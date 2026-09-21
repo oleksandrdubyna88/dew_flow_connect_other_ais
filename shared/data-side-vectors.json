@@ -39,7 +39,8 @@
       "dirExists": true,
       "notes": [],
       "settingsPath": "<default>/settings.json",
-      "logsPath": "<default>/logs"
+      "logsPath": "<default>/logs",
+      "serverNoticesPath": "<default>/server-notices.jsonl"
     },
     {
       "why": "a chosen directory and no side — used exactly as chosen, as it always was",
@@ -51,7 +52,8 @@
       "dirExists": true,
       "notes": [],
       "settingsPath": "<root>/settings.json",
-      "logsPath": "<root>/logs"
+      "logsPath": "<root>/logs",
+      "serverNoticesPath": "<root>/server-notices.jsonl"
     },
     {
       "why": "the operator's own case: two installations, one NAS, a side each",
@@ -63,7 +65,8 @@
       "dirExists": true,
       "notes": [],
       "settingsPath": "<root>/windows/settings.json",
-      "logsPath": "<root>/windows/logs"
+      "logsPath": "<root>/windows/logs",
+      "serverNoticesPath": "<root>/windows/server-notices.jsonl"
     },
     {
       "why": "a side name is lower-cased, so the two halves agree on case as well as on shape",
@@ -75,7 +78,8 @@
       "dirExists": true,
       "notes": [],
       "settingsPath": "<root>/windows/settings.json",
-      "logsPath": "<root>/windows/logs"
+      "logsPath": "<root>/windows/logs",
+      "serverNoticesPath": "<root>/windows/server-notices.jsonl"
     },
     {
       "why": "the history left behind by the flat layout — reported, never adopted",
@@ -89,7 +93,8 @@
         "loose-database"
       ],
       "settingsPath": "<root>/wsl/settings.json",
-      "logsPath": "<root>/wsl/logs"
+      "logsPath": "<root>/wsl/logs",
+      "serverNoticesPath": "<root>/wsl/server-notices.jsonl"
     },
     {
       "why": "a mistyped NAS path is a creatable directory, and looks exactly like a fresh side",
@@ -103,7 +108,8 @@
         "new-directory"
       ],
       "settingsPath": "<root>/wsl/settings.json",
-      "logsPath": "<root>/wsl/logs"
+      "logsPath": "<root>/wsl/logs",
+      "serverNoticesPath": "<root>/wsl/server-notices.jsonl"
     },
     {
       "why": "both at once: old history in the root, and this side has never run",
@@ -118,7 +124,8 @@
         "new-directory"
       ],
       "settingsPath": "<root>/wsl/settings.json",
-      "logsPath": "<root>/wsl/logs"
+      "logsPath": "<root>/wsl/logs",
+      "serverNoticesPath": "<root>/wsl/server-notices.jsonl"
     },
     {
       "why": "a plausible thing to type, and the one that must never fall back to the shared root",
@@ -130,7 +137,8 @@
       "dirExists": true,
       "notes": [],
       "settingsPath": "",
-      "logsPath": ""
+      "logsPath": "",
+      "serverNoticesPath": ""
     },
     {
       "why": "a colon is refused on Windows and accepted on Linux, so the grammar refuses it everywhere",
@@ -142,7 +150,8 @@
       "dirExists": true,
       "notes": [],
       "settingsPath": "",
-      "logsPath": ""
+      "logsPath": "",
+      "serverNoticesPath": ""
     },
     {
       "why": "dot and dot-dot are directory names no side may claim",
@@ -154,7 +163,8 @@
       "dirExists": true,
       "notes": [],
       "settingsPath": "",
-      "logsPath": ""
+      "logsPath": "",
+      "serverNoticesPath": ""
     },
     {
       "why": "a space is not in the grammar either — one rule, simple enough to write twice",
@@ -166,7 +176,8 @@
       "dirExists": true,
       "notes": [],
       "settingsPath": "",
-      "logsPath": ""
+      "logsPath": "",
+      "serverNoticesPath": ""
     }
   ]
 }

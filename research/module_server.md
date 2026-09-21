@@ -925,6 +925,36 @@ parameter name lifted out of a vendor's stderr, and a scan that visits each char
 backtrack at all — a stronger promise than a bounded quantifier, and it needs no `NonBacktracking`
 to make it.
 
+## Server notices — where the file is (S8 story 1.3, 2026-09-21)
+
+`ServerNotices.PathFor(SettingsFile.DataDirFrom(env))`, and the directory is ASKED for rather than
+composed. `DataDirFrom` has been the one rule since 2026-09-18 — it IS
+`PanelSettings.DataDirectoryFor`, with the side applied and the trim applied — so nothing here needs
+to know that a side exists.
+
+**Why it takes a directory rather than an environment.** A second function that resolved the
+directory would be a second resolver, which is the exact defect
+[PLAN_the_settings_file_ignores_the_side.md](PLAN_the_settings_file_ignores_the_side.md) was written
+to fix four days earlier. Every caller already holds one.
+
+**The two halves are held to each other by the fixture, not by resemblance.**
+`shared/data-side-vectors.json` carries a `serverNoticesPath` per case now, beside `settingsPath`
+and `logsPath`, asserted by `DataSideVectorTests` and by `dataDirAgreesWithTheServer.test.ts` —
+refused cases included, where the field is empty because a path there would describe where data goes
+for a configuration the product will not start on. The extension's assertion goes through
+`serverNoticesPath()`, the function the product actually calls, never a second spelling of the same
+name in a test.
+
+The failure this guards is the silent one. The extension has derived this path since 2026-09-17 and
+has had nothing to read; the moment the server writes, a disagreement about WHERE means the server
+writes, the extension reads an empty directory, and every surface goes on reporting half the product
+exactly as it does today. Watched failing three ways: string concatenation instead of `Path.Combine`
+(7 red), the path resolved from the ROOT instead of the side (5 red), and one vector given the wrong
+answer (1 red).
+
+`server-notices.jsonl` was already in `shared/data-inventory.json` — the extension named it when the
+reader shipped — so the data-directory move carries it without a change here.
+
 ## The spending ledger
 
 `UsageLedger` appends one JSON line per reviewer to `<dataDir>/usage.jsonl`: vendor, model, role,
