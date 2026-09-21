@@ -148,6 +148,53 @@ public sealed class AReviewTreeIsGivenBackTests : IAsyncLifetime
         Directory.Exists(tree.Path).Should().BeFalse();
     }
 
+    /// <summary>
+    /// The hole three reviewers found and a measurement confirmed: a parent's status with
+    /// <c>--ignore-submodules=none --ignored=matching</c> is COMPLETELY BLIND to an ignored file
+    /// inside a populated submodule. It reports an ignored file in the parent and answers nothing at
+    /// all for one in a submodule — so a `.env` in there read as a clean tree and would have gone
+    /// with <c>worktree remove --force</c>, silently, which is the exact loss this story exists to
+    /// prevent. Every populated mount is inspected in its own right now.
+    /// </summary>
+    [Fact]
+    public async Task AnIgnoredFileInsideASubmodule_IsCountedAndRefused_NotSweptAlong()
+    {
+        var tree = await MadeWithSubmodule(ignoring: "secrets.env");
+        await File.WriteAllTextAsync(
+            Path.Combine(tree.Path, "mods", "sub", "secrets.env"),
+            "MY_TOKEN=...",
+            TestContext.Current.CancellationToken);
+
+        var first = await Keeper().RemoveAsync(tree.Name, ct: TestContext.Current.CancellationToken);
+
+        first.Reason.Should().Be(ReviewTreeRemovalReason.HasIgnored,
+            "a parent status cannot see this at all, so nothing but a status inside the mount can");
+        first.Ignored.Should().Be(1);
+        first.IgnoredSample.Should().Contain("mods/sub/secrets.env", "and it is named where a person can find it");
+        Directory.Exists(tree.Path).Should().BeTrue();
+
+        var asked = await Keeper().RemoveAsync(
+            tree.Name, withIgnored: true, ct: TestContext.Current.CancellationToken);
+
+        asked.Reason.Should().Be(ReviewTreeRemovalReason.Removed);
+    }
+
+    /// <summary>
+    /// An inspection that could not RUN is neither clean nor dirty. Calling it dirty would be a fact
+    /// we do not have; calling it clean would delete on one. (Code round, codex.)
+    /// </summary>
+    [Fact]
+    public async Task ASubmoduleThatCannotBeInspected_IsGitFailed_NotDirtyAndNotClean()
+    {
+        var tree = await MadeWithSubmodule();
+        var keeper = new ReviewTreeKeeper(new ReviewTreeRoot(new FailsIn("mods", _launcher), _root));
+
+        var said = await keeper.RemoveAsync(tree.Name, ct: TestContext.Current.CancellationToken);
+
+        said.Reason.Should().Be(ReviewTreeRemovalReason.GitFailed);
+        Directory.Exists(tree.Path).Should().BeTrue();
+    }
+
     // ---------------------------------------------------------------------------------------
     // What removal DOES, when it may.
     // ---------------------------------------------------------------------------------------
@@ -326,11 +373,16 @@ public sealed class AReviewTreeIsGivenBackTests : IAsyncLifetime
         return new HeldReviewTree(Name: Path.GetFileName(made.Path), Path: made.Path);
     }
 
-    private async Task<HeldReviewTree> MadeWithSubmodule()
+    private async Task<HeldReviewTree> MadeWithSubmodule(string ignoring = "")
     {
         var sub = Temp("coai-sub-");
         await Git(sub, "init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(sub, "s.txt"), "sub");
+        if (ignoring.Length > 0)
+        {
+            await File.WriteAllTextAsync(Path.Combine(sub, ".gitignore"), $"{ignoring}{Environment.NewLine}");
+        }
+
         await Git(sub, "add", ".");
         await Git(sub, "commit", "-m", "sub");
         await Git(_repo, "-c", "protocol.file.allow=always", "submodule", "add", "-q", sub.Replace('\\', '/'), "mods/sub");
@@ -440,6 +492,15 @@ public sealed class AReviewTreeIsGivenBackTests : IAsyncLifetime
 
             return real.RunAsync(request, ct);
         }
+    }
+
+    /// <summary>Real git, except where it runs — a working directory under this segment cannot run.</summary>
+    private sealed class FailsIn(string segment, IProcessLauncher real) : IProcessLauncher
+    {
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default) =>
+            request.WorkingDirectory.Replace('\\', '/').Contains($"/{segment}/", StringComparison.Ordinal)
+                ? Task.FromResult(new ProcessResult(1, string.Empty, "git could not run here", true, false, false))
+                : real.RunAsync(request, ct);
     }
 
     /// <summary>Real git, except one subcommand, which answers as a process that could not run.</summary>

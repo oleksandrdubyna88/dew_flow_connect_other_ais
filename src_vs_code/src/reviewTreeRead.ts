@@ -219,6 +219,13 @@ function treesOf(raw: unknown): TreesAnswer | undefined {
   }
   const one = raw as Record<string, unknown>;
 
+  // A document with no `trees` array is not an empty machine — it is a document this panel does not
+  // understand, and saying "you hold none" about it would invite somebody to check another commit
+  // out into a root that may already hold ten. A REASON is the one shape allowed to carry no list.
+  if (!Array.isArray(one['trees']) && textOf(one, 'reason').length === 0) {
+    return undefined;
+  }
+
   return {
     root: textOf(one, 'root'),
     trees: listedOf(one['trees']),
