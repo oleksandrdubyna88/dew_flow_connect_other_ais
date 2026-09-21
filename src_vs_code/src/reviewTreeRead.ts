@@ -41,7 +41,7 @@ function treeOf(raw: unknown, asked: AskedTree): ReviewTreeAnswer | undefined {
   // was in flight answers the same id at another commit — and this one would then open a window on
   // the wrong checkout. A reason-only answer has no tree to be wrong about.
   const carries = textOf(one, 'reason').length === 0;
-  if (carries && one['sha'] !== asked.headSha) {
+  if (carries && (one['sha'] !== asked.headSha || one['repoPath'] !== asked.repoPath)) {
     return undefined;
   }
 
@@ -56,6 +56,7 @@ function treeOf(raw: unknown, asked: AskedTree): ReviewTreeAnswer | undefined {
   return {
     findingId: asked.findingId,
     sha: textOf(one, 'sha'),
+    repoPath: textOf(one, 'repoPath'),
     path: textOf(one, 'path'),
     repository: textOf(one, 'repository'),
     reused: one['reused'] === true,
@@ -89,10 +90,18 @@ function heldOf(raw: unknown): readonly HeldTree[] {
     }));
 }
 
-/** The row a tree was asked about: the id, and the commit the answer must be about. */
+/**
+ * The row a tree was asked about — all THREE coordinates, because the answer is checked against
+ * every one of them.
+ *
+ * <p>The id and the commit alone are not an identity: a pair recollected while the request was in
+ * flight can answer the same finding at the same commit for a DIFFERENT repository, and an answer
+ * taken on trust would open the wrong one in a new window. (Code round, codex.)</p>
+ */
 export interface AskedTree {
   readonly findingId: number;
   readonly headSha: string;
+  readonly repoPath: string;
 }
 
 /**

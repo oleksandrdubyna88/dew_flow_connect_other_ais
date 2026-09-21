@@ -344,6 +344,87 @@ public sealed class AReviewTreeTests : IAsyncLifetime
         answer.Reason.Should().Be(ReviewTreeReason.InProgress, "and the directory was touched moments ago");
     }
 
+    /// <summary>
+    /// A leftover directory that is not a worktree at all — `worktree add` died before it wrote the
+    /// `.git` file. Refusing every such directory forever wedged that identity permanently, with no
+    /// route back but deleting it by hand. An EMPTY one holds nothing and is cleared. (Code round,
+    /// gemini, round 2.)
+    /// </summary>
+    [Fact]
+    public async Task AnEmptyLeftoverThatIsNotAWorktree_IsClearedRatherThanWedgingTheIdentity()
+    {
+        var made = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+        var path = made.Path;
+        Unlock(_root);
+        await Run(_repo, "worktree", "remove", "--force", path);
+        File.Delete(Path.Combine(_root, $"{Path.GetFileName(path)}.json"));
+        Directory.CreateDirectory(path);
+        Age(path);
+
+        var again = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+
+        again.Reason.Should().BeEmpty("an empty leftover is nobody's work, so it must not wedge the commit");
+        Directory.Exists(again.Path).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ALeftoverThatIsNotAWorktreeButHoldsFiles_IsNamedAndLeftAlone()
+    {
+        var made = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+        var path = made.Path;
+        Unlock(_root);
+        await Run(_repo, "worktree", "remove", "--force", path);
+        File.Delete(Path.Combine(_root, $"{Path.GetFileName(path)}.json"));
+        Directory.CreateDirectory(path);
+        await File.WriteAllTextAsync(
+            Path.Combine(path, "mine.md"), "something", TestContext.Current.CancellationToken);
+        Age(path);
+
+        var again = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+
+        again.Reason.Should().Be(ReviewTreeReason.IncompleteAndDirty);
+        File.Exists(Path.Combine(path, "mine.md")).Should().BeTrue("a directory with files in it is somebody's");
+    }
+
+    /// <summary>
+    /// The cap counts a tree whose record cannot be read. It occupies disk and it is somebody's; the
+    /// docblock said so while the code filtered it out. (Code round, gemini, round 2.)
+    /// </summary>
+    [Fact]
+    public async Task ATreeWhoseRecordCannotBeRead_StillSpendsItsSlot()
+    {
+        Fill(ReviewWorktrees.Cap);
+        var one = Directory.GetDirectories(_root).First();
+        await File.WriteAllTextAsync(
+            Path.Combine(_root, $"{Path.GetFileName(one)}.json"), "not json", TestContext.Current.CancellationToken);
+
+        var refused = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+
+        refused.Reason.Should().Be(ReviewTreeReason.Budget, "a tree we cannot read about is still a tree");
+        refused.Trees.Should().HaveCount(ReviewWorktrees.Cap);
+        refused.Trees.Should().OnlyContain(t => t.Path.Length > 0,
+            "its PATH comes from the file name, which an unreadable record still has");
+    }
+
+    /// <summary>
+    /// A record with no working tree recorded describes a checkout nothing can ever remove, so it is
+    /// not a finished tree. (Code round, codex, round 2.)
+    /// </summary>
+    [Fact]
+    public async Task ARecordWithNoWorkingTree_IsNotTreatedAsFinished()
+    {
+        var made = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+        var file = Path.Combine(_root, $"{Path.GetFileName(made.Path)}.json");
+        var without = (await File.ReadAllTextAsync(file, TestContext.Current.CancellationToken))
+            .Replace($"\"repoPath\":\"{_repo.Replace("\\", "\\\\")}\"", "\"repoPath\":\"\"", StringComparison.Ordinal);
+        await File.WriteAllTextAsync(file, without, TestContext.Current.CancellationToken);
+
+        var read = ReviewTreeRecords.Read(file);
+
+        read.State.Should().Be(RecordState.Unreadable,
+            "a record that cannot support unlock and remove is not one this product may hand back");
+    }
+
     [Fact]
     public async Task TheRecordKeepsAWorkingTreeToRunGitFrom()
     {

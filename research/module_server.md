@@ -1759,6 +1759,32 @@ what proves it is SAFE to remove:
   seventh open-coded copy. The other six are named in its docblock rather than rewritten inside a
   story about worktrees.
 
+**And what the SECOND round changed**, which was the half about not getting wedged:
+
+- **A leftover directory that is not a worktree at all** — `worktree add` died before writing the
+  `.git` file — used to be refused forever, which wedged that commit permanently with no route back
+  but deleting it by hand. An EMPTY one holds nothing of anybody's and is cleared; one with files in
+  it is somebody's and is named and left, the same rule a dirty tree gets.
+- **An unreadable record still spends its cap slot.** The docblock said so while the code filtered it
+  out — exactly the disagreement a reviewer reads a docblock to find. The refusal's PATH now comes
+  from the record's own file NAME, never recomputed from fields an unreadable record does not have.
+- **`repoPath` is required, not merely kept.** A record without it describes a checkout nothing can
+  ever remove — `worktree unlock` and `worktree remove` refuse to run from a bare `.git` — so handing
+  it back as finished would promise a lifecycle we could not carry out. It reads as `Unreadable`.
+- **The blanket `worktree prune` is gated.** git offers no path-scoped prune, so it clears EVERY
+  registration of the repository whose directory is unreachable — including a person's own worktree
+  on an unmounted drive. It is now reached only once `worktree list --porcelain` has positively shown
+  that OUR path is registered and missing. The blast radius is still that repository's other already
+  broken registrations, which is said here rather than hidden.
+- **A directory that vanished during the delete is a SUCCESS.** `DirectoryNotFoundException` is an
+  `IOException`, so a directory removed between the check and the call arrived in the catch having
+  succeeded, and was reported as one that could not be cleared. The catch answers the question rather
+  than the exception. `GoneAsync` is `EnsureGoneAsync` now, because a query-shaped name on a method
+  that deletes is a name that misleads.
+- **The extension validates `repoPath` too.** The id and the commit are not an identity: a pair
+  recollected in flight can answer the same finding at the same commit for a DIFFERENT repository, and
+  an answer taken on trust would open the wrong one in a new window.
+
 Seven findings claimed these commands run with no timeout. Every one of them goes through one
 launcher that sets one; what was true underneath is that five minutes is short for a `worktree add`
 plus submodules on a large repository while the client waits ten, so the budgets are now split —

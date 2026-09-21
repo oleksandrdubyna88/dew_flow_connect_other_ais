@@ -27,6 +27,8 @@ export interface HeldTree {
 export interface ReviewTreeAnswer {
   readonly findingId: number;
   readonly sha: string;
+  /** The checkout the ROW named, echoed back so the reader can prove the answer is about this row. */
+  readonly repoPath: string;
   /** The tree to open, or empty — except for a dirty leftover, which is named so it can be found. */
   readonly path: string;
   readonly repository: string;

@@ -330,7 +330,14 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
 
         if (!clean.Ok)
         {
-            return ReviewTreeReason.IncompleteAndDirty;
+            // git ran and would not call this a worktree. Usually that means `worktree add` died
+            // before it wrote the `.git` file — and refusing every such directory forever would wedge
+            // that identity permanently, with no route back except deleting it by hand (code round,
+            // gemini). An EMPTY leftover holds nothing of anybody's and is cleared; one with files in
+            // it is somebody's and is named and left, which is the same rule as a dirty tree.
+            return IsEmpty(path)
+                ? (await EnsureGoneAsync(path, ct) ? string.Empty : ReviewTreeReason.GitFailed)
+                : ReviewTreeReason.IncompleteAndDirty;
         }
 
         // Unlock first: the tree was created locked, and a locked tree refuses `remove --force` — the
@@ -347,7 +354,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
         await Git(repoPath, ["worktree", "remove", "--force", path], Asking, ct);
         await Git(repoPath, ["worktree", "prune"], Asking, ct);
 
-        return await GoneAsync(path, ct) ? string.Empty : ReviewTreeReason.GitFailed;
+        return await EnsureGoneAsync(path, ct) ? string.Empty : ReviewTreeReason.GitFailed;
     }
 
     /// <summary>
@@ -363,7 +370,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     /// whole request would have hung behind it. It now gives up, and the tree is answered as one that
     /// could not be cleared. (Code round, gemini and local.)</para>
     /// </remarks>
-    private async Task<bool> GoneAsync(string path, CancellationToken ct)
+    private async Task<bool> EnsureGoneAsync(string path, CancellationToken ct)
     {
         if (!Inside(path))
         {
@@ -384,7 +391,11 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or TimeoutException)
         {
-            return false;
+            // The answer is the QUESTION, not the exception. `DirectoryNotFoundException` is an
+            // `IOException`, so a directory that vanished between the check and the delete — another
+            // process, a retried attempt — arrives here having succeeded, and returning false would
+            // have reported a cleared tree as one that could not be cleared. (Code round, local.)
+            return !Directory.Exists(path);
         }
 
         return !Directory.Exists(path);
@@ -438,9 +449,34 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
             return added;
         }
 
+        // `git worktree prune` has no path filter: it clears EVERY registration of this repository
+        // whose directory is currently unreachable, which on a machine with a worktree on an
+        // unmounted drive is more than we asked for (code round, gemini). It is therefore reached
+        // only once we have positively established that OUR path is registered and missing — the
+        // stale registration we are here to clear. The blast radius is still the repository's other
+        // already-broken registrations, because git offers nothing narrower; said rather than hidden.
+        if (!await RegisteredButMissingAsync(place.RepoPath, path, ct))
+        {
+            return added;
+        }
+
         await Git(place.RepoPath, ["worktree", "prune"], Asking, ct);
 
         return await Git(place.RepoPath, add, Checking, ct);
+    }
+
+    /// <summary>Whether git still lists THIS path as a worktree although its directory is gone.</summary>
+    private async Task<bool> RegisteredButMissingAsync(string repoPath, string path, CancellationToken ct)
+    {
+        var listed = await Git(repoPath, ["worktree", "list", "--porcelain"], Asking, ct);
+        var wanted = Path.GetFullPath(path).Replace('\\', '/');
+
+        return listed.Ran && listed.Ok && listed.Lines.Any(line =>
+            line.StartsWith("worktree ", StringComparison.Ordinal)
+            && string.Equals(
+                Path.GetFullPath(line["worktree ".Length..].Trim()).Replace('\\', '/'),
+                wanted,
+                StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>
@@ -556,6 +592,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
         {
             FindingId = findingId,
             Sha = place.Sha,
+            RepoPath = place.RepoPath,
             Path = path,
             Repository = repository,
             Reused = reused,
@@ -568,22 +605,29 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
         {
             FindingId = findingId,
             Sha = place.Sha,
+            RepoPath = place.RepoPath,
             Repository = repository,
             Reason = reason,
             Path = path,
         };
 
     /// <summary>The cap refusal, which names every tree held — see <see cref="ReviewTreeRow"/>.</summary>
-    private ReviewTree Full(
-        long findingId, TreePlace place, string repository, IReadOnlyList<HeldRecord> held) =>
+    /// <remarks>
+    /// The PATH comes from the record's own file name, never recomputed from its fields: a tree whose
+    /// record could not be read still occupies the cap and must still be nameable, and it has no
+    /// fields to recompute a name from.
+    /// </remarks>
+    private static ReviewTree Full(
+        long findingId, TreePlace place, string repository, IReadOnlyList<HeldTreeFile> held) =>
         new()
         {
             FindingId = findingId,
             Sha = place.Sha,
+            RepoPath = place.RepoPath,
             Repository = repository,
             Reason = ReviewTreeReason.Budget,
-            Trees = [.. held.Select(r => new ReviewTreeRow(
-                r.Repository, r.Sha, Path.Combine(root, NameOf(r.Repository, r.Sha)), r.Created))],
+            Trees = [.. held.Select(f => new ReviewTreeRow(
+                f.Read.Record.Repository, f.Read.Record.Sha, f.Tree, f.Read.Record.Created))],
         };
 
     private async Task<GitAnswer> Git(string workingDirectory, string[] args, TimeSpan budget, CancellationToken ct)

@@ -50,6 +50,17 @@ public sealed record ReviewTree
     /// <summary>The commit checked out, as the pair stores it.</summary>
     public string Sha { get; init; } = "";
 
+    /// <summary>
+    /// The checkout the ROW named, echoed back.
+    /// </summary>
+    /// <remarks>
+    /// The reader compares it, which is the point: a pair recollected while the request was in flight
+    /// can answer the same finding id at the same commit for a DIFFERENT repository, and an answer
+    /// taken on trust would open the wrong one in a new window. The id and the commit alone cannot
+    /// tell those apart. (Code round, codex.)
+    /// </remarks>
+    public string RepoPath { get; init; } = "";
+
     /// <summary>The tree on disk, or empty when there is none to open.</summary>
     public string Path { get; init; } = "";
 
