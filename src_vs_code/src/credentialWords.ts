@@ -20,32 +20,32 @@
  */
 
 /**
- * Words that mean a credential wherever they appear inside a name.
+ * The two lists, from `shared/credential-words.json` by way of the generator.
  *
- * <p>Long enough that a substring match is not an accident. `client_secret`, `refresh_token` and a
- * run-together `myapikey` are all caught by one of these without anything having to know how the
- * name was spelled.</p>
+ * <p><b>They moved out of this file on 2026-09-21, and not for tidiness.</b> The SERVER redacts the
+ * same way before it writes `server-notices.jsonl`, and the words the two halves redact on have to
+ * be the same words — two redactors disagreeing about whether `sig` names a credential is not a
+ * test failure anywhere, it is a secret in a file on one path and not the other. `coai-mcp` embeds
+ * that JSON as a manifest resource and this side generates a module from it, exactly as the role
+ * catalog is already handled.</p>
+ *
+ * <p><b>Neither half reads `shared/` at run time</b>, which is the shape a plan round corrected: a
+ * published Native-AOT binary and an installed VSIX both run where no such directory exists, and a
+ * redactor falling back to an empty list there would write raw credentials while every test that
+ * only checks the two sides AGREE stayed green.</p>
+ *
+ * <p>What each list means is unchanged. `ANYWHERE` is long enough that a substring match is not an
+ * accident — `client_secret`, `refresh_token` and a run-together `myapikey` are all caught without
+ * anything knowing how the name was spelled. `WHOLE_PART` holds three words short enough to appear
+ * inside ordinary ones, and matching THEM as substrings was a real defect: `author`, `assignee`,
+ * `design`, `signal` and `monkey` all matched, so `consultantWrite` refused legitimate endpoint
+ * URLs and the ledger redacted diagnostic parameters that carried nothing. (gemini, the code
+ * round.) A "part" is what survives splitting on separators and camelCase, so `api_key`, `apiKey`,
+ * `X-Api-Key` and a bare `key` all match while `monkey` does not; the cost is that a run-together
+ * `apikey` is spelled out in the long list rather than reached by a rule that cannot see a word
+ * boundary that is not there.</p>
  */
-const ANYWHERE: readonly string[] = [
-  'token', 'secret', 'password', 'passwd', 'authorization', 'credential', 'signature', 'apikey',
-  'accesskey', 'privatekey',
-];
-
-/**
- * Words that mean a credential only when they are a WHOLE part of the name.
- *
- * <p>Three words short enough to appear inside ordinary ones, and matching them as substrings was a
- * real defect: `author`, `assignee`, `design`, `signal` and `monkey` all matched, so
- * `consultantWrite` REFUSED legitimate endpoint URLs and the ledger redacted diagnostic parameters
- * that carried nothing. A redaction that fires on `?author=octocat` teaches people that the
- * mechanism is noise, which is how a real one gets ignored. (gemini, the code round.)</p>
- *
- * <p>A "part" is what survives splitting on separators and camelCase, so `api_key`, `apiKey`,
- * `X-Api-Key` and a bare `key` all match while `monkey` does not. The cost is that a run-together
- * lowercase `apikey` is not reached by `key` alone — which is why it is spelled out in the list
- * above rather than left to a rule that cannot see the word boundary that is not there.</p>
- */
-const WHOLE_PART: readonly string[] = ['key', 'auth', 'sig'];
+import { ANYWHERE, WHOLE_PART } from './credentialWords.generated';
 
 /** Every word, for a caller that wants to say what it looks for. */
 export const CREDENTIAL_WORDS: readonly string[] = [...ANYWHERE, ...WHOLE_PART];

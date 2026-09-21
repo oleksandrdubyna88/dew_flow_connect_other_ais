@@ -5655,6 +5655,32 @@ open. So `scripts/generate-builtin-roles.mjs` writes `src/builtinRoles.generated
 `RoleDefinition.General` applies on the server side. `panelView.ts` and the five test files that
 import them did not change.
 
+**The same shape now carries a SECURITY measure, not only a catalog** (2026-09-21).
+`shared/credential-words.json` holds the words that mean a string is carrying a credential, and both
+halves REDACT on them before anything reaches disk — the server writes `server-notices.jsonl` and
+this side reads it. Two redactors disagreeing about whether `sig` names a credential is not a test
+failure anywhere; it is a secret in a file on one path and not the other. So the words left
+`credentialWords.ts`, which imports `ANYWHERE` and `WHOLE_PART` from
+`src/credentialWords.generated.ts` now; `coai-mcp` embeds the same JSON and **refuses to start**
+without it.
+
+**Neither half reads `shared/` at run time, and that is what a plan round corrected.** The first
+draft had both of them do exactly that. A published Native-AOT binary and an installed VSIX both run
+where no such directory exists: the read throws, and because every notice write is best-effort and
+swallows its exceptions, the redactor would then run with an empty list and write raw credentials —
+on the one machine that matters, silently. Two reviewers found it independently, and it is why the
+server fails closed rather than degrading.
+
+On this side the guard is different in kind, because the module is a COPY and can go stale:
+`generate-credential-words.mjs --check` joins `generatedFilesAreCurrent.test.ts`, and
+`theBundleLoads.test.mjs` asserts that every word survives into the SHIPPED `dist/extension.js` as a
+quoted literal. That last one is deliberately weak and says so: the bundle is minified and exports
+only `activate`/`deactivate`, so it proves the words were not tree-shaken away — planting a
+`credentialWords.ts` that consults no list turns it red naming the word — and it cannot prove the
+redactor uses them. It also lives INSIDE `theBundleLoads.test.mjs` rather than in a file of its own,
+because a second test running `npm run bundle` would race the first one's build, which is the
+hazard the comment beside it already describes.
+
 **Three tests, because each catches a different direction of drift.**
 `builtinRoleCatalog.test.ts` reads the seed itself and asserts the generated file matches it, so it
 is what fails when somebody edits the seed and forgets to regenerate.

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import { namesACredential } from '../credentialWords';
 
@@ -47,5 +49,31 @@ test('an ordinary endpoint parameter stays ordinary', () => {
   // somewhere worse.
   for (const ordinary of ['api-version', 'deployment', 'region', 'model', 'count', 'page']) {
     assert.equal(namesACredential(ordinary), false, ordinary);
+  }
+});
+
+test('the shared corpus is answered the same way here as on the server', () => {
+  // THE FINDING OF STORY 1.1's PLAN ROUND, and the one that mattered most. Until this, each half
+  // was checked against its OWN hand-written table — so a TypeScript splitter that disagreed with
+  // the C# one about `requestSig`, `auth-key` or `token2` would leave both suites green while the
+  // extension and the server redacted different notices. That is a secret on disk on one path and
+  // not the other, and nothing anywhere would have said so.
+  //
+  // `shared/credential-words.json` carries the corpus and `CredentialWordsTests.cs` asserts the
+  // same rows. Neither side owns it, and a case added to it has to be answered twice.
+  //
+  // out/test at run time, so three levels reach the repository root.
+  const seed = JSON.parse(readFileSync(
+    join(__dirname, '..', '..', '..', 'shared', 'credential-words.json'), 'utf8',
+  )) as { cases: readonly { name: string; credential: boolean }[] };
+
+  assert.ok(seed.cases.length > 0, 'the shared corpus is empty, so this test asserts nothing');
+  for (const one of seed.cases) {
+    assert.equal(
+      namesACredential(one.name),
+      one.credential,
+      `shared/credential-words.json says "${one.name}" is ${one.credential ? '' : 'not '}`
+      + 'a credential, and the server is held to the same row',
+    );
   }
 });
