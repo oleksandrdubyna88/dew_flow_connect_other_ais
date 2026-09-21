@@ -433,6 +433,28 @@ that token in `.git/config` for them to read. Nothing in those jobs needs it —
      The commit becomes trustworthy because the only permitted creator cuts it from a merged PR. If
      the operator keeps a personal bypass, the exposure is reduced to "an actor we trust", not
      removed — say which of the two was chosen when this ships.
+
+   **READINESS, measured 2026-09-21 by asking WHO CUT THE LAST TAG — which is the only evidence that
+   Epic 4 actually landed in a repository rather than merely being configured in it:**
+
+   | repository | last release cut by | restrict its tags? |
+   |---|---|---|
+   | `dew_flow_sidecar_rust` | **`dew-flow-release-please[bot]`** | yes, now |
+   | `dew_flow_creds_for_devs` | **`dew-flow-release-please[bot]`** | yes, now |
+   | `dew_flow_connect_other_ais` | `github-actions[bot]` | **not yet** — configured, has cut none |
+
+   No tag ruleset exists in any of the three today. Doing `connect_other_ais` before release-please
+   has cut a tag there is precisely the mistake the order note above warns about: the restriction
+   would block the automation that was going to satisfy it, and the repository releases four
+   products.
+
+   **One collision to resolve when the bypass list is decided**, because it is written into code and
+   not only into habit: `creds_for_devs`'s `release.yml` tells a releaser to *"delete the release and
+   the tag, fix the leg, and ship the next patch version"* when an asset is missing. With **Restrict
+   deletions** on and no operator bypass, a human cannot do that. The direction of travel already
+   agrees — `connect_other_ais`'s changelog guard was rewritten on 2026-09-21 to send the repair to
+   the release pull request instead of to a deleted tag — but the creds text still says the old
+   thing and should be brought into line in the same change.
 4. Release logic from a reviewed, pinned ref rather than from the tagged checkout. **In scope for
    this plan, sequenced last on purpose**: steps 0-3 make it an improvement rather than a rescue,
    and if the operator stops after step 3 the CWE is already closed. It is the only step that may be
