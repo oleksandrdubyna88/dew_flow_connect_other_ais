@@ -191,6 +191,16 @@ public sealed record ServerNotice
         && index != uint.MaxValue
         && index.ToString(CultureInfo.InvariantCulture) == key;
 
+    /// <summary>
+    /// A refusal about <see cref="More"/>, naming the PROPERTY a caller set rather than a parameter.
+    /// </summary>
+    /// <remarks>
+    /// The property name is spelled rather than taken from <c>nameof(More)</c> in the
+    /// <c>paramName</c> position: that position means "the argument of THIS method", and this
+    /// method has no argument called <c>More</c> — Sonar reports the mismatch, and a reader chasing
+    /// the name would look for an argument that is not there. The sentence carries the property; the
+    /// parameter that actually failed is the dictionary.
+    /// </remarks>
     private static ArgumentException Refusal(string what, string why) =>
-        new($"More: {what} {why}", nameof(More));
+        new($"More: {what} {why}", "more");
 }

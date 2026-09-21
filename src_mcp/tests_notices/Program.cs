@@ -33,7 +33,7 @@ Console.InputEncoding = new UTF8Encoding(false);
 
 if (args.Length == 0)
 {
-    Console.Error.WriteLine("usage: NoticeTool <safe-text <limit> | serialise | codes>");
+    await Console.Error.WriteLineAsync("usage: NoticeTool <safe-text <limit> | serialise | codes>");
     return 64; // EX_USAGE
 }
 
@@ -44,7 +44,7 @@ try
         case "safe-text":
             if (args.Length < 2 || !int.TryParse(args[1], out var limit))
             {
-                Console.Error.WriteLine("safe-text needs a limit, a whole number");
+                await Console.Error.WriteLineAsync("safe-text needs a limit, a whole number");
                 return 64;
             }
 
@@ -60,7 +60,7 @@ try
             return 0;
 
         default:
-            Console.Error.WriteLine($"NoticeTool has no verb '{args[0]}'");
+            await Console.Error.WriteLineAsync($"NoticeTool has no verb '{args[0]}'");
             return 64;
     }
 }
@@ -68,7 +68,7 @@ catch (Exception e)
 {
     // A stand-in that dies unhandled destroys the evidence it exists to produce: the script driving
     // it would see an empty stdout and report "the two halves disagree" about a crash.
-    Console.Error.WriteLine($"NoticeTool failed: {e.GetType().Name}: {e.Message}");
+    await Console.Error.WriteLineAsync($"NoticeTool failed: {e.GetType().Name}: {e.Message}");
     return 70; // EX_SOFTWARE
 }
 
@@ -93,6 +93,16 @@ static void Write(IReadOnlyList<string> answers) =>
     Console.Out.Write(JsonSerializer.Serialize(
         answers.Select(one => one.Select(c => (int)c).ToArray()).ToArray()));
 
+/// <summary>A field this build has no name for, as the value `more` may carry.</summary>
+static object Stranger(string name, JsonElement value) =>
+    value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString()!,
+        JsonValueKind.Number => value.TryGetInt64(out var whole) ? whole : value.GetDouble(),
+        _ => throw new InvalidOperationException(
+            $"`more` may carry strings and finite numbers only; '{name}' is {value.ValueKind}"),
+    };
+
 /// <summary>One record as the script sent it, refusing a field this build cannot place.</summary>
 static ServerNotice NoticeFrom(JsonElement row)
 {
@@ -109,13 +119,7 @@ static ServerNotice NoticeFrom(JsonElement row)
     var known = new HashSet<string>(ServerNoticeLine.NamedFields, StringComparer.Ordinal);
     var more = row.EnumerateObject()
         .Where(p => !known.Contains(p.Name))
-        .ToDictionary(p => p.Name, p => p.Value.ValueKind switch
-        {
-            JsonValueKind.String => (object)p.Value.GetString()!,
-            JsonValueKind.Number => p.Value.TryGetInt64(out var whole) ? whole : p.Value.GetDouble(),
-            _ => throw new InvalidOperationException(
-                $"`more` may carry strings and finite numbers only; '{p.Name}' is {p.Value.ValueKind}"),
-        }, StringComparer.Ordinal);
+        .ToDictionary(p => p.Name, p => Stranger(p.Name, p.Value), StringComparer.Ordinal);
 
     return new ServerNotice
     {

@@ -139,7 +139,10 @@ public static partial class Redaction
     /// </remarks>
     private static readonly TimeSpan WholeCallCeiling = TimeSpan.FromMilliseconds(BacktrackingCeilingMs);
 
-    // A URL carrying its own credentials: https://someone:password@host
+    // A URL carrying its own credentials — the `user:secret` pair before the at-sign in an
+    // authority. Written in words rather than as an example URL: Sonar reads the example as a
+    // hardcoded Basic Authentication password and raises a BLOCKER on the file whose job is to
+    // remove exactly that.
     // NOT NonBacktracking because: `(?<![A-Za-z0-9_])` is a lookbehind. It is there because .NET's
     // `\b` is Unicode-aware — `парольsk-…` and `Tokenß…` were measured to slip past it — and JavaScript's
     // is ASCII. Every quantifier is bounded ({0,15}, {1,256}, {1,256}), nothing nests, nothing refers
