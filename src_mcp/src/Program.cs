@@ -94,6 +94,15 @@ internal static class Program
         /// </summary>
         TreeAt,
 
+        /// <summary>
+        /// Every review tree this machine holds, and giving one back. Not a one-PAIR mode: they
+        /// take no <c>--id</c>, because a tree outlives the row that made it. (Story 3.2b.)
+        /// </summary>
+        Trees,
+
+        /// <summary>One tree, by OUR name for it, and never by a path. (Story 3.2b.)</summary>
+        TreeRemove,
+
         /// <summary>An argument this binary does not take.</summary>
         Usage,
 
@@ -214,6 +223,8 @@ internal static class Program
                 "--real-method" => Startup.RealMethod,
                 "--file-at" => Startup.FileAt,
                 "--tree-at" => Startup.TreeAt,
+                "--trees" => Startup.Trees,
+                "--tree-remove" => Startup.TreeRemove,
                 "--upload-pairs" => Startup.UploadPairs,
                 "--requeue-refused" => Startup.RequeueRefused,
                 "--providers" => Startup.Providers,
@@ -278,6 +289,12 @@ internal static class Program
 
             case Startup.TreeAt:
                 return await TreeAtAsync(args);
+
+            case Startup.Trees:
+                return await TreesAsync();
+
+            case Startup.TreeRemove:
+                return await TreeRemoveAsync(args);
 
             case Startup.UploadPairs:
                 return await UploadPairsAsync(args);
@@ -861,6 +878,53 @@ internal static class Program
             findingId, new Runners.Collecting.FilePlace(pair.RepoPath, pair.HeadSha, pair.File));
     }
 
+    /// <summary>Every review tree this machine holds, on stdout.</summary>
+    /// <remarks>
+    /// Built from OUR records and OUR directories, joined — never from the filesystem at large, so a
+    /// round worktree or a person's own worktree cannot appear in it, and what cannot be listed cannot
+    /// be asked for. No <c>--id</c>, therefore no 65; the list is either the list or a reason, at
+    /// exit 0. Nothing is written to the rounds database.
+    /// </remarks>
+    internal static async Task<int> TreesAsync()
+    {
+        var keeper = Keeper();
+        await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(
+            await keeper.ListAsync(), Server.ServerJsonContext.Default.ReviewTrees));
+
+        return 0;
+    }
+
+    /// <summary>One review tree given back, by OUR name for it — or what is in the way.</summary>
+    /// <remarks>
+    /// <para><b>A NAME, never a path</b>, and it must match a record this machine holds: a separator,
+    /// a <c>..</c>, a round tree's name or anything else is refused as <c>not_ours</c> before a
+    /// process starts.</para>
+    /// <para><b>There is no mode that removes more than one.</b> Not a flag, not an empty
+    /// <c>--tree</c>, not a sweep. A missing <c>--tree</c> is <b>65</b> and removes nothing.</para>
+    /// <para><c>--with-ignored</c> is the person's second ask: ignored files are refused by default
+    /// because a <c>.env</c> is not build output, and no plain status shows them at all.</para>
+    /// </remarks>
+    internal static async Task<int> TreeRemoveAsync(string[] args)
+    {
+        var flags = Flags(args);
+        if (!flags.TryGetValue("--tree", out var name) || name.Length == 0)
+        {
+            Note("--tree-remove needs --tree <name>, a name this machine holds a record for");
+
+            return 65; // EX_DATAERR
+        }
+
+        var answer = await Keeper().RemoveAsync(
+            name, args.Contains("--with-ignored", StringComparer.Ordinal));
+        await Console.Out.WriteLineAsync(System.Text.Json.JsonSerializer.Serialize(
+            answer, Server.ServerJsonContext.Default.ReviewTreeRemoval));
+
+        return 0;
+    }
+
+    private static Runners.Worktrees.ReviewTreeKeeper Keeper() =>
+        new(new Runners.Worktrees.ReviewTreeRoot(new ProcessLauncher(), Runners.Worktrees.ReviewTreeRoot.Default));
+
     /// <summary>The pair's repository checked out at its commit — or the answer that there is no such pair.</summary>
     private static async Task<Core.Collecting.ReviewTree> TreeAtOfAsync(long findingId, Store.ReviewPair? pair)
     {
@@ -877,7 +941,7 @@ internal static class Program
         var trees = new Runners.Worktrees.ReviewWorktrees(
             launcher,
             new Runners.Collecting.GitHistory(launcher),
-            Runners.Worktrees.ReviewWorktrees.DefaultRoot);
+            Runners.Worktrees.ReviewTreeRoot.Default);
 
         return await trees.PrepareAsync(
             findingId, new Runners.Worktrees.TreePlace(pair.RepoPath, pair.HeadSha));

@@ -1,4 +1,7 @@
-import { HeldTree, ReviewTreeAnswer, TOO_OLD_FOR_A_TREE, TreeRead } from './reviewTree';
+import {
+  HeldTree, ListedTree, RemovalAnswer, RemovalRead, ReviewTreeAnswer,
+  TOO_OLD_FOR_A_TREE, TOO_OLD_FOR_TREES, TreeRead, TreesAnswer, TreesRead,
+} from './reviewTree';
 import { Run, serverRun } from './roundsDbRead';
 
 /**
@@ -139,3 +142,127 @@ export async function readTreeAt(
   }
 }
 
+// --------------------------------------------------------------------------------------------
+// Story 3.2b: what this machine holds, and giving one back.
+// --------------------------------------------------------------------------------------------
+
+/**
+ * Every review tree this machine holds — `--trees`, on stdout.
+ *
+ * <p>Takes no id, so there is no 65 to meet here. 64 is "this server is too old" and ONLY that, which
+ * is the one code a reader must never mistake for an answer: a fault wearing it would send a person
+ * down the fallback and hide behind a version they cannot check. (Plan round, local, three times.)</p>
+ */
+export async function readTrees(
+  executable: string,
+  run: Run = serverRun(executable),
+): Promise<TreesRead> {
+  const { code, output } = await run(['--trees'], LIST_CAP_MS);
+  if (code === EX_USAGE) {
+    return { ok: false, tooOld: true, why: TOO_OLD_FOR_TREES };
+  }
+  if (code !== 0) {
+    return { ok: false, tooOld: false, why: output.trim() || `the server exited ${code}` };
+  }
+
+  try {
+    const answer = treesOf(JSON.parse(output));
+
+    return answer === undefined
+      ? { ok: false, tooOld: false, why: 'the server answered something this panel does not understand' }
+      : { ok: true, answer };
+  } catch {
+    return { ok: false, tooOld: false, why: 'the server answered something that is not JSON' };
+  }
+}
+
+/**
+ * One tree given back — `--tree-remove --tree <name>`.
+ *
+ * <p><b>The name is echoed and checked.</b> A removal is the one call here whose answer must be about
+ * the row the person pressed; an answer about another name would put another tree's sentence on it.</p>
+ *
+ * <p><b>65 is a request fault and must not read as an old server.</b> A missing `--tree` is the only
+ * way to get one, and the reader says the server's own sentence rather than the fallback.</p>
+ */
+export async function removeTree(
+  executable: string,
+  name: string,
+  withIgnored = false,
+  run: Run = serverRun(executable),
+): Promise<RemovalRead> {
+  const args = withIgnored
+    ? ['--tree-remove', '--tree', name, '--with-ignored']
+    : ['--tree-remove', '--tree', name];
+  const { code, output } = await run(args, REMOVE_CAP_MS);
+  if (code === EX_USAGE) {
+    return { ok: false, tooOld: true, why: TOO_OLD_FOR_TREES };
+  }
+  if (code !== 0) {
+    return { ok: false, tooOld: false, why: output.trim() || `the server exited ${code}` };
+  }
+
+  try {
+    const answer = removalOf(JSON.parse(output), name);
+
+    return answer === undefined
+      ? { ok: false, tooOld: false, why: 'the server answered something this panel does not understand' }
+      : { ok: true, answer };
+  } catch {
+    return { ok: false, tooOld: false, why: 'the server answered something that is not JSON' };
+  }
+}
+
+function treesOf(raw: unknown): TreesAnswer | undefined {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined;
+  }
+  const one = raw as Record<string, unknown>;
+
+  return {
+    root: textOf(one, 'root'),
+    trees: listedOf(one['trees']),
+    reason: textOf(one, 'reason'),
+  };
+}
+
+function listedOf(raw: unknown): readonly ListedTree[] {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw
+    .filter((v): v is Record<string, unknown> => v !== null && typeof v === 'object')
+    .map((v) => ({
+      name: textOf(v, 'name'),
+      repository: textOf(v, 'repository'),
+      repoPath: textOf(v, 'repoPath'),
+      sha: textOf(v, 'sha'),
+      path: textOf(v, 'path'),
+      created: textOf(v, 'created'),
+      state: textOf(v, 'state'),
+    }))
+    .filter((t) => t.name.length > 0);
+}
+
+function removalOf(raw: unknown, asked: string): RemovalAnswer | undefined {
+  if (raw === null || typeof raw !== 'object' || Array.isArray(raw)) {
+    return undefined;
+  }
+  const one = raw as Record<string, unknown>;
+  if (one['name'] !== asked || textOf(one, 'reason').length === 0) {
+    return undefined;
+  }
+
+  return {
+    name: asked,
+    reason: textOf(one, 'reason'),
+    inTheWay: textsOf(one['inTheWay']),
+    ignored: typeof one['ignored'] === 'number' ? one['ignored'] : 0,
+    ignoredSample: textsOf(one['ignoredSample']),
+  };
+}
+
+/** Listing asks git once per repository; a removal checks out nothing but may wait on a big delete. */
+const LIST_CAP_MS = 2 * 60 * 1000;
+const REMOVE_CAP_MS = 5 * 60 * 1000;
