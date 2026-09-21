@@ -1,8 +1,11 @@
 # PLAN — the server writes down what it refused, what failed, and that it died
 
-> Status: **plan only, nothing implemented yet, 2026-09-21.** Scope: `src_mcp` — a notice record and
-> its serialiser, the append, the instrumentation sites, a run-start marker, and the
-> `try/catch/finally` that `Program.cs` has never had.
+> Status: **EPIC 1 IMPLEMENTED, 2026-09-21; epics 2 and 3 open.** Stories 1.1 (the credential list),
+> 1.2 (the notice line), 1.3 (the path) and 1.4 (the writer, and the append it had to fix) have
+> shipped. What remains is every CALL SITE — the census (2.1), the three refusal roads (2.2), the
+> reviewer and startup notices (2.3), the live seam leg (2.4) — and the deaths (3.1, 3.2).
+> Scope: `src_mcp` — a notice record and its serialiser, the append, the instrumentation sites, a
+> run-start marker, and the `try/catch/finally` that `Program.cs` has never had.
 >
 > **This is S8 of [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md)**,
 > extracted into its own file as that plan's section *G* says it must be. Defect 4 of the parent
