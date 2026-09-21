@@ -197,8 +197,11 @@ quarantine; the `serverNoticesPath` vector; `measure:append` re-run with the .NE
 
 > **Carried into 1.4 by story 1.3's code round**, written down here rather than remembered:
 > - the writer's ONLY file-opening path goes through `ServerNotices`, with a test that invokes the
->   writer and finds the file at the shared resolved path — otherwise the helper can be bypassed and
->   both suites stay green while the server writes where the extension does not read;
+>   writer and **inspects the emitted JSONL** — not only that the file is at the shared resolved
+>   path, but that what landed in it went through `ServerNoticeLine.Of`. Story 1.2's round named the
+>   gap exactly: until the serialiser is wired to the writer, a call site can serialise a notice
+>   directly and the parity harness stays green, because it exercises `NoticeTool` rather than the
+>   product's write path;
 > - a reviewer asked for an opaque resolved-data-directory TYPE, so that a root path cannot satisfy
 >   the writer's seam. `DataDirFrom` returns `string` and has seven callers, so the cost is only
 >   visible once a writer exists: **decide it in 1.4**, and say which way and why;
