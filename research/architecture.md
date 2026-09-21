@@ -490,6 +490,59 @@ zero comes to. The panel's figure is an upper bound and says so — the server d
 reviewers a round actually schedules, which is fewer when a repository wrote no rules down and the
 Conventions reviewers are dropped.
 
+### A third file neither container owns: the credential words (2026-09-21)
+
+The same shape again, and this one carries a SECURITY measure rather than a catalog.
+
+`coai-mcp` writes `server-notices.jsonl` and the extension reads it. **Both halves redact before
+anything reaches disk**, so they must redact on the same words — two redactors disagreeing about
+whether `sig` names a credential is not a test failure anywhere; it is a secret in a file on one path
+and not the other. `shared/credential-words.json` is therefore the third file in `shared/`, beside
+the URL vectors and the role seed.
+
+It is consumed the way the role seed is: `coai-mcp` **embeds** it as a manifest resource
+(`CoaiMcp.Core.Notices.CredentialWords`), the extension **generates**
+`src/credentialWords.generated.ts` from it, and each half asserts its own loader against the file.
+
+**Neither half may read `shared/` at run time**, which is the one thing this contract adds to the
+pattern. A published Native-AOT binary and an installed VSIX both run where that directory does not
+exist, so a runtime read throws — and because every notice write is best-effort and swallows its
+exceptions, the redactor would then run with an empty list and put raw credentials into the file, on
+the one machine that matters, silently. Two reviewers found that independently on the plan round. So
+**both halves fail CLOSED**: the server throws at construction, and `namesACredential` on the
+extension throws rather than answering `false` for everything.
+
+**And the file carries a CORPUS, not only the words.** The role seed is held together by each half
+asserting its own loader; that is not enough here, because the two sides also have to AGREE about
+what a name means. A C# splitter that disagreed with the TypeScript one about `requestSig`,
+`auth-key` or `token2` would leave both suites green while the two halves redacted different
+notices. So `cases` is 48 rows of `{ name, credential }` that BOTH suites answer — the same
+technique `shared/data-side-vectors.json` uses for the data directory, applied to a judgement rather
+than a path.
+
+| | Role seed | URL vectors | Credential words |
+|---|---|---|---|
+| Server | embeds | reads in tests | embeds |
+| Extension | generates a module | reads in tests | generates a module |
+| Held together by | each half asserts its loader | one vector file, both suites | one vector file, both suites, **and a shared corpus of answers** |
+| On a missing/broken file | broken build, throws | test failure | **both halves refuse to run** |
+
+```mermaid
+flowchart LR
+    words["shared/credential-words.json<br/>words + 48 answered cases"]
+    embed2["coai-mcp<br/>EmbeddedResource"]
+    gen2["generate-credential-words.mjs"]
+    cw["CredentialWords<br/>throws if absent"]
+    tsw["credentialWords.generated.ts<br/>-> namesACredential, throws if empty"]
+    notices["server-notices.jsonl"]
+    words --> embed2 --> cw
+    words --> gen2 --> tsw
+    cw -- "redacts on write" --> notices
+    tsw -- "redacts on write" --> notices
+    words -. "both suites answer the same 48 cases" .-> cw
+    words -. " " .-> tsw
+```
+
 ## How the Team server is deployed (2026-09-06)
 
 `coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the
