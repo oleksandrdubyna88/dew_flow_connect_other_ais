@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>CoaiMcp.NoticeTool</RootNamespace>
+    <!-- A test asset, not a product, and the FakeCli pattern for the same reason: the parity check
+         needs the REAL `Redaction.SafeText` and the REAL `ServerNoticeLine.Of` in a process a node
+         script can drive. Reimplementing either here would be a test of the test.
+
+         WHY IT HAS TO BE A SEPARATE PROCESS AT ALL. The contract has two implementations in two
+         languages, and the only honest check runs both. CI orders the jobs `dotnet build` ->
+         `dotnet test` -> `npm ci` -> `npm run test:seam`, so a C# test cannot spawn node: node is
+         not installed yet when the .NET tests run. The extension job is where both exist, so the
+         parity script lives there and drives this. -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../core/CoaiMcp.Core.csproj" />
+  </ItemGroup>
+
+</Project>

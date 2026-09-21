@@ -13,6 +13,7 @@
   <Folder Name="/tests/">
     <Project Path="src_mcp/tests/CoaiMcp.Tests.csproj" />
     <Project Path="src_mcp/tests_fakecli/FakeCli.csproj" />
+    <Project Path="src_mcp/tests_notices/NoticeTool.csproj" />
     <Project Path="src_bench/CoaiBench.Tests/CoaiBench.Tests.csproj" />
     <Project Path="src_server/tests/CoaiServer.Tests.csproj" />
     <Project Path="src_bugs/tests/CoaiBugs.Tests.csproj" />

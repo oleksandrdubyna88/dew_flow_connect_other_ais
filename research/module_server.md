@@ -929,6 +929,52 @@ parameter name lifted out of a vendor's stderr, and a scan that visits each char
 backtrack at all — a stronger promise than a bounded quantifier, and it needs no `NonBacktracking`
 to make it.
 
+## Server notices — the LINE, and how it is held to the extension's (S8 story 1.2, 2026-09-21)
+
+`notificationLine` in `src_vs_code/src/notifications.ts` is the contract; `ServerNoticeLine.Of` is
+this half of it. Both halves redact before anything reaches disk, so a difference between them is not
+a failing test anywhere — it is a secret written by one and removed by the other.
+
+**What is byte-identical, and what cannot be.** `SafeText` is: 346 generated shapes at both limits,
+compared as UTF-16 code units. The LINE is not, and demanding it would be demanding something the
+languages cannot deliver — `JSON.stringify` writes an object's properties in the order the CALLER
+inserted them, so the TypeScript order is a property of the call site rather than of the serialiser,
+while C# has a fixed field list. The first version of the parity check demanded byte equality and
+reported exactly that: 4408 code units of identical content, with `pid` and `seq` on either side of
+`provider`.
+
+So the line is held to three narrower things instead, and they are what the product actually needs:
+the redaction is identical; the extension's OWN parser accepts the server's line; and the line is a
+**fixed point** of that parser — `notificationLine(parse(line)) === line` — so a record read and
+written again is the record that arrived. The field order was chosen to make that true, and it is
+the parser's order rather than the interface's, which does not survive the round trip.
+
+**Five patterns, and three of them are off `NonBacktracking` with a stated reason.** The reasons are
+measurements, not preferences:
+
+| Pattern | Engine | Why |
+|---|---|---|
+| `parameter`, `labelled` | `NonBacktracking` | no word boundary; they build in 28 ms and 1 ms |
+| URL authority, vendor prefix | backtracking | need an ASCII lookbehind, which `NonBacktracking` forbids |
+| bearer | backtracking | the lookbehind, AND its three-word alternation × `{8,4096}` sizes an automaton past the engine's 10 000-node limit |
+
+**The ASCII lookbehind is the single most important line in the port.** .NET's `` is Unicode-aware;
+JavaScript's, without the `u` flag, is ASCII. So `парольtoken abcdefghijklmnop` is a string where
+.NET's own boundary does NOT match and JavaScript's does — the server would have written a bearer
+token the extension removes. `(?<![A-Za-z0-9_])` is what makes the two agree, and the corpus wraps
+every shape in Russian and German prose so that the agreement is checked rather than assumed.
+Watched failing by putting `` back: two cases red, both leaving a secret in place.
+
+`IgnoreCase` is used nowhere for the same family of reason: .NET's invariant pairing matches `k` with
+U+212A KELVIN SIGN, so `to‹K›en abcdefgh` would match in .NET and not in JavaScript. The words are
+spelled `[Bb][Ee][Aa][Rr][Ee][Rr]`.
+
+**And the encoder is hand-written**, because neither of .NET's would do. `JSON.stringify` escapes only
+`"`, `\`, the C0 range and lone surrogates; `Utf8JsonWriter`'s default escapes `<>&'+` and every
+non-ASCII character, and `UnsafeRelaxedJsonEscaping` still writes U+2028, U+0085, U+00A0 and U+FEFF as
+escapes and replaces a lone surrogate with U+FFFD. `Quoted` follows ECMA-262 and is pinned to node's
+own bytes.
+
 ## Server notices — where the file is (S8 story 1.3, 2026-09-21)
 
 `ServerNotices.PathFor(SettingsFile.DataDirFrom(env))`, and the directory is ASKED for rather than
