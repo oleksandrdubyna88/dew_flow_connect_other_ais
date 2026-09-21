@@ -18,9 +18,17 @@ export const REVISION_SCHEME = 'coai-revision';
  * a person opened.
  *
  * <p><b>A content provider, not an untitled document</b> — two plan reviewers, independently: an
- * untitled buffer is dirty, Ctrl+S prompts to save it to disk, and it is not read-only. A document
- * of a registered scheme is read-only by construction and its tab names the revision, because the
- * URI carries the short sha in the file's own name ({@link revisionDocumentPath}).</p>
+ * untitled buffer is dirty, Ctrl+S prompts to save it to disk, and it is not read-only. Its tab
+ * names the revision too, because the URI carries the short sha in the file's own name
+ * ({@link revisionDocumentPath}).</p>
+ *
+ * <p><b>What read-only means here, measured in a real editor rather than assumed.</b> This block
+ * used to say a document of a registered scheme is read-only BY CONSTRUCTION, and the host
+ * scenario written for story 3.1's code round proved that wrong: `workspace.applyEdit` APPLIES to
+ * a provider buffer. What holds is the narrower and sufficient promise — `save()` refuses and the
+ * URI is not a `file:`, so an edit has nowhere to be written and the working tree is never at
+ * risk. Both facts are pinned by that scenario, because a comment that overclaims is worse than
+ * none: the next reader stops checking.</p>
  *
  * <p>The text is held only while its document is open: `onDidCloseTextDocument` forgets it, so the
  * map is bounded by the tabs a person has open rather than by everything they ever pressed. The
