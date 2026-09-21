@@ -38,11 +38,26 @@ public sealed class AReviewTreeTests : IAsyncLifetime
         _sha = await ShaOf(_repo, "HEAD");
     }
 
+    /// <summary>
+    /// Unlock EVERYTHING first, then delete everything — two passes, and the order is the whole point.
+    /// </summary>
+    /// <remarks>
+    /// One pass deleted the repository first (it is the first temp made) and then ran
+    /// <c>git worktree unlock</c> for the next temp with that repository as its working directory. On
+    /// Windows a missing working directory is tolerated; on Linux <c>Process.Start</c> throws
+    /// <c>Win32Exception: No such file or directory</c>, which failed the TEARDOWN of all 26 tests in
+    /// this class while every test body passed. Found by CI, which is the only place this class runs
+    /// on Linux — the same split as `a host platform in a sentence`.
+    /// </remarks>
     public ValueTask DisposeAsync()
     {
         foreach (var temp in _temps)
         {
             Unlock(temp);
+        }
+
+        foreach (var temp in _temps)
+        {
             TryDelete(temp);
         }
 
@@ -629,18 +644,33 @@ public sealed class AReviewTreeTests : IAsyncLifetime
         result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)} must succeed: {result.StdErr}");
     }
 
-    /// <summary>Unlocks every review tree under a root so the fixture can delete it.</summary>
+    /// <summary>
+    /// Unlocks every review tree under a root so the fixture can delete it.
+    /// </summary>
+    /// <remarks>
+    /// The repository must still be there: a process started with a working directory that does not
+    /// exist throws on Linux and is tolerated on Windows, so the guard is what keeps this class's
+    /// teardown the same on both. The launch is wrapped because a best-effort unlock during teardown
+    /// must never become the reason a test is reported as failing.
+    /// </remarks>
     private void Unlock(string dir)
     {
-        if (!Directory.Exists(dir))
+        if (!Directory.Exists(dir) || !Directory.Exists(_repo))
         {
             return;
         }
 
         foreach (var tree in Directory.GetDirectories(dir, "coai-review-*"))
         {
-            _launcher.RunAsync(new ProcessRequest("git", ["worktree", "unlock", tree], _repo))
-                .GetAwaiter().GetResult();
+            try
+            {
+                _launcher.RunAsync(new ProcessRequest("git", ["worktree", "unlock", tree], _repo))
+                    .GetAwaiter().GetResult();
+            }
+            catch (Exception e) when (e is IOException or System.ComponentModel.Win32Exception)
+            {
+                // Teardown is not an assertion. Whatever could not be unlocked is deleted anyway.
+            }
         }
     }
 
