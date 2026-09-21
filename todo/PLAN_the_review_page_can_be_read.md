@@ -415,6 +415,33 @@ and two spellings of one repository — with the expected mapping written down f
 > **3.3 is therefore unblocked**, with three rules it inherits from the numbers: load on demand only,
 > an in-flight state on the first expansion, and `unavailable` rendered as itself and never as zero.
 
+> **Three more of story 3.3's facts, measured 2026-09-21 because its plan round asked for them.** The
+> round returned 15 findings, 13 gating; 14 were accepted. Two were questions a measurement could
+> settle, and settling them produced a third nobody had asked:
+>
+> ```
+> [3.3] indented method: column0=1 ('Totals') atSymbol=1 ('counted')
+> [3.3] file never opened: prepared=1 ('neverOpened') incoming=1
+> [3.3] a file that does not exist: threw=true
+> ```
+>
+> 1. **Asking at column 0 does NOT return empty — it returns the ENCLOSING symbol.** A reviewer
+>    predicted that an indented method would resolve to nothing and read as `unavailable`. What it
+>    actually does is worse: `prepareCallHierarchy` at character 0 of `    public counted()` prepares
+>    **`Totals`**, the class, and would have counted the CLASS's callers under the method's name — a
+>    number that is precise, plausible and about something else. So the column must be found from the
+>    line's text, AND the prepared item's name must be checked against the row's `symbolName`: here
+>    the two guards agree, because `Totals` ≠ `counted`.
+> 2. **A provider answers for a file nobody opened**, and finds its caller in another file
+>    (`prepared=1, incoming=1`). The concern was that a language service might index only open
+>    documents, which would have left this feature blank for almost every review row. It does not.
+> 3. **A file that no longer exists makes the call THROW**, rather than answer empty. That separates
+>    *the file is gone* from *there is no provider* with no guessing at all — which is exactly the
+>    distinction another reviewer said the plan had collapsed.
+>
+> Both scenarios stay as tests, for the same reason the first one does: they measure VS Code rather
+> than us, and the day any of the three changes is the day a feature built on them starts lying.
+
 ### The revision rule, which is what makes the links honest
 
 The pairs describe HISTORICAL code — the round's `head_sha`. A link, a complexity number and a call
