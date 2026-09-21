@@ -71,6 +71,33 @@ public sealed class ServerNoticeLineTests
     private static JsonElement Parsed(string line) => JsonDocument.Parse(line).RootElement.Clone();
 
     [Fact]
+    public void AnOptionalFieldThatRedactsAwayToNothing_IsABSENT_NotEmpty()
+    {
+        // CodeRabbit, on the pull request. `Title` is not empty when the record is built — it holds
+        // one character — and the redactor removes it, so the line used to carry `"title":""`. The
+        // extension's parser drops an empty optional on the way back in, which makes that line no
+        // longer a fixed point of its own parser: a record read and written again is not the record
+        // that arrived. The parity harness said exactly that once this shape was added to its
+        // corpus — "first differing at code unit 102". The character is spelled by NUMBER, because
+        // an escape here has reached disk as the raw byte four times in this repository.
+        var line = ServerNoticeLine.Of(new()
+        {
+            Utc = "u",
+            Class = "failure",
+            Source = "s",
+            Code = ServerNoticeCodes.Refused,
+            Title = ((char)1).ToString(),
+            Subject = "kept",
+            More = new Dictionary<string, object> { ["note"] = ((char)1).ToString() },
+        });
+
+        line.Should().NotContain("\"title\"", "an optional string with nothing left in it is absent");
+        line.Should().Contain("\"subject\":\"kept\"", "and the ones that survive are still there");
+        line.Should().Contain("\"note\":\"\"", "`more` keeps what it has, because the extension's own "
+            + "serialiser does and the two halves must answer alike");
+    }
+
+    [Fact]
     public void NoStringFieldOfARecordReachesTheLine_CarryingASecret_IdentityFieldsIncluded()
     {
         // The extension's own first test, and the one that rejected the exemption for `source`,

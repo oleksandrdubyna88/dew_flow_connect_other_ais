@@ -493,9 +493,10 @@ Conventions reviewers are dropped.
 ### The notice LINE is a contract, and the only honest check runs both halves (2026-09-21)
 
 The path is where the file is; this is what goes in it, and it is the sharper half. **Both containers
-REDACT** before anything reaches disk — `coai-mcp` writing `server-notices.jsonl`, the extension
-writing its own ledger — so a difference between the two redactors is not a failing test anywhere.
-It is a secret written by one and removed by the other.
+REDACT** before anything reaches disk — the extension writing its own ledger today, and `coai-mcp`
+writing `server-notices.jsonl` once story 1.4's writer has a call site — so a difference between the
+two redactors is not a failing test anywhere. It is a secret written by one and removed by the
+other.
 
 `notifications.ts` is the contract and `CoaiMcp.Core.Notices` is the port. What is compared, and how,
 was decided by running them rather than by reading them:

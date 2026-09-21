@@ -28,6 +28,9 @@ const REPO = join(ROOT, '..');
 /** How long the companion may take before this gives up rather than hanging a CI job. */
 const TIMEOUT_MS = 120_000;
 
+/** The one configuration this script builds AND runs. Named once, so the two cannot drift apart. */
+const CONFIGURATION = 'Debug';
+
 function fail(why) {
   console.error(`parity: ${why}`);
   process.exit(1);
@@ -44,14 +47,13 @@ function companion() {
   if (named !== undefined && named.length > 0) {
     return named;
   }
-  for (const configuration of ['Release', 'Debug']) {
-    const candidate = join(REPO, 'src_mcp', 'tests_notices', 'bin', configuration, 'net10.0', 'NoticeTool.dll');
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
+  // The configuration the BUILD below produces, and only that one. This searched `Release` first
+  // while the build made `Debug`, so a stale Release DLL from a month ago won and the check compared
+  // the current TypeScript against C# nobody had compiled — green, about code that does not exist.
+  // (CodeRabbit, on the pull request.)
+  const candidate = join(REPO, 'src_mcp', 'tests_notices', 'bin', CONFIGURATION, 'net10.0', 'NoticeTool.dll');
 
-  return '';
+  return existsSync(candidate) ? candidate : '';
 }
 
 /** One run of the companion: a JSON array in, a JSON array out. */
@@ -145,7 +147,7 @@ function compare(what, inputs, ours, theirs) {
 console.log('parity: building NoticeTool from the current sources...');
 const built = spawnSync(
   'dotnet',
-  ['build', join(REPO, 'src_mcp', 'tests_notices', 'NoticeTool.csproj'), '-v', 'q', '--nologo'],
+  ['build', join(REPO, 'src_mcp', 'tests_notices', 'NoticeTool.csproj'), '-c', CONFIGURATION, '-v', 'q', '--nologo'],
   { encoding: 'utf8', timeout: TIMEOUT_MS * 4, shell: false },
 );
 if (built.status !== 0) {

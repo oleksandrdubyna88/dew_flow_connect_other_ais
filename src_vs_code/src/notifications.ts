@@ -290,16 +290,30 @@ function limitFor(field: string): number {
  */
 export function notificationLine(record: NotificationRecord): string {
   const { more, ...named } = record;
-  // Flattened FIRST, so fields this build does not know are cleaned and redacted exactly like the
-  // ones it does. A forward-compatibility bag that skipped the redactor would be a hole in a
-  // security measure, dressed as tolerance.
-  const flat: Record<string, unknown> = { ...named, ...more };
-  const safe = Object.fromEntries(
-    Object.entries(flat).map(([field, value]) =>
-      [field, typeof value === 'string' ? safeText(value, limitFor(field)) : value]),
-  );
+  // Both halves are redacted the same way — a forward-compatibility bag that skipped the redactor
+  // would be a hole in a security measure, dressed as tolerance — but PRESENCE is decided
+  // separately, which is why they are no longer flattened first.
+  const safeNamed = Object.entries(named)
+    .map(([field, value]) => [field, clean(field, value)] as const)
+    // An optional string that redacts to NOTHING is ABSENT rather than empty. `given()` drops a
+    // string that was empty when the record was built; this is the same rule one step later, for a
+    // string that HAD characters and lost all of them — `title: '\u0001'` is the shape. Without it
+    // the line carries `"title":""`, `parseNotificationLine` drops the empty optional on the way
+    // back in, and the line is no longer a fixed point of its own parser: a record read and written
+    // again is not the record that arrived. Measured on the parity harness, which said so in those
+    // words. (CodeRabbit, on the notice-line pull request.)
+    .filter(([field, value]) => value !== '' || REQUIRED_FIELDS.includes(field as string));
+  const safeMore = Object.entries(more ?? {}).map(([field, value]) => [field, clean(field, value)] as const);
 
-  return `${JSON.stringify(safe)}\n`;
+  return `${JSON.stringify(Object.fromEntries([...safeNamed, ...safeMore]))}\n`;
+}
+
+/** The four a line means nothing without. They are never dropped, whatever redaction leaves. */
+const REQUIRED_FIELDS: readonly string[] = ['utc', 'class', 'source', 'code'];
+
+/** One value, redacted at its field's limit; anything that is not a string is passed through. */
+function clean(field: string, value: unknown): unknown {
+  return typeof value === 'string' ? safeText(value, limitFor(field)) : value;
 }
 
 /** A string, made safe: anything that is not one is empty rather than `undefined` downstream. */
