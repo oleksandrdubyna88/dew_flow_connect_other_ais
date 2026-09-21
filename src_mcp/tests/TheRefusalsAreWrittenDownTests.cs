@@ -1,3 +1,6 @@
+using System.Diagnostics;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using CoaiMcp.Core.Notices;
 using CoaiMcp.Server;
@@ -21,20 +24,23 @@ namespace CoaiMcp.Tests;
 /// <see cref="Refusal"/> IS the guarantee, and <c>TheRefusalRoadsAreCountedTests</c> is what keeps it
 /// true as the codebase moves.</para>
 ///
-/// <para><b>The one thing this must not get wrong.</b> A notice that cannot be written must never
-/// fail the refusal. The plan round put five findings on that single sentence, from all three
-/// providers, and every one of them was right about the same gap: the pseudocode resolved the data
-/// directory OUTSIDE the failure boundary, so a misconfigured <c>COAI_DATA_DIR</c> would have thrown
-/// past the return and the calling AI would have received nothing at all. Directory resolution,
-/// record construction and the append are one boundary now, and the tests below drive a throwing
-/// resolver, a throwing writer, a writer that answers false and a writer that never returns.</para>
+/// <para><b>The one thing this must not get wrong, in two rounds.</b> The plan round put five findings
+/// on one sentence, from all three providers: the first design resolved the data directory OUTSIDE the
+/// failure boundary, so a misconfigured <c>COAI_DATA_DIR</c> would have thrown past the return and the
+/// calling AI would have received nothing. The code round put TWELVE on the fix: waiting two seconds
+/// for a thread-pool append only stops WAITING, so a wedged share kept the worker forever and every
+/// refusal cost two threads. The answer to both is <see cref="NoticeWriter"/> — one writer thread, a
+/// bounded queue — and the tests below drive a resolver that throws, a writer that throws, a writer
+/// that answers false, a writer that never returns, and a queue that fills.</para>
 ///
 /// <para>The lines are read as JSON rather than through a parser, because this side has no parser —
-/// <see cref="ServerNoticeLine"/> writes and the extension reads, which is the whole point of the
-/// parity harness. What a test may assert is the BYTES, and one of these does.</para>
+/// <see cref="ServerNoticeLine"/> writes and the extension reads, which is what the parity harness is
+/// for. What a test may assert is the BYTES, and one of these does.</para>
 /// </remarks>
 public sealed class TheRefusalsAreWrittenDownTests : IDisposable
 {
+    private static readonly TimeSpan LongEnough = TimeSpan.FromSeconds(10);
+
     private readonly string _dir = Directory.CreateTempSubdirectory("coai-refusals-").FullName;
 
     public void Dispose() => Directory.Delete(_dir, recursive: true);
@@ -44,6 +50,18 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
     private string NoticesFile => Path.Combine(_dir, ServerNotices.Name);
 
     private string[] Lines() => File.Exists(NoticesFile) ? File.ReadAllLines(NoticesFile) : [];
+
+    private static NoticeWriter Writing(Func<ResolvedDataDir, ServerNotice, bool>? append = null) =>
+        new(append ?? ((dir, notice) => ServerNotices.Append(dir, notice)));
+
+    /// <summary>A refusal, written down and waited for — the wait is the TEST's, never the product's.</summary>
+    private string Answered(string sentence, string from, NoticeWriter writer, Serilog.ILogger? log = null)
+    {
+        var answer = Refusal.Answer(sentence, log ?? Silent, from, writer, () => Data);
+        writer.Idle(LongEnough).Should().BeTrue("the writer must drain for this test to read the file");
+
+        return answer;
+    }
 
     private static string Field(string line, string name) =>
         JsonDocument.Parse(line).RootElement.TryGetProperty(name, out var value)
@@ -56,7 +74,7 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
     [Fact]
     public void ARefusal_LandsInTheNoticesFile()
     {
-        Refusal.Answer("no reviewers are configured", "ReviewPlan", log: null, () => Data);
+        Answered("no reviewers are configured", "ReviewPlan", Writing());
 
         Lines().Should().HaveCount(1,
             "the panel reads this file, and a refusal nobody wrote down is a round a person watches "
@@ -66,15 +84,14 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
     [Fact]
     public void TheLineIsWhatTheSerialiserWouldWrite()
     {
-        // Not "a writer was called" — the BYTES. Story 1.2's round named the gap: until the
-        // serialiser was wired to a writer, a call site could serialise a notice by hand and the
-        // parity harness would stay green, because it exercises NoticeTool rather than this.
-        Refusal.Answer("the plan text is empty", "ReviewPlan", log: null, () => Data);
+        // Not "a writer was called" — the BYTES. Story 1.2's round named the gap: until the serialiser
+        // was wired to a writer, a call site could serialise a notice by hand and the parity harness
+        // would stay green, because it exercises NoticeTool rather than this.
+        Answered("the plan text is empty", "ReviewPlan", Writing());
 
         var line = Lines().Single();
 
-        // The WHOLE file, so the comparison carries the newline the serialiser owns: `Of` ends the
-        // line and the append writes exactly what it produced, which is the property this asserts.
+        // The WHOLE file, so the comparison carries the newline the serialiser owns.
         File.ReadAllText(NoticesFile).Should().Be(ServerNoticeLine.Of(new ServerNotice
         {
             Utc = Field(line, "utc"),
@@ -93,7 +110,7 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
     {
         const string sentence = "review_code refuses until a plan round reached proceed";
 
-        Refusal.Answer(sentence, "ReviewCode", log: null, () => Data)
+        Answered(sentence, "ReviewCode", Writing())
             .Should().Be(Refused(sentence),
                 "the wire shape did not move: same JSON, same context, same sentence");
     }
@@ -101,62 +118,109 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
     [Fact]
     public void AResolverThatThrows_StillReturnsTheRefusal()
     {
-        // The plan round's finding, from all three providers: the pseudocode resolved the directory
+        // The plan round's finding, from all three providers: the first design resolved the directory
         // outside the boundary, so a COAI_DATA_DIR that cannot resolve would have thrown past the
         // return and the calling AI would have got nothing — a review that stops working because a
         // setting is wrong.
-        Refusal.Answer("no", "Somewhere", log: null,
+        var said = new List<string>();
+        var writer = Writing();
+
+        Refusal.Answer("no", Watching(said), "Somewhere", writer,
                 () => throw new InvalidOperationException("COAI_DATA_SIDE is not usable"))
             .Should().Be(Refused("no"));
+
+        writer.Idle(LongEnough).Should().BeTrue();
+        said.Should().ContainSingle("and the loss is reported rather than swallowed");
     }
 
     [Fact]
     public void AWriterThatThrows_StillReturnsTheRefusal()
     {
-        Refusal.Answer("no", "Somewhere", log: null, () => Data,
-                (_, _) => throw new IOException("the share stopped answering"), RefusalNotices.Budget)
+        var said = new List<string>();
+        var writer = Writing((_, _) => throw new IOException("the share stopped answering"));
+
+        Refusal.Answer("no", Watching(said), "Somewhere", writer, () => Data)
             .Should().Be(Refused("no"));
+
+        writer.Idle(LongEnough).Should().BeTrue();
+        said.Should().ContainSingle();
     }
 
     [Fact]
-    public void AWriterThatNeverReturns_StillReturnsTheRefusalInsideItsBudget()
+    public void AWriterThatNeverReturns_DoesNotDelayTheRefusalAtAll()
     {
-        // codex on the plan round: this product's data directory has been a NAS share, and a
-        // synchronous append to a stalled one blocks. The calling AI would then time out and receive
-        // no refusal at all — the failure this whole story exists to prevent, arriving by a new road.
-        var clock = System.Diagnostics.Stopwatch.StartNew();
+        // The code round, twelve findings across all three providers. The first fix waited two seconds
+        // for a thread-pool append; a wait only stops WAITING, so a wedged NAS kept the worker forever
+        // and every refusal cost two threads — at a hundred concurrent refusals the pool is gone and
+        // the server stops answering, which is worse than the stall it was protecting against. There
+        // is one writer thread now and the refusal does not wait for it AT ALL.
+        var stuck = new ManualResetEventSlim(false);
+        try
+        {
+            var writer = Writing((_, _) => { stuck.Wait(LongEnough); return true; });
+            var clock = Stopwatch.StartNew();
 
-        var answer = Refusal.Answer("no", "Somewhere", log: null, () => Data,
-            (_, _) => { Thread.Sleep(TimeSpan.FromMinutes(5)); return true; },
-            TimeSpan.FromMilliseconds(300));
+            for (var each = 0; each < 50; each++)
+            {
+                Refusal.Answer("no", Silent, "Somewhere", writer, () => Data)
+                    .Should().Be(Refused("no"));
+            }
 
-        clock.Stop();
-        answer.Should().Be(Refused("no"));
-        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(30),
-            "the write is time-bounded and explicitly lossy: a notice is worth waiting a moment for "
-            + "and is never worth a refusal that never arrives");
+            clock.Stop();
+            clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(2),
+                "fifty refusals against a writer that never returns must cost no more than fifty "
+                + "queue writes — the point of the queue is that this number does not depend on the disk");
+        }
+        finally
+        {
+            stuck.Set();
+        }
+    }
+
+    [Fact]
+    public void AQueueThatFillsDropsTheNotice_RatherThanBlockTheRefusal()
+    {
+        // The bound the queue needs to BE a bound. Past `Depth` a notice is dropped, which is the loss
+        // becoming visible instead of becoming a stall.
+        var stuck = new ManualResetEventSlim(false);
+        try
+        {
+            var writer = Writing((_, _) => { stuck.Wait(LongEnough); return true; });
+            var offered = Enumerable.Range(0, NoticeWriter.Depth * 2)
+                .Count(_ => writer.Offer(() => Data, RefusalNotices.Of("no", "Somewhere"), Silent));
+
+            offered.Should().BeLessThan(NoticeWriter.Depth * 2,
+                "a queue that never says no is not bounded, and an unbounded queue in front of a "
+                + "wedged share is the memory of the process");
+            offered.Should().BeGreaterThan(NoticeWriter.Depth / 2,
+                "and it must actually hold what it says it holds");
+        }
+        finally
+        {
+            stuck.Set();
+        }
     }
 
     [Fact]
     public void AWriteThatIsLost_ReachesTheLog()
     {
-        // The plan round, local: a notice that silently fails to be written leaves the operator with
-        // a system that looks like it worked. `Append` answers false for anything the DISK gave, so
-        // false is the case that must not be silent.
+        // The plan round, local: a notice that silently fails to be written leaves the operator with a
+        // system that looks like it worked. `Append` answers false for anything the disk gave, so false
+        // is the case that must not be silent.
         var said = new List<string>();
+        var writer = Writing((_, _) => false);
 
-        Refusal.Answer("no", "Somewhere", Watching(said), () => Data, (_, _) => false,
-            RefusalNotices.Budget);
+        Refusal.Answer("no", Watching(said), "Somewhere", writer, () => Data);
 
+        writer.Idle(LongEnough).Should().BeTrue();
         said.Should().ContainSingle()
-            .Which.Should().Contain("Somewhere", "the log names which refusal was lost");
+            .Which.Should().Contain(ServerNotices.Name, "the log names the file the notice was for");
     }
 
     [Fact]
     public void ASecretInARefusal_DoesNotReachTheFile()
     {
-        Refusal.Answer("the vault refused: token=ghp_0123456789abcdefghij0123456789abcdef", "Vault",
-            log: null, () => Data);
+        Answered("the vault refused: token=ghp_0123456789abcdefghij0123456789abcdef", "Vault", Writing());
 
         var line = Lines().Single();
 
@@ -168,12 +232,12 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
     [Fact]
     public void TheWorstCaseLine_IsWithinTheDocumentedCeiling()
     {
-        // §7 of the parent bounds this file's growth on a per-record figure, and codex was right on
-        // the plan round that a budget over an unbounded input is not a budget. It IS bounded, by
+        // §7 of the parent bounds this file's growth on a per-record figure, and codex was right on the
+        // plan round that a budget over an unbounded input is not a budget. It IS bounded, by
         // `Redaction.TitleLimit`, and that is a fact this asserts rather than reads: a megabyte of
         // sentence must not produce a megabyte of line. Measured on the WHOLE file — every JSON key,
         // every escape and the newline the append adds — because that is what fills a disk.
-        Refusal.Answer(new string('x', 1_000_000), "Somewhere", log: null, () => Data);
+        Answered(new string('x', 1_000_000), "Somewhere", Writing());
 
         new FileInfo(NoticesFile).Length.Should().BeLessThan(10 * 1024,
             "the §7 table's worst case is ~10 KB per record, and 1.1 GB/year is arithmetic over it");
@@ -184,12 +248,12 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
     public void TwoRefusalsFromDifferentPlaces_AreTwoRowsOnThePage()
     {
         // codex on the plan round: the extension keys repeats on (code, subject), and one
-        // `code: refused` for every site would collapse "no reviewers configured" and "the plan text
-        // is empty" into a single row a person cannot read. The subject is the CALLING MEMBER, filled
-        // by the compiler through [CallerMemberName] — a stable key, no round numbers in it, and not
-        // one of the 48 call sites had to change to get it.
-        Refusal.Answer("no reviewers", "ReviewPlan", log: null, () => Data);
-        Refusal.Answer("no plan", "ReviewCode", log: null, () => Data);
+        // `code: refused` for every site would collapse "no reviewers configured" and "the plan text is
+        // empty" into a single row a person cannot read.
+        var writer = Writing();
+
+        Answered("no reviewers", "ReviewPlan", writer);
+        Answered("no plan", "ReviewCode", writer);
 
         Lines().Select(line => Field(line, "subject"))
             .Should().Equal(["ReviewPlan", "ReviewCode"],
@@ -199,27 +263,33 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
     [Fact]
     public void TheCallerNeedNotNameItself()
     {
-        // What makes the subject free: the compiler fills it at every one of the 48 sites.
-        Refusal.Answer("no", log: null, where: () => Data);
+        // What makes the subject free: the compiler fills it at every one of the 48 call sites, so not
+        // one of them had to change. Asked of the SIGNATURE rather than by calling it, because the
+        // overload that fills it writes to the real data directory — which no test may touch.
+        var filled = typeof(Refusal)
+            .GetMethod(nameof(Refusal.Answer), BindingFlags.NonPublic | BindingFlags.Static,
+                [typeof(string), typeof(Serilog.ILogger), typeof(string)])!
+            .GetParameters()[2];
 
-        Field(Lines().Single(), "subject").Should().Be(nameof(TheCallerNeedNotNameItself));
+        filled.Name.Should().Be("from");
+        filled.GetCustomAttribute<CallerMemberNameAttribute>().Should().NotBeNull(
+            "without it every site would have to pass its own name, which is the 48-call-site change "
+            + "the parent plan declined in writing");
     }
 
     [Fact]
     public void AHugeFileIsRolledOverBeforeItIsAppendedTo()
     {
-        // The plan round, gemini and codex: `.agents/conventions/common/planning-docs.md` requires a
-        // plan that creates something that GROWS to name its budget BEFORE the first write, with an
-        // owner and a retirement rule. This is the first story with a repeating writer — 48 sites,
-        // every one reachable on every round — so the rule ships with it: at the ceiling the file
-        // becomes `server-notices.1.jsonl` and a new one starts, which makes the §7 figure of 256 MB
-        // a hard maximum for the pair rather than a trigger for work nobody has scheduled.
+        // The plan round, gemini and codex: `planning-docs.md` requires a plan that creates something
+        // that GROWS to name its budget BEFORE the first write, with an owner and a retirement rule.
+        // This is the first story with a repeating writer — 48 sites, every one reachable on every
+        // round — so the rule ships with it.
         File.WriteAllText(NoticesFile, new string('x', 64) + "\n");
-        var rolled = Path.Combine(_dir, ServerNotices.Archive);
 
-        ServerNotices.Append(Data, Notice("first"), rollAt: 8);
+        ServerNotices.Append(Data, Notice("first"), rollAt: 8).Should().BeTrue();
 
-        File.Exists(rolled).Should().BeTrue("the old generation is kept, not deleted");
+        File.Exists(Path.Combine(_dir, ServerNotices.Archive)).Should().BeTrue(
+            "the old generation is kept, not deleted");
         Lines().Should().ContainSingle("and the new one starts with the record that crossed the line");
     }
 
@@ -233,6 +303,22 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
         Lines().Should().HaveCount(2, "a roll that fires early loses what the page is showing");
     }
 
+    [Fact]
+    public void AFileAtTheCeilingThatCannotRoll_RefusesToGrow()
+    {
+        // The code round, codex: the first version rolled best-effort and appended regardless, so a
+        // file at the ceiling whose rename kept failing grew without limit while the ceiling said
+        // otherwise. A ceiling that yields under exactly the conditions it exists for is not one.
+        // A DIRECTORY in the archive's place is what makes the move fail on both platforms — a locked
+        // file would not, since only Windows refuses that.
+        File.WriteAllText(NoticesFile, new string('x', 64) + "\n");
+        Directory.CreateDirectory(Path.Combine(_dir, ServerNotices.Archive));
+
+        ServerNotices.Append(Data, Notice("second"), rollAt: 8).Should().BeFalse(
+            "the notice is lost, which the writer reports — the file is not grown past its ceiling");
+        Lines().Should().ContainSingle("and what was already there is still there");
+    }
+
     private static ServerNotice Notice(string title) => new()
     {
         Utc = ServerNotice.Iso(DateTimeOffset.UtcNow),
@@ -242,11 +328,20 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
         Title = title,
     };
 
+    /// <summary>A logger that is real and says nothing — never null, per the C# rule on nulls.</summary>
+    private static Serilog.ILogger Silent => Serilog.Core.Logger.None;
+
     private static Serilog.ILogger Watching(List<string> said) =>
         new Serilog.LoggerConfiguration().WriteTo.Sink(new Collecting(said)).CreateLogger();
 
     private sealed class Collecting(List<string> said) : Serilog.Core.ILogEventSink
     {
-        public void Emit(Serilog.Events.LogEvent logEvent) => said.Add(logEvent.RenderMessage());
+        public void Emit(Serilog.Events.LogEvent logEvent)
+        {
+            lock (said)
+            {
+                said.Add(logEvent.RenderMessage());
+            }
+        }
     }
 }

@@ -89,9 +89,8 @@ public static class ServerNotices
     public static bool Append(ResolvedDataDir dir, ServerNotice notice, long rollAt = RollAt)
     {
         var path = PathFor(dir);
-        Roll(path, rollAt);
 
-        return JsonlLedger.AppendLine(path, ServerNoticeLine.Of(notice));
+        return Room(path, rollAt) && JsonlLedger.AppendLine(path, ServerNoticeLine.Of(notice));
     }
 
     /// <summary>
@@ -116,31 +115,60 @@ public static class ServerNotices
     /// which is the right answer either way. What must never happen is a refusal failing because a
     /// rename did not.</para>
     /// </remarks>
-    private static void Roll(string path, long rollAt)
-    {
-        var live = new FileInfo(path);
-        if (!live.Exists || live.Length < rollAt)
-        {
-            return;
-        }
+    private static bool Room(string path, long rollAt) => Size(path) < rollAt || Rolled(path);
 
-        Rolled(path, Path.Combine(live.DirectoryName ?? "", Archive));
-    }
-
-    private static void Rolled(string live, string archive)
+    /// <summary>
+    /// How big the live file is, and never an exception.
+    /// </summary>
+    /// <remarks>
+    /// <c>FileInfo.Exists</c> is a snapshot and <c>Length</c> reads it, so a neighbour deleting or
+    /// renaming the file between the two throws — which the code round named, and which on a shared
+    /// NAS is a Tuesday. An unreadable length answers zero: the ceiling bounds a file this process can
+    /// SEE, and refusing to write because a stat failed would lose a notice for a reason that has
+    /// nothing to do with size.
+    /// </remarks>
+    private static long Size(string path)
     {
         try
         {
-            File.Move(live, archive, overwrite: true);
+            var live = new FileInfo(path);
+
+            return live.Exists ? live.Length : 0;
         }
         catch (IOException)
         {
-            // A neighbour got there first, or the share stopped answering. Either way the append
-            // that follows is the thing that matters and it can still succeed.
+            return 0;
         }
         catch (UnauthorizedAccessException)
         {
-            // The same, from a permission the process does not have on the archive name.
+            return 0;
+        }
+    }
+
+    /// <summary>
+    /// Whether the live file was moved aside, making room. FALSE stops the append.
+    /// </summary>
+    /// <remarks>
+    /// The code round, codex: the first version rolled best-effort and appended regardless, so a file
+    /// at the ceiling whose rename kept failing — a locked archive, a denied replacement — grew without
+    /// limit while the ceiling said otherwise. A ceiling that yields under exactly the conditions it
+    /// exists for is not one. The notice is lost instead, and <see cref="NoticeWriter"/> says so.
+    /// </remarks>
+    private static bool Rolled(string live)
+    {
+        try
+        {
+            File.Move(live, Path.Combine(Path.GetDirectoryName(live) ?? "", Archive), overwrite: true);
+
+            return true;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 }

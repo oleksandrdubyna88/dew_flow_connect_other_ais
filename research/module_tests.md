@@ -1592,12 +1592,22 @@ pseudocode resolved the data directory outside the failure boundary, so a miscon
 `COAI_DATA_DIR` would have thrown past the return and the calling AI would have received nothing.
 
 **Teeth, measured.** Narrowing the boundary's `catch` from `Exception` to `DivideByZeroException`
-turns two of them red with the exception escaping as an `AggregateException`; removing the time
-budget makes the fourth **hang** — `0 completed, 0 failed | active: AWriterThatNeverReturns…` — which
-is the symptom codex described, not a proxy for it. One plant did NOT work and is worth recording: an
+turns two of them red with the exception escaping as an `AggregateException`; removing the time budget
+made the fourth **hang** — `0 completed, 0 failed | active: AWriterThatNeverReturns…` — which is the
+symptom codex described, not a proxy for it. One plant did NOT work and is worth recording: an
 `if (true) … else if (false)` version failed to COMPILE, the build stopped, and the suite then ran the
 previous executable and reported thirteen green. A plant that does not build is a plant that proves
 nothing, and the green run looks identical to a real one.
+
+**And the code round replaced what those tests were testing.** Twelve findings said the 2 s budget was
+the wrong shape — a wait only stops waiting, the pool worker stays blocked — so the timeout test became
+`AWriterThatNeverReturns_DoesNotDelayTheRefusalAtAll`: fifty refusals against a writer that never
+returns, asserted under two seconds. Two more arrived with the queue: one that a full queue answers
+`false` rather than blocking (the first channel used `DropWrite`, which discards the notice and answers
+TRUE — the silent loss the whole design is against, and the test caught it: *"Expected offered to be
+less than 512 … but found 512"*), and one that a file at its ceiling whose archive cannot be written
+REFUSES to grow. That last one uses a DIRECTORY in the archive's place rather than a locked file,
+because only Windows refuses to rename over an open handle and the suite runs on ubuntu.
 
 **The seams are parameters, not hooks** — the directory, the writer and the budget are all arguments
 with defaults, for the reason story 1.4 recorded: xUnit runs test classes in parallel and a static

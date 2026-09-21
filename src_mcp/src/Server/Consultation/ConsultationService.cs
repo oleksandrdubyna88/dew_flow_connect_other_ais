@@ -853,5 +853,5 @@ public sealed class ConsultationService(
     /// into a single row. The compiler fills it at each site, so nothing below changed.</para>
     /// </remarks>
     private string Error(string sentence, [CallerMemberName] string from = "") =>
-        Refusal.Answer(sentence, from, log);
+        Refusal.Answer(sentence, log, from);
 }

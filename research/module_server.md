@@ -1289,15 +1289,31 @@ writer that throws, a writer that answers `false`, and a writer that never retur
 breaking the code — narrowing the `catch` to `DivideByZeroException` turns two of them red with the
 exception escaping, and removing the budget makes the fourth HANG, which is the symptom itself.
 
-**The write is time-bounded.** codex: this product's data directory has been a NAS share, and a
-synchronous append to a stalled one blocks — the refusal would never be serialised and the calling AI
-would time out, which is the failure this story exists to prevent arriving by a new road. The append
-runs on the thread pool, waited on for **2 s**; past that the refusal goes without it and the task is
-abandoned. Explicitly lossy, and the residual is written into the class.
+**The refusal does not wait for the write AT ALL, and getting there took two rounds.** The first
+answer to "a stalled NAS blocks the append" was a 2 s budget on a thread-pool task. The code round put
+TWELVE findings on that, across all three providers, and they were right: a wait only stops WAITING.
+The abandoned worker stays blocked on the share forever, so every refusal cost two threads, one of
+them permanently — at a hundred concurrent refusals the pool is gone and the server stops answering,
+which is a far worse failure than the stall the budget was protecting against.
 
-**A lost notice is never silent.** `Append` answers `false` for anything the disk gave, and a run
-where that happens looks exactly like one where it did not — so both `Error` helpers became instance
-methods to pass their logger, and the loss is a `Warning` naming the refusal.
+So there is `NoticeWriter`: **one** writer thread and a bounded channel of **256**. A refusal offers
+its notice and returns — no resolve, no I/O, no lock on that path — and the directory is resolved on
+the writer's thread with the append. A wedged share blocks that one thread and nothing else; the queue
+fills and `Offer` then answers `false`, which is the loss becoming VISIBLE instead of becoming a stall.
+`BoundedChannelFullMode.Wait` is what makes a synchronous `TryWrite` answer false rather than block —
+`DropWrite` discards the notice and answers true, which is the silent loss this design exists to
+prevent. Measured by a test: fifty refusals against a writer that never returns cost under two seconds.
+
+**The writer takes a RECORD, not a refusal.** codex: a boundary specialised to refusals is one story
+2.3 has to bypass or copy. `RefusalNotices` says what a refusal IS; the writer owns resolve, append,
+and reporting the loss.
+
+**A lost notice is never silent, and the report cannot become the silence either.** `Append` answers
+`false` for anything the disk gave, and a run where that happens looks exactly like one where it did
+not — so both `Error` helpers became instance methods to pass their existing logger, and every loss is
+a `Warning`: the disk refused it, the queue was full, the record could not be built. The logging call
+is itself wrapped, because a disposed logger or a full sink throwing from inside the call that reports
+a lost notice would swallow both (the code round, local).
 
 **The ceiling ships with the first repeating writer.** §7 of the plan named 256 MB as a trigger for a
 roll-up somebody would build later; the plan round refused that, citing `planning-docs.md`: a plan
@@ -1306,6 +1322,14 @@ write, and this is the first story with a repeating writer — 48 sites, every o
 round. So `ServerNotices.Append` rolls the live file to `server-notices.1.jsonl` at **128 MB**, two
 generations, making 256 MB a hard maximum rather than a trigger. A roll that loses a race to another
 server on the same NAS is not an error: the record lands in whichever file is live.
+
+**A ceiling that yields is not one.** The first version rolled best-effort and appended regardless, so
+a file at 128 MB whose rename kept failing — a locked archive, a denied replacement — would have grown
+without limit while the ceiling said otherwise (codex). `Append` now returns `false` instead: the
+notice is lost and the writer says so. And the size check itself cannot throw: `FileInfo.Exists` is a
+snapshot and `Length` reads it, so a neighbour deleting the file between the two throws, which on a
+shared NAS is a Tuesday — an unreadable length answers zero rather than losing a notice for a reason
+that has nothing to do with size.
 
 **What bounds a record is the redactor, not a second cut.** `Redaction.SafeText` cuts every string
 field to `TitleLimit` (1000), which is what makes §7's ~10 KB worst case a fact — a megabyte of

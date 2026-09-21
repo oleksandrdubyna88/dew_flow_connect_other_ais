@@ -2680,7 +2680,7 @@ public sealed partial class PanelService
     /// into a single row. The compiler fills it at each site, so nothing below changed.</para>
     /// </remarks>
     private string Error(string sentence, [CallerMemberName] string from = "") =>
-        Refusal.Answer(sentence, from, _log);
+        Refusal.Answer(sentence, _log, from);
 }
 
 /// <summary>
