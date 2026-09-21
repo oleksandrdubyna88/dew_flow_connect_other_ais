@@ -1714,6 +1714,56 @@ no record and younger than ten minutes is `in_progress`; older, it is inspected 
 existing directory is the mutex, so of two presses at once exactly one creates and the other re-reads
 the record.
 
+**What the code round changed, and it was most of the safety.** Thirty-three gating findings, and
+the eleven that were real all pointed at the same two places — what proves a tree is FINISHED, and
+what proves it is SAFE to remove:
+
+- **A record has three states, not two.** `Absent`, `Unreadable`, `Found`. Collapsing the middle one
+  into `Absent` meant a finished tree whose record became unreadable — a permission, a lock, a
+  half-written file — looked like a tree that never finished, and once its directory was old and
+  clean the cleanup path unlocked and DELETED a checkout somebody may have been reading. Absence must
+  be positively established before anything is removed.
+- **Every field of the record is nullable and normalised on read.** A DTO field the file omits
+  deserialises as null whatever a non-nullable declaration says, and `record.Sha.Length` on an
+  omitted `sha` was an unhandled `NullReferenceException` in a mode whose whole contract is that
+  domain outcomes are data at exit 0. A record missing the two fields that carry the IDENTITY is
+  `Unreadable`, because it cannot prove anything about the tree beside it.
+- **A record proves a tree only when it MATCHES.** The directory name is a truncated digest and a
+  short sha, so two identities could in principle land on one name. Rather than lengthen the name —
+  which shrinks the chance without removing it — the record carries the full identity and is compared
+  before its tree is handed back. A collision now costs a rebuild, never the wrong repository opened.
+- **A record whose directory is gone is not a tree.** It is neither handed back (the extension would
+  open a folder that is not there) nor counted toward the cap (a ghost would wedge a slot forever).
+- **The cap is a cap.** The check and the creation now happen under one machine-wide file lock held
+  until the record is written: with nine trees held, two presses that both read nine would both
+  create and leave eleven. A press that cannot take the lock in five seconds answers `in_progress`,
+  which is true.
+- **Staleness is measured from the LAST WRITE, not the creation.** Creation time is fixed the moment
+  `worktree add` makes the directory, so a checkout whose submodules took longer than the window would
+  have been judged abandoned while git was still writing into it.
+- **Cleanliness is checked twice**, the second time immediately before the removal, and a git that
+  did not run is never read as "it is clean". The window cannot be closed entirely without locking the
+  tree itself, and the docblock says so rather than implying otherwise.
+- **The recursive delete is fenced**: refused outside our own root, run off the calling thread with a
+  two-minute budget so a held file handle cannot hang the request, and never reached for a tree that
+  has not just been proved clean.
+- **The record keeps a WORKING tree** (`repoPath`), not only the git common dir, because
+  `worktree unlock` and `worktree remove` refuse to run from a bare `.git` directory — story 3.2b
+  needs somewhere to run them FROM, and discovering that later would mean migrating every record
+  written before.
+- **A hand-deleted checkout leaves git's registration behind**, and every later press at that identity
+  then failed with *missing but already registered* — the feature dead at that commit until somebody
+  ran `git worktree prune`. One prune and one retry, reached only when the directory really is absent.
+  Found by the test written for the finding about stale records rather than by the finding.
+- **The temp-then-move dance is now `Files.AtomicFile`**, extracted when a reviewer counted the
+  seventh open-coded copy. The other six are named in its docblock rather than rewritten inside a
+  story about worktrees.
+
+Seven findings claimed these commands run with no timeout. Every one of them goes through one
+launcher that sets one; what was true underneath is that five minutes is short for a `worktree add`
+plus submodules on a large repository while the client waits ten, so the budgets are now split —
+a minute for a probe or an inspection, ten for a checkout, two for a delete.
+
 **Submodules are populated**, through the existing `SubmodulePopulator`, because in this family a
 project's rules and dependencies ARE submodules and a tree without them is one whose language server
 sees holes. A mount that stayed empty is NAMED on the answer rather than discovered later.

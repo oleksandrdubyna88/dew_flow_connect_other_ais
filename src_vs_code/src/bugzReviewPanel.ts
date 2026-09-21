@@ -4,7 +4,8 @@ import * as vscode from 'vscode';
 
 import { asText } from './asText';
 import { notify } from './notify';
-import { AskedRevision, AskedTree, KeepWrite, PairsRead } from './roundsDbRead';
+import { AskedRevision, KeepWrite, PairsRead } from './roundsDbRead';
+import { AskedTree } from './reviewTreeRead';
 import { settingWritten } from './settingWrite';
 import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';

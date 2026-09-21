@@ -70,16 +70,33 @@ export const TREE_REASONS = [
  */
 export function treeSentence(tree: ReviewTreeAnswer): string {
   if (tree.reason === 'budget') {
-    return `this machine already holds ${tree.trees.length} review checkouts, which is the limit — remove one to make room`;
+    return `this machine already holds ${tree.trees.length} review checkouts, which is the limit — remove one to make room. ${held(tree.trees)}`;
   }
   if (tree.reason === 'in_progress') {
-    return 'another press is preparing this checkout — try again in a moment';
+    // The checkout is running in the SERVER, so it survives this window being reloaded or this page
+    // being redrawn — which is why the answer is "still going" and not "start again". The truth is
+    // the tree on disk and the record beside it; this side asks on every press and caches nothing.
+    return 'this commit is already being checked out — that run continues even if this page is reloaded, so press again in a moment to open it';
   }
   if (tree.reason === 'incomplete_and_dirty') {
     return `a half-made checkout at ${tree.path} has changes in it, so it was left alone — look at it, then remove it by hand`;
   }
 
   return SENTENCES[tree.reason] ?? 'the checkout could not be made';
+}
+
+/**
+ * The checkouts that are using up the cap, named.
+ *
+ * <p>The server sends every one of them with its repository, commit, path and creation time, and the
+ * refusal used to print only how MANY there were — which tells a person they must remove something
+ * without telling them what there is to remove. Ten paths is a lot of text for a row, so each is one
+ * line: the commit, the day, and the path they can look at.</p>
+ */
+function held(trees: readonly HeldTree[]): string {
+  return trees.length === 0
+    ? ''
+    : `they are: ${trees.map((t) => `${t.sha.slice(0, 7)} (${t.created.slice(0, 10)}) at ${t.path}`).join('; ')}`;
 }
 
 const SENTENCES: Readonly<Record<string, string>> = {

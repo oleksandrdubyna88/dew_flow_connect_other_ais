@@ -160,9 +160,16 @@ test('the memory is a value: remembering answers a new one and leaves the old un
 // The rendered actions, and the name a revision document is given.
 // --------------------------------------------------------------------------------------------
 
-test('a row with no file recorded offers nothing, and one with no checkout recorded offers only the revision', () => {
-  assert.match(readable(revisionActions({ ...row(1), file: '' }, UNPROBED)), /nothing to open/u);
-  assert.doesNotMatch(revisionActions({ ...row(1), file: '' }, UNPROBED), /data-open-/u);
+test('a row with no file recorded offers no FILE action, but still offers the whole-repository checkout', () => {
+  const noFile = revisionActions({ ...row(1), file: '' }, UNPROBED);
+
+  assert.match(readable(noFile), /nothing to open/u);
+  assert.doesNotMatch(noFile, /data-open-at|data-open-current/u,
+    'neither file action has a path to open');
+  // The checkout takes the repository and the commit, which this row HAS. Returning before it was
+  // rendered suppressed a working action on every finding that recorded no path. (Code round, codex.)
+  assert.match(noFile, /data-open-tree="1"/u,
+    'the whole-repository checkout never needed a file');
 
   const noCheckout = revisionActions({ ...row(1), repoPath: '' }, UNPROBED);
   assert.match(noCheckout, /data-open-at="1"/u);

@@ -1324,14 +1324,25 @@ ARTEFACT changes, which is the question a release actually asks.
 
 Whole executable after: 2140 tests, 2138 passed, 0 failed, 2 skipped.
 
-## Story 3.2a's counts, and one flake it surfaced (2026-09-21)
+## Story 3.2a's counts, and an unresolved suite failure (2026-09-21)
 
-Whole executable after the review tree: **2 334 tests, 2 332 passed, 0 failed, 2 skipped**. Extension:
-**4 001 tests, 4 000 passed, 0 failed, 1 skipped**; `tsc` exit 0 on a clean `out/`, `eslint src` exit 0.
+Whole executable after the review tree and its code round: **2 415 tests, 0 failed**. Extension:
+**4 006 tests, 0 failed, 1 skipped**; `tsc` exit 0 on a clean `out/`, `eslint src` exit 0.
 
-**A pre-existing flake, named rather than fixed here.** On one full extension run
-`aConversationSurvivesAReload` failed with *settings.json is not writable*; it passes 3 of 3 in
-isolation and the next whole-suite run was clean. `node --test` runs test FILES in parallel and more
-than one of them writes `settings.json`, so this is contention, not a defect in the code under test.
-It has nothing to do with the review tree and is recorded here so the next person who meets it does
-not go looking in their own change.
+**One whole-suite run reported a single failure and it is NOT explained.** It is recorded here
+because the rule is explicit that "passes alone, fails in the suite" is a shared-state defect and
+never a flake — and because the first account of it written here was wrong, which is the more useful
+half of the record:
+
+- the run printed `ConnectOtherAIs: a chat tab could not be saved for a reload Error: settings.json
+  is not writable`, and that was taken for the failure. It is not. That sentence is
+  **deliberate fixture output from a test that PASSES** — `a storage failure does not stop every
+  write after it` injects exactly that error to prove the write queue survives one, and
+  `ChatTabMemory.write` prints it through `console.error` on purpose. `settled()` returns an
+  already-caught promise and cannot reject.
+- **the failing test's name was never captured**, and a second whole-suite run was clean. So what is
+  known is: one failure, identity unknown, not reproduced.
+
+Nothing here is called a flake and nothing is called fixed. The next person to see a single failure
+in this suite should capture the test NAME before anything else, and should not spend time on the
+`settings.json` line — it is noise by design.

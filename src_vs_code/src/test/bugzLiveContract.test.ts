@@ -8,6 +8,7 @@ import { spawnSync } from 'node:child_process';
 import { parseBugs } from '../roundsDb';
 import { readFileAt, readPairs, readRealMethod } from '../roundsDbRead';
 import { TREE_REASONS } from '../reviewTree';
+import { readTreeAt } from '../reviewTreeRead';
 import { mayRank } from '../bugzView';
 import { EXITS, outcomeOf, readSummary } from '../bugsSend';
 
@@ -615,7 +616,10 @@ test('a seeded pair reads its file at its revision out of a real repository, and
 test('every reason the checkout mode can answer is a reason this panel knows', () => {
   const at = path.join(process.cwd(), '..', 'src_mcp/core/Collecting/ReviewTree.cs');
   assert.ok(fs.existsSync(at), 'ReviewTree.cs has moved — this test is reading nothing');
-  const source = fs.readFileSync(at, 'utf8');
+  // Comment-stripped, per the house rule: a regex over raw source can match a constant somebody
+  // wrote INSIDE a comment, and would then pass on a vocabulary the compiler never saw.
+  // (Code round, codex.)
+  const source = stripped(fs.readFileSync(at, 'utf8'));
 
   const klass = /public static class ReviewTreeReason\s*\{([^}]*)\}/u.exec(source);
   assert.ok(klass !== null, 'ReviewTreeReason is no longer declared where this looks');
@@ -646,9 +650,61 @@ function reasonValueOf(_nearby: string, name: string): string {
   const found = fs.readdirSync(folder)
     .filter((file) => file.endsWith('.cs'))
     .map((file) => new RegExp(`public const string ${name} = "([a-z_]+)";`, 'u')
-      .exec(fs.readFileSync(path.join(folder, file), 'utf8')))
+      .exec(stripped(fs.readFileSync(path.join(folder, file), 'utf8'))))
     .find((hit) => hit !== null);
   assert.ok(found !== undefined && found !== null, `no literal defines ${name} anywhere in Collecting/`);
 
   return found[1] ?? '';
 }
+
+/** C# source with its comments removed, so a structural regex cannot match prose ABOUT the code. */
+function stripped(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//gu, ' ').replace(/(^|[^:])\/\/.*$/gmu, '$1');
+}
+
+/**
+ * The REAL `--tree-at` answer, parsed by the REAL reader — story 3.2a's contract, both halves.
+ *
+ * <p>The structural test above compares the two vocabularies as TEXT, which is worth having and is
+ * not the same as running the thing. A reviewer put it exactly right: the mode could answer a shape
+ * the reader refuses while both suites stayed green. This runs the BUILT binary against an empty
+ * corpus and asserts the reader accepts its own output — the envelope, the reason as DATA at exit 0,
+ * the id echoed, and every collection present.</p>
+ *
+ * <p>An empty corpus on purpose: a populated one would check a repository out, which is minutes and
+ * a worktree to clean up, and `AReviewTreeTests` already does that against real git. What only this
+ * can answer is whether the two halves of the WIRE agree.</p>
+ */
+test('the real --tree-at answer for a pair nobody has is a reason, not a failure',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-treeat-'));
+    try {
+      const read = await readTreeAt(server(), { findingId: 1, headSha: '' }, runIn(data));
+
+      assert.ok(read.ok, `the reader refused the real binary's own output: ${read.ok ? '' : read.why}`);
+      assert.equal(read.tree.findingId, 1);
+      assert.equal(read.tree.reason, 'pair_not_found', 'an empty corpus has no pair 1, and the binary must say so as data');
+      assert.equal(read.tree.path, '', 'nothing was made, so there is nothing to open');
+      assert.equal(read.tree.reused, false);
+      assert.deepEqual([...read.tree.emptyMounts], []);
+      assert.deepEqual([...read.tree.trees], []);
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+test('a missing --id on --tree-at is 65 from the real binary, and is not read as an old server',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-treeat-65-'));
+    try {
+      const { code } = await runIn(data)(['--tree-at']);
+
+      assert.equal(code, 65, 'a request fault is 65; 64 would send the page down the too-old path');
+
+      const read = await readTreeAt(server(), { findingId: 1, headSha: '' }, async () => ({ code, output: '' }));
+      assert.equal(read.ok, false);
+      assert.equal(read.ok === false && read.tooOld, false, 'a request fault must never read as an old server');
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });

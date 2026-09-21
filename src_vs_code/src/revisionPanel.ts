@@ -14,7 +14,8 @@ import {
 } from './openAtRevision';
 import { revisionActions, RevisionState, TREE_WORKING, TreeState, WORKING } from './revisionActions';
 import { mountsNote, TreeRead, treeSentence } from './reviewTree';
-import { AskedRevision, AskedTree } from './roundsDbRead';
+import { AskedRevision } from './roundsDbRead';
+import { AskedTree } from './reviewTreeRead';
 
 /**
  * Reaching the code for one review page: what it has learned, what is out, and what each row says.

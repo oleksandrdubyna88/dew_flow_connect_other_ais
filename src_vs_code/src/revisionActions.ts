@@ -105,10 +105,14 @@ const why = (said: string): string => (said.length > 0 ? `<span class="why">${es
 /** The row's actions, as markup for its `data-revision` container. */
 export function revisionActions(row: RevisionRow, state: RevisionState, tree: TreeState = TREE_READY): string {
   const id = escapeHtml(String(row.findingId));
-  if (text(row.file).length === 0) {
-    return none('no file recorded, so there is nothing to open');
-  }
   const sha = text(row.headSha);
+  if (text(row.file).length === 0) {
+    // The two FILE actions have nothing to open, but the whole-repository checkout never needed a
+    // file — it takes the repository and the commit, both of which this row has. Returning here
+    // before rendering it suppressed a working action on every row whose finding recorded no path.
+    // (Code round, codex.)
+    return none('no file recorded, so there is nothing to open') + checkout(id, sha, row, tree);
+  }
   const at = state.offered && sha.length > 0
     ? `<button type="button" class="quiet" data-open-at="${id}" title="The file as it was at the commit the reviewers read, read-only, straight out of git — even when no branch reaches that commit any more.">Open at ${commit(sha)}</button>`
     : '';

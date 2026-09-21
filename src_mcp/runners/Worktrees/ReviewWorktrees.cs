@@ -21,8 +21,8 @@ public sealed record TreePlace(string RepoPath, string Sha);
 /// the length of a fan-out and its correctness IS that it goes away. This one exists until a person
 /// is finished with it, which is a different lifetime and therefore a different invariant — one
 /// class cannot hold both without its every method asking which kind it is. What IS shared is
-/// reused: <see cref="SubmodulePopulator"/> unchanged, <see cref="GitHistory"/> for every probe, and
-/// the one sanctioned <see cref="IProcessLauncher"/>.</para>
+/// reused: <see cref="SubmodulePopulator"/> unchanged, <see cref="GitHistory"/> for every probe, the
+/// one sanctioned <see cref="IProcessLauncher"/>, and <see cref="Files.AtomicFile"/> for the record.</para>
 /// <para><b>The defect this class exists around.</b> <c>WorktreeManager.PruneOursAsync</c> runs on
 /// every gate <c>open</c> and has two halves: <c>worktree remove --force</c> over everything
 /// <c>ListOursAsync</c> matches, and then <c>Directory.Delete(recursive: true)</c> over every
@@ -36,8 +36,9 @@ public sealed record TreePlace(string RepoPath, string Sha);
 /// makes. It is a guard against ONE <c>--force</c>, not a vault: git's own message names the
 /// override (<c>remove -f -f</c>), and nothing stops a person deleting the directory. Said plainly
 /// because a comment that overclaims makes the next reader stop checking.</para>
-/// <para><b>Nothing here writes to the rounds database</b> — not a row, not a column. What it writes
-/// is a checkout on disk and one record beside it.</para>
+/// <para><b>Nothing is deleted that has not just been proved to hold nothing.</b> Every removal path
+/// here re-checks cleanliness immediately before it acts, refuses on a record it could not read, and
+/// refuses on any path that is not under our own root. The code round found all three.</para>
 /// </remarks>
 public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, string root)
 {
@@ -55,13 +56,38 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
         "coai review tree - remove it from the ConnectOtherAIs panel, not by hand";
 
     /// <summary>
-    /// How long a directory with no record is assumed to be another press still working. Two minutes
-    /// for the checkout plus a minute per submodule mount, with slack; past it, the maker died.
+    /// How long a directory with no record is taken for another press still working, measured from
+    /// its LAST WRITE and not its creation.
     /// </summary>
-    private static readonly TimeSpan StillWorking = TimeSpan.FromMinutes(10);
+    /// <remarks>
+    /// Creation time is fixed the moment <c>worktree add</c> makes the directory, so a checkout of a
+    /// large repository whose submodules take longer than this would have been judged abandoned while
+    /// git was still writing into it — and then inspected and rebuilt underneath itself. Last-write
+    /// moves as the checkout progresses, so it says "nothing has happened here for ten minutes",
+    /// which is the question actually being asked. (Code round, gemini.)
+    /// </remarks>
+    private static readonly TimeSpan Untouched = TimeSpan.FromMinutes(10);
 
-    /// <summary>Longer than a read: a checkout of a large repository is minutes, not seconds.</summary>
-    private static readonly TimeSpan Budget = TimeSpan.FromMinutes(5);
+    /// <summary>A probe or an inspection: seconds of work, and a minute is already generous.</summary>
+    private static readonly TimeSpan Asking = TimeSpan.FromMinutes(1);
+
+    /// <summary>
+    /// A checkout and its submodules. Ten minutes, matching the extension's own cap on the call.
+    /// </summary>
+    /// <remarks>
+    /// It was five, which is the one true thing in a cluster of code-round findings that claimed
+    /// these commands had no timeout at all — every one of them goes through <see cref="Git"/>, which
+    /// sets one. But a `worktree add` plus submodules on a large repository can exceed five minutes,
+    /// and the client waits ten, so the server abandoning first would have turned a slow success into
+    /// a half-made tree the next press has to clean up.
+    /// </remarks>
+    private static readonly TimeSpan Checking = TimeSpan.FromMinutes(10);
+
+    /// <summary>Long enough for a real tree, short enough that a held handle is not forever.</summary>
+    private static readonly TimeSpan Erasing = TimeSpan.FromMinutes(2);
+
+    /// <summary>How long to wait for another process to finish its own create before giving up.</summary>
+    private static readonly TimeSpan ForTheSlot = TimeSpan.FromSeconds(5);
 
     private readonly SubmodulePopulator _submodules = new(launcher);
 
@@ -133,9 +159,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
             return ReviewTreeReason.RepoPathMissing;
         }
 
-        var commit = await git.HasCommitAsync(place.RepoPath, place.Sha, ct);
-
-        return Reason(commit, ReviewTreeReason.CommitUnreachable);
+        return Reason(await git.HasCommitAsync(place.RepoPath, place.Sha, ct), ReviewTreeReason.CommitUnreachable);
     }
 
     /// <summary>A git answer as a reason word: nothing ran is never the same fact as git said no.</summary>
@@ -154,7 +178,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     /// </remarks>
     private async Task<string> CommonDirAsync(TreePlace place, CancellationToken ct)
     {
-        var answer = await Git(place.RepoPath, ["rev-parse", "--path-format=absolute", "--git-common-dir"], ct);
+        var answer = await Git(place.RepoPath, ["rev-parse", "--path-format=absolute", "--git-common-dir"], Asking, ct);
 
         return answer.Ran && answer.Ok ? answer.Out.Trim() : string.Empty;
     }
@@ -163,17 +187,33 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     private async Task<ReviewTree> AtAsync(long findingId, TreePlace place, string repository, CancellationToken ct)
     {
         var name = NameOf(repository, place.Sha);
-        var record = ReviewTreeRecords.Read(ReviewTreeRecords.FileFor(root, name));
+        var path = Path.Combine(root, name);
+        var read = ReviewTreeRecords.Read(ReviewTreeRecords.FileFor(root, name));
 
-        return ReviewTreeRecords.Exists(record)
-            ? Ready(findingId, place, repository, Path.Combine(root, name), record.EmptyMounts, reused: true)
+        return Ready(read, repository, place.Sha) && Directory.Exists(path)
+            ? Made(findingId, place, repository, path, read.Record.EmptyMounts, reused: true)
             : await MakeAsync(findingId, place, repository, name, ct);
     }
 
     /// <summary>
+    /// Whether a record proves THIS tree is the one asked for.
+    /// </summary>
+    /// <remarks>
+    /// The directory name is a truncated digest and a short sha, so two identities could in principle
+    /// land on one name. Rather than lengthening the name — which would not remove the possibility,
+    /// only shrink it — the record carries the FULL identity and is compared before its tree is
+    /// handed back. A name collision then costs a rebuild, never the wrong repository opened.
+    /// (Code round, codex.)
+    /// </remarks>
+    private static bool Ready(RecordRead read, string repository, string sha) =>
+        read.State == RecordState.Found
+        && string.Equals(Normalised(read.Record.Repository), Normalised(repository), StringComparison.Ordinal)
+        && string.Equals(read.Record.Sha, sha, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
     /// A stable directory name for one (repository, commit): a short digest of the common dir so the
     /// name is a legal directory on every filesystem, and the short sha so a human reading a path
-    /// can tell which commit it holds.
+    /// can tell which commit it holds. The full identity lives in the record — see <see cref="Ready"/>.
     /// </summary>
     private static string NameOf(string repository, string sha) =>
         $"{Prefix}{Digest(Normalised(repository))}-{sha[..12].ToLowerInvariant()}";
@@ -194,11 +234,21 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
         long findingId, TreePlace place, string repository, string name, CancellationToken ct)
     {
         var path = Path.Combine(root, name);
+        Directory.CreateDirectory(root);
 
-        var unfinished = await UnfinishedAsync(place.RepoPath, path, ct);
+        // The cap check and the creation are one step, or they are not a cap: with nine trees held,
+        // two presses that both read nine would both create and leave eleven. The slot is a
+        // machine-wide file lock held until the record is written. (Code round, codex, three times.)
+        using var slot = await SlotAsync(ct);
+        if (!slot.Taken)
+        {
+            return Refused(findingId, place, repository, ReviewTreeReason.InProgress);
+        }
+
+        var unfinished = await UnfinishedAsync(place.RepoPath, path, repository, place.Sha, ct);
         if (unfinished.Length > 0)
         {
-            return Refused(findingId, place, repository, unfinished, unfinished == ReviewTreeReason.IncompleteAndDirty ? path : "");
+            return Refused(findingId, place, repository, unfinished, Names(unfinished) ? path : "");
         }
 
         var held = ReviewTreeRecords.All(root);
@@ -208,36 +258,42 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
             : await AddAsync(findingId, place, repository, name, path, ct);
     }
 
+    /// <summary>The one refusal that names a directory, because a person is being asked to look at it.</summary>
+    private static bool Names(string reason) => reason == ReviewTreeReason.IncompleteAndDirty;
+
     /// <summary>
-    /// What to do about a directory that exists with no record beside it — which is the only state a
-    /// crash can leave, because the record is written last.
+    /// What to do about a directory that exists without a record proving it finished.
     /// </summary>
     /// <remarks>
-    /// Young means another press is still working and the answer is to try again shortly. Old means
-    /// its maker died: the tree is then rebuilt if it is provably clean, and if it is not — somebody
-    /// has typed into it since — it is named and left exactly where it is. "We could not ask" is
-    /// never "it is clean": a git that did not run answers <c>git_failed</c>, and a git that ran and
-    /// refused to call it a worktree cannot prove it empty, so that is refused by name too.
+    /// <para>Touched recently means another press is still working, and the answer is to try again
+    /// shortly. Untouched for ten minutes means its maker died: the tree is then rebuilt if it is
+    /// provably clean, and if it is not — somebody has typed into it since — it is named and left
+    /// exactly where it is.</para>
+    /// <para><b>"We could not ask" is never "it is clean".</b> A git that did not run answers
+    /// <c>git_failed</c>; a git that ran and refused to call it a worktree cannot prove it empty, so
+    /// that is refused by name too; and a record file that EXISTS but could not be read means we
+    /// cannot establish that the tree never finished, so nothing is removed at all.</para>
     /// </remarks>
-    private async Task<string> UnfinishedAsync(string repoPath, string path, CancellationToken ct)
+    private async Task<string> UnfinishedAsync(
+        string repoPath, string path, string repository, string sha, CancellationToken ct)
     {
         if (!Directory.Exists(path))
         {
             return string.Empty;
         }
 
-        if (DateTime.UtcNow - Directory.GetCreationTimeUtc(path) < StillWorking)
+        var read = ReviewTreeRecords.Read(ReviewTreeRecords.FileFor(root, Path.GetFileName(path)));
+        if (read.State == RecordState.Unreadable)
+        {
+            return ReviewTreeReason.IncompleteAndDirty;
+        }
+
+        if (DateTime.UtcNow - Directory.GetLastWriteTimeUtc(path) < Untouched)
         {
             return ReviewTreeReason.InProgress;
         }
 
-        var clean = await CleanAsync(path, ct);
-        if (!clean.Ran)
-        {
-            return ReviewTreeReason.GitFailed;
-        }
-
-        return clean.Ok ? await ScrappedAsync(repoPath, path, ct) : ReviewTreeReason.IncompleteAndDirty;
+        return await ScrapIfCleanAsync(repoPath, path, ct);
     }
 
     /// <summary>
@@ -247,69 +303,144 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     private async Task<GitAnswer> CleanAsync(string path, CancellationToken ct)
     {
         var answer = await Git(
-            path, ["status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none"], ct);
+            path, ["status", "--porcelain", "--untracked-files=all", "--ignore-submodules=none"], Asking, ct);
 
         return answer.Ran && answer.Ok
             ? new GitAnswer(true, answer.Out.Trim().Length == 0, answer.Out)
             : answer with { Ok = false };
     }
 
-    /// <summary>Removes a tree that never finished and holds nothing, so it can be built again.</summary>
+    /// <summary>
+    /// Removes a tree that never finished and holds nothing — checking that twice, with the second
+    /// check as late as it can be made.
+    /// </summary>
     /// <remarks>
-    /// Unlock first: the tree was created locked, and a locked tree refuses <c>remove --force</c> —
-    /// the very guard that protects a finished one. Then force, because a tree with populated
-    /// submodules refuses a plain remove (measured: <c>working trees containing submodules cannot be
-    /// moved or removed</c>). The directory delete is the last resort for a remove that half-failed,
-    /// and it is only ever reached for a tree this method has just proved clean.
+    /// A person can start reading, or typing into, an abandoned directory between the first clean
+    /// check and the removal; the second check immediately before the delete is what shrinks that
+    /// window to the smallest this can make it. It cannot be closed entirely without holding a lock
+    /// on the tree itself, and saying so is better than implying otherwise. (Code round, codex.)
     /// </remarks>
-    private async Task<string> ScrappedAsync(string repoPath, string path, CancellationToken ct)
+    private async Task<string> ScrapIfCleanAsync(string repoPath, string path, CancellationToken ct)
     {
-        await Git(repoPath, ["worktree", "unlock", path], ct);
-        await Git(repoPath, ["worktree", "remove", "--force", path], ct);
-        await Git(repoPath, ["worktree", "prune"], ct);
+        var clean = await CleanAsync(path, ct);
+        if (!clean.Ran)
+        {
+            return ReviewTreeReason.GitFailed;
+        }
 
-        return Gone(path) ? string.Empty : ReviewTreeReason.GitFailed;
+        if (!clean.Ok)
+        {
+            return ReviewTreeReason.IncompleteAndDirty;
+        }
+
+        // Unlock first: the tree was created locked, and a locked tree refuses `remove --force` — the
+        // very guard that protects a finished one. Then force, because a tree with populated
+        // submodules refuses a plain remove (measured: `working trees containing submodules cannot be
+        // moved or removed`).
+        await Git(repoPath, ["worktree", "unlock", path], Asking, ct);
+        var again = await CleanAsync(path, ct);
+        if (!again.Ran || !again.Ok)
+        {
+            return ReviewTreeReason.IncompleteAndDirty;
+        }
+
+        await Git(repoPath, ["worktree", "remove", "--force", path], Asking, ct);
+        await Git(repoPath, ["worktree", "prune"], Asking, ct);
+
+        return await GoneAsync(path, ct) ? string.Empty : ReviewTreeReason.GitFailed;
     }
 
-    private static bool Gone(string path)
+    /// <summary>
+    /// Deletes what git's own removal left behind, under a budget and never outside our root.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Inside the root, checked.</b> The path is built from our own constants today, but a
+    /// recursive delete is the one call in this class that could destroy something outside it, and a
+    /// guard costs two lines. .NET does not follow a directory symlink when deleting recursively, so
+    /// the remaining risk is a root that is itself not what it says; the check answers that too.</para>
+    /// <para><b>Off the calling thread, with a timeout.</b> A held file handle — an open editor, a
+    /// virus scanner — makes <c>Directory.Delete</c> block for as long as the handle lives, and the
+    /// whole request would have hung behind it. It now gives up, and the tree is answered as one that
+    /// could not be cleared. (Code round, gemini and local.)</para>
+    /// </remarks>
+    private async Task<bool> GoneAsync(string path, CancellationToken ct)
     {
-        try
-        {
-            if (Directory.Exists(path))
-            {
-                Directory.Delete(path, recursive: true);
-            }
-
-            return !Directory.Exists(path);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        if (!Inside(path))
         {
             return false;
         }
+
+        // git's own removal is the normal path and it leaves nothing behind; this method exists for
+        // the removal that half-failed. Asking first is not a redundant check — `Directory.Delete` on
+        // an absent directory throws, and the catch below would read that as "could not clear it".
+        if (!Directory.Exists(path))
+        {
+            return true;
+        }
+
+        try
+        {
+            await Task.Run(() => Directory.Delete(path, recursive: true), ct).WaitAsync(Erasing, ct);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or TimeoutException)
+        {
+            return false;
+        }
+
+        return !Directory.Exists(path);
+    }
+
+    /// <summary>Whether a path really is under our own root — asked before anything is deleted.</summary>
+    private bool Inside(string path)
+    {
+        var below = Path.GetFullPath(root).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+        return Path.GetFullPath(path).StartsWith(below, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>Creates the tree, fills its submodules, and writes the record that says it is ready.</summary>
     private async Task<ReviewTree> AddAsync(
         long findingId, TreePlace place, string repository, string name, string path, CancellationToken ct)
     {
-        Directory.CreateDirectory(root);
-
-        var added = await Git(
-            place.RepoPath,
-            ["worktree", "add", "--detach", "--lock", "--reason", LockReason, path, place.Sha],
-            ct);
-
+        var added = await AddedAsync(place, path, ct);
         if (!added.Ran || !added.Ok)
         {
-            return await LostTheRaceAsync(findingId, place, repository, name, path);
+            return LostTheRace(findingId, place, repository, name, path);
         }
 
         var mounts = await EmptyMountsAsync(place.RepoPath, path, ct);
         ReviewTreeRecords.Write(
             ReviewTreeRecords.FileFor(root, name),
-            new ReviewTreeRecord(repository, place.Sha, DateTime.UtcNow.ToString("O"), mounts));
+            new HeldRecord(repository, place.RepoPath, place.Sha, DateTime.UtcNow.ToString("O"), mounts));
 
-        return Ready(findingId, place, repository, path, mounts, reused: false);
+        return Made(findingId, place, repository, path, mounts, reused: false);
+    }
+
+    /// <summary>
+    /// The checkout itself — and, if git refuses because the path is registered to a worktree whose
+    /// directory is no longer there, one prune and one retry.
+    /// </summary>
+    /// <remarks>
+    /// A person who deletes a review checkout with their file manager leaves git's registration of it
+    /// behind, and every later press at that identity then failed with *missing but already
+    /// registered* — the feature dead at that commit until somebody ran `git worktree prune` by hand.
+    /// Found by the test written for the code-round finding about stale records, which is a better
+    /// reason to believe it than the finding was. The prune is only reached when the directory really
+    /// is absent, so it can never remove a registration whose tree exists.
+    /// </remarks>
+    private async Task<GitAnswer> AddedAsync(TreePlace place, string path, CancellationToken ct)
+    {
+        string[] add = ["worktree", "add", "--detach", "--lock", "--reason", LockReason, path, place.Sha];
+
+        var added = await Git(place.RepoPath, add, Checking, ct);
+        if (added.Ran && added.Ok || Directory.Exists(path))
+        {
+            return added;
+        }
+
+        await Git(place.RepoPath, ["worktree", "prune"], Asking, ct);
+
+        return await Git(place.RepoPath, add, Checking, ct);
     }
 
     /// <summary>
@@ -318,20 +449,20 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     /// the other arrives here. If the winner has finished, hand back its tree; if it is still
     /// working, say so; only a refusal with no directory behind it is a real failure.
     /// </summary>
-    private async Task<ReviewTree> LostTheRaceAsync(
+    private ReviewTree LostTheRace(
         long findingId, TreePlace place, string repository, string name, string path)
     {
-        var record = ReviewTreeRecords.Read(ReviewTreeRecords.FileFor(root, name));
-        if (ReviewTreeRecords.Exists(record))
+        var read = ReviewTreeRecords.Read(ReviewTreeRecords.FileFor(root, name));
+        if (Ready(read, repository, place.Sha) && Directory.Exists(path))
         {
-            return Ready(findingId, place, repository, path, record.EmptyMounts, reused: true);
+            return Made(findingId, place, repository, path, read.Record.EmptyMounts, reused: true);
         }
 
-        return await Task.FromResult(Refused(
+        return Refused(
             findingId,
             place,
             repository,
-            Directory.Exists(path) ? ReviewTreeReason.InProgress : ReviewTreeReason.GitFailed));
+            Directory.Exists(path) ? ReviewTreeReason.InProgress : ReviewTreeReason.GitFailed);
     }
 
     /// <summary>
@@ -348,7 +479,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     {
         await _submodules.PopulateAsync(repoPath, path);
 
-        var declared = await Git(path, ["config", "-f", ".gitmodules", "--get-regexp", "path"], ct);
+        var declared = await Git(path, ["config", "-f", ".gitmodules", "--get-regexp", "path"], Asking, ct);
 
         return declared.Ran && declared.Ok
             ? [.. Mounts(declared.Out).Where(m => IsEmpty(Path.Combine(path, m)))]
@@ -362,10 +493,59 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
             .Where(parts => parts.Length == 2)
             .Select(parts => parts[1].Trim());
 
+    /// <summary>Lazy: it stops at the first entry, so an enormous submodule costs one directory read.</summary>
     private static bool IsEmpty(string mount) =>
         !Directory.Exists(mount) || !Directory.EnumerateFileSystemEntries(mount).Any();
 
-    private static ReviewTree Ready(
+    /// <summary>
+    /// The machine-wide claim that makes the cap a cap: one creator at a time under this root.
+    /// </summary>
+    /// <remarks>
+    /// A file opened with no sharing is the cheapest cross-process mutex that works on every
+    /// filesystem this runs on, and it is released by the process dying as well as by the
+    /// <c>using</c>. A press that cannot take it inside a few seconds answers <c>in_progress</c>,
+    /// which is true: somebody else is creating.
+    /// </remarks>
+    private async Task<Slot> SlotAsync(CancellationToken ct)
+    {
+        var until = DateTime.UtcNow + ForTheSlot;
+        while (DateTime.UtcNow < until)
+        {
+            var taken = Slot.Try(Path.Combine(root, ".creating.lock"));
+            if (taken.Taken)
+            {
+                return taken;
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(200), ct);
+        }
+
+        return Slot.None;
+    }
+
+    /// <summary>A held file lock, or the absence of one — never a null in the caller.</summary>
+    private sealed class Slot(FileStream? held) : IDisposable
+    {
+        public static Slot None { get; } = new(null);
+
+        public bool Taken => held is not null;
+
+        public static Slot Try(string path)
+        {
+            try
+            {
+                return new Slot(new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return None;
+            }
+        }
+
+        public void Dispose() => held?.Dispose();
+    }
+
+    private static ReviewTree Made(
         long findingId,
         TreePlace place,
         string repository,
@@ -395,7 +575,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
 
     /// <summary>The cap refusal, which names every tree held — see <see cref="ReviewTreeRow"/>.</summary>
     private ReviewTree Full(
-        long findingId, TreePlace place, string repository, IReadOnlyList<ReviewTreeRecord> held) =>
+        long findingId, TreePlace place, string repository, IReadOnlyList<HeldRecord> held) =>
         new()
         {
             FindingId = findingId,
@@ -406,10 +586,10 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
                 r.Repository, r.Sha, Path.Combine(root, NameOf(r.Repository, r.Sha)), r.Created))],
         };
 
-    private async Task<GitAnswer> Git(string workingDirectory, string[] args, CancellationToken ct)
+    private async Task<GitAnswer> Git(string workingDirectory, string[] args, TimeSpan budget, CancellationToken ct)
     {
         var result = await launcher.RunAsync(
-            new ProcessRequest("git", args, workingDirectory) { Timeout = Budget }, ct);
+            new ProcessRequest("git", args, workingDirectory) { Timeout = budget }, ct);
 
         return result.TimedOut || result.Cancelled
             ? GitAnswer.Broken
