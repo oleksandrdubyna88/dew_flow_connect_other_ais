@@ -86,12 +86,13 @@ function complexity(pair: AboutRow): string {
  * <p>The last line is the revision rule's two actions (story 3.1), rendered from what the panel
  * remembers and posted into again when it learns more — the page never decides what they say.</p>
  */
-export function about(pair: AboutRow, revision: RevisionState): string {
+export function about(pair: AboutRow, revision: RevisionState, calls = ''): string {
   return `<dl class="about">
       <dt>Where</dt><dd>${where(pair)}</dd>
       <dt>Why</dt><dd>${prose(pair.why)}</dd>
       <dt>Fix</dt><dd>${prose(pair.fix)}</dd>
       <dt title="cyclomatic complexity of the method as it was at that commit, counted from the skeleton — not of the file today">Complexity</dt><dd>${complexity(pair)}</dd>
       <dt>Open</dt><dd class="open" data-revision="${escapeHtml(String(pair.findingId))}">${revisionActions(pair, revision)}</dd>
+      <dt>Calls</dt><dd class="open" data-calls-for="${escapeHtml(String(pair.findingId))}">${calls}</dd>
     </dl>`;
 }

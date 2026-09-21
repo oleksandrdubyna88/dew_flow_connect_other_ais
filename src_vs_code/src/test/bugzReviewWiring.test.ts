@@ -354,3 +354,48 @@ test('the provider wires the checkout hooks to the reader and to the editor', ()
     'a page test can prove the page asks; only this proves anybody answers');
   assert.match(text, /openFolder: \(path\) => openTreeFolder\(path\),/u);
 });
+
+// --------------------------------------------------------------------------------------------
+// Who calls this (story 3.3): the seams a page test and a value test cannot reach.
+// --------------------------------------------------------------------------------------------
+
+test('a calls press reaches the one method that answers it, and an opened end goes by INDEX', () => {
+  const text = code('bugzReviewPanel.ts');
+
+  assert.match(text, /case 'calls':\s*void this\.opened\(m\.id, \(pair\) => this\.calls\.ask\(pair, this\.held\)\);/u,
+    'the control must reach the panel, or it is wired to nothing');
+  // The page holds no file names for this: it posts which row, which direction and which entry, and
+  // the panel — which has the answer — opens it. A page that carried paths could be asked to open one.
+  assert.match(text, /void this\.calls\.open\(named\.id, named\.which, named\.at\);/u);
+});
+
+test('the panel hands every row its calls block on every paint, and a closed window forgets them', () => {
+  const text = code('bugzReviewPanel.ts');
+
+  assert.match(text, /calls: new Map\(found\.shown\.map\(\(pair\) => \[pair\.findingId, this\.calls\.blockFor\(pair\)\] as const\)\)/u,
+    'a redraw after a decision must not lose what a person asked for');
+  const disposed = /onDidDispose\(\(\) => \{([\s\S]*?)\}\);/u.exec(text);
+  assert.ok(disposed !== null);
+  assert.match(disposed[1] ?? '', /this\.calls\.forget\(\);/u,
+    'the answers were about a checkout that may have moved on');
+});
+
+test('a calls press says it is asking before it awaits anything, and every ending replaces that', () => {
+  const asking = bodyOf(code('callsPanel.ts'), 'async ask(pair: ReviewPair, rows: readonly ReviewPair[]): Promise<void> {');
+
+  // Measured at 0.8-2.0 s cold: a row that looks idle for two seconds is a row a person presses again.
+  assert.ok(asking.indexOf('this.tell([pair.findingId], rows);') < asking.indexOf('await '),
+    'the row must say it is asking before the language support is asked');
+  assert.match(asking, /\} finally \{[\s\S]*?this\.tell\(\[pair\.findingId\], rows\);/u);
+  assert.match(asking, /const attempt = `a\$\{\+\+this\.minted\}`;/u,
+    'every press mints an ATTEMPT, which is what a generation alone cannot do');
+});
+
+test('the provider wires the calls hooks to the real editor, not to a second opener', () => {
+  const text = code('panelProvider.ts');
+
+  assert.match(text, /askCalls: \(about\) => askCalls\(callHierarchyEditor\(\), about\),/u,
+    'a value test can prove the decisions; only this proves anybody asks the editor');
+  assert.match(text, /openCall: \(end\) => showCurrentFile\(end\.file, end\.line \+ 1\),/u,
+    'and it goes through story 3.1 opener rather than a second one');
+});

@@ -66,6 +66,8 @@ import { readProviders } from './providersProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
+import { CallEnd } from './callHierarchy';
+import { askCalls, Editor as CallEditor } from './callHierarchyAsk';
 import { contributorKey, setContributorKey } from './bugsAdminKey';
 import { mayStart, outcomeOf } from './bugsSend';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
@@ -2694,6 +2696,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       showCurrent: (file, line) => showCurrentFile(file, line),
       folders: () => workspaceFolderPaths(),
       readTreeAt: (asked) => readTreeAt(server.fsPath, asked),
+      askCalls: (about) => askCalls(callHierarchyEditor(), about),
+      openCall: (end) => showCurrentFile(end.file, end.line + 1),
       openFolder: (path) => openTreeFolder(path),
       // A decision changes how many pairs the Bugz section says are waiting, and that section is a
       // different window onto the same database. Without this the count sat stale until something
@@ -3720,4 +3724,63 @@ async function reachable(path: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * The editor, as story 3.3 needs it — and the only place its API is touched.
+ *
+ * <p>Everything decidable lives in `callHierarchy.ts` and `callHierarchyAsk.ts`, where it runs
+ * without an editor. This turns four VS Code calls into the four functions those modules take.</p>
+ *
+ * <p><b>A file the checkout does not have makes `openTextDocument` THROW</b> — measured, not assumed
+ * (`research/module_tests.md`, story 3.3's gate). That throw is what separates *the file is gone*
+ * from *there is no provider*, so it is caught here and turned into an absent line rather than
+ * allowed to look like a provider failure.</p>
+ */
+function callHierarchyEditor(): CallEditor {
+  const at = (file: string, line: number, character: number): [vscode.Uri, vscode.Position] =>
+    [vscode.Uri.file(file), new vscode.Position(line, character)];
+
+  const ends = (items: readonly { readonly from?: vscode.CallHierarchyItem; readonly to?: vscode.CallHierarchyItem }[])
+    : readonly CallEnd[] =>
+    items.flatMap((one) => {
+      const item = one.from ?? one.to;
+
+      return item === undefined
+        ? []
+        : [{
+          name: item.name,
+          file: item.uri.fsPath,
+          line: item.selectionRange.start.line,
+          character: item.selectionRange.start.character,
+          detail: item.detail ?? '',
+        }];
+    });
+
+  return {
+    lineText: async (file, line) => {
+      try {
+        const opened = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+
+        return line < opened.lineCount ? opened.lineAt(line).text : undefined;
+      } catch {
+        return undefined;
+      }
+    },
+    prepare: async (file, line, character) => {
+      const items = await vscode.commands.executeCommand<vscode.CallHierarchyItem[] | undefined>(
+        'vscode.prepareCallHierarchy', ...at(file, line, character));
+
+      return {
+        items: (items ?? []).map((one) => ({ name: one.name, detail: one.detail ?? '' })),
+        handle: items?.[0],
+      };
+    },
+    incoming: async (handle) => ends(
+      await vscode.commands.executeCommand<vscode.CallHierarchyIncomingCall[]>(
+        'vscode.provideIncomingCalls', handle) ?? []),
+    outgoing: async (handle) => ends(
+      await vscode.commands.executeCommand<vscode.CallHierarchyOutgoingCall[]>(
+        'vscode.provideOutgoingCalls', handle) ?? []),
+  };
 }
