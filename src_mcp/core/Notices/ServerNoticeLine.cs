@@ -95,12 +95,40 @@ public static class ServerNoticeLine
         var separator = "";
         foreach (var (field, value) in Entries(notice))
         {
-            line.Append(separator).Append(Quoted(field)).Append(':').Append(Text(field, value));
+            var text = Text(field, value);
+            if (Vanished(field, text))
+            {
+                continue;
+            }
+
+            line.Append(separator).Append(Quoted(field)).Append(':').Append(text);
             separator = ",";
         }
 
         return line.Append('}').Append('\n').ToString();
     }
+
+    /// <summary>The JSON text of a string with nothing left in it.</summary>
+    private const string Nothing = "\"\"";
+
+    /// <summary>
+    /// Whether a NAMED optional field redacted away to nothing, and is therefore absent.
+    /// </summary>
+    /// <remarks>
+    /// <para>Presence is decided AFTER redaction, which the first version did not do: a field whose
+    /// value was empty when the record was built is skipped by <see cref="Entries"/>, but one that
+    /// HAD characters and lost all of them — <c>Title</c> holding a single control character — came
+    /// out as <c>"title":""</c>. The extension's parser drops an empty optional on the way back in,
+    /// so that line is not a fixed point of its own parser: a record read and written again is not
+    /// the record that arrived. Measured on the parity harness, which said exactly that. (CodeRabbit,
+    /// on the pull request.)</para>
+    /// <para>The four required fields cannot reach here empty —
+    /// <c>ServerNotice.RequiredAfterRedaction</c> refuses such a record at construction — and
+    /// <c>more</c> keeps whatever it has, because the extension's own serialiser does and the two
+    /// must answer alike.</para>
+    /// </remarks>
+    private static bool Vanished(string field, string text) =>
+        text == Nothing && NamedFields.Contains(field);
 
     /// <summary>The named fields that are present, in order, then <c>more</c> flattened after them.</summary>
     private static IEnumerable<(string Field, object Value)> Entries(ServerNotice notice)

@@ -141,14 +141,20 @@ public sealed class NoSourceFileCarriesAControlByteTests
         extension is ".cs" or ".ts" or ".mjs" or ".js" or ".json" or ".md" or ".csproj" or ".props"
             or ".yml" or ".yaml" or ".sh" or ".razor";
 
+    /// <summary>Directories nobody writes by hand — build output, dependencies, the git store.</summary>
+    private static readonly string[] NotWritten =
+        ["bin", "obj", "node_modules", ".git", ".vscode-test", "out", "dist"];
+
+    /// <summary>
+    /// Whether a path runs through a directory nobody writes by hand.
+    /// </summary>
+    /// <remarks>
+    /// One predicate over a named list rather than a chain of seven <c>||</c>, which put this method
+    /// past the cyclomatic ceiling the C# rules set at four. (CodeRabbit, on the pull request.)
+    /// </remarks>
     private static bool Skipped(string file) =>
-        file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}")
-        || file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")
-        || file.Contains($"{Path.DirectorySeparatorChar}node_modules{Path.DirectorySeparatorChar}")
-        || file.Contains($"{Path.DirectorySeparatorChar}.git{Path.DirectorySeparatorChar}")
-        || file.Contains($"{Path.DirectorySeparatorChar}.vscode-test{Path.DirectorySeparatorChar}")
-        || file.Contains($"{Path.DirectorySeparatorChar}out{Path.DirectorySeparatorChar}")
-        || file.Contains($"{Path.DirectorySeparatorChar}dist{Path.DirectorySeparatorChar}");
+        NotWritten.Any(directory => file.Contains(
+            $"{Path.DirectorySeparatorChar}{directory}{Path.DirectorySeparatorChar}", StringComparison.Ordinal));
 
     private static string RepositoryRoot()
     {

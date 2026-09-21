@@ -168,6 +168,18 @@ export function noticeRecords(): readonly Record<string, unknown>[] {
       role: 'Architecture',
     },
     {
+      // CodeRabbit, on the pull request: an optional string that is NOT empty and redacts to empty.
+      // `given()` keeps it (it has characters), the redactor removes every one of them, and what the
+      // line then carries is what both halves have to agree about. The byte is spelled by NUMBER,
+      // because writing it as an escape is how this repository has put raw control bytes on disk.
+      utc: '2026-09-21T10:00:03.000Z',
+      class: 'refusal',
+      source: 'panel',
+      code: 'refused',
+      title: String.fromCharCode(1),
+      subject: 'kept',
+    },
+    {
       utc: '2026-09-21T10:00:02.000Z',
       class: 'storm',
       source: 'panel',

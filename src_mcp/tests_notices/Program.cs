@@ -42,14 +42,7 @@ try
     switch (args[0])
     {
         case "safe-text":
-            if (args.Length < 2 || !int.TryParse(args[1], out var limit))
-            {
-                await Console.Error.WriteLineAsync("safe-text needs a limit, a whole number");
-                return 64;
-            }
-
-            Write([.. Read<string>().Select(one => Redaction.SafeText(one, limit))]);
-            return 0;
+            return await RunSafeText(args);
 
         case "serialise":
             Write([.. Read<JsonElement>().Select(one => ServerNoticeLine.Of(NoticeFrom(one)))]);
@@ -70,6 +63,21 @@ catch (Exception e)
     // it would see an empty stdout and report "the two halves disagree" about a crash.
     await Console.Error.WriteLineAsync($"NoticeTool failed: {e.GetType().Name}: {e.Message}");
     return 70; // EX_SOFTWARE
+}
+
+/// <summary>The one verb with an argument of its own, checked where it is used.</summary>
+static async Task<int> RunSafeText(string[] args)
+{
+    if (args.Length < 2 || !int.TryParse(args[1], out var limit))
+    {
+        await Console.Error.WriteLineAsync("safe-text needs a limit, a whole number");
+
+        return 64; // EX_USAGE
+    }
+
+    Write([.. Read<string>().Select(one => Redaction.SafeText(one, limit))]);
+
+    return 0;
 }
 
 static List<T> Read<T>()
@@ -103,46 +111,63 @@ static object Stranger(string name, JsonElement value) =>
             $"`more` may carry strings and finite numbers only; '{name}' is {value.ValueKind}"),
     };
 
-/// <summary>One record as the script sent it, refusing a field this build cannot place.</summary>
-static ServerNotice NoticeFrom(JsonElement row)
+/// <summary>One string field, or nothing when the record does not carry it.</summary>
+static string? Text(JsonElement row, string name) =>
+    row.TryGetProperty(name, out var found) && found.ValueKind == JsonValueKind.String
+        ? found.GetString()
+        : null;
+
+/// <summary>One whole-number field, or nothing.</summary>
+static int? Number(JsonElement row, string name) =>
+    row.TryGetProperty(name, out var found) && found.ValueKind == JsonValueKind.Number
+        ? found.GetInt32()
+        : null;
+
+/// <summary>A required field, or the refusal that names it.</summary>
+static string Needed(JsonElement row, string name) =>
+    Text(row, name) ?? throw new InvalidOperationException($"a record needs a `{name}`");
+
+/// <summary>Everything this build has no name for, which is what `more` is.</summary>
+static IReadOnlyDictionary<string, object>? MoreOf(JsonElement row)
 {
-    string? Text(string name) =>
-        row.TryGetProperty(name, out var found) && found.ValueKind == JsonValueKind.String
-            ? found.GetString()
-            : null;
-
-    int? Number(string name) =>
-        row.TryGetProperty(name, out var found) && found.ValueKind == JsonValueKind.Number
-            ? found.GetInt32()
-            : null;
-
     var known = new HashSet<string>(ServerNoticeLine.NamedFields, StringComparer.Ordinal);
     var more = row.EnumerateObject()
-        .Where(p => !known.Contains(p.Name))
-        .ToDictionary(p => p.Name, p => Stranger(p.Name, p.Value), StringComparer.Ordinal);
+        .Where(property => !known.Contains(property.Name))
+        .ToDictionary(property => property.Name, property => Stranger(property.Name, property.Value), StringComparer.Ordinal);
 
-    return new ServerNotice
-    {
-        Utc = Text("utc") ?? throw new InvalidOperationException("a record needs a `utc`"),
-        Class = Text("class") ?? throw new InvalidOperationException("a record needs a `class`"),
-        Source = Text("source") ?? throw new InvalidOperationException("a record needs a `source`"),
-        Code = Text("code") ?? throw new InvalidOperationException("a record needs a `code`"),
-        Subject = Text("subject"),
-        Title = Text("title"),
-        Detail = Text("detail"),
-        Cure = Text("cure"),
-        Action = Text("action"),
-        Offered = Text("offered"),
-        Answer = Text("answer"),
-        Run = Text("run"),
-        Repo = Text("repo"),
-        Branch = Text("branch"),
-        Session = Text("session"),
-        Provider = Text("provider"),
-        Role = Text("role"),
-        Pid = Number("pid"),
-        Seq = Number("seq"),
-        Bound = Number("bound"),
-        More = more.Count == 0 ? null : more,
-    };
+    return more.Count == 0 ? null : more;
 }
+
+/// <summary>
+/// One record as the script sent it, refusing a field this build cannot place.
+/// </summary>
+/// <remarks>
+/// The readers are static methods rather than local functions, and the four refusals are one of
+/// them: this method had them all inline and was past the cyclomatic ceiling of four the C# rules
+/// set. (CodeRabbit, on the pull request.)
+/// </remarks>
+static ServerNotice NoticeFrom(JsonElement row) =>
+    new()
+    {
+        Utc = Needed(row, "utc"),
+        Class = Needed(row, "class"),
+        Source = Needed(row, "source"),
+        Code = Needed(row, "code"),
+        Subject = Text(row, "subject"),
+        Title = Text(row, "title"),
+        Detail = Text(row, "detail"),
+        Cure = Text(row, "cure"),
+        Action = Text(row, "action"),
+        Offered = Text(row, "offered"),
+        Answer = Text(row, "answer"),
+        Run = Text(row, "run"),
+        Repo = Text(row, "repo"),
+        Branch = Text(row, "branch"),
+        Session = Text(row, "session"),
+        Provider = Text(row, "provider"),
+        Role = Text(row, "role"),
+        Pid = Number(row, "pid"),
+        Seq = Number(row, "seq"),
+        Bound = Number(row, "bound"),
+        More = MoreOf(row),
+    };
