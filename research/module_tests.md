@@ -1325,6 +1325,24 @@ ARTEFACT changes, which is the question a release actually asks.
 
 Whole executable after: 2140 tests, 2138 passed, 0 failed, 2 skipped.
 
+## Story 3.3's remaining gate facts (2026-09-21)
+
+A second measurement scenario, `a call hierarchy needs the symbol COLUMN, and answers for a file
+nobody opened`, added because story 3.3's plan round raised two questions a measurement could settle.
+It settled both and produced a third:
+
+| asked | answered |
+|---|---|
+| `prepareCallHierarchy` at column 0 of an INDENTED method | **1 item — the enclosing class**, not the method |
+| the same call at the symbol's own column | 1 item, the method |
+| a file in the workspace that nobody opened | prepared, and its caller in another file found |
+| a file that does not exist | **throws**, rather than answering empty |
+
+The first is the one worth carrying: a reviewer predicted column 0 would answer nothing and read as
+`unavailable`; it answers the CLASS, which would have put a class's caller count under a method's
+name. The name check the plan already required is what catches it, and the two guards were designed
+independently — which is the argument for keeping both.
+
 ## Story 3.3's gate, measured in a real editor (2026-09-21)
 
 A tenth host scenario, and it is not a guarantee about shipped behaviour — nothing of story 3.3 is
