@@ -136,6 +136,13 @@ public static partial class Redaction
     /// <c>NonBacktracking</c> and therefore carry no ceiling of their own.</para>
     /// <para>Checked BETWEEN passes rather than inside one: a pass already stops itself. What was
     /// missing was anything stopping the sequence.</para>
+    /// <para><b>So the bound this delivers is this ceiling PLUS one pattern's, and calling it two
+    /// seconds was wrong.</b> The check runs before a pass and never during one, so a pass that
+    /// begins at 1 999 ms and then spends its own <c>BacktrackingCeilingMs</c> returns at about
+    /// 3 999 ms — and only then is the deadline read. Tightening it needs a per-call timeout, which
+    /// <c>[GeneratedRegex]</c> cannot express; what can be corrected is the promise, so the promise
+    /// is the sum: about four seconds in the worst case, not two. (CodeRabbit, on the pull
+    /// request.)</para>
     /// </remarks>
     private static readonly TimeSpan WholeCallCeiling = TimeSpan.FromMilliseconds(BacktrackingCeilingMs);
 

@@ -15,10 +15,13 @@ import { test } from 'node:test';
  * how a first pass at this came to reconstruct three releases that were already documented.</p>
  *
  * <p>The guard runs in `mcp-draft`, the first job an `mcp-v*` tag reaches, and a refusal there costs
- * nothing: no draft exists yet and no asset has been uploaded. <b>If it does refuse, the repair is to
- * delete the tag and push it again</b> once the entry is written — this repository has burned a tag
- * before (`mcp-v0.16.0`) and it is the supported move, because the alternative is a published release
- * whose notes never arrive.</p>
+ * nothing: no draft exists yet and no asset has been uploaded.</p>
+ *
+ * <p><b>Where the repair belongs moved when release-please arrived.</b> It used to be "delete the tag
+ * and push it again" — this repository has burned a tag before (`mcp-v0.16.0`). Tags are not pushed
+ * by hand any more: merging the release pull request cuts them, and a tag is never moved. So the
+ * entry is written ON the release pull request, before that merge, where it costs an edit. The
+ * refusal message says so; by the time this guard speaks, the tag already exists.</p>
  *
  * <p>These cases SPAWN the script rather than importing it, because the thing that has to be true is
  * its exit code: a guard that prints a complaint and exits 0 stops nothing in a workflow. They assert

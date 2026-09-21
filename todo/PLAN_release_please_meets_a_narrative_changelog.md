@@ -1,12 +1,14 @@
 # PLAN — release-please, and the narrative changelog it would write over
 
-> Status: **partially implemented, 2026-09-21 — the mechanism is PROVEN on one repository, two more
-> to adopt it.** `dew_flow_sidecar_rust` releases through release-please on `push: main`: a GitHub
-> App mints the token, the acceptance test in build-order step 2 passed, and `v0.2.0` was cut and
-> published through it end to end. Steps 3 (`creds_for_devs`) and 4 (`connect_other_ais`) are the
-> remaining work, and **both need option A** — this plan's own "adopt where there is no changelog
-> first" died on 2026-09-21, when `creds_for_devs` turned out to have 127 narrative entries the
-> earlier survey recorded as `none`. Scope: Epic 4 of
+> Status: **partially implemented, 2026-09-21 — configured in all three releasing repositories, and
+> exercised in two.** `dew_flow_sidecar_rust` releases through release-please on `push: main`
+> (`v0.2.0` cut and published end to end); `dew_flow_creds_for_devs` has cut three tags through it
+> and sits on a button; `dew_flow_connect_other_ais` is configured and has cut none. **Both of the
+> latter stay on `workflow_dispatch` until a release pull request of theirs has been read** — and
+> `creds_for_devs` is exactly why: `draft` without `force-tag-creation`, and a release workflow that
+> CREATED the release, together shipped three releases published and empty before either was
+> understood. Remaining: one real release through the fixed path in each, then the trigger; then
+> step 5's three guards. Scope: Epic 4 of
 > [PLAN_family_ci_hardening.md](PLAN_family_ci_hardening.md) — `release-please` in the three
 > repositories that release. Blocks Epic 5 step 3, which is the step that actually closes CWE-522.
 >
@@ -360,8 +362,52 @@ which is the order this section asked for.
 4. **`connect_other_ais`** — option A. `RELEASES.md` generated, `src_vs_code/CHANGELOG.md` left
    alone, and the guard's relationship to the release pull request written down in the repository's
    own docs rather than discovered.
+
+   **DONE 2026-09-21, on `workflow_dispatch`.** And the expectation was wrong in a useful direction:
+   **this was the EASY repository for the mechanics.** `release.yml` here already creates a draft —
+   or REUSES one it finds, and refuses outright to upload into a published release — which is exactly
+   the shape `creds_for_devs` had to be rewritten into. release-please making the draft first is the
+   case this workflow was already written for. `force-tag-creation` went in from the start, because
+   creds had already paid for that lesson.
+
+   The guard's relationship is written in **three** places rather than one: the config, the workflow
+   header, and — the one a releaser actually meets — the guard's own refusal, which used to end
+   *"delete this tag and push it again"*. That was right when a human pushed tags. It is now the one
+   move this repository forbids elsewhere, so the repair moved one step earlier, onto the release
+   pull request, where it costs an edit. Both paths re-verified against a fixture: a named version
+   passes with exit 0, an unnamed one refuses with exit 1 naming the heading to write.
 5. **Turn on the other three `guarded` flags** once the shape is settled, because a design that only
    works while three guards are off is not settled.
+
+   **Not yet: "settled" means a release has gone through release-please here, and none has.** The
+   last `connect_other_ais` tag was cut by `github-actions[bot]`; in `sidecar_rust` and
+   `creds_for_devs` it was `dew-flow-release-please[bot]`. That difference is also what gates Epic 5
+   step 3 — see below.
+
+## The commit type is the version, and this plan has now been bitten three times
+
+Recorded here because twice was a mistake and three times is a pattern, and all three were mine.
+
+| | commit | what it proposed |
+|---|---|---|
+| `sidecar_rust` | `feat(ci): release-please runs on main` | 0.3.0 — a minor release of a product whose code did not move |
+| `creds_for_devs` | `feat(ci): release-please for the four components` | 0.8.0 / 0.2.0 / 0.7.0, three at once |
+| `connect_other_ais` | `feat(ci): release-please for the four lines` | latent: mcp, server and bugs, whenever it is first dispatched |
+
+`feat` is a product feature and release-please reads the type literally. `ci:` and `chore:` release
+nothing and are what a workflow-only change must use. The reason it keeps happening in *this* epic
+specifically is that the epic's own commits add `version.txt` INSIDE each component directory, so a
+change that is pure configuration still lands in every component's path.
+
+**The rule was written down after the first occurrence and did not prevent the second or the third.**
+A note is not a mechanism. What would be one: a check that refuses `feat:`/`fix:` on a change whose
+files are all CI configuration. Not built — recorded so the next person does not conclude the
+discipline is sufficient, because the evidence says it is not.
+
+**What to do with the release pull requests it produces: leave them open.** Closing is futile (the
+commit stays in range and the next push recreates them); merging publishes a version nothing stands
+behind; left alone they accumulate until a real change ships under that version and makes it mean
+something.
 
 ## Test plan
 
