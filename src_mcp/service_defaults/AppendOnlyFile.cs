@@ -136,10 +136,25 @@ internal static partial class AppendOnlyFile
 
     private const int OWriteOnly = 0x0001;
     private const int FGetFl = 3;
+    private const int FGetFd = 1;
+    private const int FdCloExec = 1;
 
     /// <summary>`O_APPEND`, which is not the same number on Linux and on macOS.</summary>
     private static int OAppend =>
         OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst() ? 0x0008 : 0x0400;
+
+    /// <summary>
+    /// `O_CLOEXEC` — and it is not optional here, because THIS server spawns other people's CLIs.
+    /// </summary>
+    /// <remarks>
+    /// A raw descriptor opened without it is inherited across every `fork`/`exec`, and `coai-mcp`
+    /// starts reviewer processes (`claude`, `codex`, `agy`) routinely. A child holding a write
+    /// handle to the ledger keeps it open after this process exits, blocks an unmount, and hands an
+    /// external tool a descriptor to a file this product would rather it could not reach. The window
+    /// is one write wide and that is not a reason to leave it open. (The code round, gemini.)
+    /// </remarks>
+    private static int OCloExec =>
+        OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst() ? 0x1000000 : 0x80000;
 
     private static readonly Lazy<bool> AppendWorks = new(CheckUnixAppend, isThreadSafe: true);
 
@@ -167,14 +182,14 @@ internal static partial class AppendOnlyFile
 
     private static bool WriteOnUnix(string path, byte[] record, Action<string>? afterOpen)
     {
-        var fd = Open(path, OWriteOnly | OAppend);
+        var fd = Open(path, OWriteOnly | OAppend | OCloExec);
         if (fd < 0)
         {
             // Almost always "it is not there yet". Anything else — a permission, a directory in the
             // way — throws out of here with a sentence rather than an errno, and the ledger's catch
             // list turns it into a false.
             EnsureExists(path);
-            fd = Open(path, OWriteOnly | OAppend);
+            fd = Open(path, OWriteOnly | OAppend | OCloExec);
         }
 
         if (fd < 0)
@@ -186,23 +201,19 @@ internal static partial class AppendOnlyFile
 
         try
         {
-            var at = 0;
-            while (at < record.Length)
+            var wrote = (int)WriteRaw(fd, ref record[0], (nuint)record.Length);
+            if (wrote < 0)
             {
-                // A short write is legal and is not an error: a signal can cut one anywhere. Only a
-                // NEGATIVE answer is a failure, and continuing from `at` is what makes the record
-                // whole — although a short write means this record is no longer one atomic append,
-                // which is why the loop is here and not assumed away.
-                var wrote = (int)WriteRaw(fd, ref record[at], (nuint)(record.Length - at));
-                if (wrote < 0)
-                {
-                    throw new IOException($"the ledger {path} refused a {record.Length} byte record", LastError());
-                }
-
-                at += wrote;
+                throw new IOException($"the ledger {path} refused a {record.Length} byte record", LastError());
             }
 
-            return true;
+            // A SHORT write fails the record rather than being continued, and that is the code
+            // round's finding. `write` may legally return early — a signal can cut one — and the
+            // obvious loop makes the record whole at the cost of the only property this file exists
+            // for: the remainder would be a SECOND append, and another process may land between the
+            // two. So the caller is told the line was not written, the partial tail stays as a torn
+            // tail, and the next append quarantines it. One lost line, never a fused pair.
+            return wrote == record.Length;
         }
         finally
         {
@@ -222,7 +233,7 @@ internal static partial class AppendOnlyFile
 
         var probe = Path.Combine(Path.GetTempPath(), $"coai-append-check-{Environment.ProcessId}");
         EnsureExists(probe);
-        var fd = Open(probe, OWriteOnly | OAppend);
+        var fd = Open(probe, OWriteOnly | OAppend | OCloExec);
         if (fd < 0)
         {
             return false;
@@ -230,14 +241,19 @@ internal static partial class AppendOnlyFile
 
         try
         {
-            var flags = Fcntl(fd, FGetFl);
+            // BOTH flags, because both were asked for and neither would fail loudly: an append that
+            // is not one corrupts another process's records, and a descriptor that is not
+            // close-on-exec hands a reviewer CLI a handle to the ledger.
+            var status = Fcntl(fd, FGetFl);
+            var descriptor = Fcntl(fd, FGetFd);
 
-            return flags >= 0 && (flags & OAppend) != 0;
+            return status >= 0 && (status & OAppend) != 0
+                && descriptor >= 0 && (descriptor & FdCloExec) != 0;
         }
         finally
         {
             CloseRaw(fd);
-            File.Delete(probe);
+            Forget(probe);
         }
     }
 
@@ -248,6 +264,26 @@ internal static partial class AppendOnlyFile
     /// See <see cref="EnsureExists"/>: a fixed-arity P/Invoke that passes a variadic argument is
     /// right on x86-64 by accident and wrong on arm64, where those arguments go on the stack.
     /// </remarks>
+    /// <summary>
+    /// Deletes the probe, and cannot be the reason a process fails to start.
+    /// </summary>
+    /// <remarks>
+    /// This runs inside a <see cref="Lazy{T}"/> during the first append, so an exception here would
+    /// surface as a type-initialisation failure rather than as "no append available". A read-only
+    /// or restricted temp directory is the person's machine being unusual, not this file's business.
+    /// (The code round, gemini.)
+    /// </remarks>
+    private static void Forget(string probe)
+    {
+        try
+        {
+            File.Delete(probe);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+        }
+    }
+
     [LibraryImport("libc", EntryPoint = "open", StringMarshalling = StringMarshalling.Utf8, SetLastError = true)]
     private static partial int Open(string path, int flags);
 

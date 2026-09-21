@@ -529,10 +529,10 @@ public sealed record PanelSettings
     /// and a test counts its minting sites; everything that needs the string unwraps with
     /// <c>.Path</c>. (Story 1.4, answering the reviewer of story 1.3.)</para>
     /// </remarks>
-    // Spelled in full rather than target-typed, because the census that counts minting sites reads
-    // the explicit spelling; `new(` would hide this one from its own guard.
+    // Through the type's named factory, because its constructor is PRIVATE: a target-typed `new`
+    // would hide a second minting site from every scan, which is what the code round found.
     public static ResolvedDataDir DataDirectoryFor(Func<string, string?> env) =>
-        new ResolvedDataDir(ResolveDataDir(env));
+        ResolvedDataDir.For(ResolveDataDir(env));
 
     /// <summary>
     /// The directory BEFORE the side is applied — what an unpartitioned installation would use.

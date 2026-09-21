@@ -190,10 +190,10 @@ public sealed class DataSideVectorTests : IDisposable
     [Fact]
     public void ThePathIsCombined_WhichATrailingSeparatorProvesOnEveryPlatform()
     {
-        // Minted through the type's own constructor rather than the resolver, because the INPUT is
+        // Minted through the type's own factory rather than the resolver, because the INPUT is
         // the point of this test: a directory that already ends in a separator. The constructor is
-        // internal to production and visible here.
-        var withSeparator = new ServiceDefaults.ResolvedDataDir(
+        // private since the code round; the factory is internal and visible here.
+        var withSeparator = ServiceDefaults.ResolvedDataDir.For(
             Path.Combine(Path.GetTempPath(), "coai-notices") + Path.DirectorySeparatorChar);
 
         ServerNotices.PathFor(withSeparator)
@@ -221,7 +221,7 @@ public sealed class DataSideVectorTests : IDisposable
         // say nothing. That is this plan's whole failure mode, reached by a different road.
         foreach (var unusable in new[] { "", "   " })
         {
-            var minting = () => new ServiceDefaults.ResolvedDataDir(unusable);
+            var minting = () => ServiceDefaults.ResolvedDataDir.For(unusable);
 
             minting.Should().Throw<ArgumentException>().WithMessage("*empty*",
                 "the type refuses it before any writer can be handed it");

@@ -83,14 +83,21 @@ namespace CoaiMcp.ServiceDefaults;
 public static class JsonlLedger
 {
     /// <summary>
-    /// One lock for every ledger this process writes.
+    /// One lock per LEDGER, not one for the process.
     /// </summary>
     /// <remarks>
-    /// Not what makes the append safe — the kernel does that, across processes, which is the only
-    /// place it can be done. This keeps two of OUR threads from interleaving a tail inspection with
-    /// the other's repair, which would leave a blank line inside one process for no reason at all.
+    /// <para>Not what makes the append safe — the kernel does that, across processes, which is the
+    /// only place it can be done. This keeps two of OUR threads from interleaving a tail inspection
+    /// with the other's repair, which would leave a blank line inside one process for no reason at
+    /// all.</para>
+    /// <para><b>Per path, because the ledgers are now two.</b> A single process-wide lock made a
+    /// stalled write to one file — a data directory on a NAS that has stopped answering is the case
+    /// this product actually meets — block the other, so a hung notice could hold up a spending
+    /// record it has nothing to do with. The dictionary is bounded by the number of ledger paths a
+    /// process writes, which is two. (The code round, codex.)</para>
     /// </remarks>
-    private static readonly Lock Gate = new();
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<string, Lock> Gates =
+        new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>The line terminator, spelled by NUMBER: an escape here has reached disk as the raw byte three times.</summary>
     private const byte Newline = 10;
@@ -112,7 +119,7 @@ public static class JsonlLedger
         try
         {
             CreateDirectoryOf(path);
-            lock (Gate)
+            lock (Gates.GetOrAdd(path, _ => new Lock()))
             {
                 return append(path, Bytes(Terminated(line), repairFirst: TailIsTorn(path)));
             }

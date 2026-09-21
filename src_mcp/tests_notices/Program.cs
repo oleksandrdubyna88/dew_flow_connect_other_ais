@@ -80,9 +80,14 @@ try
             return 0;
 
         case "append":
-            if (args.Length < 4 || !int.TryParse(args[2], out var writer) || !int.TryParse(args[3], out var count))
+            // NON-NEGATIVE, because `append ledger.jsonl 0 -1` otherwise parses, skips the loop and
+            // exits 0 — a harness or a person then reads "success" for a run that wrote nothing.
+            if (args.Length < 4
+                || !int.TryParse(args[2], out var writer) || writer < 0
+                || !int.TryParse(args[3], out var count) || count < 0)
             {
-                await Console.Error.WriteLineAsync("append needs <path> <writer> <count>, the last two whole numbers");
+                await Console.Error.WriteLineAsync(
+                    "append needs <path> <writer> <count>, the last two whole numbers and neither negative");
                 return 64;
             }
 

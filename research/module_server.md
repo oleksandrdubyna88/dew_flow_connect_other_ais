@@ -1074,6 +1074,30 @@ not: a ledger with a gap is recoverable, one with a hole punched through a line 
 Re-measured after the change: **8000 of 8000, 0 torn** with eight .NET writers, the same with four
 of each, and 2400 of 2400 on ext4 under WSL.
 
+**What the code round changed, all of it about the same two files.** Twelve reviewers, 31 findings,
+12 accepted:
+
+- **A short write now FAILS the record** instead of being continued. `write(2)` may legally return
+  early, and the obvious loop makes the record whole at the cost of the only property this file
+  exists for — the remainder is a *second* append, and another process can land between the two. So
+  the caller is told the line was not written, the partial tail stays a torn tail, and the next
+  append quarantines it: one lost line, never a fused pair.
+- **`O_CLOEXEC`**, because this server spawns other people's CLIs. A raw descriptor without it is
+  inherited across every `fork`/`exec`, so a reviewer process would hold a write handle to the
+  ledger after this one exits. The probe now asks `fcntl` for both flags — `F_GETFL` for `O_APPEND`
+  and `F_GETFD` for `FD_CLOEXEC` — and refuses to write if either is missing.
+- **One lock per LEDGER, not one per process.** With two ledgers behind one primitive, a single
+  static lock let a stalled write to one file block the other — and this product's data directory
+  has been a NAS share.
+- **`ResolvedDataDir`'s constructor is private** and its one door is a named factory. An internal
+  constructor is reachable by every method in the assembly, and
+  `ServerNotices.Append(new(DataRootFor(env)), notice)` is a target-typed `new` that names the type
+  nowhere: no source scan can see it, and the census that asks which members *return* the type does
+  not either. Now it does not compile, and the census counts `ResolvedDataDir.For(`.
+- **The census reads a file's code as one string.** A call split across two lines was invisible to a
+  per-line scan; a `using static` of the ledger would hide one from any spelling-based scan at all,
+  so that import is refused by a test of its own.
+
 A lock was built first and rejected on evidence: one handle held `FileShare.Read` across the tail
 inspection and the write, with a retry when another writer had it. It is correct, and under the same
 eight-process run a writer exhausted its retries and dropped a record — so it trades corruption for

@@ -160,14 +160,38 @@ mkdirSync(home, { recursive: true });
 // companion for the same reason.
 const tool = dotnet > 0 ? noticeTool((line) => console.log(`measure: ${line}`)) : '';
 
+/**
+ * How long one writer may take before the harness stops waiting for it.
+ *
+ * <p>A measurement that hangs is worse than one that fails: it holds a CI job until the job's own
+ * ceiling and leaves a child with the ledger open. The bound is generous — the heaviest recorded leg
+ * is eight writers × 1000 records of up to 60 KB, and no writer has taken over ten seconds — so it
+ * can only be reached by a writer that is stuck rather than slow. (The code round, codex.)</p>
+ */
+const WRITER_CEILING_MS = 5 * 60 * 1000;
+
 /** One writer process: the .NET append for the first `howManyDotnet` indices, node's for the rest. */
 function writerProcess(path, writer, count, howManyDotnet) {
   return new Promise((resolve, reject) => {
     const child = writer < howManyDotnet
       ? spawn('dotnet', [tool, 'append', path, String(writer), String(count)], { stdio: 'inherit' })
       : fork(HERE, ['write', path, String(writer), String(count), mode], { stdio: 'inherit' });
-    child.on('error', reject);
-    child.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`writer ${writer} exited ${code}`))));
+    // `timeout` kills the child itself; on a stalled filesystem the kill can be the only thing that
+    // ends the run, so the rejection says which writer it was rather than reporting a shortfall the
+    // caller would have to infer.
+    const deadline = setTimeout(() => {
+      child.kill('SIGKILL');
+      reject(new Error(`writer ${writer} did not finish within ${WRITER_CEILING_MS} ms and was killed`));
+    }, WRITER_CEILING_MS);
+    child.on('error', (reason) => {
+      clearTimeout(deadline);
+      reject(reason);
+    });
+    child.on('exit', (code) => {
+      clearTimeout(deadline);
+
+      return code === 0 ? resolve() : reject(new Error(`writer ${writer} exited ${code}`));
+    });
   });
 }
 
@@ -210,6 +234,9 @@ async function leg(title, { name, howMany, howManyDotnet, count, fixture = '', e
   if (fixture !== '') {
     writeFileSync(path, fixture);
   }
+  // Said BEFORE the writers start. A heavy leg is a minute of silence otherwise, and a person
+  // cannot tell a run that is working from one that is stuck. (The code round, codex.)
+  console.log(`\n${title} — ${howMany} process(es), running...`);
   const startedMs = Date.now();
   await Promise.all(
     Array.from({ length: howMany }, (_unused, writer) => writerProcess(path, writer, count, howManyDotnet)),
@@ -218,7 +245,6 @@ async function leg(title, { name, howMany, howManyDotnet, count, fixture = '', e
   const found = inspect(path);
   const ok = found.whole === expect.whole && found.torn === expect.torn;
 
-  console.log(`\n${title}`);
   console.log(`  ${found.lines} lines, ${found.bytes} bytes, ${took} ms`);
   console.log(`  whole records: ${found.whole} of ${expect.whole}`);
   console.log(`  torn or unreadable lines: ${found.torn}, expected ${expect.torn}`);

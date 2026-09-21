@@ -25,6 +25,18 @@ public sealed class JsonlLedgerTests : IDisposable
 
     private static readonly string NewlineText = ((char)Newline).ToString();
 
+    /// <summary>
+    /// A directory of this test's OWN — xUnit constructs this class once per test method, so every
+    /// test gets a fresh <c>CreateTempSubdirectory</c> and disposes it after.
+    /// </summary>
+    /// <remarks>
+    /// Written down because the code round read the shared field as shared STATE across parallel
+    /// tests and asked for a directory per test method. It already is one; what the round was right
+    /// about is that nothing SAID so. The invariant is not only documented but checked: the test
+    /// that a missing file is created by the append itself asserts the ledger does not pre-exist,
+    /// and it is the first thing that would fail if this class were ever instantiated once for all
+    /// of its tests.
+    /// </remarks>
     private readonly TempDir _dir = TempDir.For("coai-jsonl-");
 
     public void Dispose() => _dir.Dispose();

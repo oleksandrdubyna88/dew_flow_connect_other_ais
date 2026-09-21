@@ -49,7 +49,7 @@ public sealed class ResolvedDataDirTests
     {
         // `Path.Combine("", name)` is the bare file name, which lands beside whatever launched the
         // process. The type refuses it before any writer can be handed it.
-        var constructing = () => new ResolvedDataDir(empty);
+        var constructing = () => ResolvedDataDir.For(empty);
 
         constructing.Should().Throw<ArgumentException>().WithMessage("*empty*");
     }
@@ -62,7 +62,7 @@ public sealed class ResolvedDataDirTests
         // The resolver always answers a FULL path (`Path.GetFullPath`, or the rooted default), so a
         // relative one can only have been composed by hand — and a relative data directory is one
         // that moves with the working directory of whichever process was launched.
-        var constructing = () => new ResolvedDataDir(relative);
+        var constructing = () => ResolvedDataDir.For(relative);
 
         constructing.Should().Throw<ArgumentException>().WithMessage("*rooted*");
     }
@@ -75,7 +75,7 @@ public sealed class ResolvedDataDirTests
         // have to be perfect.
         var unusable = Path.Combine(Path.GetPathRoot(Path.GetTempPath())!, "data*");
 
-        var constructed = new ResolvedDataDir(unusable);
+        var constructed = ResolvedDataDir.For(unusable);
 
         constructed.Path.Should().Be(unusable);
     }

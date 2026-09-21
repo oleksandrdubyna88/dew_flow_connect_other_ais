@@ -25,21 +25,30 @@ export const TIMEOUT_MS = 120_000;
 /** The project, for the error message that tells a person what to run. */
 export const PROJECT = join(REPO, 'src_mcp', 'tests_notices', 'NoticeTool.csproj');
 
-/** The built companion, or an empty string. `COAI_NOTICE_TOOL` names one directly. */
-export function findNoticeTool() {
+/**
+ * The built companion for ONE configuration, or an empty string.
+ *
+ * <p><b>One configuration, because two is how a check reports on code that was not built.</b> This
+ * searched `Release` before `Debug` while `noticeTool()` built the default `Debug` — so a stale
+ * `Release` DLL from a month ago won, and parity or the append measurement ran it and came back
+ * green about sources nobody had compiled. The configuration is now named on both sides of the same
+ * call. (The code round, codex.)</p>
+ *
+ * <p>`COAI_NOTICE_TOOL` still names an artefact directly, which is the deliberate escape: a
+ * published build, or the Windows build run under WSL to ask a second kernel the same question.</p>
+ */
+export function findNoticeTool(configuration = CONFIGURATION) {
   const named = process.env['COAI_NOTICE_TOOL'];
   if (named !== undefined && named.length > 0) {
     return named;
   }
-  for (const configuration of ['Release', 'Debug']) {
-    const candidate = join(REPO, 'src_mcp', 'tests_notices', 'bin', configuration, 'net10.0', 'NoticeTool.dll');
-    if (existsSync(candidate)) {
-      return candidate;
-    }
-  }
+  const candidate = join(REPO, 'src_mcp', 'tests_notices', 'bin', configuration, 'net10.0', 'NoticeTool.dll');
 
-  return '';
+  return existsSync(candidate) ? candidate : '';
 }
+
+/** The one configuration this script builds and runs. */
+export const CONFIGURATION = 'Debug';
 
 /**
  * The companion, built from the current sources first.
@@ -60,8 +69,8 @@ export function noticeTool(announce = () => {}) {
     return named;
   }
 
-  announce('building NoticeTool from the current sources...');
-  const built = spawnSync('dotnet', ['build', PROJECT, '-v', 'q', '--nologo'], {
+  announce(`building NoticeTool (${CONFIGURATION}) from the current sources...`);
+  const built = spawnSync('dotnet', ['build', PROJECT, '-c', CONFIGURATION, '-v', 'q', '--nologo'], {
     encoding: 'utf8',
     timeout: TIMEOUT_MS * 4,
     shell: false,
@@ -70,9 +79,9 @@ export function noticeTool(announce = () => {}) {
     throw new Error(`NoticeTool would not build:\n${built.stdout ?? ''}${built.stderr ?? ''}`);
   }
 
-  const tool = findNoticeTool();
+  const tool = findNoticeTool(CONFIGURATION);
   if (tool === '') {
-    throw new Error(`no NoticeTool build found. Run: dotnet build ${PROJECT}`);
+    throw new Error(`no ${CONFIGURATION} NoticeTool after a successful build. Run: dotnet build ${PROJECT} -c ${CONFIGURATION}`);
   }
 
   return tool;
