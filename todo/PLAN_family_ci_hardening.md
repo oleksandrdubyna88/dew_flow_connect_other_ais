@@ -224,6 +224,26 @@ that provably does nothing.
    | `mcp` / `benchmark` | 3 / 3 | 6 each |
    | `conventions` | 4 | 5 |
    | `rag_qln` | none | **none — impossible** |
+
+   **AND THE SEVENTH IS SETTLED, 2026-09-21.** "Impossible" left the obvious next question hanging —
+   *so is it going public, or is the plan being upgraded?* The operator answered: neither. `main`
+   there stays unprotected on purpose, and the decision is recorded in that repository's own
+   `.github/branch-protection.json` under `$settled`, beside the protection body it keeps for the day
+   either of those changes. Written down because an unexplained gap in the seventh repository reads
+   as something somebody forgot **every time** it is noticed — this plan corrected that same
+   misreading once already, three days earlier, and it would have been re-raised a third time. The
+   cost is recorded with it: a force push, a deletion and a merge with no green checks are all
+   possible there, and an admin is held to nothing. What still holds is everything that is a file —
+   the pull-request workflow, the jobs CI runs, the reviews.
+
+   **`conventions` also gained a SECOND protected ref on 2026-09-18**, which the table above predates:
+   `refs/heads/release`, the ref six repositories load their policy from, had none at all. It now
+   refuses a rewind, a deletion and a non-linear history, holds admins to that, and requires
+   `tools · selftest` + `workflows · actionlint` — required checks apply to a direct push, so a commit
+   hand-pushed there without ever running CI is refused by GitHub itself. Still open there, and stated
+   in three places rather than left to be found: a pull request can be opened, go green, never merge,
+   and its head sha be pushed to `release` by hand. Closing that needs a repository RULESET restricting
+   the pushing actor, which is settings of a different kind.
 3. **BLOCKED — see requirement 8.** `tools/repo-settings-check.mjs`, with its selftest; run by hand
    for now (it needs a token), documented in the README. Its HOME is the open decision: conventions
    (as written) or one repository. Do not build it until requirement 8 records the answer — the
