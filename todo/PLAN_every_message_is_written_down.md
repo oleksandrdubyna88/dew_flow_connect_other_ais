@@ -1,6 +1,8 @@
 # PLAN — every message coai raises is written down, counted, and readable afterwards
 
-> Status: **S1–S5 SHIPPED 2026-09-17; S6–S8 open.** The record, the two ledgers, the funnel in
+> Status: **S1–S5 SHIPPED 2026-09-17. S6 open; S8 EXTRACTED 2026-09-21 into
+> [PLAN_the_server_says_what_it_did.md](PLAN_the_server_says_what_it_did.md), which carries defect 4
+> with it.** The record, the two ledgers, the funnel in
 > front of all 111 call sites, the bounds on what one run may write, the panel section, the page and
 > the durable write-gap record are built, tested and through four code rounds of the gate. S6 is the
 > rounds log, S7 the three extension-side defects, S8 the server half. **Defects 1 and 3 of S7
@@ -10,7 +12,12 @@
 > below. Defect 1 is
 > [PLAN_the_mirror_says_when_it_stood_down.md](../research/PLAN_the_mirror_says_when_it_stood_down.md),
 > which gave the settings mirror a bounded back-off and a voice for the four `sync()` outcomes that
-> had none. Defect 2 remains, a story of its own. Deviations from the plan as written are recorded inline
+> had none. **Defect 2 shipped too** — this line said *"remains, a story of its own"* until
+> 2026-09-21, four days after
+> [PLAN_a_deleted_role_stays_deleted.md](../research/PLAN_a_deleted_role_stays_deleted.md) was
+> promoted with `IMPLEMENTED 2026-09-18`; the defect's own heading below had said BUILT the whole
+> time. A status line written from the story list while the truth sat in the sections is exactly
+> what `planning-docs.md` made a checkable rule about. Deviations from the plan as written are recorded inline
 > beside the thing it changed; the largest are in *E* (the run budget is charged per CODE, not per
 > `(code, subject)`), *S4a* (three decisions the code round changed) and *S5b* (what the two S5 code
 > rounds changed, including one fix that was wrong and had to be replaced).
@@ -679,6 +686,11 @@ enforces needs the run-wide budget beside it, since eviction would otherwise res
 
 ### G. The server half (S8, its own file)
 
+> **Extracted 2026-09-21 into [PLAN_the_server_says_what_it_did.md](PLAN_the_server_says_what_it_did.md)**,
+> which is where it is built. What follows is the brief as this plan wrote it, kept because the rest
+> of this document reasons against it; where the two differ, the extracted plan is the one that
+> shipped. It carries **defect 4** as well, by the ordering below.
+
 `coai-mcp` appends to `server-notices.jsonl` with the same record shape. Three functions are the whole
 instrumentation surface:
 
@@ -919,7 +931,8 @@ goes into each plan below in the same task.
 | Notification text in five languages | not done | [PLAN_a_stale_translation_is_invisible.md](PLAN_a_stale_translation_is_invisible.md) owns staleness; translation is out of scope until it lands |
 | The Team server's refusal vocabulary | not touched | [PLAN_refusals_that_explain_themselves.md](PLAN_refusals_that_explain_themselves.md) owns `src_server` |
 | The SIZE of `roundsLog.ts` (2016) and `panelView.ts` (2850) | not touched here — the new page is under 400 lines a module from its first commit, so it joins no backlog | [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md) owns the split and is **blocked until S8 finishes**: S5 adds a fourth live region to `panelView.ts` and S6 changes `roundsLog.ts`, and a thousand-line move rebased across them throws away the review both are getting. Operator, 2026-09-17 |
-| Where the server resolves its data dir | S8 depends on it | [PLAN_the_settings_file_ignores_the_side.md](../research/PLAN_the_settings_file_ignores_the_side.md) goes first |
+| Where the server resolves its data dir | S8 depended on it | [PLAN_the_settings_file_ignores_the_side.md](../research/PLAN_the_settings_file_ignores_the_side.md) went first, and shipped as `coai-mcp 0.30.0` on 2026-09-18 |
+| `server-notices.jsonl`: its writer, its serialiser, its redaction, its path and its caps; the server's run-start marker; **defect 4** | not built here — S1–S5 shipped the READER, which has had nothing to read since 2026-09-17 | [PLAN_the_server_says_what_it_did.md](PLAN_the_server_says_what_it_did.md) owns all of it. **This plan is promoted when that one ships**, per its own Definition of Done |
 
 ## Build order
 
@@ -1039,7 +1052,8 @@ regression restoring either behaviour would leave every existing test green.
 **S7 — the three extension-side defects** (1, 2 and 3), each RED first. 3 is independent of everything
 above.
 
-**S8 — the server half, and defect 4 with it.** The instrumentation points (both `Error` helpers),
+**S8 — the server half, and defect 4 with it** — now
+[PLAN_the_server_says_what_it_did.md](PLAN_the_server_says_what_it_did.md). The instrumentation points (both `Error` helpers),
 `ResolveDataDir`, the run-start marker, the seam leg — and the `try/catch/finally` around the host.
 Defect 4 lives here rather than in S7 because it changes the `coai-mcp` binary and its
 externally-killed half depends on the run marker this step builds; splitting them would put half a
