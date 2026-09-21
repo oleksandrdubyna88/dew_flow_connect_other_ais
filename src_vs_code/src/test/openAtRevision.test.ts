@@ -7,6 +7,7 @@ import { test } from 'node:test';
 import {
   affectedBy,
   currentFileIn,
+  folderHolding,
   emptyMemory,
   FileAtRead,
   heldRevision,
@@ -330,4 +331,41 @@ test('a server too old is told to every row on the page, not only the one that p
 
   assert.deepEqual([...affectedBy(memory, rows[0]!, rows)].sort(), [1, 2, 3],
     'an old binary is a fact about the SERVER, so every drawn row learns it at once');
+});
+
+// --------------------------------------------------------------------------------------------
+// Which open folder a file belongs to (round 2, gemini).
+// --------------------------------------------------------------------------------------------
+
+test('a file is matched to the open folder that HOLDS it, not to the first one tried', () => {
+  // A language provider answers with absolute paths out of any root it knows about. Trying root A
+  // first and letting the containment guard refuse `../rootB/foo.ts` happens to reach the right
+  // answer, but it asks the filesystem a question about a folder that plainly does not hold the
+  // file — and it is only right because the refusal is silent.
+  const roots = ['D:/work/alpha', 'D:/work/beta'];
+
+  assert.equal(folderHolding(roots, 'D:/work/beta/src/Bar.ts'), 'D:/work/beta');
+  assert.equal(folderHolding(roots, 'D:/work/alpha/src/Foo.ts'), 'D:/work/alpha');
+});
+
+test('a file under no open folder belongs to none, and that is the whole answer', () => {
+  const roots = ['D:/work/alpha'];
+
+  assert.equal(folderHolding(roots, 'D:/elsewhere/src/Foo.ts'), '',
+    'a dependency in node_modules of another checkout is exactly this case');
+  assert.equal(folderHolding(roots, 'C:/other/drive/Foo.ts'), '', 'another drive holds nothing of ours');
+  assert.equal(folderHolding([], 'D:/work/alpha/src/Foo.ts'), '');
+  assert.equal(folderHolding(roots, ''), '');
+});
+
+test('a nested root wins over the one containing it, because it is the closer truth', () => {
+  const roots = ['D:/work', 'D:/work/alpha'];
+
+  assert.equal(folderHolding(roots, 'D:/work/alpha/src/Foo.ts'), 'D:/work/alpha');
+  assert.equal(folderHolding(roots, 'D:/work/other/Foo.ts'), 'D:/work');
+});
+
+test('a folder name that merely STARTS with another is not inside it', () => {
+  assert.equal(folderHolding(['D:/work/alpha'], 'D:/work/alphabet/Foo.ts'), '',
+    'a prefix comparison would put alphabet inside alpha');
 });

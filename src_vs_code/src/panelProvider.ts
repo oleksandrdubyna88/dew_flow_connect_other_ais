@@ -1,4 +1,4 @@
-/* eslint-disable max-lines -- 4025 lines, over the 800 this package sets for NEW code.
+/* eslint-disable max-lines -- 3752 lines, over the 800 this package sets for NEW code.
    The limit is a boundary, not a rewrite mandate: splitting this file is a change with its own
    review. `reportUnusedDisableDirectives` turns this line into an error the day that happens. */
 import { GLANCE_CEILING_MS, LedgerGlance, NOT_LOOKED, UNREADABLE_GLANCE } from './notificationsCount';
@@ -66,6 +66,9 @@ import { readProviders } from './providersProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
+import { currentFileIn, folderHolding } from './openAtRevision';
+import { askCalls } from './callHierarchyAsk';
+import { callHierarchyEditor } from './callHierarchyVsCode';
 import { contributorKey, setContributorKey } from './bugsAdminKey';
 import { mayStart, outcomeOf } from './bugsSend';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
@@ -150,7 +153,7 @@ import {
 } from './teamServers';
 import { TeamServerState, slotSentence } from './teamServerView';
 import { access } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { asText } from './asText';
 import { notify, notifyAndAsk, notifyOnce } from './notify';
 import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
@@ -2694,6 +2697,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       showCurrent: (file, line) => showCurrentFile(file, line),
       folders: () => workspaceFolderPaths(),
       readTreeAt: (asked) => readTreeAt(server.fsPath, asked),
+      askCalls: (about) => askCalls(callHierarchyEditor(), about),
+      // Guarded, and by story 3.1's own check rather than a second one: a language server can
+      // answer with a path in node_modules, another workspace root, or anywhere at all, and
+      // `showCurrentFile` on its own would open it. (Code round, gemini, twice.)
+      openCall: (end) => openInsideWorkspace(end.file, end.line + 1),
       openFolder: (path) => openTreeFolder(path),
       // A decision changes how many pairs the Bugz section says are waiting, and that section is a
       // different window onto the same database. Without this the count sat stale until something
@@ -3719,5 +3727,26 @@ async function reachable(path: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Opens a file a LANGUAGE SERVER named, only if it is inside a folder this window has open.
+ *
+ * <p>A call hierarchy answers with whatever URIs its provider knows: a dependency in `node_modules`,
+ * another workspace root, a generated file in a temp directory, or anything at all. Story 3.1 built
+ * the guard for exactly this shape of question — `currentFileIn` checks the containing checkout
+ * against the open folders and then the file against the checkout, as written AND as it really leads
+ * — and it is reused rather than a second one written. (Code round, gemini, twice.)</p>
+ */
+async function openInsideWorkspace(file: string, line: number): Promise<void> {
+  const folder = folderHolding(workspaceFolderPaths(), file);
+  if (folder.length === 0) {
+    return;
+  }
+
+  const inside = await currentFileIn([folder], folder, relative(folder, file));
+  if (inside.ok) {
+    await showCurrentFile(inside.path, line);
   }
 }

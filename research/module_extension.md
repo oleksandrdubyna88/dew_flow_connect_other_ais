@@ -8098,6 +8098,121 @@ which is three of the sixteen tests.
 at 696 of its cap. 64 is the only code either reader treats as "the server is too old", and a missing
 `--tree` (65) carries the server's own sentence instead - three plan findings asked for exactly this.
 
+### Who calls this, and what it calls (2026-09-21, story 3.3)
+
+An open row can be asked, and the answer is two counts with expandable lists of clickable paths.
+Nothing is asked at paint: a cold language service is 0.8–2.0 s against a warm 37 ms (measured), so
+two hundred rows would be two hundred cold preparations — the arithmetic story 3.1 refused for its own
+probe. The press says it is asking BEFORE the first await, as 3.1's and 3.2a's do.
+
+**Every count says which checkout it is about, in the sentence.** A call hierarchy is answered by the
+language server of the window that asks, over the folder that window has open — and a review row is
+about a commit orphaned 55.7 % of the time. So the control's title says *in the current checkout*
+before it is pressed, and every answer repeats it. Asking the review tree's own window is not
+possible: VS Code gives an extension no way to run a command in another window, which is the gap
+story 3.2c exists for. Reading the workspace's HEAD to compare was the alternative and would have
+meant parsing `.git/HEAD` and `packed-refs` by hand — re-implementing git to say what a label says.
+
+**Two guards against the failure this story is most afraid of**, and a measurement put the second one
+there. Asking at column 0 of `    public counted()` prepares **`Totals`**, the enclosing class, and
+would have counted a class's callers under a method's name. So the column is found from the line's
+text, AND the prepared item's name is checked against the one the row records. They were designed
+independently and the measurement showed them agreeing.
+
+**The second guard had to say WHICH item matched, not merely that one did** — the code round's worst
+finding, reached independently by three reviewers. `prepareCallHierarchy` answers with a LIST, and the
+first draft checked the list and then asked the provider about `items[0]`. A provider answering
+`[Totals, counted]` would have passed both guards and still counted the class's callers under the
+method's name: the exact outcome the guards exist for, arrived at through them. `theRightSymbol` now
+returns the INDEX, and a preparation is now a list of `{ item, handle }` PAIRS rather than two
+arrays indexed in parallel — the second round's answer to the same question, because a parallel index
+is a contract nothing enforces and an adapter that filters one array and not the other would pair a
+name with another symbol's handle. Three drafts: one handle, two arrays, one value. The third cannot
+be got wrong.
+
+**The list is bounded at 50, with a tail that says how many more there are.** The COUNT in the
+sentence is never truncated — it is the answer; the list is only how a person reaches a few of them,
+and a method with ten thousand callers would otherwise become ten thousand buttons in one `innerHTML`
+assignment.
+
+**An end is opened only inside a folder this window has open.** A language provider answers with
+whatever URIs it knows: a dependency in `node_modules`, another workspace root, a generated file in a
+temp directory. Story 3.1 built `currentFileIn` for exactly this shape of question — it checks the
+containing checkout against the open folders and then the file against the checkout, as written AND as
+it really leads — so it is reused rather than a second guard written.
+
+Which folder to ask it about is a separate question, and `folderHolding` answers it as a value.
+Trying each open folder in turn and letting the guard refuse `../otherRoot/file.ts` reaches the right
+answer, but only because the refusal is silent: it asks the filesystem about folders that plainly do
+not hold the file. `folderHolding` is lexical, synchronous and unit-tested — the most specific root
+wins, since a workspace may hold a root inside another, and `alphabet` is not inside `alpha` because
+the comparison is a path boundary rather than a prefix.
+
+**One malformed item costs one END, never the whole direction.** `selectionRange` is declared
+non-optional by the API and is nevertheless missing from some providers' items, so the range is the
+fallback and an item with neither is skipped. It used to throw, and a `TypeError` inside that map
+would have been reported by the bounded wait as a direction that could not be asked: nine callers and
+one unusable tenth would have read as *the language support did not answer*.
+
+**A `findingId` is a key, not an identity.** A collect can reuse one for another finding, and the
+panel holds answers by it — so a held answer is rendered only when it is about the method the row is
+NOW (`file:line:symbolName`, carried on the answer as `about`). Without that, a refreshed row would
+show the previous method's callers under the new name: this story's own worst case, reached through a
+refresh rather than through a provider.
+
+**Only a THROW means the file is gone.** A file that opens but is now shorter than the recorded line
+has MOVED, and the adapter returns the empty string for it rather than `undefined` — `preparedAt`
+reads `undefined` as an absent file, so the first draft told a person to go looking for a file sitting
+in front of them.
+
+**A count reads as English in both directions and both numbers.** *1 method calls this*, *2 methods
+call this*, *1 method is called by this*, *2 methods are called by this*. The first draft pasted one
+phrase after a count and produced *2 methods calls this* — a number arriving in a sentence that is
+visibly not English is a number a person is right to distrust.
+
+**A live patch that would write the same markup writes nothing.** Replacing `innerHTML` with an
+identical string still destroys the element the person is on, and a superseded completion posts
+exactly that. This page's own rule, stated in `.coderabbit.yaml`.
+
+**Four states, because each is a different next move.** `moved` (that line holds something else),
+`gone` (the file is not in this checkout), `no-provider` (nobody could be ASKED — never rendered as
+zero), `failed` (asked and did not answer; worth asking again). Zero callers is a fifth thing and
+reads as a plain number, which is the whole point of the gate measurement.
+
+**An ATTEMPT, not a generation.** A request can time out, a person can press again inside the same
+draw, and the first promise can still resolve. Every press mints an attempt; only the one a row is
+still waiting for may be applied. Collapsing a row forgets its press — the provider cannot be told to
+stop (none of the three commands takes a `CancellationToken`: `vscode.prepareCallHierarchy` takes a
+URI and a position, the two direction commands take an item, and that is all), but the answer can be
+refused.
+
+**Collapsing drops the ANSWER too, not only the press, and repaints the row.** A person who collapses
+a row, checks out another branch and opens it again would otherwise be shown the old branch's count
+under the sentence *in the current checkout* — the one thing this story promises never to say.
+Reopening asks again. The repaint is the other half of the same guarantee and the second round found
+it: the block lives in the detail row, which a collapse HIDES rather than removes, so forgetting the
+answer on the panel's side while leaving the old markup in the page would have arrived at exactly the
+sentence being avoided, from the other direction.
+
+**Nothing is reused to avoid a call.** The last answer is kept so a redraw does not lose it; a press
+always asks again. That is what keeps a number from surviving a branch switch without this side
+having to learn what the workspace's HEAD is.
+
+**`reviewPageStyle.ts` was extracted** to make room: `bugzReviewPage.ts` was at 791 of the 800-line
+cap and this story needed a dozen lines in it. Ninety-four lines of CSS that no logic reads were the
+cheapest honest move, and `notificationsPageStyle.ts` is the house precedent. It is a FUNCTION rather
+than a constant because the sheet composes four other modules' CSS and two of them take the zoom and
+tone a person set — the constant version was the first attempt and the compiler caught it at once.
+
+**`callHierarchyVsCode.ts` was extracted for the same reason**, on a code-round finding:
+`panelProvider.ts` is the file every command is registered in and it was over its cap, so the VS Code
+adapter — the three `executeCommand` calls and the shaping of what they return — moved out whole. It
+is the only module in this story that imports `vscode`, which is what lets `callHierarchy.ts`,
+`callHierarchyAsk.ts`, `callsBlock.ts` and `callsPanel.ts` all be RUN by the suite; it is therefore
+also the only one in `sonar.coverage.exclusions`. The adapter guards `selectionRange` — a provider may
+leave it unset, and `item.range.start` is then the position to use, which is a different place on a
+decorated method.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs

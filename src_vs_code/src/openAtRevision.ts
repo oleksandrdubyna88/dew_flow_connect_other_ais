@@ -310,6 +310,38 @@ async function readable(file: string): Promise<boolean> {
  * A stored pair is data a model wrote about, and this is the one action that touches the live
  * filesystem.</p>
  */
+/**
+ * Which open folder holds a file — the question `currentFileIn` should be ASKED about, not made to
+ * answer by refusing.
+ *
+ * <p>A language provider answers with absolute paths out of any root it knows: another workspace
+ * folder, a dependency inside one, a generated file in a temp directory. Trying each open folder in
+ * turn and letting the containment guard refuse `../otherRoot/file.ts` happens to reach the right
+ * answer, but it asks the filesystem about folders that plainly do not hold the file and is right
+ * only because the refusal is silent. (Round 2, gemini.)</p>
+ *
+ * <p>Lexical and synchronous on purpose: this only CHOOSES the candidate, and `currentFileIn` still
+ * proves it — as written and as it really leads. The most specific folder wins, because a workspace
+ * may hold a root inside another root. Comparison is `path.relative`'s, so it is case-insensitive
+ * exactly where the filesystem is.</p>
+ */
+export function folderHolding(folders: readonly string[], file: string): string {
+  if (file.trim().length === 0) {
+    return '';
+  }
+
+  return folders
+    .filter((folder) => folder.trim().length > 0 && inside(folder, file))
+    .reduce((best, folder) => (folder.length > best.length ? folder : best), '');
+}
+
+/** Lexically within, with `..` and a bare prefix both refused — `alphabet` is not inside `alpha`. */
+function inside(folder: string, file: string): boolean {
+  const step = path.relative(folder, file);
+
+  return step.length > 0 && !step.startsWith('..') && !path.isAbsolute(step);
+}
+
 export async function currentFileIn(folders: readonly string[], repoPath: string, file: string): Promise<CurrentFile> {
   if (repoPath.trim().length === 0) {
     return { ok: false, why: 'no checkout is recorded for this pair' };

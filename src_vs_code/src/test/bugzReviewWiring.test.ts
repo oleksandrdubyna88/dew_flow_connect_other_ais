@@ -39,7 +39,9 @@ test('the panel records what the page opened, and both kinds of press reach the 
 
   // The union is what makes the page and the panel agree about the shape; a bag of optionals
   // compiles whatever is missing.
-  assert.match(text, /case 'expand':\s*case 'expandAll':\s*this\.remember\(m\.ids, m\.open\);/u,
+  assert.match(
+    text,
+    /case 'expand':\s*case 'expandAll':\s*if \(!m\.open\) \{\s*this\.calls\.closed\(m\.ids, this\.held\);\s*\}\s*this\.remember\(m\.ids, m\.open\);/u,
     'one press and every press must both end in remember(), or Expand all records nothing');
   assert.match(text, /case 'decide':\s*this\.queue\(m\.ids, m\.keep\);/u);
 });
@@ -353,4 +355,58 @@ test('the provider wires the checkout hooks to the reader and to the editor', ()
   assert.match(text, /readTreeAt: \(asked\) => readTreeAt\(server\.fsPath, asked\),/u,
     'a page test can prove the page asks; only this proves anybody answers');
   assert.match(text, /openFolder: \(path\) => openTreeFolder\(path\),/u);
+});
+
+// --------------------------------------------------------------------------------------------
+// Who calls this (story 3.3): the seams a page test and a value test cannot reach.
+// --------------------------------------------------------------------------------------------
+
+test('a calls press reaches the one method that answers it, and an opened end goes by INDEX', () => {
+  const text = code('bugzReviewPanel.ts');
+
+  assert.match(text, /case 'calls':\s*void this\.opened\(m\.id, \(pair\) => this\.calls\.ask\(pair, this\.held\)\);/u,
+    'the control must reach the panel, or it is wired to nothing');
+  // The page holds no file names for this: it posts which row, which direction and which entry, and
+  // the panel — which has the answer — opens it. A page that carried paths could be asked to open one.
+  assert.match(text, /void this\.calls\.open\(named\.id, named\.which, named\.at\);/u);
+});
+
+test('the panel hands every row its calls block on every paint, and a closed window forgets them', () => {
+  const text = code('bugzReviewPanel.ts');
+
+  assert.match(text, /calls: new Map\(found\.shown\.map\(\(pair\) => \[pair\.findingId, this\.calls\.blockFor\(pair\)\] as const\)\)/u,
+    'a redraw after a decision must not lose what a person asked for');
+  const disposed = /onDidDispose\(\(\) => \{([\s\S]*?)\}\);/u.exec(text);
+  assert.ok(disposed !== null);
+  assert.match(disposed[1] ?? '', /this\.calls\.forget\(\);/u,
+    'the answers were about a checkout that may have moved on');
+});
+
+test('only a THROW means the file is gone; a line past the end of one that opens is a move', () => {
+  // The one decision in this story that no test can execute: `callHierarchyVsCode.ts` imports
+  // `vscode`, which is why it is the single module in sonar.coverage.exclusions. So it is pinned as
+  // a whole condition instead — the ternary AND both of its answers, because a fragment match would
+  // survive its own break. Empty string, never undefined: `preparedAt` reads undefined as an absent
+  // FILE and would send a person looking for one that is sitting in front of them. (Round 2.)
+  const adapter = code('callHierarchyVsCode.ts');
+
+  assert.match(
+    adapter,
+    /return line < opened\.lineCount \? opened\.lineAt\(line\)\.text : '';\s*\} catch \{\s*return undefined;/u,
+    'the out-of-range answer and the absent-file answer must not be the same value');
+});
+
+test('the provider wires the calls hooks to the real editor, and opens only inside the workspace', () => {
+  const text = code('panelProvider.ts');
+
+  assert.match(text, /askCalls: \(about\) => askCalls\(callHierarchyEditor\(\), about\),/u,
+    'a value test can prove the decisions; only this proves anybody asks the editor');
+  // A provider answers with whatever URIs it knows — a dependency in node_modules, another root, a
+  // generated file in a temp directory. Story 3.1 built the guard; it is reused, not rewritten.
+  assert.match(text, /openCall: \(end\) => openInsideWorkspace\(end\.file, end\.line \+ 1\),/u);
+  const opening = bodyOf(text, 'async function openInsideWorkspace(file: string, line: number): Promise<void> {');
+  assert.match(opening, /currentFileIn\(\[folder\], folder, relative\(folder, file\)\)/u,
+    'and the check is story 3.1 own, which tests the path as written AND as it really leads');
+  assert.match(opening, /if \(inside\.ok\) \{/u,
+    'a path the guard refuses opens nothing at all');
 });

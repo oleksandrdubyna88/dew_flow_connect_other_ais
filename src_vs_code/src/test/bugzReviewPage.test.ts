@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { callsBlock } from '../callsBlock';
 import { test } from 'node:test';
 
 import { DROPPED, KEPT, ReviewPair, UNDECIDED, decision, reviewPageHtml, undecided } from '../bugzReviewPage';
@@ -21,6 +22,9 @@ import { readable } from './readableHtml';
  * and "a value appearing escaped" is named as legitimate. Each of those assertions was proven to
  * have teeth by deleting the thing it checks and watching it go red.</p>
  */
+
+/** The calls block as the panel would have rendered it before anything was asked. */
+const callsBlockFor = (findingId: number): string => callsBlock(findingId, { phase: 'unasked' });
 
 const pair = (findingId: number, keep = UNDECIDED): ReviewPair => ({
   findingId,
@@ -253,12 +257,13 @@ const OFFERS: Readonly<Record<string, string>> = {
   'data-open-at': 'way to open the file at its revision',
   'data-open-current': 'way to open the current file',
   'data-open-tree': 'way to check the commit out in a new window',
+  'data-calls': 'way to ask who calls this method',
 };
 
 class Opener {
   readonly id = '';
 
-  constructor(readonly kind: 'data-open-at' | 'data-open-current' | 'data-open-tree', readonly key: string) {}
+  constructor(readonly kind: 'data-open-at' | 'data-open-current' | 'data-open-tree' | 'data-calls', readonly key: string) {}
 
   getAttribute(name: string): string | null {
     return name === this.kind ? this.key : null;
@@ -271,10 +276,22 @@ class Opener {
 
 /** The container a row's revision actions live in — what the host's `revisions` answer lands in. */
 class Note {
-  innerHTML: string;
+  private text: string;
+
+  /** How many times the page ASSIGNED this container's markup. An identical patch must not. */
+  writes = 0;
 
   constructor(readonly key: string, contents: string) {
-    this.innerHTML = contents;
+    this.text = contents;
+  }
+
+  get innerHTML(): string {
+    return this.text;
+  }
+
+  set innerHTML(html: string) {
+    this.writes += 1;
+    this.text = html;
   }
 }
 
@@ -355,6 +372,8 @@ function pageScript(html: string): string {
 }
 
 interface Page {
+  /** The containers one row's call answer is painted into. */
+  readonly callBoxes: readonly Note[];
   readonly posted: readonly Posted[];
   readonly boxes: readonly Box[];
   readonly toggles: readonly Toggle[];
@@ -371,7 +390,7 @@ interface Page {
   readonly openers: readonly Opener[];
   click(what: Box | Control | Toggle | Line | TabButton | Opener): void;
   /** One row's opener of one kind — asserting it is there, because a row with none has lost the action. */
-  opener(findingId: number, kind: 'data-open-at' | 'data-open-current' | 'data-open-tree'): Opener;
+  opener(findingId: number, kind: 'data-open-at' | 'data-open-current' | 'data-open-tree' | 'data-calls'): Opener;
   /** The container one row's revision actions were rendered into. */
   revision(findingId: number): Note;
   /** Whether the pair with this `findingId` is showing its code, as the page currently stands. */
@@ -396,6 +415,7 @@ interface Options {
   readonly realText?: boolean;
   readonly real?: ReadonlyMap<number, RealRead>;
   readonly revisions?: ReadonlyMap<number, RevisionState>;
+  readonly calls?: ReadonlyMap<number, string>;
   readonly draw?: number;
 }
 
@@ -449,10 +469,13 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
   // outside any row is above.
   const notes = [...html.matchAll(/<dd class="open" data-revision="(\d+)">([\s\S]*?)<\/dd>/g)]
     .map((m) => new Note(m[1]!, m[2]!.trim()));
-  const openers = notes.flatMap((note) => [
+  const callBoxes = [...html.matchAll(/<dd class="open" data-calls-for="(\d+)">([\s\S]*?)<\/dd>/g)]
+    .map((m) => new Note(m[1]!, m[2]!.trim()));
+  const openers = [...notes, ...callBoxes].flatMap((note) => [
     ...[...note.innerHTML.matchAll(/data-open-at="(\d+)"/g)].map((m) => new Opener('data-open-at', m[1]!)),
     ...[...note.innerHTML.matchAll(/data-open-current="(\d+)"/g)].map((m) => new Opener('data-open-current', m[1]!)),
     ...[...note.innerHTML.matchAll(/data-open-tree="(\d+)"/g)].map((m) => new Opener('data-open-tree', m[1]!)),
+    ...[...note.innerHTML.matchAll(/data-calls="(\d+)"/g)].map((m) => new Opener('data-calls', m[1]!)),
   ]);
   // The severity/title line and the state word, with the element they are actually INSIDE. Whether
   // that is the disclosure button or merely the row is the whole of the defect a code reviewer
@@ -515,13 +538,16 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     },
     querySelectorAll: (selector: string): readonly unknown[] => byAttribute[selector] ?? [],
     querySelector: (selector: string): Region | Toggle | Half | Note | undefined => {
-      const one = /^\[data-(detail|toggle|skel|real|revision)="(\d+)"]$/.exec(selector);
+      const one = /^\[data-(detail|toggle|skel|real|revision|calls-for)="(\d+)"]$/.exec(selector);
       assert.ok(one !== null, `the page asked for a selector the shim cannot answer: ${selector}`);
       if (one[1] === 'skel' || one[1] === 'real') {
         return halfOf(one[1], one[2]!);
       }
       if (one[1] === 'revision') {
         return notes.find((note) => note.key === one[2]);
+      }
+      if (one[1] === 'calls-for') {
+        return callBoxes.find((note) => note.key === one[2]);
       }
       const among = one[1] === 'detail' ? regions : toggles;
 
@@ -545,6 +571,7 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
   assert.ok(onClick !== undefined, 'the page never attached a click listener');
 
   return {
+    callBoxes,
     posted,
     tabs,
     boxes,
@@ -1794,4 +1821,71 @@ test('a read that DID reach the server is not asked for twice', () => {
   page.click(toggleFor(page, 1));
 
   assert.equal(asked(page).length, 1, 'a domain answer is held; only a failed process is retried');
+});
+
+// --------------------------------------------------------------------------------------------
+// Who calls this (story 3.3): the control pressed, and the row it sits in left alone.
+// --------------------------------------------------------------------------------------------
+
+test('an open row offers to ask who calls its method, and pressing it names the row', () => {
+  const page = run([pair(1), pair(2)], { expanded: new Set([1]), calls: new Map([[1, callsBlockFor(1)]]) });
+
+  assert.deepEqual(page.posted.filter((m) => m.type === 'calls'), [],
+    'a cold language service takes seconds; nothing may ask at paint');
+
+  page.click(page.opener(1, 'data-calls'));
+
+  assert.deepEqual(page.posted.filter((m) => m.type === 'calls'), [{ type: 'calls', id: 1 }]);
+});
+
+/**
+ * A reviewer asked for the control's propagation to be pinned, and this pins it — but it is worth
+ * saying what it does NOT do. Removing the branch's `return` leaves this green, because the control
+ * lives in the DETAIL row rather than inside the summary row's toggle button, so there is nothing
+ * for the event to bubble into. Measured by taking the `return` out and watching the suite stay
+ * green. The `return` stays because it is the house pattern and because the day the control moves
+ * into the toggle is the day it matters; the test documents the contract rather than guarding it,
+ * and saying so is better than claiming teeth it has not got.
+ */
+test('pressing it does not also open, close or otherwise disturb the row it sits in', () => {
+  const page = run([pair(1), pair(2)], { expanded: new Set([1]), calls: new Map([[1, callsBlockFor(1)]]) });
+  const before = page.showing(1);
+
+  page.click(page.opener(1, 'data-calls'));
+
+  assert.equal(page.showing(1), before, 'the row must be exactly as it was');
+  assert.deepEqual(page.posted.filter((m) => m.type === 'expand'), [],
+    'and the row toggle must not have been told anything at all');
+});
+
+// --------------------------------------------------------------------------------------------
+// Live patches, DRIVEN (round 2 of the code round, coderabbit).
+// --------------------------------------------------------------------------------------------
+
+test('a call answer is painted into its own row container, and no other', () => {
+  const page = run([pair(1), pair(2)], { expanded: new Set([1, 2]), calls: new Map([[1, callsBlockFor(1)], [2, callsBlockFor(2)]]) });
+  const before = page.callBoxes.find((one) => one.key === '2')?.innerHTML;
+
+  page.host.push({ type: 'calls', items: [{ id: 1, html: '<span class="why">2 methods call this</span>' }] });
+
+  assert.match(page.callBoxes.find((one) => one.key === '1')?.innerHTML ?? '', /2 methods call this/u);
+  assert.equal(page.callBoxes.find((one) => one.key === '2')?.innerHTML, before,
+    'a patch names one row; the rest of the page is not redrawn');
+});
+
+test('an IDENTICAL call patch is skipped, so a focused button inside it survives', () => {
+  // `.coderabbit.yaml` states the rule for this page: live patches must skip identical HTML. A
+  // repeated or superseded completion posts the same block, and replacing innerHTML with the same
+  // string still destroys the element the person was on. (Code round 2, coderabbit.)
+  const page = run([pair(1)], { expanded: new Set([1]), calls: new Map([[1, callsBlockFor(1)]]) });
+  const box = page.callBoxes.find((one) => one.key === '1');
+  assert.ok(box !== undefined);
+
+  page.host.push({ type: 'calls', items: [{ id: 1, html: '<span class="why">nothing calls this</span>' }] });
+  const painted = box.writes;
+
+  page.host.push({ type: 'calls', items: [{ id: 1, html: '<span class="why">nothing calls this</span>' }] });
+
+  assert.equal(box.writes, painted, 'the same markup a second time must not touch the DOM');
+  assert.match(box.innerHTML, /nothing calls this/u, 'and what is on screen is still the answer');
 });
