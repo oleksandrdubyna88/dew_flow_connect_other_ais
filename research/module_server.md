@@ -969,6 +969,16 @@ Watched failing by putting `` back: two cases red, both leaving a secret in pla
 U+212A KELVIN SIGN, so `to‹K›en abcdefgh` would match in .NET and not in JavaScript. The words are
 spelled `[Bb][Ee][Aa][Rr][Ee][Rr]`.
 
+**The three backtracking patterns carry a match ceiling, and a timeout FAILS CLOSED.** A reviewer
+asked for it and was right: the cost had been measured at 126 ms over fourteen adversarial 200 KB
+inputs, and a measurement is evidence about the inputs that were tried rather than a guarantee about
+the ones that were not. Two seconds bounds the whole search for one value. When it is reached,
+`SafeText` returns `[redacted]` for the entire value — never the text as it arrived, because a
+redactor that could not finish does not know whether the text is clean. `TheRedactorCannotBeMadeToHangTests`
+drives nine adversarial shapes and audits every pattern: a pattern that is neither `NonBacktracking`
+nor given a ceiling fails, with the sentence *"the reason it gives for not using NonBacktracking is
+an explanation rather than a guarantee"*.
+
 **And the encoder is hand-written**, because neither of .NET's would do. `JSON.stringify` escapes only
 `"`, `\`, the C0 range and lone surrogates; `Utf8JsonWriter`'s default escapes `<>&'+` and every
 non-ASCII character, and `UnsafeRelaxedJsonEscaping` still writes U+2028, U+0085, U+00A0 and U+FEFF as

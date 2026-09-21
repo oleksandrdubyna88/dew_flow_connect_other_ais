@@ -109,13 +109,28 @@ public static partial class Redaction
     /// <summary>The two patterns that need neither a boundary nor the refused loop carry no reason: they are <c>NonBacktracking</c>.</summary>
     private const string NoReason = "";
 
+    /// <summary>
+    /// How long a BACKTRACKING pattern may search one value before it is given up on.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three of the five patterns could not take <c>NonBacktracking</c> — two need an ASCII
+    /// lookbehind and the third also exceeds the engine's node ceiling — so for those three the
+    /// bound on the search is a bound somebody has to state. Every repetition in them is already
+    /// bounded and nothing nests, and the backtracking cost was measured at 126 ms over fourteen
+    /// adversarial 200 KB inputs; a measurement is evidence about the inputs that were tried, and
+    /// this is a guarantee about the ones that were not. A reviewer asked for it and was right.</para>
+    /// <para>Two seconds is far above anything measured and far below anything a person would call a
+    /// hang. It bounds the WHOLE search for one value, not one step of it.</para>
+    /// </remarks>
+    private const int BacktrackingCeilingMs = 2_000;
+
     // A URL carrying its own credentials: https://someone:password@host
     // NOT NonBacktracking because: `(?<![A-Za-z0-9_])` is a lookbehind. It is there because .NET's
     // `\b` is Unicode-aware — `парольsk-…` and `Tokenß…` were measured to slip past it — and JavaScript's
     // is ASCII. Every quantifier is bounded ({0,15}, {1,256}, {1,256}), nothing nests, nothing refers
     // back: a backtracking search retries at most the bound per start position.
     // The case pairs are spelled ([A-Za-z]) rather than IgnoreCase, which pairs k with U+212A here.
-    [GeneratedRegex(UrlAuthorityPattern, RegexOptions.CultureInvariant)]
+    [GeneratedRegex(UrlAuthorityPattern, RegexOptions.CultureInvariant, BacktrackingCeilingMs)]
     private static partial Regex UrlAuthority();
 
     // An Authorization header, or anything that spells one out.
@@ -124,13 +139,13 @@ public static partial class Redaction
     // the extension relies on: an explicit upper bound on every repetition, no nesting, no backreference.
     // `[Bb][Ee]…` spells the three words so that JavaScript's ASCII-only `i` is matched exactly;
     // measured, IgnoreCase here would also redact `to‹KELVIN SIGN›en abcdefgh`, which the extension keeps.
-    [GeneratedRegex(BearerPattern, RegexOptions.CultureInvariant)]
+    [GeneratedRegex(BearerPattern, RegexOptions.CultureInvariant, BacktrackingCeilingMs)]
     private static partial Regex Bearer();
 
     // Vendor key shapes that are unmistakable on sight.
     // NOT NonBacktracking because: the lookbehind, for the reason given at UrlAuthority. `{8,512}`
     // alone would have built (measured), so the boundary is the whole reason here.
-    [GeneratedRegex(VendorPattern, RegexOptions.CultureInvariant)]
+    [GeneratedRegex(VendorPattern, RegexOptions.CultureInvariant, BacktrackingCeilingMs)]
     private static partial Regex Vendor();
 
     // A query or fragment parameter, so its NAME can be judged before its value is kept.
@@ -210,7 +225,39 @@ public static partial class Redaction
     /// rather than a list of names, so a field added next year is redacted without anybody
     /// remembering to add it.</para>
     /// </remarks>
-    public static string SafeText(string value, int limit)
+    public static string SafeText(string value, int limit) =>
+        WhenRedactionTimesOut(() => Passes(value, limit));
+
+    /// <summary>
+    /// FAIL CLOSED: a value whose redaction could not finish is not a value this server may write.
+    /// </summary>
+    /// <remarks>
+    /// <para>The three backtracking patterns carry a match ceiling, and the only way to reach it is
+    /// a value shaped to make one of them search for two seconds. What must not happen then is the
+    /// tempting thing — returning the value as it arrived, unredacted, because the redactor gave up
+    /// on it. A redactor that could not finish does not know whether the text is clean, and text
+    /// nobody can vouch for does not go on disk.</para>
+    /// <para>It is a method taking a thunk rather than a <c>try</c> inside <see cref="SafeText"/> so
+    /// that the branch can be REACHED by a test: a test that had to find an input which actually
+    /// times out would be asserting a performance figure, and would stop asserting anything the day
+    /// the engine got faster.</para>
+    /// <para>The same doctrine the credential list follows: best-effort is right for WRITING a
+    /// notice and wrong for deciding what a secret is.</para>
+    /// </remarks>
+    internal static string WhenRedactionTimesOut(Func<string> redact)
+    {
+        try
+        {
+            return redact();
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return Redacted;
+        }
+    }
+
+    /// <summary>The four passes, in the order the contract fixes.</summary>
+    private static string Passes(string value, int limit)
     {
         var printable = new string([.. value.Where(IsPrintable)]);
         var withoutParameters = Parameter().Replace(printable, RedactParameter);
