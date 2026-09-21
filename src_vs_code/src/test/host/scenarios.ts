@@ -223,6 +223,15 @@ async function settingsUntil(
 }
 
 /** Every scenario, named explicitly. A glob that matches nothing is a pass, which is the whole trap. */
+
+/** The throwaway folder this run was launched against — never anybody's own workspace. */
+function workspaceRoot(): string {
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  assert.ok(folder !== undefined, 'the host was launched without a workspace folder');
+
+  return folder.uri.fsPath;
+}
+
 const SCENARIOS: readonly Scenario[] = [
   {
     name: 'the extension activates, and every command its manifest declares is really registered',
@@ -478,6 +487,96 @@ const SCENARIOS: readonly Scenario[] = [
         'and it can never be SAVED, which is the promise: Ctrl+S has nowhere to write, so the working tree is safe');
       assert.notEqual(shown.document.uri.scheme, 'file',
         'the guarantee is the scheme, not an editor flag');
+    },
+  },
+  {
+    // ------------------------------------------------------------------------------------------
+    // Story 3.3's GATE. Not a guarantee about shipped behaviour — nothing of 3.3 is built — but a
+    // MEASUREMENT of the one fact that decides whether it can be built as the plan describes:
+    // whether "no provider" is distinguishable from "no callers". It stays as a test because the
+    // day it stops being true is the day the feature starts lying, and nothing else would notice.
+    // ------------------------------------------------------------------------------------------
+    name: 'a call hierarchy can tell NO PROVIDER from NO CALLERS, which is what story 3.3 rests on',
+    run: async () => {
+        const where = path.join(workspaceRoot(), 'hierarchy');
+        fs.mkdirSync(where, { recursive: true });
+
+        // TypeScript has a provider built in, so it answers with no extensions installed. One
+        // function called twice, one called never — the two ends of "how many call this".
+        const ts = path.join(where, 'calls.ts');
+        fs.writeFileSync(ts, [
+          'export function called(): number { return 1; }',
+          'export function nobodyCalls(): number { return 2; }',
+          'export function first(): number { return called(); }',
+          'export function second(): number { return called() + 1; }',
+          '',
+        ].join('\n'), 'utf8');
+
+        // A language VS Code has no built-in provider for. With `--disable-extensions` this is the
+        // honest stand-in for "a language whose provider is not installed", which the plan names as
+        // the case that must not read as zero.
+        const cs = path.join(where, 'Totals.cs');
+        fs.writeFileSync(cs, [
+          'namespace X;',
+          'public static class Totals',
+          '{',
+          '    public static int Counted() => 1;',
+          '    public static int Uses() => Counted();',
+          '}',
+          '',
+        ].join('\n'), 'utf8');
+
+        const prepared = async (file: string, line: number, character: number): Promise<number> => {
+          const opened = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+          await vscode.window.showTextDocument(opened, { preview: false });
+          // The language service needs a moment after the first open of a file; this is the cold
+          // path the plan asks to be timed, and the number is reported rather than asserted.
+          const items = await vscode.commands.executeCommand<vscode.CallHierarchyItem[] | undefined>(
+            'vscode.prepareCallHierarchy', opened.uri, new vscode.Position(line, character));
+
+          return items === undefined ? -1 : items.length;
+        };
+
+        const incoming = async (file: string, line: number, character: number): Promise<number> => {
+          const opened = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
+          const items = await vscode.commands.executeCommand<vscode.CallHierarchyItem[] | undefined>(
+            'vscode.prepareCallHierarchy', opened.uri, new vscode.Position(line, character));
+          if (items === undefined || items.length === 0) {
+            return -1;
+          }
+          const calls = await vscode.commands.executeCommand<vscode.CallHierarchyIncomingCall[] | undefined>(
+            'vscode.provideIncomingCalls', items[0]);
+
+          return calls === undefined ? -1 : calls.length;
+        };
+
+        const started = Date.now();
+        const tsPrepared = await prepared(ts, 0, 16);
+        const cold = Date.now() - started;
+
+        const again = Date.now();
+        const tsCalled = await incoming(ts, 0, 16);
+        const warm = Date.now() - again;
+
+        const tsNever = await incoming(ts, 1, 16);
+        const csPrepared = await prepared(cs, 3, 22);
+        const csCalled = await incoming(cs, 3, 22);
+
+        // REPORTED, not asserted: these are the numbers story 3.3 needs on the record, and a
+        // threshold invented here would be a preference dressed as a measurement.
+        console.log(`[3.3] typescript: prepared=${tsPrepared} cold=${cold}ms warm=${warm}ms `
+          + `calledTwice=${tsCalled} calledNever=${tsNever}`);
+        console.log(`[3.3] no-provider language: prepared=${csPrepared} incoming=${csCalled}`);
+
+        // The GATE itself. Everything above is context for it.
+        assert.ok(tsPrepared > 0, 'a language with a provider must prepare an item');
+        assert.equal(tsCalled, 2, 'and must count the methods that call it');
+        assert.equal(tsNever, 0,
+          'a method nobody calls must answer ZERO — not the same value as "nobody could be asked"');
+        assert.ok(csPrepared <= 0,
+          'a language with NO provider must not prepare an item, or the two cases are one number');
+        assert.equal(csCalled, -1,
+          'so "unavailable" is reachable, and story 3.3 can distinguish it from a genuine zero');
     },
   },
   {
