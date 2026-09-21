@@ -1324,6 +1324,34 @@ ARTEFACT changes, which is the question a release actually asks.
 
 Whole executable after: 2140 tests, 2138 passed, 0 failed, 2 skipped.
 
+## The review tree's decisions are tested as VALUES (2026-09-21)
+
+`reviewTree.test.ts` — twenty tests, and the reason it exists is worth more than the tests are.
+
+Story 3.2a shipped its seams well covered and its DECISIONS not covered at all: the wiring tests read
+source, the page test runs the page, the live contract test runs the binary — and between them
+**85 of `reviewTreeRead.ts`'s 142 new lines were never executed by anything**. Nothing said so. The
+suite was green, every review round passed over it, and the only thing that noticed was SonarCloud's
+coverage condition on the pull request: `new_coverage = 70.4` against a threshold of 80.
+
+That is the useful half: a story can be reviewed twice by twelve reviewers, ship with 4 006 green
+tests, and still have its central decision function unexecuted. Story 3.1 did not have this gap
+because `openAtRevision.ts` was written as decisions and tested as values from the start; 3.2a put
+its decisions in a reader and tested everything AROUND it.
+
+What is covered now, all without spawning anything (the runner is a parameter):
+
+| | |
+|---|---|
+| what an answer must MATCH before it is believed | another row, another commit, another repository — the last one is the finding a reviewer raised, and the mutation that removes it goes red with *another repository must not be believed* |
+| what is believed although it echoes nothing | a reason-only answer has no coordinates, and refusing it would turn a true answer into silence |
+| the path guard | relative, empty and `./` refused; POSIX, drive-with-slash and drive-with-backslash accepted |
+| the exit codes | 64 and only 64 is "too old"; 65 and 74 carry the server's own sentence |
+| output that is not an answer | empty, not-JSON, `[]`, `null`, a bare string |
+| the tree list | shaped item by item, with a null and a number inside it dropped rather than trusted |
+| what a person is TOLD | every reason word becomes a sentence, and none of them leaks an underscore; the cap refusal names the checkouts using it up, with their days and paths |
+| the press | the working state said before the first await, the button gone while it runs and back when it ends, a refusal opening nothing, an editor's rejection caught, a second press starting nothing |
+
 ## Story 3.2a's counts, and an unresolved suite failure (2026-09-21)
 
 Whole executable after the review tree and its code round: **2 420 tests, 0 failed**. Extension:
