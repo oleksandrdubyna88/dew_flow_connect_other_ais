@@ -96,7 +96,13 @@ test('zero is a real answer and reads as one; a failure reads as a failure', () 
   assert.match(sideSentence({ asked: true, failed: false, ends: [END('a')] }, 'calls this'),
     /1 method calls this, in the current checkout/u);
   assert.match(sideSentence({ asked: true, failed: false, ends: [END('a'), END('b')] }, 'calls this'),
-    /2 methods calls this/u);
+    /2 methods call this, in the current checkout/u,
+    'a plural subject takes a plural verb: "2 methods calls this" is what the first draft said');
+  assert.match(sideSentence({ asked: true, failed: false, ends: [END('a')] }, 'is called by this'),
+    /1 method is called by this/u);
+  assert.match(sideSentence({ asked: true, failed: false, ends: [END('a'), END('b')] }, 'is called by this'),
+    /2 methods are called by this/u,
+    'and the other direction conjugates too — "2 methods is called by this" is not English');
   assert.match(sideSentence({ asked: true, failed: true, ends: [] }, 'calls this'),
     /could not say/u);
   assert.equal(sideSentence({ asked: false, failed: false, ends: [] }, 'calls this'), '');
@@ -126,7 +132,7 @@ test('one method calling twice is ONE caller; two methods of one name in two fil
 // --------------------------------------------------------------------------------------------
 
 const answer = (over: Partial<Calls> = {}): Calls => ({
-  findingId: 7, attempt: 'a1', prepared: 'ok',
+  findingId: 7, about: 'src/A.ts:2:counted', attempt: 'a1', prepared: 'ok',
   incoming: { asked: true, failed: false, ends: [] },
   outgoing: { asked: true, failed: false, ends: [] },
   ...over,

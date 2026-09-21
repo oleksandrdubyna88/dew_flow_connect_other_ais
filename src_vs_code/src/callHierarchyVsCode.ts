@@ -31,12 +31,20 @@ export function callHierarchyEditor(): Editor {
   };
 }
 
-/** One line of a file, or nothing at all when the checkout does not have it. */
+/**
+ * One line of a file, or nothing at all when the checkout does not have the FILE.
+ *
+ * <p><b>A file that opens but is now shorter than the recorded line is not gone — it MOVED.</b> Only
+ * the throw means absent; an out-of-range line comes back as the empty string, which makes the symbol
+ * lookup fail and the row say *that line holds something else*. The first draft returned `undefined`
+ * for both and told a person to look for a file that is sitting in front of them. (Code round 2,
+ * coderabbit.)</p>
+ */
 async function textOfLine(file: string, line: number): Promise<string | undefined> {
   try {
     const opened = await vscode.workspace.openTextDocument(vscode.Uri.file(file));
 
-    return line < opened.lineCount ? opened.lineAt(line).text : undefined;
+    return line < opened.lineCount ? opened.lineAt(line).text : '';
   } catch {
     return undefined;
   }

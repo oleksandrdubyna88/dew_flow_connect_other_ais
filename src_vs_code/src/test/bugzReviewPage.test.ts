@@ -276,10 +276,22 @@ class Opener {
 
 /** The container a row's revision actions live in — what the host's `revisions` answer lands in. */
 class Note {
-  innerHTML: string;
+  private text: string;
+
+  /** How many times the page ASSIGNED this container's markup. An identical patch must not. */
+  writes = 0;
 
   constructor(readonly key: string, contents: string) {
-    this.innerHTML = contents;
+    this.text = contents;
+  }
+
+  get innerHTML(): string {
+    return this.text;
+  }
+
+  set innerHTML(html: string) {
+    this.writes += 1;
+    this.text = html;
   }
 }
 
@@ -360,6 +372,8 @@ function pageScript(html: string): string {
 }
 
 interface Page {
+  /** The containers one row's call answer is painted into. */
+  readonly callBoxes: readonly Note[];
   readonly posted: readonly Posted[];
   readonly boxes: readonly Box[];
   readonly toggles: readonly Toggle[];
@@ -524,13 +538,16 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     },
     querySelectorAll: (selector: string): readonly unknown[] => byAttribute[selector] ?? [],
     querySelector: (selector: string): Region | Toggle | Half | Note | undefined => {
-      const one = /^\[data-(detail|toggle|skel|real|revision)="(\d+)"]$/.exec(selector);
+      const one = /^\[data-(detail|toggle|skel|real|revision|calls-for)="(\d+)"]$/.exec(selector);
       assert.ok(one !== null, `the page asked for a selector the shim cannot answer: ${selector}`);
       if (one[1] === 'skel' || one[1] === 'real') {
         return halfOf(one[1], one[2]!);
       }
       if (one[1] === 'revision') {
         return notes.find((note) => note.key === one[2]);
+      }
+      if (one[1] === 'calls-for') {
+        return callBoxes.find((note) => note.key === one[2]);
       }
       const among = one[1] === 'detail' ? regions : toggles;
 
@@ -554,6 +571,7 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
   assert.ok(onClick !== undefined, 'the page never attached a click listener');
 
   return {
+    callBoxes,
     posted,
     tabs,
     boxes,
@@ -1838,4 +1856,36 @@ test('pressing it does not also open, close or otherwise disturb the row it sits
   assert.equal(page.showing(1), before, 'the row must be exactly as it was');
   assert.deepEqual(page.posted.filter((m) => m.type === 'expand'), [],
     'and the row toggle must not have been told anything at all');
+});
+
+// --------------------------------------------------------------------------------------------
+// Live patches, DRIVEN (round 2 of the code round, coderabbit).
+// --------------------------------------------------------------------------------------------
+
+test('a call answer is painted into its own row container, and no other', () => {
+  const page = run([pair(1), pair(2)], { expanded: new Set([1, 2]), calls: new Map([[1, callsBlockFor(1)], [2, callsBlockFor(2)]]) });
+  const before = page.callBoxes.find((one) => one.key === '2')?.innerHTML;
+
+  page.host.push({ type: 'calls', items: [{ id: 1, html: '<span class="why">2 methods call this</span>' }] });
+
+  assert.match(page.callBoxes.find((one) => one.key === '1')?.innerHTML ?? '', /2 methods call this/u);
+  assert.equal(page.callBoxes.find((one) => one.key === '2')?.innerHTML, before,
+    'a patch names one row; the rest of the page is not redrawn');
+});
+
+test('an IDENTICAL call patch is skipped, so a focused button inside it survives', () => {
+  // `.coderabbit.yaml` states the rule for this page: live patches must skip identical HTML. A
+  // repeated or superseded completion posts the same block, and replacing innerHTML with the same
+  // string still destroys the element the person was on. (Code round 2, coderabbit.)
+  const page = run([pair(1)], { expanded: new Set([1]), calls: new Map([[1, callsBlockFor(1)]]) });
+  const box = page.callBoxes.find((one) => one.key === '1');
+  assert.ok(box !== undefined);
+
+  page.host.push({ type: 'calls', items: [{ id: 1, html: '<span class="why">nothing calls this</span>' }] });
+  const painted = box.writes;
+
+  page.host.push({ type: 'calls', items: [{ id: 1, html: '<span class="why">nothing calls this</span>' }] });
+
+  assert.equal(box.writes, painted, 'the same markup a second time must not touch the DOM');
+  assert.match(box.innerHTML, /nothing calls this/u, 'and what is on screen is still the answer');
 });

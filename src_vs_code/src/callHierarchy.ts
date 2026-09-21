@@ -64,6 +64,15 @@ export interface Side {
 export interface Calls {
   readonly findingId: number;
   /**
+   * WHICH method this answer is about, beyond the row's id.
+   *
+   * <p>A collect can reuse a `findingId` for another finding, and the panel holds answers by id. On
+   * the id alone a refreshed row would render the previous method's callers under the new name —
+   * this story's own worst case, reached through a refresh rather than a provider. (Code round 2,
+   * coderabbit.)</p>
+   */
+  readonly about: string;
+  /**
    * The attempt this belongs to.
    *
    * <p>Not the draw generation, and the difference is the defect a reviewer found: a request can time
@@ -76,6 +85,9 @@ export interface Calls {
   readonly incoming: Side;
   readonly outgoing: Side;
 }
+
+/** Which way round a count is being read. */
+export type Direction = 'calls this' | 'is called by this';
 
 /** Nothing asked for yet. */
 export const NO_SIDE: Side = { asked: false, failed: false, ends: [] };
@@ -158,21 +170,34 @@ const SAID: Readonly<Record<Prepared, string>> = {
  * <p><b>Zero is a real answer and says so plainly.</b> Everything that is NOT an answer says
  * something else, because the whole point of the measurement was that the two are different.</p>
  */
-export function sideSentence(side: Side, what: 'calls this' | 'is called by this'): string {
+export function sideSentence(side: Side, what: Direction): string {
   if (!side.asked) {
     return '';
   }
   if (side.failed) {
-    return `the language support could not say what ${what}`;
+    return `the language support could not say what ${SAYS[what].one}`;
   }
 
   if (side.ends.length === 0) {
-    return `nothing ${what}, in the current checkout`;
+    return `nothing ${SAYS[what].one}, in the current checkout`;
   }
-  const methods = side.ends.length === 1 ? 'method' : 'methods';
+  const many = side.ends.length > 1;
 
-  return `${side.ends.length} ${methods} ${what}, in the current checkout`;
+  return `${side.ends.length} ${many ? 'methods' : 'method'} `
+    + `${many ? SAYS[what].many : SAYS[what].one}, in the current checkout`;
 }
+
+/**
+ * A direction, in the two forms English needs.
+ *
+ * <p>The first draft carried ONE phrase and pasted it after a count, which reads *2 methods calls
+ * this* and *2 methods is called by this*. A number a person is asked to trust should not arrive in
+ * a sentence that is visibly not English. (Code round 2, coderabbit.)</p>
+ */
+const SAYS: Readonly<Record<Direction, { readonly one: string; readonly many: string }>> = {
+  'calls this': { one: 'calls this', many: 'call this' },
+  'is called by this': { one: 'is called by this', many: 'are called by this' },
+};
 
 /**
  * Distinct METHODS, never call sites.
@@ -205,6 +230,11 @@ export function distinct(ends: readonly CallEnd[]): readonly CallEnd[] {
  * attempt must be the one it is still waiting for. A generation alone lets a timed-out request
  * overwrite the retry a person made inside the same draw.</p>
  */
+/** The three coordinates that make a row's question the question it is. */
+export function methodOf(file: string, line: number, symbolName: string): string {
+  return `${file}:${line}:${symbolName}`;
+}
+
 export function stillWanted(answer: Calls, waitingFor: ReadonlyMap<number, string>): boolean {
   return waitingFor.get(answer.findingId) === answer.attempt;
 }

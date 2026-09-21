@@ -558,7 +558,10 @@ ${body(pairs, rows, trouble)}
   function showCalls(items) {
     for (var i = 0; i < (items || []).length; i++) {
       var box = document.querySelector('[data-calls-for="' + String(items[i].id) + '"]');
-      if (box) { box.innerHTML = items[i].html; }
+      // Identical markup is not painted: replacing innerHTML with the same string still destroys
+      // the element the person was on, and a superseded completion posts exactly that. The page's
+      // own rule, which this file's older showRevisionActions still breaks. (Round 2, coderabbit.)
+      if (box && box.innerHTML !== items[i].html) { box.innerHTML = items[i].html; }
     }
   }
 

@@ -382,6 +382,20 @@ test('the panel hands every row its calls block on every paint, and a closed win
     'the answers were about a checkout that may have moved on');
 });
 
+test('only a THROW means the file is gone; a line past the end of one that opens is a move', () => {
+  // The one decision in this story that no test can execute: `callHierarchyVsCode.ts` imports
+  // `vscode`, which is why it is the single module in sonar.coverage.exclusions. So it is pinned as
+  // a whole condition instead — the ternary AND both of its answers, because a fragment match would
+  // survive its own break. Empty string, never undefined: `preparedAt` reads undefined as an absent
+  // FILE and would send a person looking for one that is sitting in front of them. (Round 2.)
+  const adapter = code('callHierarchyVsCode.ts');
+
+  assert.match(
+    adapter,
+    /return line < opened\.lineCount \? opened\.lineAt\(line\)\.text : '';\s*\} catch \{\s*return undefined;/u,
+    'the out-of-range answer and the absent-file answer must not be the same value');
+});
+
 test('the provider wires the calls hooks to the real editor, and opens only inside the workspace', () => {
   const text = code('panelProvider.ts');
 

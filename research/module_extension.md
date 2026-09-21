@@ -8154,6 +8154,26 @@ fallback and an item with neither is skipped. It used to throw, and a `TypeError
 would have been reported by the bounded wait as a direction that could not be asked: nine callers and
 one unusable tenth would have read as *the language support did not answer*.
 
+**A `findingId` is a key, not an identity.** A collect can reuse one for another finding, and the
+panel holds answers by it — so a held answer is rendered only when it is about the method the row is
+NOW (`file:line:symbolName`, carried on the answer as `about`). Without that, a refreshed row would
+show the previous method's callers under the new name: this story's own worst case, reached through a
+refresh rather than through a provider.
+
+**Only a THROW means the file is gone.** A file that opens but is now shorter than the recorded line
+has MOVED, and the adapter returns the empty string for it rather than `undefined` — `preparedAt`
+reads `undefined` as an absent file, so the first draft told a person to go looking for a file sitting
+in front of them.
+
+**A count reads as English in both directions and both numbers.** *1 method calls this*, *2 methods
+call this*, *1 method is called by this*, *2 methods are called by this*. The first draft pasted one
+phrase after a count and produced *2 methods calls this* — a number arriving in a sentence that is
+visibly not English is a number a person is right to distrust.
+
+**A live patch that would write the same markup writes nothing.** Replacing `innerHTML` with an
+identical string still destroys the element the person is on, and a superseded completion posts
+exactly that. This page's own rule, stated in `.coderabbit.yaml`.
+
 **Four states, because each is a different next move.** `moved` (that line holds something else),
 `gone` (the file is not in this checkout), `no-provider` (nobody could be ASKED — never rendered as
 zero), `failed` (asked and did not answer; worth asking again). Zero callers is a fifth thing and
