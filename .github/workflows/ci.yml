@@ -115,6 +115,23 @@ jobs:
         working-directory: src_vs_code
         run: npm run test:seam
 
+      # The THIRD thing neither container owns: `server-notices.jsonl` is written by C# and read by
+      # TypeScript, and BOTH halves redact before anything reaches disk. Two suites that each compare
+      # themselves against their own expectations can both be wrong in the same direction, which here
+      # means a secret written by one half that the other would have taken out. This runs both
+      # implementations over one corpus.
+      #
+      # It lives in THIS job because it is the only one where both runtimes exist: the .NET suites
+      # run before `npm ci`, so a C# test cannot spawn node. It drives `NoticeTool`, a test-only
+      # executable built by the solution and never published — the FakeCli pattern.
+      #
+      # Watched failing by replacing the redactor's ASCII lookbehind with .NET's own ``, which is
+      # Unicode-aware where JavaScript's is not: the server then left `token abcdefghijklmnop`
+      # unredacted after Cyrillic text while the extension removed it.
+      - name: Parity — both notice serialisers over one corpus
+        working-directory: src_vs_code
+        run: npm run test:parity
+
       # The changelog baseline is what lets the release guard notice a note going MISSING, but it
       # lives in the repository it guards — so one commit deleting a note AND its baseline row would
       # pass everything. Pinned to the pull request's own base commit: `origin/main` does not exist

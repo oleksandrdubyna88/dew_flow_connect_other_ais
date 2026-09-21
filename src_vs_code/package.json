@@ -990,6 +990,7 @@
     "test:host": "npm run compile && node scripts/run-host.mjs",
     "test:contract": "npm run compile && node scripts/run-contract.mjs",
     "test:seam": "npm run compile && node scripts/run-seam.mjs",
+    "test:parity": "node scripts/run-parity.mjs",
     "bundle": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node --minify",
     "vscode:prepublish": "npm run bundle",
     "package": "npm run test && npm run bundle && vsce package --no-dependencies",
