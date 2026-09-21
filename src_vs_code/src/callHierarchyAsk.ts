@@ -1,5 +1,5 @@
 import {
-  CallEnd, Calls, columnOf, distinct, NO_SIDE, Prepared, PreparedItem, Side, theRightSymbol,
+  CallEnd, Calls, columnOf, distinct, methodOf, NO_SIDE, Prepared, PreparedItem, Side, theRightSymbol,
 } from './callHierarchy';
 
 /**
@@ -81,9 +81,13 @@ export async function askCalls(
   about: AskedAbout,
   budgetMs: number = BUDGET_MS,
 ): Promise<Calls> {
+  const of = methodOf(about.file, about.line, about.symbolName);
   const prepared = await preparedAt(editor, about, budgetMs);
   if (prepared.why !== 'ok') {
-    return { findingId: about.findingId, attempt: about.attempt, prepared: prepared.why, incoming: NO_SIDE, outgoing: NO_SIDE };
+    return {
+      findingId: about.findingId, about: of, attempt: about.attempt,
+      prepared: prepared.why, incoming: NO_SIDE, outgoing: NO_SIDE,
+    };
   }
 
   // Both directions, independently, and neither can take the other down with it.
@@ -92,7 +96,7 @@ export async function askCalls(
     sideOf(() => editor.outgoing(prepared.handle), budgetMs),
   ]);
 
-  return { findingId: about.findingId, attempt: about.attempt, prepared: 'ok', incoming, outgoing };
+  return { findingId: about.findingId, about: of, attempt: about.attempt, prepared: 'ok', incoming, outgoing };
 }
 
 /** The symbol, or the reason there is not one to ask about. */

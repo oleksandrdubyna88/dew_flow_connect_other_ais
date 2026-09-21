@@ -1332,12 +1332,12 @@ Whole executable after: 2140 tests, 2138 passed, 0 failed, 2 skipped.
 | `callHierarchy.test.ts` (21) | the decisions as values: the column found on the line and never assumed; a name that is only part of another word rejected; exactly ONE match accepted so an overload pair is refused rather than guessed at, and WHICH one it was — a symbol and its handle
 being ONE value, so no filtering can pair the wrong two; every state a sentence that prints no token; zero told from silence; distinct methods rather than call sites; an answer applied only for the ATTEMPT its row awaits. And the flow with the editor as a parameter: both directions independent, the symbol proved before either is asked, the provider asked about the
 item that MATCHED whatever its position, a missing file `gone`, an empty preparation `no-provider`, a provider that never answers bounded and `failed` |
-| `callsPanel.test.ts` (10) | what one page REMEMBERS, run rather than read: the asking state on screen before the provider is reached; a press that throws leaving the row pressable; a superseded attempt refused; a collapse dropping both the press and the answer; a collapse REPAINTING the row rather than leaving its markup in the page, and saying nothing about a
+| `callsPanel.test.ts` (12) | what one page REMEMBERS, run rather than read: the asking state on screen before the provider is reached; a press that throws leaving the row pressable; a superseded attempt refused; a collapse dropping both the press and the answer; a collapse REPAINTING the row rather than leaving its markup in the page, and saying nothing about a
 row the page cannot draw; a closed window forgetting; an end opened by index out of what this side
 holds, with a row that has no answer, a direction with no ends and an index past the end each opening nothing |
 | `callsBlock.test.ts` (6) | the markup: each phase saying one thing and only an idle row pressable; the list stopping at 50 with the count untruncated and a tail that says how many more; a list that fits shown whole; a name a provider invented escaped; a row that could not be asked showing a reason rather than a zero; `calledOut` reading back one entry and refusing nine malformed ones |
 | `openAtRevision.test.ts` (+4) | `folderHolding`: the folder that HOLDS a file rather than the first one tried; a file under no open folder belonging to none; the most specific of two nested roots winning; and `alphabet` not being inside `alpha`, because the comparison is a path boundary and not a prefix |
-| `bugzReviewPage.test.ts` | the control pressed, by RUNNING the page: nothing asked at paint, the press naming its row |
+| `bugzReviewPage.test.ts` | the control pressed, by RUNNING the page: nothing asked at paint, the press naming its row. And the live patch itself, DRIVEN through `Host.push` — an answer painted into its own container and no other, and an identical patch skipped so a focused button inside it survives. The harness could already deliver a host message; only the shim's `querySelector` had to learn `[data-calls-for]`, and `Note` had to count its writes |
 | `bugzReviewWiring.test.ts` | the seams a value test cannot reach: `case 'calls'` reaching the one method, and the collapse path telling the panel to forget — pinned as ONE condition rather than two fragments; an opened end going by INDEX rather than by a path the page carried; the block handed to every paint; a closed window forgetting; the provider wired to the real editor, and opening only through story 3.1's workspace guard rather than a second one |
 
 **The source-text assertions about `callsPanel.ts` became tests that RUN it**, on a code-round
@@ -1352,6 +1352,10 @@ restored from a saved copy afterwards:
 
 | planted | round | red | what the failure said |
 |---|---|---|---|
+| a plural subject with a singular verb | 2b | 2 | `2 methods call this` expected where the code said `calls` |
+| an out-of-range line reported as a missing FILE | 2b | 1 | the out-of-range answer and the absent-file answer must not be the same value |
+| a held answer shown under whatever the row is now | 2b | 2 | a row whose id now names a DIFFERENT method still showed `1 method calls this` |
+| a live patch that repaints identical markup | 2b | 1 | the same markup a second time must not touch the DOM |
 | `theRightSymbol` returns 0 rather than the matching index | 1 | 2 | the handle must be the one beside the item that matched |
 | `closed()` drops the press but keeps the answer | 1 | 1 | a collapsed row still showed `1 method calls this` |
 | the list rendered unbounded | 1 | 1 | 120 buttons where 50 and a tail were expected |

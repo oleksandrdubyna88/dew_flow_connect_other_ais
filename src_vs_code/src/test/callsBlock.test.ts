@@ -16,7 +16,7 @@ import { calledOut, callsBlock } from '../callsBlock';
 const END = (name: string): CallEnd => ({ name, file: 'src/A.cs', line: 3, character: 4, detail: '' });
 
 const answered = (ends: readonly CallEnd[]): Calls => ({
-  findingId: 7, attempt: 'a1', prepared: 'ok',
+  findingId: 7, about: 'src/A.cs:3:counted', attempt: 'a1', prepared: 'ok',
   incoming: { asked: true, failed: false, ends },
   outgoing: { asked: false, failed: false, ends: [] },
 });
@@ -34,7 +34,7 @@ test('the list stops, and says how many it did not show — the COUNT is never t
   const many = Array.from({ length: 120 }, (_, at) => END(`caller${at}`));
   const html = callsBlock(7, { phase: 'answered', calls: answered(many) });
 
-  assert.match(html, /120 methods calls this/u, 'the sentence counts all of them');
+  assert.match(html, /120 methods call this/u, 'the sentence counts all of them');
   assert.equal((html.match(/data-open-call="7:in:/gu) ?? []).length, 50,
     'one innerHTML assignment must not carry ten thousand buttons');
   assert.match(html, /and 70 more/u, 'and a person is told the list was cut, never left to assume it was all');

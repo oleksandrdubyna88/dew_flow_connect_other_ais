@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { ReviewPair } from '../bugzReviewPage';
-import { CallEnd, Calls } from '../callHierarchy';
+import { CallEnd, Calls, methodOf } from '../callHierarchy';
 import { AskedAbout } from '../callHierarchyAsk';
 import { CallsItem, CallsPanel } from '../callsPanel';
 
@@ -15,14 +15,14 @@ import { CallsItem, CallsPanel } from '../callsPanel';
  * `async ask(...)` goes green on a body that has been rewritten to do the opposite; these do not.</p>
  */
 
-const pair = (findingId: number): ReviewPair => ({
+const pair = (findingId: number, symbolName = `method${findingId}`, file = 'src/Totals.cs'): ReviewPair => ({
   findingId,
-  symbolName: `method${findingId}`,
+  symbolName,
   language: 'CSharp',
   skeletonBefore: '', skeletonAfter: '',
   keep: -1, severity: 'Major', category: 'Reliability', title: 'a race',
   repoPath: 'D:/repo', headSha: 'aaaa111', fixSha: 'bbbb222',
-  file: 'src/Totals.cs', line: 5, why: '', fix: '',
+  file, line: 5, why: '', fix: '',
 });
 
 const ROWS = [pair(7), pair(8)];
@@ -31,6 +31,7 @@ const END = (name: string): CallEnd => ({ name, file: 'src/A.cs', line: 3, chara
 
 const answered = (about: AskedAbout, ends: readonly CallEnd[] = [END('uses')]): Calls => ({
   findingId: about.findingId,
+  about: methodOf(about.file, about.line, about.symbolName),
   attempt: about.attempt,
   prepared: 'ok',
   incoming: { asked: true, failed: false, ends },
@@ -183,4 +184,43 @@ test('a row still waiting shows only that it is asking, and asking twice does no
 
   assert.match(panel.blockFor(pair(7)), /asking the language support/u);
   assert.ok(said.every((one) => one.length === 1), 'every telling is about the one row that changed');
+});
+
+// --------------------------------------------------------------------------------------------
+// A findingId is not an identity (round 2, coderabbit).
+// --------------------------------------------------------------------------------------------
+
+test('a row whose id now names a DIFFERENT method shows no answer, rather than the old one', async () => {
+  // A collect can reuse a findingId for another finding. Keyed on the id alone, the panel would
+  // render the previous method's callers under the new row's name — the same "confidently wrong"
+  // number this whole story exists to prevent, arrived at through a refresh instead of a provider.
+  const { panel } = panelThat(async (about) => answered(about));
+
+  await panel.ask(pair(7), ROWS);
+  assert.match(panel.blockFor(pair(7)), /1 method calls this/u);
+
+  assert.doesNotMatch(panel.blockFor(pair(7, 'somethingElse')), /1 method calls this/u,
+    'a different symbol under the same id is a different question');
+  assert.doesNotMatch(panel.blockFor(pair(7, 'method7', 'src/Other.cs')), /1 method calls this/u,
+    'and so is the same name in a different file');
+  assert.match(panel.blockFor(pair(7)), /1 method calls this/u,
+    'while the row it was actually about still shows its answer');
+});
+
+test('an answer for a row that has since become a different method is refused', async () => {
+  let answer: (calls: Calls) => void = () => { /* set below */ };
+  const { panel } = panelThat((about) => new Promise<Calls>((resolve) => {
+    answer = () => resolve(answered(about));
+  }));
+
+  const asked = pair(7);
+  const press = panel.ask(asked, ROWS);
+  // The refresh happens while the provider is still thinking.
+  const now = pair(7, 'somethingElse');
+  answer(answered({ findingId: 7, attempt: 'a1', file: '', line: 0, symbolName: '' }));
+  await press;
+
+  assert.doesNotMatch(panel.blockFor(now), /1 method calls this/u,
+    'the in-flight answer was about the method that row USED to be');
+  assert.match(panel.blockFor(now), /Who calls this\?/u, 'and the new row can be asked about itself');
 });

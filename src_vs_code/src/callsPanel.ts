@@ -1,5 +1,5 @@
 import { ReviewPair } from './bugzReviewPage';
-import { Calls, CallEnd, stillWanted } from './callHierarchy';
+import { Calls, CallEnd, methodOf, stillWanted } from './callHierarchy';
 import { AskedAbout } from './callHierarchyAsk';
 import { callsBlock, CallsState } from './callsBlock';
 
@@ -58,7 +58,7 @@ export class CallsPanel {
 
   /** What each drawn row says about who calls it. */
   blockFor(pair: ReviewPair): string {
-    return callsBlock(pair.findingId, this.stateOf(pair.findingId));
+    return callsBlock(pair.findingId, this.stateOf(pair));
   }
 
   /**
@@ -134,13 +134,22 @@ export class CallsPanel {
     }
   }
 
-  private stateOf(id: number): CallsState {
-    if (this.waiting.has(id)) {
+  /**
+   * What one row shows — and a held answer is shown only if it is about the method the row is NOW.
+   *
+   * <p>A `findingId` is a key, not an identity: a collect can reuse it for another finding. Keyed on
+   * the id alone this would render the previous method's callers under the new row's name — this
+   * story's own worst case, reached through a refresh rather than a provider. (Round 2, coderabbit.)</p>
+   */
+  private stateOf(pair: ReviewPair): CallsState {
+    if (this.waiting.has(pair.findingId)) {
       return { phase: 'asking' };
     }
-    const calls = this.held.get(id);
+    const calls = this.held.get(pair.findingId);
 
-    return calls === undefined ? { phase: 'unasked' } : { phase: 'answered', calls };
+    return calls === undefined || calls.about !== methodOf(pair.file, pair.line, pair.symbolName)
+      ? { phase: 'unasked' }
+      : { phase: 'answered', calls };
   }
 
   private tell(ids: readonly number[], rows: readonly ReviewPair[]): void {
