@@ -153,12 +153,24 @@ internal static partial class AppendOnlyFile
     [LibraryImport("kernel32.dll", EntryPoint = "WriteFile", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static partial bool WriteFile(
-        SafeFileHandle handle, byte[] buffer, uint count, out uint written, nint overlapped);
+        SafeFileHandle handle,
+        // `[In]` because the kernel only READS this buffer, which is what the record is. Without it
+        // the generator has to assume the call might write back and says so (SYSLIB1092); with it,
+        // the direction is stated and a blittable array is simply pinned where it lies.
+        [In] byte[] buffer,
+        uint count,
+        out uint written,
+        nint overlapped);
 
     // ---------- Unix ----------
 
     private const int OWriteOnly = 0x0001;
-    private const int FGetFl = 3;
+
+    // `F_GETFL` is NOT here any more. The probe used to read the open flags back and ask whether
+    // `O_APPEND` was among them, which is circular — it asks for a number and finds the number it
+    // asked for. It proves the behaviour now, so the only flag still worth reading is the
+    // descriptor's, where the constant is 1 on every POSIX platform and the question is not about
+    // what this build believes. (SonarCloud found the leftover constant.)
     private const int FGetFd = 1;
     private const int FdCloExec = 1;
 
@@ -353,6 +365,9 @@ internal static partial class AppendOnlyFile
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
         {
+            // Deliberately nothing. A probe file that will not delete is the person's temp directory
+            // being unusual, and this method exists so that it cannot become the reason a process
+            // fails to start.
         }
     }
 

@@ -113,7 +113,7 @@ public sealed class ServerNoticesAppendTests : IDisposable
         // `Append(DataRootFor(env), notice)` must not compile.
         var parameter = typeof(ServerNotices).GetMethod(nameof(ServerNotices.Append))!.GetParameters()[0];
 
-        parameter.ParameterType.Should().Be(typeof(ResolvedDataDir),
+        parameter.ParameterType.Should().Be<ResolvedDataDir>(
             "a string parameter would accept the root, the directory BEFORE the side is applied");
     }
 }

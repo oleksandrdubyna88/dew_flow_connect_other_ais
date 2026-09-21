@@ -100,10 +100,10 @@ public sealed class ResolvedDataDirTests
         // and is not one, and giving it the type would make the type describe the confusion instead
         // of preventing it.
         typeof(PanelSettings).GetMethod(nameof(PanelSettings.DataRootFor))!.ReturnType
-            .Should().Be(typeof(string));
+            .Should().Be<string>();
         typeof(PanelSettings).GetMethod(nameof(PanelSettings.DataDirectoryFor))!.ReturnType
-            .Should().Be(typeof(ResolvedDataDir));
+            .Should().Be<ResolvedDataDir>();
         typeof(SettingsFile).GetMethod(nameof(SettingsFile.DataDirFrom))!.ReturnType
-            .Should().Be(typeof(ResolvedDataDir));
+            .Should().Be<ResolvedDataDir>();
     }
 }

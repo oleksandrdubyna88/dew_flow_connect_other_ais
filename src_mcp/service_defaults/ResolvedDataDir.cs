@@ -62,16 +62,24 @@ public sealed record ResolvedDataDir
     internal static ResolvedDataDir For(string path) =>
         new(Checked(path));
 
-    private static string Checked(string path) =>
-        string.IsNullOrWhiteSpace(path)
-            ? throw new ArgumentException(
+    private static string Checked(string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            throw new ArgumentException(
                 "a resolved data directory cannot be empty: combined with a file name it is the bare "
                 + "name, which lands beside whatever launched this process instead of where the "
-                + "extension reads it", nameof(path))
-            : System.IO.Path.IsPathRooted(path)
-                ? path
-                : throw new ArgumentException(
-                    $"'{path}' is not rooted, so it was composed by hand rather than resolved — the "
-                    + "resolver always answers a full path, and a relative data directory moves with "
-                    + "the working directory of whichever process was launched", nameof(path));
+                + "extension reads it", nameof(path));
+        }
+
+        if (!System.IO.Path.IsPathRooted(path))
+        {
+            throw new ArgumentException(
+                $"'{path}' is not rooted, so it was composed by hand rather than resolved — the "
+                + "resolver always answers a full path, and a relative data directory moves with the "
+                + "working directory of whichever process was launched", nameof(path));
+        }
+
+        return path;
+    }
 }
