@@ -76,13 +76,13 @@ public sealed class TheSideAdoptsTheRootSettingsTests : IDisposable
         WriteRoot("""{"COAI_VENDORS":"codex,gemini"}""");
         var env = Env("alpha");
 
-        var providersFirst = SettingsFile.Layer(SettingsFile.DataDirFrom(env), env, _ => { });
+        var providersFirst = SettingsFile.Layer(SettingsFile.DataDirFrom(env).Path, env, _ => { });
 
         providersFirst("COAI_VENDORS").Should().Be("codex,gemini",
             "the one-shot mode reported defaults for an installation that has configuration, and a "
             + "normal start afterwards would have answered differently about the same machine");
 
-        var normalStart = SettingsFile.Layer(SettingsFile.DataDirFrom(env), env, _ => { });
+        var normalStart = SettingsFile.Layer(SettingsFile.DataDirFrom(env).Path, env, _ => { });
 
         normalStart("COAI_VENDORS").Should().Be(providersFirst("COAI_VENDORS"),
             "two roads to the same settings must not answer differently");
@@ -232,7 +232,7 @@ public sealed class TheSideAdoptsTheRootSettingsTests : IDisposable
         var env = Env("alpha");
         var heard = new List<string>();
 
-        SettingsFile.Layer(SettingsFile.DataDirFrom(env), env, heard.Add);
+        SettingsFile.Layer(SettingsFile.DataDirFrom(env).Path, env, heard.Add);
 
         heard.Should().ContainSingle().Which.Should().Contain(SidePath("alpha"),
             "the caller is where the log and the stderr channel are; a sink that is never called is "
@@ -247,7 +247,7 @@ public sealed class TheSideAdoptsTheRootSettingsTests : IDisposable
         var env = Env("alpha");
         var heard = new List<string>();
 
-        SettingsFile.Layer(SettingsFile.DataDirFrom(env), env, heard.Add);
+        SettingsFile.Layer(SettingsFile.DataDirFrom(env).Path, env, heard.Add);
 
         heard.Should().BeEmpty("there was no root file, so nothing happened and nothing is worth "
             + "saying about it");
@@ -262,7 +262,7 @@ public sealed class TheSideAdoptsTheRootSettingsTests : IDisposable
         var env = Env("alpha");
         var heard = new List<string>();
 
-        SettingsFile.Layer(SettingsFile.DataDirFrom(env), env, heard.Add);
+        SettingsFile.Layer(SettingsFile.DataDirFrom(env).Path, env, heard.Add);
 
         heard.Should().ContainSingle().Which.Should().Contain("starting on defaults");
     }

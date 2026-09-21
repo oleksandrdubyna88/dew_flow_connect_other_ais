@@ -1,8 +1,11 @@
 # PLAN — the server writes down what it refused, what failed, and that it died
 
-> Status: **plan only, nothing implemented yet, 2026-09-21.** Scope: `src_mcp` — a notice record and
-> its serialiser, the append, the instrumentation sites, a run-start marker, and the
-> `try/catch/finally` that `Program.cs` has never had.
+> Status: **EPIC 1 IMPLEMENTED, 2026-09-21; epics 2 and 3 open.** Stories 1.1 (the credential list),
+> 1.2 (the notice line), 1.3 (the path) and 1.4 (the writer, and the append it had to fix) have
+> shipped. What remains is every CALL SITE — the census (2.1), the three refusal roads (2.2), the
+> reviewer and startup notices (2.3), the live seam leg (2.4) — and the deaths (3.1, 3.2).
+> Scope: `src_mcp` — a notice record and its serialiser, the append, the instrumentation sites, a
+> run-start marker, and the `try/catch/finally` that `Program.cs` has never had.
 >
 > **This is S8 of [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md)**,
 > extracted into its own file as that plan's section *G* says it must be. Defect 4 of the parent
@@ -211,6 +214,47 @@ quarantine; the `serverNoticesPath` vector; `measure:append` re-run with the .NE
 >   it Blocking, at 1.1 and at 1.3, and both times the honest answer was the same: there is nothing
 >   live to check before a writer exists. When 2.4 lands it must drive the real binary and read the
 >   file with the extension's own parser, and until then the fixture agreement is what there is.
+
+> **Discharged by story 1.4, 2026-09-21** — each answered where it was asked to be:
+> - the writer's only road onto the disk is `ServerNotices.Append`, and it is held by an ALLOWLIST
+>   rather than by a name count: `TheOneAppendTests` enumerates every production call site of
+>   `JsonlLedger.AppendLine` and refuses a third. `ServerNoticesAppendTests` reads the file back and
+>   compares the BYTES with `ServerNoticeLine.Of`;
+> - the type is **yes**: `ResolvedDataDir` (in `ServiceDefaults`, beside `CoaiLogPath`), minted by
+>   `PanelSettings.DataDirectoryFor` and by nothing else — an internal constructor, one granted
+>   assembly, and a census that asks the ASSEMBLY which members answer the type. `DataRootFor` keeps
+>   returning a string deliberately: giving the root the same type would make the type describe the
+>   confusion instead of preventing it. `CoaiLogPath.RootFor` and `UsageLedger` keep strings because
+>   `coai-bugs` resolves its own directory by its own rule and would otherwise mint a value whose
+>   guarantee it does not have;
+> - `CredentialWords.EnsureLoaded()` is the first statement of **`ServeAsync`**, not of `Main`. The
+>   plan round refused `Main`: `.agents/PROJECT.md` makes the one-shot CLI shape a non-negotiable,
+>   and `--version` must not be able to fail on a word list it never uses. Nothing is lost — the
+>   release smoke runs a real `initialize` over stdio against the PUBLISHED binary.
+>
+> **What story 1.4's measurement found, which no round predicted.** §4's insistence that the .NET
+> append be MEASURED rather than argued from the node result was right in the way nobody wanted:
+> `FileMode.Append` is **not an append**. It is a positional write at the offset .NET remembered when
+> it opened, probed directly on Windows 11 and on Linux/ext4 with the same answer, and at scale it
+> cost **2488 of 8000 records** to eight processes where node's writer lost none. `UsageLedger` has
+> written that way since it was built, so two servers sharing one data directory — which its own
+> docstring calls the normal case — have been overwriting each other's spending rows. Both ledgers
+> now go through `AppendOnlyFile` (`FILE_APPEND_DATA` / `O_APPEND`, the same system call node makes),
+> and the same run answers 8000 of 8000. The sanctioned fallback in §4 — a ledger per process — was
+> therefore NOT needed, and the reason it was not is written down: the shared file was never the
+> problem.
+>
+> **Handed on by story 1.4**, written down for the same reason:
+> - **the extension's own ledger has the torn tail this story fixed on the server side.**
+>   `jsonlLedger.appendLine` does not read the last byte, so a host killed mid-append costs
+>   `notifications.jsonl`, `chat-usage.jsonl` or the door ledger the NEXT record as well as the
+>   fragment. It is ten lines and one test on that side and it belongs to this plan's parent, which
+>   owns all three files;
+> - **a ceiling on the server's ledger is owed by the first story that adds a REPEATING site.** The
+>   extension's `suppression.ts` bounds a ledger with repeating writers; the server has none yet, so
+>   a bound here would bound nothing — but 2.2 and 2.3 are where one appears;
+> - **2.4 still owes the live leg**, now for the third round running, and now with something live to
+>   check.
 
 **C. The instrumentation and its ratchet.** Both `Error` helpers; `ReviewerSummaryFactory.Describe`
 ([BoundedScheduler.cs:489](../src_mcp/runners/Reviewers/BoundedScheduler.cs)); `LiveRound.Report`

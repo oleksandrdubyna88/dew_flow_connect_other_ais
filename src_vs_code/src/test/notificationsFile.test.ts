@@ -8,6 +8,7 @@ import { NotificationRecord, notificationLine } from '../notifications';
 import {
   NOTIFICATIONS_FILE,
   SERVER_NOTICES_FILE,
+  countSince,
   notificationsPath,
   readNewest,
   fillWindow,
@@ -396,6 +397,55 @@ test('the newest few start where the newest few start, not where the window did'
     assert.deepEqual(read.records.map((p) => p.record.code), ['c-5', 'c-6', 'c-7']);
     assert.equal(read.start, before, 'the first kept record, counted by hand');
     assert.equal(read.records[0]?.at, before);
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a blank line left by two servers both repairing one torn tail disturbs neither the records nor their offsets', async () => {
+  // The server's writer (`JsonlLedger.AppendLine`, story 1.4) reads the file's last byte before
+  // every append and, when it is not a newline, PREPENDS one to its record. Two servers reading the
+  // same torn tail both do, and the second newline is a blank line. The reader has to skip it,
+  // place every record at its real byte offset — the watermark is written in those — and, asserted
+  // here rather than assumed, count it once in `countSince`, which counts newline bytes: one phantom
+  // unread, once, after a crash, against a lost record.
+  const dir = home();
+  try {
+    const path = join(dir, 'server-notices.jsonl');
+    const one = notificationLine(record({ code: 'one', source: 'PanelService' })).trim();
+    const two = notificationLine(record({ code: 'two', source: 'PanelService', title: 'после разрыва — многобайтное' })).trim();
+    const three = notificationLine(record({ code: 'three', source: 'PanelService' })).trim();
+    // `one`, the fragment's own repair newline, the second server's repair newline (the blank
+    // line), `two`, `three`.
+    writeFileSync(path, one + NEWLINE + NEWLINE + two + NEWLINE + three + NEWLINE);
+    const oneBytes = Buffer.byteLength(one, 'utf8');
+    const twoBytes = Buffer.byteLength(two, 'utf8');
+    const threeBytes = Buffer.byteLength(three, 'utf8');
+    const total = oneBytes + 1 + 1 + twoBytes + 1 + threeBytes + 1;
+
+    for (const window of [16, 64 * 1024]) {
+      const read = await readNewestPlaced(path, 10, window);
+
+      assert.deepEqual(read.records.map((p) => p.record.code), ['one', 'two', 'three'], `window ${window}`);
+      assert.deepEqual(
+        read.records.map((p) => p.at),
+        [0, oneBytes + 2, oneBytes + 2 + twoBytes + 1],
+        `window ${window}: the blank line is one byte the offsets after it must carry`,
+      );
+      assert.equal(read.end, total, `window ${window}: the end is the last complete newline, blank included`);
+      assert.equal(read.start, 0);
+    }
+
+    assert.deepEqual(
+      await countSince(path, 0, 100),
+      { count: 4, more: false, readable: true },
+      'three records and one phantom: the blank line is a newline byte, and the count is newline bytes',
+    );
+    assert.deepEqual(
+      await countSince(path, oneBytes + 2, 100),
+      { count: 2, more: false, readable: true },
+      'from the record after the blank line, exactly the two records that follow',
+    );
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

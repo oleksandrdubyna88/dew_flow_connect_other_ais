@@ -1,4 +1,5 @@
 using System.Reflection;
+using CoaiMcp.Core.Notices;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
 using ModelContextProtocol.Protocol;
@@ -404,7 +405,7 @@ internal static class Program
         try
         {
             var configuration = Server.SettingsFile.Layer(
-                Server.SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable),
+                Server.SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path,
                 Environment.GetEnvironmentVariable,
                 // STDERR, through the channel this binary already prefixes: stdout carries the
                 // answer a caller parses (logging-serilog.md, a host whose stdout is a protocol).
@@ -475,7 +476,7 @@ internal static class Program
         // ignored, so this mode answered about the DEFAULT vendors and would have badged a
         // configuration nobody has. The variable still outranks the file, key by key, as everywhere.
         var configuration = Server.SettingsFile.Layer(
-            Server.SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable),
+            Server.SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path,
             Environment.GetEnvironmentVariable,
             // Same rule: this mode prints JSON on stdout and a person's migration is told on stderr.
             Note);
@@ -1623,6 +1624,15 @@ internal static class Program
 
     private static async Task<int> ServeAsync()
     {
+        // The credential word list is EXERCISED here — before the logger, the settings and the
+        // transport — so a published Native-AOT build that dropped the embedded resource refuses to
+        // serve, loudly, instead of redacting server-notices.jsonl with an empty list on somebody's
+        // machine. Here and not in Main: a one-shot mode is selected by args[0] before any
+        // transport is opened (PROJECT.md), and --version must not be able to fail on a word list
+        // it never uses. The release smoke runs a real `initialize` over stdio against the
+        // published binary, which is what makes this line a check rather than a comment.
+        CredentialWords.EnsureLoaded();
+
         // stdio host → the console sink goes to stderr (logging-serilog.md, stdio hosts).
         using var log = ServiceDefaults.CoaiLogging.CreateDewFlowLogger(
             AppName,
@@ -1630,13 +1640,13 @@ internal static class Program
             // Beside the sessions and the database, not beside the binary: the data directory is the
             // one place a person is told about, and the binary's is inside the extension's storage.
             logsRoot: ServiceDefaults.CoaiLogPath.RootFor(
-                SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable)));
+                SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path));
         try
         {
             // The file the extension writes is the base; the client config env overrides it — a
             // variable in the client is more specific than a file any window may rewrite.
             var configuration = SettingsFile.Layer(
-                SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable),
+                SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path,
                 Environment.GetEnvironmentVariable,
                 // The adoption of a legacy root settings file is exactly the class of thing the
                 // `data directory:` notes below carry, so it goes out the same way and reads the

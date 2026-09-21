@@ -1,6 +1,7 @@
 using System.Text.Json;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.ServiceDefaults;
 
 namespace CoaiMcp.Runners.Reviewers;
 
@@ -95,14 +96,19 @@ public sealed record UsageEntry(
 /// <c>FileShare.ReadWrite</c> and seeks to the end. An in-process lock alone was what the first
 /// version had, and the round that reviewed this file caught it from both vendors:
 /// <c>File.AppendAllText</c> takes a write lock the other process cannot pass, so the loser's line
-/// would be swallowed by the catch below — a silent gap in a spending record, which is the one
-/// place a gap is worse than an error. Each line is written in ONE call and is far below the
-/// atomic-write size, so interleaving cannot split a line.</para>
+/// would be swallowed by the catch — a silent gap in a spending record, which is the one place a
+/// gap is worse than an error. Each line is written in ONE call and is far below the atomic-write
+/// size, so interleaving cannot split a line.</para>
+/// <para><b>That bargain lives in <see cref="JsonlLedger"/> now, and this is its first caller</b>
+/// (story 1.4 of the server-notices plan, 2026-09-21). It was the only production append in the C#
+/// half, and the notices writer needed every line of it; a second copy would have drifted, and the
+/// thing that drifts is the <c>FileShare</c> flag nobody re-derives. Extracting it is also what
+/// made "there is one append here" checkable: a test enumerates the call sites and refuses a
+/// third. The extraction changed nothing about what this file receives — the same bytes, the same
+/// flags — and added the torn-tail quarantine every ledger now gets.</para>
 /// </remarks>
 public sealed class UsageLedger(string dataDir)
 {
-    private static readonly Lock Gate = new();
-
     public string Path => System.IO.Path.Combine(dataDir, "usage.jsonl");
 
     /// <summary>
@@ -173,25 +179,11 @@ public sealed class UsageLedger(string dataDir)
             kind));
 
     /// <summary>Never throws: a spending record that can fail a review is worse than one with a gap.</summary>
-    private void Append(UsageEntry entry)
-    {
-        try
-        {
-            Directory.CreateDirectory(dataDir);
-            var line = System.Text.Encoding.UTF8.GetBytes(
-                JsonSerializer.Serialize(entry, LedgerJsonContext.Default.UsageEntry) + "\n");
-            lock (Gate)
-            {
-                using var file = new FileStream(Path, FileMode.Append, FileAccess.Write, FileShare.ReadWrite);
-                file.Write(line);
-            }
-        }
-        catch (IOException)
-        {
-            // A missed line is a gap in a chart. A thrown exception here would be a failed review.
-        }
-        catch (UnauthorizedAccessException)
-        {
-        }
-    }
+    /// <remarks>
+    /// The answer is discarded on purpose: a missed line is a gap in a chart, and nothing here has a
+    /// place to count one yet. The catch, the directory, the flags and the lock are
+    /// <see cref="JsonlLedger.AppendLine(string, string)"/>'s.
+    /// </remarks>
+    private void Append(UsageEntry entry) =>
+        _ = JsonlLedger.AppendLine(Path, JsonSerializer.Serialize(entry, LedgerJsonContext.Default.UsageEntry) + "\n");
 }

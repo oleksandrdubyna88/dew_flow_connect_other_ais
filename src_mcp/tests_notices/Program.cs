@@ -8,6 +8,25 @@
 //
 //   codes               stdout: a JSON array of every ServerNoticeCodes constant
 //
+//   append <path> <writer> <count>
+//                       appends <count> records of the measurement harness's own shape — the
+//                       `record()` of scripts/measure-append.mjs, field for field — each through
+//                       `JsonlLedger.AppendLine`, the product's append. Exit 74 (EX_IOERR) naming
+//                       the record the moment one could not be written, so the harness sees a
+//                       process failure rather than a shortfall it has to infer.
+//
+// THE APPEND VERB MEASURES THE SYSTEM CALL, NOT THE SERIALISER. The harness checks every line's
+// `pad.length` against the length it was written with, so two halves of two records cannot pass
+// merely by parsing — and the notice serialiser caps `detail` at 4096, so a 60 KB notice would read
+// as torn on every run. The records are therefore the harness's own shape, and the atomicity claim
+// the measurement supports covers `JsonlLedger.AppendLine` — the FileStream flags, the single write,
+// the torn-tail repair inside it — and says nothing about `ServerNoticeLine`. Parity says that.
+//
+// AND IT IS THE PRODUCT'S CALL, NOT A LOOKALIKE. This repository measured `appendFileSync` once and
+// cited the result for `appendFile`; the correction is in the harness's own docstring — the same
+// argument about O_APPEND is not the same measurement. A FileStream here with the same arguments
+// would be the same mistake in the other language.
+//
 // WHY THIS EXISTS. `server-notices.jsonl` is written by C# and read by TypeScript, and both halves
 // redact before anything reaches disk. Two suites that each compare themselves against the same
 // fixture can both be wrong in the same direction; the only honest check runs BOTH implementations
@@ -24,6 +43,7 @@
 using System.Text;
 using System.Text.Json;
 using CoaiMcp.Core.Notices;
+using CoaiMcp.ServiceDefaults;
 
 // UTF-8 both ways, for the reason `FakeCli` records: without it Windows encodes stdout in the
 // console code page and every Cyrillic character leaves as `?` — which is exactly the class of
@@ -33,7 +53,7 @@ Console.InputEncoding = new UTF8Encoding(false);
 
 if (args.Length == 0)
 {
-    await Console.Error.WriteLineAsync("usage: NoticeTool <safe-text <limit> | serialise | codes>");
+    await Console.Error.WriteLineAsync("usage: NoticeTool <safe-text <limit> | serialise | codes | append <path> <writer> <count>>");
     return 64; // EX_USAGE
 }
 
@@ -51,6 +71,20 @@ try
         case "codes":
             Write([.. ServerNoticeCodes.All]);
             return 0;
+
+        case "append":
+            // NON-NEGATIVE, because `append ledger.jsonl 0 -1` otherwise parses, skips the loop and
+            // exits 0 — a harness or a person then reads "success" for a run that wrote nothing.
+            if (args.Length < 4
+                || !int.TryParse(args[2], out var writer) || writer < 0
+                || !int.TryParse(args[3], out var count) || count < 0)
+            {
+                await Console.Error.WriteLineAsync(
+                    "append needs <path> <writer> <count>, the last two whole numbers and neither negative");
+                return 64;
+            }
+
+            return await AppendMany(args[1], writer, count);
 
         default:
             await Console.Error.WriteLineAsync($"NoticeTool has no verb '{args[0]}'");
@@ -78,6 +112,43 @@ static async Task<int> RunSafeText(string[] args)
     Write([.. Read<string>().Select(one => Redaction.SafeText(one, limit))]);
 
     return 0;
+}
+
+/// <summary>The measurement's writer: <paramref name="count"/> records of the harness's shape, each through the product's append.</summary>
+static async Task<int> AppendMany(string path, int writer, int count)
+{
+    for (var index = 0; index < count; index++)
+    {
+        if (!JsonlLedger.AppendLine(path, HarnessLine(writer, index)))
+        {
+            await Console.Error.WriteLineAsync(
+                $"NoticeTool append: record {writer}:{index} could not be written to {path}");
+
+            return 74; // EX_IOERR
+        }
+    }
+
+    return 0;
+}
+
+/// <summary>
+/// <c>{"utc":…,"writer":N,"index":N,"pad":"aaa…"}</c> and its newline — the harness's <c>record()</c>,
+/// field for field, at the same paddings.
+/// </summary>
+/// <remarks>
+/// Spelled by hand rather than through a serializer: every value is a number, an ISO instant or a
+/// run of one ASCII letter, so the text is exactly what <c>JSON.stringify</c> writes and there is
+/// no encoder to disagree with. The paddings are the harness's own — a pipe buffer, a page, a
+/// filesystem block and past them — and must stay so, because the harness checks each line's
+/// <c>pad.length</c> against <c>PADDINGS[index % 5]</c> to catch two halves of two records.
+/// </remarks>
+static string HarnessLine(int writer, int index)
+{
+    int[] paddings = [0, 200, 4000, 8200, 60_000];
+    var pad = new string((char)('a' + writer % 26), paddings[index % paddings.Length]);
+    var utc = ServerNotice.Iso(DateTimeOffset.UtcNow);
+
+    return $"{{\"utc\":\"{utc}\",\"writer\":{writer},\"index\":{index},\"pad\":\"{pad}\"}}\n";
 }
 
 static List<T> Read<T>()

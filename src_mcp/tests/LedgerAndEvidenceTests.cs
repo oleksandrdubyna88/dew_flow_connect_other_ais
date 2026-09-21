@@ -83,6 +83,49 @@ public sealed class LedgerAndEvidenceTests : IDisposable
     }
 
     [Fact]
+    public void RecordingNeverThrows_EvenWithADirectoryInTheLedgersPlace()
+    {
+        // Story 1.4 moved the append into JsonlLedger; the guarantee that moved with it is that a
+        // spending record can never fail a review. A directory where the file should be is the
+        // vector the notifications reader documents — on Windows it is refused at the open — and
+        // the round carries on with a gap rather than an exception.
+        var ledger = new UsageLedger(_dir);
+        Directory.CreateDirectory(ledger.Path);
+
+        var recording = () => ledger.Record(
+            Invocation(), new ReviewerOutcome.TimedOut(), "m", "PlanReview", TimeSpan.FromSeconds(1));
+
+        recording.Should().NotThrow("a spending record that can fail a review is worse than one with a gap");
+    }
+
+    [Fact]
+    public void TheExtraction_ChangedNothingAboutTheLine_NoLeadingNewlineAndTheSameFields()
+    {
+        // The extraction may not change the spending record: the first byte of a fresh ledger is
+        // the record's own brace (the torn-tail quarantine must not put a newline in front of a
+        // first line), the line ends in exactly one newline, and it reads back through the
+        // ledger's own serializer with the fields it was written with.
+        var ledger = new UsageLedger(_dir);
+
+        ledger.Record(Invocation("codex"), new ReviewerOutcome.Ok(new NormalisedReview([], []), false, new Usage(10, 2, 0.5)),
+            "gpt-5", "CodeReview", TimeSpan.FromSeconds(3.14));
+
+        var bytes = File.ReadAllBytes(ledger.Path);
+        bytes[0].Should().Be((byte)'{', "a fresh ledger starts with its first record, not a repair newline");
+        bytes[^1].Should().Be(10, "the line ends in the newline the ledger wrote");
+        bytes[^2].Should().Be((byte)'}', "and in exactly one of them");
+        var entry = System.Text.Json.JsonSerializer.Deserialize(
+            System.Text.Encoding.UTF8.GetString(bytes).TrimEnd(), LedgerJsonContext.Default.UsageEntry)!;
+        entry.Provider.Should().Be("codex");
+        entry.Model.Should().Be("gpt-5");
+        entry.Stage.Should().Be("CodeReview");
+        entry.Seconds.Should().Be(3.1);
+        entry.TokensIn.Should().Be(10);
+        entry.CostUsd.Should().Be(0.5);
+        entry.Outcome.Should().Be("ok");
+    }
+
+    [Fact]
     public void ASecondServerHoldingTheFileOpen_DoesNotCostUsALine()
     {
         // Two servers on one data directory is the normal case here. `File.AppendAllText` takes a

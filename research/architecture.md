@@ -360,6 +360,22 @@ writing, the real extension parser reading back — rather than two self-consist
 with themselves. Plan:
 [PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md).
 
+**The writing half exists as of 2026-09-21** — `ServerNotices.Append`, with no production call site
+yet; those are S8's story 2.2 and the live seam leg is 2.4. Building it changed something that
+belongs in this document rather than in a module's: **`coai-mcp` now appends to a shared file the way
+the extension does, and it did not before.** The story's plan refused to take the extension's
+measured `O_APPEND` result as evidence about the C# writer, and the measurement it demanded found
+that .NET's `FileMode.Append` is a positional write at a remembered offset — eight processes kept
+5512 of 8000 records where eight node writers kept all 8000. Both halves now open with
+`FILE_APPEND_DATA` / `O_APPEND`, which is what makes a file written by one container and read by the
+other a seam rather than a race. It also fixes `usage.jsonl`, which had the same writer and the same
+defect since it was built. The measurement is `npm run measure:append --dotnet=N`; the details are in
+[module_server.md](module_server.md).
+
+One project edge is new in `src_mcp`: **`Runners → ServiceDefaults`**, for one method. The append is
+`CoaiMcp.ServiceDefaults.JsonlLedger.AppendLine`, extracted from `UsageLedger` rather than copied
+beside it, so that "there is one append here" is a test rather than a habit.
+
 ### A field added to the round list, and what "an older half" does with it (2026-09-14)
 
 `coai-mcp --log` is the other seam between the two containers, and it gained a member:
