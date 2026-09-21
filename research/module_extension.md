@@ -7889,6 +7889,90 @@ file is never stored — `git log --follow head..fix -- <old name>` lists the re
 and nothing after it, so the collector's walk records `symbol_gone` — and therefore no row on this
 page can need a rename followed. The reader does not follow one, and says why in its docblock.
 
+### Reaching the code, honestly about which revision (2026-09-18, story 3.1)
+
+Every open row's `about` block ends with an **Open** line carrying two buttons: *Open at aaaa111*
+and *Open CURRENT (may differ)*. Two, not one, because `head_sha` is orphaned 55.7 % of the time
+while 99.6 % of orphaned blobs still read (`PLAN_the_review_page_can_be_read.md`, *The revision
+rule*): the revision a person wants is usually unreachable as a ref and almost always readable as an
+object, and the working-tree file — where a fix would be made — is the one that can mislead, so it
+is labelled CURRENT and never presented as "the" file. The plan's third action, switching the
+working tree, is story 3.2 and is not here.
+
+**Open at &lt;sha&gt;** asks the server — `coai-mcp --file-at --id <findingId>`
+(`research/module_server.md`, *One file at the commit the reviewers read*) — and shows the text in a
+**read-only document of this product's own scheme**, `coai-revision:` (`revisionOpen.ts`, a
+`TextDocumentContentProvider` registered on the first press and disposed with the extension). Not an
+untitled document — two plan reviewers, independently: an untitled buffer is dirty, Ctrl+S prompts
+to save it to disk, and it is not read-only. The tab says which revision it is because the URI puts
+the short sha into the file's own name — `Totals@aaaa111.cs`, keeping the extension for language
+detection — with the full sha and the stored path in the query (`revisionDocumentPath`). The cursor
+lands on the recorded line, which is exact there. The text is held only while its document is open
+(`onDidCloseTextDocument` forgets it), so what the provider holds is bounded by the tabs a person
+has open, not by everything they ever pressed.
+
+**Open CURRENT** costs no server process and spawns no git. It is guarded twice before anything is
+opened, both through `insideReally` (`claudeSessions.ts`) — the one containment check in this
+extension, which requires containment as written AND as it really leads and fails closed when
+either cannot be canonicalised: the recorded checkout must be a folder of this workspace or inside
+one, and the file must be inside the checkout (`currentFileIn`, `openAtRevision.ts`). The first
+guard is the plan round's (gemini): `insideReally(repoPath, file)` alone passes for anything under
+`repoPath`, and a pair naming `/etc` would have opened a system file. A checkout that IS the
+workspace folder is the ordinary case and containment is strict, so equality is asked separately —
+`sameDirectory`, two canonical paths with nothing between them — which is the one case containment
+cannot express, not a second implementation of it. A file no longer in the checkout says so and
+points at the revision; a refusal is said on the row, beside the button that stays.
+
+**The two guards are deliberately different**, and getting them the same way round is the defect to
+avoid: the historical path is validated lexically, server-side, against the string the row stores —
+a file deleted since has no current path, and that is what the action exists for — while the current
+path is judged against the live filesystem it will open from.
+
+**Probe once per repository, on the first press, and remember.** Nothing is probed at paint (200
+rows would be 200 processes); until a repository has answered, its rows say *not checked yet: the
+first press checks that the repository still answers* beside the offer. The first press is the
+probe, and `RevisionMemory` (`openAtRevision.ts`) keeps what it taught for the panel's lifetime: a
+checkout the server says is gone (`repo_path_missing`) is remembered for the REPOSITORY, after which
+every row of it says so instead of offering and no further process is spent on it — one process per
+repository for the 41 % of recorded checkouts that no longer exist; a commit that is gone, a file
+not at that path then, a refused path and a pair that is gone are remembered for the ROW; text is
+held so a second press opens again without a process; `git_failed` and a failed process keep the
+action offered and say *press again*; a server that exits 64 is a fact about every row
+(`TOO_OLD_FOR_THE_REVISION`, spelled once for the reader and the state). Emptied with the window — a
+checkout can come back. The panel posts `{type: 'revisions', items}` into the rows' own containers
+(`data-revision`) rather than redrawing, and a repository-level answer is fanned out to every held
+row of that repository (`affectedBy`); every paint hands back `revisionsFor(found.shown)` so a
+redraw after a decision says the reasons again.
+
+**One sentence per fact.** *commit aaaa111 is not in the repository any more* · *src/Totals.cs was
+not at this path at aaaa111; open the current file instead* (the round's Blocking finding: the silent
+version is refused, and the current button stays) · *D:/repo is not a git repository any more, so
+nothing can be opened at aaaa111* · *the recorded path is not a repository-relative path, so it
+cannot be opened* · *this pair is not in the database any more* · *D:/repo is not a folder of this
+workspace, so nothing is opened from it* · *src/Totals.cs is not in D:/repo any more; open it at its
+revision instead* · *src/Totals.cs leads outside D:/repo, so it is not opened*.
+
+**What moved to stay under the file ceiling.** `bugzReviewPage.ts` was at 792 of `max-lines`' 800;
+what a row SAYS about itself (`where`, `complexity`, the reviewers' prose, the block) moved to
+`reviewAbout.ts` — a unit with a boundary of its own and the natural home of the new Open line —
+over a structural `AboutRow`, as `realMethodView.ts` did with `RealMethodRow`, so no import runs
+back into the page. `revisionActions.ts` renders the two buttons and their notes from a
+`RevisionState` and is pure; `openAtRevision.ts` decides the state and the guard and is free of
+`vscode`; `revisionOpen.ts` is the two editor calls and nothing else, and is listed in
+`sonar.coverage.exclusions` beside every other module that imports the editor. `StoredPair`,
+`Sendable()`, `UploadRun.Wire`, `OnlyThreeFieldsLeaveTests` and `NormalizeAnswer` are untouched:
+this story sends nothing.
+
+**Deviations from the story's brief, found by reading the code.** (1) There is no caller-supplied
+`repo_path` to authorise server-side: `--real-method`'s door is `--id` and the row supplies the rest,
+so this mode takes the same door and a server test pins that argv cannot redirect it. (2)
+`insideReally` is strict containment, so the ordinary case — the checkout IS the workspace folder —
+needed the equality case beside it, or every current file would have been refused. (3) "The probe
+runs once per repository" is true of what a repository-level answer teaches; a row-level fact (a
+pruned commit, a moved file) is learned on that row's press and remembered — there is no
+one-process-per-repository way to learn 200 rows' commit status without a second mode, and the
+brief settled on the middle path rather than that.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs
@@ -8286,3 +8370,93 @@ done:
   above bounds that to four processes rather than one per open row, which is most of the exposure;
   cancelling properly needs an `AbortSignal` threaded through the shared `Run` seam that eight
   readers use, and that is a change to make deliberately rather than inside this story.
+
+
+### What story 3.1's code round changed, and what it got wrong
+
+Twelve reviewers were asked and ten answered (two of gemini's roles came back empty — their vendor
+hit a permission its headless mode cannot prompt for, which is a fact about the gate rather than
+this diff). **29 findings, 12 accepted, 17 rejected.** The rejections are again the larger half, so
+the reasons are here with the lines that settle them.
+
+**All three Blocking findings were false, and all three came from one provider.**
+
+- *"`--file-at` not listed in `.agents/PROJECT.md`."* It is, at line 56, in the same sentence as
+  `--real-method`. The other Conventions reviewer checked the same file and recorded "properly
+  registered".
+- *"`FileAtOfAsync` assumes the pair is non-null"* and will throw. The null check is the method's
+  FIRST statement, and the parameter is declared `ReviewPair?` precisely so it is required.
+- *"Unescaped `JSON.stringify` into a `<script>`."* The quoted line — `var rows =
+  ${JSON.stringify(rows)}` — does not exist anywhere, and the revision answer never travels through
+  the script block at all: it arrives as a posted message. This is the third round in a row where
+  this provider filed this same finding against markup that is not there.
+
+Two more were rejected because they argue themselves out inside their own text: one examines the
+revisions map, writes "This seems correct… This is correct", and files anyway; another states "the
+`if (pair === undefined)` check exists" and asks for it to be handled "more gracefully".
+
+**And one ACCEPTED finding turned out to be false when it was built** — the second time this has
+happened in this epic, and worth the same note. *"Negative finding IDs are accepted"*: `FindingId`
+parses with `NumberStyles.None`, which refuses a sign and a decimal point. Against the shipped
+binary, `--id -1` answers **65**, `--id 1.5` answers **65**, `--id 7` answers 0. Accepting a finding
+commits you to the PROBLEM, not to a fix, and this problem did not exist.
+
+**The eleven that were real:**
+
+1. **A failed `git show` was told as "the file was not there".** Every non-zero exit after a
+   successful commit check became `file_not_in_commit`, so a permission error or a broken object
+   told a person the file had never been at that path — a lie rather than a gap, and the page then
+   suppresses the action for good instead of letting them press again. The discriminator asks git
+   rather than reading its prose: `cat-file -e sha:path` exits 0 when the path IS in the commit, so
+   a failure with the path present is `git_failed` and retryable. One extra process, only on the
+   failure path. It is shared with `--real-method`, so both readers gained the honesty at once.
+2. **A held revision's identity omitted the checkout.** A finding id, a commit and a path are the
+   same three in two checkouts of one repository — which story 2.2 measured as the ordinary case
+   here, 44 of 54 live paths being linked worktrees — so the second row was handed the first one's
+   code.
+3. **The reader trusted the sha and the path it was answered with**, comparing only the finding id.
+   A pair recollected mid-flight answers the same id at another commit. All three coordinates are
+   compared now, but only when the answer CARRIES CONTENT: `pair_not_found` has no coordinates to
+   echo, and refusing it would turn a true answer into silence.
+4. **A server too old was told to the pressed row alone.** `remember` sets `tooOld` globally without
+   marking the repository probed, so with 200 rows and an old binary 199 kept offering the action and
+   each launched another doomed request.
+5. **A press said nothing while it worked.** The first press can wait through a server launch and
+   several git reads, and the row sat on *not checked yet* beside an enabled button the whole time.
+   CLAUDE.md §8 asks a status-changing action to show its real state while it runs: the row now
+   wears an in-flight state, said BEFORE the first `await` because that is the whole point of it.
+6. **A rejection from the editor escaped as an unhandled promise rejection** and left the row on its
+   old note. The `finally` that replaces the in-flight state answers both: a rejection from the
+   EDITOR is not a fact about the revision, so what was read stays read and the row gains the
+   sentence and the offer to press again.
+7. **The webview boundary took `1.5` and `-1` as row ids.**
+8. **The type-kind table fell through to TypeScript** for every language that is not C#, so a fifth
+   language would have shown every method with an empty class and nothing would have failed.
+9. **`tellRows` said nothing about what it does** — it is `showRevisionActions` now.
+10. **Three private copies of the stdout capture** remained in `ThePairModesTests`,
+    `ABatchFindingsReadTests` and `BugsQueryTests`. `Stdout.Of` joins `OfAsync` and the copies are
+    gone; there are two helpers because three of the four one-shots captured are synchronous, and
+    wrapping them in a task to reuse one would add an `await` to tests with nothing to wait for.
+11. **The flow shipped without its scenario.** Two now run in a real VS Code: the revision document
+    opening under this product's own scheme, naming the commit, with the cursor on the finding's line
+    and **an edit refused** — asserted by trying `applyEdit` rather than by trusting the docblock —
+    and the CURRENT file opening from the checkout at its recorded line.
+
+**One mutation stayed green and is reported as such rather than counted.** Moving the two in-flight
+lines inside the `try` preserved the property the test asserts (said before the first wait), so it
+proved nothing; deleting them turns the test red, which is the check that counts.
+
+**And saying it cost a refactor.** The in-flight state pushed `bugzReviewPanel.ts` to 831 lines
+against the 800 the style rule allows — which the implementer predicted in his own questions and
+named this extraction for. `revisionPanel.ts` takes the four methods AND the three fields only they
+touch: what the panel has learned about reaching code, which reads are in flight, and which rows
+have a press out. A cluster that takes its own fields with it has found its seam. It posts through a
+function the panel gives it rather than holding a webview, so there is still ONE place here that
+talks to VS Code, and a test pins that the deciding half contains no `webview` at all. Eight
+structural tests went red on the move, which is what they are for; they were re-pointed at the file
+the code now lives in and not one assertion was weakened.
+
+**Recorded rather than fixed:** a SHA-256 repository is unsupported product-wide — `ObjectId` is
+exactly forty hex characters, so the collector, `--real-method` and `--file-at` all refuse one.
+Widening it would change how every git read treats every repository, untested against a SHA-256
+repository, inside a story that adds one read.

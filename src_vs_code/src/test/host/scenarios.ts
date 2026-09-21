@@ -2,6 +2,8 @@ import * as assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
+
+import { REVISION_SCHEME, RevisionDocuments, showCurrentFile } from '../../revisionOpen';
 import { ChatPanels } from '../../chatPanels';
 import { conversationHooks } from '../../chatHooks';
 import { signatureOf } from '../../renderAnswer';
@@ -428,6 +430,74 @@ const SCENARIOS: readonly Scenario[] = [
         fs.rmSync(prompt, { force: true });
         fs.rmSync(tombstone, { force: true });
       }
+    },
+  },
+  {
+    name: 'the file at its revision opens read-only, under this product\'s own scheme, naming the commit',
+    run: async (): Promise<void> => {
+      // The half of story 3.1 that only a real editor can answer. Outside a host, the provider, the
+      // scheme and the read-only promise are pinned by reading the source — which cannot see whether
+      // VS Code accepts the registration, whether the tab names the revision, or whether a person
+      // can type into what is supposed to be a historical file. (Code round, codex.)
+      const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
+      assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
+      await extension.activate();
+
+      const documents = RevisionDocuments.register({ subscriptions: [] } as unknown as vscode.ExtensionContext);
+      const asReviewed = 'public int GetOrAdd(int n)\n{\n    return n + 1;\n}\n';
+      await documents.show({ sha: 'aaaa111bbbb', file: 'src/Totals.cs', text: asReviewed, line: 3 });
+
+      const shown = vscode.window.activeTextEditor;
+      assert.ok(shown !== undefined, 'nothing was opened, so the button opens nothing');
+      assert.equal(shown.document.uri.scheme, REVISION_SCHEME,
+        'a historical file must not arrive as a file:// document, or saving it writes over the working tree');
+      assert.equal(shown.document.getText(), asReviewed, 'the text VS Code shows is the text that was read');
+      assert.equal(shown.document.isUntitled, false,
+        'an untitled buffer is dirty and Ctrl+S offers to write it somewhere — which is why this is a provider');
+      // The editor labels a tab with the last path segment, so the SHORT sha goes there and the
+      // full one into the query: `Totals@aaaa111.cs` says which revision at a glance and keeps the
+      // extension for language detection. The first version of this assertion looked for the full
+      // sha in the path and went red here, which is what a scenario is for.
+      assert.match(shown.document.uri.path, /Totals@aaaa111\.cs$/u,
+        'the tab must name the revision it is of, and keep the extension');
+      assert.match(shown.document.uri.query, /sha=aaaa111bbbb/u,
+        'and the URI must carry the full coordinates, so it is self-describing');
+      assert.equal(shown.selection.active.line, 2, 'the cursor is on the finding\'s line, counted from zero here');
+
+      // WHAT READ-ONLY ACTUALLY MEANS HERE, measured rather than assumed. The first version of this
+      // scenario asserted that `applyEdit` is refused, because the module's docblock said a document
+      // of a registered scheme is 'read-only by construction'. It is not: the edit APPLIES. What
+      // holds is the promise that matters — there is nowhere for it to be written, because the URI is
+      // not a file. So both are pinned, and the docblock now says the narrower true thing.
+      const edit = new vscode.WorkspaceEdit();
+      edit.insert(shown.document.uri, new vscode.Position(0, 0), 'somebody typing into history');
+      const applied = await vscode.workspace.applyEdit(edit);
+      assert.equal(applied, true,
+        'a programmatic edit does apply to a provider buffer — recorded because the comment claimed otherwise');
+      assert.equal(await shown.document.save(), false,
+        'and it can never be SAVED, which is the promise: Ctrl+S has nowhere to write, so the working tree is safe');
+      assert.notEqual(shown.document.uri.scheme, 'file',
+        'the guarantee is the scheme, not an editor flag');
+    },
+  },
+  {
+    name: 'the CURRENT file opens from the checkout, at the recorded line',
+    run: async (): Promise<void> => {
+      // The other action, and the one that touches the live filesystem. Its guard is unit-tested to
+      // death; what a host adds is that `showTextDocument` really opens THAT file and puts the cursor
+      // where the finding said.
+      const folder = vscode.workspace.workspaceFolders?.[0];
+      assert.ok(folder !== undefined, 'the harness opens a workspace, and this scenario needs it');
+
+      const file = path.join(folder.uri.fsPath, 'Totals.cs');
+      fs.writeFileSync(file, 'line one\nline two\nline three\n', 'utf8');
+      await showCurrentFile(file, 2);
+
+      const shown = vscode.window.activeTextEditor;
+      assert.ok(shown !== undefined, 'nothing was opened');
+      assert.equal(shown.document.uri.scheme, 'file', 'the CURRENT file is the real one, from disk');
+      assert.equal(shown.document.uri.fsPath.toLowerCase(), file.toLowerCase());
+      assert.equal(shown.selection.active.line, 1, 'the recorded line, counted from zero');
     },
   },
 ];

@@ -4,14 +4,16 @@ import * as vscode from 'vscode';
 
 import { asText } from './asText';
 import { notify } from './notify';
-import { KeepWrite, PairsRead } from './roundsDbRead';
+import { AskedRevision, KeepWrite, PairsRead } from './roundsDbRead';
 import { settingWritten } from './settingWrite';
 import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 import { FilterPress, ReviewPair, reviewPageHtml } from './bugzReviewPage';
+import { FileAtRead, RevisionDocument } from './openAtRevision';
 import { askedOnce, MarkReader, readGitMark } from './projectIdentity';
 import { RealRead, realView } from './realMethodView';
+import { RevisionPanel } from './revisionPanel';
 import { ALL, HeldTabs, reviewTabs } from './reviewTabs';
 
 /**
@@ -41,6 +43,23 @@ export interface ReviewHooks {
    * be 400 git reads on a path that already costs 468 ms.</p>
    */
   readonly readReal: (findingId: number) => Promise<RealRead>;
+
+  /**
+   * One pair's file as it was at the commit the reviewers read — `--file-at`, one process per call.
+   *
+   * <p>Called on a PRESS, never at paint, and what it answers is remembered for the panel's lifetime
+   * per repository: a checkout that is gone answers once and every row of it stops offering.</p>
+   */
+  readonly readFileAt: (asked: AskedRevision) => Promise<FileAtRead>;
+
+  /** Shows the text in a read-only document of this product's own scheme, named for its revision. */
+  readonly showRevision: (document: RevisionDocument) => Promise<void>;
+
+  /** Shows a file from the live filesystem — only ever a path `currentFileIn` has already judged. */
+  readonly showCurrent: (file: string, line: number) => Promise<void>;
+
+  /** The open workspace folders, as OS paths — what the current-file guard is judged against. */
+  readonly folders: () => readonly string[];
 
   /**
    * Something was decided.
@@ -75,7 +94,9 @@ type ReviewMessage =
   /** The un-anonymised view was switched; held so the next paint draws the same view. */
   | { readonly type: 'realText'; readonly on: boolean }
   /** An open row wants its real method; the generation is echoed back so a late answer can be told stale. */
-  | { readonly type: 'fetchReal'; readonly id: number; readonly generation: string };
+  | { readonly type: 'fetchReal'; readonly id: number; readonly generation: string }
+  /** A row's file was asked for — at the commit the reviewers read, or as it is now. */
+  | { readonly type: 'openAt' | 'openCurrent'; readonly id: number };
 
 /**
  * What an in-flight real-method read is keyed by: the row AND the two commits it is about.
@@ -129,6 +150,12 @@ function asReviewMessage(raw: unknown): ReviewMessage | undefined {
       // could only refuse them. (Code round, codex.)
       return Number.isInteger(Number(m['id'])) && Number(m['id']) >= 0 && typeof m['generation'] === 'string'
         ? { type: 'fetchReal', id: Number(m['id']), generation: m['generation'] }
+        : undefined;
+    case 'openAt':
+    case 'openCurrent':
+      // The same rule as `fetchReal`: an id that is not a whole, non-negative number names no row.
+      return Number.isInteger(Number(m['id'])) && Number(m['id']) >= 0
+        ? { type: m['type'], id: Number(m['id']) }
         : undefined;
     case 'zoom':
     case 'tone':
@@ -250,7 +277,21 @@ export class BugzReviewPanel {
   /** Which paint this is — part of every generation the page asks with, so a redraw stales what came before. */
   private draws = 0;
 
-  constructor(private readonly hooks: ReviewHooks) {}
+  /**
+   * Reaching the code, with the three pieces of state only it touches.
+   *
+   * <p>It came out of this class when the class reached 831 lines against the 800 the style rule
+   * allows — a cluster that takes its own fields with it is one that has found its seam. It posts
+   * through this panel rather than holding a webview, so there is still ONE place here that talks
+   * to VS Code.</p>
+   */
+  private readonly revisions: RevisionPanel;
+
+  constructor(private readonly hooks: ReviewHooks) {
+    this.revisions = new RevisionPanel(hooks, (items) => {
+      void this.panel?.webview.postMessage({ type: 'revisions', items });
+    });
+  }
 
   get isOpen(): boolean {
     return this.panel !== undefined;
@@ -286,6 +327,8 @@ export class BugzReviewPanel {
         this.realText = false;
         this.real = new Map<number, HeldReal>();
         this.fetching = new Map<string, Promise<RealRead>>();
+        // And nothing remembered about reaching the code: a checkout can have come back.
+        this.revisions.forget();
         this.panel = undefined;
       });
       this.panel.webview.onDidReceiveMessage((m: unknown) => this.received(m));
@@ -331,6 +374,14 @@ export class BugzReviewPanel {
         return;
       case 'fetchReal':
         void this.answerReal(m.id, m.generation);
+
+        return;
+      case 'openAt':
+        void this.opened(m.id, (pair) => this.revisions.openAt(pair, this.held));
+
+        return;
+      case 'openCurrent':
+        void this.opened(m.id, (pair) => this.revisions.openCurrent(pair, this.held));
 
         return;
       default:
@@ -526,6 +577,13 @@ export class BugzReviewPanel {
     }));
   }
 
+  /** A press about one row, or nothing at all when that row is no longer on the page. */
+  private async opened(id: number, act: (pair: ReviewPair) => Promise<void>): Promise<void> {
+    const pair = this.held.find((one) => one.findingId === id);
+
+    return pair === undefined ? undefined : act(pair);
+  }
+
   private async draw(): Promise<void> {
     const open = this.panel;
     if (open === undefined) {
@@ -605,6 +663,7 @@ export class BugzReviewPanel {
       expanded: this.keptOpen(this.held),
       realText: this.realText,
       real: this.realFor(found.shown),
+      revisions: this.revisions.stateFor(found.shown),
       draw: this.draws,
       projects: found.projects,
       languages: found.languages,

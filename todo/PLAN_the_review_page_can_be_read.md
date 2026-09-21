@@ -249,6 +249,45 @@ and two spellings of one repository — with the expected mapping written down f
 > as a defect, left as a question for the operator rather than repaired as a side effect.
 > Records: `research/module_extension.md`, `module_tests.md`.
 
+> **Story 3.1 built actions 2 and 4 of the revision rule on 2026-09-18** — *Open at &lt;sha&gt;* and
+> *Open CURRENT (may differ)* — and three things in this plan and its brief turned out different
+> when the code was read:
+>
+> 1. **Git does not run where this plan says it does.** The paragraph below names "the repository's
+>    existing exe-plus-argv launcher (`processLauncher.ts`)" — the EXTENSION. Story 2.2 verified and
+>    kept that the extension spawns no git at all, and 2.3 put the whole real-method read behind a
+>    server one-shot; this story does the same. `coai-mcp --file-at --id <findingId>` is the read,
+>    through `GitHistory.FileAtAsync`, which IS `git show <sha>:<path>` and already goes through the
+>    one launcher with the tested timeout and tree-kill. The sha regex written below, `^[0-9a-f]{7,40}$`,
+>    was not added: `GitHistory.ObjectId` (exactly forty) already gates every git read, and a second
+>    pattern would have been weaker in one direction and stricter in another.
+> 2. **"Its canonical resolution must stay under the repository root" is the wrong guard for the
+>    historical path, and the right one for the current file.** A file deleted or renamed since the
+>    recorded revision has no canonical current path, so canonicalising it would refuse exactly the
+>    blob action 2 exists to read — 99.6 % of orphaned blobs still read. The stored path is validated
+>    LEXICALLY (traversal, absolute, drive-qualified, NUL), server-side, on the one road into
+>    `sha:path`; the symlink question is git's, whose object spec resolves nothing outside the object
+>    database. Action 4 opens the live filesystem, so it takes the canonical guard — `insideReally`,
+>    twice: the recorded checkout inside an open workspace folder, and the file inside the checkout.
+> 3. **"Existence is checked before the action is offered" became "probe once per repository, on the
+>    first press, and remember."** A `cat-file -e` per row at paint is a process per row for a page a
+>    person may never scroll; an offer derived from nothing is a press that fails for the 41 % of
+>    checkouts that no longer exist. The first press in a repository is the probe, its answer is
+>    remembered for every row of that repository, and a row whose commit is gone, or whose file was
+>    not at that path then, says so instead of offering — the latter naming the path and offering the
+>    current file, which the plan round made Blocking.
+>
+> What shipped: `--file-at` (server: `FileAtRevision`, `FileAtReader`, `CommittedFile` extracted
+> from `RealMethodReader`, `GitHistory.IsRepoRelative` on the road in; every domain outcome a reason
+> at exit 0, 65 for a bad id; the repository is the row's, never argv's), and on the page a
+> read-only `coai-revision:` document named `Totals@aaaa111.cs` for action 2, the guarded live open
+> for action 4, `RevisionMemory` per repository, `reviewAbout.ts` extracted so the page stays under
+> its line ceiling. `StoredPair`, `Sendable()`, `UploadRun.Wire`, `OnlyThreeFieldsLeaveTests` and
+> `NormalizeAnswer` byte-identical. A SHA-256 repository stays unsupported everywhere (`ObjectId` is
+> forty characters); the one-line fix is recorded in `module_server.md`, not made. Action 3 is story
+> 3.2. Records: `research/module_server.md`, `module_extension.md`, `module_tests.md`;
+> `.agents/PROJECT.md` names the mode.
+
 ### The revision rule, which is what makes the links honest
 
 The pairs describe HISTORICAL code — the round's `head_sha`. A link, a complexity number and a call
@@ -458,7 +497,7 @@ above rather than accepting them, and three of its findings changed the plan:
 |---|---|---|---|
 | **1 — the page can be read** (no server change, no new data) | 1.1 collapse + zoom + tone · 1.2 highlighting, after the measurement · 1.3 the diff | Opus | **all three shipped** — `codeHighlight.ts` and `lineDiff.ts` are on `main`. The row said *1.1 shipped* until 2026-09-18, which is a status line that stopped matching the repository rather than work that stopped. |
 | **2 — the page says what it is showing** (one wider SELECT, then the renders) | 2.1 the projection + cause, fix, hash, path, complexity · 2.2 project and language tabs · 2.3 the real method, un-anonymised, and its class | 2.1 and 2.3 **Fable max**, 2.2 Opus | **2.1 built 2026-09-18** (through both gate rounds; the populated live contract closed after the code round) · **2.2 built 2026-09-18** (the identity rule rewritten against the live table; `tabStrip` extracted and `rolesPage` converted) · **2.3 built 2026-09-18** (`--real-method`, a toggle over what the rows already hold; the rename recovery removed after real git showed the collector cannot store the row it would serve) |
-| **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | not started |
+| **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | **3.1 built 2026-09-18** (`--file-at` server-side, a read-only document of the product's own scheme, the current file behind the workspace guard, one probe per repository remembered; the plan's sha regex and canonical-path guard for the historical read both dropped after reading the code — see the story note above) · 3.2, 3.3 not started |
 | **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2 the client sends one | **Fable max** | **unblocked 2026-09-18, not started.** Both decisions were answered by the operator and both are recorded in this document: a person's comment is PUBLIC, so no PII scanner and no local-only fallback; and the ranking pass MAY use a remote model. This row still read *blocked on two decisions* while the sections below already carried the answers. |
 
 ### Carried out of story 1.1's code round, rejected there and owed somewhere

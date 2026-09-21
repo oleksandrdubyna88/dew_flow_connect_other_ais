@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { DROPPED, KEPT, ReviewPair, UNDECIDED, decision, reviewPageHtml, undecided } from '../bugzReviewPage';
+import { emptyMemory, FileAtRead, remember, stateOf } from '../openAtRevision';
 import { RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD, realView } from '../realMethodView';
+import { revisionActions, RevisionState } from '../revisionActions';
 import { Tab } from '../tabStrip';
 import { readable } from './readableHtml';
 
@@ -238,6 +240,37 @@ class Line {
   }
 }
 
+/**
+ * One of the two ways out of a row to the code — at its revision, or as it is now — found with
+ * `closest` because the press can land on the text inside the button.
+ *
+ * <p>It sits in the DETAIL row, which carries `data-detail` and not `data-row`, so it answers
+ * nothing about a pair row: a click handler that reached for `[data-row]` from here would find
+ * nothing, exactly as it would in a browser.</p>
+ */
+class Opener {
+  readonly id = '';
+
+  constructor(readonly kind: 'data-open-at' | 'data-open-current', readonly key: string) {}
+
+  getAttribute(name: string): string | null {
+    return name === this.kind ? this.key : null;
+  }
+
+  closest(selector: string): Opener | null {
+    return selector === `[${this.kind}]` ? this : null;
+  }
+}
+
+/** The container a row's revision actions live in — what the host's `revisions` answer lands in. */
+class Note {
+  innerHTML: string;
+
+  constructor(readonly key: string, contents: string) {
+    this.innerHTML = contents;
+  }
+}
+
 /** A row's code, hidden until somebody asks for it. */
 class Region {
   hidden: boolean;
@@ -327,7 +360,13 @@ interface Page {
   readonly controls: Readonly<Record<string, Control>>;
   /** Every tab on the page, with the strip it came out of. */
   readonly tabs: readonly TabButton[];
-  click(what: Box | Control | Toggle | Line | TabButton): void;
+  /** Every way out of a row to the code, at its revision or as it is now. */
+  readonly openers: readonly Opener[];
+  click(what: Box | Control | Toggle | Line | TabButton | Opener): void;
+  /** One row's opener of one kind — asserting it is there, because a row with none has lost the action. */
+  opener(findingId: number, kind: 'data-open-at' | 'data-open-current'): Opener;
+  /** The container one row's revision actions were rendered into. */
+  revision(findingId: number): Note;
   /** Whether the pair with this `findingId` is showing its code, as the page currently stands. */
   showing(findingId: number): boolean;
   /** The skeleton half of one pair's code. */
@@ -349,6 +388,7 @@ interface Options {
   readonly textTone?: number;
   readonly realText?: boolean;
   readonly real?: ReadonlyMap<number, RealRead>;
+  readonly revisions?: ReadonlyMap<number, RevisionState>;
   readonly draw?: number;
 }
 
@@ -397,6 +437,15 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     halves.find((one) => one.which === which && one.half.key === key)?.half;
   const toggles = [...html.matchAll(/data-toggle="(\d+)"\s+aria-expanded="(true|false)"/g)]
     .map((m) => new Toggle(m[1]!, m[2] === 'true', rowFor(m[1]!)));
+  // The revision actions, from the markup: each container with what it was rendered holding, and
+  // each opener inside one. An opener rendered outside a container is a failure here, as a control
+  // outside any row is above.
+  const notes = [...html.matchAll(/<dd class="open" data-revision="(\d+)">([\s\S]*?)<\/dd>/g)]
+    .map((m) => new Note(m[1]!, m[2]!.trim()));
+  const openers = notes.flatMap((note) => [
+    ...[...note.innerHTML.matchAll(/data-open-at="(\d+)"/g)].map((m) => new Opener('data-open-at', m[1]!)),
+    ...[...note.innerHTML.matchAll(/data-open-current="(\d+)"/g)].map((m) => new Opener('data-open-current', m[1]!)),
+  ]);
   // The severity/title line and the state word, with the element they are actually INSIDE. Whether
   // that is the disclosure button or merely the row is the whole of the defect a code reviewer
   // found — the first version wrapped only the chevron and the symbol, so pressing the title did
@@ -457,11 +506,14 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
       }
     },
     querySelectorAll: (selector: string): readonly unknown[] => byAttribute[selector] ?? [],
-    querySelector: (selector: string): Region | Toggle | Half | undefined => {
-      const one = /^\[data-(detail|toggle|skel|real)="(\d+)"]$/.exec(selector);
+    querySelector: (selector: string): Region | Toggle | Half | Note | undefined => {
+      const one = /^\[data-(detail|toggle|skel|real|revision)="(\d+)"]$/.exec(selector);
       assert.ok(one !== null, `the page asked for a selector the shim cannot answer: ${selector}`);
       if (one[1] === 'skel' || one[1] === 'real') {
         return halfOf(one[1], one[2]!);
+      }
+      if (one[1] === 'revision') {
+        return notes.find((note) => note.key === one[2]);
       }
       const among = one[1] === 'detail' ? regions : toggles;
 
@@ -496,7 +548,20 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     style,
     host,
     controls,
+    openers,
     click: (what) => onClick!({ target: what }),
+    opener: (findingId, kind) => {
+      const found = openers.find((one) => one.kind === kind && one.key === String(findingId));
+      assert.ok(found !== undefined, `row ${findingId} offers no ${kind === 'data-open-at' ? 'way to open the file at its revision' : 'way to open the current file'}`);
+
+      return found;
+    },
+    revision: (findingId) => {
+      const found = notes.find((note) => note.key === String(findingId));
+      assert.ok(found !== undefined, `pair ${findingId} rendered no revision actions`);
+
+      return found;
+    },
     showing: (findingId) => {
       const region = regions.find((r) => r.key === String(findingId));
       assert.ok(region !== undefined, `no pair ${findingId} is on this page`);
@@ -1544,6 +1609,141 @@ test('a read that never reached the server can be asked for again', () => {
   page.click(toggleFor(page, 1));
 
   assert.equal(asked(page).length, 2, 'a failure that was never cached must be retryable');
+});
+
+// --------------------------------------------------------------------------------------------
+// Reaching the code (story 3.1): the file at its revision, and the file as it is now — two
+// actions, two guards, and the page paints neither answer itself.
+// --------------------------------------------------------------------------------------------
+
+/** What the page asked the host to open, in order. */
+const opens = (page: Page, type: 'openAt' | 'openCurrent'): readonly Posted[] =>
+  page.posted.filter((m) => m.type === type);
+
+test('an open row offers the file at its revision and the CURRENT file, and pressing each names the row', () => {
+  const page = run([pair(1), pair(2)], { expanded: new Set([1]) });
+  assert.deepEqual(opens(page, 'openAt'), [], 'nothing is probed at paint — 200 rows must not cost 200 processes');
+
+  page.click(page.opener(1, 'data-open-at'));
+  page.click(page.opener(1, 'data-open-current'));
+
+  assert.deepEqual(opens(page, 'openAt'), [{ type: 'openAt', id: 1 }]);
+  assert.deepEqual(opens(page, 'openCurrent'), [{ type: 'openCurrent', id: 1 }]);
+  assert.equal(page.showing(1), true, 'pressing an opener must not close the row it sits in');
+  assert.equal(opens(page, 'openAt').length + opens(page, 'openCurrent').length, 2, 'one press, one message');
+});
+
+/**
+ * The current file is the one that can mislead — it is where a fix would be made, and it may no
+ * longer be the code the reviewers read — so it is labelled CURRENT and never presented as "the" file.
+ */
+test('the current file is labelled CURRENT and says it may differ; the revision action names its commit', () => {
+  const page = run([pair(1)], { expanded: new Set([1]) });
+  const said = readable(page.revision(1).innerHTML);
+
+  assert.match(said, /CURRENT/u, 'the working-tree file must say it is the current one');
+  assert.match(said, /may differ/u, 'and that it may not be what the reviewers read');
+  assert.match(said, /Open at aaaa111/u, 'the revision action names the commit it opens, short');
+  // Each BUTTON's own words: the revision one never says CURRENT, the current one never names the
+  // commit — one label carrying both would be exactly the confusion the two buttons exist to end.
+  const label = (kind: string): string => {
+    const button = new RegExp(`<button[^>]*${kind}[^>]*>([\\s\\S]*?)</button>`, 'u').exec(page.revision(1).innerHTML);
+    assert.ok(button !== null, `no ${kind} button was rendered`);
+
+    return readable(button[1] ?? '');
+  };
+  assert.doesNotMatch(label('data-open-at'), /CURRENT/u);
+  assert.doesNotMatch(label('data-open-current'), /aaaa111/u);
+});
+
+test('before anything has been asked, the revision action says it will check first', () => {
+  const page = run([pair(1)], { expanded: new Set([1]) });
+
+  assert.match(readable(page.revision(1).innerHTML), /not checked yet/u,
+    'an offer derived from nothing must say so — 55.7 % of recorded commits are orphaned');
+});
+
+/** What the host would post for these rows, from what it remembers — exactly as `tellRevisions` composes it. */
+function revisions(memory: ReturnType<typeof emptyMemory>, rows: readonly ReviewPair[]): { readonly type: 'revisions'; readonly items: readonly { id: number; html: string }[] } {
+  return { type: 'revisions', items: rows.map((row) => ({ id: row.findingId, html: revisionActions(row, stateOf(memory, row)) })) };
+}
+
+const fileAt = (row: ReviewPair, reason: string): FileAtRead =>
+  ({ ok: true, file: { findingId: row.findingId, sha: row.headSha, path: row.file, reason, text: '' } });
+
+/**
+ * A checkout that is gone is learned ONCE and reaches every row of that repository — one process
+ * per repository, not one per row — while the other repository's rows are untouched.
+ */
+test('a host answer replaces one row\'s actions, and a checkout that is gone takes every row of that repository with it', () => {
+  const gone = [pair(1), pair(2)].map((row) => ({ ...row, repoPath: 'D:/gone' }));
+  const other = { ...pair(3), repoPath: 'D:/other' };
+  const page = run([...gone, other], { expanded: new Set([1, 2, 3]) });
+  const learned = remember(emptyMemory(), gone[0]!, fileAt(gone[0]!, 'repo_path_missing'));
+
+  page.host.push(revisions(learned, gone));
+
+  for (const id of [1, 2]) {
+    assert.doesNotMatch(page.revision(id).innerHTML, /data-open-at/u, `row ${id} still offers a press that can only fail`);
+    assert.match(readable(page.revision(id).innerHTML), /D:\/gone is not a git repository any more/u);
+    assert.match(page.revision(id).innerHTML, /data-open-current/u, 'the current file is still offered');
+  }
+  assert.match(page.revision(3).innerHTML, /data-open-at="3"/u, 'another repository\'s row is untouched');
+  assert.deepEqual(opens(page, 'openAt'), [], 'and none of it cost the page a press');
+});
+
+test('a page drawn with what the panel remembers says the reasons without asking, and keeps the row open', () => {
+  const pruned = remember(emptyMemory(), pair(1), fileAt(pair(1), 'commit_unreachable'));
+  const page = run([pair(1), pair(2)], {
+    expanded: new Set([1, 2]),
+    revisions: new Map([[1, stateOf(pruned, pair(1))], [2, stateOf(pruned, pair(2))]]),
+  });
+
+  assert.doesNotMatch(page.revision(1).innerHTML, /data-open-at/u, 'a commit the repository no longer has must not be offered');
+  assert.match(readable(page.revision(1).innerHTML), /commit aaaa111 is not in the repository any more/u);
+  page.opener(2, 'data-open-at');
+  assert.doesNotMatch(readable(page.revision(2).innerHTML), /not checked yet/u, 'the repository answered, so the sibling is a plain offer');
+  assert.deepEqual(opens(page, 'openAt'), [], 'nothing is asked at paint');
+  assert.equal(page.showing(1), true);
+});
+
+test('a file that was not at that path at that revision says which, and still offers the current file', () => {
+  const moved = remember(emptyMemory(), pair(1), fileAt(pair(1), 'file_not_in_commit'));
+  const page = run([pair(1)], { expanded: new Set([1]), revisions: new Map([[1, stateOf(moved, pair(1))]]) });
+  const said = readable(page.revision(1).innerHTML);
+
+  assert.match(said, /src\/Totals\.cs was not at this path at aaaa111/u);
+  assert.match(said, /open the current file instead/u);
+  page.opener(1, 'data-open-current');
+  assert.doesNotMatch(page.revision(1).innerHTML, /data-open-at/u);
+});
+
+test('a refusal to open the current file is said on the row, beside the button that is still there', () => {
+  const page = run([pair(1)], { expanded: new Set([1]) });
+
+  page.host.push({
+    type: 'revisions',
+    items: [{ id: 1, html: revisionActions(pair(1), { offered: true, note: '', currentNote: 'D:/repo is not a folder of this workspace, so nothing is opened from it' }) }],
+  });
+
+  assert.match(readable(page.revision(1).innerHTML), /not a folder of this workspace/u);
+  assert.match(page.revision(1).innerHTML, /data-open-current="1"/u, 'a refused press is not a removed button');
+});
+
+test('a revision answer about a row that is not on the page lands nowhere and breaks nothing', () => {
+  const page = run([pair(1)], { expanded: new Set([1]) });
+
+  assert.doesNotThrow(() => page.host.push({ type: 'revisions', items: [{ id: 99, html: '<b>x</b>' }] }));
+  assert.doesNotMatch(page.revision(1).innerHTML, /<b>x<\/b>/u);
+});
+
+test('a path full of markup in the revision actions renders as text', () => {
+  const nasty = { ...pair(1), file: '<img src=x onerror=alert(1)>.cs', repoPath: '<style>.pair{display:none}</style>' };
+  const html = reviewPageHtml({ pairs: [nasty], nonce: 'test-nonce', expanded: new Set([1]) });
+  const rows = html.slice(html.indexOf('<tbody>'), html.indexOf('</tbody>'));
+
+  assert.ok(!/<img[\s>]/iu.test(rows), 'a recorded path could add an element to the page');
+  assert.ok(!/<style[\s>]/iu.test(rows), 'a recorded checkout could restyle the page');
 });
 
 test('a read that DID reach the server is not asked for twice', () => {

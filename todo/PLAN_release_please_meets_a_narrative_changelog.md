@@ -1,9 +1,12 @@
 # PLAN — release-please, and the narrative changelog it would write over
 
-> Status: **partially implemented, 2026-09-18 — the decision is taken and what remains is not
-> scriptable.** The operator chose a GitHub App over a PAT; `release-please.yml` mints an
-> installation token and refuses in words until the secrets exist. Creating and installing a GitHub
-> App cannot be done without a browser, so the next move is two browser steps, written out below. Scope: Epic 4 of
+> Status: **partially implemented, 2026-09-21 — the mechanism is PROVEN on one repository, two more
+> to adopt it.** `dew_flow_sidecar_rust` releases through release-please on `push: main`: a GitHub
+> App mints the token, the acceptance test in build-order step 2 passed, and `v0.2.0` was cut and
+> published through it end to end. Steps 3 (`creds_for_devs`) and 4 (`connect_other_ais`) are the
+> remaining work, and **both need option A** — this plan's own "adopt where there is no changelog
+> first" died on 2026-09-21, when `creds_for_devs` turned out to have 127 narrative entries the
+> earlier survey recorded as `none`. Scope: Epic 4 of
 > [PLAN_family_ci_hardening.md](PLAN_family_ci_hardening.md) — `release-please` in the three
 > repositories that release. Blocks Epic 5 step 3, which is the step that actually closes CWE-522.
 >
@@ -27,11 +30,65 @@ Epic 5 step 0 established that three of the seven repositories release. They are
 | repository | tag patterns | products | changelog today |
 |---|---|---|---|
 | `connect_other_ais` | `mcp-v*` `extension-v*` `server-v*` `bugs-v*` | **four** | `src_vs_code/CHANGELOG.md` — **122 entries of hand-written prose**, one narrative paragraph per release |
-| `creds_for_devs` | `server-v*` `extension-v*` `cli-v*` `mcp-v*` | four | **none** |
+| `creds_for_devs` | `server-v*` `extension-v*` `cli-v*` `mcp-v*` | four | ~~**none**~~ → **`src_vs_code/CHANGELOG.md`, 4693 lines, 127 entries** — corrected 2026-09-21 |
 | `sidecar_rust` | **`v*`** | one | **none** |
 
-`creds_for_devs` and `sidecar_rust` have nothing to collide with: release-please would create a
-changelog where there is none. `connect_other_ais` is the whole of the difficulty.
+~~`creds_for_devs` and `sidecar_rust` have nothing to collide with.~~
+
+### CORRECTED 2026-09-21, and it removes this plan's own recommendation
+
+**`creds_for_devs` has the same hand-written narrative changelog that `connect_other_ais` has** —
+`src_vs_code/CHANGELOG.md`, **4693 lines and 127 entries**, Keep-a-Changelog headings with a
+paragraph of prose under each. The row above said `none`, and every conclusion drawn from it was
+built on that. **Only the sidecar was ever the clean case**, and it has already shipped.
+
+So *"D, then A"* — adopt in the two repositories with no changelog first — is gone: there are not two.
+**Both remaining repositories need option A**, a generated `RELEASES.md` beside a narrative file
+release-please never touches.
+
+**And `creds_for_devs`'s coupling is SOFTER than `connect_other_ais`'s, which makes it WORSE.**
+`release.yml` extracts the matching section for the release notes (line 635), and on a miss it
+*falls back to a link rather than failing*:
+
+```js
+const start = text.indexOf('## [' + v + ']');
+const body  = start === -1 ? 'See CHANGELOG.md.' : text.slice(start, …);
+```
+
+Measured: release-please's own heading is `## [1.9.7](…compare…) (2026-09-21)`, and `indexOf('## [1.9.7]')`
+returns **0** against it — a markdown link is `[text](url)`, so the probe is a prefix of it. **The
+extraction keeps working.** Release-please would overwrite 127 paragraphs of prose, the release notes
+would still be produced, and the build would stay green. `connect_other_ais` at least goes red;
+here the destruction is silent.
+
+### The second correction: the four components are not alike
+
+| component | where its version lives | what enforces it |
+|---|---|---|
+| extension | **`src_vs_code/package.json`** is the truth | `release.yml` **refuses** a tag that disagrees (line 599) — *"the Marketplace quietly takes the manifest's version, so `extension-v0.34.0` can publish 0.33.0 and the tag becomes a lie nobody sees"* |
+| server · cli · mcp | **nowhere in the tree** | the tag is the only record; the build injects it — `-p:Version="${GITHUB_REF_NAME#server-v}"` (line 163). `git grep '<Version>'` over every `.csproj` and `.props` returns **nothing** |
+
+The extension maps onto release-please exactly: it writes `package.json` and cuts a matching tag, so
+that guard passes by construction. **The other three are the open question** — release-please wants
+somewhere to write a version, and there is nowhere. Two shapes, and the choice is not obvious:
+
+| | what it costs | what it buys |
+|---|---|---|
+| **`release-type: simple`** + a `version.txt` per component | a new file whose only reader is release-please, and a second place the version lives — which is precisely what drifted on the sidecar (`Cargo.toml` at 0.1.0 while three tags had shipped) | the tree finally records what each component is at; release-please keeps it in step, so it cannot drift the way an unmanaged copy did |
+| **leave the tag as the only truth** | release-please's manifest becomes the sole record and the components' versions stay invisible in the source | nothing new to keep in step; today's design is drift-free *by construction* rather than by discipline |
+
+**Recommendation: `simple` + `version.txt`.** The sidecar's drift is an argument against an
+*unmanaged* duplicate, not against a managed one — and the reason nobody noticed there was that
+nothing read the file. The same is true here today, which is the problem, not the defence.
+
+### One more browser step, which is not work this plan can remove
+
+The GitHub App is installed on `dew_flow_sidecar_rust` **only**. Adding a repository to an existing
+installation has no route from here: `GET /user/installations` answers 403 *"You must authenticate
+with an access token authorized to a GitHub App"*, and `GET /repos/…/installation` answers 401
+without a JWT signed by the App's private key — which deliberately never left the browser and the
+secret. Measured 2026-09-21. So step 3 begins with *Configure → add `dew_flow_creds_for_devs`*, and
+the App ID read off that page.
 
 ## The collision, measured
 
@@ -84,10 +141,13 @@ the difference between a guard that shapes the workflow and a guard that ambushe
 | **C — release-please for versioning only** (`skip-changelog`) | nothing | untouched | loses the epic's changelog half; keeps the tagging half, which is what Epic 5 step 3 actually needs |
 | **D — adopt in the two repositories with no changelog first** | creates one in each | not applicable | proves the mechanism on `creds_for_devs` and `sidecar_rust` before touching the hard case |
 
-**Recommendation: D, then A.** D is where the epic's own acceptance test belongs — *"measured on one
-release before the others adopt it"* — and it costs nothing to get wrong twice. A is then the shape
-for `connect_other_ais`, and `changelog-path: RELEASES.md` is what Epic 4 already says, which reads
-like its author had seen this coming.
+~~**Recommendation: D, then A.**~~ **Rewritten 2026-09-21: it is D on ONE repository, then A on both
+others.** D rested on there being *two* repositories with no changelog; there was one. The sidecar
+played that role and the acceptance test passed on it — *"measured on one release before the others
+adopt it"* was satisfied, just with a smaller D than this paragraph imagined.
+
+**A is now the shape for BOTH remaining repositories**, and `changelog-path: RELEASES.md` is what
+Epic 4 already says — which still reads like its author had seen this coming, only twice over.
 
 **B is the one to say no to out loud.** The 122 paragraphs are the most valuable artefact in the
 release path: they are why anybody can tell what a version changed. A generated list of commit
@@ -222,9 +282,9 @@ As a manifest, if the form is the slower route:
    The `<` form matters: a multi-line PEM passed as `--body` from a Windows shell arrives mangled,
    and the failure surfaces an hour later as a token that will not mint.
 
-Then dispatch `release-please` once and watch a release pull request appear. Only after that does
-`push: branches: [main]` get uncommented — step 2 of the build order below is the acceptance test,
-and it has not run yet.
+**DONE 2026-09-21.** The app exists, is installed on `dew_flow_sidecar_rust` only, and both secrets
+are set. `push: branches: [main]` is uncommented — the acceptance test in step 2 below ran first,
+which is the order this section asked for.
 
 ## Build order
 
@@ -237,12 +297,66 @@ and it has not run yet.
    will bring `Cargo.toml` into line with reality for the first time.
 2. **Cut one real release through it** and compare the artefacts against the previous release, by
    name and by size. This is Epic 4's acceptance test and it is not optional: a tag that does not
-   trigger the existing workflow produces nothing, silently. **BLOCKED on the two browser steps
-   above** — creating and installing the app. Everything downstream of them is written and linted;
-   steps 3 and 4 wait behind this one deliberately, because this plan's own recommendation is to
-   measure on one release before the others adopt anything.
-3. **`creds_for_devs`** — four components, `include-component-in-tag: true`, a generated changelog
-   where none exists.
+   trigger the existing workflow produces nothing, silently.
+
+   **PASSED 2026-09-21**, and every link was checked on its own, because a green workflow proves
+   nothing here — a release that publishes NOTHING looks exactly like one that worked, until
+   somebody goes looking for the binary.
+
+   | link | evidence |
+   |---|---|
+   | the app minted a token | `create-github-app-token` green |
+   | the robot opened its OWN pull request | `#37`, author **`app/dew-flow-release-please`** |
+   | merging it and re-running cut a tag | `v0.2.0` in origin |
+   | **the tag started `release.yml`** | `ref=v0.2.0 event=push` |
+   | the artefacts are real | same two names as `v0.1.2`, sizes within **0.2 %** |
+
+   ```
+   bge-sidecar-cpu-x86_64-pc-windows-msvc.zip       10 945 261 -> 10 935 446
+   bge-sidecar-cpu-x86_64-unknown-linux-gnu.tar.gz  11 396 087 -> 11 372 369
+   ```
+
+   The fourth row is the one the app exists for: with `GITHUB_TOKEN` GitHub raises no workflow run
+   from events its own token created, so the tag would have stood there with no build, no artefacts
+   and no error.
+
+   **The drift step 1 predicted is confirmed and fixed.** `Cargo.toml` still said `0.1.0` with three
+   tags already cut; the release pull request brought it to `0.2.0` — correct for the first time.
+
+   **A DEVIATION WORTH RECORDING, because it read as a failure for a minute.** The tag is *not* cut
+   by merging the release pull request. It is cut by the NEXT run of the workflow, which the merge
+   triggers — so on `workflow_dispatch` it took **two** dispatches, and the first one looked like
+   "merged and nothing happened". On `push: main` it is automatic, which is most of why that trigger
+   is worth turning on rather than a tidiness preference.
+
+   **The version jumped 0.1.2 → 0.2.0, not 0.1.3**, because `feat:` commits were in the range. Correct
+   behaviour, and worth knowing before it surprises somebody mid-release.
+
+   **AND THE COMMIT TYPE IS THE VERSION — a rule steps 3 and 4 will meet twice more.** The very
+   commit that turned this trigger on was written `feat(ci): release-please runs on main`, and the
+   first automatic run duly proposed **0.3.0 for a change that touched nothing but `.github/`**.
+   Release-please reads the type literally: `feat` is a product feature, so it is a minor release.
+   The repository's own convention already lists `ci:` — which release-please does not release at
+   all — and `ci(...)` is what a workflow-only change must use. `feat(ci):` is a scope pretending to
+   be a type, and it is the easiest mistake to make in exactly this epic, because the whole epic
+   edits workflows.
+
+   **What to do with such a release pull request: leave it open.** Closing it is futile — the commit
+   stays in the range and the next push recreates it. Left alone it simply accumulates, and the next
+   real change ships under that version, which makes it meaningful again. Merging it publishes a
+   version nothing stands behind.
+3. **`creds_for_devs`** — four components, `include-component-in-tag: true`, and **option A, not a
+   changelog created from nothing**: it has 127 entries of narrative prose too, which the table above
+   now records. Its release notes are extracted from that file and would go on working while the
+   prose was overwritten, so this is the repository where getting it wrong is quietest.
+
+   Per component: extension → `release-type: node` (its `package.json` is the truth and a guard
+   refuses a mismatched tag, so release-please fits it exactly); server · cli · mcp → `simple` with a
+   `version.txt`, which is the recommendation above and the one open decision in this step.
+
+   **Begins with a browser step**: the App is installed on `sidecar_rust` only, and adding a
+   repository to an installation has no API route from here. Then the two secrets — the private key
+   is still readable from the `.pem` on disk, the App ID has to be read off the App's settings page.
 4. **`connect_other_ais`** — option A. `RELEASES.md` generated, `src_vs_code/CHANGELOG.md` left
    alone, and the guard's relationship to the release pull request written down in the repository's
    own docs rather than discovered.

@@ -1,5 +1,6 @@
 import { BugCorpus, DbFinding, DbLog, EMPTY_CORPUS, EMPTY_LOG, ManyFound, parseBugs, parseFindings, parseLog, parseManyFindings } from './roundsDb';
 import { ReviewPair } from './bugzReviewPage';
+import { FileAtRead, FileAtRevision, TOO_OLD_FOR_THE_REVISION } from './openAtRevision';
 import { MethodSide, RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD } from './realMethodView';
 import { inBatches, READS_AT_ONCE } from './roundsExport';
 import { capture } from './versionProbe';
@@ -573,6 +574,85 @@ export async function readRealMethod(
     return method === undefined
       ? { ok: false, tooOld: false, why: 'the server answered something this panel does not understand' }
       : { ok: true, method };
+  } catch {
+    return { ok: false, tooOld: false, why: 'the server answered something that is not JSON' };
+  }
+}
+
+/**
+ * The file at its revision, checked before it is shown — `JSON.parse(...) as T` is a promise, not a check.
+ *
+ * <p>The id is compared, not merely read: a document about another finding is not an answer to this
+ * request, and showing it would put one file under another row's heading with a sha to prove it.
+ * `sha` and `path` are what the document will be named by, so they are required to be text; `text`
+ * may legitimately be empty (an empty file, or a reason).</p>
+ */
+/**
+ * The row a revision was asked about — all three coordinates, because the answer is checked against
+ * every one of them.
+ */
+export interface AskedRevision {
+  readonly findingId: number;
+  readonly headSha: string;
+  readonly file: string;
+}
+
+function fileAtOf(raw: unknown, asked: AskedRevision): FileAtRevision | undefined {
+  if (raw === null || typeof raw !== 'object') {
+    return undefined;
+  }
+  const one = raw as Record<string, unknown>;
+  if (one['findingId'] !== asked.findingId) {
+    return undefined;
+  }
+
+  // The sha and the path are compared whenever the answer CARRIES CONTENT. A pair recollected while
+  // the request was in flight answers the same id at another commit, and an answer taken on trust
+  // would be cached and OPENED while the row still names the revision it asked about. (Code round,
+  // codex.) A reason-only answer is exempt on purpose: `pair_not_found` means there is no pair, so
+  // there are no coordinates for it to echo, and refusing it would turn a true answer into silence.
+  const carries = textOf(one, 'reason').length === 0;
+  if (carries && (one['sha'] !== asked.headSha || one['path'] !== asked.file)) {
+    return undefined;
+  }
+
+  return {
+    findingId: asked.findingId,
+    sha: textOf(one, 'sha'),
+    path: textOf(one, 'path'),
+    reason: textOf(one, 'reason'),
+    text: textOf(one, 'text'),
+  };
+}
+
+/**
+ * One pair's file as it was at the commit the reviewers read — `--file-at`, on stdout.
+ *
+ * <p>The same door as {@link readRealMethod}, for the same reasons: 64 is "the server is too old" and
+ * only that, every other non-zero code is the server's own sentence, and a domain outcome — no such
+ * pair, a pruned commit, a file not at that path then, a path that is not repository-relative — is
+ * `ok: true` with the reason ON the document, because the request was fine and the page says what
+ * the reason says.</p>
+ */
+export async function readFileAt(
+  executable: string,
+  asked: AskedRevision,
+  run: Run = serverRun(executable),
+): Promise<FileAtRead> {
+  const { code, output } = await run(['--file-at', '--id', String(asked.findingId)], CAP_MS);
+  if (code === EX_USAGE) {
+    return { ok: false, tooOld: true, why: TOO_OLD_FOR_THE_REVISION };
+  }
+  if (code !== 0) {
+    return { ok: false, tooOld: false, why: output.trim() || `the server exited ${code}` };
+  }
+
+  try {
+    const file = fileAtOf(JSON.parse(output), asked);
+
+    return file === undefined
+      ? { ok: false, tooOld: false, why: 'the server answered something this panel does not understand' }
+      : { ok: true, file };
   } catch {
     return { ok: false, tooOld: false, why: 'the server answered something that is not JSON' };
   }

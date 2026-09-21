@@ -53,7 +53,7 @@ node .agents/conventions/tools/pin-check.mjs
   by `args[0]` before any transport is opened, that answers and exits and never speaks JSON-RPC at
   all. Those are `--help`, `--version`, `--log`, `--findings`, `--findings-many`, `--ask-local`,
   `--ask-remote`, `--providers`, `--bugs-json`, `--normalize`, `--collect-bugs`, `--pairs-json`,
-  `--pairs-keep` and `--real-method`, `--upload-pairs`, `--requeue-refused` and `--close-consult`,
+  `--pairs-keep`, `--real-method` and `--file-at`, `--upload-pairs`, `--requeue-refused` and `--close-consult`,
   and their stdout is their entire interface — `--log` has been read from stdout by
   the panel since the rounds-log page shipped (`roundsDbRead.ts`), `--findings` since the log
   stopped carrying every round's findings in that list (2026-09-09), and `--findings-many` since a
