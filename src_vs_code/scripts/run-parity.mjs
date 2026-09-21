@@ -137,13 +137,30 @@ function compare(what, inputs, ours, theirs) {
   console.log(`  ok  ${what}: ${ours.length} cases, byte for byte`);
 }
 
+// BUILT HERE, not found here. A reviewer pointed out what `companion()` alone allows: edit
+// `Redaction.cs`, run `npm run test:parity`, and the script recompiles the TypeScript and compares
+// it against yesterday's DLL — green, about code that no longer exists. CI is safe by ordering (the
+// solution build is three steps above this one and the job is fail-fast); a developer's machine is
+// not, and this check is most useful exactly when somebody is changing the redactor.
+console.log('parity: building NoticeTool from the current sources...');
+const built = spawnSync(
+  'dotnet',
+  ['build', join(REPO, 'src_mcp', 'tests_notices', 'NoticeTool.csproj'), '-v', 'q', '--nologo'],
+  { encoding: 'utf8', timeout: TIMEOUT_MS * 4, shell: false },
+);
+if (built.status !== 0) {
+  fail(`NoticeTool would not build:\n${built.stdout}${built.stderr}`);
+}
+
 const tool = companion();
 if (tool === '') {
   fail('no NoticeTool build found. Run: dotnet build src_mcp/tests_notices/NoticeTool.csproj');
 }
 
 // Compiled, then imported — the same road `run-seam.mjs` takes. The TypeScript half under test is
-// the PRODUCT's module, never a copy of it.
+// the PRODUCT's module, never a copy of it. Announced, because a silent step that takes ten seconds
+// on a fresh checkout reads as a hang.
+console.log('parity: compiling the extension...');
 execFileSync('npm', ['run', 'compile'], { cwd: ROOT, stdio: 'ignore', shell: process.platform === 'win32' });
 const { safeText, notificationLine, parseNotificationLine, TITLE_LIMIT, DETAIL_LIMIT }
   = await import('../out/notifications.js');

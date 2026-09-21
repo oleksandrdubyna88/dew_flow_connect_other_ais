@@ -124,6 +124,21 @@ public static partial class Redaction
     /// </remarks>
     private const int BacktrackingCeilingMs = 2_000;
 
+    /// <summary>
+    /// The ceiling on ONE call, which is what the docstring above used to claim and did not deliver.
+    /// </summary>
+    /// <remarks>
+    /// <para>A reviewer counted what the code actually did: <c>BacktrackingCeilingMs</c> is carried
+    /// by three separate patterns and <see cref="Passes"/> runs them one after another, so a value
+    /// shaped to drive each of them near its own ceiling blocks for nearly SIX seconds, not two. The
+    /// per-pattern ceiling is still there — it is what makes each <c>Replace</c> give up at all —
+    /// and this is the bound on the whole call, including the two patterns that run on
+    /// <c>NonBacktracking</c> and therefore carry no ceiling of their own.</para>
+    /// <para>Checked BETWEEN passes rather than inside one: a pass already stops itself. What was
+    /// missing was anything stopping the sequence.</para>
+    /// </remarks>
+    private static readonly TimeSpan WholeCallCeiling = TimeSpan.FromMilliseconds(BacktrackingCeilingMs);
+
     // A URL carrying its own credentials: https://someone:password@host
     // NOT NonBacktracking because: `(?<![A-Za-z0-9_])` is a lookbehind. It is there because .NET's
     // `\b` is Unicode-aware — `парольsk-…` and `Tokenß…` were measured to slip past it — and JavaScript's
@@ -256,15 +271,38 @@ public static partial class Redaction
         }
     }
 
-    /// <summary>The four passes, in the order the contract fixes.</summary>
+    /// <summary>The four passes, in the order the contract fixes, under one deadline.</summary>
     private static string Passes(string value, int limit)
     {
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         var printable = new string([.. value.Where(IsPrintable)]);
         var withoutParameters = Parameter().Replace(printable, RedactParameter);
-        var redacted = Secrets.Aggregate(withoutParameters, (text, secret) => secret.Pattern.Replace(text, secret.Replacement));
+        StopIfOverdue(clock);
+        var redacted = Secrets.Aggregate(withoutParameters, (text, secret) =>
+        {
+            StopIfOverdue(clock);
+
+            return secret.Pattern.Replace(text, secret.Replacement);
+        });
+        StopIfOverdue(clock);
         var named = Labelled().Replace(redacted, RedactLabelled);
 
         return named.Length <= limit ? named : named[..limit] + Truncated;
+    }
+
+    /// <summary>Gives up between passes when the whole call has run out of time.</summary>
+    /// <remarks>
+    /// It throws the same exception a pattern's own ceiling throws, so there is ONE way this
+    /// function fails and one place that answers it — <see cref="WhenRedactionTimesOut"/>, which
+    /// fails closed.
+    /// </remarks>
+    private static void StopIfOverdue(System.Diagnostics.Stopwatch clock)
+    {
+        if (clock.Elapsed > WholeCallCeiling)
+        {
+            throw new RegexMatchTimeoutException(
+                "the whole redaction", "every pattern in order", WholeCallCeiling);
+        }
     }
 
     private static string RedactParameter(Match parameter) =>

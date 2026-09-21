@@ -24,16 +24,25 @@ namespace CoaiMcp.Core.Notices;
 public sealed record ServerNotice
 {
     /// <summary>When, as the extension writes it: <c>2026-09-16T17:05:39.812Z</c>. See <see cref="Iso"/>.</summary>
-    public required string Utc { get; init => field = Required(value, nameof(Utc)); }
+    public required string Utc { get; init => field = RequiredAfterRedaction(value, nameof(Utc)); }
 
     /// <summary>What the person is supposed to DO about it — <c>refusal</c>, <c>failure</c>, <c>outcome</c> …</summary>
-    public required string Class { get; init => field = Required(value, nameof(Class)); }
+    public required string Class { get; init => field = RequiredAfterRedaction(value, nameof(Class)); }
 
     /// <summary>The module that raised it. Free text, grouped on.</summary>
-    public required string Source { get; init => field = Required(value, nameof(Source)); }
+    public required string Source { get; init => field = RequiredAfterRedaction(value, nameof(Source)); }
 
     /// <summary>The KEY — a literal from <see cref="ServerNoticeCodes"/>, never prose.</summary>
-    public required string Code { get; init => field = Required(value, nameof(Code)); }
+    public required string Code
+    {
+        get;
+        init => field = ServerNoticeCodes.All.Contains(value)
+            ? value
+            : throw new ArgumentException($"'{value}' is not one of ServerNoticeCodes. The extension groups "
+                + "notices by (code, subject), so a code carrying a round number or an error "
+                + "sentence mints a new key every time and nothing ever coalesces — which is the "
+                + "defect the literal `code` was introduced to prevent", nameof(Code));
+    }
 
     /// <summary>The resource this one is about, when a <c>code</c> can be about more than one.</summary>
     public string? Subject { get; init; }
@@ -92,7 +101,7 @@ public sealed record ServerNotice
     public IReadOnlyDictionary<string, object>? More
     {
         get;
-        init => field = value is null ? null : Flat(value);
+        init => field = value is null ? null : CheckedAndFlattened(value);
     }
 
     /// <summary>
@@ -105,6 +114,28 @@ public sealed record ServerNotice
     public static string Iso(DateTimeOffset at) =>
         at.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
+    /// <summary>
+    /// A required field, checked against what will REACH THE LINE rather than what arrived.
+    /// </summary>
+    /// <remarks>
+    /// <para>A reviewer found the gap: <c>Utc</c> set to a single control character is non-empty
+    /// here, and <see cref="Redaction.SafeText"/> reduces it to nothing before it is written — so
+    /// the server emits a record whose required field is empty, and the extension's parser returns
+    /// nothing for the whole line. A notice nobody can read is worse than a notice that was never
+    /// written, because the count on the page says one arrived.</para>
+    /// <para>Checked at CONSTRUCTION, where the call site is, rather than at the write: a record
+    /// that cannot be written is a programming error and the exception belongs where it was made.</para>
+    /// </remarks>
+    private static string RequiredAfterRedaction(string value, string field)
+    {
+        var survives = Redaction.SafeText(value, Redaction.TitleLimit);
+
+        return survives.Length == 0
+            ? throw new ArgumentException($"{field} is empty once it has been redacted, and the "
+                + "extension's parser returns nothing for a line missing it", field)
+            : Required(value, field);
+    }
+
     private static string Required(string value, string field) =>
         string.IsNullOrWhiteSpace(value)
             ? throw new ArgumentException(
@@ -112,7 +143,8 @@ public sealed record ServerNotice
                 + "would be written and never read", field)
             : value;
 
-    private static Dictionary<string, object> Flat(IReadOnlyDictionary<string, object> more)
+    private static IReadOnlyDictionary<string, object> CheckedAndFlattened(
+        IReadOnlyDictionary<string, object> more)
     {
         var flat = new Dictionary<string, object>(more.Count, StringComparer.Ordinal);
         foreach (var (key, value) in more)
@@ -120,7 +152,11 @@ public sealed record ServerNotice
             flat.Add(CheckedKey(key), CheckedValue(key, value));
         }
 
-        return flat;
+        // READ-ONLY on the way out, not merely typed as such. A reviewer pointed out that an
+        // `IReadOnlyDictionary` holding a `Dictionary` can be cast back and added to after
+        // construction — past every check above — which would put a duplicate `code` property into
+        // the line or a value the writer refuses, and lose the notice either way.
+        return new System.Collections.ObjectModel.ReadOnlyDictionary<string, object>(flat);
     }
 
     private static string CheckedKey(string key) =>
