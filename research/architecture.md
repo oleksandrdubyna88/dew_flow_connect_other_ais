@@ -515,10 +515,10 @@ surrogate that `slice` leaves at a cut into U+FFFD, so the first run blamed the 
 the check. And the first version demanded byte equality of the line and got 4408 identical code units
 in a different order, which is what established the row above.
 
-**The largest cross-language trap in this contract** is that .NET's `` is Unicode-aware and
+**The largest cross-language trap in this contract** is that .NET's `\b` is Unicode-aware and
 JavaScript's, without the `u` flag, is ASCII. `парольtoken abcdefghijklmnop` is a string where the
 server would leave a bearer token the extension removes. The port answers it with an explicit ASCII
-lookbehind, the corpus wraps every shape in Russian and German prose, and planting `` back turns
+lookbehind, the corpus wraps every shape in Russian and German prose, and planting `\b` back turns
 the harness red on exactly that pair.
 
 ### The vectors gained a third path: where the notices file is (2026-09-21)

@@ -219,7 +219,7 @@ The harness therefore serves selectors **by name** and throws on one it has not 
 rule `chatPage.test.ts` adopted in #313.
 
 **And a lesson that cost three attempts:** a heredoc ate the backslash of a regex escape three times
-in one sitting — `` arrived as an actual BACKSPACE character inside a regex literal, which matched
+in one sitting — `\b` arrived as an actual BACKSPACE character inside a regex literal, which matched
 nothing and made an empty parse read as a page with no headers. The header test now asserts its own
 parse found something before it asserts anything about what it found.
 
