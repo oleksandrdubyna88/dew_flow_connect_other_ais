@@ -13,6 +13,10 @@ import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 import { FilterPress, ReviewPair, reviewPageHtml } from './bugzReviewPage';
 import { FileAtRead, RevisionDocument } from './openAtRevision';
 import { TreeRead } from './reviewTree';
+import { CallEnd, Calls } from './callHierarchy';
+import { AskedAbout } from './callHierarchyAsk';
+import { calledOut } from './callsBlock';
+import { CallsPanel } from './callsPanel';
 import { askedOnce, MarkReader, readGitMark } from './projectIdentity';
 import { RealRead, realView } from './realMethodView';
 import { RevisionPanel } from './revisionPanel';
@@ -63,6 +67,12 @@ export interface ReviewHooks {
   /** The open workspace folders, as OS paths — what the current-file guard is judged against. */
   readonly folders: () => readonly string[];
 
+  /** Who calls a row's method, and what it calls — the editor's own answer, about the CURRENT checkout. */
+  readonly askCalls: (about: AskedAbout) => Promise<Calls>;
+
+  /** Go to one end of a call. */
+  readonly openCall: (end: CallEnd) => Promise<void>;
+
   /** One pair's repository checked out at its commit — the server, never git from here. */
   readonly readTreeAt: (asked: AskedTree) => Promise<TreeRead>;
 
@@ -104,7 +114,8 @@ type ReviewMessage =
   /** An open row wants its real method; the generation is echoed back so a late answer can be told stale. */
   | { readonly type: 'fetchReal'; readonly id: number; readonly generation: string }
   /** A row's file was asked for — at the commit the reviewers read, or as it is now. */
-  | { readonly type: 'openAt' | 'openCurrent' | 'openTree'; readonly id: number };
+  | { readonly type: 'openAt' | 'openCurrent' | 'openTree' | 'calls'; readonly id: number }
+  | { readonly type: 'openCall'; readonly at: string };
 
 /**
  * What an in-flight real-method read is keyed by: the row AND the two commits it is about.
@@ -159,9 +170,13 @@ function asReviewMessage(raw: unknown): ReviewMessage | undefined {
       return Number.isInteger(Number(m['id'])) && Number(m['id']) >= 0 && typeof m['generation'] === 'string'
         ? { type: 'fetchReal', id: Number(m['id']), generation: m['generation'] }
         : undefined;
+    case 'openCall':
+      return typeof m['at'] === 'string' ? { type: 'openCall', at: m['at'] } : undefined;
+
     case 'openAt':
     case 'openCurrent':
     case 'openTree':
+    case 'calls':
       // The same rule as `fetchReal`: an id that is not a whole, non-negative number names no row.
       return Number.isInteger(Number(m['id'])) && Number(m['id']) >= 0
         ? { type: m['type'], id: Number(m['id']) }
@@ -296,7 +311,13 @@ export class BugzReviewPanel {
    */
   private readonly revisions: RevisionPanel;
 
+  /** Its own object, as the revisions are: its state is its own and the panel is at its ceiling. */
+  private readonly calls: CallsPanel;
+
   constructor(private readonly hooks: ReviewHooks) {
+    this.calls = new CallsPanel(
+      { ask: hooks.askCalls, open: hooks.openCall },
+      (items) => { void this.panel?.webview.postMessage({ type: 'calls', items }); });
     this.revisions = new RevisionPanel(hooks, (items) => {
       void this.panel?.webview.postMessage({ type: 'revisions', items });
     });
@@ -338,6 +359,7 @@ export class BugzReviewPanel {
         this.fetching = new Map<string, Promise<RealRead>>();
         // And nothing remembered about reaching the code: a checkout can have come back.
         this.revisions.forget();
+        this.calls.forget();
         this.panel = undefined;
       });
       this.panel.webview.onDidReceiveMessage((m: unknown) => this.received(m));
@@ -395,6 +417,18 @@ export class BugzReviewPanel {
 
       case 'openTree':
         void this.opened(m.id, (pair) => this.revisions.openTree(pair, this.held));
+        return;
+
+      case 'calls':
+        void this.opened(m.id, (pair) => this.calls.ask(pair, this.held));
+        return;
+
+      case 'openCall': {
+        const named = calledOut(m.at);
+        if (named !== undefined) {
+          void this.calls.open(named.id, named.which, named.at);
+        }
+      }
 
         return;
       default:
@@ -677,6 +711,7 @@ export class BugzReviewPanel {
       realText: this.realText,
       real: this.realFor(found.shown),
       revisions: this.revisions.stateFor(found.shown),
+      calls: new Map(found.shown.map((pair) => [pair.findingId, this.calls.blockFor(pair)] as const)),
       draw: this.draws,
       projects: found.projects,
       languages: found.languages,

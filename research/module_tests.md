@@ -1325,6 +1325,22 @@ ARTEFACT changes, which is the question a release actually asks.
 
 Whole executable after: 2140 tests, 2138 passed, 0 failed, 2 skipped.
 
+## Who calls this (2026-09-21, story 3.3)
+
+| Suite | What it covers |
+|---|---|
+| `callHierarchy.test.ts` (18) | the decisions as values: the column found on the line and never assumed; a name that is only part of another word rejected; exactly ONE match accepted so an overload pair is refused rather than guessed at; every state a sentence that prints no token; zero told from silence; distinct methods rather than call sites; an answer applied only for the ATTEMPT its row awaits. And the flow with the editor as a parameter: both directions independent, the symbol proved before either is asked, a missing file `gone`, an empty preparation `no-provider`, a provider that never answers bounded and `failed` |
+| `bugzReviewPage.test.ts` | the control pressed, by RUNNING the page: nothing asked at paint, the press naming its row |
+| `bugzReviewWiring.test.ts` | `case 'calls'` reaching the one method; an opened end going by INDEX rather than by a path the page carried; the block handed to every paint; the asking state before the first await; the attempt minted per press; a closed window forgetting; the provider wired to the real editor and to story 3.1's opener rather than a second one |
+
+**Teeth, and one place where there are none — said rather than implied.** Disabling the column search
+and the single-match rule turns EIGHT tests red, including the two that name them. But the test that
+presses the control and asserts the row is undisturbed stays GREEN when the branch's `return` is
+removed: the control lives in the detail row rather than inside the summary row's toggle, so there is
+nothing for the event to bubble into. Measured by taking the `return` out. It stays because it is the
+house pattern and because the day the control moves is the day it matters — the test documents the
+contract rather than guarding it.
+
 ## Story 3.3's remaining gate facts (2026-09-21)
 
 A second measurement scenario, `a call hierarchy needs the symbol COLUMN, and answers for a file

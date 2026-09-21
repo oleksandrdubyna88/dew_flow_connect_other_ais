@@ -8098,6 +8098,47 @@ which is three of the sixteen tests.
 at 696 of its cap. 64 is the only code either reader treats as "the server is too old", and a missing
 `--tree` (65) carries the server's own sentence instead - three plan findings asked for exactly this.
 
+### Who calls this, and what it calls (2026-09-21, story 3.3)
+
+An open row can be asked, and the answer is two counts with expandable lists of clickable paths.
+Nothing is asked at paint: a cold language service is 0.8–2.0 s against a warm 37 ms (measured), so
+two hundred rows would be two hundred cold preparations — the arithmetic story 3.1 refused for its own
+probe. The press says it is asking BEFORE the first await, as 3.1's and 3.2a's do.
+
+**Every count says which checkout it is about, in the sentence.** A call hierarchy is answered by the
+language server of the window that asks, over the folder that window has open — and a review row is
+about a commit orphaned 55.7 % of the time. So the control's title says *in the current checkout*
+before it is pressed, and every answer repeats it. Asking the review tree's own window is not
+possible: VS Code gives an extension no way to run a command in another window, which is the gap
+story 3.2c exists for. Reading the workspace's HEAD to compare was the alternative and would have
+meant parsing `.git/HEAD` and `packed-refs` by hand — re-implementing git to say what a label says.
+
+**Two guards against the failure this story is most afraid of**, and a measurement put the second one
+there. Asking at column 0 of `    public counted()` prepares **`Totals`**, the enclosing class, and
+would have counted a class's callers under a method's name. So the column is found from the line's
+text, AND the prepared item's name is checked against the one the row records. They were designed
+independently and the measurement showed them agreeing.
+
+**Four states, because each is a different next move.** `moved` (that line holds something else),
+`gone` (the file is not in this checkout), `no-provider` (nobody could be ASKED — never rendered as
+zero), `failed` (asked and did not answer; worth asking again). Zero callers is a fifth thing and
+reads as a plain number, which is the whole point of the gate measurement.
+
+**An ATTEMPT, not a generation.** A request can time out, a person can press again inside the same
+draw, and the first promise can still resolve. Every press mints an attempt; only the one a row is
+still waiting for may be applied. Collapsing a row forgets its press — the provider cannot be told to
+stop, but the answer can be refused.
+
+**Nothing is reused to avoid a call.** The last answer is kept so a redraw does not lose it; a press
+always asks again. That is what keeps a number from surviving a branch switch without this side
+having to learn what the workspace's HEAD is.
+
+**`reviewPageStyle.ts` was extracted** to make room: `bugzReviewPage.ts` was at 791 of the 800-line
+cap and this story needed a dozen lines in it. Ninety-four lines of CSS that no logic reads were the
+cheapest honest move, and `notificationsPageStyle.ts` is the house precedent. It is a FUNCTION rather
+than a constant because the sheet composes four other modules' CSS and two of them take the zoom and
+tone a person set — the constant version was the first attempt and the compiler caught it at once.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs
