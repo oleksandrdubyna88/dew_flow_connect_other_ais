@@ -410,7 +410,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
 
             await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
 
-            var argvs = Directory.GetFiles(record, "*.argv").Select(f => File.ReadAllText(f).Split(' ')).ToList();
+            var argvs = Directory.GetFiles(record, "*.argv").Select(f => File.ReadAllText(f).Split((char)0)).ToList();
             argvs.Should().HaveCount(3, "three roles dealt across two vendors, one each");
             argvs.Select(a => a[^1]).Distinct().Should().HaveCount(3, "and no prompt asked twice");
         }
@@ -432,7 +432,7 @@ public sealed class PanelServiceTests : IAsyncLifetime
             await service.ReviewPlanAsync(_repo, "feature", "the plan");
 
             var prompts = Directory.GetFiles(record, "*.argv")
-                .Select(f => File.ReadAllText(f).Split(' ')[^1])
+                .Select(f => File.ReadAllText(f).Split((char)0)[^1])
                 .ToList();
             prompts.Should().HaveCount(2, "one per vendor");
             prompts.Distinct().Should().HaveCount(2,
