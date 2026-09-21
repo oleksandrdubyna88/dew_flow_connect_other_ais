@@ -272,6 +272,20 @@ which is the order this section asked for.
 
    **The version jumped 0.1.2 → 0.2.0, not 0.1.3**, because `feat:` commits were in the range. Correct
    behaviour, and worth knowing before it surprises somebody mid-release.
+
+   **AND THE COMMIT TYPE IS THE VERSION — a rule steps 3 and 4 will meet twice more.** The very
+   commit that turned this trigger on was written `feat(ci): release-please runs on main`, and the
+   first automatic run duly proposed **0.3.0 for a change that touched nothing but `.github/`**.
+   Release-please reads the type literally: `feat` is a product feature, so it is a minor release.
+   The repository's own convention already lists `ci:` — which release-please does not release at
+   all — and `ci(...)` is what a workflow-only change must use. `feat(ci):` is a scope pretending to
+   be a type, and it is the easiest mistake to make in exactly this epic, because the whole epic
+   edits workflows.
+
+   **What to do with such a release pull request: leave it open.** Closing it is futile — the commit
+   stays in the range and the next push recreates it. Left alone it simply accumulates, and the next
+   real change ships under that version, which makes it meaningful again. Merging it publishes a
+   version nothing stands behind.
 3. **`creds_for_devs`** — four components, `include-component-in-tag: true`, a generated changelog
    where none exists.
 4. **`connect_other_ais`** — option A. `RELEASES.md` generated, `src_vs_code/CHANGELOG.md` left
