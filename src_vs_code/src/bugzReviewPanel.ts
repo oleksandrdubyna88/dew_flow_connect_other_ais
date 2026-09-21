@@ -4,13 +4,14 @@ import * as vscode from 'vscode';
 
 import { asText } from './asText';
 import { notify } from './notify';
-import { AskedRevision, KeepWrite, PairsRead } from './roundsDbRead';
+import { AskedRevision, AskedTree, KeepWrite, PairsRead } from './roundsDbRead';
 import { settingWritten } from './settingWrite';
 import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 import { FilterPress, ReviewPair, reviewPageHtml } from './bugzReviewPage';
 import { FileAtRead, RevisionDocument } from './openAtRevision';
+import { TreeRead } from './reviewTree';
 import { askedOnce, MarkReader, readGitMark } from './projectIdentity';
 import { RealRead, realView } from './realMethodView';
 import { RevisionPanel } from './revisionPanel';
@@ -61,6 +62,12 @@ export interface ReviewHooks {
   /** The open workspace folders, as OS paths — what the current-file guard is judged against. */
   readonly folders: () => readonly string[];
 
+  /** One pair's repository checked out at its commit — the server, never git from here. */
+  readonly readTreeAt: (asked: AskedTree) => Promise<TreeRead>;
+
+  /** Opens a checkout as a folder, in a window of its own, leaving this page where it is. */
+  readonly openFolder: (path: string) => Promise<void>;
+
   /**
    * Something was decided.
    *
@@ -96,7 +103,7 @@ type ReviewMessage =
   /** An open row wants its real method; the generation is echoed back so a late answer can be told stale. */
   | { readonly type: 'fetchReal'; readonly id: number; readonly generation: string }
   /** A row's file was asked for — at the commit the reviewers read, or as it is now. */
-  | { readonly type: 'openAt' | 'openCurrent'; readonly id: number };
+  | { readonly type: 'openAt' | 'openCurrent' | 'openTree'; readonly id: number };
 
 /**
  * What an in-flight real-method read is keyed by: the row AND the two commits it is about.
@@ -153,6 +160,7 @@ function asReviewMessage(raw: unknown): ReviewMessage | undefined {
         : undefined;
     case 'openAt':
     case 'openCurrent':
+    case 'openTree':
       // The same rule as `fetchReal`: an id that is not a whole, non-negative number names no row.
       return Number.isInteger(Number(m['id'])) && Number(m['id']) >= 0
         ? { type: m['type'], id: Number(m['id']) }
@@ -382,6 +390,10 @@ export class BugzReviewPanel {
         return;
       case 'openCurrent':
         void this.opened(m.id, (pair) => this.revisions.openCurrent(pair, this.held));
+        return;
+
+      case 'openTree':
+        void this.opened(m.id, (pair) => this.revisions.openTree(pair, this.held));
 
         return;
       default:

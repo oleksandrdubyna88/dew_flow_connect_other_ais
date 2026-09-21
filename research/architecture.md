@@ -38,7 +38,7 @@ C4Container
   Rel(ext, codex, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, gem, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, mcp, "writes the Team server token file the shim reads")
-  Rel(ext, mcp, "one-shot spawns: --providers, --log, --findings, --findings-many, --pairs-json, --real-method, --file-at")
+  Rel(ext, mcp, "one-shot spawns: --providers, --log, --findings, --findings-many, --pairs-json, --real-method, --file-at, --tree-at")
   Rel(mcp, srv, "a review, when the reviewer is a Team server's")
   Rel(mcp, srv, "and first: which review roles do you run?")
   Rel(ext, srv, "the same question, for the panel's own picture")

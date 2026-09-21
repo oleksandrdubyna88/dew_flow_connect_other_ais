@@ -7999,6 +7999,55 @@ pruned commit, a moved file) is learned on that row's press and remembered — t
 one-process-per-repository way to learn 200 rows' commit status without a second mode, and the
 brief settled on the middle path rather than that.
 
+### A third way out: the commit checked out in a window of its own (2026-09-21, story 3.2a)
+
+The **Open** line now carries a third button, *Check out aaaa111 in a new window*, and it is last and
+says what it costs: the other two are instant and this one is a real checkout that also fetches the
+submodules the first time. What it buys is the code AROUND the finding — imports resolved,
+go-to-definition, find-references — none of which a single read-only document can have, and which for
+an orphaned commit has no other route at all.
+
+**The press asks the server and opens a folder; it spawns no git.** `roundsDbRead.readTreeAt` runs
+`coai-mcp --tree-at --id <findingId>` (`research/module_server.md`, *The whole repository at that
+commit*) with a ten-minute cap rather than the read cap, because a checkout of a large repository is
+minutes. `RevisionPanel.openTree` says the in-flight state BEFORE the first await — CLAUDE.md §8, and
+here the strongest case for it in the product, since a minute of silence is exactly long enough for a
+person to conclude nothing happened — and a `finally` replaces it however the press ends. A second
+press while one is out is refused by this side rather than sent.
+
+**`forceNewWindow: true`, and the wiring test pins the whole option object.** Without it
+`vscode.openFolder` REPLACES the current window, so a person pressing a button on a row would watch
+the review page they were reading disappear; two plan reviewers raised it independently. The
+assertion matches `executeCommand('vscode.openFolder', vscode.Uri.file(path), { forceNewWindow: true })`
+entire, because a match on the call alone would survive the option being dropped — which is the only
+way this can break. Shown red by removing the option.
+
+**Two windows on one folder — what was actually verified.** The split proposed this rested on
+"`openFolder` focuses a folder that is already open". That could NOT be confirmed: `forceNewWindow`
+is a command argument and is not in `vscode.d.ts` at all, and in the shipped `main.js` its five
+occurrences are call sites passing it through to `windowsMainService.open`, the decision minified past
+reading. What IS measured in the same VS Code the host tests run (1.138.0):
+`duplicateWorkspaceInNewWindow` exists, in `vs/workbench/workbench.desktop.main.js` and in
+`nls.keys.json`. So a folder open in two windows is an ordinary state VS Code ships a command to
+produce, not one this product invents — the finding is answered whichever way the flag behaves, and
+the module says so rather than resting on the premise nobody had checked.
+
+**The panel caches no path.** Every press asks the server, which costs one record read on a reuse.
+That is what keeps story 3.2b able to remove a tree without leaving this page pointing at a folder
+that is gone.
+
+**What a row says is never the reason word.** `reviewTree.ts` maps each to a sentence that ends where
+the person's next move begins — a cap they can make room in, a press that will finish, a half-made
+checkout to look at by hand — and the live-contract suite asserts the reason UNION against the C#
+constants, following the alias chain `ReviewTreeReason` → `RealMethodReason` → `SkipReason` → literal.
+That is the server-to-extension contract the plan round said nothing exercised: a word added on one
+side and not the other is now a red test rather than a row that says nothing.
+
+**What is deliberately not here.** The new window opens at the tree ROOT: VS Code has no API to open
+a FILE in another window, and spawning the `code` CLI for `--goto` would be this extension's first
+spawn of a foreign executable, for a convenience. Removing a tree is story 3.2b; landing the new
+window on the method is story 3.2c.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs

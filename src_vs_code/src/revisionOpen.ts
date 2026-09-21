@@ -77,6 +77,26 @@ export async function showCurrentFile(file: string, line: number): Promise<void>
   await vscode.window.showTextDocument(vscode.Uri.file(file), { ...selectionAt(line) });
 }
 
+/**
+ * Opens a review checkout as a folder, in a window of its own.
+ *
+ * <p><b>`forceNewWindow` is the whole of it.</b> Without the option `vscode.openFolder` REPLACES the
+ * current window, which closes the review panel the person was reading — they pressed a button on a
+ * row and the list it was on disappeared. Two plan reviewers raised it independently, and the
+ * wiring test pins the whole option object rather than the call, because the defect is precisely
+ * the missing option.</p>
+ *
+ * <p><b>Two windows on one folder.</b> Whether VS Code opens a second window on a folder that is
+ * already open, or focuses the existing one, was not verifiable from the shipped source — the flag
+ * is a command argument, not typed API. It does not matter here: `duplicateWorkspaceInNewWindow` is
+ * a command VS Code ships, so a folder open in two windows is an ordinary state a person can ask
+ * for, not one this product would be inventing. Recorded rather than assumed, because the earlier
+ * reasoning rested on a premise nobody had checked.</p>
+ */
+export async function openTreeFolder(path: string): Promise<void> {
+  await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(path), { forceNewWindow: true });
+}
+
 /** The open workspace folders as OS paths — `fsPath`, never `path`, because the guard compares against `realpath`. */
 export function workspaceFolderPaths(): readonly string[] {
   return (vscode.workspace.workspaceFolders ?? []).map((folder) => folder.uri.fsPath);

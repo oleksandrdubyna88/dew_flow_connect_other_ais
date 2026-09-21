@@ -288,6 +288,56 @@ and two spellings of one repository — with the expected mapping written down f
 > 3.2. Records: `research/module_server.md`, `module_extension.md`, `module_tests.md`;
 > `.agents/PROJECT.md` names the mode.
 
+> **Story 3.2 was SPLIT into three on 2026-09-21, and 3.2a shipped the same day.** Its plan round
+> came back `good_enough` with 17 findings, 15 gating and none of them false, converging on one
+> thing: the LIFETIME of a durable checkout is the whole risk, and it must be decided before any code.
+> The split (`story32-split.md`, done by Fable at max as the gate's commands required) is **3.2a** a
+> tree exists and opens in a new window · **3.2b** a tree can be removed, one at a time, never with
+> work in it · **3.2c** the new window lands on the method. The dangerous half is 3.2b and it gets its
+> own branch and its own review round, because anything that can REMOVE a checkout is where somebody's
+> work is at risk.
+>
+> Four decisions the round left open, made in the split rather than left to the implementer: the tree
+> lives until a person removes it (**no** LRU, no disposal sweep, no stale rule — every automatic
+> remover can take a tree somebody is reading); the cap **refuses** at creation and names what is
+> held, never evicts; identity is `(git common dir, full sha)` because a worktree is registered in
+> exactly one object store; submodules **are** populated, and an empty mount is named on the row.
+>
+> Three things measured against real git 2.55 before any of it was built, two of which changed the
+> design:
+>
+> 1. **"Never pass `--force` to a tree somebody is reading" is impossible as written** — a tree with a
+>    POPULATED submodule refuses a plain `worktree remove` (exit 128, *working trees containing
+>    submodules cannot be moved or removed*); unpopulated, it exits 0. So 3.2b's safety rests on our
+>    own inspection of the tree, never on withholding the flag. This was a finding I had ACCEPTED in
+>    the plan round, and it was not buildable as phrased.
+> 2. **`--lock` defeats a single `--force`** (exit 128, *cannot remove a locked working tree*) — which
+>    is exactly the call `WorktreeManager.RemoveAsync` makes — but git's own message names the
+>    override, `remove -f -f`. A guard, not a vault, and the docblock says so.
+> 3. **A worktree HEAD is a gc root**: after `reflog expire --expire=now --all` and `gc --prune=now`
+>    an orphaned commit checked out in a tree is still there. A review tree PRESERVES the 55.7 %.
+>
+> And one the code settled: `PruneOursAsync`'s second half is a `Directory.Delete` by prefix that asks
+> git no permission, so **no lock can stop it** — only a different prefix, and the machine-local root
+> is the second, independent guard. Both are asserted separately, and the prefix one was shown red by
+> putting the prefix back: *Expected Directory.Exists(made.Path) to be True ... but found False*.
+>
+> **What 3.2a shipped:** `--tree-at` through the same `AnswerOnePairAsync` door (`ReviewTree`,
+> `ReviewWorktrees`, `ReviewTreeRecords`; record-written-last as the readiness signal, git's own
+> `mkdir` as the mutex, cap 10 refusing with every held tree named), and on the page a third button
+> *Check out &lt;sha&gt; in a new window* — `forceNewWindow: true` pinned as the WHOLE option object,
+> the in-flight state said before the first await, the reason union asserted against the C# constants.
+> `StoredPair`, `Sendable()`, `UploadRun.Wire`, `OnlyThreeFieldsLeaveTests` and `NormalizeAnswer`
+> untouched; `WorktreeManager` and `PruneOursAsync` untouched. Records: `research/module_server.md`,
+> `module_extension.md`, `module_tests.md`; `.agents/PROJECT.md` names the mode.
+>
+> **One thing 3.2a's PROJECT.md edit caught, which is worth more than the story:** a seven-line
+> paragraph pushed the EIGHTH tier rule out of every reviewer's prompt — `StageRulesTests`
+> `TheRotatedTail_CurrentlyFitsAtMostOneRule` went red naming seven. The canary's own docblock claims
+> 1 145 bytes of headroom on CRLF; empirically fewer than ~320 bytes of PROJECT.md prose fit today.
+> The paragraph was cut to two lines. **The stale headroom figure is not re-baselined here** and is
+> the first thing the next PROJECT.md edit will hit.
+
 ### The revision rule, which is what makes the links honest
 
 The pairs describe HISTORICAL code — the round's `head_sha`. A link, a complexity number and a call
@@ -497,7 +547,7 @@ above rather than accepting them, and three of its findings changed the plan:
 |---|---|---|---|
 | **1 — the page can be read** (no server change, no new data) | 1.1 collapse + zoom + tone · 1.2 highlighting, after the measurement · 1.3 the diff | Opus | **all three shipped** — `codeHighlight.ts` and `lineDiff.ts` are on `main`. The row said *1.1 shipped* until 2026-09-18, which is a status line that stopped matching the repository rather than work that stopped. |
 | **2 — the page says what it is showing** (one wider SELECT, then the renders) | 2.1 the projection + cause, fix, hash, path, complexity · 2.2 project and language tabs · 2.3 the real method, un-anonymised, and its class | 2.1 and 2.3 **Fable max**, 2.2 Opus | **2.1 built 2026-09-18** (through both gate rounds; the populated live contract closed after the code round) · **2.2 built 2026-09-18** (the identity rule rewritten against the live table; `tabStrip` extracted and `rolesPage` converted) · **2.3 built 2026-09-18** (`--real-method`, a toggle over what the rows already hold; the rename recovery removed after real git showed the collector cannot store the row it would serve) |
-| **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | **3.1 built 2026-09-18** (`--file-at` server-side, a read-only document of the product's own scheme, the current file behind the workspace guard, one probe per repository remembered; the plan's sha regex and canonical-path guard for the historical read both dropped after reading the code — see the story note above) · 3.2, 3.3 not started |
+| **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree, SPLIT into 3.2a/3.2b/3.2c · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | **3.1 built 2026-09-18** ; **3.2a built 2026-09-21** (Opus, not the Fable the split assigned — Fable was rate-limited and a four-hour wait was worse than the substitution; said here rather than implied). **3.2b and 3.2c not started**; 3.3 not started. Earlier note: (`--file-at` server-side, a read-only document of the product's own scheme, the current file behind the workspace guard, one probe per repository remembered; the plan's sha regex and canonical-path guard for the historical read both dropped after reading the code — see the story note above) · 3.2, 3.3 not started |
 | **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2 the client sends one | **Fable max** | **unblocked 2026-09-18, not started.** Both decisions were answered by the operator and both are recorded in this document: a person's comment is PUBLIC, so no PII scanner and no local-only fallback; and the ranking pass MAY use a remote model. This row still read *blocked on two decisions* while the sections below already carried the answers. |
 
 ### Carried out of story 1.1's code round, rejected there and owed somewhere

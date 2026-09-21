@@ -86,6 +86,14 @@ internal static class Program
         /// </remarks>
         FileAt,
 
+        /// <summary>
+        /// The whole repository at the commit the reviewers read, checked out where a person can open
+        /// it. Same door as <see cref="FileAt"/> and the same rule about coordinates; what differs is
+        /// that this one CREATES something durable, which is why it is capped and never evicts.
+        /// (Story 3.2a of the review-page plan.)
+        /// </summary>
+        TreeAt,
+
         /// <summary>An argument this binary does not take.</summary>
         Usage,
 
@@ -205,6 +213,7 @@ internal static class Program
                 "--pairs-keep" => Startup.PairsKeep,
                 "--real-method" => Startup.RealMethod,
                 "--file-at" => Startup.FileAt,
+                "--tree-at" => Startup.TreeAt,
                 "--upload-pairs" => Startup.UploadPairs,
                 "--requeue-refused" => Startup.RequeueRefused,
                 "--providers" => Startup.Providers,
@@ -266,6 +275,9 @@ internal static class Program
 
             case Startup.FileAt:
                 return await FileAtAsync(args);
+
+            case Startup.TreeAt:
+                return await TreeAtAsync(args);
 
             case Startup.UploadPairs:
                 return await UploadPairsAsync(args);
@@ -769,6 +781,22 @@ internal static class Program
     internal static Task<int> FileAtAsync(string[] args) =>
         AnswerOnePairAsync("--file-at", args, FileAtOfAsync, Server.ServerJsonContext.Default.FileAtRevision);
 
+    /// <summary>One pair's whole repository, checked out at the commit the reviewers read, on stdout.</summary>
+    /// <remarks>
+    /// <para>The third mode through <see cref="AnswerOnePairAsync"/>, and it obeys the same two rules
+    /// as the other two: the coordinates come from the ROW (no <c>--repo</c>, no <c>--sha</c>), and
+    /// every domain outcome is data at exit 0 — a checkout gone, a commit pruned, a cap reached,
+    /// another press already building this tree. 65 for a bad <c>--id</c>, never 64; 74 when the
+    /// database will not open.</para>
+    /// <para>What makes it different from its two siblings is that it CREATES something that outlives
+    /// the process, so the two things that could go wrong are bounded here rather than left to a
+    /// caller: the cap refuses rather than evicting, and the tree is made under a root and a prefix
+    /// the gate's own worktree pruning cannot match. See <see cref="Runners.Worktrees.ReviewWorktrees"/>.</para>
+    /// <para>Nothing is written to the rounds database on this path — not a row, not a column.</para>
+    /// </remarks>
+    internal static Task<int> TreeAtAsync(string[] args) =>
+        AnswerOnePairAsync("--tree-at", args, TreeAtOfAsync, Server.ServerJsonContext.Default.ReviewTree);
+
     /// <summary>
     /// The shape every one-pair mode shares: <c>--id</c> to a row, the row to an answer, the answer to
     /// stdout — and the two exit codes that are not answers.
@@ -831,6 +859,28 @@ internal static class Program
 
         return await reader.ReadAsync(
             findingId, new Runners.Collecting.FilePlace(pair.RepoPath, pair.HeadSha, pair.File));
+    }
+
+    /// <summary>The pair's repository checked out at its commit — or the answer that there is no such pair.</summary>
+    private static async Task<Core.Collecting.ReviewTree> TreeAtOfAsync(long findingId, Store.ReviewPair? pair)
+    {
+        if (pair is null)
+        {
+            return new Core.Collecting.ReviewTree
+            {
+                FindingId = findingId,
+                Reason = Core.Collecting.ReviewTreeReason.PairNotFound,
+            };
+        }
+
+        var launcher = new ProcessLauncher();
+        var trees = new Runners.Worktrees.ReviewWorktrees(
+            launcher,
+            new Runners.Collecting.GitHistory(launcher),
+            Runners.Worktrees.ReviewWorktrees.DefaultRoot);
+
+        return await trees.PrepareAsync(
+            findingId, new Runners.Worktrees.TreePlace(pair.RepoPath, pair.HeadSha));
     }
 
     /// <summary>The `--id` a caller named, as a finding id — or not, when it named none or not a number.</summary>
