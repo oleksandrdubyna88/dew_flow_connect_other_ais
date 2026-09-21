@@ -109,7 +109,11 @@ test('those arguments really do ride out three 504s and then succeed', async () 
 test('every job in every workflow declares a timeout', () => {
   // GitHub's default is 360 minutes. The suites here take two to four, so a hung test burns six
   // hours of a runner while the pull request looks like it is still working.
+  // The scan counts what it FOUND as well as what it is missing, because a structural test that
+  // matches nothing passes forever - rename `runs-on` or change the indentation and this would go
+  // green over a repository with no timeouts at all. (Code round, codex.)
   const missing: string[] = [];
+  let scanned = 0;
 
   for (const name of fs.readdirSync(workflows).filter((one) => one.endsWith('.yml'))) {
     const lines = read(name).split('\n');
@@ -119,6 +123,7 @@ test('every job in every workflow declares a timeout', () => {
       }
       const job = lines.slice(at + 1).findIndex((one) => /^ {2}\S/u.test(one) && one.trim().length > 0);
       const block = lines.slice(at - 8 < 0 ? 0 : at - 8, job < 0 ? lines.length : at + 1 + job);
+      scanned += 1;
       if (!block.some((one) => /^ {4}timeout-minutes: /u.test(one))) {
         missing.push(`${name}:${at + 1}`);
       }
@@ -126,4 +131,5 @@ test('every job in every workflow declares a timeout', () => {
   }
 
   assert.deepEqual(missing, [], 'these jobs would run for GitHub’s default 360 minutes if they hung');
+  assert.ok(scanned >= 20, `the scan found only ${scanned} jobs - it has stopped matching them`);
 });

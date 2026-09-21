@@ -207,8 +207,13 @@ test('a revision answer is remembered, posted to the page and fanned out per rep
   assert.match(opening, /this\.tell\(affectedBy\(this\.memory, pair, rows\), rows\);/u,
     'a checkout that is gone must reach every row of that repository, not only the one pressed');
   assert.doesNotMatch(opening, /webview\.html\s*=/u, 'an answer fills containers by posting; it never redraws');
-  assert.match(code('bugzReviewPanel.ts'), /type: 'revisions', items/u,
+  // The message type comes from `livePatch.ts` on BOTH sides now - the panel posts it and the page
+  // script dispatches on it - so a rename changes them together instead of silently dropping the
+  // patch. Pinned as the whole condition: the constant AND the payload. (Code round 2, codex.)
+  assert.match(code('bugzReviewPanel.ts'), /type: REVISIONS\.message, items/u,
     'the page is told which rows changed and what they now say, from the one place holding a webview');
+  assert.match(code('bugzReviewPanel.ts'), /type: CALLS\.message, items/u,
+    'and the calls channel posts from the same owner, or a rename breaks one side only');
   assert.doesNotMatch(code('revisionPanel.ts'), /webview/u,
     'and the half that decides holds none, so there is still one door to VS Code');
 });

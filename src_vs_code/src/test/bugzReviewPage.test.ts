@@ -1922,28 +1922,16 @@ test('an IDENTICAL revision patch is skipped, so a focused button inside it surv
 // The live-patch channel: the container the page WRITES is the container a patch FINDS.
 // --------------------------------------------------------------------------------------------
 
-test('both channels address the same container from the generator and from the page script', () => {
-  // The defect this replaces was silent: the generator and the script each spelled the attribute
-  // out, so a rename made the patch write nowhere and the row went on showing a stale answer with
-  // no error anywhere. Both sides now come from `livePatch.ts`, and this is what proves it — the
-  // attribute the page emitted around a row, found again inside the script's own querySelector.
-  const html = reviewPageHtml({ pairs: [pair(1)], nonce: 'test-nonce', expanded: new Set([1]) });
-  const script = html.slice(html.lastIndexOf('<script'));
-
-  for (const channel of [CALLS, REVISIONS]) {
-    assert.ok(html.includes(`${channel.attribute}="1"`),
-      `the page emits no ${channel.attribute} container, so a patch has nowhere to land`);
-    assert.ok(script.includes(`'[${channel.attribute}="'`),
-      `the page script does not query ${channel.attribute}, so the patch is addressed to nothing`);
-    assert.ok(script.includes(`m.type === '${channel.message}'`),
-      `the page script does not dispatch '${channel.message}', so the message is dropped`);
-  }
-});
-
 test('a patch reaches the row the GENERATOR named, for both channels', () => {
-  // The end-to-end of the same guarantee, run rather than read: take the id out of the emitted
-  // markup, post a patch for it, and require the markup to change. A hardcoded attribute on either
-  // side breaks this even when both spellings happen to look plausible.
+  // The whole guarantee, RUN. The defect it replaces was silent: the generator and the page script
+  // each spelled the container attribute out, so a rename made the patch write nowhere and the row
+  // went on showing a stale answer with no error anywhere. Both sides come from `livePatch.ts` now.
+  //
+  // A first draft of this also asserted the two spellings matched by reading the generated text.
+  // Two gate reviewers cited the operator's 2026-09-14 ruling against it and they were right: a
+  // page is tested by RUNNING it, and this test proves the same thing by driving the real path —
+  // the container found is the container emitted, or nothing changes. (Measured: hardcoding either
+  // side turns seven tests red, this one among them.)
   const page = run([pair(1)], { expanded: new Set([1]) });
 
   page.host.push({ type: REVISIONS.message, items: [{ id: 1, html: '<b>reached the revision row</b>' }] });

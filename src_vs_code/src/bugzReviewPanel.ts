@@ -17,6 +17,7 @@ import { TreeRead } from './reviewTree';
 import { CallEnd, Calls } from './callHierarchy';
 import { AskedAbout } from './callHierarchyAsk';
 import { calledOut } from './callsBlock';
+import { CALLS, REVISIONS } from './livePatch';
 import { CallsPanel } from './callsPanel';
 import { askedOnce, MarkReader, readGitMark } from './projectIdentity';
 import { RealRead, realView } from './realMethodView';
@@ -318,9 +319,9 @@ export class BugzReviewPanel {
   constructor(private readonly hooks: ReviewHooks) {
     this.calls = new CallsPanel(
       { ask: hooks.askCalls, open: hooks.openCall },
-      (items) => { void this.panel?.webview.postMessage({ type: 'calls', items }); });
+      (items) => { void this.panel?.webview.postMessage({ type: CALLS.message, items }); });
     this.revisions = new RevisionPanel(hooks, (items) => {
-      void this.panel?.webview.postMessage({ type: 'revisions', items });
+      void this.panel?.webview.postMessage({ type: REVISIONS.message, items });
     });
   }
 

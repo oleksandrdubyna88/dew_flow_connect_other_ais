@@ -16,6 +16,16 @@
 // one new, regenerate — the total FALLS while new code is suppressed. So the comparison is per
 // file and per rule, and it refuses a pair that is new as well as a pair that grew.
 //
+// WHAT THIS CANNOT SEE, said plainly because a guard that oversells itself is worse than none: the
+// suppressions format records a COUNT per file per rule, not the identity of each violation. So
+// fixing one violation in a file and adding a different one of the same rule in that same file
+// leaves the count equal and passes here. Two things narrow it. ESLint refuses a suppression that
+// no longer corresponds to a real violation — measured: fabricating one makes `eslint src` exit 2
+// with "There are suppressions left that do not occur anymore" — so entries cannot be invented. And
+// every file that gains a violation it did not have, or a second rule, or a higher count, is
+// refused here. What is left is one violation traded for another inside one already-listed file and
+// rule, which is visible in the diff of that file.
+//
 // THE BASE REVISION is the same problem `baseline-only-grows.mjs` solves and the same answer: a
 // shallow CI checkout has no `origin/main`, and once something has landed on main, main compares
 // equal to itself. CI pins `github.event.pull_request.base.sha`. A base with no suppressions file is
