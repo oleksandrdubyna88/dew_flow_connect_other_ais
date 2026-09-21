@@ -71,6 +71,12 @@ public enum RecordState
     Found,
 }
 
+/// <summary>One record FILE under the root: its name, its tree, and what reading it found.</summary>
+/// <param name="Name">The directory name, which is also the record's own file name without .json.</param>
+/// <param name="Tree">The checkout it describes, on disk.</param>
+/// <param name="Read">What reading the record found — which may be that it could not be read.</param>
+public sealed record HeldTreeFile(string Name, string Tree, RecordRead Read);
+
 /// <summary>A record read, with the state that says how much it is worth.</summary>
 /// <param name="State">Which of the three.</param>
 /// <param name="Record">The normalised record — meaningful only when <see cref="RecordState.Found"/>.</param>
@@ -142,12 +148,17 @@ public static class ReviewTreeRecords
     {
         var repository = raw.Repository ?? string.Empty;
         var sha = raw.Sha ?? string.Empty;
+        var repoPath = raw.RepoPath ?? string.Empty;
 
-        return repository.Length == 0 || sha.Length == 0
+        // `repoPath` is required, not merely kept: `worktree unlock` and `worktree remove` refuse to
+        // run from a bare `.git`, so a record without it describes a checkout NOTHING can ever
+        // remove — a cap slot spent forever. Handing it back as finished would be promising a
+        // lifecycle we could not carry out. (Code round, codex.)
+        return repository.Length == 0 || sha.Length == 0 || repoPath.Length == 0
             ? RecordRead.Unreadable
             : new RecordRead(RecordState.Found, new HeldRecord(
                 repository,
-                raw.RepoPath ?? string.Empty,
+                repoPath,
                 sha,
                 raw.Created ?? string.Empty,
                 raw.EmptyMounts ?? []));
@@ -166,11 +177,16 @@ public static class ReviewTreeRecords
     /// Every record under the root whose TREE is still on disk, oldest first — what the budget counts.
     /// </summary>
     /// <remarks>
-    /// A record whose directory somebody deleted by hand is not a tree; counting it would wedge a cap
-    /// slot forever against a checkout that no longer exists. Unreadable records ARE counted, because
-    /// a record we cannot read beside a directory that is there is a tree we must assume is somebody's.
+    /// <para>A record whose directory somebody deleted by hand is not a tree; counting it would wedge
+    /// a cap slot forever against a checkout that no longer exists.</para>
+    /// <para><b>An UNREADABLE record is still counted.</b> A record we cannot read beside a directory
+    /// that is there is a tree we must assume is somebody's — it occupies disk and it occupies the
+    /// cap. This docblock said so while the code filtered it out, which is exactly the kind of
+    /// disagreement a reviewer reads a docblock to find. (Code round, gemini.)</para>
+    /// <para>The NAME travels with the record, because the path of an unreadable one cannot be
+    /// recomputed from fields it does not have.</para>
     /// </remarks>
-    public static IReadOnlyList<HeldRecord> All(string root)
+    public static IReadOnlyList<HeldTreeFile> All(string root)
     {
         if (!Directory.Exists(root))
         {
@@ -179,10 +195,10 @@ public static class ReviewTreeRecords
 
         return [.. Directory.EnumerateFiles(root, "*.json")
             .Where(file => Directory.Exists(TreeOf(file)))
-            .Select(Read)
-            .Where(read => read.State == RecordState.Found)
-            .Select(read => read.Record)
-            .OrderBy(r => r.Created, StringComparer.Ordinal)];
+            .Select(file => new HeldTreeFile(
+                Path.GetFileNameWithoutExtension(file), TreeOf(file), Read(file)))
+            .Where(held => held.Read.State != RecordState.Absent)
+            .OrderBy(held => held.Read.Record.Created, StringComparer.Ordinal)];
     }
 
     /// <summary>The tree a record file describes: the same path without the <c>.json</c>.</summary>

@@ -1326,7 +1326,7 @@ Whole executable after: 2140 tests, 2138 passed, 0 failed, 2 skipped.
 
 ## Story 3.2a's counts, and an unresolved suite failure (2026-09-21)
 
-Whole executable after the review tree and its code round: **2 415 tests, 0 failed**. Extension:
+Whole executable after the review tree and its code round: **2 420 tests, 0 failed**. Extension:
 **4 006 tests, 0 failed, 1 skipped**; `tsc` exit 0 on a clean `out/`, `eslint src` exit 0.
 
 **One whole-suite run reported a single failure and it is NOT explained.** It is recorded here

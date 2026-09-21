@@ -174,7 +174,8 @@ export class RevisionPanel {
     this.noteTree(pair.findingId, '');
     this.tell([pair.findingId], rows);
     try {
-      const read = await this.hooks.readTreeAt({ findingId: pair.findingId, headSha: pair.headSha });
+      const read = await this.hooks.readTreeAt(
+        { findingId: pair.findingId, headSha: pair.headSha, repoPath: pair.repoPath });
       this.noteTree(pair.findingId, await this.openedFrom(read));
     } catch (error_: unknown) {
       this.noteTree(pair.findingId, `the checkout could not be opened: ${asText(error_)}`);

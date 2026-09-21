@@ -679,7 +679,7 @@ test('the real --tree-at answer for a pair nobody has is a reason, not a failure
   { skip: built ? false : 'the server is not built' }, async () => {
     const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-treeat-'));
     try {
-      const read = await readTreeAt(server(), { findingId: 1, headSha: '' }, runIn(data));
+      const read = await readTreeAt(server(), { findingId: 1, headSha: '', repoPath: '' }, runIn(data));
 
       assert.ok(read.ok, `the reader refused the real binary's own output: ${read.ok ? '' : read.why}`);
       assert.equal(read.tree.findingId, 1);
@@ -701,7 +701,7 @@ test('a missing --id on --tree-at is 65 from the real binary, and is not read as
 
       assert.equal(code, 65, 'a request fault is 65; 64 would send the page down the too-old path');
 
-      const read = await readTreeAt(server(), { findingId: 1, headSha: '' }, async () => ({ code, output: '' }));
+      const read = await readTreeAt(server(), { findingId: 1, headSha: '', repoPath: '' }, async () => ({ code, output: '' }));
       assert.equal(read.ok, false);
       assert.equal(read.ok === false && read.tooOld, false, 'a request fault must never read as an old server');
     } finally {
