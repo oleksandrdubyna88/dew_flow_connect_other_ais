@@ -34,9 +34,11 @@ public sealed class NoSourceFileCarriesAControlByteTests
     /// </remarks>
     private static readonly byte[] Forbidden = [0x00, 0x7F];
 
-    public static TheoryData<string> EverySourceFile()
+    public static TheoryData<string> EverySourceFile() => FilesUnder(RepositoryRoot());
+
+    /// <summary>The same walk, over any root — which is what lets a test point it at a known file.</summary>
+    internal static TheoryData<string> FilesUnder(string root)
     {
-        var root = RepositoryRoot();
         var data = new TheoryData<string>();
         foreach (var file in Directory.EnumerateFiles(root, "*.*", SearchOption.AllDirectories))
         {
@@ -54,12 +56,15 @@ public sealed class NoSourceFileCarriesAControlByteTests
         return data;
     }
 
+    /// <summary>The check itself, over any root, so the companion below runs the real one.</summary>
+    internal static IReadOnlyList<byte> ForbiddenBytesIn(string root, string relative) =>
+        [.. Forbidden.Where(File.ReadAllBytes(Path.Combine(root, relative)).Contains)];
+
     [Theory]
     [MemberData(nameof(EverySourceFile))]
     public void ASourceFile_CarriesNoRawNulOrDelByte(string relative)
     {
-        var bytes = File.ReadAllBytes(Path.Combine(RepositoryRoot(), relative));
-        var found = Forbidden.Where(bytes.Contains).ToArray();
+        var found = ForbiddenBytesIn(RepositoryRoot(), relative);
 
         found.Should().BeEmpty(
             "{0} carries a raw {1} byte. An escape was written as source and reached disk as the "
@@ -83,21 +88,34 @@ public sealed class NoSourceFileCarriesAControlByteTests
     }
 
     [Fact]
-    public void TheScanCanSeeAControlByte_WhenThereIsOneToSee()
+    public void TheScanItselfFindsAPlantedByte_NotACopyOfItsCheck()
     {
-        // And the other companion: the assertion itself is exercised against a file that DOES carry
-        // the byte, so a scan that reads nothing, or a `Contains` that never matches, is caught.
-        var planted = Path.Combine(Path.GetTempPath(), $"coai-control-byte-{Guid.NewGuid():N}.cs");
+        // THE COMPANION, and a reviewer was right that the first version was not one. It wrote a
+        // temporary file and then read it with its own `ReadAllBytes(...).Contains(...)` — a copy of
+        // the check, not the check — so the scan could have stopped enumerating files entirely and
+        // this would still have passed. It drives the REAL walk over a tree it plants now: the file
+        // has to be found by `FilesUnder` and refused by `ForbiddenBytesIn`, which are the two
+        // halves the theory above is made of.
+        var root = Directory.CreateTempSubdirectory("coai-control-byte-").FullName;
         try
         {
-            File.WriteAllBytes(planted, Encoding.UTF8.GetBytes("var previous = '").Concat([(byte)0x00]).ToArray());
+            var clean = Path.Combine(root, "Ordinary.cs");
+            var dirty = Path.Combine(root, "Planted.cs");
+            File.WriteAllText(clean, "var previous = 'a';");
+            File.WriteAllBytes(dirty, [.. Encoding.UTF8.GetBytes("var previous = '"), 0x00]);
 
-            File.ReadAllBytes(planted).Should().Contain((byte)0x00,
-                "the check the theory performs must be able to see the byte it is looking for");
+            var found = FilesUnder(root);
+
+            found.Should().HaveCount(2, "the walk must find both files it was given");
+            ForbiddenBytesIn(root, "Planted.cs").Should().Equal([(byte)0x00],
+                "the scan must SEE the byte in a file that carries one");
+            ForbiddenBytesIn(root, "Ordinary.cs").Should().BeEmpty(
+                "and must not report one in a file that does not — a check that answered yes to "
+                + "everything would pass the line above and mean nothing");
         }
         finally
         {
-            File.Delete(planted);
+            Directory.Delete(root, recursive: true);
         }
     }
 

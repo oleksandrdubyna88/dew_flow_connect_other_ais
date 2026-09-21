@@ -490,6 +490,37 @@ zero comes to. The panel's figure is an upper bound and says so — the server d
 reviewers a round actually schedules, which is fewer when a repository wrote no rules down and the
 Conventions reviewers are dropped.
 
+### The notice LINE is a contract, and the only honest check runs both halves (2026-09-21)
+
+The path is where the file is; this is what goes in it, and it is the sharper half. **Both containers
+REDACT** before anything reaches disk — `coai-mcp` writing `server-notices.jsonl`, the extension
+writing its own ledger — so a difference between the two redactors is not a failing test anywhere.
+It is a secret written by one and removed by the other.
+
+`notifications.ts` is the contract and `CoaiMcp.Core.Notices` is the port. What is compared, and how,
+was decided by running them rather than by reading them:
+
+| | Held to | Why not more |
+|---|---|---|
+| The redaction (`safeText`) | **byte for byte**, as UTF-16 code units | nothing weaker would catch the case that matters |
+| The line (`notificationLine`) | parses with the extension's OWN parser, agrees field by field, and is a FIXED POINT of it | byte equality is not achievable: `JSON.stringify` writes properties in the order the CALLER inserted them, so the order belongs to the call site, while C# has a fixed list |
+
+**The check is a third executable.** `NoticeTool` is built by the solution and published nowhere —
+the `FakeCli` pattern — and `npm run test:parity` drives it from the extension job, which is the only
+CI job where both runtimes exist: the .NET suites run before `npm ci`, so a C# test cannot spawn
+node.
+
+**What it found, twice, before anything shipped.** The harness's own transport turned the lone
+surrogate that `slice` leaves at a cut into U+FFFD, so the first run blamed the port for a defect in
+the check. And the first version demanded byte equality of the line and got 4408 identical code units
+in a different order, which is what established the row above.
+
+**The largest cross-language trap in this contract** is that .NET's `` is Unicode-aware and
+JavaScript's, without the `u` flag, is ASCII. `парольtoken abcdefghijklmnop` is a string where the
+server would leave a bearer token the extension removes. The port answers it with an explicit ASCII
+lookbehind, the corpus wraps every shape in Russian and German prose, and planting `` back turns
+the harness red on exactly that pair.
+
 ### The vectors gained a third path: where the notices file is (2026-09-21)
 
 `shared/data-side-vectors.json` already held `settingsPath` and `logsPath` per case, added on

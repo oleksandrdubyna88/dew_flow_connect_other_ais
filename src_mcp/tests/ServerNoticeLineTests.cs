@@ -42,7 +42,13 @@ public sealed class ServerNoticeLineTests
         Utc = "2026-09-16T17:05:39.812Z",
         Class = "stand-down",
         Source = value,
-        Code = value,
+        // NOT `value`, and the reason is worth the line. `Code` was in this sweep until
+        // 2026-09-21, when a code-round finding made it a catalog entry: the extension groups
+        // notices by `(code, subject)`, so a code carrying a round number or an error sentence
+        // mints a new key every time and nothing ever coalesces. A secret can no longer BE a code,
+        // which is stronger than redacting one — and the redaction of this field is still asserted,
+        // by `EveryCodeSurvivesTheRedactorUntouched` over the whole catalog.
+        Code = ServerNoticeCodes.Refused,
         Subject = value,
         Title = value,
         Detail = value,
@@ -81,7 +87,12 @@ public sealed class ServerNoticeLineTests
             .Where(p => p.PropertyType == typeof(string) && (string?)p.GetValue(record) is { } s && s.Contains(Secret))
             .Select(p => char.ToLowerInvariant(p.Name[0]) + p.Name[1..])
             .ToList();
-        strings.Should().HaveCountGreaterThanOrEqualTo(15, "the record must have string fields to sweep");
+        // FOURTEEN, and it was fifteen until 2026-09-21. `Code` left this sweep when a code-round
+        // finding made it a catalog entry — a secret cannot BE a code now, so it cannot be planted
+        // in one. The number is here at all because a sweep that found NO fields would pass
+        // silently; lowering it by the one field that deliberately left is not the same as
+        // lowering it because the sweep stopped working, which is why the reason is written down.
+        strings.Should().HaveCountGreaterThanOrEqualTo(14, "the record must have string fields to sweep");
         var back = Parsed(line);
         foreach (var field in strings.Append("whatTheServerSent"))
         {
@@ -241,7 +252,7 @@ public sealed class ServerNoticeLineTests
 
         title.Should().HaveLength(1012);
         title[999].Should().Be((char)0xD83D);
-        var line = ServerNoticeLine.Of(new() { Utc = "u", Class = "failure", Source = "s", Code = "c", Title = title });
+        var line = ServerNoticeLine.Of(new() { Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused, Title = title });
         line.Should().Contain("aaa\\ud83d" + TruncatedSuffix + "\"}");
     }
 
@@ -250,7 +261,7 @@ public sealed class ServerNoticeLineTests
     {
         var line = ServerNoticeLine.Of(new()
         {
-            Utc = "u", Class = "failure", Source = "s", Code = "c",
+            Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused,
             More = new Dictionary<string, object> { ["whatTheServerSent"] = "the call failed with api_key: abc123def456" },
         });
 
@@ -264,7 +275,7 @@ public sealed class ServerNoticeLineTests
     {
         var line = ServerNoticeLine.Of(new()
         {
-            Utc = "u", Class = "failure", Source = "s", Code = "c",
+            Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused,
             More = new Dictionary<string, object> { ["n"] = 7, ["ratio"] = 0.1 + 0.2, ["big"] = 9007199254740992L },
         });
 
@@ -388,7 +399,7 @@ public sealed class ServerNoticeLineTests
         // notificationLine maps VALUES through safeText and leaves the field name as it is.
         var line = ServerNoticeLine.Of(new()
         {
-            Utc = "u", Class = "failure", Source = "s", Code = "c",
+            Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused,
             More = new Dictionary<string, object> { ["k\"ey"] = "v\\al", ["e\nl"] = "x", ["ключ"] = "значение" },
         });
 
@@ -398,7 +409,7 @@ public sealed class ServerNoticeLineTests
     [Fact]
     public void AnEmptyOptionalString_IsAbsent_AsTheExtensionsGivenMakesIt()
     {
-        var line = ServerNoticeLine.Of(new() { Utc = "u", Class = "failure", Source = "s", Code = "c", Subject = "", Title = "t" });
+        var line = ServerNoticeLine.Of(new() { Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused, Subject = "", Title = "t" });
 
         Parsed(line).TryGetProperty("subject", out _).Should().BeFalse();
         Parsed(line).GetProperty("title").GetString().Should().Be("t");
@@ -407,10 +418,10 @@ public sealed class ServerNoticeLineTests
     [Fact]
     public void ZeroIsKept_BecauseAbsentAndZeroAreDifferentFacts()
     {
-        var line = ServerNoticeLine.Of(new() { Utc = "u", Class = "failure", Source = "s", Code = "c", Seq = 0 });
+        var line = ServerNoticeLine.Of(new() { Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused, Seq = 0 });
 
         line.Should().Contain("\"seq\":0");
-        ServerNoticeLine.Of(new() { Utc = "u", Class = "failure", Source = "s", Code = "c" }).Should().NotContain("seq");
+        ServerNoticeLine.Of(new() { Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused }).Should().NotContain("seq");
     }
 
     [Theory]
@@ -425,10 +436,17 @@ public sealed class ServerNoticeLineTests
             Utc = field == "Utc" ? " " : "u",
             Class = field == "Class" ? "" : "failure",
             Source = field == "Source" ? "" : "s",
-            Code = field == "Code" ? "" : "c",
+            Code = field == "Code" ? "" : ServerNoticeCodes.Refused,
         };
 
-        building.Should().Throw<ArgumentException>().WithMessage($"{field} is required*");
+        // The GUARANTEE, not the wording: a refusal naming the field. The first version pinned
+        // the sentence `"{field} is required*"`, and two of the three sentences moved the day the
+        // checks got sharper — `Code` now fails the catalog check first, and `Class`/`Source` fail
+        // the after-redaction check. A test that goes red because a message was improved is a test
+        // that gets its expectation pasted over rather than read.
+        building.Should().Throw<ArgumentException>()
+            .Which.ParamName.Should().Be(field,
+                "a refusal has to name the field that caused it, or the call site cannot act on it");
     }
 
     [Fact]
@@ -447,13 +465,13 @@ public sealed class ServerNoticeLineTests
                      (new() { ["b"] = true }, "Boolean"),
                  })
         {
-            var building = () => new ServerNotice { Utc = "u", Class = "failure", Source = "s", Code = "c", More = more };
+            var building = () => new ServerNotice { Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused, More = more };
             building.Should().Throw<ArgumentException>().WithMessage($"*{saying}*");
         }
 
         var kept = new ServerNotice
         {
-            Utc = "u", Class = "failure", Source = "s", Code = "c",
+            Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused,
             More = new Dictionary<string, object> { ["07"] = "not an index", ["n"] = 9007199254740992L, ["r"] = 1.5, ["s"] = "" },
         };
         ServerNoticeLine.Of(kept).Should().Contain("\"07\":\"not an index\",\"n\":9007199254740992,\"r\":1.5,\"s\":\"\"");
