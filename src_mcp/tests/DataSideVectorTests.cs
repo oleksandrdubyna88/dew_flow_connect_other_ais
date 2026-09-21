@@ -134,9 +134,9 @@ public sealed class DataSideVectorTests : IDisposable
 
         var dir = Expected(vector);
 
-        SettingsFile.PathFor(SettingsFile.DataDirFrom(Env(vector)))
+        SettingsFile.PathFor(SettingsFile.DataDirFrom(Env(vector)).Path)
             .Should().Be(Path.Combine(dir, "settings.json"), vector.Why);
-        ServiceDefaults.CoaiLogPath.RootFor(SettingsFile.DataDirFrom(Env(vector)))
+        ServiceDefaults.CoaiLogPath.RootFor(SettingsFile.DataDirFrom(Env(vector)).Path)
             .Should().Be(Path.Combine(dir, "logs"), vector.Why);
 
         // And the vector itself says the same thing, so the fixture cannot drift away from the two
@@ -190,15 +190,29 @@ public sealed class DataSideVectorTests : IDisposable
     [Fact]
     public void ThePathIsCombined_WhichATrailingSeparatorProvesOnEveryPlatform()
     {
-        var withSeparator = Path.Combine(Path.GetTempPath(), "coai-notices") + Path.DirectorySeparatorChar;
+        // Minted through the type's own constructor rather than the resolver, because the INPUT is
+        // the point of this test: a directory that already ends in a separator. The constructor is
+        // internal to production and visible here.
+        var withSeparator = new ServiceDefaults.ResolvedDataDir(
+            Path.Combine(Path.GetTempPath(), "coai-notices") + Path.DirectorySeparatorChar);
 
         ServerNotices.PathFor(withSeparator)
             .Should().NotContain(new string(Path.DirectorySeparatorChar, 2),
                 "a concatenated path doubles the separator where Path.Combine collapses it, and on "
                 + "Linux — which is every CI job here — that is the only difference there is");
-        ServerNotices.PathFor(withSeparator).Should().Be(Path.Combine(withSeparator, ServerNotices.Name));
+        ServerNotices.PathFor(withSeparator).Should().Be(Path.Combine(withSeparator.Path, ServerNotices.Name));
     }
 
+    /// <summary>
+    /// The refusal of a directory that resolved to nothing survives the move to a TYPE.
+    /// </summary>
+    /// <remarks>
+    /// <para>Story 1.4 made the parameter a <c>ResolvedDataDir</c>, whose constructor refuses an
+    /// empty path — so the two strings this test used to hand <c>PathFor</c> are refused one step
+    /// earlier, and that is asserted first. What the type CANNOT refuse is a null reference, or a
+    /// field the compiler never saw initialised, and <c>PathFor</c>'s own guard is kept for exactly
+    /// those: a type that removes a guard is a type that has to be perfect.</para>
+    /// </remarks>
     [Fact]
     public void ADataDirectoryThatDidNotResolve_IsRefusedRatherThanWrittenBesideTheProcess()
     {
@@ -206,6 +220,18 @@ public sealed class DataSideVectorTests : IDisposable
         // launched from — and the extension, reading the resolved directory, would find nothing and
         // say nothing. That is this plan's whole failure mode, reached by a different road.
         foreach (var unusable in new[] { "", "   " })
+        {
+            var minting = () => new ServiceDefaults.ResolvedDataDir(unusable);
+
+            minting.Should().Throw<ArgumentException>().WithMessage("*empty*",
+                "the type refuses it before any writer can be handed it");
+        }
+
+        // The null-bearing field the compiler cannot see: an instance that skipped its constructor
+        // carries a null path, and a null reference carries nothing at all. Both reach the guard.
+        var skippedItsConstructor = (ServiceDefaults.ResolvedDataDir)
+            System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof(ServiceDefaults.ResolvedDataDir));
+        foreach (var unusable in new[] { skippedItsConstructor, null! })
         {
             var combining = () => ServerNotices.PathFor(unusable);
 

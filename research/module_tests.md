@@ -1422,3 +1422,34 @@ half of the record:
 Nothing here is called a flake and nothing is called fixed. The next person to see a single failure
 in this suite should capture the test NAME before anything else, and should not spend time on the
 `settings.json` line — it is noise by design.
+
+## The one append, and the test that had to be given teeth (2026-09-21, S8 story 1.4)
+
+`AppendOnlyFileTests`, `JsonlLedgerTests`, `ServerNoticesAppendTests`, `ResolvedDataDirTests`,
+`TheOneAppendTests` and `TheWordListIsLoadedBeforeTheTransportTests` — 31 cases for one three-line
+writer, because everything they are about is a record that is silently not written or one that
+silently destroys the next.
+
+**The first two tests of `AppendOnlyFileTests` passed against the broken implementation**, and that
+is worth writing down. They append sequentially and assert the file's length, and `FileMode.Append`
+— which had just been measured losing 2488 of 8000 records to eight processes — passes both, because
+the class opens and writes in one breath and a sequential test never opens the window the defect
+lives in. A third test holds that window open through an `afterOpen` seam threaded into both platform
+writers: a hundred bytes arrive between our open and our write, and the record must land *after*
+them. Against the managed append it fails with `Expected bytes.Length to be 101 ... but found 100`,
+which is the defect stated in one line. The seam is a PARAMETER and not a static hook, because xUnit
+runs classes in parallel and a hook left set would fire inside somebody else's append.
+
+**What no unit test here can do is fork a process.** `npm run measure:append --dotnet=N` does: it
+runs `JsonlLedger.AppendLine` from `NoticeTool append` beside node's writer at one file, and it is
+the only reason the defect was found at all. Its four legs — a single-writer control, the torn-tail
+pair, and the mixed run — are described in the script's own header with every result and its
+conditions.
+
+**The census is an allowlist, not a name count** (`TheOneAppendTests`). The first proposal counted
+`ServerNotices.Name` in one production file; a reviewer was right that a second caller could reach
+`JsonlLedger.AppendLine` with a computed path and leave every test green. So every production call
+site is enumerated and compared with a list of two, the file name is held to one spelling, and the
+minting sites of `ResolvedDataDir` are asked of the ASSEMBLY as well as of the source — a
+target-typed `new(` hides from a text scan and not from reflection. Each scan has a companion
+asserting it still finds its known instances, so a reformat cannot turn a guard into a pass.

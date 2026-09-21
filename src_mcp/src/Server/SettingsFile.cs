@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CoaiMcp.ServiceDefaults;
 
 namespace CoaiMcp.Server;
 
@@ -108,8 +109,10 @@ public static class SettingsFile
     /// <c>CoaiLogPath.RootFor</c>), the <c>--providers</c> layer, the settings layer the server runs
     /// on, and the file its change watcher stats. One correction reaches all of them, and the log
     /// root partitions as a consequence rather than by a rule of its own.</para>
+    /// <para>A pass-through, so it answers the same <see cref="ResolvedDataDir"/> the resolver
+    /// mints; a caller that wants the string unwraps it with <c>.Path</c>.</para>
     /// </remarks>
-    public static string DataDirFrom(Func<string, string?> environment) =>
+    public static ResolvedDataDir DataDirFrom(Func<string, string?> environment) =>
         PanelSettings.DataDirectoryFor(environment);
 
     /// <summary>
@@ -153,7 +156,7 @@ public static class SettingsFile
     /// <returns>What a person should be told, or empty when nothing happened.</returns>
     public static IReadOnlyList<string> AdoptRootSettings(Func<string, string?> environment)
     {
-        var dataDir = PanelSettings.DataDirectoryFor(environment);
+        var dataDir = PanelSettings.DataDirectoryFor(environment).Path;
         var root = PanelSettings.DataRootFor(environment);
         if (string.Equals(dataDir, root, StringComparison.Ordinal))
         {

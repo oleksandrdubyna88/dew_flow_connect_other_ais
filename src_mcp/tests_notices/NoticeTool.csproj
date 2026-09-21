@@ -16,6 +16,9 @@
 
   <ItemGroup>
     <ProjectReference Include="../core/CoaiMcp.Core.csproj" />
+    <!-- For the `append` verb: the measurement drives `JsonlLedger.AppendLine` — the product's
+         append, the same FileStream flags and the same single write — never a lookalike. -->
+    <ProjectReference Include="../service_defaults/CoaiMcp.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

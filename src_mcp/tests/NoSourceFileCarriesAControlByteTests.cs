@@ -132,7 +132,8 @@ public sealed class NoSourceFileCarriesAControlByteTests
         || file.Contains($"{Path.DirectorySeparatorChar}out{Path.DirectorySeparatorChar}")
         || file.Contains($"{Path.DirectorySeparatorChar}dist{Path.DirectorySeparatorChar}");
 
-    private static string RepositoryRoot()
+    /// <summary>The checkout this test assembly was built from. Shared with the other source scans rather than copied.</summary>
+    internal static string RepositoryRoot()
     {
         var here = new DirectoryInfo(AppContext.BaseDirectory);
         while (here is not null && !Directory.Exists(Path.Combine(here.FullName, ".git"))

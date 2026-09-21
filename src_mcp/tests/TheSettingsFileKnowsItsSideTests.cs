@@ -34,8 +34,8 @@ public sealed class TheSettingsFileKnowsItsSideTests
     {
         var root = Path.Combine(Path.GetTempPath(), "coai-side-" + Guid.NewGuid().ToString("N"));
 
-        var a = SettingsFile.PathFor(SettingsFile.DataDirFrom(Env(root, "alpha")));
-        var b = SettingsFile.PathFor(SettingsFile.DataDirFrom(Env(root, "beta")));
+        var a = SettingsFile.PathFor(SettingsFile.DataDirFrom(Env(root, "alpha")).Path);
+        var b = SettingsFile.PathFor(SettingsFile.DataDirFrom(Env(root, "beta")).Path);
 
         a.Should().NotBe(b,
             "two sides sharing one COAI_DATA_DIR are the whole point of the side: one settings file "
@@ -53,8 +53,8 @@ public sealed class TheSettingsFileKnowsItsSideTests
         // `PanelSettings` spends a paragraph refusing.
         var root = Path.Combine(Path.GetTempPath(), "coai-side-" + Guid.NewGuid().ToString("N"));
 
-        SettingsFile.DataDirFrom(Env(root, null)).Should().Be(Path.GetFullPath(root));
-        SettingsFile.DataDirFrom(Env(root, "   ")).Should().Be(Path.GetFullPath(root));
+        SettingsFile.DataDirFrom(Env(root, null)).Path.Should().Be(Path.GetFullPath(root));
+        SettingsFile.DataDirFrom(Env(root, "   ")).Path.Should().Be(Path.GetFullPath(root));
     }
 
     [Fact]
@@ -63,9 +63,9 @@ public sealed class TheSettingsFileKnowsItsSideTests
         // `COAI_DATA_DIR=' '` reaching Path.GetFullPath is the working directory, which is not what
         // anybody meant by setting it. PanelSettings has always read it that way; this did not, so
         // the two halves disagreed about a whitespace variable.
-        SettingsFile.DataDirFrom(Env("   ", null)).Should().Be(PanelSettings.DefaultDataDir);
-        SettingsFile.DataDirFrom(Env("", null)).Should().Be(PanelSettings.DefaultDataDir);
-        SettingsFile.DataDirFrom(Env(null, null)).Should().Be(PanelSettings.DefaultDataDir);
+        SettingsFile.DataDirFrom(Env("   ", null)).Path.Should().Be(PanelSettings.DefaultDataDir);
+        SettingsFile.DataDirFrom(Env("", null)).Path.Should().Be(PanelSettings.DefaultDataDir);
+        SettingsFile.DataDirFrom(Env(null, null)).Path.Should().Be(PanelSettings.DefaultDataDir);
     }
 
     [Fact]
@@ -98,8 +98,8 @@ public sealed class TheSettingsFileKnowsItsSideTests
         // nothing. (The consultation, 2026-09-18.)
         var root = Path.Combine(Path.GetTempPath(), "coai-side-" + Guid.NewGuid().ToString("N"));
 
-        var a = CoaiLogPath.RootFor(SettingsFile.DataDirFrom(Env(root, "alpha")));
-        var b = CoaiLogPath.RootFor(SettingsFile.DataDirFrom(Env(root, "beta")));
+        var a = CoaiLogPath.RootFor(SettingsFile.DataDirFrom(Env(root, "alpha")).Path);
+        var b = CoaiLogPath.RootFor(SettingsFile.DataDirFrom(Env(root, "beta")).Path);
 
         a.Should().Be(Path.Combine(root, "alpha", "logs"));
         b.Should().Be(Path.Combine(root, "beta", "logs"));
@@ -134,8 +134,8 @@ public sealed class TheSettingsFileKnowsItsSideTests
                 // Agreement includes REFUSING alike. A resolver that answers where the other throws
                 // is the original defect wearing a different hat: one half of the product carrying
                 // on with a directory the other half refused to name.
-                Answer(() => PanelSettings.DataDirectoryFor(env))
-                    .Should().Be(Answer(() => SettingsFile.DataDirFrom(env)), why);
+                Answer(() => PanelSettings.DataDirectoryFor(env).Path)
+                    .Should().Be(Answer(() => SettingsFile.DataDirFrom(env).Path), why);
             }
         }
     }

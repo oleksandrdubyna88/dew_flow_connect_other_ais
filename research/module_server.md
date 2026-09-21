@@ -1015,6 +1015,127 @@ answer (1 red).
 `server-notices.jsonl` was already in `shared/data-inventory.json` — the extension named it when the
 reader shipped — so the data-directory move carries it without a change here.
 
+## Server notices — the WRITER, and the one append (S8 story 1.4, 2026-09-21)
+
+```
+ServerNotices.Append(ResolvedDataDir dir, ServerNotice notice) -> bool
+    => JsonlLedger.AppendLine(PathFor(dir), ServerNoticeLine.Of(notice))
+```
+
+Three lines, because every judgement in them was already made: the path by story 1.3, the bytes by
+story 1.2, the disk by `JsonlLedger`.
+
+**There is now exactly ONE append in this repository, and it was extracted rather than copied.**
+`UsageLedger.Append` was the only production append in the C# half and every line of it had been
+paid for by a defect — `FileMode.Append` with `FileShare.ReadWrite` because two servers share one
+data directory routinely and `File.AppendAllText` takes a lock the other cannot pass; one `Write`
+per line; an in-process lock; the directory created first; a catch with a reason. A second copy of
+that bargain would have drifted, and the thing that drifts is a `FileShare` flag nobody re-derives.
+So it moved to `CoaiMcp.ServiceDefaults.JsonlLedger.AppendLine(path, line)` — the library that
+already owns "a path under the data directory" (`CoaiLogPath`), AOT-clean, Serilog its only package
+— and the spending ledger became its first caller, the notices writer its second. `CoaiMcp.Core`
+was the obvious home and is the wrong one: its csproj says *no Process, no HttpClient, no
+filesystem*. The name is the extension's own `jsonlLedger.appendLine`: one vocabulary for the one
+file both halves write in the same shape. `Runners` gained a `ServiceDefaults` reference for this
+and nothing else.
+
+### And the measurement found that .NET's append is not one
+
+The plan for this story refused to take node's `O_APPEND` result as evidence about the C# writer —
+*"the .NET append is not the system call the harness measured"* — and made a nonzero torn count an
+acceptance gate. The first run of `npm run measure:append 8 1000 --dotnet=8` came back:
+
+| writers, 8 × 1000 records up to 60 KB, one file, local NTFS | whole records | torn lines |
+|---|---|---|
+| node's `appendFile` (`'a'`, a true `O_APPEND`) | 8000 of 8000 | 0 |
+| `FileMode.Append`, the shape `UsageLedger` has always used | **5512 of 8000** | **1110** |
+| four of each | 6719 of 8000 | 623 |
+
+The mechanism, probed directly on Windows 11 and on Linux/ext4 and identical on both: open a
+`FileStream` in `FileMode.Append` on an empty file, let another handle append 100 bytes behind its
+back, write one byte through the first stream — and the file is **100 bytes with that byte at offset
+zero**. .NET remembers the end it saw when it opened and writes *there*. It is a positional write
+wearing an append's name.
+
+So `UsageLedger`'s own claim — "each line is written in ONE call and is far below the atomic-write
+size, so interleaving cannot split a line" — was true about the call and false about the file, and
+two `coai-mcp` servers sharing one data directory (which that class's docstring calls the normal
+case) have been overwriting each other's spending records. The measurement this story was made to
+run is what found it.
+
+`AppendOnlyFile` is the answer: `FILE_APPEND_DATA` without `FILE_WRITE_DATA` on Windows, `O_APPEND`
+on POSIX — in both, the kernel ignores the offset and places the write at the end, which is the same
+system call node's writer makes and therefore the thing the recorded node results are *about*. It is
+the only P/Invoke in `ServiceDefaults` and it is there because .NET offers no managed way to ask a
+kernel to append. On Unix the flag numbers differ between Linux and macOS, so the first open asks
+`fcntl(F_GETFL)` whether the flag it requested is really set and refuses to write at all if it is
+not: a ledger with a gap is recoverable, one with a hole punched through a line is not.
+
+Re-measured after the change: **8000 of 8000, 0 torn** with eight .NET writers, the same with four
+of each, and 2400 of 2400 on ext4 under WSL.
+
+A lock was built first and rejected on evidence: one handle held `FileShare.Read` across the tail
+inspection and the write, with a retry when another writer had it. It is correct, and under the same
+eight-process run a writer exhausted its retries and dropped a record — so it trades corruption for
+losing a notice because a neighbour was busy, which is a worse contract for a recorder. An append
+the kernel cannot interrupt needs no lock at all.
+
+**A torn tail is repaired on EVERY append, inside the record's own write.** A process killed
+mid-line leaves a file whose last byte is not a newline, and the next append fuses its record onto
+the wreck — losing that record as surely as the fragment. The first draft checked once per process
+and wrote the repair as an append of its own; the plan round took both halves apart. *codex:* two
+writes are not atomic against another process — A reads a torn tail, B appends a whole record, A
+appends its bare newline, and B's record is fused for ever. *gemini:* a peer that crashes AFTER this
+process's first write leaves a tail it would never look at again. So the last byte is read before
+every append — one extra open and a one-byte read, on a path that already costs an open and a write,
+for events that are rare by construction — and when it is not a newline the newline is PREPENDED to
+the record and goes out in the single `Write` that was going to happen anyway.
+
+What remains is stated rather than hidden: after a crash, whichever process appends first may still
+fuse its record onto the fragment if it read the tail before the crash's last byte landed. That is
+ONE record — the same one that would be lost with no repair at all — and closing it needs an
+interprocess lock around inspect-plus-append, a lock file that leaks on a kill, over a NAS, guarding
+a best-effort writer. Refused deliberately. Two processes both repairing leave one blank line, which
+the extension's reader skips while still counting its byte: one phantom unread, once, after a crash,
+against a lost record. Asserted on both sides, not assumed.
+
+**It never throws, and "never" is a list.** `IOException` and `UnauthorizedAccessException` are
+inherited; the plan round added the path-shaped failures that throw *before* any I/O —
+`ArgumentException` (not `ArgumentNullException`), `NotSupportedException`, `SecurityException` —
+because a rooted, non-empty directory the OS refuses satisfies every validation above the append.
+`Exception` is not caught: an `OutOfMemoryException` or a `NullReferenceException` is a programming
+error, and swallowing one would make this the quietest bug in the product. It answers `bool` so that
+story 2.1's census can one day count a loss; nothing reads the answer yet.
+
+**The directory is a TYPE.** `ResolvedDataDir` lives in `ServiceDefaults` beside `CoaiLogPath`, is
+minted by `PanelSettings.DataDirectoryFor` and by nothing else — an internal constructor, `coai-mcp`
+the one granted assembly — and is what `ServerNotices` takes, so `DataRootFor`, the directory
+*before* the side is applied, cannot be handed to the writer. It is a record class rather than a
+`readonly record struct` because `default` would carry a null path past the constructor; `PathFor`'s
+empty-directory refusal is kept all the same, because a type that removes a guard is a type that has
+to be perfect. `CoaiLogPath.RootFor` and `UsageLedger` keep taking strings: `coai-bugs` resolves its
+own data directory by its own rule, and requiring the type there would make a second binary mint a
+value whose guarantee it does not have.
+
+**The word list is loaded where the transport is opened.** `CredentialWords.EnsureLoaded()` is the
+first statement of `ServeAsync` — not of `Main`, which the round refused: `.agents/PROJECT.md` makes
+the one-shot CLI shape a non-negotiable, and `--version` must not be able to fail on a word list it
+never uses. Nothing is lost, because the release smoke runs a real `initialize` over stdio against
+the PUBLISHED binary: a Native-AOT build that dropped the embedded resource refuses to serve,
+loudly, instead of redacting with an empty list on somebody's machine.
+
+**Three guards, all mechanical.** `TheOneAppendTests` enumerates every production call site of
+`JsonlLedger.AppendLine` and compares it with an allowlist of two — a name count was the first
+proposal and a reviewer was right that it proves nothing, because a second caller could reach the
+append with a computed path and leave every test green. The same file holds the notices file name to
+one production spelling, and asks the ASSEMBLY which members answer `ResolvedDataDir`, which a
+target-typed `new(` cannot hide from. Each scan has a companion asserting it still finds its known
+instances, so a reformat cannot turn a guard into a pass.
+
+**No call sites, by design.** The only caller is a test. Story 2.2 instruments the three refusal
+roads once 2.1's census has bounded them, and story 2.4 is the live leg: a real refusal over stdio,
+read back with the extension's own parser, asserted on the persisted bytes.
+
 ## The spending ledger
 
 `UsageLedger` appends one JSON line per reviewer to `<dataDir>/usage.jsonl`: vendor, model, role,
@@ -1022,6 +1143,13 @@ stage, seconds, tokens, cost and outcome. It is separate from the session files 
 sessions are rewritten as rounds advance and hold one repo+branch, while "what has this cost me
 this month" spans every session and must outlive all of them. Failed reviewers are recorded too,
 and recording never throws: a ledger that can fail a review is worse than one with a gap in it.
+
+**Its append is `JsonlLedger.AppendLine` since 2026-09-21**, and the extraction came with a fix it
+did not ask for: this ledger had been written through `FileMode.Append`, which is a positional write
+at a remembered offset rather than an append, so two servers sharing one data directory were
+overwriting each other's spending rows. Measured and described in *the writer* section above. It
+also gained the torn-tail quarantine, so a server killed mid-line no longer costs the next row as
+well as its own.
 
 ## The rounds database (`coai.db`, 2026-09-05)
 

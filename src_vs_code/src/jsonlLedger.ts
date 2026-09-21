@@ -47,6 +47,24 @@ import { finishedInTime } from './withinTheClock';
  * <p>None of that is a claim about every filesystem. `--dir=` is how the next person asks the same
  * question of theirs, and the sanctioned answer if it ever tears is one ledger per process
  * (`notifications-&lt;pid&gt;.jsonl`, the `chatOrphans.ts` precedent) with a glob in the reader.</p>
+ *
+ * <h2>The other half of this file has been measured too, and it had to be fixed</h2>
+ *
+ * <p>`coai-mcp` writes `server-notices.jsonl` into the same data directory, and story 1.4 of
+ * `todo/PLAN_the_server_says_what_it_did.md` measured ITS append rather than arguing from the runs
+ * above. On 2026-09-21, `--dotnet=8`: <b>5512 of 8000 records survived and 1110 lines were torn</b>,
+ * where eight node writers over the same harness kept all 8000. .NET's `FileMode.Append` is not an
+ * append — it writes at the offset it remembered when it opened, so two processes overwrite each
+ * other — and the C# side now opens with `FILE_APPEND_DATA` / `O_APPEND` like this one does, after
+ * which the same run is 8000 of 8000 on NTFS and 2400 of 2400 on ext4.</p>
+ *
+ * <p>Two things follow for THIS module. The bargain here is unchanged and still holds: node's `'a'`
+ * was the true append all along. And a torn tail is a thing this writer does NOT repair — a host
+ * killed mid-append leaves a file whose last byte is not a newline, and the next append fuses its
+ * record onto the wreck, costing the record as well as the fragment. The server's writer reads the
+ * last byte before every append and prepends a newline when it needs to; doing the same here is ten
+ * lines and a test, and it is written down in that plan's open tail rather than done in a story
+ * about the other half of the product.</p>
  */
 
 /** Which ordered queue an append joins. */

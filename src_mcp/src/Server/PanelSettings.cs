@@ -1,5 +1,6 @@
 using CoaiMcp.Core.Context;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.ServiceDefaults;
 
 namespace CoaiMcp.Server;
 
@@ -521,8 +522,17 @@ public sealed record PanelSettings
     /// to be independent sharing one settings file and overwriting each other in silence.</para>
     /// <para>The fix is a CALL rather than a copy. Copying this logic would commit the same defect a
     /// second time, and the next rule added to one of them would part them again.</para>
+    /// <para><b>It answers a TYPE, and this is the only place that mints one.</b>
+    /// <see cref="ResolvedDataDir"/> is what the notices writer takes, so that
+    /// <see cref="DataRootFor"/> — the directory BEFORE the side, which looks like a data directory
+    /// and is not one — cannot be handed to it. The type's constructor is internal to this assembly
+    /// and a test counts its minting sites; everything that needs the string unwraps with
+    /// <c>.Path</c>. (Story 1.4, answering the reviewer of story 1.3.)</para>
     /// </remarks>
-    public static string DataDirectoryFor(Func<string, string?> env) => ResolveDataDir(env);
+    // Spelled in full rather than target-typed, because the census that counts minting sites reads
+    // the explicit spelling; `new(` would hide this one from its own guard.
+    public static ResolvedDataDir DataDirectoryFor(Func<string, string?> env) =>
+        new ResolvedDataDir(ResolveDataDir(env));
 
     /// <summary>
     /// The directory BEFORE the side is applied — what an unpartitioned installation would use.

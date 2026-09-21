@@ -10,6 +10,11 @@
 
   <ItemGroup>
     <ProjectReference Include="..\core\CoaiMcp.Core.csproj" />
+    <!-- For ONE thing: `JsonlLedger.AppendLine`, the repository's one append, which the spending
+         ledger calls (story 1.4, 2026-09-21). ServiceDefaults is "how this process touches the data
+         directory" — AOT-clean, Serilog its only package — and the alternative was a second copy of
+         a FileShare bargain nobody re-derives. -->
+    <ProjectReference Include="..\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
   </ItemGroup>
 
   <ItemGroup>

@@ -4,6 +4,12 @@
     <RootNamespace>CoaiMcp.ServiceDefaults</RootNamespace>
     <!-- Referenced by the AOT host, so this library must be trim-clean too. -->
     <IsAotCompatible>true</IsAotCompatible>
+    <!-- `[LibraryImport]` in `AppendOnlyFile`, which the source generator requires. It is here and
+         not in a product project on purpose: the generated marshalling is AOT-friendly, where the
+         reflection-based `[DllImport]` alternative is not, and this library is already in the AOT
+         host's graph. Nothing else here is unsafe, and the one file that needs it says why in its
+         own remarks: .NET has no managed way to ask a kernel to APPEND. -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <ItemGroup>
@@ -13,6 +19,10 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="CoaiMcp.Tests" />
+    <!-- `ResolvedDataDir` is minted by `PanelSettings.DataDirectoryFor` and by nothing else. Its
+         constructor is internal and this is the one production assembly allowed to call it, so no
+         other binary can mint a value whose guarantee comes from a resolver it does not share. -->
+    <InternalsVisibleTo Include="coai-mcp" />
   </ItemGroup>
 
 </Project>

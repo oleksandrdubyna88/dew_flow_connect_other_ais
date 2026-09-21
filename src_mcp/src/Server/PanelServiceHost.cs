@@ -73,7 +73,7 @@ public sealed class PanelServiceHost
     private PanelService Build()
     {
         var configuration = SettingsFile.Layer(
-            SettingsFile.DataDirFrom(_env),
+            SettingsFile.DataDirFrom(_env).Path,
             _env,
             // This rebuild runs on a stamp change rather than at startup, so it is the one place an
             // adoption could happen with nobody watching. It has a log; it uses it.
@@ -93,7 +93,7 @@ public sealed class PanelServiceHost
     {
         try
         {
-            var file = new FileInfo(SettingsFile.PathFor(SettingsFile.DataDirFrom(_env)));
+            var file = new FileInfo(SettingsFile.PathFor(SettingsFile.DataDirFrom(_env).Path));
             return file.Exists ? (file.LastWriteTimeUtc, file.Length) : default;
         }
         catch (IOException)
