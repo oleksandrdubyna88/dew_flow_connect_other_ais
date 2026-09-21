@@ -1555,3 +1555,21 @@ which would have declared everything new and refused the very commit that introd
 with no behaviour to assert. The check is the compiler, and it is a real one only because the
 declaration was DELETED from `bugzReviewPage.ts` rather than re-exported — it named all ten importers
 by file and line on the first build.
+
+**The code round took five more and rejected twenty-eight, and two of the five were about these
+tests themselves.** The channel test had asserted the generator and the page script agree by
+READING the generated text; two reviewers cited the operator’s 2026-09-14 ruling against it and
+were right — a page is tested by running it, and the executed test beside it already proved the
+same thing. It is gone. And the timeout scan could have passed by matching nothing, which is the
+house rule about structural tests: it counts what it found and refuses fewer than twenty jobs.
+
+**Twenty-eight rejections, and ten of them were one claim repeated**: that jobs lack
+`timeout-minutes`, citing ci.yml lines 471, 870, 914 and 953 — in a file of 420 lines. Measured
+over all eight workflows, no job lacks one. Also rejected on measurement: that ESLint’s
+suppressions can be fabricated (a suppression with no matching violation exits **2** with
+“there are suppressions left that do not occur anymore”), that `ReviewPair` is still declared in
+the renderer (one declaration, in `reviewPair.ts`), that the retry test still uses `spawnSync`
+(it uses `execFile`; `spawnSync` survives only in the comment saying why), and that the page
+script interpolates `items[i].html` at build time (it is plain text inside the script — a
+property access the browser evaluates on a message the host posted).
+

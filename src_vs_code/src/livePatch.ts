@@ -20,6 +20,8 @@
  * never the string — it was that nothing owned the ADDRESS the string is delivered to.</p>
  */
 
+import { escapeHtml } from './webviewHtml';
+
 /** One channel from a host-side panel to a row's container. */
 export interface LivePatchChannel {
   /** The `type` on the posted message, matched by the page's dispatch. */
@@ -46,9 +48,16 @@ export interface LivePatchItem {
   readonly html: string;
 }
 
-/** The container attribute as the page WRITES it, escaped for markup. */
+/**
+ * The container attribute as the page WRITES it, escaped for markup.
+ *
+ * <p>The escape is not decoration and a reviewer was right to ask for it back: the `number`
+ * annotation is a compile-time promise about a value that arrives from a database row through JSON,
+ * and the call site this replaced escaped it. A `findingId` that is really the string
+ * `1"><img src=x onerror=…>` would otherwise break out of the attribute.</p>
+ */
 export function containerAttribute(channel: LivePatchChannel, findingId: number): string {
-  return `${channel.attribute}="${findingId}"`;
+  return `${channel.attribute}="${escapeHtml(String(findingId))}"`;
 }
 
 /** The container selector as the page SCRIPT queries it, for a row id it holds at runtime. */
