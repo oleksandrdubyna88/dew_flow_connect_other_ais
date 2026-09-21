@@ -1325,6 +1325,47 @@ ARTEFACT changes, which is the question a release actually asks.
 
 Whole executable after: 2140 tests, 2138 passed, 0 failed, 2 skipped.
 
+## Story 3.3's remaining gate facts (2026-09-21)
+
+A second measurement scenario, `a call hierarchy needs the symbol COLUMN, and answers for a file
+nobody opened`, added because story 3.3's plan round raised two questions a measurement could settle.
+It settled both and produced a third:
+
+| asked | answered |
+|---|---|
+| `prepareCallHierarchy` at column 0 of an INDENTED method | **1 item — the enclosing class**, not the method |
+| the same call at the symbol's own column | 1 item, the method |
+| a file in the workspace that nobody opened | prepared, and its caller in another file found |
+| a file that does not exist | **throws**, rather than answering empty |
+
+The first is the one worth carrying: a reviewer predicted column 0 would answer nothing and read as
+`unavailable`; it answers the CLASS, which would have put a class's caller count under a method's
+name. The name check the plan already required is what catches it, and the two guards were designed
+independently — which is the argument for keeping both.
+
+## Story 3.3's gate, measured in a real editor (2026-09-21)
+
+A tenth host scenario, and it is not a guarantee about shipped behaviour — nothing of story 3.3 is
+built. It is the MEASUREMENT the plan makes a precondition, kept as a test because the property it
+measures belongs to VS Code rather than to us, and the day it changes is the day a feature built on
+it starts lying.
+
+`a call hierarchy can tell NO PROVIDER from NO CALLERS, which is what story 3.3 rests on` writes a
+TypeScript file (one function called twice, one called never) and a C# file into the run's own
+throwaway workspace, and asks `vscode.prepareCallHierarchy` / `vscode.provideIncomingCalls` about
+each. It asserts the four facts that decide the design and REPORTS the timings rather than asserting
+them, because a threshold invented in a test is a preference dressed as a measurement:
+
+```
+[3.3] typescript: prepared=1 cold=803ms warm=37ms calledTwice=2 calledNever=0
+[3.3] no-provider language: prepared=0 incoming=-1
+```
+
+**Known about this machine, not about the change:** three clipboard scenarios fail here every run,
+and the test says why itself — *"something outside this run wrote to the clipboard in all three
+attempts. Another test:host, or a clipboard manager. Run it alone."* A clipboard manager is
+installed on this machine. CI has none and runs them green.
+
 ## Giving a review tree back (2026-09-21, story 3.2b)
 
 | Suite | What it covers |

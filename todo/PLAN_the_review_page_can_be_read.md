@@ -379,6 +379,69 @@ and two spellings of one repository — with the expected mapping written down f
 > **Still open after it:** story 3.2c (the new window landing on the method) and story 3.3 (callers and
 > callees, after its measurement).
 
+> **Story 3.3's GATE ran on 2026-09-21, and it passes.** This plan says in so many words that no
+> delegation logic is written until the measurement has run, because *"a language whose provider
+> answers nothing turns 'load on demand' into a feature that silently shows zero for a method with
+> fifty callers"*. It has run, as a scenario in a real VS Code rather than as something somebody does
+> by hand — which makes it repeatable and makes it a test rather than a memory.
+>
+> | asked | answered |
+> |---|---|
+> | a language WITH a provider, method called twice | `prepareCallHierarchy` → 1 item, `provideIncomingCalls` → **2** |
+> | the same language, method called by nobody | 1 item, **0** |
+> | a language with NO provider installed | `prepareCallHierarchy` → **0 items**, so incoming cannot be asked at all |
+>
+> **So "unavailable" IS distinguishable from "zero"**, and it is distinguishable at the FIRST call:
+> an empty `prepareCallHierarchy` means nobody could be asked, and a prepared item with zero incoming
+> means nobody calls it. That is the rule the plan demanded, and it is a property of the API rather
+> than of our code — which is why the scenario stays: the day it stops being true is the day the
+> feature starts lying, and nothing else would notice.
+>
+> **Timing: cold 0.8–2.0 s, warm ~35 ms** — a 25–58× difference, measured twice. Two things follow.
+> A first expansion costs SECONDS, so it needs the in-flight state CLAUDE.md §8 asks for, exactly as
+> 3.1's press and 3.2a's checkout do. And nothing may be asked at PAINT: two hundred rows would be two
+> hundred cold preparations, which is the same arithmetic story 3.1 measured and refused for its own
+> probe.
+>
+> **What the measurement could NOT establish, and why it is not a gap this can close.** The harness
+> launches with `--disable-extensions`, deliberately, so a developer's own extensions cannot change
+> the answer. Only VS Code's BUILT-IN providers therefore answer — TypeScript and JavaScript do, C#
+> does not, because C# needs an extension. So the table above measures the API's CONTRACT, which is
+> what the gate is about, and says nothing about which languages a given person's editor can answer
+> for. That question has no answer this repository can compute: it depends on what each person has
+> installed. It is also, after this measurement, the question that no longer matters to the design —
+> a language whose provider is absent is `unavailable` and says so, which is the whole point.
+>
+> **3.3 is therefore unblocked**, with three rules it inherits from the numbers: load on demand only,
+> an in-flight state on the first expansion, and `unavailable` rendered as itself and never as zero.
+
+> **Three more of story 3.3's facts, measured 2026-09-21 because its plan round asked for them.** The
+> round returned 15 findings, 13 gating; 14 were accepted. Two were questions a measurement could
+> settle, and settling them produced a third nobody had asked:
+>
+> ```
+> [3.3] indented method: column0=1 ('Totals') atSymbol=1 ('counted')
+> [3.3] file never opened: prepared=1 ('neverOpened') incoming=1
+> [3.3] a file that does not exist: threw=true
+> ```
+>
+> 1. **Asking at column 0 does NOT return empty — it returns the ENCLOSING symbol.** A reviewer
+>    predicted that an indented method would resolve to nothing and read as `unavailable`. What it
+>    actually does is worse: `prepareCallHierarchy` at character 0 of `    public counted()` prepares
+>    **`Totals`**, the class, and would have counted the CLASS's callers under the method's name — a
+>    number that is precise, plausible and about something else. So the column must be found from the
+>    line's text, AND the prepared item's name must be checked against the row's `symbolName`: here
+>    the two guards agree, because `Totals` ≠ `counted`.
+> 2. **A provider answers for a file nobody opened**, and finds its caller in another file
+>    (`prepared=1, incoming=1`). The concern was that a language service might index only open
+>    documents, which would have left this feature blank for almost every review row. It does not.
+> 3. **A file that no longer exists makes the call THROW**, rather than answer empty. That separates
+>    *the file is gone* from *there is no provider* with no guessing at all — which is exactly the
+>    distinction another reviewer said the plan had collapsed.
+>
+> Both scenarios stay as tests, for the same reason the first one does: they measure VS Code rather
+> than us, and the day any of the three changes is the day a feature built on them starts lying.
+
 ### The revision rule, which is what makes the links honest
 
 The pairs describe HISTORICAL code — the round's `head_sha`. A link, a complexity number and a call
@@ -588,7 +651,7 @@ above rather than accepting them, and three of its findings changed the plan:
 |---|---|---|---|
 | **1 — the page can be read** (no server change, no new data) | 1.1 collapse + zoom + tone · 1.2 highlighting, after the measurement · 1.3 the diff | Opus | **all three shipped** — `codeHighlight.ts` and `lineDiff.ts` are on `main`. The row said *1.1 shipped* until 2026-09-18, which is a status line that stopped matching the repository rather than work that stopped. |
 | **2 — the page says what it is showing** (one wider SELECT, then the renders) | 2.1 the projection + cause, fix, hash, path, complexity · 2.2 project and language tabs · 2.3 the real method, un-anonymised, and its class | 2.1 and 2.3 **Fable max**, 2.2 Opus | **2.1 built 2026-09-18** (through both gate rounds; the populated live contract closed after the code round) · **2.2 built 2026-09-18** (the identity rule rewritten against the live table; `tabStrip` extracted and `rolesPage` converted) · **2.3 built 2026-09-18** (`--real-method`, a toggle over what the rows already hold; the rename recovery removed after real git showed the collector cannot store the row it would serve) |
-| **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree, SPLIT into 3.2a/3.2b/3.2c · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | **3.1 built 2026-09-18** ; **3.2a built 2026-09-21** (Opus, not the Fable the split assigned — Fable was rate-limited and a four-hour wait was worse than the substitution; said here rather than implied). **3.2b and 3.2c not started**; 3.3 not started. Earlier note: (`--file-at` server-side, a read-only document of the product's own scheme, the current file behind the workspace guard, one probe per repository remembered; the plan's sha regex and canonical-path guard for the historical read both dropped after reading the code — see the story note above) · 3.2, 3.3 not started |
+| **3 — reaching the code, honestly about which revision** | 3.1 open at revision / open current · 3.2 a review worktree, SPLIT into 3.2a/3.2b/3.2c · 3.3 callers and callees, after the measurement | 3.1 and 3.2 **Fable max**, 3.3 Opus | **3.1 built 2026-09-18** ; **3.2a built 2026-09-21** (Opus, not the Fable the split assigned — Fable was rate-limited and a four-hour wait was worse than the substitution; said here rather than implied). **3.2b built 2026-09-21** (`--trees` / `--tree-remove`, a picker rather than a page block, ignored files refused until asked for per checkout). **3.2c not started**; **3.3’s gate measurement RAN 2026-09-21 and passed** — its implementation not started. Earlier note: (`--file-at` server-side, a read-only document of the product's own scheme, the current file behind the workspace guard, one probe per repository remembered; the plan's sha regex and canonical-path guard for the historical read both dropped after reading the code — see the story note above) · 3.2, 3.3 not started |
 | **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2 the client sends one | **Fable max** | **unblocked 2026-09-18, not started.** Both decisions were answered by the operator and both are recorded in this document: a person's comment is PUBLIC, so no PII scanner and no local-only fallback; and the ranking pass MAY use a remote model. This row still read *blocked on two decisions* while the sections below already carried the answers. |
 
 ### Carried out of story 1.1's code round, rejected there and owed somewhere
