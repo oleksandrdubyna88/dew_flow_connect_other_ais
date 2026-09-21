@@ -884,6 +884,47 @@ when it has changed. Settings used to be read once at startup, which made every 
 sidebar silently ineffective until the MCP client was restarted — a gap invisible from both ends,
 because the panel saves instantly and says so. Environment variables still outrank the file.
 
+## Server notices — what this binary writes down (S8, from 2026-09-21)
+
+`server-notices.jsonl` is read by the extension and has been since 2026-09-17; this is the half that
+writes it. The first piece of it to land is the thing both halves must agree on before either of
+them writes a byte.
+
+**One credential word list, embedded, failing closed.** Both halves REDACT before anything reaches
+disk, so they must redact on the same words — two redactors disagreeing about whether `sig` names a
+credential is not a test failure anywhere, it is a secret in a file on one path and not the other.
+`shared/credential-words.json` is the source of truth; `CoaiMcp.Core.csproj` embeds it as a manifest
+resource exactly as it already embeds `shared/builtin-roles.json`, and the extension generates a
+module from the same file.
+
+**Nothing reads `shared/` at run time, and that is a correction the plan round made.** The first
+draft had both sides read the file. A published Native-AOT binary and an installed VSIX both run
+where no such directory exists: the read throws, and because every notice write is best-effort and
+swallows its exceptions, the redactor would then run with an **empty list** and put raw credentials
+into the file — on the one machine that matters, silently, for ever. Two reviewers found it
+independently.
+
+So `CredentialWords` **throws at construction** when the resource is absent, unparseable, or carries
+an empty list, with a sentence naming the `EmbeddedResource` item. That is the one class of failure
+this codebase still lets throw — a broken BUILD, the same doctrine `RoleCatalog` applies to its
+seed — and best-effort is right for WRITING a notice and wrong for deciding what a secret is.
+
+**The two lists stay two.** `anywhere` matches inside a name; `wholePart` matches only a whole part
+after splitting on separators and camelCase. Merging them brings back the defect that earned the
+distinction: `author`, `assignee`, `design`, `signal` and `monkey` all read as credentials.
+
+**The split reads the ORIGINAL casing**, because lowering first destroys the only boundary that
+tells `xAuth` from `xauth`. The first draft of `NamesACredential` lowered before it cut and every
+camelCase case in the test still passed — `apiKey` lowers into `apikey`, which the `anywhere` list
+catches for an entirely different reason. `CredentialWordsTests` now carries cases (`xAuth`,
+`requestSig`, `myKey`) that only the whole-part rule can answer, and planting the old order turns
+that one test red while the rest stay green.
+
+`PartsOf` is a hand-rolled single-pass scan rather than a regular expression: it runs over a
+parameter name lifted out of a vendor's stderr, and a scan that visits each character once cannot
+backtrack at all — a stronger promise than a bounded quantifier, and it needs no `NonBacktracking`
+to make it.
+
 ## The spending ledger
 
 `UsageLedger` appends one JSON line per reviewer to `<dataDir>/usage.jsonl`: vendor, model, role,
