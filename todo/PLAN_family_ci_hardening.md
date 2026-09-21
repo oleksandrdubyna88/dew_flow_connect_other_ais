@@ -548,14 +548,36 @@ against a local server that answers 504 three times and then 200.
 **Still to mirror**, each its own checkout and its own pull request — this repository is `conventions`'
 consumer, not its owner, and CI hardening belongs to the repos:
 
-| repo | has the step | done |
+**Mirrored 2026-09-21, all six in one pass**, each its own checkout and its own pull request. The
+timeout audit went with it, and it was worse than the note below expected: **42 jobs** across the
+six declared none.
+
+| repo | PR | timeouts added |
 |---|---|---|
-| `dew_flow_conventions` | yes | [ ] |
-| `dew_flow_creds_for_devs` | yes | [ ] |
-| `dew_flow_rag_qln` | yes | [ ] |
-| `dew_flow_mcp` | yes | [ ] |
-| `dew_flow_benchmark` | yes | [ ] |
-| `dew_flow_sidecar_rust` | yes | [ ] |
+| `dew_flow_conventions` | [#51](https://github.com/oleksandrdubyna88/dew_flow_conventions/pull/51) | 4 |
+| `dew_flow_creds_for_devs` | [#130](https://github.com/oleksandrdubyna88/dew_flow_creds_for_devs/pull/130) | **20** |
+| `dew_flow_rag_qln` | [#42](https://github.com/oleksandrdubyna88/dew_flow_rag_qln/pull/42) | 5 |
+| `dew_flow_mcp` | [#36](https://github.com/oleksandrdubyna88/dew_flow_mcp/pull/36) | 4 |
+| `dew_flow_benchmark` | [#35](https://github.com/oleksandrdubyna88/dew_flow_benchmark/pull/35) | 4 |
+| `dew_flow_sidecar_rust` | [#44](https://github.com/oleksandrdubyna88/dew_flow_sidecar_rust/pull/44) | 5 |
+
+The curl line was **byte-identical in all six**, so one fix applied six times. Three of the
+checkouts were busy with other sessions - two on feature branches, one with a dirty tree - so the
+work went through `git worktree` from `origin/main` and touched nobody else’s files.
+
+`timeout-minutes: 30` throughout, and the number is measured rather than picked: the longest
+successful WHOLE-WORKFLOW run across the family is **9 minutes** (sidecar_rust) and most are 1-7.
+It is a ceiling on a hang, not a target.
+
+**actionlint caught the first draft breaking the YAML in all six** - replacing the `curl` SUBSTRING
+inside a `run: |` block scalar strips its indentation and leaves the command at column 0. The edit
+is line-wise now, and that is the lesson worth keeping from this change.
+
+**Still owed here: the GUARD.** `dew_flow_connect_other_ais` has `workflowGuards.test.ts`, which
+pins the whole retry argument list, runs it against a local 504 server, and refuses a workflow job
+with no timeout - so the fix cannot silently regress there. The six repositories above have the FIX
+and no guard, across three different test stacks (.NET, Rust, node). Mirroring the guard is a
+separate decision and has not been taken.
 
 **And the same audit found a second thing worth mirroring:** `timeout-minutes` was set on exactly ONE
 job across eight workflows here, so every other job fell back to GitHub's 360-minute default. All 25
