@@ -179,6 +179,7 @@ export const REMOVAL_REASONS = [
   'git_failed',
   'unregistered',
   'unreachable',
+  'incomplete',
 ] as const;
 
 /** Every state a listed tree can be in, likewise. */
@@ -233,6 +234,7 @@ const REMOVALS: Readonly<Record<string, string>> = {
   git_failed: 'git did not answer — nothing was learned and nothing was touched, so it is worth asking again',
   unregistered: 'git no longer knows this folder as a worktree, so this product cannot tell whose the files in it are — remove it by hand if it is yours',
   unreachable: 'the checkout it was made from is gone, so there is no repository to deregister it from — remove the folder by hand',
+  incomplete: 'nothing here proves that folder is the checkout its name says, so this product will not deregister anything on its word — press Check out on that commit again and it clears a clean one itself',
 };
 
 /** The question asked before ignored files go: the only confirmation this product has. */

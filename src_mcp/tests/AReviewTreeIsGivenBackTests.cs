@@ -218,6 +218,41 @@ public sealed class AReviewTreeIsGivenBackTests : IAsyncLifetime
         (await Registered(tree.Path)).Should().BeFalse("and so does git's registration");
     }
 
+    /// <summary>
+    /// A record that does not describe THIS tree may not hand its `RepoPath` to git: doing so would
+    /// deregister a worktree of a repository this tree never belonged to. Refusing is not a dead end
+    /// — `--tree-at` at that commit inspects such a directory itself and rebuilds a clean one, which
+    /// is the action the sentence names. (Code round 2, codex and gemini.)
+    /// </summary>
+    [Fact]
+    public async Task ATreeWhoseRecordDescribesAnotherOne_IsRefusedWithoutTouchingGit()
+    {
+        var tree = await Made();
+        ReviewTreeRecords.Write(
+            ReviewTreeRecords.FileFor(_root, tree.Name),
+            new HeldRecord("/somewhere/else/.git", "/somewhere/else", new string('e', 40), "2026-01-01T00:00:00Z", []));
+
+        var watching = new Watching(_launcher);
+        var said = await new ReviewTreeKeeper(new ReviewTreeRoot(watching, _root))
+            .RemoveAsync(tree.Name, ct: TestContext.Current.CancellationToken);
+
+        said.Reason.Should().Be(ReviewTreeRemovalReason.Incomplete);
+        watching.Ran.Should().BeEmpty("nothing may be deregistered on an unverified record's word");
+        await Intact(tree);
+    }
+
+    [Fact]
+    public async Task ATreeWithNoRecordAtAll_IsRefusedTheSameWay()
+    {
+        var tree = await Made();
+        File.Delete(ReviewTreeRecords.FileFor(_root, tree.Name));
+
+        var said = await Keeper().RemoveAsync(tree.Name, ct: TestContext.Current.CancellationToken);
+
+        said.Reason.Should().Be(ReviewTreeRemovalReason.Incomplete);
+        Directory.Exists(tree.Path).Should().BeTrue();
+    }
+
     // ---------------------------------------------------------------------------------------
     // What can never be listed, and therefore can never be asked for.
     // ---------------------------------------------------------------------------------------

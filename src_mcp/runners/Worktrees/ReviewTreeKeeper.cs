@@ -110,14 +110,20 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
         }
 
         // A record whose identity does not recompute to THIS name describes another tree, so it
-        // proves nothing about this one — the same check a reuse makes before handing a tree back.
-        var mine = read.State == RecordState.Found
-            && string.Equals(ReviewTreeRoot.NameOf(read.Record.Repository, read.Record.Sha), name, StringComparison.OrdinalIgnoreCase);
-
-        return mine
+        // proves nothing about this one — the same check a reuse makes before handing a tree back,
+        // and the same one a removal makes before it hands a `RepoPath` to git.
+        return Mine(read, name)
             ? Row(name, path, read, await StateOfAsync(read.Record, path, seen, ct))
             : Row(name, path, read, ReviewTreeState.Incomplete);
     }
+
+    /// <summary>Whether a record describes THIS tree — its identity recomputed to its own name.</summary>
+    private static bool Mine(RecordRead read, string name) =>
+        read.State == RecordState.Found
+        && string.Equals(
+            ReviewTreeRoot.NameOf(read.Record.Repository, read.Record.Sha),
+            name,
+            StringComparison.OrdinalIgnoreCase);
 
     private static HeldReviewTree Row(string name, string path, RecordRead read, string state) =>
         new(name, read.Record.Repository, read.Record.RepoPath, read.Record.Sha, path, read.Record.Created, state);
@@ -180,7 +186,16 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
             return Forget(name, read);
         }
 
-        return await TakeAsync(name, path, read, withIgnored, ct);
+        // The SAME check the listing makes before it calls a tree `ready`. Without it, a stale or
+        // copied record beside a valid directory would hand its `RepoPath` to `worktree unlock` and
+        // `worktree remove` — deregistering a worktree of a repository this tree never belonged to.
+        // (Code round 2, codex and gemini.) What it costs is that an unfinished tree cannot be
+        // removed from here; what it buys is that nothing is deregistered on an unverified word, and
+        // pressing `Check out` on that commit again clears a clean one, which `--tree-at` already
+        // does and the sentence says.
+        return Mine(read, name)
+            ? await TakeAsync(name, path, read, withIgnored, ct)
+            : Refused(name, ReviewTreeRemovalReason.Incomplete);
     }
 
     /// <summary>
@@ -375,7 +390,7 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
     private async Task<Looked> InsideEveryMountAsync(
         string path, IReadOnlyList<string> lines, CancellationToken ct)
     {
-        var mounts = await PopulatedMountsAsync(path, ct);
+        var mounts = await SubmoduleMounts.PopulatedAsync(root, path, ct);
         var reads = new List<Looked>(mounts.Count);
         foreach (var mount in mounts)
         {
@@ -413,45 +428,6 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
             [.. status.Lines.Where(Ours).Select(l => $"{mount}/{PathIn(l)}")],
             0,
             [.. Ignored(status.Lines).Select(one => $"{mount}/{one}")]);
-    }
-
-    /// <summary>
-    /// The submodule mounts this tree actually HAS files in — declared in <c>.gitmodules</c> and not
-    /// empty on disk. An unpopulated mount holds nothing and costs no process.
-    /// </summary>
-    private async Task<IReadOnlyList<string>> PopulatedMountsAsync(string path, CancellationToken ct)
-    {
-        var declared = await root.GitAsync(
-            path, ["config", "-f", ".gitmodules", "--get-regexp", "path"], ReviewTreeRoot.Asking, ct);
-
-        return declared.Ran && declared.Ok
-            ? [.. Mounts(declared.Out).Where(m => Populated(path, m))]
-            : [];
-    }
-
-    /// <summary>The mount paths out of <c>submodule.&lt;name&gt;.path &lt;mount&gt;</c> lines.</summary>
-    private static IEnumerable<string> Mounts(string config) =>
-        config.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(line => line.Split(' ', 2))
-            .Where(parts => parts.Length == 2)
-            .Select(parts => parts[1].Trim());
-
-    /// <summary>
-    /// A mount is only ours to look inside if it stays under the tree.
-    /// </summary>
-    /// <remarks>
-    /// <c>.gitmodules</c> is a file in the checked-out commit, so its `path` is attacker-controlled in
-    /// the same sense any committed path is. A mount that resolves outside the tree is not inspected
-    /// and not counted — this product looks at what it made and nothing else. (Code round, local.)
-    /// </remarks>
-    private static bool Populated(string path, string mount)
-    {
-        var at = Path.GetFullPath(Path.Combine(path, mount));
-        var below = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-
-        return at.StartsWith(below, StringComparison.OrdinalIgnoreCase)
-            && Directory.Exists(at)
-            && Directory.EnumerateFileSystemEntries(at).Any();
     }
 
     private static IReadOnlyList<string> Few(IReadOnlyList<string> all) => [.. all.Take(Sample)];

@@ -157,8 +157,8 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     private async Task<ReviewTree> AtAsync(long findingId, TreePlace place, string repository, CancellationToken ct)
     {
         var name = ReviewTreeRoot.NameOf(repository, place.Sha);
-        var path = Path.Combine(root, name);
-        var read = ReviewTreeRecords.Read(ReviewTreeRecords.FileFor(root, name));
+        var path = _at.TreeAt(name);
+        var read = ReviewTreeRecords.Read(ReviewTreeRecords.FileFor(_at.Path, name));
 
         return Ready(read, repository, place.Sha) && Directory.Exists(path)
             ? Made(findingId, place, repository, path, read.Record.EmptyMounts, reused: true)
@@ -184,8 +184,8 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     private async Task<ReviewTree> MakeAsync(
         long findingId, TreePlace place, string repository, string name, CancellationToken ct)
     {
-        var path = Path.Combine(root, name);
-        Directory.CreateDirectory(root);
+        var path = _at.TreeAt(name);
+        Directory.CreateDirectory(_at.Path);
 
         // The cap check and the creation are one step, or they are not a cap: with nine trees held,
         // two presses that both read nine would both create and leave eleven. The slot is a
@@ -202,7 +202,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
             return Refused(findingId, place, repository, unfinished, Names(unfinished) ? path : "");
         }
 
-        var held = ReviewTreeRecords.All(root);
+        var held = ReviewTreeRecords.All(_at.Path);
 
         return held.Count >= Cap
             ? Full(findingId, place, repository, held)
@@ -286,7 +286,10 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
             // that identity permanently, with no route back except deleting it by hand (code round,
             // gemini). An EMPTY leftover holds nothing of anybody's and is cleared; one with files in
             // it is somebody's and is named and left, which is the same rule as a dirty tree.
-            return IsEmpty(path)
+            // An empty DIRECTORY, asked about directly — the same question `SubmoduleMounts.IsEmpty`
+            // asks about a mount, and the reason that helper takes a tree and a segment rather than
+            // one path: here there is no segment, only the leftover itself.
+            return SubmoduleMounts.IsEmpty(path, string.Empty)
                 ? (await _at.EnsureGoneAsync(path, ct) ? string.Empty : ReviewTreeReason.GitFailed)
                 : ReviewTreeReason.IncompleteAndDirty;
         }
@@ -320,7 +323,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
 
         var mounts = await EmptyMountsAsync(place.RepoPath, path, ct);
         ReviewTreeRecords.Write(
-            ReviewTreeRecords.FileFor(root, name),
+            ReviewTreeRecords.FileFor(_at.Path, name),
             new HeldRecord(repository, place.RepoPath, place.Sha, DateTime.UtcNow.ToString("O"), mounts));
 
         return Made(findingId, place, repository, path, mounts, reused: false);
@@ -387,7 +390,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     private ReviewTree LostTheRace(
         long findingId, TreePlace place, string repository, string name, string path)
     {
-        var read = ReviewTreeRecords.Read(ReviewTreeRecords.FileFor(root, name));
+        var read = ReviewTreeRecords.Read(ReviewTreeRecords.FileFor(_at.Path, name));
         if (Ready(read, repository, place.Sha) && Directory.Exists(path))
         {
             return Made(findingId, place, repository, path, read.Record.EmptyMounts, reused: true);
@@ -414,23 +417,13 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     {
         await _submodules.PopulateAsync(repoPath, path);
 
-        var declared = await _at.GitAsync(path, ["config", "-f", ".gitmodules", "--get-regexp", "path"], ReviewTreeRoot.Asking, ct);
+        // ONE mount discovery, shared with the keeper: two answers to "which mounts does this tree
+        // have" would let this side populate a mount a removal never inspects, and files in it would
+        // then be treated as clean and deleted. (Code round 2, codex.)
+        var declared = await SubmoduleMounts.DeclaredAsync(_at, path, ct);
 
-        return declared.Ran && declared.Ok
-            ? [.. Mounts(declared.Out).Where(m => IsEmpty(Path.Combine(path, m)))]
-            : [];
+        return [.. declared.Where(mount => SubmoduleMounts.IsEmpty(path, mount))];
     }
-
-    /// <summary>The mount paths out of <c>submodule.&lt;name&gt;.path &lt;mount&gt;</c> lines.</summary>
-    private static IEnumerable<string> Mounts(string config) =>
-        config.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(line => line.Split(' ', 2))
-            .Where(parts => parts.Length == 2)
-            .Select(parts => parts[1].Trim());
-
-    /// <summary>Lazy: it stops at the first entry, so an enormous submodule costs one directory read.</summary>
-    private static bool IsEmpty(string mount) =>
-        !Directory.Exists(mount) || !Directory.EnumerateFileSystemEntries(mount).Any();
 
     /// <summary>
     /// The machine-wide claim that makes the cap a cap: one creator at a time under this root.
@@ -446,7 +439,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
         var until = DateTime.UtcNow + ForTheSlot;
         while (DateTime.UtcNow < until)
         {
-            var taken = Slot.Try(Path.Combine(root, ".creating.lock"));
+            var taken = Slot.Try(Path.Combine(_at.Path, ".creating.lock"));
             if (taken.Taken)
             {
                 return taken;
