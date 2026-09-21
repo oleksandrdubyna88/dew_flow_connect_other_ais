@@ -28,6 +28,12 @@ public static class ServerNotices
     /// <summary>The file, named once — the extension spells the same name in `notificationsFile.ts`.</summary>
     public const string Name = "server-notices.jsonl";
 
+    /// <summary>The previous generation, kept when the live file reaches its ceiling.</summary>
+    public const string Archive = "server-notices.1.jsonl";
+
+    /// <summary>The ceiling, so that the pair cannot exceed the 256 MB the parent plan named.</summary>
+    public const long RollAt = 128L * 1024 * 1024;
+
     /// <summary>The notices file inside a data directory that has already been resolved.</summary>
     /// <remarks>
     /// <para>It takes the directory rather than the environment on purpose: every caller here
@@ -80,6 +86,61 @@ public static class ServerNotices
     /// story 2.1's census has bounded them; until then the only caller is a test, and no published
     /// binary can be made to write a real notice. That is story 2.4's live seam leg.</para>
     /// </remarks>
-    public static bool Append(ResolvedDataDir dir, ServerNotice notice) =>
-        JsonlLedger.AppendLine(PathFor(dir), ServerNoticeLine.Of(notice));
+    public static bool Append(ResolvedDataDir dir, ServerNotice notice, long rollAt = RollAt)
+    {
+        var path = PathFor(dir);
+        Roll(path, rollAt);
+
+        return JsonlLedger.AppendLine(path, ServerNoticeLine.Of(notice));
+    }
+
+    /// <summary>
+    /// The ceiling. At <see cref="RollAt"/> the live file becomes <see cref="Archive"/> and a new one
+    /// starts, so the pair cannot pass the 256 MB the parent plan named.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why it ships with the first repeating writer.</b> §7 of the parent bounds this file at
+    /// ~400 B typical and ~10 KB worst case per record, 300/day — 44 MB/year, or 1.1 GB/year at the
+    /// worst the serialiser permits — and named 256 MB as the trigger for a roll-up somebody would
+    /// build later. Story 2.2's plan round refused that: `planning-docs.md` requires a plan that
+    /// creates something that GROWS to name its budget, its owner and its retirement rule BEFORE the
+    /// first write, and story 2.2 is the first story with a repeating writer — 48 refusal sites, every
+    /// one reachable on every round. So 256 MB is a MAXIMUM here rather than a trigger, and the
+    /// retirement rule is the oldest generation.</para>
+    /// <para><b>Two generations, not many.</b> What the page shows is recent, what a person debugging
+    /// wants is the recent past, and a numbered series is a retention policy with no end — which is
+    /// what this was asked to avoid rather than reinvent.</para>
+    /// <para><b>A roll that cannot happen is not an error.</b> Another server on the same NAS rolling
+    /// the same file in the same moment is the normal case for this product, and the disk arbitrates
+    /// it: one move wins and the other is refused. The record then lands in whichever file is live,
+    /// which is the right answer either way. What must never happen is a refusal failing because a
+    /// rename did not.</para>
+    /// </remarks>
+    private static void Roll(string path, long rollAt)
+    {
+        var live = new FileInfo(path);
+        if (!live.Exists || live.Length < rollAt)
+        {
+            return;
+        }
+
+        Rolled(path, Path.Combine(live.DirectoryName ?? "", Archive));
+    }
+
+    private static void Rolled(string live, string archive)
+    {
+        try
+        {
+            File.Move(live, archive, overwrite: true);
+        }
+        catch (IOException)
+        {
+            // A neighbour got there first, or the share stopped answering. Either way the append
+            // that follows is the thing that matters and it can still succeed.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // The same, from a permission the process does not have on the archive name.
+        }
+    }
 }

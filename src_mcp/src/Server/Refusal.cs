@@ -1,4 +1,7 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using CoaiMcp.Core.Notices;
+using CoaiMcp.ServiceDefaults;
 
 namespace CoaiMcp.Server;
 
@@ -37,10 +40,27 @@ internal static class Refusal
     /// purpose — an <c>Of(string)</c> nobody calls would be an uninhabited member today and a worse
     /// hook tomorrow, since what 2.2 needs is the moment, not another road to the same record.
     /// </remarks>
-    internal static string Answer(string sentence)
+    internal static string Answer(
+        string sentence,
+        [CallerMemberName] string from = "",
+        Serilog.ILogger? log = null,
+        Func<ResolvedDataDir>? where = null,
+        Func<ResolvedDataDir, ServerNotice, bool>? append = null,
+        TimeSpan? budget = null)
     {
         var refusal = new ErrorAnswer(sentence);
 
+        RefusalNotices.Record(sentence, from, log, where ?? Where,
+            append ?? Written, budget ?? RefusalNotices.Budget);
+
         return JsonSerializer.Serialize(refusal, ServerJsonContext.Default.ErrorAnswer);
     }
+
+    /// <summary>Where this side's data directory is, asked of the ONE resolver.</summary>
+    private static ResolvedDataDir Where() =>
+        PanelSettings.DataDirectoryFor(Environment.GetEnvironmentVariable);
+
+    /// <summary>The real writer, named so that the default is a delegate rather than a method group.</summary>
+    private static bool Written(ResolvedDataDir dir, ServerNotice notice) =>
+        ServerNotices.Append(dir, notice);
 }

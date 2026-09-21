@@ -1266,6 +1266,52 @@ lines with `Environment.NewLine` in case a CRLF file left a hidden character in 
 join is the mechanism that makes a wrapped call findable, and the trim that removes indentation
 removes the CR with it. A `\r\n` case was added to the join tests so that rejection rests on a test.
 
+## Every refusal is written down, and no notice may cost one (S8 story 2.2, 2026-09-21)
+
+`Refusal.Answer` builds the `ErrorAnswer`, hands it to `RefusalNotices.Record`, and serialises it.
+Story 2.1's boundary is what makes that one line a guarantee: an `ErrorAnswer` is the only shape a
+refusal takes on the wire, it is constructed in one file, and both services reach it — so
+instrumenting that point IS "every refusal", with `TheRefusalRoadsAreCountedTests` keeping it true.
+
+**The record.** `class: refusal`, `source: coai-mcp`, `code: refused`, `title` the sentence — and
+`subject` the CALLING MEMBER, filled by the compiler through `[CallerMemberName]` on each service's
+`Error` helper. That last part is what makes one shared `code` usable: the extension keys repeats on
+`(code, subject)`, so without it "no reviewers are configured" and "the plan text is empty" would
+collapse into a single row nobody can read. codex raised it on the plan round; it cost zero changes
+at the 48 call sites, because the compiler fills it.
+
+**Nothing in the write may cost the refusal, and that took five findings to get right.** All three
+providers put a finding on the same sentence of the plan: the pseudocode resolved the data directory
+OUTSIDE the `try`, so a `COAI_DATA_DIR` that cannot resolve — a configuration fault, not a disk one —
+would have thrown past the `return` and the calling AI would have received nothing at all. Resolution,
+construction and the append are now one boundary, and four tests drive it: a resolver that throws, a
+writer that throws, a writer that answers `false`, and a writer that never returns. Each was proved by
+breaking the code — narrowing the `catch` to `DivideByZeroException` turns two of them red with the
+exception escaping, and removing the budget makes the fourth HANG, which is the symptom itself.
+
+**The write is time-bounded.** codex: this product's data directory has been a NAS share, and a
+synchronous append to a stalled one blocks — the refusal would never be serialised and the calling AI
+would time out, which is the failure this story exists to prevent arriving by a new road. The append
+runs on the thread pool, waited on for **2 s**; past that the refusal goes without it and the task is
+abandoned. Explicitly lossy, and the residual is written into the class.
+
+**A lost notice is never silent.** `Append` answers `false` for anything the disk gave, and a run
+where that happens looks exactly like one where it did not — so both `Error` helpers became instance
+methods to pass their logger, and the loss is a `Warning` naming the refusal.
+
+**The ceiling ships with the first repeating writer.** §7 of the plan named 256 MB as a trigger for a
+roll-up somebody would build later; the plan round refused that, citing `planning-docs.md`: a plan
+that creates something that GROWS names its budget, owner and retirement rule *before* the first
+write, and this is the first story with a repeating writer — 48 sites, every one reachable on every
+round. So `ServerNotices.Append` rolls the live file to `server-notices.1.jsonl` at **128 MB**, two
+generations, making 256 MB a hard maximum rather than a trigger. A roll that loses a race to another
+server on the same NAS is not an error: the record lands in whichever file is live.
+
+**What bounds a record is the redactor, not a second cut.** `Redaction.SafeText` cuts every string
+field to `TitleLimit` (1000), which is what makes §7's ~10 KB worst case a fact — a megabyte of
+refusal sentence produces a line under 10 KB, and a test asserts it on the file's bytes rather than
+reading the limit.
+
 ## The spending ledger
 
 `UsageLedger` appends one JSON line per reviewer to `<dataDir>/usage.jsonl`: vendor, model, role,

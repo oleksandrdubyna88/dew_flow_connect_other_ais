@@ -1582,6 +1582,34 @@ the script took the first two and compared a pair nobody asked about. Counting t
 is meant in every reading. The red test hands it three files that all EXIST, so the refusal cannot
 come from a missing one; a first draft passed for exactly that wrong reason.
 
+## A refusal that cannot be written must not cost the refusal (2026-09-21, S8 story 2.2)
+
+`TheRefusalsAreWrittenDownTests` — thirteen cases, and the interesting half is not that a line lands
+but that FOUR of them break the write on purpose: a resolver that throws, a writer that throws, a
+writer that answers `false`, and a writer that never returns. The plan round put five findings on one
+sentence of the plan, from all three providers, and every one was right about the same gap — the
+pseudocode resolved the data directory outside the failure boundary, so a misconfigured
+`COAI_DATA_DIR` would have thrown past the return and the calling AI would have received nothing.
+
+**Teeth, measured.** Narrowing the boundary's `catch` from `Exception` to `DivideByZeroException`
+turns two of them red with the exception escaping as an `AggregateException`; removing the time
+budget makes the fourth **hang** — `0 completed, 0 failed | active: AWriterThatNeverReturns…` — which
+is the symptom codex described, not a proxy for it. One plant did NOT work and is worth recording: an
+`if (true) … else if (false)` version failed to COMPILE, the build stopped, and the suite then ran the
+previous executable and reported thirteen green. A plant that does not build is a plant that proves
+nothing, and the green run looks identical to a real one.
+
+**The seams are parameters, not hooks** — the directory, the writer and the budget are all arguments
+with defaults, for the reason story 1.4 recorded: xUnit runs test classes in parallel and a static
+hook fires inside somebody else's call. `COAI_DATA_DIR` is process-global, so a test that set it would
+be that hook wearing a different hat.
+
+**And the census caught the new road on its first run.** `TheOneAppendTests` asks the ASSEMBLY which
+members answer `ResolvedDataDir`; `Refusal.Where` made three, and the test went red naming it. It is
+a pass-through to the one resolver, like `SettingsFile.DataDirFrom` beside it — what that census
+exists to catch is a second IMPLEMENTATION — so the list grew by one with the reason written down,
+which is the difference between a decision and a drift.
+
 ## One scanner, two censuses (2026-09-21, S8 story 2.1)
 
 `ProductionSources` is the source scanner both censuses share — `TheOneAppendTests` (one append) and

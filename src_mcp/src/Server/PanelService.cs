@@ -1,4 +1,5 @@
 using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using System.Text.Json;
 using CoaiMcp.Core.Context;
@@ -2668,13 +2669,18 @@ public sealed partial class PanelService
     /// A refusal, through the ONE place the wire shape is built.
     /// </summary>
     /// <remarks>
-    /// It used to build its own <c>ErrorAnswer</c>, and so did <c>ConsultationService</c> — two
-    /// boundaries for one promise. Story 2.2 instruments the refusal road, and a road with two ends
-    /// is a promise nothing bounds; <see cref="Refusal"/> is the single end, held to one file by
-    /// <c>TheRefusalRoadsAreCountedTests</c>. The name stays <c>Error</c> here because
-    /// twenty-five call sites read better for it.
+    /// <para>It used to build its own <c>ErrorAnswer</c>, and so did the other service — two
+    /// boundaries for one promise. Story 2.1 made it one; story 2.2 writes the notice there, so this
+    /// is a two-line wrapper in front of the instrumented point rather than a road past it.</para>
+    /// <para><b>It is an instance method and takes a caller name, and neither cost a call site.</b>
+    /// The logger is what says a notice was LOST — <c>Append</c> answers false for anything the disk
+    /// gave, and a run where that happens otherwise looks exactly like one where it did not. The
+    /// caller name becomes the notice's <c>subject</c>: the extension keys repeats on
+    /// <c>(code, subject)</c>, so one <c>refused</c> code for every site would collapse every reason
+    /// into a single row. The compiler fills it at each site, so nothing below changed.</para>
     /// </remarks>
-    private static string Error(string sentence) => Refusal.Answer(sentence);
+    private string Error(string sentence, [CallerMemberName] string from = "") =>
+        Refusal.Answer(sentence, from, _log);
 }
 
 /// <summary>

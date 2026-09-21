@@ -2,11 +2,11 @@
 
 > Status: **EPIC 1 IMPLEMENTED, 2026-09-21; story 2.1 implemented, 2026-09-21; the rest of epics 2
 > and 3 open.** Stories 1.1 (the credential list), 1.2 (the notice line), 1.3 (the path) and 1.4 (the
-> writer, and the append it had to fix) have shipped, and 2.1 has bounded the population 2.2 is about
-> to make a promise about. What remains is the instrumentation itself — **the ONE refusal road**
-> (2.2: `Refusal.Answer`, which `PanelService.Error` and `ConsultationService.Error` are the two
-> CALLERS of, not three roads as this plan first said), the reviewer and startup notices (2.3),
-> the live seam leg (2.4) — and the deaths (3.1, 3.2).
+> writer, and the append it had to fix) have shipped; 2.1 bounded the population, and **2.2 has
+> instrumented it** — every refusal this server returns now leaves a line, written at the ONE road
+> (`Refusal.Answer`, which `PanelService.Error` and `ConsultationService.Error` are the two CALLERS
+> of, not three roads as this plan first said). What remains is the reviewer and startup notices
+> (2.3), the live seam leg (2.4) — and the deaths (3.1, 3.2).
 > Scope: `src_mcp` — a notice record and its serialiser, the append, the instrumentation sites, a
 > run-start marker, and the `try/catch/finally` that `Program.cs` has never had.
 >
@@ -178,10 +178,20 @@ more: `detail` alone may be 4096, and several other fields 1000 each.
 | **Worst case the serialiser permits** | ~10 KB | **1.1 GB/year** |
 
 So the bound is stated as a rule rather than an average: the typical figure is what this will do, and
-the worst case is what it *could* do, which is why the ceiling is named now. **No rotation and no
-sampling ship here** — but the trigger is written down: if the file passes **256 MB**, the roll-up is
-built before anything else is added to this plan's family. The owner is whoever next touches this
-file, and the DoD of that work is the retention job, not another measurement.
+the worst case is what it *could* do, which is why the ceiling is named now.
+
+> **CORRECTED by story 2.2, 2026-09-21.** This section said *"no rotation and no sampling ship here"*
+> and left 256 MB as a trigger for a roll-up whoever touched the file next would build. Story 2.2's
+> plan round refused that on the convention, and was right to:
+> `.agents/conventions/common/planning-docs.md` requires a plan that creates something that GROWS to
+> name its budget, its owner and its retirement rule **before the first write**, and 2.2 is the first
+> story with a repeating writer — 48 refusal sites, every one reachable on every round. So the
+> retirement rule shipped with it: `ServerNotices.Append` rolls the live file to
+> `server-notices.1.jsonl` at **128 MB**, two generations, which makes 256 MB a hard MAXIMUM for the
+> pair instead of a trigger for unscheduled work. The per-record figure is a fact rather than an
+> estimate now as well: `Redaction.SafeText` cuts every string field to `TitleLimit`, and
+> `TheWorstCaseLine_IsWithinTheDocumentedCeiling` asserts a megabyte of refusal sentence produces a
+> line under 10 KB, measured on the file's bytes.
 
 ### 8. Coverage is enumerated mechanically, not promised *(round)*
 
@@ -331,7 +341,7 @@ because this project's gate holds one session per repo+branch and closes it when
 | | Story | Depends on | Model |
 |---|---|---|---|
 | ~~2.1~~ | ~~Every refusal road and every reviewer ending is counted, and the count only falls~~ — **shipped 2026-09-21** as a BOUNDARY rather than a count (PR #449): `Refusal.Answer` is the one place an `ErrorAnswer` is built, and `shared/refusal-sites.json` carries the numbers | — | Opus |
-| 2.2 | Every refusal returned to the calling AI is written down, inside the helpers that return it | 1.4, 2.1 | Opus |
+| ~~2.2~~ | ~~Every refusal returned to the calling AI is written down~~ — **shipped 2026-09-21**: written at `Refusal.Answer` inside one failure boundary, time-bounded at 2 s, `subject` from `[CallerMemberName]`, and the file's ceiling (§7) ships with it rather than as a trigger | 1.4, 2.1 | Opus |
 | 2.3 | A reviewer that fails, and a setting this build cannot read, reach the file the page reads | 2.2 | Opus |
 | 2.4 | A real refusal over stdio lands with its secret taken out — asserted on the bytes | 2.2 | Opus |
 
