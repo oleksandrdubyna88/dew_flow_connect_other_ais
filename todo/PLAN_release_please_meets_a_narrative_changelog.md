@@ -1,9 +1,10 @@
 # PLAN — release-please, and the narrative changelog it would write over
 
-> Status: **partially implemented, 2026-09-18 — the decision is taken and what remains is not
-> scriptable.** The operator chose a GitHub App over a PAT; `release-please.yml` mints an
-> installation token and refuses in words until the secrets exist. Creating and installing a GitHub
-> App cannot be done without a browser, so the next move is two browser steps, written out below. Scope: Epic 4 of
+> Status: **partially implemented, 2026-09-21 — the mechanism is PROVEN on one repository, two more
+> to adopt it.** `dew_flow_sidecar_rust` releases through release-please on `push: main`: a GitHub
+> App mints the token, the acceptance test in build-order step 2 passed, and `v0.2.0` was cut and
+> published through it end to end. Steps 3 (`creds_for_devs`) and 4 (`connect_other_ais`, option A)
+> are the remaining work, and the hard half is still step 4's 122 paragraphs of narrative. Scope: Epic 4 of
 > [PLAN_family_ci_hardening.md](PLAN_family_ci_hardening.md) — `release-please` in the three
 > repositories that release. Blocks Epic 5 step 3, which is the step that actually closes CWE-522.
 >
@@ -222,9 +223,9 @@ As a manifest, if the form is the slower route:
    The `<` form matters: a multi-line PEM passed as `--body` from a Windows shell arrives mangled,
    and the failure surfaces an hour later as a token that will not mint.
 
-Then dispatch `release-please` once and watch a release pull request appear. Only after that does
-`push: branches: [main]` get uncommented — step 2 of the build order below is the acceptance test,
-and it has not run yet.
+**DONE 2026-09-21.** The app exists, is installed on `dew_flow_sidecar_rust` only, and both secrets
+are set. `push: branches: [main]` is uncommented — the acceptance test in step 2 below ran first,
+which is the order this section asked for.
 
 ## Build order
 
@@ -237,10 +238,40 @@ and it has not run yet.
    will bring `Cargo.toml` into line with reality for the first time.
 2. **Cut one real release through it** and compare the artefacts against the previous release, by
    name and by size. This is Epic 4's acceptance test and it is not optional: a tag that does not
-   trigger the existing workflow produces nothing, silently. **BLOCKED on the two browser steps
-   above** — creating and installing the app. Everything downstream of them is written and linted;
-   steps 3 and 4 wait behind this one deliberately, because this plan's own recommendation is to
-   measure on one release before the others adopt anything.
+   trigger the existing workflow produces nothing, silently.
+
+   **PASSED 2026-09-21**, and every link was checked on its own, because a green workflow proves
+   nothing here — a release that publishes NOTHING looks exactly like one that worked, until
+   somebody goes looking for the binary.
+
+   | link | evidence |
+   |---|---|
+   | the app minted a token | `create-github-app-token` green |
+   | the robot opened its OWN pull request | `#37`, author **`app/dew-flow-release-please`** |
+   | merging it and re-running cut a tag | `v0.2.0` in origin |
+   | **the tag started `release.yml`** | `ref=v0.2.0 event=push` |
+   | the artefacts are real | same two names as `v0.1.2`, sizes within **0.2 %** |
+
+   ```
+   bge-sidecar-cpu-x86_64-pc-windows-msvc.zip       10 945 261 -> 10 935 446
+   bge-sidecar-cpu-x86_64-unknown-linux-gnu.tar.gz  11 396 087 -> 11 372 369
+   ```
+
+   The fourth row is the one the app exists for: with `GITHUB_TOKEN` GitHub raises no workflow run
+   from events its own token created, so the tag would have stood there with no build, no artefacts
+   and no error.
+
+   **The drift step 1 predicted is confirmed and fixed.** `Cargo.toml` still said `0.1.0` with three
+   tags already cut; the release pull request brought it to `0.2.0` — correct for the first time.
+
+   **A DEVIATION WORTH RECORDING, because it read as a failure for a minute.** The tag is *not* cut
+   by merging the release pull request. It is cut by the NEXT run of the workflow, which the merge
+   triggers — so on `workflow_dispatch` it took **two** dispatches, and the first one looked like
+   "merged and nothing happened". On `push: main` it is automatic, which is most of why that trigger
+   is worth turning on rather than a tidiness preference.
+
+   **The version jumped 0.1.2 → 0.2.0, not 0.1.3**, because `feat:` commits were in the range. Correct
+   behaviour, and worth knowing before it surprises somebody mid-release.
 3. **`creds_for_devs`** — four components, `include-component-in-tag: true`, a generated changelog
    where none exists.
 4. **`connect_other_ais`** — option A. `RELEASES.md` generated, `src_vs_code/CHANGELOG.md` left
