@@ -61,9 +61,9 @@ public static partial class Redaction
     /// <remarks>
     /// <para>WhiteSpace ∪ LineTerminator: TAB, LF, VT, FF, CR, every <c>Zs</c>, U+2028, U+2029 and
     /// U+FEFF. Measured: .NET's own <c>\s</c> admits U+0085 (NEL) and refuses U+FEFF (ZWNBSP), and
-    /// JavaScript does the opposite — so <c>https://u:p‹NEL›@host</c> was redacted by the extension
-    /// and not by a port that wrote <c>\s</c>. The one code point no category isolates is written as
-    /// a regex escape in a REGULAR string — a <c>\u</c> escape in this repository has twice reached
+    /// JavaScript does the opposite — so an authority credential whose password ends at a NEL was
+    /// redacted by the extension and not by a port that wrote <c>\s</c>. The one code point no
+    /// category isolates is written as a regex escape in a REGULAR string — a <c>\u</c> escape in this repository has twice reached
     /// disk as the raw character, and a raw U+FEFF inside a pattern is invisible to every reader.</para>
     /// </remarks>
     private const string JsSpace = @"\t\n\v\f\r\p{Zs}\p{Zl}\p{Zp}" + "\\uFEFF";
