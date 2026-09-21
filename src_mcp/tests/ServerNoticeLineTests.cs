@@ -261,7 +261,10 @@ public sealed class ServerNoticeLineTests
     {
         var line = ServerNoticeLine.Of(new()
         {
-            Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused,
+            Utc = "u",
+            Class = "failure",
+            Source = "s",
+            Code = ServerNoticeCodes.Refused,
             More = new Dictionary<string, object> { ["whatTheServerSent"] = "the call failed with api_key: abc123def456" },
         });
 
@@ -275,7 +278,10 @@ public sealed class ServerNoticeLineTests
     {
         var line = ServerNoticeLine.Of(new()
         {
-            Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused,
+            Utc = "u",
+            Class = "failure",
+            Source = "s",
+            Code = ServerNoticeCodes.Refused,
             More = new Dictionary<string, object> { ["n"] = 7, ["ratio"] = 0.1 + 0.2, ["big"] = 9007199254740992L },
         });
 
@@ -399,7 +405,10 @@ public sealed class ServerNoticeLineTests
         // notificationLine maps VALUES through safeText and leaves the field name as it is.
         var line = ServerNoticeLine.Of(new()
         {
-            Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused,
+            Utc = "u",
+            Class = "failure",
+            Source = "s",
+            Code = ServerNoticeCodes.Refused,
             More = new Dictionary<string, object> { ["k\"ey"] = "v\\al", ["e\nl"] = "x", ["ключ"] = "значение" },
         });
 
@@ -471,7 +480,10 @@ public sealed class ServerNoticeLineTests
 
         var kept = new ServerNotice
         {
-            Utc = "u", Class = "failure", Source = "s", Code = ServerNoticeCodes.Refused,
+            Utc = "u",
+            Class = "failure",
+            Source = "s",
+            Code = ServerNoticeCodes.Refused,
             More = new Dictionary<string, object> { ["07"] = "not an index", ["n"] = 9007199254740992L, ["r"] = 1.5, ["s"] = "" },
         };
         ServerNoticeLine.Of(kept).Should().Contain("\"07\":\"not an index\",\"n\":9007199254740992,\"r\":1.5,\"s\":\"\"");
