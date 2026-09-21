@@ -125,9 +125,13 @@ jobs:
       # run before `npm ci`, so a C# test cannot spawn node. It drives `NoticeTool`, a test-only
       # executable built by the solution and never published — the FakeCli pattern.
       #
-      # Watched failing by replacing the redactor's ASCII lookbehind with .NET's own ``, which is
-      # Unicode-aware where JavaScript's is not: the server then left `token abcdefghijklmnop`
-      # unredacted after Cyrillic text while the extension removed it.
+      # Watched failing by replacing the redactor's ASCII lookbehind with .NET's own
+      # word-boundary escape, which is Unicode-aware where JavaScript's is not: the server
+      # then left `token abcdefghijklmnop` unredacted after Cyrillic text while the
+      # extension removed it. The escape is NAMED here rather than spelled: spelling it is
+      # exactly what put a raw 0x08 byte in this file, and YAML refuses a C0 control byte —
+      # the whole workflow stopped parsing, its three required checks never reported, and
+      # the pull request sat blocked with every check a person could see passing.
       - name: Parity — both notice serialisers over one corpus
         working-directory: src_vs_code
         run: npm run test:parity
