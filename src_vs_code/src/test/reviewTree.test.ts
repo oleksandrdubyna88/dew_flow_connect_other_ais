@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { ReviewPair } from '../bugzReviewPage';
+import { ReviewPair } from '../reviewPair';
 import { mountsNote, ReviewTreeAnswer, TreeRead, treeSentence } from '../reviewTree';
 import { readTreeAt } from '../reviewTreeRead';
 import { RevisionItem, RevisionPanel, RevisionReach } from '../revisionPanel';

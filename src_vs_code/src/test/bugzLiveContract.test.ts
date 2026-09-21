@@ -257,7 +257,7 @@ test('both halves of the wire name the same sixteen fields', () => {
   const served = [...(record[1] ?? '').matchAll(/\b(?:long|int|string)\s+([A-Z][A-Za-z]*)/gu)]
     .map((found) => `${(found[1] ?? '').charAt(0).toLowerCase()}${(found[1] ?? '').slice(1)}`);
 
-  const shape = /export interface ReviewPair \{([\s\S]*?)\n\}/u.exec(read('src_vs_code/src/bugzReviewPage.ts'));
+  const shape = /export interface ReviewPair \{([\s\S]*?)\n\}/u.exec(read('src_vs_code/src/reviewPair.ts'));
   assert.ok(shape !== null, 'the ReviewPair interface is no longer declared where this looks');
   const wanted = [...(shape[1] ?? '').matchAll(/readonly ([a-zA-Z]+)\??:/gu)].map((found) => found[1]);
 

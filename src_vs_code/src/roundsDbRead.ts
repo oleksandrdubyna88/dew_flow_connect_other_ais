@@ -1,5 +1,5 @@
 import { BugCorpus, DbFinding, DbLog, EMPTY_CORPUS, EMPTY_LOG, ManyFound, parseBugs, parseFindings, parseLog, parseManyFindings } from './roundsDb';
-import { ReviewPair } from './bugzReviewPage';
+import { ReviewPair } from './reviewPair';
 import { FileAtRead, FileAtRevision, TOO_OLD_FOR_THE_REVISION } from './openAtRevision';
 import { MethodSide, RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD } from './realMethodView';
 import { inBatches, READS_AT_ONCE } from './roundsExport';

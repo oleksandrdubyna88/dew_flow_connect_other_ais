@@ -1,4 +1,4 @@
-import { ReviewPair } from './bugzReviewPage';
+import { ReviewPair } from './reviewPair';
 import { Calls, CallEnd, methodOf, stillWanted } from './callHierarchy';
 import { AskedAbout } from './callHierarchyAsk';
 import { callsBlock, CallsState } from './callsBlock';

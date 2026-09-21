@@ -1,6 +1,7 @@
 import { cyclomatic } from './cyclomatic';
 import { commit, none, text } from './reviewText';
 import { revisionActions, RevisionState } from './revisionActions';
+import { CALLS, containerAttribute, REVISIONS } from './livePatch';
 import { escapeHtml } from './webviewHtml';
 
 /**
@@ -92,7 +93,7 @@ export function about(pair: AboutRow, revision: RevisionState, calls = ''): stri
       <dt>Why</dt><dd>${prose(pair.why)}</dd>
       <dt>Fix</dt><dd>${prose(pair.fix)}</dd>
       <dt title="cyclomatic complexity of the method as it was at that commit, counted from the skeleton — not of the file today">Complexity</dt><dd>${complexity(pair)}</dd>
-      <dt>Open</dt><dd class="open" data-revision="${escapeHtml(String(pair.findingId))}">${revisionActions(pair, revision)}</dd>
-      <dt>Calls</dt><dd class="open" data-calls-for="${escapeHtml(String(pair.findingId))}">${calls}</dd>
+      <dt>Open</dt><dd class="open" ${containerAttribute(REVISIONS, pair.findingId)}>${revisionActions(pair, revision)}</dd>
+      <dt>Calls</dt><dd class="open" ${containerAttribute(CALLS, pair.findingId)}>${calls}</dd>
     </dl>`;
 }

@@ -10,7 +10,8 @@ import { settingWritten } from './settingWrite';
 import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
-import { FilterPress, ReviewPair, reviewPageHtml } from './bugzReviewPage';
+import { FilterPress, reviewPageHtml } from './bugzReviewPage';
+import { ReviewPair } from './reviewPair';
 import { FileAtRead, RevisionDocument } from './openAtRevision';
 import { TreeRead } from './reviewTree';
 import { CallEnd, Calls } from './callHierarchy';

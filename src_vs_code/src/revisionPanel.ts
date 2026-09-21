@@ -1,4 +1,4 @@
-import { ReviewPair } from './bugzReviewPage';
+import { ReviewPair } from './reviewPair';
 import { asText } from './asText';
 import {
   affectedBy,

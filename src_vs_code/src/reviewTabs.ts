@@ -1,4 +1,4 @@
-import { ReviewPair } from './bugzReviewPage';
+import { ReviewPair } from './reviewPair';
 import { identityOf, MarkReader, ProjectIdentity, UNKNOWN_PROJECT } from './projectIdentity';
 import { openedFrom, Tab } from './tabStrip';
 

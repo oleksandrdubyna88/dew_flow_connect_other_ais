@@ -5,6 +5,8 @@ import { about } from './reviewAbout';
 import { RevisionState, UNPROBED } from './revisionActions';
 import { slugOf, Tab, tabStrip } from './tabStrip';
 import { toneControlHtml, toneScript } from './textTone';
+import { CALLS, containerQuery, REVISIONS } from './livePatch';
+import { ReviewPair } from './reviewPair';
 import { reviewPageCss } from './reviewPageStyle';
 import { escapeHtml, jsonForScript } from './webviewHtml';
 import { zoomControlHtml, zoomScript } from './zoomControl';
@@ -57,40 +59,6 @@ import { zoomControlHtml, zoomScript } from './zoomControl';
  * it: a page module that reaches for either fails the bundle test, and a decision inside one is a
  * decision no unit test can run.</p>
  */
-
-/**
- * One pair as the server hands it over.
- *
- * <p>The seven fields after `title` arrived with story 2.1. They are OPTIONAL on the wire —
- * `roundsDbRead.pairOf` fills each from a server too old to send it, with empty text and a line of
- * 0 — and REQUIRED here, so that the page cannot forget to decide what an empty one looks like.</p>
- */
-export interface ReviewPair {
-  readonly findingId: number;
-  readonly symbolName: string;
-  readonly language: string;
-  readonly skeletonBefore: string;
-  readonly skeletonAfter: string;
-  /** -1 nobody has looked, 0 dropped, 1 kept. */
-  readonly keep: number;
-  readonly severity: string;
-  readonly category: string;
-  readonly title: string;
-  /** The checkout the round reviewed, as the session recorded it. Empty when the server did not say. */
-  readonly repoPath: string;
-  /** The commit the reviewers read — the BEFORE skeleton is the method at this commit. */
-  readonly headSha: string;
-  /** The commit the fix was found in — the AFTER skeleton is the method at this one. */
-  readonly fixSha: string;
-  /** The finding's path at `headSha`, relative to `repoPath`. */
-  readonly file: string;
-  /** The finding's line at `headSha`; 0 when none was recorded. */
-  readonly line: number;
-  /** The reviewers' cause, verbatim — a model's prose about somebody's code, escaped on the way in. */
-  readonly why: string;
-  /** The reviewers' proposed fix, verbatim. */
-  readonly fix: string;
-}
 
 /**
  * Everything the page is drawn from, as one argument.
@@ -548,8 +516,11 @@ ${body(pairs, rows, trouble)}
   // which is what makes one process per repository true for the case that matters.
   function showRevisionActions(items) {
     for (var i = 0; i < (items || []).length; i++) {
-      var box = document.querySelector('[data-revision="' + String(items[i].id) + '"]');
-      if (box) { box.innerHTML = items[i].html; }
+      var box = document.querySelector(${containerQuery(REVISIONS, 'String(items[i].id)')});
+      // Identical markup is not painted. RevisionPanel fans ONE answer out per repository, so
+      // several rows receive the same string and a repeat is the normal case here, not an edge --
+      // and assigning innerHTML the same string still destroys the element a person is on.
+      if (box && box.innerHTML !== items[i].html) { box.innerHTML = items[i].html; }
     }
   }
 
@@ -557,7 +528,7 @@ ${body(pairs, rows, trouble)}
   // calls it, and paints it into that row's own container rather than redrawing the page.
   function showCalls(items) {
     for (var i = 0; i < (items || []).length; i++) {
-      var box = document.querySelector('[data-calls-for="' + String(items[i].id) + '"]');
+      var box = document.querySelector(${containerQuery(CALLS, 'String(items[i].id)')});
       // Identical markup is not painted: replacing innerHTML with the same string still destroys
       // the element the person was on, and a superseded completion posts exactly that. The page's
       // own rule, which this file's older showRevisionActions still breaks. (Round 2, coderabbit.)
@@ -567,8 +538,8 @@ ${body(pairs, rows, trouble)}
 
   window.addEventListener('message', function (event) {
     var m = event.data;
-    if (m && m.type === 'revisions') { showRevisionActions(m.items); return; }
-    if (m && m.type === 'calls') { showCalls(m.items); return; }
+    if (m && m.type === '${REVISIONS.message}') { showRevisionActions(m.items); return; }
+    if (m && m.type === '${CALLS.message}') { showCalls(m.items); return; }
     if (!m || m.type !== 'real') { return; }
     var id = String(m.id);
     // Applied only to the request that is still WANTED. The toggle flipped, the row collapsed or

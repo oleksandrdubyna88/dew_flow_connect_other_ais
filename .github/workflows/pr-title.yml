@@ -18,6 +18,7 @@ jobs:
   semantic:
     name: pr · semantic title
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       # Pinned to a commit, not a tag: a tag can be moved under you, and this action reads the
       # pull request with a token. SonarCloud githubactions:S7637, 2026-09-05. Dependabot keeps the

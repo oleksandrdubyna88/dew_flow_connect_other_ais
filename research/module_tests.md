@@ -1520,3 +1520,38 @@ site is enumerated and compared with a list of two, the file name is held to one
 minting sites of `ResolvedDataDir` are asked of the ASSEMBLY as well as of the source — a
 target-typed `new(` hides from a text scan and not from reflection. Each scan has a companion
 asserting it still finds its known instances, so a reformat cannot turn a guard into a pass.
+## The seams, and two gates that had stopped meaning anything (2026-09-21)
+
+Five findings from story 3.3's code rounds were right about the code and wrong about the SCOPE — each
+named a defect that lives in a sibling too. Rejected in the round with that reason, carried out as
+questions, answered by the operator, and built here as one unit.
+
+| Suite | What it covers |
+|---|---|
+| `bugzReviewPage.test.ts` (+4) | the live patch, DRIVEN through `Host.push`: a revision answer landing in its own container and no other; an identical revision patch skipped, as `showCalls` already was; and for BOTH channels, that the container the generator EMITS is the container the page script QUERIES, message type included |
+| `suppressionsOnlyShrink.test.ts` (8) | the lint ratchet, by SPAWNING it: an unchanged or shrunken file passes; a new file/rule pair is refused; a grown count is refused; a second rule on an already-listed file is refused; **the case a total would pass** — one fixed, one added, total unchanged; an absent base is a pass rather than a crash; six shapes of valid JSON that are not suppressions files are refused rather than read as a verdict; and the repository's own file is valid and carries nothing from `src/test/` |
+| `workflowGuards.test.ts` (4) | the submodule is in the ANALYSIS exclusions; the actionlint fetch has no flat `--retry-delay`, has `--retry 5` and `--retry-max-time 120`; those same arguments **run against a local server that answers 504 three times and then 200**; every job in every workflow declares `timeout-minutes` |
+
+**Teeth, measured.** Seven plants, each restored from a saved copy:
+
+| planted | red | what the failure said |
+|---|---|---|
+| `showRevisionActions` repaints identical markup | 1 | the same markup a second time must not touch the DOM |
+| the page script hardcodes its own query again | 7 | every test that drives a revision patch, plus both channel tests |
+| the generator hardcodes the container attribute | — | **the COMPILER refused it**: the import it replaces goes unused. A stronger outcome than a red test, and the reason this seam cannot quietly come apart |
+| Sonar analyses the submodule again | 1 | the submodule must be in the ANALYSIS exclusions |
+| the flat retry delay comes back | 1 | a fixed `--retry-delay` replaces the exponential backoff |
+| one job loses its timeout | 1 | these jobs would run for GitHub's default 360 minutes if they hung |
+| one file suppressed that was not before | 1 | run against the REAL file: the total was unchanged at 615, which a count check would pass, and the ratchet named `src/brandNew.ts` |
+
+**Two tests found their own harness first, and both are recorded because the lesson belongs to the
+test.** The retry scenario used `spawnSync`, which blocks the thread the local server runs on — so the
+server could never answer, curl retried an unanswerable request for the full 120 s, and the test
+measured its harness rather than the flags. It is `execFile` now. And the ratchet's own
+`--base-absent` test failed on its first run against a script that compared an absent base to `{}`,
+which would have declared everything new and refused the very commit that introduces the file.
+
+**`ReviewPair` moved with no test of its own**, said here rather than skipped silently: it is a move
+with no behaviour to assert. The check is the compiler, and it is a real one only because the
+declaration was DELETED from `bugzReviewPage.ts` rather than re-exported — it named all ten importers
+by file and line on the first build.

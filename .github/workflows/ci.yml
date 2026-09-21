@@ -18,6 +18,7 @@ jobs:
   build-test:
     name: build · test · family checks
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -156,6 +157,28 @@ jobs:
           fi
           node .github/scripts/baseline-only-grows.mjs ${ABSENT:+"$ABSENT"}             .github/changelog-baseline.json "$RUNNER_TEMP/base-baseline.json"
 
+      # The lint ratchet, and the same shape as the changelog one above for the same reason: it
+      # lives in the repository it guards. `eslint-suppressions.json` is what lets `complexity`
+      # and `max-lines-per-function` be ON for `src/**` while 615 violations that predate the
+      # decision stay recorded rather than forgiven — and without this it is simply a place to put
+      # a new one. A TOTAL is not enough: fix one old violation, add one new, regenerate, and the
+      # count falls while new code is suppressed. The comparison is per file and per rule.
+      - name: Lint suppressions only shrink
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          git fetch --depth 1 origin "$BASE_SHA"
+          ABSENT=
+          if git cat-file -e "$BASE_SHA:src_vs_code/eslint-suppressions.json" 2>/dev/null; then
+            git show "$BASE_SHA:src_vs_code/eslint-suppressions.json" > "$RUNNER_TEMP/base-suppressions.json"
+          else
+            echo '{}' > "$RUNNER_TEMP/base-suppressions.json"
+            ABSENT=--base-absent
+          fi
+          node .github/scripts/suppressions-only-shrink.mjs ${ABSENT:+"$ABSENT"} \
+            src_vs_code/eslint-suppressions.json "$RUNNER_TEMP/base-suppressions.json"
       - name: Plan lifecycle
         run: node .agents/conventions/tools/plan-lifecycle.mjs
       # The protection `main` is supposed to have is a FILE now — `.github/branch-protection.json` —
@@ -214,6 +237,7 @@ jobs:
   extension:
     name: extension · typecheck · test · package
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       # `fetch-tags` because one case in `changelogNamesTheRelease.test.ts` asks `git tag --list`:
       # it refuses a changelog baseline naming a version that was never released, which is a defect
@@ -284,6 +308,7 @@ jobs:
   extension-host:
     name: extension · a real editor
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     continue-on-error: true
     # `actions: read` is for the streak step at the end: listing this workflow's own runs and their
     # jobs is an Actions read, not a contents one. Job-level, so the rest of the workflow keeps the
@@ -378,7 +403,15 @@ jobs:
           # matters: curl retries transport failures on its own, but treats a 500 as a final
           # answer. The checksum below still decides what runs, so this widens the window without
           # widening what is trusted.
-          curl -fsSL --proto '=https' --tlsv1.2 --retry 3 --retry-delay 2 --retry-all-errors \
+          #
+          # AND THE WINDOW WAS TWO ORDERS OF MAGNITUDE TOO SHORT, measured here on 2026-09-21: four
+          # consecutive 504s between 14:53:19.86 and 14:53:25.89 — 6.08 seconds for the whole budget,
+          # because `--retry-delay 2` REPLACES curl's exponential backoff with a flat two seconds. A
+          # 504 from a CDN is a server-side outage measured in minutes. The guard was built for
+          # exactly this and then given six seconds to do it in, so it failed looking like it worked.
+          # Dropping the fixed delay restores the backoff (1, 2, 4, 8, 16 s); `--retry-max-time` is
+          # the ceiling, well under this job's `timeout-minutes: 5`.
+          curl -fsSL --proto '=https' --tlsv1.2 --retry 5 --retry-max-time 120 --retry-all-errors \
             -o actionlint.tar.gz \
             "https://github.com/rhysd/actionlint/releases/download/v$ACTIONLINT_VERSION/actionlint_${ACTIONLINT_VERSION}_linux_amd64.tar.gz"
           echo "$ACTIONLINT_SHA256  actionlint.tar.gz" | sha256sum -c -

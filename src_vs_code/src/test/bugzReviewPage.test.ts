@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict';
 import { callsBlock } from '../callsBlock';
+import { CALLS, REVISIONS } from '../livePatch';
 import { test } from 'node:test';
 
-import { DROPPED, KEPT, ReviewPair, UNDECIDED, decision, reviewPageHtml, undecided } from '../bugzReviewPage';
+import { DROPPED, KEPT, UNDECIDED, decision, reviewPageHtml, undecided } from '../bugzReviewPage';
+import { ReviewPair } from '../reviewPair';
 import { emptyMemory, FileAtRead, remember, stateOf } from '../openAtRevision';
 import { RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD, realView } from '../realMethodView';
 import { revisionActions, RevisionState } from '../revisionActions';
@@ -1888,4 +1890,65 @@ test('an IDENTICAL call patch is skipped, so a focused button inside it survives
 
   assert.equal(box.writes, painted, 'the same markup a second time must not touch the DOM');
   assert.match(box.innerHTML, /nothing calls this/u, 'and what is on screen is still the answer');
+});
+
+test('a revision answer is painted into its own row container, and no other', () => {
+  const page = run([pair(1), pair(2)], { expanded: new Set([1, 2]) });
+  const before = page.revision(2).innerHTML;
+
+  page.host.push({ type: 'revisions', items: [{ id: 1, html: '<span class="why">the checkout is gone</span>' }] });
+
+  assert.match(page.revision(1).innerHTML, /the checkout is gone/u);
+  assert.equal(page.revision(2).innerHTML, before, 'a patch names one row; the rest of the page is not redrawn');
+});
+
+test('an IDENTICAL revision patch is skipped, so a focused button inside it survives', () => {
+  // The rule `.coderabbit.yaml` states for this page, and the one its YOUNGER sibling `showCalls`
+  // has obeyed since story 3.3's second round. RevisionPanel fans one answer out per REPOSITORY, so
+  // several rows get the same markup and a redraw of unchanged content is the normal case here.
+  const page = run([pair(1)], { expanded: new Set([1]) });
+  const box = page.revision(1);
+
+  page.host.push({ type: 'revisions', items: [{ id: 1, html: '<span class="why">the checkout is gone</span>' }] });
+  const painted = box.writes;
+
+  page.host.push({ type: 'revisions', items: [{ id: 1, html: '<span class="why">the checkout is gone</span>' }] });
+
+  assert.equal(box.writes, painted, 'the same markup a second time must not touch the DOM');
+  assert.match(box.innerHTML, /the checkout is gone/u, 'and what is on screen is still the answer');
+});
+
+// --------------------------------------------------------------------------------------------
+// The live-patch channel: the container the page WRITES is the container a patch FINDS.
+// --------------------------------------------------------------------------------------------
+
+test('both channels address the same container from the generator and from the page script', () => {
+  // The defect this replaces was silent: the generator and the script each spelled the attribute
+  // out, so a rename made the patch write nowhere and the row went on showing a stale answer with
+  // no error anywhere. Both sides now come from `livePatch.ts`, and this is what proves it — the
+  // attribute the page emitted around a row, found again inside the script's own querySelector.
+  const html = reviewPageHtml({ pairs: [pair(1)], nonce: 'test-nonce', expanded: new Set([1]) });
+  const script = html.slice(html.lastIndexOf('<script'));
+
+  for (const channel of [CALLS, REVISIONS]) {
+    assert.ok(html.includes(`${channel.attribute}="1"`),
+      `the page emits no ${channel.attribute} container, so a patch has nowhere to land`);
+    assert.ok(script.includes(`'[${channel.attribute}="'`),
+      `the page script does not query ${channel.attribute}, so the patch is addressed to nothing`);
+    assert.ok(script.includes(`m.type === '${channel.message}'`),
+      `the page script does not dispatch '${channel.message}', so the message is dropped`);
+  }
+});
+
+test('a patch reaches the row the GENERATOR named, for both channels', () => {
+  // The end-to-end of the same guarantee, run rather than read: take the id out of the emitted
+  // markup, post a patch for it, and require the markup to change. A hardcoded attribute on either
+  // side breaks this even when both spellings happen to look plausible.
+  const page = run([pair(1)], { expanded: new Set([1]) });
+
+  page.host.push({ type: REVISIONS.message, items: [{ id: 1, html: '<b>reached the revision row</b>' }] });
+  page.host.push({ type: CALLS.message, items: [{ id: 1, html: '<b>reached the calls row</b>' }] });
+
+  assert.match(page.revision(1).innerHTML, /reached the revision row/u);
+  assert.match(page.callBoxes.find((one) => one.key === '1')?.innerHTML ?? '', /reached the calls row/u);
 });
