@@ -1250,7 +1250,14 @@ naming that file. The same round tightened the boundary from one FILE to one CON
 of files cannot see it — and made the declaration subtraction whitespace-tolerant, because
 `Error(  string sentence)` changes no behaviour and would have counted the declaration as a refusal.
 
-Two findings of that round were rejected. One asked `Refusal.Answer` to return the `ErrorAnswer`
+**CodeRabbit then found the same hole in a raw string** — `$$"""{{new ErrorAnswer(why)}}"""` — and
+two sharpenings beside it: the construction and the boundary call are matched as patterns now
+(`new\s+ErrorAnswer\s*\(`), because `new  ErrorAnswer (why)` changes no behaviour and would have made
+the one construction read as none; and the lexer's methods were split to the cyclomatic ceiling of 4
+that `.coderabbit.yaml` sets for this project. The regenerated inventory is byte-identical, so none
+of it moved a number.
+
+Two findings of the gate's round were rejected. One asked `Refusal.Answer` to return the `ErrorAnswer`
 record rather than the wire string, on the reasoning that serialising inside the boundary leaves
 nothing to intercept — which describes interception from OUTSIDE, and would put serialisation back
 in the two services this story exists to unify; the seam 2.2 needs is inside the method, between the

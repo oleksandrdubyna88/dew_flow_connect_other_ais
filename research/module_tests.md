@@ -1608,8 +1608,21 @@ would have gone green over it. The holes are walked as code and spliced back bet
 `$"{map["k"]}"` stopped ending at the quote before `k`. Written RED first: the failure was
 `Expected "var m = "";" to contain "new ErrorAnswer("`, the whole hole gone. Then proved on a real
 file: a `Hidden(string why) => $"{new ErrorAnswer(why)}"` planted in `Escalations.cs` fails the
-boundary census naming that file, and the plant compiles. What remains outside the lexer is a raw
-interpolated string (`$$"""…"""`), which nothing in this repository writes.
+boundary census naming that file, and the plant compiles.
+
+**And CodeRabbit found the same hole one syntax along**, on the pull request: a RAW literal was
+skipped whole, so `$$"""{{new ErrorAnswer(why)}}"""` named the type nowhere either. The number of `$`
+prefixes is the brace count now — one `$` opens a hole with `{`, two with `{{`, and a LITERAL brace is
+written twice that many — and `\` is an ordinary character in a raw string, so the escape rule is off
+there. That rewrite introduced a defect of its own and **its own companion assertion caught it**: `""`
+is the empty string, not a fence of two, and reading it as a fence sent the lexer hunting for the next
+two quotes in a row. The append census lost `UsageLedger.cs` — *"Expected … 2 item(s), but found 1"* —
+which is exactly what "every census has a companion" is for. It is a test of its own now.
+
+**The lexer's methods are small because the rule says four.** `.coderabbit.yaml` sets a cyclomatic
+ceiling of 4 for `src_mcp/**/*.cs`, and the one-pass walk had grown past it. It is a `Fence` record
+(delimiter, run, verbatim, braces) and one small method per decision — `Closes`, `Advance`, `Brace`,
+`Hole`, `Take` — which is also what made the raw-interpolation case a few lines rather than a rewrite.
 
 **There are two views, and the difference is the whole contract.** `CodeOf` drops what is inside a
 literal — that is what stops a census of CALLS counting a sentence that mentions one. `SpellingOf`

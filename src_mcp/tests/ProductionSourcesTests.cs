@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using FluentAssertions;
 using Xunit;
 
@@ -106,6 +107,48 @@ public sealed class ProductionSourcesTests
                 "`{{` is how C# writes a literal brace, so what follows it is text and not a call");
     }
 
+    [Theory]
+    [InlineData("var m = $$\"\"\"{{new ErrorAnswer(why)}}\"\"\";", "new ErrorAnswer(")]
+    [InlineData("var m = $\"\"\"{Refusal.Answer(s)}\"\"\";", "Refusal.Answer(")]
+    public void CodeInsideARAWInterpolationHole_IsStillCode(string source, string call)
+    {
+        // CodeRabbit on the pull request, and it is the same hole one syntax along: a raw literal was
+        // skipped whole, so `$$"""{{new ErrorAnswer(why)}}"""` named the type nowhere a census could
+        // see. The number of `$` says how many braces open a hole — one `$` takes `{…}`, two take
+        // `{{…}}` — which is also why the escape for a literal brace is twice that.
+        ProductionSources.Joined(source).Should().Contain(call,
+            "a raw interpolated string runs its holes exactly as an ordinary one does");
+    }
+
+    [Fact]
+    public void AnEscapedBraceInARawString_IsNotAHole()
+    {
+        ProductionSources.Joined("var m = $$\"\"\"{{{{Error( is not a call}}}}\"\"\";")
+            .Should().NotContain("Error(",
+                "with two `$` the literal brace is written `{{{{`, and what follows it is text");
+    }
+
+    [Fact]
+    public void AnEmptyString_IsNotAFenceOfTwo()
+    {
+        // A defect this rewrite introduced and its own companion caught: `""` is the EMPTY string, and
+        // reading its two quotes as a fence sent the lexer hunting for the next two in a row,
+        // swallowing everything between. The append census lost `UsageLedger.cs` — "Expected ... 2
+        // item(s), but found 1" — which is what "each scan has a companion" is for.
+        ProductionSources.Joined("var a = \"\"; Error();").Should().EndWith("Error();",
+            "three quotes open a raw string; two are a string with nothing in it");
+    }
+
+    [Fact]
+    public void ABackslashInARawString_IsNotAnEscape()
+    {
+        // The other half of getting raw strings right: `\` is an ordinary character there, so a lexer
+        // that skips two characters after one walks straight past the closing fence.
+        ProductionSources.Joined("var m = \"\"\"a\\\"\"\"; Error();")
+            .Should().EndWith("Error();",
+                "a raw string ends at its fence, and the code after it is still code");
+    }
+
     [Fact]
     public void AStringInsideAHole_DoesNotEndTheLiteralEarly()
     {
@@ -136,5 +179,23 @@ public sealed class ProductionSourcesTests
     {
         ProductionSources.UnqualifiedCalls(ProductionSources.Joined("_log.Error(x); Error(y);"), "Error")
             .Should().Be(1, "this codebase logs constantly, and a logger call is not a refusal");
+    }
+
+    [Theory]
+    [InlineData("var a = new ErrorAnswer(why);", 1)]
+    [InlineData("var a = new  ErrorAnswer (why);", 1)]
+    [InlineData("var a = new\n    ErrorAnswer(why);", 1)]
+    [InlineData("var a = new ErrorAnswer(why); var b = new ErrorAnswer(other);", 2)]
+    [InlineData("var a = newErrorAnswer(why);", 0)]
+    public void TheCensusFindsAConstructionHoweverItIsSpaced(string source, int expected)
+    {
+        // CodeRabbit on the pull request: the construction was searched for as the exact characters
+        // `new ErrorAnswer(`, so a second space or a wrapped line hid it — and the boundary test's
+        // "exactly one construction" would then have passed with two. The type-name rule catches the
+        // file either way, which is why this is a sharpening rather than a hole; the count is what
+        // would have been wrong.
+        var built = new Regex(@"\bnew\s+ErrorAnswer\s*\(", RegexOptions.CultureInvariant);
+
+        built.Count(ProductionSources.Joined(source)).Should().Be(expected);
     }
 }

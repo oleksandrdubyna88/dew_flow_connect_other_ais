@@ -95,17 +95,31 @@ internal static class ProductionSources
         File.ReadAllText(Path.Combine(RepositoryRoot(), relative));
 
     /// <summary>Every production file whose CODE contains the text, and how many times.</summary>
-    internal static Dictionary<string, int> FilesMentioning(string text) => FilesWhere(CodeOf, text);
+    internal static Dictionary<string, int> FilesMentioning(string text) =>
+        FilesWhere(CodeOf, code => Occurrences(code, text));
 
     /// <summary>Every production file that SPELLS the text, string literals included.</summary>
-    internal static Dictionary<string, int> FilesSpelling(string text) => FilesWhere(SpellingOf, text);
+    internal static Dictionary<string, int> FilesSpelling(string text) =>
+        FilesWhere(SpellingOf, code => Occurrences(code, text));
 
-    private static Dictionary<string, int> FilesWhere(Func<string, string> view, string text)
+    /// <summary>
+    /// Every production file whose CODE matches the pattern, and how many times.
+    /// </summary>
+    /// <remarks>
+    /// For the shapes that a space can be written into. <c>new ErrorAnswer(</c> searched as characters
+    /// misses <c>new  ErrorAnswer (why)</c> and a construction wrapped after <c>new</c>, neither of
+    /// which changes any behaviour — so a census that counts them can be made wrong by a formatter.
+    /// (CodeRabbit, on the pull request.) The TYPE-name rule beside it is unaffected either way, which
+    /// is why this sharpens a count rather than closing a hole.
+    /// </remarks>
+    internal static Dictionary<string, int> FilesMatching(Regex pattern) => FilesWhere(CodeOf, pattern.Count);
+
+    private static Dictionary<string, int> FilesWhere(Func<string, string> view, Func<string, int> count)
     {
         var found = new Dictionary<string, int>(StringComparer.Ordinal);
         foreach (var file in Files())
         {
-            var times = Occurrences(view(file), text);
+            var times = count(view(file));
             if (times > 0)
             {
                 found[file] = times;
@@ -215,26 +229,30 @@ internal static class ProductionSources
     /// and character literals are all handled. With <paramref name="keepText"/> false the delimiters
     /// are KEPT and only what is between them goes, so that <c>Error("x")</c> stays a call with an
     /// argument; with it true the literal survives whole, which is what a census of a NAME needs.</para>
-    /// <para>What it does not handle: interpolation holes inside a string, whose code is removed with
-    /// the rest of the string. Nothing is guarded by a count, so a call written only inside an
-    /// interpolation would be missed by the numbers and not by the boundary.</para>
+    /// <para>An interpolation HOLE survives either way, because it is not contents — it is code that
+    /// runs, and dropping it is how <c>$"{new ErrorAnswer(why)}"</c> hid from the boundary rule story
+    /// 2.2 rests on. (The second code round, codex; raw interpolation added after CodeRabbit read the
+    /// pull request.)</para>
     /// </remarks>
     private static string WithoutComments(string source, bool keepText)
     {
         var kept = new StringBuilder(source.Length);
         for (var at = 0; at < source.Length;)
         {
-            at = source[at] switch
-            {
-                '/' when Next(source, at) == '/' => SkipTo(source, at, "\n", kept, keepEnd: true),
-                '/' when Next(source, at) == '*' => SkipTo(source, at + 2, "*/", kept, keepEnd: false),
-                '"' or '\'' or '@' or '$' => Text(source, at, kept, keepText),
-                _ => Keep(source, at, kept),
-            };
+            at = Lex(source, at, kept, keepText);
         }
 
         return kept.ToString();
     }
+
+    /// <summary>What this character begins: a comment, a literal, or nothing in particular.</summary>
+    private static int Lex(string source, int at, StringBuilder kept, bool keepText) => source[at] switch
+    {
+        '/' when Next(source, at) == '/' => SkipTo(source, at, "\n", kept, keepEnd: true),
+        '/' when Next(source, at) == '*' => SkipTo(source, at + 2, "*/", kept, keepEnd: false),
+        '"' or '\'' or '@' or '$' => Text(source, at, kept, keepText),
+        _ => Keep(source, at, kept),
+    };
 
     private static char Next(string source, int at) => at + 1 < source.Length ? source[at + 1] : '\0';
 
@@ -260,8 +278,43 @@ internal static class ProductionSources
         return at + end.Length;
     }
 
+    /// <summary>
+    /// How a literal is written: what closes it, and what opens a hole inside it.
+    /// </summary>
+    /// <param name="Delimiter">The quote character — <c>"</c> or <c>'</c>.</param>
+    /// <param name="Run">How many of it open and close the literal; three or more is a raw string.</param>
+    /// <param name="Verbatim">An <c>@</c> prefix: a backslash is an ordinary character and a doubled
+    /// quote is one quote.</param>
+    /// <param name="Braces">How many braces open an interpolation hole — the number of <c>$</c>
+    /// prefixes, and zero when the literal has none. C# says one <c>$</c> takes <c>{…}</c> and two
+    /// take <c>{{…}}</c>, which is why a LITERAL brace is written twice that many.</param>
+    private readonly record struct Fence(char Delimiter, int Run, bool Verbatim, int Braces)
+    {
+        /// <summary>Whether a backslash escapes here. It does not in a verbatim or a raw string.</summary>
+        internal bool Escapes => Run == 1 && !Verbatim;
+    }
+
     /// <summary>A string or character literal: where it ends, and how much of it survives.</summary>
     private static int Text(string source, int at, StringBuilder kept, bool keepText)
+    {
+        var quote = Quote(source, at);
+        if (quote >= source.Length || source[quote] is not ('"' or '\''))
+        {
+            // A `$` or `@` that begins no literal — an identifier, or an interpolation's own brace.
+            return Keep(source, at, kept);
+        }
+
+        var fence = FenceAt(source, at, quote);
+        var holes = HolesOf(fence);
+        var end = EndOfLiteral(source, quote + fence.Run, fence, holes);
+
+        Surviving(kept, source, at, end, fence, keepText, holes);
+
+        return end;
+    }
+
+    /// <summary>Past the <c>$</c> and <c>@</c> prefixes, to the quote they belong to.</summary>
+    private static int Quote(string source, int at)
     {
         var quote = at;
         while (quote < source.Length && source[quote] is '@' or '$')
@@ -269,33 +322,105 @@ internal static class ProductionSources
             quote++;
         }
 
-        if (quote >= source.Length || source[quote] is not ('"' or '\''))
+        return quote;
+    }
+
+    /// <summary>The fence of the literal that starts at <paramref name="at"/> and quotes at <paramref name="quote"/>.</summary>
+    private static Fence FenceAt(string source, int at, int quote)
+    {
+        var prefix = source.AsSpan(at, quote - at);
+
+        return new Fence(source[quote], FenceRun(source, quote), prefix.Contains('@'), prefix.Count('$'));
+    }
+
+    /// <summary>
+    /// How many quotes open this literal: three or more is a raw string, and anything else is one.
+    /// </summary>
+    /// <remarks>
+    /// The two-quote case is why this is not just <see cref="Run"/>: <c>""</c> is the EMPTY string, not
+    /// a fence of two. Reading it as a fence made the lexer hunt for the next two quotes in a row and
+    /// swallow everything up to them — which is how one rewrite of this file quietly lost
+    /// <c>UsageLedger.cs</c> from the append census, caught by that census's companion assertion.
+    /// </remarks>
+    private static int FenceRun(string source, int quote)
+    {
+        var run = Run(source, quote, source[quote]);
+
+        return run >= 3 ? run : 1;
+    }
+
+    /// <summary>Somewhere to collect the holes, when this literal can have any.</summary>
+    private static StringBuilder? HolesOf(Fence fence) => fence.Braces > 0 ? new StringBuilder() : null;
+
+    /// <summary>Where a literal ends, collecting its interpolation holes on the way.</summary>
+    private static int EndOfLiteral(string source, int from, Fence fence, StringBuilder? holes)
+    {
+        for (var at = from; at < source.Length;)
         {
-            // A `$` or `@` that begins no literal — an identifier, or an interpolation's own brace.
-            return Keep(source, at, kept);
+            if (Closes(source, at, fence))
+            {
+                return at + fence.Run;
+            }
+
+            at = Advance(source, at, fence, holes);
         }
 
-        var delimiter = source[quote];
-        var run = RunOf(source, quote, delimiter);
+        return source.Length;
+    }
 
-        // An interpolation hole is not CONTENTS — it is code that runs. Dropping it with the text
-        // around it is how `$"{new ErrorAnswer(why)}"` hides from a boundary rule that reads source,
-        // which is the guarantee story 2.2 rests on. (The second code round, codex.) The holes are
-        // collected as they are walked and spliced back between the fences.
-        var holes = run < 3 && IsInterpolated(source, at) ? new StringBuilder() : null;
-        var end = run >= 3
-            ? EndOfRaw(source, quote + run, delimiter, run)
-            : EndOfLiteral(source, quote + 1, delimiter, IsVerbatim(source, at), holes);
+    /// <summary>Whether the fence closes here — a doubled quote in a verbatim string does not.</summary>
+    private static bool Closes(string source, int at, Fence fence) =>
+        Run(source, at, fence.Delimiter) >= fence.Run
+        && !(fence.Verbatim && Next(source, at) == fence.Delimiter);
 
-        Surviving(kept, source, at, end, delimiter, run, keepText, holes);
+    /// <summary>One step: into a hole, past an escape, past a doubled quote, or over a character.</summary>
+    private static int Advance(string source, int at, Fence fence, StringBuilder? holes) => source[at] switch
+    {
+        '{' when holes is not null => Brace(source, at, fence, holes),
+        '\\' when fence.Escapes => at + 2,
+        _ when source[at] == fence.Delimiter => at + 2,
+        _ => at + 1,
+    };
 
-        return end;
+    /// <summary>A <c>{</c>: twice the brace count writes a literal brace, fewer opens a hole.</summary>
+    private static int Brace(string source, int at, Fence fence, StringBuilder holes) =>
+        Run(source, at, '{') >= fence.Braces * 2
+            ? at + (fence.Braces * 2)
+            : Hole(source, at + fence.Braces, fence, holes);
+
+    /// <summary>One hole, copied out as the code it is — nested braces and literals included.</summary>
+    private static int Hole(string source, int from, Fence fence, StringBuilder holes)
+    {
+        var depth = 1;
+        var at = from;
+        while (at < source.Length && depth > 0)
+        {
+            depth += Nesting(source[at]);
+            at = depth == 0 ? at : Take(source, at, holes);
+        }
+
+        // The code ran; a space keeps it from gluing onto whatever follows the literal.
+        return depth == 0 ? Closed(at + fence.Braces, holes) : source.Length;
+    }
+
+    private static int Nesting(char character) => character switch { '{' => 1, '}' => -1, _ => 0 };
+
+    /// <summary>A character of a hole: a nested literal is lexed, anything else is copied.</summary>
+    private static int Take(string source, int at, StringBuilder holes) =>
+        source[at] is '"' or '\'' or '@' or '$'
+            ? Text(source, at, holes, keepText: false)
+            : Keep(source, at, holes);
+
+    private static int Closed(int at, StringBuilder holes)
+    {
+        holes.Append(' ');
+
+        return at;
     }
 
     /// <summary>The whole literal, or the fences it was written between with its holes inside.</summary>
     private static void Surviving(
-        StringBuilder kept, string source, int at, int end, char delimiter, int run, bool keepText,
-        StringBuilder? holes)
+        StringBuilder kept, string source, int at, int end, Fence fence, bool keepText, StringBuilder? holes)
     {
         if (keepText)
         {
@@ -304,25 +429,14 @@ internal static class ProductionSources
             return;
         }
 
-        var fence = run >= 3 ? run : 1;
-        kept.Append(delimiter, fence);
-        if (holes is not null)
-        {
-            kept.Append(holes);
-        }
-
-        kept.Append(delimiter, fence);
+        kept.Append(fence.Delimiter, fence.Run).Append(holes).Append(fence.Delimiter, fence.Run);
     }
 
-    /// <summary>Whether <c>{…}</c> is a hole here — <c>$"…"</c>, <c>$@"…"</c>, <c>@$"…"</c>.</summary>
-    private static bool IsInterpolated(string source, int at) =>
-        source[at] == '$' || (source[at] == '@' && Next(source, at) == '$');
-
-    /// <summary>How many of the delimiter in a row — three or more opens a raw string.</summary>
-    private static int RunOf(string source, int quote, char delimiter)
+    /// <summary>How many of the character run together from here.</summary>
+    private static int Run(string source, int from, char character)
     {
         var run = 0;
-        while (quote + run < source.Length && source[quote + run] == delimiter)
+        while (from + run < source.Length && source[from + run] == character)
         {
             run++;
         }
@@ -330,93 +444,7 @@ internal static class ProductionSources
         return run;
     }
 
-    /// <summary>
-    /// Whether a backslash is an ordinary character here — <c>@"…"</c>, <c>$@"…"</c>, <c>@$"…"</c>.
-    /// </summary>
-    /// <remarks>
-    /// An interpolated string used to count as verbatim, which was wrong and could end a literal
-    /// early: <c>$"a\"b"</c> escapes its quote exactly as an ordinary string does. It never mattered
-    /// while one view existed, because a mis-ended literal only moved where the CONTENTS stopped being
-    /// dropped; it matters now that a view keeps them.
-    /// </remarks>
-    private static bool IsVerbatim(string source, int at) =>
-        source[at] == '@' || (source[at] == '$' && Next(source, at) == '@');
 
-    private static int EndOfRaw(string source, int from, char delimiter, int run)
-    {
-        var at = source.IndexOf(new string(delimiter, run), from, StringComparison.Ordinal);
-
-        return at < 0 ? source.Length : at + run;
-    }
-
-    /// <summary>
-    /// Where a one-fence literal ends, collecting its interpolation holes on the way if asked.
-    /// </summary>
-    /// <remarks>
-    /// <paramref name="holes"/> is null for a literal that has none, and the walk is then the plain
-    /// one it always was. When it is not null every <c>{…}</c> is handed to <see cref="Hole"/>, which
-    /// copies the code out — and, because a hole may itself hold a literal, that walk is where
-    /// <c>$"{map["k"]}"</c> stops ending at the quote before <c>k</c>.
-    /// </remarks>
-    private static int EndOfLiteral(
-        string source, int from, char delimiter, bool verbatim, StringBuilder? holes)
-    {
-        for (var at = from; at < source.Length;)
-        {
-            if (holes is not null && source[at] == '{')
-            {
-                // `{{` is how C# writes a literal brace, so what follows it is text.
-                at = Next(source, at) == '{' ? at + 2 : Hole(source, at + 1, holes);
-                continue;
-            }
-
-            if (!verbatim && source[at] == '\\')
-            {
-                at += 2;
-                continue;
-            }
-
-            if (source[at] != delimiter)
-            {
-                at++;
-                continue;
-            }
-
-            if (verbatim && Next(source, at) == delimiter)
-            {
-                at += 2;
-                continue;
-            }
-
-            return at + 1;
-        }
-
-        return source.Length;
-    }
-
-    /// <summary>One <c>{…}</c> hole, copied out as the code it is — nested braces and literals too.</summary>
-    private static int Hole(string source, int from, StringBuilder holes)
-    {
-        var depth = 1;
-        var at = from;
-        while (at < source.Length)
-        {
-            depth += source[at] switch { '{' => 1, '}' => -1, _ => 0 };
-            if (depth == 0)
-            {
-                // The code ran; a space keeps it from gluing onto whatever follows the literal.
-                holes.Append(' ');
-
-                return at + 1;
-            }
-
-            at = source[at] is '"' or '\'' or '@' or '$'
-                ? Text(source, at, holes, keepText: false)
-                : Keep(source, at, holes);
-        }
-
-        return source.Length;
-    }
 
 
     /// <summary>

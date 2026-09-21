@@ -3,8 +3,9 @@
 > Status: **EPIC 1 IMPLEMENTED, 2026-09-21; story 2.1 implemented, 2026-09-21; the rest of epics 2
 > and 3 open.** Stories 1.1 (the credential list), 1.2 (the notice line), 1.3 (the path) and 1.4 (the
 > writer, and the append it had to fix) have shipped, and 2.1 has bounded the population 2.2 is about
-> to make a promise about. What remains is the instrumentation itself — the TWO refusal roads (2.2,
-> and it is two rather than three because 2.1 counted them), the reviewer and startup notices (2.3),
+> to make a promise about. What remains is the instrumentation itself — **the ONE refusal road**
+> (2.2: `Refusal.Answer`, which `PanelService.Error` and `ConsultationService.Error` are the two
+> CALLERS of, not three roads as this plan first said), the reviewer and startup notices (2.3),
 > the live seam leg (2.4) — and the deaths (3.1, 3.2).
 > Scope: `src_mcp` — a notice record and its serialiser, the append, the instrumentation sites, a
 > run-start marker, and the `try/catch/finally` that `Program.cs` has never had.

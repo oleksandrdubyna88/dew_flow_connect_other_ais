@@ -29,7 +29,9 @@ namespace CoaiMcp.Tests;
 /// scanner used to glue lines with nothing between them, and an ordinary single-line
 /// <c>using static CoaiMcp.Server.Refusal;</c> was never matched. Planting one proved it: the test
 /// passed. It is a regex over the joined code now, covering <c>global using</c>, an alias, and
-/// <c>global::</c>, and the teeth are proved by a test that plants each form in a temporary tree.</para>
+/// <c>global::</c>, and nine theory cases pin what it matches and what it must not. The teeth were
+/// proved the other way as well — a real import planted in <c>Escalations.cs</c> made this suite red
+/// naming that file, and removing it made it green.</para>
 ///
 /// <para><b>The inventory is generated, not typed.</b> <c>shared/refusal-sites.json</c> is written
 /// when <c>COAI_RECORD_REFUSAL_SITES=1</c> — and that run then FAILS, saying so, because a run that
@@ -65,6 +67,22 @@ public sealed class TheRefusalRoadsAreCountedTests
         @"\busing\s+(static\s+|\w+\s*=\s*)(global::)?[\w.]*\b(Refusal|PanelService|ConsultationService)\b",
         RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
 
+    /// <summary>
+    /// A refusal being BUILT, however the spaces fall — <c>new  ErrorAnswer (why)</c> included.
+    /// </summary>
+    /// <remarks>
+    /// CodeRabbit read the pull request and was right that searching for the characters
+    /// <c>new ErrorAnswer(</c> makes the count a formatter can move: a second space, or a line wrapped
+    /// after <c>new</c>, and the one construction becomes none. The TYPE-name rule above still names
+    /// the file either way, so this sharpens a number rather than closing a road.
+    /// </remarks>
+    private static readonly Regex BuildsARefusal =
+        new(@"\bnew\s+ErrorAnswer\s*\(", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
+
+    /// <summary>A file reaching the boundary, with the same tolerance.</summary>
+    private static readonly Regex ReachesTheBoundary =
+        new(@"\bRefusal\s*\.\s*Answer\s*\(", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
+
     [Fact]
     public void TheRefusalAnswerIsNamedInTwoPlacesAndBuiltInOne()
     {
@@ -79,7 +97,7 @@ public sealed class TheRefusalRoadsAreCountedTests
             + "build one are the places instrumentation has to reach — found: {0}",
             string.Join(", ", named.Keys));
 
-        var built = ProductionSources.FilesMentioning("new ErrorAnswer(");
+        var built = ProductionSources.FilesMatching(BuildsARefusal);
 
         built.Keys.Should().Equal([TheBoundary],
             "and the one construction is in the boundary, which is what the scan must still find");
@@ -178,7 +196,7 @@ public sealed class TheRefusalRoadsAreCountedTests
     {
         ProductionSources.Files().Should().HaveCountGreaterThan(200,
             "the walk found almost no production files, so every census here is asserting nothing");
-        ProductionSources.FilesMentioning("new ErrorAnswer(").Should().ContainKey(TheBoundary,
+        ProductionSources.FilesMatching(BuildsARefusal).Should().ContainKey(TheBoundary,
             "the scan must SEE the construction it exists to hold to one place — a companion that "
             + "searched the bare type name would go on passing after the shape it looks for changed");
     }
@@ -201,7 +219,7 @@ public sealed class TheRefusalRoadsAreCountedTests
     /// </remarks>
     private static RefusalSites Census() =>
         new(TheBoundary,
-            [.. ProductionSources.FilesMentioning("Refusal.Answer(")
+            [.. ProductionSources.FilesMatching(ReachesTheBoundary)
                 .OrderBy(pair => pair.Key, StringComparer.Ordinal)
                 .Select(pair => new RefusalCaller(
                     pair.Key,
