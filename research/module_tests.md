@@ -1573,3 +1573,10 @@ the renderer (one declaration, in `reviewPair.ts`), that the retry test still us
 script interpolates `items[i].html` at build time (it is plain text inside the script — a
 property access the browser evaluates on a message the host posted).
 
+**And SonarCloud found one the gate did not**, on the pull request: the ratchet checked its
+arguments with `currentPath === undefined`, which Sonar reads as always-false because a
+destructured short array is not `undefined` in its type view. It was wrong about the runtime and
+right about the expression, and looking at why found the real hole behind it — given THREE paths
+the script took the first two and compared a pair nobody asked about. Counting the list says what
+is meant in every reading. The red test hands it three files that all EXIST, so the refusal cannot
+come from a missing one; a first draft passed for exactly that wrong reason.
