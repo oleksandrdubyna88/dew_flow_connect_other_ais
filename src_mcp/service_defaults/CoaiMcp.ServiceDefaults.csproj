@@ -19,6 +19,14 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="CoaiMcp.Tests" />
+
+    <!-- `JsonlLedger` is INTERNAL, and these three are the only assemblies that may reach it: the
+         spending ledger, the notices writer, and the measurement companion that drives the shipped
+         call. The code round's point was that an allowlist test finds a fourth caller AFTER it is
+         written, where a visibility boundary means it cannot be written — a caller outside these
+         three cannot hand the primitive a root-derived path and a hand-built line at all. -->
+    <InternalsVisibleTo Include="CoaiMcp.Runners" />
+    <InternalsVisibleTo Include="NoticeTool" />
     <!-- `ResolvedDataDir` is minted by `PanelSettings.DataDirectoryFor` and by nothing else. Its
          constructor is internal and this is the one production assembly allowed to call it, so no
          other binary can mint a value whose guarantee comes from a resolver it does not share. -->

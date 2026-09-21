@@ -33,11 +33,18 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class TheOneAppendTests
 {
-    /// <summary>Every directory that ships in a binary. Tests, the fake CLI and the notice tool are not here.</summary>
-    private static readonly string[] ProductionRoots =
+    /// <summary>
+    /// What is NOT production, by the name of a directory on the way to a file.
+    /// </summary>
+    /// <remarks>
+    /// The roots used to be a list of nine paths, and the code round was right about what that
+    /// allows: a project added outside the list is never visited, so a third write road can exist
+    /// with this test green. They are DISCOVERED now — every <c>src_*</c> directory the repository
+    /// has — and what is excluded is named instead, which is the smaller and more stable set.
+    /// </remarks>
+    private static readonly string[] NotProduction =
     [
-        "src_mcp/src", "src_mcp/core", "src_mcp/runners", "src_mcp/service_defaults", "src_mcp/storage",
-        "src_mcp/normalizer", "src_server/src", "src_bugs/src", "src_bench/CoaiBench",
+        "bin", "obj", "node_modules", "out", "dist", "TestResults", ".vscode-test",
     ];
 
     private static readonly string[] SanctionedAppenders =
@@ -125,6 +132,27 @@ public sealed class TheOneAppendTests
     }
 
     [Fact]
+    public void TheCensusVisitsEverySourceRoot_NotAListSomebodyHasToRemember()
+    {
+        // The code round's finding, as its own check: a project added outside a hand-written list is
+        // never scanned, and a third write road inside it leaves every test above green. The roots
+        // are discovered, so this asserts the DISCOVERY finds what is on disk rather than asserting
+        // a list against itself.
+        var root = NoSourceFileCarriesAControlByteTests.RepositoryRoot();
+        var found = SourceRoots().Select(directory => Path.GetFileName(directory)).ToList();
+
+        found.Should().BeEquivalentTo(
+            Directory.EnumerateDirectories(root, "src_*").Select(Path.GetFileName),
+            "every src_* directory is scanned, including one added tomorrow");
+        found.Should().HaveCountGreaterThan(2, "this repository has several source roots; finding "
+            + "one or none means the walk started in the wrong place and every census above is empty");
+        ProductionFiles().Should().HaveCountGreaterThan(200,
+            "and the roots must contain production files, or the scans are asserting nothing");
+        ProductionFiles().Should().NotContain(file => file.Contains("/tests", StringComparison.Ordinal),
+            "a test project is not production: its calls to the append are the tests OF the append");
+    }
+
+    [Fact]
     public void AnAppendSplitAcrossTwoLines_IsStillFound()
     {
         // The code round's finding, as a test of the scan itself: the old per-line version missed
@@ -186,32 +214,43 @@ public sealed class TheOneAppendTests
         return count;
     }
 
-    /// <summary>Every production source file, by repository-relative path.</summary>
+    /// <summary>Every production source file, by repository-relative path, under every source root.</summary>
     private static IEnumerable<string> ProductionFiles()
     {
         var root = NoSourceFileCarriesAControlByteTests.RepositoryRoot();
-        foreach (var relative in ProductionRoots)
+        foreach (var source in SourceRoots())
         {
-            var directory = Path.Combine(root, relative);
-            if (!Directory.Exists(directory))
+            foreach (var file in Directory.EnumerateFiles(source, "*.cs", SearchOption.AllDirectories))
             {
-                continue;
-            }
-
-            foreach (var file in Directory.EnumerateFiles(directory, "*.cs", SearchOption.AllDirectories))
-            {
-                if (!IsGenerated(file))
+                var relative = Path.GetRelativePath(root, file).Replace('\\', '/');
+                if (IsProduction(relative))
                 {
-                    yield return Path.GetRelativePath(root, file).Replace('\\', '/');
+                    yield return relative;
                 }
             }
         }
     }
 
+    /// <summary>Every <c>src_*</c> directory this repository has — found, never listed.</summary>
+    private static IEnumerable<string> SourceRoots() =>
+        Directory.EnumerateDirectories(NoSourceFileCarriesAControlByteTests.RepositoryRoot(), "src_*");
+
+    /// <summary>
+    /// Whether a repository-relative path is production: not a test project, not build output.
+    /// </summary>
+    /// <remarks>
+    /// A directory whose name STARTS with <c>tests</c> covers <c>tests</c>, <c>tests_fakecli</c>,
+    /// <c>tests_notices</c> and <c>CoaiBench.Tests</c> — which is every test project here, and the
+    /// shape a new one will have. Said as a rule rather than as a list, for the reason the roots
+    /// above are found rather than listed.
+    /// </remarks>
+    private static bool IsProduction(string relative) =>
+        !relative.Split('/').Any(segment =>
+            segment.StartsWith("tests", StringComparison.OrdinalIgnoreCase)
+            || segment.EndsWith(".Tests", StringComparison.OrdinalIgnoreCase)
+            || NotProduction.Contains(segment, StringComparer.OrdinalIgnoreCase));
+
     private static bool IsCode(string line) =>
         line is { Length: > 0 } && !line.StartsWith("//", StringComparison.Ordinal);
 
-    private static bool IsGenerated(string file) =>
-        file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
-        || file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
 }

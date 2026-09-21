@@ -1098,6 +1098,29 @@ of each, and 2400 of 2400 on ext4 under WSL.
   per-line scan; a `using static` of the ledger would hide one from any spelling-based scan at all,
   so that import is refused by a test of its own.
 
+The second round found four more, and one of them was a hole in this file's own reasoning:
+
+- **The startup probe was CIRCULAR.** It asked `fcntl(F_GETFL)` whether the flag it had requested was
+  set — which is true whatever that flag means, so a wrong `O_APPEND` constant would have passed it.
+  The probe now makes the kernel *demonstrate*: it writes a byte through the descriptor, lets a second
+  handle grow the file behind its back, writes another, and reads the length. A true append puts the
+  second byte at the new end; a positional write puts it at offset 1 and the file is shorter. That is
+  the property, in the kernel's own terms, and no constant can be wrong in a way it does not see.
+  `FD_CLOEXEC` is still a flag question, because its constant is 1 on every POSIX platform.
+- **A NO is no longer cached.** A `Lazy<bool>` kept whatever the first probe answered, so a temp
+  directory that was full for a second would have disabled every append for the life of the process.
+- **`JsonlLedger` is INTERNAL**, and three assemblies are granted it: the spending ledger, the notices
+  writer, and the measurement companion. An allowlist test finds a fourth caller after it is written;
+  a visibility boundary means it cannot be written — nobody outside those three can hand the primitive
+  a root-derived path and a hand-built line.
+- **The path-shaped exceptions moved out of the write's catch.** `ArgumentException` was caught around
+  the whole operation to answer for a NUL in a path, which also meant an `ArgumentException` from
+  anything on the write path would have been reported as a disk refusing a line. It is caught where
+  the path is prepared and nowhere else, so a programming error stays loud.
+- **The census finds its own roots** — every `src_*` directory, with test projects and build output
+  named as the exclusion — because a project added outside a hand-written list of nine paths was never
+  scanned.
+
 A lock was built first and rejected on evidence: one handle held `FileShare.Read` across the tail
 inspection and the write, with a retry when another writer had it. It is correct, and under the same
 eight-process run a writer exhausted its retries and dropped a record — so it trades corruption for

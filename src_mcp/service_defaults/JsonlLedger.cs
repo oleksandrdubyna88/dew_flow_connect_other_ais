@@ -80,7 +80,7 @@ namespace CoaiMcp.ServiceDefaults;
 /// <para><b>It answers <c>bool</c></b> — written or not — so a caller can one day count a loss.
 /// Nothing in story 1.4 reads the answer.</para>
 /// </remarks>
-public static class JsonlLedger
+internal static class JsonlLedger
 {
     /// <summary>
     /// One lock per LEDGER, not one for the process.
@@ -109,16 +109,20 @@ public static class JsonlLedger
     /// <param name="path">The ledger file. Its directory is created when missing.</param>
     /// <param name="line">One JSON record, ending in a newline — a missing one is added.</param>
     /// <returns>Whether the line reached the file.</returns>
-    public static bool AppendLine(string path, string line) => AppendLine(path, line, AppendOnlyFile.Write);
+    internal static bool AppendLine(string path, string line) => AppendLine(path, line, AppendOnlyFile.Write);
 
     /// <summary>
     /// The seam a test counts appends through: the writer is the real one wrapped, never a lookalike.
     /// </summary>
     internal static bool AppendLine(string path, string line, Func<string, byte[], bool> append)
     {
+        if (!Prepared(path))
+        {
+            return false;
+        }
+
         try
         {
-            CreateDirectoryOf(path);
             lock (Gates.GetOrAdd(path, _ => new Lock()))
             {
                 return append(path, Bytes(Terminated(line), repairFirst: TailIsTorn(path)));
@@ -131,6 +135,38 @@ public static class JsonlLedger
             return false;
         }
     }
+
+    /// <summary>
+    /// The directory, and the only place a PATH question is answered with a false.
+    /// </summary>
+    /// <remarks>
+    /// <para>The path-shaped exceptions used to be in the same catch as the write, and the code round
+    /// was right that this makes the writer swallow a class of PROGRAMMING error: an
+    /// <c>ArgumentException</c> from anything inside the write — a future refactor, an encoder, a
+    /// caller's precondition — would have been reported as a disk that refused a line. They belong
+    /// here, around the two calls that actually inspect a path, and nowhere else.</para>
+    /// <para>The shape that reaches them is measured rather than guessed: a NUL inside a segment
+    /// makes <c>Path.GetFullPath</c> throw <c>ArgumentException</c> ("Null character in path") on
+    /// every platform, and <c>C:\data*</c> throws <c>IOException</c> on Windows. A path that survives
+    /// this step is one the OS has already agreed to parse.</para>
+    /// </remarks>
+    private static bool Prepared(string path)
+    {
+        try
+        {
+            CreateDirectoryOf(path);
+
+            return true;
+        }
+        catch (Exception e) when (IsTheDisksFault(e) || IsAPathTheOsRefuses(e))
+        {
+            return false;
+        }
+    }
+
+    /// <summary>A path the OS will not even parse. Not a disk fault, and not a bug in the caller.</summary>
+    private static bool IsAPathTheOsRefuses(Exception e) =>
+        e is NotSupportedException or (ArgumentException and not ArgumentNullException);
 
     /// <summary>The directory may genuinely not exist: this can be the first thing written under a data directory.</summary>
     private static void CreateDirectoryOf(string path)
@@ -175,11 +211,16 @@ public static class JsonlLedger
             ? [Newline, .. Encoding.UTF8.GetBytes(terminated)]
             : Encoding.UTF8.GetBytes(terminated);
 
-    /// <summary>The list. Everything else is a programming error and flies.</summary>
+    /// <summary>
+    /// The list. Everything else is a programming error and flies.
+    /// </summary>
+    /// <remarks>
+    /// <c>PathTooLongException</c> and <c>DirectoryNotFoundException</c> are <c>IOException</c>s and
+    /// need no entry. The path-shaped types are NOT here: they live in <see cref="Prepared"/>, around
+    /// the step that inspects a path, so that an <c>ArgumentException</c> thrown by anything on the
+    /// write path stays a loud programming error rather than a line the disk refused. (The code
+    /// round, gemini.)
+    /// </remarks>
     private static bool IsTheDisksFault(Exception e) =>
-        e is IOException
-            or UnauthorizedAccessException
-            or NotSupportedException
-            or SecurityException
-            or (ArgumentException and not ArgumentNullException);
+        e is IOException or UnauthorizedAccessException or SecurityException;
 }

@@ -36,13 +36,22 @@ namespace CoaiMcp.ServiceDefaults;
 /// contention is a different and worse thing, and an append that cannot be interrupted needs no lock
 /// at all.</para>
 ///
-/// <para><b>The flag is verified rather than trusted, once per process.</b> <c>O_APPEND</c> is
-/// <c>0x400</c> on Linux and <c>0x8</c> on macOS, and a wrong constant would not fail loudly: it
-/// would open a perfectly good handle that does not append, which is the corruption this file exists
-/// to prevent, on the one platform that cannot be tested from here. So the first Unix open asks
-/// <c>fcntl(F_GETFL)</c> whether the flag it asked for is actually set, and <see cref="TrueAppend"/>
-/// answers false for ever if it is not — the caller then has a fact it can report rather than a file
-/// it can corrupt.</para>
+/// <para><b>The probe checks the BEHAVIOUR, not the flag — and that correction is the code round's.</b>
+/// <c>O_APPEND</c> is <c>0x400</c> on Linux and <c>0x8</c> on macOS, and a wrong constant would not
+/// fail loudly: it would open a perfectly good handle that does not append, which is the corruption
+/// this file exists to prevent, on the one platform that cannot be tested from here. The first
+/// version asked <c>fcntl(F_GETFL)</c> whether the flag it requested was set — and that check is
+/// CIRCULAR: it asks for <c>X</c>, the kernel sets <c>X</c>, and <c>flags &amp; X</c> is true
+/// whatever <c>X</c> means. It could only ever catch a kernel silently dropping the flag.</para>
+/// <para>So the probe does what the unit test does: it writes one byte through the descriptor, lets
+/// a SECOND handle grow the file behind its back, writes another byte, and reads the length. A true
+/// append puts the second byte at the new end; a positional write puts it at offset 1 and the file
+/// is shorter. That is the property, asked of the kernel in the kernel's own terms, and no constant
+/// can be wrong in a way it does not see. <c>FD_CLOEXEC</c> is still asked of <c>F_GETFD</c>, where
+/// the constant is 1 on every POSIX platform and the question is not circular.</para>
+/// <para><b>A NO is not cached.</b> A transient temp-directory failure at startup — a full disk, a
+/// permission that clears — would otherwise disable every append for the life of the process through
+/// a <c>Lazy</c> that had already answered. A true answer is kept; a false one is re-asked.</para>
 ///
 /// <para><b>And <c>O_CREAT</c> is never asked for at all</b>, because <c>open</c> is variadic and
 /// <c>O_CREAT</c> is the only way to reach its variadic argument: a fixed-arity P/Invoke passes it in
@@ -52,7 +61,21 @@ namespace CoaiMcp.ServiceDefaults;
 internal static partial class AppendOnlyFile
 {
     /// <summary>Whether this process has a true append on this platform. False only if the Unix check failed.</summary>
-    internal static bool TrueAppend => AppendWorks.Value;
+    internal static bool TrueAppend
+    {
+        get
+        {
+            if (_appendWorks)
+            {
+                return true;
+            }
+
+            lock (ProbeGate)
+            {
+                return _appendWorks = _appendWorks || CheckUnixAppend();
+            }
+        }
+    }
 
     /// <summary>
     /// Appends the whole record at the end of <paramref name="path"/>, creating the file if needed.
@@ -156,7 +179,19 @@ internal static partial class AppendOnlyFile
     private static int OCloExec =>
         OperatingSystem.IsMacOS() || OperatingSystem.IsMacCatalyst() ? 0x1000000 : 0x80000;
 
-    private static readonly Lazy<bool> AppendWorks = new(CheckUnixAppend, isThreadSafe: true);
+    /// <summary>
+    /// The probe's answer, remembered only when it is YES.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="Lazy{T}"/> keeps whatever the first call produced, including a false that came
+    /// from a full disk or a permission that has since cleared — and that answer disables every
+    /// append for the life of the process. A true answer cannot change (the kernel's semantics are
+    /// not going to move), so it is kept; a false one is asked again next time. (The code round,
+    /// gemini.)
+    /// </remarks>
+    private static bool _appendWorks;
+
+    private static readonly Lock ProbeGate = new();
 
     /// <summary>
     /// The file, made to exist by the RUNTIME — because <c>open</c> is variadic and <c>O_CREAT</c>
@@ -182,6 +217,8 @@ internal static partial class AppendOnlyFile
 
     private static bool WriteOnUnix(string path, byte[] record, Action<string>? afterOpen)
     {
+        // No `O_CREAT`: it is the variadic argument, and `EnsureExists` is how the file comes to
+        // exist instead — see its own remarks for why a fixed-arity P/Invoke must not pass one.
         var fd = Open(path, OWriteOnly | OAppend | OCloExec);
         if (fd < 0)
         {
@@ -222,8 +259,15 @@ internal static partial class AppendOnlyFile
     }
 
     /// <summary>
-    /// Opens a throwaway file with the flags this build believes in and asks the kernel what it got.
+    /// Opens a throwaway file and makes the kernel DEMONSTRATE that it appends.
     /// </summary>
+    /// <remarks>
+    /// Asking <c>fcntl</c> whether the flag one asked for is set answers itself. This writes through
+    /// the descriptor, grows the file behind its back through another handle, writes again, and
+    /// reads the length: a true append puts the second byte at the new end and the file is 6 bytes,
+    /// a positional write puts it at offset 1 and the file stays 5. <c>FD_CLOEXEC</c> is still a
+    /// flag question, because its constant is 1 everywhere and the question is not circular.
+    /// </remarks>
     private static bool CheckUnixAppend()
     {
         if (OperatingSystem.IsWindows())
@@ -232,28 +276,56 @@ internal static partial class AppendOnlyFile
         }
 
         var probe = Path.Combine(Path.GetTempPath(), $"coai-append-check-{Environment.ProcessId}");
-        EnsureExists(probe);
-        var fd = Open(probe, OWriteOnly | OAppend | OCloExec);
-        if (fd < 0)
-        {
-            return false;
-        }
-
         try
         {
-            // BOTH flags, because both were asked for and neither would fail loudly: an append that
-            // is not one corrupts another process's records, and a descriptor that is not
-            // close-on-exec hands a reviewer CLI a handle to the ledger.
-            var status = Fcntl(fd, FGetFl);
+            EnsureExists(probe);
+            var fd = Open(probe, OWriteOnly | OAppend | OCloExec);
+
+            return fd >= 0 && Demonstrates(fd, probe);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            // A temp directory that will not take a file today. Answering false is right; REMEMBERING
+            // it is not, which is why the caller asks again.
+            return false;
+        }
+        finally
+        {
+            Forget(probe);
+        }
+    }
+
+    /// <summary>One byte, somebody else's four, one more byte — and the length says which it was.</summary>
+    private static bool Demonstrates(int fd, string probe)
+    {
+        try
+        {
+            var first = "a"u8.ToArray();
+            var second = "b"u8.ToArray();
+            if (WriteRaw(fd, ref first[0], 1) != 1)
+            {
+                return false;
+            }
+
+            // Behind its back, through a handle of its own — what another process would do.
+            using (var other = new FileStream(probe, FileMode.Append, FileAccess.Write, FileShare.ReadWrite))
+            {
+                other.Write("xxxx"u8);
+            }
+
+            if (WriteRaw(fd, ref second[0], 1) != 1)
+            {
+                return false;
+            }
+
             var descriptor = Fcntl(fd, FGetFd);
 
-            return status >= 0 && (status & OAppend) != 0
+            return new FileInfo(probe).Length == 6
                 && descriptor >= 0 && (descriptor & FdCloExec) != 0;
         }
         finally
         {
             CloseRaw(fd);
-            Forget(probe);
         }
     }
 
