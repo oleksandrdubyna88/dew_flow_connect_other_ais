@@ -1,0 +1,76 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "$note": [
+    "How a release is decided here: release-please reads the conventional commits since a line's last",
+    "tag, opens a pull request that bumps that line's version and writes its RELEASES.md, and cutting",
+    "the tag is what MERGING that pull request does. `release.yml` is what the tag then starts.",
+    "",
+    "THE NARRATIVE CHANGELOG IS NOT TOUCHED. src_vs_code/CHANGELOG.md is the human record — 122",
+    "paragraphs of prose, one per release — and `changelog-names-the-release.mjs` REFUSES an mcp",
+    "release that is not written up in it. `changelog-path` sends every generated file to RELEASES.md",
+    "instead, so the two never meet. This is option A of",
+    "todo/PLAN_release_please_meets_a_narrative_changelog.md, and it is the only option that keeps a",
+    "guard whose whole purpose is to make sure a person wrote something."
+  ],
+  "$order": [
+    "WHAT CHANGES FOR A RELEASER, and it is the part worth reading before the first one.",
+    "",
+    "The mcp line is GUARDED: `changelog-names-the-release.mjs` refuses the release unless",
+    "src_vs_code/CHANGELOG.md names that exact version and changelog-baseline.json lists it. Under",
+    "release-please the version is decided by the release pull request, so the prose has to be written",
+    "BEFORE that pull request merges — add the `## Server <version> — <date>` section and the baseline",
+    "entry to the release pull request itself, then merge it.",
+    "",
+    "That makes the release pull request a CHECKPOINT rather than a button, which is the right shape:",
+    "the alternative is cutting the tag first and having the guard refuse afterwards, which leaves a",
+    "tag that must not be moved and a release that cannot proceed.",
+    "",
+    "The other three lines are unguarded today, so nothing stops them — but they are unguarded because",
+    "nobody has turned them on, not because they do not deserve it. A design that only works while",
+    "three guards are off is not settled; see the plan's step 5."
+  ],
+  "$decided": [
+    "DRAFT plus FORCE-TAG-CREATION, and the second is not optional. The action's own schema: \"GitHub",
+    "does not create a Git tag for draft releases until they are published… Setting this to `true`",
+    "ensures the tag is created immediately.\" Without it there is no tag, `release.yml` triggers on",
+    "`push: tags`, and nothing would ever run — a silent deadlock. Learned on dew_flow_creds_for_devs",
+    "on 2026-09-21, where `draft` alone first shipped three releases PUBLISHED AND EMPTY.",
+    "",
+    "The draft suits this repository exactly as it stands: release.yml already creates a draft, or",
+    "REUSES one it finds, and refuses outright to upload into a published release. release-please",
+    "making that draft first is the case it was already written for.",
+    "",
+    "SEPARATE PULL REQUESTS, one per line. Four products with four audiences release at four",
+    "cadences — extension 0.50.0 against bugs 0.2.0 — and a combined pull request would tie them",
+    "together. It also keeps the tags arriving one at a time.",
+    "",
+    "RELEASE TYPES ARE NOT UNIFORM. The extension's package.json IS its version and release.yml",
+    "refuses a tag that disagrees with it, so `node` fits it exactly. mcp, server and bugs carry no",
+    "version in the tree — the build injects it from the tag with -p:Version — so `simple` with a",
+    "version.txt is what finally gives them one. That file is a RECORD, not a new input."
+  ],
+  "force-tag-creation": true,
+  "draft": true,
+  "separate-pull-requests": true,
+  "include-component-in-tag": true,
+  "tag-separator": "-",
+  "changelog-path": "RELEASES.md",
+  "packages": {
+    "src_mcp": {
+      "component": "mcp",
+      "release-type": "simple"
+    },
+    "src_vs_code": {
+      "component": "extension",
+      "release-type": "node"
+    },
+    "src_server": {
+      "component": "server",
+      "release-type": "simple"
+    },
+    "src_bugs": {
+      "component": "bugs",
+      "release-type": "simple"
+    }
+  }
+}
