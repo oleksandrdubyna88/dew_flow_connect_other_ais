@@ -1540,12 +1540,15 @@ function reviewTreeDeps(context: vscode.ExtensionContext): TreesDeps {
   const missing = 'the server binary is not installed yet, so this machine cannot be asked what it holds';
 
   return {
+    // Both spawn a process that asks git about every repository a checkout came from, and a removal
+    // may wait on a multi-gigabyte delete. Minutes of a picker that has not opened, with nothing on
+    // screen, reads as a command that did nothing. (Code round, three findings.)
     list: async () => (server === undefined
       ? { ok: false, tooOld: false, why: missing }
-      : readTrees(server.fsPath)),
+      : whileBusy('Reading the review checkouts on this machine…', () => readTrees(server.fsPath))),
     remove: async (name, withIgnored) => (server === undefined
       ? { ok: false, tooOld: false, why: missing }
-      : removeTree(server.fsPath, name, withIgnored)),
+      : whileBusy('Giving the checkout back…', () => removeTree(server.fsPath, name, withIgnored))),
     open: (path) => openTreeFolder(path),
     pick: async (choices, title) => vscode.window.showQuickPick(
       choices.map((one) => ({ ...one })),
@@ -1564,4 +1567,11 @@ function reviewTreeDeps(context: vscode.ExtensionContext): TreesDeps {
       });
     },
   };
+}
+
+/** A notification-area spinner for the two calls that can take minutes. */
+function whileBusy<T>(title: string, doing: () => Promise<T>): Promise<T> {
+  return Promise.resolve(vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title },
+    async () => doing()));
 }

@@ -45,9 +45,6 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     /// <summary>The root, the prefix, the identity and the budgets — shared with the keeper.</summary>
     private readonly ReviewTreeRoot _at = new(launcher, root);
 
-    /// <summary>Distinct from the round prefix, which is what the gate's prune matches on.</summary>
-    private const string Prefix = "coai-review-";
-
     /// <summary>
     /// How many trees this machine may hold. A cap enforced by REFUSING, never by evicting: every
     /// eviction rule that could make room is a rule that can delete a tree somebody is reading.

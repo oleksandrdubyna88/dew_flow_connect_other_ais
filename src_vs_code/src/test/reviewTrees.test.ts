@@ -274,3 +274,18 @@ test('a list that carries a reason is said rather than shown as empty', async ()
   assert.match(w.said[0] ?? '', /could not be listed/u);
   assert.match(w.said[0] ?? '', /root could not be read/u);
 });
+
+test('a document with no tree list is refused rather than read as an empty machine', async () => {
+  // Saying "you hold none" about a document nobody understands invites a person to check another
+  // commit out into a root that may already hold ten. (Code round, codex.)
+  for (const out of [{}, { root: 'C:/trees' }, { trees: 'not an array' }]) {
+    const read = await readTrees('coai-mcp', printing(out));
+
+    assert.equal(read.ok, false, `${JSON.stringify(out)} must not read as an empty machine`);
+  }
+
+  // A REASON is the one shape allowed to carry no list.
+  const said = await readTrees('coai-mcp', printing({ root: 'C:/trees', reason: 'the folder could not be read' }));
+  assert.ok(said.ok);
+  assert.match(said.answer.reason, /could not be read/u);
+});

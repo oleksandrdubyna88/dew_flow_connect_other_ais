@@ -1332,7 +1332,10 @@ Whole executable after: 2140 tests, 2138 passed, 0 failed, 2 skipped.
 | `reviewTrees.test.ts` (16) | the readers and the whole picker flow as VALUES: what an answer must echo, 64 as the only too-old code, `--with-ignored` sent only when asked, every word becoming a sentence that never prints the word, and the three paths where walking away must remove nothing |
 | `bugzLiveContract.test.ts` | both vocabularies against the C# constants (a word added on one side only goes red naming it), and the real `--trees` and `--tree-remove` through the real reader |
 
-**Teeth, shown rather than claimed.** Two mutations were planted and both were caught by the right
+**Teeth, shown rather than claimed.** Three mutations were planted across the two rounds and each was
+caught by the right test with the right message. Disabling the per-mount submodule inspection — the
+code round's central fix — turns FOUR tests red at once, including
+*Expected first.Reason to be the same string because a parent status cannot see this at all*. Two mutations were planted and both were caught by the right
 test with the right message: stopping the descent into a flagged submodule turned the refusal into
 *Expected said.InTheWay {"mods/sub"} to contain "mods/sub/s.txt"*, and removing the ignored-file gate
 turned the first ask into a removal. A third, adding a reason word to the C# side alone, went red

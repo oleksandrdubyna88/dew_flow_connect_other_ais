@@ -79,10 +79,21 @@ public sealed class ReviewTreeRoot(IProcessLauncher launcher, string path)
     public static bool IsOurName(string name) =>
         name.StartsWith(Prefix, StringComparison.Ordinal)
         && name.Length > Prefix.Length
-        && !name.Contains('/', StringComparison.Ordinal)
-        && !name.Contains('\\', StringComparison.Ordinal)
         && !name.Contains("..", StringComparison.Ordinal)
-        && !name.Contains('\0', StringComparison.Ordinal)
+        && Plain(name);
+
+    /// <summary>
+    /// Nothing in it can make it mean a place: no separator, no NUL, nothing a filesystem refuses.
+    /// </summary>
+    /// <remarks>
+    /// Separated from <see cref="IsOurName"/> because the two together were a seven-term condition,
+    /// over the cap of four — and a guard nobody can read is a guard nobody can check. The separators
+    /// are named explicitly rather than left to <c>GetInvalidFileNameChars</c>, which does not include
+    /// <c>/</c> on Linux.
+    /// </remarks>
+    private static bool Plain(string name) =>
+        !name.Contains('/', StringComparison.Ordinal)
+        && !name.Contains('\\', StringComparison.Ordinal)
         && name.IndexOfAny(System.IO.Path.GetInvalidFileNameChars()) < 0;
 
     /// <summary>Whether a path really is under this root — asked before anything is deleted.</summary>
@@ -113,6 +124,9 @@ public sealed class ReviewTreeRoot(IProcessLauncher launcher, string path)
     {
         if (!Directory.Exists(workingDirectory))
         {
+            // `Broken` is "nothing ran", which is NOT "git said no": every caller here must record
+            // that it learned nothing rather than a fact about the tree, because a missing working
+            // directory tells you about the directory and not about what was in it.
             return GitAnswer.Broken;
         }
 
@@ -152,6 +166,12 @@ public sealed class ReviewTreeRoot(IProcessLauncher launcher, string path)
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or TimeoutException)
         {
+            // A TIMEOUT abandons the WAIT and not the delete: `Directory.Delete` takes no token, so
+            // it keeps going in the background and may yet succeed. Said out loud because a reviewer
+            // read the timeout as a stop and was right to: what this returns is only whether the
+            // directory is gone AT THIS MOMENT, and the caller must treat false as "we do not know
+            // what this tree is now" rather than as "it is still whole". Nothing downstream acts on
+            // a false — the record is kept and the answer is `git_failed`.
             return !Directory.Exists(candidate);
         }
 

@@ -14,6 +14,9 @@ internal sealed record Looked(
     int Ignored,
     IReadOnlyList<string> IgnoredSample)
 {
+    /// <summary>The submodule mounts that were inspected — their own files are named instead.</summary>
+    internal IReadOnlyList<string> Mounts { get; init; } = [];
+
     internal static Looked Clean(int ignored, IReadOnlyList<string> sample) => new("", [], ignored, sample);
 
     internal static Looked No(string reason) => new(reason, [], 0, []);
@@ -52,9 +55,22 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
             return new ReviewTrees { Root = root.Path };
         }
 
+        IReadOnlyList<string> names;
+        try
+        {
+            names = [.. Names()];
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            // A root this process cannot read is not a machine holding nothing, and answering an
+            // empty list would invite somebody to check a commit out again into a place that already
+            // holds ten. (Code round, codex.)
+            return new ReviewTrees { Root = root.Path, Reason = $"the review-tree folder could not be read: {e.Message}" };
+        }
+
         var seen = new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase);
         var rows = new List<HeldReviewTree>();
-        foreach (var name in Names())
+        foreach (var name in names)
         {
             rows.Add(await RowAsync(name, seen, ct));
         }
@@ -93,7 +109,12 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
             return Row(name, path, read, ReviewTreeState.Vanished);
         }
 
-        return read.State == RecordState.Found
+        // A record whose identity does not recompute to THIS name describes another tree, so it
+        // proves nothing about this one — the same check a reuse makes before handing a tree back.
+        var mine = read.State == RecordState.Found
+            && string.Equals(ReviewTreeRoot.NameOf(read.Record.Repository, read.Record.Sha), name, StringComparison.OrdinalIgnoreCase);
+
+        return mine
             ? Row(name, path, read, await StateOfAsync(read.Record, path, seen, ct))
             : Row(name, path, read, ReviewTreeState.Incomplete);
     }
@@ -178,21 +199,32 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
             return Refused(name, ReviewTreeRemovalReason.NotOurs);
         }
 
-        Drop(name);
-
-        return new ReviewTreeRemoval { Name = name, Reason = ReviewTreeRemovalReason.Forgotten };
+        return Dropped(name)
+            ? new ReviewTreeRemoval { Name = name, Reason = ReviewTreeRemovalReason.Forgotten }
+            : Refused(name, ReviewTreeRemovalReason.GitFailed);
     }
 
-    private void Drop(string name)
+    /// <summary>
+    /// Removes the record, and says whether it went.
+    /// </summary>
+    /// <remarks>
+    /// The first draft swallowed the failure and answered <c>forgotten</c> anyway, so a record locked
+    /// by another process was reported as dropped and came back on the next list. Untidy rather than
+    /// unsafe — nothing is deleted on the strength of a record — but a product that says it did
+    /// something it did not is the thing this whole story is trying not to be. (Code round, three
+    /// findings.)
+    /// </remarks>
+    private bool Dropped(string name)
     {
         try
         {
             File.Delete(ReviewTreeRecords.FileFor(root.Path, name));
+
+            return true;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // The record outliving its tree is untidy, not unsafe: the next list shows it as vanished
-            // and the next attempt drops it. Nothing is deleted on the strength of it.
+            return false;
         }
     }
 
@@ -231,14 +263,19 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
         // submodules refuses a plain remove (measured: `working trees containing submodules cannot be
         // moved or removed`). The force is reached only after the inspection came back empty, twice.
         await root.GitAsync(repoPath, ["worktree", "unlock", path], ReviewTreeRoot.Asking, ct);
-        await root.GitAsync(repoPath, ["worktree", "remove", "--force", path], ReviewTreeRoot.Checking, ct);
+        var removed = await root.GitAsync(
+            repoPath, ["worktree", "remove", "--force", path], ReviewTreeRoot.Checking, ct);
 
-        if (!await root.EnsureGoneAsync(path, ct))
+        // git's own removal is what deregisters the tree. Deleting the directory after it FAILED
+        // would leave the registration behind and the files gone — a state neither this product nor
+        // git can make sense of afterwards. So a failed remove stops here, with everything intact.
+        // (Code round, gemini.) `EnsureGoneAsync` is then only for the remove that half-succeeded.
+        if (!removed.Ran || !removed.Ok || !await root.EnsureGoneAsync(path, ct))
         {
             return Refused(name, ReviewTreeRemovalReason.GitFailed);
         }
 
-        Drop(name);
+        Dropped(name);
 
         return new ReviewTreeRemoval
         {
@@ -285,10 +322,14 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
     private async Task<Looked> JudgedAsync(
         string path, IReadOnlyList<string> lines, bool withIgnored, CancellationToken ct)
     {
-        var ignored = lines.Where(l => l.StartsWith("! ", StringComparison.Ordinal))
-            .Select(l => l[2..].Trim())
-            .ToList();
-        var theirs = await TheirsAsync(path, lines, ct);
+        var inside = await InsideEveryMountAsync(path, lines, ct);
+        if (inside.Reason.Length > 0)
+        {
+            return inside;
+        }
+
+        IReadOnlyList<string> ignored = [.. Ignored(lines), .. inside.IgnoredSample];
+        IReadOnlyList<string> theirs = [.. Named(lines, inside), .. inside.InTheWay];
 
         if (theirs.Count > 0)
         {
@@ -300,36 +341,120 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
             : Looked.Clean(ignored.Count, Few(ignored));
     }
 
-    private static IReadOnlyList<string> Few(IReadOnlyList<string> all) => [.. all.Take(Sample)];
+    /// <summary>The parent's own ignored paths — its `!` lines.</summary>
+    private static IEnumerable<string> Ignored(IReadOnlyList<string> lines) =>
+        lines.Where(l => l.StartsWith("! ", StringComparison.Ordinal)).Select(l => l[2..].Trim());
 
     /// <summary>
-    /// Everything in the tree that is somebody's, named — descending into a submodule only when the
-    /// parent's own status has already said that submodule holds something.
+    /// What the parent says is the person's, with a flagged submodule's MOUNT dropped: the mount is
+    /// not a file anybody can act on, and the files inside it have been named separately.
+    /// </summary>
+    private static IEnumerable<string> Named(IReadOnlyList<string> lines, Looked inside) =>
+        lines.Where(Ours).Select(PathIn).Where(one => !inside.Mounts.Contains(one, StringComparer.Ordinal));
+
+    /// <summary>
+    /// Every POPULATED submodule, inspected in its own right — which is the only way to see what is
+    /// in it.
     /// </summary>
     /// <remarks>
-    /// Measured 2026-09-21 against real git: one status in the parent SEES all four dirty states,
-    /// including an untracked file inside a populated submodule, but reports the submodule cases as
-    /// the MOUNT (<c>mods/sub</c>) and never the file. So the verdict needs one call and the NAMES
-    /// need one more per flagged mount — and only per flagged mount, because descending into every
-    /// one would be work per submodule on every press for a fact already in hand.
+    /// <para><b>Measured 2026-09-21, and it is why this is not an optimisation but the correctness of
+    /// the whole story.</b> A parent's <c>git status --ignore-submodules=none --ignored=matching</c>
+    /// reports an ignored file in the PARENT (<c>! ignored-here.txt</c>) and is <b>completely blind</b>
+    /// to an ignored file inside a populated submodule: empty output, no flag, nothing. A `.env` in a
+    /// submodule would therefore have read as a clean tree and been deleted by
+    /// <c>worktree remove --force</c> without the confirmation the design rests on. Three reviewers
+    /// raised it independently and all three were right.</para>
+    /// <para>So every populated mount is statused, not only the ones the parent flagged: the flags say
+    /// what is MODIFIED or UNTRACKED there, and say nothing at all about what is ignored. It costs one
+    /// process per mount on a removal, which is a deliberate and rare act; the alternative is losing
+    /// somebody's file silently.</para>
+    /// <para>An inspection that could not RUN is neither clean nor dirty — it is
+    /// <see cref="ReviewTreeRemovalReason.GitFailed"/>, because calling it dirty would be a fact we
+    /// do not have, and calling it clean would delete on one.</para>
     /// </remarks>
-    private async Task<IReadOnlyList<string>> TheirsAsync(
+    private async Task<Looked> InsideEveryMountAsync(
         string path, IReadOnlyList<string> lines, CancellationToken ct)
     {
-        var named = new List<string>();
-        foreach (var line in lines.Where(Ours))
+        var mounts = await PopulatedMountsAsync(path, ct);
+        var reads = new List<Looked>(mounts.Count);
+        foreach (var mount in mounts)
         {
-            named.Add(PathIn(line));
+            var read = await OneMountAsync(path, mount, ct);
+            if (read.Reason.Length > 0)
+            {
+                return read;
+            }
+
+            reads.Add(read);
         }
 
-        foreach (var mount in lines.Where(Stirred).Select(PathIn).Distinct(StringComparer.Ordinal))
-        {
-            named.Remove(mount);
-            named.AddRange(await InsideAsync(path, mount, ct));
-        }
+        IReadOnlyList<string> theirs = [.. reads.SelectMany(r => r.InTheWay)];
+        IReadOnlyList<string> ignored = [.. reads.SelectMany(r => r.IgnoredSample)];
 
-        return named;
+        return new Looked("", theirs, ignored.Count, ignored) { Mounts = mounts };
     }
+
+    /// <summary>One submodule's own view of itself, with its mount prefixed onto every path.</summary>
+    private async Task<Looked> OneMountAsync(string path, string mount, CancellationToken ct)
+    {
+        var status = await root.GitAsync(
+            Path.Combine(path, mount),
+            ["status", "--porcelain=v2", "--untracked-files=all", "--ignore-submodules=none", "--ignored=matching"],
+            ReviewTreeRoot.Asking,
+            ct);
+
+        if (!status.Ran || !status.Ok)
+        {
+            return Looked.No(ReviewTreeRemovalReason.GitFailed);
+        }
+
+        return new Looked(
+            "",
+            [.. status.Lines.Where(Ours).Select(l => $"{mount}/{PathIn(l)}")],
+            0,
+            [.. Ignored(status.Lines).Select(one => $"{mount}/{one}")]);
+    }
+
+    /// <summary>
+    /// The submodule mounts this tree actually HAS files in — declared in <c>.gitmodules</c> and not
+    /// empty on disk. An unpopulated mount holds nothing and costs no process.
+    /// </summary>
+    private async Task<IReadOnlyList<string>> PopulatedMountsAsync(string path, CancellationToken ct)
+    {
+        var declared = await root.GitAsync(
+            path, ["config", "-f", ".gitmodules", "--get-regexp", "path"], ReviewTreeRoot.Asking, ct);
+
+        return declared.Ran && declared.Ok
+            ? [.. Mounts(declared.Out).Where(m => Populated(path, m))]
+            : [];
+    }
+
+    /// <summary>The mount paths out of <c>submodule.&lt;name&gt;.path &lt;mount&gt;</c> lines.</summary>
+    private static IEnumerable<string> Mounts(string config) =>
+        config.Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(line => line.Split(' ', 2))
+            .Where(parts => parts.Length == 2)
+            .Select(parts => parts[1].Trim());
+
+    /// <summary>
+    /// A mount is only ours to look inside if it stays under the tree.
+    /// </summary>
+    /// <remarks>
+    /// <c>.gitmodules</c> is a file in the checked-out commit, so its `path` is attacker-controlled in
+    /// the same sense any committed path is. A mount that resolves outside the tree is not inspected
+    /// and not counted — this product looks at what it made and nothing else. (Code round, local.)
+    /// </remarks>
+    private static bool Populated(string path, string mount)
+    {
+        var at = Path.GetFullPath(Path.Combine(path, mount));
+        var below = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+        return at.StartsWith(below, StringComparison.OrdinalIgnoreCase)
+            && Directory.Exists(at)
+            && Directory.EnumerateFileSystemEntries(at).Any();
+    }
+
+    private static IReadOnlyList<string> Few(IReadOnlyList<string> all) => [.. all.Take(Sample)];
 
     /// <summary>A line about something of the person's: a change, or a file git does not track.</summary>
     private static bool Ours(string line) =>
@@ -337,21 +462,6 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
         || line.StartsWith("2 ", StringComparison.Ordinal)
         || line.StartsWith("u ", StringComparison.Ordinal)
         || line.StartsWith("? ", StringComparison.Ordinal);
-
-    /// <summary>
-    /// A line about a SUBMODULE with modified or untracked content — porcelain v2's fourth field is
-    /// <c>S&lt;c&gt;&lt;m&gt;&lt;u&gt;</c>, and it is the only place this fact is available.
-    /// </summary>
-    private static bool Stirred(string line)
-    {
-        var parts = line.Split(' ');
-
-        return parts.Length > 2
-            && parts[0] == "1"
-            && parts[2].Length == 4
-            && parts[2][0] == 'S'
-            && (parts[2][2] == 'M' || parts[2][3] == 'U');
-    }
 
     /// <summary>The path a porcelain v2 line ends with — the last field, and it may contain spaces.</summary>
     private static string PathIn(string line)
@@ -364,20 +474,6 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
         var parts = line.Split(' ', 9);
 
         return parts.Length == 9 ? parts[8].Trim() : line.Trim();
-    }
-
-    /// <summary>The files inside one submodule, prefixed with its mount so a person can find them.</summary>
-    private async Task<IReadOnlyList<string>> InsideAsync(string path, string mount, CancellationToken ct)
-    {
-        var status = await root.GitAsync(
-            Path.Combine(path, mount),
-            ["status", "--porcelain=v2", "--untracked-files=all", "--ignore-submodules=none"],
-            ReviewTreeRoot.Asking,
-            ct);
-
-        return status.Ran && status.Ok
-            ? [.. status.Lines.Where(Ours).Select(l => $"{mount}/{PathIn(l)}")]
-            : [$"{mount} (its own files could not be listed)"];
     }
 
     private static ReviewTreeRemoval Refused(string name, string reason) =>
