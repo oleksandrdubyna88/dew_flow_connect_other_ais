@@ -69,8 +69,15 @@ This is the part that makes it a plan instead of an afternoon.
    numeric id**. The id is in each file's `$note` today, but an id is not reviewable content — it
    says nothing about intent and cannot be written before the ruleset exists.
 
-   **Match on `name` instead** (`"release tags"`), and treat *two rulesets with that name* and
-   *none* as two different, named failures. The id stays a note for a human re-applying by hand.
+   **Filter to `target: "tag"` FIRST, then match on `name`** (`"release tags"`), and treat *two with
+   that name* and *none* as two different, named failures. The id stays a note for a human
+   re-applying by hand.
+
+   The filter is not a nicety: `GET /repos/{repo}/rulesets` returns **every** ruleset, branch-target
+   ones included, so a branch ruleset that happened to be called `release tags` would either be
+   compared against a tag file or counted as a duplicate of one. The filter goes before all three
+   checks — duplicate, no-match, and the absent-file case in question 5 — or each of them answers
+   about the wrong set.
 
 2. **The GET is not the PUT.** The answer carries `id`, `node_id`, `source`, `source_type`,
    `created_at`, `updated_at`, `_links`, and `bypass_actors` entries richer than the ones sent. It
@@ -82,10 +89,14 @@ This is the part that makes it a plan instead of an afternoon.
    /repos/{repo}/rulesets/{id}`. `applyTo` (`branch-protection.mjs:661`) does one PUT and knows
    nothing of this.
 
-4. **Silence must keep meaning silence.** Five of the seven repositories have no
-   `.github/tag-ruleset.json` and must stay exit 0 — no file means no opinion, not drift. The same
-   rule already governs a field the branch file does not mention (`wanted`,
-   `branch-protection.mjs:135`), so the shape exists; it just has to be applied at file level too.
+4. **Silence must keep meaning silence — when there is nothing to be silent about.** Five of the
+   seven repositories have no `.github/tag-ruleset.json` and must stay exit 0 **provided they also
+   have no tag-target ruleset**: no file and no ruleset means no opinion, not drift. The same rule
+   already governs a field the branch file does not mention (`wanted`, `branch-protection.mjs:135`),
+   so the shape exists; it just has to be applied at file level too.
+
+   The proviso is the whole of the difference between this and question 5, and leaving it out is how
+   the two ended up contradicting each other in this plan's first draft.
 
 5. **A ruleset with no file is the interesting direction.** If a `tag-ruleset.json` is absent but a
    tag ruleset EXISTS, that is somebody having made settings nobody reviewed — the exact thing this
@@ -125,8 +136,9 @@ This is the part that makes it a plan instead of an afternoon.
 
 ## Definition of Done
 
-- [ ] `branch-protection.mjs` reads `.github/tag-ruleset.json` when present and says nothing when absent.
+- [ ] `branch-protection.mjs` reads `.github/tag-ruleset.json` when present, and says nothing only when **both** the file and any tag-target ruleset are absent — an absent file beside a live one is exit 1 per design question 5, which the first draft of this line contradicted.
 - [ ] Drift in a tag ruleset is exit 1 with the field named; a repository that cannot have rulesets is exit 3 with the reason.
+- [ ] Rulesets are filtered to `target: "tag"` before any of the duplicate, no-match or absent-file checks run.
 - [ ] `--apply` creates and updates, and is verified against a real ruleset.
 - [ ] The selftest covers the reducer, and each case was seen red before it was seen green.
 - [ ] The file is byte-identical in all seven repositories, checked with `cmp`.
