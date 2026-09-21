@@ -1,9 +1,11 @@
 # PLAN — the server writes down what it refused, what failed, and that it died
 
-> Status: **EPIC 1 IMPLEMENTED, 2026-09-21; epics 2 and 3 open.** Stories 1.1 (the credential list),
-> 1.2 (the notice line), 1.3 (the path) and 1.4 (the writer, and the append it had to fix) have
-> shipped. What remains is every CALL SITE — the census (2.1), the three refusal roads (2.2), the
-> reviewer and startup notices (2.3), the live seam leg (2.4) — and the deaths (3.1, 3.2).
+> Status: **EPIC 1 IMPLEMENTED, 2026-09-21; story 2.1 implemented, 2026-09-21; the rest of epics 2
+> and 3 open.** Stories 1.1 (the credential list), 1.2 (the notice line), 1.3 (the path) and 1.4 (the
+> writer, and the append it had to fix) have shipped, and 2.1 has bounded the population 2.2 is about
+> to make a promise about. What remains is the instrumentation itself — the TWO refusal roads (2.2,
+> and it is two rather than three because 2.1 counted them), the reviewer and startup notices (2.3),
+> the live seam leg (2.4) — and the deaths (3.1, 3.2).
 > Scope: `src_mcp` — a notice record and its serialiser, the append, the instrumentation sites, a
 > run-start marker, and the `try/catch/finally` that `Program.cs` has never had.
 >
@@ -327,7 +329,7 @@ because this project's gate holds one session per repo+branch and closes it when
 
 | | Story | Depends on | Model |
 |---|---|---|---|
-| 2.1 | Every refusal road and every reviewer ending is counted, and the count only falls | — | Opus |
+| ~~2.1~~ | ~~Every refusal road and every reviewer ending is counted, and the count only falls~~ — **shipped 2026-09-21** as a BOUNDARY rather than a count (PR #449): `Refusal.Answer` is the one place an `ErrorAnswer` is built, and `shared/refusal-sites.json` carries the numbers | — | Opus |
 | 2.2 | Every refusal returned to the calling AI is written down, inside the helpers that return it | 1.4, 2.1 | Opus |
 | 2.3 | A reviewer that fails, and a setting this build cannot read, reach the file the page reads | 2.2 | Opus |
 | 2.4 | A real refusal over stdio lands with its secret taken out — asserted on the bytes | 2.2 | Opus |
