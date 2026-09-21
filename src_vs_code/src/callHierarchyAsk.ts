@@ -34,17 +34,23 @@ export interface AskedAbout {
   readonly symbolName: string;
 }
 
-/** What a preparation found, and the handles that go back to the provider. */
-export interface Preparation {
-  readonly items: readonly PreparedItem[];
-  /**
-   * The opaque handles, in the SAME ORDER as `items`.
-   *
-   * <p>Plural, and that is the fix for this round's worst finding: a single handle meant the
-   * provider was asked about `items[0]` however far down the list the row's method was.</p>
-   */
-  readonly handles: readonly unknown[];
+/**
+ * One symbol a preparation found, WITH the handle that goes back to the provider.
+ *
+ * <p>One value rather than two arrays indexed in parallel, because a parallel index is a contract
+ * nothing enforces: an adapter that filters or reorders one and not the other would pair a name with
+ * another symbol's handle, and the failure would look like a correct answer about the wrong method —
+ * this story's own worst case, reached by a refactor rather than by a bug. (Code round 2, codex.)
+ * The first draft carried a single handle and asked about `items[0]`; the second carried two arrays;
+ * this one cannot be got wrong.</p>
+ */
+export interface PreparedSymbol {
+  readonly item: PreparedItem;
+  readonly handle: unknown;
 }
+
+/** What a preparation found. Empty means no provider answered. */
+export type Preparation = readonly PreparedSymbol[];
 
 /** Everything this reaches the editor through. */
 export interface Editor {
@@ -126,15 +132,16 @@ async function askedFor(
     return { why: 'failed', handle: undefined };
   }
 
-  if (prepared.items.length === 0) {
+  if (prepared.length === 0) {
     return { why: 'no-provider', handle: undefined };
   }
 
-  const which = theRightSymbol(prepared.items, about.symbolName);
+  const which = theRightSymbol(prepared.map((one) => one.item), about.symbolName);
+  const found = prepared[which];
 
-  return which >= 0
-    ? { why: 'ok', handle: prepared.handles[which] }
-    : { why: 'moved', handle: undefined };
+  return found === undefined
+    ? { why: 'moved', handle: undefined }
+    : { why: 'ok', handle: found.handle };
 }
 
 /** One direction, with its own failure and its own budget. */

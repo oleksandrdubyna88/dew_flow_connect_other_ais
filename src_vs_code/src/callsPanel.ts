@@ -90,15 +90,19 @@ export class CallsPanel {
    * <p>The press is forgotten rather than the provider stopped: an extension cannot take a request
    * back out of a language server. What it can do is refuse to apply the answer, which is what
    * `stillWanted` is for.</p>
+   *
+   * <p><b>And the page is repainted.</b> The block lives in the detail row, which a collapse HIDES
+   * rather than removes, so forgetting the answer here while leaving the old markup there would mean
+   * re-expanding after a branch switch shows that count under the sentence *in the current
+   * checkout* — the one thing this story promises never to say, reached from the other side.
+   * (Round 2, two reviewers.)</p>
    */
-  closed(ids: readonly number[]): void {
+  closed(ids: readonly number[], rows: readonly ReviewPair[]): void {
     const dropping = new Set(ids);
     this.waiting = new Map([...this.waiting].filter(([id]) => !dropping.has(id)));
-    // The ANSWER goes too. A person who collapses a row, checks out another branch and opens it
-    // again would otherwise be shown the old branch's count under the sentence "in the current
-    // checkout" — which is the one thing this story promises never to say. Reopening asks again.
-    // (Code round, three reviewers.)
+    // The ANSWER goes too, so that reopening asks again. (Code round 1, three reviewers.)
     this.held = new Map([...this.held].filter(([id]) => !dropping.has(id)));
+    this.tell(ids, rows);
   }
 
   /** Opens one end of a call that this side is holding — by index, never by a path from the page. */

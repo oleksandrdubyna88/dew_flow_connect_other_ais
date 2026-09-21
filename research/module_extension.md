@@ -8124,8 +8124,11 @@ finding, reached independently by three reviewers. `prepareCallHierarchy` answer
 first draft checked the list and then asked the provider about `items[0]`. A provider answering
 `[Totals, counted]` would have passed both guards and still counted the class's callers under the
 method's name: the exact outcome the guards exist for, arrived at through them. `theRightSymbol` now
-returns the INDEX, `Preparation.handles` is plural and in the same order as `items`, and the handle
-asked about is the one beside the item that matched.
+returns the INDEX, and a preparation is now a list of `{ item, handle }` PAIRS rather than two
+arrays indexed in parallel — the second round's answer to the same question, because a parallel index
+is a contract nothing enforces and an adapter that filters one array and not the other would pair a
+name with another symbol's handle. Three drafts: one handle, two arrays, one value. The third cannot
+be got wrong.
 
 **The list is bounded at 50, with a tail that says how many more there are.** The COUNT in the
 sentence is never truncated — it is the answer; the list is only how a person reaches a few of them,
@@ -8137,6 +8140,19 @@ whatever URIs it knows: a dependency in `node_modules`, another workspace root, 
 temp directory. Story 3.1 built `currentFileIn` for exactly this shape of question — it checks the
 containing checkout against the open folders and then the file against the checkout, as written AND as
 it really leads — so it is reused rather than a second guard written.
+
+Which folder to ask it about is a separate question, and `folderHolding` answers it as a value.
+Trying each open folder in turn and letting the guard refuse `../otherRoot/file.ts` reaches the right
+answer, but only because the refusal is silent: it asks the filesystem about folders that plainly do
+not hold the file. `folderHolding` is lexical, synchronous and unit-tested — the most specific root
+wins, since a workspace may hold a root inside another, and `alphabet` is not inside `alpha` because
+the comparison is a path boundary rather than a prefix.
+
+**One malformed item costs one END, never the whole direction.** `selectionRange` is declared
+non-optional by the API and is nevertheless missing from some providers' items, so the range is the
+fallback and an item with neither is skipped. It used to throw, and a `TypeError` inside that map
+would have been reported by the bounded wait as a direction that could not be asked: nine callers and
+one unusable tenth would have read as *the language support did not answer*.
 
 **Four states, because each is a different next move.** `moved` (that line holds something else),
 `gone` (the file is not in this checkout), `no-provider` (nobody could be ASKED — never rendered as
@@ -8150,9 +8166,13 @@ stop (none of the three commands takes a `CancellationToken`: `vscode.prepareCal
 URI and a position, the two direction commands take an item, and that is all), but the answer can be
 refused.
 
-**Collapsing drops the ANSWER too, not only the press.** A person who collapses a row, checks out
-another branch and opens it again would otherwise be shown the old branch's count under the sentence
-*in the current checkout* — the one thing this story promises never to say. Reopening asks again.
+**Collapsing drops the ANSWER too, not only the press, and repaints the row.** A person who collapses
+a row, checks out another branch and opens it again would otherwise be shown the old branch's count
+under the sentence *in the current checkout* — the one thing this story promises never to say.
+Reopening asks again. The repaint is the other half of the same guarantee and the second round found
+it: the block lives in the detail row, which a collapse HIDES rather than removes, so forgetting the
+answer on the panel's side while leaving the old markup in the page would have arrived at exactly the
+sentence being avoided, from the other direction.
 
 **Nothing is reused to avoid a call.** The last answer is kept so a redraw does not lose it; a press
 always asks again. That is what keeps a number from surviving a branch switch without this side
