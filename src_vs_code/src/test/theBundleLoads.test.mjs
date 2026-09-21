@@ -156,6 +156,35 @@ test('the shipped bundle loads with a stubbed editor, and exports activate', () 
   }
 });
 
+test('the shipped bundle carries every credential word as a quoted literal', () => {
+  // WHY IT LIVES IN THIS FILE. A test of its own would run `npm run bundle` a second time, and the
+  // comment below this one is about exactly that hazard: `prepare-gate.mjs` deletes a generated
+  // file for about two seconds mid-build, `node --test` runs files in parallel, and a second
+  // builder makes the first one's tree vanish under it. This file already builds the bundle and
+  // already runs alone, so the assertion joins it rather than racing it.
+  //
+  // WHAT IT PROVES, and the limit is worth stating. `dist/extension.js` is minified and exports
+  // only `activate`/`deactivate`, so nothing here can call the redactor. It proves that the words
+  // SURVIVED bundling — that esbuild did not tree-shake `credentialWords.generated.ts` away and
+  // that the module really is reachable from the entry point. It does NOT prove the redactor uses
+  // them; `generate-credential-words.mjs --check` is the guard for the copy being current, and the
+  // C# side has its own.
+  const bundle = readFileSync(join(ROOT, 'dist', 'extension.js'), 'utf8');
+  const seed = JSON.parse(readFileSync(join(ROOT, '..', 'shared', 'credential-words.json'), 'utf8'));
+  const words = [...seed.anywhere, ...seed.wholePart];
+
+  assert.ok(words.length > 0, 'the seed carries no words, which the generator should have refused');
+  for (const word of words) {
+    // As a QUOTED literal: a bare substring search would find `key` inside `keys`, `monkey` or any
+    // minified identifier, and would pass on a bundle that carries none of this list.
+    assert.ok(
+      bundle.includes(`"${word}"`) || bundle.includes(`'${word}'`),
+      `the shipped bundle carries no "${word}" — the extension would stop treating it as a secret `
+      + 'while the server still does, which is a secret in a file on one path and not the other',
+    );
+  }
+});
+
 /**
  * A test that runs the BUILD runs ALONE, and this is the check for it.
  *

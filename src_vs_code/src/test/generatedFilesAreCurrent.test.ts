@@ -20,7 +20,14 @@ import { test } from 'node:test';
  * between them.</p>
  */
 
-const SCRIPTS = ['generate-builtin-roles.mjs', 'generate-help-prompts.mjs'] as const;
+const SCRIPTS = [
+  'generate-builtin-roles.mjs',
+  'generate-help-prompts.mjs',
+  // Added 2026-09-21. This one guards a SECURITY measure rather than a catalog: the module it
+  // generates is what the redactor reads, and a stale copy is a word the extension no longer
+  // treats as a secret while the server still does.
+  'generate-credential-words.mjs',
+] as const;
 
 // out/test at run time, so two levels reach the package root.
 const scriptsDir = join(__dirname, '..', '..', 'scripts');

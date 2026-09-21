@@ -15,6 +15,14 @@
          the first real run died on every review_plan — and the extension generates its copy
          from the same file. Both loaders are asserted against it. -->
     <EmbeddedResource Include="..\..\shared\builtin-roles.json" LogicalName="CoaiMcp.Core.builtin-roles.json" />
+
+    <!-- The credential word list, and the same argument one step harder. A published Native-AOT
+         binary runs where no shared/ directory exists, so a redactor that READ this file would
+         throw there — and because every notice write is best-effort and swallows its exceptions,
+         it would then redact with an empty list and put raw credentials into server-notices.jsonl.
+         Two reviewers found that independently on the plan round. Embedded here, and
+         CredentialWords refuses to start without it rather than redacting nothing. -->
+    <EmbeddedResource Include="..\..\shared\credential-words.json" LogicalName="CoaiMcp.Core.credential-words.json" />
   </ItemGroup>
 
   <ItemGroup>
