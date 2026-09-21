@@ -216,9 +216,35 @@ record" is an observation that can silently not happen. A test asserts the exclu
 call and a scan to have finished, to guard a one-line list. The structural pin catches the only way
 this regresses — somebody editing the line.)
 
-And then the observation, which is still worth making once: re-query the `main` gate after the next
-scan and record what the remaining 15 findings are. This item does not claim to make the gate green —
-it claims to make it *about this repository*. What is left is then a real list somebody can work.
+**The observation, made 2026-09-21 after the change landed on `main`.** It did what it claimed and
+not more: **32 new-code findings became 15**, and **every one of the 17 in the submodule is gone**.
+The gate is still `ERROR` — `new_reliability_rating 3` and `new_security_rating 3` — because the 15
+that remain are real and unfixed. That is the point. They are now a list somebody can work instead
+of noise nobody could:
+
+| severity | where | what |
+|---|---|---|
+| MAJOR VULNERABILITY | `.github/workflows/ci.yml:336` | Omitting "--ignore-scripts" allows lifecycle scripts to run during package installation. |
+| MAJOR VULNERABILITY | `.github/workflows/ci.yml:273` | Omitting "--ignore-scripts" allows lifecycle scripts to run during package installation. |
+| MAJOR VULNERABILITY | `.github/workflows/release.yml:519` | Omitting "--ignore-scripts" allows lifecycle scripts to run during package installation. |
+| MINOR VULNERABILITY | `src_bench/CoaiBench/Running/Git.cs:11` | Use an absolute path for this command. |
+| MINOR VULNERABILITY | `src_mcp/core/Commands/PlanShape.cs:60` | Pass a timeout to limit the execution time. |
+| MINOR VULNERABILITY | `src_mcp/core/Commands/PlanShape.cs:61` | Pass a timeout to limit the execution time. |
+| MINOR VULNERABILITY | `src_mcp/core/Commands/PlanShape.cs:62` | Pass a timeout to limit the execution time. |
+| MINOR VULNERABILITY | `src_mcp/core/Commands/PlanShape.cs:63` | Pass a timeout to limit the execution time. |
+| MINOR VULNERABILITY | `src_mcp/core/Commands/PlanShape.cs:67` | Pass a timeout to limit the execution time. |
+| MINOR VULNERABILITY | `src_mcp/runners/Reviewers/ReviewerExecutor.cs:129` | Pass a timeout to limit the execution time. |
+| MAJOR VULNERABILITY | `src_mcp/src/Store/RoundsQuery.cs:790` | Use a parameterized query instead of string formatting. |
+| MAJOR BUG | `src_vs_code/src/cliChatSession.ts:657` | This conditional operation returns the same value whether the condition is "true" or "false". |
+| MINOR VULNERABILITY | `src_vs_code/src/installer.ts:345` | Make sure the "PATH" variable only contains fixed, unwriteable directories. |
+| MINOR VULNERABILITY | `src_vs_code/src/installer.ts:356` | Make sure the "PATH" variable only contains fixed, unwriteable directories. |
+| MAJOR VULNERABILITY | `src_vs_code/src/panelProvider.ts:3629` | Make sure that using this pseudorandom number generator is safe here. |
+
+Reading them: **three are one rule** — `npm ci` without `--ignore-scripts` in the two workflows that
+install; **six are one rule** — a process started without a timeout, five of them in `PlanShape.cs`;
+**two are one rule** — `PATH` in the installer. So fifteen findings are really **seven decisions**,
+and one of them (`RoundsQuery.cs:790`, string formatting in a query) is the kind that deserves
+looking at first. None belongs to this change; `new_coverage` is 95.9 %.
 
 ### 6 — the actionlint download survives an outage that lasts longer than six seconds
 
