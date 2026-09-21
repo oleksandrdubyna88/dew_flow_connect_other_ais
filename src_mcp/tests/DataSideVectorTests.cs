@@ -31,6 +31,7 @@ public sealed class DataSideVectorTests : IDisposable
         string Dir,
         string SettingsPath,
         string LogsPath,
+        string ServerNoticesPath,
         bool Refused,
         bool RootHasDatabase,
         bool DirExists,
@@ -54,6 +55,7 @@ public sealed class DataSideVectorTests : IDisposable
             v.GetProperty("dir").GetString() ?? "",
             v.GetProperty("settingsPath").GetString() ?? "",
             v.GetProperty("logsPath").GetString() ?? "",
+            v.GetProperty("serverNoticesPath").GetString() ?? "",
             v.GetProperty("refused").GetBoolean(),
             v.GetProperty("rootHasDatabase").GetBoolean(),
             v.GetProperty("dirExists").GetBoolean(),
@@ -141,6 +143,36 @@ public sealed class DataSideVectorTests : IDisposable
         // implementations it is here to hold together.
         vector.SettingsPath.Should().Be(vector.Dir + "/settings.json");
         vector.LogsPath.Should().Be(vector.Dir + "/logs");
+    }
+
+    /// <summary>
+    /// The notices file lands where the extension's own resolver says it does.
+    /// </summary>
+    /// <remarks>
+    /// <para>Added with story 1.3 of the server-notices plan. The extension has DERIVED this path
+    /// since 2026-09-17 — <c>serverNoticesPath(dataDir)</c> in <c>notificationsFile.ts</c> — and has
+    /// had nothing to read, because nothing writes it. The moment the server does, the two halves
+    /// have to agree about WHERE, and disagreeing is the silent failure: the server writes, the
+    /// extension reads an empty directory, and every surface goes on reporting half the product
+    /// exactly as it does today.</para>
+    /// <para>One field wider than the pair added on 2026-09-18, and asserted the same way —
+    /// refused cases included, where a path would be describing where data goes for a configuration
+    /// the product will not start on.</para>
+    /// </remarks>
+    [Theory]
+    [MemberData(nameof(Cases))]
+    public void EveryVectorPutsTheNoticesFileWhereTheExtensionPutsIt(int index)
+    {
+        var vector = Vectors[index];
+        if (vector.Refused)
+        {
+            vector.ServerNoticesPath.Should().BeEmpty(vector.Why);
+            return;
+        }
+
+        ServerNotices.PathFor(SettingsFile.DataDirFrom(Env(vector)))
+            .Should().Be(Path.Combine(Expected(vector), "server-notices.jsonl"), vector.Why);
+        vector.ServerNoticesPath.Should().Be(vector.Dir + "/server-notices.jsonl");
     }
 
     [Theory]

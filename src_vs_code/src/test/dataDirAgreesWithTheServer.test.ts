@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import { join, resolve } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { coaiDataDir, dataSideName, whereData } from '../dataDir';
+import { serverNoticesPath } from '../notificationsFile';
 
 /** The configured root as the server also resolves it — absolute, and native to this platform. */
 const ROOT = resolve('/srv/coai');
@@ -126,6 +127,7 @@ interface Vector {
   readonly dir: string;
   readonly settingsPath: string;
   readonly logsPath: string;
+  readonly serverNoticesPath: string;
   readonly refused: boolean;
   readonly rootHasDatabase: boolean;
   readonly dirExists: boolean;
@@ -193,6 +195,22 @@ test('every shared vector puts the settings file and the logs where the server p
       `${vector.settingsPath} does not sit under the directory this case resolved`);
     assert.ok(vector.logsPath.startsWith(vector.dir + '/'),
       `${vector.logsPath} does not sit under the directory this case resolved`);
+
+    // Added with story 1.3 of the server-notices plan. This side has DERIVED this path since
+    // 2026-09-17 and has had nothing to read, because nothing writes it; the moment the server
+    // does, the two halves have to agree about where — and disagreeing is the silent failure, the
+    // server writing while this side reads an empty directory and says nothing.
+    //
+    // Through `serverNoticesPath`, the function the product actually calls, never a second
+    // spelling of the same name in a test.
+    assert.equal(
+      serverNoticesPath(expected(vector)),
+      expectedUnder(vector, 'server-notices.jsonl'),
+      vector.why,
+    );
+    assert.equal(asPath(vector.serverNoticesPath, vector), expectedUnder(vector, 'server-notices.jsonl'), vector.why);
+    assert.ok(vector.serverNoticesPath.startsWith(vector.dir + '/'),
+      `${vector.serverNoticesPath} does not sit under the directory this case resolved`);
   }
 });
 
@@ -202,6 +220,7 @@ test('a refused side names no settings file and no log root', () => {
   for (const vector of VECTORS.filter((one) => one.refused)) {
     assert.equal(vector.settingsPath, '', vector.why);
     assert.equal(vector.logsPath, '', vector.why);
+    assert.equal(vector.serverNoticesPath, '', vector.why);
   }
 });
 
