@@ -188,7 +188,12 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // about yet. The deletion keeps its prompts until the mirror has carried the row, and a person
 // who is not told that reads a role still being reviewed against as the product ignoring them —
 // which is the 2026-09-16 incident exactly. Said once per condition, from the coordinator.
-const PLACES_THIS_SPEAKS = 126;
+// 126 → 127 on 2026-09-21, story 3.2b: the review-checkout picker says what happened to a checkout
+// somebody asked for back. ONE site for every outcome of that flow — removed, forgotten, refused
+// because it holds work of theirs, refused because only ignored files are in it, and the reads that
+// failed — because they differ in their sentence rather than in their kind, and the subject (the
+// checkout's own name) is what makes two checkouts two counters rather than one storm.
+const PLACES_THIS_SPEAKS = 127;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

@@ -7,8 +7,8 @@ import { spawnSync } from 'node:child_process';
 
 import { parseBugs } from '../roundsDb';
 import { readFileAt, readPairs, readRealMethod } from '../roundsDbRead';
-import { TREE_REASONS } from '../reviewTree';
-import { readTreeAt } from '../reviewTreeRead';
+import { REMOVAL_REASONS, TREE_REASONS, TREE_STATES } from '../reviewTree';
+import { readTrees, readTreeAt, removeTree } from '../reviewTreeRead';
 import { mayRank } from '../bugzView';
 import { EXITS, outcomeOf, readSummary } from '../bugsSend';
 
@@ -704,6 +704,92 @@ test('a missing --id on --tree-at is 65 from the real binary, and is not read as
       const read = await readTreeAt(server(), { findingId: 1, headSha: '', repoPath: '' }, async () => ({ code, output: '' }));
       assert.equal(read.ok, false);
       assert.equal(read.ok === false && read.tooOld, false, 'a request fault must never read as an old server');
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+/** The literal VALUES a C# constant class spells, comments stripped first. */
+function wordsOf(file: string, klass: string): readonly string[] {
+  const at = path.join(process.cwd(), '..', file);
+  assert.ok(fs.existsSync(at), `${file} has moved — this test is reading nothing`);
+  // Character classes rather than escapes: in a TEMPLATE literal a lone backslash is eaten before
+  // the regex ever sees it, which turned this pattern into `ReviewTreeStates*{` and made both
+  // vocabulary tests fail inside their own helper rather than on the thing they check.
+  const found = new RegExp(`public static class ${klass}[\\s]*[{]([^}]*)[}]`, 'u')
+    .exec(stripped(fs.readFileSync(at, 'utf8')));
+  assert.ok(found !== null, `${klass} is no longer declared where this looks`);
+  const body = found[1] ?? '';
+
+  return [
+    ...[...body.matchAll(/public const string \w+ = "([a-z_]+)";/gu)].map((m) => m[1] ?? ''),
+    ...[...body.matchAll(/public const string \w+ = (?:\w+)\.(\w+);/gu)]
+      .map((m) => reasonValueOf('', m[1] ?? '')),
+  ];
+}
+
+/**
+ * Story 3.2b's two vocabularies, across both halves.
+ *
+ * <p>A word the server can answer and this side does not know is a row that says nothing useful; a
+ * word this side knows and the server cannot answer is a sentence nobody will ever read. Both are
+ * invisible in a green suite, which is why they are a test.</p>
+ */
+test('every state the list can answer is a state this panel knows', () => {
+  const served = wordsOf('src_mcp/core/Collecting/ReviewTrees.cs', 'ReviewTreeState');
+
+  assert.ok(served.length >= 5, `ReviewTreeState read as ${served.length} words — the regex is wrong`);
+  assert.deepEqual([...served].sort(), [...TREE_STATES].sort());
+});
+
+test('every reason a removal can answer is a reason this panel knows', () => {
+  const served = wordsOf('src_mcp/core/Collecting/ReviewTrees.cs', 'ReviewTreeRemovalReason');
+
+  assert.ok(served.length >= 8, `ReviewTreeRemovalReason read as ${served.length} words — the regex is wrong`);
+  assert.deepEqual([...served].sort(), [...REMOVAL_REASONS].sort());
+});
+
+test('the real --trees answer on a machine holding none is a list, not a failure',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-trees-'));
+    try {
+      const read = await readTrees(server(), runIn(data));
+
+      assert.ok(read.ok, `the reader refused the real binary's own output: ${read.ok ? '' : read.why}`);
+      assert.equal(read.answer.reason, '', 'an empty machine is an empty list, never a reason');
+      assert.deepEqual([...read.answer.trees], []);
+      assert.ok(read.answer.root.length > 0, 'and it still says where they would be');
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+test('the real --tree-remove refuses a name it holds no record for, as data',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-treerm-'));
+    try {
+      const name = 'coai-review-00000000-000000000000';
+      const read = await removeTree(server(), name, false, runIn(data));
+
+      assert.ok(read.ok, `the reader refused the real binary's own output: ${read.ok ? '' : read.why}`);
+      assert.equal(read.answer.name, name, 'the answer must be about the name that was asked');
+      assert.equal(read.answer.reason, 'not_ours');
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+test('a missing --tree is 65 from the real binary, and is not read as an old server',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-treerm-65-'));
+    try {
+      const { code } = await runIn(data)(['--tree-remove']);
+
+      assert.equal(code, 65, 'a request fault is 65; 64 would send the page down the too-old path');
+
+      const read = await removeTree(server(), 'x', false, async () => ({ code, output: '' }));
+      assert.equal(read.ok, false);
+      assert.equal(read.ok === false && read.tooOld, false);
     } finally {
       fs.rmSync(data, { recursive: true, force: true });
     }

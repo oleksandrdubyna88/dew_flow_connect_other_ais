@@ -8073,6 +8073,31 @@ a FILE in another window, and spawning the `code` CLI for `--goto` would be this
 spawn of a foreign executable, for a convenience. Removing a tree is story 3.2b; landing the new
 window on the method is story 3.2c.
 
+### Seeing what this machine holds, and giving one back (2026-09-21, story 3.2b)
+
+**ConnectOtherAIs: Review checkouts on this machine** - a command, and a picker rather than a block on
+a page. Three things decided that, and the plan round left the placement to the implementer:
+
+- `bugzReviewPage.ts` is at **791 of the 800-line cap** - nine lines, which is not room for a block
+  and its click path, and extracting a fourth module out of that page is a refactor this story did not
+  set out to do;
+- the Bugz section repaints on a poll, and a list of trees costs a process to build - the same "a
+  process per row at paint" trap story 3.1 measured and refused;
+- **one at a time becomes true by construction.** A picker returns one item. There is no markup in
+  which a second selection could exist, no *remove all* a later change could add by accident, and no
+  assertion needed about the absence of a button - which the plan round rightly called unobservable.
+
+The flow is `manageReviewTrees(deps)` in `reviewTreesCommand.ts`, and every dependency is a parameter,
+so all of it is a unit test: list, choose one tree, choose Open (story 3.2a's opener, not a second
+one) or Remove. A refusal is said with what is in the way, named - including files inside a submodule.
+Ignored files are asked about ONCE, with their count and a sample, and saying no sends nothing;
+`--with-ignored` is that second ask and is never a default. Walking away at any step removes nothing,
+which is three of the sixteen tests.
+
+`readTrees` and `removeTree` live in `reviewTreeRead.ts` beside `readTreeAt`; `roundsDbRead.ts` stays
+at 696 of its cap. 64 is the only code either reader treats as "the server is too old", and a missing
+`--tree` (65) carries the server's own sentence instead - three plan findings asked for exactly this.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs

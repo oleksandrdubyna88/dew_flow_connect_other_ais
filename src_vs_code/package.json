@@ -143,6 +143,11 @@
     ],
     "commands": [
       {
+        "command": "coai.reviewTrees",
+        "title": "Review checkouts on this machine",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.setBugsAdminKey",
         "title": "Set the bugs admin key",
         "category": "ConnectOtherAIs"

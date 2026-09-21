@@ -338,6 +338,47 @@ and two spellings of one repository — with the expected mapping written down f
 > The paragraph was cut to two lines. **The stale headroom figure is not re-baselined here** and is
 > the first thing the next PROJECT.md edit will hit.
 
+> **Story 3.2b shipped 2026-09-21** — a person can see every review checkout this machine holds and
+> give one back, one at a time, and nothing they typed into one can be deleted by pressing anything in
+> this product. Its plan round returned `good_enough` with 14 gating findings and **not one of them was
+> false**; all 16 were accepted. Three changed the design outright:
+>
+> 1. **Ignored files are not reproducible.** The plan called them build output and swept them along
+>    with the tree. A `.env`, a local config and a globally ignored `notes.md` are all somebody's work
+>    and all invisible to a plain status. They are counted, sampled and refused, and `--with-ignored`
+>    is the person's second ask — which is also the confirmation another reviewer asked for, so the
+>    two findings collapsed into one design.
+> 2. **`git worktree prune` has no path filter.** The plan inherited 3.2a's gated prune for a vanished
+>    tree; the gate checks only OUR path, and the prune still clears every unreachable registration in
+>    that repository — including a person's own worktree on an unmounted drive. A vanished tree is now
+>    FORGOTTEN: the record is dropped, git's registration is left, and the next checkout at that
+>    identity clears it under its own narrow guard. A test asserts an unrelated unreachable worktree
+>    survives.
+> 3. **Empty output is not a clean tree.** A permission failure or an inaccessible submodule produces
+>    no lines while git exits non-zero. Exit 0 is required for the parent and for every submodule
+>    descended into.
+>
+> Measured before any of it was written, and it is why the refusals can NAME things: one
+> `git status --ignore-submodules=none` in the parent sees all four dirty states — including an
+> untracked file inside a populated submodule — and a clean tree answers empty. But it reports the
+> submodule cases as the MOUNT and never the file, so naming what is in the way takes one more status
+> per submodule the parent's own `S.M.`/`S..U` flags already pointed at.
+>
+> **The interface is a COMMAND and a picker, not the block this plan described**, and the reason is
+> worth the deviation: `bugzReviewPage.ts` is at 791 of its 800-line cap; the Bugz section repaints on
+> a poll and a list costs a process to build; and a picker returns ONE item, so *one at a time* becomes
+> true by construction rather than by an assertion about a button that does not exist — which the plan
+> round itself called unobservable.
+>
+> `ReviewTreeRoot` was extracted so the root, the prefix and the identity have one home: a second copy
+> of the prefix is a second place for the one thing that must never be wrong to be wrong. Records:
+> `research/module_server.md`, `module_extension.md`, `module_tests.md`, `architecture.md`;
+> `.agents/PROJECT.md` names both modes and **adds no prose**, because fewer than ~320 bytes fit there
+> before a tier rule leaves every reviewer's prompt.
+>
+> **Still open after it:** story 3.2c (the new window landing on the method) and story 3.3 (callers and
+> callees, after its measurement).
+
 ### The revision rule, which is what makes the links honest
 
 The pairs describe HISTORICAL code — the round's `head_sha`. A link, a complexity number and a call
