@@ -139,9 +139,14 @@ public static class ServerNoticeLine
     internal static string Quoted(string text)
     {
         var quoted = new StringBuilder(text.Length + 2).Append('"');
-        for (var at = 0; at < text.Length; at++)
+        // A `while`, because the step is not always one: a surrogate PAIR is written whole and
+        // advances by two. Writing that as a `for` whose body reassigns its own stop variable is
+        // what Sonar reports, and it is right — a reader has to find the hidden assignment before
+        // the loop means anything.
+        var at = 0;
+        while (at < text.Length)
         {
-            at = AppendUnit(quoted, text, at);
+            at = AppendUnit(quoted, text, at) + 1;
         }
 
         return quoted.Append('"').ToString();
