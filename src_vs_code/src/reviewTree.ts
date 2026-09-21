@@ -122,3 +122,128 @@ export function mountsNote(tree: ReviewTreeAnswer): string {
     ? ''
     : `submodules not filled: ${tree.emptyMounts.join(', ')} — navigation into them will find nothing`;
 }
+
+// --------------------------------------------------------------------------------------------
+// Story 3.2b: what this machine holds, and giving one back.
+// --------------------------------------------------------------------------------------------
+
+/** What the server says when it does not know `--trees` / `--tree-remove` — exit 64, and only that. */
+export const TOO_OLD_FOR_TREES =
+  'this server is too old to list or remove review checkouts; update the extension’s server binary';
+
+/** One review tree, as the list shows it. */
+export interface ListedTree {
+  readonly name: string;
+  readonly repository: string;
+  readonly repoPath: string;
+  readonly sha: string;
+  readonly path: string;
+  readonly created: string;
+  readonly state: string;
+}
+
+/** Everything this machine holds. */
+export interface TreesAnswer {
+  readonly root: string;
+  readonly trees: readonly ListedTree[];
+  readonly reason: string;
+}
+
+/** What happened to a tree somebody asked to give back. */
+export interface RemovalAnswer {
+  readonly name: string;
+  readonly reason: string;
+  readonly inTheWay: readonly string[];
+  readonly ignored: number;
+  readonly ignoredSample: readonly string[];
+}
+
+export type TreesRead =
+  | { readonly ok: true; readonly answer: TreesAnswer }
+  | { readonly ok: false; readonly tooOld: boolean; readonly why: string };
+
+export type RemovalRead =
+  | { readonly ok: true; readonly answer: RemovalAnswer }
+  | { readonly ok: false; readonly tooOld: boolean; readonly why: string };
+
+/**
+ * Every word `--tree-remove` can answer, spelled once on this side and asserted against the C#
+ * constants by the live-contract suite.
+ */
+export const REMOVAL_REASONS = [
+  'removed',
+  'forgotten',
+  'dirty',
+  'has_ignored',
+  'not_ours',
+  'git_failed',
+  'unregistered',
+  'unreachable',
+  'incomplete',
+] as const;
+
+/** Every state a listed tree can be in, likewise. */
+export const TREE_STATES = ['ready', 'incomplete', 'vanished', 'unregistered', 'unreachable'] as const;
+
+/** How a tree reads in a list: what it is, and whether it can be opened. */
+export function treeLine(tree: ListedTree): string {
+  const where = lastPart(tree.repository.replace(/[/\\]\.git$/u, '')) || lastPart(tree.repoPath);
+  const day = tree.created.slice(0, 10);
+
+  return `${where || 'an unrecorded repository'} @ ${tree.sha.slice(0, 7) || '???????'}${day ? ` · ${day}` : ''} · ${STATES[tree.state] ?? tree.state}`;
+}
+
+const STATES: Readonly<Record<string, string>> = {
+  ready: 'ready',
+  incomplete: 'never finished being made',
+  vanished: 'its folder is gone',
+  unregistered: 'git no longer knows it',
+  unreachable: 'the checkout it came from is gone',
+};
+
+/** Only a tree that is really there and really a worktree can be opened. */
+export function canOpen(tree: ListedTree): boolean {
+  return tree.state === 'ready';
+}
+
+/**
+ * What a person is told after asking for a tree back — and it is never the reason word.
+ *
+ * <p>Each sentence ends where their next move begins, which for the two refusals means naming what
+ * is in the way rather than counting it: a refusal nobody can act on is not a refusal.</p>
+ */
+export function removalSentence(answer: RemovalAnswer): string {
+  if (answer.reason === 'dirty') {
+    return `it holds work of yours, so nothing was removed: ${answer.inTheWay.join(', ')}`;
+  }
+  if (answer.reason === 'removed') {
+    return answer.ignored > 0
+      ? `removed, and ${answer.ignored} ignored ${answer.ignored === 1 ? 'file' : 'files'} went with it`
+      : 'removed';
+  }
+  if (answer.reason === 'has_ignored') {
+    return `it holds ${answer.ignored} ignored ${answer.ignored === 1 ? 'file' : 'files'} — ${answer.ignoredSample.join(', ')}`;
+  }
+
+  return REMOVALS[answer.reason] ?? 'it could not be removed';
+}
+
+const REMOVALS: Readonly<Record<string, string>> = {
+  forgotten: 'its folder was already gone, so only this product’s record of it was dropped — git still holds a registration, which the next checkout of that commit clears',
+  not_ours: 'this product holds no record of that checkout, so it will not touch it',
+  git_failed: 'git did not answer — nothing was learned and nothing was touched, so it is worth asking again',
+  unregistered: 'git no longer knows this folder as a worktree, so this product cannot tell whose the files in it are — remove it by hand if it is yours',
+  unreachable: 'the checkout it was made from is gone, so there is no repository to deregister it from — remove the folder by hand',
+  incomplete: 'nothing here proves that folder is the checkout its name says, so this product will not deregister anything on its word — press Check out on that commit again and it clears a clean one itself',
+};
+
+/** The question asked before ignored files go: the only confirmation this product has. */
+export function ignoredAsk(answer: RemovalAnswer): string {
+  return `Remove it anyway, including ${answer.ignored} ignored ${answer.ignored === 1 ? 'file' : 'files'}`;
+}
+
+function lastPart(path: string): string {
+  const parts = path.replace(/[/\\]+$/u, '').split(/[/\\]/u);
+
+  return parts[parts.length - 1] ?? '';
+}

@@ -1850,6 +1850,100 @@ a minute for a probe or an inspection, ten for a checkout, two for a delete.
 project's rules and dependencies ARE submodules and a tree without them is one whose language server
 sees holes. A mount that stayed empty is NAMED on the answer rather than discovered later.
 
+#### What this machine holds, and giving one back (`--trees`, `--tree-remove`, 2026-09-21, story 3.2b)
+
+`coai-mcp --trees` answers every review tree this machine holds as `ReviewTrees`; `coai-mcp
+--tree-remove --tree <name> [--with-ignored]` gives one back and answers `ReviewTreeRemoval`. Neither
+takes an `--id` - a tree outlives the row that made it - so neither goes through `AnswerOnePairAsync`.
+Every domain outcome is data at exit 0; **65** only for a missing `--tree`; **never 64**.
+
+**The list is a JOIN, in both directions, over OUR names only.** Records under the root and
+directories under the root, unioned, filtered by `ReviewTreeRoot.IsOurName`. Reading only the records
+would miss a directory whose process died before writing one - the one state nothing else will ever
+mention - and reading only the filesystem would let a round worktree or a person's own worktree into a
+list that offers a Remove. Five states, because each has a different safe action: `ready`,
+`incomplete` (a directory, no readable record), `vanished` (a record, no directory), `unregistered`
+(both, and git does not list it) and `unreachable` (the parent checkout is gone, so nothing can be
+asked or deregistered).
+
+**What removal will not do.** There is no mode, flag or method anywhere that removes more than one
+tree - the argument is a NAME and it must match a record we hold, so a separator, a `..`, a round
+tree's name or a path is refused as `not_ours` **before a process starts** (a recording launcher
+asserts it). `--force` is reached only after the inspection came back empty, TWICE.
+
+**The inspection, and the one thing it measured.** `git status --porcelain=v2 --untracked-files=all
+--ignore-submodules=none --ignored=matching` in the tree. Measured against real git 2.55 before the
+design was written: one status in the parent SEES all four dirty states - a modified tracked file, an
+untracked file, and both of those inside a populated submodule - and a clean tree answers empty, so
+there are no false positives. What it CANNOT do is name what is inside a submodule: it reports the
+MOUNT (`mods/sub`), never `mods/sub/notes.md`. So the verdict costs one call and the NAMES cost one
+more per submodule the parent's own `S.M.`/`S..U` flags have already pointed at - and only those,
+because descending into every mount would be work per submodule for a fact already in hand.
+
+**Exit 0 is required, not merely empty output.** A permission failure or an inaccessible submodule can
+produce no lines while git exits non-zero, and "empty" would then have meant "clean". A git that ran
+and REFUSED - *not a git repository*, a broken `.git` link - is `unregistered` and refused by name,
+because that is exactly the state in which this product cannot know whose the files are.
+
+**Ignored files are somebody's until they say otherwise.** The first plan called them reproducible and
+swept them along with the tree. A reviewer was right that this is false for the class: a `.env`, a
+local config, a globally ignored `notes.md` are all somebody's work and all invisible to a plain
+status. They are counted, sampled and REFUSED (`has_ignored`); `--with-ignored` is the person's second
+ask, per tree, and it is the only confirmation this product has.
+
+**A vanished tree is forgotten, and git's registration is deliberately LEFT.** `git worktree prune` is
+the only tool git offers and it has no path filter: it clears every registration in that repository
+whose directory is unreachable, which on a machine with a worktree on an unmounted drive is more than
+anybody asked for. The next `--tree-at` at that identity prunes under its own narrow guard.
+`AVanishedTree_IsForgotten_AndAnUnrelatedUnreachableWorktreeStaysRegistered` is the test.
+
+**The invariant, stated as narrowly as it is true.** Nothing this product deletes was dirty at the
+moment it was checked, and that check is the last thing before the delete. It is NOT a promise that a
+file written between the check and the delete survives - no second status can close that window, and
+the docblock says so instead of implying otherwise.
+
+**The code round found the hole the whole story is about, and it was real.** Three reviewers said an
+IGNORED file inside a populated submodule is never detected. Measured, and they were right in the
+strongest way: a parent's `git status --ignore-submodules=none --ignored=matching` reports an ignored
+file in the PARENT (`! ignored-here.txt`) and answers **nothing at all** for one inside a populated
+submodule. Empty output. So a `.env` in a submodule read as a clean tree and would have gone with
+`worktree remove --force`, silently — the exact loss this story exists to prevent, inside the very
+mechanism built to prevent it.
+
+Every POPULATED mount is therefore inspected in its own right now, not only the ones the parent's
+`S.M.`/`S..U` flags point at: those flags say what is modified or untracked there and say nothing
+about what is ignored. It costs one process per mount on a removal, which is a deliberate and rare
+act. `AnIgnoredFileInsideASubmodule_IsCountedAndRefused_NotSweptAlong` is the test, and disabling the
+mount inspection turns four tests red.
+
+The rest of what that round changed:
+
+- **An inspection that could not RUN is neither clean nor dirty** — `git_failed`, because calling it
+  dirty would be a fact we do not have and calling it clean would delete on one.
+- **The removal's own exit is read.** Deleting the directory after `worktree remove` FAILED would have
+  left the registration behind and the files gone, a state neither this product nor git can make sense
+  of. A failed remove stops with everything intact.
+- **A failed record deletion is not a forgetting.** The first draft swallowed it and answered
+  `forgotten` anyway, so a locked record was reported as dropped and came back on the next list.
+- **An unreadable root is not an empty machine** — answering an empty list would invite somebody to
+  check another commit out into a root that may already hold ten.
+- **A record whose identity does not recompute to its own name** does not make a tree `ready`: it
+  describes another tree, so it proves nothing about this one.
+- **A submodule mount that resolves outside the tree is not inspected and not counted.**
+  `.gitmodules` is a file in the checked-out commit.
+- **A timed-out recursive delete abandons the WAIT, not the delete** — `Directory.Delete` takes no
+  token. The docblock says so rather than implying the timeout stops it; nothing downstream acts on
+  the failure and the record is kept.
+- **The prefix had survived in two places** after the extraction. It is the one constant that must
+  never be wrong, and it now exists once.
+- `IsOurName` was a seven-term condition against a cap of four, and the old flagged-mount descent is
+  gone entirely.
+
+**`ReviewTreeRoot` was extracted** when this story arrived: the root, the prefix, the identity, the
+"is this under our root" check, the process budgets and the fenced recursive delete are the same facts
+for creating a tree and for giving one back, and a second copy of the PREFIX is a second place for the
+one thing that must never be wrong to be wrong.
+
 ### A beat is proof of life (2026-09-16)
 
 Two rules that only make sense together, and the second was a defect the code round found in the

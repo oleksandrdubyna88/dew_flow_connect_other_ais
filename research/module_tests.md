@@ -1325,6 +1325,30 @@ ARTEFACT changes, which is the question a release actually asks.
 
 Whole executable after: 2140 tests, 2138 passed, 0 failed, 2 skipped.
 
+## Giving a review tree back (2026-09-21, story 3.2b)
+
+| Suite | What it covers |
+|---|---|
+| `AReviewTreeIsGivenBackTests` (13) | real git, temp repositories: the four refusals - a modified tracked file, an untracked file, and both of those INSIDE a populated submodule - each asserting afterwards that the tree, its lock, its registration AND its record are all intact; a clean tree with a populated submodule removed (the case a plain `worktree remove` cannot do); ignored files refused until asked for explicitly; a round tree and a person's own worktree neither listed nor removable; a name that is a path refused before any process (recording launcher); a vanished tree forgotten while an unrelated unreachable worktree stays registered; the list telling ready from incomplete from vanished from unregistered; a status that could not run never read as clean |
+| `reviewTrees.test.ts` (16) | the readers and the whole picker flow as VALUES: what an answer must echo, 64 as the only too-old code, `--with-ignored` sent only when asked, every word becoming a sentence that never prints the word, and the three paths where walking away must remove nothing |
+| `bugzLiveContract.test.ts` | both vocabularies against the C# constants (a word added on one side only goes red naming it), and the real `--trees` and `--tree-remove` through the real reader |
+
+**Teeth, shown rather than claimed.** Three mutations were planted across the two rounds and each was
+caught by the right test with the right message. Disabling the per-mount submodule inspection — the
+code round's central fix — turns FOUR tests red at once, including
+*Expected first.Reason to be the same string because a parent status cannot see this at all*. Two mutations were planted and both were caught by the right
+test with the right message: stopping the descent into a flagged submodule turned the refusal into
+*Expected said.InTheWay {"mods/sub"} to contain "mods/sub/s.txt"*, and removing the ignored-file gate
+turned the first ask into a removal. A third, adding a reason word to the C# side alone, went red
+naming `invented`.
+
+**One test outside this story failed once in three whole-suite runs, and its name was captured this
+time.** `RemoteShimScenarioTests.AShimKilledMidClaim_LeavesEitherNothingOrAWholeClaim_NeverHalf`
+timed out waiting for a claim file: its child process could not reach a local stub server within the
+**40-second HttpClient timeout**, on a machine this story's suite keeps busy with git spawns. It is
+not a flake and it is not in this diff - it is a load-sensitive test with a hard timeout, recorded
+here for whoever owns it rather than fixed inside an unrelated story.
+
 ## The review tree's decisions are tested as VALUES (2026-09-21)
 
 `reviewTree.test.ts` — twenty tests, and the reason it exists is worth more than the tests are.

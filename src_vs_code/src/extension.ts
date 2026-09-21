@@ -25,6 +25,9 @@ import { keepChatsIn, pulseChatsThrough, rememberChatsIn, retireMemento } from '
 import { chatReadsThisSide } from './chatConfig';
 import { conversationWorkspace } from './chatRoots';
 import { forgetPickedConversation, switchConversations } from './conversationPickerCommand';
+import { Choice, manageReviewTrees, TreesDeps } from './reviewTreesCommand';
+import { readTrees, removeTree } from './reviewTreeRead';
+import { openTreeFolder } from './revisionOpen';
 import { goToConversation } from './chatGotoCommand';
 import { ChatTabMemory } from './chatTabs';
 import { ChatStoreFile, conversationsDir } from './chatStoreFile';
@@ -432,6 +435,13 @@ export function activate(context: vscode.ExtensionContext): void {
     // The page every notification has been going into since S1. One panel for the window, so a
     // second press reveals the one already open rather than stacking another over it.
     vscode.commands.registerCommand('coai.showNotifications', () => { void notifications.show(); }),
+
+    // Story 3.2b: seeing what review checkouts this machine holds, and giving one back. A PICKER
+    // rather than a block on the review page, and the reason is in `reviewTreesCommand.ts` — chiefly
+    // that "one at a time" becomes true by construction when the control returns one item.
+    vscode.commands.registerCommand('coai.reviewTrees', () => {
+      void manageReviewTrees(reviewTreeDeps(context));
+    }),
     // The same question the first install on a side asks, reachable afterwards. One flow: two ways
     // of asking it would be two ways of answering it differently.
     vscode.commands.registerCommand('coai.changeDataDirectory', async () => {
@@ -1517,4 +1527,51 @@ function message(error: unknown): string {
 function codeOf(error: unknown): string {
   const code = (error as { code?: unknown } | null)?.code;
   return typeof code === 'string' ? code : '';
+}
+
+/**
+ * The world the review-tree picker reaches through — one place, so the flow itself is a unit test.
+ *
+ * <p>The opener is story 3.2a's, not a second one: a checkout opens the same way whether a person
+ * reached it from a review row or from this list.</p>
+ */
+function reviewTreeDeps(context: vscode.ExtensionContext): TreesDeps {
+  const server = serverPath(context.globalStorageUri);
+  const missing = 'the server binary is not installed yet, so this machine cannot be asked what it holds';
+
+  return {
+    // Both spawn a process that asks git about every repository a checkout came from, and a removal
+    // may wait on a multi-gigabyte delete. Minutes of a picker that has not opened, with nothing on
+    // screen, reads as a command that did nothing. (Code round, three findings.)
+    list: async () => (server === undefined
+      ? { ok: false, tooOld: false, why: missing }
+      : whileBusy('Reading the review checkouts on this machine…', () => readTrees(server.fsPath))),
+    remove: async (name, withIgnored) => (server === undefined
+      ? { ok: false, tooOld: false, why: missing }
+      : whileBusy('Giving the checkout back…', () => removeTree(server.fsPath, name, withIgnored))),
+    open: (path) => openTreeFolder(path),
+    pick: async (choices, title) => vscode.window.showQuickPick(
+      choices.map((one) => ({ ...one })),
+      { title, matchOnDetail: true, ignoreFocusOut: true }) as Promise<Choice | undefined>,
+    // Through the one funnel, never `showInformationMessage` directly: this extension counts
+    // every place it speaks to a person, and the count only ever falls. The `code` is a literal
+    // here because a scan enforces that; the SUBJECT is what makes two trees two counters.
+    say: (said, about) => {
+      void notify({
+        as: about.failed ? 'warning' : 'information',
+        class: about.failed ? 'refusal' : 'outcome',
+        source: 'reviewTrees',
+        code: 'review-trees-said',
+        subject: about.subject,
+        title: said,
+      });
+    },
+  };
+}
+
+/** A notification-area spinner for the two calls that can take minutes. */
+function whileBusy<T>(title: string, doing: () => Promise<T>): Promise<T> {
+  return Promise.resolve(vscode.window.withProgress(
+    { location: vscode.ProgressLocation.Notification, title },
+    async () => doing()));
 }
