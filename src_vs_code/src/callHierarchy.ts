@@ -166,9 +166,12 @@ export function sideSentence(side: Side, what: 'calls this' | 'is called by this
     return `the language support could not say what ${what}`;
   }
 
-  return side.ends.length === 0
-    ? `nothing ${what}, in the current checkout`
-    : `${side.ends.length} ${side.ends.length === 1 ? 'method' : 'methods'} ${what}, in the current checkout`;
+  if (side.ends.length === 0) {
+    return `nothing ${what}, in the current checkout`;
+  }
+  const methods = side.ends.length === 1 ? 'method' : 'methods';
+
+  return `${side.ends.length} ${methods} ${what}, in the current checkout`;
 }
 
 /**

@@ -108,7 +108,7 @@ export class CallsPanel {
   /** Opens one end of a call that this side is holding — by index, never by a path from the page. */
   async open(id: number, which: 'in' | 'out', at: number): Promise<void> {
     const calls = this.held.get(id);
-    if (calls === undefined || calls.prepared !== 'ok') {
+    if (calls?.prepared !== 'ok') {
       return;
     }
 
