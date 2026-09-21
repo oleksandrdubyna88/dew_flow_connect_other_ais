@@ -67,8 +67,11 @@ public sealed class TheOneAppendTests
     public void TheNoticesFileName_IsSpelledInOneProductionFile()
     {
         // The literal, quoted, so a message that MENTIONS the file (CredentialWords' refusal does)
-        // is not a second spelling of its name.
-        var spellings = ProductionSources.FilesMentioning("\"server-notices.jsonl\"");
+        // is not a second spelling of its name — and asked of the SPELLING view, because a name in
+        // this codebase is a string literal and the code view now drops what is inside one. Story
+        // 2.1's lexer turned that on and this test went red, which is how a scanner shared between
+        // two censuses is supposed to fail: loudly, in the census whose question changed meaning.
+        var spellings = ProductionSources.FilesSpelling("\"server-notices.jsonl\"");
 
         spellings.Keys.Should().Equal(["src_mcp/src/Server/ServerNotices.cs"],
             "the extension spells the same name once in notificationsFile.ts, and a second spelling "
@@ -110,7 +113,7 @@ public sealed class TheOneAppendTests
         // The companions, in one place: each equality above would also fail on an empty scan, but
         // saying so explicitly is what makes the file readable when one of them goes red.
         ProductionSources.FilesMentioning("JsonlLedger.AppendLine(").Should().HaveCount(2);
-        ProductionSources.FilesMentioning("\"server-notices.jsonl\"").Should().HaveCount(1);
+        ProductionSources.FilesSpelling("\"server-notices.jsonl\"").Should().HaveCount(1);
         ProductionSources.FilesMentioning("ResolvedDataDir.For(").Should().HaveCount(1);
         ProductionSources.CodeOf("src_mcp/src/Server/ServerNotices.cs").Should().Contain("ServerNoticeLine.Of(",
             "the notices writer hands the serialiser's line to the append, which is what makes the "
@@ -143,11 +146,40 @@ public sealed class TheOneAppendTests
     {
         // The code round's finding, as a test of the scan itself: the old per-line version missed
         // this, and a long qualified name is exactly what invites somebody to wrap it.
-        var split = string.Join(Environment.NewLine, ["        JsonlLedger", "            .AppendLine(path, line);"]);
+        var split = string.Join("\n", ["        JsonlLedger", "            .AppendLine(path, line);"]);
 
-        ProductionSources.Joined(split.Split(Environment.NewLine)).Should().Contain("JsonlLedger.AppendLine(",
+        ProductionSources.Joined(split).Should().Contain("JsonlLedger.AppendLine(",
             "the scan joins a file's code before searching, so a wrapped call is the same string a "
-            + "call written on one line is — which is the whole point, and the reason the join has no "
-            + "separator");
+            + "call written on one line is");
+    }
+
+    [Fact]
+    public void AWrappedWORD_IsNotGluedIntoADifferentOne()
+    {
+        // The other half of the join rule, and the reason it has a separator at all: the first
+        // version glued every line with nothing, so `using` over `static` became `usingstatic` and
+        // story 2.1's import guard was searching for a word C# cannot produce. A line that starts
+        // with `.` continues a member access; anything else is a new token.
+        var split = string.Join("\n", ["using", "static CoaiMcp.Server.Refusal;"]);
+
+        ProductionSources.Joined(split).Should().Contain("using static",
+            "a wrapped keyword is two words, and a guard that searched the glued spelling could not "
+            + "fail — which is what six reviewers found in story 2.1's code round");
+    }
+
+    [Fact]
+    public void TheTwoViewsDisagreeAboutStringsAndAgreeAboutComments()
+    {
+        // The scanner's own contract, said once: what separates the census of a CALL from the census
+        // of a NAME.
+        const string source = "var name = \"server-notices.jsonl\"; // server-notices.jsonl";
+
+        ProductionSources.Joined(source).Should().NotContain("server-notices",
+            "the code view drops what is inside a literal, so a sentence that mentions a call is not "
+            + "counted as one");
+        ProductionSources.JoinedWithText(source).Should().Contain("\"server-notices.jsonl\"",
+            "and the spelling view keeps it, because a file name IS a literal");
+        ProductionSources.JoinedWithText(source).Should().EndWith("\";",
+            "while the comment is gone from BOTH — a file that talks about a name has not spelled it");
     }
 }

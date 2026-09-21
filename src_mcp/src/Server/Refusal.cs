@@ -30,6 +30,17 @@ namespace CoaiMcp.Server;
 internal static class Refusal
 {
     /// <summary>The sentence, as the answer a calling AI receives instead of a review.</summary>
-    internal static string Answer(string sentence) =>
-        JsonSerializer.Serialize(new ErrorAnswer(sentence), ServerJsonContext.Default.ErrorAnswer);
+    /// <remarks>
+    /// The refusal is BUILT and then written, on two lines rather than one nested expression, because
+    /// the point between them is where story 2.2 appends the notice: a refusal exists there, and has
+    /// not yet left. The code round asked for that seam. It is a local and not a second method on
+    /// purpose — an <c>Of(string)</c> nobody calls would be an uninhabited member today and a worse
+    /// hook tomorrow, since what 2.2 needs is the moment, not another road to the same record.
+    /// </remarks>
+    internal static string Answer(string sentence)
+    {
+        var refusal = new ErrorAnswer(sentence);
+
+        return JsonSerializer.Serialize(refusal, ServerJsonContext.Default.ErrorAnswer);
+    }
 }

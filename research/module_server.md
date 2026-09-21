@@ -1213,6 +1213,33 @@ there were three refusal roads and that `PanelService.Refused` never touched `Er
 returns `Error(sentence)` — and there were two roads, not three. That is the class of defect this
 mechanism exists to end, found in the document that specified the mechanism.
 
+**Then the code round found that the guard itself could not fail.** Six reviewers, independently: the
+import check searched for the string `using staticCoaiMcp.Server.Refusal` — with no space — because
+the scanner glued lines with nothing between them, and an ordinary single-line
+`using static CoaiMcp.Server.Refusal;` was therefore never matched. Planting a real one in
+`Escalations.cs` proved it: the suite passed 1/1. The join rule now separates words and glues member
+continuations, the import check is a regex covering `using static`, `global using static`, an alias
+and `global::`, and six `[Theory]` cases assert each spelling matches while an ordinary
+`using CoaiMcp.Server;` does not. With the fix in place the plant goes red naming the file, and
+removing it goes green — which is the evidence the first version never had.
+
+The round moved three other things:
+
+- **The boundary is the TYPE NAME, not one spelling of a construction.** `new ErrorAnswer(` was what
+  the census searched for, and `ErrorAnswer answer = new(sentence)` builds one without ever writing
+  it. The rule is now that only `Refusal.cs` and `ServerJsonContext.cs` — the boundary and the
+  declaration — may NAME the type at all; a file that cannot name it cannot build one however the
+  construction is spelled. `PanelService` still mentions it in a docblock, and does not count, because
+  the scanner removes comments.
+- **`Refusal.Answer` builds the record and then writes it**, on two lines rather than one nested
+  expression, because the point between them is where story 2.2 appends the notice. It is a local and
+  not a second method: an `Of(string)` nobody calls would be an uninhabited member today and a worse
+  hook tomorrow, since what 2.2 needs is the moment and not another road to the same record.
+- **Recording is loud and red.** `COAI_RECORD_REFUSAL_SITES=1` rewrites `shared/refusal-sites.json`
+  and then fails the test saying so. A run that writes the file it is about to check has checked
+  nothing, and a CI job with that variable set by accident would otherwise go green over a rewritten
+  source of truth.
+
 ## The spending ledger
 
 `UsageLedger` appends one JSON line per reviewer to `<dataDir>/usage.jsonl`: vendor, model, role,

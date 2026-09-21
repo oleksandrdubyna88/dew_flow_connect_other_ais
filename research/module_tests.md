@@ -1587,18 +1587,41 @@ come from a missing one; a first draft passed for exactly that wrong reason.
 `ProductionSources` is the source scanner both censuses share — `TheOneAppendTests` (one append) and
 `TheRefusalRoadsAreCountedTests` (one refusal boundary). It was built for the first and extracted
 when the second wanted it, because every rule in it was earned by a bypass somebody found and a
-second copy would have been the version that still has them: the code is read as ONE string with
-nothing between the lines, so a call wrapped across two lines is still one call; the roots are
-DISCOVERED (`src_*`) rather than listed, so a project added tomorrow is scanned; and comments are
-skipped, so a sentence about a call is not a call.
+second copy would have been the version that still has them. The roots are DISCOVERED (`src_*`)
+rather than listed, so a project added tomorrow is scanned; the file is read once per run and both
+views cached; and `RepositoryRoot()` lives on the scanner rather than on whichever test class needed
+it first, because a shared utility that cannot find its own root without a particular test class
+existing has an owner its name does not admit to.
+
+**Comments and string contents are removed by a LEXER, not by a line rule.** The first version
+skipped a line whose trimmed text began with `//`, which let a `/* … */` block holding a
+commented-out call count as a call, a trailing `// new ErrorAnswer(` count as one, and a sentence
+inside a string literal count as one. A census that counts prose is the defect it exists to end, in a
+new place. One pass handles line and block comments, ordinary strings with their escapes, verbatim
+strings with their doubled quotes, raw strings and character literals.
+
+**There are two views, and the difference is the whole contract.** `CodeOf` drops what is inside a
+literal — that is what stops a census of CALLS counting a sentence that mentions one. `SpellingOf`
+keeps literals and drops only comments, because a census of a NAME is a census of a literal:
+`"server-notices.jsonl"` is a string, not an identifier. Turning the lexer on took that name away
+from story 1.4's two guards and they went RED — which is exactly what their companion "the scan still
+finds its known instances" assertions are for, and the reason every census here has one.
+
+**Lines are joined so that a wrapped MEMBER glues and a wrapped WORD does not.** The first version
+joined with nothing at all: `Type⏎.Method(` became `Type.Method(`, which is what it was for, and
+`using⏎static` became `usingstatic`, which is what story 2.1's import guard was then written to search
+for. A line beginning with `.` glues to the one before it; everything else is separated by one space.
 
 **`UnqualifiedCalls` is the precision the plan round asked for.** A whole-file search for `Error(`
 counts every `_log.Error(` in the file, and this codebase logs constantly. The rule is an occurrence
-whose preceding character is neither a dot nor part of an identifier — and the declaration, which is
-the one preceded by `string `, is excluded, because a declaration counted as a call is an off-by-one
-in a number the documents quote.
+whose preceding character is neither a dot nor part of an identifier — and the declaration is
+SUBTRACTED as `Error(string `, not matched on its return type: the first version looked for `string `
+*before* the name, so changing the helper to return `Task<string>` would have turned its declaration
+into a call and moved a number the documents quote.
 
-**The inventory writes only when asked.** `COAI_RECORD_REFUSAL_SITES=1` regenerates
-`shared/refusal-sites.json`; without it the suite compares read-only. A test that silently rewrites
-its own expectation cannot fail, and one that writes into a read-only CI checkout cannot run — both
-named on the plan round.
+**The inventory writes only when asked, and that run FAILS.** `COAI_RECORD_REFUSAL_SITES=1`
+regenerates `shared/refusal-sites.json` and then fails on purpose, naming the file and saying to
+re-run without the variable; without it the suite compares read-only. A test that silently rewrites
+its own expectation cannot fail, one that writes into a read-only CI checkout cannot run, and one
+that goes green after rewriting its own source of truth is worse than both — the first two were named
+on the plan round, the third on the code round.
