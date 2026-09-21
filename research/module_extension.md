@@ -8043,6 +8043,31 @@ constants, following the alias chain `ReviewTreeReason` → `RealMethodReason` �
 That is the server-to-extension contract the plan round said nothing exercised: a word added on one
 side and not the other is now a red test rather than a row that says nothing.
 
+**What the code round changed on this side.** The reader moved out of `roundsDbRead.ts` into
+`reviewTreeRead.ts` — a reviewer called the 800-line cap breached while the file was still at 790,
+which was wrong then and became right two fixes later when the path guard was added, so the
+extraction is real and the finding was right for the wrong reason. Three other things changed:
+
+- **A cap refusal names the checkouts that are using it up.** The server was already sending every
+  one of them with its repository, commit, path and creation time, and the sentence printed only how
+  MANY there were — telling a person they must remove something without telling them what there is to
+  remove.
+- **A row with no recorded file still offers the checkout.** The two FILE actions returned early on
+  an empty path, before the third button was rendered, so a finding that recorded no path lost a
+  working action — and `--tree-at` never needed a file, only the repository and the commit.
+- **The answer that carries a tree must carry an ABSOLUTE path.** It is about to become a folder this
+  editor opens; the server builds it from its own root, but a relative string would become a URI
+  resolved against something nobody chose.
+
+**On the in-flight state surviving a reload.** A reviewer is right that `checking` is a set on the
+panel instance and dies with the window, so a reloaded page shows a pressable button while a checkout
+is still running. What it does NOT do is start a second one: the source of truth is server-side — the
+directory and the record beside it — and a press re-reads it, so the answer is `in_progress` and the
+row says the earlier run is still going and survives a reload. Probing every row at paint would be
+200 processes for a page a person may never scroll, which is the cost story 3.1 measured and refused,
+so the re-read happens on a press rather than on a draw. CLAUDE.md §8 is satisfied by the persisted
+status, not by the local flag; the flag is optimistic only, which is what §8 says it may be.
+
 **What is deliberately not here.** The new window opens at the tree ROOT: VS Code has no API to open
 a FILE in another window, and spawning the `code` CLI for `--goto` would be this extension's first
 spawn of a foreign executable, for a convenience. Removing a tree is story 3.2b; landing the new

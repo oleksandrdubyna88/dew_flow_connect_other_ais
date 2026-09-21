@@ -118,6 +118,33 @@ public sealed class AReviewTreeTests : IAsyncLifetime
         Directory.Exists(made.Path).Should().BeTrue("prune must not take a locked tree either");
     }
 
+    /// <summary>
+    /// The lock carries a REASON, and git shows it to whoever tries to remove the tree.
+    /// </summary>
+    /// <remarks>
+    /// A code-round finding worried the reason might be empty or ignored. It is a compile-time
+    /// constant, so it cannot be empty — but "cannot" is what a test is for, and the interesting half
+    /// is the one nobody had checked: that git STORES it and hands it back. It does, in
+    /// `worktree list --porcelain`, and it is what a person meets in the refusal message when they
+    /// reach for `worktree remove` by hand. That makes the reason a piece of user-facing text rather
+    /// than a comment, which is why it names where the tree should be removed from instead.
+    /// </remarks>
+    [Fact]
+    public async Task TheTreeIsLocked_WithAReasonThatSaysWhereToRemoveItFrom()
+    {
+        var made = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+
+        var listed = await Run(_repo, "worktree", "list", "--porcelain");
+        var lines = listed.StdOut.Replace("\r", "").Split('\n');
+        var at = Array.FindIndex(lines, l => l.Replace('\\', '/') == $"worktree {made.Path.Replace('\\', '/')}");
+        at.Should().BeGreaterThan(-1, "the tree must be registered at all");
+
+        var reason = lines.Skip(at).TakeWhile(l => l.Length > 0).FirstOrDefault(l => l.StartsWith("locked", StringComparison.Ordinal));
+        reason.Should().NotBeNull("the tree must be locked, which is what refuses a single --force");
+        reason!.Length.Should().BeGreaterThan("locked".Length, "an empty reason tells the person nothing");
+        reason.Should().Contain("ConnectOtherAIs", "the refusal a person meets must say where to remove it from");
+    }
+
     // ---------------------------------------------------------------------------------------
     // What the tree is FOR: the commits that have no other way to be seen.
     // ---------------------------------------------------------------------------------------
@@ -216,12 +243,7 @@ public sealed class AReviewTreeTests : IAsyncLifetime
     [Fact]
     public async Task TheEleventhTree_IsRefused_AndTheTenAreNamed()
     {
-        for (var i = 0; i < ReviewWorktrees.Cap; i++)
-        {
-            ReviewTreeRecords.Write(
-                Path.Combine(_root, $"coai-review-0000000{i}-{i:D12}.json"),
-                new ReviewTreeRecord($"/r{i}/.git", new string('a', 39) + i, $"2026-09-0{i % 9 + 1}T00:00:00Z", []));
-        }
+        Fill(ReviewWorktrees.Cap);
 
         var refused = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
 
@@ -230,7 +252,111 @@ public sealed class AReviewTreeTests : IAsyncLifetime
         refused.Trees.Should().HaveCount(ReviewWorktrees.Cap);
         refused.Trees.Should().OnlyContain(t => t.Repository.Length > 0 && t.Sha.Length > 0 && t.Path.Length > 0,
             "a refusal that says 'you have ten' without saying which ten leaves a person no move");
-        Directory.GetDirectories(_root).Should().BeEmpty("a cap refuses; it never evicts");
+        Directory.GetDirectories(_root).Should().HaveCount(ReviewWorktrees.Cap,
+            "a cap refuses; it never evicts, so the ten that were there are all still there");
+    }
+
+    /// <summary>
+    /// A record whose tree somebody deleted by hand is not a tree. Counting it would wedge a cap slot
+    /// against a checkout that no longer exists, and handing it back would open a folder that is not
+    /// there. (Code round, gemini and codex, three findings.)
+    /// </summary>
+    [Fact]
+    public async Task ARecordWhoseTreeWasDeletedByHand_NeitherOpensNorSpendsASlot()
+    {
+        Fill(ReviewWorktrees.Cap);
+        Directory.Delete(Directory.GetDirectories(_root).First(), recursive: true);
+
+        var made = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+
+        made.Reason.Should().BeEmpty("nine trees remain, so there is room for one more");
+        Directory.Exists(made.Path).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task AReusedTreeIsHandedBackOnlyWhenItsDirectoryIsStillThere()
+    {
+        var trees = Trees();
+        var first = await trees.PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+        Unlock(_root);
+        Directory.Delete(first.Path, recursive: true);
+
+        var again = await trees.PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+
+        again.Reason.Should().BeEmpty();
+        again.Reused.Should().BeFalse("the record alone is not a checkout");
+        Directory.Exists(again.Path).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A record that EXISTS and cannot be read is not the same fact as no record. Collapsing the two
+    /// let the cleanup path unlock and delete a finished tree a person may have been reading.
+    /// (Code round, codex.)
+    /// </summary>
+    [Fact]
+    public async Task ARecordThatCannotBeRead_RefusesRatherThanDeletingTheTree()
+    {
+        var made = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+        var record = Path.Combine(_root, $"{Path.GetFileName(made.Path)}.json");
+        await File.WriteAllTextAsync(record, "{ this is not json", TestContext.Current.CancellationToken);
+        Directory.SetLastWriteTimeUtc(made.Path, DateTime.UtcNow.AddHours(-2));
+
+        var answer = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+
+        answer.Reason.Should().Be(ReviewTreeReason.IncompleteAndDirty);
+        Directory.Exists(made.Path).Should().BeTrue("a record we cannot read is never a licence to delete");
+    }
+
+    /// <summary>
+    /// A record missing the fields that carry the identity used to deserialise as null into
+    /// non-nullable properties and crash the mode on `record.Sha.Length`. (Code round, codex, twice.)
+    /// </summary>
+    [Fact]
+    public async Task ARecordMissingItsFields_IsRefusedAndDoesNotCrash()
+    {
+        var made = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+        var record = Path.Combine(_root, $"{Path.GetFileName(made.Path)}.json");
+        await File.WriteAllTextAsync(record, "{}", TestContext.Current.CancellationToken);
+
+        var answer = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+
+        answer.Reason.Should().Be(ReviewTreeReason.IncompleteAndDirty,
+            "a record with no identity cannot prove the tree never finished, so nothing may be removed");
+        Directory.Exists(made.Path).Should().BeTrue();
+    }
+
+    /// <summary>
+    /// The directory name truncates the digest and the sha, so two identities could in principle land
+    /// on one name. The record carries the FULL identity and is compared before its tree is handed
+    /// back, so a collision costs a rebuild rather than the wrong repository opened. (Code round, codex.)
+    /// </summary>
+    [Fact]
+    public async Task ARecordForAnotherIdentity_IsNotHandedBackForThisOne()
+    {
+        var made = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+        var record = Path.Combine(_root, $"{Path.GetFileName(made.Path)}.json");
+        ReviewTreeRecords.Write(record, new HeldRecord(
+            "/somewhere/else/.git", "/somewhere/else", new string('c', 40), "2026-01-01T00:00:00Z", []));
+
+        var answer = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+
+        answer.Reused.Should().BeFalse("a record that names another commit does not prove this tree");
+        answer.Reason.Should().Be(ReviewTreeReason.InProgress, "and the directory was touched moments ago");
+    }
+
+    [Fact]
+    public async Task TheRecordKeepsAWorkingTreeToRunGitFrom()
+    {
+        var made = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
+
+        var read = ReviewTreeRecords.Read(Path.Combine(_root, $"{Path.GetFileName(made.Path)}.json"));
+
+        read.State.Should().Be(RecordState.Found);
+        // `worktree unlock` and `worktree remove` refuse to run from a bare .git directory, so story
+        // 3.2b needs somewhere to run them FROM. Discovering it later would mean migrating every
+        // record written before. (Code round, gemini.)
+        read.Record.RepoPath.Should().Be(_repo);
+        read.Record.Repository.Should().NotBe(read.Record.RepoPath);
     }
 
     [Fact]
@@ -239,6 +365,7 @@ public sealed class AReviewTreeTests : IAsyncLifetime
         var path = await HalfMade();
         await File.WriteAllTextAsync(
             Path.Combine(path, "a.txt"), "v1", TestContext.Current.CancellationToken);
+        Age(path);
 
         var made = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
 
@@ -253,6 +380,7 @@ public sealed class AReviewTreeTests : IAsyncLifetime
         var path = await HalfMade();
         await File.WriteAllTextAsync(
             Path.Combine(path, "notes-i-was-writing.md"), "mine", TestContext.Current.CancellationToken);
+        Age(path);
 
         var refused = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
 
@@ -344,6 +472,22 @@ public sealed class AReviewTreeTests : IAsyncLifetime
 
     private ReviewWorktrees Trees() => new(_launcher, new GitHistory(_launcher), _root);
 
+    /// <summary>
+    /// Fills the root with trees the cap will count: a record AND the directory beside it, because
+    /// a record whose tree is gone is deliberately not counted.
+    /// </summary>
+    private void Fill(int count)
+    {
+        for (var i = 0; i < count; i++)
+        {
+            var name = $"coai-review-0000000{i}-{i:D12}";
+            Directory.CreateDirectory(Path.Combine(_root, name));
+            ReviewTreeRecords.Write(
+                Path.Combine(_root, $"{name}.json"),
+                new HeldRecord($"/r{i}/.git", $"/r{i}", new string('a', 39) + i, $"2026-09-0{i % 9 + 1}T00:00:00Z", []));
+        }
+    }
+
     private TreePlace Place(string sha) => new(_repo, sha);
 
     /// <summary>A directory where the tree would go, with no record beside it — what a crash leaves.</summary>
@@ -353,11 +497,15 @@ public sealed class AReviewTreeTests : IAsyncLifetime
         File.Delete(Path.Combine(_root, $"{Path.GetFileName(made.Path)}.json"));
         if (old)
         {
-            Directory.SetCreationTimeUtc(made.Path, DateTime.UtcNow.AddHours(-2));
+            Age(made.Path);
         }
 
         return made.Path;
     }
+
+    /// <summary>Makes a directory look untouched for long enough that its maker is presumed dead.</summary>
+    private static void Age(string path) =>
+        Directory.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddHours(-2));
 
     private async Task<string> OrphanedCommit()
     {
