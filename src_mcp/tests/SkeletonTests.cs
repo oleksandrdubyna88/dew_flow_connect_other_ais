@@ -53,8 +53,8 @@ public sealed class SkeletonTests
 
         var skeleton = _normalizer.Normalise(SourceLanguage.CSharp, source);
 
-        skeleton.Should().NotMatchRegex(@"f", "a lambda parameter is a name we chose");
-        skeleton.Should().NotMatchRegex(@"n");
+        skeleton.Should().NotMatchRegex(@"\bf\b", "a lambda parameter is a name we chose");
+        skeleton.Should().NotMatchRegex(@"\bn\b");
         skeleton.Should().NotContain("CustomerName").And.NotContain("_invoices");
         skeleton.Should().Contain("Select").And.Contain("Where").And.Contain("ToList");
     }
@@ -194,8 +194,8 @@ public sealed class SkeletonTests
 
         var skeleton = _normalizer.Normalise(SourceLanguage.JavaScript, source);
 
-        skeleton.Should().NotMatchRegex(@"entries", "it is a parameter WE named, not Object.entries");
-        skeleton.Should().NotMatchRegex(@"size");
+        skeleton.Should().NotMatchRegex(@"\bentries\b", "it is a parameter WE named, not Object.entries");
+        skeleton.Should().NotMatchRegex(@"\bsize\b");
         skeleton.Should().NotContain("amountDue").And.NotContain("tally");
         skeleton.Should().Contain("reduce", "and the runtime member it calls is still runtime");
     }

@@ -958,12 +958,12 @@ measurements, not preferences:
 | URL authority, vendor prefix | backtracking | need an ASCII lookbehind, which `NonBacktracking` forbids |
 | bearer | backtracking | the lookbehind, AND its three-word alternation × `{8,4096}` sizes an automaton past the engine's 10 000-node limit |
 
-**The ASCII lookbehind is the single most important line in the port.** .NET's `` is Unicode-aware;
+**The ASCII lookbehind is the single most important line in the port.** .NET's `\b` is Unicode-aware;
 JavaScript's, without the `u` flag, is ASCII. So `парольtoken abcdefghijklmnop` is a string where
 .NET's own boundary does NOT match and JavaScript's does — the server would have written a bearer
 token the extension removes. `(?<![A-Za-z0-9_])` is what makes the two agree, and the corpus wraps
 every shape in Russian and German prose so that the agreement is checked rather than assumed.
-Watched failing by putting `` back: two cases red, both leaving a secret in place.
+Watched failing by putting `\b` back: two cases red, both leaving a secret in place.
 
 `IgnoreCase` is used nowhere for the same family of reason: .NET's invariant pairing matches `k` with
 U+212A KELVIN SIGN, so `to‹K›en abcdefgh` would match in .NET and not in JavaScript. The words are

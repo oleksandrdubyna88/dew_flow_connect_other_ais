@@ -392,7 +392,7 @@ Six corrections, all verified in the repository before they were written down:
 
 ### The largest unknown
 
-**`` and case folding under `RegexOptions.NonBacktracking`.** .NET's `` is Unicode-aware; the
+**`\b` and case folding under `RegexOptions.NonBacktracking`.** .NET's `\b` is Unicode-aware; the
 JavaScript `SECRETS` patterns use `gi` without `u`, so theirs is ASCII. Around Cyrillic prose — which
 this product's ledgers demonstrably carry — the two may disagree about where a word begins. It is
 measured by running the parity property with every shape wrapped in Russian and German prose. If they

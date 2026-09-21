@@ -28,11 +28,23 @@ public sealed class NoSourceFileCarriesAControlByteTests
     /// Every byte a source file may not contain, and why each one is on the list.
     /// </summary>
     /// <remarks>
-    /// NUL and DEL only. Not the whole C0 range: a tab is ordinary, and CR is how half the
-    /// checkouts on this machine store a line ending. These two are the ones that make git call a
-    /// file binary, and they are the two the TypeScript module got wrong.
+    /// <para>EVERY C0 byte except the three that mean something — tab, line feed, carriage return —
+    /// and DEL. It was NUL and DEL alone, on the reasoning that those are the two that make git call
+    /// a file binary. <b>The fourth occurrence proved the reasoning too narrow.</b> On 2026-09-21 a
+    /// regex escape written in a comment reached <c>.github/workflows/ci.yml</c> as byte
+    /// <c>0x08</c> — git is perfectly happy with it and YAML is not. The workflow stopped parsing,
+    /// so its three REQUIRED checks never reported at all, and the pull request sat blocked for
+    /// hours with every check a person could SEE passing. A byte that breaks a parser is worse than
+    /// one that breaks a diff, because nothing says so.</para>
+    /// <para>Tab, LF and CR are excluded because they are ordinary text — CR is how half the
+    /// checkouts on this machine store a line ending. Everything else in the range is a byte nobody
+    /// types on purpose, and each one of them has now cost this repository something.</para>
     /// </remarks>
-    private static readonly byte[] Forbidden = [0x00, 0x7F];
+    private static readonly byte[] Forbidden =
+    [
+        .. Enumerable.Range(0, 32).Select(b => (byte)b).Where(b => b is not (0x09 or 0x0A or 0x0D)),
+        0x7F,
+    ];
 
     public static TheoryData<string> EverySourceFile() => FilesUnder(RepositoryRoot());
 
@@ -101,14 +113,20 @@ public sealed class NoSourceFileCarriesAControlByteTests
         {
             var clean = Path.Combine(root, "Ordinary.cs");
             var dirty = Path.Combine(root, "Planted.cs");
+            // The byte the OLD list missed, in the file type it missed it in: a workflow, where it
+            // costs a parser rather than a diff.
+            var workflow = Path.Combine(root, "planted.yml");
             File.WriteAllText(clean, "var previous = 'a';");
             File.WriteAllBytes(dirty, [.. Encoding.UTF8.GetBytes("var previous = '"), 0x00]);
+            File.WriteAllBytes(workflow, [.. Encoding.UTF8.GetBytes("# the escape was written as "), 0x08]);
 
             var found = FilesUnder(root);
 
-            found.Should().HaveCount(2, "the walk must find both files it was given");
+            found.Should().HaveCount(3, "the walk must find all three files it was given");
             ForbiddenBytesIn(root, "Planted.cs").Should().Equal([(byte)0x00],
                 "the scan must SEE the byte in a file that carries one");
+            ForbiddenBytesIn(root, "planted.yml").Should().Equal([(byte)0x08],
+                "and the one that got past the old list, in the file type it got past it in");
             ForbiddenBytesIn(root, "Ordinary.cs").Should().BeEmpty(
                 "and must not report one in a file that does not — a check that answered yes to "
                 + "everything would pass the line above and mean nothing");
