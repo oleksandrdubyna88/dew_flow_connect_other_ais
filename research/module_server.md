@@ -1067,9 +1067,10 @@ run is what found it.
 on POSIX — in both, the kernel ignores the offset and places the write at the end, which is the same
 system call node's writer makes and therefore the thing the recorded node results are *about*. It is
 the only P/Invoke in `ServiceDefaults` and it is there because .NET offers no managed way to ask a
-kernel to append. On Unix the flag numbers differ between Linux and macOS, so the first open asks
-`fcntl(F_GETFL)` whether the flag it requested is really set and refuses to write at all if it is
-not: a ledger with a gap is recoverable, one with a hole punched through a line is not.
+kernel to append. On Unix the flag numbers differ between Linux and macOS, so the first open PROVES
+the behaviour rather than reading back a flag — see the code round's correction below — and refuses
+to write at all if the proof fails: a ledger with a gap is recoverable, one with a hole punched
+through a line is not.
 
 Re-measured after the change: **8000 of 8000, 0 torn** with eight .NET writers, the same with four
 of each, and 2400 of 2400 on ext4 under WSL.
