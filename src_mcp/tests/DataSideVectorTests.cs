@@ -171,8 +171,46 @@ public sealed class DataSideVectorTests : IDisposable
         }
 
         ServerNotices.PathFor(SettingsFile.DataDirFrom(Env(vector)))
-            .Should().Be(Path.Combine(Expected(vector), "server-notices.jsonl"), vector.Why);
-        vector.ServerNoticesPath.Should().Be(vector.Dir + "/server-notices.jsonl");
+            .Should().Be(Path.Combine(Expected(vector), ServerNotices.Name), vector.Why);
+        vector.ServerNoticesPath.Should().Be(vector.Dir + "/" + ServerNotices.Name);
+    }
+
+    /// <summary>
+    /// The path is COMBINED rather than concatenated, and this is the half that says so on Linux.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Why the theory above is not enough, and a reviewer was right about it.</b> Planting
+    /// <c>dataDir + "/" + Name</c> in place of <c>Path.Combine</c> turns seven of those cases red —
+    /// on WINDOWS. On Linux the two produce the same bytes, and every job in this repository's
+    /// `ci.yml` is `ubuntu-latest`; the Windows legs exist only in the release matrix. So the plant
+    /// that convinced me is a plant CI would never have caught.</para>
+    /// <para>A directory that already ends in a separator tells them apart on both platforms:
+    /// <c>Path.Combine</c> does not double it and concatenation does. That is the whole test.</para>
+    /// </remarks>
+    [Fact]
+    public void ThePathIsCombined_WhichATrailingSeparatorProvesOnEveryPlatform()
+    {
+        var withSeparator = Path.Combine(Path.GetTempPath(), "coai-notices") + Path.DirectorySeparatorChar;
+
+        ServerNotices.PathFor(withSeparator)
+            .Should().NotContain(new string(Path.DirectorySeparatorChar, 2),
+                "a concatenated path doubles the separator where Path.Combine collapses it, and on "
+                + "Linux — which is every CI job here — that is the only difference there is");
+        ServerNotices.PathFor(withSeparator).Should().Be(Path.Combine(withSeparator, ServerNotices.Name));
+    }
+
+    [Fact]
+    public void ADataDirectoryThatDidNotResolve_IsRefusedRatherThanWrittenBesideTheProcess()
+    {
+        // `Path.Combine("", name)` is the bare file name, which would land wherever the process was
+        // launched from — and the extension, reading the resolved directory, would find nothing and
+        // say nothing. That is this plan's whole failure mode, reached by a different road.
+        foreach (var unusable in new[] { "", "   " })
+        {
+            var combining = () => ServerNotices.PathFor(unusable);
+
+            combining.Should().Throw<ArgumentException>().WithMessage("*data directory is empty*");
+        }
     }
 
     [Theory]

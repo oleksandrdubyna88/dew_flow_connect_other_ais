@@ -886,9 +886,13 @@ because the panel saves instantly and says so. Environment variables still outra
 
 ## Server notices — what this binary writes down (S8, from 2026-09-21)
 
-`server-notices.jsonl` is read by the extension and has been since 2026-09-17; this is the half that
-writes it. The first piece of it to land is the thing both halves must agree on before either of
-them writes a byte.
+`server-notices.jsonl` is read by the extension and has been since 2026-09-17. **Nothing writes it
+yet** — the writer is story 1.4 of
+[PLAN_the_server_says_what_it_did.md](../todo/PLAN_the_server_says_what_it_did.md) — and what has
+landed so far is what both halves must agree on before either writes a byte. A reviewer was right to
+pick the present tense out of the first draft of this sentence: `knowledge-base.md` says a sentence
+describing something that does not run is a bug in the file, and *"this is the half that writes it"*
+described a class that did not exist.
 
 **One credential word list, embedded, failing closed.** Both halves REDACT before anything reaches
 disk, so they must redact on the same words — two redactors disagreeing about whether `sig` names a

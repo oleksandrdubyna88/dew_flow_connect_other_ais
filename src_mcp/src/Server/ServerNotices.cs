@@ -27,10 +27,22 @@ public static class ServerNotices
 
     /// <summary>The notices file inside a data directory that has already been resolved.</summary>
     /// <remarks>
-    /// It takes the directory rather than the environment on purpose: every caller here already
-    /// holds one, and a second function that resolved it would be a second resolver — which is
-    /// exactly the defect <c>PLAN_the_settings_file_ignores_the_side.md</c> was written to fix, four
-    /// days before this file existed.
+    /// <para>It takes the directory rather than the environment on purpose: every caller here
+    /// already holds one, and a second function that resolved it would be a second resolver — which
+    /// is exactly the defect <c>PLAN_the_settings_file_ignores_the_side.md</c> was written to fix,
+    /// four days before this file existed.</para>
+    /// <para><b>An empty directory is refused rather than combined.</b>
+    /// <c>Path.Combine("", "server-notices.jsonl")</c> is the bare file name, which resolves against
+    /// whatever directory happened to launch the server — so a data directory that failed to
+    /// resolve would put a person's notices in a deployment folder, or in whatever the working
+    /// directory of an editor's spawned process is, and the extension would read an empty directory
+    /// and say nothing. A reviewer asked for this and it is the one input the type system cannot
+    /// refuse on its own.</para>
     /// </remarks>
-    public static string PathFor(string dataDir) => Path.Combine(dataDir, Name);
+    public static string PathFor(string dataDir) =>
+        string.IsNullOrWhiteSpace(dataDir)
+            ? throw new ArgumentException(
+                "the data directory is empty, so the notices file would land beside whatever "
+                + "launched this process instead of where the extension reads it", nameof(dataDir))
+            : Path.Combine(dataDir, Name);
 }
