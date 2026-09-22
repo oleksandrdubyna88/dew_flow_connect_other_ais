@@ -75,6 +75,44 @@ public sealed class LiveRound
     }
 
     /// <summary>
+    /// The reviewer's state after this report — the merge, with no I/O and no lock in it.
+    /// </summary>
+    /// <remarks>
+    /// Lifted out of <see cref="Report"/> so that method is orchestration and this one is the rule.
+    /// (CodeRabbit, on story 2.3.2's pull request: <c>Report</c> was over the complexity ceiling
+    /// `.coderabbit.yaml` sets for this project, and it was over it before this story touched it.)
+    /// </remarks>
+    private static ReviewerState Moved(ReviewerState previous, ReviewerProgress progress) => previous with
+    {
+        Status = progress.Status,
+        Findings = progress.Outcome is ReviewerOutcome.Ok ok ? ok.Review.Findings.Count() : previous.Findings,
+        Note = Noted(previous, progress),
+        // Only a FINISHED reviewer has a duration; a "running" report carries zero, and taking it
+        // would erase the number of one that had already finished.
+        Seconds = progress.Elapsed > TimeSpan.Zero
+            ? Math.Round(progress.Elapsed.TotalSeconds, 1)
+            : previous.Seconds,
+    };
+
+    /// <summary>
+    /// The sentence this reviewer carries: its failure, or its own note, or what it already had.
+    /// </summary>
+    /// <remarks>
+    /// A progress line may carry its own sentence — a queued reviewer saying what it is waiting for
+    /// — and it is only ever an ADDITION: an empty one never wipes the reason a failed reviewer
+    /// already recorded.
+    /// </remarks>
+    private static string Noted(ReviewerState previous, ReviewerProgress progress)
+    {
+        if (progress.Outcome is { } outcome and not ReviewerOutcome.Ok)
+        {
+            return ReviewerSummaryFactory.Describe(outcome);
+        }
+
+        return progress.Note.Length > 0 ? progress.Note : previous.Note;
+    }
+
+    /// <summary>
     /// A reviewer that did not answer, written down once.
     /// </summary>
     /// <remarks>
@@ -89,9 +127,7 @@ public sealed class LiveRound
     /// </remarks>
     private void Noticed(ReviewerProgress progress, string key)
     {
-        if (progress.Outcome is not { } outcome
-            || !ReviewerNotices.IsAFailure(outcome)
-            || _noticed.Contains(key))
+        if (Ending(progress) is not { } outcome || _noticed.Contains(key))
         {
             return;
         }
@@ -103,6 +139,10 @@ public sealed class LiveRound
             _noticed.Add(key);
         }
     }
+
+    /// <summary>The outcome this report ends on, when it is one that gets written down.</summary>
+    private static ReviewerOutcome? Ending(ReviewerProgress progress) =>
+        progress.Outcome is { } outcome && ReviewerNotices.IsAFailure(outcome) ? outcome : null;
 
     /// <summary>A model, or nothing — the two ways of having none, made one.</summary>
     /// <remarks>
@@ -124,24 +164,8 @@ public sealed class LiveRound
             var key = Key(progress.Provider, progress.Role);
             var previous = _states.GetValueOrDefault(key)
                            ?? new ReviewerState(progress.Provider, progress.Role, progress.Status);
-            _states[key] = previous with
-            {
-                Status = progress.Status,
-                Findings = progress.Outcome is ReviewerOutcome.Ok ok ? ok.Review.Findings.Count() : previous.Findings,
-                Note = progress.Outcome is { } outcome and not ReviewerOutcome.Ok
-                    ? ReviewerSummaryFactory.Describe(outcome)
-                    // A progress line may carry its own sentence — a queued reviewer saying what it
-                    // is waiting for — and it is only ever an ADDITION: an empty one never wipes
-                    // the reason a failed reviewer already recorded.
-                    : progress.Note.Length > 0
-                        ? progress.Note
-                        : previous.Note,
-                // Only a FINISHED reviewer has a duration; a "running" report carries zero, and
-                // taking it would erase the number of one that had already finished.
-                Seconds = progress.Elapsed > TimeSpan.Zero
-                    ? Math.Round(progress.Elapsed.TotalSeconds, 1)
-                    : previous.Seconds,
-            };
+
+            _states[key] = Moved(previous, progress);
             Noticed(progress, key);
             Persist();
         }

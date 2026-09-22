@@ -50,15 +50,22 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
     private Serilog.ILogger Watching() =>
         new Serilog.LoggerConfiguration().WriteTo.Sink(new Sink(_said)).CreateLogger();
 
+    private SessionStore _store = null!;
+
     private LiveRound Round(Noticing noticing, params string[] providers)
     {
-        var store = new SessionStore(_dir);
+        _store = new SessionStore(_dir);
         var session = new PersistedSession(
             new SessionState("s-failures", "D:/repo", "feature/x", new PanelConfig()), []);
-        store.Save(session);
+        _store.Save(session);
 
-        return new LiveRound(store, session, [.. providers.Select(Work)], "", noticing);
+        return new LiveRound(_store, session, [.. providers.Select(Work)], "", noticing);
     }
+
+    /// <summary>What the session file says about one reviewer, after the round persisted it.</summary>
+    private ReviewerState Persisted(string provider) =>
+        _store.Load("D:/repo", "feature/x")!.Rounds.Single().ReviewerStates
+            .Single(state => state.Provider == provider);
 
     private static ReviewerWork Work(string provider) =>
         new(new ReviewerInvocation(provider, RoleCatalog.ArchitectureRole, new ProcessRequest("cli", [], ".")));
@@ -92,17 +99,22 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
     }
 
     /// <summary>One of each ending, built — the arguments reflection cannot invent.</summary>
-    private static ReviewerOutcome Instance(Type ending) => ending switch
-    {
-        _ when ending == typeof(ReviewerOutcome.TimedOut) => new ReviewerOutcome.TimedOut(),
-        _ when ending == typeof(ReviewerOutcome.RateLimited) => new ReviewerOutcome.RateLimited("quota", 2),
-        _ when ending == typeof(ReviewerOutcome.NonZeroExit) => new ReviewerOutcome.NonZeroExit(3, "boom"),
-        _ when ending == typeof(ReviewerOutcome.NotStarted) => new ReviewerOutcome.NotStarted("no executable"),
-        _ when ending == typeof(ReviewerOutcome.Unparseable) => new ReviewerOutcome.Unparseable("not json", Usage.None),
-        _ => throw new NotSupportedException(
-            $"{ending.Name} is mapped to a code but this suite cannot build one — add it here, "
-            + "because an ending nothing can construct is an ending nothing tests"),
-    };
+    private static readonly IReadOnlyDictionary<Type, Func<ReviewerOutcome>> Built =
+        new Dictionary<Type, Func<ReviewerOutcome>>
+        {
+            [typeof(ReviewerOutcome.TimedOut)] = () => new ReviewerOutcome.TimedOut(),
+            [typeof(ReviewerOutcome.RateLimited)] = () => new ReviewerOutcome.RateLimited("quota", 2),
+            [typeof(ReviewerOutcome.NonZeroExit)] = () => new ReviewerOutcome.NonZeroExit(3, "boom"),
+            [typeof(ReviewerOutcome.NotStarted)] = () => new ReviewerOutcome.NotStarted("no executable"),
+            [typeof(ReviewerOutcome.Unparseable)] = () => new ReviewerOutcome.Unparseable("not json", Usage.None),
+        };
+
+    private static ReviewerOutcome Instance(Type ending) =>
+        Built.TryGetValue(ending, out var build)
+            ? build()
+            : throw new NotSupportedException(
+                $"{ending.Name} is mapped to a code but this suite cannot build one — add it here, "
+                + "because an ending nothing can construct is an ending nothing tests");
 
     [Theory]
     [MemberData(nameof(EveryEnding))]
@@ -175,6 +187,14 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
 
         reporting.Should().NotThrow();
         _said.Should().ContainSingle("and the loss is said out loud rather than swallowed");
+
+        // The name of this test promises the STATE survives, and CodeRabbit was right that it only
+        // checked the throw. The round's own record is what the page falls back to when the ledger
+        // lost a line, so it is the half that must not go with it.
+        var state = Persisted("codex");
+
+        state.Status.Should().Be("failed");
+        state.Note.Should().Be("timeout", "the reviewer's reason is still in the session file");
     }
 
     [Fact]
@@ -270,10 +290,18 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
     /// is an IDENTITY — that the instance handed to the host is the instance the service holds — which
     /// no public surface should have to answer.
     /// </remarks>
-    private static Noticing Held(PanelService service) =>
-        (Noticing)typeof(PanelService)
-            .GetField("_noticing", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!
-            .GetValue(service)!;
+    private static Noticing Held(PanelService service)
+    {
+        var field = typeof(PanelService).GetField(
+            "_noticing",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+
+        field.Should().NotBeNull(
+            "a rename of PanelService's field would otherwise make this test throw a "
+            + "NullReferenceException instead of saying what it could not find");
+
+        return (Noticing)field!.GetValue(service)!;
+    }
 
     [Fact]
     public void NoProductionCodeReachesForTheSharedWriterBehindTheHost()

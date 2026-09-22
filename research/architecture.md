@@ -510,8 +510,12 @@ Conventions reviewers are dropped.
 
 The path is where the file is; this is what goes in it, and it is the sharper half. **Both containers
 REDACT** before anything reaches disk — the extension writing its own ledger, and `coai-mcp` writing
-`server-notices.jsonl` — so a difference between the two redactors is not a failing test anywhere. It
-is a secret written by one and removed by the other.
+`server-notices.jsonl`. A difference between the two redactors is a secret written by one and removed
+by the other, which no single-language test can see; that is why `run-parity.mjs` drives BOTH through
+`NoticeTool` and compares `safeText` as UTF-16 code units, and why a mismatch makes `npm run
+test:parity` exit 1 rather than print a warning. (The sentence here used to say such a difference
+would fail nothing anywhere — true when it was written, and untrue since the harness landed with
+story 1.2. CodeRabbit, 2026-09-22.)
 
 ### The server became a PRODUCER of that file (2026-09-22, S8 stories 2.2 and 2.3.2)
 

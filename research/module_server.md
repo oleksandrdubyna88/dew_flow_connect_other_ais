@@ -1291,7 +1291,8 @@ costs the REST of that callback, where `live.Report`, `audit.Moved` and `_ledger
 sequence (`PanelService.cs:1249-1265`) — so a throw in the first loses that reviewer's audit line and
 its spending row. The split found that the plan round had this consequence wrong.
 
-**Ownership is threaded and undefaulted.** `ServeAsync` composes one `Noticing.Through(notices, log)`
+**Ownership is threaded and undefaulted.** `ServeAsync` composes one
+`Noticing.Through(notices, env, log)`
 and hands it to `PanelServiceHost`, which HOLDS it and gives it to every service it builds —
 including the rebuild that runs whenever the settings file moves. gemini found that gap on the plan
 round: a host that passed it once would hand the rebuilt service nothing, and every injected test
