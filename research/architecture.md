@@ -538,13 +538,15 @@ instance, so draining or replacing it cannot split the ledger the page reads. Th
 modes take a silent one: a mode that answers on stdout and exits must not start a writer thread
 nobody drains.
 
-**The startup road writes twice over, on purpose.** The notes a run makes about ITSELF — a
+**The startup road writes to both sinks from ONE call.** The notes a run makes about ITSELF — a
 setting it could not read, a database loose in a shared root, a legacy settings file it adopted —
 go to the log AND to the page, because an operator reading a terminal and a person reading the
-panel are different people. They are also written on the settings RELOAD, not only at startup: the
-host rebuilds whenever the panel writes the file, which is exactly when a person types a bad value,
-and that was the one moment nothing said anything. The host's first build is silent, because
-startup has already said those.
+panel are different people. One enumeration writes both, rather than a log loop beside a notice
+loop: a diagnostic added to one of two paths reaches one sink and not the other, and a structural
+test can only prove that both paths exist. They are also written on the settings RELOAD, not only
+at startup: the host rebuilds whenever the panel writes the file, which is exactly when a person
+types a bad value, and that was the one moment nothing said anything. The host's first build is
+silent, because startup has already said those.
 
 **One thread writes, and nothing waits for it.** `NoticeWriter` has a bounded queue of 256 and a
 single writer; a caller offers and returns. A wedged share blocks that one thread and nothing else,

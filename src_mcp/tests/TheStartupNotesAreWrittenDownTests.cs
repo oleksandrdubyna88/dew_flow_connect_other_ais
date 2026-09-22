@@ -49,7 +49,7 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
             With(new UnrecognisedSetting("COAI_RETRY_BACKOFF", "cannot read that as seconds"),
                  new UnrecognisedSetting("COAI_CODE_WORKSPACE", "does not know that workspace")),
             [],
-            Collecting);
+            Collecting, Watching());
 
         _written.Select(notice => notice.Subject)
             .Should().Equal(["COAI_RETRY_BACKOFF", "COAI_CODE_WORKSPACE"],
@@ -67,7 +67,7 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
             With(new UnrecognisedSetting("COAI_ROLES", "row 1 has no id"),
                  new UnrecognisedSetting("COAI_ROLES", "row 2 has no stage")),
             [],
-            Collecting);
+            Collecting, Watching());
 
         _written.Should().HaveCount(2);
         _written.Select(notice => notice.Subject).Distinct().Should().ContainSingle();
@@ -82,7 +82,7 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
         StartupNotices.Record(With(), [
             new StorageNote(StorageNote.LooseDatabase, "C:/one", "a database in C:/one"),
             new StorageNote(StorageNote.LooseDatabase, "C:/two", "a database in C:/two"),
-        ], Collecting);
+        ], Collecting, Watching());
 
         _written.Select(notice => notice.Subject).Should().OnlyHaveUniqueItems();
     }
@@ -96,7 +96,7 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
         StartupNotices.Record(With(), [
             new StorageNote(StorageNote.LooseDatabase, "C:/root", "a database this side is not using"),
             new StorageNote(StorageNote.NewDirectory, "C:/root/side", "this side starts with no history"),
-        ], Collecting);
+        ], Collecting, Watching());
 
         _written.Should().SatisfyRespectively(
             loose => loose.Class.Should().Be("stand-down",
@@ -129,17 +129,19 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
         // here stands in for whatever the third kind turns out to be.
         StartupNotices.Record(
             With(), [new StorageNote("permission-denied", "C:/root", "this side cannot write there")],
-            Collecting);
+            Collecting, Watching());
 
         _written.Should().BeEmpty("silence is recoverable; a refusal shown as a success is not");
-        _said.Should().ContainSingle().Which.Should().Contain("could not be written down",
+        Losses().Should().ContainSingle(
             "and the loss is said out loud, which is the boundary story 2.3.2 built");
+        _said.Should().Contain(line => line.Contains("cannot write there", StringComparison.Ordinal),
+            "while the terminal still gets the sentence itself — losing the page is not losing both");
     }
 
     [Fact]
     public void AnUnrecognisedSetting_IsAStandDown()
     {
-        StartupNotices.Record(With(new UnrecognisedSetting("COAI_ROLES", "not JSON")), [], Collecting);
+        StartupNotices.Record(With(new UnrecognisedSetting("COAI_ROLES", "not JSON")), [], Collecting, Watching());
 
         _written.Should().ContainSingle().Which.Class.Should().Be("stand-down",
             "this build fell back on something the person did not choose");
@@ -150,7 +152,7 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
     {
         var settings = Path.Combine(_dir, "settings.json");
 
-        StartupNotices.Adopted("a settings.json in the root was adopted", settings, Collecting);
+        StartupNotices.Adopted("a settings.json in the root was adopted", settings, Collecting, Watching());
 
         var notice = _written.Should().ContainSingle().Subject;
 
@@ -164,8 +166,9 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
     {
         // The plan round: the same settings file reached once with backslashes and once with forward
         // slashes would otherwise be two rows of history rather than one with a count.
-        StartupNotices.Adopted("adopted", Path.Combine(_dir, "a", "..", "settings.json"), Collecting);
-        StartupNotices.Adopted("adopted", Path.Combine(_dir, "settings.json"), Collecting);
+        StartupNotices.Adopted(
+            "adopted", Path.Combine(_dir, "a", "..", "settings.json"), Collecting, Watching());
+        StartupNotices.Adopted("adopted", Path.Combine(_dir, "settings.json"), Collecting, Watching());
 
         _written.Select(notice => notice.Subject).Distinct().Should().ContainSingle(
             "one file is one row, however the path to it was spelled");
@@ -174,7 +177,7 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
     [Fact]
     public void NothingUnrecognisedAndNothingOnTheDisk_WritesNothing()
     {
-        StartupNotices.Record(With(), [], Collecting);
+        StartupNotices.Record(With(), [], Collecting, Watching());
 
         _written.Should().BeEmpty("empty is the normal state — a value nobody set is not a mismatch");
     }
@@ -189,12 +192,12 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
         var recording = () => StartupNotices.Record(
             With(new UnrecognisedSetting("COAI_ROLES", "not JSON")),
             [new StorageNote(StorageNote.NewDirectory, "C:/x", "new")],
-            exploding);
-        var adopting = () => StartupNotices.Adopted("adopted", "C:/x/settings.json", exploding);
+            exploding, Watching());
+        var adopting = () => StartupNotices.Adopted("adopted", "C:/x/settings.json", exploding, Watching());
 
         recording.Should().NotThrow();
         adopting.Should().NotThrow();
-        _said.Should().HaveCount(3, "and each loss is said out loud rather than swallowed");
+        Losses().Should().HaveCount(3, "and each loss is said out loud rather than swallowed");
     }
 
     [Fact]
@@ -208,7 +211,7 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
         StartupNotices.Record(
             With(new UnrecognisedSetting("COAI_CODE_WORKSPACE", $"COAI_CODE_WORKSPACE is 'token={secret}'")),
             [new StorageNote(StorageNote.NewDirectory, $"C:/token={secret}", $"C:/token={secret} is new")],
-            Collecting);
+            Collecting, Watching());
 
         var lines = _written.Select(ServerNoticeLine.Of).ToList();
 
@@ -226,7 +229,7 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
         StartupNotices.Record(
             With(),
             [new StorageNote(StorageNote.NewDirectory, "C:/" + new string('d', 5_000), "new")],
-            Collecting);
+            Collecting, Watching());
 
         _written.Should().ContainSingle().Which.Subject!.Length
             .Should().BeLessThanOrEqualTo(Redaction.TitleLimit);
@@ -240,7 +243,7 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
         var sentence = new string('x', Redaction.TitleLimit + 50)
             + " — check COAI_DATA_DIR for a typo before recording into it.";
 
-        StartupNotices.Record(With(new UnrecognisedSetting("COAI_DATA_DIR", sentence)), [], Collecting);
+        StartupNotices.Record(With(new UnrecognisedSetting("COAI_DATA_DIR", sentence)), [], Collecting, Watching());
 
         var notice = _written.Should().ContainSingle().Subject;
 
@@ -275,6 +278,17 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
             .Equal(["COAI_RETRY_BACKOFF", "COAI_CODE_WORKSPACE"],
                 "each under the key it is about, so ten saves of one typo stay one row with a count");
     }
+
+    /// <summary>
+    /// The log lines that report a LOST notice, apart from the diagnostics themselves.
+    /// </summary>
+    /// <remarks>
+    /// Both now reach the same sink, because one call writes the log and the page. Counting every
+    /// line would make these assertions go up by one whenever a diagnostic is added, which is the
+    /// opposite of what they are for.
+    /// </remarks>
+    private IEnumerable<string> Losses() =>
+        _said.Where(line => line.Contains("could not be written down", StringComparison.Ordinal));
 
     /// <summary>What the panel does when a person touches a control: rewrite the settings file.</summary>
     private void Saved(string json) =>
@@ -320,21 +334,37 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
             Watching(), Collecting);
 
     [Fact]
-    public void TheStartupNotes_ReachTheLogAsWellAsThePage()
+    public void EveryStartupNote_ReachesTheLogAndThePageFromOneCall()
     {
-        // codex, on the plan round: an implementation can emit the panel notice and drop the
-        // log.Warning, and every other test here stays green while terminal operators silently lose
-        // what they had. The census is structural because the host's own block is not reachable from
-        // a unit test — but a scan that finds the calls beside each other is what makes the
-        // "log AND notice" decision checkable at all.
+        // codex asked for this twice, and the second answer is better than the first. On the PLAN
+        // round: an implementation can emit the panel notice and drop the `log.Warning`, and every
+        // behavioural test stays green while terminal operators silently lose what they had — so a
+        // structural scan held the two calls beside each other in Program.cs. On the CODE round he
+        // named what that scan cannot do: prove that each DIAGNOSTIC reaches both sinks. A note
+        // added to one of two enumerations is visible in the panel and absent from the terminal.
+        // So there is one enumeration now, writing both, and this asserts it on the sentences
+        // rather than on the source text.
+        StartupNotices.Record(
+            With(new UnrecognisedSetting("COAI_ROLES", "COAI_ROLES is not JSON this server reads")),
+            [new StorageNote(StorageNote.NewDirectory, "C:/x", "C:/x did not exist and is new")],
+            Collecting, Watching());
+
+        _written.Should().HaveCount(2);
+        _written.Select(notice => notice.Title).Should().OnlyContain(
+            title => _said.Any(line => line.Contains(title!, StringComparison.Ordinal)),
+            "an operator reading a terminal and a person reading the panel are different people, "
+            + "and one call writing both is what stops a future note reaching only one of them");
+    }
+
+    [Fact]
+    public void TheStartupNotes_HaveTwoCallersAndNoMore()
+    {
         var serving = ProductionSources.CodeOf("src_mcp/src/Program.cs");
 
-        serving.Should().Contain("Said(settings, storage, log);",
-            "the terminal keeps its warnings — an operator and a person reading the panel are "
-            + "different people");
-        serving.Should().Contain("StartupNotices.Record(settings, storage, noticing);",
-            "and the page gets the same events");
-        serving.Should().Contain("StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), noticing);",
+        serving.Should().Contain("StartupNotices.Record(settings, storage, noticing, log);",
+            "the startup block writes them, and the log argument is what makes that one call");
+        serving.Should().Contain(
+            "StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), noticing, log));",
             "including the adoption, which happens inside the layering callback");
         ProductionSources.FilesMentioning("StartupNotices.").Keys.Order().Should()
             .Equal(

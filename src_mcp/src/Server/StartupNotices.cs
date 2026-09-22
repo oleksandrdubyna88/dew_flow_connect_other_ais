@@ -40,16 +40,21 @@ internal static class StartupNotices
     /// about. Canonical so the same file reached as <c>C:\data</c> and <c>C:/data</c> is one row
     /// with a count rather than two rows. (The plan round.)
     /// </remarks>
-    internal static void Adopted(string sentence, string settingsPath, Noticing noticing) =>
+    internal static void Adopted(
+        string sentence, string settingsPath, Noticing noticing, Serilog.ILogger log)
+    {
+        log.Warning("data directory: {Note}", sentence);
         noticing.Offered(() => Note(
             ServerNoticeCodes.SettingsAdopted, Outcome, Canonical(settingsPath), sentence));
+    }
 
     /// <summary>Every unrecognised setting and every storage note this run has, written down.</summary>
     internal static void Record(
-        PanelSettings settings, IReadOnlyList<StorageNote> storage, Noticing noticing)
+        PanelSettings settings, IReadOnlyList<StorageNote> storage, Noticing noticing,
+        Serilog.ILogger log)
     {
-        Unrecognised(settings, noticing);
-        Storage(storage, noticing);
+        Unrecognised(settings, noticing, log);
+        Storage(storage, noticing, log);
     }
 
     /// <summary>
@@ -61,19 +66,22 @@ internal static class StartupNotices
     /// rebuild that re-ran it would stat a configured NAS on a settings change (issue #115). What a
     /// reload can newly produce is a value somebody just typed. (The code round, five findings.)
     /// </remarks>
-    internal static void Unrecognised(PanelSettings settings, Noticing noticing)
+    internal static void Unrecognised(PanelSettings settings, Noticing noticing, Serilog.ILogger log)
     {
         foreach (var setting in settings.UnrecognisedSettings)
         {
+            log.Warning("{Mismatch}", setting.Sentence);
             noticing.Offered(() => Note(
                 ServerNoticeCodes.UnrecognisedSetting, StoodDown, setting.Key, setting.Sentence));
         }
     }
 
-    private static void Storage(IReadOnlyList<StorageNote> storage, Noticing noticing)
+    private static void Storage(
+        IReadOnlyList<StorageNote> storage, Noticing noticing, Serilog.ILogger log)
     {
         foreach (var note in storage)
         {
+            log.Warning("data directory: {Note}", note.Sentence);
             noticing.Offered(() => Note(ServerNoticeCodes.StorageNote, ClassOf(note), note.Subject, note.Sentence));
         }
     }
@@ -110,25 +118,20 @@ internal static class StartupNotices
         Class = kind,
         Source = Source,
         Code = code,
-        // Cut where the record is BUILT, not only where the line is written: a notice waits in the
-        // writer's queue until then. (Story 2.2's memory rule, applied to this road.) The SUBJECT
-        // is cut for the same reason and was not — it is a path, and a path has no length anybody
-        // controls. The writer cuts at this same limit, so the grouping key is unchanged by moving
-        // the cut earlier. (gemini, on the code round.)
-        Subject = Shorter(subject),
-        Title = Shorter(sentence),
+        // The SUBJECT is cut as well as the title, and was not: it is a path, and a path has no
+        // length anybody controls. Both go through the one helper every producer shares —
+        // `ServerNotice.Shortened` says why the cut is here rather than only at the line.
+        // (gemini, on both code rounds.)
+        Subject = ServerNotice.Shortened(subject),
+        Title = ServerNotice.Shortened(sentence),
         // These sentences put an unbounded VALUE at the front and the instruction at the back, so a
-        // cut takes the actionable half and leaves no sign that it did. The detail keeps it — four
-        // times the room — and the title says it was cut. (codex, on the code round.)
+        // cut takes the actionable half. The detail keeps it — four times the room — while the
+        // title carries the mark saying there was more. (codex, on the code round.)
         Detail = Cut(sentence) ? sentence : "",
     };
 
     /// <summary>Whether a sentence is longer than a title is allowed to be.</summary>
     private static bool Cut(string text) => text.Length > Redaction.TitleLimit;
-
-    /// <summary>The sentence, or as much of it as fits with a mark saying the rest was cut.</summary>
-    private static string Shorter(string text) =>
-        Cut(text) ? text[..(Redaction.TitleLimit - 1)] + "…" : text;
 
     /// <summary>
     /// One spelling per path, so the same file is one row rather than one per spelling.

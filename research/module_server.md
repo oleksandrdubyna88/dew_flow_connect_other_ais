@@ -1276,11 +1276,15 @@ codes had existed since story 1.2 and nothing wrote them. The plan records the c
 configuration that had been applied, read and reloaded correctly looked broken for twenty minutes,
 and the one line that would have ended it was in a file the panel does not read.
 
-**The log lines STAY.** An operator reading a terminal and a person reading the panel are different
-people — the decision `PanelService.Refused` made when it kept its warning beside the refusal it
-returns. `Program.Said` is the log half and `StartupNotices.Record` the page half, side by side, and
-a structural test holds them there: an implementation that emitted the notice and dropped the
-warning would otherwise pass everything (codex, on the plan round).
+**The log lines STAY, and they are the SAME call.** An operator reading a terminal and a person
+reading the panel are different people — the decision `PanelService.Refused` made when it kept its
+warning beside the refusal it returns. The first version had two enumerations side by side, a log
+half in `Program.Said` and a page half in `StartupNotices.Record`, with a structural test holding
+both calls in the file. codex named what that cannot do on the second code round: prove that each
+DIAGNOSTIC reaches both sinks. A note added to one of two loops is visible in the panel and absent
+from the terminal, and the scan stays green. So there is one loop now — `StartupNotices` takes the
+logger, writes the line and offers the notice per item, `Program.Said` is gone, and the guard is
+behavioural: every title written must appear in some log line.
 
 **Each note groups on a subject that says which one it was**, because the extension keys repeats on
 `(code, subject)` and an empty subject collapses every setting there has ever been into one row:
@@ -1314,7 +1318,10 @@ the likeliest moment for a bad value to appear was the one moment nothing said s
 mismatch and writes it through the same `Noticing`, and an adoption reached on that path goes out
 both ways too.
 
-Two things make it a reload rather than a second startup. The host's **first** build stays silent,
+Two things make it a reload rather than a second startup. The host's **first** build stays silent
+— it is a `Build(bool first)` parameter rather than a field, so the answer cannot be wrong for a
+later build because an earlier one threw, and there is no mutable state to reason about across
+threads (gemini, second code round) —
 because `Program` has already said those notes and a second copy would make every start report each
 mismatch twice — one misconfiguration, a count of two, and nothing that happened twice. And the
 **disk** notes are not re-taken: they come from a survey that stats the data directory, and a
@@ -1322,12 +1329,16 @@ rebuild that re-ran it would stat a configured NAS on a settings change (issue #
 can newly produce is a value somebody just typed, so `StartupNotices.Unrecognised` is its own method
 and that is the one the host calls.
 
-**Two bounds and a map, from the code round.** The SUBJECT is cut at `Redaction.TitleLimit` where
+**Two bounds and a map, from the code rounds.** The SUBJECT is cut at `Redaction.TitleLimit` where
 the record is built, as the title already was — it is a path, and 256 queued notices each holding an
 unbounded one is process held because a share stopped answering; the writer cuts at the same limit,
 so the grouping key is unchanged by moving the cut earlier. A sentence longer than a title keeps its
 remedy in `detail` and ends in an ellipsis, because these sentences put the unbounded VALUE at the
-front and the instruction at the back. And the storage class is a MAP (`StartupNotices.ClassByKind`)
+front and the instruction at the back. The cut itself is **`ServerNotice.Shortened`, one helper for
+every producer**: there were two, and they disagreed — reviewer failures cut plainly while startup
+notes cut with a mark, so the same overflow was legible in one place and silent in the other. The
+reviewer road's `not started: {Reason}` and `unparseable: {Reason}` are the sentences that
+actually reach it, because a stderr tail is already bounded by `BoundedScheduler.Quote`. And the storage class is a MAP (`StartupNotices.ClassByKind`)
 whose unmapped key throws, not a condition with a default: a third kind — a permission refusal, say
 — would otherwise reach the page as a successful `outcome` with nothing failing to say so. A census
 test reads the kinds off `StorageNote` itself, which is what makes that throw unreachable.

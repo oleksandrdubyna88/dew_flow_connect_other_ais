@@ -260,6 +260,25 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
     }
 
     [Fact]
+    public void AReasonNoQuoteBounds_IsCutAndSaysSo()
+    {
+        // Written after a plant proved the FIRST version of this assertion worthless. It hung off
+        // `AMegabyteOfStderr`, where the tail goes through `BoundedScheduler.Quote` and comes back
+        // already ellipsised at `ReasonLength` — so the assertion passed on Quote's mark and would
+        // have passed with the shared cut removed. `not started: {Reason}` has no Quote in it, so
+        // this is a sentence that really does reach `ServerNotice.Shortened`.
+        Round(Collecting, "codex").Report(Ended("codex",
+            new ReviewerOutcome.NotStarted(new string('r', 2_000))));
+
+        var title = _written.Should().ContainSingle().Subject.Title!;
+
+        title.Length.Should().BeLessThanOrEqualTo(Redaction.TitleLimit);
+        title.Should().EndWith("…",
+            "one helper cuts for both roads since story 2.3.3's second code round — this one used "
+            + "to cut with no sign at all while the startup road marked its cuts");
+    }
+
+    [Fact]
     public void TheInstanceTheHostWasGiven_SurvivesASettingsRebuild()
     {
         // gemini, on the plan round, and it is the finding that would have made this whole story

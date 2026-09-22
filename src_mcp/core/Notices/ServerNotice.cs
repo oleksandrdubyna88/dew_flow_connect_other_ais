@@ -115,6 +115,25 @@ public sealed record ServerNotice
         at.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
     /// <summary>
+    /// A title or a subject at most <see cref="Redaction.TitleLimit"/> long, ending in a mark when
+    /// it had to be cut.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Cut where the record is BUILT, not only where the line is written.</b> A notice
+    /// waits in the writer's queue until then, and 256 queued notices each holding a megabyte of
+    /// somebody's stderr is 256 MB of process held because a share stopped answering. (Story 2.2.)
+    /// <see cref="ServerNoticeLine"/> cuts at the same limit on the way out, so moving the cut
+    /// earlier changes no line and no grouping key.</para>
+    /// <para><b>One helper, because there were two and they disagreed.</b> Reviewer failures cut
+    /// plainly and startup notes cut with an ellipsis, which meant the same overflow was legible in
+    /// one place and silent in the other — a truncation nobody can SEE is the half that matters,
+    /// since these sentences carry the unbounded value at the front and the instruction at the
+    /// back. (gemini, on story 2.3.3's second code round.)</para>
+    /// </remarks>
+    public static string Shortened(string text) =>
+        text.Length <= Redaction.TitleLimit ? text : text[..(Redaction.TitleLimit - 1)] + "…";
+
+    /// <summary>
     /// A required field, checked against what will REACH THE LINE rather than what arrived.
     /// </summary>
     /// <remarks>

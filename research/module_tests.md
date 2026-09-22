@@ -1587,7 +1587,7 @@ come from a missing one; a first draft passed for exactly that wrong reason.
 
 ## The startup notes reach the page, each under a subject (2026-09-22, S8 story 2.3.3)
 
-`TheStartupNotesAreWrittenDownTests` — nineteen cases, and most of them are about the SUBJECT, because
+`TheStartupNotesAreWrittenDownTests` — twenty cases, and most of them are about the SUBJECT, because
 that is where this story could have been useless while looking finished: two malformed settings are
 two subjects; two refused rows of one key share one (the accepted cost, asserted); two loose
 databases under different roots are two subjects; one path spelled two ways is one.
@@ -1618,10 +1618,17 @@ settings file whatever the code did — the plant that should have reddened it s
 value is written BEFORE the host exists now, which is the only ordering in which that assertion
 means anything.
 
-**And the log half is held structurally.** An implementation can emit the panel notice and drop the
-`log.Warning`, and every behavioural test here stays green while terminal operators silently lose
-what they had (codex). `Program.cs` is scanned for both calls side by side. That is weaker than
-running the host — which is story 2.4 — and it is what makes the decision checkable at all.
+**The log half stopped being structural.** It began as a scan of `Program.cs` for the log call and
+the notice call side by side — which proves the two paths exist and nothing about whether a given
+diagnostic travels both. One call writes both now, so the guard is behavioural: every title written
+must appear in some log line, and deleting the `log.Warning` from the loop reddens it. The census of
+CALLERS stays, because "two and no more" is still a fact worth pinning.
+
+**A second plant proved a test worthless rather than the code wrong.** The shared-cut assertion was
+first hung off `AMegabyteOfStderr`, where the stderr tail goes through `BoundedScheduler.Quote` and
+comes back already ellipsised at `ReasonLength` — so it passed on Quote's mark and would have passed
+with the shared cut deleted. `AReasonNoQuoteBounds_IsCutAndSaysSo` drives `not started: {Reason}`
+instead, which no Quote bounds, and the plain-cut plant reddens it by name.
 
 ## Every reviewer failure is written down, once (2026-09-22, S8 story 2.3.2)
 

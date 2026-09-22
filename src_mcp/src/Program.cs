@@ -1668,11 +1668,7 @@ internal static class Program
                 // The adoption of a legacy root settings file is exactly the class of thing the
                 // `data directory:` notes below carry, so it goes out the same way and reads the
                 // same in the log — AND, since story 2.3.3, onto the page a person actually looks at.
-                note =>
-                {
-                    log.Warning("data directory: {Note}", note);
-                    StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), noticing);
-                });
+                note => StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), noticing, log));
             var settings = PanelSettings.FromEnvironment(configuration);
             // The tracker is what lets a LATER server collect reviewers this one leaves behind if
             // it dies: the timeout kill is performed by the parent, so it cannot run when the
@@ -1698,8 +1694,7 @@ internal static class Program
             // would make `--version` hang on an unreachable mount rather than answer. Raised on both
             // code rounds (issue #115).
             var storage = PanelSettings.StorageNotes(Environment.GetEnvironmentVariable);
-            Said(settings, storage, log);
-            StartupNotices.Record(settings, storage, noticing);
+            StartupNotices.Record(settings, storage, noticing, log);
 
             // The file the panel writes is re-read per call, so a vendor or a threshold changed
             // in the sidebar reaches the NEXT round without restarting the MCP client.
@@ -1768,30 +1763,6 @@ internal static class Program
         }
 
         return notices.Drain(NoticeWriter.DrainBudget);
-    }
-
-    /// <summary>
-    /// The startup notes, in the log — where they have always been, and still are.
-    /// </summary>
-    /// <remarks>
-    /// Kept beside <see cref="StartupNotices.Record"/> rather than replaced by it: an operator
-    /// reading a terminal and a person reading the panel are different people, and a change that
-    /// moved these onto the page and off the console would be invisible to the second one.
-    /// codex asked for that to be ASSERTED rather than intended, and
-    /// <c>TheStartupNotesAreWrittenDownTests</c> does.
-    /// </remarks>
-    private static void Said(
-        PanelSettings settings, IReadOnlyList<Server.StorageNote> storage, Serilog.ILogger log)
-    {
-        foreach (var mismatch in settings.Unrecognised)
-        {
-            log.Warning("{Mismatch}", mismatch);
-        }
-
-        foreach (var note in storage)
-        {
-            log.Warning("data directory: {Note}", note.Sentence);
-        }
     }
 
     /// <summary>What the writer could not account for on the way out, said rather than swallowed.</summary>

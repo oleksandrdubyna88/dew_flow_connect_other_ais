@@ -32,11 +32,6 @@ public sealed class PanelServiceHost
     private readonly Noticing _noticing;
     private readonly Lock _gate = new();
 
-    /// <summary>
-    /// Whether the next build is the FIRST — the constructor's, whose notes startup has already said.
-    /// </summary>
-    private bool _startupBuild = true;
-
     private PanelService _current;
     private (DateTime Written, long Length) _stamp;
 
@@ -62,7 +57,7 @@ public sealed class PanelServiceHost
         _log = log;
         _noticing = noticing;
         _stamp = Stamp();
-        _current = Build();
+        _current = Build(first: true);
     }
 
     /// <summary>The service to serve this call with — rebuilt only when the file actually moved.</summary>
@@ -79,14 +74,19 @@ public sealed class PanelServiceHost
                 }
 
                 _stamp = stamp;
-                _current = Build();
+                _current = Build(first: false);
                 _log.Information("settings reloaded — the panel's file changed on disk");
                 return _current;
             }
         }
     }
 
-    private PanelService Build()
+    /// <param name="first">
+    /// Whether this is the constructor's build. A PARAMETER rather than a field somebody has to
+    /// reason about across threads: the two callers each know which they are, and the answer then
+    /// cannot be wrong for a later build because an earlier one threw. (gemini, second code round.)
+    /// </param>
+    private PanelService Build(bool first)
     {
         var dataDir = SettingsFile.DataDirFrom(_env).Path;
         var configuration = SettingsFile.Layer(
@@ -96,13 +96,9 @@ public sealed class PanelServiceHost
             // adoption could happen with nobody watching. It has a log and, since story 2.3.3, the
             // page as well. No flag guards this one: `AdoptRootSettings` yields a sentence only
             // when it actually MOVED something, so the build after an adoption says nothing.
-            note =>
-            {
-                _log.Warning("data directory: {Note}", note);
-                StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), _noticing);
-            });
+            note => StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), _noticing, _log));
         var settings = PanelSettings.FromEnvironment(configuration);
-        Reloaded(settings);
+        Reloaded(settings, first);
 
         return new PanelService(settings, _keys, _vaultReadUtc, _launcher, _log, _noticing);
     }
@@ -121,24 +117,19 @@ public sealed class PanelServiceHost
     /// <c>Program</c> has logged and written these same notes. Saying them again there would make
     /// every single start report each mismatch twice — one misconfiguration, two lines, a count of
     /// two on the page and nothing that happened twice.</para>
+    /// <para>The log line and the notice are ONE call, not two loops side by side: a diagnostic
+    /// added to one of two paths is visible in the panel and absent from the terminal, or the
+    /// reverse, and a structural test can only prove both paths exist. (codex, second code
+    /// round.)</para>
     /// <para>The disk notes are deliberately NOT re-taken here; see
     /// <see cref="StartupNotices.Unrecognised"/>.</para>
     /// </remarks>
-    private void Reloaded(PanelSettings settings)
+    private void Reloaded(PanelSettings settings, bool first)
     {
-        if (_startupBuild)
+        if (!first)
         {
-            _startupBuild = false;
-
-            return;
+            StartupNotices.Unrecognised(settings, _noticing, _log);
         }
-
-        foreach (var mismatch in settings.Unrecognised)
-        {
-            _log.Warning("{Mismatch}", mismatch);
-        }
-
-        StartupNotices.Unrecognised(settings, _noticing);
     }
 
     /// <summary>
