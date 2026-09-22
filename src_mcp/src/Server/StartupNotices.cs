@@ -48,12 +48,30 @@ internal static class StartupNotices
     internal static void Record(
         PanelSettings settings, IReadOnlyList<StorageNote> storage, Noticing noticing)
     {
+        Unrecognised(settings, noticing);
+        Storage(storage, noticing);
+    }
+
+    /// <summary>
+    /// Every setting this build could not use — the half a settings RELOAD can produce.
+    /// </summary>
+    /// <remarks>
+    /// Its own method because <see cref="PanelServiceHost.Build"/> calls it and must not call the
+    /// other one: the storage notes come from a survey of the DISK taken once at startup, and a
+    /// rebuild that re-ran it would stat a configured NAS on a settings change (issue #115). What a
+    /// reload can newly produce is a value somebody just typed. (The code round, five findings.)
+    /// </remarks>
+    internal static void Unrecognised(PanelSettings settings, Noticing noticing)
+    {
         foreach (var setting in settings.UnrecognisedSettings)
         {
             noticing.Offered(() => Note(
                 ServerNoticeCodes.UnrecognisedSetting, StoodDown, setting.Key, setting.Sentence));
         }
+    }
 
+    private static void Storage(IReadOnlyList<StorageNote> storage, Noticing noticing)
+    {
         foreach (var note in storage)
         {
             noticing.Offered(() => Note(ServerNoticeCodes.StorageNote, ClassOf(note), note.Subject, note.Sentence));
@@ -61,10 +79,30 @@ internal static class StartupNotices
     }
 
     /// <summary>
-    /// A database this side is NOT using is a stand-down; a directory being created is an outcome.
+    /// Which class each storage KIND is — a map rather than a condition, so a kind nobody has
+    /// decided about cannot pass as an outcome.
     /// </summary>
+    /// <remarks>
+    /// The first draft was <c>note.Kind == LooseDatabase ? StoodDown : Outcome</c>, and codex named
+    /// what that costs: a third kind — a permission refusal, say — would reach the extension as a
+    /// SUCCESSFUL outcome, with nothing failing anywhere to say so. The same answer story 2.3.2
+    /// gave for reviewer endings: the mapping is data, an unmapped key throws, and a census test
+    /// over the kinds this type declares is what makes the throw unreachable.
+    /// </remarks>
+    internal static IReadOnlyDictionary<string, string> ClassByKind { get; } =
+        new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [StorageNote.LooseDatabase] = StoodDown,
+            [StorageNote.NewDirectory] = Outcome,
+        };
+
     private static string ClassOf(StorageNote note) =>
-        note.Kind == StorageNote.LooseDatabase ? StoodDown : Outcome;
+        ClassByKind.TryGetValue(note.Kind, out var said)
+            ? said
+            : throw new ArgumentException(
+                $"'{note.Kind}' is a storage kind nothing has decided a class for — put it in "
+                + $"{nameof(ClassByKind)} rather than letting it reach the page as an outcome",
+                nameof(note));
 
     private static ServerNotice Note(string code, string kind, string subject, string sentence) => new()
     {
@@ -72,14 +110,25 @@ internal static class StartupNotices
         Class = kind,
         Source = Source,
         Code = code,
-        Subject = subject,
         // Cut where the record is BUILT, not only where the line is written: a notice waits in the
-        // writer's queue until then. (Story 2.2's memory rule, applied to this road.)
+        // writer's queue until then. (Story 2.2's memory rule, applied to this road.) The SUBJECT
+        // is cut for the same reason and was not — it is a path, and a path has no length anybody
+        // controls. The writer cuts at this same limit, so the grouping key is unchanged by moving
+        // the cut earlier. (gemini, on the code round.)
+        Subject = Shorter(subject),
         Title = Shorter(sentence),
+        // These sentences put an unbounded VALUE at the front and the instruction at the back, so a
+        // cut takes the actionable half and leaves no sign that it did. The detail keeps it — four
+        // times the room — and the title says it was cut. (codex, on the code round.)
+        Detail = Cut(sentence) ? sentence : "",
     };
 
-    private static string Shorter(string sentence) =>
-        sentence.Length <= Redaction.TitleLimit ? sentence : sentence[..Redaction.TitleLimit];
+    /// <summary>Whether a sentence is longer than a title is allowed to be.</summary>
+    private static bool Cut(string text) => text.Length > Redaction.TitleLimit;
+
+    /// <summary>The sentence, or as much of it as fits with a mark saying the rest was cut.</summary>
+    private static string Shorter(string text) =>
+        Cut(text) ? text[..(Redaction.TitleLimit - 1)] + "…" : text;
 
     /// <summary>
     /// One spelling per path, so the same file is one row rather than one per spelling.

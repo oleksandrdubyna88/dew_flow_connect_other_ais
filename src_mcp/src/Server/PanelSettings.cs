@@ -623,7 +623,7 @@ public sealed record PanelSettings
         // catalog and the sentences it refused join `Unrecognised`. Calling the parser or the
         // composer again for the second half would let the two halves of one answer describe two
         // different values of the setting. (codex, story B2's second code round.)
-        WithCatalog(env, ParseRoles(env("COAI_ROLES")));
+        WithCatalog(env, ParseRoles(env(Key.Roles)));
 
     private static PanelSettings WithCatalog(Func<string, string?> env, RolesSetting roles) =>
         WithCatalog(env, roles, RoleComposition.Compose(roles.Rows));
@@ -657,9 +657,9 @@ public sealed record PanelSettings
             UnrecognisedSettings =
             [
                 .. UnknownValues(env, roles),
-                .. catalog.Dropped.Select(dropped => new UnrecognisedSetting("COAI_ROLES", dropped)),
+                .. catalog.Dropped.Select(dropped => new UnrecognisedSetting(Key.Roles, dropped)),
                 .. consultants.Complaints.Select(
-                    complaint => new UnrecognisedSetting("COAI_CONSULTANTS", complaint)),
+                    complaint => new UnrecognisedSetting(Key.Consultants, complaint)),
             ],
             Consultants = consultants.Map,
             ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
@@ -703,7 +703,7 @@ public sealed record PanelSettings
             LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
             ? effort.Trim().ToLowerInvariant()
             : "none",
-            CodeWorkspace = WorkspaceOf(env("COAI_CODE_WORKSPACE")),
+            CodeWorkspace = WorkspaceOf(env(Key.Workspace)),
             DealPlanLenses = Flag(env, "COAI_DEAL_PLAN") || Flag(env, "COAI_ROTATE_PROMPTS"),
             DealCodeLenses = Flag(env, "COAI_DEAL_CODE") || Flag(env, "COAI_ROTATE_PROMPTS"),
             PromptsPerRound = ParsePromptRounds(env("COAI_PROMPTS_PER_ROUND")),
@@ -747,7 +747,7 @@ public sealed record PanelSettings
     /// </summary>
     private static IReadOnlyList<TimeSpan> LadderFrom(Func<string, string?> env)
     {
-        if (Runners.Reviewers.RetryLadder.Parse(env("COAI_RETRY_BACKOFF")) is { Count: > 0 } ladder)
+        if (Runners.Reviewers.RetryLadder.Parse(env(Key.Backoff)) is { Count: > 0 } ladder)
         {
             return ladder;
         }
@@ -759,46 +759,71 @@ public sealed record PanelSettings
             : Runners.Reviewers.RetryLadder.Default;
     }
 
+    /// <summary>
+    /// The environment variables an unrecognised-setting notice can be ABOUT, spelled once each.
+    /// </summary>
+    /// <remarks>
+    /// Each of these was written three times — where the value is read, where the refusal is
+    /// decided, and inside the sentence a person reads — and the notice's grouping key made a
+    /// fourth. A rename that updated the reads and missed the sentence would group the page under
+    /// the new variable while telling the person about the old one, which is worse than either
+    /// alone. (codex, on story 2.3.3's code round.)
+    /// </remarks>
+    private static class Key
+    {
+        internal const string Backoff = "COAI_RETRY_BACKOFF";
+
+        internal const string Exhausted = "COAI_ON_EXHAUSTED";
+
+        internal const string Workspace = "COAI_CODE_WORKSPACE";
+
+        internal const string Roles = "COAI_ROLES";
+
+        internal const string Consultants = "COAI_CONSULTANTS";
+    }
+
     /// <summary>Every setting whose VALUE this build could not use, as one sentence each.</summary>
     /// <remarks>
-    /// One clause per key, each its own method, so this one only assembles them: the family's C#
-    /// doctrine bounds a method at four decisions and four diagnostics was already past it.
-    /// (CodeRabbit, this plan's pull request.)
+    /// <para>One clause per key, each its own method, so this one only assembles them: the family's
+    /// C# doctrine bounds a method at four decisions and four diagnostics was already past it.
+    /// (CodeRabbit, this plan's pull request.)</para>
+    /// <para>Each clause answers a LIST — empty when it has nothing to say — rather than a nullable
+    /// one filtered out afterwards with <c>OfType</c>, which is the exact shape the family's
+    /// no-null rule names. (codex, on story 2.3.3's code round.)</para>
     /// </remarks>
     private static IReadOnlyList<UnrecognisedSetting> UnknownValues(
         Func<string, string?> env, RolesSetting roles) =>
-        [.. new[] { WhyBackoff(env), WhyExhausted(env), WhyWorkspace(env), WhyRoles(roles) }
-            .OfType<UnrecognisedSetting>()];
+        [.. WhyBackoff(env), .. WhyExhausted(env), .. WhyWorkspace(env), .. WhyRoles(roles)];
 
-    private static UnrecognisedSetting? WhyBackoff(Func<string, string?> env) =>
-        env("COAI_RETRY_BACKOFF") is { Length: > 0 } backoff
+    private static IReadOnlyList<UnrecognisedSetting> WhyBackoff(Func<string, string?> env) =>
+        env(Key.Backoff) is { Length: > 0 } backoff
         && Runners.Reviewers.RetryLadder.Parse(backoff).Count == 0
-            ? new UnrecognisedSetting(
-                "COAI_RETRY_BACKOFF",
-                $"COAI_RETRY_BACKOFF is '{backoff}', which this server cannot read as a list of "
+            ? [new UnrecognisedSetting(
+                Key.Backoff,
+                $"{Key.Backoff} is '{backoff}', which this server cannot read as a list of "
               + "seconds — it is using the waits it would have used anyway. The form is "
-              + "'5,30,60,120', and one number means one retry at that interval.")
-            : null;
+              + "'5,30,60,120', and one number means one retry at that interval.")]
+            : [];
 
-    private static UnrecognisedSetting? WhyExhausted(Func<string, string?> env) =>
-        env("COAI_ON_EXHAUSTED") is { Length: > 0 } policy
+    private static IReadOnlyList<UnrecognisedSetting> WhyExhausted(Func<string, string?> env) =>
+        env(Key.Exhausted) is { Length: > 0 } policy
         && PolicyOf(policy) == StagePolicy.Human
         && !string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase)
-            ? new UnrecognisedSetting(
-                "COAI_ON_EXHAUSTED",
-                $"COAI_ON_EXHAUSTED is '{policy}', which this server does not know — it is asking a "
+            ? [new UnrecognisedSetting(
+                Key.Exhausted,
+                $"{Key.Exhausted} is '{policy}', which this server does not know — it is asking a "
               + "person instead. The panel is probably newer than this server: update it in the "
-              + "panel's Server section.")
-            : null;
+              + "panel's Server section.")]
+            : [];
 
-    private static UnrecognisedSetting? WhyWorkspace(Func<string, string?> env) =>
-        env("COAI_CODE_WORKSPACE") is { Length: > 0 } workspace && !AWorkspaceWeKnow(workspace)
-            ? new UnrecognisedSetting(
-                "COAI_CODE_WORKSPACE",
-                $"COAI_CODE_WORKSPACE is '{workspace}', which this server does not know — code "
+    private static IReadOnlyList<UnrecognisedSetting> WhyWorkspace(Func<string, string?> env) =>
+        env(Key.Workspace) is { Length: > 0 } workspace && !AWorkspaceWeKnow(workspace)
+            ? [new UnrecognisedSetting(
+                Key.Workspace,
+                $"{Key.Workspace} is '{workspace}', which this server does not know — code "
               + "reviewers are getting the diff alone, as they do by default. The values are "
-              + "'none' and 'worktree'.")
-            : null;
+              + "'none' and 'worktree'.")]
+            : [];
 
     private static bool AWorkspaceWeKnow(string workspace) =>
         string.Equals(workspace.Trim(), "none", StringComparison.OrdinalIgnoreCase)
@@ -811,14 +836,14 @@ public sealed record PanelSettings
     /// the catalog and another for the complaint could describe two different values of the setting.
     /// (codex, story B2's second code round.)
     /// </remarks>
-    private static UnrecognisedSetting? WhyRoles(RolesSetting roles) =>
+    private static IReadOnlyList<UnrecognisedSetting> WhyRoles(RolesSetting roles) =>
         roles.CouldNotBeRead
-            ? new UnrecognisedSetting(
-                "COAI_ROLES",
-                $"COAI_ROLES is not JSON this server can read — {roles.Unreadable} It is running the "
+            ? [new UnrecognisedSetting(
+                Key.Roles,
+                $"{Key.Roles} is not JSON this server can read — {roles.Unreadable} It is running the "
               + "roles it shipped with, and nothing you added is in this round. The form is an "
-              + """array of rows: [{"id":"Requirements","name":"...","stage":"result","prompts":[…]}].""")
-            : null;
+              + """array of rows: [{"id":"Requirements","name":"...","stage":"result","prompts":[…]}].""")]
+            : [];
 
     /// <summary>
     /// <c>{"Architecture":["architecture","arch-boundaries"],...}</c> — the panel's per-round
@@ -1108,7 +1133,7 @@ public sealed record PanelSettings
     /// repeat it for three roles.
     /// </remarks>
     private static PanelConfig Config(Func<string, string?> env, RoleCatalog catalog) =>
-        new(Roles: RoleGates(env, catalog), OnExhausted: PolicyOf(env("COAI_ON_EXHAUSTED")))
+        new(Roles: RoleGates(env, catalog), OnExhausted: PolicyOf(env(Key.Exhausted)))
         {
             Catalog = catalog,
         };

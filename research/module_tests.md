@@ -1587,7 +1587,7 @@ come from a missing one; a first draft passed for exactly that wrong reason.
 
 ## The startup notes reach the page, each under a subject (2026-09-22, S8 story 2.3.3)
 
-`TheStartupNotesAreWrittenDownTests` — eleven cases, and most of them are about the SUBJECT, because
+`TheStartupNotesAreWrittenDownTests` — nineteen cases, and most of them are about the SUBJECT, because
 that is where this story could have been useless while looking finished: two malformed settings are
 two subjects; two refused rows of one key share one (the accepted cost, asserted); two loose
 databases under different roots are two subjects; one path spelled two ways is one.
@@ -1596,9 +1596,27 @@ databases under different roots are two subjects; one path spelled two ways is o
 loose database as `outcome`, would pass every other case here while the extension shows the wrong
 severity.
 
-**Teeth.** Making the storage subject the kind alone turns the two-databases case red; making every
-storage note an `outcome` turns the taxonomy case red; emptying the unrecognised subject turns the
-two-settings case red.
+**The code round added eight, and four of those are a REAL host.** The settings reload is the case
+a unit test cannot reach: `Hosting()` builds a genuine `PanelServiceHost` over a temp directory,
+writes the settings file the way the panel does, and reads `Current`. That covers the mismatch
+reaching the page without a restart, the same mismatch reaching the LOG, the host's first build
+staying silent (so a start does not report everything twice), and `Current` read three times over an
+unchanged file writing nothing more — the last one is what keeps the ledger's volume bounded by
+settings EDITS rather than by tool calls.
+
+**Teeth, seven times.** Making the storage subject the kind alone turns the two-databases case red;
+making every storage note an `outcome` turns the taxonomy case red; emptying the unrecognised
+subject turns the two-settings case red. From the code round: dropping a kind from
+`StartupNotices.ClassByKind` turns the census red naming the kind (*"{new-directory} do(es) not
+match"*); restoring the `? :` default turns the unknown-kind case red (*"Expected _written to be
+empty ... but found at least one item"*); rewording one sentence's variable turns the key-drift case
+red; and starting the host with `_startupBuild = false` turns the double-report assertion red.
+
+**One of those plants proved the test, not the code.** The reload case first wrote its bad value
+AFTER constructing the host, so its "the first build says nothing" assertion passed over an empty
+settings file whatever the code did — the plant that should have reddened it stayed green. The
+value is written BEFORE the host exists now, which is the only ordering in which that assertion
+means anything.
 
 **And the log half is held structurally.** An implementation can emit the panel notice and drop the
 `log.Warning`, and every behavioural test here stays green while terminal operators silently lose

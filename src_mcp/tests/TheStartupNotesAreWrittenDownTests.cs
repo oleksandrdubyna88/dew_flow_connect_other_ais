@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Notices;
+using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
@@ -105,6 +106,37 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
     }
 
     [Fact]
+    public void EveryStorageKindThereIs_HasBeenGivenAClass()
+    {
+        // The census, not a repetition of the map: it reads the kinds off `StorageNote` itself, so
+        // a THIRD one added tomorrow fails here on the day it is added rather than reaching the
+        // page as an outcome. A switch with a default would have answered every one of them
+        // silently — story 2.3.2 learned this about reviewer endings and the same reflex applies.
+        var kinds = typeof(StorageNote)
+            .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(field => field is { IsLiteral: true, FieldType: var type } && type == typeof(string))
+            .Select(field => (string)field.GetRawConstantValue()!)
+            .ToList();
+
+        kinds.Should().HaveCountGreaterThan(1, "the census is worthless if it found nothing to count");
+        kinds.Should().OnlyContain(kind => StartupNotices.ClassByKind.ContainsKey(kind));
+    }
+
+    [Fact]
+    public void AStorageKindNobodyDecidedAbout_DoesNotReachThePageAsAnOutcome()
+    {
+        // codex: the cost of the default branch, stated as behaviour. A permission refusal invented
+        // here stands in for whatever the third kind turns out to be.
+        StartupNotices.Record(
+            With(), [new StorageNote("permission-denied", "C:/root", "this side cannot write there")],
+            Collecting);
+
+        _written.Should().BeEmpty("silence is recoverable; a refusal shown as a success is not");
+        _said.Should().ContainSingle().Which.Should().Contain("could not be written down",
+            "and the loss is said out loud, which is the boundary story 2.3.2 built");
+    }
+
+    [Fact]
     public void AnUnrecognisedSetting_IsAStandDown()
     {
         StartupNotices.Record(With(new UnrecognisedSetting("COAI_ROLES", "not JSON")), [], Collecting);
@@ -185,6 +217,109 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
     }
 
     [Fact]
+    public void ASubjectTooLongForTheLine_IsCutWhereTheRecordIsBuilt()
+    {
+        // The same rule the title has had since story 2.2, and for the same reason: a subject is a
+        // PATH, a path can be any length, and 256 queued notices each holding a long one is process
+        // held because a share stopped answering. The writer cuts at the same limit on the way out,
+        // so the grouping key is unchanged by moving the cut earlier. (gemini, on the code round.)
+        StartupNotices.Record(
+            With(),
+            [new StorageNote(StorageNote.NewDirectory, "C:/" + new string('d', 5_000), "new")],
+            Collecting);
+
+        _written.Should().ContainSingle().Which.Subject!.Length
+            .Should().BeLessThanOrEqualTo(Redaction.TitleLimit);
+    }
+
+    [Fact]
+    public void ASentenceTooLongForATitle_KeepsItsRemedyAndSaysItWasCut()
+    {
+        // codex, on the code round: an unbounded value sits at the FRONT of these sentences and the
+        // instruction at the back, so a cut takes the actionable half and leaves no sign it did.
+        var sentence = new string('x', Redaction.TitleLimit + 50)
+            + " — check COAI_DATA_DIR for a typo before recording into it.";
+
+        StartupNotices.Record(With(new UnrecognisedSetting("COAI_DATA_DIR", sentence)), [], Collecting);
+
+        var notice = _written.Should().ContainSingle().Subject;
+
+        notice.Title.Should().EndWith("…", "a reader can otherwise not tell the sentence was cut");
+        notice.Detail.Should().EndWith("before recording into it.",
+            "and the remedy — the half a front-loaded cut always takes — survives in the detail");
+    }
+
+    [Fact]
+    public void ASettingSavedMidSession_ReachesThePageWithoutARestart()
+    {
+        // The hole this story's own plan wrote down as owed, and which five reviewers across three
+        // vendors refused to leave owed: `PanelServiceHost.Build()` re-layers the settings whenever
+        // the file moves, which is what a person editing the panel DOES. Saving a bad value there
+        // used to reach the log and nothing else, so the page stayed silent until a restart —
+        // and mid-session is the likeliest moment for a bad value to appear at all.
+        // The bad value is there BEFORE the host exists, which is what makes the first assertion
+        // mean anything: startup has already said this one, and the host's own first build must
+        // not say it again. (Written the other way round first, where an empty file made it pass
+        // whatever the code did — the plant that was supposed to turn it red stayed green.)
+        Saved("""{"COAI_RETRY_BACKOFF":"soon"}""");
+        var host = Hosting();
+
+        _written.Should().BeEmpty(
+            "the host's FIRST build is startup's own, and Program has already said those — a "
+            + "second copy would make every start report each mismatch twice");
+
+        Saved("""{"COAI_RETRY_BACKOFF":"soon","COAI_CODE_WORKSPACE":"somewhere"}""");
+        _ = host.Current;
+
+        _written.Select(notice => notice.Subject).Should()
+            .Equal(["COAI_RETRY_BACKOFF", "COAI_CODE_WORKSPACE"],
+                "each under the key it is about, so ten saves of one typo stay one row with a count");
+    }
+
+    /// <summary>What the panel does when a person touches a control: rewrite the settings file.</summary>
+    private void Saved(string json) =>
+        File.WriteAllText(Path.Combine(_dir, SettingsFile.Name), json);
+
+    [Fact]
+    public void TheServiceReadAgainWithoutASettingsChange_WritesNothingMore()
+    {
+        // `Current` is read on EVERY tool call. If the notice rode there rather than on the rebuild,
+        // one permanently-bad setting would write a line per call — the volume ceiling story 2.2 set
+        // is bounded by settings EDITS, and this is what keeps it that way.
+        var host = Hosting();
+
+        Saved("""{"COAI_RETRY_BACKOFF":"soon"}""");
+        _ = host.Current;
+        _ = host.Current;
+        _ = host.Current;
+
+        _written.Should().ContainSingle("a rebuild is a settings change, not a call");
+    }
+
+    [Fact]
+    public void TheSettingsReload_SaysItToTheLogAsWellAsThePage()
+    {
+        var host = Hosting();
+
+        Saved("""{"COAI_RETRY_BACKOFF":"soon"}""");
+        _ = host.Current;
+
+        _said.Should().Contain(said => said.Contains("COAI_RETRY_BACKOFF", StringComparison.Ordinal),
+            "the terminal keeps what it had on this road too — the same decision startup made");
+    }
+
+    /// <summary>A real host over the temp directory, writing its notices into this test's list.</summary>
+    /// <remarks>
+    /// A REAL one, because what is being asserted is that the rebuild path — which only the host
+    /// runs, and only when the file's stamp moves — says what startup says. A fake would assert the
+    /// method exists, which is not the thing that was missing.
+    /// </remarks>
+    private PanelServiceHost Hosting() =>
+        new(name => name == "COAI_DATA_DIR" ? _dir.Path : null,
+            VaultKeys.None("no vault in this test"), default, new ProcessLauncher(),
+            Watching(), Collecting);
+
+    [Fact]
     public void TheStartupNotes_ReachTheLogAsWellAsThePage()
     {
         // codex, on the plan round: an implementation can emit the panel notice and drop the
@@ -201,8 +336,33 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
             "and the page gets the same events");
         serving.Should().Contain("StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), noticing);",
             "including the adoption, which happens inside the layering callback");
-        ProductionSources.FilesMentioning("StartupNotices.").Keys.Should()
-            .Equal(["src_mcp/src/Program.cs"], "one caller, and it is the startup block");
+        ProductionSources.FilesMentioning("StartupNotices.").Keys.Order().Should()
+            .Equal(
+                ["src_mcp/src/Program.cs", "src_mcp/src/Server/PanelServiceHost.cs"],
+                "two callers and no more: the startup block, and the settings RELOAD — which is "
+                + "where a person's own edit lands, and which said nothing until the code round");
+    }
+
+    [Fact]
+    public void TheKeyANoticeGroupsOn_IsTheVariableItsSentenceNamesAsWell()
+    {
+        // Not a defect — a drift guard. Each of these variables is spelled where the value is read,
+        // where the refusal is decided and inside the sentence, and the grouping key made a fourth.
+        // A rename that misses the sentence groups the page under the new variable while telling
+        // the person about the old one. (codex, on the code round; the keys are one constant each
+        // now, and this is what keeps them so.)
+        var settings = PanelSettings.FromEnvironment(name => name switch
+        {
+            "COAI_RETRY_BACKOFF" => "soon",
+            "COAI_ON_EXHAUSTED" => "carry-on",
+            "COAI_CODE_WORKSPACE" => "somewhere",
+            "COAI_ROLES" => "not json",
+            _ => null,
+        });
+
+        settings.UnrecognisedSettings.Should().HaveCount(4, "one per bad value, and no more");
+        settings.UnrecognisedSettings.Should().OnlyContain(
+            one => one.Sentence.Contains(one.Key, StringComparison.Ordinal));
     }
 
     private sealed class Sink(List<string> said) : Serilog.Core.ILogEventSink

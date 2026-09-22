@@ -1307,10 +1307,35 @@ the person cannot see which. The place is canonicalised, so one file reached as 
 two bad rows of `COAI_ROLES` are two lines with one subject. That is the same bargain story 2.2 took
 for two refusal branches in one method, and a test asserts it so it is written down.
 
-**Owed, and named in the plan rather than done quietly here:** the settings REBUILD path
-(`PanelServiceHost.Build()`) logs an adoption, never logs `Unrecognised`, and writes no notice — so a
-person who saves a bad value in the panel mid-session learns nothing until restart. It is cheap now
-that `Noticing` is threaded, but it is not "startup notes", which is what §C scopes.
+**The settings RELOAD says the same things.** This was written as *owed*, and five findings across
+three vendors on the code round refused to leave it owed — rightly: `PanelServiceHost.Build()` runs
+again whenever the panel writes the settings file, which is whenever a person changes a setting, so
+the likeliest moment for a bad value to appear was the one moment nothing said so. It now logs each
+mismatch and writes it through the same `Noticing`, and an adoption reached on that path goes out
+both ways too.
+
+Two things make it a reload rather than a second startup. The host's **first** build stays silent,
+because `Program` has already said those notes and a second copy would make every start report each
+mismatch twice — one misconfiguration, a count of two, and nothing that happened twice. And the
+**disk** notes are not re-taken: they come from a survey that stats the data directory, and a
+rebuild that re-ran it would stat a configured NAS on a settings change (issue #115). What a reload
+can newly produce is a value somebody just typed, so `StartupNotices.Unrecognised` is its own method
+and that is the one the host calls.
+
+**Two bounds and a map, from the code round.** The SUBJECT is cut at `Redaction.TitleLimit` where
+the record is built, as the title already was — it is a path, and 256 queued notices each holding an
+unbounded one is process held because a share stopped answering; the writer cuts at the same limit,
+so the grouping key is unchanged by moving the cut earlier. A sentence longer than a title keeps its
+remedy in `detail` and ends in an ellipsis, because these sentences put the unbounded VALUE at the
+front and the instruction at the back. And the storage class is a MAP (`StartupNotices.ClassByKind`)
+whose unmapped key throws, not a condition with a default: a third kind — a permission refusal, say
+— would otherwise reach the page as a successful `outcome` with nothing failing to say so. A census
+test reads the kinds off `StorageNote` itself, which is what makes that throw unreachable.
+
+**Still owed:** `Canonical` does not fold case, so a person who edits `COAI_DATA_DIR`'s casing
+between restarts gets two rows for one file — traded away because the subject is also what the panel
+DISPLAYS, and resolving the filesystem's true casing is a disk call on a directory that may be an
+unreachable mount.
 
 ## Every reviewer failure is written down, once (S8 story 2.3.2, 2026-09-22)
 
