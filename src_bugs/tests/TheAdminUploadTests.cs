@@ -219,7 +219,7 @@ public sealed class TheAdminUploadTests
             var throughAcceptAdmin = corpus.AcceptAdmin(
                 admin, month, scope => scope.Keep("CSharp", "a", "b"));
 
-            throughAccept.Should().BeOfType<Accepted<(Kept, string, bool)>.KeyNotInForce>(
+            throughAccept.Should().BeOfType<Accepted<(Kept, string, Words)>.KeyNotInForce>(
                 "an administrator is not a key row, and Accept is right to refuse one");
             throughAcceptAdmin.Kept.Should().Be(Kept.Stored, "which is why the administrator has its own path");
             corpus.Waiting(10).Should().ContainSingle("exactly one of the two wrote anything");

@@ -301,7 +301,8 @@ public sealed class TheCommentTests : IDisposable
         var second = Commented(corpus, Pair("and mine was not")).Should().ContainSingle().Subject;
 
         second.Took.Should().Be("duplicate", "it is still a success; the client may stop sending it");
-        second.Why.Should().Contain("not stored");
+        second.Why.Should().Contain("already carries a comment").And.Contain("not stored");
+        second.Why.Should().NotContain("promoted", "that is a different thing to be told");
         StoredComment(corpus).Should().Be("mine was first");
     }
 
@@ -347,7 +348,10 @@ public sealed class TheCommentTests : IDisposable
         var again = Commented(corpus, Pair("too late, but here it is")).Should().ContainSingle().Subject;
 
         again.Took.Should().Be("duplicate");
-        again.Why.Should().Contain("not stored");
+        again.Why.Should().Contain("promoted").And.Contain("not stored");
+        again.Why.Should().NotContain(
+            "already carries a comment",
+            "it carries none, and telling somebody that is a false account of where their words went");
     }
 
     /// <summary>A duplicate with NO comment says nothing extra — there is nothing to report.</summary>
@@ -358,6 +362,46 @@ public sealed class TheCommentTests : IDisposable
 
         Commented(corpus, Pair());
         Commented(corpus, Pair()).Should().ContainSingle().Subject.Why.Should().BeEmpty();
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // The store says what became of the WORDS, separately from what became of the pair.
+    // ------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Each of the four outcomes, read straight off the store rather than through a sentence.
+    /// </summary>
+    /// <remarks>
+    /// <para>These exist because a code round found a contract that lied in a way no caller could
+    /// see: the answer was a <c>bool CommentLanded</c> computed as "the row was written OR the
+    /// comment was attached", so a new pair with NO comment reported that a comment had landed. The
+    /// only caller masked it by checking the comment's length itself, so nothing anywhere went red —
+    /// and the next caller to trust the value would have told somebody their words were stored when
+    /// there were none. (Code round, codex.)</para>
+    /// <para>Asserted on <see cref="Corpus.Keep"/> directly, because that is where the contract is.
+    /// A test that could only see the refusal sentences would have the same blind spot the defect
+    /// hid in.</para>
+    /// </remarks>
+    [Fact]
+    public void TheStoreSaysWhatBecameOfTheWords()
+    {
+        using var corpus = Open();
+        var month = UtcMonth.Of(Sixteenth);
+
+        corpus.Keep("CSharp", "method_1() { }", "method_1() { lock { } }", Key, month)
+            .Words.Should().Be(Words.None, "a new pair with nothing said about it landed no words");
+        corpus.Keep("CSharp", "method_2() { }", "method_2() { lock { } }", Key, month, "mine")
+            .Words.Should().Be(Words.Stored, "a new pair carries the words it arrived with");
+        corpus.Keep("CSharp", "method_2() { }", "method_2() { lock { } }", Key, month, "mine too")
+            .Words.Should().Be(Words.AlreadySpokenFor, "and the first to speak keeps it");
+        corpus.Keep("CSharp", "method_1() { }", "method_1() { lock { } }", Key, month, "late")
+            .Words.Should().Be(Words.Stored, "a pair that had none takes the first offered");
+
+        var promoted = Corpus.IdOf("CSharp", "method_1() { }", "method_1() { lock { } }");
+        corpus.Promote(promoted, UtcInstant.Of(Sixteenth.AddHours(1))).Should().BeTrue();
+
+        corpus.Keep("CSharp", "method_1() { }", "method_1() { lock { } }", Key, month, "later still")
+            .Words.Should().Be(Words.TooLate, "there is no waiting row left to attach to");
     }
 
     // ------------------------------------------------------------------------------------------

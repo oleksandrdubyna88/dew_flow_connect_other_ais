@@ -102,11 +102,11 @@ public static class Ingest
         // The id comes BACK from the store, which derives it: two places computing one identity is
         // how they come to disagree. This one is still computed above, for the refusals that never
         // reach the store at all, and the two are asserted equal by `TheIdIsAFunctionOfThePair`.
-        var (kept, stored, landed) = scope.Keep(name, before, after, comment);
+        var (kept, stored, words) = scope.Keep(name, before, after, comment);
 
         return new UploadResult(stored,
             kept is Kept.Stored ? Took.Accepted : Took.Duplicate,
-            Lost(comment, landed));
+            Lost(words));
     }
 
     /// <summary>
@@ -118,14 +118,21 @@ public static class Ingest
     /// was: a pair that was already waiting and carried no comment takes this one, and that is a
     /// duplicate with nothing lost. (Plan round, gemini; code round, gemini again on the case where
     /// nothing could ever be attached.)</para>
-    /// <para>Two ways to end up here: somebody else's words are already on the pair, or the pair has
-    /// been promoted out of the queue and the decision it belonged to is made. Storing several would
-    /// need a comments table, which is a story of its own and not this one.</para>
+    /// <para><b>Two ways to end up here, and they are told apart.</b> Somebody else's words are
+    /// already on the pair, or the pair has been promoted out of the queue and the decision it
+    /// belonged to is made. One sentence for both said "already carries a comment" to a person whose
+    /// pair carried none, which is a false explanation of where their words went. (Code round,
+    /// codex.) Storing several would need a comments table, a story of its own and not this one.
+    /// </para>
     /// </remarks>
-    private static string Lost(string comment, bool landed) =>
-        comment.Length > 0 && !landed
-            ? "this pair is already held and already carries a comment, so yours was not stored"
-            : string.Empty;
+    private static string Lost(Words words) => words switch
+    {
+        Words.AlreadySpokenFor =>
+            "this pair already carries a comment, and the first one stays, so yours was not stored",
+        Words.TooLate =>
+            "this pair has already been promoted into the corpus, so your comment was not stored",
+        _ => string.Empty,
+    };
 
     /// <summary>Why this pair may not be stored at all — the two whitelists, in their order.</summary>
     /// <remarks>

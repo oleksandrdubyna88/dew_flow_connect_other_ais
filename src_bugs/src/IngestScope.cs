@@ -38,7 +38,7 @@ public sealed class IngestScope
     /// a row written before comments existed, which is why the column is <c>NOT NULL DEFAULT ''</c>
     /// rather than nullable: no reader anywhere needs a null check.
     /// </param>
-    public (Kept Kept, string EntryId, bool CommentLanded) Keep(
+    public (Kept Kept, string EntryId, Words Words) Keep(
         string language, string before, string after, string comment = "")
     {
         MustBeOpen();
