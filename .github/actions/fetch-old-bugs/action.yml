@@ -1,0 +1,57 @@
+# The PREVIOUS released `coai-bugs`, fetched so that one test can run it.
+#
+# A comment travels on a POST route an older server does not have, and the only thing that can be
+# asked about a binary built weeks ago is that binary — everything else in the suite is two halves
+# of one checkout agreeing with each other. `TheBuiltBinariesTests.OldServer` runs it and asserts
+# both halves: 404 on the new route, and the same document accepted on the old one with nowhere to
+# put the field.
+#
+# THE TAG IS PINNED, and the test pins the archive's SHA-256 and verifies it before extracting
+# anything: "whatever is newest" would one day fetch a build that HAS the route and pass by agreeing
+# with itself. Bump both together when the promise is re-made against a newer floor.
+#
+# A composite action rather than the same six lines in three workflows: the ingest suite runs in
+# `ci.yml`, `sonarcloud.yml` and `release.yml`, and the test FAILS on CI when the variable is unset —
+# so a copy that drifts is a red build in one workflow and not the others.
+name: Fetch the previous ingest server
+description: >-
+  Downloads the pinned previous coai-bugs release archive and exports
+  COAI_BUGS_OLD_ARCHIVE for the ingest test suite.
+
+inputs:
+  token:
+    description: A token that may read this repository's releases.
+    required: true
+  repository:
+    description: The repository to download the release from.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Download bugs-v0.2.0 for this runner's architecture
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        REPOSITORY: ${{ inputs.repository }}
+      run: |
+        set -euo pipefail
+        tag='bugs-v0.2.0'
+        # THE RUNNER'S OWN ARCHITECTURE, because the release job is a matrix and one leg of it is
+        # `ubuntu-24.04-arm`. An x64 archive there unpacks perfectly and then will not execute, with
+        # an error that reads as a missing binary. The test pins a hash per architecture and picks
+        # the same way.
+        case "$(uname -m)" in
+          x86_64) rid='linux-x64' ;;
+          aarch64 | arm64) rid='linux-arm64' ;;
+          *) echo "no coai-bugs archive is published for $(uname -m)" >&2; exit 1 ;;
+        esac
+        archive="coai-bugs-${tag#bugs-v}-${rid}.tar.gz"
+        into="${RUNNER_TEMP}/old-bugs"
+        mkdir -p "${into}"
+        gh release download "${tag}" \
+          --repo "${REPOSITORY}" \
+          --pattern "${archive}" \
+          --dir "${into}" \
+          --clobber
+        echo "COAI_BUGS_OLD_ARCHIVE=${into}/${archive}" >> "${GITHUB_ENV}"

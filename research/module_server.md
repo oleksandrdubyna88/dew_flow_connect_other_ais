@@ -1920,7 +1920,7 @@ them through the same three-table join `BugsQuery` already uses, into **`ReviewP
 `fixSha`, `file`, `line`, `why`, `fix`.
 
 **Why a second record and not a wider `StoredPair`.** `UploadRun.Wire` is a function OF
-`StoredPair`, and `OnlyThreeFieldsLeaveTests` constructs that record by name to prove what the
+`StoredPair`, and `OnlyFourFieldsLeaveTests` constructs that record by name to prove what the
 mapping leaves behind. Widening it would have routed a repository path, a file and the reviewers'
 prose through the very type the send reads — an edit that reads like a simplification and is the
 one that test exists to refuse. So `Sendable()` still answers the narrow record, `Wire` still takes
@@ -2014,8 +2014,10 @@ or never there, and the page says which of the two a person should think about.
 **`RoundsDb.Pair(findingId)`** is the page's projection for ONE row — the same sixteen columns as
 `Pairs()`, through one shared SELECT constant (`ThePagesRow`), by finding id — because a pair past
 the page's limit would otherwise be unreadable, and two hundred rows for one is the wrong shape.
-`Sendable()`, `StoredPair`, `UploadRun.Wire`, `OnlyThreeFieldsLeaveTests` and `NormalizeAnswer` are
-byte-identical to what they were: real source never reaches the type whose `Leaks` contract is the
+`Sendable()`, `StoredPair`, `UploadRun.Wire`, the wire guard and `NormalizeAnswer` were left
+byte-identical **by that story** — the guard has since been widened once and renamed
+`OnlyFourFieldsLeaveTests`, for the comment and for nothing else. Real source never reaches the type
+whose `Leaks` contract is the
 proof that no real source survived, which is why the answer is a fourth record rather than a wider
 third.
 
@@ -3295,12 +3297,23 @@ is worth exactly what it lets through.
 
 ### Three fields cross
 
-`UploadedPair` is the language and the two skeletons. `StoredPair` carries the finding id, the
-symbol, the severity, the category and the title, and every one of them must never leave — a
-story-5 code round flagged reusing it here as the obvious way to leak all five in one edit that
-reads like a simplification. `OnlyThreeFieldsLeaveTests` names the three rather than counting them,
-because a count passes when somebody swaps one for `SymbolName`; adding the symbol back turns two
-tests red, one of them by finding the name in the serialised body.
+`UploadedPair` is the language, the two skeletons and — since 2026-09-21 — a contributor's own
+`Comment`. `StoredPair` carries the finding id, the symbol, the severity, the category and the
+title, and every one of them must never leave — a story-5 code round flagged reusing it here as the
+obvious way to leak all five in one edit that reads like a simplification.
+`OnlyFourFieldsLeaveTests` names the four rather than counting them, because a count passes when
+somebody swaps one for `SymbolName`; adding the symbol back turns two tests red, one of them by
+finding the name in the serialised body.
+
+**The guard was widened ONCE, and the difference in kind is the reason.** The five it still refuses
+are DERIVED from somebody's repository and are anonymised before they leave; a comment is typed by a
+person into a box that says, beside it, that it leaves the machine unanonymised — public by the
+operator's decision of 2026-09-18. The test went red on the widening before it was changed, the
+file and class were renamed with it (a test called "three" asserting four is the drift it exists to
+refuse), and it gained
+`APairWithoutACommentIsByteIdenticalToTheWireBeforeComments`, which compares against bytes captured
+from the build that predates the field. A null comment is omitted by `WhenWritingNull`, so every
+deployed server keeps receiving exactly what it received before until somebody types.
 
 **The id is derived, not sent.** The plan first promised idempotency on a client-generated entry id
 AND that only three fields cross; two reviewers said both cannot hold. Both do when the id is a pure
@@ -3757,6 +3770,68 @@ connection is what makes a transaction here mean what it says.
 **A pair is marked only on an acknowledgement.** Marked when the batch left, it would be skipped for
 ever if the reply never came. A transport failure marks nothing; a refusal is marked as refused
 rather than sent, because retrying produces the same answer and hides a defect in our normaliser.
+
+### A comment arrives by a door older binaries do not have (2026-09-22, story 4.1)
+
+A pair may now carry a fourth field: what the person reviewing it wrote about it. It is **public by
+the contributor's own decision** (the operator, 2026-09-18) — so nothing scans it, nothing scrubs it,
+and the page that will offer the box says beside it that it leaves the machine unanonymised.
+
+**The route is the mechanism, and a capability probe was rejected for a measured reason.** `BugsJson`
+declares only a naming policy, so a server built before this accepts a four-field pair, drops the
+comment in silence and answers `accepted`. A probe cannot close that: during a rollout it reaches one
+node while the POST reaches another, and by the time the client learns anything the words are gone
+and a retry is answered `duplicate`. So a comment travels on **`POST /ingest/commented`**, which such
+a binary answers **404** — nothing written, nothing lost, and no ordering of deployments that opens a
+window. `IngestGate` admits the new path behind the same bearer key, still POST-only.
+`UploadAnswer.Contract` states which contract answered, as a belt against a proxy answering 200 for a
+route the server does not really have.
+
+**And the new server never drops one either.** `POST /ingest` REFUSES a pair that carries a comment,
+per item, naming the path that keeps it, writing nothing — so the batch can simply be resent. Three
+code-round reviewers asked for that and were right: a new server quietly discarding the field is the
+same failure an old one commits, in the place nobody is watching for it. A pair with **no** comment
+is byte-for-byte unaffected on either route, which a fixture captured before the field existed
+asserts.
+
+**Where it is kept.** Schema step 5 adds `comment TEXT NOT NULL DEFAULT ''` to `quarantine` **and**
+`corpus` in one step: SQLite rewrites no rows for a constant default, so every pair already waiting
+reads back as having no comment and no reader needs a null check, and a comment that survived
+quarantine but vanished at promotion would be the corpus losing the only words anybody wrote about a
+pair at the moment somebody decided it was worth keeping. A rollback leaves the column in place and
+unread; what it removes is the ROUTE, which is the right thing to lose.
+
+**The identity does not move.** `PairId.Of` still derives an entry id from exactly the three machine
+fields. If a comment entered it, every row already stored would change identity, acknowledgement
+matching would break against all of them, and two people who found the same defect would stop
+deduplicating. The consequence is that one skeleton pair is one row — so `Corpus.Keep` answers a
+third value, `Words`, saying what became of the sentence separately from what became of the pair:
+
+| `Words` | when | what the contributor is told |
+|---|---|---|
+| `None` | there was no comment | nothing |
+| `Stored` | written with a new pair, or attached to a waiting one that had none | nothing; it landed |
+| `AlreadySpokenFor` | the pair already carries somebody else's words | *this pair already carries a comment, and the first one stays* |
+| `TooLate` | the pair has been promoted out of the queue | *this pair has already been promoted into the corpus* |
+
+`Attach` is what makes the second row possible — an `UPDATE … WHERE comment = ''` inside the batch's
+transaction, separate from the INSERT so that the rows-affected which distinguishes a new pair from a
+duplicate cannot be confused by it. Without it no pair that was **already** waiting could ever gain a
+comment, and on the day this ships that is every pair.
+
+**What is refused, and it is refused rather than trimmed.** `CommentRule` (in the shared core, so both
+halves compile against one rule) takes at most 1 000 UTF-16 code units and every scalar value except
+C0/C1 controls other than LF and TAB, the bidirectional controls, and unpaired surrogates — naming the
+length or the code point, never the content, because a refusal is also a thing that gets logged. A
+scrubbed comment is text the person did not write. The alphabet whitelist deliberately does **not**
+run over the comment, and a test asserts a word refused in a skeleton is accepted in a comment, so the
+decision cannot be undone by widening the whitelist. The bidi list is written as `\u` escapes: it was
+first spelled in the characters themselves, where every literal renders as empty quotes — unreadable
+in review, and silently emptied by any tool that strips them.
+
+**Where the operator sees it.** `--waiting` prints the comment's first line under its pair, truncated
+with an ellipsis when there is more; `--promote` prints it **whole**, because deciding to keep a pair
+is exactly the moment somebody wants everything that was said about it.
 
 ## The tool description is a delivery channel, not documentation (2026-09-17)
 

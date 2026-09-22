@@ -210,7 +210,7 @@ public sealed class TheRealMethodTests : IAsyncLifetime
     /// <remarks>
     /// <para>Two assertions, and they are not the same test. The FILE being identical proves the
     /// read wrote nothing. The serialised <c>UploadRequest</c> being identical — through the run's
-    /// own <c>Wire</c>, reached by reflection as <c>OnlyThreeFieldsLeaveTests</c> reaches it — is the
+    /// own <c>Wire</c>, reached by reflection as <c>OnlyFourFieldsLeaveTests</c> reaches it — is the
     /// plan's byte-level property: view on and view off, the bytes a send would put on the wire are
     /// the same bytes. And the third line is the leak test proper: the answer this test just read
     /// CONTAINS the real names, and the wire does not.</para>

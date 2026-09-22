@@ -1,0 +1,9 @@
+{
+  "items": [
+    {
+      "language": "CSharp",
+      "skeletonBefore": "method_1() { }",
+      "skeletonAfter": "method_1() { lock (var_1) { } }"
+    }
+  ]
+}

@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text;
+using CoaiMcp.Core.Collecting;
 using FluentAssertions;
 using Xunit;
 
@@ -220,8 +221,125 @@ public sealed class TheRouteTests
         reply.IsSuccessStatusCode.Should().BeFalse("the body limit is what stops a batch nobody reads");
     }
 
+    // ------------------------------------------------------------------------------------------
+    // The commented route — a door an older binary does not have.
+    // ------------------------------------------------------------------------------------------
+
+    /// <summary>The comment binds through the real AOT context and lands in the column.</summary>
+    /// <remarks>
+    /// `Ingest.Take` is unit-tested with a comment, and that proves nothing about the WIRE: a
+    /// property the serializer context does not know is dropped in silence, which is the exact
+    /// failure this whole route exists to prevent. Only a real request can see it.
+    /// </remarks>
+    [Fact]
+    public async Task ACommentedRequestBindsAndTheCommentIsStored()
+    {
+        using var server = new BugsServer();
+        using var http = server.CreateClient();
+        var (key, _) = server.IssueKey();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
+
+        var reply = await http.PostAsJsonAsync(
+            "/ingest/commented", Said, TestContext.Current.CancellationToken);
+
+        reply.StatusCode.Should().Be(HttpStatusCode.OK);
+        var answer = await reply.Content.ReadFromJsonAsync<Answer>(TestContext.Current.CancellationToken);
+        answer!.Items.Should().ContainSingle().Which.Took.Should().Be("accepted");
+
+        using var corpus = server.Reading();
+        corpus.Waiting(10).Should().ContainSingle()
+            .Which.Comment.Should().Be("this one bit us in production");
+    }
+
+    /// <summary>
+    /// And the plain route REFUSES a comment it is handed. THE mechanism, in one assertion.
+    /// </summary>
+    /// <remarks>
+    /// Two routes that behaved identically would be one route with two names, and the only thing
+    /// keeping a comment out of a server too old to store it would be an accident of deployment
+    /// order. Here the difference is the code's, and it is the same difference an old binary's 404
+    /// enforces from the other side — with the refusal per ITEM, so the batch is still a 200 and a
+    /// pair without a comment beside it still lands.
+    /// </remarks>
+    [Fact]
+    public async Task ThePlainRouteRefusesAPairThatCarriesAComment()
+    {
+        using var server = new BugsServer();
+        using var http = server.CreateClient();
+        var (key, _) = server.IssueKey();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
+
+        var reply = await http.PostAsJsonAsync("/ingest", Said, TestContext.Current.CancellationToken);
+
+        reply.StatusCode.Should().Be(
+            HttpStatusCode.OK, "a refusal is an item's fate, not the batch's");
+        var answer = await reply.Content.ReadFromJsonAsync<Answer>(TestContext.Current.CancellationToken);
+        answer!.Items.Should().ContainSingle().Which.Took.Should().Be("refused");
+        answer.Items[0].Why.Should().Contain("/ingest/commented");
+
+        using var corpus = server.Reading();
+        corpus.Waiting(10).Should().BeEmpty("nothing is written, so the batch can be resent");
+    }
+
+    /// <summary>The new route is behind the same key as the old one.</summary>
+    /// <remarks>
+    /// A route added beside the gate rather than behind it would let anybody write into somebody
+    /// else's corpus — and `WhoOf` would throw on a request that carried no key at all, turning the
+    /// hole into a 500 rather than a 401.
+    /// </remarks>
+    [Fact]
+    public async Task TheCommentedRouteWithoutAKeyTakesNothing()
+    {
+        using var server = new BugsServer();
+        using var http = server.CreateClient();
+
+        var reply = await http.PostAsJsonAsync(
+            "/ingest/commented", Said, TestContext.Current.CancellationToken);
+
+        reply.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        using var corpus = server.Reading();
+        corpus.Waiting(10).Should().BeEmpty();
+    }
+
+    /// <summary>Both routes state which contract answered, on every answer.</summary>
+    /// <remarks>
+    /// The belt behind the route: a proxy that answers 200 for a path the server does not really
+    /// have cannot also produce this number, so a client that checks it refuses to mark a batch
+    /// somebody else answered.
+    /// </remarks>
+    [Theory]
+    [InlineData("/ingest")]
+    [InlineData("/ingest/commented")]
+    public async Task EveryAnswerSaysWhichContractAnsweredIt(string route)
+    {
+        using var server = new BugsServer();
+        using var http = server.CreateClient();
+        var (key, _) = server.IssueKey();
+        http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", key);
+
+        var reply = await http.PostAsJsonAsync(route, Good, TestContext.Current.CancellationToken);
+
+        var answer = await reply.Content.ReadFromJsonAsync<Answer>(TestContext.Current.CancellationToken);
+        answer!.Contract.Should().Be(Contract.Comments);
+    }
+
+    /// <summary>The same pair as <see cref="Good"/>, with words a person typed about it.</summary>
+    private static readonly object Said = new
+    {
+        items = new[]
+        {
+            new
+            {
+                language = "CSharp",
+                skeletonBefore = "method_1(var_1) { }",
+                skeletonAfter = "method_1(var_1) { lock (var_2) { } }",
+                comment = "this one bit us in production",
+            },
+        },
+    };
+
     /// <summary>The answer's shape, as a reader of it sees it.</summary>
-    private sealed record Answer(IReadOnlyList<Item> Items);
+    private sealed record Answer(IReadOnlyList<Item> Items, int Contract = 0);
 
     private sealed record Item(string EntryId, string Took, string Why);
 }

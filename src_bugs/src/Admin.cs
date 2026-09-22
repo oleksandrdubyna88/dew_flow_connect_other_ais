@@ -239,17 +239,69 @@ internal static class Admin
         }
 
         Say($"promoted [{moving.Language}] {First(moving.Before)}");
+        if (moving.Comment.Length > 0)
+        {
+            // WHOLE, not the listing's one-line preview. `--waiting` shows many pairs and has to
+            // keep each one scannable; this shows ONE, and a person who has decided to keep a pair
+            // is exactly the person who wants everything that was said about it. Without this there
+            // was no way to read a long comment at all short of opening the database by hand — the
+            // plan promised a command that prints it whole and there is none. (Code round, codex.)
+            Say("the contributor said:");
+            Console.Out.WriteLine(moving.Comment);
+        }
         Say($"the corpus now holds {corpus.Held()}");
 
         return 0;
     }
 
-    /// <summary>A skeleton's first line, which is what identifies it to a person.</summary>
+    /// <summary>A skeleton's — or a comment's — first line, which is what identifies it to a person.</summary>
+    /// <remarks>
+    /// <b>One row per line, which is why a comment may hold LF and still be printed here.</b> The
+    /// charset rule refuses C0 controls precisely because they corrupt this listing, and then allows
+    /// the one control that would wrap a row onto the next — because a person writing two sentences
+    /// about a defect will press Enter, and refusing that would be the product arguing with the one
+    /// thing it asked for. So the listing takes the first line and says, with the ellipsis, that
+    /// there is more. Nothing else needs escaping: every character that could forge a row was
+    /// already refused at ingest.
+    /// </remarks>
     private static string First(string skeleton)
     {
         var line = skeleton.Split('\n')[0].Trim();
 
         return line.Length > 72 ? line[..72] + "…" : line;
+    }
+
+    /// <summary>One waiting pair on the operator's terminal: both skeletons, then what was said.</summary>
+    /// <remarks>
+    /// To stdout, where the skeletons already went — this is the command's ANSWER, and `Say` is for
+    /// the sentences about it. Split out of <see cref="Waiting"/> to stay inside the cyclomatic
+    /// bound the C# doctrine sets at four.
+    /// </remarks>
+    private static void Show(
+        (string EntryId, string Language, string Before, string After, string Comment) pair)
+    {
+        Console.Out.WriteLine($"--- {pair.EntryId}  [{pair.Language}]");
+        Console.Out.WriteLine(pair.Before);
+        Console.Out.WriteLine("  ->");
+        Console.Out.WriteLine(pair.After);
+        if (pair.Comment.Length > 0)
+        {
+            Console.Out.WriteLine($"  said: {Said(pair.Comment)}");
+        }
+    }
+
+    /// <summary>A comment as ONE row: its first line, and an ellipsis when there is more of it.</summary>
+    /// <remarks>
+    /// "More" is more LINES as well as more characters, which <see cref="First"/> alone cannot say:
+    /// a comment may legally hold LF, so a row that stopped at the first newline would read as the
+    /// whole of what somebody wrote. Whoever wants all of it promotes the pair, or reads the column.
+    /// </remarks>
+    private static string Said(string comment)
+    {
+        var line = First(comment);
+        var more = comment.Trim().Length > line.Length;
+
+        return more && !line.EndsWith('…') ? line + "…" : line;
     }
 
     /// <summary>What is waiting for somebody to read it.</summary>
@@ -275,12 +327,9 @@ internal static class Admin
         // number arrived after the scrollback had already gone past. (Code round, codex/local.)
         Say($"{total} waiting; showing {waiting.Count} from {skip}");
 
-        foreach (var (id, language, before, after) in waiting)
+        foreach (var pair in waiting)
         {
-            Console.Out.WriteLine($"--- {id}  [{language}]");
-            Console.Out.WriteLine(before);
-            Console.Out.WriteLine("  ->");
-            Console.Out.WriteLine(after);
+            Show(pair);
         }
 
         Say(skip + waiting.Count < total

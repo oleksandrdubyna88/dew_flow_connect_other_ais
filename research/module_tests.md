@@ -438,8 +438,9 @@ does. After the record existed: the session's `LEFT JOIN` made a plain `JOIN` tu
 both the typed and the JSON test red with `"aaaa111"` where `"bbbb222"` belonged. That fixture also
 corrected a belief: Microsoft.Data.Sqlite turns foreign keys ON for every connection it opens, so
 the product cannot orphan a round — the `sqlite3` shell can, with foreign keys OFF by default, and
-the test deletes the session the way that shell would. `OnlyThreeFieldsLeaveTests` is unmodified
-and green; `TheWhereAndTheWhyAreOnThePagesRecord_AndNeverOnTheSends` pins on the types that the
+the test deletes the session the way that shell would. The wire guard was unmodified by THAT story
+and green (it was `OnlyThreeFieldsLeaveTests` then; the comment story later widened and renamed it
+to `OnlyFourFieldsLeaveTests`); `TheWhereAndTheWhyAreOnThePagesRecord_AndNeverOnTheSends` pins on the types that the
 seven page fields exist on `ReviewPair` and on nothing `Sendable()` returns.
 
 **Counts on 2026-09-18, on this branch.** Extension: `tsc` exit 0, then 3 791 tests — 3 790 passed,
@@ -589,10 +590,12 @@ transport, so `Ranking.Order` is exercised and nothing produces a real reply for
 | `TheAlphabetTests` | the real normaliser over this repository's OWN files | a whitelist too narrow (it found two) or too wide |
 | `TheKeywordsAreOneListTests` | the grammars | a keyword list gone stale after a grammar bump |
 | `TheIngestTests` | the pure decisions | a refusal that strands its neighbours; a leak that is stored |
-| `TheRouteTests` | the REAL server in-process | the AOT JSON binding, the bearer header, the 401, the caps |
-| `OnlyThreeFieldsLeaveTests` | the mapping and the serialiser | the symbol, the id or the finding's prose crossing |
+| `TheCommentTests` | a contributor's own words | a comment scrubbed, scanned, lost at promotion, or read on the route that must ignore it |
+| `TheRouteTests` | the REAL server in-process | the AOT JSON binding, the bearer header, the 401, the caps, the two ingest routes really differing |
+| `OnlyFourFieldsLeaveTests` | the mapping and the serialiser | the symbol, the id or the finding's prose crossing; a comment-less wire that stopped being byte-identical |
 | `BothHalvesTests` | the REAL client against the REAL server | the two halves disagreeing about an id, a word, or a document |
 | `TheBuiltBinariesTests` | two real PROCESSES over a real socket | a publish, trimming or embedded-resource defect; an exit code; the field's file not migrated; a 429 without its number; a revoke that stops nothing; two servers on one directory |
+| `TheBuiltBinariesTests.OldServer` | the PREVIOUS RELEASE, `bugs-v0.2.0`, pinned by tag and by SHA-256 per architecture and verified before it is executed | the belief that an old binary has no route for a comment; **the only test here that is not two halves of one checkout agreeing with each other.** CI fetches the archive through `.github/actions/fetch-old-bugs`; unset, it skips locally and FAILS on CI, because a silently skipped check is a silently deleted one |
 | `TheEdgeIsWatchedTests` | the running server, reading what it LOGGED | a misconfigured edge going unnoticed; the address reaching a log |
 | `WhatTheArgumentsMeanTests` | the argument rules, in-process | 64 answered for a mode this binary has, or withheld for one it does not |
 | `TheKeywordListIsCheckedTests` | the startup guard | a binary that starts, passes the smoke, and refuses every pair |

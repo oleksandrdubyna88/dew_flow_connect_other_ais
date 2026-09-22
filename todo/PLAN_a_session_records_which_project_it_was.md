@@ -72,7 +72,7 @@ process that is already being started.
 ## The seam this must NOT cross
 
 Story 2.1's boundary holds here too: `Sendable()`, `StoredPair` and `UploadRun.Wire` are the UPLOAD's
-types and must stay byte-identical, guarded by `OnlyThreeFieldsLeaveTests`. A project identity is a
+types and must stay byte-identical, guarded by `OnlyFourFieldsLeaveTests`. A project identity is a
 repository URL — it names a person's private repository, and it must not reach the ingest server.
 It belongs only in `ReviewPair`, the page-facing record.
 
@@ -96,7 +96,7 @@ It belongs only in `ReviewPair`, the page-facing record.
 |---|---|
 | `projectIdentity.test.ts` | a recorded identity ignored in favour of the filesystem; a legacy row with no identity losing the fallback |
 | a new `TheSessionIdentityTests` (`src_mcp`) | a repository with no remote recorded as empty rather than as its path; two clones answering different identities; the identity read from a directory that is not the session's |
-| `OnlyThreeFieldsLeaveTests` | **unmodified** — the upload must not learn a repository URL |
+| `OnlyFourFieldsLeaveTests` | **unmodified** — the upload must not learn a repository URL |
 | `bugzLiveContract.test.ts` | the field absent from an older server's document read as `''` rather than as malformed |
 
 ## Definition of Done
@@ -106,7 +106,7 @@ It belongs only in `ReviewPair`, the page-facing record.
 - [ ] Legacy sessions (every one that exists today) still group by the story 2.2 rule, and its tests
       are untouched.
 - [ ] The extension still spawns no process.
-- [ ] `OnlyThreeFieldsLeaveTests` and the three upload types are byte-identical.
+- [ ] `OnlyFourFieldsLeaveTests` and the upload types are byte-identical.
 - [ ] `research/module_server.md` and `module_extension.md` record the column, the write and the
       precedence; this plan is promoted per
       [planning-docs.md](../.agents/conventions/common/planning-docs.md).

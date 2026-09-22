@@ -7986,7 +7986,8 @@ back into the page. `revisionActions.ts` renders the two buttons and their notes
 `RevisionState` and is pure; `openAtRevision.ts` decides the state and the guard and is free of
 `vscode`; `revisionOpen.ts` is the two editor calls and nothing else, and is listed in
 `sonar.coverage.exclusions` beside every other module that imports the editor. `StoredPair`,
-`Sendable()`, `UploadRun.Wire`, `OnlyThreeFieldsLeaveTests` and `NormalizeAnswer` are untouched:
+`Sendable()`, `UploadRun.Wire`, the wire guard (now `OnlyFourFieldsLeaveTests`) and
+`NormalizeAnswer` were untouched **by this story**:
 this story sends nothing.
 
 **Deviations from the story's brief, found by reading the code.** (1) There is no caller-supplied

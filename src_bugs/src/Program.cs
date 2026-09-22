@@ -238,6 +238,25 @@ internal sealed class Program
             (UploadRequest? request, HttpContext http, TimeProvider clock) =>
                 Judged(corpus, ready.Keywords, request, IngestGate.WhoOf(http), clock, limiter));
 
+        // THE ROUTE IS THE MECHANISM, and it is why there is no capability probe.
+        //
+        // A comment must never be dropped in silence, and a server older than 2026-09-21 would drop
+        // one: `BugsJson` declares only a naming policy, so System.Text.Json skips a member it does
+        // not know and the pair is accepted without it. Asking such a server whether it takes
+        // comments cannot help — the answer and the POST can reach different nodes during a rollout,
+        // and by the time the client learns anything the comment is gone and a retry is answered
+        // `duplicate`. (Plan round, codex.)
+        //
+        // So a comment travels on a route an old binary does not HAVE. Its refusal is a 404: nothing
+        // written, nothing lost, and no ordering of deployments can produce a window. `/ingest` is
+        // untouched — same route, same behaviour, and byte-identical requests for a batch with no
+        // comment in it.
+        app.MapPost(
+            "/ingest/commented",
+            (UploadRequest? request, HttpContext http, TimeProvider clock) =>
+                Judged(corpus, ready.Keywords, request, IngestGate.WhoOf(http), clock, limiter,
+                    commented: true));
+
         await app.RunAsync();
 
         return 0;
@@ -416,13 +435,19 @@ internal sealed class Program
     /// was read; what is left to decide here is the body (400) and the work. The key is checked once
     /// more INSIDE the write transaction, because a revoke can commit between the gate and the write.
     /// </remarks>
+    /// <param name="commented">
+    /// Whether the request arrived on <c>/ingest/commented</c>. Only that route reads a comment; a
+    /// pair posted to <c>/ingest</c> is stored without one however it was serialised, so the two
+    /// routes really do differ and a test asserts exactly that.
+    /// </param>
     private static Answered Judged(
         Corpus corpus,
         IReadOnlyDictionary<string, IReadOnlySet<string>> keywords,
         UploadRequest? request,
         Uploader uploader,
         TimeProvider clock,
-        RateLimiter limiter)
+        RateLimiter limiter,
+        bool commented = false)
     {
         if (request?.Items is not { } items)
         {
@@ -435,7 +460,7 @@ internal sealed class Program
                 new Problem($"a batch carries at most {Ingest.MostPerBatch} pairs"));
         }
 
-        return Taken(corpus, uploader, UtcMonth.Now(clock), limiter, scope => Ingest.Take(scope, items, keywords));
+        return Taken(corpus, uploader, UtcMonth.Now(clock), limiter, scope => Ingest.Take(scope, items, keywords, commented));
     }
 
     /// <summary>Stores the batch down the path its credential belongs to.</summary>

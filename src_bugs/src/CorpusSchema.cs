@@ -21,7 +21,33 @@ internal static class CorpusSchema
 {
     /// <summary>The steps, in the order every file runs them. Append; never reorder, never edit.</summary>
     internal static readonly string[] Steps =
-        [Tables, WhoUsedItAndWhoAdministeredIt, TheMonthAPairArrived, WhatEachKeyHasWaiting];
+        [Tables, WhoUsedItAndWhoAdministeredIt, TheMonthAPairArrived, WhatEachKeyHasWaiting,
+         TheContributorsWords];
+
+    /// <summary>
+    /// Step 5 — what a contributor typed, on both tables. Appended 2026-09-21.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>A comment is PUBLIC</b>, by the operator's decision of 2026-09-18: *a comment a
+    /// person wrote is public; it goes everywhere, including to the server, for storage and later
+    /// processing.* It is stored verbatim, never scanned and never scrubbed, and the page that
+    /// offers the box says so beside it. It is the one column here that a person typed rather than a
+    /// normaliser produced.</para>
+    /// <para><b><c>NOT NULL DEFAULT ''</c> rather than nullable</b>, and that choice is what makes
+    /// the upgrade and the rollback both safe. SQLite rewrites no rows for an ADD COLUMN with a
+    /// constant default, so every pair already in quarantine or in the corpus reads back an empty
+    /// comment — which is exactly *no comment*, indistinguishable from a new pair without one, and
+    /// no reader anywhere needs a null check. Rolling the binary back leaves the column in place and
+    /// unread; comments written in between survive and reappear. What a rollback removes is the
+    /// ROUTE, which is the right thing to lose: an older binary answers 404 and the client refuses
+    /// to send rather than sending into a version that would drop it.</para>
+    /// <para>On BOTH tables in one step, because a comment that survives quarantine and vanishes at
+    /// promotion would be the corpus quietly losing the only words a person wrote.</para>
+    /// </remarks>
+    internal const string TheContributorsWords = """
+        ALTER TABLE quarantine ADD COLUMN comment TEXT NOT NULL DEFAULT '';
+        ALTER TABLE corpus     ADD COLUMN comment TEXT NOT NULL DEFAULT '';
+        """;
 
     /// <summary>
     /// Step 4 — an index on <c>quarantine.key_id</c>, because the Users tab asks for it per key.

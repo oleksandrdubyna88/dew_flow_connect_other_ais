@@ -23,6 +23,34 @@ public enum Kept
 }
 
 /// <summary>
+/// What became of the words a contributor sent with a pair — which is not the pair's own fate.
+/// </summary>
+/// <remarks>
+/// <para><b>Four outcomes rather than a boolean, because two of them owe a person a different
+/// sentence.</b> It was <c>bool CommentLanded</c>, and a code round found both ways that lied: a new
+/// pair with no comment answered "landed" because the row was written, and a pair somebody had
+/// already promoted was told "this pair already carries a comment" when it carried none. The first
+/// was masked by the one caller checking the comment's length itself; the second reached a real
+/// person as a false explanation of where their words went. (Code round, codex.)</para>
+/// <para>The pair's fate stays <see cref="Kept"/>: a duplicate is still a duplicate whether or not
+/// it took the comment, because the CLIENT reads that word to decide whether to keep sending.</para>
+/// </remarks>
+public enum Words
+{
+    /// <summary>There were none, and nothing is owed.</summary>
+    None,
+
+    /// <summary>Stored with the pair — written with it, or attached to one that had none.</summary>
+    Stored,
+
+    /// <summary>The pair already carries somebody else's words, and the first to speak keeps them.</summary>
+    AlreadySpokenFor,
+
+    /// <summary>The pair has been promoted out of the queue; there is no waiting row to attach to.</summary>
+    TooLate,
+}
+
+/// <summary>
 /// The corpus: quarantine, the keys that may write to it, and the index a person promotes into.
 /// </summary>
 /// <remarks>
@@ -138,14 +166,14 @@ public sealed partial class Corpus : IDisposable
     /// `--waiting` for ever: promoting it again is a no-op, because the corpus already holds that
     /// id. Three reviewers found the same row, from three directions. (Code round, codex/gemini.)</para>
     /// </remarks>
-    /// <returns>Whether it was stored, and the id it is stored under.</returns>
-    public (Kept Kept, string EntryId) Keep(
-        string language, string before, string after, KeyId key, UtcMonth month)
+    /// <returns>Whether it was stored, the id it is stored under, and what became of the words.</returns>
+    public (Kept Kept, string EntryId, Words Words) Keep(
+        string language, string before, string after, KeyId key, UtcMonth month, string comment = "")
     {
         lock (_gate)
         {
             using var transaction = _db.BeginTransaction(deferred: false);
-            var kept = KeepInside(language, before, after, key, month);
+            var kept = KeepInside(language, before, after, key, month, comment);
             transaction.Commit();
 
             return kept;
@@ -163,20 +191,25 @@ public sealed partial class Corpus : IDisposable
     /// <c>NOT NULL</c> without a default so it must be written. What a pair carries about its arrival
     /// is <c>received_month</c>; what orders the queue is <c>rowid</c>.</para>
     /// </remarks>
-    internal (Kept Kept, string EntryId) KeepInside(
-        string language, string before, string after, KeyId key, UtcMonth month)
+    internal (Kept Kept, string EntryId, Words Words) KeepInside(
+        string language, string before, string after, KeyId key, UtcMonth month, string comment = "")
     {
         var entryId = IdOf(language, before, after);
         if (Promoted(entryId))
         {
-            return (Kept.AlreadyHeld, entryId);
+            // A pair a person already promoted is in `corpus` and out of the queue: there is no
+            // waiting row to attach words to, and the decision it was part of has been made. Said
+            // as its OWN outcome, because "there is nowhere to put this" and "somebody else got
+            // there first" are two different things to be told. (Code round, codex.)
+            return (Kept.AlreadyHeld, entryId, comment.Length > 0 ? Words.TooLate : Words.None);
         }
 
         using var write = _db.CreateCommand();
         write.CommandText = """
             INSERT INTO quarantine
-                (entry_id, language, skeleton_before, skeleton_after, received_utc, received_month, key_id)
-            VALUES ($id, $language, $before, $after, '', $month, $key)
+                (entry_id, language, skeleton_before, skeleton_after, received_utc, received_month,
+                 key_id, comment)
+            VALUES ($id, $language, $before, $after, '', $month, $key, $comment)
             ON CONFLICT(entry_id) DO NOTHING
             """;
         Bind(write, "$id", entryId);
@@ -185,12 +218,64 @@ public sealed partial class Corpus : IDisposable
         Bind(write, "$after", after);
         Bind(write, "$month", month.Value);
         Bind(write, "$key", key.Value);
+        // DO NOTHING keeps the FIRST comment when two contributors send one skeleton. The second is
+        // answered `duplicate` and told its comment was not stored, rather than reported a silent
+        // success. (Plan round, gemini.)
+        Bind(write, "$comment", comment);
 
         // DO NOTHING answers zero rows for a pair quarantine already holds. That is a success for
         // the caller: it may stop sending it.
         var stored = write.ExecuteNonQuery() == 1;
 
-        return (stored ? Kept.Stored : Kept.AlreadyHeld, entryId);
+        return (stored ? Kept.Stored : Kept.AlreadyHeld, entryId, Became(stored, entryId, comment));
+    }
+
+    /// <summary>What became of the words, once the pair's own fate is known.</summary>
+    /// <remarks>
+    /// The guard against <see cref="Attach"/> running at all is here rather than inside it: an empty
+    /// comment is the ordinary case and must cost no statement, and <see cref="Words.None"/> is the
+    /// honest answer for it — a new row written without a comment has not "landed" one.
+    /// </remarks>
+    private Words Became(bool stored, string entryId, string comment)
+    {
+        if (comment.Length == 0)
+        {
+            return Words.None;
+        }
+
+        return stored || Attach(entryId, comment) ? Words.Stored : Words.AlreadySpokenFor;
+    }
+
+    /// <summary>
+    /// Gives a waiting pair the words somebody wrote about it, if it has none of its own yet.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Without this, no pair that was already waiting could ever gain a comment</b> — and
+    /// on the day this ships, that is EVERY pair. A contributor who re-reviews something they sent
+    /// last week, writes a sentence about it and sends it again would be answered <c>duplicate</c>
+    /// for ever, with their words stored nowhere. A code round called it permanently blocking, and
+    /// it was. (Code round, gemini.)</para>
+    /// <para><b><c>WHERE comment = ''</c> is the whole of the arbitration.</b> The first person to
+    /// say something about a pair is the one whose words are kept; nobody can overwrite them, and a
+    /// second contributor is told their comment was not stored rather than reported a silent
+    /// success. Storing several would need a comments table, which is a story of its own.</para>
+    /// <para>Inside the caller's transaction, like the insert above, and separate from it rather
+    /// than folded into an <c>ON CONFLICT DO UPDATE</c>: that clause makes the conflicting row count
+    /// as one affected, which is the number this method's caller reads to tell a new pair from a
+    /// duplicate. The two questions stay two statements so neither answer can be mistaken for the
+    /// other.</para>
+    /// </remarks>
+    private bool Attach(string entryId, string comment)
+    {
+        using var fill = _db.CreateCommand();
+        fill.CommandText = """
+            UPDATE quarantine SET comment = $comment
+             WHERE entry_id = $id AND comment = ''
+            """;
+        Bind(fill, "$comment", comment);
+        Bind(fill, "$id", entryId);
+
+        return fill.ExecuteNonQuery() == 1;
     }
 
     /// <summary>How many pairs are waiting for a person right now.</summary>
@@ -516,8 +601,8 @@ public sealed partial class Corpus : IDisposable
     /// <para>Ordered by <c>rowid</c>, never by a time: the only thing the order is for is a person
     /// reading the queue oldest-first, and insertion order among live rows is exactly that.</para>
     /// </remarks>
-    public IReadOnlyList<(string EntryId, string Language, string Before, string After)> Waiting(
-        int limit, int skip = 0)
+    public IReadOnlyList<(string EntryId, string Language, string Before, string After,
+        string Comment)> Waiting(int limit, int skip = 0)
     {
         lock (_gate)
         {
@@ -530,39 +615,43 @@ public sealed partial class Corpus : IDisposable
     /// `--promote` reads the row BEFORE moving it, so it can print what it moved rather than only
     /// that it moved something — the one defence against a mistyped id, since there is no undo.
     /// </remarks>
-    public (string EntryId, string Language, string Before, string After) Find(string entryId)
+    public (string EntryId, string Language, string Before, string After, string Comment) Find(
+        string entryId)
     {
         lock (_gate)
         {
             using var read = _db.CreateCommand();
             read.CommandText = """
-                SELECT entry_id, language, skeleton_before, skeleton_after
+                SELECT entry_id, language, skeleton_before, skeleton_after, comment
                   FROM quarantine WHERE entry_id = $id
                 """;
             Bind(read, "$id", entryId);
             using var rows = read.ExecuteReader();
 
             return rows.Read()
-                ? (rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3))
-                : (string.Empty, string.Empty, string.Empty, string.Empty);
+                ? (rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
+                    rows.GetString(4))
+                : (string.Empty, string.Empty, string.Empty, string.Empty, string.Empty);
         }
     }
 
-    private IReadOnlyList<(string EntryId, string Language, string Before, string After)> Reading(
-        int limit, int skip)
+    private List<(string EntryId, string Language, string Before, string After,
+        string Comment)> Reading(int limit, int skip)
     {
         using var read = _db.CreateCommand();
         read.CommandText = """
-            SELECT entry_id, language, skeleton_before, skeleton_after
+            SELECT entry_id, language, skeleton_before, skeleton_after, comment
               FROM quarantine ORDER BY rowid LIMIT $limit OFFSET $skip
             """;
         Bind(read, "$limit", limit);
         Bind(read, "$skip", skip);
         using var rows = read.ExecuteReader();
-        var waiting = new List<(string, string, string, string)>();
+        var waiting = new List<(string EntryId, string Language, string Before, string After,
+            string Comment)>();
         while (rows.Read())
         {
-            waiting.Add((rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3)));
+            waiting.Add((rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
+                rows.GetString(4)));
         }
 
         return waiting;
@@ -601,9 +690,13 @@ public sealed partial class Corpus : IDisposable
         }
 
         using var move = _db.CreateCommand();
+        // The comment travels with its pair. A comment that survived quarantine and vanished at
+        // promotion would be the corpus quietly losing the only words a person wrote about the
+        // defect — and losing them at the exact moment somebody decided they were worth keeping.
         move.CommandText = """
-            INSERT INTO corpus (entry_id, language, skeleton_before, skeleton_after, promoted_utc)
-            SELECT entry_id, language, skeleton_before, skeleton_after, $now
+            INSERT INTO corpus
+                (entry_id, language, skeleton_before, skeleton_after, promoted_utc, comment)
+            SELECT entry_id, language, skeleton_before, skeleton_after, $now, comment
               FROM quarantine WHERE entry_id = $id
             ON CONFLICT(entry_id) DO NOTHING
             """;

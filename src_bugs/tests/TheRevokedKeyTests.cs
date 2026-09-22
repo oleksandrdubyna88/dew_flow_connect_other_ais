@@ -123,7 +123,7 @@ public sealed class TheRevokedKeyTests
             }
 
             serving.Accept(new KeyId(keyId), UtcMonth.Now(clock), scope => scope.Keep("CSharp", "a", "b"))
-                .Should().BeOfType<Accepted<(Kept Kept, string EntryId)>.KeyNotInForce>(
+                .Should().BeOfType<Accepted<(Kept Kept, string EntryId, Words Words)>.KeyNotInForce>(
                     "the key was revoked between the gate and the write, so the write must refuse itself");
 
             serving.WaitingCount().Should().Be(0, "a key revoked before the write must store nothing");
@@ -165,7 +165,7 @@ public sealed class TheRevokedKeyTests
                 escaped = scope;
 
                 return scope.Keep("CSharp", "a", "b");
-            }).Should().BeOfType<Accepted<(Kept Kept, string EntryId)>.Stored>();
+            }).Should().BeOfType<Accepted<(Kept Kept, string EntryId, Words Words)>.Stored>();
 
             var after = () => escaped!.Keep("CSharp", "c", "d");
 
