@@ -29,4 +29,11 @@
     <ProjectReference Include="..\service_defaults\CoaiMcp.ServiceDefaults.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The wire as it was BEFORE comments, captured from the build that predates them. It is the
+         only way to assert that a pair without a comment still sends byte-identical bytes to every
+         deployed server - the same discipline as corpus-schema-step1 on the server side. -->
+    <None Update="fixtures\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

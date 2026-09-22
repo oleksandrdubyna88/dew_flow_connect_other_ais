@@ -76,6 +76,47 @@ public sealed class OnlyThreeFieldsLeaveTests
         wire.Should().Contain("method_1").And.Contain("CSharp");
     }
 
+    /// <summary>
+    /// The wire AS IT IS TODAY, captured to a file so that a later widening can be measured.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>This test exists to be committed BEFORE the field it guards against.</b> A comment
+    /// is about to become the wire's fourth property, and the promise that makes that safe to deploy
+    /// in any order is that a pair nobody commented on still serialises to exactly these bytes — so
+    /// every server already running keeps receiving what it received yesterday until somebody types
+    /// something. A fixture written at the same time as the widening cannot prove that: it would
+    /// have been produced by the new code and would agree with it whatever the new code did.</para>
+    /// <para>So the bytes are captured here, against the THREE-field type, and this assertion is
+    /// green in this commit. The next commit adds the field and renames this class; the assertion
+    /// travels with it unchanged, and from then on it compares the new serialiser against a file
+    /// the new serialiser never wrote.</para>
+    /// <para>Line endings are normalised on both sides — a checkout under <c>autocrlf</c> and a CI
+    /// runner disagree about them, and that is not a change to the wire.</para>
+    /// </remarks>
+    [Fact]
+    public void APairWithoutACommentIsByteIdenticalToTheWireBeforeComments()
+    {
+        var before = File.ReadAllText(
+            Path.Combine(AppContext.BaseDirectory, "fixtures", "upload-request-before-comments.json"));
+
+        var wire = System.Text.Json.JsonSerializer.Serialize(
+            new UploadRequest([Wire(Fixture)]), Server.ServerJsonContext.Default.UploadRequest);
+
+        wire.ReplaceLineEndings("\n").Should().Be(before.ReplaceLineEndings("\n"));
+    }
+
+    /// <summary>One pair, the same in every test here, so a failure is about the mapping.</summary>
+    private static StoredPair Fixture => new(
+        FindingId: 4242,
+        SymbolName: "ChargeAcmeCustomer",
+        Language: "CSharp",
+        SkeletonBefore: "method_1() { }",
+        SkeletonAfter: "method_1() { lock (var_1) { } }",
+        Keep: Keep.Kept,
+        Severity: "Major",
+        Category: "Reliability",
+        Title: "a race in the acme payment path");
+
     /// <summary>The same mapping the run uses, reached through the run's own type.</summary>
     /// <remarks>
     /// Reflection rather than a copy of the three lines: a copy would pass while the real mapping
