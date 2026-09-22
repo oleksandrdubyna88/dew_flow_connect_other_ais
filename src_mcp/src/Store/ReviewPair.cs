@@ -7,7 +7,7 @@ namespace CoaiMcp.Store;
 /// <remarks>
 /// <para><b>A record of its own, and deliberately not a wider <see cref="Core.Collecting.StoredPair"/>.</b>
 /// The send's projection (<c>UploadRun.Wire</c>) is a function OF <c>StoredPair</c>, and
-/// <c>OnlyThreeFieldsLeaveTests</c> constructs one by name to prove what that mapping leaves behind.
+/// <c>OnlyFourFieldsLeaveTests</c> constructs one by name to prove what that mapping leaves behind.
 /// Widening that type would route a repository path, a file and the reviewers' prose through the very
 /// type the upload reads — an edit that looks like a simplification, which is the one that test exists
 /// to refuse. So the page has its own row, <see cref="RoundsDb.Sendable"/> keeps answering the narrow

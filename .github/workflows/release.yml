@@ -1082,6 +1082,15 @@ jobs:
       - name: Toolchain (linux)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang zlib1g-dev
 
+      # One test drives the PREVIOUS release, and it FAILS on CI when the archive is absent — which
+      # is the point: a release is the last moment to notice that the promise about older servers
+      # stopped being checked.
+      - name: Fetch the previous ingest server
+        uses: ./.github/actions/fetch-old-bugs
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+
       # Never ship a binary that has not passed its own tests, and this suite is the one that
       # drives the built server as a real process.
       - name: Build and test

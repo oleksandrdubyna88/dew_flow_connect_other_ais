@@ -98,9 +98,15 @@ internal sealed class IngestGate(
     private RateLimiter Limiting(Uploader uploader) =>
         uploader is Uploader.Administrator ? administrators : contributors;
 
+    /// <remarks>
+    /// Both ingest paths, still POST-only. `/ingest/commented` is the one route that reads a comment
+    /// and it must be behind the same key as the other — a route reached around this gate would let
+    /// anybody write into somebody's corpus, and `WhoOf` would throw on a request with no key.
+    /// </remarks>
     private static bool IsIngest(HttpRequest request) =>
         HttpMethods.IsPost(request.Method)
-        && request.Path.Equals("/ingest", StringComparison.OrdinalIgnoreCase);
+        && (request.Path.Equals("/ingest", StringComparison.OrdinalIgnoreCase)
+            || request.Path.Equals("/ingest/commented", StringComparison.OrdinalIgnoreCase));
 
     /// <summary>429, with <c>Retry-After</c> and a body naming the limit that was reached.</summary>
     /// <remarks>

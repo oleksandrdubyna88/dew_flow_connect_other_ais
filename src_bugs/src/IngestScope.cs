@@ -33,11 +33,17 @@ public sealed class IngestScope
     internal void Spend() => _spent = true;
 
     /// <summary>Stores a pair inside the batch, for the batch's key, stamped with the batch's month.</summary>
-    public (Kept Kept, string EntryId) Keep(string language, string before, string after)
+    /// <param name="comment">
+    /// What the contributor typed, or empty. Empty is the normal case and is indistinguishable from
+    /// a row written before comments existed, which is why the column is <c>NOT NULL DEFAULT ''</c>
+    /// rather than nullable: no reader anywhere needs a null check.
+    /// </param>
+    public (Kept Kept, string EntryId, bool CommentLanded) Keep(
+        string language, string before, string after, string comment = "")
     {
         MustBeOpen();
 
-        return _corpus.KeepInside(language, before, after, _key, _month);
+        return _corpus.KeepInside(language, before, after, _key, _month, comment);
     }
 
     /// <summary>How many pairs are waiting, as this transaction sees them.</summary>

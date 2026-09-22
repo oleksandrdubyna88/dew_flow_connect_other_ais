@@ -5,7 +5,7 @@ using System.Text;
 namespace CoaiMcp.Core.Collecting;
 
 /// <summary>
-/// One pair, as it crosses the wire — three fields and no more.
+/// One pair, as it crosses the wire — three fields the machine derived, and one a person typed.
 /// </summary>
 /// <remarks>
 /// <para><b>ONE type, in the core both halves reference.</b> It was two: `CoaiMcp.Collecting` had
@@ -18,20 +18,40 @@ namespace CoaiMcp.Core.Collecting;
 /// <c>= null</c> default, and the server then hands it to a validator that dereferences it, turning
 /// malformed input into a 500. <see cref="Whole"/> is the one place that is settled, and the route
 /// calls it before anything else reads a field. (Code round, codex.)</para>
-/// <para><b>No id.</b> The server derives one with <see cref="PairId.Of"/> from exactly these three
-/// fields, so nothing extra crosses and there is no second copy to disagree with the first.</para>
+/// <para><b>No id.</b> The server derives one with <see cref="PairId.Of"/> from exactly the three
+/// DERIVED fields, so nothing extra crosses and there is no second copy to disagree with the first.
+/// </para>
+/// <para><b><see cref="Comment"/> is the fourth field, and it is the only one a person TYPED</b> —
+/// added 2026-09-21 on the operator's decision that *a comment a person wrote is public; it goes
+/// everywhere, including to the server, for storage and later processing.* The three it joins are
+/// derived from somebody's repository and are anonymised before they leave; this one is not
+/// anonymised, is not scanned, and is not scrubbed, and the page that offers the box says so beside
+/// it. That is why widening the architecture test was safe, and the test's own docblock records the
+/// reasoning.</para>
+/// <para><b>It is NOT part of the id.</b> <see cref="PairId.Of(UploadedPair)"/> still deconstructs
+/// three. If a comment entered the derivation, every entry already in quarantine and in the corpus
+/// would change identity, the client's acknowledgement matching would break against every old row,
+/// and two people who found the same defect would stop deduplicating. The consequence is accepted:
+/// the same skeleton pair from two contributors is ONE row and the first comment is the one
+/// stored — and the answer for the second SAYS so rather than reporting a silent success.</para>
+/// <para><b>A null comment is OMITTED from the JSON</b> (<c>WhenWritingNull</c> on the client's
+/// context), so a pair without one serialises byte-identically to the wire as it was before this
+/// field existed. A fixture captured from that build asserts it, which is what lets a client that
+/// nobody comments through keep talking to a server of any age.</para>
 /// </remarks>
 public sealed record UploadedPair(
-    string? Language = null, string? SkeletonBefore = null, string? SkeletonAfter = null)
+    string? Language = null, string? SkeletonBefore = null, string? SkeletonAfter = null,
+    string? Comment = null)
 {
-    /// <summary>The same three fields with every null read as the empty string.</summary>
+    /// <summary>The same four fields with every null read as the empty string.</summary>
     /// <remarks>
-    /// A method rather than three computed properties: the architecture test asserts this type's
-    /// PROPERTIES are exactly the three that may cross, and a computed property would widen that
+    /// A method rather than four computed properties: the architecture test asserts this type's
+    /// PROPERTIES are exactly the four that may cross, and a computed property would widen that
     /// list for no reason anybody could see later.
     /// </remarks>
-    public (string Language, string Before, string After) Whole() =>
-        (Language ?? string.Empty, SkeletonBefore ?? string.Empty, SkeletonAfter ?? string.Empty);
+    public (string Language, string Before, string After, string Comment) Whole() =>
+        (Language ?? string.Empty, SkeletonBefore ?? string.Empty, SkeletonAfter ?? string.Empty,
+            Comment ?? string.Empty);
 }
 
 /// <summary>A batch, as the client sends it.</summary>
@@ -45,8 +65,27 @@ public sealed record UploadRequest(IReadOnlyList<UploadedPair>? Items = null);
 /// <summary>What one item came to.</summary>
 public sealed record UploadResult(string EntryId = "", string Took = "", string Why = "");
 
-/// <summary>What the batch came to, item by item.</summary>
-public sealed record UploadAnswer(IReadOnlyList<UploadResult>? Items = null);
+/// <summary>What the batch came to, item by item — and which contract answered.</summary>
+/// <remarks>
+/// <para><b><see cref="Contract"/> is a belt, not the mechanism.</b> What stops an old server
+/// taking a commented pair is that it has no route to take it on: comments POST to
+/// <c>/ingest/commented</c>, which a binary older than 2026-09-21 answers 404. A capability the
+/// client merely ASKS about cannot work — the probe reaches one node and the POST reaches another
+/// during a rollout, and by the time the client learns anything the comment is gone and a retry is
+/// answered <c>duplicate</c>. (Plan round, codex.)</para>
+/// <para>The number is still carried on every answer, and a batch that went to the commented route
+/// and came back without <see cref="Contract"/> at <see cref="Collecting.Contract.Comments"/> marks
+/// nothing — which catches a proxy answering 200 for a route it does not really have. Absent reads
+/// as 0, and 1 is the three-field wire, never declared.</para>
+/// </remarks>
+public sealed record UploadAnswer(IReadOnlyList<UploadResult>? Items = null, int Contract = 0);
+
+/// <summary>The wire's own version, as the server states it on every answer.</summary>
+public static class Contract
+{
+    /// <summary>A server that accepts a comment, and has a route to accept it on.</summary>
+    public const int Comments = 2;
+}
 
 /// <summary>
 /// The three words an item's fate is spelled with, and the only three.
@@ -107,9 +146,16 @@ public static class PairId
     }
 
     /// <summary>The id of a pair as it stands on the wire.</summary>
+    /// <remarks>
+    /// <b>The comment is deliberately not read here</b>, and the discard is written out rather than
+    /// hidden behind a shorter deconstruction so that the omission is visible to whoever reads this
+    /// next. An id that moved when somebody typed would change the identity of every row already
+    /// stored, break acknowledgement matching against all of them, and stop two people who found the
+    /// same defect from deduplicating.
+    /// </remarks>
     public static string Of(UploadedPair pair)
     {
-        var (language, before, after) = pair.Whole();
+        var (language, before, after, _) = pair.Whole();
 
         return Of(language, before, after);
     }

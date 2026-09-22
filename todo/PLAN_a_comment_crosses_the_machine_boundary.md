@@ -1,9 +1,18 @@
 # PLAN — a comment crosses the machine boundary
 
-> Status: **plan only, nothing implemented yet, 2026-09-21.** Scope: `src_mcp/core` (the wire type
+> Status: **story 4.1 IMPLEMENTED 2026-09-22; stories 4.2a and 4.2b are open.** The ingest server
+> takes a comment on `POST /ingest/commented`, stores it verbatim beside its pair, carries it into
+> the corpus at promotion and shows it to the operator; `POST /ingest` refuses a pair that carries
+> one rather than dropping it. The CLIENT half — `coai-mcp`'s local column and `--pairs-decide`
+> (4.2a), and the extension's box with its "it leaves the machine" notice (4.2b) — is **not built**,
+> so nothing a person types can reach the server yet. This plan stays in `todo/` until 4.2b ships,
+> and is promoted then.
+>
+> Scope: `src_mcp/core` (the wire type
 > both halves compile against), `src_bugs` (the ingest server, its schema and its one-shots),
 > `src_mcp/src` (the local store, a new one-shot mode, the send), `src_vs_code` (the review page and
-> its panel), and — deliberately, visibly, once — `src_mcp/tests/OnlyThreeFieldsLeaveTests.cs`.
+> its panel), and — deliberately, visibly, once — `src_mcp/tests/OnlyThreeFieldsLeaveTests.cs`
+> (renamed `OnlyFourFieldsLeaveTests.cs` in 4.1).
 > This is epic 4 of [PLAN_the_review_page_can_be_read.md](PLAN_the_review_page_can_be_read.md)
 > (story 6 there), split as that plan split it: **4.1 the server accepts a comment**, which ships
 > and is deployed BEFORE **4.2 the client sends one**.
@@ -256,7 +265,7 @@ old one and a failed decision would look like a compatibility fallback.
 
 | test | runs | proves |
 |---|---|---|
-| `TheOldServerHasNoCommentedRouteTests` (new) | the PREVIOUS released `coai-bugs`, **pinned**: tag `bugs-v0.2.0`, its linux-x64 archive verified by SHA-256 before it runs, started on a disposable data directory that is removed afterwards. CI downloads it; the variable being unset SKIPS locally and FAILS on CI | `POST /ingest/commented` is 404; a four-field POST to `/ingest` is accepted with the comment dropped (the defect this route exists to prevent, demonstrated rather than assumed) |
+| `TheBuiltBinariesTests.OldServer` (new file) | the PREVIOUS released `coai-bugs`, **pinned**: tag `bugs-v0.2.0`, its archive verified by SHA-256 **per architecture** before it runs, started on a disposable data directory that is removed afterwards. CI downloads it through `.github/actions/fetch-old-bugs`; the variable being unset SKIPS locally and FAILS on CI | `POST /ingest/commented` is 404; a four-field POST to `/ingest` is accepted with the comment dropped (the defect this route exists to prevent, demonstrated rather than assumed) |
 | `BothHalvesTests` (+3) | the real `UploadRun` against the real server in-process | a commented batch goes to `/ingest/commented` and arrives whole; a comment-free batch goes to `/ingest` and its bytes equal the fixture; a 404 there stops the run and marks nothing |
 | `UploadRunTests` (new, stubbed handler) | `UploadRun` alone | each row of the failure table above, including that a 503 and a timeout do NOT say "old" |
 | `ThePairModesTests` (+5) | the real binary | the five non-64 exits, and 64 only for an unknown mode |
@@ -407,21 +416,32 @@ the id.
 ## Test plan — each test and what it would catch
 
 **Server** (`./src_bugs/tests/bin/Release/net10.0/CoaiBugs.Tests`, never `dotnet test`)
-- `TheIngestTests` (+7): a comment accepted and carried into `--waiting`'s tuple (a column written and
-  never read); an empty comment accepted as none (the old client's payload); 1 001 characters refused
-  naming the length (a cap that is not enforced); NUL, CR, U+202E and a lone surrogate each refused
-  naming the code point (a rule with a hole); a leaky word accepted in a comment while refused in a
-  skeleton (the alphabet reaching the new field); the same pair twice with two comments → `duplicate`,
-  first kept (the id absorbing the comment); `PairId.Of` equal across comments (the constraint).
+- **`TheCommentTests` (new file, +18)** — a class of its own rather than more rows in
+  `TheIngestTests`, because what it asserts is one subject: a comment accepted and carried into
+  `--waiting`'s tuple (a column written and never read); an empty comment accepted as none (the old
+  client's payload); 1 004 characters refused naming the length (a cap that is not enforced); NUL,
+  CR, ESC, U+202E and a lone surrogate each refused naming the code point (a rule with a hole); a
+  leaky word accepted in a comment while refused in a skeleton (the alphabet reaching the new
+  field); the same pair twice with two comments → `duplicate`, first kept, second TOLD (the id
+  absorbing the comment; a silent loss); promotion carrying the comment into `corpus` (the quietest
+  failure available); a refusal that never quotes the comment back.
+  `PairId.Of` equal across comments is asserted on the client side, where the type lives.
 - `TheRouteTests` (+4): `POST /ingest/commented` with a key → 200 and `contract: 2` through the real
   AOT binding; without a key → 401 (a route reached around the gate); `/ingest` still ignores a
   comment it is sent, so the two routes really do differ (the whole mechanism in one assertion); every
   answer from both routes carries `contract`.
-- `TheMigrationTests` (+1): step 1 unchanged, both tables altered, `Steps.Length` = 5.
-- `TheOldServerDropsTheCommentTests` (new, gated on `COAI_BUGS_OLD_EXE`): the drop is REAL and the
-  probe tells the two servers apart. Without it, every other test here is two suites agreeing with
-  the same file.
-- `TheBuiltBinariesTests` (+1): the published binary stores and prints a comment.
+- `TheMigrationTests` (+1): step 1 unchanged, both tables altered, and a row written BEFORE step 5
+  reading back as having no comment — the half of the promise that makes this safe on a live host.
+- `TheAdminUploadTests` (+1): an administrator's comment stored on the `AcceptAdmin` path, which no
+  other test here walks, and still counted against no key row.
+- **The old release, RUN** (`TheBuiltBinariesTests.OldServer`, gated on `COAI_BUGS_OLD_ARCHIVE`):
+  `POST /ingest/commented` is 404 and the SAME document on `/ingest` is accepted with nowhere to put
+  the field. Without it, every other test here is two halves of one checkout agreeing with each
+  other. The archive is pinned by tag and by SHA-256 per architecture and verified before anything
+  in it is executed; CI downloads it through a composite action used by all three workflows that run
+  this suite, and the variable being unset SKIPS locally and FAILS on CI.
+- `TheBuiltBinariesTests` (+2): the published binary takes a comment on its own route, states
+  `contract`, and shows the comment in `--waiting`; and its plain route still stores none.
 
 **Client** (`./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe`)
 - `OnlyFourFieldsLeaveTests`: the four names; the five that must not leave; the mapping sends the
@@ -462,9 +482,9 @@ the id.
 - [ ] `OnlyFourFieldsLeaveTests` exists, `OnlyThreeFieldsLeaveTests` does not, the four names are
       asserted, the five private fields are still asserted absent, and the comment-less wire is
       byte-identical to the captured fixture.
-- [ ] `TheOldServerHasNoCommentedRouteTests` ran against the real `bugs-v0.2.0` binary — pinned by
-      tag and SHA-256, on a disposable data directory — and proved both halves: 404 on the new route,
-      and a silent drop on the old one.
+- [ ] `TheOldServerHasNoCommentedRouteAndDropsACommentSentToTheOldOne` ran against the real
+      `bugs-v0.2.0` binary — pinned by tag and SHA-256, on a disposable data directory — and proved
+      both halves: 404 on the new route, and a silent drop on the old one.
 - [ ] Every failure mode is told apart: 404, 401/403, 429, 5xx, timeout and a 200 under the wrong
       contract each have their own answer, and only the first says the server is old.
 - [ ] `sentUtc` is written in the acknowledgement transaction and NOWHERE earlier, with a test that

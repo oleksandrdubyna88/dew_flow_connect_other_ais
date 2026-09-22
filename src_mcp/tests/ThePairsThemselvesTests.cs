@@ -136,7 +136,7 @@ public sealed class ThePairsThemselvesTests : IDisposable
     /// What the page gained, the send did not — pinned on the TYPES, so a later widening is a red build.
     /// </summary>
     /// <remarks>
-    /// <para><c>OnlyThreeFieldsLeaveTests</c> guards the wire and constructs <see cref="StoredPair"/>
+    /// <para><c>OnlyFourFieldsLeaveTests</c> guards the wire and constructs <see cref="StoredPair"/>
     /// by name; this is the same promise seen from the page's side. The obvious maintenance move —
     /// one record for both readers — would put a repository path, a file and the reviewers' prose
     /// one edit away from <c>UploadRun.Wire</c>. Named rather than counted, for the reason that file

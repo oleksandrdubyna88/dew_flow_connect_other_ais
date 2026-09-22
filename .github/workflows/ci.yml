@@ -76,6 +76,14 @@ jobs:
       - name: Test the Team server
         run: ./src_server/tests/bin/Release/net10.0/CoaiServer.Tests
 
+      # One test in the ingest suite runs the PREVIOUS release, and FAILS on CI when it is absent:
+      # a silently skipped check is a silently deleted one. See the action for why it is pinned.
+      - name: Fetch the previous ingest server
+        uses: ./.github/actions/fetch-old-bugs
+        with:
+          token: ${{ github.token }}
+          repository: ${{ github.repository }}
+
       - name: Test the ingest server
         run: ./src_bugs/tests/bin/Release/net10.0/CoaiBugs.Tests
 

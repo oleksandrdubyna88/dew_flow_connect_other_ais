@@ -68,6 +68,78 @@ public sealed class TheMigrationTests : IDisposable
             .Should().Contain("admin_audit_by_time", "the sweep and the admin API read it by time");
     }
 
+    /// <summary>
+    /// Step 5 reaches BOTH tables, and a pair written before it reads back as having no comment.
+    /// </summary>
+    /// <remarks>
+    /// <para>The two halves of the promise that makes this column safe to add to a running host.
+    /// <c>ADD COLUMN</c> with a constant default rewrites no rows in SQLite, so every pair already
+    /// in quarantine answers the empty string — which is exactly <i>no comment</i>, indistinguishable
+    /// from a new pair nobody wrote about, and no reader anywhere needs a null check.</para>
+    /// <para>And on BOTH tables in one step: a comment that survived quarantine and vanished at
+    /// promotion would be the corpus losing the only words a person wrote, at the very moment
+    /// somebody decided the pair was worth keeping.</para>
+    /// </remarks>
+    [Fact]
+    public void StepFiveGivesBothTablesAComment_AndTheRowsAlreadyThereReadAsHavingNone()
+    {
+        WriteAFileFromStepOneOnly(DbPath);
+        TestSql.Run(
+            DbPath,
+            "INSERT INTO quarantine (entry_id, language, skeleton_before, skeleton_after, "
+            + "received_utc, key_id) VALUES ('older-than-comments', 'CSharp', 'method_1() { }', "
+            + $"'method_1() {{ lock (var_1) {{ }} }}', '2026-09-17T00:00:00Z', '{TheOldBuildsKeyValue}')");
+        TestSql.Run(
+            DbPath,
+            "INSERT INTO corpus (entry_id, language, skeleton_before, skeleton_after, promoted_utc) "
+            + "VALUES ('promoted-before-comments', 'CSharp', 'method_2() { }', "
+            + "'method_2() { lock (var_1) { } }', '2026-09-17T00:00:00Z')");
+
+        using (Corpus.Open(DbPath))
+        {
+            // Opened and closed: the migration is the open.
+        }
+
+        foreach (var table in (string[])["quarantine", "corpus"])
+        {
+            TestSql.Column(DbPath, $"SELECT name FROM pragma_table_info('{table}')")
+                .Should().Contain("comment", $"a comment must survive being promoted, so {table} holds one");
+        }
+
+        TestSql.Scalar(DbPath, "SELECT comment FROM quarantine WHERE entry_id = 'older-than-comments'")
+            .Should().BeEmpty("no row is rewritten, and an absent comment is the empty string");
+        TestSql.Scalar(DbPath, "SELECT comment FROM corpus WHERE entry_id = 'promoted-before-comments'")
+            .Should().BeEmpty("and the same holds for what the corpus was already keeping");
+        TestSql.Scalar(DbPath, "SELECT COUNT(*) FROM quarantine").Should().Be(
+            "1", "an ALTER with a constant default rewrites no rows, so nothing is lost or doubled");
+    }
+
+    /// <summary>
+    /// And the upgrade is idempotent on a file that ALREADY has step 5.
+    /// </summary>
+    /// <remarks>
+    /// <c>ALTER TABLE … ADD COLUMN</c> answers <c>duplicate column name</c> when it runs twice, so a
+    /// step appended without a version stamp would leave the service unable to start on its own
+    /// data after one restart. <see cref="TheMigrationRunsOnce_SoASecondOpenIsNotASecondAlter"/>
+    /// asserts that for the file the FIELD has; this asserts it for a file this build wrote, which
+    /// is the shape every host will have from tomorrow.
+    /// </remarks>
+    [Fact]
+    public void AFileThisBuildWroteOpensAgainWithoutRunningStepFiveTwice()
+    {
+        using (Corpus.Open(DbPath))
+        {
+        }
+
+        var opening = () => Corpus.Open(DbPath).Dispose();
+
+        opening.Should().NotThrow("a second ADD COLUMN would answer `duplicate column name`");
+        TestSql.Scalar(DbPath, "PRAGMA user_version").Should().Be(
+            CorpusSchema.Steps.Length.ToString(CultureInfo.InvariantCulture));
+        TestSql.Column(DbPath, "SELECT name FROM pragma_table_info('quarantine')")
+            .Count(column => column == "comment").Should().Be(1, "exactly once");
+    }
+
     [Fact]
     public void TheKeyTheOldBuildIssuedSurvivesReadsAsNeverUsedAndCanBeRevoked()
     {

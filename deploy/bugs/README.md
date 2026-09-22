@@ -46,10 +46,21 @@ narrowest thing that answers "is this key alive", took the month:
 > **About administrators**, the server records exact times: when a key was issued, when it was
 > revoked, and who did it. That is a log about the people holding administrative power, not about
 > the people contributing.
+>
+> **A comment is the one field a person TYPES, and it is public by their decision** (2026-09-18).
+> Everything else a pair carries was derived from somebody's repository and anonymised before it
+> left their machine; a comment is written into a box that says, beside it, that it leaves the
+> machine unanonymised. So the server stores it verbatim, scans nothing in it, scrubs nothing in
+> it — and refuses, naming what it refused, rather than silently changing what somebody wrote.
 
 | Promise | Kept by |
 |---|---|
 | A key carries no identity — no name, no address | **Code.** The schema has no column for either. |
+| A comment is the contributor's own words: stored verbatim, never scanned, never scrubbed | **Code.** The alphabet whitelist runs over the two skeletons only; `CommentRule` refuses a comment or takes it whole, and never edits one. A test sends a word that is refused in a skeleton and accepted in a comment. |
+| A comment never reaches a server too old to store it | **Code.** It travels on `POST /ingest/commented`, which a binary older than `bugs-v0.3.0` answers 404 — so the refusal is structural rather than a matter of deployment order. One test runs the previous release, pinned by tag and SHA-256, to prove it. |
+| **A comment is never dropped in silence, by any server** | **Code.** `POST /ingest` REFUSES a pair that carries one, naming the path that keeps it, and writes nothing — so the batch can simply be resent. A new server quietly discarding the field would be the same failure an old one commits, in the place nobody is watching for it. |
+| A comment attaches to a pair that was already waiting without one | **Code.** The first non-empty comment wins and nobody can overwrite it; a contributor whose words were not kept is TOLD, never reported a silent success. |
+| A comment is never written to the server's log | **Code.** A refusal names a length or a code point, never content. |
 | Of WHEN a key was used, only the calendar month (`last_seen_month`, `yyyy-MM`, UTC) — never a day or an hour | **Code.** The column is typed as a month; nothing can write a finer value into it, and it moves only on an accepted ingest. |
 | `submissions` is a lifetime count | **Code.** It is not a rate limit; the limit is per key, in memory, and below. |
 | `admin_audit` names administrators, actions and key ids — never a note, a key or a hash | **Code.** A test pins what its two text columns may hold. |

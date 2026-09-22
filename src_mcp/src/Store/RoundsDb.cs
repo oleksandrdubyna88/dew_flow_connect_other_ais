@@ -384,7 +384,7 @@ public sealed class RoundsDb : IDisposable
     /// </summary>
     /// <remarks>
     /// <para><b>A wider row than <see cref="Sendable"/>'s, into a record of its own.</b> The send
-    /// projects <see cref="StoredPair"/> and nothing else, and <c>OnlyThreeFieldsLeaveTests</c>
+    /// projects <see cref="StoredPair"/> and nothing else, and <c>OnlyFourFieldsLeaveTests</c>
     /// constructs that record by name to say so; widening it would have routed the repository path
     /// and the reviewers' prose through the type the upload reads. The page reads
     /// <see cref="ReviewPair"/>, and the two share their first nine columns and nothing else.</para>

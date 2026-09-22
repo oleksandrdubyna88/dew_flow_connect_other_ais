@@ -96,6 +96,82 @@ public sealed partial class TheBuiltBinariesTests : IDisposable
     }
 
     /// <summary>
+    /// The PUBLISHED binary takes a comment on its own route, stores it, and shows it to a person.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Three things only the real binary can answer.</b> The route exists in the published
+    /// surface at all; the source-generated serializer really binds the fourth property, which is
+    /// the one failure mode that compiles perfectly and drops the field at runtime; and the
+    /// migration ran on the real file so the column is there to write into.</para>
+    /// <para>And the other half of the mechanism, on the same binary: the old route accepts the same
+    /// document and stores no comment. A person reading `--waiting` sees the difference, which is
+    /// where they would see it.</para>
+    /// <para>The client half cannot carry a comment yet — that is story 4.2a — so this posts the
+    /// document itself rather than running `coai-mcp`. The end-to-end pass through both real
+    /// processes arrives with that story.</para>
+    /// </remarks>
+    [Fact]
+    public async Task TheRealServerTakesACommentOnItsOwnRouteAndShowsIt()
+    {
+        MustExist(BugsExe);
+        var key = IssueKey();
+        var (server, port) = await Serving(string.Empty);
+        try
+        {
+            using var http = Talking(port, key);
+
+            using var said = await http.PostAsJsonAsync(
+                "/ingest/commented", OneCommentedPair, TestContext.Current.CancellationToken);
+            said.StatusCode.Should().Be(HttpStatusCode.OK);
+            (await said.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
+                .Should().Contain("\"contract\":2", "the published answer states which contract took it");
+        }
+        finally
+        {
+            Stop(server);
+        }
+
+        var waiting = Run(BugsExe, "--waiting", _dir);
+        waiting.Code.Should().Be(0);
+        waiting.Out.Should().Contain(
+            "said: this one bit us in production",
+            "a person deciding what to promote is shown the words that came with the pair");
+    }
+
+    /// <summary>And the SAME published binary refuses that document on the old route.</summary>
+    /// <remarks>
+    /// The route is the mechanism, so it is worth one scenario on the artefact that is actually
+    /// deployed: two routes that behaved alike would leave a comment's fate to deployment order.
+    /// Refused rather than stored-without-it, because a new server dropping a field in silence is
+    /// the very failure the new route exists to prevent.
+    /// </remarks>
+    [Fact]
+    public async Task TheRealServersPlainRouteRefusesAPairCarryingAComment()
+    {
+        MustExist(BugsExe);
+        var key = IssueKey();
+        var (server, port) = await Serving(string.Empty);
+        try
+        {
+            using var http = Talking(port, key);
+
+            using var plain = await http.PostAsJsonAsync(
+                "/ingest", OneCommentedPair, TestContext.Current.CancellationToken);
+
+            plain.StatusCode.Should().Be(HttpStatusCode.OK, "a refusal is an item's fate");
+            (await plain.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
+                .Should().Contain("refused").And.Contain("/ingest/commented");
+        }
+        finally
+        {
+            Stop(server);
+        }
+
+        Run(BugsExe, "--waiting", _dir).Err.Should().Contain(
+            "nothing is waiting", "a refused pair is written to no table at all");
+    }
+
+    /// <summary>
     /// A candidate port taken between the probe and the bind costs the candidate, not the run.
     /// </summary>
     /// <remarks>
@@ -487,6 +563,21 @@ public sealed partial class TheBuiltBinariesTests : IDisposable
     private static Task<HttpResponseMessage> Ingest(HttpClient http) =>
         http.PostAsJsonAsync("/ingest", OnePair, TestContext.Current.CancellationToken);
 
+    /// <summary>The same pair with words a person typed about it.</summary>
+    private static readonly object OneCommentedPair = new
+    {
+        items = new[]
+        {
+            new
+            {
+                language = "CSharp",
+                skeletonBefore = "method_1(var_1) { }",
+                skeletonAfter = "method_1(var_1) { lock (var_2) { } }",
+                comment = "this one bit us in production",
+            },
+        },
+    };
+
     /// <summary>What the key has done, read from the FILE by a third opener while the server serves.</summary>
     private static Usage UsageOf(string database, string id)
     {
@@ -531,8 +622,14 @@ public sealed partial class TheBuiltBinariesTests : IDisposable
     }
 
     /// <summary>Starts the server and waits for it to answer, on a port it really got.</summary>
-    private Task<(Running Server, int Port)> Serving(string args, string admins = "", string rate = "") =>
-        Serving(FreePorts(), args, admins, rate);
+    /// <param name="exe">
+    /// Which binary to start; this build's by default. A caller passes one to run a PREVIOUS
+    /// release — the scenario that proves an old server has no route for a comment can only be
+    /// written against the artefact that release really produced.
+    /// </param>
+    private Task<(Running Server, int Port)> Serving(
+        string args, string admins = "", string rate = "", string exe = "") =>
+        Serving(FreePorts(), args, admins, rate, exe);
 
     /// <summary>
     /// The same, over a caller's candidates — which is what makes a lost port testable.
@@ -558,14 +655,16 @@ public sealed partial class TheBuiltBinariesTests : IDisposable
     /// into a hang; so it stops, and the message carries what the server actually SAID.</para>
     /// </remarks>
     private async Task<(Running Server, int Port)> Serving(
-        IEnumerable<int> candidates, string args, string admins = "", string rate = "")
+        IEnumerable<int> candidates, string args, string admins = "", string rate = "",
+        string exe = "")
     {
         var lost = new List<int>();
+        var binary = exe.Length > 0 ? exe : BugsExe;
 
         foreach (var port in candidates)
         {
             var server = Start(
-                BugsExe, $"--urls http://127.0.0.1:{port} {args}".TrimEnd(), _dir, rate: rate, admins: admins);
+                binary, $"--urls http://127.0.0.1:{port} {args}".TrimEnd(), _dir, rate: rate, admins: admins);
 
             if (await Listening(server, port))
             {

@@ -1920,7 +1920,7 @@ them through the same three-table join `BugsQuery` already uses, into **`ReviewP
 `fixSha`, `file`, `line`, `why`, `fix`.
 
 **Why a second record and not a wider `StoredPair`.** `UploadRun.Wire` is a function OF
-`StoredPair`, and `OnlyThreeFieldsLeaveTests` constructs that record by name to prove what the
+`StoredPair`, and `OnlyFourFieldsLeaveTests` constructs that record by name to prove what the
 mapping leaves behind. Widening it would have routed a repository path, a file and the reviewers'
 prose through the very type the send reads — an edit that reads like a simplification and is the
 one that test exists to refuse. So `Sendable()` still answers the narrow record, `Wire` still takes
@@ -2014,8 +2014,10 @@ or never there, and the page says which of the two a person should think about.
 **`RoundsDb.Pair(findingId)`** is the page's projection for ONE row — the same sixteen columns as
 `Pairs()`, through one shared SELECT constant (`ThePagesRow`), by finding id — because a pair past
 the page's limit would otherwise be unreadable, and two hundred rows for one is the wrong shape.
-`Sendable()`, `StoredPair`, `UploadRun.Wire`, `OnlyThreeFieldsLeaveTests` and `NormalizeAnswer` are
-byte-identical to what they were: real source never reaches the type whose `Leaks` contract is the
+`Sendable()`, `StoredPair`, `UploadRun.Wire`, the wire guard and `NormalizeAnswer` were left
+byte-identical **by that story** — the guard has since been widened once and renamed
+`OnlyFourFieldsLeaveTests`, for the comment and for nothing else. Real source never reaches the type
+whose `Leaks` contract is the
 proof that no real source survived, which is why the answer is a fourth record rather than a wider
 third.
 
@@ -3295,12 +3297,23 @@ is worth exactly what it lets through.
 
 ### Three fields cross
 
-`UploadedPair` is the language and the two skeletons. `StoredPair` carries the finding id, the
-symbol, the severity, the category and the title, and every one of them must never leave — a
-story-5 code round flagged reusing it here as the obvious way to leak all five in one edit that
-reads like a simplification. `OnlyThreeFieldsLeaveTests` names the three rather than counting them,
-because a count passes when somebody swaps one for `SymbolName`; adding the symbol back turns two
-tests red, one of them by finding the name in the serialised body.
+`UploadedPair` is the language, the two skeletons and — since 2026-09-21 — a contributor's own
+`Comment`. `StoredPair` carries the finding id, the symbol, the severity, the category and the
+title, and every one of them must never leave — a story-5 code round flagged reusing it here as the
+obvious way to leak all five in one edit that reads like a simplification.
+`OnlyFourFieldsLeaveTests` names the four rather than counting them, because a count passes when
+somebody swaps one for `SymbolName`; adding the symbol back turns two tests red, one of them by
+finding the name in the serialised body.
+
+**The guard was widened ONCE, and the difference in kind is the reason.** The five it still refuses
+are DERIVED from somebody's repository and are anonymised before they leave; a comment is typed by a
+person into a box that says, beside it, that it leaves the machine unanonymised — public by the
+operator's decision of 2026-09-18. The test went red on the widening before it was changed, the
+file and class were renamed with it (a test called "three" asserting four is the drift it exists to
+refuse), and it gained
+`APairWithoutACommentIsByteIdenticalToTheWireBeforeComments`, which compares against bytes captured
+from the build that predates the field. A null comment is omitted by `WhenWritingNull`, so every
+deployed server keeps receiving exactly what it received before until somebody types.
 
 **The id is derived, not sent.** The plan first promised idempotency on a client-generated entry id
 AND that only three fields cross; two reviewers said both cannot hold. Both do when the id is a pure

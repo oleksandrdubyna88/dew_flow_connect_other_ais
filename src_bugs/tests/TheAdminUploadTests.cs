@@ -53,6 +53,44 @@ public sealed class TheAdminUploadTests
             "0", "an administrator is not a key row and uploading does not make one");
     }
 
+    /// <summary>An administrator may comment too, on the same route, and still counts against nobody.</summary>
+    /// <remarks>
+    /// The commented route shares one handler with the plain one and differs in a single flag, so
+    /// the administrator's path through it is a branch nothing else here walks: it reaches
+    /// <see cref="Corpus.AcceptAdmin"/> rather than <see cref="Corpus.Accept"/>, and a comment lost
+    /// on that one path would be lost exactly where nobody is watching for it.
+    /// </remarks>
+    [Fact]
+    public async Task AnAdministratorsCommentIsStoredAndStillCountsAgainstNoKey()
+    {
+        using var server = new BugsServer(adminKeys: AdminKey);
+        using var http = server.Bearing(AdminKey);
+
+        var reply = await http.PostAsJsonAsync(
+            "/ingest/commented", OneCommentedPair, TestContext.Current.CancellationToken);
+
+        reply.StatusCode.Should().Be(HttpStatusCode.OK);
+        var db = Path.Combine(server.DataDir, "coai-bugs.db");
+        TestSql.Scalar(db, "SELECT comment FROM quarantine").Should().Be("we hit this in the field");
+        TestSql.Scalar(db, "SELECT COUNT(*) FROM api_keys").Should().Be(
+            "0", "commenting is not a reason to invent a key row either");
+    }
+
+    /// <summary>The same pair as <see cref="OnePair"/>, with words an administrator typed.</summary>
+    private static readonly object OneCommentedPair = new
+    {
+        items = new[]
+        {
+            new
+            {
+                language = "CSharp",
+                skeletonBefore = "method_1(var_1) { }",
+                skeletonAfter = "method_1(var_1) { lock (var_2) { } }",
+                comment = "we hit this in the field",
+            },
+        },
+    };
+
     /// <summary>No counter and no month are written, because there is no row to write them on.</summary>
     [Fact]
     public async Task NoCounterAndNoMonthAreWrittenForAnAdministrator()
@@ -181,7 +219,7 @@ public sealed class TheAdminUploadTests
             var throughAcceptAdmin = corpus.AcceptAdmin(
                 admin, month, scope => scope.Keep("CSharp", "a", "b"));
 
-            throughAccept.Should().BeOfType<Accepted<(Kept, string)>.KeyNotInForce>(
+            throughAccept.Should().BeOfType<Accepted<(Kept, string, bool)>.KeyNotInForce>(
                 "an administrator is not a key row, and Accept is right to refuse one");
             throughAcceptAdmin.Kept.Should().Be(Kept.Stored, "which is why the administrator has its own path");
             corpus.Waiting(10).Should().ContainSingle("exactly one of the two wrote anything");
