@@ -89,7 +89,8 @@ public sealed partial class PanelService
         _callers = new CallerSessions(settings.DataDir);
         _projection = new Store.Projection(settings.DataDir, log);
         _consultations = new ConsultationService(
-            settings, launcher, _executor, _context, _prompts, _ledger, log, Environment.GetEnvironmentVariable);
+            settings, launcher, _executor, _context, _prompts, _ledger, log,
+            Environment.GetEnvironmentVariable, noticing);
 
         // One client for every Team server this configuration names. A probe and a cancellation are
         // both short requests to the same handful of hosts, so a shared handler is the whole point.
@@ -2705,7 +2706,7 @@ public sealed partial class PanelService
     /// into a single row. The compiler fills it at each site, so nothing below changed.</para>
     /// </remarks>
     private string Error(string sentence, [CallerMemberName] string from = "") =>
-        Refusal.Answer(sentence, _log, from);
+        Refusal.Answer(sentence, _noticing, from);
 }
 
 /// <summary>

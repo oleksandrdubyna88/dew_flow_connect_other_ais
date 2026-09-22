@@ -1705,7 +1705,7 @@ internal static class Program
             // every injected test passes. (gemini and codex, on story 2.3.2's plan round.)
             var host = new PanelServiceHost(
                 Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log,
-                Noticing.Through(notices, log));
+                Noticing.Through(notices, Environment.GetEnvironmentVariable, log));
             var options = new McpServerOptions
             {
                 ServerInfo = new Implementation

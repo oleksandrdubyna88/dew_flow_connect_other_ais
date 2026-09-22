@@ -509,10 +509,57 @@ Conventions reviewers are dropped.
 ### The notice LINE is a contract, and the only honest check runs both halves (2026-09-21)
 
 The path is where the file is; this is what goes in it, and it is the sharper half. **Both containers
-REDACT** before anything reaches disk — the extension writing its own ledger today, and `coai-mcp`
-writing `server-notices.jsonl` once story 1.4's writer has a call site — so a difference between the
-two redactors is not a failing test anywhere. It is a secret written by one and removed by the
-other.
+REDACT** before anything reaches disk — the extension writing its own ledger, and `coai-mcp` writing
+`server-notices.jsonl` — so a difference between the two redactors is not a failing test anywhere. It
+is a secret written by one and removed by the other.
+
+### The server became a PRODUCER of that file (2026-09-22, S8 stories 2.2 and 2.3.2)
+
+For four days `server-notices.jsonl` was a contract with one side: the extension read it and merged
+it into the panel section, the page and the derived count, and nothing wrote it. Both halves now
+write the same file, and the arrow in the container diagram above runs both ways.
+
+What the server writes, and where it is observed:
+
+| What | Observed at | Code |
+|---|---|---|
+| Every refusal returned to a calling AI | `Refusal.Answer` — the one place an `ErrorAnswer` is built (story 2.1's boundary) | `refused` |
+| Every reviewer that did not answer | `LiveRound.Report`, where the outcome arrives | `reviewer-timed-out`, `reviewer-rate-limited`, `reviewer-exit`, `reviewer-not-started`, `reviewer-unparseable` |
+| A setting this build cannot read, a storage note, an adopted settings file | *(story 2.3.3, not yet built)* | `unrecognised-setting`, `storage-note`, `settings-adopted` |
+
+**One road, and it is owned by the host.** `ServeAsync` composes a single `Noticing` — a writer, an
+environment, a log — and hands it to `PanelServiceHost`, which holds it and gives it to every service
+it builds, the rebuild on a settings change included. Refusals and reviewer failures travel the same
+instance, so draining or replacing it cannot split the ledger the page reads. The two one-shot CLI
+modes take a silent one: a mode that answers on stdout and exits must not start a writer thread
+nobody drains.
+
+**One thread writes, and nothing waits for it.** `NoticeWriter` has a bounded queue of 256 and a
+single writer; a caller offers and returns. A wedged share blocks that one thread and nothing else,
+the queue fills, and further offers are refused ALOUD rather than silently dropped. On a clean exit
+the host drains what is queued within a two-second ceiling. What the file holds is every offer the
+disk accepted — the delivery promise is written once, in `module_server.md`, and the stories that add
+a population quote it instead of each making a stronger claim.
+
+```mermaid
+flowchart LR
+    subgraph server["coai-mcp"]
+        refusal["Refusal.Answer"]
+        round["LiveRound.Report"]
+        noticing["Noticing (host-owned)"]
+        writer["NoticeWriter · 1 thread, queue 256"]
+    end
+    subgraph ext["VS Code extension"]
+        own["its own ledger"]
+        page["panel · page · counts"]
+    end
+    file[("server-notices.jsonl")]
+    refusal -- "redacts on write" --> noticing
+    round -- "redacts on write" --> noticing
+    noticing --> writer --> file
+    own --> page
+    file --> page
+```
 
 `notifications.ts` is the contract and `CoaiMcp.Core.Notices` is the port. What is compared, and how,
 was decided by running them rather than by reading them:

@@ -32,9 +32,39 @@ namespace CoaiMcp.Server;
 /// <param name="Log">Where a notice that did not land is said out loud.</param>
 public sealed record Noticing(Func<ServerNotice, bool> Offer, Serilog.ILogger Log)
 {
-    /// <summary>The production composition: the host's writer, this side's directory, its log.</summary>
-    internal static Noticing Through(NoticeWriter writer, Serilog.ILogger log) =>
-        new(notice => writer.Offer(Where, notice, log), log);
+    /// <summary>
+    /// The production composition: the host's writer, the HOST's environment, its log.
+    /// </summary>
+    /// <remarks>
+    /// The environment is a parameter because <see cref="PanelServiceHost"/> takes one — a host with
+    /// a scoped or virtualised env would otherwise have its notices resolved from the ambient
+    /// process, and land somewhere its own settings never named. (gemini, on the code round.) It is
+    /// threaded as the <c>env</c> rather than as a <c>Func&lt;ResolvedDataDir&gt;</c> so that the
+    /// resolution stays one NAMED method: a lambda at the call site put
+    /// <c>&lt;&gt;c.&lt;ServeAsync&gt;b__46_4</c> into the census that asks which members answer a
+    /// <see cref="ResolvedDataDir"/>, which is a member no reader can place.
+    /// </remarks>
+    internal static Noticing Through(NoticeWriter writer, Func<string, string?> env, Serilog.ILogger log)
+    {
+        var directory = new NoticesDirectory(env);
+
+        return new(notice => writer.Offer(directory.Where, notice, log), log);
+    }
+
+    /// <summary>
+    /// One environment, and the one rule for where its notices go.
+    /// </summary>
+    /// <remarks>
+    /// A named type for what could have been a closure, because <c>TheOneAppendTests</c> asks the
+    /// ASSEMBLY which members answer a <see cref="ResolvedDataDir"/> — and a lambda puts
+    /// <c>&lt;&gt;c__DisplayClass11_0.&lt;Through&gt;b__1</c> in that list, a member no reader can
+    /// place. The census caught this twice while this story was being written, which is the census
+    /// doing precisely its job: every road to the directory rule has a name somebody can read.
+    /// </remarks>
+    internal sealed record NoticesDirectory(Func<string, string?> Env)
+    {
+        internal ResolvedDataDir Where() => PanelSettings.DataDirectoryFor(Env);
+    }
 
     /// <summary>
     /// Where this side's data directory is — asked of the ONE resolver, from the ONE place notices ask.
@@ -47,8 +77,7 @@ public sealed record Noticing(Func<ServerNotice, bool> Offer, Serilog.ILogger Lo
     /// name no reader can place, which is worse than the thing the census was watching for. One
     /// named pass-through, used by the refusals and by the reviewer failures alike.
     /// </remarks>
-    internal static ResolvedDataDir Where() =>
-        PanelSettings.DataDirectoryFor(Environment.GetEnvironmentVariable);
+
 
     /// <summary>
     /// Writes nothing, says nothing — for a one-shot mode, and for a test that is about something else.
@@ -72,7 +101,9 @@ public sealed record Noticing(Func<ServerNotice, bool> Offer, Serilog.ILogger Lo
     {
         try
         {
-            return Said(Offer(build()));
+            var notice = build();
+
+            return Said(Offer(notice), notice, Log);
         }
         catch (Exception failure)
         {
@@ -85,11 +116,15 @@ public sealed record Noticing(Func<ServerNotice, bool> Offer, Serilog.ILogger Lo
     }
 
     /// <summary>An offer that was not accepted is reported, and the report is never the failure.</summary>
-    private bool Said(bool offered)
+    private static bool Said(bool offered, ServerNotice notice, Serilog.ILogger log)
     {
         if (!offered)
         {
-            Quietly(() => Log.Warning("a notice was not accepted by the writer"));
+            // Named, because during a burst an operator otherwise cannot tell WHICH row is missing
+            // from the page. (The code round.)
+            Quietly(() => log.Warning(
+                "a notice was not accepted by the writer: {Code} for {Subject}",
+                notice.Code, notice.Subject ?? ""));
         }
 
         return offered;

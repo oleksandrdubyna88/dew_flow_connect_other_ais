@@ -116,7 +116,7 @@ public sealed class TheOneAppendTests
         answering.Should().BeEquivalentTo([
             $"{nameof(PanelSettings)}.{nameof(PanelSettings.DataDirectoryFor)}",
             $"{nameof(SettingsFile)}.{nameof(SettingsFile.DataDirFrom)}",
-            $"{nameof(Noticing)}.Where"]);
+            $"{nameof(Noticing.NoticesDirectory)}.Where"]);
     }
 
     [Fact]

@@ -1610,6 +1610,12 @@ and `Build()` runs again. The live leg over stdio remains story 2.4's.
 offer threw — the exception, and then "not accepted" — which reads in a log as two different losses.
 One sentence per lost notice.
 
+**The theory is DERIVED from the production map** (codex, on the code round): listing the five
+endings again beside `ReviewerNotices.ByType` is a list that gives a sixth no row, so the cases come
+from `ByType.Keys` and a factory supplies the constructor arguments reflection cannot invent. An
+ending that is mapped but which the factory cannot build fails loudly there — the same demand in a
+different place.
+
 ## A notice offered on the way out still lands (2026-09-22, S8 story 2.3.1)
 
 `TheWriterDrainsBeforeTheProcessLeavesTests` — seven cases for one method, because what `Drain` has

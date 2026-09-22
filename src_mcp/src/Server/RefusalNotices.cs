@@ -43,13 +43,8 @@ internal static class RefusalNotices
     /// than refused. A catch no test can reach is a guarantee nobody has checked; the theory below
     /// checks this one instead, over sentences chosen to break it.
     /// </remarks>
-    internal static void Record(
-        string sentence,
-        string from,
-        Serilog.ILogger log,
-        NoticeWriter writer,
-        Func<ResolvedDataDir> where) =>
-        writer.Offer(where, Of(sentence, from), log);
+    internal static void Record(string sentence, string from, Noticing noticing) =>
+        noticing.Offered(() => Of(sentence, from));
 
     /// <summary>
     /// The notice a refusal makes.

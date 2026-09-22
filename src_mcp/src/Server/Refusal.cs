@@ -42,29 +42,18 @@ internal static class Refusal
     /// second code round were about: a wait only stops WAITING, so a wedged share kept a thread-pool
     /// worker forever and every refusal cost two threads.</para>
     /// </remarks>
-    internal static string Answer(string sentence, Serilog.ILogger log, [CallerMemberName] string from = "") =>
-        Answer(sentence, log, from, NoticeWriter.Shared, Noticing.Where);
-
-    /// <summary>
-    /// The same, with the writer and the resolver supplied — the seam every test drives.
-    /// </summary>
-    /// <remarks>
-    /// Parameters rather than a static hook, for the reason story 1.4 recorded: xUnit runs test classes
-    /// in parallel and a hook left set fires inside somebody else's call. <c>COAI_DATA_DIR</c> is
-    /// process-global, so a test that set it would be that hook wearing a different hat.
+    /// <para><b>It takes the <see cref="Noticing"/> the host owns</b> rather than reaching for the
+    /// static writer. codex, on story 2.3.2's code round: with reviewer failures going through the
+    /// host's instance and refusals going through <c>NoticeWriter.Shared</c>, draining or replacing
+    /// one would lose or misroute the other, and the page would no longer be reading one ledger.
+    /// That also made this the only overload — the <c>Noticing</c> IS the seam a test supplies.</para>
     /// </remarks>
-    internal static string Answer(
-        string sentence,
-        Serilog.ILogger log,
-        string from,
-        NoticeWriter writer,
-        Func<ResolvedDataDir> where)
+    internal static string Answer(string sentence, Noticing noticing, [CallerMemberName] string from = "")
     {
         var refusal = new ErrorAnswer(sentence);
 
-        RefusalNotices.Record(sentence, from, log, writer, where);
+        RefusalNotices.Record(sentence, from, noticing);
 
         return JsonSerializer.Serialize(refusal, ServerJsonContext.Default.ErrorAnswer);
     }
-
 }

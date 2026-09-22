@@ -66,13 +66,42 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
     private static ReviewerProgress Ended(string provider, ReviewerOutcome outcome) =>
         new(provider, RoleCatalog.ArchitectureRole, "failed", outcome, TimeSpan.FromSeconds(1));
 
-    public static TheoryData<ReviewerOutcome, string> EveryEnding => new()
+    /// <summary>
+    /// One case per mapped ending, DERIVED from the map rather than repeated beside it.
+    /// </summary>
+    /// <remarks>
+    /// codex, on the code round: a theory that lists the five types again is a theory that gives a
+    /// sixth no row — the list and the code would have to be kept in step by somebody remembering.
+    /// The cases come from <c>ReviewerNotices.ByType.Keys</c>, and <see cref="Instance"/> is the one
+    /// thing a reflection walk cannot supply: constructor arguments. An ending whose type is mapped
+    /// but which <see cref="Instance"/> cannot build fails LOUDLY here, which is the same demand in
+    /// a different place.
+    /// </remarks>
+    public static TheoryData<ReviewerOutcome, string> EveryEnding
     {
-        { new ReviewerOutcome.TimedOut(), ServerNoticeCodes.ReviewerTimedOut },
-        { new ReviewerOutcome.RateLimited("quota", 2), ServerNoticeCodes.ReviewerRateLimited },
-        { new ReviewerOutcome.NonZeroExit(3, "boom"), ServerNoticeCodes.ReviewerExit },
-        { new ReviewerOutcome.NotStarted("no executable"), ServerNoticeCodes.ReviewerNotStarted },
-        { new ReviewerOutcome.Unparseable("not json", Usage.None), ServerNoticeCodes.ReviewerUnparseable },
+        get
+        {
+            var cases = new TheoryData<ReviewerOutcome, string>();
+            foreach (var (type, code) in ReviewerNotices.ByType)
+            {
+                cases.Add(Instance(type), code);
+            }
+
+            return cases;
+        }
+    }
+
+    /// <summary>One of each ending, built — the arguments reflection cannot invent.</summary>
+    private static ReviewerOutcome Instance(Type ending) => ending switch
+    {
+        _ when ending == typeof(ReviewerOutcome.TimedOut) => new ReviewerOutcome.TimedOut(),
+        _ when ending == typeof(ReviewerOutcome.RateLimited) => new ReviewerOutcome.RateLimited("quota", 2),
+        _ when ending == typeof(ReviewerOutcome.NonZeroExit) => new ReviewerOutcome.NonZeroExit(3, "boom"),
+        _ when ending == typeof(ReviewerOutcome.NotStarted) => new ReviewerOutcome.NotStarted("no executable"),
+        _ when ending == typeof(ReviewerOutcome.Unparseable) => new ReviewerOutcome.Unparseable("not json", Usage.None),
+        _ => throw new NotSupportedException(
+            $"{ending.Name} is mapped to a code but this suite cannot build one — add it here, "
+            + "because an ending nothing can construct is an ending nothing tests"),
     };
 
     [Theory]
@@ -252,10 +281,12 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
         // The ownership guarantee, as a census: the host is handed ONE composition and every service
         // it builds gets that one. A fourth file reaching for the static is a road that writes
         // somewhere else — or nowhere — while every injected test passes.
-        ProductionSources.FilesMentioning("NoticeWriter.Shared").Keys.Should().BeEquivalentTo(
-            ["src_mcp/src/Server/Refusal.cs", "src_mcp/src/Program.cs"],
-            "the writer is taken once in Program and handed down; Refusal's own overload is 2.1's "
-            + "boundary, which predates the host owning one and reaches the SAME instance");
+        ProductionSources.FilesMentioning("NoticeWriter.Shared").Keys.Should()
+            .Equal(["src_mcp/src/Program.cs"],
+                "ONE road: the writer is taken once in Program, composed into a Noticing there, and "
+                + "handed down. Refusal reached for the static until this story — with reviewer "
+                + "failures on the host's instance and refusals on the shared one, draining or "
+                + "replacing either would have split the ledger the page reads (codex)");
         ProductionSources.FilesMentioning("Noticing.Through(").Keys.Should()
             .Equal(["src_mcp/src/Program.cs"], "one composition, in one place");
         ProductionSources.FilesMentioning("Noticing.None").Keys.Should()

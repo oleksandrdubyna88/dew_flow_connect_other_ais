@@ -1315,6 +1315,22 @@ with a count and two reviewers are two rows.
 about 0.4 MB/day at the typical record size — 146 MB/year, inside the 128 MB × two-generation roll
 that `ServerNotices` already enforces. No new retention rule; the existing one covers it.
 
+**What the code round changed.** Refusals travelled `NoticeWriter.Shared` while reviewer failures
+travelled the host's instance, and codex was right that draining or replacing either would split the
+ledger the page reads — so `Refusal.Answer` takes the `Noticing` too, the seam parameter it used to
+need is gone, and `NoticeWriter.Shared` is named in exactly one production file. The resolver takes
+the HOST's environment rather than the process's (gemini): a host with a scoped env was otherwise
+writing its notices wherever the ambient one pointed. And a refused notice now names itself in the
+log — `{Code} for {Subject}` — because during a burst an operator otherwise cannot tell which row is
+missing from the page.
+
+**The census made the same correction twice, and it was right both times.** Composing the resolver
+as a lambda at a call site put `<>c.<ServeAsync>b__46_4`, and then
+`<>c__DisplayClass11_0.<Through>b__1`, into the list of members that answer a `ResolvedDataDir` — a
+member no reader can place, which is worse than the second implementation the census was watching
+for. It is a named record now, `Noticing.NoticesDirectory`, holding the environment it resolves
+against.
+
 ## What the notices ledger delivers — the promise, said once (S8 story 2.3.1, 2026-09-22)
 
 Two sentences in this repository contradicted each other: this file and the plan's status line both
