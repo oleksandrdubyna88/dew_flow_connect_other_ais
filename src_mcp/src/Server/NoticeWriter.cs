@@ -58,14 +58,35 @@ internal sealed class NoticeWriter
             SingleReader = true,
         });
 
+    /// <summary>
+    /// How long a process leaving may wait for what it queued.
+    /// </summary>
+    /// <remarks>
+    /// It is a CEILING and not a wait: an empty queue drains at once, and the ordinary session that
+    /// wrote a handful of notices pays the time of a handful of appends. Two seconds is what a slow
+    /// share needs for those and what a person does not notice on exit — the plan round pushed back
+    /// on three, and was right that this is paid by the release smoke, which runs a real
+    /// <c>initialize</c> over stdio against the published binary and then exits.
+    /// </remarks>
+    internal static readonly TimeSpan DrainBudget = TimeSpan.FromSeconds(2);
+
     private readonly ManualResetEventSlim _idle = new(initialState: true);
 
+    private readonly Task _writing;
+
     private int _inFlight;
+
+    /// <summary>
+    /// Volatile because <see cref="Drain"/> writes it and <see cref="Offer"/> reads it from another
+    /// thread with no lock between them. Without it a late offer can see a stale <c>false</c> and be
+    /// refused with the wrong reason — which is the whole point of the field. (The code round.)
+    /// </summary>
+    private volatile bool _closing;
 
     internal NoticeWriter(Func<ResolvedDataDir, ServerNotice, bool> append)
     {
         _append = append;
-        _ = Task.Run(Draining);
+        _writing = Task.Run(Draining);
     }
 
     /// <summary>
@@ -82,10 +103,82 @@ internal sealed class NoticeWriter
         }
 
         Done();
-        Safely(() => log.Warning(
-            "a notice was dropped: {Depth} are already waiting and the disk is not answering", Depth));
+        Safely(() => log.Warning(Why(), Depth));
 
         return false;
+    }
+
+    /// <summary>
+    /// Why an offer was refused — and never the wrong reason.
+    /// </summary>
+    /// <remarks>
+    /// After <see cref="Drain"/> the channel is closed, so a late offer is refused for a completely
+    /// different reason than a full queue. Saying "256 are already waiting and the disk is not
+    /// answering" there would be a lie in a log, which is worse than silence. (The plan round.)
+    /// </remarks>
+    private string Why() => _closing
+        ? "a notice arrived after the writer was closing, and was not written"
+        : "a notice was dropped: {Depth} are already waiting and the disk is not answering";
+
+    /// <summary>
+    /// Closes the queue and waits for the writer, up to <paramref name="within"/>. Never throws.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>It waits on the TASK, not on the count.</b> Three findings of the plan round were the
+    /// same thing: <see cref="Idle"/> watches <c>_inFlight</c>, which an append that hangs never
+    /// decrements — so a wait on the count both fails to end and fails to tell anyone that the
+    /// draining task is still holding the file while the process leaves.</para>
+    /// <para><b>What it answers is UNRESOLVED, not lost.</b> codex: a record dequeued and mid-append
+    /// may already be on disk when the bound expires, so the count is what this writer cannot
+    /// account for — and that is what the warning says.</para>
+    /// <para><b>And zero means the QUEUE emptied, not that every notice reached the disk.</b> An
+    /// append the disk refused was already reported by <see cref="Said"/> when it happened; a late
+    /// offer refused after the close was reported by <see cref="Offer"/>. Zero here is the absence of
+    /// anything still outstanding, which is the only thing a drain can honestly claim. (The code
+    /// round, gemini.)</para>
+    /// <para><b>What remains after a timeout</b> is a task still blocked in a synchronous append.
+    /// There is no cancellation for that — the append is one kernel write to a share that has
+    /// stopped answering — so the process leaves with it outstanding. Surviving that is story 3.1's
+    /// run marker, not a property a writer can have.</para>
+    /// <para><b>Honest about the test.</b> Swapping this back to <c>Idle(within)</c> leaves every one
+    /// of story 2.3.1's tests GREEN — measured, by doing it — because with today's
+    /// <see cref="Draining"/> the count reaching zero and the task completing are the same moment,
+    /// and <see cref="Wrote"/> catches everything so the task cannot fault. The task wait is kept
+    /// anyway: it is strictly stronger, it is what stays correct when somebody adds work after the
+    /// loop or a path that lets the task fault, and the alternative is a method whose contract says
+    /// "waits for the writer" while waiting for a counter. What is NOT claimed is that a test would
+    /// catch the swap today.</para>
+    /// </remarks>
+    internal int Drain(TimeSpan within)
+    {
+        _closing = true;
+        _queue.Writer.TryComplete();
+
+        return Waited(_writing, within) ? 0 : Volatile.Read(ref _inFlight);
+    }
+
+    /// <summary>
+    /// Whether the writer finished — and never an exception, which the contract above promises.
+    /// </summary>
+    /// <remarks>
+    /// <c>Task.Wait</c> RETHROWS a faulted task as an <c>AggregateException</c>, and this is called
+    /// from a <c>finally</c> during process exit: a throw there skips the warning that says what was
+    /// unresolved and turns a clean <c>return 0</c> into a crash. The task cannot fault today —
+    /// <see cref="Wrote"/> catches everything — which is exactly why the guard is cheap and why the
+    /// docstring's "never throws" has to be true of the code and not of today's call graph. (gemini,
+    /// on the code round.)
+    /// </remarks>
+    internal static bool Waited(Task writing, TimeSpan within)
+    {
+        try
+        {
+            return writing.Wait(within);
+        }
+        catch (Exception)
+        {
+            // A faulted writer is a writer that is FINISHED, and its own catch already reported why.
+            return true;
+        }
     }
 
     /// <summary>Whether the queue has drained, for a test that needs to look at the file.</summary>

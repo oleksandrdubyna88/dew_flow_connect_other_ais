@@ -3,7 +3,8 @@
 > Status: **EPIC 1 IMPLEMENTED, 2026-09-21; story 2.1 implemented, 2026-09-21; the rest of epics 2
 > and 3 open.** Stories 1.1 (the credential list), 1.2 (the notice line), 1.3 (the path) and 1.4 (the
 > writer, and the append it had to fix) have shipped; 2.1 bounded the population, and **2.2 has
-> instrumented it** — every refusal this server returns now leaves a line, written at the ONE road
+> instrumented it** — every refusal this server returns is OFFERED to the writer (see the delivery
+> promise in module_server.md; a full queue drops and says so), written at the ONE road
 > (`Refusal.Answer`, which `PanelService.Error` and `ConsultationService.Error` are the two CALLERS
 > of, not three roads as this plan first said). What remains is the reviewer and startup notices
 > (2.3), the live seam leg (2.4) — and the deaths (3.1, 3.2).
@@ -348,7 +349,20 @@ because this project's gate holds one session per repo+branch and closes it when
 |---|---|---|---|
 | ~~2.1~~ | ~~Every refusal road and every reviewer ending is counted, and the count only falls~~ — **shipped 2026-09-21** as a BOUNDARY rather than a count (PR #449): `Refusal.Answer` is the one place an `ErrorAnswer` is built, and `shared/refusal-sites.json` carries the numbers | — | Opus |
 | ~~2.2~~ | ~~Every refusal returned to the calling AI is written down~~ — **shipped 2026-09-21**: written at `Refusal.Answer`, handed to ONE writer thread behind a bounded queue so the refusal waits for nothing, `subject` from `[CallerMemberName]`, and the file's ceiling (§7) ships with it rather than as a trigger | 1.4, 2.1 | Opus |
-| 2.3 | A reviewer that fails, and a setting this build cannot read, reach the file the page reads | 2.2 | Opus |
+| ~~2.3~~ | **SPLIT into three on the gate's own command, 2026-09-22** (the split was done by Fable against the code, and found two things the plan round had assumed wrong — see below) | 2.2 | — |
+| ~~2.3.1~~ | ~~A notice offered before the process leaves still lands, and the ledger's promise says what it delivers~~ — **shipped 2026-09-22**: `NoticeWriter.Drain` waits on the writer TASK, `ServeAsync` drains in a `finally` covering both exits, and the delivery promise is one paragraph in `module_server.md` instead of two sentences that disagreed | 2.2 | Opus |
+| 2.3.2 | A reviewer that fails is written down once, by a writer the host owns, and a sixth ending cannot arrive unnamed | 2.3.1 | Opus |
+| 2.3.3 | A setting this build cannot read, a directory that surprised it, and a settings file it adopted reach the page, each under a subject it can group on | 2.3.2 | Opus |
+
+**What the split found that the plan round had wrong.** (1) An exception escaping `LiveRound.Report`
+does NOT kill the round — `BoundedScheduler.cs:359-376` already wraps `onProgress?.Invoke` in a
+`catch (Exception)` with the comment *"Reporting is not the work."* What it costs is different and
+real: the progress lambda at `PanelService.cs:1249-1265` runs `live.Report`, then `audit.Moved`, then
+`_ledger.Record` in sequence, so a throw in the first skips that reviewer's audit line and its
+spending row — 2.3.2 claims that consequence. (2) `PanelSettings.Unrecognised` can be typed without
+parsing prose: all three of its sources know their key where the sentence is built
+(`PanelSettings.cs:736-779`), so a `(Key, Sentence)` pair costs edits in ONE file — but the list is
+also on the wire (`ProvidersAnswer.Unrecognised`), so it stays as a projection. That is 2.3.3's.
 | 2.4 | A real refusal over stdio lands with its secret taken out — asserted on the bytes | 2.2 | Opus |
 
 ### Epic 3 — the deaths

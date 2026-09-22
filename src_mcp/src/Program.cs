@@ -1641,6 +1641,16 @@ internal static class Program
             // one place a person is told about, and the binary's is inside the extension's storage.
             logsRoot: ServiceDefaults.CoaiLogPath.RootFor(
                 SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path));
+        // Taken ONCE, here, so the `finally` below cannot start a writer only to drain nothing —
+        // and so story 2.3.2 has an instance to hand to the host rather than each caller reaching
+        // for the static.
+        //
+        // It is the process-global writer, and draining it CLOSES it for good. That is right for a
+        // server whose `ServeAsync` runs once and then the process leaves, and it is the reason
+        // story 2.3.2 moves ownership into the host: once reviewer and startup notices have their
+        // own producers, a producer that outlives this `finally` would be refused as closing rather
+        // than written. (codex, on the code round.)
+        var notices = NoticeWriter.Shared;
         try
         {
             // The file the extension writes is the base; the client config env overrides it — a
@@ -1723,6 +1733,45 @@ internal static class Program
             Note("the MCP client closed the connection.");
             return 0;
         }
+        // A notice is handed to one background thread and the caller returns; without this, a
+        // refusal answered as the client hangs up is one the panel never shows. A `finally` is what
+        // covers BOTH `return 0` roads and an exception unwinding out — including, when story 3.2
+        // adds its `catch (Exception)` above, the crash notice that catch will offer. `using var
+        // log` is disposed after the method body, so the sentence below still has somewhere to go.
+        finally { Unresolved(Draining(notices, log), log); }
+    }
+
+    /// <summary>
+    /// Drains, and says so BEFORE the wait when there is anything to wait for.
+    /// </summary>
+    /// <remarks>
+    /// A session closing with a slow share can sit in the drain for the whole budget, and the only
+    /// message used to arrive after it — so the person closing their client saw a server that looked
+    /// hung. One line first, and only when something is actually queued. (The code round.)
+    /// </remarks>
+    internal static int Draining(NoticeWriter notices, Serilog.ILogger log)
+    {
+        if (!notices.Idle(TimeSpan.Zero))
+        {
+            log.Information("writing down the last notices before this run ends");
+        }
+
+        return notices.Drain(NoticeWriter.DrainBudget);
+    }
+
+    /// <summary>What the writer could not account for on the way out, said rather than swallowed.</summary>
+    /// <remarks>
+    /// UNRESOLVED and not "lost": a record dequeued and mid-append when the bound expired may
+    /// already be on disk. What this number means is what this process cannot vouch for.
+    /// </remarks>
+    internal static void Unresolved(int notices, Serilog.ILogger log)
+    {
+        if (notices == 0)
+        {
+            return;
+        }
+
+        log.Warning("{Notices} notice(s) were still unwritten when this run ended", notices);
     }
 
     internal const string Instructions = """
