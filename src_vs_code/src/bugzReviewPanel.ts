@@ -5,7 +5,7 @@ import * as vscode from 'vscode';
 import { asText } from './asText';
 import { notify } from './notify';
 import { AskedRevision, KeepWrite, PairsRead } from './roundsDbRead';
-import { commentWrite, decisionsFor, settled } from './reviewComment';
+import { commentWrite, decisionsFor, settledBy, unwritten } from './reviewComment';
 import { reportWrite } from './reviewWrites';
 import { AskedTree } from './reviewTreeRead';
 import { settingWritten } from './settingWrite';
@@ -126,8 +126,11 @@ type ReviewMessage =
   /** A row's file was asked for — at the commit the reviewers read, or as it is now. */
   | { readonly type: 'openAt' | 'openCurrent' | 'openTree' | 'calls'; readonly id: number }
   | { readonly type: 'openCall'; readonly at: string }
-  /** A person's words about one pair, posted on a pause or when the box was left. */
-  | { readonly type: 'comment'; readonly id: number; readonly text: string };
+  /**
+   * A person's words about one pair: a `draft` on every keystroke (held, never written), a `comment`
+   * on a pause or when the box was left (held AND written).
+   */
+  | { readonly type: 'comment' | 'draft'; readonly id: number; readonly text: string };
 
 /**
  * What an in-flight real-method read is keyed by: the row AND the two commits it is about.
@@ -185,10 +188,11 @@ function asReviewMessage(raw: unknown): ReviewMessage | undefined {
     case 'openCall':
       return typeof m['at'] === 'string' ? { type: 'openCall', at: m['at'] } : undefined;
     case 'comment':
+    case 'draft':
       // `fetchReal`'s rule for the id, and the text must BE text: `String(undefined)` would write
       // the word "undefined" as somebody's comment. The rule on WHAT text is `--pairs-decide`'s.
       return Number.isInteger(Number(m['id'])) && Number(m['id']) >= 0 && typeof m['text'] === 'string'
-        ? { type: 'comment', id: Number(m['id']), text: m['text'] }
+        ? { type: m['type'], id: Number(m['id']), text: m['text'] }
         : undefined;
 
     case 'openAt':
@@ -378,7 +382,10 @@ export class BugzReviewPanel {
         toneHook.dispose();
         // A closed window starts collapsed when it comes back. This object outlives the webview.
         this.expanded = new Set<number>();
-        // Every draft here was already POSTED and its write is queued; the store is where it lives.
+        // Every draft the store does not have yet is written NOW, as one batch: a page closed inside
+        // the pause before a write would otherwise take the words with it. The chain outlives the
+        // webview, so the write finishes after this panel is gone.
+        this.queue(unwritten(this.drafts, this.held));
         this.drafts = new Map<number, string>();
         // And anonymised, with nothing remembered: the cache's lifetime IS the window's.
         this.realText = false;
@@ -415,6 +422,10 @@ export class BugzReviewPanel {
     switch (m.type) {
       case 'decide':
         this.queue(decisionsFor(m.ids, m.keep, this.held, this.drafts));
+
+        return;
+      case 'draft':
+        this.drafts = new Map([...this.drafts, [m.id, m.text]]);
 
         return;
       case 'comment':
@@ -536,8 +547,8 @@ export class BugzReviewPanel {
     this.inFlight = this.inFlight.then(async () => {
       const written = await this.hooks.decide(decisions);
       if (written.ok) {
-        // Only a draft that is exactly what landed is let go; words typed during the write stay.
-        this.drafts = settled(this.drafts, decisions);
+        // Only a draft that is exactly what landed is let go, and only when ALL of it landed.
+        this.drafts = settledBy(this.drafts, decisions, written.decided);
       }
 
       await reportWrite(written, decisions.length);

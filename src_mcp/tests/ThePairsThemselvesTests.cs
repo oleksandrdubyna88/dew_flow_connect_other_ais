@@ -472,6 +472,28 @@ public sealed class ThePairsThemselvesTests : IDisposable
         pair.CommentLost.Should().Be(RoundsDb.EditedWhileSending);
     }
 
+    /// <summary>Words that were edited in the air AND lost on the server say both, not only the edit.</summary>
+    /// <remarks>
+    /// The server answered that another comment was there first, and the person changed the box while
+    /// the batch was out. Recording only the edit tells them the server holds their OLD words — when it
+    /// holds somebody else's. Both facts are true and both are kept. (Code round of 4.2, codex and gemini.)
+    /// </remarks>
+    [Fact]
+    public void WordsEditedInTheAirAndLostOnTheServerSayBoth()
+    {
+        const string lost = "this pair already carries a comment, and the first one stays, so yours was not stored";
+        var id = KeptWith("before the edit");
+        using var db = Db();
+        var inTheAir = db.Sendable(10)[0];
+
+        db.RecordDecide([new CommentedDecision(id, Keep.Kept, "after the edit")]).Refusal.Should().BeEmpty();
+        db.RecordSendOutcome([new SendOutcome(id, lost, false, inTheAir.Comment)]);
+
+        db.Pairs(50)[0].CommentLost.Should().Be(
+            $"{lost}; {RoundsDb.EditedAsWell}",
+            "the server's reason is the first thing that happened to the words, and the edit the second");
+    }
+
     /// <summary>
     /// A database with pairs, from before comments existed, gains both columns and loses nothing.
     /// </summary>

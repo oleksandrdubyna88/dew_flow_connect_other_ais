@@ -57,8 +57,18 @@ test('the panel records what the page opened, and both kinds of press reach the 
   // the condition and the one statement inside it.
   assert.match(
     text,
-    /if \(written\.ok\) \{\s*this\.drafts = settled\(this\.drafts, decisions\);\s*\}\s*await reportWrite\(written, decisions\.length\);/u,
-    'a draft let go on a failed write is a comment lost in the one case the person was told about');
+    /if \(written\.ok\) \{\s*this\.drafts = settledBy\(this\.drafts, decisions, written\.decided\);\s*\}\s*await reportWrite\(written, decisions\.length\);/u,
+    'a draft let go on a failed or PARTIAL write is a comment lost in the one case the person was told about');
+  // A keystroke is held as a draft and written by nobody — and a closing panel writes every held
+  // draft the store does not have, as one batch, BEFORE it lets them go (code round of 4.2, codex).
+  assert.match(
+    text,
+    /case 'draft':\s*this\.drafts = new Map\(\[\.\.\.this\.drafts, \[m\.id, m\.text\]\]\);\s*return;/u,
+    'a draft is held and never written on its own');
+  assert.match(
+    text,
+    /this\.queue\(unwritten\(this\.drafts, this\.held\)\);\s*this\.drafts = new Map<number, string>\(\);/u,
+    'a panel closed inside a pause must write what it holds before it forgets it');
 });
 
 test('the panel hands its open rows to the page on every draw', () => {

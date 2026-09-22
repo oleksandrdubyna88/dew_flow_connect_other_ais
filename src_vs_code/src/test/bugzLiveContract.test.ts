@@ -7,6 +7,7 @@ import { spawnSync } from 'node:child_process';
 
 import { parseBugs } from '../roundsDb';
 import { keysFileIn, readFileAt, readPairs, readRealMethod, writeDecide } from '../roundsDbRead';
+import { COMMENT_MOST_CHARS } from '../commentContract';
 import { REMOVAL_REASONS, TREE_REASONS, TREE_STATES } from '../reviewTree';
 import { readTrees, readTreeAt, removeTree } from '../reviewTreeRead';
 import { mayRank } from '../bugzView';
@@ -358,6 +359,17 @@ test('a decision with words crosses the real writer and the real binary, and a r
       assert.equal(refused.ok, false);
       assert.ok(!refused.ok && refused.tooOld !== true, 'a comment the rule refused is not a binary too old for comments');
       assert.ok(!refused.ok && refused.why.includes('U+0007'), `the refusal names the code point: ${refused.ok ? '' : refused.why}`);
+
+      // The limit, LIVE: the page's number against the running binary's boundary — not two suites
+      // each agreeing with a shared file, which is what a code reviewer said was missing (codex).
+      // Exactly the box's maxlength is taken; one more is refused, as a reason and never as "old".
+      const full = await writeDecide(
+        server(), [{ findingId: 7, keep: 1, comment: 'x'.repeat(COMMENT_MOST_CHARS) }], keysFileIn(data), run);
+      assert.deepEqual(full, { ok: true, decided: 1 }, 'a box filled to its maxlength is inside the server\'s limit');
+      const over = await writeDecide(
+        server(), [{ findingId: 7, keep: 1, comment: 'x'.repeat(COMMENT_MOST_CHARS + 1) }], keysFileIn(data), run);
+      assert.ok(!over.ok && over.tooOld !== true && over.why.includes(String(COMMENT_MOST_CHARS + 1)),
+        `one past the box's limit is refused by the binary, naming the length: ${over.ok ? '' : over.why}`);
     } finally {
       fs.rmSync(data, { recursive: true, force: true });
     }

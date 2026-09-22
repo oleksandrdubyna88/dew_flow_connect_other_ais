@@ -10,7 +10,8 @@ import { RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD, realView } from '../
 import { revisionActions, RevisionState } from '../revisionActions';
 import { Tab } from '../tabStrip';
 import { readable, unescaped } from './readableHtml';
-import { COMMENT_MOST_CHARS, LEAVES_THE_MACHINE } from '../reviewComment';
+import { COMMENT_MOST_CHARS } from '../commentContract';
+import { LEAVES_THE_MACHINE } from '../reviewComment';
 
 /**
  * The review page, RUN — because a multi-select that renders is not a multi-select that selects.
@@ -2060,10 +2061,26 @@ test('typing and then pausing posts the words once, for the pair they were typed
   const page = run([pair(1), pair(2)], { expanded: new Set([2]) });
 
   page.type(page.comment(2), 'this one bit us');
-  assert.deepEqual(acted(page), [], 'nothing is written on a keystroke — each post is a process');
+  assert.deepEqual(acted(page).filter((one) => one.type === 'comment'), [],
+    'nothing is WRITTEN on a keystroke — each write is a process');
 
   page.pause();
-  assert.deepEqual(acted(page), [{ type: 'comment', id: 2, text: 'this one bit us' }]);
+  assert.deepEqual(acted(page).filter((one) => one.type === 'comment'), [{ type: 'comment', id: 2, text: 'this one bit us' }]);
+});
+
+test('every keystroke hands the panel the words as a DRAFT, so closing the page cannot lose them', () => {
+  // A draft is a message, not a write: it costs no process. What it buys is that the panel holds the
+  // words from the first keystroke, and can write them itself if the page closes before a pause or
+  // a blur ever comes — the window a code reviewer found open (codex, twice, round 1 of 4.2's code).
+  const page = run([pair(1)], { expanded: new Set([1]) });
+
+  page.type(page.comment(1), 'half');
+  page.type(page.comment(1), 'half a thought');
+
+  assert.deepEqual(acted(page), [
+    { type: 'draft', id: 1, text: 'half' },
+    { type: 'draft', id: 1, text: 'half a thought' },
+  ]);
 });
 
 test('leaving the box posts what is in it, and the pause it replaced does not post again', () => {
@@ -2074,7 +2091,7 @@ test('leaving the box posts what is in it, and the pause it replaced does not po
   page.leave(box);
   page.pause();
 
-  assert.deepEqual(acted(page), [{ type: 'comment', id: 1, text: 'half a thought' }],
+  assert.deepEqual(acted(page).filter((one) => one.type === 'comment'), [{ type: 'comment', id: 1, text: 'half a thought' }],
     'the blur flushes the words, and a second post of the same words would be a second write');
 });
 

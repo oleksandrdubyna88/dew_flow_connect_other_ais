@@ -3,7 +3,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import test from 'node:test';
 
-import { COMMENT_MOST_CHARS, commentBlock, commentWrite, decisionsFor, settled } from '../reviewComment';
+import { COMMENT_MOST_CHARS } from '../commentContract';
+import { commentBlock, commentWrite, decisionsFor, settled, settledBy, unwritten } from '../reviewComment';
 import { ReviewPair } from '../reviewPair';
 
 /**
@@ -48,11 +49,39 @@ test('the box stops where the server does: one number, held against the shared l
 test('a decision press writes each pair\'s draft when there is one, and its stored words when not', () => {
   const pairs = [pair(1, -1, 'stored one'), pair(2, -1, 'stored two')];
 
-  assert.deepEqual(decisionsFor([1, 2, 99], 1, pairs, new Map([[2, 'typed two']])), [
+  assert.deepEqual(decisionsFor([1, 2], 1, pairs, new Map([[2, 'typed two']])), [
     { findingId: 1, keep: 1, comment: 'stored one' },
     { findingId: 2, keep: 1, comment: 'typed two' },
-    { findingId: 99, keep: 1, comment: '' },
   ], 'a keep press must never write an empty comment over a stored one');
+});
+
+test('a decision press about a pair the panel no longer holds writes nothing for it', () => {
+  // A page drawn before a recollection can still post an id the store has since let go. Writing a
+  // decision with an EMPTY comment for it is a guess, and the batch then comes back partial — which
+  // is what let the other pairs' drafts be settled on words that never landed. (Code round of 4.2,
+  // codex.) `commentWrite` already drops such an id; a press now does the same.
+  assert.deepEqual(decisionsFor([1, 99], 1, [pair(1, -1, '')], new Map()), [
+    { findingId: 1, keep: 1, comment: '' },
+  ]);
+});
+
+test('a write that landed only PART of its batch lets go of no draft at all', () => {
+  const drafts = new Map([[1, 'one'], [2, 'two']]);
+  const asked = [{ findingId: 1, keep: 1, comment: 'one' }, { findingId: 2, keep: 1, comment: 'two' }];
+
+  assert.deepEqual([...settledBy(drafts, asked, 1)], [[1, 'one'], [2, 'two']],
+    'the answer says one of two landed and not WHICH, so every draft is still possibly unsaved');
+  assert.deepEqual([...settledBy(drafts, asked, 2)], [], 'while a whole batch that landed lets go of both');
+});
+
+test('closing the panel writes every draft the store does not have yet, in ONE write', () => {
+  const pairs = [pair(1, 1, 'stored'), pair(2, 0, ''), pair(3, -1, 'same')];
+  const drafts = new Map([[1, 'typed since'], [2, 'new words'], [3, 'same'], [99, 'about nobody']]);
+
+  assert.deepEqual(unwritten(drafts, pairs), [
+    { findingId: 1, keep: 1, comment: 'typed since' },
+    { findingId: 2, keep: 0, comment: 'new words' },
+  ], 'a draft equal to what is stored is already saved, and one for a pair nobody holds has no keep to carry');
 });
 
 test('a comment is written with the pair\'s CURRENT keep, and nothing for a pair the panel lacks', () => {

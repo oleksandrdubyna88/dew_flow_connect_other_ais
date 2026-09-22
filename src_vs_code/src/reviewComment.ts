@@ -1,4 +1,5 @@
 import type { Decision, ReviewPair } from './reviewPair';
+import { COMMENT_MOST_CHARS } from './commentContract';
 import { escapeHtml } from './webviewHtml';
 
 /**
@@ -11,12 +12,9 @@ import { escapeHtml } from './webviewHtml';
  *
  * <p><b>The charset rule is NOT here, and must never be.</b> `CommentRule` in the server's core is the
  * one implementation; a comment it refuses comes back from `--pairs-decide` as 65 with a sentence
- * naming the pair and the code point, which the panel shows. This module holds the NUMBER only, and a
- * structural test pins it against `CommentRule.MostChars`.</p>
+ * naming the pair and the code point, which the panel shows. The page knows the NUMBER only, from
+ * `commentContract.ts`, held by both halves against `shared/comment-limit.json`.</p>
  */
-
-/** The most a comment may be, in UTF-16 code units — `.length` here, `string.Length` there. */
-export const COMMENT_MOST_CHARS = 1000;
 
 /** Where the counter turns warning-coloured, so a long comment is noticed before it is stopped. */
 export const COMMENT_NEAR = 900;
@@ -32,11 +30,6 @@ export const COMMENT_NEAR = 900;
 export const LEAVES_THE_MACHINE =
   'Sent with this pair to the corpus server, in public and not anonymised — as you typed it, '
   + 'apart from blank space at either end.';
-
-/** What the panel says when the binary answered 64 to a write that carried words. */
-export const TOO_OLD_FOR_COMMENTS =
-  'This coai-mcp is too old to keep a comment. Install the newest server from the panel; your '
-  + 'comment is still in its box, and nothing was written.';
 
 /** The box, its counter and its sentence, for the detail row of one pair. */
 export function commentBlock(pair: ReviewPair, draft: string | undefined): string {
@@ -88,7 +81,11 @@ export function decisionsFor(
 ): Decision[] {
   const stored = new Map(pairs.map((pair) => [pair.findingId, pair.comment] as const));
 
-  return ids.map((findingId) => ({ findingId, keep, comment: drafts.get(findingId) ?? stored.get(findingId) ?? '' }));
+  // Only pairs the panel HOLDS: an id from a page drawn before a recollection has no stored words to
+  // carry, and a guessed empty comment for it came back as a partial batch. (Code round of 4.2, codex.)
+  return ids
+    .filter((findingId) => stored.has(findingId))
+    .map((findingId) => ({ findingId, keep, comment: drafts.get(findingId) ?? stored.get(findingId) ?? '' }));
 }
 
 /**
@@ -109,6 +106,39 @@ export function commentWrite(findingId: number, text: string, pairs: readonly Re
  * <p>Only a draft that is exactly what was written is let go. A person may have typed on while the
  * write was in the air, and that newer text is still theirs and still unsaved.</p>
  */
+/**
+ * The drafts after a write that answered `decided` of the batch it was asked for.
+ *
+ * <p><b>A partial answer lets go of NOTHING.</b> `{"decided": 1}` for a batch of two says one landed
+ * and not which, so every draft in it is still possibly unsaved; settling them all erased the words
+ * of a pair that was never written. (Code round of 4.2, codex, twice.)</p>
+ */
+export function settledBy(
+  drafts: ReadonlyMap<number, string>, asked: readonly Decision[], decided: number,
+): ReadonlyMap<number, string> {
+  return decided === asked.length ? settled(drafts, asked) : drafts;
+}
+
+/**
+ * Every draft the store does not have yet, as the ONE batch of writes that would save it.
+ *
+ * <p>What the panel writes when it closes: the page posts every keystroke as a draft, so the words
+ * reach the panel before any pause or blur — and a page closed inside that window no longer loses
+ * them. (Code round of 4.2, codex.) A draft equal to the stored words is already saved; one for a
+ * pair nobody holds has no keep to carry; and one on a SENT pair is left out, because
+ * `--pairs-decide` refuses a whole batch that changes a sent pair's words, and one such pair would
+ * sink every other draft with it.</p>
+ */
+export function unwritten(drafts: ReadonlyMap<number, string>, pairs: readonly ReviewPair[]): Decision[] {
+  return pairs.flatMap((pair) => {
+    const text = drafts.get(pair.findingId);
+
+    return text !== undefined && text !== pair.comment && pair.sentUtc.length === 0
+      ? [{ findingId: pair.findingId, keep: pair.keep, comment: text }]
+      : [];
+  });
+}
+
 export function settled(drafts: ReadonlyMap<number, string>, written: readonly Decision[]): ReadonlyMap<number, string> {
   const landed = new Map(written.map((one) => [one.findingId, one.comment] as const));
 
@@ -149,6 +179,7 @@ export const COMMENT_SCRIPT = `
     if (!box) { return; }
     countComment(box);
     var id = box.getAttribute('data-comment');
+    vscode.postMessage({ type: 'draft', id: Number(id), text: box.value });
     clearTimeout(commentPauses[id]);
     commentPauses[id] = setTimeout(function () { postComment(box); }, 1500);
   });

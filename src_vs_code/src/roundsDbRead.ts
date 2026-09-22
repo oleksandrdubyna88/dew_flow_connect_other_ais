@@ -2,7 +2,7 @@ import { BugCorpus, DbFinding, DbLog, EMPTY_CORPUS, EMPTY_LOG, ManyFound, parseB
 import { Decision, ReviewPair } from './reviewPair';
 import { FileAtRead, FileAtRevision, TOO_OLD_FOR_THE_REVISION } from './openAtRevision';
 import { MethodSide, RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD } from './realMethodView';
-import { TOO_OLD_FOR_COMMENTS } from './reviewComment';
+import { TOO_OLD_FOR_COMMENTS } from './commentContract';
 import { inBatches, READS_AT_ONCE } from './roundsExport';
 import { capture } from './versionProbe';
 import { serverEnv } from './dataDir';

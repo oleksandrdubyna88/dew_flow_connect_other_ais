@@ -5,7 +5,7 @@ import {
   DEFAULT_LIMIT, readFileAt, readFindings, readLog, readPairs, readRealMethod, Run, WithKeysFile,
   writeDecide, writeDecisions, writeKeep,
 } from '../roundsDbRead';
-import { TOO_OLD_FOR_COMMENTS } from '../reviewComment';
+import { TOO_OLD_FOR_COMMENTS } from '../commentContract';
 import { TOO_OLD_FOR_THE_REVISION } from '../openAtRevision';
 
 /**

@@ -383,6 +383,25 @@ fallback (the fallback is taken only on the LOCAL binary's exit 64); that the HT
 (it has two minutes, and Ctrl+C); that a comment-only edit has no save path (it is its own write); and
 that retention is unsized (decision 4's table sizes every surface).
 
+### What code round 1 of 4.2 changed (2026-09-22)
+
+12 reviewers, 42 findings, 23 gating; **10 accepted, 32 rejected with reasons** — among the rejected,
+three disproved by measurement (`Corpus.cs` is 760 lines; `--pairs-decide` IS in `.agents/PROJECT.md`;
+`max-lines` is off for tests by the lint's own configuration). The accepted ones:
+
+- **A page closed inside a pause lost the words** (codex, twice). Every keystroke now reaches the panel
+  as a `draft` — a message, no process — and a closing panel writes every draft the store does not have
+  as ONE batch.
+- **A partial write let go of drafts it never wrote** (codex, twice): `settledBy` lets go only when the
+  whole batch landed, and a press no longer writes a guessed empty comment for a pair the panel does not
+  hold.
+- **An edit in the air erased the server's reason** (codex and gemini): both are kept, reason first.
+- **The reader depended on the page module** for its too-old sentence (codex): `commentContract.ts`.
+- **The limit had no live check** (codex): the live contract now writes 1 000 and 1 001 characters
+  through the real binary against the page's own number.
+- **`research/architecture.md` still said three fields cross, on one route** (codex) — true until 4.1,
+  and nobody had changed it. Diagram and text now show the fourth field and the second route.
+
 ## What changes, file by file
 
 ### 4.1 — the server accepts a comment (one PR, released as `bugs-v0.3.0`, DEPLOYED before 4.2 merges)

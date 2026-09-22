@@ -2101,7 +2101,10 @@ answer — *somebody else's comment was there first*, *the pair was already prom
 `comment_lost` in the acknowledgement's one transaction, and printed. So is text a person changed
 while its batch was in the air: the acknowledgement compares the comment that CROSSED with the one
 the row holds now, and a difference is recorded as `RoundsDb.EditedWhileSending` (plan round of 4.2,
-the local reviewer). Without either, the pair is marked sent and the page says *Sent* above words the
+the local reviewer). When BOTH happened — the server kept another comment and the box changed in the
+air — both are kept, the server's reason first and `EditedAsWell` after it: the edit sentence alone
+said the server held the person's OLD words when it held somebody else's (code round 1 of 4.2, codex
+and gemini). Without any of this, the pair is marked sent and the page says *Sent* above words the
 server never kept.
 
 #### The page's row is wider than the send's, and it is a record of its own (2026-09-18, story 2.1)

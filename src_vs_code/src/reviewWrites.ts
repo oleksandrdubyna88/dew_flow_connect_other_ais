@@ -1,5 +1,5 @@
 import { notify } from './notify';
-import { TOO_OLD_FOR_COMMENTS } from './reviewComment';
+import { TOO_OLD_FOR_COMMENTS } from './commentContract';
 import type { KeepWrite } from './roundsDbRead';
 
 /**

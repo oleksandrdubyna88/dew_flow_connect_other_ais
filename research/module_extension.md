@@ -8271,24 +8271,32 @@ Once the server has acknowledged the pair the box is `readonly` and says *Sent o
 will not follow it.* — or, when the pair landed and its words did not, *Sent on &lt;date&gt;, but your comment
 was not stored:* followed by the server's own reason (`commentLost`).
 
-**The words travel on a pause and on the box being left** — never per keystroke, since each post is one
-`--pairs-decide` process, and never only on `change`, which fires on blur: text typed and never blurred
-was lost when the panel closed (plan round, gemini). The page posts `{type: 'comment', id, text}`; the
-panel holds it as a DRAFT, drawn over the stored comment on every paint, and queues ONE write carrying
-that pair's current keep and the words through the same `inFlight` chain as a decision. A decision
-press carries each pair's draft or stored words too (`reviewComment.decisionsFor`), so a keep never
-writes an empty comment over a stored one. A draft is let go only when a write lands EXACTLY its words
-(`settled`); a refused comment (65) and a binary too old for comments (64) leave it in its box, with the
-reason in a notice.
+**The words reach the panel on every keystroke and are WRITTEN on a pause or when the box is left.**
+The page posts `{type: 'draft', id, text}` per keystroke — a message, no process — and
+`{type: 'comment', id, text}` after a pause of a second and a half or on `change`. The panel holds the
+latest as a DRAFT, drawn over the stored comment on every paint; a `comment` also queues ONE write
+carrying that pair's current keep and the words, through the same `inFlight` chain as a decision.
+**Closing the panel writes every draft the store does not have, as one batch** (`unwritten`), before it
+forgets them: a page closed inside a pause lost the words until code round 1 of 4.2 (codex, twice). A
+draft on a SENT pair is left out of that batch, because `--pairs-decide` refuses a whole batch that
+changes a sent pair's words.
+
+A decision press carries each HELD pair's draft or stored words (`decisionsFor`), so a keep never
+writes an empty comment over a stored one — and an id from a page drawn before a recollection is
+dropped rather than written with a guessed empty comment. A draft is let go only when a write landed
+ALL of its batch (`settledBy`): `{"decided": 1}` for two says one landed and not which. A refused
+comment (65) and a binary too old for comments (64) leave it in its box, with the reason in a notice.
 
 **`writeDecisions` is the version hinge.** `--pairs-decide` exiting 64 is a `coai-mcp` older than
 comments. A batch with no words then goes to `--pairs-keep`, keep by keep, which says the same thing to
 an old binary; a batch WITH words does not — an old binary would keep the keep and drop them in silence —
 and the answer stays `tooOld` with *"This coai-mcp is too old to keep a comment"*.
 
-**Four modules, and why each is where it is.** `reviewComment.ts` is pure — the markup, the sentence, the
-page's script fragment and the draft helpers — because `roundsDbRead.ts` imports its sentence and the
-unit suite loads that with no editor. `reviewWrites.ts` holds `reportWrite`, which speaks through
+**Five modules, and why each is where it is.** `commentContract.ts` holds the two facts more than the
+page needs — the limit and the too-old sentence — and imports nothing: `roundsDbRead.ts`, which spawns
+processes, took that sentence from the module that draws HTML until code round 1 said so (codex).
+`reviewComment.ts` is pure — the markup, the sentence beside the box, the page's script fragment and the
+draft helpers. `reviewWrites.ts` holds `reportWrite`, which speaks through
 `notify` and therefore VS Code; it is in `sonar.coverage.exclusions` for that reason, and it exists
 because putting it in `reviewComment.ts` made three test files fail to LOAD on `Cannot find module
 'vscode'`. Both moved out of `bugzReviewPage.ts` and `bugzReviewPanel.ts`, which were 709 and 759 lines

@@ -542,6 +542,16 @@ public sealed class RoundsDb : IDisposable
     internal const string EditedWhileSending =
         "the comment was changed while it was being sent, so the server holds the words from before the change";
 
+    /// <summary>
+    /// What follows the server's own reason when the words were ALSO changed in the air.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="EditedWhileSending"/>: that sentence says the server holds the words from
+    /// before the change, and when the server also said the pair already carried a comment it holds
+    /// somebody else's. Both facts are true, in that order. (Code round of 4.2, codex and gemini.)
+    /// </remarks>
+    internal const string EditedAsWell = "and the comment was also changed here while it was being sent";
+
     private SqliteCommand RefusalOf(SendOutcome outcome)
     {
         var write = _db.CreateCommand();
@@ -569,13 +579,16 @@ public sealed class RoundsDb : IDisposable
         write.CommandText = """
             UPDATE collect_pairs
                SET sent_utc = $now,
-                   comment_lost = CASE WHEN comment = $sent THEN $lost ELSE $edited END
+                   comment_lost = CASE WHEN comment = $sent THEN $lost
+                                       WHEN $lost = '' THEN $edited
+                                       ELSE $lost || '; ' || $also END
              WHERE finding_id = $id
             """;
         Bind(write, "$now", Now());
         Bind(write, "$sent", outcome.Comment);
         Bind(write, "$lost", outcome.Why);
         Bind(write, "$edited", EditedWhileSending);
+        Bind(write, "$also", EditedAsWell);
         Bind(write, "$id", outcome.FindingId);
 
         return write;
