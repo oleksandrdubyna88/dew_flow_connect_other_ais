@@ -51,8 +51,11 @@ export async function refusalSeam({ serverSession, resolvedFor, answerOf, fail, 
     fail(provoked);
   }
 
-  // A CLEAN end, by EOF — never a kill, which skips `ServeAsync`'s `finally`.
-  const verdict = await judged(root, sideDir, await session.close(), secret, timeoutMs);
+  // A CLEAN end, by EOF — never a kill, which skips `ServeAsync`'s `finally`. And whatever a claim
+  // THROWS becomes the leg's reason rather than escaping past `forget()`: a harness that leaves its
+  // directory behind on a failure is a harness that hides the failure behind the next run's clutter.
+  const verdict = await judged(root, sideDir, await session.close(), secret, timeoutMs)
+    .catch((e) => ({ why: `the leg itself failed while judging the run: ${e.message}`, title: '', logs: 0 }));
   forget();
   if (verdict.why !== '') {
     fail(verdict.why);
@@ -172,7 +175,7 @@ function noSinkCarries(root, stderr, secret) {
  * <i>"a line the extension would have WRITTEN from the same record"</i> — checked for the first time
  * against the shipped binary rather than `NoticeTool`.</p>
  */
-async function theRecordCrosses(root, sideDir) {
+export async function theRecordCrosses(root, sideDir) {
   const noticesFile = serverNoticesPath(sideDir);
   const failed = (why) => ({ why, title: '' });
   if (!existsSync(noticesFile)) {
@@ -180,11 +183,16 @@ async function theRecordCrosses(root, sideDir) {
       + `The run left: ${filesUnder(root).map((f) => f.slice(root.length)).join(', ')}`);
   }
   const bytes = readFileSync(noticesFile, 'utf8');
-  const refusedLine = bytes.split('\n').find((line) => line.includes('"code":"refused"'));
+  // The line that PARSES to the refusal, not the first one that merely mentions it. The first version
+  // took the latter and handed it to the parser, which answers `undefined` for a line it cannot read —
+  // and `notificationLine(undefined)` throws while destructuring, past this function and past the
+  // leg's cleanup. The reader skips a malformed line, so it bit only with a malformed line FIRST and a
+  // good refusal after it. (CodeRabbit, on #465; `seamLegs.test.mjs` holds it.)
+  const refusedLine = bytes.split('\n').find((line) => isTheRefusal(parseNotificationLine(line)));
   if (refusedLine === undefined || !bytes.endsWith('\n')) {
     return failed(`the notices file has no refused line, or its last line is not terminated: ${bytes.slice(0, 300)}`);
   }
-  const record = (await readServerNotices(sideDir)).find((one) => one.code === 'refused' && one.subject === 'OpenAsync');
+  const record = (await readServerNotices(sideDir)).find(isTheRefusal);
   if (record === undefined || record.class !== 'refusal' || record.source !== 'coai-mcp'
     || !String(record.title).includes('is not a directory on this machine')) {
     return failed(`the extension's reader did not return the refusal the server wrote. It returned: ${JSON.stringify(record ?? null).slice(0, 400)}`);
@@ -194,6 +202,11 @@ async function theRecordCrosses(root, sideDir) {
   return again === `${refusedLine}\n`
     ? { why: '', title: String(record.title) }
     : failed(`the server's line is not a fixed point of the extension's parser.\n  server:    ${refusedLine}\n  extension: ${again.trimEnd()}`);
+}
+
+/** The record this leg provoked: `OpenAsync`'s refusal. Anything else in the file is not its business. */
+function isTheRefusal(record) {
+  return record?.code === 'refused' && record?.subject === 'OpenAsync';
 }
 
 /** Every file under `dir`, recursively. */

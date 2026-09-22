@@ -424,6 +424,12 @@ also on the wire (`ProvidersAnswer.Unrecognised`), so it stays as a projection. 
   and the leg's own body is 25. The producer census catches `Substring(0, Redaction.…Limit)` as well
   as a range, and says what it cannot catch — a limit copied into a local — and why the companion
   answers that.
+- **What CodeRabbit found on the pull request**, both in the harness and both reproduced RED first:
+  a write in flight to a dying server's stdin was an unhandled `'error'` event that ended the whole
+  run before cleanup (`Error: write EOF`, 3 of 3 without a listener), and a malformed line merely
+  mentioning a refusal was handed to the parser, whose `undefined` then threw past cleanup. The
+  session moved into `scripts/seam-session.mjs` so a test could load it at all, and
+  `seamLegs.test.mjs` holds both.
 
 ### Epic 3 — the deaths
 
