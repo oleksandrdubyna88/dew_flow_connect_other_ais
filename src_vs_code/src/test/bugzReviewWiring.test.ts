@@ -43,7 +43,22 @@ test('the panel records what the page opened, and both kinds of press reach the 
     text,
     /case 'expand':\s*case 'expandAll':\s*if \(!m\.open\) \{\s*this\.calls\.closed\(m\.ids, this\.held\);\s*\}\s*this\.remember\(m\.ids, m\.open\);/u,
     'one press and every press must both end in remember(), or Expand all records nothing');
-  assert.match(text, /case 'decide':\s*this\.queue\(m\.ids, m\.keep\);/u);
+  // A decision carries the page's ids and keep AND each pair's words — the draft when one is held —
+  // so a keep press cannot write an empty comment over a stored one (story 4.2).
+  assert.match(text, /case 'decide':\s*this\.queue\(decisionsFor\(m\.ids, m\.keep, this\.held, this\.drafts\)\);/u);
+  // And a comment is held as a draft BEFORE its write is queued, so a redraw while the write is in
+  // the air still paints the words — pinned whole, the draft and the write in that order.
+  assert.match(
+    text,
+    /case 'comment':\s*this\.drafts = new Map\(\[\.\.\.this\.drafts, \[m\.id, m\.text\]\]\);\s*this\.queue\(commentWrite\(m\.id, m\.text, this\.held\)\);/u,
+    'a comment must become a draft and then a write, or a redraw loses what was typed');
+  // And a draft is let go ONLY when the write landed: a refused comment (65) or a binary too old
+  // for comments (64) must leave the words in their box, with the reason on screen. Pinned whole —
+  // the condition and the one statement inside it.
+  assert.match(
+    text,
+    /if \(written\.ok\) \{\s*this\.drafts = settled\(this\.drafts, decisions\);\s*\}\s*await reportWrite\(written, decisions\.length\);/u,
+    'a draft let go on a failed write is a comment lost in the one case the person was told about');
 });
 
 test('the panel hands its open rows to the page on every draw', () => {

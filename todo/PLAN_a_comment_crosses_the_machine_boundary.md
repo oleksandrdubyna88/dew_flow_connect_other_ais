@@ -1,13 +1,15 @@
 # PLAN — a comment crosses the machine boundary
 
-> Status: **story 4.1 IMPLEMENTED 2026-09-22; stories 4.2a and 4.2b are open.** The ingest server
-> takes a comment on `POST /ingest/commented`, stores it verbatim beside its pair, carries it into
-> the corpus at promotion and shows it to the operator; `POST /ingest` refuses a pair that carries
-> one rather than dropping it. The CLIENT half — `coai-mcp`'s local column and `--pairs-decide`
-> (4.2a), and the extension's box with its "it leaves the machine" notice (4.2b) — is **not built**,
-> so nothing a person types can reach the server yet. This plan stays in `todo/` until 4.2b ships,
-> and is promoted then. **On 2026-09-22 the operator folded 4.2a and 4.2b into ONE pull request with
-> ONE review gate** — see *4.2 in one pull request* below; the two release lines stay separate.
+> Status: **story 4.1 IMPLEMENTED and DEPLOYED 2026-09-22 (`bugs-v0.3.0`); stories 4.2a and 4.2b
+> IMPLEMENTED 2026-09-22 in one pull request, not yet RELEASED.** The ingest server takes a comment on
+> `POST /ingest/commented` and refuses one on `/ingest`; `coai-mcp` stores it (`collect_pairs.comment`,
+> `comment_lost`), writes it with its decision through `--pairs-decide` and sends it on its own route;
+> the review page carries the box and says, beside it, that the words leave the machine. What is
+> still NOT done: the releases (`mcp-v0.31.0`, `extension-v0.51.0`, and `bugs-v0.3.1` for the retry
+> fix below), the deploy of `bugs-v0.3.1`, and the live verification 4.1's build step asks for — an
+> authenticated `POST /ingest/commented` answered with `contract: 2`, and `user_version = 5` read off
+> the host. The plan is promoted to `research/` once those are recorded. **The operator folded 4.2a
+> and 4.2b into ONE pull request with ONE review gate** — see *4.2 in one pull request* below.
 >
 > Scope: `src_mcp/core` (the wire type
 > both halves compile against), `src_bugs` (the ingest server, its schema and its one-shots),
@@ -346,6 +348,41 @@ changes what they say, and the file-by-file lists are corrected to match:
    existing construction — `OnlyFourFieldsLeaveTests` builds one by name — compiles and means what it
    did; `Sendable` reads it as ordinal 9, after the nine it already reads.
 
+### What the plan round of 4.2 changed (2026-09-22)
+
+One round (the session allows one), 17 findings, `good_enough`. **12 accepted, 5 rejected with
+reasons.** The accepted ones changed the build as follows; item numbers above are superseded where
+they disagree:
+
+- **Item 5 was wrong, and gemini said so:** `.agents/conventions/common/coding-style.md:25` forbids a
+  `partial` "to duck the limit". The mode is a named unit, `Collecting/PairsDecideMode.cs`, and
+  `Program.Note` and `Program.Flags` became `internal` for it.
+- **The same words retried after a lost answer were called somebody else's** (codex and gemini,
+  independently). The server's `Attach` wrote only `WHERE comment = ''`; a send that landed and was
+  never acknowledged, retried with the identical comment, came back `AlreadySpokenFor`, and the client
+  would have recorded its own stored words as lost. Fixed on the SERVER — `OR comment = $comment`, and a
+  promoted pair compared with the words promotion carried — which is why this pull request also carries
+  a `bugs` release (`bugs-v0.3.1`).
+- **Words edited while their batch was in the air** (the local reviewer): the acknowledgement compares
+  the comment that crossed with the one the row holds, and a difference is written to `comment_lost`.
+- **The draft is posted on a pause as well as on blur** (gemini): `change` alone lost text typed and
+  never blurred when the panel closed.
+- **The notice no longer says "exactly as typed"** (codex): the mode trims, so it says so.
+- **A 65 keeps the draft and shows the reason** (codex), pinned in the panel's source.
+- **The comment is proven absent from every line the send prints**, on four endings (codex).
+- **A real-binary seam for the writer** (codex): `bugzLiveContract.test.ts` hands `--pairs-decide` its
+  file the way the panel does and reads the words back off `--pairs-json`.
+- **A migration test from a real twelve-step file** (codex) — the migrator was already atomic per step
+  (`SqliteMigrator.cs:80-91`); the test is what was missing.
+- Validation order is stated: the file is checked before the transaction, and the sent-pair check is
+  inside it, so the row read is the row written.
+
+Rejected: that a decision write and a send share a transaction (they are separate runs, and `sent_utc`
+is written only on the acknowledgement); that a 404 could send the panel down the `--pairs-keep`
+fallback (the fallback is taken only on the LOCAL binary's exit 64); that the HTTP call has no timeout
+(it has two minutes, and Ctrl+C); that a comment-only edit has no save path (it is its own write); and
+that retention is unsized (decision 4's table sizes every surface).
+
 ## What changes, file by file
 
 ### 4.1 — the server accepts a comment (one PR, released as `bugs-v0.3.0`, DEPLOYED before 4.2 merges)
@@ -545,31 +582,49 @@ the id.
       archive's SHA-256 is pinned in the same commit.
 - [ ] 4.1 shipped as `bugs-v0.3.0`, deployed, and an authenticated `POST /ingest/commented` is
       accepted where it was 404 before — recorded with a date BEFORE PR 3 merges.
-- [ ] `OnlyFourFieldsLeaveTests` exists, `OnlyThreeFieldsLeaveTests` does not, the four names are
+- [x] `OnlyFourFieldsLeaveTests` exists, `OnlyThreeFieldsLeaveTests` does not, the four names are
       asserted, the five private fields are still asserted absent, and the comment-less wire is
       byte-identical to the captured fixture.
-- [ ] `TheOldServerHasNoCommentedRouteAndDropsACommentSentToTheOldOne` ran against the real
+- [x] `TheOldServerHasNoCommentedRouteAndDropsACommentSentToTheOldOne` ran against the real
       `bugs-v0.2.0` binary — pinned by tag and SHA-256, on a disposable data directory — and proved
       both halves: 404 on the new route, and a silent drop on the old one.
-- [ ] Every failure mode is told apart: 404, 401/403, 429, 5xx, timeout and a 200 under the wrong
+- [x] Every failure mode is told apart: 404, 401/403, 429, 5xx, timeout and a 200 under the wrong
       contract each have their own answer, and only the first says the server is old.
-- [ ] `sentUtc` is written in the acknowledgement transaction and NOWHERE earlier, with a test that
+- [x] `sentUtc` is written in the acknowledgement transaction and NOWHERE earlier, with a test that
       kills the run at both boundaries and finds no pair that is read-only and unsent.
-- [ ] A refused comment leaves the draft in the box, the row unmarked and the reason on screen.
-- [ ] A `duplicate` whose comment was not stored SAYS so.
-- [ ] The migration is proven against a store seeded with pre-column rows, and proven idempotent.
+- [x] A refused comment leaves the draft in the box, the row unmarked and the reason on screen.
+- [x] A `duplicate` whose comment was not stored SAYS so.
+- [x] The migration is proven against a store seeded with pre-column rows, and proven idempotent.
 - [ ] `--pairs-decide` returns 65/65/65/65/74 for its five fault kinds and 64 for nothing but an
       unknown mode, each asserted by the real binary.
-- [ ] The comment is escaped at every sink and logged at none.
+- [x] The comment is escaped at every sink and logged at none.
 - [ ] `BothHalvesTests` proves a comment crosses on the new route, that a comment-free batch still
       goes to `/ingest` with bytes equal to the fixture, and that a 404 stops the run marking nothing.
-- [ ] `--pairs-decide` is in `.agents/PROJECT.md`'s list, adds no prose, and the rules-budget canary
+- [x] `--pairs-decide` is in `.agents/PROJECT.md`'s list, adds no prose, and the rules-budget canary
       is green.
-- [ ] The page RUNS in its tests: the box posts, survives a redraw, goes read-only when sent, escapes,
+- [x] The page RUNS in its tests: the box posts, survives a redraw, goes read-only when sent, escapes,
       and does not toggle its row; the notice is read off the rendered element.
-- [ ] Every C# suite run as its executable, both halves; `npm test` green; every new TypeScript
+- [x] Every C# suite run as its executable, both halves; `npm test` green; every new TypeScript
       function within complexity 4 and 50 lines with no new suppression.
-- [ ] `deploy/bugs/README.md`'s promise table and the `research/module_*.md` docs updated; the parent
+- [x] `deploy/bugs/README.md`'s promise table and the `research/module_*.md` docs updated; the parent
       plan's epic-4 row updated per story; `todo/README.md` row committed with this plan.
 - [ ] After fifty real comments exist, the median length is read off `quarantine` and decision 1 is
       revisited in the promoted record.
+
+**The five left open, said exactly (2026-09-22).**
+
+- *Step 0's record* belongs to 4.1 and is not re-verified by the 4.2 pull request.
+- *The authenticated `POST /ingest/commented`* has NOT been sent to `bugs.remsoft.dev`. What is
+  measured there is the route: an unauthenticated `POST` answers 401 and a `GET` 405 where the
+  near-miss `/ingest/commentedX` answers 404, and `bugs-v0.2.0` answered 404 on the route itself. An
+  authenticated request needs a contributor key on the production host, and writes a pair into its
+  quarantine; that is the operator's decision to make, and it is asked for rather than taken.
+  `user_version = 5` has not been read off the host either.
+- *`--pairs-decide`'s exit codes* are asserted IN-PROCESS for all six (`ThePairModesTests`) and
+  through the real binary for 0 and 65 (`bugzLiveContract.test.ts`). 74 and 64 are not driven through
+  the real binary.
+- *`BothHalvesTests`* proves the comment crossing on its route against the real server, and a
+  comment-free pair crossing without words. The route a comment-free batch takes is asserted in
+  `UploadRunTests`, its bytes against the fixture in `OnlyFourFieldsLeaveTests`, and the 404 in
+  `UploadRunTests` through a stub — the in-process server HAS the route, so it cannot answer 404 for it.
+- *Fifty real comments* do not exist yet.

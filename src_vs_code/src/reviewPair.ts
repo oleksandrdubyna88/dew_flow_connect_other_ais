@@ -44,4 +44,29 @@ export interface ReviewPair {
   readonly why: string;
   /** The reviewers' proposed fix, verbatim. */
   readonly fix: string;
+  /**
+   * What a person wrote about this pair; empty for none. The one field here that a person TYPES,
+   * and it crosses with the pair in public, unanonymised, by the operator's decision (story 4.2).
+   */
+  readonly comment: string;
+  /**
+   * When the server acknowledged the pair; empty while it has not. It is what makes the box
+   * read-only and say so — a comment edited after the send never crosses.
+   */
+  readonly sentUtc: string;
+  /** Why the pair's words did not land although the pair did; empty when they did or there were none. */
+  readonly commentLost: string;
+}
+
+/**
+ * One decision as `--pairs-decide` takes it: the keep AND the words, for one pair.
+ *
+ * <p>Here with the model rather than beside the writer in `roundsDbRead.ts`: the comment module
+ * builds these and the writer sends them, and a type declared on either side made the two import
+ * each other — a cycle the repository's own guard refuses.</p>
+ */
+export interface Decision {
+  readonly findingId: number;
+  readonly keep: number;
+  readonly comment: string;
 }

@@ -6,7 +6,7 @@ import * as path from 'node:path';
 import { spawnSync } from 'node:child_process';
 
 import { parseBugs } from '../roundsDb';
-import { readFileAt, readPairs, readRealMethod } from '../roundsDbRead';
+import { keysFileIn, readFileAt, readPairs, readRealMethod, writeDecide } from '../roundsDbRead';
 import { REMOVAL_REASONS, TREE_REASONS, TREE_STATES } from '../reviewTree';
 import { readTrees, readTreeAt, removeTree } from '../reviewTreeRead';
 import { mayRank } from '../bugzView';
@@ -292,43 +292,9 @@ test('a seeded pair survives the real binary and the real reader, field by field
   { skip: built ? false : 'the server is not built' }, async () => {
     const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-seeded-'));
     try {
-      // The BINARY makes the schema, so what is filled below is the real thing.
-      const made = spawnSync(server(), ['--bugs-json'], {
-        encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
-      });
-      assert.equal(made.status, 0, `the server would not open its database: ${made.stderr}`);
+      await seedOnePair(data);
 
-      const { DatabaseSync } = await import('node:sqlite');
-      const db = new DatabaseSync(path.join(data, 'coai.db'));
-      try {
-        db.exec(`
-          INSERT INTO sessions (id, repo_path, branch, opened_utc)
-            VALUES ('s1', 'D:/repo', 'main', '2026-09-18T00:00:00Z');
-          INSERT INTO rounds (id, session_id, stage, number, status, verdict,
-                              started_utc, completed_utc, head_sha)
-            VALUES (1, 's1', 'CodeReview', 1, 'done', 'proceed',
-                    '2026-09-18T00:00:00Z', '2026-09-18T00:01:00Z', 'aaaa111aaaa');
-          INSERT INTO findings (id, round_id, ordinal, severity, category, file, line,
-                                title, why, fix, fix_sha)
-            VALUES (7, 1, 0, 'Major', 'Reliability', 'src/Totals.cs', 42,
-                    'a race', 'two writers, one row', 'take the lock', 'bbbb222bbbb');
-          INSERT INTO collect_pairs (finding_id, symbol_name, language,
-                                     skeleton_before, skeleton_after, written_utc, keep)
-            VALUES (7, 'method_1', 'CSharp',
-                    'void method_1() { }', 'void method_1() { lock (var_1) { } }',
-                    '2026-09-18T00:02:00Z', -1);
-        `);
-      } finally {
-        db.close();
-      }
-
-      const answer = await readPairs(server(), 5, async (args) => {
-        const ran = spawnSync(server(), args, {
-          encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
-        });
-
-        return { code: ran.status ?? 1, output: `${ran.stdout ?? ''}${ran.stderr ?? ''}` };
-      });
+      const answer = await readPairs(server(), 5, realRunIn(data));
 
       assert.ok(answer.ok, `the reader refused the binary's output: ${answer.ok ? '' : answer.why}`);
       assert.equal(answer.pairs.length, 1, 'one pair was seeded, so one must come back');
@@ -349,11 +315,104 @@ test('a seeded pair survives the real binary and the real reader, field by field
         line: 42,
         why: 'two writers, one row',
         fix: 'take the lock',
+        // Seeded with values rather than left at their defaults: an empty field that came back empty
+        // proves nothing about its NAME, and a rename is exactly what this contract exists to catch.
+        comment: 'it bit us twice',
+        sentUtc: '2026-09-18T00:03:00Z',
+        commentLost: 'the first one stays',
       }, 'a field was lost, defaulted or crossed with another on the way across the wire');
     } finally {
       fs.rmSync(data, { recursive: true, force: true });
     }
   });
+
+/**
+ * A decision with words, through the extension's REAL writer and the REAL binary, read back by the real
+ * reader (story 4.2).
+ *
+ * <p>The seam a plan reviewer named (codex): every other test of `--pairs-decide` runs it in-process or
+ * stubs the spawn, so the argv, the file the writer hands over and the document the binary reads could
+ * all drift apart with both halves green. This hands the file over the way the panel does and reads the
+ * answer back off the binary's own `--pairs-json`.</p>
+ *
+ * <p>It seeds an UNSENT pair: the one it shares with the test above is sent, and changing a sent pair's
+ * words is refused — which is its own assertion below, through the same real path.</p>
+ */
+test('a decision with words crosses the real writer and the real binary, and a refusal is not "too old"',
+  { skip: built ? false : 'the server is not built' }, async () => {
+    const data = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-decided-'));
+    try {
+      await seedOnePair(data, { sent: false });
+      const run = realRunIn(data);
+
+      const written = await writeDecide(server(), [{ findingId: 7, keep: 1, comment: '  two\r\nlines  ' }], keysFileIn(data), run);
+      assert.deepEqual(written, { ok: true, decided: 1 }, 'the binary took the file the writer handed it');
+
+      const read = await readPairs(server(), 5, run);
+      assert.ok(read.ok);
+      assert.equal(read.pairs[0]?.keep, 1);
+      assert.equal(read.pairs[0]?.comment, 'two\nlines', 'the words as the person meant them: LF, and trimmed');
+
+      const refused = await writeDecide(
+        server(), [{ findingId: 7, keep: 1, comment: `looks${String.fromCharCode(7)}harmless` }], keysFileIn(data), run);
+      assert.equal(refused.ok, false);
+      assert.ok(!refused.ok && refused.tooOld !== true, 'a comment the rule refused is not a binary too old for comments');
+      assert.ok(!refused.ok && refused.why.includes('U+0007'), `the refusal names the code point: ${refused.ok ? '' : refused.why}`);
+    } finally {
+      fs.rmSync(data, { recursive: true, force: true });
+    }
+  });
+
+/** A `Run` that spawns the real binary against one data directory — the way the panel's `serverRun` does. */
+function realRunIn(data: string): (args: readonly string[]) => Promise<{ code: number; output: string }> {
+  return async (args) => {
+    const ran = spawnSync(server(), [...args], {
+      encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+    });
+
+    return { code: ran.status ?? 1, output: `${ran.stdout ?? ''}${ran.stderr ?? ''}` };
+  };
+}
+
+/**
+ * One pair, seeded into a database whose schema the BINARY made — so what is filled is the real thing.
+ *
+ * <p>`sent` decides whether the pair has been acknowledged and carries a lost comment, which is what
+ * the field-by-field test reads back; a decision test needs it unsent, because a sent pair's words
+ * cannot change.</p>
+ */
+async function seedOnePair(data: string, { sent = true }: { readonly sent?: boolean } = {}): Promise<void> {
+      const made = spawnSync(server(), ['--bugs-json'], {
+        encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+      });
+      assert.equal(made.status, 0, `the server would not open its database: ${made.stderr}`);
+
+      const { DatabaseSync } = await import('node:sqlite');
+      const db = new DatabaseSync(path.join(data, 'coai.db'));
+      try {
+        db.exec(`
+          INSERT INTO sessions (id, repo_path, branch, opened_utc)
+            VALUES ('s1', 'D:/repo', 'main', '2026-09-18T00:00:00Z');
+          INSERT INTO rounds (id, session_id, stage, number, status, verdict,
+                              started_utc, completed_utc, head_sha)
+            VALUES (1, 's1', 'CodeReview', 1, 'done', 'proceed',
+                    '2026-09-18T00:00:00Z', '2026-09-18T00:01:00Z', 'aaaa111aaaa');
+          INSERT INTO findings (id, round_id, ordinal, severity, category, file, line,
+                                title, why, fix, fix_sha)
+            VALUES (7, 1, 0, 'Major', 'Reliability', 'src/Totals.cs', 42,
+                    'a race', 'two writers, one row', 'take the lock', 'bbbb222bbbb');
+          INSERT INTO collect_pairs (finding_id, symbol_name, language,
+                                     skeleton_before, skeleton_after, written_utc, keep,
+                                     comment, sent_utc, comment_lost)
+            VALUES (7, 'method_1', 'CSharp',
+                    'void method_1() { }', 'void method_1() { lock (var_1) { } }',
+                    '2026-09-18T00:02:00Z', -1,
+                    ${sent ? "'it bit us twice', '2026-09-18T00:03:00Z', 'the first one stays'" : "'', '', ''"});
+        `);
+      } finally {
+        db.close();
+      }
+}
 
 
 /**

@@ -8258,6 +8258,44 @@ also the only one in `sonar.coverage.exclusions`. The adapter guards `selectionR
 leave it unset, and `item.range.start` is then the position to use, which is a different place on a
 decorated method.
 
+### A person's words about a pair (2026-09-22, story 4.2)
+
+The detail row of every pair carries a box: a `<label for>`, a `<textarea data-comment maxlength="1000"
+rows="2">`, a live counter that turns warning-coloured from 900, and beside it the sentence *"Sent with
+this pair to the corpus server, in public and not anonymised — as you typed it, apart from blank space
+at either end."* The operator decided on 2026-09-18 that a comment is public; the sentence is what lets
+a person choose what to put in it knowingly. "Apart from blank space" because `--pairs-decide` trims,
+and a notice claiming "exactly as typed" over trimmed text was the plan round's catch (codex).
+
+Once the server has acknowledged the pair the box is `readonly` and says *Sent on &lt;date&gt;. A change here
+will not follow it.* — or, when the pair landed and its words did not, *Sent on &lt;date&gt;, but your comment
+was not stored:* followed by the server's own reason (`commentLost`).
+
+**The words travel on a pause and on the box being left** — never per keystroke, since each post is one
+`--pairs-decide` process, and never only on `change`, which fires on blur: text typed and never blurred
+was lost when the panel closed (plan round, gemini). The page posts `{type: 'comment', id, text}`; the
+panel holds it as a DRAFT, drawn over the stored comment on every paint, and queues ONE write carrying
+that pair's current keep and the words through the same `inFlight` chain as a decision. A decision
+press carries each pair's draft or stored words too (`reviewComment.decisionsFor`), so a keep never
+writes an empty comment over a stored one. A draft is let go only when a write lands EXACTLY its words
+(`settled`); a refused comment (65) and a binary too old for comments (64) leave it in its box, with the
+reason in a notice.
+
+**`writeDecisions` is the version hinge.** `--pairs-decide` exiting 64 is a `coai-mcp` older than
+comments. A batch with no words then goes to `--pairs-keep`, keep by keep, which says the same thing to
+an old binary; a batch WITH words does not — an old binary would keep the keep and drop them in silence —
+and the answer stays `tooOld` with *"This coai-mcp is too old to keep a comment"*.
+
+**Four modules, and why each is where it is.** `reviewComment.ts` is pure — the markup, the sentence, the
+page's script fragment and the draft helpers — because `roundsDbRead.ts` imports its sentence and the
+unit suite loads that with no editor. `reviewWrites.ts` holds `reportWrite`, which speaks through
+`notify` and therefore VS Code; it is in `sonar.coverage.exclusions` for that reason, and it exists
+because putting it in `reviewComment.ts` made three test files fail to LOAD on `Cannot find module
+'vscode'`. Both moved out of `bugzReviewPage.ts` and `bugzReviewPanel.ts`, which were 709 and 759 lines
+against the lint's 800. `Decision` is declared in `reviewPair.ts` with the model, because declared
+beside the writer it made `reviewComment` and `roundsDbRead` import each other — a cycle the repository's
+own guard refused.
+
 ## Sending — the last thing the Bugz section could not do
 
 The section collected and reviewed and then stopped. Uploading was `coai-mcp --upload-pairs

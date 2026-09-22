@@ -9,6 +9,7 @@ import { CALLS, containerQuery, REVISIONS } from './livePatch';
 import { ReviewPair } from './reviewPair';
 import { reviewPageCss } from './reviewPageStyle';
 import { escapeHtml, jsonForScript } from './webviewHtml';
+import { COMMENT_SCRIPT, commentBlock } from './reviewComment';
 import { zoomControlHtml, zoomScript } from './zoomControl';
 
 /**
@@ -75,6 +76,14 @@ export interface ReviewView {
   readonly trouble?: string;
   /** The `findingId`s whose code is showing. Keyed by id, never by position — see {@link row}. */
   readonly expanded?: ReadonlySet<number>;
+  /**
+   * The comments a person has typed and the store does not have yet, by `findingId`.
+   *
+   * <p>Held by the panel for {@link expanded}'s reason — every paint replaces the document — and
+   * drawn OVER the stored comment, so a redraw, and a write the server refused, both leave the words
+   * where they were typed.</p>
+   */
+  readonly comments?: ReadonlyMap<number, string>;
   readonly uiScale?: number;
   readonly textTone?: number;
 
@@ -237,7 +246,7 @@ function halves(pair: ReviewPair, id: string, showReal: boolean, read: RealRead 
 
 function row(
   pair: ReviewPair, open: boolean, showReal: boolean, read: RealRead | undefined, revision: RevisionState,
-  calls: string,
+  calls: string, draft: string | undefined,
 ): string {
   const id = key(pair.findingId);
   const said = `${escapeHtml(pair.severity)} · ${escapeHtml(pair.category)} — ${escapeHtml(pair.title)}`;
@@ -267,6 +276,7 @@ function row(
   <td>
     ${about(pair, revision, calls)}
     ${halves(pair, id, showReal, read)}
+    ${commentBlock(pair, draft)}
   </td>
 </tr>`;
 }
@@ -370,10 +380,11 @@ export function reviewPageHtml(view: ReviewView): string {
   const real = view.real ?? new Map<number, RealRead>();
   const revisions = view.revisions ?? new Map<number, RevisionState>();
   const calls = view.calls ?? new Map<number, string>();
+  const comments = view.comments ?? new Map<number, string>();
   const rows = pairs
     .map((pair) => row(
       pair, expanded.has(pair.findingId), showReal, real.get(pair.findingId),
-      revisions.get(pair.findingId) ?? UNPROBED, calls.get(pair.findingId) ?? ''))
+      revisions.get(pair.findingId) ?? UNPROBED, calls.get(pair.findingId) ?? '', comments.get(pair.findingId)))
     .join('\n');
   const waiting = undecided(pairs);
 
@@ -585,6 +596,7 @@ ${body(pairs, rows, trouble)}
     vscode.postMessage({ type: 'expandAll', ids: ids, open: open });
   }
 
+${COMMENT_SCRIPT}
   document.addEventListener('click', function (event) {
     var target = event.target;
     // ABOVE anything that acts on the row, and it RETURNS: a tick-box that falls through would

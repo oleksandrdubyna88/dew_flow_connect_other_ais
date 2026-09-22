@@ -224,7 +224,7 @@ test('empty submodule mounts are said on the row, and silence means there were n
 const pair = (findingId = 7): ReviewPair => ({
   findingId, symbolName: 'Totals', language: 'csharp', skeletonBefore: '', skeletonAfter: '',
   keep: -1, severity: 'major', category: 'bug', title: 't', repoPath: REPO, headSha: SHA,
-  fixSha: 'ffff111bbbb2222cccc3333dddd4444eeee5555f', file: 'src/Totals.cs', line: 12, why: '', fix: '',
+  fixSha: 'ffff111bbbb2222cccc3333dddd4444eeee5555f', file: 'src/Totals.cs', line: 12, why: '', fix: '', comment: '', sentUtc: '', commentLost: '',
 });
 
 /** A panel whose every hook is recorded, and whose posts are collected in order. */

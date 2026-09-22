@@ -197,7 +197,7 @@ public sealed class BothHalvesTests : IDisposable
         using var server = new BugsServer();
         var (key, _) = server.IssueKey();
         using var db = Db();
-        db.RecordDecide([new CommentedDecision(id, Kept,"this one bit us in production")]);
+        db.RecordDecide([new CommentedDecision(id, Kept, "this one bit us in production")]);
 
         (await Run(server, db, key)).Accepted.Should().Be(1);
 
@@ -233,7 +233,7 @@ public sealed class BothHalvesTests : IDisposable
         var (key, _) = server.IssueKey();
         using (var first = Db())
         {
-            first.RecordDecide([new CommentedDecision(id, Kept,"mine")]);
+            first.RecordDecide([new CommentedDecision(id, Kept, "mine")]);
             (await Run(server, first, key)).Accepted.Should().Be(1);
         }
 
@@ -260,14 +260,14 @@ public sealed class BothHalvesTests : IDisposable
         var (key, _) = server.IssueKey();
         using (var first = Db())
         {
-            first.RecordDecide([new CommentedDecision(id, Kept,"the first words")]);
+            first.RecordDecide([new CommentedDecision(id, Kept, "the first words")]);
             (await Run(server, first, key)).Accepted.Should().Be(1);
         }
 
         // Another contributor's position: the same pair, unsent here, carrying different words.
         ForgetTheAcknowledgement();
         using var db = Db();
-        db.RecordDecide([new CommentedDecision(id, Kept,"different words")]);
+        db.RecordDecide([new CommentedDecision(id, Kept, "different words")]);
 
         (await Run(server, db, key)).Duplicate.Should().Be(1);
 

@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { TOO_OLD_FOR_THE_REAL_METHOD } from '../realMethodView';
-import { DEFAULT_LIMIT, readFileAt, readFindings, readLog, readPairs, readRealMethod, Run } from '../roundsDbRead';
+import {
+  DEFAULT_LIMIT, readFileAt, readFindings, readLog, readPairs, readRealMethod, Run, WithKeysFile,
+  writeDecide, writeDecisions, writeKeep,
+} from '../roundsDbRead';
+import { TOO_OLD_FOR_COMMENTS } from '../reviewComment';
 import { TOO_OLD_FOR_THE_REVISION } from '../openAtRevision';
 
 /**
@@ -196,16 +200,39 @@ const SEVEN = {
   why: 'it races', fix: 'hold the lock',
 };
 
+/** The three a server from story 4.2 onwards adds: a person's words, and what became of them. */
+const THREE = { comment: 'it bit us', sentUtc: '2026-09-18T00:03:00Z', commentLost: 'the first one stays' };
+
+/** What a server too old for the three says about them: nothing, which reads as empty. */
+const NONE_SAID = { comment: '', sentUtc: '', commentLost: '' };
+
 const pairsOf = (...items: readonly Record<string, unknown>[]): string => JSON.stringify({ items });
 
 test('a server that says where a pair was is read field by field, and the limit travels', async () => {
-  const { run, seen } = calls({ code: 0, output: pairsOf({ ...NINE, ...SEVEN }) });
+  const { run, seen } = calls({ code: 0, output: pairsOf({ ...NINE, ...SEVEN, ...THREE }) });
 
   const read = await readPairs('coai-mcp.exe', 200, run);
 
   assert.deepEqual(seen, [['--pairs-json', '--limit', '200']]);
   assert.ok(read.ok);
-  assert.deepEqual(read.pairs, [{ ...NINE, ...SEVEN }]);
+  assert.deepEqual(read.pairs, [{ ...NINE, ...SEVEN, ...THREE }]);
+});
+
+/**
+ * A server from before comments answers a page whose boxes are empty and editable — not a failure.
+ *
+ * <p>The same rule as the seven fields below, one story later: the halves ship out of step, so an
+ * extension newer than its `coai-mcp` meets a pair with no `comment`, `sentUtc` or `commentLost`.
+ * Empty text for each is what makes the box render empty and EDITABLE, rather than read-only over
+ * a send that never happened.</p>
+ */
+test('a server from before comments still answers a page, with empty boxes and nothing sent', async () => {
+  const { run } = calls({ code: 0, output: pairsOf({ ...NINE, ...SEVEN }) });
+
+  const read = await readPairs('coai-mcp.exe', 200, run);
+
+  assert.ok(read.ok, 'an older server is not a failed read');
+  assert.deepEqual(read.pairs, [{ ...NINE, ...SEVEN, ...NONE_SAID }]);
 });
 
 /**
@@ -223,7 +250,7 @@ test('a server too old to say where a pair was still answers a page, with nothin
 
   assert.ok(read.ok, 'an older server is not a failed read');
   assert.deepEqual(read.pairs, [{
-    ...NINE, repoPath: '', headSha: '', fixSha: '', file: '', line: 0, why: '', fix: '',
+    ...NINE, repoPath: '', headSha: '', fixSha: '', file: '', line: 0, why: '', fix: '', ...NONE_SAID,
   }]);
 });
 
@@ -440,6 +467,91 @@ test('a file-at answer about a different PATH is refused too', () => {
     .then((read) => {
       assert.equal(read.ok, false);
     });
+});
+
+// --------------------------------------------------------------------------------------------
+// Writing decisions — `--pairs-keep`, and `--pairs-decide` with a person's words (story 4.2).
+// `writeKeep` had no test before this story touched it; these are its first.
+// --------------------------------------------------------------------------------------------
+
+/** A decisions file that is only ever a string: what was asked for, and where it went. */
+function fileless(): { withFile: WithKeysFile; asked: string[] } {
+  const asked: string[] = [];
+
+  return {
+    asked,
+    withFile: async (json, use) => {
+      asked.push(json);
+
+      return use('decisions.json');
+    },
+  };
+}
+
+test('a keep batch goes to --pairs-keep and answers how many were decided', async () => {
+  const { run, seen } = calls({ code: 0, output: '{"decided":2}' });
+  const { withFile, asked } = fileless();
+
+  const written = await writeKeep('coai-mcp.exe', [7, 8], 1, withFile, run);
+
+  assert.deepEqual(written, { ok: true, decided: 2 });
+  assert.deepEqual(seen, [['--pairs-keep', '--in', 'decisions.json']]);
+  assert.deepEqual(JSON.parse(asked[0]!), { items: [{ findingId: 7, keep: 1 }, { findingId: 8, keep: 1 }] });
+});
+
+test('a keep batch that failed is a failure with the server\'s own words, never zero decisions', async () => {
+  const { run } = calls({ code: 74, output: 'the rounds database could not be opened' });
+
+  const written = await writeKeep('coai-mcp.exe', [7], 1, fileless().withFile, run);
+
+  assert.deepEqual(written, { ok: false, why: 'the rounds database could not be opened' });
+});
+
+test('decisions with words go to --pairs-decide, the words beside each keep', async () => {
+  const { run, seen } = calls({ code: 0, output: '{"decided":1}' });
+  const { withFile, asked } = fileless();
+
+  const written = await writeDecide('coai-mcp.exe', [{ findingId: 7, keep: 1, comment: 'it races' }], withFile, run);
+
+  assert.deepEqual(written, { ok: true, decided: 1 });
+  assert.deepEqual(seen, [['--pairs-decide', '--in', 'decisions.json']]);
+  assert.deepEqual(JSON.parse(asked[0]!), { items: [{ findingId: 7, keep: 1, comment: 'it races' }] });
+});
+
+test('64 from --pairs-decide is a binary too old for comments — and ONLY 64 is', async () => {
+  const old = await writeDecide(
+    'coai-mcp.exe', [{ findingId: 7, keep: 1, comment: 'x' }], fileless().withFile, calls({ code: 64, output: '' }).run);
+  assert.deepEqual(old, { ok: false, tooOld: true, why: TOO_OLD_FOR_COMMENTS });
+
+  const refused = await writeDecide(
+    'coai-mcp.exe', [{ findingId: 7, keep: 1, comment: 'x' }], fileless().withFile,
+    calls({ code: 65, output: '--pairs-decide: pair 7: the comment carries U+0007' }).run);
+  assert.deepEqual(refused, { ok: false, why: '--pairs-decide: pair 7: the comment carries U+0007' },
+    'a comment the rule refused is a reason to show, not a server to replace');
+});
+
+test('an old binary still takes a batch that carries no words, through --pairs-keep, keep by keep', async () => {
+  const { run, seen } = calls(
+    { code: 64, output: '' }, { code: 0, output: '{"decided":2}' }, { code: 0, output: '{"decided":1}' });
+
+  const written = await writeDecisions('coai-mcp.exe', [
+    { findingId: 7, keep: 1, comment: '' },
+    { findingId: 8, keep: 1, comment: '' },
+    { findingId: 9, keep: 0, comment: '' },
+  ], fileless().withFile, run);
+
+  assert.deepEqual(written, { ok: true, decided: 3 });
+  assert.deepEqual(seen.map((args) => args[0]), ['--pairs-decide', '--pairs-keep', '--pairs-keep']);
+});
+
+test('an old binary is NOT handed a batch that carries words: it would keep the keep and lose them', async () => {
+  const { run, seen } = calls({ code: 64, output: '' }, { code: 0, output: '{"decided":1}' });
+
+  const written = await writeDecisions(
+    'coai-mcp.exe', [{ findingId: 7, keep: 1, comment: 'the words' }], fileless().withFile, run);
+
+  assert.deepEqual(written, { ok: false, tooOld: true, why: TOO_OLD_FOR_COMMENTS });
+  assert.deepEqual(seen.map((args) => args[0]), ['--pairs-decide'], '--pairs-keep was never asked');
 });
 
 test('the revision it WAS asked about still reads', () => {

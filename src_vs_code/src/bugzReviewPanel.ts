@@ -5,13 +5,15 @@ import * as vscode from 'vscode';
 import { asText } from './asText';
 import { notify } from './notify';
 import { AskedRevision, KeepWrite, PairsRead } from './roundsDbRead';
+import { commentWrite, decisionsFor, settled } from './reviewComment';
+import { reportWrite } from './reviewWrites';
 import { AskedTree } from './reviewTreeRead';
 import { settingWritten } from './settingWrite';
 import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 
 import { FilterPress, reviewPageHtml } from './bugzReviewPage';
-import { ReviewPair } from './reviewPair';
+import { Decision, ReviewPair } from './reviewPair';
 import { FileAtRead, RevisionDocument } from './openAtRevision';
 import { TreeRead } from './reviewTree';
 import { CallEnd, Calls } from './callHierarchy';
@@ -40,8 +42,14 @@ export interface ReviewHooks {
   /** The pairs as the server has them now, or why it could not say. */
   readonly read: () => Promise<PairsRead>;
 
-  /** Writes a batch of decisions, or says why it could not. */
-  readonly decide: (ids: readonly number[], keep: number) => Promise<KeepWrite>;
+  /**
+   * Writes a batch of decisions — each with its keep AND its words — or says why it could not.
+   *
+   * <p>One write for both, so a comment never changes a decision and a decision never erases a
+   * comment (story 4.2). `tooOld` on the answer means the binary has no `--pairs-decide` and the
+   * batch carried words; the draft is kept and the panel says which binary to install.</p>
+   */
+  readonly decide: (decisions: readonly Decision[]) => Promise<KeepWrite>;
 
   /**
    * One pair's method as it really was, at both commits — `--real-method`, one process per call.
@@ -117,7 +125,9 @@ type ReviewMessage =
   | { readonly type: 'fetchReal'; readonly id: number; readonly generation: string }
   /** A row's file was asked for — at the commit the reviewers read, or as it is now. */
   | { readonly type: 'openAt' | 'openCurrent' | 'openTree' | 'calls'; readonly id: number }
-  | { readonly type: 'openCall'; readonly at: string };
+  | { readonly type: 'openCall'; readonly at: string }
+  /** A person's words about one pair, posted on a pause or when the box was left. */
+  | { readonly type: 'comment'; readonly id: number; readonly text: string };
 
 /**
  * What an in-flight real-method read is keyed by: the row AND the two commits it is about.
@@ -174,6 +184,12 @@ function asReviewMessage(raw: unknown): ReviewMessage | undefined {
         : undefined;
     case 'openCall':
       return typeof m['at'] === 'string' ? { type: 'openCall', at: m['at'] } : undefined;
+    case 'comment':
+      // `fetchReal`'s rule for the id, and the text must BE text: `String(undefined)` would write
+      // the word "undefined" as somebody's comment. The rule on WHAT text is `--pairs-decide`'s.
+      return Number.isInteger(Number(m['id'])) && Number(m['id']) >= 0 && typeof m['text'] === 'string'
+        ? { type: 'comment', id: Number(m['id']), text: m['text'] }
+        : undefined;
 
     case 'openAt':
     case 'openCurrent':
@@ -219,6 +235,13 @@ export class BugzReviewPanel {
    * (A code reviewer found that; the first version kept it for the lifetime of the extension.)</p>
    */
   private expanded: ReadonlySet<number> = new Set<number>();
+
+  /**
+   * Words the page has posted and the store has not confirmed, by `findingId` — held for
+   * {@link expanded}'s reason, and drawn over the stored comment so a redraw, or a write the server
+   * refused, leaves them in their box. Let go only once a write lands exactly what they say.
+   */
+  private drafts: ReadonlyMap<number, string> = new Map<number, string>();
 
   /**
    * The last read, kept so a filter press does not cost a server process.
@@ -355,6 +378,8 @@ export class BugzReviewPanel {
         toneHook.dispose();
         // A closed window starts collapsed when it comes back. This object outlives the webview.
         this.expanded = new Set<number>();
+        // Every draft here was already POSTED and its write is queued; the store is where it lives.
+        this.drafts = new Map<number, string>();
         // And anonymised, with nothing remembered: the cache's lifetime IS the window's.
         this.realText = false;
         this.real = new Map<number, HeldReal>();
@@ -389,7 +414,12 @@ export class BugzReviewPanel {
 
     switch (m.type) {
       case 'decide':
-        this.queue(m.ids, m.keep);
+        this.queue(decisionsFor(m.ids, m.keep, this.held, this.drafts));
+
+        return;
+      case 'comment':
+        this.drafts = new Map([...this.drafts, [m.id, m.text]]);
+        this.queue(commentWrite(m.id, m.text, this.held));
 
         return;
       case 'expand':
@@ -497,39 +527,20 @@ export class BugzReviewPanel {
    * a write completes, and two redraws racing would leave the page showing whichever finished last
    * rather than what is true.</p>
    */
-  private queue(ids: readonly number[], keep: number): void {
+  private queue(decisions: readonly Decision[]): void {
+    if (decisions.length === 0) {
+      // A comment about a pair this panel no longer holds: nothing to write, and no keep to invent.
+      return;
+    }
+
     this.inFlight = this.inFlight.then(async () => {
-      const written = await this.hooks.decide(ids, keep);
-      if (!written.ok) {
-        // A FAILURE, not "none of them existed". The two send a person to different places, and
-        // saying the wrong one sends them to collect again for nothing. (Code round, codex.)
-        // `notify`, which waits for the DISK and not for the person. It was `notifyAndAsk` here,
-        // carried over from an `await vscode.window.showErrorMessage` in the code this replaced, and
-        // both have the same defect: a VS Code error toast does not dismiss itself, so `this.draw()`
-        // below did not run until somebody noticed the toast in the corner and closed it — leaving
-        // this panel frozen with its controls disabled and no terminal state. The record is still on
-        // disk before the toast appears; what stops is waiting for a human who has no decision to
-        // make. (gemini, the code round.)
-        await notify({
-          as: 'error',
-          class: 'failure',
-          source: 'bugzReview',
-          code: 'bugz-decision-not-saved',
-          title: `The decision could not be saved: ${written.why}`,
-          detail: written.why,
-        });
-      } else if (written.decided !== ids.length) {
-        await notify({
-          as: 'warning',
-          class: 'failure',
-          source: 'bugzReview',
-          code: 'bugz-decisions-partly-written',
-          title: `${written.decided} of ${ids.length} decisions were written. The rest name pairs this `
-            + 'database does not have — collect again and they will come back.',
-          detail: `${written.decided} of ${ids.length}`,
-        });
+      const written = await this.hooks.decide(decisions);
+      if (written.ok) {
+        // Only a draft that is exactly what landed is let go; words typed during the write stay.
+        this.drafts = settled(this.drafts, decisions);
       }
 
+      await reportWrite(written, decisions.length);
       await this.draw();
       await this.hooks.changed();
     }).catch(async (error_: unknown) => {
@@ -717,6 +728,7 @@ export class BugzReviewPanel {
       pairs: found.shown,
       trouble: this.trouble,
       expanded: this.keptOpen(this.held),
+      comments: this.drafts,
       realText: this.realText,
       real: this.realFor(found.shown),
       revisions: this.revisions.stateFor(found.shown),

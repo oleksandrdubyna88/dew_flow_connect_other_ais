@@ -22,7 +22,7 @@ const pair = (findingId: number, symbolName = `method${findingId}`, file = 'src/
   skeletonBefore: '', skeletonAfter: '',
   keep: -1, severity: 'Major', category: 'Reliability', title: 'a race',
   repoPath: 'D:/repo', headSha: 'aaaa111', fixSha: 'bbbb222',
-  file, line: 5, why: '', fix: '',
+  file, line: 5, why: '', fix: '', comment: '', sentUtc: '', commentLost: '',
 });
 
 const ROWS = [pair(7), pair(8)];

@@ -63,7 +63,7 @@ import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverP
 import { DbLog } from './roundsDb';
 import { NO_NOTES, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
-import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeKeep } from './roundsDbRead';
+import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
 import { currentFileIn, folderHolding } from './openAtRevision';
@@ -2684,8 +2684,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
     this.review ??= new BugzReviewPanel({
       read: () => readPairs(server.fsPath),
-      decide: (ids, keep) => writeKeep(
-        server.fsPath, ids, keep, keysFileIn(this.context.globalStorageUri.fsPath)),
+      decide: (decisions) => writeDecisions(
+        server.fsPath, decisions, keysFileIn(this.context.globalStorageUri.fsPath)),
       // The un-anonymised view: one process per opened row, cached by the panel. A VIEW — nothing
       // it reads reaches a decision or a send.
       readReal: (findingId) => readRealMethod(server.fsPath, findingId),
