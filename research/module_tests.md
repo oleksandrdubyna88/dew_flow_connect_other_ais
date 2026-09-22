@@ -661,8 +661,26 @@ stay green. Its teeth were proved by putting the old filter order back and watch
 go red. The harness is `TheArchiveCheckTests`'s — on CI a missing `sh` fails the job, on a Windows
 checkout without git's `sh` it skips.
 
+`TheHostsHelperIsTheOneThisDeployNeedsTests` guards the other half of that shell-to-server seam: not
+which line is a key, but whether the host's helper can carry a key list at all. `install-env.sh` is
+COPIED to `/usr/local/sbin` at provisioning and is the one file a deploy never refreshes, so it can
+fall behind the checkout that talks to it — and on 2026-09-22 it had, by ten hours and one release.
+The older body read stdin as `head -1`, so it took the secret, dropped the administrator list without
+a word and reported success; the deploy was green, the server started, and every `/admin` call
+answered 401 until `admin-check` said so a whole deploy later. The test runs the REAL
+`deploy/bugs/helper-protocol.sh` over four helpers: the one this checkout ships (accepted — which is
+what makes the marker single-sourced, since a change to either end that does not change the other
+fails here), the pre-administrator body that was actually on the host (refused, and the refusal must
+carry the `install -m 0755` repair rather than sending somebody to this document for it), one
+declaring a different protocol number (refused, because a substring match would accept every future
+protocol), and a path that does not exist (refused, naming the path). Its teeth were proved twice —
+by moving the shipped helper to protocol 3 and watching the drift test name that exact string, and by
+making the check accept everything and watching both refusal tests go red. The harness is
+`TheDeliveryAgreesWithTheServerTests`'s, for its reason.
+
 **What is NOT covered, and why it is written down rather than skipped quietly:** `install-env.sh`'s
-two-record framing has no automated test. It writes a `root:coai-bugs 0640` file under `/etc`, and
+two-record framing still has no automated test — the protocol test above proves the host's helper
+CAN carry two records, not that it frames them correctly. It writes a `root:coai-bugs 0640` file under `/etc`, and
 the only ways to drive it are to run the suite as root or to give it an override for its destination
 — and a root-owned writer that takes its path from the environment is a privilege escalation in a
 checkout the deploy account can write. It was exercised by hand over six shapes of stdin (both lines,

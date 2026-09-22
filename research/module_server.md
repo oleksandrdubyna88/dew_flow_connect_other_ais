@@ -3654,6 +3654,19 @@ non-zero for that too and the value is what decides. A third record is refused, 
 wrapped base64 value arrives as — and an unterminated third one is refused for the same reason it
 would otherwise have been dropped in silence.
 
+**And the HELPER is asked what it understands before any of that is sent** (2026-09-22).
+`install-env.sh` is copied to `/usr/local/sbin/coai-bugs-install-env` at provisioning and is the one
+file a deploy does not refresh — it runs as root and the checkout is writable by the deploy account,
+so refreshing it from there would be an escalation. On 2026-09-22 the host's copy predated the
+administrator record by ten hours, and the older body read stdin as `head -1`: it took the secret,
+discarded the key list in silence, wrote an environment file with no administrators and reported
+success. Every check passed, the server started, and every `/admin` call answered 401 until
+`admin-check` said so a whole deploy later. So the two ends declare a PROTOCOL: `install-env.sh`
+states which one it implements, `deploy/bugs/helper-protocol.sh` demands it by an exact literal —
+number included, because a substring match would accept every future protocol — and `deploy-cmd.sh`
+runs that check before the secret leaves the runner and before anything is written. The check only
+reports; a script that reinstalled the helper would be the escalation the copy exists to prevent.
+
 **Which line of a list is a KEY is decided in one place**, `deploy/bugs/first-key.sh`: trim the line,
 drop the blanks and the `#` comments, take the first. That is `AdminKeys.Lines`'s rule, and the ORDER
 matters — the server trims before it looks for a `#`, so an indented `  # alice` is a comment. A

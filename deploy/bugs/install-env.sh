@@ -28,6 +28,20 @@ set -eu
 
 ENV_FILE=/etc/coai-bugs/env
 
+# WHAT THIS COPY UNDERSTANDS, declared so the checkout can ask before it sends anything.
+#
+# Being a copy under /usr/local/sbin, this file can fall BEHIND the checkout that talks to it, and on
+# 2026-09-22 it had: the host was still running the version before the administrator record existed,
+# which read one line, discarded the key list in silence and reported success. The deploy went green
+# and delivered nobody. `deploy/bugs/helper-protocol.sh` reads this line out of the installed file
+# and refuses the delivery when it is not the one it needs; `deploy-cmd.sh` runs that check first.
+#
+# Spelled ONCE, here, and demanded once, there. Bump the number whenever what arrives on stdin
+# changes meaning — that is the whole event this guards against — and reinstall the helper.
+#   1  one record:  the secret
+#   2  two records: the secret, then the base64 administrator list
+PROTOCOL='coai-bugs-install-env protocol 2'
+
 # TWO RECORDS, from stdin: the server's secret, then the administrator list. `tr -d` removes the
 # carriage return a Windows-written secret box adds, which would otherwise become part of the value
 # and hash differently from the one the client thinks it sent.
@@ -107,4 +121,4 @@ trap - EXIT
 # NEITHER VALUE is printed, and the administrator count is not printed either — it would be one more
 # thing in a CI log that says something about the credentials. A helper that confirmed them would put
 # them there.
-printf 'the environment file is written\n'
+printf 'the environment file is written (%s)\n' "$PROTOCOL"

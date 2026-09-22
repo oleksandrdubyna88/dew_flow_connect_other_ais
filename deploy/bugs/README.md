@@ -272,9 +272,9 @@ restrict,command="/opt/coai-bugs/src/deploy/bugs/deploy-cmd.sh" ssh-ed25519 AAAA
 ```
 
 `restrict` turns off the pty, forwarding and everything else; the forced command means the key
-can run that one file whatever the client asks for. It answers exactly four things —
-`deploy <version>`, `deploy --rollback`, `secret` and `health` — and refuses anything else. A
-leaked key can update or roll back this one service and can do nothing whatsoever besides.
+can run that one file whatever the client asks for. It answers exactly five things —
+`deploy <version>`, `deploy --rollback`, `secret`, `admin-check` and `health` — and refuses anything
+else. A leaked key can update or roll back this one service and can do nothing whatsoever besides.
 
 **Its own key, its own user, its own wrapper.** It shares nothing with the Team server’s deploy
 key: this is a fully independent deployment, so a mistake in one cannot reach the other.
@@ -394,6 +394,41 @@ canary. `systemctl is-enabled` is the only thing that answers the question.
 Then run **Actions → deploy the ingest server** with the version.
 The first run writes the environment file before it installs anything, so the service has its
 secret the first time it starts.
+
+### The root helper is the one thing a deploy does not update — and it now says so
+
+`/usr/local/sbin/coai-bugs-install-env` is a **copy**. Every other script here is read out of
+`/opt/coai-bugs/src`, so a fix to it reaches the host with the next deploy; this one cannot be,
+because it runs as root and that checkout is writable by the deploy account. A root script in a
+directory its caller owns is a way to become root, so the copy stays a copy.
+
+**What that cost, on 2026-09-22.** The helper gained its second record — the administrator list —
+in `c38637e3`. The host's copy predated it by ten hours, and the older helper's entire reading of
+stdin was `head -1`: it took the secret, **discarded the key list without a word**, wrote an
+environment file holding no administrators, printed success and exited 0. So the deploy's delivery
+step was green while it delivered nobody; the server started perfectly, because an absent
+`COAI_BUGS_ADMIN_KEYS` legitimately means "no administrators"; and every `/admin` call answered 401.
+`admin-check` caught it — a whole deploy later, which is the right net at the wrong distance.
+
+**So the two ends now declare a protocol.** `install-env.sh` states which one it implements,
+`deploy/bugs/helper-protocol.sh` demands it, and `deploy-cmd.sh` runs that check **before** the
+secret is sent and before anything is written. A helper that is behind fails the deploy immediately,
+naming the one command that repairs it. The check never repairs anything itself — a script that
+reinstalled a root helper would hand the deploy account exactly the escalation the copy prevents.
+
+```bash
+# as root, when a deploy refuses with "does not speak coai-bugs-install-env protocol N"
+install -m 0755 -o root -g root \
+  /opt/coai-bugs/src/deploy/bugs/install-env.sh /usr/local/sbin/coai-bugs-install-env
+```
+
+The marker is spelled once, in `install-env.sh`. `TheHostsHelperIsTheOneThisDeployNeedsTests` runs
+the real check against the shipped helper, against one declaring another protocol, and against the
+pre-administrator body that was actually on the host — so the two ends cannot drift apart without a
+red test on somebody's machine rather than a 401 on a live one.
+
+**Bump the number whenever what arrives on stdin changes meaning**, and reinstall. `1` was one
+record, the secret; `2` is two, the secret then the base64 administrator list.
 
 ### The unit
 
