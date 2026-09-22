@@ -1268,6 +1268,42 @@ lines with `Environment.NewLine` in case a CRLF file left a hidden character in 
 join is the mechanism that makes a wrapped call findable, and the trim that removes indentation
 removes the CR with it. A `\r\n` case was added to the join tests so that rejection rests on a test.
 
+## What the notices ledger delivers — the promise, said once (S8 story 2.3.1, 2026-09-22)
+
+Two sentences in this repository contradicted each other: this file and the plan's status line both
+said *"every refusal this server returns now leaves a line"*, while `NoticeWriter`'s own docstring
+said a full queue drops. §8 of the parent plan is about exactly that — a claim a list can make and a
+codebase can quietly break — so the promise is one paragraph now, and every story that adds a
+population quotes it instead of writing its own:
+
+> Every refusal — and, after stories 2.3.2 and 2.3.3, every non-Ok reviewer ending and every startup
+> note — is **offered** to the writer. What the file holds is **every offer the disk accepted**. A
+> full queue (256 waiting, which means a wedged share) drops and logs; a disk that refuses logs; a
+> clean exit **drains** what is queued within `NoticeWriter.DrainBudget`; a kill loses what was
+> queued, and story 3.1's run marker is what records that death.
+
+**The drain is a `finally` on `ServeAsync`'s existing `try`.** That is what covers BOTH `return 0`
+roads — the one after `server.RunAsync()` and the one in the `catch (IOException or
+ObjectDisposedException)` that is the ordinary "the client hung up" path — and an exception unwinding
+out, which is where story 3.2's crash notice will pass. Without it a refusal answered as the client
+disconnects was one the panel never showed. `using var log` is disposed after the method body, so the
+drain's own warning still has somewhere to go.
+
+**`Drain` waits on the TASK, not on the in-flight count** (three findings of the plan round said the
+same thing): a count an append that hangs never decrements is a wait that neither ends nor tells
+anyone the writer is still holding the file. What it answers is what is **unresolved** rather than
+what is lost — codex's correction — because a record dequeued and mid-append may already be on disk
+when the bound expires. And what remains after a timeout is a task still blocked in a synchronous
+append with no cancellation to give it: one kernel write to a share that stopped answering.
+
+**The budget is a CEILING, not a wait** — 2 s, and an empty queue costs nothing. The plan round
+pushed back on 3 s and was right about who pays it: the release smoke runs a real `initialize` over
+stdio against the published binary and then exits.
+
+**What is owed to 3.1/3.2, written here so it is not rediscovered:** the crash `catch`, the ordering
+of the drain against the log flush (drain first, so its warnings reach the log), and the exit code
+all belong to 3.2; surviving SIGKILL is 3.1's run marker.
+
 ## Every refusal is written down, and no notice may cost one (S8 story 2.2, 2026-09-21)
 
 `Refusal.Answer` builds the `ErrorAnswer`, hands it to `RefusalNotices.Record`, and serialises it.

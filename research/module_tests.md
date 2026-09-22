@@ -1582,6 +1582,33 @@ the script took the first two and compared a pair nobody asked about. Counting t
 is meant in every reading. The red test hands it three files that all EXIST, so the refusal cannot
 come from a missing one; a first draft passed for exactly that wrong reason.
 
+## A notice offered on the way out still lands (2026-09-22, S8 story 2.3.1)
+
+`TheWriterDrainsBeforeTheProcessLeavesTests` — seven cases for one method, because what `Drain` has
+to be right about is all edges: everything queued is on disk afterwards; a writer that HANGS does not
+hold the process (measured against a generous ceiling rather than against the bound, since a test
+that asserts "returned within 200 ms" of a 200 ms bound fails on a loaded machine and proves nothing
+on a fast one); an empty queue pays nothing; a late offer is refused with the CLOSING sentence rather
+than the full-queue one; an offer racing the drain is either written or refused but never accepted
+and dropped; and a burst past the depth refuses with a sentence naming the depth.
+
+**Teeth.** Deleting the `finally` from `ServeAsync` turns the structural case red; putting the
+full-queue sentence back on the closing road turns the message case red. Both restored from saved
+copies.
+
+**And one thing these tests CANNOT prove, said rather than implied.** Swapping `Drain`'s wait from
+the writer task back to the in-flight count leaves all seven GREEN — measured, by doing it. With
+today's `Draining` loop the count reaching zero and the task completing are the same moment, and
+`Wrote` catches everything so the task cannot fault. The task wait is kept because it is strictly
+stronger and stays correct when somebody adds work after the loop; the docstring says so instead of
+the suite pretending otherwise.
+
+**What is structural and why.** `TheHostDrainsOnEveryRoadOut` asserts the `finally` by scanning
+`Program.cs` — a `finally` attached to the wrong `try`, or missing from one of the two `return 0`
+roads, would pass every behavioural test here while a last-second refusal is lost from a real
+session (codex, on the plan round). The live half — a real refusal over stdio against the published
+binary — is story 2.4, which the parent plan owes by name.
+
 ## A refusal that cannot be written must not cost the refusal (2026-09-21, S8 story 2.2)
 
 `TheRefusalsAreWrittenDownTests` — thirteen cases, and the interesting half is not that a line lands

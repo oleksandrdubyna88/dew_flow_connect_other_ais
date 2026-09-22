@@ -1641,6 +1641,10 @@ internal static class Program
             // one place a person is told about, and the binary's is inside the extension's storage.
             logsRoot: ServiceDefaults.CoaiLogPath.RootFor(
                 SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path));
+        // Taken ONCE, here, so the `finally` below cannot start a writer only to drain nothing —
+        // and so story 2.3.2 has an instance to hand to the host rather than each caller reaching
+        // for the static.
+        var notices = NoticeWriter.Shared;
         try
         {
             // The file the extension writes is the base; the client config env overrides it — a
@@ -1723,6 +1727,27 @@ internal static class Program
             Note("the MCP client closed the connection.");
             return 0;
         }
+        // A notice is handed to one background thread and the caller returns; without this, a
+        // refusal answered as the client hangs up is one the panel never shows. A `finally` is what
+        // covers BOTH `return 0` roads and an exception unwinding out — including, when story 3.2
+        // adds its `catch (Exception)` above, the crash notice that catch will offer. `using var
+        // log` is disposed after the method body, so the sentence below still has somewhere to go.
+        finally { Unresolved(notices.Drain(NoticeWriter.DrainBudget), log); }
+    }
+
+    /// <summary>What the writer could not account for on the way out, said rather than swallowed.</summary>
+    /// <remarks>
+    /// UNRESOLVED and not "lost": a record dequeued and mid-append when the bound expired may
+    /// already be on disk. What this number means is what this process cannot vouch for.
+    /// </remarks>
+    private static void Unresolved(int notices, Serilog.ILogger log)
+    {
+        if (notices == 0)
+        {
+            return;
+        }
+
+        log.Warning("{Notices} notice(s) were still unwritten when this run ended", notices);
     }
 
     internal const string Instructions = """

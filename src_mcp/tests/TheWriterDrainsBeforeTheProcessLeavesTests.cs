@@ -1,0 +1,230 @@
+using System.Diagnostics;
+using CoaiMcp.Core.Notices;
+using CoaiMcp.Server;
+using CoaiMcp.ServiceDefaults;
+using FluentAssertions;
+using Xunit;
+
+namespace CoaiMcp.Tests;
+
+/// <summary>
+/// A notice offered in the last second of a session still lands — and the promise says what it delivers.
+/// </summary>
+/// <remarks>
+/// <para><b>What was broken.</b> <see cref="NoticeWriter.Offer"/> hands a record to one background
+/// thread and returns; that is the whole point of it, and story 2.2's code round is why. But
+/// <c>ServeAsync</c> has two clean exits — after <c>server.RunAsync()</c> and in the
+/// <c>catch (IOException or ObjectDisposedException)</c> that is the ordinary "the client hung up"
+/// road — and neither waited for the queue. A refusal answered as the client disconnects was a
+/// refusal the panel never showed.</para>
+///
+/// <para><b>And two documents contradicted each other.</b> The plan and <c>module_server.md</c> both
+/// said "every refusal now leaves a line" while <c>NoticeWriter</c>'s own docstring said a full queue
+/// drops. §8 of the parent plan is about exactly that: a claim a list can make and a codebase can
+/// quietly break. The promise is one paragraph now, and it says what is delivered.</para>
+///
+/// <para><b>What the plan round changed.</b> Thirteen findings, all accepted, and three of them were
+/// the same thing: waiting on the in-flight COUNT is not waiting on the writer. If an append hangs,
+/// the count never reaches zero and the draining task is still holding the file when the process
+/// leaves. <see cref="NoticeWriter.Drain"/> waits on the TASK. codex added the honest name: a record
+/// dequeued and mid-append may already be on disk, so what the drain answers is what is
+/// UNRESOLVED, not what is lost.</para>
+/// </remarks>
+public sealed class TheWriterDrainsBeforeTheProcessLeavesTests : IDisposable
+{
+    private static readonly TimeSpan Generous = TimeSpan.FromSeconds(30);
+
+    private readonly string _dir = Directory.CreateTempSubdirectory("coai-drain-").FullName;
+
+    public void Dispose() => Directory.Delete(_dir, recursive: true);
+
+    private ResolvedDataDir Data => ResolvedDataDir.For(_dir);
+
+    private string[] Lines()
+    {
+        var file = Path.Combine(_dir, ServerNotices.Name);
+
+        return File.Exists(file) ? File.ReadAllLines(file) : [];
+    }
+
+    private static NoticeWriter Writing(Func<ResolvedDataDir, ServerNotice, bool>? append = null) =>
+        new(append ?? ((dir, notice) => ServerNotices.Append(dir, notice)));
+
+    private static ServerNotice Notice(string title) => new()
+    {
+        Utc = ServerNotice.Iso(DateTimeOffset.UtcNow),
+        Class = "refusal",
+        Source = "coai-mcp",
+        Code = ServerNoticeCodes.Refused,
+        Title = title,
+    };
+
+    private bool Offer(NoticeWriter writer, string title, Serilog.ILogger? log = null) =>
+        writer.Offer(() => Data, Notice(title), log ?? Silent);
+
+    [Fact]
+    public void EverythingQueued_IsOnDiskAfterTheDrain()
+    {
+        var slow = Writing((dir, notice) =>
+        {
+            Thread.Sleep(10);
+
+            return ServerNotices.Append(dir, notice);
+        });
+
+        for (var each = 0; each < 50; each++)
+        {
+            Offer(slow, $"notice {each}").Should().BeTrue();
+        }
+
+        slow.Drain(Generous).Should().Be(0, "a clean exit waits for what it queued");
+        Lines().Should().HaveCount(50, "and every one of them is on disk, not in a dead process");
+    }
+
+    [Fact]
+    public void AWriterThatHangs_DoesNotHoldTheProcess()
+    {
+        // Three findings of the plan round were the same thing: waiting on the in-flight COUNT is not
+        // waiting on the writer. An append that hangs never decrements it, so the wait has to be on
+        // the task and it has to be bounded. The comparison is against a GENEROUS ceiling rather than
+        // the bound itself — a test that asserts "returned within 200 ms" of a 200 ms bound is a test
+        // that fails on a loaded machine and proves nothing on a fast one.
+        var stuck = new ManualResetEventSlim(false);
+        try
+        {
+            var wedged = Writing((_, _) => { stuck.Wait(Generous); return true; });
+            Offer(wedged, "into the void");
+            var clock = Stopwatch.StartNew();
+
+            var unresolved = wedged.Drain(TimeSpan.FromMilliseconds(200));
+
+            clock.Stop();
+            unresolved.Should().BeGreaterThan(0, "the notice is unresolved, and the count says so");
+            clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(10),
+                "a wedged share must not hold a process that is trying to leave");
+        }
+        finally
+        {
+            stuck.Set();
+        }
+    }
+
+    [Fact]
+    public void AWriterWithNothingQueued_PaysNothing()
+    {
+        // gemini: a budget paid on every clean exit is a budget paid by the release smoke, which runs
+        // a real `initialize` over stdio and exits. A session that wrote no notices must not wait.
+        var clock = Stopwatch.StartNew();
+
+        Writing().Drain(TimeSpan.FromSeconds(30)).Should().Be(0);
+
+        clock.Stop();
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5),
+            "an empty queue is already drained; the bound is a ceiling, never a wait");
+    }
+
+    [Fact]
+    public void AfterTheDrain_AnOfferSaysTheWriterIsClosing()
+    {
+        // The plan round, local: today's sentence — "256 are already waiting and the disk is not
+        // answering" — would be a lie on this road, and a lie in a log is worse than silence.
+        var said = new List<string>();
+        var writer = Writing();
+        writer.Drain(Generous);
+
+        Offer(writer, "too late", Watching(said)).Should().BeFalse();
+
+        said.Should().ContainSingle()
+            .Which.Should().Contain("closing", "the reason a notice was refused must be the real one")
+            .And.NotContain("256", "which is the OTHER reason, and this is not it");
+    }
+
+    [Fact]
+    public async Task AnOfferRacingTheDrain_IsEitherWrittenOrRefused_NeverLostSilently()
+    {
+        // The plan round, local: `Drain` completes the writer side and then waits, so an `Offer` from
+        // another thread in that window must resolve one way or the other — accepted and drained, or
+        // refused and said out loud. What it must never be is accepted and dropped.
+        var said = new List<string>();
+        var writer = Writing();
+        var racing = new List<bool>();
+        var start = new ManualResetEventSlim(false);
+
+        var offering = Task.Run(() =>
+        {
+            start.Wait(Generous);
+            for (var each = 0; each < 20; each++)
+            {
+                racing.Add(Offer(writer, $"racing {each}", Watching(said)));
+            }
+        });
+
+        start.Set();
+        writer.Drain(Generous);
+        await offering.WaitAsync(Generous);
+
+        Lines().Length.Should().Be(racing.Count(accepted => accepted),
+            "every offer that was ACCEPTED reached the disk, and every one refused was refused");
+    }
+
+    [Fact]
+    public void AFullQueue_RefusesTheOverflowAndSaysWhy()
+    {
+        // codex: the promise says a full queue drops and logs, and no test filled it and read the
+        // sentence. An off-by-one in the capacity or a misleading warning would have passed
+        // everything else.
+        var stuck = new ManualResetEventSlim(false);
+        var said = new List<string>();
+        try
+        {
+            var wedged = Writing((_, _) => { stuck.Wait(Generous); return true; });
+            var accepted = Enumerable.Range(0, NoticeWriter.Depth + 50)
+                .Count(each => Offer(wedged, $"burst {each}", Watching(said)));
+
+            accepted.Should().BeLessThan(NoticeWriter.Depth + 50, "past the depth it must refuse");
+            said.Should().NotBeEmpty("and every refusal is said out loud");
+            said[0].Should().Contain(NoticeWriter.Depth.ToString(),
+                "the sentence names the depth, so a person knows what filled");
+        }
+        finally
+        {
+            stuck.Set();
+        }
+    }
+
+    [Fact]
+    public void TheHostDrainsOnEveryRoadOut()
+    {
+        // codex was right that every other test here exercises the writer directly, so a `finally`
+        // attached to the wrong `try` — or missing from one of the two `return 0` roads — would pass
+        // all of them while a last-second refusal is lost from a real session.
+        //
+        // This is the structural half: the drain is inside `ServeAsync`'s `finally`, which is what
+        // covers BOTH returns and an exception unwinding out. The live half — a real refusal over
+        // stdio against the published binary, asserted on the bytes — is story 2.4, which the parent
+        // plan owes by name and which now has something to check.
+        var serving = ProductionSources.CodeOf("src_mcp/src/Program.cs");
+
+        serving.Should().Contain("finally { Unresolved(notices.Drain(NoticeWriter.DrainBudget), log); }",
+            "one drain, in the finally of the try that wraps both exits — a `finally` is what a "
+            + "`return` cannot escape and what story 3.2's crash catch will sit above");
+        ProductionSources.FilesMentioning(".Drain(").Keys.Should().Equal(["src_mcp/src/Program.cs"],
+            "a second production caller is a second exit road somebody did not write down");
+    }
+
+    private static Serilog.ILogger Silent => Serilog.Core.Logger.None;
+
+    private static Serilog.ILogger Watching(List<string> said) =>
+        new Serilog.LoggerConfiguration().WriteTo.Sink(new Collecting(said)).CreateLogger();
+
+    private sealed class Collecting(List<string> said) : Serilog.Core.ILogEventSink
+    {
+        public void Emit(Serilog.Events.LogEvent logEvent)
+        {
+            lock (said)
+            {
+                said.Add(logEvent.RenderMessage());
+            }
+        }
+    }
+}

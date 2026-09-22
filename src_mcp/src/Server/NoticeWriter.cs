@@ -58,14 +58,30 @@ internal sealed class NoticeWriter
             SingleReader = true,
         });
 
+    /// <summary>
+    /// How long a process leaving may wait for what it queued.
+    /// </summary>
+    /// <remarks>
+    /// It is a CEILING and not a wait: an empty queue drains at once, and the ordinary session that
+    /// wrote a handful of notices pays the time of a handful of appends. Two seconds is what a slow
+    /// share needs for those and what a person does not notice on exit — the plan round pushed back
+    /// on three, and was right that this is paid by the release smoke, which runs a real
+    /// <c>initialize</c> over stdio against the published binary and then exits.
+    /// </remarks>
+    internal static readonly TimeSpan DrainBudget = TimeSpan.FromSeconds(2);
+
     private readonly ManualResetEventSlim _idle = new(initialState: true);
 
+    private readonly Task _writing;
+
     private int _inFlight;
+
+    private volatile bool _closing;
 
     internal NoticeWriter(Func<ResolvedDataDir, ServerNotice, bool> append)
     {
         _append = append;
-        _ = Task.Run(Draining);
+        _writing = Task.Run(Draining);
     }
 
     /// <summary>
@@ -82,10 +98,53 @@ internal sealed class NoticeWriter
         }
 
         Done();
-        Safely(() => log.Warning(
-            "a notice was dropped: {Depth} are already waiting and the disk is not answering", Depth));
+        Safely(() => log.Warning(Why(), Depth));
 
         return false;
+    }
+
+    /// <summary>
+    /// Why an offer was refused — and never the wrong reason.
+    /// </summary>
+    /// <remarks>
+    /// After <see cref="Drain"/> the channel is closed, so a late offer is refused for a completely
+    /// different reason than a full queue. Saying "256 are already waiting and the disk is not
+    /// answering" there would be a lie in a log, which is worse than silence. (The plan round.)
+    /// </remarks>
+    private string Why() => _closing
+        ? "a notice arrived after the writer was closing, and was not written"
+        : "a notice was dropped: {Depth} are already waiting and the disk is not answering";
+
+    /// <summary>
+    /// Closes the queue and waits for the writer, up to <paramref name="within"/>. Never throws.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>It waits on the TASK, not on the count.</b> Three findings of the plan round were the
+    /// same thing: <see cref="Idle"/> watches <c>_inFlight</c>, which an append that hangs never
+    /// decrements — so a wait on the count both fails to end and fails to tell anyone that the
+    /// draining task is still holding the file while the process leaves.</para>
+    /// <para><b>What it answers is UNRESOLVED, not lost.</b> codex: a record dequeued and mid-append
+    /// may already be on disk when the bound expires, so the count is what this writer cannot
+    /// account for — and that is what the warning says.</para>
+    /// <para><b>What remains after a timeout</b> is a task still blocked in a synchronous append.
+    /// There is no cancellation for that — the append is one kernel write to a share that has
+    /// stopped answering — so the process leaves with it outstanding. Surviving that is story 3.1's
+    /// run marker, not a property a writer can have.</para>
+    /// <para><b>Honest about the test.</b> Swapping this back to <c>Idle(within)</c> leaves every one
+    /// of story 2.3.1's tests GREEN — measured, by doing it — because with today's
+    /// <see cref="Draining"/> the count reaching zero and the task completing are the same moment,
+    /// and <see cref="Wrote"/> catches everything so the task cannot fault. The task wait is kept
+    /// anyway: it is strictly stronger, it is what stays correct when somebody adds work after the
+    /// loop or a path that lets the task fault, and the alternative is a method whose contract says
+    /// "waits for the writer" while waiting for a counter. What is NOT claimed is that a test would
+    /// catch the swap today.</para>
+    /// </remarks>
+    internal int Drain(TimeSpan within)
+    {
+        _closing = true;
+        _queue.Writer.TryComplete();
+
+        return _writing.Wait(within) ? 0 : Volatile.Read(ref _inFlight);
     }
 
     /// <summary>Whether the queue has drained, for a test that needs to look at the file.</summary>
