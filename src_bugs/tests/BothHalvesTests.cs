@@ -37,6 +37,9 @@ public sealed class BothHalvesTests : IDisposable
     /// <summary>Where the client sends. The factory answers it in-process whatever the host says.</summary>
     private static readonly Uri Anywhere = new("http://localhost");
 
+    /// <summary>A kept decision — spelled here because this class's own <c>Keep</c> is the seeding method.</summary>
+    private const int Kept = CoaiMcp.Core.Collecting.Keep.Kept;
+
     private RoundsDb Db() => RoundsDb.Open(_dir, _log)!;
 
     [Fact]
@@ -175,6 +178,133 @@ public sealed class BothHalvesTests : IDisposable
         corpus.WaitingCount().Should().Be(UploadRun.PerBatch + 3);
     }
 
+    // ------------------------------------------------------------------------------------------
+    // A comment, end to end (story 4.2 of PLAN_a_comment_crosses_the_machine_boundary.md).
+    // ------------------------------------------------------------------------------------------
+
+    /// <summary>What a person wrote here is what the server holds, and the pair is marked sent.</summary>
+    /// <remarks>
+    /// The whole story in one assertion chain: the local column, the route an old server does not
+    /// have, the server's own column, and the acknowledgement written back — with nothing said about
+    /// a lost comment, because nothing was lost.
+    /// </remarks>
+    [Fact]
+    public async Task ACommentWrittenHereIsHeldThereAndThePairIsMarkedSent()
+    {
+        var id = Keep(new CollectedPair(
+            "GetOrAdd", "CSharp", "method_1(var_1) { }", "method_1(var_1) { lock (var_2) { } }"))[0];
+
+        using var server = new BugsServer();
+        var (key, _) = server.IssueKey();
+        using var db = Db();
+        db.RecordDecide([new CommentedDecision(id, Kept,"this one bit us in production")]);
+
+        (await Run(server, db, key)).Accepted.Should().Be(1);
+
+        using var corpus = server.Reading();
+        corpus.Waiting(10).Should().ContainSingle().Which.Comment.Should().Be(
+            "this one bit us in production", "the words crossed with the pair, verbatim");
+        var here = db.Pairs(10).Should().ContainSingle().Subject;
+        here.SentUtc.Should().NotBeEmpty("the server acknowledged it");
+        here.CommentLost.Should().BeEmpty("and it held the words, so nothing was lost");
+    }
+
+    /// <summary>
+    /// A send that landed and was never acknowledged, retried, is not reported as a lost comment.
+    /// </summary>
+    /// <remarks>
+    /// <para>The failure codex and gemini named in the plan round of 4.2, driven through both real
+    /// halves. The server commits the pair and its words; the client never records the answer — the
+    /// process killed, the connection dropped — so the pair is offered again with the SAME comment.
+    /// Answered "this pair already carries a comment, so yours was not stored", the client would
+    /// write <c>comment_lost</c>, and the page would tell a person their words are gone while they
+    /// sit on the server.</para>
+    /// <para>The lost acknowledgement is simulated the way <see cref="TheSecondSendIsADuplicateAndStillMarksThePair"/>
+    /// simulates a resend: <c>sent_utc</c> cleared by hand, which is exactly the state a kill between
+    /// the server's commit and the client's write leaves behind.</para>
+    /// </remarks>
+    [Fact]
+    public async Task ARetriedSendWhoseAnswerWasLostDoesNotCallItsOwnCommentLost()
+    {
+        var id = Keep(new CollectedPair(
+            "GetOrAdd", "CSharp", "method_1(var_1) { }", "method_1(var_1) { lock (var_2) { } }"))[0];
+
+        using var server = new BugsServer();
+        var (key, _) = server.IssueKey();
+        using (var first = Db())
+        {
+            first.RecordDecide([new CommentedDecision(id, Kept,"mine")]);
+            (await Run(server, first, key)).Accepted.Should().Be(1);
+        }
+
+        ForgetTheAcknowledgement();
+
+        using var db = Db();
+        (await Run(server, db, key)).Duplicate.Should().Be(1, "the server already holds the pair");
+        db.Pairs(10).Should().ContainSingle().Which.CommentLost.Should().BeEmpty(
+            "the words the server holds ARE these words — the retry must not report them lost");
+    }
+
+    /// <summary>Somebody else's words were there first: the pair is sent, and the loss is SAID.</summary>
+    /// <remarks>
+    /// The other half of the same arbitration: different words on a pair the server already holds
+    /// lose to the first speaker, and `duplicate` — a success — must not carry that loss in silence.
+    /// </remarks>
+    [Fact]
+    public async Task WordsThatLostToAnEarlierCommentAreRecordedAsLost()
+    {
+        var id = Keep(new CollectedPair(
+            "GetOrAdd", "CSharp", "method_1(var_1) { }", "method_1(var_1) { lock (var_2) { } }"))[0];
+
+        using var server = new BugsServer();
+        var (key, _) = server.IssueKey();
+        using (var first = Db())
+        {
+            first.RecordDecide([new CommentedDecision(id, Kept,"the first words")]);
+            (await Run(server, first, key)).Accepted.Should().Be(1);
+        }
+
+        // Another contributor's position: the same pair, unsent here, carrying different words.
+        ForgetTheAcknowledgement();
+        using var db = Db();
+        db.RecordDecide([new CommentedDecision(id, Kept,"different words")]);
+
+        (await Run(server, db, key)).Duplicate.Should().Be(1);
+
+        var here = db.Pairs(10).Should().ContainSingle().Subject;
+        here.SentUtc.Should().NotBeEmpty("a duplicate is acknowledged, so the pair is not offered again");
+        here.CommentLost.Should().Contain("was not stored", "and the person is told their words did not go");
+        here.CommentLost.Should().NotContain("different words", "the sentence names no comment's text");
+    }
+
+    /// <summary>A comment-free batch still crosses as it always did, and its pair carries no words there.</summary>
+    [Fact]
+    public async Task ACommentFreePairStillCrossesWithoutWords()
+    {
+        Keep(new CollectedPair(
+            "GetOrAdd", "CSharp", "method_1(var_1) { }", "method_1(var_1) { lock (var_2) { } }"));
+
+        using var server = new BugsServer();
+        var (key, _) = server.IssueKey();
+        using var db = Db();
+
+        (await Run(server, db, key)).Accepted.Should().Be(1);
+
+        using var corpus = server.Reading();
+        corpus.Waiting(10).Should().ContainSingle().Which.Comment.Should().BeEmpty();
+    }
+
+    /// <summary>Puts every pair back in the queue — the state a lost acknowledgement leaves.</summary>
+    private void ForgetTheAcknowledgement()
+    {
+        using var write = new SqliteConnection(
+            $"Data Source={Path.Combine(_dir, RoundsDb.FileName)};Pooling=False");
+        write.Open();
+        using var clear = write.CreateCommand();
+        clear.CommandText = "UPDATE collect_pairs SET sent_utc = '', comment_lost = ''";
+        clear.ExecuteNonQuery();
+    }
+
     private static async Task<UploadSummary> Run(
         BugsServer server, RoundsDb db, string key, int limit = 10)
     {
@@ -185,7 +315,7 @@ public sealed class BothHalvesTests : IDisposable
             db, Anywhere, key, limit, TestContext.Current.CancellationToken);
     }
 
-    private void Keep(params CollectedPair[] pairs) => Seed.KeptPairs(_dir, pairs);
+    private IReadOnlyList<long> Keep(params CollectedPair[] pairs) => Seed.KeptPairs(_dir, pairs);
 
     public void Dispose() => Scratch.Delete(_dir);
 }

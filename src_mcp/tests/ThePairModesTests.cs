@@ -216,6 +216,160 @@ public sealed class ThePairModesTests : IDisposable
             Keep.Undecided, "a value the column may not hold must not reach it");
     }
 
+    // ------------------------------------------------------------------------------------------
+    // `--pairs-decide`: keeps AND comments (story 4.2 of PLAN_a_comment_crosses_the_machine_boundary.md).
+    // ------------------------------------------------------------------------------------------
+
+    /// <summary>A decisions file holding one decision with the given words.</summary>
+    /// <remarks>
+    /// Written through the serializer rather than as literal JSON, so a control character in
+    /// <paramref name="comment"/> reaches the file as the escape JSON uses for it — and never as a
+    /// raw character in this source, which the invisible-character guard would refuse.
+    /// </remarks>
+    private string DecisionsFile(long id, int keep, string comment)
+    {
+        var file = Path.Combine(_dir, "decide.json");
+        File.WriteAllText(file, JsonSerializer.Serialize(
+            new DecideRequest([new DecideAsk(id, keep, comment)]), ServerJsonContext.Default.DecideRequest));
+
+        return file;
+    }
+
+    /// <summary>What the mode wrote to stderr, and its exit code.</summary>
+    private static (string Said, int Code) Refused(string[] args)
+    {
+        var stderr = new StringWriter();
+        var was = Console.Error;
+        try
+        {
+            Console.SetError(stderr);
+            Spoken(() => PairsDecideMode.Run(args), out var code);
+
+            return (stderr.ToString(), code);
+        }
+        finally
+        {
+            Console.SetError(was);
+        }
+    }
+
+    /// <summary>The keep and the words are written together, the words as the person meant them.</summary>
+    /// <remarks>
+    /// CRLF and a bare CR become LF and the ends are trimmed BEFORE the rule runs: a CR the box never
+    /// meant would otherwise be refused as a control character, and a comment of nothing but spaces is
+    /// no comment.
+    /// </remarks>
+    [Fact]
+    public void PairsDecideWritesTheKeepAndTheWordsAsMeant()
+    {
+        var id = Seed();
+        var file = DecisionsFile(id, Keep.Kept, "  two\r\nlines\rand a third  ");
+
+        var json = Spoken(() => PairsDecideMode.Run(["--pairs-decide", "--in", file]), out var code);
+
+        code.Should().Be(0);
+        JsonSerializer.Deserialize(json, ServerJsonContext.Default.KeepAnswer)!.Decided.Should().Be(1);
+        using var db = RoundsDb.Open(_dir, Serilog.Core.Logger.None)!;
+        var pair = db.Pairs(50)[0];
+        pair.Keep.Should().Be(Keep.Kept);
+        pair.Comment.Should().Be("two\nlines\nand a third");
+    }
+
+    /// <summary>Every fault in the document is 65 — the same cases `--pairs-keep` is held to.</summary>
+    [Theory]
+    [MemberData(nameof(BadRequests))]
+    public void PairsDecideAnswers65ForABadRequest_Never64(string how, string content)
+    {
+        Seed();
+        var file = Path.Combine(_dir, "decide.json");
+        if (content.Length > 0)
+        {
+            File.WriteAllText(file, content);
+        }
+
+        string[] args = how switch
+        {
+            "file" => ["--pairs-decide", "--in", file],
+            "" => ["--pairs-decide"],
+            _ => ["--pairs-decide", "--in", how],
+        };
+
+        Refused(args).Code.Should().Be(65, "64 is reserved for a mode this binary does not have");
+    }
+
+    /// <summary>A comment the rule refuses is 65, names the pair and the code point, and writes nothing.</summary>
+    [Theory]
+    [InlineData(0x0007)]
+    [InlineData(0x001b)]
+    [InlineData(0x202e)]
+    public void AWordTheRuleRefusesIs65_AndNothingIsWritten(int code)
+    {
+        var id = Seed();
+        var file = DecisionsFile(id, Keep.Kept, $"looks{(char)code}harmless");
+
+        var (said, exit) = Refused(["--pairs-decide", "--in", file]);
+
+        exit.Should().Be(65);
+        said.Should().Contain($"pair {id}").And.Contain($"U+{code:X4}")
+            .And.NotContain("harmless", "a refusal names a code point, never the words");
+        using var db = RoundsDb.Open(_dir, Serilog.Core.Logger.None)!;
+        db.Pairs(50)[0].Keep.Should().Be(Keep.Undecided, "the batch was refused whole");
+    }
+
+    /// <summary>One character over the limit is 65; exactly the limit is taken.</summary>
+    [Fact]
+    public void TheLimitIsTheRulesLimit()
+    {
+        var id = Seed();
+
+        Refused(["--pairs-decide", "--in", DecisionsFile(id, Keep.Kept, new string('x', CommentRule.MostChars + 1))])
+            .Code.Should().Be(65);
+        Refused(["--pairs-decide", "--in", DecisionsFile(id, Keep.Kept, new string('x', CommentRule.MostChars))])
+            .Code.Should().Be(0, "a person who filled the box exactly is inside it");
+    }
+
+    /// <summary>Changing a SENT pair's words is 65, and says which pair.</summary>
+    [Fact]
+    public void ChangingASentPairsWordsIs65()
+    {
+        var id = Seed();
+        using (var db = RoundsDb.Open(_dir, Serilog.Core.Logger.None)!)
+        {
+            db.RecordDecide([new CommentedDecision(id, Keep.Kept, "what crossed")]);
+            db.RecordSendOutcome([new SendOutcome(id, string.Empty, false, "what crossed")]);
+        }
+
+        var (said, code) = Refused(["--pairs-decide", "--in", DecisionsFile(id, Keep.Kept, "something else")]);
+
+        code.Should().Be(65);
+        said.Should().Contain($"pair {id}").And.Contain("already sent");
+    }
+
+    /// <summary>A database that cannot be opened is 74, as it is for every database mode here.</summary>
+    /// <remarks>
+    /// Made by pointing the data directory at a FILE: nothing can be created beneath it, so the open
+    /// itself fails — the one fault that is the machine's rather than the request's.
+    /// </remarks>
+    [Fact]
+    public void ADatabaseThatWillNotOpenIs74()
+    {
+        var file = DecisionsFile(1, Keep.Kept, "words");
+        var notADirectory = Path.Combine(_dir, "a-file-not-a-directory");
+        File.WriteAllText(notADirectory, "x");
+        Environment.SetEnvironmentVariable("COAI_DATA_DIR", notADirectory);
+
+        Refused(["--pairs-decide", "--in", file]).Code.Should().Be(74);
+    }
+
+    /// <summary>64 belongs to a mode this binary does not have, and to nothing else.</summary>
+    [Fact]
+    public void OnlyAModeThisBinaryDoesNotHaveIsTheUsageExit()
+    {
+        Program.Classify(["--pairs-decide"]).Should().Be(Program.Startup.PairsDecide);
+        Program.Classify(["--pairs-decid"]).Should().Be(
+            Program.Startup.Usage, "which is the one that exits 64, and the panel reads as an old binary");
+    }
+
     public void Dispose()
     {
         Environment.SetEnvironmentVariable("COAI_DATA_DIR", _was);

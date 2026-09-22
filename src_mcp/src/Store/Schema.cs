@@ -32,7 +32,7 @@ internal static class Schema
     [
         Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
-        TheSendsThemselves,
+        TheSendsThemselves, WhatAPersonSaid,
     ];
 
     internal const string Tables = """
@@ -399,5 +399,26 @@ internal static class Schema
     /// </remarks>
     internal const string WhoSaidSo = """
         ALTER TABLE consultations ADD COLUMN outcome_by TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>What a person wrote about a pair, and what became of it once it was sent.</summary>
+    /// <remarks>
+    /// <para><b><c>comment</c> is the one field on the send a person TYPES</b>, and it is public by
+    /// the operator's decision of 2026-09-18: it crosses with the pair on <c>/ingest/commented</c>,
+    /// unanonymised. Empty is "no comment", which is why it is <c>NOT NULL DEFAULT ''</c> rather than
+    /// nullable — every pair already here reads back as having none, and no reader needs a null
+    /// check. (<c>PLAN_a_comment_crosses_the_machine_boundary.md</c>, decision 4.)</para>
+    /// <para><b><c>comment_lost</c> is the server's sentence when the words did NOT land</b> although
+    /// the pair did: somebody else's comment was there first, the pair had already been promoted, or
+    /// the text was changed here while it was being sent. Without it the pair is marked sent and the
+    /// page says so above words that never crossed — the silent loss this whole story exists to
+    /// prevent, moved one hop. Written in the acknowledgement's transaction, never before it.</para>
+    /// <para>Both in ONE step because they shipped in one story and are one question; a database that
+    /// ran twelve steps gains both or neither, since the migrator applies a step and its version in
+    /// one transaction.</para>
+    /// </remarks>
+    internal const string WhatAPersonSaid = """
+        ALTER TABLE collect_pairs ADD COLUMN comment      TEXT NOT NULL DEFAULT '';
+        ALTER TABLE collect_pairs ADD COLUMN comment_lost TEXT NOT NULL DEFAULT '';
         """;
 }

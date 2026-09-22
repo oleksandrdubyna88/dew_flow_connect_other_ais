@@ -36,6 +36,16 @@ namespace CoaiMcp.Store;
 /// <param name="Line">The finding's line at <paramref name="HeadSha"/>; 0 when none was recorded.</param>
 /// <param name="Why">The reviewers' cause, verbatim. Empty when none was recorded — never invented.</param>
 /// <param name="Fix">The reviewers' proposed fix, verbatim. Empty when none was recorded.</param>
+/// <param name="Comment">What a person wrote about this pair; empty for none.</param>
+/// <param name="SentUtc">
+/// When the server acknowledged the pair; empty while it has not. It is what makes the page's box
+/// READ-ONLY and say so: a comment edited after the send never crosses, and a box that let it be
+/// edited in silence is the failure this product refuses.
+/// </param>
+/// <param name="CommentLost">
+/// The server's sentence when the pair landed and its comment did not — or this client's, when the
+/// text was changed while it was being sent. Empty when the words are held or there were none.
+/// </param>
 public sealed record ReviewPair(
     long FindingId,
     string SymbolName,
@@ -52,4 +62,7 @@ public sealed record ReviewPair(
     string File,
     int Line,
     string Why,
-    string Fix);
+    string Fix,
+    string Comment = "",
+    string SentUtc = "",
+    string CommentLost = "");

@@ -26,6 +26,12 @@ public sealed record CollectedPair(
 /// without the other. None of those three is anonymous, and none of them is ever uploaded.
 /// </remarks>
 /// <param name="Keep">-1 nobody has looked, 0 dropped, 1 kept.</param>
+/// <param name="Comment">
+/// What a person wrote about the pair, or empty. The ONE field here that crosses and that nobody
+/// derived: it is public by the operator's decision, travels on <c>/ingest/commented</c>, and never
+/// enters the pair's id. LAST and defaulted, so every construction written before it — the
+/// privacy test builds one by name — still compiles and still means what it did.
+/// </param>
 public sealed record StoredPair(
     long FindingId,
     string SymbolName,
@@ -35,18 +41,35 @@ public sealed record StoredPair(
     int Keep,
     string Severity,
     string Category,
-    string Title);
+    string Title,
+    string Comment = "");
 
 /// <summary>What a person decided about one pair.</summary>
 public readonly record struct KeepDecision(long FindingId, int Keep);
+
+/// <summary>What a person decided about one pair, and what they wrote about it.</summary>
+/// <remarks>
+/// Its own type rather than a wider <see cref="KeepDecision"/>: `--pairs-keep` takes that one and
+/// must keep meaning exactly what it did, because an old panel calls it with no comment to give.
+/// </remarks>
+/// <param name="Comment">Already normalised and trimmed; empty is "no comment".</param>
+public readonly record struct CommentedDecision(long FindingId, int Keep, string Comment);
 
 /// <summary>What the ingest server said about one pair, ready to be written down.</summary>
 /// <remarks>
 /// A batch's outcomes travel together so they can be written in ONE transaction: marking two hundred
 /// pairs one statement at a time leaves half a batch recorded when the process is killed.
 /// </remarks>
-/// <param name="Why">The server's reason, when it refused. Empty otherwise.</param>
-public readonly record struct SendOutcome(long FindingId, string Why, bool WasRefused);
+/// <param name="Why">
+/// When refused, the server's reason. When taken, the server's sentence about the COMMENT if it did
+/// not land — somebody else's was there first, or the pair was already promoted — and empty when it
+/// did or when there was none.
+/// </param>
+/// <param name="Comment">
+/// The comment exactly as it crossed, so the acknowledgement can tell whether the words a person
+/// sees now are the words the server has: text edited while its batch was in the air did not go.
+/// </param>
+public readonly record struct SendOutcome(long FindingId, string Why, bool WasRefused, string Comment = "");
 
 /// <summary>The vocabulary of <see cref="StoredPair.Keep"/>, spelled once.</summary>
 /// <remarks>

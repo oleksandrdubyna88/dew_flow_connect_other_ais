@@ -444,7 +444,8 @@ public sealed class RoundsDb : IDisposable
         SELECT p.finding_id, p.symbol_name, p.language, p.skeleton_before, p.skeleton_after,
                p.keep, f.severity, f.category, f.title,
                COALESCE(s.repo_path, '') AS repo_path, COALESCE(r.head_sha, '') AS head_sha,
-               f.fix_sha, f.file, f.line, f.why, f.fix
+               f.fix_sha, f.file, f.line, f.why, f.fix,
+               p.comment, p.sent_utc, p.comment_lost
           FROM collect_pairs p
           JOIN findings f ON f.id = p.finding_id
           LEFT JOIN rounds r ON r.id = f.round_id
@@ -469,7 +470,10 @@ public sealed class RoundsDb : IDisposable
             File: Columns.Text(rows, "file"),
             Line: Columns.Number(rows, "line"),
             Why: Columns.Text(rows, "why"),
-            Fix: Columns.Text(rows, "fix"));
+            Fix: Columns.Text(rows, "fix"),
+            Comment: Columns.Text(rows, "comment"),
+            SentUtc: Columns.Text(rows, "sent_utc"),
+            CommentLost: Columns.Text(rows, "comment_lost"));
 
     /// <summary>The kept pairs nobody has sent yet, and nobody has been refused for.</summary>
     /// <remarks>
@@ -485,7 +489,7 @@ public sealed class RoundsDb : IDisposable
         // show a number the run does not use. (Code round 2, gemini and codex.)
         read.CommandText = """
             SELECT p.finding_id, p.symbol_name, p.language, p.skeleton_before, p.skeleton_after,
-                   p.keep, f.severity, f.category, f.title
+                   p.keep, f.severity, f.category, f.title, p.comment
               FROM collect_pairs p JOIN findings f ON f.id = p.finding_id
              WHERE
             """
@@ -500,10 +504,12 @@ public sealed class RoundsDb : IDisposable
         var pairs = new List<StoredPair>();
         while (rows.Read())
         {
+            // The comment is LAST, at 9, because this reader is ordinal: appended rather than
+            // inserted, every column before it keeps the number it had.
             pairs.Add(new StoredPair(
                 rows.GetInt64(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),
                 rows.GetString(4), rows.GetInt32(5), rows.GetString(6), rows.GetString(7),
-                rows.GetString(8)));
+                rows.GetString(8), rows.GetString(9)));
         }
 
         return pairs;
@@ -525,16 +531,54 @@ public sealed class RoundsDb : IDisposable
         using var transaction = _db.BeginTransaction();
         foreach (var outcome in outcomes)
         {
-            using var write = _db.CreateCommand();
-            write.CommandText = outcome.WasRefused
-                ? "UPDATE collect_pairs SET send_refusal = $why WHERE finding_id = $id"
-                : "UPDATE collect_pairs SET sent_utc = $why WHERE finding_id = $id";
-            Bind(write, "$why", outcome.WasRefused ? outcome.Why : Now());
-            Bind(write, "$id", outcome.FindingId);
+            using var write = outcome.WasRefused ? RefusalOf(outcome) : AcknowledgementOf(outcome);
             write.ExecuteNonQuery();
         }
 
         transaction.Commit();
+    }
+
+    /// <summary>What <c>comment_lost</c> says when the text changed while its batch was in the air.</summary>
+    internal const string EditedWhileSending =
+        "the comment was changed while it was being sent, so the server holds the words from before the change";
+
+    private SqliteCommand RefusalOf(SendOutcome outcome)
+    {
+        var write = _db.CreateCommand();
+        write.CommandText = "UPDATE collect_pairs SET send_refusal = $why WHERE finding_id = $id";
+        Bind(write, "$why", outcome.Why);
+        Bind(write, "$id", outcome.FindingId);
+
+        return write;
+    }
+
+    /// <summary>A pair the server took — and whether the words a person sees are the words it has.</summary>
+    /// <remarks>
+    /// <para><c>comment_lost</c> is the server's own sentence when it took the pair and not the
+    /// comment (somebody else's was there first; the pair was already promoted), written in THIS
+    /// transaction so a pair is never marked sent while the page still implies its words went.</para>
+    /// <para><b>And the text is compared with what crossed.</b> A batch is read, the POST takes its
+    /// time, and a person can edit the box meanwhile: the pair is then acknowledged with words the
+    /// server never saw. Marking it sent with the NEW text on screen would be the silent divergence
+    /// the read-only box exists to prevent, so the row says what happened instead. (Plan round of
+    /// 4.2, the local reviewer.)</para>
+    /// </remarks>
+    private SqliteCommand AcknowledgementOf(SendOutcome outcome)
+    {
+        var write = _db.CreateCommand();
+        write.CommandText = """
+            UPDATE collect_pairs
+               SET sent_utc = $now,
+                   comment_lost = CASE WHEN comment = $sent THEN $lost ELSE $edited END
+             WHERE finding_id = $id
+            """;
+        Bind(write, "$now", Now());
+        Bind(write, "$sent", outcome.Comment);
+        Bind(write, "$lost", outcome.Why);
+        Bind(write, "$edited", EditedWhileSending);
+        Bind(write, "$id", outcome.FindingId);
+
+        return write;
     }
 
     /// <summary>
@@ -609,6 +653,10 @@ public sealed class RoundsDb : IDisposable
 
         return decided;
     }
+
+    /// <summary>Records keeps AND comments, or refuses the batch — see <see cref="PairDecisions"/>.</summary>
+    public (int Decided, string Refusal) RecordDecide(IReadOnlyList<CommentedDecision> decisions) =>
+        PairDecisions.Record(_db, decisions);
 
     /// <summary>What the caller decided about each finding of the round it last answered.</summary>
     /// <remarks>

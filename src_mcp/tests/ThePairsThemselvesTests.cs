@@ -367,6 +367,151 @@ public sealed class ThePairsThemselvesTests : IDisposable
         db.Pairs(50).Should().ContainSingle("the table must arrive as its own appended step");
     }
 
+    // ------------------------------------------------------------------------------------------
+    // What a person wrote about a pair (story 4.2 of PLAN_a_comment_crosses_the_machine_boundary.md).
+    // ------------------------------------------------------------------------------------------
+
+    /// <summary>A collected pair, kept, carrying the given words — the ordinary starting point.</summary>
+    private long KeptWith(string comment)
+    {
+        var id = Seed();
+        using var db = Db();
+        db.RecordCollect(id, "", "collected", "", "bbbb222", "run-1", Pair);
+        db.RecordDecide([new CommentedDecision(id, Keep.Kept, comment)]).Refusal.Should().BeEmpty();
+
+        return id;
+    }
+
+    /// <summary>One write carries the keep AND the words, and both read back — by name and by ordinal.</summary>
+    /// <remarks>
+    /// <c>Sendable</c> reads by ORDINAL, and its own docblock warns what that costs the day the SELECT
+    /// is reordered: the wrong column, silently. So the comment is asserted there BY VALUE — an
+    /// ordinal off by one answers the finding's title, which is text too and would pass a check that
+    /// asked only whether something came back.
+    /// </remarks>
+    [Fact]
+    public void ADecisionWritesTheKeepAndTheWordsTogether()
+    {
+        KeptWith("it races on the second call");
+        using var db = Db();
+
+        var page = db.Pairs(50).Should().ContainSingle().Subject;
+        page.Keep.Should().Be(Keep.Kept);
+        page.Comment.Should().Be("it races on the second call");
+        db.Sendable(10).Should().ContainSingle().Which.Comment.Should().Be(
+            "it races on the second call", "the send reads the words by ordinal, and must read THESE");
+    }
+
+    /// <summary>A sent pair's words cannot change here — but its keep still can.</summary>
+    /// <remarks>
+    /// The page makes the box read-only once the server has acknowledged the pair; the store must not
+    /// be the way round it, or the local row diverges from what crossed and the page renders the
+    /// divergence as sent. The refusal names the pair and never the text, and the WHOLE batch goes:
+    /// the decision ahead of the refused one in the same batch is not written either.
+    /// </remarks>
+    [Fact]
+    public void ASentPairsWordsCannotChange_ButItsKeepStillCan()
+    {
+        var id = KeptWith("the words that crossed");
+        using var db = Db();
+        db.RecordSendOutcome([new SendOutcome(id, string.Empty, false, "the words that crossed")]);
+
+        var changed = db.RecordDecide([
+            new CommentedDecision(id, Keep.Dropped, "the words that crossed"),
+            new CommentedDecision(id, Keep.Kept, "new words"),
+        ]);
+
+        changed.Decided.Should().Be(0);
+        changed.Refusal.Should().Contain($"pair {id}").And.NotContain("new words", "a refusal never quotes a comment");
+        var after = db.Pairs(50)[0];
+        after.Comment.Should().Be("the words that crossed", "nothing was written");
+        after.Keep.Should().Be(Keep.Kept, "not even the decision ahead of the refused one");
+
+        db.RecordDecide([new CommentedDecision(id, Keep.Dropped, "the words that crossed")])
+            .Should().Be((1, string.Empty), "unchanged words let a sent pair's keep change");
+        db.Pairs(50)[0].Keep.Should().Be(Keep.Dropped);
+    }
+
+    /// <summary>The server's sentence about words that did not land is kept with the pair.</summary>
+    [Fact]
+    public void TheServersSentenceAboutLostWordsIsKeptWithThePair()
+    {
+        var id = KeptWith("mine");
+        using var db = Db();
+
+        db.RecordSendOutcome([new SendOutcome(
+            id, "this pair already carries a comment, and the first one stays, so yours was not stored",
+            false, "mine")]);
+
+        var pair = db.Pairs(50)[0];
+        pair.SentUtc.Should().NotBeEmpty("the pair itself was taken");
+        pair.CommentLost.Should().Contain("was not stored", "and the page must be able to say its words were not");
+    }
+
+    /// <summary>Words changed while their batch was in the air are said not to have gone.</summary>
+    /// <remarks>
+    /// A batch is read, the POST takes its time, and the box is still editable because the pair is
+    /// not sent yet. The acknowledgement then arrives for the OLD words. Marking the pair sent with the
+    /// new text on screen is the silent divergence the read-only box exists to prevent. (Plan round of
+    /// 4.2, the local reviewer.)
+    /// </remarks>
+    [Fact]
+    public void WordsChangedWhileTheirBatchWasInTheAirAreSaidNotToHaveGone()
+    {
+        var id = KeptWith("before the edit");
+        using var db = Db();
+        var inTheAir = db.Sendable(10)[0];
+
+        db.RecordDecide([new CommentedDecision(id, Keep.Kept, "after the edit")]).Refusal.Should().BeEmpty(
+            "the pair is not sent yet, so its words may still change");
+        db.RecordSendOutcome([new SendOutcome(id, string.Empty, false, inTheAir.Comment)]);
+
+        var pair = db.Pairs(50)[0];
+        pair.SentUtc.Should().NotBeEmpty();
+        pair.Comment.Should().Be("after the edit", "what the person wrote is kept, not overwritten");
+        pair.CommentLost.Should().Be(RoundsDb.EditedWhileSending);
+    }
+
+    /// <summary>
+    /// A database with pairs, from before comments existed, gains both columns and loses nothing.
+    /// </summary>
+    /// <remarks>
+    /// <para>The state is MADE rather than spelled: seed a pair on today's schema, then take the two
+    /// columns away and stamp the file back to twelve steps — which is byte for byte what a database
+    /// written by the previous release holds. The reopen must then run step 13 alone, and every pair
+    /// must read back as having said nothing. (Plan round of 4.2, codex.)</para>
+    /// <para>Opened twice, because the second open is the idempotence half: a file already at thirteen
+    /// runs nothing, and a step that ran again would fail on a duplicate column.</para>
+    /// </remarks>
+    [Fact]
+    public void ADatabaseFromBeforeComments_GainsThem_AndEveryPairSaysNothing()
+    {
+        var id = Seed();
+        using (var db = Db())
+        {
+            db.RecordCollect(id, "", "collected", "", "bbbb222", "run-1", Pair);
+            db.RecordKeep([new KeepDecision(id, Keep.Kept)]);
+        }
+
+        Execute("""
+            ALTER TABLE collect_pairs DROP COLUMN comment;
+            ALTER TABLE collect_pairs DROP COLUMN comment_lost;
+            PRAGMA user_version = 12;
+            """);
+        SqliteConnection.ClearAllPools();
+
+        for (var open = 0; open < 2; open++)
+        {
+            using var db = Db();
+            var pair = db.Pairs(50).Should().ContainSingle().Subject;
+            pair.Keep.Should().Be(Keep.Kept, "the decision survives the step");
+            pair.Comment.Should().BeEmpty();
+            pair.CommentLost.Should().BeEmpty();
+            db.Sendable(10).Should().ContainSingle().Which.Comment.Should().BeEmpty();
+            SqliteConnection.ClearAllPools();
+        }
+    }
+
     public void Dispose()
     {
         SqliteConnection.ClearAllPools();

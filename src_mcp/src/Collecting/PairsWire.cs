@@ -41,6 +41,24 @@ public sealed record KeepRequest(IReadOnlyList<KeepAsk>? Items = null)
     public IReadOnlyList<KeepAsk>? Items { get; init; } = Items;
 }
 
+/// <summary>One decision as the panel sends it to `--pairs-decide`: the keep AND the words.</summary>
+/// <remarks>
+/// Its own record, and its own MODE, rather than a comment added to <see cref="KeepAsk"/>: an older
+/// binary handed a comment in `--pairs-keep`'s file would deserialise past it and answer
+/// `{"decided": N}` — plausible and wrong, the comment dropped in silence. A new mode is the one
+/// thing an old binary cannot pretend to understand; it exits 64, and the panel says so.
+/// </remarks>
+/// <param name="Comment">As typed. The mode normalises line endings, trims, and checks it.</param>
+public sealed record DecideAsk(long FindingId = 0, int Keep = Core.Collecting.Keep.Undecided, string Comment = "");
+
+/// <summary>A batch of decisions with their comments, file-in like <see cref="KeepRequest"/>.</summary>
+/// <remarks>Nullable `items` for <see cref="KeepRequest.Items"/>'s reason: an absent list is a malformed request.</remarks>
+public sealed record DecideRequest(IReadOnlyList<DecideAsk>? Items = null)
+{
+    /// <summary>The decisions, or nothing at all when the document did not carry the field.</summary>
+    public IReadOnlyList<DecideAsk>? Items { get; init; } = Items;
+}
+
 /// <summary>How many rows a batch actually decided.</summary>
 /// <remarks>
 /// The count, not a success flag: a decision naming a pair this database does not have changes
