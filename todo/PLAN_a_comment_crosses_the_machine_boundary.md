@@ -6,7 +6,8 @@
 > one rather than dropping it. The CLIENT half — `coai-mcp`'s local column and `--pairs-decide`
 > (4.2a), and the extension's box with its "it leaves the machine" notice (4.2b) — is **not built**,
 > so nothing a person types can reach the server yet. This plan stays in `todo/` until 4.2b ships,
-> and is promoted then.
+> and is promoted then. **On 2026-09-22 the operator folded 4.2a and 4.2b into ONE pull request with
+> ONE review gate** — see *4.2 in one pull request* below; the two release lines stay separate.
 >
 > Scope: `src_mcp/core` (the wire type
 > both halves compile against), `src_bugs` (the ingest server, its schema and its one-shots),
@@ -302,6 +303,49 @@ never merged into step 1, which stays byte-identical and is pinned by `TheSchema
   column and asserts they read back with an empty comment, then re-runs the migration to prove it is
   idempotent.
 
+## 4.2 in one pull request — what changed on 2026-09-22, and what the code said
+
+The operator folded the two client stories into **one pull request with one review gate**. The two
+release LINES stay: the merge proposes `mcp-v0.31.0` and `extension-v0.51.0` as separate release
+PRs. Shipping both from one merge is safe for the reason the old order was safe — an extension that
+meets an older `coai-mcp` gets 64 from `--pairs-decide`, and the page says the server is too old for
+comments rather than dropping one.
+
+The 4.2 sections below were read against the code on 2026-09-22 before this was written. Each item
+changes what they say, and the file-by-file lists are corrected to match:
+
+1. **There is no probe.** 4.2a said *"the batch loop probes when any sendable pair has a comment"* —
+   a sentence from before the plan round replaced the probe with a route (decision 3). A batch in
+   which any pair carries a comment is POSTed to `/ingest/commented`; every other batch goes to
+   `/ingest`, byte-identical to today. `Record` requires `Contract >= Contract.Comments` on the
+   answer to a commented batch and marks nothing without it.
+2. **`sent_utc` is already written on the acknowledgement.** `WhatWasSent` (step 8) added it, and
+   `RoundsDb.RecordSendOutcome` writes it in the batch's one transaction. 4.2 does not introduce it:
+   it exposes it to the page (`ReviewPair.SentUtc`) and adds the test the Definition of Done asks
+   for — a run killed before the POST and one killed after it leave no pair marked sent that the
+   server never acknowledged.
+3. **A comment the server did NOT store is recorded, not lost inside a success.** The server already
+   answers `accepted`/`duplicate` with a `Why` of *"this pair already carries a comment, and the first
+   one stays, so yours was not stored"* or *"… has already been promoted into the corpus …"*
+   (`Ingest.Lost`, 4.1). With nowhere to put it, the client marks the pair sent and the page then
+   shows *"Sent on …"* above words that never crossed — the silent loss this plan exists to prevent,
+   moved one hop. So step 13 adds a second column, **`comment_lost TEXT NOT NULL DEFAULT ''`**,
+   written in the same acknowledgement transaction from a non-refusal `Why`; the page's sent sentence
+   becomes *"Sent on <date>, but your comment was not stored: <the server's reason>"*, and
+   `--upload-pairs` prints the same line. **A deviation from 4.2a as reviewed**, which had one column.
+4. **A sent pair's comment cannot change in the store either.** The page makes the box read-only;
+   `--pairs-decide` must not be the way around it, or the local row diverges from what crossed and
+   the page renders the divergence as sent. A decision whose comment DIFFERS from the stored one on a
+   pair with `sent_utc` set is refused, 65, naming the finding. An unchanged one is accepted, so
+   changing a sent pair's keep still works.
+5. **`Program.cs` is 1 878 lines against the doctrine's 800.** `--pairs-decide` does not make it
+   longer: `Program` becomes `partial` and the mode lives in `Program.PairsDecide.cs`, beside the
+   helpers it shares (`Flags`, `Note`, `Unreadable`). Splitting the existing file is not this epic's
+   work and is not done here.
+6. **`StoredPair` gains `Comment` as its LAST positional parameter, defaulted to empty**, so every
+   existing construction — `OnlyFourFieldsLeaveTests` builds one by name — compiles and means what it
+   did; `Sendable` reads it as ordinal 9, after the nine it already reads.
+
 ## What changes, file by file
 
 ### 4.1 — the server accepts a comment (one PR, released as `bugs-v0.3.0`, DEPLOYED before 4.2 merges)
@@ -350,35 +394,42 @@ the one field a person types, into a box that says where it goes. The five priva
 asserted absent; the wire without a comment is byte-identical to today; and the comment never enters
 the id.
 
-### 4.2a — `coai-mcp` (one PR, released as `mcp-v0.31.0`)
+### 4.2a — `coai-mcp` (released as `mcp-v0.31.0`; one PR with 4.2b since 2026-09-22)
 
 - `Schema.cs` — step 13, `WhatAPersonSaid`:
-  `ALTER TABLE collect_pairs ADD COLUMN comment TEXT NOT NULL DEFAULT '';`
-- `CollectedPair.cs` — `StoredPair` gains `Comment`; `RoundsDb.Sendable` selects it LAST, because
-  that reader is ordinal and its own docblock warns about it.
-- `ReviewPair.cs` gains `Comment` and `SentUtc`. **`SentUtc` exists so the page can make a sent
-  pair's box read-only and SAY the send has happened** — a comment edited after a send never
-  crosses, and a box that let it be edited in silence would be the failure this product refuses.
-- `PairsWire.cs` — `DecideAsk(FindingId, Keep, Comment = "")`; `RecordDecide` writes keep AND comment
-  in one transaction; `RecordKeep` stays for `--pairs-keep`.
-- `Program.cs` — `"--pairs-decide" => Startup.PairsDecide`: reads the file (65 on a fault), validates
-  every keep and every comment through `CommentRule.Refuse` (65, naming the finding id and the
-  reason), normalises CRLF/CR to LF, trims, writes, prints `{"decided": N}`. 74 for a database that
-  will not open. Never 64.
+  `ALTER TABLE collect_pairs ADD COLUMN comment TEXT NOT NULL DEFAULT ''; ALTER TABLE collect_pairs ADD COLUMN comment_lost TEXT NOT NULL DEFAULT '';`
+  — the second column is item 3 of *4.2 in one pull request*.
+- `CollectedPair.cs` — `StoredPair` gains `Comment` LAST and defaulted; `RoundsDb.Sendable` selects
+  it LAST, because that reader is ordinal and its own docblock warns about it. `SendOutcome` gains the
+  lost-comment sentence, so it is written in the acknowledgement's one transaction.
+- `ReviewPair.cs` gains `Comment`, `SentUtc` and `CommentLost`. **`SentUtc` exists so the page can
+  make a sent pair's box read-only and SAY the send has happened** — a comment edited after a send
+  never crosses, and a box that let it be edited in silence would be the failure this product
+  refuses. `ThePagesRow` selects the three by name.
+- `PairsWire.cs` — `DecideAsk(FindingId, Keep, Comment = "")` and its request; `RoundsDb.RecordDecide`
+  writes keep AND comment in one transaction and refuses a changed comment on a sent pair (item 4);
+  `RecordKeep` stays for `--pairs-keep`.
+- `Program.PairsDecide.cs` (new; `Program` becomes `partial`, item 5) —
+  `"--pairs-decide" => Startup.PairsDecide`: reads the file (65 on a fault), validates every keep and
+  every comment through `CommentRule.Refuse` (65, naming the finding id and the reason), normalises
+  CRLF/CR to LF, trims, writes, prints `{"decided": N}`. 74 for a database that will not open. Never 64.
 - `UploadRun.cs` — `Wire` maps an empty comment to **null**, which is what makes the byte-identity
-  assertion true; the batch loop probes when any sendable pair has a comment; `Record` checks
-  `answer.Contract` when the batch carried one.
+  assertion true; a batch with any comment goes to `/ingest/commented` and every other to `/ingest`
+  (item 1); `Record` requires `answer.Contract >= Contract.Comments` for a commented batch, writes a
+  non-refusal `Why` as `comment_lost`, and says it; a 404 on the commented route is the sentence in
+  decision 3's table, never a generic status.
 - `.agents/PROJECT.md`: `--pairs-decide` added to the list, no prose. `StageRulesTests
   .TheRotatedTail_CurrentlyFitsAtMostOneRule` is run afterwards — it is the canary for that file.
 
-### 4.2b — the extension (one PR, released as `extension-v0.51.0`)
+### 4.2b — the extension (released as `extension-v0.51.0`; one PR with 4.2a since 2026-09-22)
 
 - `src_vs_code/src/reviewComment.ts` (new; held to complexity 4 and 50 lines per function by the
   rules that landed on 2026-09-21): renders inside the DETAIL row a `<label for>`, a
   `<textarea data-comment maxlength="1000" rows="2">`, a counter, and beside it the sentence
   *"Sent with this pair to the corpus server, in public, exactly as typed — it is not anonymised."*
   When `pair.sentUtc` is set the box is `readonly` and the sentence becomes *"Sent on &lt;date&gt;. A
-  change here will not follow it."*
+  change here will not follow it."* — or, when `pair.commentLost` is set, *"Sent on &lt;date&gt;, but
+  your comment was not stored: &lt;the server's reason&gt;"* (item 3).
 - `bugzReviewPage.ts` — `ReviewView` gains `comments`; `row()` calls `commentBlock`; the script gains
   ONE delegated `change` listener posting `{type: 'comment', id, text}`. The `click` handler needs no
   new branch — the textarea is in the detail row, outside `[data-toggle]` — and the page test presses
@@ -387,10 +438,10 @@ the id.
   validated as `fetchReal` validates its id; handled by updating the draft AND queueing one write
   through the same `inFlight` chain, so a comment never changes a decision and a decision never
   erases a comment.
-- `roundsDbRead.ts` — `pairOf` reads the two new fields through `textOf`, so a server older than the
-  field yields empty and the page renders an empty editable box; `writeDecide` maps **64 →
+- `roundsDbRead.ts` — `pairOf` reads the three new fields through `textOf`, so a server older than
+  the field yields empty and the page renders an empty editable box; `writeDecide` maps **64 →
   `tooOld`**; the provider falls back to `writeKeep` only when every comment in the batch is empty.
-- `reviewPair.ts` gains the two fields; `bugzLiveContract.test.ts` derives both sides' names.
+- `reviewPair.ts` gains the three fields; `bugzLiveContract.test.ts` derives both sides' names.
 
 ## Build order
 
@@ -406,10 +457,12 @@ the id.
    Tag `bugs-v0.3.0`. Deploy. Verify: an authenticated `POST /ingest/commented` is accepted where it
    answered 404 in step 0, and its answer carries `contract: 2`; the migration stamped
    `user_version = 5`; existing quarantine rows read back with an empty comment. Record the date here.
-2. **4.2a — `coai-mcp`** (PR 2). Safe even before step 1 is deployed, because the probe refuses to
-   send a comment to a contract-1 server; but the order above is the intended one. Tag `mcp-v0.31.0`.
-3. **4.2b — the extension** (PR 3). Needs `mcp-v0.31.0` on the machine; an older binary is told apart
-   by 64 and the page says so. Tag `extension-v0.51.0`.
+2. **4.2a + 4.2b — `coai-mcp` and the extension, ONE PR** (operator, 2026-09-22; it was PR 2 and
+   PR 3). Safe even before step 1 is deployed, because an older server answers the commented route
+   404 and the run stops marking nothing. The merge proposes two releases, `mcp-v0.31.0` and
+   `extension-v0.51.0`; the extension needs the new `coai-mcp` on the machine, and an older binary is
+   told apart by 64 and the page says so — so the two may ship in either order without losing a word.
+3. *(folded into step 2.)*
 4. The parent plan's epic-4 row is updated per story; when 4.2b ships, this plan is promoted with its
    deviations and the parent plan with it.
 
@@ -455,8 +508,16 @@ the id.
 - `ThePairsThemselvesTests` (+3): `RecordDecide` writes keep and comment together; `Sendable` reads
   the comment back BY VALUE (the ordinal reader answering the wrong column).
 - `ThePairModesTests` (+3): `--pairs-decide` 65 on a long comment, 65 naming `U+0007`, never 64.
-- `UploadRunTests` (new): the four probe/contract cases.
-- `BothHalvesTests` (+2): the comment crosses end to end; no comment → no probe request.
+- `UploadRunTests` (new, stubbed handler): the route chosen per batch; every row of decision 3's
+  failure table, including that a 503 and a timeout do NOT say "old"; a commented batch answered
+  without `contract >= 2` marks nothing; a lost-comment `Why` is written as `comment_lost`; and a run
+  killed before the POST and one killed after it leave no pair sent that was never acknowledged.
+- `BothHalvesTests` (+3; it lives in the INGEST suite, `src_bugs/tests`, because it runs the real
+  `UploadRun` against the real server in-process): the comment crosses end to end on the new route; a
+  comment-free batch goes to `/ingest` with bytes equal to the fixture; a 404 on the commented route
+  stops the run marking nothing.
+- `ThePairsThemselvesTests` (+2 on top of the three above): a changed comment on a sent pair is
+  refused and an unchanged one is not; `comment_lost` reads back through `ThePagesRow` by name.
 
 **Extension** (`cd src_vs_code && npm test`)
 - `bugzReviewPage.test.ts`, by RUNNING the page: typing and blurring posts the message; a redraw with
