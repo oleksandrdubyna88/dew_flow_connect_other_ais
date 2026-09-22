@@ -64,6 +64,11 @@ const { DEFAULTS } = await import('../out/settingsShape.js');
 const { coaiDataDir } = await import('../out/dataDir.js');
 const { DEFAULT_CONSULT, consultSettingsFrom } = await import('../out/consultSettings.js');
 const { tokenFileName } = await import('../out/teamServers.js');
+// The sixth leg lives in its own module: this file passed the repository's 800-line ceiling when it
+// was added. It is handed the session, the resolver and the failure road below rather than having
+// copies of them.
+const { refusalSeam } = await import('./seam-refusal.mjs');
+const { answerOf, sessionsFor } = await import('./seam-session.mjs');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -144,6 +149,10 @@ const row = { ...ROW, baseUrl: address };
 // the vendor name is used at all, which is exactly how the first draft of this check proved nothing.
 mkdirSync(join(dataDir, 'servers'), { recursive: true });
 writeFileSync(join(dataDir, 'servers', tokenFileName(address)), 'a-token', 'utf8');
+
+// The one session factory every leg uses: the real binary, this run's data directory, this run's
+// deadline.
+const serverSession = sessionsFor({ command: 'dotnet', args: [binary], dataDir, timeoutMs: TIMEOUT_MS });
 
 function fail(why) {
   console.error(`seam: ${why}`);
@@ -237,36 +246,39 @@ server.close();
 // variables and asked what it made of it. If the two resolvers disagree by so much as a directory,
 // the server reads nothing and reports the shipped defaults - which is precisely the silent failure
 // this whole plan is about, reproduced live.
+/**
+ * What the EXTENSION's own resolver answers for a root and a side — and the environment put back.
+ *
+ * <p>Set and restored by hand: this is a script, and the suite's `withEnv` would drag a test helper
+ * into the one check that has to run against the real binary.</p>
+ *
+ * <p><b>Restored by DELETING what was absent, not by assigning it back.</b> `process.env.X = undefined`
+ * writes the STRING 'undefined', so the first version of this poisoned every later leg: the consultant
+ * leg resolved a data directory literally named `undefined` and reached a real vendor instead of the
+ * stand-in CLI. A variable the parent DID have is reassigned. One helper for the fifth leg and the
+ * sixth, which first carried its own copy. (Story 2.4.)</p>
+ */
+function resolvedFor(root, side) {
+  const before = { COAI_DATA_DIR: process.env['COAI_DATA_DIR'], COAI_DATA_SIDE: process.env['COAI_DATA_SIDE'] };
+  process.env['COAI_DATA_DIR'] = root;
+  process.env['COAI_DATA_SIDE'] = side;
+  try {
+    return coaiDataDir();
+  } finally {
+    for (const [name, value] of Object.entries(before)) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  }
+}
+
 async function sideSeam() {
   const root = mkdtempSync(join(tmpdir(), 'coai-seam-side-'));
   const side = 'wsl';
-  // Set and restored by hand: this is a script rather than a test file, and reaching for the suite's
-  // `withEnv` would drag a test helper into the one check that has to run against the real binary.
-  //
-  // RESTORED BY DELETING, not by assigning back. `process.env.X = undefined` writes the STRING
-  // 'undefined', so the first version of this poisoned every later leg: the consultant leg then
-  // resolved a data directory literally named `undefined`, found no consultant settings, and the
-  // server reached a real vendor instead of the stand-in CLI. Caught by this suite, which is the
-  // suite for catching exactly that.
-  const before = { ...process.env };
-  const restore = () => {
-    for (const name of ['COAI_DATA_DIR', 'COAI_DATA_SIDE']) {
-      if (before[name] === undefined) {
-        delete process.env[name];
-      } else {
-        process.env[name] = before[name];
-      }
-    }
-  };
-
-  process.env['COAI_DATA_DIR'] = root;
-  process.env['COAI_DATA_SIDE'] = side;
-  let written;
-  try {
-    written = join(coaiDataDir(), 'settings.json');
-  } finally {
-    restore();
-  }
+  const written = join(resolvedFor(root, side), 'settings.json');
 
   if (!written.startsWith(join(root, side))) {
     fail(`the extension resolved ${written}, which is not under the side it was given. `
@@ -341,6 +353,9 @@ async function providersIn(extra) {
 }
 
 await sideSeam();
+
+// The SIXTH leg: a real refusal over stdio, its secret taken out, read back by the extension.
+const refusal = await refusalSeam({ serverSession, resolvedFor, answerOf, fail, timeoutMs: TIMEOUT_MS });
 console.log('  ok  a side\'s settings are written and read at the same path, and the root is adopted');
 
 // The SECOND leg: the consultant settings, which cross the same seam and have the same failure.
@@ -370,97 +385,6 @@ function scratchRepo() {
   return dir;
 }
 
-/**
- * ONE live server, driven over the transport a real client uses.
- *
- * <p><b>One process for the whole leg, deliberately.</b> A fresh server per call would read the file
- * at startup and prove nothing about the case that actually happens: the panel writes while an MCP
- * client is already holding a server, and the NEXT call has to see it. `PanelServiceHost` re-stamps
- * the settings file on every tool call for exactly that reason, and this is what holds it — raised on
- * this story's plan round, where the first version of this leg spawned twice and could not tell.</p>
- *
- * <p>The three session variables are CLEARED rather than inherited: this script is itself running
- * under an assistant, so the caller kind would otherwise be whatever happens to be driving it, and
- * the leg would assert about a different row of the map on somebody else's machine. Cleared, the kind
- * is `other` — which is also the row a plain MCP client gets.</p>
- */
-function serverSession(extraEnv = {}) {
-  const child = spawn('dotnet', [binary], {
-    env: {
-      ...process.env,
-      COAI_DATA_DIR: dataDir,
-      CLAUDE_CODE_SESSION_ID: '',
-      CODEX_SESSION_ID: '',
-      GEMINI_CLI_SESSION_ID: '',
-      ...extraEnv,
-    },
-    stdio: ['pipe', 'pipe', 'pipe'],
-  });
-  const waiting = new Map();
-  let next = 1;
-  let buffered = '';
-  let err = '';
-
-  child.stderr.on('data', (b) => {
-    err += String(b);
-  });
-  child.stdout.on('data', (b) => {
-    buffered += String(b);
-    for (const line of buffered.split('\n').slice(0, -1)) {
-      // A throw HERE runs inside a 'data' listener, outside every surrounding try — so it escapes
-      // as an uncaught exception: the dotnet child is never killed, the temporary directories stay,
-      // and the run prints a stack where its own `seam:` line belongs. A line that is not a frame is
-      // not this reader's business. (CodeRabbit, on the pull request.)
-      let message;
-      try {
-        message = JSON.parse(line);
-      } catch {
-        continue;
-      }
-      const settle = waiting.get(message.id);
-      if (settle !== undefined) {
-        waiting.delete(message.id);
-        settle(message);
-      }
-    }
-    buffered = buffered.slice(buffered.lastIndexOf('\n') + 1);
-  });
-
-  const say = (message) => child.stdin.write(`${JSON.stringify(message)}\n`);
-  const ask = async (method, params) => {
-    const id = (next += 1);
-
-    return await new Promise((done, broke) => {
-      const deadline = setTimeout(() => {
-        waiting.delete(id);
-        broke(new Error(`${method} did not answer within ${TIMEOUT_MS} ms\n${err}`));
-      }, TIMEOUT_MS);
-      waiting.set(id, (message) => {
-        clearTimeout(deadline);
-        done(message);
-      });
-      child.on('error', (e) => {
-        clearTimeout(deadline);
-        broke(e);
-      });
-      say({ jsonrpc: '2.0', id, method, params });
-    });
-  };
-
-  return {
-    ready: ask('initialize', {
-      protocolVersion: '2024-11-05',
-      capabilities: {},
-      clientInfo: { name: 'seam', version: '1' },
-    }).then(() => say({ jsonrpc: '2.0', method: 'notifications/initialized' })),
-    tools: async () => await ask('tools/list', {}),
-    consult: async (repoPath) => await ask('tools/call', {
-      name: 'consult',
-      arguments: { repoPath, problem: 'The parser returns 3 where 4 is expected, after two fix attempts.' },
-    }),
-    end: () => child.kill(),
-  };
-}
 
 /**
  * The stand-in vendor CLI the server's own tests use, so a consultation can ANSWER here.
@@ -512,15 +436,6 @@ async function readLog() {
   });
 }
 
-/** The tool's own answer, which is a JSON object in the text content of the result. */
-function answerOf(reply) {
-  const text = reply?.result?.content?.[0]?.text ?? '';
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { error: text };
-  }
-}
 
 // The scratch repository is made INSIDE a guard, for the same reason the handshake below is: git
 // can refuse (`--initial-branch` wants git 2.28), and an escaping throw skipped every cleanup this
@@ -731,4 +646,5 @@ console.log(`seam: the consultant map crossed too — "${String(routed.error).sl
 console.log(`seam: and the switch — "${String(switched.error).slice(0, 120)}…"`);
 console.log(`seam: and a consultation the binary RAN was read back out of --log — "${String(consulted.advice).slice(0, 60)}…"`);
 console.log(`seam: and a consultant DEFINED with no reviewer row answered through its own CLI path — "${String(throughDefinition.advice).slice(0, 60)}…"`);
+console.log(`seam: and a REAL refusal carrying a secret was written with it taken out, read back by the extension's own reader, and survived its parser byte for byte — "${refusal.title.slice(0, 90)}…" (${refusal.logs} log file(s) checked too)`);
 console.log(`seam: asked ${binary}`);

@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using CoaiMcp.Core.Notices;
 using CoaiMcp.Server;
 using CoaiMcp.ServiceDefaults;
@@ -395,6 +396,51 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
         RefusalNotices.Of(new string('x', 1_000_000), "Somewhere").Title!.Length
             .Should().Be(Redaction.TitleLimit,
                 "a queued notice must never hold more than can ever be written from it");
+    }
+
+    [Fact]
+    public void ARefusalTooLongForATitle_SaysItWasCut()
+    {
+        // A defect in story 2.3.3, found while reading for 2.4. That story put the reviewer and the
+        // startup roads through `ServerNotice.Shortened` and wrote, in its doc comment and in
+        // module_server.md, that there were two producers and now one helper. There were THREE: this
+        // road kept its own plain cut, so an over-long refusal was truncated with no sign while an
+        // over-long startup note said it was cut. Refusals are the records a person most needs to
+        // read to the end, because the sentence is the only thing the helper knows.
+        var title = RefusalNotices.Of(new string('x', 2_000), "Somewhere").Title!;
+
+        title.Length.Should().BeLessThanOrEqualTo(Redaction.TitleLimit);
+        title.Should().EndWith("…", "a reader must be able to tell the refusal was cut");
+    }
+
+    [Fact]
+    public void ANoticeProducerCutsOnlyThroughTheSharedHelper()
+    {
+        // The census that would have caught 2.3.3's miss. That story counted the producers by
+        // remembering them, said "two", and moved two: the refusal road kept a hand-written
+        // `[..Redaction.TitleLimit]` and nothing anywhere said so. A producer added tomorrow with its
+        // own cut fails here on the day it is added.
+        // Both spellings a hand cut takes in this codebase: a range, `[..Redaction.TitleLimit]` or
+        // `[..(Redaction.TitleLimit - 1)]`, and `Substring(0, Redaction.TitleLimit)`. (gemini and codex,
+        // on the code round.) A limit copied into a local first is NOT caught — text cannot follow a
+        // value — and the companion below is what answers that: a producer that never calls the
+        // helper is missing from the list of those that do.
+        var handCuts = ProductionSources.FilesMatching(new Regex(
+            @"(\[\.\.\(?\s*|Substring\(\s*0\s*,\s*)Redaction\.(Title|Detail)Limit",
+            RegexOptions.CultureInvariant));
+
+        handCuts.Keys.Should().BeEmpty(
+            "a notice field is cut by ServerNotice.Shortened, which marks the cut, and by nothing else");
+
+        // The companion, without which the census above passes on a scanner that found nothing: the
+        // three producers really are there, and really do call the helper.
+        ProductionSources.FilesMentioning("ServerNotice.Shortened(").Keys.Order().Should().Equal(
+            [
+                "src_mcp/src/Server/RefusalNotices.cs",
+                "src_mcp/src/Server/ReviewerNotices.cs",
+                "src_mcp/src/Server/StartupNotices.cs",
+            ],
+            "every road that builds a notice goes through the one cut");
     }
 
     [Fact]

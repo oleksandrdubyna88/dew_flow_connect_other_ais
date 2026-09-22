@@ -1,13 +1,14 @@
 # PLAN — the server writes down what it refused, what failed, and that it died
 
-> Status: **EPIC 1 IMPLEMENTED, 2026-09-21; story 2.1 implemented, 2026-09-21; the rest of epics 2
-> and 3 open.** Stories 1.1 (the credential list), 1.2 (the notice line), 1.3 (the path) and 1.4 (the
-> writer, and the append it had to fix) have shipped; 2.1 bounded the population, and **2.2 has
-> instrumented it** — every refusal this server returns is OFFERED to the writer (see the delivery
-> promise in module_server.md; a full queue drops and says so), written at the ONE road
-> (`Refusal.Answer`, which `PanelService.Error` and `ConsultationService.Error` are the two CALLERS
-> of, not three roads as this plan first said). What remains is the reviewer and startup notices
-> (2.3), the live seam leg (2.4) — and the deaths (3.1, 3.2).
+> Status: **EPICS 1 AND 2 IMPLEMENTED, 2026-09-22; epic 3 open.** Epic 1 (1.1 the credential list,
+> 1.2 the notice line, 1.3 the path, 1.4 the writer and the append it had to fix) shipped 2026-09-21.
+> Epic 2 shipped 2026-09-22: 2.1 bounded the population to ONE refusal road (`Refusal.Answer`), 2.2
+> wrote every refusal down through one writer thread, 2.3 was split into three and wrote down the
+> drain, reviewer failures and startup notes, and **2.4 proved the whole thing over the wire** — a
+> real `coai-mcp`, driven over stdio, refuses with a secret in its argument, and the extension's own
+> path, reader and parser find the record with the secret taken out and the line unchanged by a
+> round trip. What remains is the deaths (3.1 the run marker, 3.2 the crash handler), so this plan
+> stays in `todo/`.
 > Scope: `src_mcp` — a notice record and its serialiser, the append, the instrumentation sites, a
 > run-start marker, and the `try/catch/finally` that `Program.cs` has never had.
 >
@@ -228,10 +229,11 @@ quarantine; the `serverNoticesPath` vector; `measure:append` re-run with the .NE
 >   visible once a writer exists: **decide it in 1.4**, and say which way and why;
 > - the PUBLISHED Native-AOT artefact is exercised — `CredentialWords.EnsureLoaded` is the hook that
 >   turns a missing embedded list into a startup refusal a smoke run can see (carried from 1.1);
-> - **the LIVE cross-implementation check is story 2.4's seam leg.** Two reviewers have now called
->   it Blocking, at 1.1 and at 1.3, and both times the honest answer was the same: there is nothing
->   live to check before a writer exists. When 2.4 lands it must drive the real binary and read the
->   file with the extension's own parser, and until then the fixture agreement is what there is.
+> - ~~**the LIVE cross-implementation check is story 2.4's seam leg.**~~ **Discharged by 2.4,
+>   2026-09-22.** Two reviewers called it Blocking, at 1.1 and at 1.3, and both times the honest
+>   answer was that there was nothing live to check before a writer existed. There is one now: the
+>   seam's sixth leg drives the real binary over stdio and reads the file with the extension's own
+>   path function, reader and parser, asserted on the persisted bytes.
 
 > **Discharged by story 1.4, 2026-09-21** — each answered where it was asked to be:
 > - the writer's only road onto the disk is `ServerNotices.Append`, and it is held by an ALLOWLIST
@@ -353,12 +355,13 @@ because this project's gate holds one session per repo+branch and closes it when
 | ~~2.3.1~~ | ~~A notice offered before the process leaves still lands, and the ledger's promise says what it delivers~~ — **shipped 2026-09-22**: `NoticeWriter.Drain` waits on the writer TASK, `ServeAsync` drains in a `finally` covering both exits, and the delivery promise is one paragraph in `module_server.md` instead of two sentences that disagreed | 2.2 | Opus |
 | ~~2.3.2~~ | ~~A reviewer that fails is written down once, by a writer the host owns, and a sixth ending cannot arrive unnamed~~ — **shipped 2026-09-22**: `Noticing` is the shared seam and boundary, the host holds one instance across settings rebuilds, and `ReviewerNotices.ByType` is data a reflection census holds to the assembly's sealed subtypes | 2.3.1 | Opus |
 | ~~2.3.3~~ | ~~A setting this build cannot read, a directory that surprised it, and a settings file it adopted reach the page~~ — **shipped 2026-09-22**: keys and kinds typed at the source, `kind:place` subjects, canonical paths, and the log lines kept beside the notices. The code round took the settings RELOAD off the owed list below and into the story, and turned the storage class from a condition with a default into a map with a census | 2.3.2 | Opus |
+| ~~2.4~~ | ~~A real refusal over stdio lands with its secret taken out — asserted on the bytes~~ — **shipped 2026-09-22** as the seam's SIXTH leg: the real binary refuses `open` on a path that carries a token, the extension's own `coaiDataDir` + `serverNoticesPath` + `readServerNotices` find the record, and `notificationLine(parseNotificationLine(line))` gives the line back byte for byte. Deviations below | 2.2 | Opus |
 
 **Owed by what 2.3 found, and not done inside it:**
 
 - ~~**The settings REBUILD path.**~~ **Done inside 2.3.3 after all, 2026-09-22.** Written here as
   owed and out of scope; five findings across three vendors on that story's code round said no, and
-  they were right {d} the rebuild runs whenever the panel writes the file, so a person typing a bad
+  they were right — the rebuild runs whenever the panel writes the file, so a person typing a bad
   value was the likeliest case and the only silent one. `PanelServiceHost.Build` now logs each
   mismatch and writes it through the host's own `Noticing`, and an adoption on that path goes both
   ways too. The host's FIRST build stays silent (startup has already said those) and the disk survey
@@ -387,7 +390,46 @@ spending row — 2.3.2 claims that consequence. (2) `PanelSettings.Unrecognised`
 parsing prose: all three of its sources know their key where the sentence is built
 (`PanelSettings.cs:736-779`), so a `(Key, Sentence)` pair costs edits in ONE file — but the list is
 also on the wire (`ProvidersAnswer.Unrecognised`), so it stays as a projection. That is 2.3.3's.
-| 2.4 | A real refusal over stdio lands with its secret taken out — asserted on the bytes | 2.2 | Opus |
+
+**What story 2.4 shipped differently from what it planned.**
+
+- **It does NOT prove the drain, and it said it would.** The plan listed "the drain removed from
+  `ServeAsync`'s `finally` — the file is missing" among its teeth. Planted, that stayed GREEN: one
+  refusal is written by the writer thread long before stdin closes, so the drain never has anything
+  to do on this road. The drain is story 2.3.1's and is proved by its own tests. The leg still ends
+  its session by EOF rather than by kill, because that is how a real client leaves and it is the
+  only exit on which the file is guaranteed complete — but that is a correctness condition of the
+  leg, not something the leg demonstrates.
+- **It found a third notice producer 2.3.3 had missed.** `ServerNotice.Shortened` was introduced
+  there as "one helper, because there were two"; there were three, and `RefusalNotices` kept a
+  plain cut, so an over-long refusal was truncated with no mark while an over-long startup note
+  said it was cut. Fixed here, RED first, and `ANoticeProducerCutsOnlyThroughTheSharedHelper` now
+  lists every producer instead of remembering them.
+- **It checks more sinks than the notices file.** The plan round (codex) pointed out that a
+  refusal's sentence could land in a log line as easily as in the notices file, and the operator's
+  standing rule is that no secret reaches a log line. So the leg also asserts the secret is absent
+  from the server's stderr and from EVERY file the run left under its data root — and asserts that
+  the run did leave a log file, so that check is not vacuous.
+- **A defect in the leg itself, found by one of its own plants.** When a check failed before the
+  clean close, the cleanup removed the directory while the dotnet child still held its files open;
+  on Windows `rmSync` threw `EPERM`, and a stack trace was printed where the leg's own sentence
+  belonged. `session.killAndWait()` now waits for the process to be gone, and a removal that still
+  fails is SAID rather than thrown past the reason.
+- **What its code round changed.** The session reads a child's end at `close`, not `exit`: Node
+  documents that stdio "might still be open" at `exit`, and the stderr claim needs the whole stream
+  (codex — not reproduced here, 0 of 25 runs of a 4 MB burst, and fixed on the documented contract).
+  A timeout kill now waits for the process too, and the close is remembered from spawn time so a late
+  caller cannot hang. The leg moved into its own module, `scripts/seam-refusal.mjs`, because
+  `run-seam.mjs` had passed the repository's 800-line ceiling with it; the runner is 792 lines again
+  and the leg's own body is 25. The producer census catches `Substring(0, Redaction.…Limit)` as well
+  as a range, and says what it cannot catch — a limit copied into a local — and why the companion
+  answers that.
+- **What CodeRabbit found on the pull request**, both in the harness and both reproduced RED first:
+  a write in flight to a dying server's stdin was an unhandled `'error'` event that ended the whole
+  run before cleanup (`Error: write EOF`, 3 of 3 without a listener), and a malformed line merely
+  mentioning a refusal was handed to the parser, whose `undefined` then threw past cleanup. The
+  session moved into `scripts/seam-session.mjs` so a test could load it at all, and
+  `seamLegs.test.mjs` holds both.
 
 ### Epic 3 — the deaths
 

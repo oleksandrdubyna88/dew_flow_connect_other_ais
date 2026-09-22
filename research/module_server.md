@@ -1335,10 +1335,16 @@ unbounded one is process held because a share stopped answering; the writer cuts
 so the grouping key is unchanged by moving the cut earlier. A sentence longer than a title keeps its
 remedy in `detail` and ends in an ellipsis, because these sentences put the unbounded VALUE at the
 front and the instruction at the back. The cut itself is **`ServerNotice.Shortened`, one helper for
-every producer**: there were two, and they disagreed — reviewer failures cut plainly while startup
-notes cut with a mark, so the same overflow was legible in one place and silent in the other. The
-reviewer road's `not started: {Reason}` and `unparseable: {Reason}` are the sentences that
-actually reach it, because a stderr tail is already bounded by `BoundedScheduler.Quote`. And the storage class is a MAP (`StartupNotices.ClassByKind`)
+every producer** — and when this paragraph was first written it said "there were two", which was
+false. There were THREE: reviewer failures and REFUSALS cut plainly while startup notes cut with a
+mark, and 2.3.3 moved two of them. The refusal road kept its own `[..Redaction.TitleLimit]` until
+story 2.4 found it while reading for the seam leg, so an over-long refusal was truncated with no sign
+at all. It is on the shared helper now (RED first), and `ANoticeProducerCutsOnlyThroughTheSharedHelper`
+LISTS the producers rather than remembering them: no production file may cut at a notice limit by
+hand, and exactly `RefusalNotices`, `ReviewerNotices` and `StartupNotices` call the helper — the
+second half being what stops the first passing on a scanner that found nothing. The reviewer road's
+`not started: {Reason}` and `unparseable: {Reason}` are the sentences that actually reach it,
+because a stderr tail is already bounded by `BoundedScheduler.Quote`. And the storage class is a MAP (`StartupNotices.ClassByKind`)
 whose unmapped key throws, not a condition with a default: a third kind — a permission refusal, say
 — would otherwise reach the page as a successful `outcome` with nothing failing to say so. A census
 test reads the kinds off `StorageNote` itself, which is what makes that throw unreachable.
