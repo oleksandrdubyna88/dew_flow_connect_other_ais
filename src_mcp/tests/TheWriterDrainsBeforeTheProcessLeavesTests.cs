@@ -150,6 +150,13 @@ public sealed class TheWriterDrainsBeforeTheProcessLeavesTests : IDisposable
         var racing = new List<bool>();
         var start = new ManualResetEventSlim(false);
 
+        // One offer BEFORE the race, accepted for certain. codex was right that a test where the
+        // drain wins every time passes on zero accepted and zero written and proves nothing — and
+        // measured, the drain does win every time, because the racing task has not been scheduled
+        // when the main thread reaches it. So the accepted path is pinned here and the race then
+        // only has to show that what it accepts is drained and what it refuses is refused.
+        Offer(writer, "before the race").Should().BeTrue();
+
         var offering = Task.Run(() =>
         {
             start.Wait(Generous);
@@ -163,8 +170,10 @@ public sealed class TheWriterDrainsBeforeTheProcessLeavesTests : IDisposable
         writer.Drain(Generous);
         await offering.WaitAsync(Generous);
 
-        Lines().Length.Should().Be(racing.Count(accepted => accepted),
+        Lines().Length.Should().Be(1 + racing.Count(accepted => accepted),
             "every offer that was ACCEPTED reached the disk, and every one refused was refused");
+        said.Should().HaveCount(racing.Count(accepted => !accepted),
+            "and a refusal is never silent — one sentence for each");
     }
 
     [Fact]
@@ -181,6 +190,9 @@ public sealed class TheWriterDrainsBeforeTheProcessLeavesTests : IDisposable
             var accepted = Enumerable.Range(0, NoticeWriter.Depth + 50)
                 .Count(each => Offer(wedged, $"burst {each}", Watching(said)));
 
+            accepted.Should().BeGreaterThan(0,
+                "an implementation that refused EVERY offer would satisfy the rest of this test — "
+                + "a fixture the code rejects proves nothing (codex, on the code round)");
             accepted.Should().BeLessThan(NoticeWriter.Depth + 50, "past the depth it must refuse");
             said.Should().NotBeEmpty("and every refusal is said out loud");
             said[0].Should().Contain(NoticeWriter.Depth.ToString(),
@@ -203,13 +215,41 @@ public sealed class TheWriterDrainsBeforeTheProcessLeavesTests : IDisposable
         // covers BOTH returns and an exception unwinding out. The live half — a real refusal over
         // stdio against the published binary, asserted on the bytes — is story 2.4, which the parent
         // plan owes by name and which now has something to check.
-        var serving = ProductionSources.CodeOf("src_mcp/src/Program.cs");
+        ProductionSources.CodeOf("src_mcp/src/Program.cs")
+            .Should().Contain("finally { Unresolved(Draining(notices, log), log); }",
+                "one drain, in the finally of the try that wraps both exits — a `finally` is what a "
+                + "`return` cannot escape and what story 3.2's crash catch will sit above");
+    }
 
-        serving.Should().Contain("finally { Unresolved(notices.Drain(NoticeWriter.DrainBudget), log); }",
-            "one drain, in the finally of the try that wraps both exits — a `finally` is what a "
-            + "`return` cannot escape and what story 3.2's crash catch will sit above");
-        ProductionSources.FilesMentioning(".Drain(").Keys.Should().Equal(["src_mcp/src/Program.cs"],
-            "a second production caller is a second exit road somebody did not write down");
+    [Fact]
+    public void NoSecondProductionCallerDrainsTheWriter()
+    {
+        // The prohibition, in its own test — the convention asks for two, because a scan that finds
+        // nothing passes a prohibition and proves nothing. The one above is the known instance.
+        ProductionSources.FilesMentioning("NoticeWriter.DrainBudget").Keys
+            .Should().Equal(["src_mcp/src/Program.cs"],
+                "a second production caller is a second exit road somebody did not write down");
+    }
+
+    [Fact]
+    public void WhatCouldNotBeWritten_IsNamedWithItsCount()
+    {
+        // The host turns `Drain`'s answer into one sentence, and nothing asserted that sentence —
+        // so a change to the wording or to the "only when non-zero" rule would have been invisible
+        // (the code round). Asserted on the WRITER's own contract, which is what the host formats.
+        var stuck = new ManualResetEventSlim(false);
+        try
+        {
+            var wedged = Writing((_, _) => { stuck.Wait(Generous); return true; });
+            Offer(wedged, "into the void");
+
+            wedged.Drain(TimeSpan.FromMilliseconds(200)).Should().Be(1,
+                "one notice was outstanding, so the host says one — a count, not a flag");
+        }
+        finally
+        {
+            stuck.Set();
+        }
     }
 
     private static Serilog.ILogger Silent => Serilog.Core.Logger.None;

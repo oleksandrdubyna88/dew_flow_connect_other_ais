@@ -76,6 +76,11 @@ internal sealed class NoticeWriter
 
     private int _inFlight;
 
+    /// <summary>
+    /// Volatile because <see cref="Drain"/> writes it and <see cref="Offer"/> reads it from another
+    /// thread with no lock between them. Without it a late offer can see a stale <c>false</c> and be
+    /// refused with the wrong reason — which is the whole point of the field. (The code round.)
+    /// </summary>
     private volatile bool _closing;
 
     internal NoticeWriter(Func<ResolvedDataDir, ServerNotice, bool> append)
@@ -126,6 +131,11 @@ internal sealed class NoticeWriter
     /// <para><b>What it answers is UNRESOLVED, not lost.</b> codex: a record dequeued and mid-append
     /// may already be on disk when the bound expires, so the count is what this writer cannot
     /// account for — and that is what the warning says.</para>
+    /// <para><b>And zero means the QUEUE emptied, not that every notice reached the disk.</b> An
+    /// append the disk refused was already reported by <see cref="Said"/> when it happened; a late
+    /// offer refused after the close was reported by <see cref="Offer"/>. Zero here is the absence of
+    /// anything still outstanding, which is the only thing a drain can honestly claim. (The code
+    /// round, gemini.)</para>
     /// <para><b>What remains after a timeout</b> is a task still blocked in a synchronous append.
     /// There is no cancellation for that — the append is one kernel write to a share that has
     /// stopped answering — so the process leaves with it outstanding. Surviving that is story 3.1's
@@ -144,7 +154,31 @@ internal sealed class NoticeWriter
         _closing = true;
         _queue.Writer.TryComplete();
 
-        return _writing.Wait(within) ? 0 : Volatile.Read(ref _inFlight);
+        return Waited(within) ? 0 : Volatile.Read(ref _inFlight);
+    }
+
+    /// <summary>
+    /// Whether the writer finished — and never an exception, which the contract above promises.
+    /// </summary>
+    /// <remarks>
+    /// <c>Task.Wait</c> RETHROWS a faulted task as an <c>AggregateException</c>, and this is called
+    /// from a <c>finally</c> during process exit: a throw there skips the warning that says what was
+    /// unresolved and turns a clean <c>return 0</c> into a crash. The task cannot fault today —
+    /// <see cref="Wrote"/> catches everything — which is exactly why the guard is cheap and why the
+    /// docstring's "never throws" has to be true of the code and not of today's call graph. (gemini,
+    /// on the code round.)
+    /// </remarks>
+    private bool Waited(TimeSpan within)
+    {
+        try
+        {
+            return _writing.Wait(within);
+        }
+        catch (Exception)
+        {
+            // A faulted writer is a writer that is finished, and its own catch already reported why.
+            return true;
+        }
     }
 
     /// <summary>Whether the queue has drained, for a test that needs to look at the file.</summary>

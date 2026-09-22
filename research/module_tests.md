@@ -1606,8 +1606,18 @@ the suite pretending otherwise.
 **What is structural and why.** `TheHostDrainsOnEveryRoadOut` asserts the `finally` by scanning
 `Program.cs` — a `finally` attached to the wrong `try`, or missing from one of the two `return 0`
 roads, would pass every behavioural test here while a last-second refusal is lost from a real
-session (codex, on the plan round). The live half — a real refusal over stdio against the published
+session (codex, on the plan round). It is TWO tests, as the convention asks: the known instance and,
+separately, `NoSecondProductionCallerDrainsTheWriter`, because a scan that finds nothing passes a
+prohibition and proves nothing. The live half — a real refusal over stdio against the published
 binary — is story 2.4, which the parent plan owes by name.
+
+**Two of these tests could have passed on a fixture the code REJECTS, and the code round caught
+both.** The racing test would have gone green on zero accepted and zero written — and measured, the
+drain DOES win every race, because the offering task has not been scheduled when the main thread
+reaches `Drain` — so one offer is accepted before the race and the race then only has to show that
+what it accepts is drained and what it refuses is refused, with one sentence per refusal. The
+full-queue test would have gone green against an implementation that refused EVERY offer, so it
+asserts that offers were accepted before the overflow began.
 
 ## A refusal that cannot be written must not cost the refusal (2026-09-21, S8 story 2.2)
 
