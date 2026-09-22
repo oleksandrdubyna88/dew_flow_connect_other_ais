@@ -39,6 +39,9 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
     private Serilog.ILogger Watching() =>
         new Serilog.LoggerConfiguration().WriteTo.Sink(new Sink(_said)).CreateLogger();
 
+    /// <summary>A path <see cref="Path.GetFullPath(string)"/> refuses: it holds a NUL.</summary>
+    private static readonly string Refused = "C:/a" + (char)0 + "b/settings.json";
+
     private static PanelSettings With(params UnrecognisedSetting[] settings) =>
         new() { UnrecognisedSettings = [.. settings] };
 
@@ -172,6 +175,21 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
 
         _written.Select(notice => notice.Subject).Distinct().Should().ContainSingle(
             "one file is one row, however the path to it was spelled");
+    }
+
+    [Fact]
+    public void APathThisProcessCannotCanonicalise_IsStillNamed()
+    {
+        // A NUL in the path is what `Path.GetFullPath` refuses, and the trade this catch exists for
+        // is stated as behaviour: the notice still goes out, under the path exactly as it arrived.
+        // Losing an adoption over the SPELLING of its subject would be the wrong way round.
+        //
+        // Spelled by NUMBER because the first draft wrote the escape and the byte reached disk:
+        // `NoSourceFileCarriesAControlByteTests` caught it, which is the whole reason that guard
+        // is in this suite — git treats such a file as binary, with no diff and no three-way merge.
+        StartupNotices.Adopted("adopted", Refused, Collecting, Watching());
+
+        _written.Should().ContainSingle().Which.Subject.Should().Be(Refused);
     }
 
     [Fact]

@@ -137,8 +137,15 @@ internal static class StartupNotices
     /// One spelling per path, so the same file is one row rather than one per spelling.
     /// </summary>
     /// <remarks>
-    /// Never an exception: a path this process cannot canonicalise is still a path worth naming, and
-    /// losing the notice over the spelling of its subject would be the wrong trade.
+    /// <para>Never an exception: a path this process cannot canonicalise is still a path worth
+    /// naming, and losing the notice over the spelling of its subject would be the wrong
+    /// trade.</para>
+    /// <para>Two types, which are the two <see cref="Path.GetFullPath(string)"/> documents for a
+    /// non-null argument. The first draft also caught <c>NotSupportedException</c>,
+    /// <c>IOException</c> and <c>UnauthorizedAccessException</c> on the chance that some platform
+    /// throws them: three branches no test can reach, which is a coverage gate failing over code
+    /// that cannot run and a reader wondering which platform was meant. A path holding a NUL
+    /// reaches the one that CAN happen, and a test drives it.</para>
     /// </remarks>
     private static string Canonical(string path)
     {
@@ -146,9 +153,7 @@ internal static class StartupNotices
         {
             return Path.GetFullPath(path);
         }
-        catch (Exception failure) when (failure is ArgumentException or NotSupportedException
-                                            or PathTooLongException or IOException
-                                            or UnauthorizedAccessException)
+        catch (Exception failure) when (failure is ArgumentException or PathTooLongException)
         {
             return path;
         }
