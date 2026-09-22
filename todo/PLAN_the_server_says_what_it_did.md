@@ -352,7 +352,22 @@ because this project's gate holds one session per repo+branch and closes it when
 | ~~2.3~~ | **SPLIT into three on the gate's own command, 2026-09-22** (the split was done by Fable against the code, and found two things the plan round had assumed wrong — see below) | 2.2 | — |
 | ~~2.3.1~~ | ~~A notice offered before the process leaves still lands, and the ledger's promise says what it delivers~~ — **shipped 2026-09-22**: `NoticeWriter.Drain` waits on the writer TASK, `ServeAsync` drains in a `finally` covering both exits, and the delivery promise is one paragraph in `module_server.md` instead of two sentences that disagreed | 2.2 | Opus |
 | ~~2.3.2~~ | ~~A reviewer that fails is written down once, by a writer the host owns, and a sixth ending cannot arrive unnamed~~ — **shipped 2026-09-22**: `Noticing` is the shared seam and boundary, the host holds one instance across settings rebuilds, and `ReviewerNotices.ByType` is data a reflection census holds to the assembly's sealed subtypes | 2.3.1 | Opus |
-| 2.3.3 | A setting this build cannot read, a directory that surprised it, and a settings file it adopted reach the page, each under a subject it can group on | 2.3.2 | Opus |
+| ~~2.3.3~~ | ~~A setting this build cannot read, a directory that surprised it, and a settings file it adopted reach the page~~ — **shipped 2026-09-22**: keys and kinds typed at the source, `kind:place` subjects, canonical paths, and the log lines kept beside the notices | 2.3.2 | Opus |
+
+**Owed by what 2.3 found, and not done inside it:**
+
+- **The settings REBUILD path.** `PanelServiceHost.Build()` runs again whenever the settings file
+  moves; it logs an adoption, never logs `Unrecognised`, and writes no notice either way. A person
+  who saves a bad value in the panel mid-session learns nothing until restart. Cheap now that
+  `Noticing` is threaded through the host — but it is not "startup", which is what §C scopes.
+- **`SweptRounds`, `SweptConsultations`, `KilledReviewers`.** Three codes in `ServerNoticeCodes` with
+  no owner story. The events are in the `PanelService` constructor, which runs at startup AND on
+  every rebuild; the symptom table at the top of this plan names them ("swept orphans, killed
+  children") and §C does not. They need a story or a sentence retiring the codes.
+- **One-shot modes lose a refusal notice.** `--close-consult` builds a `PanelService` and can refuse;
+  it takes `Noticing.None`, so that refusal is answered on stdout and written nowhere. Deliberate
+  (a one-shot must not start a writer thread nobody drains) and worth revisiting if those refusals
+  turn out to matter.
 
 **What the split found that the plan round had wrong.** (1) An exception escaping `LiveRound.Report`
 does NOT kill the round — `BoundedScheduler.cs:359-376` already wraps `onProgress?.Invoke` in a

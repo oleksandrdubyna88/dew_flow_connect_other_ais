@@ -1268,6 +1268,50 @@ lines with `Environment.NewLine` in case a CRLF file left a hidden character in 
 join is the mechanism that makes a wrapped call findable, and the trim that removes indentation
 removes the CR with it. A `\r\n` case was added to the join tests so that rejection rests on a test.
 
+## A run says what it could not read, and what surprised it on the disk (S8 story 2.3.3, 2026-09-22)
+
+Three things were said at startup and said only to Serilog: a legacy settings file this side
+adopted, every setting whose value this build could not use, and what it found on the disk. The
+codes had existed since story 1.2 and nothing wrote them. The plan records the cost once already — a
+configuration that had been applied, read and reloaded correctly looked broken for twenty minutes,
+and the one line that would have ended it was in a file the panel does not read.
+
+**The log lines STAY.** An operator reading a terminal and a person reading the panel are different
+people — the decision `PanelService.Refused` made when it kept its warning beside the refusal it
+returns. `Program.Said` is the log half and `StartupNotices.Record` the page half, side by side, and
+a structural test holds them there: an implementation that emitted the notice and dropped the
+warning would otherwise pass everything (codex, on the plan round).
+
+**Each note groups on a subject that says which one it was**, because the extension keys repeats on
+`(code, subject)` and an empty subject collapses every setting there has ever been into one row:
+
+| Note | Subject | Class |
+|---|---|---|
+| `unrecognised-setting` | the environment variable, typed at the source | `stand-down` |
+| `storage-note` | `kind:place` — the kind AND the directory | `stand-down` for a loose database, `outcome` for a new one |
+| `settings-adopted` | this side's settings path, canonical | `outcome` |
+
+**The key is typed where the sentence is BUILT, never parsed back out of it.** All three sources
+already know their variable — `WhyBackoff` and its three siblings hard-code theirs, `catalog.Dropped`
+is rows of `COAI_ROLES`, `consultants.Complaints` is `COAI_CONSULTANTS` — so `UnrecognisedSetting`
+carries `(Key, Sentence)` and `PanelSettings.Unrecognised` becomes the projection. It stays a
+projection because it is **on the wire**: `ProvidersAnswer.Unrecognised` is what `--providers` prints
+and the extension parses.
+
+**A storage note carries its PLACE as well as its kind** (gemini, on the plan round): with the kind
+alone, a machine running two sides reports two loose databases as one row with a count of two and
+the person cannot see which. The place is canonicalised, so one file reached as `C:\data` and
+`C:/data` is one row rather than two.
+
+**Accepted cost, stated rather than discovered:** several refused rows under one key share a row —
+two bad rows of `COAI_ROLES` are two lines with one subject. That is the same bargain story 2.2 took
+for two refusal branches in one method, and a test asserts it so it is written down.
+
+**Owed, and named in the plan rather than done quietly here:** the settings REBUILD path
+(`PanelServiceHost.Build()`) logs an adoption, never logs `Unrecognised`, and writes no notice — so a
+person who saves a bad value in the panel mid-session learns nothing until restart. It is cheap now
+that `Noticing` is threaded, but it is not "startup notes", which is what §C scopes.
+
 ## Every reviewer failure is written down, once (S8 story 2.3.2, 2026-09-22)
 
 A reviewer that times out, is rate-limited, exits non-zero, never starts or answers unparseably was

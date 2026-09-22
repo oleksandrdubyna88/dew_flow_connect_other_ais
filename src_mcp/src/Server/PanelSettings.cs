@@ -350,7 +350,28 @@ public sealed record PanelSettings
     /// behaviour was the old one with nothing anywhere saying why.</para>
     /// <para>Empty is the normal state. A value nobody set is not a mismatch.</para>
     /// </remarks>
-    public IReadOnlyList<string> Unrecognised { get; init; } = [];
+    public IReadOnlyList<string> Unrecognised => [.. UnrecognisedSettings.Select(one => one.Sentence)];
+
+    /// <summary>
+    /// The same list, each sentence with the KEY it is about.
+    /// </summary>
+    /// <remarks>
+    /// <para>The key is what the notice written for it groups on — the extension keys repeats on
+    /// <c>(code, subject)</c>, so two malformed settings must be two rows and one misconfiguration
+    /// across ten restarts must be one row with a count. Without a key that means an empty subject
+    /// and every unrecognised setting there has ever been collapsing into one row. (Story 2.3.3's
+    /// plan round, gemini.)</para>
+    /// <para><b>Typed at the source rather than parsed back out of the prose.</b> Every one of the
+    /// three places these sentences come from already knows its key where it writes one —
+    /// <see cref="WhyBackoff"/> hard-codes <c>COAI_RETRY_BACKOFF</c> and its three siblings do the
+    /// same; <c>catalog.Dropped</c> is rows of <c>COAI_ROLES</c>; <c>consultants.Complaints</c> is
+    /// <c>COAI_CONSULTANTS</c>. A key recovered FROM a sentence is a key that stops matching the
+    /// first time somebody rewords the sentence.</para>
+    /// <para><see cref="Unrecognised"/> stays as the projection because it is ON THE WIRE:
+    /// <c>ProvidersAnswer.Unrecognised</c> is what <c>--providers</c> prints and the extension
+    /// parses, so changing its shape would be changing a contract for an internal convenience.</para>
+    /// </remarks>
+    public IReadOnlyList<UnrecognisedSetting> UnrecognisedSettings { get; init; } = [];
 
     /// <summary>
     /// Which vendor and model consult for each CALLER kind (<c>claude</c>, <c>codex</c>, <c>gemini</c>,
@@ -483,7 +504,7 @@ public sealed record PanelSettings
     /// mount rather than answering. Raised on both code rounds, and the same objection is why these
     /// notes are not merged into <c>Unrecognised</c>, which is about configuration VALUES.</para>
     /// </remarks>
-    public static IReadOnlyList<string> StorageNotes(Func<string, string?> env)
+    public static IReadOnlyList<StorageNote> StorageNotes(Func<string, string?> env)
     {
         if (env("COAI_DATA_DIR")?.Trim() is not { Length: > 0 } configured)
         {
@@ -492,20 +513,22 @@ public sealed record PanelSettings
 
         var root = Path.GetFullPath(configured);
         var dir = ResolveDataDir(env);
-        var notes = new List<string>(2);
+        var notes = new List<StorageNote>(2);
 
         if (dir != root && File.Exists(Path.Combine(root, DatabaseFile)))
         {
-            notes.Add($"there is a {DatabaseFile} directly in {root}, from the layout before this "
+            notes.Add(new StorageNote(StorageNote.LooseDatabase, root,
+                $"there is a {DatabaseFile} directly in {root}, from the layout before this "
                 + $"directory was shared between sides. It is NOT being used: this side reads and "
                 + $"writes {dir}. Move that database and its sessions into a side directory to keep "
-                + "its history.");
+                + "its history."));
         }
 
         if (!Directory.Exists(dir))
         {
-            notes.Add($"{dir} did not exist and is being created — this side starts with no history. "
-                + "If that is a surprise, check COAI_DATA_DIR for a typo before recording into it.");
+            notes.Add(new StorageNote(StorageNote.NewDirectory, dir,
+                $"{dir} did not exist and is being created — this side starts with no history. "
+                + "If that is a surprise, check COAI_DATA_DIR for a typo before recording into it."));
         }
 
         return notes;
@@ -628,7 +651,16 @@ public sealed record PanelSettings
             // The data directory's own notes ride here rather than in a channel of their own: this list
             // is already "things said out loud at startup, because silence made a working configuration
             // look broken", and a database left behind in a shared root is exactly that.
-            Unrecognised = [.. UnknownValues(env, roles), .. catalog.Dropped, .. consultants.Complaints],
+            // Each sentence with the key it is about, because the notice written for it groups on
+            // that key. The two collections below know theirs by construction: `Dropped` is rows of
+            // COAI_ROLES and `Complaints` is COAI_CONSULTANTS.
+            UnrecognisedSettings =
+            [
+                .. UnknownValues(env, roles),
+                .. catalog.Dropped.Select(dropped => new UnrecognisedSetting("COAI_ROLES", dropped)),
+                .. consultants.Complaints.Select(
+                    complaint => new UnrecognisedSetting("COAI_CONSULTANTS", complaint)),
+            ],
             Consultants = consultants.Map,
             ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
             ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),
@@ -733,31 +765,39 @@ public sealed record PanelSettings
     /// doctrine bounds a method at four decisions and four diagnostics was already past it.
     /// (CodeRabbit, this plan's pull request.)
     /// </remarks>
-    private static IReadOnlyList<string> UnknownValues(Func<string, string?> env, RolesSetting roles) =>
-        [.. new[] { WhyBackoff(env), WhyExhausted(env), WhyWorkspace(env), WhyRoles(roles) }.OfType<string>()];
+    private static IReadOnlyList<UnrecognisedSetting> UnknownValues(
+        Func<string, string?> env, RolesSetting roles) =>
+        [.. new[] { WhyBackoff(env), WhyExhausted(env), WhyWorkspace(env), WhyRoles(roles) }
+            .OfType<UnrecognisedSetting>()];
 
-    private static string? WhyBackoff(Func<string, string?> env) =>
+    private static UnrecognisedSetting? WhyBackoff(Func<string, string?> env) =>
         env("COAI_RETRY_BACKOFF") is { Length: > 0 } backoff
         && Runners.Reviewers.RetryLadder.Parse(backoff).Count == 0
-            ? $"COAI_RETRY_BACKOFF is '{backoff}', which this server cannot read as a list of "
+            ? new UnrecognisedSetting(
+                "COAI_RETRY_BACKOFF",
+                $"COAI_RETRY_BACKOFF is '{backoff}', which this server cannot read as a list of "
               + "seconds — it is using the waits it would have used anyway. The form is "
-              + "'5,30,60,120', and one number means one retry at that interval."
+              + "'5,30,60,120', and one number means one retry at that interval.")
             : null;
 
-    private static string? WhyExhausted(Func<string, string?> env) =>
+    private static UnrecognisedSetting? WhyExhausted(Func<string, string?> env) =>
         env("COAI_ON_EXHAUSTED") is { Length: > 0 } policy
         && PolicyOf(policy) == StagePolicy.Human
         && !string.Equals(policy, "human", StringComparison.OrdinalIgnoreCase)
-            ? $"COAI_ON_EXHAUSTED is '{policy}', which this server does not know — it is asking a "
+            ? new UnrecognisedSetting(
+                "COAI_ON_EXHAUSTED",
+                $"COAI_ON_EXHAUSTED is '{policy}', which this server does not know — it is asking a "
               + "person instead. The panel is probably newer than this server: update it in the "
-              + "panel's Server section."
+              + "panel's Server section.")
             : null;
 
-    private static string? WhyWorkspace(Func<string, string?> env) =>
+    private static UnrecognisedSetting? WhyWorkspace(Func<string, string?> env) =>
         env("COAI_CODE_WORKSPACE") is { Length: > 0 } workspace && !AWorkspaceWeKnow(workspace)
-            ? $"COAI_CODE_WORKSPACE is '{workspace}', which this server does not know — code "
+            ? new UnrecognisedSetting(
+                "COAI_CODE_WORKSPACE",
+                $"COAI_CODE_WORKSPACE is '{workspace}', which this server does not know — code "
               + "reviewers are getting the diff alone, as they do by default. The values are "
-              + "'none' and 'worktree'."
+              + "'none' and 'worktree'.")
             : null;
 
     private static bool AWorkspaceWeKnow(string workspace) =>
@@ -771,11 +811,13 @@ public sealed record PanelSettings
     /// the catalog and another for the complaint could describe two different values of the setting.
     /// (codex, story B2's second code round.)
     /// </remarks>
-    private static string? WhyRoles(RolesSetting roles) =>
+    private static UnrecognisedSetting? WhyRoles(RolesSetting roles) =>
         roles.CouldNotBeRead
-            ? $"COAI_ROLES is not JSON this server can read — {roles.Unreadable} It is running the "
+            ? new UnrecognisedSetting(
+                "COAI_ROLES",
+                $"COAI_ROLES is not JSON this server can read — {roles.Unreadable} It is running the "
               + "roles it shipped with, and nothing you added is in this round. The form is an "
-              + """array of rows: [{"id":"Requirements","name":"...","stage":"result","prompts":[…]}]."""
+              + """array of rows: [{"id":"Requirements","name":"...","stage":"result","prompts":[…]}].""")
             : null;
 
     /// <summary>

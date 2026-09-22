@@ -1585,6 +1585,26 @@ the script took the first two and compared a pair nobody asked about. Counting t
 is meant in every reading. The red test hands it three files that all EXIST, so the refusal cannot
 come from a missing one; a first draft passed for exactly that wrong reason.
 
+## The startup notes reach the page, each under a subject (2026-09-22, S8 story 2.3.3)
+
+`TheStartupNotesAreWrittenDownTests` — eleven cases, and most of them are about the SUBJECT, because
+that is where this story could have been useless while looking finished: two malformed settings are
+two subjects; two refused rows of one key share one (the accepted cost, asserted); two loose
+databases under different roots are two subjects; one path spelled two ways is one.
+
+**The taxonomy is asserted, not intended** (codex): a new directory emitted as `stand-down`, or a
+loose database as `outcome`, would pass every other case here while the extension shows the wrong
+severity.
+
+**Teeth.** Making the storage subject the kind alone turns the two-databases case red; making every
+storage note an `outcome` turns the taxonomy case red; emptying the unrecognised subject turns the
+two-settings case red.
+
+**And the log half is held structurally.** An implementation can emit the panel notice and drop the
+`log.Warning`, and every behavioural test here stays green while terminal operators silently lose
+what they had (codex). `Program.cs` is scanned for both calls side by side. That is weaker than
+running the host — which is story 2.4 — and it is what makes the decision checkable at all.
+
 ## Every reviewer failure is written down, once (2026-09-22, S8 story 2.3.2)
 
 `TheReviewerFailuresAreWrittenDownTests` — sixteen cases. A theory over all five endings (the right

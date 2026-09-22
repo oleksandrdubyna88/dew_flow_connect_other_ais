@@ -251,8 +251,10 @@ public sealed class DataSideVectorTests : IDisposable
 
         Arrange(vector);
 
-        var kinds = PanelSettings.StorageNotes(Env(vector))
-            .Select(note => note.Contains("coai.db", StringComparison.Ordinal) ? "loose-database" : "new-directory");
+        // The KIND is a field now, not a substring guess. This fixture named the two kinds
+        // before production did — `loose-database` and `new-directory` are its words — so story
+        // 2.3.3 put them in the type and this comparison got stronger rather than weaker.
+        var kinds = PanelSettings.StorageNotes(Env(vector)).Select(note => note.Kind);
 
         kinds.Should().Equal([.. vector.Notes], vector.Why);
     }
