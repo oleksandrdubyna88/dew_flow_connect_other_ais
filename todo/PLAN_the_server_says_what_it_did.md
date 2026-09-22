@@ -413,8 +413,17 @@ also on the wire (`ProvidersAnswer.Unrecognised`), so it stays as a projection. 
 - **A defect in the leg itself, found by one of its own plants.** When a check failed before the
   clean close, the cleanup removed the directory while the dotnet child still held its files open;
   on Windows `rmSync` threw `EPERM`, and a stack trace was printed where the leg's own sentence
-  belonged. `session.stop()` now waits for the process to be gone, and a removal that still fails is
-  SAID rather than thrown past the reason.
+  belonged. `session.killAndWait()` now waits for the process to be gone, and a removal that still
+  fails is SAID rather than thrown past the reason.
+- **What its code round changed.** The session reads a child's end at `close`, not `exit`: Node
+  documents that stdio "might still be open" at `exit`, and the stderr claim needs the whole stream
+  (codex — not reproduced here, 0 of 25 runs of a 4 MB burst, and fixed on the documented contract).
+  A timeout kill now waits for the process too, and the close is remembered from spawn time so a late
+  caller cannot hang. The leg moved into its own module, `scripts/seam-refusal.mjs`, because
+  `run-seam.mjs` had passed the repository's 800-line ceiling with it; the runner is 792 lines again
+  and the leg's own body is 25. The producer census catches `Substring(0, Redaction.…Limit)` as well
+  as a range, and says what it cannot catch — a limit copied into a local — and why the companion
+  answers that.
 
 ### Epic 3 — the deaths
 
