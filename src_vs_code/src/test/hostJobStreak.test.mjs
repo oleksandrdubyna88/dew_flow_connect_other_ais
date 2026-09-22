@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { test } from 'node:test';
 import {
-  AskFailed, JOB_NAME, PROMOTE_AT, asText, asking, streakOf, textFor, worthRetrying,
+  ATTEMPTS, JOB_NAME, NO_ANSWER, PROMOTE_AT, REQUEST_CEILING_MS,
+  answered, asText, asking, refused, streakOf, textFor, worthRetrying,
 } from '../../scripts/host-job-streak.mjs';
 
 /**
@@ -102,14 +104,13 @@ test('a transient failure is asked again, and the answer is taken', async () => 
   let asked = 0;
   const flaky = async () => {
     asked += 1;
-    if (asked < 3) {
-      throw new AskFailed('the jobs of run 1 could not be read: 502', 502);
-    }
 
-    return 'the answer';
+    return asked < 3
+      ? refused('the jobs of run 1 could not be read: 502 Bad Gateway', 502)
+      : answered('the answer');
   };
 
-  assert.equal(await asking(flaky, quietly), 'the answer');
+  assert.deepEqual(await asking(flaky, quietly), { ok: true, value: 'the answer' });
   assert.equal(asked, 3, 'it stopped asking before the request would have succeeded');
 });
 
@@ -118,11 +119,10 @@ test('every retry says so, so UNKNOWN can be told from never having tried', asyn
   let asked = 0;
   const flaky = async () => {
     asked += 1;
-    if (asked < 3) {
-      throw new AskFailed('the runs of main could not be read: 503 Service Unavailable', 503);
-    }
 
-    return 'the answer';
+    return asked < 3
+      ? refused('the runs of main could not be read: 503 Service Unavailable', 503)
+      : answered('the answer');
   };
 
   await asking(flaky, { ...quietly, note: (line) => said.push(line) });
@@ -132,45 +132,53 @@ test('every retry says so, so UNKNOWN can be told from never having tried', asyn
   assert.match(said[0], /503/u, 'the line does not say what went wrong');
 });
 
-test('an answered failure is asked exactly once', async () => {
+test('an answered failure is asked exactly once, and comes back as the refusal', async () => {
   let asked = 0;
   const gone = async () => {
     asked += 1;
-    throw new AskFailed('the runs of main could not be read: 404 Not Found', 404);
+
+    return refused('the runs of main could not be read: 404 Not Found', 404);
   };
 
-  await assert.rejects(() => asking(gone, quietly), /404/u);
+  const got = await asking(gone, quietly);
+
+  assert.equal(got.ok, false);
+  assert.match(got.message, /404/u);
   assert.equal(asked, 1, 'a 404 was retried');
 });
 
-test('a bug in this script is never retried', async () => {
-  // Why the guard asks the FAILURE and not only the attempt count: a TypeError from our own code
-  // is not a flaky network, and asking again only delays the stack trace.
+test('a bug in this script is never retried, and is never mistaken for a refusal', async () => {
+  // An expected failure is a VALUE here, so anything that THROWS is by construction unexpected:
+  // it passes straight through the retry and reaches the loud exit. That separation is the whole
+  // reason the failures are values. (codex, on the code round: `common/coding-style.md`.)
   let asked = 0;
   const broken = async () => {
     asked += 1;
-    throw new TypeError('runs.map is not a function');
+    throw new TypeError('attempts.push is not a function');
   };
 
   await assert.rejects(() => asking(broken, quietly), TypeError);
   assert.equal(asked, 1, 'a programming error was retried as if it were a network blip');
 });
 
-test('when the attempts run out it throws the LAST failure, not a summary of them', async () => {
+test('when the attempts run out it answers the LAST refusal, not a summary of them', async () => {
   let asked = 0;
   const down = async () => {
     asked += 1;
-    throw new AskFailed(`attempt ${asked} got 503`, 503);
+
+    return refused(`attempt ${asked} got 503`, 503);
   };
 
-  await assert.rejects(() => asking(down, { ...quietly, attempts: 3 }), /attempt 3 got 503/u);
+  const got = await asking(down, { ...quietly, attempts: 3 });
+
+  assert.equal(got.message, 'attempt 3 got 503', 'the reported reason is not the one that happened');
   assert.equal(asked, 3, 'the attempt budget was not honoured');
 });
 
 test('GitHub being unreachable says UNKNOWN and no figure', async () => {
-  const text = await textFor(() => {
-    throw new AskFailed('the jobs of run 35641590649 could not be read: 502', 502);
-  });
+  const text = await textFor(
+    () => refused('the jobs of run 35641590649 could not be read: 502 Bad Gateway', 502),
+  );
 
   assert.match(text, /UNKNOWN/u, 'it did not say that it could not find out');
   assert.match(text, /502/u, 'the reason a person needs in order to act is not in the line');
@@ -189,9 +197,53 @@ test('a fault in the script itself is NOT dressed up as GitHub being down', asyn
 });
 
 test('a streak that WAS measured is still reported as a number', async () => {
-  assert.match(await textFor(() => 7), /7 of 20 consecutive green runs/u,
+  assert.match(await textFor(() => answered(7)), /7 of 20 consecutive green runs/u,
     'degrading on failure cost the count it reports when it succeeds');
 });
+
+test('no answer at all is worth asking again, which is the case that had no producer', () => {
+  // The code round's finding, and five reviewers across three vendors found it: `worthRetrying`
+  // documented status 0 and NOTHING could ever construct it. A DNS failure or a reset socket makes
+  // `fetch` reject with a native TypeError, which the first draft neither retried nor degraded -
+  // it exited 1, the exact failure this whole change exists to remove.
+  assert.equal(NO_ANSWER, 0);
+  assert.ok(worthRetrying(NO_ANSWER), 'a request that got no answer at all was not asked again');
+});
+
+test('one request carries a deadline, because node fetch has none', () => {
+  // Structural, and deliberately the WHOLE call rather than a fragment of it: a connection GitHub
+  // accepts and never answers would otherwise hold the step until the runner's own limit.
+  // Asserting it by waiting would cost this suite four ten-second attempts, so the WIRING is what
+  // is pinned. (gemini and codex, on the code round.)
+  const source = readFileSync(
+    fileURLToPath(new URL('../../scripts/host-job-streak.mjs', import.meta.url)),
+    'utf8',
+  );
+
+  assert.ok(source.includes('signal: AbortSignal.timeout(REQUEST_CEILING_MS),'),
+    'the fetch has no deadline, so a stalled connection hangs the job');
+  assert.ok(Number.isFinite(REQUEST_CEILING_MS) && REQUEST_CEILING_MS > 0);
+  assert.equal(ATTEMPTS, 4, 'the attempt budget the retry messages promise');
+});
+
+/** The script itself, run against `apiUrl`, with nothing of the ambient environment. */
+function spawned(apiUrl) {
+  const child = spawn(process.execPath, [
+    fileURLToPath(new URL('../../scripts/host-job-streak.mjs', import.meta.url)),
+  ], {
+    // No GITHUB_STEP_SUMMARY: this must not append to a real summary file, and no token, because
+    // the fake server does not want one and a real token must never reach a local endpoint.
+    env: { PATH: process.env.PATH, GITHUB_API_URL: apiUrl },
+  });
+
+  return new Promise((ready, fail) => {
+    let said = '';
+    child.stdout.on('data', (chunk) => { said += chunk; });
+    child.stderr.on('data', (chunk) => { said += chunk; });
+    child.on('error', fail);
+    child.on('close', (status) => ready({ status, stdout: said }));
+  });
+}
 
 /**
  * The script, run for real against `answer`, with nothing of the ambient environment.
@@ -208,22 +260,10 @@ function running(answer) {
   return new Promise((ready, fail) => {
     server.on('listening', () => {
       const { port } = server.address();
-      const child = spawn(process.execPath, [
-        fileURLToPath(new URL('../../scripts/host-job-streak.mjs', import.meta.url)),
-      ], {
-        // No GITHUB_STEP_SUMMARY: this must not append to a real summary file, and no token,
-        // because the fake server does not want one.
-        env: { PATH: process.env.PATH, GITHUB_API_URL: `http://127.0.0.1:${port}` },
-      });
-
-      let said = '';
-      child.stdout.on('data', (chunk) => { said += chunk; });
-      child.stderr.on('data', (chunk) => { said += chunk; });
-      child.on('error', (reason) => { server.close(); fail(reason); });
-      child.on('close', (status) => {
-        server.close();
-        ready({ status, stdout: said });
-      });
+      spawned(`http://127.0.0.1:${port}`).then(
+        (ran) => { server.close(); ready(ran); },
+        (reason) => { server.close(); fail(reason); },
+      );
     });
   });
 }
@@ -241,6 +281,28 @@ test('a 502 on the RUNS request leaves the job green and the number unreported',
   assert.equal(ran.status, 0, `the job was failed by a 502; it said: ${ran.stdout}`);
   assert.match(ran.stdout, /UNKNOWN/u);
   assert.match(ran.stdout, /asking again \(attempt 1 of 4\)/u, 'it gave up without retrying');
+  assert.doesNotMatch(ran.stdout, /consecutive green runs/u);
+});
+
+test('a connection nothing accepts is retried and degrades, instead of failing the job', async () => {
+  // The hole the code round found, at the level it bites. `fetch` rejects with a native TypeError
+  // for a refused connection; the first draft neither retried nor degraded it and exited 1 - the
+  // very failure this change removes for a 502. A closed port is the cheapest real producer of it.
+  const closed = createServer(() => {});
+  closed.listen(0, '127.0.0.1');
+  const port = await new Promise((ready) => {
+    closed.on('listening', () => {
+      const chosen = closed.address().port;
+      closed.close(() => ready(chosen));
+    });
+  });
+
+  const ran = await spawned(`http://127.0.0.1:${port}`);
+
+  assert.equal(ran.status, 0, `a refused connection failed the job; it said: ${ran.stdout}`);
+  assert.match(ran.stdout, /UNKNOWN/u);
+  assert.match(ran.stdout, /asking again \(attempt 1 of 4\)/u,
+    'a network rejection was not retried, which is what status 0 is for');
   assert.doesNotMatch(ran.stdout, /consecutive green runs/u);
 });
 
