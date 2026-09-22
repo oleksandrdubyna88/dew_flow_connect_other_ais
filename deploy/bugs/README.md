@@ -422,10 +422,12 @@ install -m 0755 -o root -g root \
   /opt/coai-bugs/src/deploy/bugs/install-env.sh /usr/local/sbin/coai-bugs-install-env
 ```
 
-The marker is spelled once, in `install-env.sh`. `TheHostsHelperIsTheOneThisDeployNeedsTests` runs
-the real check against the shipped helper, against one declaring another protocol, and against the
-pre-administrator body that was actually on the host — so the two ends cannot drift apart without a
-red test on somebody's machine rather than a 401 on a live one.
+The marker is spelled once, in `install-env.sh`, and the check demands that **whole line** — not the
+text inside it, because `protocol 2` is a substring of `protocol 20` and a containment check would
+wave through the very helper it exists to stop. `TheHostsHelperIsTheOneThisDeployNeedsTests` runs the
+real check against the shipped helper, against the pre-administrator body that was actually on the
+host, and against four helpers that are not this protocol — so the two ends cannot drift apart
+without a red test on somebody's machine rather than a 401 on a live one.
 
 **Bump the number whenever what arrives on stdin changes meaning**, and reinstall. `1` was one
 record, the secret; `2` is two, the secret then the base64 administrator list.

@@ -33,10 +33,15 @@
 # ---------------------------------------------------------------------------
 set -eu
 
-# The protocol this checkout speaks, spelled EXACTLY as `install-env.sh` declares it. Compared whole,
-# number included: a check asking whether the file merely mentions the helper would accept every
-# future protocol, including the one that changes what the records mean again.
-NEED='coai-bugs-install-env protocol 2'
+# The protocol this checkout speaks, spelled EXACTLY as `install-env.sh` declares it.
+#
+# Matched as a WHOLE LINE, which is the difference between a guard and a guard-shaped comment. This
+# first asked whether the file CONTAINED the text, and a substring of "protocol 2" is also a
+# substring of "protocol 20" — so the one helper this must certainly stop, the next incompatible
+# version, would have been waved through. A mention in a comment would have passed too. The test
+# that was supposed to cover it asserted "protocol 1", which is refused either way, so the test
+# agreed with the bug. (Code round, CodeRabbit.)
+NEED="PROTOCOL='coai-bugs-install-env protocol 2'"
 
 HELPER=${1:-}
 [ -n "$HELPER" ] || { printf 'usage: helper-protocol.sh <path to the installed helper>\n' >&2; exit 2; }
@@ -50,13 +55,13 @@ if [ ! -r "$HELPER" ]; then
   exit 1
 fi
 
-# `-F`, because the marker is a literal and a `.` in it must not match a character somebody else
-# chose. Not `-x`: the declaration is a shell assignment, so the line carries the quoting around it.
-if grep -Fq "$NEED" "$HELPER"; then
+# `-F` because the marker is a literal and a `.` in it must not match a character somebody else
+# chose; `-x` because only the WHOLE declaration line counts. Together they are the whole guard.
+if grep -Fxq "$NEED" "$HELPER"; then
   exit 0
 fi
 
-printf '%s does not speak "%s".\n' "$HELPER" "$NEED" >&2
+printf '%s does not declare the line `%s`.\n' "$HELPER" "$NEED" >&2
 printf 'It is the ONE file here that a deploy does not update, and it is behind this checkout. An\n' >&2
 printf 'older helper reads only the first line of what it is sent: it would take the secret, discard\n' >&2
 printf 'the administrator list in silence, report success, and leave a server answering 401 to every\n' >&2

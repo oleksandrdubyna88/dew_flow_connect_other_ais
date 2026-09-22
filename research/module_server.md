@@ -3662,10 +3662,12 @@ administrator record by ten hours, and the older body read stdin as `head -1`: i
 discarded the key list in silence, wrote an environment file with no administrators and reported
 success. Every check passed, the server started, and every `/admin` call answered 401 until
 `admin-check` said so a whole deploy later. So the two ends declare a PROTOCOL: `install-env.sh`
-states which one it implements, `deploy/bugs/helper-protocol.sh` demands it by an exact literal —
-number included, because a substring match would accept every future protocol — and `deploy-cmd.sh`
-runs that check before the secret leaves the runner and before anything is written. The check only
-reports; a script that reinstalled the helper would be the escalation the copy exists to prevent.
+states which one it implements, `deploy/bugs/helper-protocol.sh` demands that WHOLE DECLARATION LINE
+(`grep -Fxq`), and `deploy-cmd.sh` runs that check before the secret leaves the runner and before
+anything is written. The line rather than the text inside it, because "protocol 2" is a substring of
+"protocol 20": a containment check would have waved through the one helper it most needs to stop, the
+next incompatible version — and a mention in a comment besides. The check only reports; a script that
+reinstalled the helper would be the escalation the copy exists to prevent.
 
 **Which line of a list is a KEY is decided in one place**, `deploy/bugs/first-key.sh`: trim the line,
 drop the blanks and the `#` comments, take the first. That is `AdminKeys.Lines`'s rule, and the ORDER

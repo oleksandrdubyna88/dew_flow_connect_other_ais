@@ -671,9 +671,13 @@ answered 401 until `admin-check` said so a whole deploy later. The test runs the
 `deploy/bugs/helper-protocol.sh` over four helpers: the one this checkout ships (accepted — which is
 what makes the marker single-sourced, since a change to either end that does not change the other
 fails here), the pre-administrator body that was actually on the host (refused, and the refusal must
-carry the `install -m 0755` repair rather than sending somebody to this document for it), one
-declaring a different protocol number (refused, because a substring match would accept every future
-protocol), and a path that does not exist (refused, naming the path). Its teeth were proved twice —
+carry the `install -m 0755` repair rather than sending somebody to this document for it), four that
+are not this protocol, and a path that does not exist (refused, naming the path). Those four are the
+part a code round had to add: the first draft compared with `grep -F` and asserted only `protocol 1`,
+which is refused either way — so the test agreed with the bug. `protocol 20` CONTAINS `protocol 2`,
+and a containment check admitted it, which is precisely the helper the guard exists to stop. The
+check now demands the whole declaration LINE, and the theory covers the earlier protocol, the later
+one, a mention in a comment and the string inside some other statement. Its teeth were proved twice —
 by moving the shipped helper to protocol 3 and watching the drift test name that exact string, and by
 making the check accept everything and watching both refusal tests go red. The harness is
 `TheDeliveryAgreesWithTheServerTests`'s, for its reason.

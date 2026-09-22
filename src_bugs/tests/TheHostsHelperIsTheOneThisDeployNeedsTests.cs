@@ -82,23 +82,31 @@ public sealed class TheHostsHelperIsTheOneThisDeployNeedsTests : IDisposable
             "and it names the file to replace, because there is more than one script here");
     }
 
-    /// <summary>A helper declaring a DIFFERENT protocol is refused as loudly as one declaring none.</summary>
+    /// <summary>Every helper that is not speaking THIS protocol, including the ones that look like it.</summary>
     /// <remarks>
-    /// The version that comes after this one is the case nobody is looking at today, and it is the
-    /// case a substring match gets wrong: a check asking whether the file merely MENTIONS the helper
-    /// would accept every future protocol, including the one that renames the records again.
+    /// <para>The version that comes after this one is the case nobody is looking at today, and it is
+    /// the case a loose match gets wrong. <c>protocol 20</c> is the one that matters and the one this
+    /// test was missing: a substring check for "protocol 2" finds it inside "protocol 20" and admits
+    /// a helper framing its records some entirely different way. The first draft compared with
+    /// <c>grep -F</c> and asserted only <c>protocol 1</c> — which passes either way, so the test
+    /// agreed with the bug. (Code round, CodeRabbit.)</para>
+    /// <para>A helper that merely MENTIONS the protocol in prose is the same mistake wearing a
+    /// different hat: what is required is a DECLARATION, and a sentence about one is not it.</para>
     /// </remarks>
-    [Fact]
-    public void AHelperSpeakingAnotherProtocolIsRefused()
+    [Theory]
+    [InlineData("PROTOCOL='coai-bugs-install-env protocol 1'", "the protocol before this one")]
+    [InlineData("PROTOCOL='coai-bugs-install-env protocol 20'", "a later protocol whose text CONTAINS this one")]
+    [InlineData("# replaces coai-bugs-install-env protocol 2", "a mention in a comment is not a declaration")]
+    [InlineData("echo 'coai-bugs-install-env protocol 2'", "nor is the string appearing in some other statement")]
+    public void AHelperNotSpeakingThisProtocolIsRefused(string declaration, string why)
     {
-        var other = Helper("""
+        var other = Helper($"""
             #!/bin/sh
-            # coai-bugs-install-env protocol 1
+            {declaration}
             printf 'the environment file is written\n'
             """);
 
-        ReleaseScript.FromCheckout(Check, other).Code.Should()
-            .Be(1, "protocol 1 is not the protocol this checkout speaks");
+        ReleaseScript.FromCheckout(Check, other).Code.Should().Be(1, why);
     }
 
     /// <summary>A host that was never provisioned says that, rather than failing inside sudo.</summary>
