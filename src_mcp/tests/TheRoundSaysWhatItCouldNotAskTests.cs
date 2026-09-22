@@ -90,7 +90,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
                     },
                 ],
             },
-            VaultKeys.None("no vault"), default, new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
+            VaultKeys.None("no vault"), default, new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
         foreach (var seed in Enumerable.Range(0, 10))
         {
@@ -132,7 +132,7 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
         };
 
         return new PanelService(settings, VaultKeys.None("no vault"), default,
-            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
+            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
     }
 
     /// <summary>

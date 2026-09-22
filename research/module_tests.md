@@ -1585,6 +1585,31 @@ the script took the first two and compared a pair nobody asked about. Counting t
 is meant in every reading. The red test hands it three files that all EXIST, so the refusal cannot
 come from a missing one; a first draft passed for exactly that wrong reason.
 
+## Every reviewer failure is written down, once (2026-09-22, S8 story 2.3.2)
+
+`TheReviewerFailuresAreWrittenDownTests` — sixteen cases. A theory over all five endings (the right
+code, the `provider/role` subject, the title equal to `Describe`); `Ok` and a progress line with no
+outcome write nothing; the same reviewer reported twice is ONE line; two reviewers are two subjects;
+a secret in a stderr tail does not reach the line; a megabyte of stderr does not sit in the queue.
+
+**Three guards, each proved by breaking it.** Removing `_noticed` turns the twice-reported case red;
+deleting one entry from `ReviewerNotices.ByType` turns both the reflection census AND that ending's
+theory row red; and dropping `_noticing` from `PanelServiceHost.Build()` turns the rebuild case red —
+which is gemini's finding, and the one that would otherwise have made this story write nowhere in the
+case people actually hit.
+
+**The wiring is asserted on IDENTITY, not on behaviour.** A first version drove a real host through a
+real round with a vendor that could not start; it went red for a reason that had nothing to do with
+the wiring (`no session for this repo+branch`), and chasing that further would have been testing the
+round rather than the thread. What the test asserts instead is that the `Noticing` the host was GIVEN
+is the one its service holds — by reflection, because the question is an identity and no public
+surface should have to answer it — and that it is still the same one after the settings file moves
+and `Build()` runs again. The live leg over stdio remains story 2.4's.
+
+**And one defect the tests found in the boundary itself:** `Noticing.Offered` logged TWICE when the
+offer threw — the exception, and then "not accepted" — which reads in a log as two different losses.
+One sentence per lost notice.
+
 ## A notice offered on the way out still lands (2026-09-22, S8 story 2.3.1)
 
 `TheWriterDrainsBeforeTheProcessLeavesTests` — seven cases for one method, because what `Drain` has

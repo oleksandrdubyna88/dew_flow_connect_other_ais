@@ -108,11 +108,15 @@ public sealed class TheOneAppendTests
         // this census exists to catch is a second IMPLEMENTATION, which is how those two functions
         // came to disagree in the first place, not a second caller. `Refusal.Where` arrived with
         // story 2.2 (a refusal must know where to write its notice) and this test is what made that
-        // a decision rather than a drift: it went red naming the new member on its first run.
+        // a decision rather than a drift: it went red naming the new member on its first run. It
+        // moved from `Refusal` to `Noticing` in story 2.3.2, when reviewer failures needed the same
+        // directory: composing it as a lambda at the second call site put
+        // `<>c.<ServeAsync>b__46_4` in this list, which is a member nobody can place — so there is
+        // one NAMED pass-through and both roads use it.
         answering.Should().BeEquivalentTo([
             $"{nameof(PanelSettings)}.{nameof(PanelSettings.DataDirectoryFor)}",
             $"{nameof(SettingsFile)}.{nameof(SettingsFile.DataDirFrom)}",
-            $"{nameof(Refusal)}.Where"]);
+            $"{nameof(Noticing)}.Where"]);
     }
 
     [Fact]

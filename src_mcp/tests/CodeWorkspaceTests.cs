@@ -72,7 +72,7 @@ public class CodeWorkspaceTests
             Providers = [new ProviderSettings("local") { Enabled = true, Runtime = "local", Model = "m" }],
         };
         return new PanelService(settings, VaultKeys.None("no vault"), default,
-            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
+            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
     }
 
     private static string Worktree()

@@ -1268,6 +1268,53 @@ lines with `Environment.NewLine` in case a CRLF file left a hidden character in 
 join is the mechanism that makes a wrapped call findable, and the trim that removes indentation
 removes the CR with it. A `\r\n` case was added to the join tests so that rejection rests on a test.
 
+## Every reviewer failure is written down, once (S8 story 2.3.2, 2026-09-22)
+
+A reviewer that times out, is rate-limited, exits non-zero, never starts or answers unparseably was
+described by `ReviewerSummaryFactory.Describe` into `ReviewerState.Note` — which lives in the session
+file, is rewritten on every tick and is swept. The codes have existed since story 1.2. Nothing wrote
+them, so a person looking at a round with four findings had no way to learn that two reviewers never
+answered.
+
+`LiveRound.Report` is where the outcome is OBSERVED, so that is where the notice is offered.
+`Describe` is USED and never edited: it lives in `runners`, and instrumenting it would make that
+assembly know about the ledger.
+
+**`Noticing` is the seam and the boundary**, shared with story 2.3.3's startup notes. It is a
+delegate rather than the concrete `NoticeWriter`, because `Offer` by contract never throws — a
+boundary no test can reach is a guarantee nobody has checked, which is what Sonar said about 2.2 and
+what 2.3.1 then fixed twice. It carries a logger because `LiveRound` has none.
+
+**What a throw there costs, precisely.** Not the round: the scheduler already wraps its progress
+callback in `catch (Exception)` — *"Reporting is not the work"* (`BoundedScheduler.cs:359-376`). It
+costs the REST of that callback, where `live.Report`, `audit.Moved` and `_ledger.Record` run in
+sequence (`PanelService.cs:1249-1265`) — so a throw in the first loses that reviewer's audit line and
+its spending row. The split found that the plan round had this consequence wrong.
+
+**Ownership is threaded and undefaulted.** `ServeAsync` composes one `Noticing.Through(notices, log)`
+and hands it to `PanelServiceHost`, which HOLDS it and gives it to every service it builds —
+including the rebuild that runs whenever the settings file moves. gemini found that gap on the plan
+round: a host that passed it once would hand the rebuilt service nothing, and every injected test
+would still pass. No constructor on that road has a default; the two one-shot modes take
+`Noticing.None`, because a mode that answers on stdout and exits must not start a writer thread
+nobody drains.
+
+**A sixth ending cannot arrive unnamed, and the old claim that it could not was false.** A C# switch
+over a class hierarchy is NOT exhaustive-checked — adding a sealed `ReviewerOutcome` subtype compiles,
+and the switch then throws at runtime or folds it into "unknown", losing the notice for exactly the
+ending nobody thought about. `ReviewerExecutor`'s docstring and the plan both said otherwise. So the
+map is DATA (`ReviewerNotices.ByType`, no default arm) and a reflection test compares its keys with
+the sealed subtypes the assembly has.
+
+**Once per reviewer, and the key is set only after the offer is accepted** — codex, on the plan
+round: marking it first means a notice the disk refused is suppressed for ever by a key nothing
+wrote. `subject` is `provider/role`, so the same reviewer timing out across four rounds is one row
+with a count and two reviewers are two rows.
+
+**Volume, against the ceiling 2.2 set.** A deployment with a thousand failed reviewers a day writes
+about 0.4 MB/day at the typical record size — 146 MB/year, inside the 128 MB × two-generation roll
+that `ServerNotices` already enforces. No new retention rule; the existing one covers it.
+
 ## What the notices ledger delivers — the promise, said once (S8 story 2.3.1, 2026-09-22)
 
 Two sentences in this repository contradicted each other: this file and the plan's status line both

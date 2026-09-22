@@ -32,7 +32,7 @@ public sealed class TheAllRolesOffRefusalTests
             },
         },
             VaultKeys.None("no vault"), default,
-            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
+            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
     [Fact]
     public void WithEveryRoleOff_ItStillNamesTheBoxesAPersonCanTick()

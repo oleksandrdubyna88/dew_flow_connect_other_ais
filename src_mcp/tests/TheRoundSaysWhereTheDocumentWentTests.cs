@@ -30,7 +30,7 @@ public sealed class TheRoundSaysWhereTheDocumentWentTests
             VaultKeys.None("no vault"),
             default,
             new Runners.Processes.ProcessLauncher(),
-            Serilog.Core.Logger.None);
+            Serilog.Core.Logger.None, Noticing.None);
 
     private static ProviderSettings Remote(string id, string server) =>
         new(id) { Enabled = true, Runtime = "remote", RemoteVendor = "codex", BaseUrl = server, Documents = DocumentReviews.Yes };

@@ -33,7 +33,7 @@ public sealed class ReviewScopeTests : IDisposable
     }
 
     private PanelService Service() =>
-        new(new PanelSettings { DataDir = _data }, VaultKeys.None("not configured for this test"), default, new ProcessLauncher(), Serilog.Core.Logger.None);
+        new(new PanelSettings { DataDir = _data }, VaultKeys.None("not configured for this test"), default, new ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
     private const string Scope = """
         # SCOPE — the retry must not lose the reviewer's own words
@@ -74,7 +74,7 @@ public sealed class ReviewScopeTests : IDisposable
             StagePolicy.Human);
         var service = new PanelService(
             new PanelSettings { DataDir = _data, Rounds = allOff },
-            VaultKeys.None("not configured for this test"), default, new ProcessLauncher(), Serilog.Core.Logger.None);
+            VaultKeys.None("not configured for this test"), default, new ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
         var answer = await service.ReviewCodeAsync("D:/nowhere", "main", "main~1", Scope);
 

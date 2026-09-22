@@ -43,7 +43,7 @@ internal static class Refusal
     /// worker forever and every refusal cost two threads.</para>
     /// </remarks>
     internal static string Answer(string sentence, Serilog.ILogger log, [CallerMemberName] string from = "") =>
-        Answer(sentence, log, from, NoticeWriter.Shared, Where);
+        Answer(sentence, log, from, NoticeWriter.Shared, Noticing.Where);
 
     /// <summary>
     /// The same, with the writer and the resolver supplied — the seam every test drives.
@@ -67,7 +67,4 @@ internal static class Refusal
         return JsonSerializer.Serialize(refusal, ServerJsonContext.Default.ErrorAnswer);
     }
 
-    /// <summary>Where this side's data directory is, asked of the ONE resolver.</summary>
-    private static ResolvedDataDir Where() =>
-        PanelSettings.DataDirectoryFor(Environment.GetEnvironmentVariable);
 }

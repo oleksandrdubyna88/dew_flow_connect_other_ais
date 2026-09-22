@@ -28,6 +28,8 @@ public sealed partial class PanelService
     private readonly DateTime _vaultReadUtc;
     private readonly IProcessLauncher _launcher;
     private readonly Serilog.ILogger _log;
+
+    private readonly Noticing _noticing;
     private readonly SessionStore _store;
     private readonly ArtifactStore _artifacts;
     private readonly WorktreeManager _worktrees;
@@ -43,13 +45,20 @@ public sealed partial class PanelService
     private readonly RemoteProbe _remote;
     private readonly ConsultationService _consultations;
 
-    public PanelService(PanelSettings settings, VaultKeys keys, DateTime vaultReadUtc, IProcessLauncher launcher, Serilog.ILogger log)
+    public PanelService(
+        PanelSettings settings,
+        VaultKeys keys,
+        DateTime vaultReadUtc,
+        IProcessLauncher launcher,
+        Serilog.ILogger log,
+        Noticing noticing)
     {
         _settings = settings;
         _keys = keys;
         _vaultReadUtc = vaultReadUtc;
         _launcher = launcher;
         _log = log;
+        _noticing = noticing;
         _store = new SessionStore(settings.DataDir, settings.Rounds.Catalog);
         _artifacts = new ArtifactStore(settings.DataDir);
         _worktrees = new WorktreeManager(launcher, Path.Combine(settings.DataDir, "worktrees"));
@@ -1232,7 +1241,7 @@ public sealed partial class PanelService
             // What the round is about, derived from the plan the caller passed — a file name if
             // they handed a path, its title otherwise. Nobody has to remember to name the work.
             var subject = RoundSubject.From(planText, File.Exists);
-            var live = new LiveRound(_store, session, work, subject);
+            var live = new LiveRound(_store, session, work, subject, _noticing);
             var audit = new RoundAudit(_log, session.State.Stage.ToString(), session.State.RoundsRunThisStage + 1);
             // Two kinds of exclusion, one list: a vendor this round cannot run AT ALL — no adapter,
             // no credential — and a vendor that cannot run one particular ROLE, which is what a Team

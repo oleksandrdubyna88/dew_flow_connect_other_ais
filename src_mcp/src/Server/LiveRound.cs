@@ -25,9 +25,34 @@ public sealed class LiveRound
 
     private readonly string _subject;
 
-    public LiveRound(SessionStore store, PersistedSession session, IReadOnlyList<ReviewerWork> work, string subject = "")
+    private readonly Noticing _noticing;
+
+    /// <summary>
+    /// Which reviewers have had their ending written down, so a second report does not write a second line.
+    /// </summary>
+    /// <remarks>
+    /// The scheduler reports a terminal outcome once per reviewer today — every road returns after
+    /// its one <c>Report(..., "failed", outcome, ...)</c> — but this is a contract of the PUBLIC
+    /// <see cref="Report"/>, which <c>LiveRoundTests</c> already drives twice for one reviewer. A key
+    /// is added only after the offer is ACCEPTED, so a write the disk refused is retried rather than
+    /// suppressed. (codex, on the plan round.)
+    /// </remarks>
+    private readonly HashSet<string> _noticed = new(StringComparer.Ordinal);
+
+    /// <param name="noticing">
+    /// Where a reviewer that did not answer is written down. Required and undefaulted: a defaulted
+    /// one is the trap the plan round named, where production takes the quiet path while every
+    /// injected test passes.
+    /// </param>
+    public LiveRound(
+        SessionStore store,
+        PersistedSession session,
+        IReadOnlyList<ReviewerWork> work,
+        string subject,
+        Noticing noticing)
     {
         _subject = subject;
+        _noticing = noticing;
         _store = store;
         _session = session;
         _states = work.ToDictionary(
@@ -47,6 +72,36 @@ public sealed class LiveRound
                 // The effort that was APPLIED, which today only a local launch has.
                 Effort: Normalise(w.Invocation.Effort)));
         Persist();
+    }
+
+    /// <summary>
+    /// A reviewer that did not answer, written down once.
+    /// </summary>
+    /// <remarks>
+    /// <para>Here rather than in <c>Describe</c>: the parent plan forbids instrumenting that, because
+    /// it lives in <c>runners</c> and would make that assembly know about the ledger. This is where
+    /// the outcome is OBSERVED, and the sentence is borrowed.</para>
+    /// <para>A throw from here would not fail the round — the scheduler catches its own progress
+    /// callback — but it WOULD skip the rest of that callback, which is this reviewer's audit line
+    /// and its spending row (<c>PanelService.cs:1249-1265</c>). That is what
+    /// <see cref="Noticing.Offered"/>'s boundary is protecting, and the split corrected the plan
+    /// round's claim that a round would die.</para>
+    /// </remarks>
+    private void Noticed(ReviewerProgress progress, string key)
+    {
+        if (progress.Outcome is not { } outcome
+            || !ReviewerNotices.IsAFailure(outcome)
+            || _noticed.Contains(key))
+        {
+            return;
+        }
+
+        // Marked only after the writer ACCEPTED it, so a notice the disk refused is offered again on
+        // the next report rather than suppressed by a key nothing wrote. (codex, on the plan round.)
+        if (_noticing.Offered(() => ReviewerNotices.Of(progress.Provider, progress.Role, outcome)))
+        {
+            _noticed.Add(key);
+        }
     }
 
     /// <summary>A model, or nothing — the two ways of having none, made one.</summary>
@@ -87,6 +142,7 @@ public sealed class LiveRound
                     ? Math.Round(progress.Elapsed.TotalSeconds, 1)
                     : previous.Seconds,
             };
+            Noticed(progress, key);
             Persist();
         }
     }

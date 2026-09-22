@@ -29,7 +29,7 @@ public sealed class LocalVendorNeedsAModelTests
             VaultKeys.None("no vault in tests"),
             default,
             new ProcessLauncher(),
-            Logger.None);
+            Logger.None, Noticing.None);
 
     [Fact]
     public async Task ALocalVendorWithNoModel_IsReportedUnavailable()

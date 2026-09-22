@@ -139,7 +139,7 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"),
             default,
             _launcher,
-            Logger.None);
+            Logger.None, Noticing.None);
     }
 
     /// <summary>The shipped plan role, plus one a person added to the same stage.</summary>
@@ -172,7 +172,7 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"),
             default,
             _launcher,
-            Logger.None);
+            Logger.None, Noticing.None);
     }
 
     /// <summary>

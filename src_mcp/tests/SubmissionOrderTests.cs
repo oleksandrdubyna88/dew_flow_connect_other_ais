@@ -33,7 +33,7 @@ public sealed class SubmissionOrderTests : IDisposable
             Providers = [.. vendors.Select(v =>
                 new ProviderSettings(v) { Enabled = true, Runtime = "local", Model = "m" })],
         }, VaultKeys.None("no vault"), default,
-        new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
+        new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
     /// <summary>
     /// One root for the whole class, swept when it ends.

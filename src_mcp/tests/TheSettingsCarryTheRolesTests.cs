@@ -258,7 +258,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             Providers = [new ProviderSettings("local") { Enabled = true, Runtime = "local", Model = "m" }],
         };
         var service = new PanelService(settings, VaultKeys.None("no vault"), default,
-            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
+            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
         var work = service.BuildWork(
             [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true);
@@ -284,7 +284,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             ],
         };
         var service = new PanelService(settings, VaultKeys.None("no vault"), default,
-            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
+            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
         var work = service.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true);
 
@@ -329,7 +329,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             ],
         };
         var service = new PanelService(settings, VaultKeys.None("no vault"), default,
-            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
+            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
         var work = service.BuildWork(
             [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true);

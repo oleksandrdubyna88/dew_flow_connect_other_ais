@@ -73,7 +73,7 @@ public class RoundNamesTheExcludedTests
             VaultKeys.None("no vault"),
             default,
             new Runners.Processes.ProcessLauncher(),
-            Serilog.Core.Logger.None);
+            Serilog.Core.Logger.None, Noticing.None);
 
     /// <summary>A Team-server row on a machine that has not signed in: enabled, and unrunnable.</summary>
     private static ProviderSettings Remote(bool plan = true, bool code = true) =>
