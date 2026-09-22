@@ -115,7 +115,7 @@ public sealed record ServerNotice
         at.UtcDateTime.ToString("yyyy-MM-dd'T'HH:mm:ss.fff'Z'", CultureInfo.InvariantCulture);
 
     /// <summary>
-    /// A title or a subject at most <see cref="Redaction.TitleLimit"/> long, ending in a mark when
+    /// A field at most <paramref name="limit"/> long — a title by default — ending in a mark when
     /// it had to be cut.
     /// </summary>
     /// <remarks>
@@ -130,8 +130,8 @@ public sealed record ServerNotice
     /// since these sentences carry the unbounded value at the front and the instruction at the
     /// back. (gemini, on story 2.3.3's second code round.)</para>
     /// </remarks>
-    public static string Shortened(string text) =>
-        text.Length <= Redaction.TitleLimit ? text : text[..(Redaction.TitleLimit - 1)] + "…";
+    public static string Shortened(string text, int limit = Redaction.TitleLimit) =>
+        text.Length <= limit ? text : text[..(limit - 1)] + "…";
 
     /// <summary>
     /// A required field, checked against what will REACH THE LINE rather than what arrived.

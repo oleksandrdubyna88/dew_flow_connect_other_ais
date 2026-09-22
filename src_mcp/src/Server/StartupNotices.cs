@@ -127,7 +127,14 @@ internal static class StartupNotices
         // These sentences put an unbounded VALUE at the front and the instruction at the back, so a
         // cut takes the actionable half. The detail keeps it — four times the room — while the
         // title carries the mark saying there was more. (codex, on the code round.)
-        Detail = Cut(sentence) ? sentence : "",
+        //
+        // BOUNDED, and the first draft was not: it handed the detail the whole sentence, which is
+        // the field the overflow lands in — so the queue bound this change had just added to the
+        // subject and the title was defeated by the field beside them. 256 queued notices each
+        // holding 20 kB is 5 MB of process held because a share stopped answering. (CodeRabbit, on
+        // the pull request.) A LENGTH cut, not a redaction: the redactor still runs once, at the
+        // line, over every field.
+        Detail = Cut(sentence) ? ServerNotice.Shortened(sentence, Redaction.DetailLimit) : "",
     };
 
     /// <summary>Whether a sentence is longer than a title is allowed to be.</summary>

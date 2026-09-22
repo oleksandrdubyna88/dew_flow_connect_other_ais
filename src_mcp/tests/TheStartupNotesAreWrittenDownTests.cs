@@ -271,6 +271,22 @@ public sealed class TheStartupNotesAreWrittenDownTests : IDisposable
     }
 
     [Fact]
+    public void ADetailTooLongForTheLine_IsCutWhereTheRecordIsBuiltToo()
+    {
+        // CodeRabbit, on the pull request, and it is right: the subject and the title were bounded
+        // where the record is built and the DETAIL was handed the whole sentence — which is the
+        // field that carries the overflow, so the bound the queue exists for was defeated by the
+        // very change that added it. 256 queued notices each holding 20 kB is 5 MB of process held
+        // because a share stopped answering.
+        StartupNotices.Record(
+            With(new UnrecognisedSetting("COAI_ROLES", new string('x', 20_000))), [],
+            Collecting, Watching());
+
+        _written.Should().ContainSingle().Which.Detail!.Length
+            .Should().BeLessThanOrEqualTo(Redaction.DetailLimit);
+    }
+
+    [Fact]
     public void ASettingSavedMidSession_ReachesThePageWithoutARestart()
     {
         // The hole this story's own plan wrote down as owed, and which five reviewers across three
