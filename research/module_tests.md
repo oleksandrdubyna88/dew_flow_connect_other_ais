@@ -1592,7 +1592,7 @@ pseudocode resolved the data directory outside the failure boundary, so a miscon
 `COAI_DATA_DIR` would have thrown past the return and the calling AI would have received nothing.
 
 **Teeth, measured.** Narrowing the boundary's `catch` from `Exception` to `DivideByZeroException`
-turns two of them red with the exception escaping as an `AggregateException`; removing the time budget
+turned two of them red with the exception escaping as an `AggregateException`; removing the time budget
 made the fourth **hang** — `0 completed, 0 failed | active: AWriterThatNeverReturns…` — which is the
 symptom codex described, not a proxy for it. One plant did NOT work and is worth recording: an
 `if (true) … else if (false)` version failed to COMPILE, the build stopped, and the suite then ran the

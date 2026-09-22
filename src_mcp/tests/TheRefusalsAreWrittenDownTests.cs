@@ -319,6 +319,67 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
         Lines().Should().ContainSingle("and what was already there is still there");
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("token=ghp_0123456789abcdefghij0123456789abcdef")]
+    [InlineData("\u0001\u0002\u0003")]
+    [InlineData("пароль: hunter2 — и ещё немного текста")]
+    public void NoSentenceCanBreakTheRecord(string sentence)
+    {
+        // What replaced a `try` nobody could reach. `Record` has no catch, and the reason is that
+        // nothing in it can throw — `Offer` is a queue write with its own boundary, and `Of` builds a
+        // record whose required fields are constants and whose variable fields are optional, so a
+        // sentence the redactor empties is DROPPED rather than refused. Sonar found the unreachable
+        // catch; this is the claim it was standing in for, checked over sentences chosen to break it.
+        var recording = () => Refusal.Answer(sentence, Silent, "Somewhere", Writing(), () => Data);
+
+        recording.Should().NotThrow();
+    }
+
+    [Fact]
+    public void AQueuedNotice_HoldsNoMoreThanTheSerialiserWillEverWrite()
+    {
+        // CodeRabbit on the pull request, and it is about MEMORY rather than disk: the serialiser
+        // cuts a title when the LINE is written, but the record sits in the writer's queue until
+        // then — so 256 queued refusals each holding a megabyte of sentence is 256 MB of process
+        // held because a share stopped answering. The cut moved to where the record is built.
+        RefusalNotices.Of(new string('x', 1_000_000), "Somewhere").Title!.Length
+            .Should().Be(Redaction.TitleLimit,
+                "a queued notice must never hold more than can ever be written from it");
+    }
+
+    [Fact]
+    public void ALoggerThatThrows_DoesNotStopTheWriter()
+    {
+        // The code round, local: a disposed logger or a full sink throws from inside the very call
+        // that reports a lost notice, and a plain catch would then swallow both. There is nowhere
+        // left to say it — this process's stdout may be carrying a protocol — so what the guard buys
+        // is that the writer thread SURVIVES to write the next one, which is what this asserts.
+        // The FIRST notice is refused by the disk, so the writer reports it and the report throws.
+        // The second goes through the same writer and must land, which is the survival being asserted
+        // — the writer thread is single, and a thread that died of its own warning writes nothing
+        // ever again.
+        var refused = true;
+        var writer = Writing((dir, notice) =>
+        {
+            if (refused)
+            {
+                refused = false;
+
+                return false;
+            }
+
+            return ServerNotices.Append(dir, notice);
+        });
+
+        Refusal.Answer("lost", Exploding, "Somewhere", writer, () => Data);
+        writer.Idle(LongEnough).Should().BeTrue("the writer must not die of its own warning");
+
+        Answered("and the next one still lands", "Later", writer);
+        Lines().Should().ContainSingle("the writer is still writing after the log threw");
+    }
+
     private static ServerNotice Notice(string title) => new()
     {
         Utc = ServerNotice.Iso(DateTimeOffset.UtcNow),
@@ -330,6 +391,16 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
 
     /// <summary>A logger that is real and says nothing — never null, per the C# rule on nulls.</summary>
     private static Serilog.ILogger Silent => Serilog.Core.Logger.None;
+
+    /// <summary>A logger whose sink throws — a disposed one, or a sink that has filled.</summary>
+    private static Serilog.ILogger Exploding =>
+        new Serilog.LoggerConfiguration().WriteTo.Sink(new Throwing()).CreateLogger();
+
+    private sealed class Throwing : Serilog.Core.ILogEventSink
+    {
+        public void Emit(Serilog.Events.LogEvent logEvent) =>
+            throw new ObjectDisposedException(nameof(Throwing));
+    }
 
     private static Serilog.ILogger Watching(List<string> said) =>
         new Serilog.LoggerConfiguration().WriteTo.Sink(new Collecting(said)).CreateLogger();

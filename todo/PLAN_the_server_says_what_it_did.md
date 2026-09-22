@@ -341,7 +341,7 @@ because this project's gate holds one session per repo+branch and closes it when
 | | Story | Depends on | Model |
 |---|---|---|---|
 | ~~2.1~~ | ~~Every refusal road and every reviewer ending is counted, and the count only falls~~ — **shipped 2026-09-21** as a BOUNDARY rather than a count (PR #449): `Refusal.Answer` is the one place an `ErrorAnswer` is built, and `shared/refusal-sites.json` carries the numbers | — | Opus |
-| ~~2.2~~ | ~~Every refusal returned to the calling AI is written down~~ — **shipped 2026-09-21**: written at `Refusal.Answer` inside one failure boundary, time-bounded at 2 s, `subject` from `[CallerMemberName]`, and the file's ceiling (§7) ships with it rather than as a trigger | 1.4, 2.1 | Opus |
+| ~~2.2~~ | ~~Every refusal returned to the calling AI is written down~~ — **shipped 2026-09-21**: written at `Refusal.Answer`, handed to ONE writer thread behind a bounded queue so the refusal waits for nothing, `subject` from `[CallerMemberName]`, and the file's ceiling (§7) ships with it rather than as a trigger | 1.4, 2.1 | Opus |
 | 2.3 | A reviewer that fails, and a setting this build cannot read, reach the file the page reads | 2.2 | Opus |
 | 2.4 | A real refusal over stdio lands with its secret taken out — asserted on the bytes | 2.2 | Opus |
 

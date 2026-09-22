@@ -1284,10 +1284,20 @@ at the 48 call sites, because the compiler fills it.
 providers put a finding on the same sentence of the plan: the pseudocode resolved the data directory
 OUTSIDE the `try`, so a `COAI_DATA_DIR` that cannot resolve — a configuration fault, not a disk one —
 would have thrown past the `return` and the calling AI would have received nothing at all. Resolution,
-construction and the append are now one boundary, and four tests drive it: a resolver that throws, a
-writer that throws, a writer that answers `false`, and a writer that never returns. Each was proved by
-breaking the code — narrowing the `catch` to `DivideByZeroException` turns two of them red with the
-exception escaping, and removing the budget makes the fourth HANG, which is the symptom itself.
+construction and the append are now one boundary — the writer's — and five tests drive it: a resolver
+that throws, a writer that throws, a writer that answers `false`, a writer that never returns, and a
+LOG that throws from inside the call reporting the loss. Each was proved by breaking the code:
+narrowing the boundary's `catch` to `DivideByZeroException` turns two of them red with the exception
+escaping, making `Room` always true turns the ceiling test red, and `DropWrite` turns the queue test
+red. (The budget the fourth test once measured is gone — see below; its assertion is now that fifty
+refusals against a writer that never returns cost under two seconds.)
+
+**There is no `try` in `RefusalNotices.Record`, and that is a claim rather than an omission.** Sonar
+found the catch unreachable by any test, because nothing in that line can throw: `Offer` is a queue
+write with its own boundary, and `Of` builds a record whose required fields are constants and whose
+variable fields are optional, so a sentence the redactor empties is DROPPED rather than refused. A
+catch no test can reach is a guarantee nobody has checked; a theory over sentences chosen to break it
+— empty, whitespace, control characters, a credential, Cyrillic prose — checks it instead.
 
 **The refusal does not wait for the write AT ALL, and getting there took two rounds.** The first
 answer to "a stalled NAS blocks the append" was a 2 s budget on a thread-pool task. The code round put
@@ -1331,10 +1341,21 @@ snapshot and `Length` reads it, so a neighbour deleting the file between the two
 shared NAS is a Tuesday — an unreadable length answers zero rather than losing a notice for a reason
 that has nothing to do with size.
 
-**What bounds a record is the redactor, not a second cut.** `Redaction.SafeText` cuts every string
-field to `TitleLimit` (1000), which is what makes §7's ~10 KB worst case a fact — a megabyte of
-refusal sentence produces a line under 10 KB, and a test asserts it on the file's bytes rather than
-reading the limit.
+**What bounds a record is the redactor, and the queue needed the same bound earlier.**
+`Redaction.SafeText` cuts every string field to `TitleLimit` (1000) when the LINE is written, which is
+what makes §7's ~10 KB worst case a fact — a megabyte of refusal sentence produces a line under 10 KB,
+asserted on the file's bytes rather than read from the limit. But a notice sits in the writer's queue
+until then, so 256 queued refusals each holding a megabyte of sentence is 256 MB of process held
+because a share stopped answering: the title is cut to the same limit where the record is BUILT
+(CodeRabbit, on the pull request). The cut there is the plain prefix and nothing else — the redaction,
+the control characters and the suffix still belong to the serialiser, so there is one rule about what
+a written field is.
+
+**Both wrappers forward their own caller.** `PanelService.Refused` adds a log line and then calls
+`Error`; `RunStageAsync` is the body of all three rounds. Without `[CallerMemberName]` on each of them
+every document refusal is written down as `Refused` and every stage refusal as `RunStageAsync` — one
+collapsed row apiece, which is the thing the subject was introduced to prevent. (CodeRabbit, on the
+pull request.)
 
 ## The spending ledger
 

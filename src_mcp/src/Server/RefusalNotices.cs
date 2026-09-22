@@ -31,26 +31,25 @@ internal static class RefusalNotices
     /// <summary>Which half of the product said it — the extension writes its own name in its own.</summary>
     private const string Source = "coai-mcp";
 
-    /// <summary>Writes one refusal down. Never throws, never blocks.</summary>
+    /// <summary>
+    /// Writes one refusal down. Never throws, never blocks.
+    /// </summary>
+    /// <remarks>
+    /// <b>There is no <c>try</c> here, and that is the claim rather than an omission.</b> An earlier
+    /// version wrapped this line, and Sonar was right that the catch was never reached by any test —
+    /// because nothing inside it can throw. <see cref="NoticeWriter.Offer"/> is a queue write with its
+    /// own boundary, and <see cref="Of"/> builds a record whose every required field is a constant and
+    /// whose every variable field is optional, so a sentence the redactor empties is DROPPED rather
+    /// than refused. A catch no test can reach is a guarantee nobody has checked; the theory below
+    /// checks this one instead, over sentences chosen to break it.
+    /// </remarks>
     internal static void Record(
         string sentence,
         string from,
         Serilog.ILogger log,
         NoticeWriter writer,
-        Func<ResolvedDataDir> where)
-    {
-        try
-        {
-            writer.Offer(where, Of(sentence, from), log);
-        }
-        catch (Exception failure)
-        {
-            // Building the record is the only thing left that can throw here — a code the list does
-            // not carry, a required field that redacts away. Both are programming errors, and neither
-            // is worth a refusal that never arrives.
-            Quietly(() => log.Warning(failure, "the refusal from {From} could not be written down", from));
-        }
-    }
+        Func<ResolvedDataDir> where) =>
+        writer.Offer(where, Of(sentence, from), log);
 
     /// <summary>
     /// The notice a refusal makes.
@@ -64,9 +63,13 @@ internal static class RefusalNotices
     /// by the compiler through <c>[CallerMemberName]</c> on each service's own <c>Error</c> helper — a
     /// stable key with no round number in it, and not one call site had to change to get it. (codex, on
     /// the plan round.)</para>
-    /// <para>The sentence is not cut here. <c>Redaction.SafeText</c> cuts every string field to
-    /// <c>TitleLimit</c>, which is what makes §7's per-record ceiling a fact rather than a hope, and a
-    /// second cut in front of it would be a second rule to keep in step.</para>
+    /// <para><b>The sentence is cut to the same limit the serialiser will cut it to</b>, and that is
+    /// about MEMORY rather than bytes on disk. <c>Redaction.SafeText</c> cuts every string field to
+    /// <c>TitleLimit</c> when the line is written — but the notice sits in the writer's queue until
+    /// then, and 256 queued records each holding a megabyte of refusal sentence is 256 MB of process
+    /// held because a share stopped answering. CodeRabbit found it on the pull request. The cut here
+    /// is the plain prefix and nothing else; the redaction, the control characters and the suffix all
+    /// still belong to the serialiser, so there is still one rule about what a written field is.</para>
     /// </remarks>
     internal static ServerNotice Of(string sentence, string from) => new()
     {
@@ -75,20 +78,11 @@ internal static class RefusalNotices
         Source = Source,
         Code = ServerNoticeCodes.Refused,
         Subject = from,
-        Title = sentence,
+        Title = Shorter(sentence),
     };
 
-    /// <summary>A log that throws must not become the silence it was there to prevent.</summary>
-    private static void Quietly(Action saying)
-    {
-        try
-        {
-            saying();
-        }
-        catch (Exception)
-        {
-            // A disposed logger or a full sink, inside the call that reports a lost notice. There is
-            // nowhere left to say it: this process's stdout may be carrying a protocol.
-        }
-    }
+    /// <summary>As much of the sentence as can ever be written, and no more held in memory.</summary>
+    private static string Shorter(string sentence) =>
+        sentence.Length <= Redaction.TitleLimit ? sentence : sentence[..Redaction.TitleLimit];
+
 }

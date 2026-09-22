@@ -713,12 +713,20 @@ public sealed partial class PanelService
             _ => throw new InvalidOperationException("the union is closed"),
         };
 
-    /// <summary>A refusal a person may have to act on is worth a line in the log as well.</summary>
-    private string Refused(string sentence)
+    /// <summary>
+    /// A refusal a person may have to act on is worth a line in the log as well.
+    /// </summary>
+    /// <remarks>
+    /// It forwards its OWN caller. Without that, every refusal that comes through this wrapper is
+    /// written down as <c>Refused</c> — one subject for every document refusal there is, which is the
+    /// single collapsed row story 2.2 introduced <c>[CallerMemberName]</c> to avoid. (CodeRabbit, on
+    /// the pull request.)
+    /// </remarks>
+    private string Refused(string sentence, [CallerMemberName] string from = "")
     {
         _log.Warning("review_document refused: {Why}", sentence);
 
-        return Error(sentence);
+        return Error(sentence, from);
     }
 
     /// <summary>Why this cannot be a document round at all, or null.</summary>
@@ -1132,29 +1140,37 @@ public sealed partial class PanelService
         }
     }
 
+    /// <remarks>
+    /// <paramref name="from"/> is the ENTRYPOINT, filled by the compiler at each of the three callers
+    /// — the plan round, the code round and the document round. Without it every refusal this method
+    /// returns is written down as <c>RunStageAsync</c>, and the page cannot tell a plan round that
+    /// found no reviewers from a code round that has no session. (CodeRabbit, on the pull request.)
+    /// </remarks>
     private async Task<string> RunStageAsync(
         string repoPath,
         string branch,
         string planText,
         StageRun stage,
-        CancellationToken ct)
+        CancellationToken ct,
+        [CallerMemberName] string from = "")
     {
         if (planText.Length == 0)
         {
-            return Error("planText is required — a reviewer that cannot see the intent reviews its own guess");
+            return Error(
+                "planText is required — a reviewer that cannot see the intent reviews its own guess", from);
         }
 
         var session = _store.Load(repoPath, branch, stage.Document);
         if (session is null)
         {
-            return Error("no session for this repo+branch — call open first");
+            return Error("no session for this repo+branch — call open first", from);
         }
 
         session = ApplyAnyHumanDecision(session);
 
         if (stage.Begin(session.State) is Transition.Refused refused)
         {
-            return Error(refused.Sentence);
+            return Error(refused.Sentence, from);
         }
 
         // ARMED BEFORE THE SETUP, not after it. The first build computed the budget from `work.Count`
@@ -1208,7 +1224,7 @@ public sealed partial class PanelService
                 // filtered out would otherwise be refused with a sentence about vendors — sending
                 // somebody to check a configuration that is perfectly correct. (codex, the code
                 // round, twice.)
-                return Error(NoReviewerRefusal(session.State.Stage, roundWork));
+                return Error(NoReviewerRefusal(session.State.Stage, roundWork), from);
             }
 
             // The round exists on disk BEFORE the first CLI starts: the panel shows "running" for
@@ -1275,7 +1291,7 @@ public sealed partial class PanelService
 
             if (RoundMachine.CompleteRound(session.State, gate, summary) is not Transition.Ok completed)
             {
-                return Error("the round could not complete — this is a bug, report it");
+                return Error("the round could not complete — this is a bug, report it", from);
             }
 
             var answer = AnswerFor(completed.Verdict, gate, summary, merged, reviews, StageGate(session).Threshold);

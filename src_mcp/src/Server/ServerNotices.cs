@@ -135,11 +135,7 @@ public static class ServerNotices
 
             return live.Exists ? live.Length : 0;
         }
-        catch (IOException)
-        {
-            return 0;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception failure) when (IsTheDisksFault(failure))
         {
             return 0;
         }
@@ -162,13 +158,20 @@ public static class ServerNotices
 
             return true;
         }
-        catch (IOException)
-        {
-            return false;
-        }
-        catch (UnauthorizedAccessException)
+        catch (Exception failure) when (IsTheDisksFault(failure))
         {
             return false;
         }
     }
+
+    /// <summary>
+    /// What the DISK gave, as opposed to a programming error.
+    /// </summary>
+    /// <remarks>
+    /// One filter rather than two catch blocks, which is the shape <c>JsonlLedger</c> already uses:
+    /// a second block for the second type is two places to keep in step and two branches a test has
+    /// to reach separately to be honest about its coverage.
+    /// </remarks>
+    private static bool IsTheDisksFault(Exception failure) =>
+        failure is IOException or UnauthorizedAccessException;
 }
