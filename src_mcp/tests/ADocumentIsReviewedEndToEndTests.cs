@@ -139,7 +139,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"),
             default,
             _launcher,
-            Logger.None);
+            Logger.None, Noticing.None);
     }
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
@@ -339,7 +339,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"),
             default,
             _launcher,
-            Logger.None);
+            Logger.None, Noticing.None);
 
         var answer = Parse(await service.ReviewDocumentAsync(
             _repo, "main", Purpose, documentPath: Path.Combine(_repo, "does-not-exist.md")));

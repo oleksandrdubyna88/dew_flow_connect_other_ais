@@ -135,7 +135,7 @@ public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
             VaultKeys.None("no vault"),
             default,
             new Runners.Processes.ProcessLauncher(),
-            Serilog.Core.Logger.None);
+            Serilog.Core.Logger.None, Noticing.None);
 
         var work = service.BuildWork(
             [RoleCatalog.DocumentRole], scratch, "ctx", round: 1,
@@ -155,7 +155,7 @@ public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
             VaultKeys.None("no vault"),
             default,
             new Runners.Processes.ProcessLauncher(),
-            Serilog.Core.Logger.None);
+            Serilog.Core.Logger.None, Noticing.None);
 
         var work = service.BuildWork(
             [RoleCatalog.DocumentRole], scratch, "ctx", round: 1,

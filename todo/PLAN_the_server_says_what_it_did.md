@@ -351,7 +351,7 @@ because this project's gate holds one session per repo+branch and closes it when
 | ~~2.2~~ | ~~Every refusal returned to the calling AI is written down~~ — **shipped 2026-09-21**: written at `Refusal.Answer`, handed to ONE writer thread behind a bounded queue so the refusal waits for nothing, `subject` from `[CallerMemberName]`, and the file's ceiling (§7) ships with it rather than as a trigger | 1.4, 2.1 | Opus |
 | ~~2.3~~ | **SPLIT into three on the gate's own command, 2026-09-22** (the split was done by Fable against the code, and found two things the plan round had assumed wrong — see below) | 2.2 | — |
 | ~~2.3.1~~ | ~~A notice offered before the process leaves still lands, and the ledger's promise says what it delivers~~ — **shipped 2026-09-22**: `NoticeWriter.Drain` waits on the writer TASK, `ServeAsync` drains in a `finally` covering both exits, and the delivery promise is one paragraph in `module_server.md` instead of two sentences that disagreed | 2.2 | Opus |
-| 2.3.2 | A reviewer that fails is written down once, by a writer the host owns, and a sixth ending cannot arrive unnamed | 2.3.1 | Opus |
+| ~~2.3.2~~ | ~~A reviewer that fails is written down once, by a writer the host owns, and a sixth ending cannot arrive unnamed~~ — **shipped 2026-09-22**: `Noticing` is the shared seam and boundary, the host holds one instance across settings rebuilds, and `ReviewerNotices.ByType` is data a reflection census holds to the assembly's sealed subtypes | 2.3.1 | Opus |
 | 2.3.3 | A setting this build cannot read, a directory that surprised it, and a settings file it adopted reach the page, each under a subject it can group on | 2.3.2 | Opus |
 
 **What the split found that the plan round had wrong.** (1) An exception escaping `LiveRound.Report`

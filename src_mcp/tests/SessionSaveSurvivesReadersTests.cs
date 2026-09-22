@@ -122,7 +122,7 @@ public sealed class SessionSaveSurvivesReadersTests : IDisposable
         File.WriteAllText(asFile, "no sessions directory here either");
         var store = new SessionStore(asFile);
 
-        var act = () => new LiveRound(store, SessionFor("C:/repo", 1), [], "a subject");
+        var act = () => new LiveRound(store, SessionFor("C:/repo", 1), [], "a subject", Noticing.None);
 
         act.Should().NotThrow("a round that cannot draw itself is still a round");
     }

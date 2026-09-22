@@ -25,9 +25,34 @@ public sealed class LiveRound
 
     private readonly string _subject;
 
-    public LiveRound(SessionStore store, PersistedSession session, IReadOnlyList<ReviewerWork> work, string subject = "")
+    private readonly Noticing _noticing;
+
+    /// <summary>
+    /// Which reviewers have had their ending written down, so a second report does not write a second line.
+    /// </summary>
+    /// <remarks>
+    /// The scheduler reports a terminal outcome once per reviewer today — every road returns after
+    /// its one <c>Report(..., "failed", outcome, ...)</c> — but this is a contract of the PUBLIC
+    /// <see cref="Report"/>, which <c>LiveRoundTests</c> already drives twice for one reviewer. A key
+    /// is added only after the offer is ACCEPTED, so a write the disk refused is retried rather than
+    /// suppressed. (codex, on the plan round.)
+    /// </remarks>
+    private readonly HashSet<string> _noticed = new(StringComparer.Ordinal);
+
+    /// <param name="noticing">
+    /// Where a reviewer that did not answer is written down. Required and undefaulted: a defaulted
+    /// one is the trap the plan round named, where production takes the quiet path while every
+    /// injected test passes.
+    /// </param>
+    public LiveRound(
+        SessionStore store,
+        PersistedSession session,
+        IReadOnlyList<ReviewerWork> work,
+        string subject,
+        Noticing noticing)
     {
         _subject = subject;
+        _noticing = noticing;
         _store = store;
         _session = session;
         _states = work.ToDictionary(
@@ -49,6 +74,76 @@ public sealed class LiveRound
         Persist();
     }
 
+    /// <summary>
+    /// The reviewer's state after this report — the merge, with no I/O and no lock in it.
+    /// </summary>
+    /// <remarks>
+    /// Lifted out of <see cref="Report"/> so that method is orchestration and this one is the rule.
+    /// (CodeRabbit, on story 2.3.2's pull request: <c>Report</c> was over the complexity ceiling
+    /// `.coderabbit.yaml` sets for this project, and it was over it before this story touched it.)
+    /// </remarks>
+    private static ReviewerState Moved(ReviewerState previous, ReviewerProgress progress) => previous with
+    {
+        Status = progress.Status,
+        Findings = progress.Outcome is ReviewerOutcome.Ok ok ? ok.Review.Findings.Count() : previous.Findings,
+        Note = Noted(previous, progress),
+        // Only a FINISHED reviewer has a duration; a "running" report carries zero, and taking it
+        // would erase the number of one that had already finished.
+        Seconds = progress.Elapsed > TimeSpan.Zero
+            ? Math.Round(progress.Elapsed.TotalSeconds, 1)
+            : previous.Seconds,
+    };
+
+    /// <summary>
+    /// The sentence this reviewer carries: its failure, or its own note, or what it already had.
+    /// </summary>
+    /// <remarks>
+    /// A progress line may carry its own sentence — a queued reviewer saying what it is waiting for
+    /// — and it is only ever an ADDITION: an empty one never wipes the reason a failed reviewer
+    /// already recorded.
+    /// </remarks>
+    private static string Noted(ReviewerState previous, ReviewerProgress progress)
+    {
+        if (progress.Outcome is { } outcome and not ReviewerOutcome.Ok)
+        {
+            return ReviewerSummaryFactory.Describe(outcome);
+        }
+
+        return progress.Note.Length > 0 ? progress.Note : previous.Note;
+    }
+
+    /// <summary>
+    /// A reviewer that did not answer, written down once.
+    /// </summary>
+    /// <remarks>
+    /// <para>Here rather than in <c>Describe</c>: the parent plan forbids instrumenting that, because
+    /// it lives in <c>runners</c> and would make that assembly know about the ledger. This is where
+    /// the outcome is OBSERVED, and the sentence is borrowed.</para>
+    /// <para>A throw from here would not fail the round — the scheduler catches its own progress
+    /// callback — but it WOULD skip the rest of that callback, which is this reviewer's audit line
+    /// and its spending row (<c>PanelService.cs:1249-1265</c>). That is what
+    /// <see cref="Noticing.Offered"/>'s boundary is protecting, and the split corrected the plan
+    /// round's claim that a round would die.</para>
+    /// </remarks>
+    private void Noticed(ReviewerProgress progress, string key)
+    {
+        if (Ending(progress) is not { } outcome || _noticed.Contains(key))
+        {
+            return;
+        }
+
+        // Marked only after the writer ACCEPTED it, so a notice the disk refused is offered again on
+        // the next report rather than suppressed by a key nothing wrote. (codex, on the plan round.)
+        if (_noticing.Offered(() => ReviewerNotices.Of(progress.Provider, progress.Role, outcome)))
+        {
+            _noticed.Add(key);
+        }
+    }
+
+    /// <summary>The outcome this report ends on, when it is one that gets written down.</summary>
+    private static ReviewerOutcome? Ending(ReviewerProgress progress) =>
+        progress.Outcome is { } outcome && ReviewerNotices.IsAFailure(outcome) ? outcome : null;
+
     /// <summary>A model, or nothing — the two ways of having none, made one.</summary>
     /// <remarks>
     /// <para>Trimmed, because a configured model of " " is not a model and the renderer's truthiness
@@ -69,24 +164,9 @@ public sealed class LiveRound
             var key = Key(progress.Provider, progress.Role);
             var previous = _states.GetValueOrDefault(key)
                            ?? new ReviewerState(progress.Provider, progress.Role, progress.Status);
-            _states[key] = previous with
-            {
-                Status = progress.Status,
-                Findings = progress.Outcome is ReviewerOutcome.Ok ok ? ok.Review.Findings.Count() : previous.Findings,
-                Note = progress.Outcome is { } outcome and not ReviewerOutcome.Ok
-                    ? ReviewerSummaryFactory.Describe(outcome)
-                    // A progress line may carry its own sentence — a queued reviewer saying what it
-                    // is waiting for — and it is only ever an ADDITION: an empty one never wipes
-                    // the reason a failed reviewer already recorded.
-                    : progress.Note.Length > 0
-                        ? progress.Note
-                        : previous.Note,
-                // Only a FINISHED reviewer has a duration; a "running" report carries zero, and
-                // taking it would erase the number of one that had already finished.
-                Seconds = progress.Elapsed > TimeSpan.Zero
-                    ? Math.Round(progress.Elapsed.TotalSeconds, 1)
-                    : previous.Seconds,
-            };
+
+            _states[key] = Moved(previous, progress);
+            Noticed(progress, key);
             Persist();
         }
     }

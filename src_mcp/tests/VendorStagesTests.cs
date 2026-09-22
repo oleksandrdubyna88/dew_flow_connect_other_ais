@@ -36,7 +36,7 @@ public sealed class VendorStagesTests
             VaultKeys.None("no vault"),
             default,
             new Runners.Processes.ProcessLauncher(),
-            Serilog.Core.Logger.None);
+            Serilog.Core.Logger.None, Noticing.None);
 
     private static string Scratch()
     {

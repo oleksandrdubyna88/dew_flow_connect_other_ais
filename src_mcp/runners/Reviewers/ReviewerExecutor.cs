@@ -5,9 +5,18 @@ using CoaiMcp.Runners.Processes;
 namespace CoaiMcp.Runners.Reviewers;
 
 /// <summary>
-/// The five ways one reviewer ends — exhaustive and closed, so a sixth cannot appear silently.
-/// Never a silent zero: a round that ran with four of six reviewers says so by name.
+/// The five ways one reviewer ends, and the success. Never a silent zero: a round that ran with
+/// four of six reviewers says so by name.
 /// </summary>
+/// <remarks>
+/// <b>"A sixth cannot appear silently" was written here and it was not true.</b> A C# switch over a
+/// class hierarchy is not exhaustive-checked: adding a sealed subtype below compiles, and every
+/// switch over these then either throws at runtime or folds the new ending into a default arm. What
+/// makes the claim true is a TEST — <c>ReviewerNotices.ByType</c> is a map with no default, and
+/// <c>TheReviewerFailuresAreWrittenDownTests</c> compares its keys against the sealed subtypes
+/// reflection finds in this assembly, so a sixth is red on the day it is added. (codex, on story
+/// 2.3's plan round.)
+/// </remarks>
 public abstract record ReviewerOutcome
 {
     /// <param name="Usage">What the vendor said the run consumed. Zeroes mean it said nothing.</param>

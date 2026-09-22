@@ -28,23 +28,34 @@ public sealed class PanelServiceHost
     private readonly DateTime _vaultReadUtc;
     private readonly IProcessLauncher _launcher;
     private readonly Serilog.ILogger _log;
+
+    private readonly Noticing _noticing;
     private readonly Lock _gate = new();
 
     private PanelService _current;
     private (DateTime Written, long Length) _stamp;
 
+    /// <param name="noticing">
+    /// Where this host's services write their notices. It is REQUIRED and has no default, because a
+    /// defaulted one is the trap story 2.3.2's plan round named: production takes the quiet path
+    /// while every injected unit test passes. It is held rather than passed once, so that
+    /// <see cref="Build"/> — which runs again whenever the settings file moves — hands the same
+    /// instance to the rebuilt service instead of dropping it. (gemini, on the plan round.)
+    /// </param>
     public PanelServiceHost(
         Func<string, string?> env,
         VaultKeys keys,
         DateTime vaultReadUtc,
         IProcessLauncher launcher,
-        Serilog.ILogger log)
+        Serilog.ILogger log,
+        Noticing noticing)
     {
         _env = env;
         _keys = keys;
         _vaultReadUtc = vaultReadUtc;
         _launcher = launcher;
         _log = log;
+        _noticing = noticing;
         _stamp = Stamp();
         _current = Build();
     }
@@ -78,7 +89,8 @@ public sealed class PanelServiceHost
             // This rebuild runs on a stamp change rather than at startup, so it is the one place an
             // adoption could happen with nobody watching. It has a log; it uses it.
             note => _log.Warning("data directory: {Note}", note));
-        return new PanelService(PanelSettings.FromEnvironment(configuration), _keys, _vaultReadUtc, _launcher, _log);
+        return new PanelService(
+            PanelSettings.FromEnvironment(configuration), _keys, _vaultReadUtc, _launcher, _log, _noticing);
     }
 
     /// <summary>

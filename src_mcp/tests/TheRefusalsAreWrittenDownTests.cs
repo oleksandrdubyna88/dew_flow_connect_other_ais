@@ -54,10 +54,24 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
     private static NoticeWriter Writing(Func<ResolvedDataDir, ServerNotice, bool>? append = null) =>
         new(append ?? ((dir, notice) => ServerNotices.Append(dir, notice)));
 
+    /// <summary>
+    /// This directory, as the environment a host would have been given.
+    /// </summary>
+    /// <remarks>
+    /// Story 2.3.2 made the resolver take the HOST's environment rather than the process's, so a
+    /// host with a scoped env stops writing its notices into the ambient one — which is also what
+    /// lets a test point the whole road at a temporary directory without touching
+    /// <c>COAI_DATA_DIR</c>, the process-global a parallel suite must not set.
+    /// </remarks>
+    private string? Env(string name) => name == "COAI_DATA_DIR" ? _dir : null;
+
+    private Noticing Through(NoticeWriter writer, Serilog.ILogger? log = null) =>
+        Noticing.Through(writer, Env, log ?? Silent);
+
     /// <summary>A refusal, written down and waited for — the wait is the TEST's, never the product's.</summary>
     private string Answered(string sentence, string from, NoticeWriter writer, Serilog.ILogger? log = null)
     {
-        var answer = Refusal.Answer(sentence, log ?? Silent, from, writer, () => Data);
+        var answer = Refusal.Answer(sentence, Through(writer, log), from);
         writer.Idle(LongEnough).Should().BeTrue("the writer must drain for this test to read the file");
 
         return answer;
@@ -125,8 +139,11 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
         var said = new List<string>();
         var writer = Writing();
 
-        Refusal.Answer("no", Watching(said), "Somewhere", writer,
-                () => throw new InvalidOperationException("COAI_DATA_SIDE is not usable"))
+        Refusal.Answer(
+                "no",
+                new Noticing(_ => throw new InvalidOperationException("COAI_DATA_SIDE is not usable"),
+                    Watching(said)),
+                "Somewhere")
             .Should().Be(Refused("no"));
 
         writer.Idle(LongEnough).Should().BeTrue();
@@ -139,7 +156,7 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
         var said = new List<string>();
         var writer = Writing((_, _) => throw new IOException("the share stopped answering"));
 
-        Refusal.Answer("no", Watching(said), "Somewhere", writer, () => Data)
+        Refusal.Answer("no", Through(writer, Watching(said)), "Somewhere")
             .Should().Be(Refused("no"));
 
         writer.Idle(LongEnough).Should().BeTrue();
@@ -162,7 +179,7 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
 
             for (var each = 0; each < 50; each++)
             {
-                Refusal.Answer("no", Silent, "Somewhere", writer, () => Data)
+                Refusal.Answer("no", Through(writer), "Somewhere")
                     .Should().Be(Refused("no"));
             }
 
@@ -210,7 +227,7 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
         var said = new List<string>();
         var writer = Writing((_, _) => false);
 
-        Refusal.Answer("no", Watching(said), "Somewhere", writer, () => Data);
+        Refusal.Answer("no", Through(writer, Watching(said)), "Somewhere");
 
         writer.Idle(LongEnough).Should().BeTrue();
         said.Should().ContainSingle()
@@ -363,7 +380,7 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
         // record whose required fields are constants and whose variable fields are optional, so a
         // sentence the redactor empties is DROPPED rather than refused. Sonar found the unreachable
         // catch; this is the claim it was standing in for, checked over sentences chosen to break it.
-        var recording = () => Refusal.Answer(sentence, Silent, "Somewhere", Writing(), () => Data);
+        var recording = () => Refusal.Answer(sentence, Through(Writing()), "Somewhere");
 
         recording.Should().NotThrow();
     }
@@ -404,7 +421,7 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
             return ServerNotices.Append(dir, notice);
         });
 
-        Refusal.Answer("lost", Exploding, "Somewhere", writer, () => Data);
+        Refusal.Answer("lost", Through(writer, Exploding), "Somewhere");
         writer.Idle(LongEnough).Should().BeTrue("the writer must not die of its own warning");
 
         Answered("and the next one still lands", "Later", writer);

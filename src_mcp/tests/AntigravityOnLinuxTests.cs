@@ -57,7 +57,7 @@ public class AntigravityOnLinuxTests
             VaultKeys.None("no vault in tests"),
             default,
             new RecordingLauncher(stdOut: "agy 0.4.2"),
-            Logger.None);
+            Logger.None, Noticing.None);
 
         var answer = await service.ProvidersAsync();
 

@@ -107,7 +107,7 @@ public sealed class AnUnrecordedRoundIsNotAnAnswerTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"),
             default,
             _launcher,
-            Logger.None);
+            Logger.None, Noticing.None);
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 

@@ -66,7 +66,7 @@ public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
                 ? new ProviderSettings(v) { Enabled = true, Runtime = "local", Model = "m", BaseUrl = "http://127.0.0.1:11434/v1" }
                 : new ProviderSettings(v) { Enabled = true, Runtime = "codex", Model = "m" })],
         }, VaultKeys.None("no vault"), default,
-        new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
+        new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
     /// <summary>
     /// Every reviewer ROW in the order this round submits them — one per (vendor, role).

@@ -28,7 +28,8 @@ public sealed class ConsultationService(
     RolePrompts prompts,
     UsageLedger ledger,
     Serilog.ILogger log,
-    Func<string, string?> env)
+    Func<string, string?> env,
+    Noticing noticing)
 {
     public const string PromptId = "consult";
 
@@ -853,5 +854,5 @@ public sealed class ConsultationService(
     /// into a single row. The compiler fills it at each site, so nothing below changed.</para>
     /// </remarks>
     private string Error(string sentence, [CallerMemberName] string from = "") =>
-        Refusal.Answer(sentence, log, from);
+        Refusal.Answer(sentence, noticing, from);
 }

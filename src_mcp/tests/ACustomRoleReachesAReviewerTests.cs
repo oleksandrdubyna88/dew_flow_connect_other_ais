@@ -51,7 +51,7 @@ public sealed class ACustomRoleReachesAReviewerTests : IDisposable
         };
 
         return new PanelService(settings, VaultKeys.None("no vault"), default,
-            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None);
+            new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
     }
 
     private static RoleCatalog WithRequirements() =>

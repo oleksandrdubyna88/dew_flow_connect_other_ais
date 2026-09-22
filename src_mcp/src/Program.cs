@@ -421,7 +421,9 @@ internal static class Program
             // (codex Architecture, the code round.)
             var service = new Server.PanelService(
                 settings, Server.VaultKeys.None("a close needs no vendor key"), DateTime.UtcNow, launcher,
-                Serilog.Core.Logger.None);
+                Serilog.Core.Logger.None,
+                // A one-shot answers on stdout and exits; a writer thread here is one nobody drains.
+                Server.Noticing.None);
 
             var answer = await service.CloseConsultByHandAsync(repo, id, outcome, note ?? string.Empty);
             await Console.Out.WriteLineAsync(answer);
@@ -487,7 +489,7 @@ internal static class Program
         var keys = await new Server.KeyVault(launcher)
             .ReadAsync(Environment.GetEnvironmentVariable(Server.KeyVault.KeyVariable));
         var service = new Server.PanelService(
-            settings, keys, DateTime.UtcNow, launcher, Serilog.Core.Logger.None);
+            settings, keys, DateTime.UtcNow, launcher, Serilog.Core.Logger.None, Server.Noticing.None);
 
         await Console.Out.WriteLineAsync(await service.ProvidersAsync());
 
@@ -1697,7 +1699,13 @@ internal static class Program
 
             // The file the panel writes is re-read per call, so a vendor or a threshold changed
             // in the sidebar reaches the NEXT round without restarting the MCP client.
-            var host = new PanelServiceHost(Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log);
+            // ONE composition, handed to the host, which holds it and gives it to every service it
+            // builds — the rebuild on a settings change included. A defaulted parameter anywhere on
+            // that road is the trap the plan round named: production takes the quiet path while
+            // every injected test passes. (gemini and codex, on story 2.3.2's plan round.)
+            var host = new PanelServiceHost(
+                Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log,
+                Noticing.Through(notices, Environment.GetEnvironmentVariable, log));
             var options = new McpServerOptions
             {
                 ServerInfo = new Implementation

@@ -103,7 +103,7 @@ public sealed class ConsultScenarioTests : IAsyncLifetime
         VaultKeys.None("no vault in tests"),
         default,
         _launcher,
-        Logger.None);
+        Logger.None, Noticing.None);
 
     private static readonly string[] CallerVariables =
         ["COAI_CALLER_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_SESSION_ID", "GEMINI_CLI_SESSION_ID"];

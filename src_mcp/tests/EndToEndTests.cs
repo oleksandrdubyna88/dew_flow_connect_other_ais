@@ -160,7 +160,7 @@ public sealed class EndToEndTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"),
             default,
             _launcher,
-            log ?? Logger.None);
+            log ?? Logger.None, Noticing.None);
 
     private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
 
@@ -424,7 +424,7 @@ public sealed class EndToEndTests : IAsyncLifetime
             VaultKeys.None("no vault in tests"),
             default,
             _launcher,
-            Logger.None);
+            Logger.None, Noticing.None);
         await service.OpenAsync(_repo, "feature");
 
         Script(FourMajors);

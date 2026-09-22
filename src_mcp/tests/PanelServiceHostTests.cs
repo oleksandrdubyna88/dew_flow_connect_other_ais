@@ -24,7 +24,7 @@ public sealed class PanelServiceHostTests : IDisposable
     private string? Env(string name) => name == "COAI_DATA_DIR" ? _dataDir : null;
 
     private PanelServiceHost NewHost() =>
-        new(Env, VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), _log);
+        new(Env, VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), _log, Noticing.None);
 
     private void WriteVendors(string json) =>
         File.WriteAllText(SettingsPath, $$"""{"COAI_VENDORS": {{System.Text.Json.JsonSerializer.Serialize(json)}}}""");
@@ -76,7 +76,7 @@ public sealed class PanelServiceHostTests : IDisposable
                 "COAI_VENDORS" => """[{"id":"claude","runtime":"claude","model":"haiku","baseUrl":""}]""",
                 _ => null,
             },
-            VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), _log);
+            VaultKeys.None("no vault in this test"), default, new ProcessLauncher(), _log, Noticing.None);
 
         Touch(() => WriteVendors("""[{"id":"gemini","runtime":"gemini","model":"","baseUrl":""}]"""));
 
