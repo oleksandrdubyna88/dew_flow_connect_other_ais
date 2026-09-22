@@ -595,6 +595,7 @@ transport, so `Ranking.Order` is exercised and nothing produces a real reply for
 | `OnlyFourFieldsLeaveTests` | the mapping and the serialiser | the symbol, the id or the finding's prose crossing; a comment-less wire that stopped being byte-identical |
 | `BothHalvesTests` | the REAL client against the REAL server | the two halves disagreeing about an id, a word, or a document |
 | `TheBuiltBinariesTests` | two real PROCESSES over a real socket | a publish, trimming or embedded-resource defect; an exit code; the field's file not migrated; a 429 without its number; a revoke that stops nothing; two servers on one directory |
+| `TheBuiltBinariesTests.OldServer` | the PREVIOUS RELEASE, `bugs-v0.2.0`, pinned by tag and by SHA-256 per architecture and verified before it is executed | the belief that an old binary has no route for a comment; **the only test here that is not two halves of one checkout agreeing with each other.** CI fetches the archive through `.github/actions/fetch-old-bugs`; unset, it skips locally and FAILS on CI, because a silently skipped check is a silently deleted one |
 | `TheEdgeIsWatchedTests` | the running server, reading what it LOGGED | a misconfigured edge going unnoticed; the address reaching a log |
 | `WhatTheArgumentsMeanTests` | the argument rules, in-process | 64 answered for a mode this binary has, or withheld for one it does not |
 | `TheKeywordListIsCheckedTests` | the startup guard | a binary that starts, passes the smoke, and refuses every pair |

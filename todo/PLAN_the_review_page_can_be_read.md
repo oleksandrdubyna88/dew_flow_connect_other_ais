@@ -1,9 +1,12 @@
 # PLAN — the review page can be read
 
-> Status: **partly implemented, 2026-09-21 — epics 1, 2 and 3 are COMPLETE (3.2c closed by decision
-> rather than built), epic 4 unblocked and not started.** It stays in `todo/` because epic 4 is
+> Status: **partly implemented, 2026-09-22 — epics 1, 2 and 3 are COMPLETE (3.2c closed by decision
+> rather than built); epic 4 is UNDER WAY, with story 4.1 (the server accepts a comment) implemented
+> and 4.2a/4.2b open.** Epic 4 is carried by its own plan,
+> [PLAN_a_comment_crosses_the_machine_boundary.md](PLAN_a_comment_crosses_the_machine_boundary.md),
+> which holds its decisions and its per-story record. This plan stays in `todo/` because epic 4 is
 > still work somebody is supposed to do; the state column of the epic table below is the per-story
-> record. (The line this replaces still said *plan only, nothing implemented yet* after three epics
+> record. (An earlier line here still said *plan only, nothing implemented yet* after three epics
 > had landed, which is the drift the planning rule exists to catch.) Scope: `src_vs_code`
 > (`bugzReviewPage.ts`, `bugzReviewPanel.ts`, `bugzView.ts`), `src_mcp` (the projection `--bugs-json`
 > and `--pairs-json` return), and — for one story only — the ingest contract in `src_bugs`.
@@ -661,7 +664,7 @@ extension no way to run a command in another window, the only honest route is a 
 with a lifetime of its own, and the 55.7 % measurement that justifies 3.2a and 3.2b does not carry
 this one — the code is already reachable and what would be saved is navigation. Recorded in
 `research/module_extension.md`. **Epic 3 is COMPLETE.** |
-| **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2 the client sends one | **Fable max** | **unblocked 2026-09-18, not started.** Both decisions were answered by the operator and both are recorded in this document: a person's comment is PUBLIC, so no PII scanner and no local-only fallback; and the ranking pass MAY use a remote model. This row still read *blocked on two decisions* while the sections below already carried the answers. |
+| **4 — moving the anonymisation boundary** | 4.1 the server accepts a comment · 4.2a the client stores and decides · 4.2b the extension's box | **Fable max** | **UNDER WAY. 4.1 implemented 2026-09-22; 4.2a and 4.2b open.** Split into its own plan, [PLAN_a_comment_crosses_the_machine_boundary.md](PLAN_a_comment_crosses_the_machine_boundary.md), which carries the four decisions and the per-story record. Both preconditions were answered by the operator: a person's comment is PUBLIC, so no PII scanner and no local-only fallback; and the ranking pass MAY use a remote model. 4.1 ships the ingest server's side — a comment travels on `POST /ingest/commented`, a route an older binary answers 404, and `/ingest` refuses one rather than dropping it. |
 
 ### Carried out of story 1.1's code round, rejected there and owed somewhere
 
