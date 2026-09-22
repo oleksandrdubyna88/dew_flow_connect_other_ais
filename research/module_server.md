@@ -886,13 +886,14 @@ because the panel saves instantly and says so. Environment variables still outra
 
 ## Server notices — what this binary writes down (S8, from 2026-09-21)
 
-`server-notices.jsonl` is read by the extension and has been since 2026-09-17. **Nothing writes it
-yet** — the writer is story 1.4 of
-[PLAN_the_server_says_what_it_did.md](../todo/PLAN_the_server_says_what_it_did.md) — and what has
-landed so far is what both halves must agree on before either writes a byte. A reviewer was right to
-pick the present tense out of the first draft of this sentence: `knowledge-base.md` says a sentence
-describing something that does not run is a bug in the file, and *"this is the half that writes it"*
-described a class that did not exist.
+`server-notices.jsonl` is read by the extension and has been since 2026-09-17. **It had nothing to
+read until 2026-09-21**, when story 2.2 of
+[PLAN_the_server_says_what_it_did.md](../todo/PLAN_the_server_says_what_it_did.md) instrumented the
+refusal road; what landed before that — the line, the path, the append — is what both halves had to
+agree on before either wrote a byte. The tense of this paragraph has been corrected twice now, in
+both directions, which is what `knowledge-base.md` means when it says a sentence describing something
+that does not run is a bug in the file: *"this is the half that writes it"* once described a class
+that did not exist, and *"nothing writes it yet"* then outlived the writer by one story.
 
 **One credential word list, embedded, failing closed.** Both halves REDACT before anything reaches
 disk, so they must redact on the same words — two redactors disagreeing about whether `sig` names a
@@ -1180,9 +1181,10 @@ one production spelling, and asks the ASSEMBLY which members answer `ResolvedDat
 target-typed `new(` cannot hide from. Each scan has a companion asserting it still finds its known
 instances, so a reformat cannot turn a guard into a pass.
 
-**No call sites, by design.** The only caller is a test. Story 2.2 instruments the three refusal
-roads once 2.1's census has bounded them, and story 2.4 is the live leg: a real refusal over stdio,
-read back with the extension's own parser, asserted on the persisted bytes.
+**Its caller since story 2.2 is `NoticeWriter`**, on one thread behind a bounded queue, and every
+refusal this server returns reaches it — by ONE road rather than the three this section once
+expected, which is what 2.1's census established. Story 2.4 is still owed: the live leg, a real
+refusal over stdio, read back with the extension's own parser and asserted on the persisted bytes.
 
 ## Every refusal leaves by ONE road, and a census says so (S8 story 2.1, 2026-09-21)
 
@@ -1265,6 +1267,97 @@ record and the serialiser, which is why the body is two lines. The other asked t
 lines with `Environment.NewLine` in case a CRLF file left a hidden character in `using static`; the
 join is the mechanism that makes a wrapped call findable, and the trim that removes indentation
 removes the CR with it. A `\r\n` case was added to the join tests so that rejection rests on a test.
+
+## Every refusal is written down, and no notice may cost one (S8 story 2.2, 2026-09-21)
+
+`Refusal.Answer` builds the `ErrorAnswer`, hands it to `RefusalNotices.Record`, and serialises it.
+Story 2.1's boundary is what makes that one line a guarantee: an `ErrorAnswer` is the only shape a
+refusal takes on the wire, it is constructed in one file, and both services reach it — so
+instrumenting that point IS "every refusal", with `TheRefusalRoadsAreCountedTests` keeping it true.
+
+**The record.** `class: refusal`, `source: coai-mcp`, `code: refused`, `title` the sentence — and
+`subject` the CALLING MEMBER, filled by the compiler through `[CallerMemberName]` on each service's
+`Error` helper. That last part is what makes one shared `code` usable: the extension keys repeats on
+`(code, subject)`, so without it "no reviewers are configured" and "the plan text is empty" would
+collapse into a single row nobody can read. codex raised it on the plan round; it cost zero changes
+at the 48 call sites, because the compiler fills it.
+
+**Nothing in the write may cost the refusal, and that took five findings to get right.** All three
+providers put a finding on the same sentence of the plan: the pseudocode resolved the data directory
+OUTSIDE the `try`, so a `COAI_DATA_DIR` that cannot resolve — a configuration fault, not a disk one —
+would have thrown past the `return` and the calling AI would have received nothing at all. Resolution,
+construction and the append are now one boundary — the writer's — and five tests drive it: a resolver
+that throws, a writer that throws, a writer that answers `false`, a writer that never returns, and a
+LOG that throws from inside the call reporting the loss. Each was proved by breaking the code:
+narrowing the boundary's `catch` to `DivideByZeroException` turns two of them red with the exception
+escaping, making `Room` always true turns the ceiling test red, and `DropWrite` turns the queue test
+red. (The budget the fourth test once measured is gone — see below; its assertion is now that fifty
+refusals against a writer that never returns cost under two seconds.)
+
+**There is no `try` in `RefusalNotices.Record`, and that is a claim rather than an omission.** Sonar
+found the catch unreachable by any test, because nothing in that line can throw: `Offer` is a queue
+write with its own boundary, and `Of` builds a record whose required fields are constants and whose
+variable fields are optional, so a sentence the redactor empties is DROPPED rather than refused. A
+catch no test can reach is a guarantee nobody has checked; a theory over sentences chosen to break it
+— empty, whitespace, control characters, a credential, Cyrillic prose — checks it instead.
+
+**The refusal does not wait for the write AT ALL, and getting there took two rounds.** The first
+answer to "a stalled NAS blocks the append" was a 2 s budget on a thread-pool task. The code round put
+TWELVE findings on that, across all three providers, and they were right: a wait only stops WAITING.
+The abandoned worker stays blocked on the share forever, so every refusal cost two threads, one of
+them permanently — at a hundred concurrent refusals the pool is gone and the server stops answering,
+which is a far worse failure than the stall the budget was protecting against.
+
+So there is `NoticeWriter`: **one** writer thread and a bounded channel of **256**. A refusal offers
+its notice and returns — no resolve, no I/O, no lock on that path — and the directory is resolved on
+the writer's thread with the append. A wedged share blocks that one thread and nothing else; the queue
+fills and `Offer` then answers `false`, which is the loss becoming VISIBLE instead of becoming a stall.
+`BoundedChannelFullMode.Wait` is what makes a synchronous `TryWrite` answer false rather than block —
+`DropWrite` discards the notice and answers true, which is the silent loss this design exists to
+prevent. Measured by a test: fifty refusals against a writer that never returns cost under two seconds.
+
+**The writer takes a RECORD, not a refusal.** codex: a boundary specialised to refusals is one story
+2.3 has to bypass or copy. `RefusalNotices` says what a refusal IS; the writer owns resolve, append,
+and reporting the loss.
+
+**A lost notice is never silent, and the report cannot become the silence either.** `Append` answers
+`false` for anything the disk gave, and a run where that happens looks exactly like one where it did
+not — so both `Error` helpers became instance methods to pass their existing logger, and every loss is
+a `Warning`: the disk refused it, the queue was full, the record could not be built. The logging call
+is itself wrapped, because a disposed logger or a full sink throwing from inside the call that reports
+a lost notice would swallow both (the code round, local).
+
+**The ceiling ships with the first repeating writer.** §7 of the plan named 256 MB as a trigger for a
+roll-up somebody would build later; the plan round refused that, citing `planning-docs.md`: a plan
+that creates something that GROWS names its budget, owner and retirement rule *before* the first
+write, and this is the first story with a repeating writer — 48 sites, every one reachable on every
+round. So `ServerNotices.Append` rolls the live file to `server-notices.1.jsonl` at **128 MB**, two
+generations, making 256 MB a hard maximum rather than a trigger. A roll that loses a race to another
+server on the same NAS is not an error: the record lands in whichever file is live.
+
+**A ceiling that yields is not one.** The first version rolled best-effort and appended regardless, so
+a file at 128 MB whose rename kept failing — a locked archive, a denied replacement — would have grown
+without limit while the ceiling said otherwise (codex). `Append` now returns `false` instead: the
+notice is lost and the writer says so. And the size check itself cannot throw: `FileInfo.Exists` is a
+snapshot and `Length` reads it, so a neighbour deleting the file between the two throws, which on a
+shared NAS is a Tuesday — an unreadable length answers zero rather than losing a notice for a reason
+that has nothing to do with size.
+
+**What bounds a record is the redactor, and the queue needed the same bound earlier.**
+`Redaction.SafeText` cuts every string field to `TitleLimit` (1000) when the LINE is written, which is
+what makes §7's ~10 KB worst case a fact — a megabyte of refusal sentence produces a line under 10 KB,
+asserted on the file's bytes rather than read from the limit. But a notice sits in the writer's queue
+until then, so 256 queued refusals each holding a megabyte of sentence is 256 MB of process held
+because a share stopped answering: the title is cut to the same limit where the record is BUILT
+(CodeRabbit, on the pull request). The cut there is the plain prefix and nothing else — the redaction,
+the control characters and the suffix still belong to the serialiser, so there is one rule about what
+a written field is.
+
+**Both wrappers forward their own caller.** `PanelService.Refused` adds a log line and then calls
+`Error`; `RunStageAsync` is the body of all three rounds. Without `[CallerMemberName]` on each of them
+every document refusal is written down as `Refused` and every stage refusal as `RunStageAsync` — one
+collapsed row apiece, which is the thing the subject was introduced to prevent. (CodeRabbit, on the
+pull request.)
 
 ## The spending ledger
 

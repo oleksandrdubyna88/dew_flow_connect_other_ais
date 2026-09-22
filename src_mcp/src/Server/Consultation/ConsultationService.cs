@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using CoaiMcp.Core.Consultation;
 using CoaiMcp.Core.Context;
@@ -840,5 +841,17 @@ public sealed class ConsultationService(
     private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) => JsonSerializer.Serialize(value, type);
 
     /// <summary>A refusal, through the ONE place the wire shape is built. See <see cref="Refusal"/>.</summary>
-    private static string Error(string sentence) => Refusal.Answer(sentence);
+    /// <remarks>
+    /// <para>It used to build its own <c>ErrorAnswer</c>, and so did the other service — two
+    /// boundaries for one promise. Story 2.1 made it one; story 2.2 writes the notice there, so this
+    /// is a two-line wrapper in front of the instrumented point rather than a road past it.</para>
+    /// <para><b>It is an instance method and takes a caller name, and neither cost a call site.</b>
+    /// The logger is what says a notice was LOST — <c>Append</c> answers false for anything the disk
+    /// gave, and a run where that happens otherwise looks exactly like one where it did not. The
+    /// caller name becomes the notice's <c>subject</c>: the extension keys repeats on
+    /// <c>(code, subject)</c>, so one <c>refused</c> code for every site would collapse every reason
+    /// into a single row. The compiler fills it at each site, so nothing below changed.</para>
+    /// </remarks>
+    private string Error(string sentence, [CallerMemberName] string from = "") =>
+        Refusal.Answer(sentence, log, from);
 }

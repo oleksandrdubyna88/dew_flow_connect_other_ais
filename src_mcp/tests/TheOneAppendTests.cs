@@ -103,8 +103,16 @@ public sealed class TheOneAppendTests
             .Select(method => $"{method.DeclaringType!.Name}.{method.Name}")
             .ToList();
 
-        answering.Should().BeEquivalentTo(
-            [$"{nameof(PanelSettings)}.{nameof(PanelSettings.DataDirectoryFor)}", $"{nameof(SettingsFile)}.{nameof(SettingsFile.DataDirFrom)}"]);
+        // Three members answer the type and exactly one MINTS it. `SettingsFile.DataDirFrom` and
+        // `Refusal.Where` both call `PanelSettings.DataDirectoryFor` and return what it gives — what
+        // this census exists to catch is a second IMPLEMENTATION, which is how those two functions
+        // came to disagree in the first place, not a second caller. `Refusal.Where` arrived with
+        // story 2.2 (a refusal must know where to write its notice) and this test is what made that
+        // a decision rather than a drift: it went red naming the new member on its first run.
+        answering.Should().BeEquivalentTo([
+            $"{nameof(PanelSettings)}.{nameof(PanelSettings.DataDirectoryFor)}",
+            $"{nameof(SettingsFile)}.{nameof(SettingsFile.DataDirFrom)}",
+            $"{nameof(Refusal)}.Where"]);
     }
 
     [Fact]

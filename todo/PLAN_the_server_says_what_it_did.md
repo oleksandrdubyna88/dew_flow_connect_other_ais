@@ -2,11 +2,11 @@
 
 > Status: **EPIC 1 IMPLEMENTED, 2026-09-21; story 2.1 implemented, 2026-09-21; the rest of epics 2
 > and 3 open.** Stories 1.1 (the credential list), 1.2 (the notice line), 1.3 (the path) and 1.4 (the
-> writer, and the append it had to fix) have shipped, and 2.1 has bounded the population 2.2 is about
-> to make a promise about. What remains is the instrumentation itself — **the ONE refusal road**
-> (2.2: `Refusal.Answer`, which `PanelService.Error` and `ConsultationService.Error` are the two
-> CALLERS of, not three roads as this plan first said), the reviewer and startup notices (2.3),
-> the live seam leg (2.4) — and the deaths (3.1, 3.2).
+> writer, and the append it had to fix) have shipped; 2.1 bounded the population, and **2.2 has
+> instrumented it** — every refusal this server returns now leaves a line, written at the ONE road
+> (`Refusal.Answer`, which `PanelService.Error` and `ConsultationService.Error` are the two CALLERS
+> of, not three roads as this plan first said). What remains is the reviewer and startup notices
+> (2.3), the live seam leg (2.4) — and the deaths (3.1, 3.2).
 > Scope: `src_mcp` — a notice record and its serialiser, the append, the instrumentation sites, a
 > run-start marker, and the `try/catch/finally` that `Program.cs` has never had.
 >
@@ -38,7 +38,8 @@ own ledger — [notificationsGlance.ts:57](../src_vs_code/src/notificationsGlanc
 [notificationsSnapshot.ts:70](../src_vs_code/src/notificationsSnapshot.ts). The panel section, the
 page, the tab strip, the unread watermark and the derived count all handle its rows.
 
-Nothing writes it. Every one of those surfaces reports on half the product.
+Nothing wrote it, and every one of those surfaces reported on half the product — until story 2.2,
+2026-09-21, which instrumented the refusal road. The table below is the symptom AS IT WAS.
 
 | What happens | Where it is recorded today |
 |---|---|
@@ -114,7 +115,10 @@ survives a separator difference.
 
 Every write is best-effort: caught, counted, never thrown. A refusal that fails to be written is
 still returned to the caller. That is why the instrumentation goes **inside** the two `Error` helpers
-rather than at their 53 call sites.
+rather than at their 53 call sites — and story 2.1 then found that both helpers reach ONE boundary,
+`Refusal.Answer`, so 2.2 instruments a single point rather than two. Best-effort also turned out to
+mean NOT WAITING: the write is handed to one thread behind a bounded queue, because a 2 s budget on a
+stalled share still keeps a pool worker forever (2.2's code round, twelve findings).
 
 Three reviewers asked what happens when two processes append at once. The answer is not a new
 mechanism — it is the bargain [jsonlLedger.ts](../src_vs_code/src/jsonlLedger.ts) already documents,
@@ -178,10 +182,20 @@ more: `detail` alone may be 4096, and several other fields 1000 each.
 | **Worst case the serialiser permits** | ~10 KB | **1.1 GB/year** |
 
 So the bound is stated as a rule rather than an average: the typical figure is what this will do, and
-the worst case is what it *could* do, which is why the ceiling is named now. **No rotation and no
-sampling ship here** — but the trigger is written down: if the file passes **256 MB**, the roll-up is
-built before anything else is added to this plan's family. The owner is whoever next touches this
-file, and the DoD of that work is the retention job, not another measurement.
+the worst case is what it *could* do, which is why the ceiling is named now.
+
+> **CORRECTED by story 2.2, 2026-09-21.** This section said *"no rotation and no sampling ship here"*
+> and left 256 MB as a trigger for a roll-up whoever touched the file next would build. Story 2.2's
+> plan round refused that on the convention, and was right to:
+> `.agents/conventions/common/planning-docs.md` requires a plan that creates something that GROWS to
+> name its budget, its owner and its retirement rule **before the first write**, and 2.2 is the first
+> story with a repeating writer — 48 refusal sites, every one reachable on every round. So the
+> retirement rule shipped with it: `ServerNotices.Append` rolls the live file to
+> `server-notices.1.jsonl` at **128 MB**, two generations, which makes 256 MB a hard MAXIMUM for the
+> pair instead of a trigger for unscheduled work. The per-record figure is a fact rather than an
+> estimate now as well: `Redaction.SafeText` cuts every string field to `TitleLimit`, and
+> `TheWorstCaseLine_IsWithinTheDocumentedCeiling` asserts a megabyte of refusal sentence produces a
+> line under 10 KB, measured on the file's bytes.
 
 ### 8. Coverage is enumerated mechanically, not promised *(round)*
 
@@ -295,7 +309,9 @@ Every item RED first, with its failure message recorded, and each guard broken t
 
 ## What this plan deliberately does not do
 
-- **No rotation and no sampling** — §7 names the trigger and the owner instead.
+- ~~**No rotation and no sampling**~~ — **shipped with 2.2** instead, at its plan round's insistence:
+  the live file rolls to `server-notices.1.jsonl` at 128 MB, two generations, so §7's 256 MB is a hard
+  maximum rather than a trigger. See the correction in §7.
 - **No new page, panel section or count.** S1–S5 shipped all of it and already handles these rows.
 - **It does not touch `src_server`** — that is
   [PLAN_refusals_that_explain_themselves.md](PLAN_refusals_that_explain_themselves.md).
@@ -331,7 +347,7 @@ because this project's gate holds one session per repo+branch and closes it when
 | | Story | Depends on | Model |
 |---|---|---|---|
 | ~~2.1~~ | ~~Every refusal road and every reviewer ending is counted, and the count only falls~~ — **shipped 2026-09-21** as a BOUNDARY rather than a count (PR #449): `Refusal.Answer` is the one place an `ErrorAnswer` is built, and `shared/refusal-sites.json` carries the numbers | — | Opus |
-| 2.2 | Every refusal returned to the calling AI is written down, inside the helpers that return it | 1.4, 2.1 | Opus |
+| ~~2.2~~ | ~~Every refusal returned to the calling AI is written down~~ — **shipped 2026-09-21**: written at `Refusal.Answer`, handed to ONE writer thread behind a bounded queue so the refusal waits for nothing, `subject` from `[CallerMemberName]`, and the file's ceiling (§7) ships with it rather than as a trigger | 1.4, 2.1 | Opus |
 | 2.3 | A reviewer that fails, and a setting this build cannot read, reach the file the page reads | 2.2 | Opus |
 | 2.4 | A real refusal over stdio lands with its secret taken out — asserted on the bytes | 2.2 | Opus |
 
@@ -395,12 +411,14 @@ Six corrections, all verified in the repository before they were written down:
 
 ### Costs accepted with open eyes
 
-- **Every panel refusal gets one `code`.** Instrumenting inside a `static Error(sentence)` means the
-  helper knows only the sentence, so all 27 panel refusals share `code: refused` with the sentence as
-  `title`, and the page groups them into one row — the opposite of what the extension's per-site
-  `code` literal was designed for. The alternative is `Error(code, sentence)` at 51 call sites, which
-  this plan chose not to do. If the grouping proves useless, a follow-up adds the literals and 2.1's
-  census is what will hold it to completeness.
+- **Every panel refusal gets one `code`** — but not one ROW. Instrumenting inside `Error(sentence)`
+  means the helper knows only the sentence, so every panel refusal shares `code: refused` with the
+  sentence as `title`, and the alternative — `Error(code, sentence)` at 48 call sites — is one this
+  plan declined in writing. **Story 2.2's plan round found the middle**: the extension keys repeats on
+  `(code, subject)`, and `[CallerMemberName]` fills the subject with the calling member at every site
+  for free, so the reasons separate by the method that refused. What remains accepted is coarser than
+  a per-site literal — two refusal branches in one method still share a row, and a rename splits the
+  history — and 2.1's census is what will hold a follow-up to completeness if that proves too coarse.
 - **`Describe` is not edited.** It lives in `runners` and is a pure sentence; instrumenting it would
   make that assembly know about the ledger. 2.3 writes at `LiveRound.Report`, where the outcome is
   OBSERVED, and uses `Describe` for the title.

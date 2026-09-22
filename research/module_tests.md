@@ -1582,6 +1582,47 @@ the script took the first two and compared a pair nobody asked about. Counting t
 is meant in every reading. The red test hands it three files that all EXIST, so the refusal cannot
 come from a missing one; a first draft passed for exactly that wrong reason.
 
+## A refusal that cannot be written must not cost the refusal (2026-09-21, S8 story 2.2)
+
+`TheRefusalsAreWrittenDownTests` — thirteen cases, and the interesting half is not that a line lands
+but that FOUR of them break the write on purpose: a resolver that throws, a writer that throws, a
+writer that answers `false`, and a writer that never returns. The plan round put five findings on one
+sentence of the plan, from all three providers, and every one was right about the same gap — the
+pseudocode resolved the data directory outside the failure boundary, so a misconfigured
+`COAI_DATA_DIR` would have thrown past the return and the calling AI would have received nothing.
+
+**Teeth, measured.** Narrowing the boundary's `catch` from `Exception` to `DivideByZeroException`
+turned two of them red with the exception escaping as an `AggregateException`; removing the time budget
+made the fourth **hang** — `0 completed, 0 failed | active: AWriterThatNeverReturns…` — which is the
+symptom codex described, not a proxy for it. One plant did NOT work and is worth recording: an
+`if (true) … else if (false)` version failed to COMPILE, the build stopped, and the suite then ran the
+previous executable and reported thirteen green. A plant that does not build is a plant that proves
+nothing, and the green run looks identical to a real one.
+
+**And the code round replaced what those tests were testing.** Twelve findings said the 2 s budget was
+the wrong shape — a wait only stops waiting, the pool worker stays blocked — so the timeout test became
+`AWriterThatNeverReturns_DoesNotDelayTheRefusalAtAll`: fifty refusals against a writer that never
+returns, asserted under two seconds. Two more arrived with the queue: one that a full queue answers
+`false` rather than blocking (the first channel used `DropWrite`, which discards the notice and answers
+TRUE — the silent loss the whole design is against, and the test caught it: *"Expected offered to be
+less than 512 … but found 512"*), and one that a file at its ceiling whose archive cannot be written
+REFUSES to grow. That last one uses a DIRECTORY in the archive's place rather than a locked file,
+because only Windows refuses to rename over an open handle and the suite runs on ubuntu.
+
+**The seams are parameters, not hooks** — the directory and the writer are arguments, for the reason
+story 1.4 recorded: xUnit runs test classes in parallel and a static hook fires inside somebody
+else's call. `COAI_DATA_DIR` is process-global, so a test that set it would be that hook wearing a
+different hat — which is also why the `[CallerMemberName]` forwarding is asserted on the SIGNATURES
+of every hop (`Error`, `Refused`, `RunStageAsync`, `Answer`) rather than by driving the service: the
+overload that fills the subject resolves its directory from that variable. Removing the attribute
+from `Refused` turns that theory red naming it. The live leg is story 2.4.
+
+**And the census caught the new road on its first run.** `TheOneAppendTests` asks the ASSEMBLY which
+members answer `ResolvedDataDir`; `Refusal.Where` made three, and the test went red naming it. It is
+a pass-through to the one resolver, like `SettingsFile.DataDirFrom` beside it — what that census
+exists to catch is a second IMPLEMENTATION — so the list grew by one with the reason written down,
+which is the difference between a decision and a drift.
+
 ## One scanner, two censuses (2026-09-21, S8 story 2.1)
 
 `ProductionSources` is the source scanner both censuses share — `TheOneAppendTests` (one append) and

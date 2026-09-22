@@ -1,4 +1,7 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
+using CoaiMcp.Core.Notices;
+using CoaiMcp.ServiceDefaults;
 
 namespace CoaiMcp.Server;
 
@@ -31,16 +34,40 @@ internal static class Refusal
 {
     /// <summary>The sentence, as the answer a calling AI receives instead of a review.</summary>
     /// <remarks>
-    /// The refusal is BUILT and then written, on two lines rather than one nested expression, because
-    /// the point between them is where story 2.2 appends the notice: a refusal exists there, and has
-    /// not yet left. The code round asked for that seam. It is a local and not a second method on
-    /// purpose — an <c>Of(string)</c> nobody calls would be an uninhabited member today and a worse
-    /// hook tomorrow, since what 2.2 needs is the moment, not another road to the same record.
+    /// <para>The refusal is BUILT and then written, on two lines rather than one nested expression,
+    /// because the point between them is where story 2.2 records the notice: a refusal exists there,
+    /// and has not yet left. The first code round asked for that seam.</para>
+    /// <para><b>The recording neither throws nor waits.</b> It hands the notice to one writer thread
+    /// and returns — no resolve, no I/O, no lock on this path — which is what twelve findings of the
+    /// second code round were about: a wait only stops WAITING, so a wedged share kept a thread-pool
+    /// worker forever and every refusal cost two threads.</para>
     /// </remarks>
-    internal static string Answer(string sentence)
+    internal static string Answer(string sentence, Serilog.ILogger log, [CallerMemberName] string from = "") =>
+        Answer(sentence, log, from, NoticeWriter.Shared, Where);
+
+    /// <summary>
+    /// The same, with the writer and the resolver supplied — the seam every test drives.
+    /// </summary>
+    /// <remarks>
+    /// Parameters rather than a static hook, for the reason story 1.4 recorded: xUnit runs test classes
+    /// in parallel and a hook left set fires inside somebody else's call. <c>COAI_DATA_DIR</c> is
+    /// process-global, so a test that set it would be that hook wearing a different hat.
+    /// </remarks>
+    internal static string Answer(
+        string sentence,
+        Serilog.ILogger log,
+        string from,
+        NoticeWriter writer,
+        Func<ResolvedDataDir> where)
     {
         var refusal = new ErrorAnswer(sentence);
 
+        RefusalNotices.Record(sentence, from, log, writer, where);
+
         return JsonSerializer.Serialize(refusal, ServerJsonContext.Default.ErrorAnswer);
     }
+
+    /// <summary>Where this side's data directory is, asked of the ONE resolver.</summary>
+    private static ResolvedDataDir Where() =>
+        PanelSettings.DataDirectoryFor(Environment.GetEnvironmentVariable);
 }
