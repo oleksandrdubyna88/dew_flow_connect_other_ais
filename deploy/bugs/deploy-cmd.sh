@@ -68,6 +68,16 @@ case "$VERB" in
     # The helper is `/usr/local/sbin/coai-bugs-install-env`, installed from `install-env.sh` and
     # owned by root — never executed out of this checkout, which the deploy account can write.
     # stdin passes straight through; nothing here reads the secret. (CodeRabbit, #328.)
+    #
+    # AND IT IS ASKED WHAT IT UNDERSTANDS FIRST. The helper is the one file here that a deploy does
+    # not update, so it can be older than this wrapper — and an older one reads only the first line
+    # of what it is sent, discarding the administrator list in silence and reporting success. That
+    # is not hypothetical: it is what this host did on 2026-09-22, and the 401s were found a whole
+    # deploy later by `admin-check`. The check runs BEFORE the secret is sent and before anything is
+    # written, and it never repairs — a script that reinstalled a root helper would hand the deploy
+    # account the escalation the copy exists to prevent. See `helper-protocol.sh`.
+    sh "$SRC/deploy/bugs/helper-protocol.sh" /usr/local/sbin/coai-bugs-install-env || exit 1
+
     exec sudo -n /usr/local/sbin/coai-bugs-install-env
     ;;
 
