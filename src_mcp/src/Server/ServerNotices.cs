@@ -1,3 +1,4 @@
+using System.Text;
 using CoaiMcp.Core.Notices;
 using CoaiMcp.ServiceDefaults;
 
@@ -7,12 +8,12 @@ namespace CoaiMcp.Server;
 /// Where this binary writes down what it refused, what failed, and that it died.
 /// </summary>
 /// <remarks>
-/// <para><b>The reader shipped first, and has had nothing to read.</b>
-/// <c>server-notices.jsonl</c> has been named in <c>notificationsFile.ts</c> since 2026-09-17, its
-/// path derived by <c>serverNoticesPath</c>, and three modules already merge it into the panel
-/// section, the page and the derived count. Nothing writes it, so every one of those surfaces
-/// reports on half the product. This class is the other half; story 1.3 is its PATH, and the writer
-/// arrives with story 1.4.</para>
+/// <para><b>The reader shipped first, and had nothing to read for four days.</b>
+/// <c>server-notices.jsonl</c> was named in <c>notificationsFile.ts</c> on 2026-09-17, its path
+/// derived by <c>serverNoticesPath</c>, and three modules already merged it into the panel section,
+/// the page and the derived count — while nothing wrote it, so every one of those surfaces reported
+/// on half the product. This class is the other half: story 1.3 gave it a PATH, story 1.4 the append,
+/// and story 2.2 the first caller that is not a test.</para>
 /// <para><b>The directory is ASKED for, never composed.</b>
 /// <see cref="SettingsFile.DataDirFrom"/> is the one rule — since 2026-09-18 it IS
 /// <c>PanelSettings.DataDirectoryFor</c>, with the side applied and the trim applied — and the two
@@ -82,15 +83,18 @@ public static class ServerNotices
     /// <para><b>The directory is the TYPE.</b> <see cref="ResolvedDataDir"/> is minted by the one
     /// resolver, so <c>PanelSettings.DataRootFor</c> — the directory BEFORE the side, the one thing
     /// here that looks like a data directory and is not one — cannot be handed to this.</para>
-    /// <para><b>No call sites yet, by design.</b> Story 2.2 instruments the three refusal roads once
-    /// story 2.1's census has bounded them; until then the only caller is a test, and no published
-    /// binary can be made to write a real notice. That is story 2.4's live seam leg.</para>
+    /// <para><b>Its caller since story 2.2 is <see cref="NoticeWriter"/></b>, on one thread behind a
+    /// bounded queue, and every refusal this server returns reaches it — there turned out to be ONE
+    /// road rather than the three this was written expecting, which is what story 2.1's census
+    /// established. What is still owed is story 2.4's live seam leg: a real refusal over stdio,
+    /// asserted on the bytes that land.</para>
     /// </remarks>
     public static bool Append(ResolvedDataDir dir, ServerNotice notice, long rollAt = RollAt)
     {
         var path = PathFor(dir);
+        var line = ServerNoticeLine.Of(notice);
 
-        return Room(path, rollAt) && JsonlLedger.AppendLine(path, ServerNoticeLine.Of(notice));
+        return Room(path, rollAt, Encoding.UTF8.GetByteCount(line)) && JsonlLedger.AppendLine(path, line);
     }
 
     /// <summary>
@@ -115,7 +119,17 @@ public static class ServerNotices
     /// which is the right answer either way. What must never happen is a refusal failing because a
     /// rename did not.</para>
     /// </remarks>
-    private static bool Room(string path, long rollAt) => Size(path) < rollAt || Rolled(path);
+    /// <summary>
+    /// Whether this record fits under the ceiling, counting the record.
+    /// </summary>
+    /// <remarks>
+    /// The first version compared the file's size BEFORE the append, so a file one byte under the
+    /// ceiling still took a whole record and the ceiling was really "the ceiling plus one record".
+    /// CodeRabbit found it on the pull request. The line is serialised ONCE and its bytes — the
+    /// newline included, because that is what lands — are what the comparison is about.
+    /// </remarks>
+    private static bool Room(string path, long rollAt, int adding) =>
+        Size(path) + adding <= rollAt || Rolled(path);
 
     /// <summary>
     /// How big the live file is, and never an exception.

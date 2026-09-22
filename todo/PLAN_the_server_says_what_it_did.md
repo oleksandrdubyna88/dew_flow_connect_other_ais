@@ -38,7 +38,8 @@ own ledger — [notificationsGlance.ts:57](../src_vs_code/src/notificationsGlanc
 [notificationsSnapshot.ts:70](../src_vs_code/src/notificationsSnapshot.ts). The panel section, the
 page, the tab strip, the unread watermark and the derived count all handle its rows.
 
-Nothing writes it. Every one of those surfaces reports on half the product.
+Nothing wrote it, and every one of those surfaces reported on half the product — until story 2.2,
+2026-09-21, which instrumented the refusal road. The table below is the symptom AS IT WAS.
 
 | What happens | Where it is recorded today |
 |---|---|
@@ -114,7 +115,10 @@ survives a separator difference.
 
 Every write is best-effort: caught, counted, never thrown. A refusal that fails to be written is
 still returned to the caller. That is why the instrumentation goes **inside** the two `Error` helpers
-rather than at their 53 call sites.
+rather than at their 53 call sites — and story 2.1 then found that both helpers reach ONE boundary,
+`Refusal.Answer`, so 2.2 instruments a single point rather than two. Best-effort also turned out to
+mean NOT WAITING: the write is handed to one thread behind a bounded queue, because a 2 s budget on a
+stalled share still keeps a pool worker forever (2.2's code round, twelve findings).
 
 Three reviewers asked what happens when two processes append at once. The answer is not a new
 mechanism — it is the bargain [jsonlLedger.ts](../src_vs_code/src/jsonlLedger.ts) already documents,
@@ -305,7 +309,9 @@ Every item RED first, with its failure message recorded, and each guard broken t
 
 ## What this plan deliberately does not do
 
-- **No rotation and no sampling** — §7 names the trigger and the owner instead.
+- ~~**No rotation and no sampling**~~ — **shipped with 2.2** instead, at its plan round's insistence:
+  the live file rolls to `server-notices.1.jsonl` at 128 MB, two generations, so §7's 256 MB is a hard
+  maximum rather than a trigger. See the correction in §7.
 - **No new page, panel section or count.** S1–S5 shipped all of it and already handles these rows.
 - **It does not touch `src_server`** — that is
   [PLAN_refusals_that_explain_themselves.md](PLAN_refusals_that_explain_themselves.md).
@@ -405,12 +411,14 @@ Six corrections, all verified in the repository before they were written down:
 
 ### Costs accepted with open eyes
 
-- **Every panel refusal gets one `code`.** Instrumenting inside a `static Error(sentence)` means the
-  helper knows only the sentence, so all 27 panel refusals share `code: refused` with the sentence as
-  `title`, and the page groups them into one row — the opposite of what the extension's per-site
-  `code` literal was designed for. The alternative is `Error(code, sentence)` at 51 call sites, which
-  this plan chose not to do. If the grouping proves useless, a follow-up adds the literals and 2.1's
-  census is what will hold it to completeness.
+- **Every panel refusal gets one `code`** — but not one ROW. Instrumenting inside `Error(sentence)`
+  means the helper knows only the sentence, so every panel refusal shares `code: refused` with the
+  sentence as `title`, and the alternative — `Error(code, sentence)` at 48 call sites — is one this
+  plan declined in writing. **Story 2.2's plan round found the middle**: the extension keys repeats on
+  `(code, subject)`, and `[CallerMemberName]` fills the subject with the calling member at every site
+  for free, so the reasons separate by the method that refused. What remains accepted is coarser than
+  a per-site literal — two refusal branches in one method still share a row, and a rename splits the
+  history — and 2.1's census is what will hold a follow-up to completeness if that proves too coarse.
 - **`Describe` is not edited.** It lives in `runners` and is a pure sentence; instrumenting it would
   make that assembly know about the ledger. 2.3 writes at `LiveRound.Report`, where the outcome is
   OBSERVED, and uses `Describe` for the title.

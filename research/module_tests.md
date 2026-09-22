@@ -1609,10 +1609,13 @@ less than 512 … but found 512"*), and one that a file at its ceiling whose arc
 REFUSES to grow. That last one uses a DIRECTORY in the archive's place rather than a locked file,
 because only Windows refuses to rename over an open handle and the suite runs on ubuntu.
 
-**The seams are parameters, not hooks** — the directory, the writer and the budget are all arguments
-with defaults, for the reason story 1.4 recorded: xUnit runs test classes in parallel and a static
-hook fires inside somebody else's call. `COAI_DATA_DIR` is process-global, so a test that set it would
-be that hook wearing a different hat.
+**The seams are parameters, not hooks** — the directory and the writer are arguments, for the reason
+story 1.4 recorded: xUnit runs test classes in parallel and a static hook fires inside somebody
+else's call. `COAI_DATA_DIR` is process-global, so a test that set it would be that hook wearing a
+different hat — which is also why the `[CallerMemberName]` forwarding is asserted on the SIGNATURES
+of every hop (`Error`, `Refused`, `RunStageAsync`, `Answer`) rather than by driving the service: the
+overload that fills the subject resolves its directory from that variable. Removing the attribute
+from `Refused` turns that theory red naming it. The live leg is story 2.4.
 
 **And the census caught the new road on its first run.** `TheOneAppendTests` asks the ASSEMBLY which
 members answer `ResolvedDataDir`; `Refusal.Where` made three, and the test went red naming it. It is

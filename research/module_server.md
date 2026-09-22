@@ -886,13 +886,14 @@ because the panel saves instantly and says so. Environment variables still outra
 
 ## Server notices — what this binary writes down (S8, from 2026-09-21)
 
-`server-notices.jsonl` is read by the extension and has been since 2026-09-17. **Nothing writes it
-yet** — the writer is story 1.4 of
-[PLAN_the_server_says_what_it_did.md](../todo/PLAN_the_server_says_what_it_did.md) — and what has
-landed so far is what both halves must agree on before either writes a byte. A reviewer was right to
-pick the present tense out of the first draft of this sentence: `knowledge-base.md` says a sentence
-describing something that does not run is a bug in the file, and *"this is the half that writes it"*
-described a class that did not exist.
+`server-notices.jsonl` is read by the extension and has been since 2026-09-17. **It had nothing to
+read until 2026-09-21**, when story 2.2 of
+[PLAN_the_server_says_what_it_did.md](../todo/PLAN_the_server_says_what_it_did.md) instrumented the
+refusal road; what landed before that — the line, the path, the append — is what both halves had to
+agree on before either wrote a byte. The tense of this paragraph has been corrected twice now, in
+both directions, which is what `knowledge-base.md` means when it says a sentence describing something
+that does not run is a bug in the file: *"this is the half that writes it"* once described a class
+that did not exist, and *"nothing writes it yet"* then outlived the writer by one story.
 
 **One credential word list, embedded, failing closed.** Both halves REDACT before anything reaches
 disk, so they must redact on the same words — two redactors disagreeing about whether `sig` names a
@@ -1180,9 +1181,10 @@ one production spelling, and asks the ASSEMBLY which members answer `ResolvedDat
 target-typed `new(` cannot hide from. Each scan has a companion asserting it still finds its known
 instances, so a reformat cannot turn a guard into a pass.
 
-**No call sites, by design.** The only caller is a test. Story 2.2 instruments the three refusal
-roads once 2.1's census has bounded them, and story 2.4 is the live leg: a real refusal over stdio,
-read back with the extension's own parser, asserted on the persisted bytes.
+**Its caller since story 2.2 is `NoticeWriter`**, on one thread behind a bounded queue, and every
+refusal this server returns reaches it — by ONE road rather than the three this section once
+expected, which is what 2.1's census established. Story 2.4 is still owed: the live leg, a real
+refusal over stdio, read back with the extension's own parser and asserted on the persisted bytes.
 
 ## Every refusal leaves by ONE road, and a census says so (S8 story 2.1, 2026-09-21)
 

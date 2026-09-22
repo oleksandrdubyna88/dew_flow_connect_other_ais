@@ -260,21 +260,33 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
                 "two reasons are two keys, so the page shows two rows");
     }
 
-    [Fact]
-    public void TheCallerNeedNotNameItself()
+    [Theory]
+    [InlineData(typeof(Refusal), "Answer", "the one place a refusal becomes an answer")]
+    [InlineData(typeof(PanelService), "Error", "the panel's own helper, in front of 25 refusals")]
+    [InlineData(typeof(PanelService), "Refused", "the document wrapper that adds a log line")]
+    [InlineData(typeof(PanelService), "RunStageAsync", "the body of all three rounds")]
+    [InlineData(typeof(ConsultationService), "Error", "the consultation helper, in front of 23")]
+    public void EveryWrapperOnTheRefusalRoad_ForwardsItsOwnCaller(Type owner, string method, string why)
     {
         // What makes the subject free: the compiler fills it at every one of the 48 call sites, so not
-        // one of them had to change. Asked of the SIGNATURE rather than by calling it, because the
-        // overload that fills it writes to the real data directory — which no test may touch.
-        var filled = typeof(Refusal)
-            .GetMethod(nameof(Refusal.Answer), BindingFlags.NonPublic | BindingFlags.Static,
-                [typeof(string), typeof(Serilog.ILogger), typeof(string)])!
-            .GetParameters()[2];
+        // one of them had to change. It only works if EVERY hop declares it — CodeRabbit found two
+        // that did not, and without them every document refusal is written down as `Refused` and every
+        // stage refusal as `RunStageAsync`, which is the single collapsed row the subject exists to
+        // prevent.
+        //
+        // Asked of the SIGNATURES rather than by driving the service, because the overload that fills
+        // the subject resolves its directory from `COAI_DATA_DIR` — a process-global that a parallel
+        // suite must not set. The live leg over stdio is story 2.4, which the plan owes and names.
+        var from = owner
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance
+                | BindingFlags.Static | BindingFlags.DeclaredOnly)
+            .Where(candidate => candidate.Name == method)
+            .SelectMany(candidate => candidate.GetParameters())
+            .Where(parameter => parameter.GetCustomAttribute<CallerMemberNameAttribute>() is not null)
+            .ToList();
 
-        filled.Name.Should().Be("from");
-        filled.GetCustomAttribute<CallerMemberNameAttribute>().Should().NotBeNull(
-            "without it every site would have to pass its own name, which is the 48-call-site change "
-            + "the parent plan declined in writing");
+        from.Should().ContainSingle(why + " must forward the member that called IT, not its own name")
+            .Which.Name.Should().Be("from");
     }
 
     [Fact]
@@ -291,6 +303,25 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
         File.Exists(Path.Combine(_dir, ServerNotices.Archive)).Should().BeTrue(
             "the old generation is kept, not deleted");
         Lines().Should().ContainSingle("and the new one starts with the record that crossed the line");
+    }
+
+    [Fact]
+    public void AFileJustUnderTheCeiling_IsRolledBeforeTheRecordPushesItOver()
+    {
+        // CodeRabbit on the pull request: the first version compared the file's size BEFORE the
+        // append, so a file one byte under the ceiling still took a whole record and the ceiling was
+        // really "the ceiling plus one record". The line is serialised once and its bytes — the
+        // newline included, because that is what lands — are counted.
+        var record = ServerNoticeLine.Of(Notice("first"));
+        var ceiling = record.Length + 10;
+        File.WriteAllText(NoticesFile, new string('x', ceiling - 1) + "\n");
+
+        ServerNotices.Append(Data, Notice("second"), rollAt: ceiling).Should().BeTrue();
+
+        File.Exists(Path.Combine(_dir, ServerNotices.Archive)).Should().BeTrue(
+            "one byte under the ceiling plus a whole record is over it");
+        new FileInfo(NoticesFile).Length.Should().BeLessThanOrEqualTo(ceiling,
+            "and what is live after the roll is the record alone");
     }
 
     [Fact]
