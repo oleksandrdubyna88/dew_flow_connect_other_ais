@@ -100,7 +100,7 @@ public sealed class EachSideKeepsItsOwnDataDirectoryTests : IDisposable
 
         var notes = PanelSettings.StorageNotes(Env(("COAI_DATA_DIR", _root), ("COAI_DATA_SIDE", "windows-desktop01")));
 
-        notes.Should().ContainSingle(n => n.Contains("coai.db") && n.Contains(_root),
+        notes.Should().ContainSingle(n => n.Kind == StorageNote.LooseDatabase && n.Place == _root,
             "history left in the old flat layout must not go invisible");
     }
 
@@ -112,7 +112,8 @@ public sealed class EachSideKeepsItsOwnDataDirectoryTests : IDisposable
         var env = Env(("COAI_DATA_DIR", Path.Combine(_root, "probably-a-typo")), ("COAI_DATA_SIDE", "s"));
 
         PanelSettings.StorageNotes(env).Should()
-            .Contain(n => n.Contains(PanelSettings.FromEnvironment(env).DataDir));
+            .Contain(n => n.Kind == StorageNote.NewDirectory
+                          && n.Place == PanelSettings.FromEnvironment(env).DataDir);
     }
 
     /// <summary>

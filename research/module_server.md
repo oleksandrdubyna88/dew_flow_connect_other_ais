@@ -1268,6 +1268,86 @@ lines with `Environment.NewLine` in case a CRLF file left a hidden character in 
 join is the mechanism that makes a wrapped call findable, and the trim that removes indentation
 removes the CR with it. A `\r\n` case was added to the join tests so that rejection rests on a test.
 
+## A run says what it could not read, and what surprised it on the disk (S8 story 2.3.3, 2026-09-22)
+
+Three things were said at startup and said only to Serilog: a legacy settings file this side
+adopted, every setting whose value this build could not use, and what it found on the disk. The
+codes had existed since story 1.2 and nothing wrote them. The plan records the cost once already — a
+configuration that had been applied, read and reloaded correctly looked broken for twenty minutes,
+and the one line that would have ended it was in a file the panel does not read.
+
+**The log lines STAY, and they are the SAME call.** An operator reading a terminal and a person
+reading the panel are different people — the decision `PanelService.Refused` made when it kept its
+warning beside the refusal it returns. The first version had two enumerations side by side, a log
+half in `Program.Said` and a page half in `StartupNotices.Record`, with a structural test holding
+both calls in the file. codex named what that cannot do on the second code round: prove that each
+DIAGNOSTIC reaches both sinks. A note added to one of two loops is visible in the panel and absent
+from the terminal, and the scan stays green. So there is one loop now — `StartupNotices` takes the
+logger, writes the line and offers the notice per item, `Program.Said` is gone, and the guard is
+behavioural: every title written must appear in some log line.
+
+**Each note groups on a subject that says which one it was**, because the extension keys repeats on
+`(code, subject)` and an empty subject collapses every setting there has ever been into one row:
+
+| Note | Subject | Class |
+|---|---|---|
+| `unrecognised-setting` | the environment variable, typed at the source | `stand-down` |
+| `storage-note` | `kind:place` — the kind AND the directory | `stand-down` for a loose database, `outcome` for a new one |
+| `settings-adopted` | this side's settings path, canonical | `outcome` |
+
+**The key is typed where the sentence is BUILT, never parsed back out of it.** All three sources
+already know their variable — `WhyBackoff` and its three siblings hard-code theirs, `catalog.Dropped`
+is rows of `COAI_ROLES`, `consultants.Complaints` is `COAI_CONSULTANTS` — so `UnrecognisedSetting`
+carries `(Key, Sentence)` and `PanelSettings.Unrecognised` becomes the projection. It stays a
+projection because it is **on the wire**: `ProvidersAnswer.Unrecognised` is what `--providers` prints
+and the extension parses.
+
+**A storage note carries its PLACE as well as its kind** (gemini, on the plan round): with the kind
+alone, a machine running two sides reports two loose databases as one row with a count of two and
+the person cannot see which. The place is canonicalised, so one file reached as `C:\data` and
+`C:/data` is one row rather than two.
+
+**Accepted cost, stated rather than discovered:** several refused rows under one key share a row —
+two bad rows of `COAI_ROLES` are two lines with one subject. That is the same bargain story 2.2 took
+for two refusal branches in one method, and a test asserts it so it is written down.
+
+**The settings RELOAD says the same things.** This was written as *owed*, and five findings across
+three vendors on the code round refused to leave it owed — rightly: `PanelServiceHost.Build()` runs
+again whenever the panel writes the settings file, which is whenever a person changes a setting, so
+the likeliest moment for a bad value to appear was the one moment nothing said so. It now logs each
+mismatch and writes it through the same `Noticing`, and an adoption reached on that path goes out
+both ways too.
+
+Two things make it a reload rather than a second startup. The host's **first** build stays silent
+— it is a `Build(bool first)` parameter rather than a field, so the answer cannot be wrong for a
+later build because an earlier one threw, and there is no mutable state to reason about across
+threads (gemini, second code round) —
+because `Program` has already said those notes and a second copy would make every start report each
+mismatch twice — one misconfiguration, a count of two, and nothing that happened twice. And the
+**disk** notes are not re-taken: they come from a survey that stats the data directory, and a
+rebuild that re-ran it would stat a configured NAS on a settings change (issue #115). What a reload
+can newly produce is a value somebody just typed, so `StartupNotices.Unrecognised` is its own method
+and that is the one the host calls.
+
+**Two bounds and a map, from the code rounds.** The SUBJECT is cut at `Redaction.TitleLimit` where
+the record is built, as the title already was — it is a path, and 256 queued notices each holding an
+unbounded one is process held because a share stopped answering; the writer cuts at the same limit,
+so the grouping key is unchanged by moving the cut earlier. A sentence longer than a title keeps its
+remedy in `detail` and ends in an ellipsis, because these sentences put the unbounded VALUE at the
+front and the instruction at the back. The cut itself is **`ServerNotice.Shortened`, one helper for
+every producer**: there were two, and they disagreed — reviewer failures cut plainly while startup
+notes cut with a mark, so the same overflow was legible in one place and silent in the other. The
+reviewer road's `not started: {Reason}` and `unparseable: {Reason}` are the sentences that
+actually reach it, because a stderr tail is already bounded by `BoundedScheduler.Quote`. And the storage class is a MAP (`StartupNotices.ClassByKind`)
+whose unmapped key throws, not a condition with a default: a third kind — a permission refusal, say
+— would otherwise reach the page as a successful `outcome` with nothing failing to say so. A census
+test reads the kinds off `StorageNote` itself, which is what makes that throw unreachable.
+
+**Still owed:** `Canonical` does not fold case, so a person who edits `COAI_DATA_DIR`'s casing
+between restarts gets two rows for one file — traded away because the subject is also what the panel
+DISPLAYS, and resolving the filesystem's true casing is a disk call on a directory that may be an
+unreachable mount.
+
 ## Every reviewer failure is written down, once (S8 story 2.3.2, 2026-09-22)
 
 A reviewer that times out, is rate-limited, exits non-zero, never starts or answers unparseably was

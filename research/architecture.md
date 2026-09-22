@@ -517,7 +517,7 @@ test:parity` exit 1 rather than print a warning. (The sentence here used to say 
 would fail nothing anywhere — true when it was written, and untrue since the harness landed with
 story 1.2. CodeRabbit, 2026-09-22.)
 
-### The server became a PRODUCER of that file (2026-09-22, S8 stories 2.2 and 2.3.2)
+### The server became a PRODUCER of that file (2026-09-22, S8 stories 2.2, 2.3.2 and 2.3.3)
 
 For four days `server-notices.jsonl` was a contract with one side: the extension read it and merged
 it into the panel section, the page and the derived count, and nothing wrote it. Both halves now
@@ -529,7 +529,8 @@ What the server writes, and where it is observed:
 |---|---|---|
 | Every refusal returned to a calling AI | `Refusal.Answer` — the one place an `ErrorAnswer` is built (story 2.1's boundary) | `refused` |
 | Every reviewer that did not answer | `LiveRound.Report`, where the outcome arrives | `reviewer-timed-out`, `reviewer-rate-limited`, `reviewer-exit`, `reviewer-not-started`, `reviewer-unparseable` |
-| A setting this build cannot read, a storage note, an adopted settings file | *(story 2.3.3, not yet built)* | `unrecognised-setting`, `storage-note`, `settings-adopted` |
+| A setting this build cannot read, and a legacy settings file adopted | `Program` at startup, AND `PanelServiceHost.Build` on every settings RELOAD — which is what a person editing the panel causes | `unrecognised-setting`, `settings-adopted` |
+| What it found on the DISK | `Program` at startup only: the survey stats the data directory, and re-running it on a settings change would stat a configured NAS (issue #115) | `storage-note` |
 
 **One road, and it is owned by the host.** `ServeAsync` composes a single `Noticing` — a writer, an
 environment, a log — and hands it to `PanelServiceHost`, which holds it and gives it to every service
@@ -537,6 +538,20 @@ it builds, the rebuild on a settings change included. Refusals and reviewer fail
 instance, so draining or replacing it cannot split the ledger the page reads. The two one-shot CLI
 modes take a silent one: a mode that answers on stdout and exits must not start a writer thread
 nobody drains.
+
+**The startup road writes to both sinks from ONE call.** The notes a run makes about ITSELF — a
+setting it could not read, a database loose in a shared root, a legacy settings file it adopted —
+go to the log AND to the page, because an operator reading a terminal and a person reading the
+panel are different people. One enumeration writes both, rather than a log loop beside a notice
+loop: a diagnostic added to one of two paths reaches one sink and not the other, and a structural
+test can only prove that both paths exist.
+
+**The settings ones are also written on a RELOAD; the disk ones are not.** The host rebuilds
+whenever the panel writes the settings file, which is exactly when a person types a bad value, and
+that was the one moment nothing said anything — so an unrecognised setting and an adoption go out
+again there. The host's first build is silent, because startup has already said those. The STORAGE
+survey stays startup-only and deliberately so: it stats the data directory, and a settings change
+must not stat a configured NAS (issue #115).
 
 **One thread writes, and nothing waits for it.** `NoticeWriter` has a bounded queue of 256 and a
 single writer; a caller offers and returns. A wedged share blocks that one thread and nothing else,
@@ -550,8 +565,10 @@ flowchart LR
     subgraph server["coai-mcp"]
         refusal["Refusal.Answer"]
         round["LiveRound.Report"]
+        startup["StartupNotices · startup + settings reload"]
         noticing["Noticing (host-owned)"]
         writer["NoticeWriter · 1 thread, queue 256"]
+        log[("Serilog")]
     end
     subgraph ext["VS Code extension"]
         own["its own ledger"]
@@ -560,6 +577,8 @@ flowchart LR
     file[("server-notices.jsonl")]
     refusal -- "redacts on write" --> noticing
     round -- "redacts on write" --> noticing
+    startup -- "redacts on write" --> noticing
+    startup -- "and still says it here" --> log
     noticing --> writer --> file
     own --> page
     file --> page

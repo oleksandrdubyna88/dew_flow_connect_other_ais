@@ -77,9 +77,9 @@ internal static class ReviewerNotices
         Source = Source,
         Code = ByType[outcome.GetType()],
         Subject = $"{provider}/{role}",
-        Title = Shorter(ReviewerSummaryFactory.Describe(outcome)),
+        // The shared helper, since story 2.3.3's second code round: this file cut a megabyte of
+        // stderr plainly and `StartupNotices` cut with an ellipsis, so the same overflow was
+        // legible in one place and silent in the other.
+        Title = ServerNotice.Shortened(ReviewerSummaryFactory.Describe(outcome)),
     };
-
-    private static string Shorter(string sentence) =>
-        sentence.Length <= Redaction.TitleLimit ? sentence : sentence[..Redaction.TitleLimit];
 }

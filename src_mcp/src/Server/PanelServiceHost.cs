@@ -57,7 +57,7 @@ public sealed class PanelServiceHost
         _log = log;
         _noticing = noticing;
         _stamp = Stamp();
-        _current = Build();
+        _current = Build(first: true);
     }
 
     /// <summary>The service to serve this call with — rebuilt only when the file actually moved.</summary>
@@ -74,23 +74,62 @@ public sealed class PanelServiceHost
                 }
 
                 _stamp = stamp;
-                _current = Build();
+                _current = Build(first: false);
                 _log.Information("settings reloaded — the panel's file changed on disk");
                 return _current;
             }
         }
     }
 
-    private PanelService Build()
+    /// <param name="first">
+    /// Whether this is the constructor's build. A PARAMETER rather than a field somebody has to
+    /// reason about across threads: the two callers each know which they are, and the answer then
+    /// cannot be wrong for a later build because an earlier one threw. (gemini, second code round.)
+    /// </param>
+    private PanelService Build(bool first)
     {
+        var dataDir = SettingsFile.DataDirFrom(_env).Path;
         var configuration = SettingsFile.Layer(
-            SettingsFile.DataDirFrom(_env).Path,
+            dataDir,
             _env,
             // This rebuild runs on a stamp change rather than at startup, so it is the one place an
-            // adoption could happen with nobody watching. It has a log; it uses it.
-            note => _log.Warning("data directory: {Note}", note));
-        return new PanelService(
-            PanelSettings.FromEnvironment(configuration), _keys, _vaultReadUtc, _launcher, _log, _noticing);
+            // adoption could happen with nobody watching. It has a log and, since story 2.3.3, the
+            // page as well. No flag guards this one: `AdoptRootSettings` yields a sentence only
+            // when it actually MOVED something, so the build after an adoption says nothing.
+            note => StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), _noticing, _log));
+        var settings = PanelSettings.FromEnvironment(configuration);
+        Reloaded(settings, first);
+
+        return new PanelService(settings, _keys, _vaultReadUtc, _launcher, _log, _noticing);
+    }
+
+    /// <summary>
+    /// What a settings RELOAD says about the values it could not use: the same thing startup says.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The hole this closes.</b> Settings used to be reported once, by <c>Program</c>, and
+    /// this rebuild — which runs whenever the panel writes the file, meaning whenever a person
+    /// changes a setting — reported nothing. So the likeliest moment for a bad value to appear was
+    /// the one moment nothing said so, and the person learned it at their next restart. Five
+    /// findings across three vendors on story 2.3.3's code round, which is what turned it from a
+    /// line in the plan's *owed* list into this method.</para>
+    /// <para><b>Why the first build is silent.</b> The constructor builds too, immediately after
+    /// <c>Program</c> has logged and written these same notes. Saying them again there would make
+    /// every single start report each mismatch twice — one misconfiguration, two lines, a count of
+    /// two on the page and nothing that happened twice.</para>
+    /// <para>The log line and the notice are ONE call, not two loops side by side: a diagnostic
+    /// added to one of two paths is visible in the panel and absent from the terminal, or the
+    /// reverse, and a structural test can only prove both paths exist. (codex, second code
+    /// round.)</para>
+    /// <para>The disk notes are deliberately NOT re-taken here; see
+    /// <see cref="StartupNotices.Unrecognised"/>.</para>
+    /// </remarks>
+    private void Reloaded(PanelSettings settings, bool first)
+    {
+        if (!first)
+        {
+            StartupNotices.Unrecognised(settings, _noticing, _log);
+        }
     }
 
     /// <summary>

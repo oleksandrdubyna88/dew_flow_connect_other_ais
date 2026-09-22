@@ -1657,13 +1657,18 @@ internal static class Program
         {
             // The file the extension writes is the base; the client config env overrides it — a
             // variable in the client is more specific than a file any window may rewrite.
+            // Composed here rather than at the host below, because the FIRST thing that writes a
+            // notice is the settings layering on the next line — the adoption of a legacy root
+            // settings file happens before there is a host to own anything.
+            var noticing = Noticing.Through(notices, Environment.GetEnvironmentVariable, log);
+            var dataDir = SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path;
             var configuration = SettingsFile.Layer(
-                SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path,
+                dataDir,
                 Environment.GetEnvironmentVariable,
                 // The adoption of a legacy root settings file is exactly the class of thing the
                 // `data directory:` notes below carry, so it goes out the same way and reads the
-                // same in the log.
-                note => log.Warning("data directory: {Note}", note));
+                // same in the log — AND, since story 2.3.3, onto the page a person actually looks at.
+                note => StartupNotices.Adopted(note, SettingsFile.PathFor(dataDir), noticing, log));
             var settings = PanelSettings.FromEnvironment(configuration);
             // The tracker is what lets a LATER server collect reviewers this one leaves behind if
             // it dies: the timeout kill is performed by the parent, so it cannot run when the
@@ -1682,20 +1687,14 @@ internal static class Program
             // alternative is what actually happened: a configuration that had been applied, read and
             // reloaded correctly looked broken for twenty minutes, and the one thing that would have
             // ended it in a second was this line.
-            foreach (var mismatch in settings.Unrecognised)
-            {
-                log.Warning("{Mismatch}", mismatch);
-            }
-
-            // The same rule for the DATA DIRECTORY, and deliberately here rather than inside the
-            // settings: these two notes are the only ones that have to look at the disk — is there a
-            // database loose in a shared root, is this side's directory new — and a settings record
-            // that stats a configured NAS would make `--version` hang on an unreachable mount rather
-            // than answer. Raised on both code rounds (issue #115).
-            foreach (var note in PanelSettings.StorageNotes(Environment.GetEnvironmentVariable))
-            {
-                log.Warning("data directory: {Note}", note);
-            }
+            //
+            // The STORAGE notes are gathered here and deliberately not inside the settings: they are
+            // the only two that have to look at the disk — is there a database loose in a shared
+            // root, is this side's directory new — and a settings record that stats a configured NAS
+            // would make `--version` hang on an unreachable mount rather than answer. Raised on both
+            // code rounds (issue #115).
+            var storage = PanelSettings.StorageNotes(Environment.GetEnvironmentVariable);
+            StartupNotices.Record(settings, storage, noticing, log);
 
             // The file the panel writes is re-read per call, so a vendor or a threshold changed
             // in the sidebar reaches the NEXT round without restarting the MCP client.
@@ -1704,8 +1703,7 @@ internal static class Program
             // that road is the trap the plan round named: production takes the quiet path while
             // every injected test passes. (gemini and codex, on story 2.3.2's plan round.)
             var host = new PanelServiceHost(
-                Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log,
-                Noticing.Through(notices, Environment.GetEnvironmentVariable, log));
+                Environment.GetEnvironmentVariable, keys, vaultReadUtc, launcher, log, noticing);
             var options = new McpServerOptions
             {
                 ServerInfo = new Implementation

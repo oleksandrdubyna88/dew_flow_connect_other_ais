@@ -1585,6 +1585,51 @@ the script took the first two and compared a pair nobody asked about. Counting t
 is meant in every reading. The red test hands it three files that all EXIST, so the refusal cannot
 come from a missing one; a first draft passed for exactly that wrong reason.
 
+## The startup notes reach the page, each under a subject (2026-09-22, S8 story 2.3.3)
+
+`TheStartupNotesAreWrittenDownTests` — twenty cases, and most of them are about the SUBJECT, because
+that is where this story could have been useless while looking finished: two malformed settings are
+two subjects; two refused rows of one key share one (the accepted cost, asserted); two loose
+databases under different roots are two subjects; one path spelled two ways is one.
+
+**The taxonomy is asserted, not intended** (codex): a new directory emitted as `stand-down`, or a
+loose database as `outcome`, would pass every other case here while the extension shows the wrong
+severity.
+
+**The code round added eight, and four of those are a REAL host.** The settings reload is the case
+a unit test cannot reach: `Hosting()` builds a genuine `PanelServiceHost` over a temp directory,
+writes the settings file the way the panel does, and reads `Current`. That covers the mismatch
+reaching the page without a restart, the same mismatch reaching the LOG, the host's first build
+staying silent (so a start does not report everything twice), and `Current` read three times over an
+unchanged file writing nothing more — the last one is what keeps the ledger's volume bounded by
+settings EDITS rather than by tool calls.
+
+**Teeth, seven times.** Making the storage subject the kind alone turns the two-databases case red;
+making every storage note an `outcome` turns the taxonomy case red; emptying the unrecognised
+subject turns the two-settings case red. From the code round: dropping a kind from
+`StartupNotices.ClassByKind` turns the census red naming the kind (*"{new-directory} do(es) not
+match"*); restoring the `? :` default turns the unknown-kind case red (*"Expected _written to be
+empty ... but found at least one item"*); rewording one sentence's variable turns the key-drift case
+red; and starting the host with `_startupBuild = false` turns the double-report assertion red.
+
+**One of those plants proved the test, not the code.** The reload case first wrote its bad value
+AFTER constructing the host, so its "the first build says nothing" assertion passed over an empty
+settings file whatever the code did — the plant that should have reddened it stayed green. The
+value is written BEFORE the host exists now, which is the only ordering in which that assertion
+means anything.
+
+**The log half stopped being structural.** It began as a scan of `Program.cs` for the log call and
+the notice call side by side — which proves the two paths exist and nothing about whether a given
+diagnostic travels both. One call writes both now, so the guard is behavioural: every title written
+must appear in some log line, and deleting the `log.Warning` from the loop reddens it. The census of
+CALLERS stays, because "two and no more" is still a fact worth pinning.
+
+**A second plant proved a test worthless rather than the code wrong.** The shared-cut assertion was
+first hung off `AMegabyteOfStderr`, where the stderr tail goes through `BoundedScheduler.Quote` and
+comes back already ellipsised at `ReasonLength` — so it passed on Quote's mark and would have passed
+with the shared cut deleted. `AReasonNoQuoteBounds_IsCutAndSaysSo` drives `not started: {Reason}`
+instead, which no Quote bounds, and the plain-cut plant reddens it by name.
+
 ## Every reviewer failure is written down, once (2026-09-22, S8 story 2.3.2)
 
 `TheReviewerFailuresAreWrittenDownTests` — sixteen cases. A theory over all five endings (the right
