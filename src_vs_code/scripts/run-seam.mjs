@@ -18,7 +18,9 @@
  * passes when it did not run is worse than no check: it is the green suite the rule is about.</p>
  */
 import { execFileSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync,
+} from 'node:fs';
 import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -64,6 +66,10 @@ const { DEFAULTS } = await import('../out/settingsShape.js');
 const { coaiDataDir } = await import('../out/dataDir.js');
 const { DEFAULT_CONSULT, consultSettingsFrom } = await import('../out/consultSettings.js');
 const { tokenFileName } = await import('../out/teamServers.js');
+// The sixth leg reads the server's notices with the EXTENSION's own path, reader, parser and
+// writer — every one of them imported, none re-derived here.
+const { serverNoticesPath, readServerNotices } = await import('../out/notificationsFile.js');
+const { notificationLine, parseNotificationLine } = await import('../out/notifications.js');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -237,36 +243,43 @@ server.close();
 // variables and asked what it made of it. If the two resolvers disagree by so much as a directory,
 // the server reads nothing and reports the shipped defaults - which is precisely the silent failure
 // this whole plan is about, reproduced live.
+/**
+ * What the EXTENSION's own resolver answers for a root and a side — and the environment put back.
+ *
+ * <p>Set and restored by hand: this is a script rather than a test file, and reaching for the suite's
+ * `withEnv` would drag a test helper into the one check that has to run against the real binary.</p>
+ *
+ * <p><b>Restored by DELETING what was absent, not by assigning it back.</b> `process.env.X = undefined`
+ * writes the STRING 'undefined', so the first version of this poisoned every later leg: the consultant
+ * leg then resolved a data directory literally named `undefined`, found no consultant settings, and
+ * the server reached a real vendor instead of the stand-in CLI. A variable the parent DID have is
+ * reassigned, so a run that inherited one gets it back. Caught by this suite, which is the suite for
+ * catching exactly that.</p>
+ *
+ * <p>One helper for the fifth leg and the sixth: the sixth first carried its own copy of this block,
+ * which is a second implementation of the thing whose first one already had a bug. (Story 2.4.)</p>
+ */
+function resolvedFor(root, side) {
+  const before = { COAI_DATA_DIR: process.env['COAI_DATA_DIR'], COAI_DATA_SIDE: process.env['COAI_DATA_SIDE'] };
+  process.env['COAI_DATA_DIR'] = root;
+  process.env['COAI_DATA_SIDE'] = side;
+  try {
+    return coaiDataDir();
+  } finally {
+    for (const [name, value] of Object.entries(before)) {
+      if (value === undefined) {
+        delete process.env[name];
+      } else {
+        process.env[name] = value;
+      }
+    }
+  }
+}
+
 async function sideSeam() {
   const root = mkdtempSync(join(tmpdir(), 'coai-seam-side-'));
   const side = 'wsl';
-  // Set and restored by hand: this is a script rather than a test file, and reaching for the suite's
-  // `withEnv` would drag a test helper into the one check that has to run against the real binary.
-  //
-  // RESTORED BY DELETING, not by assigning back. `process.env.X = undefined` writes the STRING
-  // 'undefined', so the first version of this poisoned every later leg: the consultant leg then
-  // resolved a data directory literally named `undefined`, found no consultant settings, and the
-  // server reached a real vendor instead of the stand-in CLI. Caught by this suite, which is the
-  // suite for catching exactly that.
-  const before = { ...process.env };
-  const restore = () => {
-    for (const name of ['COAI_DATA_DIR', 'COAI_DATA_SIDE']) {
-      if (before[name] === undefined) {
-        delete process.env[name];
-      } else {
-        process.env[name] = before[name];
-      }
-    }
-  };
-
-  process.env['COAI_DATA_DIR'] = root;
-  process.env['COAI_DATA_SIDE'] = side;
-  let written;
-  try {
-    written = join(coaiDataDir(), 'settings.json');
-  } finally {
-    restore();
-  }
+  const written = join(resolvedFor(root, side), 'settings.json');
 
   if (!written.startsWith(join(root, side))) {
     fail(`the extension resolved ${written}, which is not under the side it was given. `
@@ -341,6 +354,174 @@ async function providersIn(extra) {
 }
 
 await sideSeam();
+
+// The SIXTH leg — story 2.4 of PLAN_the_server_says_what_it_did.md, owed since 1.1.
+//
+// `server-notices.jsonl` is written by C# and read by TypeScript, and BOTH halves redact before
+// anything reaches disk. The parity harness (`test:parity`) proves the two REDACTORS agree, by
+// driving both through `NoticeTool`, a third executable built for the check. What it cannot prove
+// is that the PRODUCT does what they agree on: nothing there starts the shipped server, provokes a
+// refusal down the road a real client takes, and reads what landed with the extension's own reader.
+// A product that serialised past `ServerNoticeLine.Of`, wrote somewhere the extension does not look,
+// or wrote a line the extension's parser rejects would leave the harness green, because the harness
+// never runs `coai-mcp`.
+//
+// So the trigger is a REAL refusal, not a test mode: `open` on a `repoPath` that is not a directory,
+// which `PanelService.OpenAsync` refuses with the path QUOTED — `'<path>' is not a directory on this
+// machine`. That quoting is the whole reason this refusal was chosen: a secret placed in the path
+// genuinely reaches the writer. The secret is a GitHub token shape.
+async function refusalSeam() {
+  const root = mkdtempSync(join(tmpdir(), 'coai-seam-refusal-'));
+  const side = 'seam';
+  mkdirSync(join(root, side), { recursive: true });
+
+  // Assembled at run time, so no token-shaped literal sits in this file for a scanner to report.
+  // `ghp_` and 36 of [A-Za-z0-9] is what the server's vendor-prefix pattern takes out
+  // (`Redaction.cs`: `(?<![A-Za-z0-9_])(sk-|ghp_|…)[A-Za-z0-9._-]{8,512}`), and a path separator
+  // before it satisfies the lookbehind on both platforms.
+  const secret = ['ghp', '_', 'S34mLeg2p4Refusal', 'CrossesTheWire', 'Now12'].join('');
+  const absent = join(root, 'no-such-checkout', secret);
+
+  // Where the EXTENSION looks, by its own resolver.
+  const sideDir = resolvedFor(root, side);
+  const noticesFile = serverNoticesPath(sideDir);
+
+  const session = serverSession({ COAI_DATA_DIR: root, COAI_DATA_SIDE: side });
+
+  /**
+   * Remove this leg's directory, and never let that removal be what the run reports.
+   *
+   * <p>A failing leg must end on ITS sentence. The directory is a temporary one, so a removal that
+   * still fails after the retries is SAID and then left behind — not thrown past the reason the
+   * leg is failing, which is what the first version did.</p>
+   */
+  const forget = () => {
+    try {
+      rmSync(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+    } catch (e) {
+      console.error(`seam: could not remove ${root} (${e.code ?? e.message}); it is left behind`);
+    }
+  };
+
+  /** A failure BEFORE the clean close: the child is still alive and still holds files in `root`. */
+  const leave = async (why) => {
+    await session.stop();
+    forget();
+    fail(why);
+  };
+
+  let refused;
+  try {
+    await session.ready;
+    refused = answerOf(await session.call('open', { repoPath: absent, branch: 'main' }));
+  } catch (e) {
+    await leave(`the binary could not be asked to open a missing checkout: ${e.message}`);
+  }
+
+  // 1. THE TEETH. The answer to the calling AI is not redacted — it is the AI's own argument, echoed
+  //    — so finding the secret here is what proves the writer was HANDED it. Without this, every
+  //    assertion below would pass on a server that wrote nothing sensitive because it was never
+  //    given anything sensitive.
+  const said = String(refused?.error ?? '');
+  if (!said.includes('is not a directory on this machine') || !said.includes(secret)) {
+    await leave('the refusal did not quote the path it refused, so nothing below could tell a '
+      + `redacted secret from one that never reached the writer. It answered: ${said.slice(0, 200)}`);
+  }
+
+  // 2. A CLEAN end, by EOF — the only road on which the writer is drained (story 2.3.1).
+  const ended = await session.close();
+  if (!ended.exited) {
+    forget();
+    fail(`the server did not exit within ${TIMEOUT_MS} ms of its stdin closing, and was killed. A `
+      + 'client that ends its session this way would leave the notices undrained.');
+  }
+
+  // 3-6, each a claim that answers the reason it fails, or '' when it holds.
+  const sink = noSinkCarries(root, ended.stderr, secret);
+  if (sink.why !== '') {
+    forget();
+    fail(sink.why);
+  }
+  const crossed = await theRecordCrosses(root, sideDir, noticesFile);
+  if (crossed.why !== '') {
+    forget();
+    fail(crossed.why);
+  }
+
+  forget();
+
+  return { title: crossed.title, logs: sink.logs };
+}
+
+/**
+ * Claim 3: no sink of this run carries the secret — not stderr, and not ONE file under its data root.
+ *
+ * <p>The notices file is not the only place a refusal's sentence could land, and the operator's
+ * standing rule is that no secret reaches a log line at all. (codex, on the plan round.) The companion
+ * is what stops "no file carries it" passing on a run that wrote nothing: the run must have left a
+ * log file for the check to have covered one.</p>
+ */
+function noSinkCarries(root, stderr, secret) {
+  const shown = (files) => files.map((f) => f.slice(root.length)).join(', ') || '(nothing)';
+  if (stderr.includes(secret)) {
+    return { why: 'the secret reached the server\'s STDERR in clear, which is where a stdio host sends its console log.', logs: 0 };
+  }
+  const everything = filesUnder(root);
+  const leaking = everything.filter((file) => readFileSync(file).includes(secret));
+  if (leaking.length > 0) {
+    return { why: `the secret reached the disk in clear, in: ${shown(leaking)}`, logs: 0 };
+  }
+  const logs = everything.filter((file) => file.endsWith('.log'));
+  if (logs.length === 0) {
+    return { why: `the run left no log file under ${root}, so "no log carries the secret" was vacuous. It left: ${shown(everything)}`, logs: 0 };
+  }
+
+  return { why: '', logs: logs.length };
+}
+
+/**
+ * Claims 4-6: the record is where the EXTENSION looks, its own reader returns it, and its own parser
+ * gives the line back unchanged.
+ *
+ * <p>The raw bytes come first, so an empty or missing file cannot pass claim 3 by having nothing in
+ * it (gemini, on the plan round). The fixed point is the bar `ServerNoticeLine.cs` sets itself —
+ * <i>"a line the extension would have WRITTEN from the same record"</i> — checked for the first time
+ * against the shipped binary rather than `NoticeTool`.</p>
+ */
+async function theRecordCrosses(root, sideDir, noticesFile) {
+  const failed = (why) => ({ why, title: '' });
+  if (!existsSync(noticesFile)) {
+    return failed(`the extension looks for the server's notices at ${noticesFile.slice(root.length)} and there is nothing there. `
+      + `The run left: ${filesUnder(root).map((f) => f.slice(root.length)).join(', ')}`);
+  }
+  const bytes = readFileSync(noticesFile, 'utf8');
+  const refusedLine = bytes.split('\n').find((line) => line.includes('"code":"refused"'));
+  if (refusedLine === undefined || !bytes.endsWith('\n')) {
+    return failed(`the notices file has no refused line, or its last line is not terminated: ${bytes.slice(0, 300)}`);
+  }
+  const record = (await readServerNotices(sideDir)).find((one) => one.code === 'refused' && one.subject === 'OpenAsync');
+  if (record === undefined || record.class !== 'refusal' || record.source !== 'coai-mcp'
+    || !String(record.title).includes('is not a directory on this machine')) {
+    return failed(`the extension's reader did not return the refusal the server wrote. It returned: ${JSON.stringify(record ?? null).slice(0, 400)}`);
+  }
+  const again = notificationLine(parseNotificationLine(refusedLine));
+  if (again !== `${refusedLine}\n`) {
+    return failed(`the server's line is not a fixed point of the extension's parser.\n  server:    ${refusedLine}\n  extension: ${again.trimEnd()}`);
+  }
+
+  return { why: '', title: String(record.title) };
+}
+
+/** Every file under `dir`, recursively. */
+function filesUnder(dir) {
+  return readdirSync(dir).flatMap((name) => {
+    const path = join(dir, name);
+
+    return statSync(path).isDirectory() ? filesUnder(path) : [path];
+  });
+}
+
+const refusal = await refusalSeam();
 console.log('  ok  a side\'s settings are written and read at the same path, and the root is adopted');
 
 // The SECOND leg: the consultant settings, which cross the same seam and have the same failure.
@@ -447,6 +628,37 @@ function serverSession(extraEnv = {}) {
     });
   };
 
+  const call = async (name, args) => await ask('tools/call', { name, arguments: args });
+
+  /**
+   * End the session the way a client does — by closing stdin — and wait for the process to leave.
+   *
+   * <p>NOT `kill()`. A kill is a terminate, which skips the `finally` in `ServeAsync` that drains the
+   * notice writer (story 2.3.1), so a leg that killed and then read the notices file would be reading
+   * whatever happened to be flushed. A clean end of stdin is what a real client's exit looks like,
+   * and it is the only road on which the file is complete.</p>
+   *
+   * <p><b>Bounded, and it kills on the way out.</b> A server that does not exit on EOF is a finding
+   * in its own right, and the answer to it must not be a CI job that hangs until the runner's limit
+   * with a dotnet child holding the data directory open. (codex and a local reviewer, on story 2.4's
+   * plan round.)</p>
+   */
+  const close = async () => await new Promise((done) => {
+    if (child.exitCode !== null) {
+      done({ exited: true, code: child.exitCode, stderr: err });
+      return;
+    }
+    const deadline = setTimeout(() => {
+      child.kill('SIGKILL');
+      done({ exited: false, code: null, stderr: err });
+    }, TIMEOUT_MS);
+    child.on('exit', (code) => {
+      clearTimeout(deadline);
+      done({ exited: true, code, stderr: err });
+    });
+    child.stdin.end();
+  });
+
   return {
     ready: ask('initialize', {
       protocolVersion: '2024-11-05',
@@ -454,9 +666,32 @@ function serverSession(extraEnv = {}) {
       clientInfo: { name: 'seam', version: '1' },
     }).then(() => say({ jsonrpc: '2.0', method: 'notifications/initialized' })),
     tools: async () => await ask('tools/list', {}),
-    consult: async (repoPath) => await ask('tools/call', {
-      name: 'consult',
-      arguments: { repoPath, problem: 'The parser returns 3 where 4 is expected, after two fix attempts.' },
+    consult: async (repoPath) => await call('consult', {
+      repoPath,
+      problem: 'The parser returns 3 where 4 is expected, after two fix attempts.',
+    }),
+    call,
+    close,
+    /**
+     * Kill, and WAIT for the process to be gone — for a leg that is failing.
+     *
+     * <p>`end()` returns the instant the signal is sent. On Windows the dotnet child still holds
+     * its log file and the notices file open for a moment after that, so a leg that removed its
+     * directory straight after `end()` got `EPERM` from `rmSync` — and that throw escaped and
+     * printed a stack where the leg's own `seam:` sentence belonged. Found by planting a defect the
+     * sixth leg exists to catch: it failed on the right condition and reported the wrong one.</p>
+     */
+    stop: async () => await new Promise((done) => {
+      if (child.exitCode !== null || child.signalCode !== null) {
+        done();
+        return;
+      }
+      const deadline = setTimeout(done, TIMEOUT_MS);
+      child.on('exit', () => {
+        clearTimeout(deadline);
+        done();
+      });
+      child.kill('SIGKILL');
     }),
     end: () => child.kill(),
   };
@@ -731,4 +966,5 @@ console.log(`seam: the consultant map crossed too — "${String(routed.error).sl
 console.log(`seam: and the switch — "${String(switched.error).slice(0, 120)}…"`);
 console.log(`seam: and a consultation the binary RAN was read back out of --log — "${String(consulted.advice).slice(0, 60)}…"`);
 console.log(`seam: and a consultant DEFINED with no reviewer row answered through its own CLI path — "${String(throughDefinition.advice).slice(0, 60)}…"`);
+console.log(`seam: and a REAL refusal carrying a secret was written with it taken out, read back by the extension's own reader, and survived its parser byte for byte — "${refusal.title.slice(0, 90)}…" (${refusal.logs} log file(s) checked too)`);
 console.log(`seam: asked ${binary}`);

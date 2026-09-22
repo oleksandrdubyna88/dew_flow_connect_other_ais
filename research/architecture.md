@@ -593,9 +593,38 @@ was decided by running them rather than by reading them:
 | The line (`notificationLine`) | parses with the extension's OWN parser, agrees field by field, and is a FIXED POINT of it | byte equality is not achievable: `JSON.stringify` writes properties in the order the CALLER inserted them, so the order belongs to the call site, while C# has a fixed list |
 
 **The check is a third executable.** `NoticeTool` is built by the solution and published nowhere —
-the `FakeCli` pattern — and `npm run test:parity` drives it from the extension job, which is the only
-CI job where both runtimes exist: the .NET suites run before `npm ci`, so a C# test cannot spawn
-node.
+the `FakeCli` pattern — and `npm run test:parity` drives it from the extension job. A C# test cannot
+spawn node: the .NET suites run before the extension's toolchain is installed.
+
+**And since story 2.4 there is a LIVE check beside it, which the harness structurally cannot be.**
+Parity proves the two REDACTORS agree; it drives `NoticeTool`, so it never runs `coai-mcp`, and a
+product that serialised past `ServerNoticeLine.Of`, wrote somewhere the extension does not look, or
+wrote a line the extension's parser rejects would leave it green. The seam's sixth leg
+(`npm run test:seam`) closes that: the REAL binary is driven over stdio, refuses `open` on a path
+carrying a token-shaped secret, and exits by EOF; the extension's own `coaiDataDir`,
+`serverNoticesPath` and `readServerNotices` then find the record, the raw bytes are checked for the
+secret before any parser sees them, and `notificationLine(parseNotificationLine(line))` must give
+the line back byte for byte. It runs in the build job, which installs the extension's toolchain
+beside the .NET SDK it has just compiled with — so the extension job is not the only one with both
+runtimes, as this paragraph used to say.
+
+```mermaid
+sequenceDiagram
+    participant Seam as run-seam.mjs (leg six)
+    participant Mcp as coai-mcp (real binary)
+    participant Disk as server-notices.jsonl
+    participant Ext as extension's own reader
+    Seam->>Mcp: tools/call open, repoPath carries the secret
+    Mcp-->>Seam: refusal QUOTING the path (proves the writer was handed it)
+    Mcp->>Disk: ServerNoticeLine.Of, redacted
+    Seam->>Mcp: close stdin (EOF, never kill)
+    Mcp-->>Seam: exits cleanly
+    Seam->>Disk: raw bytes: no secret, a refused line present
+    Seam->>Ext: coaiDataDir, serverNoticesPath, readServerNotices
+    Ext-->>Seam: the record, secret taken out
+    Seam->>Ext: notificationLine(parseNotificationLine(line))
+    Ext-->>Seam: the same bytes
+```
 
 **What it found, twice, before anything shipped.** The harness's own transport turned the lone
 surrogate that `slice` leaves at a cut into U+FFFD, so the first run blamed the port for a defect in

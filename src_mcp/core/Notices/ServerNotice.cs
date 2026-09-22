@@ -124,11 +124,14 @@ public sealed record ServerNotice
     /// somebody's stderr is 256 MB of process held because a share stopped answering. (Story 2.2.)
     /// <see cref="ServerNoticeLine"/> cuts at the same limit on the way out, so moving the cut
     /// earlier changes no line and no grouping key.</para>
-    /// <para><b>One helper, because there were two and they disagreed.</b> Reviewer failures cut
-    /// plainly and startup notes cut with an ellipsis, which meant the same overflow was legible in
-    /// one place and silent in the other — a truncation nobody can SEE is the half that matters,
-    /// since these sentences carry the unbounded value at the front and the instruction at the
-    /// back. (gemini, on story 2.3.3's second code round.)</para>
+    /// <para><b>One helper, because there were THREE and they disagreed.</b> Reviewer failures and
+    /// refusals cut plainly and startup notes cut with an ellipsis, which meant the same overflow was
+    /// legible in one place and silent in the other two — a truncation nobody can SEE is the half
+    /// that matters, since these sentences carry the unbounded value at the front and the
+    /// instruction at the back. (gemini, on story 2.3.3's second code round.) That round said
+    /// "two" and moved two; the refusal road kept its plain cut until story 2.4 found it, which is
+    /// why every producer's construction site is listed by <c>ANoticeProducerCutsOnlyThroughTheSharedHelper</c>
+    /// rather than remembered.</para>
     /// </remarks>
     public static string Shortened(string text, int limit = Redaction.TitleLimit) =>
         text.Length <= limit ? text : text[..(limit - 1)] + "…";

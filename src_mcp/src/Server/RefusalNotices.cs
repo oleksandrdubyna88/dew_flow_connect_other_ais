@@ -62,9 +62,11 @@ internal static class RefusalNotices
     /// about MEMORY rather than bytes on disk. <c>Redaction.SafeText</c> cuts every string field to
     /// <c>TitleLimit</c> when the line is written — but the notice sits in the writer's queue until
     /// then, and 256 queued records each holding a megabyte of refusal sentence is 256 MB of process
-    /// held because a share stopped answering. CodeRabbit found it on the pull request. The cut here
-    /// is the plain prefix and nothing else; the redaction, the control characters and the suffix all
-    /// still belong to the serialiser, so there is still one rule about what a written field is.</para>
+    /// held because a share stopped answering. CodeRabbit found it on the pull request. The cut is
+    /// <see cref="ServerNotice.Shortened"/>'s — a prefix ending in a mark that says it was cut — and
+    /// nothing more: the redaction and the control characters still belong to the serialiser, so
+    /// there is still one rule about what a written field is. (It was a plain prefix until story
+    /// 2.4, and was the one producer 2.3.3 missed when it gave the other two the shared cut.)</para>
     /// </remarks>
     internal static ServerNotice Of(string sentence, string from) => new()
     {
@@ -73,11 +75,9 @@ internal static class RefusalNotices
         Source = Source,
         Code = ServerNoticeCodes.Refused,
         Subject = from,
-        Title = Shorter(sentence),
+        // The helper every producer shares, since story 2.4. This road kept a plain cut of its own
+        // after 2.3.3 moved the other two onto `ServerNotice.Shortened`, so an over-long refusal was
+        // truncated with no sign while an over-long startup note said it was cut.
+        Title = ServerNotice.Shortened(sentence),
     };
-
-    /// <summary>As much of the sentence as can ever be written, and no more held in memory.</summary>
-    private static string Shorter(string sentence) =>
-        sentence.Length <= Redaction.TitleLimit ? sentence : sentence[..Redaction.TitleLimit];
-
 }
