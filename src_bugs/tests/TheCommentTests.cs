@@ -65,7 +65,7 @@ public sealed class TheCommentTests : IDisposable
         corpus.Accept(Key, UtcMonth.Of(Sixteenth), scope => Ingest.Take(scope, items, _keywords))
             .Should().BeOfType<Accepted<UploadAnswer>.Stored>().Subject.Answer.Items!;
 
-    private string StoredComment(Corpus corpus) =>
+    private static string StoredComment(Corpus corpus) =>
         corpus.Waiting(50).Should().ContainSingle().Subject.Comment;
 
     // ------------------------------------------------------------------------------------------
@@ -210,9 +210,10 @@ public sealed class TheCommentTests : IDisposable
 
     /// <summary>And the characters on either side of those ranges are perfectly ordinary text.</summary>
     /// <remarks>
-    /// The other half of the range assertion: a whitelist widened by a typo — <c>&lt;= '⁯'</c>
-    /// for <c>&lt;= '⁩'</c> — would refuse punctuation nobody meant to refuse, and the theory
-    /// above cannot see it.
+    /// The other half of the range assertion: a whitelist widened by a typo — an upper bound of
+    /// U+206F where U+2069 belongs — would refuse punctuation nobody meant to refuse, and the
+    /// theory above cannot see it. Code points are named here rather than written, for the reason
+    /// the rule itself gives.
     /// </remarks>
     [Theory]
     [InlineData(0x0629)] // ARABIC TEH MARBUTA, just past the letter mark

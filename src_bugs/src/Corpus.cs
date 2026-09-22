@@ -635,7 +635,7 @@ public sealed partial class Corpus : IDisposable
         }
     }
 
-    private IReadOnlyList<(string EntryId, string Language, string Before, string After,
+    private List<(string EntryId, string Language, string Before, string After,
         string Comment)> Reading(int limit, int skip)
     {
         using var read = _db.CreateCommand();
@@ -646,7 +646,8 @@ public sealed partial class Corpus : IDisposable
         Bind(read, "$limit", limit);
         Bind(read, "$skip", skip);
         using var rows = read.ExecuteReader();
-        var waiting = new List<(string, string, string, string, string)>();
+        var waiting = new List<(string EntryId, string Language, string Before, string After,
+            string Comment)>();
         while (rows.Read())
         {
             waiting.Add((rows.GetString(0), rows.GetString(1), rows.GetString(2), rows.GetString(3),

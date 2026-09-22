@@ -55,8 +55,8 @@ public sealed partial class TheBuiltBinariesTests
     /// A single x64 hash there would refuse the right archive as tampered-with — a failure that
     /// reads as a supply-chain alarm and is really a missing row in this table.
     /// </remarks>
-    private static readonly IReadOnlyDictionary<Architecture, string> OldArchiveSha256 =
-        new Dictionary<Architecture, string>
+    private static readonly Dictionary<Architecture, string> OldArchiveSha256 =
+        new()
         {
             [Architecture.X64] = "d203a043969925f9cf2356643c4c854c543628e009280e24e5fdc6bfdb372a97",
             [Architecture.Arm64] = "2ef0ddbd84aa72dd6fc3d64a75edd1fbf8964b5c808868ac25adc29ee9d490cb",

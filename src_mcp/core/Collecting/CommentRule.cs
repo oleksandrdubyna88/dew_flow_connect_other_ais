@@ -106,9 +106,9 @@ public static class CommentRule
     /// </list>
     /// </remarks>
     private static bool Reordering(char one) =>
-        one is '؜' or '‎' or '‏'
-            or >= '‪' and <= '‮'
-            or >= '⁦' and <= '⁩';
+        one is '\u061c' or '\u200e' or '\u200f'
+            or >= '\u202a' and <= '\u202e'
+            or >= '\u2066' and <= '\u2069';
 
     /// <summary>A surrogate with no partner, which is not a character at all.</summary>
     /// <remarks>

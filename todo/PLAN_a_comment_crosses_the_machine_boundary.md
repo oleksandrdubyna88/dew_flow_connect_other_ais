@@ -427,9 +427,14 @@ the id.
   failure available); a refusal that never quotes the comment back.
   `PairId.Of` equal across comments is asserted on the client side, where the type lives.
 - `TheRouteTests` (+4): `POST /ingest/commented` with a key → 200 and `contract: 2` through the real
-  AOT binding; without a key → 401 (a route reached around the gate); `/ingest` still ignores a
-  comment it is sent, so the two routes really do differ (the whole mechanism in one assertion); every
-  answer from both routes carries `contract`.
+  AOT binding; without a key → 401 (a route reached around the gate); **`/ingest` REFUSES a pair that
+  carries a comment**, per item, naming the path that keeps it and writing nothing, so the two routes
+  really do differ (the whole mechanism in one assertion); every answer from both routes carries
+  `contract`.
+  *(Revised in code round 1: the plan first said `/ingest` would ignore a comment it was sent. Three
+  reviewers pointed out that a new server dropping the field in silence is the same failure an old one
+  commits, in the place nobody is watching for it — so it refuses instead, and a batch loses
+  nothing because nothing was written.)*
 - `TheMigrationTests` (+1): step 1 unchanged, both tables altered, and a row written BEFORE step 5
   reading back as having no comment — the half of the promise that makes this safe on a live host.
 - `TheAdminUploadTests` (+1): an administrator's comment stored on the `AcceptAdmin` path, which no
