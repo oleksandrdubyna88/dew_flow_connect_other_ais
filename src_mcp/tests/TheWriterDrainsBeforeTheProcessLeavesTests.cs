@@ -252,6 +252,58 @@ public sealed class TheWriterDrainsBeforeTheProcessLeavesTests : IDisposable
         }
     }
 
+    [Fact]
+    public void AFaultedWriterIsAFinishedWriter_AndTheDrainDoesNotThrowOutOfAFinally()
+    {
+        // gemini, on the code round: `Task.Wait` RETHROWS a faulted task as an AggregateException,
+        // and `Drain` runs inside a `finally` during process exit — a throw there skips the warning
+        // saying what was unresolved and turns a clean `return 0` into a crash. The task cannot
+        // fault today, because `Wrote` catches everything, which is exactly why the guard needed a
+        // seam: a `catch` no test can reach is a guarantee nobody has checked, and Sonar said so.
+        var faulted = Task.FromException(new InvalidOperationException("the writer died"));
+
+        var waiting = () => NoticeWriter.Waited(faulted, Generous);
+
+        waiting.Should().NotThrow("the contract says never throws, and a finally is where that matters");
+        waiting().Should().BeTrue("a faulted writer is a FINISHED writer — nothing is still outstanding");
+    }
+
+    [Fact]
+    public void ADrainWithNothingOutstanding_SaysNothing()
+    {
+        // The host turns the count into one sentence and prints it ONLY when it is non-zero; an
+        // ordinary session that wrote a few notices must not end with a warning about none.
+        var said = new List<string>();
+
+        Program.Unresolved(0, Watching(said));
+
+        said.Should().BeEmpty("zero unresolved notices is not news");
+    }
+
+    [Fact]
+    public void ADrainThatLeftSomethingOutstanding_NamesTheCount()
+    {
+        var said = new List<string>();
+
+        Program.Unresolved(3, Watching(said));
+
+        said.Should().ContainSingle().Which.Should().Contain("3",
+            "a count, not a flag — the number is what a person compares with the file");
+    }
+
+    [Fact]
+    public void AHostDrainingAnEmptyWriter_DoesNotAnnounceIt()
+    {
+        // The code round: a session closing on a slow share sat in the drain with no message and
+        // looked hung, so the host says it is draining BEFORE the wait — but only when something is
+        // queued. Announcing an empty drain on every clean exit is noise on every clean exit.
+        var said = new List<string>();
+
+        Program.Draining(Writing(), Watching(said)).Should().Be(0);
+
+        said.Should().BeEmpty("there was nothing to wait for, so there was nothing to say");
+    }
+
     private static Serilog.ILogger Silent => Serilog.Core.Logger.None;
 
     private static Serilog.ILogger Watching(List<string> said) =>

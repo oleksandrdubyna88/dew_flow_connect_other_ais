@@ -1749,7 +1749,7 @@ internal static class Program
     /// message used to arrive after it — so the person closing their client saw a server that looked
     /// hung. One line first, and only when something is actually queued. (The code round.)
     /// </remarks>
-    private static int Draining(NoticeWriter notices, Serilog.ILogger log)
+    internal static int Draining(NoticeWriter notices, Serilog.ILogger log)
     {
         if (!notices.Idle(TimeSpan.Zero))
         {
@@ -1764,7 +1764,7 @@ internal static class Program
     /// UNRESOLVED and not "lost": a record dequeued and mid-append when the bound expired may
     /// already be on disk. What this number means is what this process cannot vouch for.
     /// </remarks>
-    private static void Unresolved(int notices, Serilog.ILogger log)
+    internal static void Unresolved(int notices, Serilog.ILogger log)
     {
         if (notices == 0)
         {

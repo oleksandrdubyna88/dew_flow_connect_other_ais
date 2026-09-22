@@ -154,7 +154,7 @@ internal sealed class NoticeWriter
         _closing = true;
         _queue.Writer.TryComplete();
 
-        return Waited(within) ? 0 : Volatile.Read(ref _inFlight);
+        return Waited(_writing, within) ? 0 : Volatile.Read(ref _inFlight);
     }
 
     /// <summary>
@@ -168,15 +168,15 @@ internal sealed class NoticeWriter
     /// docstring's "never throws" has to be true of the code and not of today's call graph. (gemini,
     /// on the code round.)
     /// </remarks>
-    private bool Waited(TimeSpan within)
+    internal static bool Waited(Task writing, TimeSpan within)
     {
         try
         {
-            return _writing.Wait(within);
+            return writing.Wait(within);
         }
         catch (Exception)
         {
-            // A faulted writer is a writer that is finished, and its own catch already reported why.
+            // A faulted writer is a writer that is FINISHED, and its own catch already reported why.
             return true;
         }
     }

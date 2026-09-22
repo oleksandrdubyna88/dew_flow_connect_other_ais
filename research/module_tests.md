@@ -1611,6 +1611,16 @@ separately, `NoSecondProductionCallerDrainsTheWriter`, because a scan that finds
 prohibition and proves nothing. The live half — a real refusal over stdio against the published
 binary — is story 2.4, which the parent plan owes by name.
 
+**And Sonar found the rest of the same lesson.** New-code coverage came back at 50 %, and every
+uncovered line was a helper no test could reach: the `catch` inside `Drain`'s wait, and the two
+`Program` helpers that only `ServeAsync`'s `finally` runs. The answer was not to accept them — it was
+to make them reachable. `Waited(Task, TimeSpan)` is a static function of its arguments now, so a test
+hands it `Task.FromException` and proves the "never throws" contract against a faulted writer the
+running code cannot produce; `Draining` and `Unresolved` are `internal`, so the sentence the host
+prints — and the rule that it prints nothing when there is nothing outstanding — are asserted rather
+than read. A helper a test cannot call is a guarantee nobody has checked, which is the same finding
+story 2.2 took from Sonar about an unreachable `catch`.
+
 **Two of these tests could have passed on a fixture the code REJECTS, and the code round caught
 both.** The racing test would have gone green on zero accepted and zero written — and measured, the
 drain DOES win every race, because the offering task has not been scheduled when the main thread
