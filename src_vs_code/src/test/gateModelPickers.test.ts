@@ -65,6 +65,18 @@ test('what a picker sends reaches the host as a commandModel write, not as a set
   });
 });
 
+test('a repaint puts focus back on the picker that had it, not on another kind sharing its slot name', () => {
+  // The picker's focus id has a fifth segment, its kind; the pattern the host holds a focus id to
+  // accepted four, so every picker lost its focus on a repaint. (CodeRabbit, PR #481.)
+  const page = runPanel(panelState('gate', { codexModels: codexList }, { id: 'strongest||||codex', start: 0, end: 0 }));
+
+  assert.deepEqual(
+    page.controls.filter((one) => one.focused).map((one) => `${one.dataset['setting']}/${one.dataset['commandModel']}`),
+    ['strongest/codex'],
+    'the repaint put focus somewhere else, or nowhere',
+  );
+});
+
 test('"another model…" asks the host for a name for THAT kind and slot, and writes nothing yet', () => {
   const page = gate();
   const control = picker(page, 'gemini', 'implementation');

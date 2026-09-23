@@ -324,14 +324,16 @@ export function withholdsRepaint(editingSince: number, now: number): boolean {
 export const OPEN_BY_DEFAULT: readonly string[] = [];
 
 /**
- * `setting|vendor|role|caller`, each of them a name. Nothing that could end a script or open a tag.
+ * `setting|vendor|role|caller`, each of them a name — and, on a split-order model picker only, a
+ * fifth `|kind`. Nothing that could end a script or open a tag.
  *
  * <p>The fourth part arrived with the consultant rows, and it had to arrive HERE as well as in the
  * page's `idOf`: an id this pattern does not match is dropped whole rather than escaped, so a
  * forgotten segment does not fail loudly — it silently stops putting the caret back, in every
- * control on the panel. Eight tests said so within a second of the id gaining its fourth part.</p>
+ * control on the panel. Eight tests said so within a second of the id gaining its fourth part. The
+ * fifth (issue #117) was forgotten here exactly that way, and CodeRabbit found it on the PR.</p>
  */
-const FOCUS_ID = /^[A-Za-z0-9_.-]+\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*$/;
+const FOCUS_ID = /^[A-Za-z0-9_.-]+\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*(\|[A-Za-z0-9_.-]+)?$/;
 
 /**
  * {@link PanelState.focus} as a literal the page's own script can hold, or `null`.
