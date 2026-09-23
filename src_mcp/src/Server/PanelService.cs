@@ -986,7 +986,7 @@ public sealed partial class PanelService
     }
 
     /// <summary>
-    /// One local ROW leads the round; every other local one goes to the back.
+    /// Every local ROW leads the round, as one group in the shuffle's order.
     /// </summary>
     /// <remarks>
     /// <para><b>Why it leads (issue #155).</b> A local engine is the slowest reviewer in any round —
@@ -998,34 +998,25 @@ public sealed partial class PanelService
     /// <para><b>Rows, not providers — and that distinction is the whole correctness of this.</b> The
     /// first version reordered the PROVIDER list, and <c>Everyone</c> then expands each provider into
     /// one row per role, vendor-major. A local vendor serving four roles therefore put four local
-    /// rows at the head, filling every machine slot with reviewers that cannot run: exactly the trap
-    /// described below, reintroduced by the fix for it. Found on the code round — and the test could
-    /// not see it, because it read the row list through <c>Distinct()</c> on the provider.</para>
+    /// rows at the head while every reviewer took a machine slot first, filling every slot with
+    /// reviewers that could not run. Found on the code round — and the test could not see it, because
+    /// it read the row list through <c>Distinct()</c> on the provider.</para>
     ///
-    /// <para><b>Why only ONE leads, and the others go LAST.</b> <see cref="BoundedScheduler"/> takes
-    /// a machine-wide slot before the engine — deliberately, since taking the engine first once made
-    /// a local reviewer hold an idle card while queued behind hosted vendors. With
-    /// <c>LocalConcurrency = 1</c> a second local row can only wait for the card, so leaving it near
-    /// the front would occupy one of three machine slots to do nothing, and the hosted vendors would
-    /// share what was left. At the tail it waits where waiting is free. Raised on the plan round,
-    /// against a first draft that promoted one row and left the rest where they were.</para>
+    /// <para><b>ALL of them lead, since 2026-09-23.</b> Until then only one did and the rest went to
+    /// the tail, because a waiting local row held a machine slot. That tail is what made
+    /// <c>local/2..4</c> wait behind every hosted reviewer while the card sat idle — the half of
+    /// issue #155 the operator restated. <see cref="BoundedScheduler"/> now gives a local reviewer a
+    /// lane of its own, bounded only by its engine, so there is no slot to hold; and at the head the
+    /// local rows meet the engine's FIFO queue together, with no hosted launch between
+    /// <c>local/1</c> and <c>local/2</c> (plan round, gemini). See
+    /// <c>todo/PLAN_the_local_reviewers_have_their_own_lane.md</c>.</para>
     ///
-    /// <para><b>What it promises</b> is the order reviewers are SUBMITTED in, which is all this
-    /// method decides. If another round already holds the engine lease, the promoted row waits for
-    /// the card like anything else; what changed is that it is asked first.</para>
-    ///
-    /// <para>Stable in both directions: the hosted vendors keep the shuffle's relative order, so the
-    /// fairness it buys is untouched and a replayed seed still replays.</para>
+    /// <para>Stable in both directions: the local rows and the hosted rows each keep the shuffle's
+    /// relative order, so the fairness it buys is untouched and a replayed seed still replays.</para>
     /// </remarks>
-    private static IReadOnlyList<ReviewerWork> OneLocalRowFirstTheRestLast(IReadOnlyList<ReviewerWork> rows)
+    private static IReadOnlyList<ReviewerWork> LocalRowsFirst(IReadOnlyList<ReviewerWork> rows)
     {
-        var local = rows.Where(IsLocalRow).ToList();
-        if (local.Count == 0)
-        {
-            return rows;
-        }
-
-        return [local[0], .. rows.Where(r => !IsLocalRow(r)), .. local.Skip(1)];
+        return [.. rows.Where(IsLocalRow), .. rows.Where(r => !IsLocalRow(r))];
 
         // `SharedResource` is what the ADAPTER decided this launch contends on, and only
         // `LocalRuntime` sets it — to the engine's endpoint. Asking the invocation rather than
@@ -1888,7 +1879,7 @@ public sealed partial class PanelService
         var refused = new HashSet<(string Provider, string Role)>();
         Assemble(runnable, items, deal, seed, Add, CanCarry);
 
-        return new RoundWork(OneLocalRowFirstTheRestLast(work), notAsked, excluded);
+        return new RoundWork(LocalRowsFirst(work), notAsked, excluded);
 
         // One sentence per ROLE however many vendors would have carried it: a person reading a round
         // needs to know the role did not run, not that four vendors each did not run it.

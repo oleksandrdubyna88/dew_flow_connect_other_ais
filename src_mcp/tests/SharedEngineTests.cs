@@ -146,6 +146,93 @@ public sealed class SharedEngineTests
         (await run).Should().HaveCount(1);
     }
 
+    /// <summary>
+    /// The next local reviewer starts the moment the last one ends — not after the hosted ones.
+    /// </summary>
+    /// <remarks>
+    /// <para>Issue #155's second half, restated by the operator on 2026-09-23 with a screenshot: four
+    /// local roles in one round, the three tail ones waiting behind codex and gemini while the card sat
+    /// idle. A local reviewer used to take a MACHINE slot before its engine, and the tail ones waited
+    /// for one behind every hosted reviewer.</para>
+    /// <para>The hosted launches here BLOCK until the test lets them go, so the only way for all three
+    /// locals to finish is for none of them to need a slot a hosted reviewer holds. Before the change
+    /// this timed out; the failure message says why.</para>
+    /// </remarks>
+    [Fact]
+    public async Task TheNextLocalReviewer_StartsWhenTheLastOneEnds_NotAfterTheHostedOnes()
+    {
+        var scheduler = new BoundedScheduler(globalCap: 3, perProviderCap: 2, sharedResourceCap: 1);
+        var hosted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var localsDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var done = 0;
+        var work = new[]
+        {
+            OnEngine("local", RoleCatalog.ArchitectureRole, "http://127.0.0.1:11434/v1"),
+            Hosted("codex", RoleCatalog.ArchitectureRole, blocks: true),
+            Hosted("codex", RoleCatalog.SecurityRole, blocks: true),
+            Hosted("codex", RoleCatalog.UxDxRole, blocks: true),
+            Hosted("gemini", RoleCatalog.ArchitectureRole, blocks: true),
+            Hosted("gemini", RoleCatalog.SecurityRole, blocks: true),
+            OnEngine("local", RoleCatalog.SecurityRole, "http://127.0.0.1:11434/v1"),
+            OnEngine("local", RoleCatalog.UxDxRole, "http://127.0.0.1:11434/v1"),
+        };
+
+        var run = scheduler.RunAllAsync(work, new ReviewerExecutor(new GatedLauncher(hosted.Task)), onProgress: p =>
+        {
+            if (p.Provider == "local" && p.Status == "done" && Interlocked.Increment(ref done) == 3)
+            {
+                localsDone.TrySetResult();
+            }
+        });
+        var first = await Task.WhenAny(localsDone.Task, Task.Delay(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        var finishedWhileHostedBusy = Volatile.Read(ref done);
+        hosted.TrySetResult();
+        await run;
+
+        first.Should().Be(
+            localsDone.Task,
+            $"only {finishedWhileHostedBusy} of 3 local reviewers finished while the hosted ones were busy: a local "
+            + "reviewer waited for a machine slot although the card was free");
+        scheduler.PeakPerResource["http://127.0.0.1:11434/v1"].Should().Be(1, "still one at a time on the card");
+    }
+
+    [Fact]
+    public async Task ALocalReviewer_TakesNoMachineSlot()
+    {
+        // The other half of the same lane: the hosted vendors keep ALL of the machine's slots while
+        // local reviewers run. The locals BLOCK here until every hosted reviewer is done, so the
+        // hosted ones can only have been three at once if no local was holding a slot. Before the
+        // change `local/1` held one while running and `local/2` another while waiting for the card,
+        // and the hosted vendors got one slot between them.
+        var scheduler = new BoundedScheduler(globalCap: 3, perProviderCap: 2, sharedResourceCap: 1);
+        var locals = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var hostedDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var done = 0;
+        var work = new[]
+        {
+            OnEngine("local", RoleCatalog.ArchitectureRole, "http://127.0.0.1:11434/v1", blocks: true),
+            OnEngine("local", RoleCatalog.SecurityRole, "http://127.0.0.1:11434/v1", blocks: true),
+            Hosted("codex", RoleCatalog.ArchitectureRole),
+            Hosted("codex", RoleCatalog.SecurityRole),
+            Hosted("gemini", RoleCatalog.ArchitectureRole),
+            Hosted("gemini", RoleCatalog.SecurityRole),
+        };
+
+        var run = scheduler.RunAllAsync(work, new ReviewerExecutor(new GatedLauncher(locals.Task, holdFor: 150)), onProgress: p =>
+        {
+            if (p.Provider != "local" && p.Status == "done" && Interlocked.Increment(ref done) == 4)
+            {
+                hostedDone.TrySetResult();
+            }
+        });
+        await Task.WhenAny(hostedDone.Task, Task.Delay(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+        locals.TrySetResult();
+        await run;
+
+        scheduler.PeakConcurrency.Should().Be(3, "the machine's three slots are the hosted vendors' own");
+        scheduler.PeakPerResource["http://127.0.0.1:11434/v1"].Should().Be(1);
+    }
+
     [Theory]
     [InlineData("http://127.0.0.1:11434/v1", "http://127.0.0.1:11434/v1/")]
     [InlineData("http://127.0.0.1:11434", "http://127.0.0.1:11434/v1")]
@@ -191,15 +278,31 @@ public sealed class SharedEngineTests
                 "the sentence says what happened to it");
     }
 
-    private static ReviewerWork OnEngine(string provider, string role, string engine) =>
+    private static ReviewerWork OnEngine(string provider, string role, string engine, bool blocks = false) =>
         new(new ReviewerInvocation(
             provider,
             role,
-            new ProcessRequest("dotnet", ["--version"], "."),
+            new ProcessRequest("dotnet", [blocks ? GatedLauncher.Blocks : "--version"], "."),
             SharedResource: engine));
 
-    private static ReviewerWork Hosted(string provider, string role) =>
-        new(new ReviewerInvocation(provider, role, new ProcessRequest("dotnet", ["--version"], ".")));
+    private static ReviewerWork Hosted(string provider, string role, bool blocks = false) =>
+        new(new ReviewerInvocation(
+            provider, role, new ProcessRequest("dotnet", [blocks ? GatedLauncher.Blocks : "--version"], ".")));
+
+    /// <summary>
+    /// Launches marked to block wait for the gate; everything else answers after <paramref name="holdFor"/>
+    /// milliseconds — long enough, where it matters, for overlap to be observable.
+    /// </summary>
+    private sealed class GatedLauncher(Task gate, int holdFor = 20) : IProcessLauncher
+    {
+        public const string Blocks = "--blocks-until-released";
+
+        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            await (request.Arguments.Contains(Blocks) ? gate.WaitAsync(ct) : Task.Delay(holdFor, ct));
+            return new ProcessResult(0, "{\"findings\":[]}", string.Empty, false);
+        }
+    }
 
     /// <summary>An executor whose reviewers all "answer" after a beat, so overlap is observable.</summary>
     private static ReviewerExecutor Executor(int millis = 30) =>

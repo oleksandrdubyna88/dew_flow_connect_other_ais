@@ -57,6 +57,8 @@ public sealed record ReviewerProgress(
 /// <remarks>
 /// A global cap bounds the machine; a per-provider cap bounds each vendor, because a rate limit
 /// is per vendor and a global cap alone would happily put all of its slots on one provider. A
+/// reviewer on a local engine is in a lane of its own, bounded only by its engine — see
+/// <c>OnEngineAsync</c>. A
 /// rate-limited reviewer climbs a ladder of waits — 5 s, 30 s, 60 s, 120 s by default, each jittered
 /// — and is reported only when the ladder is spent, the limit is hopeless, or the next wait would
 /// outrun the reviewer's own deadline.
@@ -92,7 +94,9 @@ public sealed class BoundedScheduler(
     private int _running;
 
     /// <summary>
-    /// The most reviewers ever in flight at once during the last <see cref="RunAllAsync"/>.
+    /// The most reviewers ever in flight at once in the MACHINE lane during the last
+    /// <see cref="RunAllAsync"/> — what <c>globalCap</c> bounds. A reviewer on a local engine is in the
+    /// engine lane and is counted by <see cref="PeakPerResource"/> instead.
     /// </summary>
     /// <remarks>
     /// Instrumented rather than inferred. The first version of the cap test measured overlap from
@@ -174,6 +178,7 @@ public sealed class BoundedScheduler(
         // engine cap below — the same defect one layer up from the one being fixed.
         var global = _global;
         var perProvider = work
+            .Where(w => w.Invocation.SharedResource.Length == 0)
             .Select(w => w.Invocation.Provider)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToDictionary(p => p, p => Limiter(_perProvider, p, perProviderCap), StringComparer.OrdinalIgnoreCase);
@@ -188,115 +193,155 @@ public sealed class BoundedScheduler(
                 Report(onProgress, w.Invocation, "queued", note: QueueNote(w.Invocation));
             }
 
-            var tasks = work.Select(async w =>
-            {
-                var name = w.Invocation.Provider;
-                var provider = perProvider[name];
-                var engine = w.Invocation.SharedResource;
-                var queued = System.Diagnostics.Stopwatch.StartNew();
-                // Widest first, narrowest last: the machine, then the vendor, then the ENGINE.
-                // The first version took the engine first, and gemini's reviewer named the cost —
-                // a local reviewer would hold the card while still blocked on a machine slot filled
-                // by hosted vendors, so the GPU sat idle and locked and every other local reviewer
-                // waited on a card nobody was using. Same order for every reviewer, so nothing can
-                // deadlock; released in reverse.
-                try
-                {
-                    await global.WaitAsync(ct);
-                }
-                catch (OperationCanceledException)
-                {
-                    // A round that ends while a reviewer is still queued is that reviewer's
-                    // failure, not the round's exception: `Task.WhenAll` would otherwise fault and
-                    // every sibling's result would be lost with it.
-                    return Abandoned(onProgress, w.Invocation, queued.Elapsed);
-                }
-                try
-                {
-                    try
-                    {
-                        await provider.WaitAsync(ct);
-                    }
-                    catch (OperationCanceledException)
-                    {
-                        return Abandoned(onProgress, w.Invocation, queued.Elapsed);
-                    }
-                    try
-                    {
-                        var resource = engine.Length == 0
-                            ? null
-                            : Limiter(_perResource, engine, sharedResourceCap);
-                        if (resource is not null)
-                        {
-                            // The note is computed HERE and not when the round was laid out. At
-                            // lay-out nothing held the card yet, so the queue was always empty and
-                            // the sentence was always blank — the estimate would have shipped
-                            // never saying anything. (gemini, this change's code round.)
-                            Report(onProgress, w.Invocation, "queued", note: QueueNote(w.Invocation));
-                            try
-                            {
-                                await resource.WaitAsync(ct);
-                            }
-                            catch (OperationCanceledException)
-                            {
-                                return Abandoned(onProgress, w.Invocation, queued.Elapsed);
-                            }
-
-                            EnteredResource(engine);
-                        }
-                        try
-                        {
-                            Entered(name, runningPerProvider);
-                            Report(onProgress, w.Invocation, "running");
-                            var watch = System.Diagnostics.Stopwatch.StartNew();
-                            try
-                            {
-                                var outcome = await RunWithLadderAsync(w, executor, onProgress, ct);
-                                Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed);
-                                return (w.Invocation, outcome);
-                            }
-                            catch (OperationCanceledException)
-                            {
-                                // The same defect as the queued case, one step further in — and it
-                                // was the test for THAT which found this: a reviewer cancelled
-                                // while RUNNING threw out of the fan-out, so `Task.WhenAll` faulted
-                                // and the round reported none of its finished reviewers either.
-                                return Abandoned(
-                                    onProgress,
-                                    w.Invocation,
-                                    watch.Elapsed,
-                                    "was cancelled while it was running");
-                            }
-                            finally
-                            {
-                                Left(name, runningPerProvider);
-                            }
-                        }
-                        finally
-                        {
-                            if (resource is not null)
-                            {
-                                LeftResource(engine);
-                                resource.Release();
-                            }
-                        }
-                    }
-                    finally
-                    {
-                        provider.Release();
-                    }
-                }
-                finally
-                {
-                    global.Release();
-                }
-            });
+            // TWO LANES. A reviewer on a local engine waits for its engine and for nothing else; every
+            // other reviewer waits for the machine and then its vendor. See `OnEngineAsync` for why.
+            var tasks = work.Select(w => w.Invocation.SharedResource.Length > 0
+                ? OnEngineAsync(w, executor, onProgress, ct)
+                : OnMachineAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, onProgress, ct));
             return await Task.WhenAll(tasks);
         }
         finally
         {
             // Nothing is disposed here any more: the limiters outlive the run on purpose, and a
             // `Dispose` in this block is what made them per-round in the first place.
+        }
+    }
+
+    /// <summary>
+    /// A hosted reviewer: a machine slot, then its vendor's, released in reverse.
+    /// </summary>
+    /// <remarks>
+    /// Widest first, the same order for every reviewer in this lane, so nothing can deadlock. A round
+    /// that ends while a reviewer is still queued is that reviewer's failure, not the round's
+    /// exception: <c>Task.WhenAll</c> would otherwise fault and every sibling's result would be lost.
+    /// </remarks>
+    private async Task<(ReviewerInvocation, ReviewerOutcome)> OnMachineAsync(
+        ReviewerWork w,
+        SemaphoreSlim global,
+        SemaphoreSlim provider,
+        Dictionary<string, int> runningPerProvider,
+        ReviewerExecutor executor,
+        Action<ReviewerProgress>? onProgress,
+        CancellationToken ct)
+    {
+        var queued = System.Diagnostics.Stopwatch.StartNew();
+        if (!await Took(global, ct))
+        {
+            return Abandoned(onProgress, w.Invocation, queued.Elapsed);
+        }
+        try
+        {
+            if (!await Took(provider, ct))
+            {
+                return Abandoned(onProgress, w.Invocation, queued.Elapsed);
+            }
+            try
+            {
+                Entered(w.Invocation.Provider, runningPerProvider);
+                try
+                {
+                    return await LaunchAsync(w, executor, onProgress, ct);
+                }
+                finally
+                {
+                    Left(w.Invocation.Provider, runningPerProvider);
+                }
+            }
+            finally
+            {
+                provider.Release();
+            }
+        }
+        finally
+        {
+            global.Release();
+        }
+    }
+
+    /// <summary>
+    /// A reviewer on a local engine: the engine, and nothing else.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Its own lane (2026-09-23, issue #155's second half).</b> It used to take a machine
+    /// slot and a vendor slot first, like a hosted CLI. The local rows after the first were submitted
+    /// last, so they waited for a MACHINE slot behind every hosted reviewer — and when <c>local/1</c>
+    /// ended, the slot it freed went to the next hosted waiter, while the card sat idle and
+    /// <c>local/2</c> queued for a slot it did not need. The operator's screenshot: four local roles in
+    /// one round, three of them waiting behind codex and gemini.</para>
+    /// <para><b>Why the machine cap does not bound it.</b> That cap exists for vendor CLIs, their lock
+    /// files and their 429s. A local reviewer is one small self-invocation speaking HTTP to the
+    /// engine, and the engine cap already bounds how many run: hosted ≤ <c>globalCap</c>, local ≤
+    /// engines × <c>sharedResourceCap</c> — one per card by default.</para>
+    /// <para>The engine's semaphore outlives the round and hands over FIFO, so local reviewers run
+    /// strictly one after another in the order they were submitted — which is why
+    /// <c>PanelService.LocalRowsFirst</c> puts every one of them at the head. The note is computed
+    /// HERE and not when the round was laid out: at lay-out nothing held the card yet, so the sentence
+    /// was always blank. (gemini, the engine-cap code round.)</para>
+    /// </remarks>
+    private async Task<(ReviewerInvocation, ReviewerOutcome)> OnEngineAsync(
+        ReviewerWork w,
+        ReviewerExecutor executor,
+        Action<ReviewerProgress>? onProgress,
+        CancellationToken ct)
+    {
+        var engine = w.Invocation.SharedResource;
+        var resource = Limiter(_perResource, engine, sharedResourceCap);
+        var queued = System.Diagnostics.Stopwatch.StartNew();
+        Report(onProgress, w.Invocation, "queued", note: QueueNote(w.Invocation));
+        if (!await Took(resource, ct))
+        {
+            return Abandoned(onProgress, w.Invocation, queued.Elapsed);
+        }
+        EnteredResource(engine);
+        try
+        {
+            return await LaunchAsync(w, executor, onProgress, ct);
+        }
+        finally
+        {
+            LeftResource(engine);
+            resource.Release();
+        }
+    }
+
+    /// <summary>Waits for a slot; <c>false</c> when the round ended first. Never throws the cancellation.</summary>
+    private static async Task<bool> Took(SemaphoreSlim slot, CancellationToken ct)
+    {
+        try
+        {
+            await slot.WaitAsync(ct);
+            return true;
+        }
+        catch (OperationCanceledException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The launch itself, once every slot is held — the same in both lanes.
+    /// </summary>
+    /// <remarks>
+    /// A reviewer cancelled while RUNNING is reported, not thrown: it once threw out of the fan-out,
+    /// so <c>Task.WhenAll</c> faulted and the round reported none of its finished reviewers either.
+    /// </remarks>
+    private async Task<(ReviewerInvocation, ReviewerOutcome)> LaunchAsync(
+        ReviewerWork w,
+        ReviewerExecutor executor,
+        Action<ReviewerProgress>? onProgress,
+        CancellationToken ct)
+    {
+        Report(onProgress, w.Invocation, "running");
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        try
+        {
+            var outcome = await RunWithLadderAsync(w, executor, onProgress, ct);
+            Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed);
+            return (w.Invocation, outcome);
+        }
+        catch (OperationCanceledException)
+        {
+            return Abandoned(onProgress, w.Invocation, watch.Elapsed, "was cancelled while it was running");
         }
     }
 
