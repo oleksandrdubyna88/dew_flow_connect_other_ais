@@ -183,7 +183,7 @@ public sealed class TheRunsAreAccountedForTests : IDisposable
     [Fact]
     public void ABeat_WritesTheDocumentedFields_InTheDocumentedNames()
     {
-        Markers(Me).Write().Should().BeTrue();
+        Markers(Me).Write(() => false).Should().BeTrue();
 
         using var json = JsonDocument.Parse(File.ReadAllText(Path.Combine(Runs, Me.Run + ".json")));
         json.RootElement.EnumerateObject().Select(p => p.Name).Should().BeEquivalentTo(
@@ -199,10 +199,10 @@ public sealed class TheRunsAreAccountedForTests : IDisposable
         // marker swept by a peer, and its next beat must put it back or its own clean end can never
         // clear it. (The lesson collect_runs learned.)
         var markers = Markers(Me);
-        markers.Write();
+        markers.Write(() => false);
         File.Delete(Path.Combine(Runs, Me.Run + ".json"));
 
-        markers.Write().Should().BeTrue();
+        markers.Write(() => false).Should().BeTrue();
 
         Left().Should().Equal([Me.Run + ".json"]);
     }
@@ -218,6 +218,39 @@ public sealed class TheRunsAreAccountedForTests : IDisposable
 
         _recorded.Select(n => n.Subject).Should().BeEquivalentTo(["dead00000001", "dead00000002"]);
         Left().Should().Equal(["alive0000000.json"], "the recorded deaths and their claims are gone; the live run is untouched");
+    }
+
+    [Fact]
+    public async Task ABeatThatFinishesAfterTheClear_DoesNotBringTheMarkerBack()
+    {
+        // CodeRabbit, on the pull request: a beat stuck on the share past the stop budget is cleared
+        // over, and when it finally finishes its replace re-creates the marker — which a later start
+        // records as a death that did not happen. A beat that finishes writing after its marker was
+        // CLEARED must throw its temporary away, not move it into place. (After the clear, not after
+        // the stop: a crash that did not land stops without clearing and must keep its marker.)
+        using var stuck = new ManualResetEventSlim();
+        using var entered = new ManualResetEventSlim();
+        var calls = 0;
+        var markers = new RunMarkers(ResolvedDataDir.For(_dir.Path), Me, () =>
+        {
+            if (Interlocked.Increment(ref calls) == 1)
+            {
+                entered.Set();
+                stuck.Wait(TimeSpan.FromSeconds(30)); // the share, wedged, for longer than the budget
+            }
+
+            return Now;
+        }, (_, _) => false, Serilog.Core.Logger.None);
+        var life = RunLife.Start(markers, Landing, Serilog.Core.Logger.None);
+        entered.Wait(TimeSpan.FromSeconds(30)).Should().BeTrue("the first beat is on the share");
+
+        (await life.StopAsync()).Should().BeFalse("the beat is still stuck when the budget runs out");
+        life.Clear();
+        stuck.Set();
+        (await life.StopAsync()).Should().BeTrue("and once released, the loop ends");
+
+        (Directory.Exists(Runs) ? Directory.GetFiles(Runs) : []).Should().BeEmpty(
+            "a beat that finished after the stop leaves neither a marker nor its temporary behind");
     }
 
     [Fact]
@@ -289,8 +322,8 @@ public sealed class TheRunsAreAccountedForTests : IDisposable
 
         var first = Markers(Me);
         var second = Markers(Me with { Run = "other0000000" });
-        first.Write();
-        second.Write();
+        first.Write(() => false);
+        second.Write(() => false);
         await Task.WhenAll(Task.Run(() => first.Sweep(Landing, CancellationToken.None)), Task.Run(() => second.Sweep(Landing, CancellationToken.None)));
 
         _recorded.Should().HaveCount(Deaths, "one record per death, whichever start won each claim");
@@ -301,7 +334,7 @@ public sealed class TheRunsAreAccountedForTests : IDisposable
     public void AClearRemovesThisRunsMarker_AndNoOneElses()
     {
         var markers = Markers(Me);
-        markers.Write();
+        markers.Write(() => false);
         Leave(Marker("someone00000", silentFor: TimeSpan.FromMinutes(1)));
 
         markers.Clear();

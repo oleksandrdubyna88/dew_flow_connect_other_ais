@@ -1616,7 +1616,8 @@ same instant, records a death twice — in the SAME row, because the subject is 
 `catch (Exception)` calls `HostCrash.Handled`, which logs the exception as a REDACTED STRING — never
 the exception object, which a sink renders raw — and returns **70** (`EX_SOFTWARE`). The `finally`
 then runs `EndedAsync` in the one safe order: stop the beat (bounded, so a wedged share cannot keep a
-dying process alive; a beat stuck past the budget may outlive the clear, and says so), drain the
+dying process alive; a beat that finishes writing after the marker was cleared throws its temporary
+away rather than re-creating it), drain the
 queue, write the crash through the CONFIRMED `ServerNotices.Append` within `NoticeWriter.DrainBudget`,
 clear the marker only when the run ended cleanly or the crash is known to be on disk, and dispose the
 logger last under a guard (`HostCrash.Flushed`) — which is how `logging-serilog.md`'s
@@ -1636,8 +1637,10 @@ scan cannot see it (it is composed from a constant on `dataDir.Path`), so
 `TheMarkersFolder_IsInTheDataInventory_AndStaysBehindOnAMove` holds it from this side.
 
 **Residuals, stated where they live:** a laptop asleep past the window, seen from another machine on
-the share, is a false death; the duplicate windows above; and a beat stuck on a wedged share at
-shutdown can outlive the clear.
+the share, is a false death; the duplicate windows above; and a beat whose final REPLACE is itself
+stuck on a wedged share past the stop budget can still land after the clear. (A beat stuck before its
+replace used to do the same; CodeRabbit found it on the pull request, and
+`ABeatThatFinishesAfterTheClear_DoesNotBringTheMarkerBack` holds the fix, RED first.)
 
 ## The spending ledger
 

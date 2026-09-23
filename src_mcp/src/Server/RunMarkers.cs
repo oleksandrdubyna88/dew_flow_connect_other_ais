@@ -150,8 +150,18 @@ internal sealed class RunMarkers(
     /// replace, so a reader almost never meets a half-written marker — and the sweep does not delete
     /// one it cannot read unless it is old, so "almost" is enough.
     /// </remarks>
+    /// <param name="cleared">
+    /// Asked between the temporary and the replace: has the owner already cleared this run's marker?
+    /// A beat stuck on the share past the stop budget is cleared over; if it then moved its temporary
+    /// into place it would re-create the marker, and a later start would record a clean exit as a death.
+    /// So it throws its temporary away instead. (CodeRabbit, on the pull request.) Keyed on the CLEAR,
+    /// not the stop: a crash whose record did not land stops WITHOUT clearing, and its first beat must
+    /// still land or the death disappears — the first version keyed on the stop, and
+    /// <c>ACrashThatDidNotLand_LeavesTheMarker</c> went red on exactly that. What is left is a replace
+    /// that is ITSELF stuck past the budget — a single rename on a wedged share.
+    /// </param>
     /// <returns>Whether the marker was written.</returns>
-    internal bool Write()
+    internal bool Write(Func<bool> cleared)
     {
         try
         {
@@ -159,6 +169,13 @@ internal sealed class RunMarkers(
             var temporary = Path.Combine(Dir, me.Run + TemporarySuffix);
             File.WriteAllText(temporary, JsonSerializer.Serialize(
                 me with { HeartbeatUtc = clock() }, RunMarkerContext.Default.RunMarker));
+            if (cleared())
+            {
+                Remove(temporary);
+
+                return false;
+            }
+
             File.Move(temporary, MarkerOf(me.Run), overwrite: true);
 
             return true;

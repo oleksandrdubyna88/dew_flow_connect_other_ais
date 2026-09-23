@@ -5,9 +5,10 @@
 > 2.1 bounded the population to ONE refusal road (`Refusal.Answer`), 2.2 wrote every refusal down
 > through one writer thread, 2.3 was split into three and wrote down the drain, reviewer failures and
 > startup notes, and 2.4 proved the whole thing over the wire. **Epic 3 shipped 2026-09-23**: every
-> run keeps a heartbeat in `runs/{run}.json` and the next start records one that never finished,
-> exactly once; every notice carries the run and pid that wrote it; and an exception nothing else
-> caught is written down, said redacted, flushed and exits 70 — in two layers, because the first
+> run keeps a heartbeat in `runs/{run}.json` and the next start records one that never finished —
+> once per start, at least once across a crash mid-record; every notice carries the run and pid that
+> wrote it; and an exception nothing else caught is written down, said redacted, flushed and exits
+> 70 — in two layers, because the first
 > thing a server can fail at is resolving the directory its logger lives in. The deviations are under
 > *What epic 3 found*. **Open tail, not built here:** the `coai-mcp` release that carries epic 3 (a
 > release is the operator's call). The parent stays in `todo/` on that release AND on the
@@ -516,6 +517,16 @@ also on the wire (`ProvidersAnswer.Unrecognised`), so it stays as a projection. 
   `Main`'s throw may be the directory itself failing), a UI spinner in a third-party client, and
   ten findings the code refutes — among them that `RunLife.Start` runs inside the `try`, that
   `Read()` scans on every beat, and that a vanished marker is recorded anyway.
+- **What the pull request's reviewers changed (#471).** CodeRabbit narrowed a residual the plan round
+  had accepted: a beat stuck on the share past the stop budget, then released after the clear, moved
+  its temporary into place and re-created the marker — RED first, the marker came back. The first
+  fix keyed the discard on the STOP, and `ACrashThatDidNotLand_LeavesTheMarker` went red at once: a
+  run that crashes in its first milliseconds stops before its first beat lands, and without a
+  marker its unrecorded crash disappears. So it is keyed on the CLEAR — `RunLife.Clear` says so
+  before it deletes, and a beat asks just before its replace. What remains is a replace that is
+  itself stuck. It also caught "exactly once" in three summaries of a design that is at
+  least once across a crash mid-record. Sonar's gate failed on one bug — the stop's
+  `CancellationTokenSource` was never disposed — fixed with three smaller findings.
 
 Order: 1.1 → 1.2 → 1.3 → 1.4 → 2.1 → 2.2 → 2.3 → 2.4 → 3.1 → 3.2. 1.3 may run beside 1.1/1.2.
 

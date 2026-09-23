@@ -30,6 +30,9 @@ internal sealed class RunLife
 
     private readonly CancellationTokenSource _stop = new();
 
+    /// <summary>Set by <see cref="Clear"/> before it deletes; read by a beat before it replaces.</summary>
+    private volatile bool _cleared;
+
     private readonly Task _loop;
 
     private RunLife(RunMarkers markers, Func<ServerNotice, bool> append, Serilog.ILogger log)
@@ -49,9 +52,10 @@ internal sealed class RunLife
     /// Stop the beat — BEFORE the marker is cleared, or a beat landing after the clear re-creates it.
     /// </summary>
     /// <remarks>
-    /// Bounded. A beat stuck on a wedged share cannot be recalled, and it may land after the clear:
-    /// that marker would then outlive a run that ended cleanly and be recorded, half an hour later,
-    /// as a death. Said here rather than discovered then. (gemini, on the plan round, named the race.)
+    /// Bounded. A beat stuck on a wedged share cannot be recalled; one that finishes writing after
+    /// <see cref="Clear"/> throws its temporary away, so it cannot re-create the marker that removed.
+    /// Only a replace that is itself stuck past the budget can still land after the clear. (gemini, on
+    /// the plan round, named the race; CodeRabbit, on the pull request, the fix.)
     /// </remarks>
     /// <returns>Whether the loop is known to have stopped.</returns>
     internal async Task<bool> StopAsync()
@@ -76,7 +80,17 @@ internal sealed class RunLife
     }
 
     /// <summary>Clear this run's marker. Only after <see cref="StopAsync"/>.</summary>
-    internal void Clear() => _markers.Clear();
+    /// <remarks>
+    /// Says so FIRST, then deletes: a beat still on the share asks <see cref="_cleared"/> just before
+    /// its replace and throws its temporary away, so it cannot re-create the marker this removes.
+    /// Keyed on the CLEAR and not on the stop, because a run that stops without clearing — a crash
+    /// whose record did not land — must keep its marker, and its first beat may still be in flight.
+    /// </remarks>
+    internal void Clear()
+    {
+        _cleared = true;
+        _markers.Clear();
+    }
 
     private async Task LivingAsync(Func<ServerNotice, bool> append)
     {
@@ -108,7 +122,7 @@ internal sealed class RunLife
     {
         try
         {
-            _markers.Write();
+            _markers.Write(() => _cleared);
         }
         catch (Exception failure)
         {
