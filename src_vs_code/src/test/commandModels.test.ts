@@ -6,6 +6,7 @@ import { test } from 'node:test';
 import {
   COMMAND_MODELS_SINCE,
   SHIPPED_COMMAND_MODELS,
+  commandModelTarget,
   commandModelsAfter,
   commandModelsEnv,
   commandModelsFrom,
@@ -76,6 +77,31 @@ test('typing a name stores that one field and keeps everything else in the recor
     cursor: { strongest: 'c-max' },
     codex: { strongest: 'gpt-6-astra' },
   });
+});
+
+test('a kind this build does not know is never written, whatever the message says', () => {
+  // The kind arrives in a webview message; `__proto__` indexed into a record would read
+  // Object.prototype and write a key nobody asked for — the refusal consultantRecordUpdate makes.
+  const current = { claude: { strongest: 'opus' } };
+
+  assert.deepEqual(commandModelsAfter(current, '__proto__', 'strongest', 'x'), current);
+  assert.deepEqual(commandModelsAfter(current, 'cursor', 'strongest', 'x'), current);
+});
+
+test('choosing the CLI alias of the default is choosing the default', () => {
+  // The Claude picker offers `fable`; the shipped name is `Fable`. Sending it would change nothing
+  // and put a warning about an older server beside a panel that asked for nothing new.
+  const models = commandModelsFrom({ claude: { strongest: 'fable', implementation: 'opus' } });
+
+  assert.deepEqual(kindsOnTheWire(models), []);
+  assert.equal(commandModelsSkewNote('0.32.0', models), '');
+});
+
+test('a picker id names a known kind and a real slot, or nothing', () => {
+  assert.deepEqual(commandModelTarget('codex:strongest'), { kind: 'codex', label: 'Codex', slot: 'strongest' });
+  assert.equal(commandModelTarget('__proto__:strongest'), undefined);
+  assert.equal(commandModelTarget('codex:nonsense'), undefined);
+  assert.equal(commandModelTarget('codex'), undefined);
 });
 
 test('clearing a box removes the field, and a kind with no fields left drops out', () => {

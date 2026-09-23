@@ -3384,10 +3384,15 @@ chosen by:
   says the generic words rather than naming another vendor's model.
 - **The shipped map is held level with the extension by a file neither owns**,
   `shared/command-models.json`; each half asserts its own constant against it.
-- **`GateCommands.ModelOrderMarker`** (`"Do the SPLIT itself with "`) is what the bench reads to see
-  the order was given. It read "Fable" until this change, which every Codex round would have failed.
-- **The log line says which models were ordered**: `split ordered to caller {Caller}; strongest model
-  {Strongest}, implementation {Implementation}`.
+- **`GateCommands.ModelOrderMarker`** (`"Do the SPLIT itself with "`) is the words every model order
+  opens with. The bench recognises the order by them from its OWN copy (it references no server code),
+  and both copies are asserted against the same file's `orderOpensWith`. It read "Fable" until this
+  change, which every Codex round would have failed.
+- **Two spellings of one kind are one row** (`Codex` and `codex`, JSON keys being case-sensitive): the
+  last one wins, through the indexer, as in `ConsultantRouting.Merge`. The first build used
+  `ToDictionary`, which threw outside the `JsonException` catch — caught in the code round.
+- **The log line says who and which**: `split ordered to caller {Caller} ({CallerKind}); strongest
+  model …, implementation …`.
 
 **A reader could kill a round, and the catch written for it looked past the exception (2026-09-04).**
 Six code rounds died with `Access to the path is denied`. One died on the FINAL save, with every

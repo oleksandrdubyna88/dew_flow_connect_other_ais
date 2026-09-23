@@ -53,10 +53,11 @@ public static class CommandModels
         var chosen = configured.GetValueOrDefault(known, shipped);
 
         return new ModelPair(
-            Named(chosen.Strongest, shipped.Strongest),
-            Named(chosen.Implementation, shipped.Implementation));
+            NamedOr(chosen.Strongest, shipped.Strongest),
+            NamedOr(chosen.Implementation, shipped.Implementation));
     }
 
-    private static string Named(string chosen, string shipped) =>
-        string.IsNullOrWhiteSpace(chosen) ? shipped : chosen.Trim();
+    /// <summary>A name, trimmed — or the fallback when there is none. The one spelling of "blank".</summary>
+    public static string NamedOr(string name, string fallback) =>
+        string.IsNullOrWhiteSpace(name) ? fallback : name.Trim();
 }

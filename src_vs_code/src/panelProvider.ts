@@ -92,6 +92,7 @@ import {
   roleRecordUpdate,
   SettingMessage,
   CoaiSettings,
+  settingMessageFrom,
   settingsFrom,
   settingWrite,
 } from './settingsShape';
@@ -372,7 +373,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     });
     view.webview.options = { enableScripts: true };
     view.webview.onDidReceiveMessage(
-      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; caller?: string; round?: number; editing?: boolean; start?: number; end?: number }) => {
+      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; caller?: string; commandModel?: string; round?: number; editing?: boolean; start?: number; end?: number }) => {
         if (m.type === 'section' && m.id !== undefined) {
           this.openSections = m.open === true
             ? [...new Set([...this.openSections, m.id])]
@@ -380,7 +381,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         } else if (m.type === 'prompt' && m.role !== undefined && m.round !== undefined) {
           void this.choosePrompt(m.role, m.round, String(m.value));
         } else if (m.type === 'setting') {
-          this.enqueue(() => this.write({ key: m.key, value: m.value, vendor: m.vendor, role: m.role, caller: m.caller }));
+          this.enqueue(() => this.write(settingMessageFrom(m)));
         } else if (m.type === 'focus') {
           this.editing(m.editing === true, m.id ?? '', Number(m.start), Number(m.end));
         } else if (m.type === 'command') {
@@ -2213,7 +2214,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
     const model = await vscode.window.showInputBox({
-      title: `${SLOT_LABELS[target.slot]} model for ${target.kind}`,
+      title: `${SLOT_LABELS[target.slot]} model for ${target.label}`,
       prompt: 'The model name the split order should give this assistant. Empty goes back to the default.',
       placeHolder: 'e.g. fable, gpt-6-astra, gemini-pro-latest',
     });

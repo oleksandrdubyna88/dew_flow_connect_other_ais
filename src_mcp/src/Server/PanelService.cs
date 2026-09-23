@@ -1318,6 +1318,7 @@ public sealed partial class PanelService
             // The operator's own switches, read for THIS call: the settings file is stamped and
             // reloaded per tool call, so a box ticked a second ago governs this round.
             var caller = CallerFor(session);
+            var callerKind = CallerIdentity.KindFrom(Environment.GetEnvironmentVariable);
             var provisional = new Core.Commands.CommandContext(
                 Autonomous: _settings.Autonomous,
                 SplitPlan: _settings.SplitPlan,
@@ -1342,8 +1343,7 @@ public sealed partial class PanelService
                 // kind comes from the vendor's session variable — the same answer the consultant is
                 // chosen by — and the pair from the panel (issue #117). A client nobody can identify
                 // is `other`, and is named no model rather than another vendor's.
-                Models = Core.Commands.CommandModels.For(
-                    _settings.CommandModels, CallerIdentity.KindFrom(Environment.GetEnvironmentVariable)),
+                Models = Core.Commands.CommandModels.For(_settings.CommandModels, callerKind),
             };
             // The caller's one order is CLAIMED, and only on a round that would actually give it —
             // a claim taken on a code round would spend it on a round that issues nothing. The
@@ -1360,10 +1360,7 @@ public sealed partial class PanelService
             if (Core.Commands.GateCommands.OrdersSplit(context))
             {
                 _log.Information(
-                    "split ordered to caller {Caller}; strongest model {Strongest}, implementation {Implementation}",
-                    caller,
-                    context.SplitWithFable ? NamedInLog(context.Models.Strongest) : "(not ordered)",
-                    context.SplitWithFable ? NamedInLog(context.Models.Implementation) : "(not ordered)");
+                    "split ordered to caller {Caller} ({CallerKind}); {Models}", caller, callerKind, ModelsInLog(context));
             }
             // Built HERE because this is the only place that holds both a reviewer's answer and the
             // invocation that produced it, which is the same reason the ROLE is stamped on a finding
@@ -2310,7 +2307,12 @@ public sealed partial class PanelService
     private static string CallerFor(PersistedSession session) =>
         CallerIdentity.Current().Id is { Length: > 0 } id ? id : $"repo:{session.State.RepoPath}";
 
-    /// <summary>A model slot as the log line says it: the name, or that the order names none.</summary>
+    /// <summary>Which models a split order named, as the log line says it (issue #117).</summary>
+    private static string ModelsInLog(Core.Commands.CommandContext context) =>
+        context.SplitWithFable
+            ? $"strongest model {NamedInLog(context.Models.Strongest)}, implementation {NamedInLog(context.Models.Implementation)}"
+            : "no model order";
+
     private static string NamedInLog(string name) => name.Length > 0 ? name : "(generic words)";
 
     private string ComposePrompt(PromptChoice choice, string context, bool hasCheckout) =>

@@ -208,6 +208,25 @@ export interface SettingMessage {
 }
 
 /**
+ * The write the page ASKED for, rebuilt from the raw webview message — every routing field it may
+ * carry, and nothing else.
+ *
+ * <p>Its own function because this step is where a routing field can be lost with every test green:
+ * the page sent it and `settingWrite` would have routed it, and the one line between them rebuilt the
+ * message from a hand-written list of four fields. (Issue #117's code review.)</p>
+ */
+export function settingMessageFrom(m: {
+  readonly key?: string | undefined;
+  readonly value?: unknown;
+  readonly vendor?: string | undefined;
+  readonly role?: string | undefined;
+  readonly caller?: string | undefined;
+  readonly commandModel?: string | undefined;
+}): SettingMessage {
+  return { key: m.key, value: m.value, vendor: m.vendor, role: m.role, caller: m.caller, commandModel: m.commandModel };
+}
+
+/**
  * Route one changed control. Pure: the `vscode` call it leads to is the provider's business, and
  * this is the part that was wrong.
  */

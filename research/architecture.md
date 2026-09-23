@@ -721,6 +721,27 @@ flowchart LR
     words -. " " .-> tsw
 ```
 
+### A setting that names the CALLER's models, and a file that holds three copies level (2026-09-23)
+
+Issue #117 made the gate's model order a choice per caller kind, and it crosses the seam as
+**`COAI_COMMAND_MODELS`** — one JSON key, written by the panel only for a kind whose pair differs from
+the shipped one, read by `coai-mcp` per call like every other setting. The same "absent means the
+shipped value" shape as `COAI_CONSULTANTS`, and for the same reason: a pristine install sends nothing.
+
+The shipped pairs, and the words every model order opens with, live in **`shared/command-models.json`**
+— and they have THREE holders, not two: the server's `CommandModels.Shipped` and
+`GateCommands.ModelOrderMarker`, the extension's `SHIPPED_COMMAND_MODELS`, and the bench's own copy of
+the marker in `SettingsApplied`, because the bench drives the PUBLISHED server and references none of
+its code. Each asserts its own copy against the file in its own suite, the URL-vectors shape rather
+than the generated one: eight short strings do not earn a generator.
+
+| | Role seed | URL vectors | Credential words | Command models |
+|---|---|---|---|---|
+| Server | embeds | reads in tests | embeds | a constant, read against the file in tests |
+| Extension | generates a module | reads in tests | generates a module | a constant, read against the file in tests |
+| Bench | — | — | — | its marker copy, read against the file in tests |
+| On a missing/broken file | broken build, throws | test failure | both halves refuse to run | test failure |
+
 ## How the Team server is deployed (2026-09-06)
 
 `coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the

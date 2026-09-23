@@ -21,22 +21,21 @@ import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
 import { CALLER_KINDS, CUSTOM_ENDPOINT, consultantSkewNote, vaultKeyNote } from './consultSettings';
-import { ModelSlot, SHIPPED_COMMAND_MODELS, commandModelsSkewNote } from './commandModels';
+import {
+  COMMAND_MODEL_RUNTIMES,
+  ModelSlot,
+  NO_MODELS,
+  SHIPPED_COMMAND_MODELS,
+  SLOT_LABELS,
+  commandModelsSkewNote,
+} from './commandModels';
 import { chatProvidersFromPresets } from './chatModels';
 import { mainPrompt } from './chatPresets';
 import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
 import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
-import {
-  allowedModelsFor,
-  CURATED_CLAUDE_MODELS,
-  CURATED_GEMINI_MODELS,
-  ModelChoice,
-  modelsFor,
-  modelsProvenance,
-  RemoteProvenance,
-} from './models';
+import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
 import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
@@ -1228,12 +1227,12 @@ ${commandModelsBlock(state)}`;
 function commandModelsBlock(state: PanelState): string {
   const models = state.settings.commandModels;
   const rows = CALLER_KINDS.map(({ id, label }) => {
-    const shipped = SHIPPED_COMMAND_MODELS[id] ?? { strongest: '', implementation: '' };
-    const box = (slot: ModelSlot, words: string, generic: string): string => {
+    const shipped = SHIPPED_COMMAND_MODELS[id] ?? NO_MODELS;
+    const box = (slot: ModelSlot, generic: string): string => {
       const fallback = shipped[slot].length > 0 ? shipped[slot] : generic;
 
       return `<select id="commandModel-${id}-${slot}" data-setting="${slot}" data-command-model="${id}"`
-        + ` aria-label="${escapeHtml(`${label} — ${words}`)}">`
+        + ` aria-label="${escapeHtml(`${label} — ${SLOT_LABELS[slot].toLowerCase()} model`)}">`
         + commandModelOptions(id, state, models[id]?.[slot] ?? '', `default — ${fallback}`)
         + '</select>';
     };
@@ -1241,44 +1240,42 @@ function commandModelsBlock(state: PanelState): string {
     return `  <div class="model-pair">
     <div class="group-head">${escapeHtml(label)}</div>
     <div class="model-pair-boxes">
-      <label>Strongest${box('strongest', 'strongest model', 'its strongest')}</label>
-      <label>Implementation${box('implementation', 'implementation model', 'its usual')}</label>
+      <label>${SLOT_LABELS.strongest}${box('strongest', 'its strongest')}</label>
+      <label>${SLOT_LABELS.implementation}${box('implementation', 'its usual')}</label>
     </div>
   </div>`;
   }).join('\n');
   const note = commandModelsSkewNote(state.server.version, models);
 
   return `<div class="field">
-  <div class="hint">Which models the order above names, per assistant — the order is carried out by
-  the assistant that called, so each names its own. The first choice in each list is the default.</div>
+  <div class="model-pairs-head">Models the order names</div>
+  <div class="hint">Per assistant — the order is carried out by the assistant that called, so each
+  names its own. The first choice in each list is the default.</div>
 ${note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`}${rows}
 </div>`;
 }
 
-/**
- * The options of one split-order model picker: the default, this caller kind's OWN vendor's models,
- * whatever is saved even when no list names it, and "another model…".
- *
- * <p>The saved name is kept as an option of its own for the reason `modelsFor` gives: a value that
- * vanished from its own dropdown would read as reset while it is still what the order names.</p>
- */
+/** The options of one split-order model picker: the default, this kind's own models, and "another model…". */
 function commandModelOptions(kind: string, state: PanelState, current: string, defaultLabel: string): string {
-  const known = commandModelChoices(kind, state);
-  const saved = current.length > 0 && !known.some((m) => m.id === current) ? [{ id: current, label: current }] : [];
-
-  return modelOptions([...saved, ...known], current, escapeHtml(defaultLabel));
+  return modelOptions(commandModelChoices(kind, state, current), current, escapeHtml(defaultLabel));
 }
 
-/** The names a picker of this caller kind offers — its own vendor's models, never another's. */
-function commandModelChoices(kind: string, state: PanelState): readonly ModelChoice[] {
-  const choices: readonly ModelChoice[] = kind === 'claude'
-    ? CURATED_CLAUDE_MODELS
-    : kind === 'codex'
-      ? state.codexModels
-      : kind === 'gemini'
-        ? [...CURATED_GEMINI_MODELS, ...state.agyModels.filter((m) => m.id.startsWith('gemini'))]
-        : [];
-  return [...new Map(choices.map((m) => [m.id, m])).values()];
+/**
+ * The names a picker of this caller kind offers — its own vendor's models, never another's — through
+ * `modelsFor`, the one place that decides what a runtime's list is (the Claude families labelled from
+ * what the CLI answered, the discovered Codex list) and that keeps a saved name as `(yours)`, so a
+ * value never vanishes from its own dropdown. A kind no runtime answers for offers only what was saved.
+ */
+function commandModelChoices(kind: string, state: PanelState, current: string): readonly ModelChoice[] {
+  const runtime = COMMAND_MODEL_RUNTIMES[kind];
+
+  return runtime === undefined
+    ? savedOnly(current)
+    : modelsFor(runtime, state.codexModels, current, undefined, state.agyModels, [], state.claudeProbe);
+}
+
+function savedOnly(current: string): readonly ModelChoice[] {
+  return current.length > 0 ? [{ id: current, label: `${current} (yours)` }] : [];
 }
 
 /**
@@ -2717,6 +2714,7 @@ const CSS = `
   .role-group { border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 6px 8px 2px; margin: 0 0 10px; }
   /* One assistant's two model boxes, side by side: the sidebar is narrow, so a three-column table
      would squeeze the names it exists to show. Each box keeps its own label above it. */
+  .model-pairs-head { font-weight: 600; margin: 4px 0 2px; }
   .model-pair { margin: 6px 0 8px; }
   .model-pair-boxes { display: flex; gap: 6px; }
   .model-pair-boxes label { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; font-size: 11px; opacity: .9; }

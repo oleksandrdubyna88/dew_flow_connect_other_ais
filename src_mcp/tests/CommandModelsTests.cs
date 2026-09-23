@@ -92,6 +92,20 @@ public sealed class CommandModelsTests
     }
 
     [Fact]
+    public void TwoSpellingsOfOneKind_AreOneRow_AndNeverAnException()
+    {
+        // JSON object keys are case-sensitive, so both survive deserialisation — and they are one
+        // kind once trimmed and lower-cased. `ToDictionary` threw ArgumentException here, which the
+        // JsonException catch did not see, and it would have left through every settings read.
+        // The last one wins, which is what ConsultantRouting's indexer has always done.
+        var setting = CommandModelsSetting.Parse(
+            """{ "Codex": { "strongest": "first" }, "codex ": { "strongest": "second" } }""");
+
+        setting.Complaints.Should().BeEmpty();
+        setting.Map.Should().ContainSingle().Which.Value.Strongest.Should().Be("second");
+    }
+
+    [Fact]
     public void AKindThisBuildDoesNotKnow_IsKept()
     {
         // A newer panel may know a caller kind this server does not; dropping it would lose the

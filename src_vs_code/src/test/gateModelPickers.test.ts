@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { CALLER_KINDS } from '../consultSettings';
 import { commandModelsFrom } from '../commandModels';
-import { DEFAULTS } from '../settingsShape';
+import { DEFAULTS, settingMessageFrom, settingWrite } from '../settingsShape';
 import { type Control, type Page, lastWrite, panelState, runPanel } from './panelPageHarness';
 
 /**
@@ -49,6 +49,20 @@ test('every caller kind has both pickers, and each writes for its own kind', () 
       }, 'eight pickers share two slot names, so a write with no kind lands in whichever the host guesses');
     }
   }
+});
+
+test('what a picker sends reaches the host as a commandModel write, not as a setting of its own', () => {
+  // The page and `settingWrite` were each right, and the line between them rebuilt the message from
+  // a hand-written list of four fields: every choice in every picker became a write to an
+  // undeclared `coai.strongest`, refused, and the picker snapped back. Found in #117's code review.
+  const page = gate();
+  const control = picker(page, 'codex', 'strongest');
+  control.value = 'gpt-6-astra';
+  control.fire('change');
+
+  assert.deepEqual(settingWrite(settingMessageFrom(lastWrite(page))), {
+    kind: 'commandModel', key: 'strongest', value: 'gpt-6-astra', commandModel: 'codex',
+  });
 });
 
 test('"another model…" asks the host for a name for THAT kind and slot, and writes nothing yet', () => {

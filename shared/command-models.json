@@ -1,5 +1,6 @@
 {
-  "$comment": "The models the split order names per caller kind when nobody configured any (issue #117). Owned by neither half: coai-mcp's CommandModels.Shipped and the extension's SHIPPED_COMMAND_MODELS each assert themselves against this file in their own suite. An empty name means the order says the generic words instead of naming a model.",
+  "$comment": "The models the split order names per caller kind when nobody configured any (issue #117). Owned by neither half: coai-mcp's CommandModels.Shipped and the extension's SHIPPED_COMMAND_MODELS each assert themselves against this file in their own suite. An empty name means the order says the generic words instead of naming a model. orderOpensWith is the start of every model order: GateCommands.ModelOrderMarker in the server and the bench's own copy in SettingsApplied are both held to it.",
+  "orderOpensWith": "Do the SPLIT itself with ",
   "shipped": {
     "claude": { "strongest": "Fable", "implementation": "Opus" },
     "codex": { "strongest": "", "implementation": "" },

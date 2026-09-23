@@ -86,10 +86,11 @@ public static class SettingsCheck
     private const string Autonomy = "Work AUTONOMOUSLY";
     private const string OrdersASplit = "Split this plan into";
     private const string AlreadySplit = "already under way";
-    // The words the model order OPENS with, whichever models it names (`GateCommands.ModelOrderMarker`
-    // in the server). It was "Fable" until issue #117 made the models a per-caller choice: a Codex
-    // caller's order names no Fable, and the old check reported its switch as doing nothing.
-    private const string ModelOrder = "Do the SPLIT itself with";
+    // The words the model order OPENS with, whichever models it names. The server's copy is
+    // `GateCommands.ModelOrderMarker`; the bench references nothing of the server, so both are held to
+    // `shared/command-models.json`'s `orderOpensWith` by their own tests. It was "Fable" until issue
+    // #117 made the models a per-caller choice, and a Codex round would have read as a dead switch.
+    internal const string ModelOrder = "Do the SPLIT itself with ";
 
     /// <summary>The three switches, which are visible as the ORDERS a passing plan round hands back.</summary>
     /// <remarks>
