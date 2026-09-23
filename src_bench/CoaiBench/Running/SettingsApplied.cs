@@ -85,6 +85,12 @@ public static class SettingsCheck
     /// </remarks>
     private const string Autonomy = "Work AUTONOMOUSLY";
     private const string OrdersASplit = "Split this plan into";
+
+    // The words every split order of a first plan round carries, whatever size it names — the one
+    // phrase the "build it as it stands" order shares with the others (issue #131). The server's copy
+    // is `GateCommands.GateOrderMarker`; both are held to `shared/command-models.json`. An older
+    // server's order has none, which is why "Split this plan into" still counts beside it.
+    internal const string SplitOrder = "THE GATE runs once";
     private const string AlreadySplit = "already under way";
     // The words the model order OPENS with, whichever models it names. The server's copy is
     // `GateCommands.ModelOrderMarker`; the bench references nothing of the server, so both are held to
@@ -119,7 +125,7 @@ public static class SettingsCheck
         Expect(
             asked,
             "COAI_SPLIT_PLAN",
-            said(OrdersASplit) || said(AlreadySplit),
+            said(SplitOrder) || said(OrdersASplit) || said(AlreadySplit),
             "an order about splitting the plan",
             mismatches,
             examined);
@@ -127,7 +133,7 @@ public static class SettingsCheck
         // The model order rides on the split order and cannot appear without it. When the round said
         // "already split", its absence is not evidence about the switch — and an instrument reports
         // the absence of evidence as unchecked, never as a failure.
-        if (said(OrdersASplit))
+        if (said(SplitOrder) || said(OrdersASplit))
         {
             Expect(
                 asked, "COAI_SPLIT_WITH_FABLE", said(ModelOrder), "an order naming the strongest model", mismatches, examined);

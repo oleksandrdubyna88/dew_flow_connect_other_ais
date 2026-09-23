@@ -171,6 +171,14 @@ public sealed class GateCommandsTests
     }
 
     [Fact]
+    public void TheWordsEverySplitOrderCarries_AreTheOnesTheSharedFileHolds()
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(SharedFixtures.Text("command-models.json"));
+
+        GateCommands.GateOrderMarker.Should().Be(document.RootElement.GetProperty("splitOrderCarries").GetString());
+    }
+
+    [Fact]
     public void TheWordsTheBenchReads_AreTheOnesTheSharedFileHolds()
     {
         using var document = System.Text.Json.JsonDocument.Parse(SharedFixtures.Text("command-models.json"));
@@ -347,6 +355,18 @@ public sealed class GateCommandsTests
             Enumerable.Range(0, 7).SelectMany(i => new[] { $"- `src/a{i}.cs`", $"- `tests/a{i}.cs`" }));
 
         PlanShapeReader.Of(text).Files.Should().Be(14);
+    }
+
+    [Fact]
+    public void ABuildOrderWithPhasesUnderIt_CountsEveryStepInEveryPhase()
+    {
+        // Issue #131 made the steps decide the size, and the section used to end at ANY heading — so a
+        // "### Phase 1" under "## Build order" cut it at zero steps and a plan built in phases read as
+        // small. The section ends at a heading of its own level or higher. (#131's code review.)
+        var text = "# PLAN\n\n## Build order\n\n### Phase 1\n\n1. a\n2. b\n3. c\n\n### Phase 2\n\n4. d\n5. e\n\n"
+            + "## Test plan\n\n1. x\n2. y\n";
+
+        PlanShapeReader.Of(text).Steps.Should().Be(5, "both phases are the build order, and the test plan is not");
     }
 
     [Fact]

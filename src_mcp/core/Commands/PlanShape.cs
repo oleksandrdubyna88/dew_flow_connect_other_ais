@@ -40,8 +40,10 @@ public sealed record PlanShape(int Lines, int Steps, int Files, int Areas)
     /// threshold was 14), and the area pattern matches <c>src</c>, <c>tests</c> and
     /// <c>research</c> in prose, so nine plans in ten "touch four areas". Neither discriminates any
     /// more, so neither decides; both are still reported in <see cref="Numbers"/>.</para>
-    /// <para>This rule sorts the same corpus 15 / 129 / 28 / 10 / 5 — 8 % / 68 % / 14 % / 5 % / 2 % —
-    /// and the five it calls Huge include the Team server, who-holds-a-key and
+    /// <para>This rule sorts the same corpus 15 / 129 / 28 / 10 / 5 — 8 % / 68 % / 14 % / 5 % / 2 % — and,
+    /// re-measured after the build-order section stopped ending at a phase sub-heading, 189 plans (this
+    /// change's own two among them) 15 / 129 / 29 / 10 / 6. The ones it calls Huge include the Team
+    /// server, who-holds-a-key and
     /// every-message-is-written-down plans, each of which was in fact built as several epics.
     /// Length must be able to raise the size on its own: the last of those has no recognised build
     /// order at all.</para>
@@ -80,15 +82,15 @@ public sealed record PlanShape(int Lines, int Steps, int Files, int Areas)
 /// <remarks>
 /// <b>The extraction rules are written down here rather than implied</b>, because a plan is markdown
 /// somebody typed and a heuristic that silently reads zero from an unfamiliar layout would call a
-/// large plan small. Raised in this change's own plan round. Where the structure is absent the
-/// verdict falls back to what can still be counted — length and file names — which is why the rule
-/// has a size axis at all.
+/// large plan small. Raised in the first rule's own plan round. Where the structure is absent the
+/// verdict falls back to what can still be counted — the length — which is why the rule has a length
+/// axis at all.
 /// </remarks>
 public static class PlanShapeReader
 {
     private static readonly Regex NumberedItem = new(@"^\s{0,3}\d+[.)]\s", RegexOptions.Multiline);
-    private static readonly Regex BuildHeading = new(@"^##+\s*(build order|steps|implementation)\b", RegexOptions.Multiline | RegexOptions.IgnoreCase);
-    private static readonly Regex NextHeading = new(@"^##+\s", RegexOptions.Multiline);
+    private static readonly Regex BuildHeading = new(@"^(##+)\s*(build order|steps|implementation)\b", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+    private static readonly Regex NextHeading = new(@"^(#+)\s", RegexOptions.Multiline);
     private static readonly Regex FilePath = new(@"[\w./\\-]+\.(cs|ts|tsx|razor|json|yml|yaml|mjs|md|csproj|slnx)\b", RegexOptions.IgnoreCase);
     // A lookbehind rather than `\b` at the start: `\b` before a DOT never matches, so `.github` — a
     // legitimate area, and one of the five this repository has — was invisible to the count. Found
@@ -101,9 +103,8 @@ public static class PlanShapeReader
     {
         var text = planText ?? string.Empty;
         var lines = text.Length == 0 ? 0 : text.Split('\n').Length;
-        // By PATH, not by base name: `src/a.cs` and `tests/a.cs` are two files, and collapsing them
-        // made a plan naming fourteen of them look like a plan naming nine — which is the threshold
-        // the epics verdict turns on. (codex, this change's code round.)
+        // By PATH, not by base name: `src/a.cs` and `tests/a.cs` are two files. Reported with the
+        // size, no longer part of deciding it (issue #131). (codex, the first rule's code round.)
         var files = FilePath.Matches(text)
             .Select(m => m.Value.Replace('\\', '/').TrimStart('.', '/'))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -131,10 +132,19 @@ public static class PlanShapeReader
             return LongestRun(text);
         }
         var after = text[(heading.Index + heading.Length)..];
-        var next = NextHeading.Match(after);
+        var next = SectionEnd(after, heading.Groups[1].Length);
 
-        return NumberedItem.Matches(next.Success ? after[..next.Index] : after).Count;
+        return NumberedItem.Matches(after[..next]).Count;
     }
+
+    /// <summary>Where the build-order section ends: the first heading of its own level or higher.</summary>
+    /// <remarks>
+    /// Not the first heading of ANY level: a build order written in phases carries "### Phase 1" under
+    /// "## Build order", and ending there counted zero steps — harmless while files decided the size,
+    /// wrong since issue #131 made the steps decide it. (#131's code review.)
+    /// </remarks>
+    private static int SectionEnd(string after, int level) =>
+        NextHeading.Matches(after).FirstOrDefault(m => m.Groups[1].Length <= level)?.Index ?? after.Length;
 
     /// <summary>The longest unbroken sequence of numbered lines — a build order without a heading.</summary>
     /// <remarks>

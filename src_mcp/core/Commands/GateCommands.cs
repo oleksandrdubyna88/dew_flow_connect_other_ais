@@ -136,16 +136,21 @@ public static class GateCommands
             + GateEnding(context.GatePer, HasEpics(shape.Verdict));
     }
 
+    /// <summary>
+    /// The size a split order was computed from, with its numbers — or empty when this call orders no
+    /// split. What the server writes into the round's record, from the same reader the order used.
+    /// </summary>
+    public static string ShapeOrdered(CommandContext context) =>
+        OrdersSplit(context) ? PlanShapeReader.Of(context.PlanText).Described : string.Empty;
+
+    private const string NeverMore = " Fewer is fine when the work is smaller; never more.";
+
     private static string Judgement(PlanShape.Split size) => size switch
     {
-        PlanShape.Split.Small =>
-            "Split this plan into 3-5 logically complete STORIES — no epics. Fewer is fine when the work is smaller; never more.",
-        PlanShape.Split.Medium =>
-            "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES. Fewer is fine when the work is smaller; never more.",
-        PlanShape.Split.Large =>
-            "Split this plan into 3-4 EPICS, each of 3-4 logically complete STORIES. Fewer is fine when the work is smaller; never more.",
-        PlanShape.Split.Huge =>
-            "Split this plan into 4-5 EPICS, each of 3-5 logically complete STORIES. Fewer is fine when the work is smaller; never more.",
+        PlanShape.Split.Small => "Split this plan into 3-5 logically complete STORIES — no epics." + NeverMore,
+        PlanShape.Split.Medium => "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES." + NeverMore,
+        PlanShape.Split.Large => "Split this plan into 3-4 EPICS, each of 3-4 logically complete STORIES." + NeverMore,
+        PlanShape.Split.Huge => "Split this plan into 4-5 EPICS, each of 3-5 logically complete STORIES." + NeverMore,
         _ => "This plan is small enough to build as it stands; split it only if you disagree, and say why.",
     };
 
@@ -178,13 +183,18 @@ public static class GateCommands
     /// Without this the loop has no floor. A plan is split into epics; each epic comes back for its
     /// own plan review, which is the right thing to do; and the gate, having no memory of the first
     /// order, tells it to split into epics again. The operator saw it before it could happen — and
-    /// it is why the split order is a once-per-session thing rather than a per-round one. Under one
-    /// gate for the whole task a piece should not come back at all, and is told so (issue #131).
+    /// it is why the split order is a once-per-session thing rather than a per-round one.
+    /// <para>Under one gate for the whole task a piece should not come back at all, and is told so
+    /// (issue #131) — but SOFTLY: the "already split" memory is per caller for a day, so this is also
+    /// what a caller starting a genuinely NEW task within that day receives, and an order to skip the
+    /// code round would leave that task ungated. (#131's code review.)</para>
     /// </remarks>
     private static string AlreadySplitCommand(GateScope scope) => scope == GateScope.Task
         ? "This plan is a PIECE of a split that is already under way, so do NOT split it again — and it is "
-            + "not gated on its own: the task is gated once as a whole. Build it on the task's branch, commit "
-            + "it as ONE commit, and leave the review to the single code round at the end of the task."
+            + "not gated on its own: the task is gated once as a whole, so build it on the task's branch, "
+            + "commit it as ONE commit, and leave the review to the single code round at the end of the task. "
+            + "If this is in fact a NEW task rather than a piece of the one you split, gate it as usual: build "
+            + "it, review its diff through this gate, fix, document, test and commit."
         : "This plan is a PIECE of a split that is already under way, so do NOT split it again: build "
             + "it as one unit, review its diff through this gate, fix, document, test and commit. If "
             + "it is genuinely too big for one unit, say so in your summary and say what you would "

@@ -5,15 +5,17 @@
  */
 
 import { compareVersions } from './coaiInstall';
+import { COMMAND_MODELS_SINCE } from './commandModels';
 
 /**
  * The first `coai-mcp` whose split order gates once per epic or per task rather than after every story.
  *
- * <p>The same release as the per-caller models (#117), which is the next minor after mcp 0.32.0.
- * Set too LOW this stays silent on a server that still orders a round per story — the unsafe
- * direction; whoever cuts the release keeps it level with the tag.</p>
+ * <p>The SAME release as the per-caller models (#117) — the issue run ships as one release — so it is
+ * that constant rather than a second number to keep level with the tag. If the two ever ship apart,
+ * this becomes a literal of its own. Set too LOW it stays silent on a server that still orders a round
+ * per story, the unsafe direction.</p>
  */
-export const GATE_PER_SINCE = '0.33.0';
+export const GATE_PER_SINCE = COMMAND_MODELS_SINCE;
 
 /**
  * The sentence beside the choice while the installed server would ignore it — or nothing.

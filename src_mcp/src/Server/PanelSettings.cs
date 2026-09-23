@@ -727,7 +727,7 @@ public sealed record PanelSettings
             Autonomous = Flag(env, "COAI_AUTONOMOUS"),
             SplitPlan = Flag(env, "COAI_SPLIT_PLAN"),
             SplitWithFable = Flag(env, "COAI_SPLIT_WITH_FABLE"),
-            GatePer = GateScopeOf(env(Key.GatePer) ?? string.Empty) ?? Core.Commands.GateScope.Epic,
+            GatePer = GateScopeOf(env(Key.GatePer) ?? string.Empty),
             LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
             ? effort.Trim().ToLowerInvariant()
             : "none",
@@ -826,20 +826,25 @@ public sealed record PanelSettings
         [.. WhyBackoff(env), .. WhyExhausted(env), .. WhyWorkspace(env), .. WhyGatePer(env), .. WhyRoles(roles)];
 
     private static IReadOnlyList<UnrecognisedSetting> WhyGatePer(Func<string, string?> env) =>
-        env(Key.GatePer) is { Length: > 0 } scope && GateScopeOf(scope) is null
+        env(Key.GatePer) is { Length: > 0 } scope && !AGateScopeWeKnow(scope)
             ? [new UnrecognisedSetting(
                 Key.GatePer,
                 $"{Key.GatePer} is '{scope}', which this server does not know — split work is gated "
               + "once per epic, as it is by default. The values are 'epic' and 'task'.")]
             : [];
 
-    /// <summary><c>COAI_GATE_PER</c> as a scope, or nothing when the word is not one (issue #131).</summary>
-    private static Core.Commands.GateScope? GateScopeOf(string value) => value.Trim().ToLowerInvariant() switch
-    {
-        "epic" => Core.Commands.GateScope.Epic,
-        "task" => Core.Commands.GateScope.Task,
-        _ => null,
-    };
+    private static bool AGateScopeWeKnow(string value) =>
+        string.Equals(value.Trim(), "epic", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value.Trim(), "task", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <c>COAI_GATE_PER</c> as a scope: <c>task</c> is one gate for the whole task, anything else is
+    /// per epic — an unknown word is said by <see cref="WhyGatePer"/> (issue #131).
+    /// </summary>
+    private static Core.Commands.GateScope GateScopeOf(string value) =>
+        string.Equals(value.Trim(), "task", StringComparison.OrdinalIgnoreCase)
+            ? Core.Commands.GateScope.Task
+            : Core.Commands.GateScope.Epic;
 
     private static IReadOnlyList<UnrecognisedSetting> WhyBackoff(Func<string, string?> env) =>
         env(Key.Backoff) is { Length: > 0 } backoff
