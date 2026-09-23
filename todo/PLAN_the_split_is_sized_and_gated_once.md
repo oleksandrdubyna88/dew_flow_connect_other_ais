@@ -93,7 +93,10 @@ has no column for it, `RoundContext` does not carry it, and the only trace is on
    - **per epic**: each epic is one unit of review — its own branch, one `review_plan` with the epic's
      plan, its stories built WITHOUT a gate each, one `review_code` over the epic's whole diff, and the
      epic committed as ONE commit before the next begins. A Small plan (stories, no epics) is one unit:
-     one code round over the whole diff at the end.
+     one code round over the whole diff at the end. **The epics stack** (plan round 1, gemini): the
+     order says epic N+1 branches from epic N's commit, and its `review_code` passes epic N's commit as
+     `baseRef` — so each round reviews that epic's diff alone while its read-only worktree holds every
+     epic before it. No task-level round follows the last epic; that is what *per task* is for.
    - **per task**: this plan round is the only plan gate; every epic and story is built on this branch
      with no gate of its own, one `review_code` over the whole task's diff at the end, and each epic
      still committed as ONE commit.
@@ -105,9 +108,12 @@ has no column for it, `RoundContext` does not carry it, and the only trace is on
    the orders exactly as the caller received them, `[]` when none) and `rounds.plan_shape` (the size and
    its numbers, `''` when no verdict was computed). `--log` carries both on `LoggedRound`; the rounds
    log page shows them on the round's detail as **Orders given**, one line per order, the size first.
-5. **Old halves degrade honestly**: an older extension ignores the two new members; a newer extension
-   reading a database an older server wrote finds no column (`pragma_table_info`, as `RoundsQuery`
-   already asks) and shows nothing rather than "no orders"; the panel says beside the radio buttons when
+5. **Old halves degrade honestly**: an older extension ignores the two new members; a database not yet
+   migrated (read read-only, so its steps never run for the reader) has no such columns, and `--log`
+   then answers `commands: null`-free — the members are ABSENT, never `[]`, so the page can tell "no
+   orders were recorded" from "no orders were given" (it asks `pragma_table_info`, as `RoundsQuery`
+   already does for `base_ref`). The migration itself is the existing ordered `user_version` step list
+   (`SqliteMigrator`), which runs each step once per database; the panel says beside the radio buttons when
    the installed server predates `COAI_GATE_PER` (the #117 skew-note shape).
 
 ## Constraints
