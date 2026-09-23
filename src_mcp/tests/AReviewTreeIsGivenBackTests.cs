@@ -446,14 +446,11 @@ public sealed class AReviewTreeIsGivenBackTests : IAsyncLifetime
     private async Task<bool> Registered(string path)
     {
         var listed = await Run(_repo, "worktree", "list", "--porcelain");
-        var wanted = Path.GetFullPath(path).Replace('\\', '/').TrimEnd('/');
-
+        // Git lists the REAL path, which behind a link (every macOS temp directory) is not the one we
+        // made the tree under. (The mcp-v0.31.0 release build, osx-arm64.)
         return listed.StdOut.Replace("\r", "").Split('\n')
             .Where(l => l.StartsWith("worktree ", StringComparison.Ordinal))
-            .Any(l => string.Equals(
-                Path.GetFullPath(l["worktree ".Length..].Trim()).Replace('\\', '/').TrimEnd('/'),
-                wanted,
-                StringComparison.OrdinalIgnoreCase));
+            .Any(l => WorktreePaths.Same(l["worktree ".Length..].Trim(), path));
     }
 
     private async Task<string> ShaOf(string repo, string rev)

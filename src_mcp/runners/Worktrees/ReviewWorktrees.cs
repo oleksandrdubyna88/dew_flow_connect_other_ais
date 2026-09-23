@@ -371,14 +371,9 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     private async Task<bool> RegisteredButMissingAsync(string repoPath, string path, CancellationToken ct)
     {
         var listed = await _at.GitAsync(repoPath, ["worktree", "list", "--porcelain"], ReviewTreeRoot.Asking, ct);
-        var wanted = Path.GetFullPath(path).Replace('\\', '/');
-
         return listed.Ran && listed.Ok && listed.Lines.Any(line =>
             line.StartsWith("worktree ", StringComparison.Ordinal)
-            && string.Equals(
-                Path.GetFullPath(line["worktree ".Length..].Trim()).Replace('\\', '/'),
-                wanted,
-                StringComparison.OrdinalIgnoreCase));
+            && WorktreePaths.Same(line["worktree ".Length..].Trim(), path));
     }
 
     /// <summary>
