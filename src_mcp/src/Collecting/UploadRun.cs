@@ -297,7 +297,7 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
     /// repaired. A lost comment is the server's own sentence. Neither line ever carries a comment's
     /// text — the symbol and the server's reason only, because the comment is logged nowhere.
     /// </remarks>
-    private void Report(IReadOnlyDictionary<string, StoredPair> byId, IReadOnlyList<UploadResult> answers)
+    private void Report(Dictionary<string, StoredPair> byId, IReadOnlyList<UploadResult> answers)
     {
         foreach (var answer in answers.Where(one => one.Why.Length > 0))
         {

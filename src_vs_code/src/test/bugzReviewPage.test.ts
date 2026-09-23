@@ -451,7 +451,7 @@ interface Page {
   /** The box losing focus: the page hears `change`. */
   leave(box: CommentBox): void;
   /** Every pause the page is waiting out, run now. */
-  pause(): void;
+  waitOut(): void;
 }
 
 /** What the page is drawn with, beyond the pairs — every field optional, as the page has it. */
@@ -589,7 +589,7 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
   let onInput: ((event: { target: unknown }) => void) | undefined;
   let onChange: ((event: { target: unknown }) => void) | undefined;
   // The page's pauses, held rather than timed: a test that waited a real second and a half would be
-  // slow, and one that raced a real timer would be flaky. `pause()` runs whatever is waiting.
+  // slow, and one that raced a real timer would be flaky. `waitOut()` runs whatever is waiting.
   const pauses = new Map<number, () => void>();
   let nextPause = 1;
 
@@ -732,7 +732,7 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
       assert.ok(onChange !== undefined, 'the page never listened for a box being left');
       onChange({ target: box });
     },
-    pause: () => {
+    waitOut: () => {
       const waiting = [...pauses.values()];
       pauses.clear();
       for (const then of waiting) {
@@ -2064,7 +2064,7 @@ test('typing and then pausing posts the words once, for the pair they were typed
   assert.deepEqual(acted(page).filter((one) => one.type === 'comment'), [],
     'nothing is WRITTEN on a keystroke — each write is a process');
 
-  page.pause();
+  page.waitOut();
   assert.deepEqual(acted(page).filter((one) => one.type === 'comment'), [{ type: 'comment', id: 2, text: 'this one bit us' }]);
 });
 
@@ -2089,7 +2089,7 @@ test('leaving the box posts what is in it, and the pause it replaced does not po
 
   page.type(box, 'half a thought');
   page.leave(box);
-  page.pause();
+  page.waitOut();
 
   assert.deepEqual(acted(page).filter((one) => one.type === 'comment'), [{ type: 'comment', id: 1, text: 'half a thought' }],
     'the blur flushes the words, and a second post of the same words would be a second write');
@@ -2128,7 +2128,7 @@ test('a sent pair\'s box is read-only, says it was sent, and typing into it post
 
   page.type(box, 'an edit after the send');
   page.leave(box);
-  page.pause();
+  page.waitOut();
   assert.deepEqual(acted(page), [], 'words changed after the send would never cross, so none are posted');
 });
 

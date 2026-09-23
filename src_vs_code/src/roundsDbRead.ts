@@ -403,7 +403,7 @@ export type PairsRead =
  */
 export type KeepWrite =
   | { readonly ok: true; readonly decided: number }
-  | { readonly ok: false; readonly why: string; readonly tooOld?: boolean };
+  | { readonly ok: false; readonly why: string; readonly tooOld?: boolean; readonly decided?: number };
 
 
 /**
@@ -772,7 +772,9 @@ async function keepEach(
     const ids = decisions.filter((one) => one.keep === keep).map((one) => one.findingId);
     const written = await writeKeep(executable, ids, keep, withFile, run);
     if (!written.ok) {
-      return written;
+      // With what the earlier calls already wrote: they are in the store, and "could not be saved"
+      // alone would tell a person none of it was. (CodeRabbit, the pull request.)
+      return { ...written, decided };
     }
     decided += written.decided;
   }

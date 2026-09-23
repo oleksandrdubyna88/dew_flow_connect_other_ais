@@ -45,12 +45,15 @@ test('the panel records what the page opened, and both kinds of press reach the 
     'one press and every press must both end in remember(), or Expand all records nothing');
   // A decision carries the page's ids and keep AND each pair's words — the draft when one is held —
   // so a keep press cannot write an empty comment over a stored one (story 4.2).
-  assert.match(text, /case 'decide':\s*this\.queue\(decisionsFor\(m\.ids, m\.keep, this\.held, this\.drafts\)\);/u);
+  // Resolved when the write RUNS, not when the press arrives: a thunk, evaluated after the previous
+  // link's redraw has refreshed `this.held`. Evaluated eagerly, a comment queued behind a pending
+  // Keep carried the OLD keep and quietly undid the decision. (CodeRabbit, the pull request.)
+  assert.match(text, /case 'decide':\s*this\.queue\(\(\) => decisionsFor\(m\.ids, m\.keep, this\.held, this\.drafts\)\);/u);
   // And a comment is held as a draft BEFORE its write is queued, so a redraw while the write is in
   // the air still paints the words — pinned whole, the draft and the write in that order.
   assert.match(
     text,
-    /case 'comment':\s*this\.drafts = new Map\(\[\.\.\.this\.drafts, \[m\.id, m\.text\]\]\);\s*this\.queue\(commentWrite\(m\.id, m\.text, this\.held\)\);/u,
+    /case 'comment':\s*this\.drafts = new Map\(\[\.\.\.this\.drafts, \[m\.id, m\.text\]\]\);\s*this\.queue\(\(\) => commentWrite\(m\.id, m\.text, this\.held\)\);/u,
     'a comment must become a draft and then a write, or a redraw loses what was typed');
   // And a draft is let go ONLY when the write landed: a refused comment (65) or a binary too old
   // for comments (64) must leave the words in their box, with the reason on screen. Pinned whole —
@@ -67,8 +70,9 @@ test('the panel records what the page opened, and both kinds of press reach the 
     'a draft is held and never written on its own');
   assert.match(
     text,
-    /this\.queue\(unwritten\(this\.drafts, this\.held\)\);\s*this\.drafts = new Map<number, string>\(\);/u,
-    'a panel closed inside a pause must write what it holds before it forgets it');
+    /for \(const \[id, text\] of this\.drafts\) \{\s*this\.queue\(\(\) => unwritten\(new Map\(\[\[id, text\]\]\), this\.held\)\);\s*\}\s*this\.drafts = new Map<number, string>\(\);/u,
+    'a panel closed inside a pause must write what it holds before it forgets it — ONE write per draft, '
+    + 'because a batch with one refused comment is refused whole and would take the others with it');
 });
 
 test('the panel hands its open rows to the page on every draw', () => {

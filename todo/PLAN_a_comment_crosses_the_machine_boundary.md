@@ -402,6 +402,23 @@ three disproved by measurement (`Corpus.cs` is 760 lines; `--pairs-decide` IS in
 - **`research/architecture.md` still said three fields cross, on one route** (codex) — true until 4.1,
   and nobody had changed it. Diagram and text now show the fourth field and the second route.
 
+### What the pull request's review changed (2026-09-23)
+
+CodeRabbit read #466 and left four findings, all accepted; SonarCloud's gate failed on reliability.
+
+- **A queued write captured its decisions at the press** — a keypress behind a slow write wrote the keep
+  as it was when pressed, over one the person had changed since. The panel's chain now takes a thunk and
+  works the decisions out when it runs.
+- **A close flushed every draft as one batch**, so one refused draft sank the rest. It is one write per
+  draft now.
+- **A fallback that failed part-way said nothing had been written.** `writeDecisions` keeps the count on
+  the failure and the notice says *N of M*.
+- **The file list above still named `Program.PairsDecide.cs`**, which the plan round had already replaced
+  with `Collecting/PairsDecideMode.cs`.
+- **Sonar**: the test harness's `pause()` read as a debugger command (S8959, three false positives that
+  set reliability to C) and is `waitOut()`; a loop that was a filter (S3267) and two private parameters
+  typed wider than their one caller (CA1859).
+
 ## What changes, file by file
 
 ### 4.1 — the server accepts a comment (one PR, released as `bugs-v0.3.0`, DEPLOYED before 4.2 merges)
@@ -465,7 +482,8 @@ the id.
 - `PairsWire.cs` — `DecideAsk(FindingId, Keep, Comment = "")` and its request; `RoundsDb.RecordDecide`
   writes keep AND comment in one transaction and refuses a changed comment on a sent pair (item 4);
   `RecordKeep` stays for `--pairs-keep`.
-- `Program.PairsDecide.cs` (new; `Program` becomes `partial`, item 5) —
+- `Collecting/PairsDecideMode.cs` (new; a named unit, not a `partial` `Program` — item 5 as the plan
+  round corrected it, with `Program.Note`/`Program.Flags` made `internal`) —
   `"--pairs-decide" => Startup.PairsDecide`: reads the file (65 on a fault), validates every keep and
   every comment through `CommentRule.Refuse` (65, naming the finding id and the reason), normalises
   CRLF/CR to LF, trims, writes, prints `{"decided": N}`. 74 for a database that will not open. Never 64.

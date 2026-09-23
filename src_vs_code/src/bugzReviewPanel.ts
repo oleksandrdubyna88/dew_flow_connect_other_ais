@@ -382,11 +382,7 @@ export class BugzReviewPanel {
         toneHook.dispose();
         // A closed window starts collapsed when it comes back. This object outlives the webview.
         this.expanded = new Set<number>();
-        // Every draft the store does not have yet is written NOW, as one batch: a page closed inside
-        // the pause before a write would otherwise take the words with it. The chain outlives the
-        // webview, so the write finishes after this panel is gone.
-        this.queue(unwritten(this.drafts, this.held));
-        this.drafts = new Map<number, string>();
+        this.flushDrafts();
         // And anonymised, with nothing remembered: the cache's lifetime IS the window's.
         this.realText = false;
         this.real = new Map<number, HeldReal>();
@@ -421,7 +417,7 @@ export class BugzReviewPanel {
 
     switch (m.type) {
       case 'decide':
-        this.queue(decisionsFor(m.ids, m.keep, this.held, this.drafts));
+        this.queue(() => decisionsFor(m.ids, m.keep, this.held, this.drafts));
 
         return;
       case 'draft':
@@ -430,7 +426,7 @@ export class BugzReviewPanel {
         return;
       case 'comment':
         this.drafts = new Map([...this.drafts, [m.id, m.text]]);
-        this.queue(commentWrite(m.id, m.text, this.held));
+        this.queue(() => commentWrite(m.id, m.text, this.held));
 
         return;
       case 'expand':
@@ -532,19 +528,41 @@ export class BugzReviewPanel {
   }
 
   /**
+   * Writes every draft the store does not have yet, NOW, and forgets them.
+   *
+   * <p>A page closed inside the pause before a write would otherwise take the words with it; the chain
+   * outlives the webview, so the writes finish after this panel is gone.</p>
+   *
+   * <p><b>One write per draft</b>: a batch is refused whole when one comment is refused, and a pasted
+   * bidi mark in one box would otherwise take every other box's words with it. (CodeRabbit.) The TEXT
+   * is taken now, because the map is emptied below; the keep is read when the write runs, for the
+   * reason {@link queue} gives.</p>
+   */
+  private flushDrafts(): void {
+    for (const [id, text] of this.drafts) {
+      this.queue(() => unwritten(new Map([[id, text]]), this.held));
+    }
+    this.drafts = new Map<number, string>();
+  }
+
+  /**
    * Writes one batch, then redraws from storage.
    *
    * <p>Serialised through {@link inFlight} because a person can press Keep and then Drop faster than
    * a write completes, and two redraws racing would leave the page showing whichever finished last
    * rather than what is true.</p>
    */
-  private queue(decisions: readonly Decision[]): void {
-    if (decisions.length === 0) {
-      // A comment about a pair this panel no longer holds: nothing to write, and no keep to invent.
-      return;
-    }
-
+  private queue(asked: () => readonly Decision[]): void {
     this.inFlight = this.inFlight.then(async () => {
+      // Resolved HERE, when the write runs, and not when the press arrived: the previous link has
+      // redrawn by now, so `this.held` carries the keep it wrote. Resolved at the press, a comment
+      // queued behind a pending Keep carried the OLD keep and quietly undid it. (CodeRabbit.)
+      const decisions = asked();
+      if (decisions.length === 0) {
+        // A comment about a pair this panel no longer holds: nothing to write, no keep to invent.
+        return;
+      }
+
       const written = await this.hooks.decide(decisions);
       if (written.ok) {
         // Only a draft that is exactly what landed is let go, and only when ALL of it landed.

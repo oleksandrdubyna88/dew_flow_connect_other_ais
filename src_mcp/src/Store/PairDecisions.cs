@@ -57,18 +57,11 @@ internal static class PairDecisions
     /// </remarks>
     private static string FirstChangeToASentComment(
         SqliteConnection db, IReadOnlyList<CommentedDecision> decisions)
-    {
-        foreach (var decision in decisions)
-        {
-            if (ChangesASentComment(db, decision))
-            {
-                return $"pair {decision.FindingId} was already sent, so its comment cannot change: "
-                       + "the new text would never cross. Nothing was written.";
-            }
-        }
-
-        return string.Empty;
-    }
+        => decisions
+            .Where(decision => ChangesASentComment(db, decision))
+            .Select(decision => $"pair {decision.FindingId} was already sent, so its comment cannot change: "
+                                + "the new text would never cross. Nothing was written.")
+            .FirstOrDefault(string.Empty);
 
     private static bool ChangesASentComment(SqliteConnection db, CommentedDecision decision)
     {

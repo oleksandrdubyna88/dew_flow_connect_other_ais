@@ -544,6 +544,22 @@ test('an old binary still takes a batch that carries no words, through --pairs-k
   assert.deepEqual(seen.map((args) => args[0]), ['--pairs-decide', '--pairs-keep', '--pairs-keep']);
 });
 
+test('a fallback that fails part-way still says how many decisions it had already written', async () => {
+  // Two keep values are two `--pairs-keep` calls. When the second fails, the first has already
+  // written — and "could not be saved" alone tells a person nothing was, while the page redraws the
+  // written ones as decided. (CodeRabbit, the pull request.)
+  const { run } = calls(
+    { code: 64, output: '' }, { code: 0, output: '{"decided":2}' }, { code: 74, output: 'the database went away' });
+
+  const written = await writeDecisions('coai-mcp.exe', [
+    { findingId: 7, keep: 1, comment: '' },
+    { findingId: 8, keep: 1, comment: '' },
+    { findingId: 9, keep: 0, comment: '' },
+  ], fileless().withFile, run);
+
+  assert.deepEqual(written, { ok: false, why: 'the database went away', decided: 2 });
+});
+
 test('an old binary is NOT handed a batch that carries words: it would keep the keep and lose them', async () => {
   const { run, seen } = calls({ code: 64, output: '' }, { code: 0, output: '{"decided":1}' });
 

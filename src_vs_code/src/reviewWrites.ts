@@ -21,7 +21,7 @@ import type { KeepWrite } from './roundsDbRead';
  */
 export async function reportWrite(written: KeepWrite, asked: number): Promise<void> {
   if (!written.ok) {
-    await notify(failureOf(written.why, written.tooOld === true));
+    await notify(failureOf(written, asked));
   } else if (written.decided !== asked) {
     await notify({
       as: 'warning',
@@ -35,9 +35,21 @@ export async function reportWrite(written: KeepWrite, asked: number): Promise<vo
   }
 }
 
-/** The notice for a write that failed — the binary too old for comments, or anything else. */
-function failureOf(why: string, tooOld: boolean): Parameters<typeof notify>[0] {
-  return tooOld
-    ? { as: 'error', class: 'failure', source: 'bugzReview', code: 'bugz-comment-needs-a-newer-server', title: TOO_OLD_FOR_COMMENTS, detail: why }
-    : { as: 'error', class: 'failure', source: 'bugzReview', code: 'bugz-decision-not-saved', title: `The decision could not be saved: ${why}`, detail: why };
+/**
+ * The notice for a write that failed — the binary too old for comments, or anything else.
+ *
+ * <p>A failure part-way through an old binary's fallback says how many decisions it had already
+ * written: they are in the store and the redraw shows them, and "could not be saved" alone would tell
+ * a person none were. (CodeRabbit, the pull request.)</p>
+ */
+function failureOf(written: Extract<KeepWrite, { ok: false }>, asked: number): Parameters<typeof notify>[0] {
+  if (written.tooOld === true) {
+    return { as: 'error', class: 'failure', source: 'bugzReview', code: 'bugz-comment-needs-a-newer-server', title: TOO_OLD_FOR_COMMENTS, detail: written.why };
+  }
+
+  const title = (written.decided ?? 0) > 0
+    ? `${written.decided} of ${asked} decisions were written, and the rest could not be: ${written.why}`
+    : `The decision could not be saved: ${written.why}`;
+
+  return { as: 'error', class: 'failure', source: 'bugzReview', code: 'bugz-decision-not-saved', title, detail: written.why };
 }

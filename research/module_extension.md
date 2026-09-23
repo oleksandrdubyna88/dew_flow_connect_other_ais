@@ -8276,10 +8276,14 @@ The page posts `{type: 'draft', id, text}` per keystroke — a message, no proce
 `{type: 'comment', id, text}` after a pause of a second and a half or on `change`. The panel holds the
 latest as a DRAFT, drawn over the stored comment on every paint; a `comment` also queues ONE write
 carrying that pair's current keep and the words, through the same `inFlight` chain as a decision.
-**Closing the panel writes every draft the store does not have, as one batch** (`unwritten`), before it
-forgets them: a page closed inside a pause lost the words until code round 1 of 4.2 (codex, twice). A
-draft on a SENT pair is left out of that batch, because `--pairs-decide` refuses a whole batch that
-changes a sent pair's words.
+**A queued write works out what it writes when it RUNS, not when it was asked for**: the chain takes a
+thunk, so a keypress queued behind a slow write reads the keep and the drafts as they are by then —
+capturing them at the press wrote a keep the person had already changed. (CodeRabbit, the pull request.)
+**Closing the panel writes every draft the store does not have, one write per draft** (`unwritten`),
+before it forgets them: a page closed inside a pause lost the words until code round 1 of 4.2 (codex,
+twice), and one batch for all of them let a single refused draft sink every other (CodeRabbit, the pull
+request). A draft on a SENT pair is left out, because `--pairs-decide` refuses a changed comment on a
+sent pair.
 
 A decision press carries each HELD pair's draft or stored words (`decisionsFor`), so a keep never
 writes an empty comment over a stored one — and an id from a page drawn before a recollection is
@@ -8290,7 +8294,9 @@ comment (65) and a binary too old for comments (64) leave it in its box, with th
 **`writeDecisions` is the version hinge.** `--pairs-decide` exiting 64 is a `coai-mcp` older than
 comments. A batch with no words then goes to `--pairs-keep`, keep by keep, which says the same thing to
 an old binary; a batch WITH words does not — an old binary would keep the keep and drop them in silence —
-and the answer stays `tooOld` with *"This coai-mcp is too old to keep a comment"*.
+and the answer stays `tooOld` with *"This coai-mcp is too old to keep a comment"*. A fallback that
+fails part-way says how many it had already written (`decided` on the failure), and the notice says
+*"N of M decisions were written, and the rest could not be"* rather than that none were.
 
 **Five modules, and why each is where it is.** `commentContract.ts` holds the two facts more than the
 page needs — the limit and the too-old sentence — and imports nothing: `roundsDbRead.ts`, which spawns

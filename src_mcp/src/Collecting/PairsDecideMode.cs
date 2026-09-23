@@ -106,7 +106,7 @@ internal static class PairsDecideMode
     /// A document with no `items` is malformed rather than empty, for `--pairs-keep`'s reason: `{}`
     /// must not look like a successful batch of nothing. An explicit `[]` stays a legitimate no-op.
     /// </remarks>
-    private static IReadOnlyList<CommentedDecision> Wanted(DecideRequest? request, out string refusal)
+    private static List<CommentedDecision> Wanted(DecideRequest? request, out string refusal)
     {
         if (request?.Items is not { } items)
         {
