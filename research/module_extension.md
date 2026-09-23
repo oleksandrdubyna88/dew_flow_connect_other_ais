@@ -7647,7 +7647,7 @@ is as tall as it was; if the path turns out to be what a person scans for, movin
 summary line is a presentation change epic 2.2 can make when the project and language tabs arrive.
 And the decide path still has no visible in-flight state — the observation carried out of story
 1.1's code round; it is a durable-status change to `bugzReviewPanel.ts` and `--pairs-keep`, not a
-projection change, and it is still owed.
+projection change, and it is still owed — carried by [PLAN_the_review_page_tail.md](../todo/PLAN_the_review_page_tail.md) since 2026-09-23.
 
 ### Tabs by project and by language — and the identity rule the corpus rewrote
 

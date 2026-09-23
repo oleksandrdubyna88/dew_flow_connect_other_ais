@@ -1,15 +1,14 @@
 # PLAN — a comment crosses the machine boundary
 
-> Status: **story 4.1 IMPLEMENTED and DEPLOYED 2026-09-22 (`bugs-v0.3.0`); stories 4.2a and 4.2b
-> IMPLEMENTED 2026-09-22 in one pull request, not yet RELEASED.** The ingest server takes a comment on
-> `POST /ingest/commented` and refuses one on `/ingest`; `coai-mcp` stores it (`collect_pairs.comment`,
-> `comment_lost`), writes it with its decision through `--pairs-decide` and sends it on its own route;
-> the review page carries the box and says, beside it, that the words leave the machine. What is
-> still NOT done: the releases (`mcp-v0.31.0`, `extension-v0.51.0`, and `bugs-v0.3.1` for the retry
-> fix below), the deploy of `bugs-v0.3.1`, and the live verification 4.1's build step asks for — an
-> authenticated `POST /ingest/commented` answered with `contract: 2`, and `user_version = 5` read off
-> the host. The plan is promoted to `research/` once those are recorded. **The operator folded 4.2a
-> and 4.2b into ONE pull request with ONE review gate** — see *4.2 in one pull request* below.
+> Status: **IMPLEMENTED, 2026-09-23.** All three stories shipped and are released: 4.1 as
+> `bugs-v0.3.0` (deployed 2026-09-22), 4.2a and 4.2b in ONE pull request (#466) as `mcp-v0.31.0` and
+> `extension-v0.51.0`, and the server's retry fix as `bugs-v0.4.0`, deployed 2026-09-23 and read off
+> the host (`user_version = 5`, one administrator, no warning). **Deviations:** the bugs release is
+> `0.4.0`, not the `0.3.1` this plan named — release-please versions by commit type and #466 was a
+> `feat`; the authenticated `POST /ingest/commented` was NOT sent — the operator accepted the route
+> evidence and the real-binary tests in its place (2026-09-23); and two releases each found a defect
+> the pull-request CI could not (#470: a review tree behind a link, macOS only; #473: the release job's
+> suite fetched no tags). The open tail is under *The five left open* below.
 >
 > Scope: `src_mcp/core` (the wire type
 > both halves compile against), `src_bugs` (the ingest server, its schema and its one-shots),
@@ -20,9 +19,9 @@
 > (story 6 there), split as that plan split it: **4.1 the server accepts a comment**, which ships
 > and is deployed BEFORE **4.2 the client sends one**.
 >
-> Related: [PLAN_a_corpus_of_real_defects.md](../research/PLAN_a_corpus_of_real_defects.md) (the
-> corpus and the three-field promise), [PLAN_who_holds_a_key.md](../research/PLAN_who_holds_a_key.md)
-> (the keys, the send, `bugs-v0.2.0`), [PLAN_the_bugs_release_line.md](../research/PLAN_the_bugs_release_line.md)
+> Related: [PLAN_a_corpus_of_real_defects.md](PLAN_a_corpus_of_real_defects.md) (the
+> corpus and the three-field promise), [PLAN_who_holds_a_key.md](PLAN_who_holds_a_key.md)
+> (the keys, the send, `bugs-v0.2.0`), [PLAN_the_bugs_release_line.md](PLAN_the_bugs_release_line.md)
 > (the frozen schema step and the migration discipline), `deploy/bugs/README.md` (the promise table
 > this widens).
 
@@ -617,8 +616,10 @@ the id.
 - [ ] Step 0's fixture is committed BEFORE the type changes; the deployed server's 404 for
       `POST /ingest/commented` and its version are recorded here with a date; and the `bugs-v0.2.0`
       archive's SHA-256 is pinned in the same commit.
-- [ ] 4.1 shipped as `bugs-v0.3.0`, deployed, and an authenticated `POST /ingest/commented` is
-      accepted where it was 404 before — recorded with a date BEFORE PR 3 merges.
+- [x] 4.1 shipped as `bugs-v0.3.0`, deployed, and an authenticated `POST /ingest/commented` is
+      accepted where it was 404 before — recorded with a date BEFORE PR 3 merges. **Replaced by
+      operator decision, 2026-09-23:** the route evidence below and the real-binary tests stand in
+      for the authenticated request, which would have written a test pair into production.
 - [x] `OnlyFourFieldsLeaveTests` exists, `OnlyThreeFieldsLeaveTests` does not, the four names are
       asserted, the five private fields are still asserted absent, and the comment-less wire is
       byte-identical to the captured fixture.
@@ -648,7 +649,7 @@ the id.
 - [ ] After fifty real comments exist, the median length is read off `quarantine` and decision 1 is
       revisited in the promoted record.
 
-**The five left open, said exactly (2026-09-22).**
+**The five left open, said exactly (2026-09-22; updated 2026-09-23 at promotion).**
 
 - *Step 0's record* belongs to 4.1 and is not re-verified by the 4.2 pull request.
 - *The authenticated `POST /ingest/commented`* has NOT been sent to `bugs.remsoft.dev`. What is
@@ -656,7 +657,8 @@ the id.
   near-miss `/ingest/commentedX` answers 404, and `bugs-v0.2.0` answered 404 on the route itself. An
   authenticated request needs a contributor key on the production host, and writes a pair into its
   quarantine; that is the operator's decision to make, and it is asked for rather than taken.
-  `user_version = 5` has not been read off the host either.
+  **Decided 2026-09-23:** the operator accepted the route evidence and the real-binary tests instead.
+  `user_version = 5` was read off the host the same day, after the `bugs-v0.4.0` deploy.
 - *`--pairs-decide`'s exit codes* are asserted IN-PROCESS for all six (`ThePairModesTests`) and
   through the real binary for 0 and 65 (`bugzLiveContract.test.ts`). 74 and 64 are not driven through
   the real binary.
