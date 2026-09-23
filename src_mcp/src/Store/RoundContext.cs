@@ -55,6 +55,13 @@ public readonly record struct RoundContext(
     /// </remarks>
     public string BaseRef { get; init; } = string.Empty;
 
+    /// <summary>The orders this round handed the caller, exactly as sent — empty when it gave none.</summary>
+    /// <remarks>Issue #131: what a round ordered was written down nowhere but one log line.</remarks>
+    public ImmutableArray<string> Commands { get; init; } = [];
+
+    /// <summary>The size a split order was computed from and its numbers — empty when none was ordered.</summary>
+    public string PlanShape { get; init; } = string.Empty;
+
     /// <summary>Whether this finding is one the caller had already rejected.</summary>
     /// <remarks>
     /// Through the product's OWN rule for "the same defect" — same category, same file, lines within

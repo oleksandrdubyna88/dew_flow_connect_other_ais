@@ -134,6 +134,31 @@ test('an opened row asks for exactly one round, by the three fields the database
   assert.equal(found.findings[0]?.title, 'the fan rebuilt its buffer');
 });
 
+test('the orders a round gave ride on its findings answer, and an answer without them has none (issue #131)', async () => {
+  const withOrders = JSON.stringify({
+    known: true,
+    findings: [],
+    orders: { commands: ['Split this plan into 3-5 logically complete STORIES'], planShape: 'Small: 200 lines' },
+  });
+  const told = await readFindings('coai-mcp.exe', { sessionId: 's1', stage: 'PlanReview', number: 1 },
+    calls({ code: 0, output: withOrders }).run);
+  const older = await readFindings('coai-mcp.exe', { sessionId: 's1', stage: 'PlanReview', number: 1 },
+    calls({ code: 0, output: FOUND }).run);
+
+  assert.deepEqual(told.orders, { commands: ['Split this plan into 3-5 logically complete STORIES'], planShape: 'Small: 200 lines' });
+  assert.equal(older.orders, undefined, 'an older server, or an older database, sends none — and none is invented');
+});
+
+test('orders of the wrong shape are dropped, and the findings are still loaded', async () => {
+  for (const orders of [{ commands: 'one' }, { commands: [1], planShape: '' }, 'x', null]) {
+    const found = await readFindings('coai-mcp.exe', { sessionId: 's1', stage: 'PlanReview', number: 1 },
+      calls({ code: 0, output: JSON.stringify({ known: true, findings: [], orders }) }).run);
+
+    assert.equal(found.state, 'loaded', JSON.stringify(orders));
+    assert.equal(found.orders, undefined, JSON.stringify(orders));
+  }
+});
+
 test('a round the database has never heard of is ABSENT, which is not "it found nothing"', async () => {
   const { run } = calls({ code: 69, output: '' });
 

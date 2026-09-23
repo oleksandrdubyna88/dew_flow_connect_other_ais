@@ -4,6 +4,7 @@ using FluentAssertions;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Server;
+using CoaiMcp.Store;
 using Serilog.Core;
 
 namespace CoaiMcp.Tests;
@@ -107,7 +108,7 @@ public sealed class SplitOrderTests : IAsyncLifetime
         result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
     }
 
-    private PanelService Service(bool splitPlan) =>
+    private PanelService Service(bool splitPlan, Core.Commands.GateScope gatePer = Core.Commands.GateScope.Epic) =>
         new(
             new PanelSettings
             {
@@ -117,6 +118,7 @@ public sealed class SplitOrderTests : IAsyncLifetime
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
                 RateLimitBackoff = TimeSpan.FromMilliseconds(5),
                 SplitPlan = splitPlan,
+                GatePer = gatePer,
             },
             VaultKeys.None("no vault in tests"),
             default,
@@ -135,6 +137,34 @@ public sealed class SplitOrderTests : IAsyncLifetime
         await service.OpenAsync(_repo, branch);
         Script(Clean);
         return Parse(await service.ReviewPlanAsync(_repo, branch, plan));
+    }
+
+    [Theory]
+    [InlineData(Core.Commands.GateScope.Epic, "per EPIC")]
+    [InlineData(Core.Commands.GateScope.Task, "for the WHOLE task")]
+    public async Task TheGateScopeSetInThePanel_IsTheOneTheOrderGives(Core.Commands.GateScope scope, string words)
+    {
+        // Issue #131, through a real round: the setting reaches the order, and no order gates a story.
+        var order = CommandsOf(await PlanRound(Service(splitPlan: true, scope), "feature", BigPlan))[0];
+
+        order.Should().Contain(Core.Commands.GateCommands.GateOrderMarker + " " + words);
+        order.Should().NotContain("After EVERY story");
+    }
+
+    [Fact]
+    public async Task WhatARoundOrdered_IsWrittenDown_ExactlyAsTheCallerReceivedIt()
+    {
+        // Issue #131, symptom 3: the orders and the size must be readable after the fact, and what is
+        // stored must be what was SENT — never a second rendering of the same decision.
+        var answer = await PlanRound(Service(splitPlan: true), "feature", BigPlan);
+        var round = RoundsQuery.Read(_data).Rounds.Should().ContainSingle().Subject;
+
+        var orders = RoundsQuery.FindingsOf(_data, round.SessionId, round.Stage, round.Number).Orders;
+
+        orders.Should().NotBeNull();
+        orders!.Commands.Should().Equal(CommandsOf(answer));
+        orders.PlanShape.Should().StartWith(Core.Commands.PlanShapeReader.Of(BigPlan).Verdict.ToString())
+            .And.Contain("build step(s)");
     }
 
     [Fact]

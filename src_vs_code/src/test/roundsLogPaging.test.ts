@@ -356,6 +356,39 @@ test('the findings arrive addressed to one row, and are drawn there', () => {
   assert.doesNotMatch(page.at('rows').innerHTML, /Reading what this round found/);
 });
 
+test('the orders a round gave are drawn above what it found, the size first (issue #131)', () => {
+  const page = open([row({ foundState: 'unasked', foundCount: 0 })]);
+  page.click(hit('tr[data-key]', 'k1'));
+  page.deliver({
+    type: 'found',
+    id: 'k1',
+    state: 'loaded',
+    findings: [],
+    orders: {
+      commands: ['Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES. Fewer is fine.', 'Work AUTONOMOUSLY. Say so.'],
+      planShape: 'Medium: 400 lines, 8 build step(s), 3 file(s) named, 2 area(s) touched',
+    },
+  });
+  const html = page.at('rows').innerHTML;
+
+  assert.match(html, /Orders given/);
+  assert.match(html, /Medium: 400 lines/);
+  assert.match(html, /Split this plan into 2-3 EPICS/);
+  assert.match(html, /Work AUTONOMOUSLY/);
+  assert.ok(html.indexOf('Medium: 400 lines') < html.indexOf('Split this plan'), 'the size comes first');
+  assert.match(html, /This round found nothing/, 'the orders do not replace what the round found');
+});
+
+test('a round that gave no orders, or recorded none, draws no orders block at all', () => {
+  for (const orders of [undefined, { commands: [], planShape: '' }]) {
+    const page = open([row({ foundState: 'unasked', foundCount: 0 })]);
+    page.click(hit('tr[data-key]', 'k1'));
+    page.deliver({ type: 'found', id: 'k1', state: 'loaded', findings: [], ...(orders === undefined ? {} : { orders }) });
+
+    assert.doesNotMatch(page.at('rows').innerHTML, /Orders given/, JSON.stringify(orders));
+  }
+});
+
 test('the totals arrive by a push, because the page is painted before the database is read', () => {
   // The line under the table was embedded in the HTML and never sent again, and the panel stored the
   // totals without ever pushing them — so the whole SQL-counted line stayed empty for ever. (Code

@@ -1332,6 +1332,8 @@ public sealed partial class PanelService
                 // chosen by — and the pair from the panel (issue #117). A client nobody can identify
                 // is `other`, and is named no model rather than another vendor's.
                 Models = Core.Commands.CommandModels.For(_settings.CommandModels, callerKind),
+                // Once per epic or once for the task, never per story (issue #131).
+                GatePer = _settings.GatePer,
             };
             // The caller's one order is CLAIMED, and only on a round that would actually give it —
             // a claim taken on a code round would spend it on a round that issues nothing. The
@@ -1404,6 +1406,12 @@ public sealed partial class PanelService
                         // From the work, because the stage that assembled the diff is the only thing
                         // that resolved it. A plan round assembles none and leaves this empty.
                         BaseRef = roundWork.BaseRef,
+                        // What this round ORDERED, and the size a split order was computed from —
+                        // written down so "why five epics?" has an answer (issue #131).
+                        Commands = [.. commands],
+                        PlanShape = Core.Commands.GateCommands.OrdersSplit(context)
+                            ? Core.Commands.PlanShapeReader.Of(planText).Described
+                            : string.Empty,
                     });
 
                 // Phase 2's instrument, and NOTHING is called: how many findings this round handed

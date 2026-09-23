@@ -155,6 +155,8 @@ const SETTING_ALIAS: Record<string, string> = {
   // per kind of assistant — the key keeps its historical name.
   'coai.splitWithFable': 'split with the strongest model',
   'coai.commandModels': 'chosen per kind of assistant',
+  // Issue #131: the article names both choices and says what neither of them is.
+  'coai.gatePer': 'never once per story',
   'coai.perSideSettings': 'separate settings for each side',
   // The consultant's five. The caller map and each cap is a setting of its own, so each one is
   // covered by the words the article actually uses for it.

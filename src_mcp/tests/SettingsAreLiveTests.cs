@@ -70,6 +70,30 @@ public sealed class SettingsAreLiveTests : IDisposable
     }
 
     [Fact]
+    public void HowOftenSplitWorkIsGated_IsLive()
+    {
+        // Issue #131: choosing one gate for the whole task must govern the NEXT round.
+        Write("{}");
+        var host = Host();
+        host.Current.Settings.GatePer.Should().Be(Core.Commands.GateScope.Epic);
+
+        Thread.Sleep(1100);
+        Write("""{ "COAI_GATE_PER": "task" }""");
+
+        host.Current.Settings.GatePer.Should().Be(Core.Commands.GateScope.Task);
+    }
+
+    [Fact]
+    public void AGateScopeThisServerDoesNotKnow_IsSaidAndFallsBackToPerEpic()
+    {
+        var settings = PanelSettings.FromEnvironment(key => key == "COAI_GATE_PER" ? "per-story" : null);
+
+        settings.GatePer.Should().Be(Core.Commands.GateScope.Epic);
+        settings.UnrecognisedSettings.Should().ContainSingle(u => u.Key == "COAI_GATE_PER")
+            .Which.Sentence.Should().Contain("'epic' and 'task'");
+    }
+
+    [Fact]
     public void TheModelsTheSplitOrderNames_AreLive()
     {
         // Issue #117: typing a model into the panel's box must govern the NEXT round, the way the

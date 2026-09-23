@@ -41,6 +41,19 @@ public sealed record CommandContext(
     /// release before issue #117 said.
     /// </remarks>
     public ModelPair Models { get; init; } = CommandModels.ClaudeCode;
+
+    /// <summary>How often the split work comes back through the gate — once per epic unless told otherwise.</summary>
+    public GateScope GatePer { get; init; } = GateScope.Epic;
+}
+
+/// <summary>How often split work is gated (issue #131). Never per story: that cost two rounds a story.</summary>
+public enum GateScope
+{
+    /// <summary>One plan round and one code round per epic; the epics stack; one commit each.</summary>
+    Epic,
+
+    /// <summary>One code round over the whole task at the end; still one commit per epic.</summary>
+    Task,
 }
 
 /// <summary>
@@ -80,7 +93,7 @@ public static class GateCommands
         var commands = new List<string>();
         if (context.SplitPlan && context.PlanStage)
         {
-            commands.Add(OrdersSplit(context) ? SplitCommand(context) : AlreadySplitCommand);
+            commands.Add(OrdersSplit(context) ? SplitCommand(context) : AlreadySplitCommand(context.GatePer));
         }
         if (OrdersSplit(context) && context.SplitWithFable)
         {
@@ -95,32 +108,68 @@ public static class GateCommands
     }
 
     /// <summary>
-    /// Split the work before building it, and close every piece properly.
+    /// The words every split order's gate ending carries, whichever size and scope it is.
     /// </summary>
     /// <remarks>
-    /// The verdict is stated WITH the numbers it was computed from, so the AI can disagree in
-    /// writing rather than silently: a heuristic that hides its inputs cannot be argued with.
+    /// Public for the test that holds <see cref="OrdersSplit"/> and <see cref="For"/> to one event. It
+    /// was "After EVERY story" until issue #131 — the words that made every story cost a branch, a plan
+    /// round and a code round, because a gate session ends at its code round.
+    /// </remarks>
+    public const string GateOrderMarker = "THE GATE runs once";
+
+    /// <summary>
+    /// Split the work before building it, and say how often it comes back through the gate.
+    /// </summary>
+    /// <remarks>
+    /// The size is stated WITH the numbers it was computed from, so the AI can disagree in writing
+    /// rather than silently: a heuristic that hides its inputs cannot be argued with. The numbers of
+    /// epics and stories are the owner's (issue #131), and "never more" is there because the AI read
+    /// the old "2-4 × 2-4" as a floor and cut everything into four or five of each.
     /// </remarks>
     private static string SplitCommand(CommandContext context)
     {
         var shape = PlanShapeReader.Of(context.PlanText);
-        var judgement = shape.Verdict switch
-        {
-            PlanShape.Split.Epics =>
-                "Split this plan into 2-4 EPICS, then each epic into 2-4 logically complete STORIES.",
-            PlanShape.Split.Stories =>
-                "Split this plan into 2-4 logically complete STORIES. It is not broad enough to need epics.",
-            _ => "This plan is small enough to build as it stands; split it only if you disagree, and say why.",
-        };
 
-        return $"{judgement} "
-            + $"(Measured from the plan you sent: {shape.Numbers}. That is a heuristic — if it is wrong "
-            + "for this plan, say so in your summary and do what is right.) "
-            + "After EVERY story: call review_code on that story's diff, resolve every finding, fix "
-            + "what you accepted, update the documentation and the tests, and commit. Only then start "
-            + "the next one. A story that is not reviewed, documented, tested and committed is not "
-            + "finished.";
+        return $"{Judgement(shape.Verdict)} "
+            + $"(Measured from the plan you sent: {shape.Numbers} — size {shape.Verdict}. That is a "
+            + "heuristic — if it is wrong for this plan, say so in your summary and do what is right.) "
+            + GateEnding(context.GatePer, HasEpics(shape.Verdict));
     }
+
+    private static string Judgement(PlanShape.Split size) => size switch
+    {
+        PlanShape.Split.Small =>
+            "Split this plan into 3-5 logically complete STORIES — no epics. Fewer is fine when the work is smaller; never more.",
+        PlanShape.Split.Medium =>
+            "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES. Fewer is fine when the work is smaller; never more.",
+        PlanShape.Split.Large =>
+            "Split this plan into 3-4 EPICS, each of 3-4 logically complete STORIES. Fewer is fine when the work is smaller; never more.",
+        PlanShape.Split.Huge =>
+            "Split this plan into 4-5 EPICS, each of 3-5 logically complete STORIES. Fewer is fine when the work is smaller; never more.",
+        _ => "This plan is small enough to build as it stands; split it only if you disagree, and say why.",
+    };
+
+    private static bool HasEpics(PlanShape.Split size) => size >= PlanShape.Split.Medium;
+
+    /// <summary>How often the work comes back through the gate — never per story.</summary>
+    private static string GateEnding(GateScope scope, bool epics) => (scope, epics) switch
+    {
+        (GateScope.Epic, true) =>
+            $"{GateOrderMarker} per EPIC, never per story: give each epic its own branch, starting from the "
+                + "previous epic's commit; call review_plan with that epic's plan; build all of its stories "
+                + "without gating them one by one; then ONE review_code over the epic's whole diff, with the "
+                + "previous epic's commit as baseRef; resolve every finding, fix what you accepted, update the "
+                + "documentation and the tests, and commit the epic as ONE commit. Only then start the next epic.",
+        (GateScope.Task, true) =>
+            $"{GateOrderMarker} for the WHOLE task, never per epic or story: this plan round was its plan "
+                + "gate; build every epic and its stories on this branch without gating them, and commit each "
+                + "epic as ONE commit as you finish it; then ONE review_code over the whole task's diff; resolve "
+                + "every finding, fix what you accepted, update the documentation and the tests, and commit.",
+        _ =>
+            $"{GateOrderMarker} for this work, never per story: build it on this branch without gating each "
+                + "piece; then ONE review_code over the whole diff; resolve every finding, fix what you "
+                + "accepted, update the documentation and the tests, and commit it as ONE commit.",
+    };
 
     /// <summary>
     /// From the second plan round on: this plan is a PIECE of a split, not a plan to split again.
@@ -129,10 +178,14 @@ public static class GateCommands
     /// Without this the loop has no floor. A plan is split into epics; each epic comes back for its
     /// own plan review, which is the right thing to do; and the gate, having no memory of the first
     /// order, tells it to split into epics again. The operator saw it before it could happen — and
-    /// it is why the split order is a once-per-session thing rather than a per-round one.
+    /// it is why the split order is a once-per-session thing rather than a per-round one. Under one
+    /// gate for the whole task a piece should not come back at all, and is told so (issue #131).
     /// </remarks>
-    private const string AlreadySplitCommand =
-        "This plan is a PIECE of a split that is already under way, so do NOT split it again: build "
+    private static string AlreadySplitCommand(GateScope scope) => scope == GateScope.Task
+        ? "This plan is a PIECE of a split that is already under way, so do NOT split it again — and it is "
+            + "not gated on its own: the task is gated once as a whole. Build it on the task's branch, commit "
+            + "it as ONE commit, and leave the review to the single code round at the end of the task."
+        : "This plan is a PIECE of a split that is already under way, so do NOT split it again: build "
             + "it as one unit, review its diff through this gate, fix, document, test and commit. If "
             + "it is genuinely too big for one unit, say so in your summary and say what you would "
             + "have cut it into — but do not start a second round of splitting on your own.";
