@@ -96,6 +96,24 @@ public sealed class SettingsAppliedTests
     }
 
     [Fact]
+    public void TheModelOrderWords_AreTheOnesTheSharedFileHolds()
+    {
+        // The bench drives the PUBLISHED server and references none of its code, so its copy of the
+        // words is held to `shared/command-models.json` — the server's copy is held to the same file.
+        var here = new DirectoryInfo(AppContext.BaseDirectory);
+        while (here is not null && !File.Exists(Path.Combine(here.FullName, "shared", "command-models.json")))
+        {
+            here = here.Parent;
+        }
+        here.Should().NotBeNull("shared/command-models.json is what both copies are held to; a test that cannot read it asserts nothing");
+
+        using var document = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(here!.FullName, "shared", "command-models.json")));
+
+        SettingsCheck.ModelOrder.Should().Be(document.RootElement.GetProperty("orderOpensWith").GetString());
+    }
+
+    [Fact]
     public void TheModelOrder_IsRecognisedWhateverModelsItNames()
     {
         // Issue #117 made the two models a per-caller choice, so a Codex caller's order names no

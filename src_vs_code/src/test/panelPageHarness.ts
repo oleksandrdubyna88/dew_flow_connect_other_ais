@@ -4,6 +4,7 @@ import { panelHtml, type PanelFocus, type PanelState } from '../panelView';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
+import { camel } from './rolesPageHarness';
 
 /**
  * The sidebar panel, RUN — its own script over its own markup, for a test of any section's controls.
@@ -46,23 +47,15 @@ export class Control {
 }
 
 /**
- * A `data-*` attribute's name as `dataset` spells it — `data-command-model` is `commandModel`.
- *
- * <p>The first version read only single-word names, which a real DOM does not do: a hyphenated
- * attribute was simply absent from `dataset`, so a control routed on one could never be written. A
- * fake may be stricter than the real thing and never more permissive; this one was stricter in a way
- * that hid the attribute a test was about.</p>
+ * One `data-setting` tag of the page, as the script will meet it — every `data-*` attribute under the
+ * name `dataset` gives it, hyphenated ones included (`data-command-model` is `commandModel`), as a DOM
+ * does.
  */
-function datasetName(attribute: string): string {
-  return attribute.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
-}
-
-/** One `data-setting` tag of the page, as the script will meet it. */
-function controlFrom(tag: string, attributes: string): Control {
+export function controlFrom(tag: string, attributes: string): Control {
   const control = new Control(tag.toUpperCase(), attribute(attributes, 'type'));
   control.value = attribute(attributes, 'value');
   for (const [, name, value] of attributes.matchAll(/data-([a-zA-Z-]+)="([^"]*)"/g)) {
-    control.dataset[datasetName(name!)] = value!;
+    control.dataset[camel(name!)] = value!;
   }
 
   return control;

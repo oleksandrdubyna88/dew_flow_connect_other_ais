@@ -34,37 +34,43 @@ public sealed record CommandModelsSetting(
 
         try
         {
-            var rows = JsonSerializer.Deserialize(json, SettingsJsonContext.Default.DictionaryStringCommandModelDto)
-                ?? throw new JsonException("it is the JSON value null rather than an object of caller kinds");
-
-            return new CommandModelsSetting(Rows(rows), []);
+            // A JSON `null` is a readable value that is not a map: said, not thrown into the catch.
+            return JsonSerializer.Deserialize(json, SettingsJsonContext.Default.DictionaryStringCommandModelDto) is { } rows
+                ? new CommandModelsSetting(Rows(rows), [])
+                : Unreadable("it is the JSON value null rather than an object of caller kinds");
         }
         catch (JsonException e)
         {
-            return Absent with
-            {
-                Complaints =
-                [
-                    $"{Key} could not be read ({e.Message.Split(" LineNumber:")[0].Trim()}) — "
-                        + "the split order names the shipped models until it is fixed",
-                ],
-            };
+            return Unreadable(e.Message.Split(" LineNumber:")[0].Trim());
         }
     }
 
+    private static CommandModelsSetting Unreadable(string why) => Absent with
+    {
+        Complaints = [$"{Key} could not be read ({why}) — the split order names the shipped models until it is fixed"],
+    };
+
     /// <summary>Every row that names something, trimmed; a kind this build does not know is KEPT.</summary>
     /// <remarks>
-    /// Kept because a newer panel may know a caller kind this server does not, and dropping it would
-    /// lose the person's choice on the day this server is updated. A null row is skipped: the DTO's
-    /// nullables are the wire's shape and none of them survives past this method.
+    /// <para>Kept because a newer panel may know a caller kind this server does not, and dropping it
+    /// would lose the person's choice on the day this server is updated. A null row is skipped: the
+    /// DTO's nullables are the wire's shape and none of them survives past this method.</para>
+    /// <para>Written through the INDEXER, so two spellings of one kind (<c>Codex</c> and
+    /// <c>codex</c> — JSON keys are case-sensitive) are one row and the last one wins, which is what
+    /// <c>ConsultantRouting.Merge</c> does. <c>ToDictionary</c> threw on them, outside the
+    /// <c>JsonException</c> catch, and would have left through every settings read (#117's code
+    /// review).</para>
     /// </remarks>
-    private static Dictionary<string, ModelPair> Rows(Dictionary<string, CommandModelDto?> rows) =>
-        rows
-            .Where(row => row.Value is not null && row.Key.Trim().Length > 0)
-            .ToDictionary(
-                row => row.Key.Trim().ToLowerInvariant(),
-                row => new ModelPair(Trimmed(row.Value!.Strongest), Trimmed(row.Value.Implementation)),
-                StringComparer.Ordinal);
+    private static Dictionary<string, ModelPair> Rows(Dictionary<string, CommandModelDto?> rows)
+    {
+        var map = new Dictionary<string, ModelPair>(StringComparer.Ordinal);
+        foreach (var (kind, row) in rows.Where(row => row.Value is not null && row.Key.Trim().Length > 0))
+        {
+            map[kind.Trim().ToLowerInvariant()] = new ModelPair(Trimmed(row!.Strongest), Trimmed(row.Implementation));
+        }
+
+        return map;
+    }
 
     private static string Trimmed(string? value) => value?.Trim() ?? string.Empty;
 }

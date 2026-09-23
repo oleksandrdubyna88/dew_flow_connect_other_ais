@@ -170,6 +170,14 @@ public sealed class GateCommandsTests
             .Should().Contain(splitWords).And.Contain(implementWords).And.NotContain("  ");
     }
 
+    [Fact]
+    public void TheWordsTheBenchReads_AreTheOnesTheSharedFileHolds()
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(SharedFixtures.Text("command-models.json"));
+
+        GateCommands.ModelOrderMarker.Should().Be(document.RootElement.GetProperty("orderOpensWith").GetString());
+    }
+
     [Theory]
     [InlineData("Fable", "Opus")]
     [InlineData("gpt-6-astra", "gpt-6-luna")]

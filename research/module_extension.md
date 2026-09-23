@@ -6968,19 +6968,28 @@ sent as `COAI_COMMAND_MODELS`, only for a kind whose pair differs from the shipp
 
 - **`commandModels.ts`** is the one reader: `commandModelsFrom` (key by key, junk reads as nothing),
   `resolvedPair` (per field, typed → shipped), `commandModelsEnv`, `commandModelsAfter` (a cleared
-  picker REMOVES its field; unknown kinds and fields are carried forward) and `commandModelsSkewNote`
-  (`COMMAND_MODELS_SINCE = 0.33.0`: an older server names Fable and Opus to everybody, said beside the
-  pickers only once a kind was changed).
-- **Each picker offers only its own vendor's models** — `CURATED_CLAUDE_MODELS`, the discovered Codex
-  list, the Gemini ones — plus the saved name even when no list knows it, and **"another model…"**,
-  which posts `customCommandModel` with `<kind>:<slot>` so the host can ask for a name.
+  picker REMOVES its field; other kinds and fields are carried forward as stored; a kind this build
+  does not know is never WRITTEN — the `__proto__` refusal `consultantRecordUpdate` makes) and
+  `commandModelsSkewNote` (`COMMAND_MODELS_SINCE = 0.33.0`: an older server names Fable and Opus to
+  everybody, said beside the pickers only once a kind was changed). A pair is compared WITHOUT case,
+  so picking the CLI alias `fable` is picking the default and sends nothing.
+- **Each picker offers only its own vendor's models, through `modelsFor`** — the kind's runtime from
+  `COMMAND_MODEL_RUNTIMES` (claude, codex, gemini; `other` has none and offers only what was saved),
+  so the Claude families carry the labels the CLI answered and a saved name stays as `(yours)` — and
+  **"another model…"**, which posts `customCommandModel` with `<kind>:<slot>` so the host can ask for a
+  name.
 - **A select, not a text box with a datalist**: a datalist filters its options by the value already in
   the box, which this panel learned on the reviewer model picker (`modelOptions`).
 - **The write path** is its own `SettingWrite` kind, `commandModel`, routed by `data-command-model`
-  and read through the side-aware reader, like a consultant row.
+  and read through the side-aware reader, like a consultant row. The host builds the `SettingMessage`
+  with **`settingMessageFrom`**, one function: the first build rebuilt it inline from four hand-listed
+  fields and dropped `commandModel`, so every choice became a write to an undeclared `coai.strongest`
+  while the page test and the `settingWrite` test were both green — caught in the code round, now a
+  test that sends a page's real message through both.
 - **`test/panelPageHarness.ts`** — the whole-panel run-the-page harness, extracted from
   `consultantSectionScript.test.ts` when this section needed it too. It now maps a hyphenated
-  `data-*` attribute to its `dataset` name as a DOM does; the old copy dropped them.
+  `data-*` attribute to its `dataset` name as a DOM does (with `rolesPageHarness`' `camel`); the old
+  copy dropped them, and `panelPageHarness.test.ts` holds the fake to that.
 
 ### A version only the code knows is a version nobody has (2026-09-03)
 

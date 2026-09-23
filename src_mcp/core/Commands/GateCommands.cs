@@ -4,7 +4,8 @@ namespace CoaiMcp.Core.Commands;
 /// <param name="Autonomous">Work without interrupting the person until there is no other way.</param>
 /// <param name="SplitPlan">Break an accepted plan into epics and stories before building it.</param>
 /// <param name="SplitWithFable">
-/// Do the splitting — and the risky stories — with Fable.
+/// Do the splitting — and the risky stories — with the caller's strongest model; which one is
+/// <see cref="CommandContext.Models"/>. (Named for Fable, which every caller was told until issue #117.)
 /// <para>The switch is the WHOLE decision, and there is deliberately no second condition beside it.
 /// It once asked whether a Fable REVIEWER was configured, on the reasoning that a command must never
 /// name a model this machine has not got. The reasoning was sound and the premise was wrong: Fable
@@ -37,8 +38,7 @@ public sealed record CommandContext(
     /// </summary>
     /// <remarks>
     /// Defaults to the Claude Code pair, so a context built without it says exactly what every
-    /// release before issue #117 said. The switch keeps its historical name, <c>SplitWithFable</c>:
-    /// renaming a stored key is a migration of every settings file for a word nobody sees.
+    /// release before issue #117 said.
     /// </remarks>
     public ModelPair Models { get; init; } = CommandModels.ClaudeCode;
 }
@@ -141,8 +141,10 @@ public static class GateCommands
     /// The words every model order opens with, whichever models it names.
     /// </summary>
     /// <remarks>
-    /// Public because the bench recognises the order by them. It used to look for "Fable", which
-    /// stopped being true of every order the day the models became a per-caller choice (issue #117).
+    /// The bench recognises the order by these words and holds its OWN copy — it drives the published
+    /// server and references nothing here — so both copies are asserted against
+    /// <c>shared/command-models.json</c>'s <c>orderOpensWith</c>, a file neither owns. It looked for
+    /// "Fable" until the models became a per-caller choice (issue #117).
     /// </remarks>
     public const string ModelOrderMarker = "Do the SPLIT itself with ";
 
@@ -156,8 +158,8 @@ public static class GateCommands
     /// </remarks>
     private static string ModelCommand(ModelPair models)
     {
-        var strongest = NamedOr(models.Strongest, "the strongest model your client offers");
-        var implementation = NamedOr(models.Implementation, "your usual model");
+        var strongest = CommandModels.NamedOr(models.Strongest, "the strongest model your client offers");
+        var implementation = CommandModels.NamedOr(models.Implementation, "your usual model");
 
         return $"{ModelOrderMarker}{strongest} at its highest available version — deciding what the epics "
             + "and stories are is the judgement that shapes everything after it. Then implement: "
@@ -165,9 +167,6 @@ public static class GateCommands
             + $"money, authentication, security, architecture, data migration — on {strongest} (max) again. "
             + "Name the model you used for each story in your summary.";
     }
-
-    private static string NamedOr(string name, string words) =>
-        string.IsNullOrWhiteSpace(name) ? words : name.Trim();
 
     /// <summary>
     /// What "autonomous" is made of, and when to interrupt the person.
