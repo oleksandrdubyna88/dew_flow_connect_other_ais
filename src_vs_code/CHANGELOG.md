@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+**The split order names the calling assistant's own models, and you choose them** (issue #117). The
+third switch in *The gate* used to tell every assistant to split with Fable and implement on Opus —
+including a Codex session, which has neither. It is called **Split with the strongest model** now,
+and under it each kind of assistant — Claude Code, Codex, Gemini, another client — has two pickers:
+the *strongest* model (the split itself and the risky stories) and the *implementation* model.
+Claude Code keeps Fable and Opus unless you change them, word for word the order it got before; an
+assistant you have not chosen for is told to use its own strongest model, never another vendor's.
+Needs coai-mcp 0.33.0 or later — an older server names Fable and Opus to everybody, and the panel says
+so beside the pickers once you have changed one.
+
 ## Server 0.32.0 — 2026-09-23
 
 **The server now says when it died.** A `coai-mcp` that was killed — the window closed hard, the

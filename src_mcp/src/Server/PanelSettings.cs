@@ -315,8 +315,22 @@ public sealed record PanelSettings
     /// <summary>Break an accepted plan into epics and stories, and close each one properly.</summary>
     public bool SplitPlan { get; init; }
 
-    /// <summary>Do the splitting — and the expensive-to-get-wrong stories — with Fable.</summary>
+    /// <summary>
+    /// Do the splitting — and the expensive-to-get-wrong stories — with the caller's strongest model.
+    /// </summary>
+    /// <remarks>
+    /// The name is historical: the switch named Fable to every caller until issue #117 made the models
+    /// a per-caller choice (<see cref="CommandModels"/>). Renaming the stored key would be a migration of
+    /// every settings file for a word nobody sees.
+    /// </remarks>
     public bool SplitWithFable { get; init; }
+
+    /// <summary>
+    /// The model pairs a person configured, per caller kind — only those; the rest resolve through
+    /// <see cref="Core.Commands.CommandModels.For"/>. From <c>COAI_COMMAND_MODELS</c>; issue #117.
+    /// </summary>
+    public IReadOnlyDictionary<string, Core.Commands.ModelPair> CommandModels { get; init; } =
+        new Dictionary<string, Core.Commands.ModelPair>();
 
     /// <summary>
     /// What a CODE reviewer is launched in: <c>none</c> (the default) or <c>worktree</c>.
@@ -630,7 +644,10 @@ public sealed record PanelSettings
 
     private static PanelSettings WithCatalog(
         Func<string, string?> env, RolesSetting roles, RoleCatalog catalog) =>
-        WithCatalog(env, roles, catalog, ResolveDataDir(env), ConsultantRouting.Parse(env("COAI_CONSULTANTS")));
+        WithCatalog(
+            env, roles, catalog, ResolveDataDir(env),
+            ConsultantRouting.Parse(env("COAI_CONSULTANTS")),
+            CommandModelsSetting.Parse(env(CommandModelsSetting.Key)));
 
     /// <remarks>
     /// The resolution is passed IN rather than computed twice. It was called once for `DataDir` and
@@ -638,14 +655,15 @@ public sealed record PanelSettings
     /// two answers: a directory created between the two calls made `DataDir` and `Unrecognised`
     /// describe different states. Raised four times on the code round. The consultant routing is
     /// passed in beside it for the same reason: it is parsed once and read twice, for the map and
-    /// for its complaints.
+    /// for its complaints — and so are the split order's models (issue #117).
     /// </remarks>
     private static PanelSettings WithCatalog(
         Func<string, string?> env,
         RolesSetting roles,
         RoleCatalog catalog,
         string dataDir,
-        ConsultantsSetting consultants) => new PanelSettings
+        ConsultantsSetting consultants,
+        CommandModelsSetting commandModels) => new PanelSettings
         {
             Rounds = Config(env, catalog),
             // The data directory's own notes ride here rather than in a channel of their own: this list
@@ -660,7 +678,10 @@ public sealed record PanelSettings
                 .. catalog.Dropped.Select(dropped => new UnrecognisedSetting(Key.Roles, dropped)),
                 .. consultants.Complaints.Select(
                     complaint => new UnrecognisedSetting(Key.Consultants, complaint)),
+                .. commandModels.Complaints.Select(
+                    complaint => new UnrecognisedSetting(CommandModelsSetting.Key, complaint)),
             ],
+            CommandModels = commandModels.Map,
             Consultants = consultants.Map,
             ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
             ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),

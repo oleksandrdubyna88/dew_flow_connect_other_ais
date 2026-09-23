@@ -151,7 +151,10 @@ const SETTING_ALIAS: Record<string, string> = {
   // VS Code does not know about is a setting nothing checks the help for either.
   'coai.autonomous': 'work autonomously',
   'coai.splitPlan': 'split the plan into epics and stories',
-  'coai.splitWithFable': 'split with fable',
+  // Issue #117: the switch names the caller's own strongest model now, and the two models are chosen
+  // per kind of assistant — the key keeps its historical name.
+  'coai.splitWithFable': 'split with the strongest model',
+  'coai.commandModels': 'chosen per kind of assistant',
   'coai.perSideSettings': 'separate settings for each side',
   // The consultant's five. The caller map and each cap is a setting of its own, so each one is
   // covered by the words the article actually uses for it.

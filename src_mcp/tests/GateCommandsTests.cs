@@ -111,6 +111,77 @@ public sealed class GateCommandsTests
         commands[1].Should().Contain("payments").And.Contain("security");
     }
 
+    /// <summary>The model order as every release up to mcp 0.32.0 wrote it, verbatim.</summary>
+    private const string TodaysModelOrder =
+        "Do the SPLIT itself with Fable at its highest available version — deciding what the epics "
+            + "and stories are is the judgement that shapes everything after it. Then implement: "
+            + "ordinary stories on Opus, and anything where being wrong is expensive — payments, "
+            + "money, authentication, security, architecture, data migration — on Fable (max) again. "
+            + "Name the model you used for each story in your summary.";
+
+    [Fact]
+    public void AClaudeCodeCaller_WithNothingConfigured_GetsTodaysOrderByteForByte()
+    {
+        // Issue #117 made the two models a choice per caller kind. The shipped choice for Claude
+        // Code is the pair every release before it named, and a person who changed nothing must not
+        // be able to tell the feature landed — so this is equality, not containment.
+        var commands = GateCommands.For(new CommandContext(
+            SplitPlan: true, SplitWithFable: true, PlanText: SmallPlan, PlanStage: true));
+
+        commands[1].Should().Be(TodaysModelOrder);
+    }
+
+    private static string ModelOrderFor(ModelPair models) =>
+        GateCommands.For(new CommandContext(
+            SplitPlan: true, SplitWithFable: true, PlanText: SmallPlan, PlanStage: true)
+        { Models = models })[1];
+
+    [Fact]
+    public void ACodexCaller_IsToldItsOwnPair_AndNoClaudeModel()
+    {
+        // The command is carried out by the CALLER. A Codex session told "use Fable and Opus" has
+        // neither, so it was being handed an order it could not follow (issue #117).
+        var order = ModelOrderFor(new ModelPair("gpt-6-astra", "gpt-6-luna"));
+
+        order.Should().Contain("with gpt-6-astra at its highest available version")
+            .And.Contain("ordinary stories on gpt-6-luna")
+            .And.Contain("on gpt-6-astra (max) again");
+        order.Should().NotContain("Fable").And.NotContain("Opus");
+    }
+
+    [Fact]
+    public void ACallerWithNothingNamed_IsToldTheGenericWords_NeverAnotherVendorsModel()
+    {
+        var order = ModelOrderFor(new ModelPair(string.Empty, string.Empty));
+
+        order.Should().Contain("with the strongest model your client offers at its highest available version")
+            .And.Contain("ordinary stories on your usual model");
+        order.Should().NotContain("Fable").And.NotContain("Opus");
+    }
+
+    [Theory]
+    [InlineData("gpt-6-astra", "", "with gpt-6-astra at", "stories on your usual model")]
+    [InlineData("", "gpt-6-luna", "with the strongest model your client offers at", "stories on gpt-6-luna")]
+    public void APairWithOneNameSet_UsesItForThatSlotAndTheGenericWordsForTheOther(
+        string strongest, string implementation, string splitWords, string implementWords)
+    {
+        // Never half-blank: an empty slot is not "with  at its highest available version".
+        ModelOrderFor(new ModelPair(strongest, implementation))
+            .Should().Contain(splitWords).And.Contain(implementWords).And.NotContain("  ");
+    }
+
+    [Theory]
+    [InlineData("Fable", "Opus")]
+    [InlineData("gpt-6-astra", "gpt-6-luna")]
+    [InlineData("", "")]
+    public void EveryVariant_OpensWithTheWordsTheBenchReads(string strongest, string implementation)
+    {
+        // The bench recognises the order by these words, never by a model name — a name is now a
+        // setting, and the old check ("contains Fable") would call every Codex round unapplied.
+        ModelOrderFor(new ModelPair(strongest, implementation))
+            .Should().StartWith(GateCommands.ModelOrderMarker);
+    }
+
     [Fact]
     public void WithEverythingOn_TheOrderIsSplitThenModelThenAutonomy()
     {

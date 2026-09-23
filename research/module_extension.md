@@ -6958,6 +6958,30 @@ nobody knows to look for is not an instruction.
 The help article for the gate describes all three in every language the help ships, because a switch
 whose only explanation is its label is a switch people leave alone.
 
+### The third switch names the caller's OWN models, and the person picks them (2026-09-23, issue #117)
+
+The label is **Split with the strongest model** now; the stored key keeps its historical name,
+`coai.splitWithFable`, because renaming it is a migration of every settings file for a word nobody
+sees. Under the three switches sits one row per caller kind (Claude Code, Codex, Gemini, another
+client) with two pickers — *Strongest* and *Implementation* — stored in **`coai.commandModels`** and
+sent as `COAI_COMMAND_MODELS`, only for a kind whose pair differs from the shipped one.
+
+- **`commandModels.ts`** is the one reader: `commandModelsFrom` (key by key, junk reads as nothing),
+  `resolvedPair` (per field, typed → shipped), `commandModelsEnv`, `commandModelsAfter` (a cleared
+  picker REMOVES its field; unknown kinds and fields are carried forward) and `commandModelsSkewNote`
+  (`COMMAND_MODELS_SINCE = 0.33.0`: an older server names Fable and Opus to everybody, said beside the
+  pickers only once a kind was changed).
+- **Each picker offers only its own vendor's models** — `CURATED_CLAUDE_MODELS`, the discovered Codex
+  list, the Gemini ones — plus the saved name even when no list knows it, and **"another model…"**,
+  which posts `customCommandModel` with `<kind>:<slot>` so the host can ask for a name.
+- **A select, not a text box with a datalist**: a datalist filters its options by the value already in
+  the box, which this panel learned on the reviewer model picker (`modelOptions`).
+- **The write path** is its own `SettingWrite` kind, `commandModel`, routed by `data-command-model`
+  and read through the side-aware reader, like a consultant row.
+- **`test/panelPageHarness.ts`** — the whole-panel run-the-page harness, extracted from
+  `consultantSectionScript.test.ts` when this section needed it too. It now maps a hyphenated
+  `data-*` attribute to its `dataset` name as a DOM does; the old copy dropped them.
+
 ### A version only the code knows is a version nobody has (2026-09-03)
 
 The snippet has been versioned since v2 and the panel has reported a stale copy since then — but the

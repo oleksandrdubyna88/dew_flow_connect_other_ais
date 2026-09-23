@@ -86,7 +86,10 @@ public static class SettingsCheck
     private const string Autonomy = "Work AUTONOMOUSLY";
     private const string OrdersASplit = "Split this plan into";
     private const string AlreadySplit = "already under way";
-    private const string WithFable = "Fable";
+    // The words the model order OPENS with, whichever models it names (`GateCommands.ModelOrderMarker`
+    // in the server). It was "Fable" until issue #117 made the models a per-caller choice: a Codex
+    // caller's order names no Fable, and the old check reported its switch as doing nothing.
+    private const string ModelOrder = "Do the SPLIT itself with";
 
     /// <summary>The three switches, which are visible as the ORDERS a passing plan round hands back.</summary>
     /// <remarks>
@@ -120,12 +123,13 @@ public static class SettingsCheck
             mismatches,
             examined);
 
-        // Fable's order rides on the split order and cannot appear without it. When the round said
+        // The model order rides on the split order and cannot appear without it. When the round said
         // "already split", its absence is not evidence about the switch — and an instrument reports
         // the absence of evidence as unchecked, never as a failure.
         if (said(OrdersASplit))
         {
-            Expect(asked, "COAI_SPLIT_WITH_FABLE", said(WithFable), "an order naming Fable", mismatches, examined);
+            Expect(
+                asked, "COAI_SPLIT_WITH_FABLE", said(ModelOrder), "an order naming the strongest model", mismatches, examined);
         }
     }
 

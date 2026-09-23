@@ -1,0 +1,9 @@
+{
+  "$comment": "The models the split order names per caller kind when nobody configured any (issue #117). Owned by neither half: coai-mcp's CommandModels.Shipped and the extension's SHIPPED_COMMAND_MODELS each assert themselves against this file in their own suite. An empty name means the order says the generic words instead of naming a model.",
+  "shipped": {
+    "claude": { "strongest": "Fable", "implementation": "Opus" },
+    "codex": { "strongest": "", "implementation": "" },
+    "gemini": { "strongest": "", "implementation": "" },
+    "other": { "strongest": "", "implementation": "" }
+  }
+}

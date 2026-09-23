@@ -92,7 +92,24 @@ public sealed class SettingsAppliedTests
             [Plan("proceed", "Split this plan into 2-4 EPICS …")]);
 
         applied.Ok.Should().BeFalse();
-        applied.Mismatches.Should().ContainSingle().Which.Should().Contain("Fable");
+        applied.Mismatches.Should().ContainSingle().Which.Should().Contain("COAI_SPLIT_WITH_FABLE");
+    }
+
+    [Fact]
+    public void TheModelOrder_IsRecognisedWhateverModelsItNames()
+    {
+        // Issue #117 made the two models a per-caller choice, so a Codex caller's order names no
+        // Fable at all. The check reads the words every variant opens with, never a model name — or
+        // every round a Codex session ran would be reported as a switch that did nothing.
+        var applied = SettingsCheck.Of(
+            Asked(("COAI_SPLIT_PLAN", "true"), ("COAI_SPLIT_WITH_FABLE", "true")),
+            null,
+            [Plan("proceed",
+                "Split this plan into 2-4 EPICS …",
+                "Do the SPLIT itself with gpt-6-astra at its highest available version …")]);
+
+        applied.Ok.Should().BeTrue();
+        applied.Checked.Should().Contain("COAI_SPLIT_WITH_FABLE");
     }
 
     [Fact]

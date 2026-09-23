@@ -41,6 +41,13 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   autonomous: true,
   splitPlan: true,
   splitWithFable: true,
+  // Issue #117: a kind whose pair differs from the shipped one is what reaches the env block.
+  commandModels: {
+    claude: { strongest: '', implementation: '' },
+    codex: { strongest: 'gpt-6-astra', implementation: 'gpt-6-luna' },
+    gemini: { strongest: '', implementation: '' },
+    other: { strongest: '', implementation: '' },
+  },
   roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
             prompts: [{ id: 'requirements-general', label: 'General' }] }],
   // Every part of it changed at once, because this walk changes ONE top-level setting at a time and

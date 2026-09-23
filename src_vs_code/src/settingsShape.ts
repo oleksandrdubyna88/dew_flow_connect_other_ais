@@ -21,6 +21,7 @@ import {
   CONSULT_SETTINGS,
   sameChoice,
 } from './consultSettings';
+import { CommandModels, ModelSlot, commandModelsEnv, commandModelsFrom, isModelSlot } from './commandModels';
 
 export type OnExhausted = 'continue' | 'escalate' | 'human' | 'good_enough';
 
@@ -141,8 +142,16 @@ export interface CoaiSettings {
   readonly autonomous: boolean;
   /** Break an accepted plan into epics and stories, and close each story properly. */
   readonly splitPlan: boolean;
-  /** Do the split, and the stories where being wrong is expensive, with Fable. */
+  /**
+   * Do the split, and the stories where being wrong is expensive, with the caller's STRONGEST model.
+   *
+   * <p>The key's name is historical: it named Fable to every caller until issue #117 made the two
+   * models a per-caller choice ({@link commandModels}). Renaming a stored key is a migration of every
+   * settings file for a word nobody sees.</p>
+   */
   readonly splitWithFable: boolean;
+  /** Per caller kind, the models the model order names — what a person typed, trimmed (issue #117). */
+  readonly commandModels: CommandModels;
   /**
    * What a code reviewer is launched in: `none` (Fast — the diff alone) or `worktree` (Full).
    *
@@ -184,7 +193,8 @@ export type SettingWrite =
   | { readonly kind: 'plain'; readonly key: string; readonly value: unknown }
   | { readonly kind: 'vendor'; readonly key: string; readonly value: unknown; readonly vendor: string }
   | { readonly kind: 'role'; readonly key: string; readonly value: unknown; readonly role: string }
-  | { readonly kind: 'caller'; readonly key: string; readonly value: unknown; readonly caller: string };
+  | { readonly kind: 'caller'; readonly key: string; readonly value: unknown; readonly caller: string }
+  | { readonly kind: 'commandModel'; readonly key: ModelSlot; readonly value: unknown; readonly commandModel: string };
 
 /** What the webview said it changed. A message with no key changes nothing. */
 export interface SettingMessage {
@@ -193,6 +203,8 @@ export interface SettingMessage {
   readonly vendor?: string | undefined;
   readonly role?: string | undefined;
   readonly caller?: string | undefined;
+  /** The caller KIND whose split-order model a box names (issue #117) — a key of `coai.commandModels`. */
+  readonly commandModel?: string | undefined;
 }
 
 /**
@@ -203,6 +215,11 @@ export function settingWrite(message: SettingMessage): SettingWrite | undefined 
   const { key, value } = message;
   if (key === undefined || key.length === 0) {
     return undefined;
+  }
+  if (message.commandModel !== undefined && message.commandModel.length > 0) {
+    // The key names WHICH slot changed, and only the two slots exist: anything else is a page and a
+    // host that disagree, and writing it would store a field no reader looks at.
+    return isModelSlot(key) ? { kind: 'commandModel', key, value, commandModel: message.commandModel } : undefined;
   }
   if (message.caller !== undefined && message.caller.length > 0) {
     return { kind: 'caller', key, value, caller: message.caller };
@@ -268,6 +285,7 @@ export const DEFAULTS: CoaiSettings = {
   autonomous: false,
   splitPlan: false,
   splitWithFable: false,
+  commandModels: commandModelsFrom(undefined),
   codeWorkspace: 'none',
   roles: [],
   consult: DEFAULT_CONSULT,
@@ -289,7 +307,7 @@ export type SettingsOverlay = Readonly<Record<string, unknown>>;
 export const OVERLAID_SETTINGS: readonly string[] = [
   'vendors', 'rounds', 'thresholds', 'roleEnabled', 'onExhausted', 'maxConcurrency', 'maxPerProvider',
   'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey', 'escalationMinutes', 'promptsPerRound',
-  'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'codeWorkspace',
+  'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'commandModels', 'codeWorkspace',
   // A person's own review roles belong to the WORK, which is what a side is — beside `rounds`,
   // `thresholds` and `roleEnabled`, which ask the same question about the roles this product ships.
   // The prompt BODIES do NOT: they live in one data directory, because a body is the text of a
@@ -382,6 +400,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     autonomous: read('autonomous') === true,
     splitPlan: read('splitPlan') === true,
     splitWithFable: read('splitWithFable') === true,
+    commandModels: commandModelsFrom(read('commandModels')),
     codeWorkspace: read('codeWorkspace') === 'worktree' ? 'worktree' : 'none',
     roles: rolesFrom(read('roles')),
     consult: consultSettingsFrom(read),
@@ -433,6 +452,8 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   if (settings.splitWithFable) {
     env['COAI_SPLIT_WITH_FABLE'] = 'true';
   }
+  // Only the caller kinds whose pair differs from the shipped one — a pristine panel adds nothing.
+  Object.assign(env, commandModelsEnv(settings.commandModels));
 
   for (const [role, threshold] of Object.entries(settings.thresholds)) {
     if (threshold !== DEFAULTS.thresholds[role]) {
