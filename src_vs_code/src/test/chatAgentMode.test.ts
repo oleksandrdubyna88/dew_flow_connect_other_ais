@@ -7,7 +7,7 @@ import { ChatLaunch, NEW_CONVERSATION } from '../chatAdapter';
 import { agyAdapter, AGY_ARGS } from '../agyAdapter';
 import { claudeAdapter, CLAUDE_ARGS } from '../claudeAdapter';
 import { codexAdapter } from '../codexAdapter';
-import { CHAT_RUNTIMES, launchSpecFor } from '../cliChatLaunch';
+import { CHAT_RUNTIMES, isFolder, launchSpecFor } from '../cliChatLaunch';
 import { AGENT_BUDGETS, DEFAULT_BUDGETS, budgetsFor } from '../chatSession';
 import { Vendor } from '../vendors';
 import { accessDropped, accessNotice, accessOn, agentOffered, agentQuestion, agentRefusal } from '../chatAccessRules';
@@ -229,4 +229,47 @@ test('a box that is not offered is hidden, so a push can bring it back', () => {
 test('the box cannot be changed while a turn runs', () => {
   assert.match(chatAgentToggleHtml(true, 'text', true), /<input[^>]* disabled/);
   assert.equal(chatAgentToggleHtml(true, 'text', false).includes('disabled'), false);
+});
+
+test('an agent launch tells cmd.exe not to look in the workspace for the programs a shim calls', () => {
+  // MEASURED on 2026-09-23: the npm shim `codex.cmd` runs `node` by bare name, and cmd.exe searches the
+  // working directory before the PATH — so a cloned repository with `node.cmd` in its root ran THAT
+  // file, before the model had decided anything, the moment agent mode put the chat in the workspace.
+  // With NoDefaultCurrentDirectoryInExePath=1 the same launch ran the real node. (Our own code review.)
+  const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-agent-ws-'));
+  try {
+    for (const runtime of CHAT_RUNTIMES) {
+      const spec = launchSpecFor(vendor(runtime), os.tmpdir(), AGENT, 'C:/npm/x.cmd', 'win32', workspace);
+      assert.equal(spec.env['NoDefaultCurrentDirectoryInExePath'], '1', runtime);
+    }
+  } finally {
+    fs.rmSync(workspace, { recursive: true, force: true });
+  }
+});
+
+test('a text launch adds nothing to the environment, because it runs in an empty directory', () => {
+  assert.deepEqual(launchSpecFor(vendor('codex'), os.tmpdir(), NEW_CONVERSATION, '', 'win32').env, {});
+});
+
+test('a workspace that is a FILE is refused, not handed to the CLI as a directory', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-agent-file-'));
+  const file = path.join(dir, 'not-a-folder.txt');
+  fs.writeFileSync(file, 'x');
+  try {
+    const spec = launchSpecFor(vendor('claude'), os.tmpdir(), AGENT, '', 'linux', file);
+
+    assert.equal(spec.executable, '');
+    assert.ok(spec.refusal.includes(file), spec.refusal);
+    assert.equal(isFolder(file), false);
+    assert.equal(isFolder(dir), true);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the launch and the box refuse in the same words, from one place', () => {
+  const remote: Vendor = { ...vendor('claude'), runtime: 'remote' };
+
+  assert.equal(launchSpecFor(remote, os.tmpdir(), AGENT, '', 'linux', os.tmpdir()).refusal, agentRefusal(true, os.tmpdir()));
+  assert.equal(launchSpecFor(vendor('claude'), os.tmpdir(), AGENT, '', 'linux', '').refusal, agentRefusal(false, ''));
 });

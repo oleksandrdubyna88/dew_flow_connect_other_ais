@@ -1,13 +1,25 @@
 # PLAN — a local chat can act on the machine, when the person ticks it
 
-> Status: **plan only, nothing implemented yet.** Scope: the chat's launch path in `src_vs_code`
+> Status: **IMPLEMENTED, 2026-09-23.** Deviations, all from the code round: every agent launch also
+> carries `NoDefaultCurrentDirectoryInExePath=1`, because the npm shim `codex.cmd` runs `node` by bare
+> name and cmd.exe searched the workspace first — measured, a planted `node.cmd` ran (our own review;
+> the plan had called the `shell=true` path safe); the workspace must be a DIRECTORY (`isFolder`), not
+> merely exist; the page never ticks its own box — the host's push does, because pushes are
+> de-duplicated and a cancelled confirmation would otherwise leave it ticked; a queued change is dropped
+> if the tab closed or the person asked for the opposite since, and the rules are asked again when the
+> queue reaches it; the label reads *Agent mode — full access*; the memento fallback does NOT carry
+> `access` (a conversation restored from it reopens in text mode, the safe direction), contrary to step 7.
+> Open tail: killing an agent's whole process tree on close stays in
+> [PLAN_closing_a_chat_ends_its_whole_tree.md](../todo/PLAN_closing_a_chat_ends_its_whole_tree.md).
+>
+> Scope: the chat's launch path in `src_vs_code`
 > (`chatAdapter.ts`, the three vendor adapters, `cliChatLaunch.ts`, `chatProcess.ts`, `chatLaunch.ts`,
 > `chatSession.ts`), the conversation record (`chatStore.ts`, `chatPersist.ts`, `chatShow.ts`,
 > `chatConversationRestore.ts`, `chatArchive.ts`, `chatThread.ts`) and the page (`chatPage.ts`,
 > `chatPanel.ts`, `chatMessages.ts`, `chatHooks.ts`). Issue #289.
 >
-> Related docs: [module_extension.md](../research/module_extension.md), [architecture.md](../research/architecture.md),
-> [PLAN_closing_a_chat_ends_its_whole_tree.md](PLAN_closing_a_chat_ends_its_whole_tree.md).
+> Related docs: [module_extension.md](module_extension.md), [architecture.md](architecture.md),
+> [PLAN_closing_a_chat_ends_its_whole_tree.md](../todo/PLAN_closing_a_chat_ends_its_whole_tree.md).
 
 ## The symptom
 
@@ -171,11 +183,11 @@ that names it, not a spawn error (local, the plan round).
 
 ## Definition of Done
 
-- [ ] Agent mode launches each local vendor with the flags in the table, in the conversation's workspace.
-- [ ] Text mode's argv, directory and budget are unchanged (existing tests untouched and green).
-- [ ] The box is offered only for a local row; a remote row cannot be switched into agent mode by any path.
-- [ ] Ticking or unticking relaunches with the transcript carried, after a running turn finishes.
-- [ ] The choice survives a reload and a restore; an old record reads back as text.
-- [ ] Tests added for every step; `npm test` and `npm run lint` green.
-- [ ] Live check done per installed vendor and reported in the PR.
-- [ ] `module_extension.md` and the CHANGELOG updated; this plan promoted to `research/`.
+- [x] Agent mode launches each local vendor with the flags in the table, in the conversation's workspace.
+- [x] Text mode's argv, directory and budget are unchanged (existing tests untouched and green).
+- [x] The box is offered only for a local row; a remote row cannot be switched into agent mode by any path.
+- [x] Ticking or unticking relaunches with the transcript carried, after a running turn finishes.
+- [x] The choice survives a reload and a restore; an old record reads back as text.
+- [x] Tests added for every step; `npm test` and `npm run lint` green.
+- [x] Live check done per installed vendor and reported in the PR.
+- [x] `module_extension.md` and the CHANGELOG updated; this plan promoted to `research/`.

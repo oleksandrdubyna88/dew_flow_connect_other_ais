@@ -1756,12 +1756,15 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   }
   wirePicker();
   wireCapped();
-  // The agent-mode box asks the HOST, which confirms, relaunches and pushes back what is in force - so a
-  // cancelled confirmation or a refusal redraws the box as it was rather than leaving it ticked.
+  // The agent-mode box ASKS; it never ticks itself. The click is put back at once and the host's push is
+  // what ticks it - because the host de-duplicates its pushes, and a cancelled confirmation changes
+  // nothing there, so nothing would ever come back to untick a box the page had ticked on its own.
   const agentBox = document.getElementById('agent');
   if (agentBox) {
     agentBox.addEventListener('change', function () {
-      vscode.postMessage({ type: 'command', command: 'access', agent: agentBox.checked === true });
+      const asked = agentBox.checked === true;
+      agentBox.checked = !asked;
+      vscode.postMessage({ type: 'command', command: 'access', agent: asked });
     });
   }
   // THE SAME MESSAGE the capped notice's button posts, so one host implementation serves both: they

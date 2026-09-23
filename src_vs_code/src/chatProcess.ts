@@ -56,7 +56,7 @@ export function chatProcessFor(
     if (spec.refusal.length > 0) {
       throw new Error(spec.refusal);
     }
-    const child = launch(spec.executable, spec.args, { cwd: spec.cwd, shell: spec.shell });
+    const child = launch(spec.executable, spec.args, { cwd: spec.cwd, shell: spec.shell, env: spec.env });
 
     // Written down BEFORE anything is asked of it, and SYNCHRONOUSLY: the window this guards
     // against is a force-kill, which is exactly what a queued write does not survive. A child

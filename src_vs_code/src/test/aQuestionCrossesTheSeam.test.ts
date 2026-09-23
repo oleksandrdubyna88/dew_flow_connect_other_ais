@@ -69,6 +69,10 @@ interface Running {
   readonly box: { value: string; disabled: boolean };
   /** A host state message, delivered the way the webview delivers one. */
   readonly push: (data: Record<string, unknown>) => void;
+  /** An element as the page's script holds it, to set a control's state or read it back. */
+  readonly element: (id: string) => Record<string, unknown>;
+  /** A `change` event on a control, the way a checkbox delivers one. */
+  readonly change: (on: string) => void;
 }
 
 /**
@@ -145,6 +149,12 @@ function runPage(over: Partial<ChatPageState> = {}): Running {
   return {
     posted,
     box,
+    element: (id: string) => document_.getElementById(id) as Record<string, unknown>,
+    change: (on: string) => {
+      const fire = listeners.get(`${on}:change`);
+      assert.ok(fire, `the page registered no change listener on #${on}, so this test drives nothing`);
+      fire({ target: document_.getElementById(on) });
+    },
     push: (data: Record<string, unknown>) => {
       assert.ok(onMessage, 'the page is not listening for host state, so this test delivers nothing');
       onMessage({ data });
@@ -278,4 +288,43 @@ test('the lock lifts again when the cap does', () => {
   page.push({ type: 'state', running: true, capped: false });
 
   assert.equal(page.box.disabled, false, 'the composer stayed locked after the cap went away');
+});
+
+// ---------------------------------------------------------------------------------------------
+// The agent-mode box (issue #289): the page asks, the host decides, the page draws what it is told.
+// ---------------------------------------------------------------------------------------------
+
+test('ticking agent mode asks the host, in a command the host can read', () => {
+  const page = runPage({ agentOffered: true });
+  page.element('agent')['checked'] = true;
+  page.change('agent');
+
+  const sent = page.posted.filter((one) => one['command'] === 'access');
+  assert.equal(sent.length, 1);
+  assert.deepEqual(chatCommandOf(sent[0]), { kind: 'access', agent: true });
+});
+
+test('a ticked box does not claim agent mode before the host has put it in force', () => {
+  // The host de-duplicates its state pushes, so a CANCELLED confirmation — which changes nothing on the
+  // host — pushes nothing back. A page that kept its own tick would then show agent mode on for a model
+  // that answers from text: the one state this box must never misreport. (Found on the code round.)
+  const page = runPage({ agentOffered: true });
+  page.element('agent')['checked'] = true;
+  page.change('agent');
+
+  assert.equal(page.element('agent')['checked'], false, 'the page claimed agent mode on its own say-so');
+});
+
+test('the host’s push is what ticks the box, and what disables it during a turn', () => {
+  const page = runPage({ agentOffered: true });
+  page.push({ type: 'state', running: true, capped: false, access: 'agent', agentOffered: true });
+
+  assert.equal(page.element('agent')['checked'], true);
+  assert.equal(page.element('agent')['disabled'], true, 'the box could be changed mid-answer');
+  assert.equal(page.element('agentBox')['className'], 'agent agentOn');
+
+  page.push({ type: 'state', running: false, capped: false, access: 'text', agentOffered: false });
+  assert.equal(page.element('agent')['checked'], false);
+  assert.equal(page.element('agent')['disabled'], false);
+  assert.equal(page.element('agentBox')['hidden'], true, 'a Team-server model was left offered the box');
 });

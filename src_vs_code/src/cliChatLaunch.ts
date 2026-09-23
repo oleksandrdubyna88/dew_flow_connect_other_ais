@@ -6,6 +6,7 @@ import { agyAdapter } from './agyAdapter';
 import { claudeAdapter } from './claudeAdapter';
 import { codexAdapter } from './codexAdapter';
 import { Vendor } from './vendors';
+import { agentFolderGone, agentRefusal as boxRefusal } from './chatAccessRules';
 
 /**
  * How a vendor row becomes a command line.
@@ -90,8 +91,20 @@ export interface LaunchSpec {
    * found by the live check rather than by any test, which is what live checks are for.</p>
    */
   readonly shell: boolean;
-  /** Empty means "wherever the caller likes" — but for this feature it is always a temp directory. */
+  /** An empty temp directory in text mode; the conversation's workspace in agent mode. */
   readonly cwd: string;
+  /**
+   * Variables ADDED to the child's environment. Empty in text mode.
+   *
+   * <p>In agent mode it carries `NoDefaultCurrentDirectoryInExePath=1`, and that is a MEASURED
+   * necessity rather than hygiene: the npm shim `codex.cmd` runs `node` by bare name, and cmd.exe
+   * searches the working directory before the PATH — so with the workspace as the working directory, a
+   * repository holding `node.cmd` in its root had that file run before the model decided anything.
+   * Measured 2026-09-23: `PLANTED-NODE-RAN` without the variable, the real `codex-cli` with it. The
+   * vendor's own shells inherit it too, which only stops a bare name from resolving to the workspace;
+   * an explicit `.\script` still runs. (Our own code review of issue #289.)</p>
+   */
+  readonly env: Readonly<Record<string, string>>;
   /** Empty when the row can be launched; otherwise why it cannot. */
   readonly refusal: string;
 }
@@ -216,18 +229,25 @@ function agentRefusal(vendor: Vendor, launch: ChatLaunch, workspace: string): st
 }
 
 function noAgentHere(vendor: Vendor, workspace: string): string {
-  if (vendor.runtime === 'remote') {
-    return `${vendor.id} runs on a Team server, so agent mode has no computer of yours to act on.`;
-  }
+  // The SAME words the box refuses in — one rule, stated in `chatAccessRules` (our own code review).
+  const refusal = boxRefusal(vendor.runtime === 'remote', workspace);
 
-  return workspace.length === 0 ? NO_AGENT_FOLDER : folderGone(workspace);
+  return refusal.length > 0 ? refusal : agentFolderGone(workspace, isFolder(workspace));
 }
 
-const NO_AGENT_FOLDER = 'Agent mode needs a workspace folder to work in, and this conversation has none. '
-  + 'Open a folder and start the conversation from it.';
+/** What cmd.exe is told so it never runs a program from the workspace by bare name. See `LaunchSpec.env`. */
+const NO_CWD_SEARCH: Readonly<Record<string, string>> = { NoDefaultCurrentDirectoryInExePath: '1' };
 
-function folderGone(workspace: string): string {
-  return fs.existsSync(workspace) ? '' : `Agent mode works in ${workspace}, and that folder no longer exists.`;
+/**
+ * Whether this path is a DIRECTORY that exists now. Not `existsSync`, which says yes to a file — and a
+ * file handed to a full-access CLI as its working directory is a record gone wrong, not a folder.
+ */
+export function isFolder(candidate: string): boolean {
+  try {
+    return fs.statSync(candidate).isDirectory();
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -256,7 +276,7 @@ export function launchSpecFor(
   const refusal = chatRuntimeRefusal(vendor) || modelRefusal(launch.model) || agentRefusal(vendor, launch, workspace);
   const known = entryFor(vendor.runtime);
   if (refusal.length > 0 || known === undefined) {
-    return { executable: '', args: [], cwd: '', shell: false, refusal };
+    return { executable: '', args: [], cwd: '', shell: false, env: {}, refusal };
   }
   const executable = [resolved, vendor.executablePath, known.executable].find((name) => name.length > 0) ?? '';
 
@@ -272,6 +292,7 @@ export function launchSpecFor(
     // workspace, because acting on its files is the whole point (issue #289) — and `cmd.exe`'s search
     // is still moot, because `executable` is the full path `resolvedExecutable` found.
     cwd: launch.access === 'agent' ? workspace : tempDir,
+    env: launch.access === 'agent' ? NO_CWD_SEARCH : {},
     refusal: '',
   };
 }

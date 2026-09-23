@@ -15,7 +15,7 @@ export function chatAgentToggleHtml(offered: boolean, access: ChatAccess, runnin
 
   return `<label id="agentBox" class="agent${when(on, ' agentOn')}"${when(!offered, ' hidden')} `
     + `title="${AGENT_TITLE}">`
-    + `<input type="checkbox" id="agent"${when(on, ' checked')}${when(running, ' disabled')}> Agent mode</label>`;
+    + `<input type="checkbox" id="agent"${when(on, ' checked')}${when(running, ' disabled')}> Agent mode — full access</label>`;
 }
 
 function when(yes: boolean, text: string): string {
