@@ -25,13 +25,28 @@ export const AGY_ARGS: readonly string[] = [
   'stream-json',
 ];
 
+/**
+ * Agent mode's flags (issue #289): `--mode plan` goes, because plan mode writes nothing, and
+ * `--dangerously-skip-permissions` ("Auto-approve all tool permission requests", `agy --help`,
+ * 2026-09-23) comes in its place. `--disable-slash-commands` stays: the text is still another AI's and
+ * can still begin with a slash.
+ */
+export const AGY_AGENT_ARGS: readonly string[] = [
+  '--dangerously-skip-permissions',
+  ...AGY_ARGS.slice(2),
+];
+
 export const agyAdapter: ChatAdapter = {
   shape: 'persistent',
   // Per-turn: each `result` carries the tokens of the turn it ends, not the pipe's running total.
   cumulative: false,
   announces: true,
   // `--model`, as AntigravityRuntime passes it for a reviewer on the same CLI.
-  argv: ({ model }) => (model.length > 0 ? [...AGY_ARGS, '--model', model] : AGY_ARGS),
+  argv: ({ model, access }) => {
+    const args = access === 'agent' ? AGY_AGENT_ARGS : AGY_ARGS;
+
+    return model.length > 0 ? [...args, '--model', model] : args;
+  },
   encode: (turn) => JSON.stringify({ event: 'user', message: { role: 'user', content: turn } }),
   classify: (line) => {
     const event = parsed(line);

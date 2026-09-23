@@ -5,6 +5,7 @@ import { ChatEntry, DisposableSession, RevealablePanel } from './chatPanels';
 import { ChatMessage, ChatPageState, TurnMarks, WaitingQuestion, chatCappedHtml, chatFailureHtml, chatMessagesHtml, chatPageHtml, chatPickerHtml, chatPresetRowsHtml, chatStatusHtml, chatWaitingHtml } from './chatPage';
 import { ChatModelChoice } from './chatContracts';
 import { ChatProvider } from './chatModels';
+import type { ChatAccess } from './chatAdapter';
 import { ModelPreset, PromptPreset } from './chatPresets';
 import { chatTabIcon } from './chatIcon';
 import { escapeHtml } from './webviewHtml';
@@ -98,6 +99,8 @@ export interface ChatPanelHooks {
   readonly onUnattach: (id: object) => void;
   /** Move the thread to a model that keeps a conversation. */
   readonly onUseLocal: (id: object) => void;
+  /** The agent-mode box changed (issue #289). The host confirms, relaunches, or refuses and redraws. */
+  readonly onAccess: (id: object, agent: boolean) => void;
   /** The page trapped an error, or the host failed to handle one of its messages. */
   readonly onPageError: (id: object, message: string) => void;
   /**
@@ -154,6 +157,9 @@ export interface ChatPushState {
   readonly attached: string;
   /** What this conversation has cost so far, as a line, or empty. */
   readonly spend: string;
+  /** What the model may do on this computer, and whether the box is offered — issue #289. */
+  readonly access: ChatAccess;
+  readonly agentOffered: boolean;
   readonly providerId: string;
   readonly modelId: string;
   /** Which saved PROMPT is in force — the button that looks pressed. */
@@ -391,6 +397,10 @@ async function handle(id: object, message: PageMessage, hooks: ChatPanelHooks): 
       hooks.onUseLocal(id);
 
       return;
+    case 'access':
+      hooks.onAccess(id, command.agent);
+
+      return;
     case 'pageError':
       hooks.onPageError(id, command.message);
 
@@ -461,6 +471,10 @@ export function pushChatState(entry: ChatEntry, state: ChatPushState): boolean {
     // the text in the box and the page would silently colour nothing.
     marks: { ...state.marks, role: state.marks.role.trim(), task: state.marks.task.trim() },
     modelId: state.modelId,
+    // The agent-mode box, drawn from what the HOST holds: a cancelled confirmation or a refusal pushes
+    // the old access back, and the page's own tick is undone by it.
+    access: state.access,
+    agentOffered: state.agentOffered,
   };
 
   offered.set(entry.id, pairsOf(state.providers));

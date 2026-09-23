@@ -1023,6 +1023,7 @@
     "package": "npm run test && npm run bundle && vsce package --no-dependencies",
     "icon": "node scripts/generate-icon.mjs",
     "test:live": "npm run compile && node scripts/live-chat.mjs",
+    "test:live-agent": "npm run compile && node scripts/live-agent.mjs",
     "test:fresh": "npm run compile && node scripts/live-fresh.mjs",
     "test:claude-models": "npm run compile && node scripts/live-claude-models.mjs",
     "test:close-compat": "node scripts/live-close-consult-compat.mjs",

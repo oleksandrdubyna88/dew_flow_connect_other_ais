@@ -113,6 +113,12 @@ export interface ConversationRecord {
   readonly source: ConversationSource;
   /** The workspace folder this conversation belongs to, or empty for a window that had none. */
   readonly workspace: string;
+  /**
+   * Agent mode, when it is on (issue #289). ABSENT is text — so every record written before the field
+   * existed reads back as the chat it was, and `CONVERSATION_VERSION` did not have to move (moving it
+   * discards every record).
+   */
+  readonly access?: 'agent';
   readonly createdAt: number;
   readonly updatedAt: number;
   /** When the person started a new chat here, if they did. A closed conversation is still readable. */
@@ -316,6 +322,9 @@ export function recordFrom(value: unknown): ConversationRecord | undefined {
   if (row.workspace !== undefined && !isText(row.workspace)) {
     return undefined;
   }
+  if (row.access !== undefined && row.access !== 'agent') {
+    return undefined;
+  }
   const source = row.source === undefined ? { kind: 'none' as const } : sourceFrom(row.source);
   if (source === undefined) {
     return undefined;
@@ -336,6 +345,7 @@ export function recordFrom(value: unknown): ConversationRecord | undefined {
     carryFrom: row.carryFrom ?? 0,
     source,
     workspace: row.workspace ?? '',
+    ...(row.access === 'agent' ? { access: 'agent' as const } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     ...(row.closedAt === undefined ? {} : { closedAt: row.closedAt }),

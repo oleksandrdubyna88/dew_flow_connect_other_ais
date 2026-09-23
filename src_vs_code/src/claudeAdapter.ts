@@ -28,6 +28,13 @@ export const CLAUDE_ARGS: readonly string[] = [
   'stream-json',
 ];
 
+/**
+ * Agent mode's flag (issue #289). `bypassPermissions` rather than `acceptEdits`: the operator chose
+ * full access to the computer, which includes running commands, and `acceptEdits` still refuses those
+ * headless. One of the choices `claude --help` listed on 2026-09-23.
+ */
+export const CLAUDE_AGENT_ARGS: readonly string[] = [...CLAUDE_ARGS, '--permission-mode', 'bypassPermissions'];
+
 export const claudeAdapter: ChatAdapter = {
   shape: 'persistent',
   // Per-turn: each `result` prices the turn it ends, `total_cost_usd` included.
@@ -35,7 +42,11 @@ export const claudeAdapter: ChatAdapter = {
   announces: false,
   // `--model`, the spelling this repository already verified against the installed CLI for its
   // reviewers (ClaudeRuntime). Empty sends nothing, so the CLI keeps its own default.
-  argv: ({ model }) => (model.length > 0 ? [...CLAUDE_ARGS, '--model', model] : CLAUDE_ARGS),
+  argv: ({ model, access }) => {
+    const args = access === 'agent' ? CLAUDE_AGENT_ARGS : CLAUDE_ARGS;
+
+    return model.length > 0 ? [...args, '--model', model] : args;
+  },
   // The block shape, not a bare string: the content of a user message is a list of typed blocks,
   // and a string where a list is expected is refused by the CLI rather than misread.
   encode: (turn) => JSON.stringify({

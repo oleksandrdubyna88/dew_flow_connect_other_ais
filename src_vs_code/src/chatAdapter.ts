@@ -104,10 +104,23 @@ export interface ChatLaunch {
    * is a different request from not asking, and the first is an error the person did not make.</p>
    */
   readonly model: string;
+  /**
+   * What the model may do on this computer — issue #289.
+   *
+   * <p>`text` is how every chat ran before: an empty directory, a vendor in its most careful mode,
+   * answering from the text it was handed. `agent` is FULL access, the operator's decision of
+   * 2026-09-23 over a workspace-only sandbox: the conversation's workspace as the working directory
+   * and each vendor's own "act without asking" switch. The flags are what each CLI's `--help` printed
+   * that day, and each adapter says which it uses.</p>
+   */
+  readonly access: ChatAccess;
 }
 
+/** What a chat's model may do: answer from text, or act on the computer. See `ChatLaunch.access`. */
+export type ChatAccess = 'text' | 'agent';
+
 /** A launch that asks for nothing in particular — a first turn on whatever the row is set to. */
-export const NEW_CONVERSATION: ChatLaunch = { resume: '', model: '' };
+export const NEW_CONVERSATION: ChatLaunch = { resume: '', model: '', access: 'text' };
 
 export interface ChatAdapter {
   readonly shape: ChatShape;

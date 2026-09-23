@@ -3,9 +3,10 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 import { ChatEntry } from './chatPanels';
-import { threads } from './chatThread';
+import { Thread, threads } from './chatThread';
 import { asText, show } from './chatShow';
-import { ChatSession, DEFAULT_BUDGETS } from './chatSession';
+import { ChatSession, budgetsFor } from './chatSession';
+import { ChatAccess } from './chatAdapter';
 import { CliChatSession, REAL_TIMERS } from './cliChatSession';
 import { retire } from './retireSession';
 import { isRemote, memoryOf, modelToRun } from './chatModels';
@@ -21,6 +22,7 @@ import { chatProcessFor } from './chatProcess';
 import { resolvedExecutable } from './versionProbe';
 import { Vendor } from './vendors';
 import { notify } from './notify';
+import { accessDropped, accessOn } from './chatAccessRules';
 
 /**
  * Where a conversation's process comes from, and what happens when somebody changes their mind.
@@ -64,6 +66,10 @@ export function started(
    */
   model: string,
   remote?: ChatSession,
+  /** Text or agent (issue #289). A remote session ignores it: the box is never offered for one. */
+  access: ChatAccess = 'text',
+  /** The conversation's workspace — where an agent-mode vendor runs. */
+  workspace = '',
 ): { session: ChatSession; home: ChatHome } {
   if (remote !== undefined) {
     // A Team server needs no process and no directory: the home is a stub whose release does
@@ -75,8 +81,8 @@ export function started(
 
   return {
     session: new CliChatSession(
-      chatProcessFor(vendor, home.dir, resolved, model),
-      DEFAULT_BUDGETS,
+      chatProcessFor(vendor, home.dir, resolved, model, access, workspace),
+      budgetsFor(access),
       REAL_TIMERS,
       adapter,
     ),
@@ -282,13 +288,10 @@ export async function switchNow(entry: ChatEntry, providerId: string, modelId: s
     return false;
   }
 
-  // WORSE THAN A LEAK HERE, which is why it is guarded rather than merely tidied: a replacement
-  // session is installed on the next lines, so a disposal that threw would leave the thread holding
-  // the old one while the new one is already running.
-  retire(thread, (what, reason) => console.warn(`ConnectOtherAIs: ${what}`, reason));
-  const replacement = started(vendor, cli.resolved, modelId, remote.session);
-  thread.session = replacement.session;
-  thread.home = replacement.home;
+  // Agent mode moves with the conversation unless the row it moves to cannot have it — a Team-server
+  // model is launched in text mode and the notice says so (codex, the plan round of issue #289).
+  const before = thread.access;
+  install(thread, vendor, cli.resolved, modelId, remote.session, accessOn(isRemote(vendor), before, thread.workspace));
   thread.providerId = providerId;
   thread.modelId = modelId;
   // The ROW as well as the session: a model chosen in the dropdown below the buttons is still a
@@ -298,6 +301,46 @@ export async function switchNow(entry: ChatEntry, providerId: string, modelId: s
   // button for a model that was not answering. Photographed by the operator: GPT-5.6-Terra pressed
   // while GPT-5.6-Sol was in the dropdown underneath it.
   thread.chosenId = presetInForce(savedModels(vscode.workspace.getConfiguration('coai')), providerId, modelId);
+  show(entry, false, '');
+  // Said out loud: the next question costs more than the last one, because it carries everything
+  // above it. A person who is not told reads the first answer as a model that mysteriously knows.
+  void notify({
+    as: 'information',
+    class: 'outcome',
+    source: 'chat',
+    code: 'model-switched',
+    subject: modelId,
+    title: `Now asking ${modelId}. Your next question carries this conversation across to it.${accessDropped(before, thread.access)}`,
+  });
+
+  return true;
+}
+
+/**
+ * A new session for this conversation, installed in place of the old one, with everything said so far
+ * ready to travel with the next question.
+ *
+ * <p>Shared by a model switch and a change of access (issue #289), because both are the same move: the
+ * flags a vendor was started with cannot be changed under it. The replacement is a NEW session, so a
+ * codex thread id is never resumed under different flags — the next turn starts a fresh thread with
+ * the transcript replayed (gemini, the plan round).</p>
+ */
+export function install(
+  thread: Thread,
+  vendor: Vendor,
+  resolved: string,
+  modelId: string,
+  remote: ChatSession | undefined,
+  access: ChatAccess,
+): void {
+  // WORSE THAN A LEAK HERE, which is why it is guarded rather than merely tidied: a replacement
+  // session is installed on the next lines, so a disposal that threw would leave the thread holding
+  // the old one while the new one is already running.
+  retire(thread, (what, reason) => console.warn(`ConnectOtherAIs: ${what}`, reason));
+  const replacement = started(vendor, resolved, modelId, remote, access, thread.workspace);
+  thread.session = replacement.session;
+  thread.home = replacement.home;
+  thread.access = access;
   // The memory rules move WITH the model. Left behind, they described the one just thrown away:
   // switching to a Team server kept `forgetful` false, so the server — which remembers nothing —
   // was asked turn two with no transcript behind it and the three-turn cap never applied; switching
@@ -310,17 +353,4 @@ export async function switchNow(entry: ChatEntry, providerId: string, modelId: s
   // was asked for, because this runs after the turn queue has drained — so an answer that was still
   // arriving when the person changed their mind is in the transcript by now. (codex, the plan round.)
   thread.carry = carriedFrom(thread.messages, thread.carryFrom);
-  show(entry, false, '');
-  // Said out loud: the next question costs more than the last one, because it carries everything
-  // above it. A person who is not told reads the first answer as a model that mysteriously knows.
-  void notify({
-    as: 'information',
-    class: 'outcome',
-    source: 'chat',
-    code: 'model-switched',
-    subject: modelId,
-    title: `Now asking ${modelId}. Your next question carries this conversation across to it.`,
-  });
-
-  return true;
 }

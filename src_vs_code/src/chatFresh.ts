@@ -150,7 +150,7 @@ export function freshened(saveId: string, now: number): Freshened {
  * their value, and an empty array is a value. `forkOnDisk` clears the same three for the same
  * reason.</p>
  */
-export const UNSAVED = ['savedMessages', 'savedModelId', 'savedCarryFrom'] as const;
+export const UNSAVED = ['savedMessages', 'savedModelId', 'savedCarryFrom', 'savedAccess'] as const;
 
 /**
  * Is the conversation a turn BEGAN in still the one this tab is holding?

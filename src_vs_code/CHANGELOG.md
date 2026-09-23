@@ -23,6 +23,16 @@ assistant you have not chosen for is told to use its own strongest model, never 
 Needs coai-mcp 0.33.0 or later — an older server names Fable and Opus to everybody, and the panel says
 so beside the pickers once you have changed one.
 
+**A local chat can open, write and run things on your computer — when you tick Agent mode** (issue
+#289). Asking a chat to translate a *file* used to fail: every local model was launched to answer from
+the text alone, in an empty folder, and codex's own sandbox does not start on some Windows machines.
+Beside the model picker there is now an **Agent mode** box, offered for a local model in a conversation
+that has a workspace folder. Ticking it asks you first, then restarts the model with full access to the
+computer — Claude with `bypassPermissions`, codex outside its sandbox, agy out of plan mode — starting in
+the conversation's workspace, with twenty minutes a turn instead of three. The conversation carries
+across, the choice is saved with it, and every new conversation starts with the box off. A Team-server
+model never gets it: switching to one turns agent mode off and says so.
+
 ## Server 0.32.0 — 2026-09-23
 
 **The server now says when it died.** A `coai-mcp` that was killed — the window closed hard, the

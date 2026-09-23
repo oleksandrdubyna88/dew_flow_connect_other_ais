@@ -59,8 +59,8 @@ test('changing the model changes the command line, for every runtime', () => {
   // able to join the product without this guarantee being asked of it. That is the same reason the
   // defect existed at all — nothing forced an adapter to answer the question.
   for (const runtime of CHAT_RUNTIMES) {
-    const a = launchSpecFor(onRuntime(runtime), 'C:/temp/empty', { resume: '', model: 'model-a' });
-    const b = launchSpecFor(onRuntime(runtime), 'C:/temp/empty', { resume: '', model: 'model-b' });
+    const a = launchSpecFor(onRuntime(runtime), 'C:/temp/empty', { resume: '', model: 'model-a', access: 'text' });
+    const b = launchSpecFor(onRuntime(runtime), 'C:/temp/empty', { resume: '', model: 'model-b', access: 'text' });
 
     assert.notDeepStrictEqual(
       [...a.args],
@@ -74,7 +74,7 @@ test('changing the model changes the command line, for every runtime', () => {
 
 test('each runtime uses its own vendor flag, in the spelling that vendor takes', () => {
   for (const runtime of CHAT_RUNTIMES) {
-    const spec = launchSpecFor(onRuntime(runtime), 'C:/temp/empty', { resume: '', model: 'chosen' });
+    const spec = launchSpecFor(onRuntime(runtime), 'C:/temp/empty', { resume: '', model: 'chosen', access: 'text' });
     const flag = FLAG[runtime];
 
     assert.ok(flag !== undefined, `${runtime} has no known model flag — add one, do not guess`);
@@ -93,7 +93,7 @@ test('an empty model sends no model flag at all, so the CLI keeps its own defaul
   // model either. Sending an empty string would be a different thing from sending nothing: one asks
   // the CLI for a model called "", the other does not ask.
   for (const runtime of CHAT_RUNTIMES) {
-    const spec = launchSpecFor(onRuntime(runtime), 'C:/temp/empty', { resume: '', model: '' });
+    const spec = launchSpecFor(onRuntime(runtime), 'C:/temp/empty', { resume: '', model: '', access: 'text' });
 
     assert.ok(!spec.args.includes(''), `${runtime} passed an empty argument`);
     assert.ok(
@@ -109,7 +109,7 @@ test('the model travels beside the resume, not instead of it', () => {
   const spec = launchSpecFor(
     vendor({ runtime: 'codex' }),
     'C:/temp/empty',
-    { resume: 'thread-abc', model: 'gpt-5.6-luna' },
+    { resume: 'thread-abc', model: 'gpt-5.6-luna', access: 'text' },
   );
 
   assert.ok(spec.args.includes('resume'));
@@ -126,7 +126,7 @@ test('a model name that could be read as a flag is refused by name, never sent',
   // Refused rather than dropped: dropping it silently would re-create the defect this whole file is
   // about — the tab would label the answer with a model the CLI was never told about.
   for (const hostile of ['--dangerously-skip-permissions', '-m other', 'a b', 'x" & calc.exe', '--']) {
-    const spec = launchSpecFor(onRuntime('claude'), 'C:/temp/empty', { resume: '', model: hostile });
+    const spec = launchSpecFor(onRuntime('claude'), 'C:/temp/empty', { resume: '', model: hostile, access: 'text' });
 
     assert.notStrictEqual(spec.refusal, '', `a model of ${JSON.stringify(hostile)} was not refused`);
     assert.deepStrictEqual([...spec.args], [], 'a refused launch builds no command line');
@@ -144,7 +144,7 @@ test('the model names this product actually uses are not refused', () => {
     'Qwen3.5-35B-A3B-Q5_vk128:latest',
     'openai/gpt-oss-120b',
   ]) {
-    const spec = launchSpecFor(onRuntime('claude'), 'C:/temp/empty', { resume: '', model: real });
+    const spec = launchSpecFor(onRuntime('claude'), 'C:/temp/empty', { resume: '', model: real, access: 'text' });
 
     assert.strictEqual(spec.refusal, '', `a real model name was refused: ${real}`);
     assert.ok(spec.args.includes(real));

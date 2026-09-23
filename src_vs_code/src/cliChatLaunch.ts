@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import { needsShell } from './cliVersions';
 import { Platform } from './hostSide';
 import { ChatAdapter, ChatLaunch, NEW_CONVERSATION } from './chatAdapter';
@@ -203,6 +204,33 @@ function modelRefusal(model: string): string {
 }
 
 /**
+ * Why this launch may not run in agent mode, or empty when it may (or is not asking to).
+ *
+ * <p>No workspace is a refusal rather than a fall back to the home directory: "create a file" would
+ * land in the profile root (gemini, the plan round of issue #289). A folder deleted since the
+ * conversation was filed is named, rather than surfacing as a spawn error nobody can read. A remote
+ * row never reaches here today; refused anyway, because "this computer" is not the one it runs on.</p>
+ */
+function agentRefusal(vendor: Vendor, launch: ChatLaunch, workspace: string): string {
+  return launch.access === 'agent' ? noAgentHere(vendor, workspace) : '';
+}
+
+function noAgentHere(vendor: Vendor, workspace: string): string {
+  if (vendor.runtime === 'remote') {
+    return `${vendor.id} runs on a Team server, so agent mode has no computer of yours to act on.`;
+  }
+
+  return workspace.length === 0 ? NO_AGENT_FOLDER : folderGone(workspace);
+}
+
+const NO_AGENT_FOLDER = 'Agent mode needs a workspace folder to work in, and this conversation has none. '
+  + 'Open a folder and start the conversation from it.';
+
+function folderGone(workspace: string): string {
+  return fs.existsSync(workspace) ? '' : `Agent mode works in ${workspace}, and that folder no longer exists.`;
+}
+
+/**
  * The command line for one vendor row, or the reason there is none.
  *
  * @param tempDir a directory with nothing in it — see the note below
@@ -222,8 +250,10 @@ export function launchSpecFor(
   /** The file the vendor's name resolved to, from `resolvedExecutable`. Empty falls back to the name. */
   resolved = '',
   platform: Platform = process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'win32' : 'linux',
+  /** The conversation's workspace folder — where an AGENT-mode launch runs. Text mode ignores it. */
+  workspace = '',
 ): LaunchSpec {
-  const refusal = chatRuntimeRefusal(vendor) || modelRefusal(launch.model);
+  const refusal = chatRuntimeRefusal(vendor) || modelRefusal(launch.model) || agentRefusal(vendor, launch, workspace);
   const known = entryFor(vendor.runtime);
   if (refusal.length > 0 || known === undefined) {
     return { executable: '', args: [], cwd: '', shell: false, refusal };
@@ -236,10 +266,12 @@ export function launchSpecFor(
     // From the adapter, because the command line and the wire protocol are one decision: a vendor
     // launched with another's flags answers in a shape nobody here can read.
     args: known.adapter.argv(launch),
-    // An empty temp directory, never the workspace. The task is to explain a paragraph: handing a
-    // third-party agent the source tree buys nothing but startup time, and on Windows a working
-    // directory is also something `cmd.exe` searches before the PATH.
-    cwd: tempDir,
+    // In text mode an empty temp directory, never the workspace. The task is to explain a paragraph:
+    // handing a third-party agent the source tree buys nothing but startup time, and on Windows a
+    // working directory is also something `cmd.exe` searches before the PATH. In AGENT mode the
+    // workspace, because acting on its files is the whole point (issue #289) — and `cmd.exe`'s search
+    // is still moot, because `executable` is the full path `resolvedExecutable` found.
+    cwd: launch.access === 'agent' ? workspace : tempDir,
     refusal: '',
   };
 }

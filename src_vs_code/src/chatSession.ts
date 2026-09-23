@@ -1,3 +1,4 @@
+import type { ChatAccess } from './chatAdapter';
 import { ReportedUsage } from './chatUsage';
 
 /**
@@ -132,3 +133,16 @@ export interface TurnBudgets {
 }
 
 export const DEFAULT_BUDGETS: TurnBudgets = { startupMs: 30_000, turnMs: 180_000 };
+
+/**
+ * Agent mode's budget (issue #289): twenty minutes a turn. A model that reads a file, writes another
+ * and runs a command outruns three minutes as a matter of course, and a persistent vendor that times
+ * out loses its whole context. The ceiling, not the expectation — Stop ends a turn sooner, and a
+ * process that DIES ends it at once on its exit event, whatever the budget.
+ */
+export const AGENT_BUDGETS: TurnBudgets = { startupMs: DEFAULT_BUDGETS.startupMs, turnMs: 1_200_000 };
+
+/** The budget a launch in this mode gets. */
+export function budgetsFor(access: ChatAccess): TurnBudgets {
+  return access === 'agent' ? AGENT_BUDGETS : DEFAULT_BUDGETS;
+}

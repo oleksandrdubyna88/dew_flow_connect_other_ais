@@ -12,6 +12,8 @@ import { serviceLines } from './chatPrompt';
 import { spendLabel, spendSoFar } from './chatSpend';
 import { remoteIsFull } from './remoteAsk';
 import { pushChatState } from './chatPanel';
+import { isRemote } from './chatModels';
+import { agentOffered } from './chatAccessRules';
 
 /**
  * What the page is told, and the five small facts every caller of it needs first.
@@ -35,6 +37,17 @@ import { pushChatState } from './chatPanel';
  * @param queued how many turns are ahead of this one on a Team server; 0 for none, and for a local
  *   model, which has no queue
  */
+/**
+ * Whether this conversation's row runs on a Team server — read from the ROW, not from `forgetful`: a
+ * tab restored from a reload has not been told its model's memory rules yet, and says `false` until its
+ * first question (`chatConversationRestore`). A row that is gone counts as remote, so nothing is offered.
+ */
+export function onATeamServer(thread: Thread): boolean {
+  const vendor = vendorFor(thread.providerId);
+
+  return vendor === undefined || isRemote(vendor);
+}
+
 export function show(entry: ChatEntry, running: boolean, failure: string, queued = 0): void {
   const thread = threads.get(entry.id);
   if (thread === undefined) {
@@ -93,6 +106,8 @@ export function show(entry: ChatEntry, running: boolean, failure: string, queued
       : thread.failedWith === pairOf(thread) && retryFrom(thread.messages) !== undefined,
     attached: thread?.attached ?? '',
     spend: spendLabel(spendSoFar(thread?.spend ?? [])),
+    access: thread.access,
+    agentOffered: agentOffered(onATeamServer(thread), thread.workspace),
   });
   // The one place the transcript reaches a page is the one place it is written down — but only when
   // there is something new to write. `show` runs on every state push: a turn starting, a queue
@@ -105,12 +120,14 @@ export function show(entry: ChatEntry, running: boolean, failure: string, queued
   // drawn would not have survived a reload, silently.
   if (thread.savedMessages === thread.messages
     && thread.savedModelId === thread.modelId
-    && thread.savedCarryFrom === thread.carryFrom) {
+    && thread.savedCarryFrom === thread.carryFrom
+    && thread.savedAccess === thread.access) {
     return;
   }
   thread.savedMessages = thread.messages;
   thread.savedModelId = thread.modelId;
   thread.savedCarryFrom = thread.carryFrom;
+  thread.savedAccess = thread.access;
   // AND WHEN. Below the guard, so it records that something CHANGED rather than that a page redrew —
   // the picker orders its Open section by this, and a conversation nobody has spoken in must not
   // climb to the top of it because its tab repainted. See `Thread.usedAt`.

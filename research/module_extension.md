@@ -8867,3 +8867,48 @@ the code now lives in and not one assertion was weakened.
 exactly forty hex characters, so the collector, `--real-method` and `--file-at` all refuse one.
 Widening it would change how every git read treats every repository, untested against a SHA-256
 repository, inside a story that adds one read.
+## A local chat can act on the machine (2026-09-23, issue #289)
+
+A chat had exactly one way to run a local vendor: **text mode** — an empty temp directory
+(`coai-chat-*`), each CLI in its most careful setting, 180 s a turn. Asked to translate a FILE, it could
+not open one. `ChatLaunch` (`chatAdapter.ts`) now carries a third field, `access: ChatAccess`
+(`'text' | 'agent'`), and the compiler made all three adapters answer it. **Agent mode** is full access
+to the computer — the operator's choice over a workspace-only sandbox:
+
+| vendor | agent-mode argv (text mode unchanged) |
+|---|---|
+| `claude` | `CLAUDE_ARGS` + `--permission-mode bypassPermissions` |
+| `codex` | `exec [resume <id>] [-m M] --dangerously-bypass-approvals-and-sandbox --json - --skip-git-repo-check` — accepted by `exec resume` too, unlike `-s`; with no sandbox, the Windows `error 1920` has nothing to fail in |
+| `agy` | `--dangerously-skip-permissions` in place of `--mode plan`; `--disable-slash-commands` kept |
+
+- **Where it runs.** `launchSpecFor(..., workspace)` puts an agent launch in the conversation's
+  `Thread.workspace`; a conversation with no workspace, a folder that no longer exists and a remote row
+  are each REFUSED with a sentence (`agentRefusal`) — never a silent fall back to the home directory.
+- **How long.** `budgetsFor(access)` (`chatSession.ts`): `AGENT_BUDGETS` gives a turn 20 minutes. A
+  process that dies still ends its turn at once, on its exit event.
+- **The rules** live in `chatAccessRules.ts` with nothing of VS Code in them: `agentOffered` (a local row
+  AND a workspace), `accessOn` (what a relaunch keeps), the refusal, the question and the notices.
+- **Changing it** is `switchAccess` (`chatAccess.ts`): refused where not offered, a modal
+  `notifyAndAsk` before turning it ON, then the turn queue, then `install` — the step a model switch
+  now shares (`chatLaunch.ts`): retire the session, start a NEW one with the new flags, carry the
+  transcript. A codex thread id is therefore never resumed under different flags. A model switch to a
+  Team-server row goes through `accessOn` and comes out of agent mode, saying so in its notice; so does a
+  reload whose row became remote (`reopened`).
+- **Kept.** `Thread.access` survives a reset (`KeptByAReset`) and a reload: `ConversationRecord.access?:
+  'agent'`, absent meaning text, so every older record reads back unchanged and `CONVERSATION_VERSION`
+  did not move. `show()` compares `savedAccess`, so ticking the box alone is written down.
+- **The page** draws `chatAgentToggleHtml(offered, access, running)` beside the picker — hidden when not
+  offered, disabled while a turn runs, outlined while on — and posts `{command: 'access', agent}`; a
+  non-boolean `agent` is ignored. The host pushes `access`/`agentOffered` back on every state push, so a
+  cancelled confirmation or a refusal redraws the box as it was.
+
+**Live check** — `npm run test:live-agent` (`scripts/live-agent.mjs`): per vendor, create a file,
+translate it, read a file OUTSIDE the workspace, run `git --version`, each verified on disk or in the
+answer. 2026-09-23, Windows 11, node 24.18: agy, claude and codex all four. Codex first refused the
+outside read because the planted file was called `token.txt` ("may contain a secret") — a refusal about
+the name, not about access; the script plants `note.txt`.
+
+**Not done here:** a closed tab still leaves an agent's grandchildren running until
+`todo/PLAN_closing_a_chat_ends_its_whole_tree.md` lands — agent mode raises its priority. The memento
+fallback (`chatTabs`) does not carry `access`, so a conversation restored from it reopens in text mode —
+the safe direction.

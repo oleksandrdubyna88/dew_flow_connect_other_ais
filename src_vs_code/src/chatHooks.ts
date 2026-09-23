@@ -7,6 +7,7 @@ import { pulse } from './chatHost';
 import { chatLanguage, show } from './chatShow';
 import { ask, oneReask, oneRetry } from './chatTurn';
 import { switchModel } from './chatLaunch';
+import { switchAccess } from './chatAccess';
 import { freshStart } from './chatArchive';
 import { resolveAndPin } from './chatSessionJoin';
 import { ModelPreset } from './chatPresets';
@@ -496,6 +497,12 @@ export function conversationHooks(panels: ChatPanels): Parameters<typeof createC
         }
       },
       onUseLocal: () => undefined,
+      onAccess: (id, agent) => {
+        const entry = panels.entryOf(id);
+        if (entry !== undefined) {
+          void switchAccess(entry, agent);
+        }
+      },
       onPageError: (_id, message) => {
         void notify({
           as: 'warning',

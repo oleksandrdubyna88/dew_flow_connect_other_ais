@@ -62,6 +62,8 @@ type KeptByAReset =
   | 'title' | 'modelId' | 'providerId' | 'promptId' | 'role' | 'chosenId' | 'presses' | 'models' | 'providers'
   // It still belongs to the same tab in the same project.
   | 'source' | 'workspace' | 'fromSession' | 'sessionFile'
+  // Set for the job the tab is doing, which a new subject in the same tab has not changed (issue #289).
+  | 'access'
   // Never reset anywhere: a stop names the turn it means, and a late one must not name a turn of the
   // new conversation. `generation` and `resetting` belong to the reset itself rather than to a slate.
   | 'turn' | 'generation' | 'resetting'
@@ -70,7 +72,7 @@ type KeptByAReset =
   // Replaced by the host, which owns them: a dead session and a released directory are not values.
   | 'session' | 'home'
   // Deleted rather than assigned — see `UNSAVED` — and decided by whichever model answers next.
-  | 'savedMessages' | 'savedModelId' | 'savedCarryFrom' | 'forgetful' | 'ourDraft';
+  | 'savedMessages' | 'savedModelId' | 'savedCarryFrom' | 'savedAccess' | 'forgetful' | 'ourDraft';
 
 /** Any field of a thread that a reset neither replaces nor has been told to keep. Must be none. */
 type Unclassified = Exclude<keyof Thread, keyof Freshened | KeptByAReset>;

@@ -19,6 +19,7 @@ import {
   originOf,
   whereToLook,
 } from './chatRoots';
+import { agentOffered } from './chatAccessRules';
 import { Ready, chatCatalogFrom, openingPrompt, readyToChat, roleOf, savedModels, savedPick, savedPrompts, taskOf } from './chatConfig';
 import { CANCELLED, fromTheEditor, matchedSource, passageFor } from './chatCapture';
 import { ChatSession } from './chatSession';
@@ -97,6 +98,9 @@ function newConversation(
       providers: ready.providers,
       promptPresets: savedPrompts(config),
       modelPresets: savedModels(config),
+      // Text, always, for a new conversation — and the box offered only where agent mode could run.
+      access: 'text',
+      agentOffered: agentOffered(isRemote(ready.vendor), originOf(state.source).workspace),
       // A conversation that has just opened has said nothing, so there is nothing to ask again.
       reask: '',
       // Nor anything to send again: nothing has failed yet, and the failure line is empty.
@@ -144,6 +148,8 @@ function newConversation(
     attachedPath: '',
     spend: [],
     ...originOf(state.source),
+    // Every conversation starts answering from text; agent mode is ticked per job (issue #289).
+    access: 'text',
     providerId: ready.providerId,
     modelId: ready.modelId,
     // The MAIN prompt, and the chosen model's own role: what a capture opens on, with both buttons

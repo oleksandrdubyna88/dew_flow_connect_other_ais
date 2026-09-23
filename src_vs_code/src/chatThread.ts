@@ -1,5 +1,6 @@
 import { ChatMemory, ChatProvider } from './chatModels';
 import { ChatHome } from './cliChatLaunch';
+import type { ChatAccess } from './chatAdapter';
 import { ChatMessage } from './chatPage';
 import { ChatModelChoice } from './chatContracts';
 import { ChatSession } from './chatSession';
@@ -287,6 +288,14 @@ export interface Thread extends ChatMemory {
    */
   workspace: string;
   /**
+   * What this conversation's model may do on this computer — issue #289.
+   *
+   * <p>Per conversation and `text` for every new one: full access is something a person turns on for
+   * a job, never a default they inherit. It survives a reset (the tab is still the tab it was set in)
+   * and a reload (it is written down), and a switch to a remote model turns it off.</p>
+   */
+  access: ChatAccess;
+  /**
    * This conversation's store writes, one after another.
    *
    * <p>The same shape as `turns` above and for a sharper reason. A save carries the revision this
@@ -303,6 +312,8 @@ export interface Thread extends ChatMemory {
   savedModelId?: string;
   /** The mark last written down, so a press that changed only it is still saved. */
   savedCarryFrom?: number;
+  /** The access last written down, so ticking the box alone is still saved. */
+  savedAccess?: ChatAccess;
   /**
    * A conversation restored from a reload, whose vendor process does not exist yet.
    *
