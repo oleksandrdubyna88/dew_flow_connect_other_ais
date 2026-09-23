@@ -242,6 +242,45 @@ jobs:
           sys.exit(1 if bad else 0)
           PY
 
+  # THE SAME SUITES ON macOS, on every pull request.
+  #
+  # Every other job here is Linux, so a defect only macOS has waited for a release to be seen, and on
+  # 2026-09-23 one did: `mcp-v0.31.0` failed on `osx-arm64` alone — nine review-tree tests, because
+  # every macOS temp directory is behind a link (`/var` is `/private/var`) and git records a worktree
+  # by its real path (#470). Pull-request CI was green; the tag was the first thing that ran them there.
+  #
+  # The three suites that run on a Mac in production. The ingest server's suite is not here: it ships
+  # for Linux only, and one of its tests runs the previous linux-x64 release.
+  macos:
+    name: macOS · mcp · server · bench
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # `StageRulesTests` reads the mounted rules; without the submodule it fails, as it once failed
+      # two releases (see release.yml's note on the same step).
+      - name: Conventions submodule
+        run: git submodule update --init --depth 1 .agents/conventions
+
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build dew_flow_connect_other_ais.slnx -c Release
+
+      - name: Test
+        run: ./src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests
+
+      - name: Test the Team server
+        run: ./src_server/tests/bin/Release/net10.0/CoaiServer.Tests
+
+      - name: Test the bench
+        run: ./src_bench/CoaiBench.Tests/bin/Release/net10.0/CoaiBench.Tests
+
   extension:
     name: extension · typecheck · test · package
     runs-on: ubuntu-latest

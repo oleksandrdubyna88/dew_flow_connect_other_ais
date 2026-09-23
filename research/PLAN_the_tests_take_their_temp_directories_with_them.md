@@ -1,12 +1,23 @@
 # PLAN — a run sweeps the temporary directories before it starts
 
-> Status: **plan only, nothing implemented yet, 2026-09-18.** Scope: the test runners
-> (`src_vs_code/scripts/run-tests.mjs` and the `src_mcp` suite's entry), and one shared sweep.
+> Status: **IMPLEMENTED, 2026-09-23.** Both runners sweep `coai-*` directories older than ten minutes
+> before they start, on one rule in `shared/temp-sweep.json`. **Deviations:** (1) the rule is shared
+> as a DATA file both halves read, not as one script the C# suite calls — the server suite already had
+> a working sweep (`TempDirsAreSwept` over `PanelService.PruneOldScratchDirs`), so it was widened, not
+> replaced; (2) the rule gained what this plan did not have: `neverSwept`, the product's own runtime
+> working directories under the same prefix (a live chat's directory can sit an hour with nothing
+> written), held against each program's own source by a test in each program; (3) test #4 — "a
+> whole-suite run leaves the count where it found it" — is a MEASUREMENT, not an in-suite assertion: a
+> suite cannot observe what it leaves after it exits. Measured 2026-09-23: a full extension run swept
+> 855 leftovers and, on an already-swept temp, added 19. The trade is recorded in
+> [module_tests.md](module_tests.md): test-made product-prefixed directories now wait for the
+> product's own six-hour sweep. Scope: the test runners (`src_vs_code/scripts/run-tests.mjs` and the
+> `src_mcp` suite's entry), and one shared sweep.
 >
 > Opened by the operator on 2026-09-18 after a sweep found **5 455 leftover directories**, all made
 > the same day.
 >
-> Related: [module_tests.md](../research/module_tests.md).
+> Related: [module_tests.md](module_tests.md).
 
 ## The operator's ruling, which decides the design
 
@@ -97,15 +108,16 @@ npm test
 
 ## Definition of Done
 
-- [ ] One sweep, called before anything else by both runners, removing `coai-*` older than ten
+- [x] One sweep, called before anything else by both runners, removing `coai-*` older than ten
       minutes and saying how many.
-- [ ] The decision is a pure function with its own tests; only the unlinking touches a disk.
-- [ ] A removal that fails is counted and stepped over, never fatal.
-- [ ] A whole-suite run leaves the count where it found it, asserted.
-- [ ] Each assertion watched failing first, and both observations reported.
-- [ ] `research/module_tests.md` records the sweep and the ten-minute rule with its reason.
-- [ ] Promotion per `common/planning-docs.md`, then `plan-lifecycle.mjs`.
-- [ ] Through `review_plan` and `review_code`.
+- [x] The decision is a pure function with its own tests; only the unlinking touches a disk.
+- [x] A removal that fails is counted and stepped over, never fatal.
+- [ ] A whole-suite run leaves the count where it found it, asserted. **Measured instead** — see the
+      status line; a suite cannot assert what it leaves after it exits.
+- [x] Each assertion watched failing first, and both observations reported.
+- [x] `research/module_tests.md` records the sweep and the ten-minute rule with its reason.
+- [x] Promotion per `common/planning-docs.md`, then `plan-lifecycle.mjs`.
+- [x] Through `review_plan` and `review_code`.
 
 ## What this deliberately does NOT do
 
