@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/bugs-v0.3.0...bugs-v0.4.0) (2026-09-23)
+
+
+### Features
+
+* a person's comment on a review pair reaches the corpus (epic 4, stories 4.2a and 4.2b) ([#466](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/466)) ([e68de91](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e68de9191815edc57f5e7e8fb23257a7fa420c9b))
+
+
+### Bug Fixes
+
+* **bugs:** a helper the deploy cannot update now says what it understands ([#463](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/463)) ([d4d406b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d4d406b126f4bce5957853fe7e1ff15e315fdd69))
+
 ## [0.3.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/bugs-v0.2.0...bugs-v0.3.0) (2026-09-22)
 
 
