@@ -1,12 +1,42 @@
 # PLAN — the split order names the caller's OWN strongest model, and the person picks it
 
-> Status: **plan only, nothing implemented yet, 2026-09-23.** Scope: the third gate switch
+> Status: **IMPLEMENTED, 2026-09-23.** Scope: the third gate switch
 > (`splitWithFable`) — `GateCommands.FableCommand`, the settings seam that carries it, the panel's
-> *The gate* section, its help, and the bench check that reads it. Issue #117.
+> *The gate* section, its help, and the bench check that reads it. Issue #117. Nothing is left open.
 >
-> Related: [PLAN_commands_and_autonomy.md](../research/PLAN_commands_and_autonomy.md) (the design record
-> of the three switches), [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md).
+> Related: [PLAN_commands_and_autonomy.md](PLAN_commands_and_autonomy.md) (the design record
+> of the three switches), [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md).
+
+## What shipped differently from this plan
+
+Gate: plan round 1 `good_enough` (2 of 3 reviewers; codex failed on its configured model), code round 1
+`good_enough` (8 of 12; the four codex reviewers failed the same way). Three reviewers of our own ran
+beside it.
+
+- **Pickers are `<select>`s through `modelsFor`, not text boxes with a `<datalist>`** (step 8). The
+  panel had already recorded why (`panelView.ts` `modelOptions`): a datalist filters its options by the
+  value in the box, so once a model is chosen every other one vanishes. "another model…" posts a new
+  panel command, `customCommandModel` (`<kind>:<slot>`), and the host asks for the name. The list is
+  `modelsFor` on the kind's runtime (`COMMAND_MODEL_RUNTIMES`; `other` has none), so Claude's families
+  carry the labels its CLI answered — the first build hand-picked lists and the code review caught it.
+- **The shipped pairs are held level by `shared/command-models.json`**, not by
+  `panelServerDefaultsAgreement.test.ts` reading C# (step 3 of the build order): a test reading the other
+  program's source is what `NothingReadsAnotherProgramsSourceTests` exists to stop. The same file holds
+  `orderOpensWith`, the marker, because the BENCH holds a third copy of it and references no server code.
+- **`FableCommand` became `ModelCommand`** (not `StrongestModelCommand`), and the marker is the phrase the
+  old sentence already began with, `"Do the SPLIT itself with "` — plan round 1 (gemini) showed a separate
+  marker sentence could not coexist with the byte-for-byte Claude text.
+- **The setting is parsed by its own record, `CommandModelsSetting`**, beside `ConsultantsSetting`, rather
+  than a `Key.CommandModels` inside `PanelSettings`.
+- **Two defects the code review found, each fixed red-first:** the host rebuilt the page's message from
+  four hand-listed fields and dropped `commandModel`, so no picker choice was ever stored (now
+  `settingMessageFrom`, tested with a page's real message); and `ToDictionary` threw on two spellings of
+  one kind (`Codex`/`codex`) outside the `JsonException` catch (now the indexer, last one wins).
+- **Added, not planned:** pairs are compared without case (picking the CLI alias `fable` is the default);
+  a kind the build does not know is never written (the `__proto__` refusal); the run-the-page harness was
+  extracted to `test/panelPageHarness.ts`, reads hyphenated `data-*` names as a DOM does, and has tests of
+  its own; the second picker's label is "Implementation", not "For implementation".
 
 ## The symptom
 
