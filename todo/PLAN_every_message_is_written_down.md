@@ -935,6 +935,7 @@ goes into each plan below in the same task.
 
 | Item | This plan | The sibling |
 |---|---|---|
+| The run marker on the EXTENSION side (section *H*) | promised here, not built | [PLAN_the_extension_says_when_a_window_died.md](PLAN_the_extension_says_when_a_window_died.md) builds it, in its own folder `extension-runs/`, after the server's half (S8) shipped; this plan is promoted once that and the S8 release have both shipped |
 | `rowMatches`' haystack (`roundsLog.ts:801`) | S6 adds the summary sentence to it | [PLAN_the_log_searches_the_findings.md](PLAN_the_log_searches_the_findings.md) queries `findings_fts`; its point 5 keeps the row-text filter. **The two plans cited two different lines — 820 here, 474 there, both written from an older file. Reconciled 2026-09-17 by opening it: 801. This plan goes first** |
 | The rounds log's tab ARIA | not started here | [PLAN_the_tabs_announce_themselves.md](PLAN_the_tabs_announce_themselves.md) owns it; S6 changes only which ids the handler derives |
 | Page tests that run the page | the new page ships this way from the start | [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) owns the backlog of existing source-text assertions |
