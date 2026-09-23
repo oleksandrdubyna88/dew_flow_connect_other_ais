@@ -97,12 +97,26 @@ Disjoint otherwise.
 3. **`CommandContext`** gains `ModelPair Models` (default = the Claude pair, so every existing test
    and caller that does not set it gets today's text). `PanelService` fills it at
    `src_mcp/src/Server/PanelService.cs:1321` from `CallerIdentity.KindFrom(Environment…)` — the same
-   kind the consultant is chosen by (`src_mcp/src/Server/CallerSessions.cs:87-102`).
-4. **`FableCommand` becomes `StrongestModelCommand(ModelPair)`**. The Claude pair renders the
-   current sentence word for word; any other pair substitutes its names; an empty name renders as
-   *"the strongest model your client offers"* / *"your usual model"*. Every variant opens with the
-   fixed marker **"Do the SPLIT itself with your STRONGEST model"** — the bench reads the marker, not a
-   model name.
+   kind the consultant is chosen by (`src_mcp/src/Server/CallerSessions.cs:87-102`). `KindFrom` never
+   answers blank: a client that exports none of the three session variables is `other`
+   (`CallerSessions.cs:101`), and `CommandModels.For` maps any kind it has no row for to `other`'s
+   pair — so an unidentified client is never told Claude models. (Plan round 1, local and gemini.)
+4. **`FableCommand` becomes `StrongestModelCommand(ModelPair)`** — ONE template whose Claude
+   instance is today's sentence byte for byte (plan round 1, gemini: a separate marker sentence
+   would have contradicted that). With `S` and `I` the two resolved names:
+
+   > Do the SPLIT itself with **{S}** at its highest available version — deciding what the epics and
+   > stories are is the judgement that shapes everything after it. Then implement: ordinary stories on
+   > **{I}**, and anything where being wrong is expensive — payments, money, authentication, security,
+   > architecture, data migration — on **{S}** (max) again. Name the model you used for each story in
+   > your summary.
+
+   `S = "Fable"`, `I = "Opus"` is exactly `GateCommands.cs:129-134`. **Per-field resolution**, so a
+   pair with one name set is never half-blank: a configured name, else the shipped name of that kind
+   and field, else the generic words — `S` → *"the strongest model your client offers"*,
+   `I` → *"your usual model"*. (With a generic `S` the sentence still reads: "with the strongest model
+   your client offers at its highest available version".) The bench's marker is **"Do the SPLIT itself
+   with"** — a phrase every variant, the old one included, already starts with.
 5. The existing log line `split ordered to caller {Caller}` (`PanelService.cs:1354`) gains the caller
    kind and the two names, so a log reader can see which models were ordered.
 
@@ -119,7 +133,9 @@ Disjoint otherwise.
    of that vendor's known models (`CURATED_CLAUDE_MODELS`, the discovered Codex list,
    `ANTIGRAVITY_MODELS`/discovered agy list via `modelsFor`, none for *another client*). The write goes
    through the panel's existing record-update path (the `consultantRecordUpdate` pattern,
-   `src_vs_code/src/consultantWrite.ts:65`), so a field another panel wrote is not deleted.
+   `src_vs_code/src/consultantWrite.ts:65`), so a field another panel wrote is not deleted. A box
+   cleared (or holding only whitespace) REMOVES that field from the stored record, so the kind falls
+   back to its shipped name for that field; a kind left with no fields drops out of the record.
 9. **Skew note**: `commandModelsSkewNote(installedVersion, settings)` — the pattern of
    `consultantSkewNote` (`consultSettings.ts:462-479`): shown only when the installed server is known,
    strictly older than `COMMAND_MODELS_SINCE` (the next minor after `mcp 0.32.0`, i.e. `0.33.0`), and
@@ -131,8 +147,8 @@ Disjoint otherwise.
 
 ### Bench (`src_bench`)
 
-11. `SettingsApplied.WithFable` (`:89`) becomes the marker from step 4; the expectation text at `:128`
-    says "an order naming the strongest model".
+11. `SettingsApplied.WithFable` (`:89`) becomes the marker from step 4 (`"Do the SPLIT itself with"`);
+    the expectation text at `:128` says "an order naming the strongest model".
 
 ## Growth
 
@@ -154,9 +170,12 @@ None: one settings key, bounded by four caller kinds × two short strings. No ta
 - `GateCommandsTests`: the Claude pair renders today's sentence **byte for byte** (a regression pin
   written BEFORE the refactor, run red-free against the old code, then kept green through it);
   a Codex pair names its two models and contains neither "Fable" nor "Opus"; an empty pair renders the
-  generic words and no Claude model; every variant starts with the marker.
-- `CommandModelsTests`: `For` falls back configured → shipped → `other`; `Parse` of malformed JSON gives
-  the shipped map and exactly one unrecognised setting naming `COAI_COMMAND_MODELS`; an unknown kind is
+  generic words and no Claude model; a pair with ONE name set uses it for that field and the fallback
+  for the other; every variant starts with the marker.
+- `CommandModelsTests`: `For` falls back configured → shipped → `other`, per field; an unknown kind
+  resolves as `other`; `Parse` of malformed JSON gives the shipped map and exactly one unrecognised
+  setting naming `COAI_COMMAND_MODELS`; valid JSON of the wrong SHAPE (a number for a field, an array
+  for the map, `null`) is the same — shipped map plus a sentence, never an exception; an unknown kind is
   kept; whitespace is trimmed.
 - `SettingsAreLiveTests`: a `COAI_COMMAND_MODELS` written to the settings file governs the NEXT call.
 - End to end (the `SplitOrderTests` shape): a round run with `CODEX_SESSION_ID` set and a Codex pair
