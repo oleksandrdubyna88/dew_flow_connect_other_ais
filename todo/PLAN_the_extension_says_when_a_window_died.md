@@ -63,13 +63,22 @@ write-gap record. **Only the marker is missing.**
    window that found it. A death is appended to the ledger with the dead run's identity, the way the
    server's `UncleanExit.Of` is — but still through the SAME serialiser (`notificationLine`,
    `src_vs_code/src/notifications.ts:291`, which redacts every field) and the same append
-   (`appendLine`, `src_vs_code/src/jsonlLedger.ts:113`); only the funnel's stamp is bypassed. *(round, gemini)* Several windows activating at once on
+   (`appendLine`, `src_vs_code/src/jsonlLedger.ts:113`); only the funnel's stamp is bypassed. It
+   is still ADMITTED by the finder's bounds (`BOUNDS.admit`, `notify.ts:212`, keyed on
+   `unclean-exit` and the dead run): bounds limit what a run WRITES, and the finder is the writer, so
+   a folder full of stale markers cannot flood the ledger — a first occurrence is never suppressed,
+   and past the run budget the usual storm record says so. It carries NO `seq`: that field is this
+   run's own diagnostic ordinal (`notifications.ts:106`), and on a record about another run it would
+   mean nothing. *(CodeRabbit, on the pull request)* *(round, gemini)* Several windows activating at once on
    one share record each death once between them.
 4. **A live window is never recorded as dead**, and that includes the case that makes this harder on
    the extension than on the server. A laptop that slept overnight wakes with every window's marker
    eight hours stale, and the first thing a person does is often open a new window, whose activation
    sweeps. So a stale marker from THIS host whose pid is alive is not a death (see *Costs* for what a
-   reused pid does). "Alive" is read from `process.kill(pid, 0)` by its ERROR CODE: `ESRCH` is the
+   reused pid does). "This host" is the marker's `host` — `os.hostname()`, compared as the server
+   compares it, case-insensitively (`RunMarkers.cs:270`). A marker from ANOTHER host is never probed:
+   its pid names nothing here, so the heartbeat alone decides, and a stale one is a death. *(CodeRabbit,
+   on the pull request)* "Alive" is read from `process.kill(pid, 0)` by its ERROR CODE: `ESRCH` is the
    only answer that means gone; `EPERM` — a live process owned by someone else, which Windows and a
    sandboxed macOS both answer — means alive, and so does any error nobody named, because a missed
    death is the safe direction and a false one is not. A test drives each code. *(round, local)*
