@@ -1336,7 +1336,15 @@ public sealed partial class PanelService
                 // Once per CALLER, not once per session: the epics a split produces come back as
                 // their own sessions on their own branches, so a per-session memory would order
                 // every one of them to split again — epics of epics, with no floor.
-                FirstPlanRound: true);
+                FirstPlanRound: true)
+            {
+                // The CALLER carries the model order out, so it names the caller's own models: the
+                // kind comes from the vendor's session variable — the same answer the consultant is
+                // chosen by — and the pair from the panel (issue #117). A client nobody can identify
+                // is `other`, and is named no model rather than another vendor's.
+                Models = Core.Commands.CommandModels.For(
+                    _settings.CommandModels, CallerIdentity.KindFrom(Environment.GetEnvironmentVariable)),
+            };
             // The caller's one order is CLAIMED, and only on a round that would actually give it —
             // a claim taken on a code round would spend it on a round that issues nothing. The
             // product's own predicate asks the question, so the condition cannot drift from what
@@ -1351,7 +1359,11 @@ public sealed partial class PanelService
             var commands = Core.Commands.GateCommands.For(context);
             if (Core.Commands.GateCommands.OrdersSplit(context))
             {
-                _log.Information("split ordered to caller {Caller}", caller);
+                _log.Information(
+                    "split ordered to caller {Caller}; strongest model {Strongest}, implementation {Implementation}",
+                    caller,
+                    context.SplitWithFable ? NamedInLog(context.Models.Strongest) : "(not ordered)",
+                    context.SplitWithFable ? NamedInLog(context.Models.Implementation) : "(not ordered)");
             }
             // Built HERE because this is the only place that holds both a reviewer's answer and the
             // invocation that produced it, which is the same reason the ROLE is stamped on a finding
@@ -2297,6 +2309,9 @@ public sealed partial class PanelService
     /// </remarks>
     private static string CallerFor(PersistedSession session) =>
         CallerIdentity.Current().Id is { Length: > 0 } id ? id : $"repo:{session.State.RepoPath}";
+
+    /// <summary>A model slot as the log line says it: the name, or that the order names none.</summary>
+    private static string NamedInLog(string name) => name.Length > 0 ? name : "(generic words)";
 
     private string ComposePrompt(PromptChoice choice, string context, bool hasCheckout) =>
         $"{WithoutTheStaleClaim(_prompts.ForChoice(choice))}\n\n{WhatYouHave(hasCheckout)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";

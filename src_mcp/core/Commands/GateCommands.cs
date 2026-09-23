@@ -29,7 +29,19 @@ public sealed record CommandContext(
     bool SplitWithFable = false,
     string PlanText = "",
     bool PlanStage = false,
-    bool FirstPlanRound = true);
+    bool FirstPlanRound = true)
+{
+    /// <summary>
+    /// The two models the model order names — already resolved for THIS caller's kind by
+    /// <see cref="CommandModels.For"/>.
+    /// </summary>
+    /// <remarks>
+    /// Defaults to the Claude Code pair, so a context built without it says exactly what every
+    /// release before issue #117 said. The switch keeps its historical name, <c>SplitWithFable</c>:
+    /// renaming a stored key is a migration of every settings file for a word nobody sees.
+    /// </remarks>
+    public ModelPair Models { get; init; } = CommandModels.ClaudeCode;
+}
 
 /// <summary>
 /// The orders a round hands back with its verdict.
@@ -72,7 +84,7 @@ public static class GateCommands
         }
         if (OrdersSplit(context) && context.SplitWithFable)
         {
-            commands.Add(FableCommand);
+            commands.Add(ModelCommand(context.Models));
         }
         if (context.Autonomous)
         {
@@ -125,13 +137,37 @@ public static class GateCommands
             + "it is genuinely too big for one unit, say so in your summary and say what you would "
             + "have cut it into — but do not start a second round of splitting on your own.";
 
-    /// <summary>Which model does which half, when Fable is here.</summary>
-    private const string FableCommand =
-        "Do the SPLIT itself with Fable at its highest available version — deciding what the epics "
+    /// <summary>
+    /// The words every model order opens with, whichever models it names.
+    /// </summary>
+    /// <remarks>
+    /// Public because the bench recognises the order by them. It used to look for "Fable", which
+    /// stopped being true of every order the day the models became a per-caller choice (issue #117).
+    /// </remarks>
+    public const string ModelOrderMarker = "Do the SPLIT itself with ";
+
+    /// <summary>Which model does which half — the caller's OWN two, per its kind.</summary>
+    /// <remarks>
+    /// <para>One template, and its Claude Code instance is the sentence every release before issue
+    /// #117 sent, byte for byte: a person who configured nothing cannot tell the feature landed. A
+    /// test holds it to the old text by equality.</para>
+    /// <para>A slot with no name reads as generic words rather than as a gap — never "with  at its
+    /// highest", and never another vendor's model.</para>
+    /// </remarks>
+    private static string ModelCommand(ModelPair models)
+    {
+        var strongest = NamedOr(models.Strongest, "the strongest model your client offers");
+        var implementation = NamedOr(models.Implementation, "your usual model");
+
+        return $"{ModelOrderMarker}{strongest} at its highest available version — deciding what the epics "
             + "and stories are is the judgement that shapes everything after it. Then implement: "
-            + "ordinary stories on Opus, and anything where being wrong is expensive — payments, "
-            + "money, authentication, security, architecture, data migration — on Fable (max) again. "
+            + $"ordinary stories on {implementation}, and anything where being wrong is expensive — payments, "
+            + $"money, authentication, security, architecture, data migration — on {strongest} (max) again. "
             + "Name the model you used for each story in your summary.";
+    }
+
+    private static string NamedOr(string name, string words) =>
+        string.IsNullOrWhiteSpace(name) ? words : name.Trim();
 
     /// <summary>
     /// What "autonomous" is made of, and when to interrupt the person.

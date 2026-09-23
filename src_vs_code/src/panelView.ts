@@ -20,14 +20,23 @@ import { ROLE_TONE_CSS, roleTone } from './roleTone';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
-import { CUSTOM_ENDPOINT, consultantSkewNote, vaultKeyNote } from './consultSettings';
+import { CALLER_KINDS, CUSTOM_ENDPOINT, consultantSkewNote, vaultKeyNote } from './consultSettings';
+import { ModelSlot, SHIPPED_COMMAND_MODELS, commandModelsSkewNote } from './commandModels';
 import { chatProvidersFromPresets } from './chatModels';
 import { mainPrompt } from './chatPresets';
 import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
 import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
-import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
+import {
+  allowedModelsFor,
+  CURATED_CLAUDE_MODELS,
+  CURATED_GEMINI_MODELS,
+  ModelChoice,
+  modelsFor,
+  modelsProvenance,
+  RemoteProvenance,
+} from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
 import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
@@ -397,7 +406,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
       server: state.settings.bugzServer,
     })),
     section('prompts', 'Prompts per round', open, promptsBody(state)),
-    section('gate', 'The gate', open, gateBody(state.settings)),
+    section('gate', 'The gate', open, gateBody(state)),
     section('limits', 'Limits', open, limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length)),
     section('keys', 'Vendor keys', open, keysBody(state)),
     section('teamServers', 'Team servers', open, teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '')),
@@ -427,8 +436,9 @@ ${body}
   // so a name alone would refocus whichever of them the document holds first.
   // The CALLER is part of it too: four consultant rows share one setting name, so without it a
   // repaint mid-edit would put the cursor back in whichever of them the document holds first.
+  // And the COMMAND-MODEL kind: four assistants' boxes share the two slot names.
   const idOf = (el) => el.dataset.setting + '|' + (el.dataset.vendor || '') + '|' + (el.dataset.role || '')
-    + '|' + (el.dataset.caller || '');
+    + '|' + (el.dataset.caller || '') + (el.dataset.commandModel ? '|' + el.dataset.commandModel : '');
   const posted = new Map();
   // What each control last held that was a REAL value. A sentinel is a request, not a choice, so the
   // control goes straight back to this when one is picked: nothing is written, so no repaint is
@@ -440,7 +450,10 @@ ${body}
     if (value === '__other__') {
       // Not a model — a request to type one; the input box comes from the provider side.
       el.value = real.get(el) || '';
-      vscode.postMessage({ type: 'command', command: 'customModel', id: el.dataset.vendor });
+      // A split-order model picker names a caller kind and a slot, not a vendor row (issue #117).
+      vscode.postMessage(el.dataset.commandModel
+        ? { type: 'command', command: 'customCommandModel', id: el.dataset.commandModel + ':' + el.dataset.setting }
+        : { type: 'command', command: 'customModel', id: el.dataset.vendor });
       return;
     }
     if (value === '${CUSTOM_ENDPOINT}') {
@@ -459,7 +472,9 @@ ${body}
     posted.set(el, value);
     vscode.postMessage({ type: 'setting', key: el.dataset.setting, value,
                          vendor: el.dataset.vendor, role: el.dataset.role,
-                         caller: el.dataset.caller });
+                         caller: el.dataset.caller,
+                         // Only on a split-order model picker, so every other write keeps its shape.
+                         ...(el.dataset.commandModel ? { commandModel: el.dataset.commandModel } : {}) });
   };
   const reportFocus = (el, editing) => vscode.postMessage({
     type: 'focus',
@@ -1169,7 +1184,8 @@ function sideBody(state: PanelState): string {
 </div>`;
 }
 
-function gateBody(s: CoaiSettings): string {
+function gateBody(state: PanelState): string {
+  const s = state.settings;
   // Rounds and threshold moved INTO each role's box, beside that role's prompts: they were two
   // sections describing one thing. What is left here is the one decision that belongs to neither
   // role nor stage \u2014 what to do when the rounds run out.
@@ -1188,8 +1204,81 @@ function gateBody(s: CoaiSettings): string {
   expensive half. All three are off unless you turn them on.</div>
   <label class="check"><input type="checkbox" data-setting="autonomous"${s.autonomous ? ' checked' : ''}> Work autonomously${help('autonomous')}</label>
   <label class="check"><input type="checkbox" data-setting="splitPlan"${s.splitPlan ? ' checked' : ''}> Split the plan into epics and stories${help('splitPlan')}</label>
-  <label class="check"><input type="checkbox" data-setting="splitWithFable"${s.splitWithFable ? ' checked' : ''}> Split with Fable, and give it the risky stories${help('splitWithFable')}</label>
+  <label class="check"><input type="checkbox" data-setting="splitWithFable"${s.splitWithFable ? ' checked' : ''}> Split with the strongest model, and give it the risky stories${help('splitWithFable')}</label>
+</div>
+${commandModelsBlock(state)}`;
+}
+
+/**
+ * The two models the model order names, one row per KIND of calling assistant (issue #117).
+ *
+ * <p>The order is carried out by the caller, so each kind names its OWN vendor's models: every picker
+ * offers that vendor's list — the Claude families the CLI is asked about, the Codex list read from its
+ * own cache, the Gemini ones Antigravity lists — and "another model…" for any name. The first option
+ * is the shipped name; for every kind but Claude Code that is no model at all, and the order then says
+ * so in words rather than naming another vendor's.</p>
+ *
+ * <p>A select, not a text box with a datalist: `modelOptions` below records why — a datalist filters
+ * its options by the value already in the box, so once a model is chosen every other one vanishes.</p>
+ *
+ * <p>Always drawn, not only while the switch is on: a person choosing the models before ticking the
+ * box is the ordinary order of things, and a block that appeared on tick would move the controls
+ * under the cursor.</p>
+ */
+function commandModelsBlock(state: PanelState): string {
+  const models = state.settings.commandModels;
+  const rows = CALLER_KINDS.map(({ id, label }) => {
+    const shipped = SHIPPED_COMMAND_MODELS[id] ?? { strongest: '', implementation: '' };
+    const box = (slot: ModelSlot, words: string, generic: string): string => {
+      const fallback = shipped[slot].length > 0 ? shipped[slot] : generic;
+
+      return `<select id="commandModel-${id}-${slot}" data-setting="${slot}" data-command-model="${id}"`
+        + ` aria-label="${escapeHtml(`${label} — ${words}`)}">`
+        + commandModelOptions(id, state, models[id]?.[slot] ?? '', `default — ${fallback}`)
+        + '</select>';
+    };
+
+    return `  <div class="model-pair">
+    <div class="group-head">${escapeHtml(label)}</div>
+    <div class="model-pair-boxes">
+      <label>Strongest${box('strongest', 'strongest model', 'its strongest')}</label>
+      <label>Implementation${box('implementation', 'implementation model', 'its usual')}</label>
+    </div>
+  </div>`;
+  }).join('\n');
+  const note = commandModelsSkewNote(state.server.version, models);
+
+  return `<div class="field">
+  <div class="hint">Which models the order above names, per assistant — the order is carried out by
+  the assistant that called, so each names its own. The first choice in each list is the default.</div>
+${note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`}${rows}
 </div>`;
+}
+
+/**
+ * The options of one split-order model picker: the default, this caller kind's OWN vendor's models,
+ * whatever is saved even when no list names it, and "another model…".
+ *
+ * <p>The saved name is kept as an option of its own for the reason `modelsFor` gives: a value that
+ * vanished from its own dropdown would read as reset while it is still what the order names.</p>
+ */
+function commandModelOptions(kind: string, state: PanelState, current: string, defaultLabel: string): string {
+  const known = commandModelChoices(kind, state);
+  const saved = current.length > 0 && !known.some((m) => m.id === current) ? [{ id: current, label: current }] : [];
+
+  return modelOptions([...saved, ...known], current, escapeHtml(defaultLabel));
+}
+
+/** The names a picker of this caller kind offers — its own vendor's models, never another's. */
+function commandModelChoices(kind: string, state: PanelState): readonly ModelChoice[] {
+  const choices: readonly ModelChoice[] = kind === 'claude'
+    ? CURATED_CLAUDE_MODELS
+    : kind === 'codex'
+      ? state.codexModels
+      : kind === 'gemini'
+        ? [...CURATED_GEMINI_MODELS, ...state.agyModels.filter((m) => m.id.startsWith('gemini'))]
+        : [];
+  return [...new Map(choices.map((m) => [m.id, m])).values()];
 }
 
 /**
@@ -2626,6 +2715,12 @@ const CSS = `
      colour is still a deliberate box rather than a bare one. */
   .consultant-row { border: 1px solid var(--vscode-widget-border); border-left: 3px solid var(--vscode-widget-border); border-radius: 3px; padding: 6px 8px 2px; margin: 0 0 8px; }
   .role-group { border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 6px 8px 2px; margin: 0 0 10px; }
+  /* One assistant's two model boxes, side by side: the sidebar is narrow, so a three-column table
+     would squeeze the names it exists to show. Each box keeps its own label above it. */
+  .model-pair { margin: 6px 0 8px; }
+  .model-pair-boxes { display: flex; gap: 6px; }
+  .model-pair-boxes label { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; font-size: 11px; opacity: .9; }
+  .model-pair-boxes select { width: 100%; box-sizing: border-box; }
   .group-head { font-size: 11px; font-weight: 600; opacity: .8; margin: 0 0 6px; }
   /* A left edge rather than a filled box: it marks the role at a glance without turning the
      settings panel into four coloured slabs, and it survives a light theme unchanged. */
@@ -2729,6 +2824,9 @@ export const PANEL_COMMANDS = [
   // a name and a base URL, and an id keys the vault entry, so nothing may be stored before there is
   // one. Carries the CALLER as its id — four rows share the control.
   'customConsultant',
+  // And by a split-order model picker (issue #117): "another model…" asks for a name. Its id is
+  // `<caller kind>:<slot>` — eight pickers share the control.
+  'customCommandModel',
   // Team servers. Each is a button in the section above, and the provider's switch is checked for
   // exhaustiveness — a command added here without a case is a COMPILE error, not a dead button.
   'addTeamServer',

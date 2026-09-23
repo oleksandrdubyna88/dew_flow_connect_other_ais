@@ -70,6 +70,22 @@ public sealed class SettingsAreLiveTests : IDisposable
     }
 
     [Fact]
+    public void TheModelsTheSplitOrderNames_AreLive()
+    {
+        // Issue #117: typing a model into the panel's box must govern the NEXT round, the way the
+        // three switches beside it already do.
+        Write("{}");
+        var host = Host();
+        host.Current.Settings.CommandModels.Should().BeEmpty();
+
+        Thread.Sleep(1100);
+        Write("""{ "COAI_COMMAND_MODELS": "{\"codex\":{\"strongest\":\"gpt-6-astra\"}}" }""");
+
+        host.Current.Settings.CommandModels.Should().ContainKey("codex")
+            .WhoseValue.Strongest.Should().Be("gpt-6-astra");
+    }
+
+    [Fact]
     public void EveryOneOfTheThreeSwitches_IsLive()
     {
         Write("{}");

@@ -230,6 +230,51 @@ public sealed class SplitOrderTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task ACodexCaller_IsToldTheModelsConfiguredForCodex_EndToEnd()
+    {
+        // Issue #117, through the real round: the caller KIND comes from the vendor's own session
+        // variable, and the pair comes from the setting — neither is a parameter a test can hand
+        // the command directly. `COAI_CALLER_SESSION` stays set (it is identity, never a kind).
+        var claude = Environment.GetEnvironmentVariable("CLAUDE_CODE_SESSION_ID");
+        var codex = Environment.GetEnvironmentVariable("CODEX_SESSION_ID");
+        Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", null);
+        Environment.SetEnvironmentVariable("CODEX_SESSION_ID", "codex-" + Guid.NewGuid().ToString("N")[..8]);
+        try
+        {
+            var service = new PanelService(
+                new PanelSettings
+                {
+                    Providers = [new("codex") { ExecutablePath = FakeCliExe }],
+                    Rounds = PanelConfig.Uniform(3, 2),
+                    DataDir = _data,
+                    ReviewerTimeout = TimeSpan.FromSeconds(30),
+                    RateLimitBackoff = TimeSpan.FromMilliseconds(5),
+                    SplitPlan = true,
+                    SplitWithFable = true,
+                    CommandModels = new Dictionary<string, Core.Commands.ModelPair>
+                    {
+                        ["codex"] = new("gpt-6-astra", "gpt-6-luna"),
+                    },
+                },
+                VaultKeys.None("no vault in tests"),
+                default,
+                _launcher,
+                Logger.None, Noticing.None);
+
+            var commands = CommandsOf(await PlanRound(service, "feature", BigPlan));
+
+            commands.Should().HaveCount(2);
+            commands[1].Should().Contain("gpt-6-astra").And.Contain("gpt-6-luna");
+            commands[1].Should().NotContain("Fable").And.NotContain("Opus");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("CLAUDE_CODE_SESSION_ID", claude);
+            Environment.SetEnvironmentVariable("CODEX_SESSION_ID", codex);
+        }
+    }
+
+    [Fact]
     public async Task ADifferentClaude_IsOwedItsOwnSplitOrder()
     {
         // Two people working in one repository at once is the ordinary case, and the second one's

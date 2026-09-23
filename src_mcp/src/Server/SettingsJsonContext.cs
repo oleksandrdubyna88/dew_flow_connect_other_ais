@@ -68,7 +68,12 @@ internal sealed record ConsultantDto(
     string? BaseUrl = null,
     string? ExecutablePath = null);
 
+/// <summary>One caller kind's row of <c>COAI_COMMAND_MODELS</c> (issue #117).</summary>
+/// <remarks>Nullable for the reason <see cref="ConsultantDto"/> gives: an omitted field arrives null.</remarks>
+internal sealed record CommandModelDto(string? Strongest = null, string? Implementation = null);
+
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(Dictionary<string, CommandModelDto?>), TypeInfoPropertyName = "DictionaryStringCommandModelDto")]
 [JsonSerializable(typeof(List<VendorDto>))]
 [JsonSerializable(typeof(Dictionary<string, ConsultantDto>), TypeInfoPropertyName = "DictionaryStringConsultantDto")]
 [JsonSerializable(typeof(List<CoaiMcp.Core.Rounds.RoleEntry>), TypeInfoPropertyName = "ListRoleEntry")]

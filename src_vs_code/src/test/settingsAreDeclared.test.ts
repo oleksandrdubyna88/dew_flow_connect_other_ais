@@ -47,8 +47,9 @@ function controls(html: string): { setting: string; scoped: boolean }[] {
     // or `coai.consultants`, so it is not a settings key of its own and must not be required to
     // be one. `data-file` is the third case and the only one that leaves the configuration
     // entirely: the consultant's prompt is written to the server's own prompt override, because
-    // that is where the server reads it from.
-    scoped: /\bdata-(vendor|role|caller|file)=/.test(m[0]),
+    // that is where the server reads it from. A split-order model picker (`data-command-model`,
+    // issue #117) is stored inside `coai.commandModels` the same way.
+    scoped: /\bdata-(vendor|role|caller|file|command-model)=/.test(m[0]),
   }));
 }
 

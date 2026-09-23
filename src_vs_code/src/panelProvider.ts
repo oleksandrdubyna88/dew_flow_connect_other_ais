@@ -42,6 +42,7 @@ import {
   endpointAnswer,
   endpointConflict,
 } from './consultantWrite';
+import { SLOT_LABELS, commandModelTarget, commandModelsAfter } from './commandModels';
 import { ChatDoorRecord } from './chatDoors';
 import { chatDoorsPath, readChatDoors } from './chatDoorsFile';
 import {
@@ -1656,6 +1657,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         await this.save(config, 'consultants', consultantRecordUpdate(current, write.caller, write.key, write.value, rows));
         return;
       }
+      case 'commandModel': {
+        // One slot of one caller kind, merged into `commandModels` like a consultant row into
+        // `consultants` — read through the SIDE-AWARE reader for the same reason, since it is one of
+        // the overlaid settings. A cleared box removes the field, which is how a person gets the
+        // shipped model back (issue #117).
+        const current = this.read(config)('commandModels');
+        await this.save(config, 'commandModels', commandModelsAfter(current, write.commandModel, write.key, String(write.value ?? '')));
+        return;
+      }
       case 'plain':
         // A setting that INVALIDATES another is cleared BEFORE it, not after. One case today, and it
         // is the chat pair: `chatModelName` names one of `chatModel`'s models, so choosing a
@@ -1860,6 +1870,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       case 'customConsultant':
         if (id !== undefined) {
           await this.customConsultant(id);
+        }
+        break;
+      case 'customCommandModel':
+        if (id !== undefined) {
+          await this.customCommandModel(id);
         }
         break;
       case 'installVendorCli':
@@ -2186,6 +2201,27 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     await this.write({ key: 'model', value: model.trim(), vendor: id });
+  }
+
+  /**
+   * "another model…" in a split-order model picker (issue #117): ask for the name, then write it
+   * through the same route the picker itself uses. `id` is `<caller kind>:<slot>`.
+   */
+  private async customCommandModel(id: string): Promise<void> {
+    const target = commandModelTarget(id);
+    if (target === undefined) {
+      return;
+    }
+    const model = await vscode.window.showInputBox({
+      title: `${SLOT_LABELS[target.slot]} model for ${target.kind}`,
+      prompt: 'The model name the split order should give this assistant. Empty goes back to the default.',
+      placeHolder: 'e.g. fable, gpt-6-astra, gemini-pro-latest',
+    });
+    if (model === undefined) {
+      return; // dismissed — the picker snaps back to the saved value on re-render
+    }
+
+    await this.write({ key: target.slot, value: model.trim(), commandModel: target.kind });
   }
 
   /** A preset, or a name and an endpoint typed in — the list is not meant to stay at two. */

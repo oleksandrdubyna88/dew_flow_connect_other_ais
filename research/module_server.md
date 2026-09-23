@@ -3346,7 +3346,7 @@ they come from a person and outrank the caller's own defaults.
 |---|---|
 | Work autonomously | a question that does not block is written down and asked at the END, all together; one that does block is asked at once — but only after gathering every other blocking question, so the person is interrupted once |
 | Split the plan | 2-4 epics, each 2-4 logically complete stories, and after EVERY story: `review_code`, resolve, fix, document, test, commit — then the next |
-| Split with Fable | the split itself on Fable at its highest version; ordinary stories on Opus; payments, security, architecture and data migration back on Fable |
+| Split with the strongest model (`COAI_SPLIT_WITH_FABLE`, a historical name) | the split itself on the CALLER's strongest model at its highest version; ordinary stories on its implementation model; payments, security, architecture and data migration back on the strongest — the two names per caller kind, below |
 
 Everything is off by default, and an empty command list is exactly the behaviour of every release
 before this one.
@@ -3364,6 +3364,30 @@ before this one.
   two helpers behind it are gone rather than left as a flag with one constant caller.
 - **The autonomy command does not tell you to re-read epics that do not exist.** With the split
   switch off it says "re-read the whole plan" instead.
+
+### The model order names the CALLER's own models (2026-09-23, issue #117)
+
+The third switch named Fable and Opus to every caller. The order is carried out by the calling AI,
+so a Codex session was being told to use two models it does not have. The two names are now a choice
+**per caller kind** — the kinds `CallerIdentity.KindFrom` answers, the same ones the consultant is
+chosen by:
+
+| piece | where |
+|---|---|
+| `ModelPair`, the shipped map, `For(map, kind)` — per-FIELD fallback, configured → shipped; a kind with no row resolves as `other` | `core/Commands/CommandModels.cs` |
+| `COAI_COMMAND_MODELS` → `PanelSettings.CommandModels`; an unreadable value is the shipped map plus one `UnrecognisedSetting`, never a refusal — the order is advice | `src/Server/CommandModelsSetting.cs` |
+| `CommandContext.Models` (an init property defaulting to Claude Code's pair) filled from the caller's kind | `PanelService.RunStageAsync` |
+| the template: `Do the SPLIT itself with {S} at its highest available version … ordinary stories on {I} … on {S} (max) again`; a blank slot reads "the strongest model your client offers" / "your usual model" | `GateCommands.ModelCommand` |
+
+- **Claude Code with nothing configured gets the pre-#117 sentence byte for byte** — a test pins it by
+  equality against the old text. Codex, Gemini and other clients ship with NO names: the order then
+  says the generic words rather than naming another vendor's model.
+- **The shipped map is held level with the extension by a file neither owns**,
+  `shared/command-models.json`; each half asserts its own constant against it.
+- **`GateCommands.ModelOrderMarker`** (`"Do the SPLIT itself with "`) is what the bench reads to see
+  the order was given. It read "Fable" until this change, which every Codex round would have failed.
+- **The log line says which models were ordered**: `split ordered to caller {Caller}; strongest model
+  {Strongest}, implementation {Implementation}`.
 
 **A reader could kill a round, and the catch written for it looked past the exception (2026-09-04).**
 Six code rounds died with `Access to the path is denied`. One died on the FINAL save, with every

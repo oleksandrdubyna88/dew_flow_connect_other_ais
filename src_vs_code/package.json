@@ -572,7 +572,19 @@
         "coai.splitWithFable": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "Do the split itself with Fable at its highest version, and send the stories where being wrong is expensive — payments, security, architecture, data migration — back to it; the ordinary ones run on Opus. Fable here is a model of YOUR assistant, not a reviewer in the list."
+          "markdownDescription": "Do the split itself with the calling assistant's STRONGEST model, and send the stories where being wrong is expensive — payments, security, architecture, data migration — back to it; the ordinary ones run on its implementation model. Both are chosen per kind of assistant in `#coai.commandModels#`; Claude Code's are Fable and Opus unless you change them. They are models of YOUR assistant, not reviewers in the list. (The setting keeps its old name, `splitWithFable`.)"
+        },
+        "coai.commandModels": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "The two models the split order names, per kind of calling assistant — `claude`, `codex`, `gemini`, `other` — as `{ \"strongest\": \"…\", \"implementation\": \"…\" }`. A blank field keeps the shipped name: Fable and Opus for Claude Code, and for the others no model at all (the order then says \"the strongest model your client offers\"). Edited in the panel's *The gate* section.",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "strongest": { "type": "string" },
+              "implementation": { "type": "string" }
+            }
+          }
         },
         "coai.chatPrompt": {
           "type": "string",
