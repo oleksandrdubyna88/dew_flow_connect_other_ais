@@ -115,7 +115,11 @@ write-gap record. **Only the marker is missing.**
   while the process that reused its pid lives, and is recorded as soon as that process ends.
   *(round, local)*
 
-## Open question — for the operator
+## Decided by the operator — the toast
+
+> **Decided 2026-09-23: (a).** One toast per activation, saying how many windows closed without
+> finishing — shown AFTER each death has been recorded with its own identity, never one toast per
+> death. What follows is the question as it was put, kept for the reasoning.
 
 1. **Is a death found at activation shown, or only recorded?** Recording is decided (requirement 3:
    each death appended with its own identity); what is open is only the TOAST. The funnel records and then shows
@@ -138,7 +142,8 @@ write-gap record. **Only the marker is missing.**
    directory.
 4. Wiring: `activate` starts it, and `deactivate` clears only when `flushChatUsage()` — which is
    `flushLedgers()` — answered that the drain finished. Deaths are appended with their own identity;
-   the toast, if any, is the one question 1 decides.
+   then ONE `notifyOnce` toast per activation says how many windows closed without finishing
+   (the operator's decision, 2026-09-23).
 5. `extension-runs/` in `shared/data-inventory.json`; the docs.
 
 ## Test plan
@@ -201,7 +206,8 @@ gemini: a boundary has three columns and is written on both sides)*
 - [ ] Every test above written RED first, with its failure message recorded, and each guard broken.
 - [ ] `shared/run-marker-vectors.json` answered by BOTH suites.
 - [ ] `extension-runs/` in `shared/data-inventory.json`, `move: false`.
-- [ ] Question 1 decided by the operator, and the choice recorded here.
+- [x] Question 1 decided by the operator, and the choice recorded here. *(2026-09-23: (a), one
+      summary toast per activation.)*
 - [ ] `research/module_extension.md` records the marker, and `research/module_tests.md` names the
       scenario.
 - [ ] An extension release.
