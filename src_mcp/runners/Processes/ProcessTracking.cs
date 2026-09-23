@@ -152,7 +152,12 @@ public sealed class ProcessTracking(string dataDir, Action<string>? note = null)
     }
 
     /// <summary>When the live process with that pid started, or null when there is none.</summary>
-    private static DateTime? StartedAt(int pid)
+    /// <remarks>
+    /// Public since epic 3: the run-marker sweep asks it about a stale marker from THIS machine, where
+    /// a pid means something — paired with <see cref="OrphanSweep.Same"/>, so a reused number is not
+    /// mistaken for the process that wrote the marker.
+    /// </remarks>
+    public static DateTime? StartedAt(int pid)
     {
         try
         {

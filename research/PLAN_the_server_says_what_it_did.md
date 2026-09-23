@@ -1,24 +1,28 @@
 # PLAN — the server writes down what it refused, what failed, and that it died
 
-> Status: **EPICS 1 AND 2 IMPLEMENTED, 2026-09-22; epic 3 open.** Epic 1 (1.1 the credential list,
-> 1.2 the notice line, 1.3 the path, 1.4 the writer and the append it had to fix) shipped 2026-09-21.
-> Epic 2 shipped 2026-09-22: 2.1 bounded the population to ONE refusal road (`Refusal.Answer`), 2.2
-> wrote every refusal down through one writer thread, 2.3 was split into three and wrote down the
-> drain, reviewer failures and startup notes, and **2.4 proved the whole thing over the wire** — a
-> real `coai-mcp`, driven over stdio, refuses with a secret in its argument, and the extension's own
-> path, reader and parser find the record with the secret taken out and the line unchanged by a
-> round trip. What remains is the deaths (3.1 the run marker, 3.2 the crash handler), so this plan
-> stays in `todo/`.
+> Status: **IMPLEMENTED, 2026-09-23.** Epic 1 (1.1 the credential list, 1.2 the notice line, 1.3 the
+> path, 1.4 the writer and the append it had to fix) shipped 2026-09-21. Epic 2 shipped 2026-09-22:
+> 2.1 bounded the population to ONE refusal road (`Refusal.Answer`), 2.2 wrote every refusal down
+> through one writer thread, 2.3 was split into three and wrote down the drain, reviewer failures and
+> startup notes, and 2.4 proved the whole thing over the wire. **Epic 3 shipped 2026-09-23**: every
+> run keeps a heartbeat in `runs/{run}.json` and the next start records one that never finished,
+> exactly once; every notice carries the run and pid that wrote it; and an exception nothing else
+> caught is written down, said redacted, flushed and exits 70 — in two layers, because the first
+> thing a server can fail at is resolving the directory its logger lives in. The deviations are under
+> *What epic 3 found*. **Open tail, not built here:** the `coai-mcp` release that carries epic 3 (a
+> release is the operator's call). The parent stays in `todo/` on that release AND on the
+> EXTENSION half of its section *H*'s run marker — the boundary table below gives that half to the
+> parent, and nothing built it.
 > Scope: `src_mcp` — a notice record and its serialiser, the append, the instrumentation sites, a
 > run-start marker, and the `try/catch/finally` that `Program.cs` has never had.
 >
-> **This is S8 of [PLAN_every_message_is_written_down.md](PLAN_every_message_is_written_down.md)**,
+> **This is S8 of [PLAN_every_message_is_written_down.md](../todo/PLAN_every_message_is_written_down.md)**,
 > extracted into its own file as that plan's section *G* says it must be. Defect 4 of the parent
 > comes with it, for the reason the parent gives: it changes the `coai-mcp` binary, and its
 > externally-killed half depends on the run marker this step builds.
 >
 > Its declared prerequisite has shipped. The parent ordered S8 after
-> [PLAN_the_settings_file_ignores_the_side.md](../research/PLAN_the_settings_file_ignores_the_side.md);
+> [PLAN_the_settings_file_ignores_the_side.md](PLAN_the_settings_file_ignores_the_side.md);
 > that landed on 2026-09-18 and went out as **`coai-mcp 0.30.0`**.
 >
 > **Through its plan round, 2026-09-21: three reviewers, 19 findings, 15 accepted.** The round
@@ -26,8 +30,8 @@
 > writes — and both are marked *(round)* below. One accepted finding is about this document rather
 > than the code: the parent may not be promoted while S6 is open.
 >
-> Related docs: [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md), [module_tests.md](../research/module_tests.md).
+> Related docs: [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md), [module_tests.md](module_tests.md).
 
 ## The symptom
 
@@ -317,7 +321,7 @@ Every item RED first, with its failure message recorded, and each guard broken t
   maximum rather than a trigger. See the correction in §7.
 - **No new page, panel section or count.** S1–S5 shipped all of it and already handles these rows.
 - **It does not touch `src_server`** — that is
-  [PLAN_refusals_that_explain_themselves.md](PLAN_refusals_that_explain_themselves.md).
+  [PLAN_refusals_that_explain_themselves.md](../todo/PLAN_refusals_that_explain_themselves.md).
 
 ## The boundary with the parent plan
 
@@ -435,8 +439,55 @@ also on the wire (`ProvidersAnswer.Unrecognised`), so it stays as a projection. 
 
 | | Story | Depends on | Model |
 |---|---|---|---|
-| 3.1 | A run says when it started, keeps a heartbeat, and the next start records the one that never finished | 1.4, 2.2 | **Fable (max)** — liveness across a NAS, PID reuse, exactly-once across a crash |
-| 3.2 | A third exception type is written down, redacted in the log, flushed, and exits non-zero | 1.4, 2.2, 3.1 | **Fable (max)** — exit semantics and a second redaction sink |
+| ~~3.1~~ | ~~A run says when it started, keeps a heartbeat, and the next start records the one that never finished~~ — **shipped 2026-09-23**: `RunMarkers` (a pure planner and the disk it acts on), `RunLife` (the beat, on a thread of its own), and `Noticing.Stamped`, which puts this run's id and pid on every notice it writes | 1.4, 2.2 | **Fable (max)** — built on Opus 5.5 by the operator's choice, one gate for the epic |
+| ~~3.2~~ | ~~A third exception type is written down, redacted in the log, flushed, and exits non-zero~~ — **shipped 2026-09-23**: `HostCrash`, the third `catch` in `ServeAsync`, `Program.EndedAsync`, and a last-resort catch in `Main` | 1.4, 2.2, 3.1 | as 3.1 |
+
+### What epic 3 found
+
+- **A rename is not a claim — measured, and found by the race test before anything shipped.** The
+  first design claimed a death by renaming its marker, on the reasoning that a rename is atomic. Two
+  sweepers racing over fifty stale markers recorded **72** deaths. Isolated: two threads renaming one
+  file to two targets through .NET on Windows had BOTH renames succeed in **975 of 1000** attempts;
+  `FileMode.CreateNew` let both succeed in **0 of 1000**. So a claim is an exclusive create of
+  `runs/{run}.claim`, and a claim's AGE says whether the sweeper holding it is still alive.
+- **An exclusive create was not enough either: 68–75 records for 50.** A released claim could be won
+  again by a sweeper still holding a listing from before the first one finished. Two invariants fixed
+  it: the marker is removed BEFORE the claim is released, and the marker is re-read UNDER the claim
+  (`StillDead`) so a sweeper acts on what is there now rather than on what it listed. After: 50 of 50
+  across eight runs, and a stress run of four sweepers over 500 deaths recorded each exactly once,
+  three times out of three.
+- **Liveness is a heartbeat, refined on the same machine.** A stale marker written on THIS host is
+  checked against the process table too — pid AND start time, through the very function the orphan
+  sweep already uses — so a server stalled under a debugger is not recorded as a death. (gemini and
+  local, the plan round.) From another machine on the share, a sleeping laptop is still a false
+  death, as *Costs accepted* says.
+- **The crash record goes through the CONFIRMED append**, not the queue, and the marker is cleared
+  only when the run ended cleanly or its crash is known to be on disk; a crash that could not be
+  written leaves the marker behind on purpose, so the next start records an unclean exit instead of
+  nothing. (local, the plan round.) The beat stops before the clear, so a late beat cannot re-create a
+  cleared marker (gemini). The ORDER — stop, drain, clear only over a landed crash, flush — is pinned
+  as a whole by `TheHostDrainsOnEveryRoadOut`, which used to pin the one-line `finally` it replaced.
+- **Two layers, and the second was not optional.** The plan's correction 2 named a last-resort catch
+  in `Main`, and the real-binary test showed why: an unusable `COAI_DATA_SIDE` throws while the data
+  directory is resolved — before the logger, which is rooted in that directory — and its message
+  QUOTES the value. RED, it printed `Unhandled exception. … COAI_DATA_SIDE='token sk-ant-api03-…'` to
+  stderr in clear. `HostCrash.Unlogged` now says it redacted and exits 70, and writes no notice: the
+  directory a notice would go to may be the very thing that failed. If the redactor itself cannot run
+  (the word list loads lazily), what is said is the exception's TYPE, never its raw message.
+- **`Log.CloseAndFlush` is still not called, on purpose.** This host's logger is a local instance, not
+  Serilog's static one, so the rule's intent is met as `HostCrash.Flushed(log)` — the host's own
+  logger disposed LAST, under a guard, on every road out.
+- **`runs/` joined `shared/data-inventory.json`** as live state (`move: false`): a copied live marker
+  would be recorded at the destination as a death it is not. The extension's inventory scan could not
+  have found it — the folder is composed from a constant on `dataDir.Path`, which its patterns do not
+  match — so a C# test holds `RunMarkers.Folder` to the inventory instead.
+- **A plant that stayed green found a gap in the scenario.** Naming the marker with one run id and
+  stamping the run's notices with another passed the first end-to-end test, because nothing joined
+  the death to the dead run's OWN records. The scenario now makes the run write a real refusal over
+  stdio before it is killed, and asserts the death carries that refusal's run id.
+- **One locator, not four.** Three process-level test classes each carried an identical copy of the
+  code that finds the `coai-mcp` binary; the epic's scenario would have been the fourth. It is
+  `tests/ServerBinary.cs` now, and all four use it.
 
 Order: 1.1 → 1.2 → 1.3 → 1.4 → 2.1 → 2.2 → 2.3 → 2.4 → 3.1 → 3.2. 1.3 may run beside 1.1/1.2.
 
@@ -523,18 +574,27 @@ reason per pattern" clause is what applies.
 
 ## Definition of Done
 
-- [ ] Every test above written RED first, with its failure message recorded, and each guard broken.
-- [ ] One credential list, embedded at build time into both deliverables, failing CLOSED, asserted
-      against `shared/` by both suites **through the shipped artefact**.
-- [ ] The two serialisers agree as a property over every shape.
-- [ ] `measure:append` re-run with the .NET writer as one of the processes, outcome in the docstring.
-- [ ] No write can fail a round; proved by a test.
-- [ ] `research/module_server.md` records the writer, the redaction, the append bargain and the run
+- [x] Every test above written RED first, with its failure message recorded, and each guard broken.
+      *(Epic 3's: the scenario RED on "a serving run writes runs/<run>.json at start", the crash RED
+      on the runtime's own `Unhandled exception.` with the key in clear; six defects planted in the host
+      wiring and the crash handler, every one red on its own symptom once the scenario learned to
+      join the death to the run's own records.)*
+- [x] One credential list, embedded at build time into both deliverables, failing CLOSED, asserted
+      against `shared/` by both suites **through the shipped artefact**. *(1.1.)*
+- [x] The two serialisers agree as a property over every shape. *(1.2; `npm run test:parity`.)*
+- [x] `measure:append` re-run with the .NET writer as one of the processes, outcome in the docstring.
+      *(1.4; recorded in `module_server.md`.)*
+- [x] No write can fail a round; proved by a test. *(2.2, 2.3.)*
+- [x] `research/module_server.md` records the writer, the redaction, the append bargain and the run
       marker; `research/module_tests.md` names the scenario and the seam leg.
-- [ ] A `coai-mcp` release.
-- [ ] Through `review_plan` (done — 19 findings, 15 accepted) and `review_code` per story.
-- [ ] **S6 is extracted into its own `todo/` plan, and only THEN is the parent promoted** *(round)*.
-      Promoting a plan with an open phase is what `planning-docs.md` forbids in as many words, and
-      the first draft of this DoD asked for exactly that. The parent's own status line is corrected
-      in the same task: it says *"Defect 2 remains"* while defect 2's heading says **BUILT
-      2026-09-18** and its plan was promoted that day.
+- [ ] A `coai-mcp` release. **Open** — the release is the operator's call, and it is what the
+      parent's promotion waits for.
+- [ ] Through `review_plan` (done — 19 findings, 15 accepted) and `review_code` per story. *(Epic 3:
+      one plan round and one code round for the whole epic, on the operator's command of 2026-09-23.)*
+- [x] ~~**S6 is extracted into its own `todo/` plan, and only THEN is the parent promoted**~~ *(round)*.
+      **Overtaken, found while promoting this plan:** S6 needed no extraction — it had already
+      SHIPPED, as [PLAN_the_rounds_log_in_line.md](PLAN_the_rounds_log_in_line.md), `IMPLEMENTED
+      2026-09-17`, four days before this DoD was written; the parent said *"S6 open"* on the same
+      evidence. The parent's status line is corrected in the same task (its *"Defect 2 remains"* had
+      already been fixed on 2026-09-21), and it stays in `todo/` for one reason only: its own DoD
+      promotes it *"when S8 has shipped and the server release is out"*.

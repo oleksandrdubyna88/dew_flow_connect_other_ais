@@ -98,5 +98,13 @@ public static class OrphanSweep
         return new SweepPlan(reap, forget);
     }
 
-    private static bool Same(DateTime a, DateTime b) => (a - b).Duration() <= Slack;
+    /// <summary>
+    /// Whether two recorded start times are the same process's, within <see cref="Slack"/>.
+    /// </summary>
+    /// <remarks>
+    /// Public since epic 3 of PLAN_the_server_says_what_it_did.md: the run-marker sweep asks the same
+    /// question of a stale marker written on this machine — is that pid still the process that wrote
+    /// it — and a second copy of the slack would be a second answer to one question.
+    /// </remarks>
+    public static bool Same(DateTime a, DateTime b) => (a - b).Duration() <= Slack;
 }

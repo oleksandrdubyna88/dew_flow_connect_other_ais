@@ -215,10 +215,27 @@ public sealed class TheWriterDrainsBeforeTheProcessLeavesTests : IDisposable
         // covers BOTH returns and an exception unwinding out. The live half — a real refusal over
         // stdio against the published binary, asserted on the bytes — is story 2.4, which the parent
         // plan owes by name and which now has something to check.
-        ProductionSources.CodeOf("src_mcp/src/Program.cs")
-            .Should().Contain("finally { Unresolved(Draining(notices, log), log); }",
-                "one drain, in the finally of the try that wraps both exits — a `finally` is what a "
-                + "`return` cannot escape and what story 3.2's crash catch will sit above");
+        //
+        // Since epic 3 the `finally` hands the whole end of the run to `EndedAsync`, and what is pinned
+        // is the ORDER in there, because each step depends on the one before it: the beat stops before
+        // the marker is cleared (or a late beat re-creates it), the queue drains before the crash is
+        // judged, the marker is cleared only after the crash is known to have landed, and the log is
+        // flushed last so everything above still has somewhere to be said.
+        var code = ProductionSources.CodeOf("src_mcp/src/Program.cs");
+
+        code.Should().Contain("finally { await EndedAsync(life, notices, crash, run, recorded, log); }",
+            "one end, in the finally of the try that wraps every exit — a `finally` is what a "
+            + "`return` cannot escape, and it sits below story 3.2's crash catch");
+        string[] order =
+        [
+            "await life.StopAsync();",
+            "Unresolved(Draining(notices, log), log);",
+            "if (crash is null || CrashRecorded(crash, run, recorded)) { life.Clear(); }",
+            "HostCrash.Flushed(log);",
+        ];
+        var at = order.Select(step => code.IndexOf(step, StringComparison.Ordinal)).ToList();
+        at.Should().AllSatisfy(i => i.Should().BeGreaterThanOrEqualTo(0), "every step of the end is there");
+        at.Should().BeInAscendingOrder("stop, drain, clear only over a crash that landed, flush — in that order");
     }
 
     [Fact]

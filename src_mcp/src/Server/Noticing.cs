@@ -44,12 +44,30 @@ public sealed record Noticing(Func<ServerNotice, bool> Offer, Serilog.ILogger Lo
     /// <c>&lt;&gt;c.&lt;ServeAsync&gt;b__46_4</c> into the census that asks which members answer a
     /// <see cref="ResolvedDataDir"/>, which is a member no reader can place.
     /// </remarks>
-    internal static Noticing Through(NoticeWriter writer, Func<string, string?> env, Serilog.ILogger log)
+    /// <param name="run">
+    /// This host start's id — REQUIRED, with no default, for the reason the host's own <c>Noticing</c>
+    /// has none: a defaulted seam is the one production takes quietly while every test passes.
+    /// </param>
+    internal static Noticing Through(NoticeWriter writer, Func<string, string?> env, Serilog.ILogger log, string run)
     {
         var directory = new NoticesDirectory(env);
+        var pid = Environment.ProcessId;
 
-        return new(notice => writer.Offer(directory.Where, notice, log), log);
+        return new(notice => writer.Offer(directory.Where, Stamped(notice, run, pid), log), log);
     }
+
+    /// <summary>
+    /// This run's id and pid on every notice it writes — filled where absent, never overwritten.
+    /// </summary>
+    /// <remarks>
+    /// <para>One place rather than every producer: <see cref="ServerNotice.Run"/> existed from story 1.2
+    /// and no producer ever set it, so the page could not tell which run a record came from and a death
+    /// record would have had nothing to join to. (Epic 3, defect 3 of the plan.)</para>
+    /// <para>Never overwritten, because a record can be ABOUT another run: an unclean-exit is written
+    /// by the start that found the death, and must carry the dead run's id and pid.</para>
+    /// </remarks>
+    internal static ServerNotice Stamped(ServerNotice notice, string run, int pid) =>
+        notice with { Run = notice.Run ?? run, Pid = notice.Pid ?? pid };
 
     /// <summary>
     /// One environment, and the one rule for where its notices go.

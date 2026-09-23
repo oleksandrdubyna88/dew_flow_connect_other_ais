@@ -66,6 +66,7 @@
     { "path": "servers/", "kind": "directory", "move": false, "mention": true, "why": "Team-server sign-ins, which belong to the side that made them" },
 
     { "path": "running/", "kind": "directory", "move": false, "mention": false, "why": "process ids of reviewers alive right now" },
+    { "path": "runs/", "kind": "directory", "move": false, "mention": false, "why": "one heartbeat per coai-mcp run alive right now, and the markers of runs that died before anything read them. Copying one hands the destination a live run's marker, which the next start there records half an hour later as a death it is not; a dead run's marker left behind loses one unclean-exit record, which is the smaller loss" },
     { "path": "settings.json", "kind": "file", "move": false, "mention": false, "why": "written from your VS Code settings at every activation, so it reappears by itself" },
     { "path": "settings.json.bak", "kind": "file", "move": false, "mention": false, "why": "a copy of that file from an older build; the settings themselves are written again at every activation" },
     { "path": "settings.lock", "kind": "file", "move": false, "mention": false, "why": "held while that file is written, and meaningless afterwards" },

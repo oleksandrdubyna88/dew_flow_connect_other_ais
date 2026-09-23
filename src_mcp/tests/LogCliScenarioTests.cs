@@ -25,22 +25,7 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class LogCliScenarioTests : IDisposable
 {
-    private static string ServerExe
-    {
-        get
-        {
-            if (Environment.GetEnvironmentVariable("COAI_CONTRACT_EXE") is { Length: > 0 } published)
-            {
-                return published;
-            }
-
-            var configuration = AppContext.BaseDirectory.Contains("Release") ? "Release" : "Debug";
-
-            return Path.GetFullPath(Path.Combine(
-                AppContext.BaseDirectory, "..", "..", "..", "..", "src", "bin", configuration, "net10.0",
-                OperatingSystem.IsWindows() ? "coai-mcp.exe" : "coai-mcp"));
-        }
-    }
+    private static string ServerExe => ServerBinary.Path;
 
     private readonly string _data = Directory.CreateTempSubdirectory("coai-logcli-").FullName;
     private readonly Serilog.ILogger _log = Serilog.Core.Logger.None;
