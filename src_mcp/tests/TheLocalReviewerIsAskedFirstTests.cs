@@ -22,7 +22,7 @@ namespace CoaiMcp.Tests;
 /// idle — the half of issue #155 the operator restated. Local reviewers now have their own lane,
 /// bounded only by their engine (`SharedEngineTests`), so there is no machine slot to hold and no
 /// reason to keep them apart; at the head they meet the engine queue in order, with no hosted
-/// launch in between. See `todo/PLAN_the_local_reviewers_have_their_own_lane.md`.</para>
+/// launch in between. See `research/PLAN_the_local_reviewers_have_their_own_lane.md`.</para>
 ///
 /// <para><b>What this promises.</b> The order reviewers are SUBMITTED in. The start times are the
 /// scheduler's, and pinned there.</para>

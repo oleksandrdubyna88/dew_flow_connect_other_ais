@@ -3055,8 +3055,8 @@ seconds, and asked last it makes the round's wall-clock "everything else finishe
 
 **Local reviewers have their own lane (2026-09-23).** In `BoundedScheduler` a reviewer with a
 `SharedResource` — only `LocalRuntime` sets one, to the engine's endpoint — waits for its ENGINE and
-for nothing else (`OnEngineAsync`); every other reviewer waits for a machine slot and then its
-vendor's (`OnMachineAsync`). The engine's semaphore outlives the round and hands over FIFO, so the
+for nothing else (`EngineLaneAsync`); every other reviewer waits for a machine slot and then its
+vendor's (`MachineLaneAsync`). The engine's semaphore outlives the round and hands over FIFO, so the
 local rows run strictly one after another and **the next one starts the moment the last one ends**;
 the hosted vendors keep all three machine slots. The bound is stated rather than implied: hosted ≤
 `globalCap`, local ≤ engines × `sharedResourceCap` — one per card by default. The machine cap exists

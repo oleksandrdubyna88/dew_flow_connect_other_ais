@@ -1,6 +1,11 @@
 # PLAN — the local reviewers have their own lane, so the next one starts when the last one ends
 
-> Status: **plan only, nothing implemented yet, 2026-09-23.** Scope: `src_mcp/runners/Reviewers/BoundedScheduler.cs`,
+> Status: **IMPLEMENTED, 2026-09-23.** What shipped differently from the text below: the two lanes are
+> `MachineLaneAsync` / `EngineLaneAsync` (named for the lane, code round), the launch they share is
+> `LaunchAsync`, and "is this a local reviewer" is ONE property, `ReviewerInvocation.IsOnEngine`, read by
+> both the scheduler and `LocalRowsFirst` (code round, gemini). Test 2 was redesigned before it counted:
+> as first written it passed on the old code, so the locals now BLOCK until every hosted reviewer is done.
+> Nothing is left open. Scope: `src_mcp/runners/Reviewers/BoundedScheduler.cs`,
 > `PanelService.OneLocalRowFirstTheRestLast` (becomes `LocalRowsFirst`), `src_mcp/tests/SharedEngineTests.cs`,
 > `src_mcp/tests/TheLocalReviewerIsAskedFirstTests.cs`.
 >
@@ -12,9 +17,9 @@
 > instrumentation), a UI state mismatch (states are reported where each wait is entered), heterogeneous
 > cards (the key is already per endpoint), and "unbounded" local processes (the bound is written below).
 >
-> Related docs: [PLAN_the_local_reviewer_starts_first.md](../research/PLAN_the_local_reviewer_starts_first.md)
-> (the half this finishes), [PLAN_one_gpu_one_reviewer.md](../research/PLAN_one_gpu_one_reviewer.md),
-> [module_server.md](../research/module_server.md).
+> Related docs: [PLAN_the_local_reviewer_starts_first.md](PLAN_the_local_reviewer_starts_first.md)
+> (the half this finishes), [PLAN_one_gpu_one_reviewer.md](PLAN_one_gpu_one_reviewer.md),
+> [module_server.md](module_server.md).
 
 ## The symptom
 

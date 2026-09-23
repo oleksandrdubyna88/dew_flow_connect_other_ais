@@ -94,7 +94,15 @@ public sealed record ReviewerInvocation(
     string SharedResource = "",
     string Model = "",
     string JobFile = "",
-    string Effort = "");
+    string Effort = "")
+{
+    /// <summary>
+    /// Whether this launch contends on an engine of ours — a local card — rather than a vendor's
+    /// fleet. The ONE answer to "is this a local reviewer": the scheduler picks its lane by it and
+    /// the round orders its rows by it, so the two cannot drift (code round, gemini).
+    /// </summary>
+    public bool IsOnEngine => SharedResource.Length > 0;
+}
 
 /// <summary>
 /// THE vendor adapter: everything one AI vendor needs to plug into the panel, in one interface —

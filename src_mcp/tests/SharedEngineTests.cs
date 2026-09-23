@@ -165,8 +165,8 @@ public sealed class SharedEngineTests
         var hosted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var localsDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var done = 0;
-        var work = new[]
-        {
+        ReviewerWork[] work =
+        [
             OnEngine("local", RoleCatalog.ArchitectureRole, "http://127.0.0.1:11434/v1"),
             Hosted("codex", RoleCatalog.ArchitectureRole, blocks: true),
             Hosted("codex", RoleCatalog.SecurityRole, blocks: true),
@@ -175,7 +175,7 @@ public sealed class SharedEngineTests
             Hosted("gemini", RoleCatalog.SecurityRole, blocks: true),
             OnEngine("local", RoleCatalog.SecurityRole, "http://127.0.0.1:11434/v1"),
             OnEngine("local", RoleCatalog.UxDxRole, "http://127.0.0.1:11434/v1"),
-        };
+        ];
 
         var run = scheduler.RunAllAsync(work, new ReviewerExecutor(new GatedLauncher(hosted.Task)), onProgress: p =>
         {
@@ -208,15 +208,15 @@ public sealed class SharedEngineTests
         var locals = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var hostedDone = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var done = 0;
-        var work = new[]
-        {
+        ReviewerWork[] work =
+        [
             OnEngine("local", RoleCatalog.ArchitectureRole, "http://127.0.0.1:11434/v1", blocks: true),
             OnEngine("local", RoleCatalog.SecurityRole, "http://127.0.0.1:11434/v1", blocks: true),
             Hosted("codex", RoleCatalog.ArchitectureRole),
             Hosted("codex", RoleCatalog.SecurityRole),
             Hosted("gemini", RoleCatalog.ArchitectureRole),
             Hosted("gemini", RoleCatalog.SecurityRole),
-        };
+        ];
 
         var run = scheduler.RunAllAsync(work, new ReviewerExecutor(new GatedLauncher(locals.Task, holdFor: 150)), onProgress: p =>
         {

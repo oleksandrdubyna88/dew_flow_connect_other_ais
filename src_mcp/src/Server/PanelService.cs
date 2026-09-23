@@ -1009,21 +1009,18 @@ public sealed partial class PanelService
     /// lane of its own, bounded only by its engine, so there is no slot to hold; and at the head the
     /// local rows meet the engine's FIFO queue together, with no hosted launch between
     /// <c>local/1</c> and <c>local/2</c> (plan round, gemini). See
-    /// <c>todo/PLAN_the_local_reviewers_have_their_own_lane.md</c>.</para>
+    /// <c>research/PLAN_the_local_reviewers_have_their_own_lane.md</c>.</para>
     ///
     /// <para>Stable in both directions: the local rows and the hosted rows each keep the shuffle's
     /// relative order, so the fairness it buys is untouched and a replayed seed still replays.</para>
+    ///
+    /// <para>"Local" is asked of the invocation — <see cref="ReviewerInvocation.IsOnEngine"/> — rather
+    /// than re-derived from the settings, so there is one authority: <c>RuntimeResolution</c> chose
+    /// the adapter, the adapter said what it contends on, and the scheduler picks its lane by the same
+    /// property.</para>
     /// </remarks>
-    private static IReadOnlyList<ReviewerWork> LocalRowsFirst(IReadOnlyList<ReviewerWork> rows)
-    {
-        return [.. rows.Where(IsLocalRow), .. rows.Where(r => !IsLocalRow(r))];
-
-        // `SharedResource` is what the ADAPTER decided this launch contends on, and only
-        // `LocalRuntime` sets it — to the engine's endpoint. Asking the invocation rather than
-        // re-deriving "is this local" from the settings keeps one authority for the question:
-        // `RuntimeResolution` chose the adapter, and the adapter said what it contends on.
-        static bool IsLocalRow(ReviewerWork row) => row.Invocation.SharedResource.Length > 0;
-    }
+    private static IReadOnlyList<ReviewerWork> LocalRowsFirst(IReadOnlyList<ReviewerWork> rows) =>
+        [.. rows.Where(r => r.Invocation.IsOnEngine), .. rows.Where(r => !r.Invocation.IsOnEngine)];
 
     /// <summary>
     /// A seed that is the same on every replay of one round, and different for the next.
