@@ -1,7 +1,8 @@
 import { BugCorpus, DbFinding, DbLog, EMPTY_CORPUS, EMPTY_LOG, ManyFound, parseBugs, parseFindings, parseLog, parseManyFindings } from './roundsDb';
-import { ReviewPair } from './reviewPair';
+import { Decision, ReviewPair } from './reviewPair';
 import { FileAtRead, FileAtRevision, TOO_OLD_FOR_THE_REVISION } from './openAtRevision';
 import { MethodSide, RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD } from './realMethodView';
+import { TOO_OLD_FOR_COMMENTS } from './commentContract';
 import { inBatches, READS_AT_ONCE } from './roundsExport';
 import { capture } from './versionProbe';
 import { serverEnv } from './dataDir';
@@ -393,10 +394,17 @@ export type PairsRead =
   | { readonly ok: true; readonly pairs: readonly ReviewPair[] }
   | { readonly ok: false; readonly why: string };
 
-/** What a decision write came to. */
+/**
+ * What a decision write came to.
+ *
+ * <p>`tooOld` is set only when the binary answered 64 — "never heard of this mode" — which is the
+ * one failure the panel answers differently: it keeps the draft and says which binary to install,
+ * rather than reporting a decision that could not be saved.</p>
+ */
 export type KeepWrite =
   | { readonly ok: true; readonly decided: number }
-  | { readonly ok: false; readonly why: string };
+  | { readonly ok: false; readonly why: string; readonly tooOld?: boolean; readonly decided?: number };
+
 
 /**
  * Every field the page renders, checked before it is rendered.
@@ -456,6 +464,9 @@ function pairOf(raw: unknown): ReviewPair | undefined {
     line: count('line'),
     why: text('why'),
     fix: text('fix'),
+    comment: text('comment'),
+    sentUtc: text('sentUtc'),
+    commentLost: text('commentLost'),
   };
 }
 
@@ -679,18 +690,94 @@ export async function writeKeep(
 
   return withFile(asked, async (file) => {
     const { code, output } = await run(['--pairs-keep', '--in', file], CAP_MS);
-    if (code !== 0) {
-      return { ok: false as const, why: output.trim() || `the server exited ${code}` };
-    }
 
-    try {
-      const raw = JSON.parse(output) as { decided?: unknown };
-
-      return typeof raw?.decided === 'number'
-        ? { ok: true as const, decided: raw.decided }
-        : { ok: false as const, why: 'the server did not say how many decisions it wrote' };
-    } catch {
-      return { ok: false as const, why: 'the server answered something that is not JSON' };
-    }
+    return code === 0 ? decidedIn(output) : { ok: false, why: output.trim() || `the server exited ${code}` };
   });
+}
+
+/**
+ * What `{"decided": N}` says — the one answer both decision modes give.
+ *
+ * <p>Read once, for both: `--pairs-keep` and `--pairs-decide` print the same document, and a second
+ * parser beside the first is the copy the reuse rule names.</p>
+ */
+function decidedIn(output: string): KeepWrite {
+  try {
+    const raw = JSON.parse(output) as { decided?: unknown };
+
+    return typeof raw?.decided === 'number'
+      ? { ok: true, decided: raw.decided }
+      : { ok: false, why: 'the server did not say how many decisions it wrote' };
+  } catch {
+    return { ok: false, why: 'the server answered something that is not JSON' };
+  }
+}
+
+/**
+ * Writes decisions WITH their comments through `--pairs-decide`, and answers how many were decided.
+ *
+ * <p><b>64 is the one exit told apart</b>: "this binary has never heard of the mode". It is the only
+ * sign of a `coai-mcp` older than comments, and it is `tooOld` so the panel can keep the draft and say
+ * which binary to install. Every other failure — 65 for a refused comment, 74 for a database — is a
+ * reason to show, never a fallback, because the binary understood perfectly and said no.</p>
+ */
+export async function writeDecide(
+  executable: string,
+  decisions: readonly Decision[],
+  withFile: WithKeysFile,
+  run: Run = serverRun(executable),
+): Promise<KeepWrite> {
+  return withFile(JSON.stringify({ items: decisions }), async (file) => {
+    const { code, output } = await run(['--pairs-decide', '--in', file], CAP_MS);
+    if (code === 64) {
+      return { ok: false, tooOld: true, why: TOO_OLD_FOR_COMMENTS };
+    }
+
+    return code === 0 ? decidedIn(output) : { ok: false, why: output.trim() || `the server exited ${code}` };
+  });
+}
+
+/**
+ * Decisions, through the newest mode the binary has — and never a comment dropped on the way.
+ *
+ * <p>A `coai-mcp` older than comments answers `--pairs-decide` with 64. When no decision in the batch
+ * carries words, `--pairs-keep` says exactly the same thing and the old binary has it, so the batch
+ * goes there. When one DOES, it does not: an old binary would take the keep and lose the words in
+ * silence — the failure this whole story refuses — so the answer stays `tooOld` and the draft stays
+ * in its box.</p>
+ */
+export async function writeDecisions(
+  executable: string,
+  decisions: readonly Decision[],
+  withFile: WithKeysFile,
+  run: Run = serverRun(executable),
+): Promise<KeepWrite> {
+  const written = await writeDecide(executable, decisions, withFile, run);
+  const wordless = decisions.every((one) => one.comment.length === 0);
+
+  return !written.ok && written.tooOld === true && wordless
+    ? keepEach(executable, decisions, withFile, run)
+    : written;
+}
+
+/** `--pairs-keep` for every keep value in the batch, in turn, with the counts added up. */
+async function keepEach(
+  executable: string,
+  decisions: readonly Decision[],
+  withFile: WithKeysFile,
+  run: Run,
+): Promise<KeepWrite> {
+  let decided = 0;
+  for (const keep of new Set(decisions.map((one) => one.keep))) {
+    const ids = decisions.filter((one) => one.keep === keep).map((one) => one.findingId);
+    const written = await writeKeep(executable, ids, keep, withFile, run);
+    if (!written.ok) {
+      // With what the earlier calls already wrote: they are in the store, and "could not be saved"
+      // alone would tell a person none of it was. (CodeRabbit, the pull request.)
+      return { ...written, decided };
+    }
+    decided += written.decided;
+  }
+
+  return { ok: true, decided };
 }

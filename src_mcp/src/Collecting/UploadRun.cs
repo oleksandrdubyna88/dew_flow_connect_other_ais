@@ -1,3 +1,4 @@
+using System.Net;
 using System.Net.Http.Json;
 using CoaiMcp.Core.Collecting;
 using CoaiMcp.Store;
@@ -155,10 +156,56 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
         }
     }
 
+    /// <summary>The route that keeps a comment — which a server older than <c>bugs-v0.3.0</c> does not have.</summary>
+    internal const string CommentedRoute = "/ingest/commented";
+
+    /// <summary>The route every comment-free batch still takes, byte for byte as before comments.</summary>
+    internal const string PlainRoute = "/ingest";
+
+    /// <summary>Why a commented batch was answered but nothing was marked.</summary>
+    internal const string UnstatedContract =
+        "the server answered " + CommentedRoute + " without stating contract 2, so this client cannot "
+        + "tell whether it kept the comments; nothing was marked";
+
+    /// <summary>
+    /// One request on the route its pairs need, and what it came to.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The ROUTE is the negotiation, not a probe.</b> A batch in which any pair carries a
+    /// comment goes to <see cref="CommentedRoute"/>; a server that predates comments has no such
+    /// route and answers 404 with nothing written, so no rollout order can make an old node accept
+    /// a comment and drop it. Every other batch goes to <see cref="PlainRoute"/>, as it always has.
+    /// A probe was the first design and the plan round was right that it cannot work: it reaches one
+    /// node and the POST reaches another. (Decision 3.)</para>
+    /// <para><b>And the answer to a commented batch must SAY it understood.</b> Every answer from a
+    /// comment-aware server carries <c>contract</c>; a 200 without <c>contract &gt;= 2</c> on the
+    /// commented route is a proxy, or half a deployment, and marking on it would be trusting a
+    /// server that may have dropped the words.</para>
+    /// </remarks>
     private async Task<UploadSummary> SendAsync(
         RoundsDb db, IReadOnlyList<StoredPair> sendable, Uri server, string key, CancellationToken ct)
     {
-        using var request = new HttpRequestMessage(HttpMethod.Post, new Uri(server, "/ingest"))
+        var commented = sendable.Any(pair => pair.Comment.Length > 0);
+        using var request = RequestFor(sendable, server, key, commented);
+        using var reply = await http.SendAsync(request, ct);
+        if (!reply.IsSuccessStatusCode)
+        {
+            // NOTHING is marked. A refusal of the whole request says nothing about any single
+            // pair, and marking them would lose every one of them silently.
+            return new UploadSummary(sendable.Count, Trouble: StatusTrouble(reply.StatusCode, commented, sendable));
+        }
+
+        var answer = await reply.Content.ReadFromJsonAsync(
+            Server.ServerJsonContext.Default.UploadAnswer, ct) ?? new UploadAnswer();
+
+        return Acknowledged(db, sendable, answer, commented);
+    }
+
+    private static HttpRequestMessage RequestFor(
+        IReadOnlyList<StoredPair> sendable, Uri server, string key, bool commented)
+    {
+        var request = new HttpRequestMessage(
+            HttpMethod.Post, new Uri(server, commented ? CommentedRoute : PlainRoute))
         {
             Content = JsonContent.Create(
                 new UploadRequest([.. sendable.Select(Wire)]),
@@ -166,20 +213,33 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
         };
         request.Headers.Authorization = new("Bearer", key);
 
-        using var reply = await http.SendAsync(request, ct);
-        if (!reply.IsSuccessStatusCode)
-        {
-            // NOTHING is marked. A refusal of the whole request says nothing about any single
-            // pair, and marking them would lose every one of them silently.
-            return new UploadSummary(
-                sendable.Count, Trouble: $"the server answered {(int)reply.StatusCode}");
-        }
-
-        var answer = await reply.Content.ReadFromJsonAsync(
-            Server.ServerJsonContext.Default.UploadAnswer, ct);
-
-        return Record(db, sendable, answer?.Items ?? []);
+        return request;
     }
+
+    /// <summary>What a status that is not success means — and only ONE of them means "old".</summary>
+    /// <remarks>
+    /// A 404 on the commented route is the server predating comments, and says so with what to do.
+    /// Anything else keeps the sentence it always had: a 401 is a key, a 429 a limit, a 503 a server
+    /// that is unwell, and calling any of those "too old" would send a person to redeploy for nothing
+    /// and hide the retry that would have worked. (Plan round of 4.1, codex.)
+    /// </remarks>
+    private static string StatusTrouble(HttpStatusCode status, bool commented, IReadOnlyList<StoredPair> sendable) =>
+        commented && status == HttpStatusCode.NotFound
+            ? OlderThanComments(sendable.Count(pair => pair.Comment.Length > 0), sendable.Count)
+            : $"the server answered {(int)status}";
+
+    /// <summary>The sentence for a server without the commented route. It never quotes a comment.</summary>
+    internal static string OlderThanComments(int carrying, int batch) =>
+        $"this server is older than comments (404 for {CommentedRoute}); {carrying} of the {batch} pairs "
+        + "in this batch carry one. Deploy bugs-v0.3.0 or newer, or clear those comments; none of this "
+        + "batch was sent.";
+
+    /// <summary>An answer this client may mark on — or the reason it may not.</summary>
+    private UploadSummary Acknowledged(
+        RoundsDb db, IReadOnlyList<StoredPair> sendable, UploadAnswer answer, bool commented) =>
+        commented && answer.Contract < Contract.Comments
+            ? new UploadSummary(sendable.Count, Trouble: UnstatedContract)
+            : Record(db, sendable, answer.Items ?? []);
 
     /// <summary>
     /// Writes down what the server said, matched to what was sent BY ID.
@@ -207,19 +267,8 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
             return new UploadSummary(sent.Count, Trouble: trouble);
         }
 
-        var outcomes = answers
-            .Select(answer => new SendOutcome(
-                byId[answer.EntryId].FindingId,
-                answer.Took == Took.Refused ? answer.Why : string.Empty,
-                answer.Took == Took.Refused))
-            .ToList();
-
-        foreach (var answer in answers.Where(one => one.Took == Took.Refused))
-        {
-            // The refusal names a defect in OUR normaliser and is worth keeping. `--requeue-refused`
-            // is what clears it once the normaliser is repaired.
-            Say($"  refused {byId[answer.EntryId].SymbolName}: {answer.Why}");
-        }
+        var outcomes = answers.Select(answer => Outcome(byId[answer.EntryId], answer)).ToList();
+        Report(byId, answers);
 
         // ONE transaction for the batch: a kill halfway through two hundred single updates left half
         // the batch marked and half not, which is a local state no retry can reason about.
@@ -230,6 +279,32 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
             answers.Count(one => one.Took == Took.Accepted),
             answers.Count(one => one.Took == Took.Duplicate),
             answers.Count(one => one.Took == Took.Refused));
+    }
+
+    /// <summary>What one answer means for the pair it is about.</summary>
+    /// <remarks>
+    /// The server's <c>Why</c> travels whatever the word: on a refusal it is the reason, and on a
+    /// taken pair it is the sentence saying its COMMENT did not land, which becomes
+    /// <c>comment_lost</c>. The comment that crossed travels too, so the acknowledgement can tell
+    /// whether the words a person sees now are the words the server has.
+    /// </remarks>
+    private static SendOutcome Outcome(StoredPair pair, UploadResult answer) =>
+        new(pair.FindingId, answer.Why, answer.Took == Took.Refused, pair.Comment);
+
+    /// <summary>Says what a person needs to act on: a refused pair, and a taken pair whose words did not land.</summary>
+    /// <remarks>
+    /// A refusal names a defect in OUR normaliser and `--requeue-refused` clears it once that is
+    /// repaired. A lost comment is the server's own sentence. Neither line ever carries a comment's
+    /// text — the symbol and the server's reason only, because the comment is logged nowhere.
+    /// </remarks>
+    private void Report(Dictionary<string, StoredPair> byId, IReadOnlyList<UploadResult> answers)
+    {
+        foreach (var answer in answers.Where(one => one.Why.Length > 0))
+        {
+            Say(answer.Took == Took.Refused
+                ? $"  refused {byId[answer.EntryId].SymbolName}: {answer.Why}"
+                : $"  {byId[answer.EntryId].SymbolName} was taken, but its comment was not stored: {answer.Why}");
+        }
     }
 
     /// <summary>Why this answer cannot be trusted, or empty when it can.</summary>
@@ -283,9 +358,15 @@ public sealed class UploadRun(HttpClient http, TextWriter? progress = null)
             total.Refused + batch.Refused,
             batch.Trouble);
 
-    /// <summary>The three fields that cross, and nothing else.</summary>
+    /// <summary>The four fields that cross, and nothing else — the comment only when there is one.</summary>
+    /// <remarks>
+    /// An empty comment is NULL here, and the client's JSON omits a null property
+    /// (<c>ServerJsonContext</c>'s <c>WhenWritingNull</c>), so a comment-free pair is byte-identical to
+    /// what every deployed server received before comments existed. <c>OnlyFourFieldsLeaveTests</c>
+    /// compares it with a fixture captured before the type changed.
+    /// </remarks>
     private static UploadedPair Wire(StoredPair pair) =>
-        new(pair.Language, pair.SkeletonBefore, pair.SkeletonAfter);
+        new(pair.Language, pair.SkeletonBefore, pair.SkeletonAfter, pair.Comment.Length == 0 ? null : pair.Comment);
 
     private void Say(string line) => progress?.WriteLine(line);
 }

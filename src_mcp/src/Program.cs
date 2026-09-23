@@ -35,7 +35,7 @@ internal static class Program
     /// name is what prefixes the tools (`mcp__coai__review_plan`).</summary>
     private const string ServerName = "connect-other-ais";
 
-    private static void Note(string message) =>
+    internal static void Note(string message) =>
         Console.Error.WriteLine($"{Runners.Reviewers.ShimNotes.Prefix}{message}");
 
     /// <summary>What this process was started to do, before any of it happens.</summary>
@@ -66,6 +66,9 @@ internal static class Program
 
         /// <summary>A batch of keep/drop decisions, file-in as `--findings-many` takes its keys.</summary>
         PairsKeep,
+
+        /// <summary>Keeps AND comments, in one write — `Collecting.PairsDecideMode`.</summary>
+        PairsDecide,
 
         /// <summary>One pair's method as it really was, at both commits — a VIEW for the page, never a payload.</summary>
         /// <remarks>
@@ -221,6 +224,7 @@ internal static class Program
                 "--collect-bugs" => Startup.Collect,
                 "--pairs-json" => Startup.Pairs,
                 "--pairs-keep" => Startup.PairsKeep,
+                "--pairs-decide" => Startup.PairsDecide,
                 "--real-method" => Startup.RealMethod,
                 "--file-at" => Startup.FileAt,
                 "--tree-at" => Startup.TreeAt,
@@ -281,6 +285,9 @@ internal static class Program
 
             case Startup.PairsKeep:
                 return PairsKeep(args);
+
+            case Startup.PairsDecide:
+                return Collecting.PairsDecideMode.Run(args);
 
             case Startup.RealMethod:
                 return await RealMethodAsync(args);
@@ -1609,7 +1616,7 @@ internal static class Program
         text.Length <= 300 ? text.Replace('\n', ' ') : text[..300].Replace('\n', ' ') + "…";
 
     /// <summary>`--flag value` pairs. An odd trailing flag simply has no value.</summary>
-    private static Dictionary<string, string> Flags(string[] args)
+    internal static Dictionary<string, string> Flags(string[] args)
     {
         var flags = new Dictionary<string, string>(StringComparer.Ordinal);
         for (var i = 0; i < args.Length - 1; i += 1)

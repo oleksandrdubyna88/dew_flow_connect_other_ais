@@ -7,49 +7,6 @@ using Microsoft.Data.Sqlite;
 
 namespace CoaiBugs;
 
-/// <summary>What storing a pair came to.</summary>
-/// <remarks>
-/// Two outcomes and not three: a refusal is decided by the alphabet BEFORE anything is stored, so
-/// it is never an answer this type can give. <c>AlreadyHeld</c> is a success — the corpus holds the
-/// pair, in quarantine or promoted, and the client may stop sending it.
-/// </remarks>
-public enum Kept
-{
-    /// <summary>Written to quarantine, waiting for a person.</summary>
-    Stored,
-
-    /// <summary>Already here. Nothing was written and nothing is wrong.</summary>
-    AlreadyHeld,
-}
-
-/// <summary>
-/// What became of the words a contributor sent with a pair — which is not the pair's own fate.
-/// </summary>
-/// <remarks>
-/// <para><b>Four outcomes rather than a boolean, because two of them owe a person a different
-/// sentence.</b> It was <c>bool CommentLanded</c>, and a code round found both ways that lied: a new
-/// pair with no comment answered "landed" because the row was written, and a pair somebody had
-/// already promoted was told "this pair already carries a comment" when it carried none. The first
-/// was masked by the one caller checking the comment's length itself; the second reached a real
-/// person as a false explanation of where their words went. (Code round, codex.)</para>
-/// <para>The pair's fate stays <see cref="Kept"/>: a duplicate is still a duplicate whether or not
-/// it took the comment, because the CLIENT reads that word to decide whether to keep sending.</para>
-/// </remarks>
-public enum Words
-{
-    /// <summary>There were none, and nothing is owed.</summary>
-    None,
-
-    /// <summary>Stored with the pair — written with it, or attached to one that had none.</summary>
-    Stored,
-
-    /// <summary>The pair already carries somebody else's words, and the first to speak keeps them.</summary>
-    AlreadySpokenFor,
-
-    /// <summary>The pair has been promoted out of the queue; there is no waiting row to attach to.</summary>
-    TooLate,
-}
-
 /// <summary>
 /// The corpus: quarantine, the keys that may write to it, and the index a person promotes into.
 /// </summary>
@@ -201,7 +158,7 @@ public sealed partial class Corpus : IDisposable
             // waiting row to attach words to, and the decision it was part of has been made. Said
             // as its OWN outcome, because "there is nowhere to put this" and "somebody else got
             // there first" are two different things to be told. (Code round, codex.)
-            return (Kept.AlreadyHeld, entryId, comment.Length > 0 ? Words.TooLate : Words.None);
+            return (Kept.AlreadyHeld, entryId, AfterPromotion(entryId, comment));
         }
 
         using var write = _db.CreateCommand();
@@ -255,10 +212,16 @@ public sealed partial class Corpus : IDisposable
     /// last week, writes a sentence about it and sends it again would be answered <c>duplicate</c>
     /// for ever, with their words stored nowhere. A code round called it permanently blocking, and
     /// it was. (Code round, gemini.)</para>
-    /// <para><b><c>WHERE comment = ''</c> is the whole of the arbitration.</b> The first person to
-    /// say something about a pair is the one whose words are kept; nobody can overwrite them, and a
+    /// <para><b>The <c>WHERE</c> is the whole of the arbitration.</b> The first person to say
+    /// something about a pair is the one whose words are kept; nobody can overwrite them, and a
     /// second contributor is told their comment was not stored rather than reported a silent
     /// success. Storing several would need a comments table, which is a story of its own.</para>
+    /// <para><b>And the SAME words offered again are the words already held</b>, which is what
+    /// <c>OR comment = $comment</c> says. A send that landed and was never acknowledged — the client
+    /// killed, the connection dropped before the answer — is offered again with the identical
+    /// comment, and answering it <see cref="Words.AlreadySpokenFor"/> made the client record its own
+    /// stored words as lost. Rewriting a value with itself changes nothing and counts as the one row
+    /// the caller reads as "stored". (Plan round of 4.2, codex and gemini.)</para>
     /// <para>Inside the caller's transaction, like the insert above, and separate from it rather
     /// than folded into an <c>ON CONFLICT DO UPDATE</c>: that clause makes the conflicting row count
     /// as one affected, which is the number this method's caller reads to tell a new pair from a
@@ -270,12 +233,33 @@ public sealed partial class Corpus : IDisposable
         using var fill = _db.CreateCommand();
         fill.CommandText = """
             UPDATE quarantine SET comment = $comment
-             WHERE entry_id = $id AND comment = ''
+             WHERE entry_id = $id AND (comment = '' OR comment = $comment)
             """;
         Bind(fill, "$comment", comment);
         Bind(fill, "$id", entryId);
 
         return fill.ExecuteNonQuery() == 1;
+    }
+
+    /// <summary>What became of the words offered for a pair already promoted into the corpus.</summary>
+    /// <remarks>
+    /// There is no waiting row to attach anything to, so new words are too late — but the words the
+    /// promotion CARRIED are held, and a retry of the send that brought them is told so, for the
+    /// reason <see cref="Attach"/> admits the identical comment: the retry of an unacknowledged send
+    /// must not come back as a loss.
+    /// </remarks>
+    private Words AfterPromotion(string entryId, string comment)
+    {
+        if (comment.Length == 0)
+        {
+            return Words.None;
+        }
+
+        using var read = _db.CreateCommand();
+        read.CommandText = "SELECT comment FROM corpus WHERE entry_id = $id";
+        Bind(read, "$id", entryId);
+
+        return read.ExecuteScalar() as string == comment ? Words.Stored : Words.TooLate;
     }
 
     /// <summary>How many pairs are waiting for a person right now.</summary>

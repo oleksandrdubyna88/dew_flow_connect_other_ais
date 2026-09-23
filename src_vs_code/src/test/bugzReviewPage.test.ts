@@ -9,7 +9,9 @@ import { emptyMemory, FileAtRead, remember, stateOf } from '../openAtRevision';
 import { RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD, realView } from '../realMethodView';
 import { revisionActions, RevisionState } from '../revisionActions';
 import { Tab } from '../tabStrip';
-import { readable } from './readableHtml';
+import { readable, unescaped } from './readableHtml';
+import { COMMENT_MOST_CHARS } from '../commentContract';
+import { LEAVES_THE_MACHINE } from '../reviewComment';
 
 /**
  * The review page, RUN — because a multi-select that renders is not a multi-select that selects.
@@ -45,6 +47,9 @@ const pair = (findingId: number, keep = UNDECIDED): ReviewPair => ({
   line: 5,
   why: 'it races',
   fix: 'hold the lock',
+  comment: '',
+  sentUtc: '',
+  commentLost: '',
 });
 
 interface Posted {
@@ -60,6 +65,38 @@ interface Posted {
   readonly generation?: string;
   /** A `realText` press says which way the view went. */
   readonly on?: boolean;
+  /** A `comment` carries what was in the box. */
+  readonly text?: string;
+}
+
+/**
+ * A pair's comment box, built from the markup the page rendered: its words, and whether it may change.
+ *
+ * <p>It sits in the DETAIL row, which carries `data-detail` and not `data-row`, so it answers
+ * nothing about a pair row or a toggle — pressing it must therefore reach no branch of the click
+ * handler, which is what the story's page test proves by pressing it.</p>
+ */
+class CommentBox {
+  value: string;
+
+  readonly id = '';
+
+  constructor(readonly key: string, readonly readOnly: boolean, value: string) {
+    this.value = value;
+  }
+
+  getAttribute(name: string): string | null {
+    return name === 'data-comment' ? this.key : null;
+  }
+
+  closest(selector: string): CommentBox | null {
+    return selector === '[data-comment]' ? this : null;
+  }
+}
+
+/** A comment's counter — what the page's script rewrites as a person types. */
+class Counter {
+  constructor(readonly key: string, public textContent: string, public className: string) {}
 }
 
 /**
@@ -390,7 +427,7 @@ interface Page {
   readonly tabs: readonly TabButton[];
   /** Every way out of a row to the code, at its revision or as it is now. */
   readonly openers: readonly Opener[];
-  click(what: Box | Control | Toggle | Line | TabButton | Opener): void;
+  click(what: Box | Control | Toggle | Line | TabButton | Opener | CommentBox): void;
   /** One row's opener of one kind — asserting it is there, because a row with none has lost the action. */
   opener(findingId: number, kind: 'data-open-at' | 'data-open-current' | 'data-open-tree' | 'data-calls'): Opener;
   /** The container one row's revision actions were rendered into. */
@@ -401,6 +438,20 @@ interface Page {
   skeleton(findingId: number): Half;
   /** The real-method half of one pair's code. */
   real(findingId: number): Half;
+  /** Every comment box on the page, as rendered. */
+  readonly comments: readonly CommentBox[];
+  /** One pair's comment box — asserting it is there. */
+  comment(findingId: number): CommentBox;
+  /** One pair's counter, as the page's script last left it. */
+  counter(findingId: number): Counter;
+  /** The sentence beside one pair's box, as rendered — a VALUE, read off the element. */
+  notice(findingId: number): string;
+  /** A person typing: the words replace the box's value and the page hears `input`. */
+  type(box: CommentBox, text: string): void;
+  /** The box losing focus: the page hears `change`. */
+  leave(box: CommentBox): void;
+  /** Every pause the page is waiting out, run now. */
+  waitOut(): void;
 }
 
 /** What the page is drawn with, beyond the pairs — every field optional, as the page has it. */
@@ -419,6 +470,7 @@ interface Options {
   readonly revisions?: ReadonlyMap<number, RevisionState>;
   readonly calls?: ReadonlyMap<number, string>;
   readonly draw?: number;
+  readonly comments?: ReadonlyMap<number, string>;
 }
 
 /**
@@ -520,10 +572,26 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     }
   }
 
+  // A comment box with the words it was rendered holding, decoded as a browser would decode them —
+  // so a draft or a stored comment that comes back as the box's VALUE is what a person would see.
+  const comments = [...html.matchAll(
+    /<textarea id="comment-\d+" data-comment="(\d+)" maxlength="\d+" rows="2"( readonly)?>([\s\S]*?)<\/textarea>/g)]
+    .map((m) => new CommentBox(m[1]!, m[2] !== undefined, unescaped(m[3]!)));
+  const counters = [...html.matchAll(/<span class="(count(?: near)?)" data-count="(\d+)">([^<]*)<\/span>/g)]
+    .map((m) => new Counter(m[2]!, m[3]!, m[1]!));
+  const notices = new Map([...html.matchAll(/<p class="notice" data-notice="(\d+)">([^<]*)<\/p>/g)]
+    .map((m) => [m[1]!, unescaped(m[2]!)] as const));
+
   const posted: Posted[] = [];
   const style = new Style();
   const host = new Host();
   let onClick: ((event: { target: unknown }) => void) | undefined;
+  let onInput: ((event: { target: unknown }) => void) | undefined;
+  let onChange: ((event: { target: unknown }) => void) | undefined;
+  // The page's pauses, held rather than timed: a test that waited a real second and a half would be
+  // slow, and one that raced a real timer would be flaky. `waitOut()` runs whatever is waiting.
+  const pauses = new Map<number, () => void>();
+  let nextPause = 1;
 
   const byAttribute: Record<string, readonly (Box | Region | Toggle | Knob)[]> = {
     '[data-pick]': boxes,
@@ -536,12 +604,19 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     addEventListener: (kind: string, handler: (event: { target: unknown }) => void) => {
       if (kind === 'click') {
         onClick = handler;
+      } else if (kind === 'input') {
+        onInput = handler;
+      } else if (kind === 'change') {
+        onChange = handler;
       }
     },
     querySelectorAll: (selector: string): readonly unknown[] => byAttribute[selector] ?? [],
-    querySelector: (selector: string): Region | Toggle | Half | Note | undefined => {
-      const one = /^\[data-(detail|toggle|skel|real|revision|calls-for)="(\d+)"]$/.exec(selector);
+    querySelector: (selector: string): Region | Toggle | Half | Note | Counter | undefined => {
+      const one = /^\[data-(detail|toggle|skel|real|revision|calls-for|count)="(\d+)"]$/.exec(selector);
       assert.ok(one !== null, `the page asked for a selector the shim cannot answer: ${selector}`);
+      if (one[1] === 'count') {
+        return counters.find((counter) => counter.key === one[2]);
+      }
       if (one[1] === 'skel' || one[1] === 'real') {
         return halfOf(one[1], one[2]!);
       }
@@ -563,11 +638,23 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     body: { style },
   };
 
-  const body = new Function('acquireVsCodeApi', 'document', 'window', pageScript(html));
+  const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', pageScript(html));
   body(
     () => ({ postMessage: (m: Posted) => posted.push(m) }),
     document,
     host,
+    (then: () => void): number => {
+      const id = nextPause;
+      nextPause += 1;
+      pauses.set(id, then);
+
+      return id;
+    },
+    (id: number | undefined): void => {
+      if (id !== undefined) {
+        pauses.delete(id);
+      }
+    },
   );
 
   assert.ok(onClick !== undefined, 'the page never attached a click listener');
@@ -616,6 +703,41 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
       assert.ok(half !== undefined, `pair ${findingId} rendered no real-method half`);
 
       return half;
+    },
+    comments,
+    comment: (findingId) => {
+      const box = comments.find((one) => one.key === String(findingId));
+      assert.ok(box !== undefined, `pair ${findingId} rendered no comment box`);
+
+      return box;
+    },
+    counter: (findingId) => {
+      const counter = counters.find((one) => one.key === String(findingId));
+      assert.ok(counter !== undefined, `pair ${findingId} rendered no counter`);
+
+      return counter;
+    },
+    notice: (findingId) => {
+      const said = notices.get(String(findingId));
+      assert.ok(said !== undefined, `pair ${findingId} rendered no sentence beside its box`);
+
+      return said;
+    },
+    type: (box, text) => {
+      box.value = text;
+      assert.ok(onInput !== undefined, 'the page never listened for typing');
+      onInput({ target: box });
+    },
+    leave: (box) => {
+      assert.ok(onChange !== undefined, 'the page never listened for a box being left');
+      onChange({ target: box });
+    },
+    waitOut: () => {
+      const waiting = [...pauses.values()];
+      pauses.clear();
+      for (const then of waiting) {
+        then();
+      }
     },
   };
 }
@@ -1921,6 +2043,139 @@ test('an IDENTICAL revision patch is skipped, so a focused button inside it surv
 // --------------------------------------------------------------------------------------------
 // The live-patch channel: the container the page WRITES is the container a patch FINDS.
 // --------------------------------------------------------------------------------------------
+
+// --------------------------------------------------------------------------------------------
+// A person's words about a pair (story 4.2 of PLAN_a_comment_crosses_the_machine_boundary.md).
+// Every behaviour below is the script RUN; the sentence is read off the rendered element, which
+// is a VALUE and inside the 2026-09-14 ruling's carve-out.
+// --------------------------------------------------------------------------------------------
+
+/** What the page posted because of something a person DID — its own `ready` announcement left out. */
+const acted = (page: Page): readonly Posted[] => page.posted.filter((one) => one.type !== 'ready');
+
+/** A pair the server has acknowledged, with or without its words having landed. */
+const sent = (findingId: number, comment: string, commentLost = ''): ReviewPair =>
+  ({ ...pair(findingId), comment, sentUtc: '2026-09-18T00:03:00.000Z', commentLost });
+
+test('typing and then pausing posts the words once, for the pair they were typed on', () => {
+  const page = run([pair(1), pair(2)], { expanded: new Set([2]) });
+
+  page.type(page.comment(2), 'this one bit us');
+  assert.deepEqual(acted(page).filter((one) => one.type === 'comment'), [],
+    'nothing is WRITTEN on a keystroke — each write is a process');
+
+  page.waitOut();
+  assert.deepEqual(acted(page).filter((one) => one.type === 'comment'), [{ type: 'comment', id: 2, text: 'this one bit us' }]);
+});
+
+test('every keystroke hands the panel the words as a DRAFT, so closing the page cannot lose them', () => {
+  // A draft is a message, not a write: it costs no process. What it buys is that the panel holds the
+  // words from the first keystroke, and can write them itself if the page closes before a pause or
+  // a blur ever comes — the window a code reviewer found open (codex, twice, round 1 of 4.2's code).
+  const page = run([pair(1)], { expanded: new Set([1]) });
+
+  page.type(page.comment(1), 'half');
+  page.type(page.comment(1), 'half a thought');
+
+  assert.deepEqual(acted(page), [
+    { type: 'draft', id: 1, text: 'half' },
+    { type: 'draft', id: 1, text: 'half a thought' },
+  ]);
+});
+
+test('leaving the box posts what is in it, and the pause it replaced does not post again', () => {
+  const page = run([pair(1)], { expanded: new Set([1]) });
+  const box = page.comment(1);
+
+  page.type(box, 'half a thought');
+  page.leave(box);
+  page.waitOut();
+
+  assert.deepEqual(acted(page).filter((one) => one.type === 'comment'), [{ type: 'comment', id: 1, text: 'half a thought' }],
+    'the blur flushes the words, and a second post of the same words would be a second write');
+});
+
+test('a draft the panel holds is drawn back over the stored words, so a redraw loses nothing', () => {
+  const page = run([{ ...pair(1), comment: 'stored' }], { comments: new Map([[1, 'typed since']]) });
+
+  assert.equal(page.comment(1).value, 'typed since');
+  assert.equal(page.counter(1).textContent, `${'typed since'.length} / ${COMMENT_MOST_CHARS}`);
+});
+
+test('the words a pair already carries are in its box, and the box can still change', () => {
+  const page = run([{ ...pair(1), comment: 'stored words' }]);
+
+  assert.equal(page.comment(1).value, 'stored words');
+  assert.equal(page.comment(1).readOnly, false, 'nothing was sent, so nothing is fixed yet');
+});
+
+test('every unsent box says, beside it, that its words leave the machine in public', () => {
+  const page = run([pair(1), pair(2), pair(3)]);
+
+  for (const box of page.comments) {
+    assert.equal(page.notice(Number(box.key)), LEAVES_THE_MACHINE,
+      `pair ${box.key}'s box must say where its words go before a person chooses them`);
+  }
+  assert.equal(page.comments.length, 3, 'one box per pair, none forgotten');
+});
+
+test('a sent pair\'s box is read-only, says it was sent, and typing into it posts nothing', () => {
+  const page = run([sent(1, 'what crossed')]);
+  const box = page.comment(1);
+
+  assert.equal(box.readOnly, true);
+  assert.match(page.notice(1), /^Sent on 2026-09-18\. A change here will not follow it\.$/u);
+
+  page.type(box, 'an edit after the send');
+  page.leave(box);
+  page.waitOut();
+  assert.deepEqual(acted(page), [], 'words changed after the send would never cross, so none are posted');
+});
+
+test('a pair whose words did not land says so, with the server\'s reason, instead of "sent"', () => {
+  const page = run([sent(1, 'mine', 'this pair already carries a comment, and the first one stays, so yours was not stored')]);
+
+  assert.match(page.notice(1), /^Sent on 2026-09-18, but your comment was not stored: this pair already carries a comment/u);
+});
+
+test('markup in a comment is text: the box holds it, and no element is made of it', () => {
+  const hostile = '</textarea><img src=x onerror=alert(1)>';
+  const html = reviewPageHtml({ pairs: [{ ...pair(1), comment: hostile }], nonce: 'n' });
+  const page = run([{ ...pair(1), comment: hostile }]);
+
+  assert.equal(page.comment(1).value, hostile, 'the words come back whole, as the person wrote them');
+  assert.ok(!html.includes('<img src=x'), 'and they did not become an element on the page');
+});
+
+test('pressing inside a box neither opens nor closes its row, and decides nothing', () => {
+  const page = run([pair(1)], { expanded: new Set([1]) });
+
+  page.click(page.comment(1));
+
+  assert.equal(page.showing(1), true, 'the row stayed open');
+  assert.deepEqual(acted(page), [], 'and no decision, expansion or comment was posted by a press');
+});
+
+test('the counter turns warning-coloured from nine hundred, before the box stops taking more', () => {
+  const page = run([pair(1)]);
+  const box = page.comment(1);
+
+  page.type(box, 'x'.repeat(899));
+  assert.equal(page.counter(1).className, 'count');
+  page.type(box, 'x'.repeat(900));
+  assert.equal(page.counter(1).className, 'count near');
+  assert.equal(page.counter(1).textContent, `900 / ${COMMENT_MOST_CHARS}`);
+});
+
+test('a decision still posts exactly its three fields — the words travel from the panel, not the press', () => {
+  const page = run([pair(1)], { comments: new Map([[1, 'typed']]) });
+
+  page.click(page.boxes[0]!);
+  page.click(page.controls['keep']!);
+
+  const decided = page.posted.filter((one) => one.type === 'decide');
+  assert.deepEqual(decided, [{ type: 'decide', keep: KEPT, ids: [1] }]);
+});
 
 test('a patch reaches the row the GENERATOR named, for both channels', () => {
   // The whole guarantee, RUN. The defect it replaces was silent: the generator and the page script

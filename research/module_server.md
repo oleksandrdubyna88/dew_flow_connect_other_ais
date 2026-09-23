@@ -2058,6 +2058,55 @@ caller down a fallback, so a fault wearing it hides behind a successful-looking 
 with no `items` list is a fault; `{"items": []}` is somebody deciding about nothing, which is fine.
 The difference is the one a stale or misspelled file falls through.
 
+#### A third mode, for a person's words (2026-09-22, story 4.2)
+
+`--pairs-decide --in <decisions.json>` writes a keep AND a comment for each pair, in ONE transaction
+(`Store/PairDecisions.cs`, a unit of its own beside `UploadRuns` because `RoundsDb.cs` was already
+1 116 lines). It is a mode rather than a wider `--pairs-keep` because an older binary handed a
+comment in `--pairs-keep`'s file deserialises past it and answers `{"decided": N}` — plausible, and
+the words gone. A mode an old binary does not have exits 64, which the panel can act on.
+
+Line endings become LF and the ends are trimmed BEFORE `CommentRule.Refuse` runs, so a CR the box
+never meant is not refused as a control character. Every request fault is 65 — no `--in`, an
+unreadable file, malformed JSON, no `items`, a keep that is not a decision, a comment the rule
+refuses, and **a changed comment on a pair already sent**: the page's read-only box has a store-side
+twin, or the local row would diverge from what crossed and be rendered as sent. The check is inside
+the transaction; the whole batch is refused and nothing is written. A refusal names the pair and a
+length or a code point, never the text. 74 is a database that will not open.
+
+The mode lives in `Collecting/PairsDecideMode.cs`, not in a `partial` of `Program.cs`: that file was
+1 878 lines, and the conventions forbid a partial to duck the 800-line ceiling (plan round of 4.2,
+gemini). `Program.Note` and `Program.Flags` became `internal` so the unit spells its answers the way
+every other mode does.
+
+Step 13, `WhatAPersonSaid`, adds `collect_pairs.comment` and `comment_lost` (`NOT NULL DEFAULT ''`),
+one step because they shipped in one story; `SqliteMigrator` applies a step and its version in one
+IMMEDIATE transaction, so a file gains both or neither. `StoredPair` gains `Comment` LAST and
+defaulted — `Sendable` reads it at ordinal 9 — and `ReviewPair` gains `Comment`, `SentUtc` and
+`CommentLost`, read by name.
+
+#### The send takes the route its batch needs (2026-09-22, story 4.2)
+
+`UploadRun` posts a batch in which any pair carries a comment to `/ingest/commented`, and every other
+batch to `/ingest` with the bytes it always sent — an empty comment is `null` on the wire and
+`WhenWritingNull` omits it. The ROUTE is the negotiation: a server older than `bugs-v0.3.0` has no
+commented route and answers 404 with nothing written, so no rollout order can make an old node take a
+comment and drop it. That 404 is the one status with its own sentence — *this server is older than
+comments* — while 401, 403, 429, 5xx and a timeout keep theirs, because calling a 503 "old" sends a
+person to redeploy for nothing. A commented batch answered without `contract >= 2` marks nothing: a
+proxy, or half a deployment.
+
+**A pair that landed without its words says so.** The server's `Why` on an accepted or duplicate
+answer — *somebody else's comment was there first*, *the pair was already promoted* — is written to
+`comment_lost` in the acknowledgement's one transaction, and printed. So is text a person changed
+while its batch was in the air: the acknowledgement compares the comment that CROSSED with the one
+the row holds now, and a difference is recorded as `RoundsDb.EditedWhileSending` (plan round of 4.2,
+the local reviewer). When BOTH happened — the server kept another comment and the box changed in the
+air — both are kept, the server's reason first and `EditedAsWell` after it: the edit sentence alone
+said the server held the person's OLD words when it held somebody else's (code round 1 of 4.2, codex
+and gemini). Without any of this, the pair is marked sent and the page says *Sent* above words the
+server never kept.
+
 #### The page's row is wider than the send's, and it is a record of its own (2026-09-18, story 2.1)
 
 `--pairs-json` used to answer `StoredPair` — the nine columns of `collect_pairs` joined to the
@@ -3975,14 +4024,25 @@ third value, `Words`, saying what became of the sentence separately from what be
 | `Words` | when | what the contributor is told |
 |---|---|---|
 | `None` | there was no comment | nothing |
-| `Stored` | written with a new pair, or attached to a waiting one that had none | nothing; it landed |
+| `Stored` | written with a new pair, attached to a waiting one that had none, or the very words the pair already carries — in quarantine or carried into the corpus by promotion | nothing; it landed |
 | `AlreadySpokenFor` | the pair already carries somebody else's words | *this pair already carries a comment, and the first one stays* |
 | `TooLate` | the pair has been promoted out of the queue | *this pair has already been promoted into the corpus* |
 
-`Attach` is what makes the second row possible — an `UPDATE … WHERE comment = ''` inside the batch's
-transaction, separate from the INSERT so that the rows-affected which distinguishes a new pair from a
-duplicate cannot be confused by it. Without it no pair that was **already** waiting could ever gain a
-comment, and on the day this ships that is every pair.
+`Attach` is what makes the second row possible — an `UPDATE … WHERE comment = '' OR comment = $comment`
+inside the batch's transaction, separate from the INSERT so that the rows-affected which distinguishes a
+new pair from a duplicate cannot be confused by it. Without it no pair that was **already** waiting
+could ever gain a comment, and on the day this ships that is every pair.
+
+**The `OR comment = $comment` arrived with 4.2 (2026-09-22), and it is the retry of a lost answer.** A
+send that landed and was never acknowledged — the client killed, the connection dropped before the
+reply — is offered again with the IDENTICAL comment. Answered `AlreadySpokenFor`, the client would
+record its own stored words as lost and the page would say so. Rewriting a value with itself changes
+nothing and counts as the one row the caller reads as stored; a pair already promoted compares against
+the words the promotion carried (`Corpus.AfterPromotion`). Different words keep their answers: the
+first speaker still keeps the pair, and a promoted pair is still too late for new ones. codex and gemini
+found it independently in the plan round; `TheSameWordsSentAgainAreStoredWordsNotAnotherPersons` and
+the both-halves retry test went red on the old `WHERE`. `Kept` and `Words` moved to `StoringAPair.cs`
+in the same change, because it took `Corpus.cs` past 800 lines.
 
 **What is refused, and it is refused rather than trimmed.** `CommentRule` (in the shared core, so both
 halves compile against one rule) takes at most 1 000 UTF-16 code units and every scalar value except

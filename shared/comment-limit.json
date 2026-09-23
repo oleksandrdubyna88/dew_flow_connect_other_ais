@@ -1,0 +1,17 @@
+{
+  "why": [
+    "The most a person's comment on a review pair may be, in UTF-16 code units: `string.Length` in C#,",
+    "`.length` in TypeScript, the one measure both halves already share (story 4.2 of",
+    "PLAN_a_comment_crosses_the_machine_boundary.md, decision 1).",
+    "",
+    "Two halves hold this number: the server's CommentRule.MostChars, which refuses a longer comment,",
+    "and the review page's maxlength, which stops the next character being typed at all. If they drift,",
+    "a person is told their comment is too long by a box that let them write it.",
+    "",
+    "Neither half owns this file. Each asserts its OWN number against it, which is the shape",
+    "NothingReadsAnotherProgramsSourceTests requires: a suite that parsed the other program's source to",
+    "find the number would go quiet on a reformat instead of red. The first draft of the extension's",
+    "test did exactly that, and that guard refused it."
+  ],
+  "mostChars": 1000
+}

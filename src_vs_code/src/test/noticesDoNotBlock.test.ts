@@ -66,10 +66,24 @@ test('the review panel never waits for a person before it redraws', () => {
   // settings write that fails now says so — but a code round pointed out that `helpPanel.ts` had
   // the identical helper privately, so the body moved to `settingWrite.ts` and both panels call it.
   // The notice is still raised on this panel's behalf; it is simply no longer written here.
+  //
+  // And it is still three — in two files since story 4.2. The refusal and the partial write moved to
+  // `reviewWrites.ts` with the comment's write, which took this panel past the 800 lines the lint
+  // allows; the catch stayed. So the same two assertions are made of BOTH files: the one door, and
+  // the count, split where the notices now live. A move that dropped one would turn this red.
   assert.equal(
     (text.match(/\bawait notify\(/gu) ?? []).length,
-    3,
-    'the three places this panel speaks: the refusal, the partial write, and the catch',
+    1,
+    'the place this panel still speaks for itself: the catch around a write',
+  );
+  const writes = read('reviewWrites.ts');
+  const writeDoors = (/import \{([^}]{1,200})\} from '\.\/notify';/u.exec(writes)?.[1] ?? '')
+    .split(',').map((name) => name.trim()).filter((name) => name.length > 0);
+  assert.deepEqual(writeDoors, ['notify'], 'the panel\'s write notices use only the door that waits for the DISK');
+  assert.equal(
+    (writes.match(/\bawait notify\(/gu) ?? []).length,
+    2,
+    'the two places a write speaks on the panel\'s behalf: the refusal and the partial write',
   );
 });
 

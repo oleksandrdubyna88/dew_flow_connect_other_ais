@@ -43,6 +43,9 @@ function pair(over: Partial<ReviewPair>): ReviewPair {
     line: 3,
     why: '',
     fix: '',
+    comment: '',
+    sentUtc: '',
+    commentLost: '',
     ...over,
   };
 }

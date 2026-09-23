@@ -29,6 +29,25 @@ public sealed class TheCommentRuleTests
     public void NothingSaidIsNothingRefused() =>
         CommentRule.Refuse(string.Empty).Should().BeEmpty();
 
+    /// <summary>The server's limit is the one in <c>shared/comment-limit.json</c>.</summary>
+    /// <remarks>
+    /// The review page's <c>maxlength</c> holds the same number and asserts it against the same file
+    /// (story 4.2). Neither program reads the other's source for it: a test that parsed another
+    /// program's code would go quiet on a reformat instead of red, which is what
+    /// <c>NothingReadsAnotherProgramsSourceTests</c> exists to stop.
+    /// </remarks>
+    [Fact]
+    public void TheLimitIsTheOneBothHalvesAgreeOn()
+    {
+        // tests/bin/<cfg>/net10.0 → the repository root, then the shared folder both sides read.
+        var path = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory, "..", "..", "..", "..", "..", "shared", "comment-limit.json"));
+        using var shared = System.Text.Json.JsonDocument.Parse(File.ReadAllBytes(path));
+
+        shared.RootElement.GetProperty("mostChars").GetInt32().Should().Be(
+            CommentRule.MostChars, "the box and the server must stop a comment at the same length");
+    }
+
     /// <summary>Exactly at the limit is taken; one more is not.</summary>
     [Fact]
     public void TheLimitIsInclusive()

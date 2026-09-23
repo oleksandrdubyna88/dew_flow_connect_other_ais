@@ -808,25 +808,46 @@ flowchart LR
     subgraph local["one machine — nothing here opens a socket"]
         findings[("gate findings<br/>coai.db")] --> collector["collector<br/>--collect-bugs"]
         collector --> pairs[("collect_pairs")]
-        pairs --> page["review page<br/>a person picks keep"]
-        page --> upload["coai-mcp --upload-pairs"]
+        pairs --> page["review page<br/>a person picks keep<br/>and may write a comment"]
+        page -- "keep and comment, one write" --> pairs
+        pairs --> upload["coai-mcp --upload-pairs"]
     end
     subgraph public["anywhere"]
         ingest["coai-bugs<br/>POST /ingest"] --> alphabet{"alphabet check<br/>whitelist"}
+        commented["coai-bugs<br/>POST /ingest/commented"] --> alphabet
         alphabet -- refused --> nowhere["stored nowhere<br/>answered with the word"]
-        alphabet -- admitted --> quarantine[("quarantine")]
+        alphabet -- admitted --> rule{"CommentRule<br/>length, controls"}
+        rule -- refused --> nowhere
+        rule -- admitted --> quarantine[("quarantine<br/>+ comment")]
         quarantine --> promote["--promote<br/>a person reads it"]
-        promote --> corpus[("corpus")]
+        promote --> corpus[("corpus<br/>+ comment")]
     end
     upload -- "language + 2 skeletons" --> ingest
+    upload -- "language + 2 skeletons + a person's comment" --> commented
 ```
 
 **Everything left of the line is local.** The collector reads `coai.db` and a git history; the review
-page reads pairs and writes one person's decision. Nothing in stories 0–5 opens a socket.
+page reads pairs and writes one person's decision — and, since story 4.2, their comment, through
+`--pairs-decide`. Nothing there opens a socket; `--upload-pairs` is the one thing that does.
 
-**Three fields cross the line**, and a test names them. What stays behind is not incidental: the
-finding id is a pointer into somebody's database, the symbol is a name, and the severity, category
-and title are the reviewers' own prose about somebody's code.
+**Four fields cross the line, and the fourth is the only one a person types** (widened once, epic 4
+of `PLAN_the_review_page_can_be_read.md`). Language and the two skeletons are derived and anonymised;
+the comment is written into a box that says, beside it, that it leaves the machine in public and
+unanonymised — the operator's decision of 2026-09-18. A test names the four
+(`OnlyFourFieldsLeaveTests`). What stays behind is not incidental: the finding id is a pointer into
+somebody's database, the symbol is a name, and the severity, category and title are the reviewers'
+own prose about somebody's code.
+
+**A comment travels on its own ROUTE, which is the whole of the version negotiation.** A batch in which
+any pair carries a comment goes to `/ingest/commented`; every other batch goes to `/ingest` with the
+bytes it always sent. A server older than `bugs-v0.3.0` has no commented route and answers 404 with
+nothing written, so no rollout order can make an old node take a comment and drop it — which a
+capability probe could not have promised, because it reaches one node while the POST reaches another.
+`/ingest` refuses a pair carrying one rather than dropping it. The comment is outside the pair's
+identity (`PairId.Of` hashes three fields), so one skeleton pair from two people is one row, the first
+comment stays, and the second is TOLD — and the same words sent again after a lost answer are held,
+not lost. The two halves hold the length limit against `shared/comment-limit.json`, and a live test
+checks it against the running binary.
 
 **The page's row is wider than the send's, and they are two types** (2026-09-18). The review page
 now reads the repository path, both commits, the file and line, and the reviewers' `why` and `fix`

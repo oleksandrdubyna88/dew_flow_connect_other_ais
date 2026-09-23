@@ -405,6 +405,42 @@ public sealed class TheCommentTests : IDisposable
             .Words.Should().Be(Words.TooLate, "there is no waiting row left to attach to");
     }
 
+    /// <summary>
+    /// The SAME words sent again are words the server has — not somebody else's, not too late.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>The case this exists for is a send that landed and was never acknowledged.</b> The
+    /// server commits the pair with its comment; the client is killed, or the connection drops,
+    /// before it reads the answer; nothing is marked, so the next run offers the pair again with the
+    /// very same comment. Answered <see cref="Words.AlreadySpokenFor"/>, the client writes down that
+    /// its comment was not stored, and the page tells a person their words are lost while they sit
+    /// on the server. codex and gemini found it independently in the plan round of 4.2.</para>
+    /// <para>Different words on the second offer keep their answer: the first to speak still keeps
+    /// the pair, and the second is still told. Only the identical retry changes.</para>
+    /// </remarks>
+    [Fact]
+    public void TheSameWordsSentAgainAreStoredWordsNotAnotherPersons()
+    {
+        using var corpus = Open();
+        var month = UtcMonth.Of(Sixteenth);
+        corpus.Keep("CSharp", "method_1() { }", "method_1() { lock { } }", Key, month, "mine")
+            .Words.Should().Be(Words.Stored, "the first offer lands its words");
+
+        corpus.Keep("CSharp", "method_1() { }", "method_1() { lock { } }", Key, month, "mine")
+            .Words.Should().Be(Words.Stored,
+                "the identical retry of a send whose answer was lost is the same words, already held");
+        corpus.Keep("CSharp", "method_1() { }", "method_1() { lock { } }", Key, month, "not mine")
+            .Words.Should().Be(Words.AlreadySpokenFor, "different words are still somebody else's turn");
+
+        var promoted = Corpus.IdOf("CSharp", "method_1() { }", "method_1() { lock { } }");
+        corpus.Promote(promoted, UtcInstant.Of(Sixteenth.AddHours(1))).Should().BeTrue();
+
+        corpus.Keep("CSharp", "method_1() { }", "method_1() { lock { } }", Key, month, "mine")
+            .Words.Should().Be(Words.Stored, "and promotion carried them, so they are still held");
+        corpus.Keep("CSharp", "method_1() { }", "method_1() { lock { } }", Key, month, "not mine")
+            .Words.Should().Be(Words.TooLate, "while new words after promotion are still too late");
+    }
+
     // ------------------------------------------------------------------------------------------
     // And it survives the one moment somebody decided it was worth keeping.
     // ------------------------------------------------------------------------------------------
