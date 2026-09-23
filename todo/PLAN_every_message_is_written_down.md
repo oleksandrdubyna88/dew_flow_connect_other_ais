@@ -4,8 +4,9 @@
 > promotion:** the `coai-mcp` release that carries S8, which its DoD names; and the EXTENSION half
 > of *H*'s run marker, which no phase built — *H* says both halves write one, S8 built the server's,
 > and on 2026-09-23 nothing in `src_vs_code/src` outside the tests produces an `unclean-exit`
-> (checked by search for the code and for a marker; whether *H*'s other shutdown items all landed
-> was NOT re-checked). S6 shipped 2026-09-17 as
+> (checked by search for the code and for a marker) — extracted on 2026-09-23 into
+> [PLAN_the_extension_says_when_a_window_died.md](PLAN_the_extension_says_when_a_window_died.md). *H*'s other shutdown items — the drain to quiescence, its ceiling,
+> the write-gap record — DID ship with S5 (checked 2026-09-23: `jsonlLedger.ts:161`). S6 shipped 2026-09-17 as
 > [PLAN_the_rounds_log_in_line.md](../research/PLAN_the_rounds_log_in_line.md); this line said *"S6
 > open"* until 2026-09-23, when promoting S8 found it. S8 was extracted 2026-09-21 into
 > [PLAN_the_server_says_what_it_did.md](../research/PLAN_the_server_says_what_it_did.md), which
@@ -771,6 +772,8 @@ that lies in exactly the situation it exists for:
   failing, labelled as this window's, because until the disk answers there is nowhere else for it to
   be.
 - **A killed process leaves no record at all.** SIGKILL, OOM, power loss: no `catch`, no `deactivate`.
+  *(The server half shipped 2026-09-23 with S8; the extension half is
+  [PLAN_the_extension_says_when_a_window_died.md](PLAN_the_extension_says_when_a_window_died.md).)*
   Both halves write a **run-start marker** and clear it on clean exit; the next start finds a stale
   marker and appends an unclean-exit record. The server already has the machinery — `running/{pid}.json`
   and `ProcessTracking.Sweep` — and this is the same shape, including the part that matters most:
@@ -1158,6 +1161,7 @@ rename and inflates the count). C#: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.T
 - [ ] The watermark is a map **per ledger**, acknowledges only the range actually rendered, and treats a
       missing file as a first run rather than an error.
 - [ ] Every run has its own marker; a clean exit clears only its own; startup sweeps them all.
+      *(Server: shipped with S8. Extension: [PLAN_the_extension_says_when_a_window_died.md](PLAN_the_extension_says_when_a_window_died.md).)*
 - [ ] Role deletion writes its tombstone **before** the row, resumes after a kill at any step, and a
       tombstone stranded by a permanent stand-down can be finished from the roles page.
 - [ ] The `.NET` writer applies the same redaction and caps as the TypeScript one, proven by

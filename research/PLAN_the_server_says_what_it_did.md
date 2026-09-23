@@ -330,7 +330,7 @@ Every item RED first, with its failure message recorded, and each guard broken t
 |---|---|
 | `server-notices.jsonl`: writer, serialiser, redaction, path, caps | **this plan** |
 | Reading, merging, counting and showing those rows | the parent, S1–S5, shipped |
-| The run-start marker on the EXTENSION side | the parent's *H* |
+| The run-start marker on the EXTENSION side | [PLAN_the_extension_says_when_a_window_died.md](../todo/PLAN_the_extension_says_when_a_window_died.md), extracted from the parent's *H* on 2026-09-23 |
 | The run-start marker on the SERVER side | **this plan** |
 | Defect 4 | **this plan**, by the parent's own ordering |
 | The rounds log (S6) | the parent — and it is what stops the parent being promoted here |
