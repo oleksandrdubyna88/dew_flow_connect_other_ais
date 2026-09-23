@@ -295,23 +295,41 @@ test('the baseline names no release that was never tagged', () => {
     `these versions have a changelog entry and no tag: ${phantom.join(', ')}`);
 });
 
-test('the job that runs this suite fetches the tags it needs', () => {
+/** Every job, in every workflow, whose steps run `npm test` — named by its file and its id. */
+function jobsRunningTheSuite(): { where: string; body: string }[] {
+  const dir = path.join(repoRoot, '.github', 'workflows');
+
+  return fs.readdirSync(dir).filter((file) => /\.ya?ml$/.test(file)).flatMap((file) => {
+    const text = fs.readFileSync(path.join(dir, file), 'utf8').replace(/\r\n/g, '\n');
+    const jobs = text.indexOf('\njobs:\n');
+
+    return jobs === -1 ? [] : text.slice(jobs).split(/\n(?= {2}[\w-]+:\n)/)
+      .filter((job) => /\n\s+(?:- )?run: npm test\s*\n/.test(job))
+      .map((job) => ({ where: `${file} ${job.trim().split(':')[0]}`, body: job }));
+  });
+}
+
+test('every job that runs this suite fetches the tags it needs', () => {
   // The case above is only as good as the checkout it runs in, and a test that can only pass on a
   // developer's machine is worse than no test: it reports green where it was written and red where
   // it is enforced. `actions/checkout` brings no tags unless asked.
-  const ci = fs.readFileSync(path.join(repoRoot, '.github', 'workflows', 'ci.yml'), 'utf8')
-    .replace(/\r\n/g, '\n');
+  //
+  // EVERY such job, not the pull-request one alone: that is all this case used to look at, and the
+  // release workflow runs the same suite before it packages. Its checkout fetched no tags, so the
+  // first extension release after the phantom case landed — extension-v0.51.0 — failed there, on a
+  // tree the pull request had passed.
+  const jobs = jobsRunningTheSuite();
 
-  const start = ci.indexOf('extension · typecheck · test · package');
-  assert.notEqual(start, -1, 'the extension job is still the one that runs npm test');
-  const job = ci.slice(start, ci.indexOf('\n  ', ci.indexOf('- name: Package', start)) + 1
-    || undefined);
+  assert.ok(jobs.some((job) => job.where.startsWith('ci.yml ')), 'the pull-request job runs the suite');
+  assert.ok(jobs.some((job) => job.where.startsWith('release.yml ')), 'and so does the release job');
 
-  const checkout = job.indexOf('actions/checkout@');
-  assert.notEqual(checkout, -1, 'the job checks the repository out');
-  assert.match(job.slice(checkout, checkout + 200), /fetch-tags:\s*true/,
-    'without fetch-tags the tag list is empty, `git tag --list` still exits 0, and the '
-    + 'phantom-version case fails naming every release a phantom');
+  for (const job of jobs) {
+    const checkout = job.body.indexOf('actions/checkout@');
+    assert.notEqual(checkout, -1, `${job.where} checks the repository out`);
+    assert.match(job.body.slice(checkout, checkout + 200), /fetch-tags:\s*true/,
+      `${job.where}: without fetch-tags the tag list is empty, \`git tag --list\` still exits 0, and `
+      + 'the phantom-version case fails naming every release a phantom');
+  }
 });
 
 /**
