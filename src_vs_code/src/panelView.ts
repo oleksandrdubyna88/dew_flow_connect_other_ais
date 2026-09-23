@@ -1218,16 +1218,26 @@ ${commandModelsBlock(state)}`;
  * of choice between two named modes.
  */
 function gatePerBlock(state: PanelState): string {
-  const per = state.settings.gatePer;
-  const option = (value: GatePer, words: string): string =>
-    `<label class="${per === value ? 'on' : ''}"><input type="radio" name="gatePer" data-setting="gatePer" value="${value}"${per === value ? ' checked' : ''}> ${words}</label>`;
   const note = gatePerSkewNote(state.server.version, state.settings.splitPlan);
+  const choices: readonly (readonly [GatePer, string])[] = [['epic', 'One gate per epic'], ['task', 'One gate for the whole task']];
 
-  return `  <div class="seg" role="radiogroup" aria-label="How often split work is gated">
-    ${option('epic', 'One gate per epic')}
-    ${option('task', 'One gate for the whole task')}
-  </div>${help('gatePer')}
+  return `  ${segmentedRadio('gatePer', state.settings.gatePer, 'How often split work is gated', choices)}${help('gatePer')}
 ${note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`}`;
+}
+
+/**
+ * A setting with a few named values, as the segmented control the panel draws for them. ONE place,
+ * extracted when a second such choice arrived (issue #131) beside `codeWorkspace`, so the markup the
+ * page's script and styles rely on cannot drift between the two. Values and labels are the panel's
+ * own literals.
+ */
+function segmentedRadio(setting: string, current: string, label: string, choices: readonly (readonly [string, string])[]): string {
+  const option = ([value, words]: readonly [string, string]): string =>
+    `<label class="${current === value ? 'on' : ''}"><input type="radio" name="${setting}" data-setting="${setting}" value="${value}"${current === value ? ' checked' : ''}> ${words}</label>`;
+
+  return `<div class="seg" role="radiogroup" aria-label="${label}">
+      ${choices.map(option).join('\n      ')}
+    </div>`;
 }
 
 /**
@@ -1950,10 +1960,7 @@ ${roleSwitchSkew(state.server, s)}
   </div>
   <div class="field">
     ${labelled('codeWorkspace', 'What a reviewer gets', 'codeWorkspace')}
-    <div class="seg" role="radiogroup" aria-label="What a reviewer gets">
-      <label class="${s.codeWorkspace === 'none' ? 'on' : ''}"><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="none"${s.codeWorkspace === 'none' ? ' checked' : ''}> Fast — diffs only</label>
-      <label class="${s.codeWorkspace === 'worktree' ? 'on' : ''}"><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="worktree"${s.codeWorkspace === 'worktree' ? ' checked' : ''}> Full — with the code</label>
-    </div>
+    ${segmentedRadio('codeWorkspace', s.codeWorkspace, 'What a reviewer gets', [['none', 'Fast — diffs only'], ['worktree', 'Full — with the code']])}
     <div class="hint">Fast sends the diff, the plan and this project’s rules — and nothing to explore. Measured on one commit: every hosted model found MORE that way, at a half to a third of the tokens. Full also hands them the checkout, for a review that needs the surrounding code.</div>
   </div>
   <div class="hint"><b>Architecture</b> round 1 defaults to <b>Conventions</b>: it judges the diff against the rules this project has written down \u2014 <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> \u2014 and nothing else. The other two roles spend their round on their own subject; pick <b>Conventions</b> for them if you want the rules read again. Anything you pick wins.</div>

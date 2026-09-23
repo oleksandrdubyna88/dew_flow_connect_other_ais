@@ -432,7 +432,8 @@ internal static class Schema
     /// numbers it was computed from, empty when no split was ordered.</para>
     /// <para><b>The default is the empty string, and it means NOT RECORDED</b> — a round written before
     /// this step. A round written after it that gave no orders stores <c>[]</c>. The two are different
-    /// facts and the page says different things for them.</para>
+    /// facts and <c>--findings</c> keeps them apart (no member against an empty list); the log page
+    /// draws nothing for either, since an empty block on every code round would be noise.</para>
     /// </remarks>
     internal const string WhatItWasTold = """
         ALTER TABLE rounds ADD COLUMN commands   TEXT NOT NULL DEFAULT '';

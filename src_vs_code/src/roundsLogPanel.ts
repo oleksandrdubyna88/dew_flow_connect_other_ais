@@ -178,7 +178,8 @@ export class RoundsLogPanel {
       return;
     }
     try {
-      // `orders` only when there are some to draw (issue #131); the page draws no block without it.
+      // `orders` only when the server sent them (issue #131) — an older server or a round recorded
+      // before them sends none, and the page draws no block for that or for an empty list.
       await panel.webview.postMessage({ type: 'found', id: key, state, findings, ...(orders === undefined ? {} : { orders }) });
     } catch (reason: unknown) {
       // The row stays on "Reading…" until the person closes and opens it, which asks again. Silence

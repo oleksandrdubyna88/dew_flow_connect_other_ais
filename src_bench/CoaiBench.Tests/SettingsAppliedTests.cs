@@ -96,6 +96,37 @@ public sealed class SettingsAppliedTests
     }
 
     [Fact]
+    public void AnOrderToBuildItAsItStands_IsStillTheSplitSwitchApplied()
+    {
+        // Issue #131: the smallest size says "small enough to build as it stands", which carries
+        // neither "Split this plan into" nor "already under way" — only the gate ending every split
+        // order carries. Without it a short plan read as a switch that did nothing.
+        var applied = SettingsCheck.Of(
+            Asked(("COAI_SPLIT_PLAN", "true")),
+            null,
+            [Plan("proceed", "This plan is small enough to build as it stands … THE GATE runs once for this work …")]);
+
+        applied.Ok.Should().BeTrue();
+        applied.Checked.Should().Contain("COAI_SPLIT_PLAN");
+    }
+
+    [Fact]
+    public void TheSplitOrderWords_AreTheOnesTheSharedFileHolds()
+    {
+        var here = new DirectoryInfo(AppContext.BaseDirectory);
+        while (here is not null && !File.Exists(Path.Combine(here.FullName, "shared", "command-models.json")))
+        {
+            here = here.Parent;
+        }
+        here.Should().NotBeNull("shared/command-models.json is what both copies are held to");
+
+        using var document = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(here!.FullName, "shared", "command-models.json")));
+
+        SettingsCheck.SplitOrder.Should().Be(document.RootElement.GetProperty("splitOrderCarries").GetString());
+    }
+
+    [Fact]
     public void TheModelOrderWords_AreTheOnesTheSharedFileHolds()
     {
         // The bench drives the PUBLISHED server and references none of its code, so its copy of the

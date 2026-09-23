@@ -379,6 +379,21 @@ test('the orders a round gave are drawn above what it found, the size first (iss
   assert.match(html, /This round found nothing/, 'the orders do not replace what the round found');
 });
 
+test('the orders survive the next rows push, as the findings beside them do', () => {
+  // A tick rebuilds every row from the session files, which know nothing of orders; the carry-over
+  // kept `found` and `foundState` and dropped `orders`, and a loaded row is never asked again — so
+  // the block vanished on the first tick. (#131's code review.)
+  const page = open([row({ foundState: 'unasked', foundCount: 0 })]);
+  page.click(hit('tr[data-key]', 'k1'));
+  page.deliver({
+    type: 'found', id: 'k1', state: 'loaded', findings: [],
+    orders: { commands: ['Split this plan into 3-5 logically complete STORIES. Fewer is fine.'], planShape: 'Small: 200 lines' },
+  });
+  page.deliver({ type: 'rows', rows: [row({ foundState: 'unasked', foundCount: 0 })] });
+
+  assert.match(page.at('rows').innerHTML, /Orders given/);
+});
+
 test('a round that gave no orders, or recorded none, draws no orders block at all', () => {
   for (const orders of [undefined, { commands: [], planShape: '' }]) {
     const page = open([row({ foundState: 'unasked', foundCount: 0 })]);

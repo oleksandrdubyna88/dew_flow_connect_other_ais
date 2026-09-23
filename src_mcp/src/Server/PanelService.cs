@@ -1409,9 +1409,7 @@ public sealed partial class PanelService
                         // What this round ORDERED, and the size a split order was computed from —
                         // written down so "why five epics?" has an answer (issue #131).
                         Commands = [.. commands],
-                        PlanShape = Core.Commands.GateCommands.OrdersSplit(context)
-                            ? Core.Commands.PlanShapeReader.Of(planText).Described
-                            : string.Empty,
+                        PlanShape = Core.Commands.GateCommands.ShapeOrdered(context),
                     });
 
                 // Phase 2's instrument, and NOTHING is called: how many findings this round handed

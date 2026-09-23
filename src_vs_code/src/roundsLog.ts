@@ -1556,10 +1556,6 @@ export function roundsLogHtml(
     }
     return lines + foundHtml(row);
   }
-  // What the round FOUND, under the reviewers that found it. Severity first because that is how a
-  // person triages, then where, then what it said and what was decided about it - an accepted
-  // finding is something this repository's author had not seen, which is the whole point of keeping
-  // them.
   // What the round ORDERED its caller to do, and the size it measured (issue #131) - so that "why
   // did it cut my plan into five epics" has an answer on the page. Nothing at all for a round that
   // gave no orders or recorded none: an empty block on every code round would be noise.
@@ -1583,6 +1579,10 @@ export function roundsLogHtml(
   function foundHtml(row) {
     return (row.foundState === 'loaded' ? ordersHtml(row) : '') + foundOnly(row);
   }
+  // What the round FOUND, under the reviewers that found it. Severity first because that is how a
+  // person triages, then where, then what it said and what was decided about it - an accepted
+  // finding is something this repository's author had not seen, which is the whole point of keeping
+  // them.
   function foundOnly(row) {
     // Five states, and each draws its OWN element. Four of them used to be one blank, and a blank
     // reads as "this round was clean" — which is a lie about three of them.
@@ -2014,7 +2014,7 @@ export function roundsLogHtml(
       var was = held[r.key];
       return was === undefined
         ? r
-        : Object.assign({}, r, { found: was.found, foundState: was.foundState });
+        : Object.assign({}, r, { found: was.found, foundState: was.foundState, orders: was.orders });
     });
     if (typeof message.questions === 'string') {
       document.getElementById('questions').innerHTML = message.questions;
