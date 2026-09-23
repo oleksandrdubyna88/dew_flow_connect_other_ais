@@ -697,7 +697,7 @@
   },
   "src/panelView.ts": {
     "complexity": {
-      "count": 19
+      "count": 18
     },
     "max-lines-per-function": {
       "count": 7
