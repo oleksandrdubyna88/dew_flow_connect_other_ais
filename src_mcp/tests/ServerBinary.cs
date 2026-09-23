@@ -7,9 +7,9 @@ namespace CoaiMcp.Tests;
 /// <remarks>
 /// One copy. It was written out four times — in <c>CloseConsultCliScenarioTests</c>,
 /// <c>LogCliScenarioTests</c> and <c>McpContractTests</c>, identical but for their comments, and as
-/// <c>ShimExe</c> in <c>RemoteShimScenarioTests</c> — and
-/// epic 3's run-marker scenario would have been the fourth. (reuse-first.md: the second copy is the
-/// defect, and extracting the shared half is the work.)
+/// <c>ShimExe</c> in <c>RemoteShimScenarioTests</c> — and epic 3's run-marker scenario would have
+/// been the fifth. (reuse-first.md: the second copy is the defect, and extracting the shared half is
+/// the work.)
 /// </remarks>
 internal static class ServerBinary
 {
