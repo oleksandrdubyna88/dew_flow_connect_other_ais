@@ -57,6 +57,7 @@ import { readLog, serverRunAt } from './roundsDbRead';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
+import { regionOr } from './logRegions';
 import { ExistingFile, ServerSettingsSync, SyncOutcome } from './serverSettingsSync';
 import { lockIsStale } from './settingsLock';
 import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
@@ -1217,7 +1218,7 @@ async function showRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher, pa
   log.show(
     await logRows(panel, undefined),
     watcher.openQuestions,
-    await panel.usageTab());
+    await regionOr('spending', () => panel.usageTab()));
   await refreshRoundsLog(log, watcher, panel, true);
 }
 
@@ -1227,14 +1228,20 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
     return;
   }
   const fresh = await panel.roundsLog();
+  // Each tab built on its own: one that throws becomes a sentence in its own place and the push still
+  // runs. Built inline as arguments, an unpriced consultation's TypeError skipped this whole call, and
+  // the date switch and *What it keeps missing* stopped answering with it (2026-09-23).
+  const usage = await regionOr('spending', () => panel.usageTab());
+  const spots = await regionOr('blind-spot', () => blindSpotsHtml(fresh));
+  const consultations = await regionOr('consultations', () => panel.consultationsTab(fresh));
   log.update(
     await logRows(panel, fresh),
     watcher.openQuestions,
-    await panel.usageTab(),
+    usage,
     force,
-    blindSpotsHtml(fresh),
+    spots,
     fresh.totals,
-    await panel.consultationsTab(fresh));
+    consultations);
 }
 
 /**

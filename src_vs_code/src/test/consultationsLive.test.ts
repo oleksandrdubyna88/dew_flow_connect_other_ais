@@ -201,6 +201,43 @@ test('a server too old to have the table answers a log with no consultations, ne
   assert.equal(log.read, true, 'an absent list is an empty one, not a failed read');
 });
 
+test('a consultation the server wrote with NO price draws a dash, not a page that stops updating', () => {
+  // THE SHAPE ON THE WIRE, not the one the type declares. The server writes `--log` through
+  // `ServerJsonContext`, whose `WhenWritingNull` OMITS a null `CostUsd` — so a consultation nobody
+  // priced (a local model, a subscription CLI) arrives with no `costUsd` key at all, and `undefined`
+  // slipped past `costUsd !== null` into `toFixed`. That throw sat in `refreshRoundsLog` before the
+  // push, so from the first unpriced consultation on, the date switch and *What it keeps missing*
+  // stopped answering. Every case above builds the row by hand with `costUsd: null`, which is why
+  // none of them saw it. (2026-09-23, 64 TypeErrors in one day's extension-host log.)
+  const wire = JSON.stringify({
+    rounds: [], blindSpots: [], defended: [], totals: {},
+    consultations: [{
+      id: 'abc', callerKind: 'claude', repoPath: 'D:/repo', branch: 'main', vendor: 'local',
+      model: 'qwen3', turns: 1, status: 'closed', reason: '', outcome: '', outcomeBy: '',
+      startedUtc: '2026-09-23T09:00:00.000Z', endedUtc: '2026-09-23T09:01:00.000Z', seconds: 60,
+      tokensIn: 1_200, tokensOut: 300, problem: 'p', advice: 'a', alert: '',
+    }],
+  });
+  const log = parseLog(wire, true);
+  // Drawn FIRST, because the throw is the symptom; the field check below is the cause.
+  const html = priced(log);
+
+  assert.match(html, /<td class="num cost">—<\/td>/, 'an unpriced consultation shows the dash');
+  assert.equal(log.consultations[0]?.costUsd, null, 'an absent price is no price, the same as null');
+});
+
+test('a consultation missing fields an older server never wrote still draws', () => {
+  // The same boundary rule `round()` already applies to rounds: believed only as far as its shape.
+  // A number that is not a number must not reach `shortNumber` or `toFixed` either.
+  const log = parseLog(JSON.stringify({ consultations: [{ id: 'abc', tokensIn: 'many', costUsd: 'free' }] }), true);
+  const one = log.consultations[0];
+
+  assert.equal(one?.tokensIn, 0);
+  assert.equal(one?.costUsd, null);
+  assert.equal(one?.vendor, '');
+  assert.doesNotThrow(() => priced(log));
+});
+
 // ---------------------------------------------------------------------------------------------
 // How it ended, and what it cost (issue #309)
 

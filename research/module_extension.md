@@ -2427,6 +2427,29 @@ message leaves with the id on it. The precedent is `forgetAChatRow.test.ts`, whe
 perfect and the page dropped half the message; this control shipped with markup assertions alone
 until the code round said the same thing again.
 
+### An unpriced consultation silenced the whole page (2026-09-23)
+
+Reported as two bugs: the spending tab's **Today / Week / Month / Year** did nothing, and **What it
+keeps missing** never opened. Neither tab was at fault. The extension host's log held the cause 64
+times in one day — `TypeError: Cannot read properties of undefined (reading 'toFixed')` from
+`consultationsTab`, thrown inside `refreshRoundsLog`.
+
+**The wire and the type disagreed.** The server writes `--log` through `ServerJsonContext`, whose
+`WhenWritingNull` OMITS a null `CostUsd`, so a consultation nobody priced (a local model, a
+subscription CLI) arrives with no `costUsd` key. `parseLog` passed consultations through untouched,
+`undefined` slipped past `costUsd !== null`, and `money` called `toFixed` on it. Every test built the
+row by hand with `costUsd: null`, the shape the TYPE promises, so none of them saw it.
+`parseLog` now puts each consultation through `consultation()`, the rule `round()` already applied:
+absent, null and anything that is not a finite number are all no price.
+
+**And one tab took every other tab with it.** `refreshRoundsLog` built each tab's HTML as an
+argument to one `update` call, so the throw skipped the whole push — the new window's numbers, the
+blind spots and the totals were never sent. Each tab is now built through `regionOr`
+(`logRegions.ts`): a tab that throws becomes a sentence in its own place, naming the tab and the
+reason, and is written to the extension host's console; everything else is pushed as usual.
+`logRegions.test.ts` also holds the shape of the wiring, since `extension.ts` imports `vscode` and
+cannot run under the unit tests: every builder call in it must be the body of a `regionOr`.
+
 ## The Claude list is ASKED, not listed (2026-09-16, issue #301)
 
 Four of the panel's five model sources were discovered by asking the machine — a local engine's
