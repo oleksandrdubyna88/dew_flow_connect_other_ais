@@ -195,6 +195,33 @@ public sealed class ACrashIsWrittenDownTests : IDisposable
     private string MarkerOf(string run) => Path.Combine(_dir.Path, RunMarkers.Folder, run + ".json");
 
     [Fact]
+    public async Task ABeatThatMeetsAnUnexpectedException_SaysSo_AndTheLoopLivesOn()
+    {
+        // A beat that died in silence is the failure the sweep's catch-all exists to prevent: the run
+        // goes on serving, its marker goes stale, and half an hour later a peer records a death that
+        // is not one. `Write` names the disk's two failures; anything else must not end the loop.
+        var said = new List<Serilog.Events.LogEvent>();
+        using var log = Watching(said);
+        var life = RunLife.Start(
+            new RunMarkers(
+                PanelSettings.DataDirectoryFor(name => name == "COAI_DATA_DIR" ? _dir.Path : null),
+                new RunMarker("beatbroke000", Environment.ProcessId, "this-machine", DateTime.UtcNow, DateTime.UtcNow),
+                () => throw new InvalidOperationException("the clock is not there"),
+                (_, _) => true,
+                log),
+            _ => true,
+            log);
+
+        var stopped = await life.StopAsync();
+
+        stopped.Should().BeTrue();
+        said.Where(e => e.Level == Serilog.Events.LogEventLevel.Warning)
+            .Select(e => e.RenderMessage())
+            .Should().Contain(line => line.Contains("heartbeat", StringComparison.Ordinal),
+                "a beat that failed is said out loud, not lost with the loop");
+    }
+
+    [Fact]
     public async Task ACleanEnd_ClearsTheMarker()
     {
         var life = Living("clean0000000", _ => true);

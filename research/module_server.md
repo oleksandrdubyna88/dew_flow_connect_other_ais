@@ -1586,8 +1586,8 @@ per start, and `Noticing.Stamped` puts it and the pid on EVERY notice this run w
 is absent and never overwriting: an `unclean-exit` is written by the start that found the death and
 carries the DEAD run's id. `RunLife` writes the marker, sweeps once, then beats every 60 s on a
 LongRunning thread of its own, because the data directory may be a share and a wedged share must
-stall the beat and nothing else. Its sweep has a catch-all: a sweep that took the loop down would
-leave a live run silent, and half an hour later a peer would record it as dead.
+stall the beat and nothing else. Its sweep AND each beat have a catch-all: either one taking the
+loop down would leave a live run silent, and half an hour later a peer would record it as dead.
 
 **The decision is pure.** `RunMarkers.Plan(found, now, me, window, sameProcessAlive)` returns what to
 claim, what to break and what to retire, and is tested apart from the disk. A marker is a death when

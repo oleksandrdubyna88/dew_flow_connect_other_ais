@@ -485,6 +485,11 @@ also on the wire (`ProvidersAnswer.Unrecognised`), so it stays as a projection. 
   stamping the run's notices with another passed the first end-to-end test, because nothing joined
   the death to the dead run's OWN records. The scenario now makes the run write a real refusal over
   stdio before it is killed, and asserts the death carries that refusal's run id.
+- **A beat could die in silence, found re-reading the story before its code round.** `Write` names
+  the disk's two failures; anything else escaped the loop, faulted a task nobody observed, and ended
+  the beat without a word — the live run's marker then goes stale and a peer records a death that is
+  not one. RED on a clock that throws (*"to have an item matching … heartbeat"*, with nothing
+  logged at all); each beat now has the sweep's catch-all, says what failed, and the next one tries.
 - **One locator, not four.** Three process-level test classes each carried an identical copy of the
   code that finds the `coai-mcp` binary; the epic's scenario would have been the fourth. It is
   `tests/ServerBinary.cs` now, and all four use it.

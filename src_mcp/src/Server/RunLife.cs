@@ -71,7 +71,7 @@ internal sealed class RunLife
 
     private async Task LivingAsync(Func<ServerNotice, bool> append)
     {
-        _markers.Write();
+        Beaten();
         Swept(append);
 
         using var beat = new PeriodicTimer(RunMarkers.Beat);
@@ -79,12 +79,33 @@ internal sealed class RunLife
         {
             while (await beat.WaitForNextTickAsync(_stop.Token))
             {
-                _markers.Write();
+                Beaten();
             }
         }
         catch (OperationCanceledException)
         {
             // Stopped, which is how a run's life ends.
+        }
+    }
+
+    /// <summary>One beat, which no failure may turn into the last one.</summary>
+    /// <remarks>
+    /// <see cref="RunMarkers.Write"/> names the disk's own two failures; anything else used to escape
+    /// the loop, fault a task nobody observes, and end the beat in silence — a live run whose marker
+    /// then goes stale and is recorded, half an hour later, as a death it is not. Found re-reading this
+    /// story before its code round, RED first.
+    /// </remarks>
+    private void Beaten()
+    {
+        try
+        {
+            _markers.Write();
+        }
+        catch (Exception failure)
+        {
+            // The detached edge's catch-all, as the sweep's: the next beat tries again.
+            _log.Warning("run marker: a heartbeat failed, and the next one will try again: {Why}",
+                Redaction.SafeText(failure.Message, Redaction.TitleLimit));
         }
     }
 
