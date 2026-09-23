@@ -35,6 +35,11 @@ export function agentRefusal(remote: boolean, workspace: string): string {
     : '';
 }
 
+/** Why a folder that was a conversation's workspace cannot be one now, or empty when it can. */
+export function agentFolderGone(workspace: string, isFolder: boolean): string {
+  return isFolder ? '' : `Agent mode works in ${workspace}, and that is no longer a folder on this computer.`;
+}
+
 /** The button that confirms turning agent mode on. Anything else — Cancel, Escape — leaves it off. */
 export const TURN_AGENT_ON = 'Turn agent mode on';
 

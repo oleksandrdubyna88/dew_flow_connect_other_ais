@@ -8882,8 +8882,14 @@ to the computer — the operator's choice over a workspace-only sandbox:
 | `agy` | `--dangerously-skip-permissions` in place of `--mode plan`; `--disable-slash-commands` kept |
 
 - **Where it runs.** `launchSpecFor(..., workspace)` puts an agent launch in the conversation's
-  `Thread.workspace`; a conversation with no workspace, a folder that no longer exists and a remote row
-  are each REFUSED with a sentence (`agentRefusal`) — never a silent fall back to the home directory.
+  `Thread.workspace`; a conversation with no workspace, a path that is no longer a DIRECTORY
+  (`isFolder`, not `existsSync`, which says yes to a file) and a remote row are each REFUSED, in the same
+  words the box uses (`chatAccessRules`) — never a silent fall back to the home directory.
+- **What cmd.exe is told.** Every agent launch carries `NoDefaultCurrentDirectoryInExePath=1`
+  (`LaunchSpec.env`). MEASURED 2026-09-23: the npm shim `codex.cmd` runs `node` by bare name and cmd.exe
+  searches the working directory first, so a workspace holding `node.cmd` ran it (`PLANTED-NODE-RAN`)
+  before the model decided anything; with the variable, the real node ran. Found by our own code review;
+  the Claude Code shell already sets the variable, which is why a first probe could not reproduce it.
 - **How long.** `budgetsFor(access)` (`chatSession.ts`): `AGENT_BUDGETS` gives a turn 20 minutes. A
   process that dies still ends its turn at once, on its exit event.
 - **The rules** live in `chatAccessRules.ts` with nothing of VS Code in them: `agentOffered` (a local row
@@ -8891,7 +8897,9 @@ to the computer — the operator's choice over a workspace-only sandbox:
 - **Changing it** is `switchAccess` (`chatAccess.ts`): refused where not offered, a modal
   `notifyAndAsk` before turning it ON, then the turn queue, then `install` — the step a model switch
   now shares (`chatLaunch.ts`): retire the session, start a NEW one with the new flags, carry the
-  transcript. A codex thread id is therefore never resumed under different flags. A model switch to a
+  transcript. When the queue reaches it, the change is dropped if the tab was closed meanwhile or the
+  person has since asked for the opposite (the LAST intent wins), and the rules are asked again — a
+  model switch queued ahead of it may have moved the conversation to a Team server. A codex thread id is therefore never resumed under different flags. A model switch to a
   Team-server row goes through `accessOn` and comes out of agent mode, saying so in its notice; so does a
   reload whose row became remote (`reopened`).
 - **Kept.** `Thread.access` survives a reset (`KeptByAReset`) and a reload: `ConversationRecord.access?:
@@ -8899,8 +8907,10 @@ to the computer — the operator's choice over a workspace-only sandbox:
   did not move. `show()` compares `savedAccess`, so ticking the box alone is written down.
 - **The page** draws `chatAgentToggleHtml(offered, access, running)` beside the picker — hidden when not
   offered, disabled while a turn runs, outlined while on — and posts `{command: 'access', agent}`; a
-  non-boolean `agent` is ignored. The host pushes `access`/`agentOffered` back on every state push, so a
-  cancelled confirmation or a refusal redraws the box as it was.
+  non-boolean `agent` is ignored. **The page never ticks its own box**: the click is put back at once
+  and only the host's push ticks it. `pushChatState` de-duplicates by payload, so after a cancelled
+  confirmation — which changes nothing on the host — no push would ever come to untick a box the page
+  had ticked itself. Found by our own code review, and by a test that was red before the fix.
 
 **Live check** — `npm run test:live-agent` (`scripts/live-agent.mjs`): per vendor, create a file,
 translate it, read a file OUTSIDE the workspace, run `git --version`, each verified on disk or in the

@@ -67,18 +67,20 @@ function steps(workspace, outside) {
 }
 
 async function conversation(name, vendor, adapter) {
+  // Resolved FIRST, so a vendor that is not installed leaves no scratch folders behind. (codex, the
+  // code round.)
+  const resolved = await resolvedExecutable({ antigravity: 'agy', claude: 'claude', codex: 'codex' }[vendor.runtime]);
+  if (!resolved) { console.log(`${name.padEnd(8)} NOT INSTALLED`); return false; }
   const home = mkdtempSync(join(tmpdir(), 'coai-agent-home-'));
   const workspace = mkdtempSync(join(tmpdir(), 'coai-agent-ws-'));
   const outside = mkdtempSync(join(tmpdir(), 'coai-agent-outside-'));
   writeFileSync(join(outside, 'note.txt'), `${TOKEN}\n`);
-  const resolved = await resolvedExecutable({ antigravity: 'agy', claude: 'claude', codex: 'codex' }[vendor.runtime]);
-  if (!resolved) { console.log(`${name.padEnd(8)} NOT INSTALLED`); return false; }
   const session = new CliChatSession(
     (resume) => {
       const spec = launchSpecFor(vendor, home, { ...NEW_CONVERSATION, resume, access: 'agent' }, resolved, undefined, workspace);
       if (spec.refusal) { throw new Error(spec.refusal); }
 
-      return launch(spec.executable, spec.args, { cwd: spec.cwd, shell: spec.shell });
+      return launch(spec.executable, spec.args, { cwd: spec.cwd, shell: spec.shell, env: spec.env });
     },
     AGENT_BUDGETS,
     undefined,
