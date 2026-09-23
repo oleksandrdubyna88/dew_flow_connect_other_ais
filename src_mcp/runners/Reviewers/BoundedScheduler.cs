@@ -58,7 +58,7 @@ public sealed record ReviewerProgress(
 /// A global cap bounds the machine; a per-provider cap bounds each vendor, because a rate limit
 /// is per vendor and a global cap alone would happily put all of its slots on one provider. A
 /// reviewer on a local engine is in a lane of its own, bounded only by its engine — see
-/// <c>OnEngineAsync</c>. A
+/// <c>EngineLaneAsync</c>. A
 /// rate-limited reviewer climbs a ladder of waits — 5 s, 30 s, 60 s, 120 s by default, each jittered
 /// — and is reported only when the ladder is spent, the limit is hopeless, or the next wait would
 /// outrun the reviewer's own deadline.
@@ -178,7 +178,7 @@ public sealed class BoundedScheduler(
         // engine cap below — the same defect one layer up from the one being fixed.
         var global = _global;
         var perProvider = work
-            .Where(w => w.Invocation.SharedResource.Length == 0)
+            .Where(w => !w.Invocation.IsOnEngine)
             .Select(w => w.Invocation.Provider)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToDictionary(p => p, p => Limiter(_perProvider, p, perProviderCap), StringComparer.OrdinalIgnoreCase);
@@ -194,10 +194,10 @@ public sealed class BoundedScheduler(
             }
 
             // TWO LANES. A reviewer on a local engine waits for its engine and for nothing else; every
-            // other reviewer waits for the machine and then its vendor. See `OnEngineAsync` for why.
-            var tasks = work.Select(w => w.Invocation.SharedResource.Length > 0
-                ? OnEngineAsync(w, executor, onProgress, ct)
-                : OnMachineAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, onProgress, ct));
+            // other reviewer waits for the machine and then its vendor. See `EngineLaneAsync` for why.
+            var tasks = work.Select(w => w.Invocation.IsOnEngine
+                ? EngineLaneAsync(w, executor, onProgress, ct)
+                : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, onProgress, ct));
             return await Task.WhenAll(tasks);
         }
         finally
@@ -215,7 +215,7 @@ public sealed class BoundedScheduler(
     /// that ends while a reviewer is still queued is that reviewer's failure, not the round's
     /// exception: <c>Task.WhenAll</c> would otherwise fault and every sibling's result would be lost.
     /// </remarks>
-    private async Task<(ReviewerInvocation, ReviewerOutcome)> OnMachineAsync(
+    private async Task<(ReviewerInvocation, ReviewerOutcome)> MachineLaneAsync(
         ReviewerWork w,
         SemaphoreSlim global,
         SemaphoreSlim provider,
@@ -272,13 +272,18 @@ public sealed class BoundedScheduler(
     /// files and their 429s. A local reviewer is one small self-invocation speaking HTTP to the
     /// engine, and the engine cap already bounds how many run: hosted ≤ <c>globalCap</c>, local ≤
     /// engines × <c>sharedResourceCap</c> — one per card by default.</para>
+    /// <para><b>Why no vendor cap either, and no <c>runningPerProvider</c> count.</b> The vendor cap
+    /// exists because a rate limit is per VENDOR fleet; an engine is not a fleet, and two local vendor
+    /// ids can name one card — the engine key is what they actually share. So this lane is counted by
+    /// <see cref="PeakPerResource"/>, and <see cref="PeakConcurrency"/> stays what <c>globalCap</c>
+    /// bounds. (Code round.)</para>
     /// <para>The engine's semaphore outlives the round and hands over FIFO, so local reviewers run
     /// strictly one after another in the order they were submitted — which is why
     /// <c>PanelService.LocalRowsFirst</c> puts every one of them at the head. The note is computed
     /// HERE and not when the round was laid out: at lay-out nothing held the card yet, so the sentence
     /// was always blank. (gemini, the engine-cap code round.)</para>
     /// </remarks>
-    private async Task<(ReviewerInvocation, ReviewerOutcome)> OnEngineAsync(
+    private async Task<(ReviewerInvocation, ReviewerOutcome)> EngineLaneAsync(
         ReviewerWork w,
         ReviewerExecutor executor,
         Action<ReviewerProgress>? onProgress,
@@ -397,9 +402,9 @@ public sealed class BoundedScheduler(
     /// be the comfortable half of the truth.
     /// </remarks>
     private static string QueueNote(ReviewerInvocation invocation) =>
-        invocation.SharedResource.Length == 0
-            ? string.Empty
-            : EngineLease.WaitNote(invocation.SharedResource, invocation.Model);
+        invocation.IsOnEngine
+            ? EngineLease.WaitNote(invocation.SharedResource, invocation.Model)
+            : string.Empty;
 
     private static void Report(
         Action<ReviewerProgress>? onProgress,
