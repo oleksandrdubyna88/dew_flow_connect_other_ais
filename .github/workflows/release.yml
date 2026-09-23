@@ -478,9 +478,14 @@ jobs:
       run:
         working-directory: src_vs_code
     steps:
+      # `fetch-tags` for the same reason as ci.yml's extension job: `npm test` below includes the
+      # case that asks `git tag --list` which releases exist, and with no tags it calls every
+      # recorded release a phantom. Missing here, it failed extension-v0.51.0 on a tree its pull
+      # request had passed.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-tags: true
 
       # The suite this job runs includes a test that compares the MOUNTED shared rule with the
       # snippet the menu hands out, so it needs the submodule on disk — and it fails rather than
