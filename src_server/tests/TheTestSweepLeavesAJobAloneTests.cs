@@ -24,7 +24,7 @@ public sealed class TheTestSweepLeavesAJobAloneTests
     public void EveryTempDirectoryThisProgramMakes_IsNamedInTheSharedRule()
     {
         var program = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-        var literal = new Regex(@"CreateTempSubdirectory\(""(coai-[a-z-]+)""\)");
+        var literal = new Regex(@"CreateTempSubdirectory\(\s*""(coai-[a-z-]+)""\s*\)");
         var made = Directory.EnumerateFiles(Path.Combine(program, "src"), "*.cs", SearchOption.AllDirectories)
             .SelectMany(f => literal.Matches(File.ReadAllText(f)).Select(m => m.Groups[1].Value))
             .Distinct()

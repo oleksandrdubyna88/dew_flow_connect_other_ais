@@ -126,6 +126,23 @@ public sealed class TheRootHelperFramesTwoRecordsTests : IDisposable
         File.Exists(Written).Should().BeFalse();
     }
 
+    /// <summary>
+    /// A helper that refuses on its first line and leaves a megabyte unread is still a refusal.
+    /// </summary>
+    /// <remarks>
+    /// The harness's own guarantee, found by the code round (gemini): it wrote stdin BEFORE it started
+    /// reading the child's streams, so a script that exits without reading everything handed it made
+    /// the write fail with a broken pipe — the test then errored instead of reading the exit code.
+    /// </remarks>
+    [Fact]
+    public void ARefusalOnTheFirstLine_IsReadEvenWithAMegabyteLeftUnread()
+    {
+        var run = Deliver("\n" + new string('A', 1_000_000));
+
+        run.Code.Should().Be(1);
+        run.Error.Should().Contain("no secret arrived");
+    }
+
     private ShellRun Deliver(string stdin) => ShellScript.Fed(Helper, stdin, Shims);
 
     /// <summary>A stand-in command: LF endings and an execute bit, which is all `sh` asks of one.</summary>

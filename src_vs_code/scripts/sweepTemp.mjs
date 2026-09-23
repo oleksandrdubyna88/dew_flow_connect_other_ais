@@ -45,9 +45,13 @@ export function toSweep(entries, now, rule) {
   return entries.filter((entry) => leftover(entry, now, rule)).map((entry) => entry.name);
 }
 
-/** What `dir` holds, as {@link toSweep} reads it. An entry that vanished mid-listing is skipped. */
-function entriesOf(dir, io) {
-  return io.readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+/**
+ * What `dir` holds under the prefix, as {@link toSweep} reads it. An entry that vanished mid-listing
+ * is skipped, and a name without the prefix is never stat-ed at all: the system temp directory is
+ * everybody's, and a stat for each of its entries is a startup pause for nothing. (Code round, gemini.)
+ */
+function entriesOf(dir, io, prefix) {
+  return io.readdirSync(dir, { withFileTypes: true }).filter((entry) => entry.name.startsWith(prefix)).flatMap((entry) => {
     try {
       const stat = io.statSync(path.join(dir, entry.name));
       return [{ name: entry.name, isDirectory: entry.isDirectory(), lastWriteMs: stat.mtimeMs }];
@@ -73,7 +77,7 @@ function removed(target, io) {
  * `io` is `node:fs` unless a test hands it something that fails on purpose.
  */
 export function sweep(dir, now, rule, io = fs) {
-  const outcomes = toSweep(entriesOf(dir, io), now, rule).map((name) => removed(path.join(dir, name), io));
+  const outcomes = toSweep(entriesOf(dir, io, rule.prefix), now, rule).map((name) => removed(path.join(dir, name), io));
 
   return {
     removed: outcomes.filter(Boolean).length,

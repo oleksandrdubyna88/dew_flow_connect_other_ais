@@ -39,10 +39,10 @@ test('every temp directory the extension makes at runtime is one the sweep leave
   // there. A new runtime directory nobody adds to the shared rule would be deleted under a live
   // session by the next test run on the same machine. (Plan round, local.)
   const src = path.join(here, '..');
-  const made = [...new Set(fs.readdirSync(src)
-    .filter((f) => f.endsWith('.ts'))
+  const made = [...new Set(fs.readdirSync(src, { recursive: true })
+    .filter((f) => f.endsWith('.ts') && !f.split(/[\\/]/).includes('test'))
     .flatMap((f) => [...fs.readFileSync(path.join(src, f), 'utf8')
-      .matchAll(/mkdtemp(?:Sync)?\(\s*path\.join\(\s*os\.tmpdir\(\),\s*'(coai-[a-z-]+)'/g)].map((m) => m[1])))];
+      .matchAll(/mkdtemp(?:Sync)?\(\s*path\.join\(\s*(?:os\.)?tmpdir\(\)\s*,\s*['"`](coai-[a-z-]+)['"`]/g)].map((m) => m[1])))];
 
   assert.ok(made.includes('coai-chat-'), `the scan must still see chatLaunch.ts's directory; it found ${made.join(', ') || 'nothing'}`);
   for (const prefix of made) {
@@ -108,6 +108,24 @@ test('a directory that cannot be removed is counted and stepped over, never thro
 
   assert.deepEqual(sweep('/tmp', now, rule, io), { removed: 1, failed: 1 },
     'a suite that refuses to start over housekeeping has made things worse');
+});
+
+test('a name without the prefix is never even stat-ed', () => {
+  // The system temp directory is everybody's: tens of thousands of entries from other software on a
+  // working machine, and a stat each is a startup pause for nothing. (Code round, gemini.)
+  const statted = [];
+  const io = {
+    readdirSync: () => ['somebody-elses', 'npm-12345', 'coai-x'].map((name) => ({ name, isDirectory: () => true })),
+    statSync: (target) => {
+      statted.push(path.basename(target));
+      return { mtimeMs: now - 60 * minute };
+    },
+    rmSync: () => undefined,
+  };
+
+  sweep('/tmp', now, rule, io);
+
+  assert.deepEqual(statted, ['coai-x']);
 });
 
 test('the runner sweeps FIRST, before it discovers or runs anything', () => {

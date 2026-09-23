@@ -88,7 +88,7 @@ public sealed class TempDirsAreSwept
     private static List<string> TempPrefixesIn(params string[] folders)
     {
         var program = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
-        var literal = new System.Text.RegularExpressions.Regex(@"CreateTempSubdirectory\(""(coai-[a-z-]+)""\)");
+        var literal = new System.Text.RegularExpressions.Regex(@"CreateTempSubdirectory\(\s*""(coai-[a-z-]+)""\s*\)");
 
         return [.. folders
             .SelectMany(f => Directory.EnumerateFiles(Path.Combine(program, f), "*.cs", SearchOption.AllDirectories))

@@ -64,47 +64,77 @@ internal static class ShellScript
             relativePath,
             Repository(),
             [],
-            new Feeding(stdin, pathFirst));
+            new ScriptInput(stdin, pathFirst));
 
     /// <summary>The shell part, which is the same whoever owns the script.</summary>
     private static (int Code, string Error) Start(
         string script, string what, string workingDirectory, string[] arguments)
     {
-        var run = Launch(script, what, workingDirectory, arguments, Feeding.Nothing);
+        var run = Launch(script, what, workingDirectory, arguments, ScriptInput.Nothing);
 
         return (run.Code, run.Error);
     }
 
     private static ShellRun Launch(
-        string script, string what, string workingDirectory, string[] arguments, Feeding feeding)
+        string script, string what, string workingDirectory, string[] arguments, ScriptInput input)
     {
         File.Exists(script).Should().BeTrue("{0} is what this checkout runs", script);
 
-        using var process = StartOrExplain(StartInfo(script, workingDirectory, arguments, feeding), what);
-        if (feeding.Stdin is { } stdin)
-        {
-            process.StandardInput.Write(stdin);
-            process.StandardInput.Close();
-        }
+        using var process = StartOrExplain(StartInfo(script, workingDirectory, arguments, input), what);
 
-        // Both streams at once: a script that fills one pipe while this reads the other to its end
-        // would wait on this reader for ever.
+        // Both streams are read BEFORE anything is written, and at once: a script that fills one pipe
+        // while this reads the other would wait on this reader for ever, and one that writes before it
+        // reads would block a write that nobody was draining. (Code round, gemini.)
         var error = process.StandardError.ReadToEndAsync();
         var output = process.StandardOutput.ReadToEndAsync();
-        process.WaitForExit(milliseconds: 30_000).Should().BeTrue("the script should not hang");
+        Feed(process, input);
+
+        if (!process.WaitForExit(milliseconds: 30_000))
+        {
+            process.Kill(entireProcessTree: true);
+            Assert.Fail($"{what} did not finish in 30 seconds and was killed");
+        }
 
         return new ShellRun(process.ExitCode, error.GetAwaiter().GetResult(), output.GetAwaiter().GetResult());
     }
 
-    private static ProcessStartInfo StartInfo(
-        string script, string workingDirectory, string[] arguments, Feeding feeding)
+    /// <summary>Hands the script its whole stdin, if it has one, and closes it.</summary>
+    /// <remarks>
+    /// A script is allowed to stop reading — a refusal on the first line is exactly that — and the
+    /// write then meets a closed pipe. That is the script's answer, not the harness's failure: its exit
+    /// code and what it said are what the test reads. (Code round, gemini; red first as
+    /// <c>IOException: The pipe is being closed</c>.)
+    /// </remarks>
+    private static void Feed(Process process, ScriptInput input)
     {
+        if (input.Stdin is not { } stdin)
+        {
+            return;
+        }
+
+        try
+        {
+            process.StandardInput.Write(stdin);
+            process.StandardInput.Close();
+        }
+        catch (IOException)
+        {
+            // The script stopped reading; what it said about why is in its streams.
+        }
+    }
+
+    private static ProcessStartInfo StartInfo(
+        string script, string workingDirectory, string[] arguments, ScriptInput input)
+    {
+        var utf8 = new System.Text.UTF8Encoding(false);
         var start = new ProcessStartInfo("sh")
         {
             RedirectStandardError = true,
             RedirectStandardOutput = true,
-            RedirectStandardInput = feeding.Stdin is not null,
-            StandardInputEncoding = feeding.Stdin is null ? null : new System.Text.UTF8Encoding(false),
+            RedirectStandardInput = input.Stdin is not null,
+            StandardInputEncoding = input.Stdin is null ? null : utf8,
+            StandardOutputEncoding = utf8,
+            StandardErrorEncoding = utf8,
             UseShellExecute = false,
             WorkingDirectory = workingDirectory,
         };
@@ -114,18 +144,18 @@ internal static class ShellScript
             start.ArgumentList.Add(argument);
         }
 
-        if (feeding.PathFirst.Length > 0)
+        if (input.PathFirst.Length > 0)
         {
-            start.Environment["PATH"] = feeding.PathFirst + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
+            start.Environment["PATH"] = input.PathFirst + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
         }
 
         return start;
     }
 
-    /// <summary>What a run is handed besides its arguments.</summary>
-    private sealed record Feeding(string? Stdin, string PathFirst)
+    /// <summary>What a script is handed besides its arguments: its stdin, and what goes first on PATH.</summary>
+    private sealed record ScriptInput(string? Stdin, string PathFirst)
     {
-        public static readonly Feeding Nothing = new(null, string.Empty);
+        public static readonly ScriptInput Nothing = new(null, string.Empty);
     }
 
     /// <summary>A path a POSIX shell will accept, which a Windows one is not.</summary>

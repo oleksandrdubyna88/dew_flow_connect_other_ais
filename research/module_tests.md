@@ -719,12 +719,16 @@ making the check accept everything and watching both refusal tests go red. The h
 root and writes under `/etc` — with stand-ins for `install`, `chown` and `mv` first on PATH; the
 `mv` stand-in insists the destination is `/etc/coai-bugs/env` and puts the file where the test reads
 it. No override for the destination was added to the script: a root-owned writer that took its path
-from the environment would be a privilege escalation in a checkout the deploy account can write. Nine
+from the environment would be a privilege escalation in a checkout the deploy account can write. Ten
 cases: both records become the three lines the server reads and neither value is printed; an empty
 second record is no administrators; an absent one is refused and nothing is written; an unterminated
 one is still complete; a third record, terminated or not, is refused (a wrapped base64 list would
 decode to a PREFIX); carriage returns are stripped; no secret is refused; a list over 64 KiB is refused
-rather than truncated. Teeth: reading an absent record as empty, throwing a third line away, and
+rather than truncated; and a refusal on the first line with a megabyte left unread is still read as a
+refusal. That last one is the HARNESS's guarantee and went red first (`IOException: The pipe is being
+closed`): it wrote stdin before it started reading the child's streams, so a script that stopped reading
+broke the test instead of answering it — it now reads both streams first, treats a closed pipe as the
+script's answer, and kills the tree on its 30-second timeout (code round, gemini). Teeth: reading an absent record as empty, throwing a third line away, and
 keeping the carriage return on the list each turned exactly their own case red. The harness is
 `ShellScript` — renamed from `ReleaseScript` in the same change, since it now runs deploy scripts
 too — widened with `Fed` (a stdin and a PATH) rather than copied.
