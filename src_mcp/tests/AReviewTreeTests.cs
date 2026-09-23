@@ -151,7 +151,10 @@ public sealed class AReviewTreeTests : IAsyncLifetime
 
         var listed = await Run(_repo, "worktree", "list", "--porcelain");
         var lines = listed.StdOut.Replace("\r", "").Split('\n');
-        var at = Array.FindIndex(lines, l => l.Replace('\\', '/') == $"worktree {made.Path.Replace('\\', '/')}");
+        // By the path git REALLY recorded — behind a link (every macOS temp directory) it is not the
+        // spelling we made the tree under. (The mcp-v0.31.0 release build, osx-arm64.)
+        var at = Array.FindIndex(lines, l =>
+            l.StartsWith("worktree ", StringComparison.Ordinal) && WorktreePaths.Same(l["worktree ".Length..], made.Path));
         at.Should().BeGreaterThan(-1, "the tree must be registered at all");
 
         var reason = lines.Skip(at).TakeWhile(l => l.Length > 0).FirstOrDefault(l => l.StartsWith("locked", StringComparison.Ordinal));

@@ -2454,6 +2454,17 @@ list that offers a Remove. Five states, because each has a different safe action
 (both, and git does not list it) and `unreachable` (the parent checkout is gone, so nothing can be
 asked or deregistered).
 
+**"Git lists it" is decided on the REAL path** (`WorktreePaths`). `git worktree add` records a tree
+with every link on its path resolved, so behind a link — every macOS temp directory, where `/var` is
+`/private/var`, a Windows junction, a data directory moved and linked back — the path git lists is
+not the spelling we made the tree under. Compared by spelling, a live tree read as `unregistered`
+and a tree whose directory was deleted could not be made again (`git_failed`), because the stale
+registration was never recognised as ours. `WorktreePaths.Same` resolves links component by
+component, as far as the path exists, and both the list and the re-make compare through it. Found by
+the `mcp-v0.31.0` release build on `osx-arm64` — pull-request CI runs on Linux, where temp is not
+behind a link — and held on every platform by `AReviewRootBehindALinkTests`, which makes the link
+itself.
+
 **What removal will not do.** There is no mode, flag or method anywhere that removes more than one
 tree - the argument is a NAME and it must match a record we hold, so a separator, a `..`, a round
 tree's name or a path is refused as `not_ours` **before a process starts** (a recording launcher

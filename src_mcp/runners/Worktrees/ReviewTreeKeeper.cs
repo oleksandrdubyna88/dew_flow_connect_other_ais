@@ -139,7 +139,7 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
 
         var registered = await RegisteredAsync(record.RepoPath, seen, ct);
 
-        return registered.Any(one => Same(one, path)) ? ReviewTreeState.Ready : ReviewTreeState.Unregistered;
+        return registered.Any(one => WorktreePaths.Same(one, path)) ? ReviewTreeState.Ready : ReviewTreeState.Unregistered;
     }
 
     /// <summary>
@@ -163,12 +163,6 @@ public sealed class ReviewTreeKeeper(ReviewTreeRoot root)
 
         return paths;
     }
-
-    private static bool Same(string one, string other) =>
-        string.Equals(
-            Path.GetFullPath(one).Replace('\\', '/').TrimEnd('/'),
-            Path.GetFullPath(other).Replace('\\', '/').TrimEnd('/'),
-            StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Gives one tree back — or says, by name, what is in the way.</summary>
     public async Task<ReviewTreeRemoval> RemoveAsync(
