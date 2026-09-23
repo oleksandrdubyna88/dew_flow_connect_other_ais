@@ -444,6 +444,8 @@ function bundledChatPage(over: Record<string, unknown> = {}): { bundle: string; 
       asked: [],
       marks: { role: '', task: '', service: [] },
       uiScale: 0,
+      access: 'text',
+      agentOffered: false,
       textTone: 0,
       canRetry: false,
       ...over,

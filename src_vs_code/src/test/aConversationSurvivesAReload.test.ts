@@ -368,7 +368,7 @@ test('a push that changed nothing writes nothing', () => {
 
   assert.match(
     command,
-    /if \(thread\.savedMessages === thread\.messages\s*\n\s*&& thread\.savedModelId === thread\.modelId\s*\n\s*&& thread\.savedCarryFrom === thread\.carryFrom\) \{\s*\n\s*return;/,
+    /if \(thread\.savedMessages === thread\.messages\s*\n\s*&& thread\.savedModelId === thread\.modelId\s*\n\s*&& thread\.savedCarryFrom === thread\.carryFrom\s*\n\s*&& thread\.savedAccess === thread\.access\) \{\s*\n\s*return;/,
     'every state push writes the whole store again, transcripts and all',
   );
   assert.match(command, /thread\.savedMessages = thread\.messages;/, 'nothing records what was written');
@@ -377,6 +377,10 @@ test('a push that changed nothing writes nothing', () => {
   // drawn would not have survived a reload, without a word about it.
   assert.match(command, /thread\.savedCarryFrom = thread\.carryFrom;/,
     'a press that changes only the mark is not written down');
+  // AND THE AGENT-MODE BOX (issue #289), for the same reason: ticking it moves neither the transcript
+  // nor the model, and a guard blind to it would lose the choice at the next reload.
+  assert.match(command, /thread\.savedAccess = thread\.access;/,
+    'ticking agent mode alone is not written down');
 });
 
 test('a question refused by a dead conversation comes back to the composer', () => {

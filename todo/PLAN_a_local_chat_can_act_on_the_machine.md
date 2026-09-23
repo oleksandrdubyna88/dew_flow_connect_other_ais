@@ -45,8 +45,11 @@ machine on 2026-09-23, not from memory:
 | `agy` | `--mode plan --disable-slash-commands --input-format stream-json --output-format stream-json` | `--mode plan` replaced by `--dangerously-skip-permissions` ("Auto-approve all tool permission requests"); `--disable-slash-commands` kept — the text is still another AI's and may start with a slash |
 
 In agent mode the working directory is the conversation's workspace (`Thread.workspace`,
-`chatThread.ts:288`), or the person's home directory when the conversation has none. It is fixed for
-the life of the conversation, which is what codex's `resume` needs (a thread resumes where it started).
+`chatThread.ts:288`). A conversation with NO workspace is not offered agent mode at all — never a silent
+fall back to the home directory, where "create a file" would land in the profile root (gemini, the plan
+round). The directory is fixed for the life of the conversation, which is what codex's `resume` needs (a
+thread resumes where it started), and it is checked to exist at launch: a deleted folder is a refusal
+that names it, not a spawn error (local, the plan round).
 
 ## The design
 
@@ -58,8 +61,8 @@ the life of the conversation, which is what codex's `resume` needs (a thread res
 2. **Each adapter answers it.** `agyAdapter.argv`, `claudeAdapter.argv`, `codexAdapter.argv` build the
    table above. Text mode stays byte-identical — the existing argv tests keep passing untouched.
 3. **`launchSpecFor(vendor, tempDir, launch, resolved, platform, workspace)`** — `cwd` is `tempDir`
-   in text mode and `workspace` (falling back to `os.homedir()`) in agent mode. A remote row in agent
-   mode is REFUSED with a sentence (defence in depth: a remote row never reaches this function today,
+   in text mode and `workspace` in agent mode; agent mode with an empty or missing workspace is REFUSED
+   with a sentence naming it, and so is a remote row in agent mode (defence in depth: a remote row never reaches this function today,
    `chatLaunch.ts:68-72`). The `shell=true` path stays safe because `resolved` is a full path
    (`processLauncher.ts:115-131`) — `cmd.exe` searching the workspace first matters only for a bare name.
 4. **A longer turn in agent mode.** `AGENT_BUDGETS = { startupMs: 30_000, turnMs: 1_200_000 }`
@@ -70,10 +73,19 @@ the life of the conversation, which is what codex's `resume` needs (a thread res
    factory.
 6. **Changing the box mid-conversation relaunches, like a model switch.** Flags are fixed when a
    persistent process starts, so a change retires the session and starts a new one with the transcript
-   carried — exactly `switchNow` (`chatLaunch.ts:238-326`). `switchNow`'s body becomes
+   carried — exactly `switchNow` (`chatLaunch.ts:238-326`). The replacement is a NEW `CliChatSession`, so
+   codex's resume id is not carried across a mode change: the next turn starts a fresh codex thread with
+   the transcript replayed, never `resume <id>` under different flags (gemini, the plan round). `switchNow`'s body becomes
    `relaunch(entry, vendor, modelId, access)`, shared by the model switch and a new
    `switchAccess(entry, access)`, which goes through the same turn queue as `switchModel`
-   (`chatLaunch.ts:148`) so a running answer finishes first. The notice says what changed: *"Agent mode
+   (`chatLaunch.ts:148`). The box is DISABLED while a turn runs, as the composer already is (`locked`), so
+   a change can never be queued behind a 20-minute answer while the box claims otherwise; Stop is the way
+   out of a running turn (codex, local, gemini, the plan round). Turning it ON asks first — a modal
+   warning on the host, *"{model} will be able to read, write and run anything on this computer without
+   asking. Turn agent mode on?"*; cancelling puts the box back (local, the plan round). Turning it off asks
+   nothing.
+   A model switch to a REMOTE row while agent mode is on turns agent mode off, persists that, and says
+   so in the switch notice — it never tries an agent launch on a remote row (codex, the plan round). The notice says what changed: *"Agent mode
    is on: {model} may now read, write and run anything on this computer, without asking."* / *"Agent mode
    is off: {model} answers from the text alone."*
 7. **The thread and its record.** `Thread.access: ChatAccess` (`chatThread.ts`), classified as
@@ -83,8 +95,8 @@ the life of the conversation, which is what codex's `resume` needs (a thread res
    `recordFrom` accepts only `'agent'` or absence; `recordOf` (`chatPersist.ts:58-77`) writes it only when
    on; `show()`'s unchanged-check (`chatShow.ts:106-113`) compares it, or ticking the box is never saved;
    the memento copy (`chatPersist.ts:191-199`) and the restore (`chatConversationRestore.ts:152-230`) carry it.
-8. **The page.** The host computes `agentOffered = !thread.forgetful` (`forgetful === isRemote`,
-   `chatModels.ts:113-115`) — the page decides nothing. `ChatPageState` / `ChatPushState` carry
+8. **The page.** The host computes `agentOffered = !thread.forgetful && thread.workspace !== ''`
+   (`forgetful === isRemote`, `chatModels.ts:113-115`) — the page decides nothing. `ChatPageState` / `ChatPushState` carry
    `access` and `agentOffered`; the `pickerRow` (`chatPage.ts:1186-1190`) gets a labelled checkbox
    *"Agent mode — full access to this computer"* with a `title` that says what it allows, hidden when not
    offered, and a warning outline on the row while it is on. The page posts
@@ -116,6 +128,17 @@ the life of the conversation, which is what codex's `resume` needs (a thread res
 - **The flags are vendor surface.** Pinned by argv tests, and checked live once per vendor before the
   pull request (the Test plan's last line), because an argv test proves what we SEND, not what the CLI does.
 
+## Plan round (2026-09-23) — what was declined
+
+- **Kill the whole process tree here** — real, and already `PLAN_closing_a_chat_ends_its_whole_tree.md`,
+  which text mode needs too; the PR says agent mode raises its priority.
+- **A schema version for the record** — an optional field read as absent is how this record has grown
+  four times, and a version bump discards every record.
+- **A heartbeat for the 20-minute turn** — a dead process already ends the turn on its exit/error events
+  (`cliChatSession.ts:365-366`, `:488-491`); the budget bounds only a live, silent one.
+- **Fallback flags for older CLIs** — an unknown flag exits at once with the vendor's own error, shown
+  with its stderr tail; guessing flags for versions nobody measured would be worse.
+
 ## Build order
 
 1. `ChatAccess` + `ChatLaunch.access` + `NEW_CONVERSATION`; the three adapters' agent argv
@@ -140,7 +163,9 @@ the life of the conversation, which is what codex's `resume` needs (a thread res
 - `cd src_vs_code && npm test` and `npm run lint` (complexity ≤ 4; no new suppressions).
 - Unit tests listed per step above; every new behaviour has a test named after its guarantee.
 - **Live check, once per vendor, before the pull request:** open a local chat on a scratch folder, tick
-  the box, ask it to create `hello.txt` there and then to translate it; observe the file. Record what
+  the box, ask it to create `hello.txt` there and then to translate it; observe the file. Then ask it to
+  read a file OUTSIDE the workspace and to run a shell command (`git --version`), because the box promises
+  the whole computer and a check inside the folder does not prove that (codex, the plan round). Record what
   each vendor did in the PR description — observed, not assumed. A vendor that is not installed or
   signed in on this machine is reported as not checked.
 

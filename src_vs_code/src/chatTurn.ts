@@ -21,6 +21,7 @@ import { pushChatDraft } from './chatPanel';
 import { MOST_WAITING, NotJoined, began as leftTheQueue, isWanted, join } from './chatQueue';
 import { randomUUID } from 'node:crypto';
 import { remoteIsFull } from './remoteAsk';
+import { accessOn } from './chatAccessRules';
 
 /**
  * One turn of a conversation, start to finish — and the three gestures that are turns wearing
@@ -184,13 +185,17 @@ export async function reopened(thread: Thread): Promise<string> {
     return remote.refusal;
   }
 
-  const opened = started(ready.vendor, cli.resolved, ready.modelId, remote.session);
+  // The access it was left in — unless the row it reopens on can no longer have agent mode, in which
+  // case it reopens answering from text (issue #289).
+  const access = accessOn(isRemote(ready.vendor), thread.access, thread.workspace);
+  const opened = started(ready.vendor, cli.resolved, ready.modelId, remote.session, access, thread.workspace);
   // Same shape as the switch, and the same reason for guarding it: the replacement is installed on
   // the next lines, so a disposal that threw would leave the thread holding the old session while
   // the new one is already running.
   retire(thread, (what, reason) => console.warn(`ConnectOtherAIs: ${what}`, reason));
   thread.session = opened.session;
   thread.home = opened.home;
+  thread.access = access;
   thread.providers = ready.providers;
   thread.providerId = ready.providerId;
   thread.modelId = ready.modelId;

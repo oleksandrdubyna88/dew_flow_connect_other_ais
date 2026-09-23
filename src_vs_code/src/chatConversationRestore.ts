@@ -5,7 +5,8 @@ import { pulse } from './chatHost';
 import { closedSession } from './chatArchive';
 import { conversationHooks } from './chatHooks';
 import { pinSession } from './chatSessionJoin';
-import { LegacyPick } from './chatModels';
+import { LegacyPick, isRemote } from './chatModels';
+import { agentOffered } from './chatAccessRules';
 import { Ready, readyToChat, savedModels, savedPick, savedPrompts } from './chatConfig';
 import { ModelPreset, PromptPreset, mainPrompt } from './chatPresets';
 import { ChatPageState } from './chatPage';
@@ -42,6 +43,14 @@ import { chatTextTone, chatUiScale, createChatPanel } from './chatPanel';
  * stay inside a window is how a guard stops being about what it guards; taking twenty lines out of
  * the middle is how it goes on being about it.</p>
  */
+/** The agent-mode box as it was left (issue #289), offered only while the row is still a local one. */
+function agentBoxOf(saved: ConversationRecord, ready: Ready): Pick<ChatPageState, 'access' | 'agentOffered'> {
+  return {
+    access: saved.access ?? 'text',
+    agentOffered: agentOffered(!ready.ok || isRemote(ready.vendor), saved.workspace),
+  };
+}
+
 function restoredPage(
   saved: ConversationRecord,
   ready: Ready,
@@ -55,7 +64,7 @@ function restoredPage(
       messages: saved.messages,
       models: ready.ok ? ready.models : [],
       providers: ready.ok ? ready.providers : [],
-      ...presets,
+      ...presets, ...agentBoxOf(saved, ready),
       reask: '',
       // A restored tab shows no failure — the failure line is live state and is not saved with the
       // conversation — so it has nothing to offer a retry of until the next turn fails.
@@ -165,6 +174,10 @@ export function restoreConversation(
     // second window under that window's first root instead of its own.
     source: saved.source,
     workspace: saved.workspace,
+    // Agent mode comes back as it was left — and `reopened` still turns it off if the row it reopens
+    // on has become remote. Absent is text (issue #289).
+    access: saved.access ?? 'text',
+    savedAccess: saved.access ?? 'text',
     providerId: ready.ok ? ready.providerId : restored.providerId,
     modelId: saved.modelId,
     // The MAIN prompt and the restored model's own role: a reloaded tab shows the same pressed

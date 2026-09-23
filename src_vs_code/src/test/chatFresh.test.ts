@@ -85,13 +85,14 @@ test('the clock is an argument, so a reset is not dated by whenever a test happe
   assert.notEqual(freshened(FRESH, 7).createdAt, freshened(FRESH, 9).createdAt);
 });
 
-test('the marks that say what the disk holds are DELETED, and all three of them are named', () => {
-  // The push that writes a conversation down skips itself when these three still match the thread.
+test('the marks that say what the disk holds are DELETED, and all four of them are named', () => {
+  // The push that writes a conversation down skips itself when these four still match the thread —
+  // the fourth, `savedAccess`, since agent mode became something a conversation records (issue #289).
   // A reset that left them would meet a new empty transcript, decide nothing had changed, and never
   // write the new record at all — the tab saying one thing and the disk another until the next
   // question. They are deleted rather than emptied because the guard reads "never written" from
   // their ABSENCE and "written as this" from their value, and an empty array is a value.
-  assert.deepEqual([...UNSAVED], ['savedMessages', 'savedModelId', 'savedCarryFrom']);
+  assert.deepEqual([...UNSAVED], ['savedMessages', 'savedModelId', 'savedCarryFrom', 'savedAccess']);
   // None of them is in the slate: setting them there would be the bug this constant exists to avoid.
   const slate: Record<string, unknown> = { ...freshened(FRESH, 1) };
   for (const mark of UNSAVED) {

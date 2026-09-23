@@ -193,7 +193,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // because it holds work of theirs, refused because only ignored files are in it, and the reads that
 // failed — because they differ in their sentence rather than in their kind, and the subject (the
 // checkout's own name) is what makes two checkouts two counters rather than one storm.
-const PLACES_THIS_SPEAKS = 127;
+// 127 → 130 on 2026-09-23, issue #289: agent mode for a local chat. Three places, because they are three
+// kinds: the confirmation asked BEFORE a model is handed the computer (modal), the outcome once the new
+// mode is in force, and the refusal when the model or the folder cannot have it.
+const PLACES_THIS_SPEAKS = 130;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

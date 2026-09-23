@@ -42,6 +42,8 @@ export interface PageMessage {
   /** Which block of an answer a copy control named, and the signature it was drawn with. */
   readonly block?: unknown;
   readonly sig?: unknown;
+  /** The agent-mode box's new state (issue #289). */
+  readonly agent?: unknown;
 }
 
 export type ChatCommand =
@@ -123,6 +125,11 @@ export type ChatCommand =
   | { readonly kind: 'retry'; readonly at: number }
   | { readonly kind: 'restart' }
   | { readonly kind: 'useLocal' }
+  /**
+   * The agent-mode box was ticked or unticked (issue #289). A request, not a fact: the host refuses it
+   * for a model that cannot have it, asks before turning it on, and pushes back what is in force.
+   */
+  | { readonly kind: 'access'; readonly agent: boolean }
   | { readonly kind: 'pageError'; readonly message: string }
   /**
    * A link in an ANSWER, which is text another vendor's model wrote.
@@ -426,6 +433,10 @@ export function chatCommandOf(message: PageMessage | undefined): ChatCommand {
       return { kind: 'restart' };
     case 'useLocal':
       return { kind: 'useLocal' };
+    case 'access':
+      // A real boolean or nothing: `"false"` is a truthy string, and reading it as a tick would hand a
+      // model the computer on a message that said the opposite.
+      return typeof message.agent === 'boolean' ? { kind: 'access', agent: message.agent } : IGNORE;
     default:
       return IGNORE;
   }

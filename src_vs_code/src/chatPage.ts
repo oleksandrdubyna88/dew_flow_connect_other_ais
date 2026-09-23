@@ -10,6 +10,8 @@ import { ChatProvider, ChatProviderList } from './chatModels';
 import { ChatModelChoice } from './chatContracts';
 import { ModelPreset, PromptPreset } from './chatPresets';
 import { pastedImage } from './chatImage';
+import { AGENT_TOGGLE_CSS, chatAgentToggleHtml } from './chatAgentToggle';
+import type { ChatAccess } from './chatAdapter';
 
 /**
  * The conversation tab: the passage that started it, what has been said, and a box to say more.
@@ -244,6 +246,10 @@ export interface ChatPageState {
    * not durable while the next Team turn quietly re-sends everything. (codex, the plan round.)</p>
    */
   readonly carryFrom: number;
+  /** What the model may do on this computer (issue #289). The host's, drawn as the agent-mode box. */
+  readonly access: ChatAccess;
+  /** Whether the box is offered at all — false for a Team-server model or a conversation with no folder. */
+  readonly agentOffered: boolean;
   readonly uiScale: number;
   /**
    * How far the text is from the theme's own colour: 0 is the theme, up is brighter, down is
@@ -1049,6 +1055,7 @@ function chatStyle(
   .hint { font-size: .85em; opacity: .6; margin-top: 4px; }
 ${modelColours(models, messages)}
 ${ZOOM_CSS}
+${AGENT_TOGGLE_CSS}
 ${TONE_CSS}`;
 }
 
@@ -1185,6 +1192,7 @@ ${state.fromSession ? `<section id="asking" class="asking" aria-live="polite" ar
 ${chatPresetRowsHtml(state.promptPresets, state.modelPresets, state.promptId, state.chosenModelId)}
 <div class="pickerRow">
 <div id="pickerBox">${chatPickerHtml({ providers: state.providers, refused: [] }, state.providerId, state.modelId)}</div>
+${chatAgentToggleHtml(state.agentOffered, state.access, state.running)}
 <span id="spend" class="spend" title="What this conversation has cost so far. A turn carries the whole conversation, so each question is billed for the ones before it.">${escapeHtml(state.spend)}</span>
 <button type="button" id="clear" class="clear"${locked ? ' disabled' : ''} title="Empty the box" aria-label="Empty the box">✕</button><button type="button" id="send"${locked ? ' disabled' : ''}>${state.reask.length > 0 ? `Re-ask · ${escapeHtml(state.reask)}` : 'Send'}</button>
 </div>
@@ -1748,6 +1756,14 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   }
   wirePicker();
   wireCapped();
+  // The agent-mode box asks the HOST, which confirms, relaunches and pushes back what is in force - so a
+  // cancelled confirmation or a refusal redraws the box as it was rather than leaving it ticked.
+  const agentBox = document.getElementById('agent');
+  if (agentBox) {
+    agentBox.addEventListener('change', function () {
+      vscode.postMessage({ type: 'command', command: 'access', agent: agentBox.checked === true });
+    });
+  }
   // THE SAME MESSAGE the capped notice's button posts, so one host implementation serves both: they
   // are the same gesture with the same words, and a second host path would be two places for one
   // behaviour to drift. Its own ID, though - wireCapped finds that one with getElementById, and two
@@ -2282,6 +2298,18 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     // it while a turn is still in flight. (local, the second code round.)
     // Who a re-ask would go to, which is also the button's caption: the gesture is an empty box and
     // Enter, and a feature whose only trigger is pressing Enter on nothing is one nobody discovers.
+    if (typeof data.agentOffered === 'boolean' && typeof data.access === 'string') {
+      const agentLabel = document.getElementById('agentBox');
+      const agentInput = document.getElementById('agent');
+      if (agentLabel) {
+        agentLabel.hidden = !data.agentOffered;
+        agentLabel.className = data.access === 'agent' ? 'agent agentOn' : 'agent';
+      }
+      if (agentInput) {
+        agentInput.checked = data.access === 'agent';
+        agentInput.disabled = data.running === true;
+      }
+    }
     if (typeof data.spend === 'string') {
       const total = document.getElementById('spend');
       if (total) { total.textContent = data.spend; }

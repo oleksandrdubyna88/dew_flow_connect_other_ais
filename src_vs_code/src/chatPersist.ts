@@ -68,6 +68,8 @@ export function recordOf(thread: Thread, at = Date.now()): ConversationRecord {
     carryFrom: thread.carryFrom,
     source: thread.source,
     workspace: thread.workspace,
+    // Only when on: absent is text, which is also what every record written before issue #289 says.
+    ...(thread.access === 'agent' ? { access: 'agent' as const } : {}),
     // WHEN IT BEGAN, not when it was last written. The two were the same instant here until A3's
     // plan round; a conversation answered three months after it started was recorded as having
     // started that day, and the picker draws its "started" from this field.
@@ -180,6 +182,7 @@ async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
   delete thread.savedMessages;
   delete thread.savedModelId;
   delete thread.savedCarryFrom;
+  delete thread.savedAccess;
   // THE MEMENTO FIRST, and WAITED FOR — while it is still bound. Written the other way round, a crash
   // in between leaves the fork on disk under an id the memento has never heard of: while the memento
   // is a fallback the tab could reload as the original it no longer owns, and the copy holding the

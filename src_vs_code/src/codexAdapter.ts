@@ -44,6 +44,14 @@ const THREAD_ID = /^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$/;
 /** The flags every codex turn carries. `exec` and any resume come first — see `argv`. */
 export const CODEX_ARGS: readonly string[] = ['--json', '-', '--skip-git-repo-check'];
 
+/**
+ * Agent mode's flag (issue #289). Not `-s danger-full-access`: `exec resume` refuses `-s`
+ * (CodexConsultant.cs), and a codex chat resumes on every turn after its first. This one is accepted
+ * by both `codex exec --help` and `codex exec resume --help` (2026-09-23), and with no sandbox at all the
+ * Windows sandbox failure `error 1920` (RESULTS_first_real_run.md) has nothing to fail in.
+ */
+export const CODEX_AGENT_FLAG = '--dangerously-bypass-approvals-and-sandbox';
+
 export const codexAdapter: ChatAdapter = {
   shape: 'per-turn',
   announces: false,
@@ -58,10 +66,11 @@ export const codexAdapter: ChatAdapter = {
   // the positional that makes codex read its instructions from stdin: an option after a positional
   // is still parsed as an option here, but writing it that way asks a reader to know that, and the
   // one place this product cannot afford a reader's benefit of the doubt is a command line.
-  argv: ({ resume, model }) => [
+  argv: ({ resume, model, access }) => [
     'exec',
     ...(THREAD_ID.test(resume) ? ['resume', resume] : []),
     ...(model.length > 0 ? ['-m', model] : []),
+    ...(access === 'agent' ? [CODEX_AGENT_FLAG] : []),
     ...CODEX_ARGS,
   ],
   // The prompt itself: there is no envelope, and the session writes it followed by EOF.

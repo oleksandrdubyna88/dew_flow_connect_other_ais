@@ -51,6 +51,8 @@ function state(over: Partial<ChatPageState> = {}): ChatPageState {
     draft: '',
     marks: NO_MARKS,
     uiScale: 0,
+    access: 'text',
+    agentOffered: false,
     textTone: 0,
     waiting: [],
     ...over,

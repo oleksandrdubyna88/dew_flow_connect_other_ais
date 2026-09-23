@@ -1,6 +1,7 @@
 import { ProcessHandle, launch } from './processLauncher';
 import { Vendor } from './vendors';
 import { launchSpecFor } from './cliChatLaunch';
+import { ChatAccess } from './chatAdapter';
 import { forget, remember } from './chatOrphans';
 
 /**
@@ -37,9 +38,13 @@ export function chatProcessFor(
   home: string,
   resolved: string,
   model: string,
+  /** Text or agent (issue #289) — fixed for the session, because a persistent vendor's flags are. */
+  access: ChatAccess = 'text',
+  /** The conversation's workspace, where an agent-mode launch runs. */
+  workspace = '',
 ): (resume: string) => ProcessHandle {
   return (resume) => {
-    const spec = launchSpecFor(vendor, home, { resume, model }, resolved);
+    const spec = launchSpecFor(vendor, home, { resume, model, access }, resolved, undefined, workspace);
     // A refused spec carries an empty executable and an empty argv, and handing those to `launch`
     // spawns "" — a spawn ENOENT, or nothing, in place of the sentence that says why. Found on this
     // change's own code round by two reviewers, and it is a defect the refusal itself introduced:

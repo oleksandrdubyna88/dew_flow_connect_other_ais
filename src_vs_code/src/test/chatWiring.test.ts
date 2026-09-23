@@ -367,6 +367,7 @@ test('EVERY handover goes through the mark, and none builds its own slice', () =
     'chatHooks.ts',
     'chatConversationRestore.ts',
     'chatLaunch.ts',
+    'chatAccess.ts',
   ].map((one) => read(join('src', one))).join('\n');
 
   // The five places a conversation is handed to a model that has not heard it. Each is named by the
@@ -375,7 +376,9 @@ test('EVERY handover goes through the mark, and none builds its own slice', () =
     ['a re-ask, which is a switch by another name', /thread\.carry = carriedFrom\(again\.said, thread\.carryFrom\)/],
     ['a Team server, handed the conversation every turn', /thread\.forgetful[\s\S]{0,700}?thread\.carry = carriedFrom\(/],
     ['a vendor that lost the conversation', /contextLost === true[\s\S]{0,200}?thread\.carry = carriedFrom\(/],
-    ['a model switch', /thread\.carry = carriedFrom\(thread\.messages, thread\.carryFrom\);\s*\n\s*show\(entry, false/],
+    // A model switch and a change of agent mode (issue #289) are one move — a new session with the
+    // conversation carried — so both go through `install`, and `install` goes through the mark.
+    ['a model switch or a change of agent mode', /export function install\([\s\S]{0,2600}?thread\.carry = carriedFrom\(thread\.messages, thread\.carryFrom\);\s*\n\}/],
     ['the first turn after a window reload', /carry: carriedFrom\(saved\.messages, carryMark\(/],
   ];
   for (const [what, shape] of handovers) {
