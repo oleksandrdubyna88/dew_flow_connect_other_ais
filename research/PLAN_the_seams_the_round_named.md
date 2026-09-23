@@ -25,7 +25,7 @@
 >
 > Related docs: [module_extension.md](module_extension.md),
 > [module_tests.md](module_tests.md),
-> [PLAN_the_review_page_can_be_read.md](../todo/PLAN_the_review_page_can_be_read.md) (story 3.2c lives there
+> [PLAN_the_review_page_can_be_read.md](PLAN_the_review_page_can_be_read.md) (story 3.2c lives there
 > and this plan closes it), [PLAN_family_ci_hardening.md](../todo/PLAN_family_ci_hardening.md) (the actionlint
 > retry is mirrored from here).
 
@@ -311,7 +311,7 @@ beside the two stories that were built:
   fact — `head_sha` orphaned **55.7 %** of the time — that says *without a tree you cannot reach the
   code at all*. Here the code is already reachable; what is saved is navigation.
 
-Epic 3 of [PLAN_the_review_page_can_be_read.md](../todo/PLAN_the_review_page_can_be_read.md) is therefore
+Epic 3 of [PLAN_the_review_page_can_be_read.md](PLAN_the_review_page_can_be_read.md) is therefore
 **complete**, and its row says so. The plan itself stays in `todo/` because epic 4 is open.
 
 ## Test plan

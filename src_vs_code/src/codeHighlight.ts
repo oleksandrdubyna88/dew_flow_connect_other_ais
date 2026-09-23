@@ -12,7 +12,7 @@ import { escapeHtml } from './webviewHtml';
  * Syntax highlighting for the review page, with VS Code's own grammars.
  *
  * <p>The choice between this and porting `creds_for_devs`'s regex highlighter was made by a
- * measurement, recorded in `todo/PLAN_the_review_page_can_be_read.md` — and the number that decided
+ * measurement, recorded in `research/PLAN_the_review_page_can_be_read.md` — and the number that decided
  * it was not the size. <b>Neither option can use VS Code's own colours</b>: a webview is handed the
  * workbench theme variables and no token colours, and the only token-ish variable in either
  * repository is `--vscode-debugTokenExpression-name`. So "as close to VS Code's own as possible"

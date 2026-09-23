@@ -5,7 +5,7 @@
 >
 > Related docs: [module_server.md](../research/module_server.md),
 > [module_extension.md](../research/module_extension.md),
-> [PLAN_the_review_page_can_be_read.md](PLAN_the_review_page_can_be_read.md) (story 2.2, which this
+> [PLAN_the_review_page_can_be_read.md](../research/PLAN_the_review_page_can_be_read.md) (story 2.2, which this
 > completes).
 
 ## The symptom
