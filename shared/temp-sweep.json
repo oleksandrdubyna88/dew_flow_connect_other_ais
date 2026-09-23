@@ -3,7 +3,7 @@
     "What a test run may remove from the machine's temp directory before it starts, and what it must not.",
     "Two runners read this: the extension's (src_vs_code/scripts/run-tests.mjs) and the server suite's",
     "assembly fixture (src_mcp/tests/TempDirsAreSwept.cs). One rule in one place, because two copies of",
-    "it would drift the way the leaked directories did (todo/PLAN_the_tests_take_their_temp_directories_with_them.md).",
+    "it would drift the way the leaked directories did (research/PLAN_the_tests_take_their_temp_directories_with_them.md).",
     "",
     "keepMinutes is the operator's ruling of 2026-09-18: clean BEFORE the run, everything older than ten",
     "minutes. Anything a concurrent session is using was touched more recently than that.",

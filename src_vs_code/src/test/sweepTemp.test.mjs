@@ -10,7 +10,7 @@ import { readRule, sweep, toSweep } from '../../scripts/sweepTemp.mjs';
  * A run sweeps what earlier runs left in temp, before it starts — and never anything that is not
  * a leftover.
  *
- * <p>`todo/PLAN_the_tests_take_their_temp_directories_with_them.md`. The one outcome this must never
+ * <p>`research/PLAN_the_tests_take_their_temp_directories_with_them.md`. The one outcome this must never
  * have is removing something in use: another session's run in flight, or the product's own working
  * directories, which share the `coai-` prefix — a live chat's directory can sit for an hour with
  * nothing written into it. So every "takes" case below is paired with the "keeps" case that a
