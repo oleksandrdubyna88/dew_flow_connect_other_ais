@@ -8,8 +8,8 @@
 > run keeps a heartbeat in `runs/{run}.json` and the next start records one that never finished —
 > once per start, at least once across a crash mid-record; every notice carries the run and pid that
 > wrote it; and an exception nothing else caught is written down, said redacted, flushed and exits
-> 70 — in two layers, because the first
-> thing a server can fail at is resolving the directory its logger lives in. The deviations are under
+> 70 — in two layers, because the first thing a server can fail at is resolving the directory its
+> logger lives in. The deviations are under
 > *What epic 3 found*. **Open tail, not built here:** the `coai-mcp` release that carries epic 3 (a
 > release is the operator's call). The parent stays in `todo/` on that release AND on the
 > EXTENSION half of its section *H*'s run marker — the boundary table below gives that half to the
@@ -523,8 +523,9 @@ also on the wire (`ProvidersAnswer.Unrecognised`), so it stays as a projection. 
   fix keyed the discard on the STOP, and `ACrashThatDidNotLand_LeavesTheMarker` went red at once: a
   run that crashes in its first milliseconds stops before its first beat lands, and without a
   marker its unrecorded crash disappears. So it is keyed on the CLEAR — `RunLife.Clear` says so
-  before it deletes, and a beat asks just before its replace. What remains is a replace that is
-  itself stuck. It also caught "exactly once" in three summaries of a design that is at
+  before it deletes, and a beat asks just before its replace. CodeRabbit's second pass named the
+  replace already under way when the clear lands; the beat asks again after it and takes the marker
+  back (RED first). What remains is a rename still pending when the process itself exits. It also caught "exactly once" in three summaries of a design that is at
   least once across a crash mid-record. Sonar's gate failed on one bug — the stop's
   `CancellationTokenSource` was never disposed — fixed with three smaller findings.
 

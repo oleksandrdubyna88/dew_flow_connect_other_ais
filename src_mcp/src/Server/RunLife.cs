@@ -30,7 +30,7 @@ internal sealed class RunLife
 
     private readonly CancellationTokenSource _stop = new();
 
-    /// <summary>Set by <see cref="Clear"/> before it deletes; read by a beat before it replaces.</summary>
+    /// <summary>Set by <see cref="Clear"/> before it deletes; read by a beat before and after it replaces.</summary>
     private volatile bool _cleared;
 
     private readonly Task _loop;
@@ -53,9 +53,10 @@ internal sealed class RunLife
     /// </summary>
     /// <remarks>
     /// Bounded. A beat stuck on a wedged share cannot be recalled; one that finishes writing after
-    /// <see cref="Clear"/> throws its temporary away, so it cannot re-create the marker that removed.
-    /// Only a replace that is itself stuck past the budget can still land after the clear. (gemini, on
-    /// the plan round, named the race; CodeRabbit, on the pull request, the fix.)
+    /// <see cref="Clear"/> throws its temporary away, and one whose replace was already under way
+    /// takes the marker back once the replace is done — so neither can re-create what the clear removed.
+    /// Only a rename still pending when the process exits can. (gemini, on the plan round, named the
+    /// race; CodeRabbit, on the pull request, the fix, in two passes.)
     /// </remarks>
     /// <returns>Whether the loop is known to have stopped.</returns>
     internal async Task<bool> StopAsync()
@@ -81,8 +82,9 @@ internal sealed class RunLife
 
     /// <summary>Clear this run's marker. Only after <see cref="StopAsync"/>.</summary>
     /// <remarks>
-    /// Says so FIRST, then deletes: a beat still on the share asks <see cref="_cleared"/> just before
-    /// its replace and throws its temporary away, so it cannot re-create the marker this removes.
+    /// Says so FIRST, then deletes: a beat still on the share asks <see cref="_cleared"/> before its
+    /// replace (and throws its temporary away) and after it (and takes the marker back), so it cannot
+    /// re-create the marker this removes.
     /// Keyed on the CLEAR and not on the stop, because a run that stops without clearing — a crash
     /// whose record did not land — must keep its marker, and its first beat may still be in flight.
     /// </remarks>

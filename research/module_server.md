@@ -1637,10 +1637,12 @@ scan cannot see it (it is composed from a constant on `dataDir.Path`), so
 `TheMarkersFolder_IsInTheDataInventory_AndStaysBehindOnAMove` holds it from this side.
 
 **Residuals, stated where they live:** a laptop asleep past the window, seen from another machine on
-the share, is a false death; the duplicate windows above; and a beat whose final REPLACE is itself
-stuck on a wedged share past the stop budget can still land after the clear. (A beat stuck before its
-replace used to do the same; CodeRabbit found it on the pull request, and
-`ABeatThatFinishesAfterTheClear_DoesNotBringTheMarkerBack` holds the fix, RED first.)
+the share, is a false death; the duplicate windows above; and a rename still pending on a wedged
+share when the process itself exits. A beat that finishes after the clear used to re-create the
+marker; CodeRabbit found it on the pull request, in two passes — the beat now asks whether its
+owner cleared both before its replace (and throws the temporary away) and after it (and takes the
+marker back). `ABeatThatFinishesAfterTheClear_DoesNotBringTheMarkerBack` and
+`AClearThatLandsDuringTheReplace_StillLeavesNoMarker` hold them, each RED first.
 
 ## The spending ledger
 

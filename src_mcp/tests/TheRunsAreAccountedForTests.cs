@@ -254,6 +254,22 @@ public sealed class TheRunsAreAccountedForTests : IDisposable
     }
 
     [Fact]
+    public void AClearThatLandsDuringTheReplace_StillLeavesNoMarker()
+    {
+        // CodeRabbit's second pass: the check before the replace cannot see a clear that lands WHILE the
+        // replace is under way — on a share, a rename that has started can finish after the delete. So
+        // the beat asks again once its replace is done, and takes back what it just wrote. Simulated
+        // here by the owner's answer changing between the two questions.
+        var asked = 0;
+
+        Markers(Me).Write(() => Interlocked.Increment(ref asked) >= 2)
+            .Should().BeFalse("the marker it wrote was taken back");
+
+        (Directory.Exists(Runs) ? Directory.GetFiles(Runs) : []).Should().BeEmpty(
+            "a clear that landed during the replace leaves neither a marker nor a temporary");
+    }
+
+    [Fact]
     public async Task AStopDuringTheSweep_IsHonouredBetweenDeaths_AndLeavesTheRestForTheNextStart()
     {
         // A client that connects and leaves while a start is still recording deaths on a slow share

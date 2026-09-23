@@ -157,8 +157,9 @@ internal sealed class RunMarkers(
     /// So it throws its temporary away instead. (CodeRabbit, on the pull request.) Keyed on the CLEAR,
     /// not the stop: a crash whose record did not land stops WITHOUT clearing, and its first beat must
     /// still land or the death disappears — the first version keyed on the stop, and
-    /// <c>ACrashThatDidNotLand_LeavesTheMarker</c> went red on exactly that. What is left is a replace
-    /// that is ITSELF stuck past the budget — a single rename on a wedged share.
+    /// <c>ACrashThatDidNotLand_LeavesTheMarker</c> went red on exactly that. Asked twice — before the
+    /// replace and after it — so a clear that lands WHILE the replace runs is taken back too. What is
+    /// left is a rename still pending on a wedged share when the process itself exits.
     /// </param>
     /// <returns>Whether the marker was written.</returns>
     internal bool Write(Func<bool> cleared)
@@ -177,6 +178,17 @@ internal sealed class RunMarkers(
             }
 
             File.Move(temporary, MarkerOf(me.Run), overwrite: true);
+
+            // Asked AGAIN: a clear that landed while the replace was under way was not visible to the
+            // question above, and on a share a started rename can finish after the delete. The owner
+            // raises the flag BEFORE it deletes, so a replace that completes after the delete always
+            // sees it here, and takes back what it just wrote. (CodeRabbit, its second pass.)
+            if (cleared())
+            {
+                Remove(MarkerOf(me.Run));
+
+                return false;
+            }
 
             return true;
         }
