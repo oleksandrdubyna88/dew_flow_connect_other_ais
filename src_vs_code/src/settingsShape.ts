@@ -25,6 +25,9 @@ import { CommandModels, ModelSlot, commandModelsEnv, commandModelsFrom, isModelS
 
 export type OnExhausted = 'continue' | 'escalate' | 'human' | 'good_enough';
 
+/** How often split work is gated (issue #131) — `COAI_GATE_PER` on the wire. */
+export type GatePer = 'epic' | 'task';
+
 /** The five languages a person may be asked in. */
 export type LanguageCode = 'en' | 'es' | 'de' | 'ru' | 'uk';
 
@@ -152,6 +155,11 @@ export interface CoaiSettings {
   readonly splitWithFable: boolean;
   /** Per caller kind, the models the model order names — what a person typed, trimmed (issue #117). */
   readonly commandModels: CommandModels;
+  /**
+   * How often split work comes back through the gate: once per EPIC (the default) or once for the
+   * whole TASK — never per story, which cost a branch and two rounds a story (issue #131).
+   */
+  readonly gatePer: GatePer;
   /**
    * What a code reviewer is launched in: `none` (Fast — the diff alone) or `worktree` (Full).
    *
@@ -305,6 +313,7 @@ export const DEFAULTS: CoaiSettings = {
   splitPlan: false,
   splitWithFable: false,
   commandModels: commandModelsFrom(undefined),
+  gatePer: 'epic',
   codeWorkspace: 'none',
   roles: [],
   consult: DEFAULT_CONSULT,
@@ -326,7 +335,7 @@ export type SettingsOverlay = Readonly<Record<string, unknown>>;
 export const OVERLAID_SETTINGS: readonly string[] = [
   'vendors', 'rounds', 'thresholds', 'roleEnabled', 'onExhausted', 'maxConcurrency', 'maxPerProvider',
   'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey', 'escalationMinutes', 'promptsPerRound',
-  'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'commandModels', 'codeWorkspace',
+  'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'commandModels', 'gatePer', 'codeWorkspace',
   // A person's own review roles belong to the WORK, which is what a side is — beside `rounds`,
   // `thresholds` and `roleEnabled`, which ask the same question about the roles this product ships.
   // The prompt BODIES do NOT: they live in one data directory, because a body is the text of a
@@ -420,6 +429,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     splitPlan: read('splitPlan') === true,
     splitWithFable: read('splitWithFable') === true,
     commandModels: commandModelsFrom(read('commandModels')),
+    gatePer: read('gatePer') === 'task' ? 'task' : 'epic',
     codeWorkspace: read('codeWorkspace') === 'worktree' ? 'worktree' : 'none',
     roles: rolesFrom(read('roles')),
     consult: consultSettingsFrom(read),
@@ -473,6 +483,9 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   }
   // Only the caller kinds whose pair differs from the shipped one — a pristine panel adds nothing.
   Object.assign(env, commandModelsEnv(settings.commandModels));
+  if (settings.gatePer !== DEFAULTS.gatePer) {
+    env['COAI_GATE_PER'] = settings.gatePer;
+  }
 
   for (const [role, threshold] of Object.entries(settings.thresholds)) {
     if (threshold !== DEFAULTS.thresholds[role]) {

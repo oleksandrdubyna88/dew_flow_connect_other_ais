@@ -1560,7 +1560,30 @@ export function roundsLogHtml(
   // person triages, then where, then what it said and what was decided about it - an accepted
   // finding is something this repository's author had not seen, which is the whole point of keeping
   // them.
+  // What the round ORDERED its caller to do, and the size it measured (issue #131) - so that "why
+  // did it cut my plan into five epics" has an answer on the page. Nothing at all for a round that
+  // gave no orders or recorded none: an empty block on every code round would be noise.
+  function ordersHtml(row) {
+    var orders = row.orders;
+    if (!orders || !orders.commands || orders.commands.length === 0) {
+      return '';
+    }
+    var out = '<div class="orders"><b>Orders given</b>';
+    if (orders.planShape) {
+      out += '<div class="why">size ' + esc(orders.planShape) + '</div>';
+    }
+    for (var i = 0; i < orders.commands.length; i++) {
+      var text = String(orders.commands[i]);
+      var cut = text.indexOf('. ');
+      out += '<details class="order"><summary>' + esc(cut > 0 ? text.slice(0, cut + 1) : text) + '</summary>'
+        + '<div class="why">' + esc(text) + '</div></details>';
+    }
+    return out + '</div>';
+  }
   function foundHtml(row) {
+    return (row.foundState === 'loaded' ? ordersHtml(row) : '') + foundOnly(row);
+  }
+  function foundOnly(row) {
     // Five states, and each draws its OWN element. Four of them used to be one blank, and a blank
     // reads as "this round was clean" — which is a lie about three of them.
     if (row.foundState === 'asking') {
@@ -1966,7 +1989,7 @@ export function roundsLogHtml(
       for (var f = 0; f < ROWS.length; f++) {
         if (ROWS[f].key === message.id) {
           ROWS[f] = Object.assign({}, ROWS[f], {
-            found: message.findings || [], foundState: message.state || 'failed',
+            found: message.findings || [], foundState: message.state || 'failed', orders: message.orders,
           });
         }
       }

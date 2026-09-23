@@ -73,7 +73,7 @@ public sealed class SettingsAppliedTests
             Asked(("COAI_AUTONOMOUS", "true"), ("COAI_SPLIT_PLAN", "true"), ("COAI_SPLIT_WITH_FABLE", "true")),
             null,
             [Plan("proceed",
-                "Split this plan into 2-4 EPICS … After EVERY story: call review_code …",
+                "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES … THE GATE runs once per EPIC …",
                 "Do the SPLIT itself with Fable at its highest available version …",
                 "Work AUTONOMOUSLY. A question that does not block you …")]);
 
@@ -89,7 +89,7 @@ public sealed class SettingsAppliedTests
         var applied = SettingsCheck.Of(
             Asked(("COAI_SPLIT_WITH_FABLE", "true")),
             null,
-            [Plan("proceed", "Split this plan into 2-4 EPICS …")]);
+            [Plan("proceed", "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES …")]);
 
         applied.Ok.Should().BeFalse();
         applied.Mismatches.Should().ContainSingle().Which.Should().Contain("COAI_SPLIT_WITH_FABLE");
@@ -123,7 +123,7 @@ public sealed class SettingsAppliedTests
             Asked(("COAI_SPLIT_PLAN", "true"), ("COAI_SPLIT_WITH_FABLE", "true")),
             null,
             [Plan("proceed",
-                "Split this plan into 2-4 EPICS …",
+                "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES …",
                 "Do the SPLIT itself with gpt-6-astra at its highest available version …")]);
 
         applied.Ok.Should().BeTrue();

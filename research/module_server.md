@@ -3406,6 +3406,22 @@ chosen by:
 - **The log line says who and which**: `split ordered to caller {Caller} ({CallerKind}); strongest
   model …, implementation …`.
 
+### The split is sized honestly, gated once, and written down (2026-09-23, issue #131)
+
+The split order answered "epics" for 106 of the 187 plans in this repository and told the caller to
+run `review_code` after EVERY story — a new branch, a plan round and a code round per story, because
+a gate session ends at its code round. Three changes:
+
+| what | where |
+|---|---|
+| **Five sizes from build steps and length only** — AsItIs / Small (3–5 stories) / Medium (2–3 epics × 2–3) / Large (3–4 × 3–4) / Huge (4–5 × 3–5), the larger of what steps and length say; files and areas are still reported but no longer decide (the median plan names 15 files; nine in ten "touch" four areas). Calibrated on the 187 plans: 8 / 68 / 14 / 5 / 2 %. The order adds "fewer is fine when the work is smaller; never more". | `core/Commands/PlanShape.cs` (`Verdict`, `Described`) |
+| **`GateScope`: once per EPIC (default) or once for the whole TASK, never per story.** Per epic, the epics stack — each branches from the previous epic's commit and passes it as `baseRef` — with one plan round, one code round over its whole diff and one commit. Per task, one code round at the end, still a commit per epic. A piece coming back under *task* is told it is not gated on its own. `GateCommands.GateOrderMarker` (`"THE GATE runs once"`) replaced "After EVERY story" as the words every split order carries. | `GateCommands.SplitCommand`/`GateEnding`/`AlreadySplitCommand`; `COAI_GATE_PER` → `PanelSettings.GatePer` (an unknown word is an unrecognised setting and falls back to per epic) |
+| **What a round ordered is written down.** Schema step 14, `WhatItWasTold`, adds `rounds.commands` (the orders as sent, JSON; `[]` for none) and `rounds.plan_shape` (`Described`, empty when no split was ordered). The default `''` means NOT RECORDED. `--findings` carries them as `orders`, absent for a round recorded before the step or a database not yet migrated (the read-only reader asks `pragma_table_info`). | `Store/Schema.cs`, `RoundContext.Commands`/`PlanShape`, `RoundsDb.RecordRoundRow`, `RoundsQuery.OrdersOf`/`OrdersFrom`, `LoggedRoundFindings.Orders` |
+
+The orders ride on `--findings` (one round's detail), not on the `--log` list: the list's query is kept
+as literal SQL in one text per schema shape, and a third optional column would have meant a third
+copy of it for data only the opened row shows.
+
 **A reader could kill a round, and the catch written for it looked past the exception (2026-09-04).**
 Six code rounds died with `Access to the path is denied`. One died on the FINAL save, with every
 reviewer answered and the verdict decided: the findings were in memory and all of it was thrown away

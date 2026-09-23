@@ -5,6 +5,7 @@ using CoaiMcp.Core.Rounds;
 using CoaiMcp.Server;
 using CoaiMcp.Storage;
 using Microsoft.Data.Sqlite;
+using System.Text.Json;
 
 namespace CoaiMcp.Store;
 
@@ -766,11 +767,13 @@ public sealed class RoundsDb : IDisposable
             INSERT INTO rounds (session_id, stage, number, subject, status, verdict, gating,
                                 started_utc, completed_utc, tokens_in, tokens_out, cost_usd,
                                 plan_text, head_sha, base_ref, caller, agent_log,
-                                caller_vendor, caller_client, caller_client_version, caller_model)
+                                caller_vendor, caller_client, caller_client_version, caller_model,
+                                commands, plan_shape)
             VALUES ($session, $stage, $number, $subject, $status, $verdict, $gating,
                     $started, $completed, $tokensIn, $tokensOut, $cost,
                     $plan, $sha, $baseRef, $caller, $agentLog,
-                    $vendor, $client, $clientVersion, $model)
+                    $vendor, $client, $clientVersion, $model,
+                    $commands, $planShape)
             ON CONFLICT(session_id, stage, number) DO UPDATE SET
                 subject = excluded.subject, status = excluded.status, verdict = excluded.verdict,
                 gating = excluded.gating, completed_utc = excluded.completed_utc,
@@ -778,7 +781,8 @@ public sealed class RoundsDb : IDisposable
                 plan_text = excluded.plan_text, head_sha = excluded.head_sha, base_ref = excluded.base_ref,
                 caller = excluded.caller, agent_log = excluded.agent_log,
                 caller_vendor = excluded.caller_vendor, caller_client = excluded.caller_client,
-                caller_client_version = excluded.caller_client_version, caller_model = excluded.caller_model
+                caller_client_version = excluded.caller_client_version, caller_model = excluded.caller_model,
+                commands = excluded.commands, plan_shape = excluded.plan_shape
             RETURNING id
             """;
         BindRound(write, state.SessionId, round.Stage, round.Number);
@@ -813,6 +817,11 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$client", calledBy.Client);
         Bind(write, "$clientVersion", calledBy.ClientVersion);
         Bind(write, "$model", calledBy.Model);
+        // What the round ORDERED (issue #131). `[]` for a round that gave none — the empty string is
+        // the column's default and means a round recorded before this was written down at all.
+        Bind(write, "$commands", JsonSerializer.Serialize(
+            [.. context.Commands.IsDefault ? [] : context.Commands], Server.ServerJsonContext.Default.ListString));
+        Bind(write, "$planShape", context.PlanShape ?? string.Empty);
 
         return (long)(write.ExecuteScalar() ?? 0L);
     }

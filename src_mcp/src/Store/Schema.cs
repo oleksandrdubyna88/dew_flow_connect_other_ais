@@ -32,7 +32,7 @@ internal static class Schema
     [
         Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
-        TheSendsThemselves, WhatAPersonSaid,
+        TheSendsThemselves, WhatAPersonSaid, WhatItWasTold,
     ];
 
     internal const string Tables = """
@@ -420,5 +420,22 @@ internal static class Schema
     internal const string WhatAPersonSaid = """
         ALTER TABLE collect_pairs ADD COLUMN comment      TEXT NOT NULL DEFAULT '';
         ALTER TABLE collect_pairs ADD COLUMN comment_lost TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>
+    /// Step 14: what a round ORDERED the caller to do, and the size it measured (issue #131).
+    /// </summary>
+    /// <remarks>
+    /// <para>Until this step the only trace of a split order was one Serilog line, so "why did it cut
+    /// my plan into five epics" had no answer anywhere a person could look. <c>commands</c> is the
+    /// JSON array of orders exactly as the caller received them; <c>plan_shape</c> is the size and the
+    /// numbers it was computed from, empty when no split was ordered.</para>
+    /// <para><b>The default is the empty string, and it means NOT RECORDED</b> — a round written before
+    /// this step. A round written after it that gave no orders stores <c>[]</c>. The two are different
+    /// facts and the page says different things for them.</para>
+    /// </remarks>
+    internal const string WhatItWasTold = """
+        ALTER TABLE rounds ADD COLUMN commands   TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN plan_shape TEXT NOT NULL DEFAULT '';
         """;
 }

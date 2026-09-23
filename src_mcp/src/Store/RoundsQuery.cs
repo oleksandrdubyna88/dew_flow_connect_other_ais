@@ -1,4 +1,5 @@
 using Microsoft.Data.Sqlite;
+using System.Text.Json;
 
 namespace CoaiMcp.Store;
 
@@ -139,7 +140,15 @@ public sealed record LoggedTotals(
     double CostUsd = 0);
 
 /// <summary>One round's findings, and whether the database has ever heard of that round.</summary>
-public sealed record LoggedRoundFindings(bool Known, IReadOnlyList<LoggedFinding> Findings);
+public sealed record LoggedRoundFindings(bool Known, IReadOnlyList<LoggedFinding> Findings, RoundOrders? Orders = null);
+
+/// <summary>What a round ordered its caller to do, and the size it measured (issue #131).</summary>
+/// <remarks>
+/// Absent from a <see cref="LoggedRoundFindings"/> when the round was recorded before the columns
+/// existed, or by a database not yet migrated: that is NOT RECORDED, a different fact from a round that
+/// gave no orders, which carries an empty list.
+/// </remarks>
+public sealed record RoundOrders(IReadOnlyList<string> Commands, string PlanShape);
 
 /// <summary>One round of a BATCH answer: the key it was asked for, and what was found.</summary>
 /// <remarks>
@@ -246,7 +255,50 @@ public static class RoundsQuery
 
         var id = RoundId(db, sessionId, stage, number);
 
-        return id is null ? new LoggedRoundFindings(false, []) : new LoggedRoundFindings(true, FindingsFor(db, id.Value));
+        return id is null
+            ? new LoggedRoundFindings(false, [])
+            : new LoggedRoundFindings(true, FindingsFor(db, id.Value), OrdersOf(db, id.Value));
+    }
+
+    /// <summary>
+    /// What the round ordered — or nothing when it was never written down (issue #131).
+    /// </summary>
+    /// <remarks>
+    /// Asked of the schema first, because this read is read-only and a database last written by an
+    /// older binary has no such column. The empty string is the column's default and means the same
+    /// thing: a round from before the orders were recorded.
+    /// </remarks>
+    private static RoundOrders? OrdersOf(SqliteConnection db, long roundId)
+    {
+        if (!HasColumn(db, "rounds", "commands"))
+        {
+            return null;
+        }
+        using var read = db.CreateCommand();
+        read.CommandText = "SELECT commands, plan_shape FROM rounds WHERE id = $id";
+        read.Parameters.AddWithValue("$id", roundId);
+        using var row = read.ExecuteReader();
+
+        return row.Read() ? OrdersFrom(Text(row, "commands"), Text(row, "plan_shape")) : null;
+    }
+
+    /// <summary>The stored pair as orders, or nothing for a round that recorded none — or unreadable text.</summary>
+    internal static RoundOrders? OrdersFrom(string commands, string planShape)
+    {
+        try
+        {
+            return commands.Length == 0
+                ? null
+                : new RoundOrders(
+                    JsonSerializer.Deserialize(commands, Server.ServerJsonContext.Default.ListString) ?? [],
+                    planShape);
+        }
+        catch (JsonException)
+        {
+            // A column this binary wrote and cannot read back is a defect, but not one worth the
+            // round's findings: the page shows the findings and says nothing about orders.
+            return null;
+        }
     }
 
     /// <summary>

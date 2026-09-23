@@ -172,13 +172,14 @@ export class RoundsLogPanel {
    * about it changed, and this is not a region — it is the answer to a question the page asked a
    * moment ago, addressed to one row by its key.</p>
    */
-  async tell(key: string, state: string, findings: readonly unknown[]): Promise<void> {
+  async tell(key: string, state: string, findings: readonly unknown[], orders?: unknown): Promise<void> {
     const panel = this.panel;
     if (panel === undefined) {
       return;
     }
     try {
-      await panel.webview.postMessage({ type: 'found', id: key, state, findings });
+      // `orders` only when there are some to draw (issue #131); the page draws no block without it.
+      await panel.webview.postMessage({ type: 'found', id: key, state, findings, ...(orders === undefined ? {} : { orders }) });
     } catch (reason: unknown) {
       // The row stays on "Reading…" until the person closes and opens it, which asks again. Silence
       // here would be the blank this whole change exists to end.

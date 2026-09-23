@@ -31,7 +31,8 @@ import {
 } from './commandModels';
 import { chatProvidersFromPresets } from './chatModels';
 import { mainPrompt } from './chatPresets';
-import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
+import { CoaiSettings, GatePer, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
+import { gatePerSkewNote } from './gateScope';
 import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
@@ -1205,9 +1206,28 @@ function gateBody(state: PanelState): string {
   expensive half. All three are off unless you turn them on.</div>
   <label class="check"><input type="checkbox" data-setting="autonomous"${s.autonomous ? ' checked' : ''}> Work autonomously${help('autonomous')}</label>
   <label class="check"><input type="checkbox" data-setting="splitPlan"${s.splitPlan ? ' checked' : ''}> Split the plan into epics and stories${help('splitPlan')}</label>
+${gatePerBlock(state)}
   <label class="check"><input type="checkbox" data-setting="splitWithFable"${s.splitWithFable ? ' checked' : ''}> Split with the strongest model, and give it the risky stories${help('splitWithFable')}</label>
 </div>
 ${commandModelsBlock(state)}`;
+}
+
+/**
+ * How often split work comes back through the gate (issue #131): one gate per epic, or one for the
+ * whole task — never per story. The segmented radio `codeWorkspace` already uses, for the same kind
+ * of choice between two named modes.
+ */
+function gatePerBlock(state: PanelState): string {
+  const per = state.settings.gatePer;
+  const option = (value: GatePer, words: string): string =>
+    `<label class="${per === value ? 'on' : ''}"><input type="radio" name="gatePer" data-setting="gatePer" value="${value}"${per === value ? ' checked' : ''}> ${words}</label>`;
+  const note = gatePerSkewNote(state.server.version, state.settings.splitPlan);
+
+  return `  <div class="seg" role="radiogroup" aria-label="How often split work is gated">
+    ${option('epic', 'One gate per epic')}
+    ${option('task', 'One gate for the whole task')}
+  </div>${help('gatePer')}
+${note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`}`;
 }
 
 /**

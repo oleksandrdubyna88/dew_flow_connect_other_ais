@@ -567,7 +567,17 @@
         "coai.splitPlan": {
           "type": "boolean",
           "default": false,
-          "markdownDescription": "After a plan passes, tell the assistant to break it into 2-4 epics and each into 2-4 logically complete stories, and to close every story properly: review its diff through this gate, fix, document, test, commit. The order is given once per assistant — an epic coming back for its own review is told it is a piece, not told to split again."
+          "markdownDescription": "After a plan passes, tell the assistant how big it is — build it as it stands, 3-5 stories, or 2-3, 3-4 or 4-5 epics of stories, never more — measured from its build steps and length. How often the work comes back through the gate is `#coai.gatePer#`: once per epic or once for the whole task, never per story. The order is given once per assistant — an epic coming back for its own review is told it is a piece, not told to split again."
+        },
+        "coai.gatePer": {
+          "type": "string",
+          "enum": ["epic", "task"],
+          "enumDescriptions": [
+            "One gate per epic: each epic gets one plan round and one code round over its whole diff, and one commit.",
+            "One gate for the whole task: one code round over the whole diff at the end; still one commit per epic."
+          ],
+          "default": "epic",
+          "markdownDescription": "How often split work comes back through the gate. Never per story — a gate session ends at its code round, so a round per story cost a new branch and two rounds for every story."
         },
         "coai.splitWithFable": {
           "type": "boolean",
