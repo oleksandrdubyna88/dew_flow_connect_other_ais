@@ -24,7 +24,9 @@
  */
 import { readdirSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readRule, sweep } from './sweepTemp.mjs';
 
 /**
  * Every test file under `root`, by extension: compiled ones from `out/test`, source ones from
@@ -73,7 +75,23 @@ function run(files) {
   return result.status ?? 1;
 }
 
+/**
+ * What earlier runs left in temp, removed BEFORE this one makes anything (`sweepTemp.mjs`), and
+ * said, so a run that starts by removing four thousand directories tells somebody. It never stops
+ * the run: housekeeping that fails is reported and stepped over.
+ */
+function sweepFirst() {
+  try {
+    const { removed, failed } = sweep(tmpdir(), Date.now(), readRule('..'));
+    console.log(`run-tests: swept ${removed} leftover temp director${removed === 1 ? 'y' : 'ies'}`
+      + (failed > 0 ? `, ${failed} could not be removed` : ''));
+  } catch (error) {
+    console.log(`run-tests: the temp sweep did not run (${error.message}); the tests still will`);
+  }
+}
+
 function main() {
+  sweepFirst();
   const { compiled, sources } = discover('.');
 
   if (compiled.length === 0) {

@@ -1476,7 +1476,7 @@ public sealed partial class PanelService
     /// and — since Fast became the default — the review launch as well, which is now every code
     /// round rather than an opt-in. Empty directories are cheap; an unbounded count of them is not.
     /// </remarks>
-    private static readonly string[] ScratchPrefixes =
+    internal static readonly string[] ScratchPrefixes =
         ["coai-answers-*", "coai-repair-*", "coai-noworkspace-*"];
 
     /// <summary>
@@ -1506,6 +1506,10 @@ public sealed partial class PanelService
     /// <summary>A downloaded server kept under its version — not scratch, and not ours to remove.</summary>
     private static bool VersionCache(string dir) =>
         Path.GetFileName(dir) is { Length: > 5 } name && char.IsDigit(name["coai-".Length]);
+
+    /// <summary>A version cache, or a directory whose name starts with one of <paramref name="except"/>.</summary>
+    private static bool Kept(string dir, IReadOnlyList<string> except) =>
+        VersionCache(dir) || except.Any(owned => Path.GetFileName(dir).StartsWith(owned, StringComparison.Ordinal));
 
     /// <summary>How often one process will walk the temp directory looking for its own leftovers.</summary>
     /// <remarks>
@@ -1567,8 +1571,12 @@ public sealed partial class PanelService
     /// sweeper would be a second thing to get wrong. Measured on this machine, 2026-09-05: the
     /// product's own three prefixes had 3,395 directories and NOT ONE older than its six-hour
     /// window, while the test prefixes had 6,220 with the oldest at five days.
+    /// <para><paramref name="except"/> is for the test sweep, which matches <c>coai-*</c> on a ten-minute
+    /// window and must leave the product's own working directories alone — a live chat's can sit for an
+    /// hour with nothing written into it (<c>shared/temp-sweep.json</c>).</para>
     /// </remarks>
-    internal static void PruneOldScratchDirs(string tempRoot, DateTime cutoff, IReadOnlyList<string>? prefixes = null)
+    internal static void PruneOldScratchDirs(
+        string tempRoot, DateTime cutoff, IReadOnlyList<string>? prefixes = null, IReadOnlyList<string>? except = null)
     {
         try
         {
@@ -1580,7 +1588,7 @@ public sealed partial class PanelService
                     // name its predecessor's creation time, so a directory made this minute under a
                     // name used yesterday reads as a day old — and, the other way round, a long
                     // campaign's directory looks fresh for as long as anything writes into it.
-                    if (Directory.GetLastWriteTimeUtc(dir) < cutoff && !VersionCache(dir))
+                    if (Directory.GetLastWriteTimeUtc(dir) < cutoff && !Kept(dir, except ?? []))
                     {
                         DeleteEvenIfReadOnly(dir);
                     }

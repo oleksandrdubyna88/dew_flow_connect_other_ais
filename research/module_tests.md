@@ -60,6 +60,10 @@ dotnet build src_bench/CoaiBench/CoaiBench.csproj -c Release
 
 - **The two test suites: in CI, on every push and pull request**, plus the family checks (pin,
   plan lifecycle) and an AOT publish. A release is not cut without them.
+- **The server, Team server and bench suites again on macOS, on every pull request** (the `macos`
+  job, since 2026-09-23). Every other pull-request job is Linux, and `mcp-v0.31.0` found a macOS-only
+  defect — a review tree behind a link, #470 — at the tag, because the release matrix was the first
+  thing to run the suite there. The ingest server's suite is not in it: that server ships for Linux.
 - **The campaign harness: by hand, and not in CI** — it spends real vendor subscriptions and needs the
   local GPU for the `local` arm. Run by the operator before a release that changes reviewing
   behaviour, and whenever a question about vendors needs an answer with a number. Its results are
@@ -260,6 +264,24 @@ to over four minutes, which from outside is indistinguishable from a deadlock in
 been changed. The product now walks at most once every ten minutes per process rather than twice per
 reviewer. CI never sees any of this: a runner starts with an empty temp, so a green CI beside a
 stalled local suite is evidence FOR this cause.
+
+**Both runners sweep BEFORE they start, on one shared rule (2026-09-23).** The operator's ruling of
+2026-09-18: tests must clean up, not after each test but before the run, everything older than ten
+minutes — a cleanup hung off each test never runs for the runs that leave the most behind (Ctrl-C, a
+killed runner, a crashed host). `shared/temp-sweep.json` holds the rule: prefix `coai-`, ten
+minutes, and the product's own working directories (`coai-answers-`, `coai-repair-`,
+`coai-noworkspace-`, `coai-plan-`, `coai-server-job-`, `coai-chat-`) which are NEVER a test's to take —
+a live chat's directory can sit for an hour with nothing written into it, and a round waiting on a slow
+reviewer writes nothing to its answers directory until the answer lands. The extension's
+`scripts/run-tests.mjs` calls `sweepTemp.mjs` first (a pure decision over names and times, a thin
+unlinker that counts a failure and steps over it) and prints how many it took; the server suite's
+`TempDirsAreSwept` reads the same file and passes the exception list to `PruneOldScratchDirs`. The
+two-hour window it replaces never excepted anything, so it could take a live chat's directory.
+**The trade said out loud:** a test that makes a product-prefixed directory through `PanelService`
+(about a thousand per server-suite run) is now left to the product's own six-hour sweep, because by
+name it cannot be told from a live round's. Measured on 2026-09-23: a full extension run on a
+swept temp added 19 directories. Each rule in `sweepTemp.mjs` and the C# exception was broken on
+purpose and the test that owns it went red (`sweepTemp.test.mjs`, `TempDirsAreSwept`).
 
 ## The collector's suites (2026-09-16)
 
@@ -692,14 +714,20 @@ by moving the shipped helper to protocol 3 and watching the drift test name that
 making the check accept everything and watching both refusal tests go red. The harness is
 `TheDeliveryAgreesWithTheServerTests`'s, for its reason.
 
-**What is NOT covered, and why it is written down rather than skipped quietly:** `install-env.sh`'s
-two-record framing still has no automated test — the protocol test above proves the host's helper
-CAN carry two records, not that it frames them correctly. It writes a `root:coai-bugs 0640` file under `/etc`, and
-the only ways to drive it are to run the suite as root or to give it an override for its destination
-— and a root-owned writer that takes its path from the environment is a privilege escalation in a
-checkout the deploy account can write. It was exercised by hand over six shapes of stdin (both lines,
-an empty administrator line, an absent one, an unterminated one, three lines, an unterminated third)
-using a harness built from the script itself.
+`TheRootHelperFramesTwoRecordsTests` (2026-09-23) covers what the protocol test could not: that
+`install-env.sh` FRAMES the two records correctly. It runs the real, unmodified script — which runs as
+root and writes under `/etc` — with stand-ins for `install`, `chown` and `mv` first on PATH; the
+`mv` stand-in insists the destination is `/etc/coai-bugs/env` and puts the file where the test reads
+it. No override for the destination was added to the script: a root-owned writer that took its path
+from the environment would be a privilege escalation in a checkout the deploy account can write. Nine
+cases: both records become the three lines the server reads and neither value is printed; an empty
+second record is no administrators; an absent one is refused and nothing is written; an unterminated
+one is still complete; a third record, terminated or not, is refused (a wrapped base64 list would
+decode to a PREFIX); carriage returns are stripped; no secret is refused; a list over 64 KiB is refused
+rather than truncated. Teeth: reading an absent record as empty, throwing a third line away, and
+keeping the carriage return on the list each turned exactly their own case red. The harness is
+`ShellScript` — renamed from `ReleaseScript` in the same change, since it now runs deploy scripts
+too — widened with `Fed` (a stdin and a PATH) rather than copied.
 
 `ThePromiseMatchesTheSchemaTests` guards the WORDING against the schema: while `api_keys` has
 `last_seen_month` on it, no live surface may still say `submissions` is a counter with no clock. It

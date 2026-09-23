@@ -163,6 +163,6 @@ public sealed class ThePublishOutputCheckTests
         var arguments = new List<string> { Path.GetFileName(directory) };
         arguments.AddRange(wanted);
 
-        return ReleaseScript.Run("publish-output-carries.sh", parent, [.. arguments]);
+        return ShellScript.Run("publish-output-carries.sh", parent, [.. arguments]);
     }
 }

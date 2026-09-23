@@ -151,7 +151,7 @@ public sealed class TheArchiveCheckTests
         var arguments = new List<string> { Path.GetFileName(archive) };
         arguments.AddRange(wanted);
 
-        return ReleaseScript.Run("archive-carries.sh", Path.GetDirectoryName(archive)!, [.. arguments]);
+        return ShellScript.Run("archive-carries.sh", Path.GetDirectoryName(archive)!, [.. arguments]);
     }
 
 }

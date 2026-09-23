@@ -1,3 +1,4 @@
+using FluentAssertions;
 using CoaiMcp.Server;
 using Xunit;
 
@@ -19,8 +20,9 @@ namespace CoaiMcp.Tests;
 /// open — a spawned CLI, a SQLite handle, a reader mid-poll. Each of those catches the exception, and
 /// correctly: a leftover temp directory is not a failing test. What was missing is anybody clearing
 /// the leftovers afterwards, which is one sweep rather than forty corrections.</para>
-/// <para>It runs ONCE per assembly, deletes only what this project named, and only what is a day
-/// old — so a directory another test run is using right now is never touched.</para>
+/// <para>It runs ONCE per assembly, deletes only what this project named, only what is older than
+/// <see cref="Rule"/>'s window, and never the product's own working directories — so neither a
+/// directory another test run is using right now nor a live round's is touched.</para>
 /// </remarks>
 public sealed class TempDirsAreSwept
 {
@@ -36,23 +38,64 @@ public sealed class TempDirsAreSwept
     private static readonly string[] Prefixes = ["coai-*"];
 
     /// <summary>
-    /// How old a leftover must be before the suite removes it.
+    /// How old a leftover must be, and what is never one — <c>shared/temp-sweep.json</c>, which the
+    /// extension's runner reads too.
     /// </summary>
     /// <remarks>
-    /// <para><b>Two hours, and it was a day.</b> A day is safe and far too slow: a machine running
-    /// this suite repeatedly accumulates everything it makes IN that day and sweeps none of it, and
-    /// what that costs is not disk — it is <c>PanelService.BuildWork</c>, which walks the temp
-    /// directory looking for its own leftovers. Measured here 2026-09-13: <b>81,986</b> directories,
-    /// and a test that calls <c>BuildWork</c> a hundred times went from 8 seconds to over four
-    /// minutes.</para>
-    /// <para>Two hours still protects a concurrent run by a wide margin — the longest single run of
-    /// this suite is under ten minutes — and it is the same reasoning the old window had, with a
-    /// number that matches how often this is actually run.</para>
+    /// <para><b>Ten minutes, and it was two hours, and before that a day.</b> A day was far too slow:
+    /// a machine running this suite repeatedly accumulated everything it made IN that day, and what
+    /// that cost was not disk — it was <c>PanelService.BuildWork</c>, which walks the temp directory.
+    /// Measured here 2026-09-13: <b>81,986</b> directories, and a test that calls <c>BuildWork</c> a
+    /// hundred times went from 8 seconds to over four minutes. Ten minutes is the operator's ruling of
+    /// 2026-09-18, for both runners: the longest single run of this suite is under ten minutes, so a
+    /// concurrent run is still never reached.</para>
+    /// <para><b>And the product's own working directories are excepted</b>, which the two-hour window
+    /// never did: a live chat's directory can sit with nothing written into it for longer than either
+    /// window, and <c>coai-*</c> matched it.</para>
     /// </remarks>
-    private static readonly TimeSpan Keeps = TimeSpan.FromHours(2);
+    internal static readonly SweepRule Rule = SweepRule.Shared();
 
     public TempDirsAreSwept() =>
-        PanelService.PruneOldScratchDirs(Path.GetTempPath(), DateTime.UtcNow - Keeps, Prefixes);
+        PanelService.PruneOldScratchDirs(
+            Path.GetTempPath(), DateTime.UtcNow - Rule.Keeps, [$"{Rule.Prefix}*"], Rule.NeverSwept);
+
+    [Fact]
+    public void TheSharedRuleIsTheOperatorsTenMinutes()
+    {
+        Rule.Prefix.Should().Be("coai-");
+        Rule.Keeps.Should().Be(TimeSpan.FromMinutes(10));
+    }
+
+    /// <summary>Every scratch prefix the product makes is one the test sweep leaves alone.</summary>
+    /// <remarks>
+    /// A new working directory in <c>PanelService</c> that nobody adds to the shared rule would be
+    /// removed out from under a live round by the next test run on the same machine.
+    /// </remarks>
+    [Fact]
+    public void EveryScratchPrefixTheProductMakes_IsNeverTheTestsToSweep()
+    {
+        foreach (var prefix in PanelService.ScratchPrefixes.Select(p => p.TrimEnd('*')))
+        {
+            Rule.NeverSwept.Should().Contain(prefix, "the product sweeps {0}* itself, on its own clock", prefix);
+        }
+    }
+
+    [Fact]
+    public void AProductWorkingDirectory_SurvivesTheTestSweep_WhateverItsAge()
+    {
+        using var root = TempDir.For("coai-sweep-owned-");
+        var chat = Directory.CreateDirectory(root.At("coai-chat-live")).FullName;
+        var leftover = Directory.CreateDirectory(root.At("coai-panel-old")).FullName;
+        foreach (var dir in new[] { chat, leftover })
+        {
+            Directory.SetLastWriteTimeUtc(dir, DateTime.UtcNow.AddHours(-3));
+        }
+
+        PanelService.PruneOldScratchDirs(root, DateTime.UtcNow - Rule.Keeps, [$"{Rule.Prefix}*"], Rule.NeverSwept);
+
+        Directory.Exists(chat).Should().BeTrue("a chat that wrote nothing for three hours is still somebody's chat");
+        Directory.Exists(leftover).Should().BeFalse("and the test's own leftover beside it still goes");
+    }
 
     [Fact]
     public void TheSweepRemovesWhatIsOldAndLeavesWhatIsInUse()

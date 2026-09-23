@@ -25,7 +25,7 @@ namespace CoaiBugs.Tests;
 /// deliberately wrong. A check spelled inline in the wrapper could only be tested by running the
 /// wrapper, which wants root, a sudoers line and an ssh forced command. This file runs THE REAL
 /// SCRIPT over the real helper and over helpers that are wrong in each way they are wrong.</para>
-/// <para>Every refusal the script makes goes to STDERR, which is why <see cref="ReleaseScript"/>'s
+/// <para>Every refusal the script makes goes to STDERR, which is why <see cref="ShellScript"/>'s
 /// harness fits unchanged: it answers with the exit code and what was said there.</para>
 /// </remarks>
 public sealed class TheHostsHelperIsTheOneThisDeployNeedsTests : IDisposable
@@ -47,7 +47,7 @@ public sealed class TheHostsHelperIsTheOneThisDeployNeedsTests : IDisposable
     [Fact]
     public void TheHelperThisCheckoutShipsIsAccepted()
     {
-        var (code, error) = ReleaseScript.FromCheckout(Check, "deploy/bugs/install-env.sh");
+        var (code, error) = ShellScript.FromCheckout(Check, "deploy/bugs/install-env.sh");
 
         code.Should().Be(0, "the checkout's own helper must satisfy the checkout's own demand: {0}", error);
     }
@@ -73,7 +73,7 @@ public sealed class TheHostsHelperIsTheOneThisDeployNeedsTests : IDisposable
             printf 'the environment file is written\n'
             """);
 
-        var (code, error) = ReleaseScript.FromCheckout(Check, stale);
+        var (code, error) = ShellScript.FromCheckout(Check, stale);
 
         code.Should().Be(1, "a helper that cannot carry administrators must not be handed any");
         error.Should().Contain("install -m 0755",
@@ -106,16 +106,16 @@ public sealed class TheHostsHelperIsTheOneThisDeployNeedsTests : IDisposable
             printf 'the environment file is written\n'
             """);
 
-        ReleaseScript.FromCheckout(Check, other).Code.Should().Be(1, why);
+        ShellScript.FromCheckout(Check, other).Code.Should().Be(1, why);
     }
 
     /// <summary>A host that was never provisioned says that, rather than failing inside sudo.</summary>
     [Fact]
     public void AHelperThatIsNotThereIsSaidToBeMissing()
     {
-        var absent = ReleaseScript.Posix(Path.Combine(_dir, "not-installed-at-all"));
+        var absent = ShellScript.Posix(Path.Combine(_dir, "not-installed-at-all"));
 
-        var (code, error) = ReleaseScript.FromCheckout(Check, absent);
+        var (code, error) = ShellScript.FromCheckout(Check, absent);
 
         code.Should().Be(1);
         error.Should().Contain("not-installed-at-all", "the path that was looked for is the whole news");
@@ -135,6 +135,6 @@ public sealed class TheHostsHelperIsTheOneThisDeployNeedsTests : IDisposable
         var path = Path.Combine(_dir, "coai-bugs-install-env");
         File.WriteAllText(path, body.ReplaceLineEndings("\n"));
 
-        return ReleaseScript.Posix(path);
+        return ShellScript.Posix(path);
     }
 }

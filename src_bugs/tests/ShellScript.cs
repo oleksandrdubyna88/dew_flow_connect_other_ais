@@ -5,21 +5,21 @@ using Xunit;
 namespace CoaiBugs.Tests;
 
 /// <summary>
-/// Runs one of this repository's shell checks, the way the thing that owns it runs it.
+/// Runs one of this repository's shell scripts, the way the thing that owns it runs it.
 /// </summary>
 /// <remarks>
 /// <para>Extracted when the SECOND release check got a test. The first one's harness — find the
 /// checkout, convert the path for a POSIX shell, start `sh` or explain why it could not — is not
 /// about archives, and a second copy of it would have started drifting from the first the moment
 /// either learned something.</para>
-/// <para>Everything here is about the shell rather than about any particular check, which is why it
+/// <para>Everything here is about the shell rather than about any particular script, which is why it
 /// takes the script's name and its arguments and answers with the exit code and what it said.</para>
-/// <para><b>It stopped being only the release's in 2026-09.</b> `deploy/bugs/helper-protocol.sh` is
-/// a DEPLOY check and needed exactly this harness; the third copy was written before this comment
-/// was, which is the whole argument for the rule that caught it. The class keeps its name for now
-/// and the name is now slightly wrong — see <see cref="FromCheckout"/>.</para>
+/// <para><b>It was <c>ReleaseScript</c> until 2026-09-23</b>, and stopped being only the release's
+/// when `deploy/bugs/helper-protocol.sh` — a DEPLOY check — needed exactly this harness. Then
+/// `install-env.sh`, the root helper itself, needed it with a stdin and a PATH of its own
+/// (<see cref="Fed"/>); the name followed what the class does.</para>
 /// </remarks>
-internal static class ReleaseScript
+internal static class ShellScript
 {
     /// <summary>Run a script from `.github/scripts`, from <paramref name="workingDirectory"/>.</summary>
     /// <remarks>
@@ -47,16 +47,64 @@ internal static class ReleaseScript
             Repository(),
             arguments);
 
+    /// <summary>
+    /// Run a checkout script with <paramref name="stdin"/> as its whole input and
+    /// <paramref name="pathFirst"/> searched before the machine's own PATH.
+    /// </summary>
+    /// <remarks>
+    /// For a script whose job is to read what arrives and act on the system — `install-env.sh`, which
+    /// runs as root and writes under `/etc`. Putting a directory of stand-ins for `install`, `chown`
+    /// and `mv` first on PATH runs THE REAL SCRIPT, unmodified, with the side effects landing where a
+    /// test can read them; a test-only mode in a root helper would be one more thing root executes.
+    /// Answers with what went to stdout too, because a helper that printed the secret is a failure.
+    /// </remarks>
+    internal static ShellRun Fed(string relativePath, string stdin, string pathFirst) =>
+        Launch(
+            Path.Combine(Repository(), relativePath.Replace('/', Path.DirectorySeparatorChar)),
+            relativePath,
+            Repository(),
+            [],
+            new Feeding(stdin, pathFirst));
+
     /// <summary>The shell part, which is the same whoever owns the script.</summary>
     private static (int Code, string Error) Start(
         string script, string what, string workingDirectory, string[] arguments)
     {
+        var run = Launch(script, what, workingDirectory, arguments, Feeding.Nothing);
+
+        return (run.Code, run.Error);
+    }
+
+    private static ShellRun Launch(
+        string script, string what, string workingDirectory, string[] arguments, Feeding feeding)
+    {
         File.Exists(script).Should().BeTrue("{0} is what this checkout runs", script);
 
+        using var process = StartOrExplain(StartInfo(script, workingDirectory, arguments, feeding), what);
+        if (feeding.Stdin is { } stdin)
+        {
+            process.StandardInput.Write(stdin);
+            process.StandardInput.Close();
+        }
+
+        // Both streams at once: a script that fills one pipe while this reads the other to its end
+        // would wait on this reader for ever.
+        var error = process.StandardError.ReadToEndAsync();
+        var output = process.StandardOutput.ReadToEndAsync();
+        process.WaitForExit(milliseconds: 30_000).Should().BeTrue("the script should not hang");
+
+        return new ShellRun(process.ExitCode, error.GetAwaiter().GetResult(), output.GetAwaiter().GetResult());
+    }
+
+    private static ProcessStartInfo StartInfo(
+        string script, string workingDirectory, string[] arguments, Feeding feeding)
+    {
         var start = new ProcessStartInfo("sh")
         {
             RedirectStandardError = true,
             RedirectStandardOutput = true,
+            RedirectStandardInput = feeding.Stdin is not null,
+            StandardInputEncoding = feeding.Stdin is null ? null : new System.Text.UTF8Encoding(false),
             UseShellExecute = false,
             WorkingDirectory = workingDirectory,
         };
@@ -66,12 +114,18 @@ internal static class ReleaseScript
             start.ArgumentList.Add(argument);
         }
 
-        using var process = StartOrExplain(start, what);
-        var error = process.StandardError.ReadToEnd();
-        process.StandardOutput.ReadToEnd();
-        process.WaitForExit(milliseconds: 30_000).Should().BeTrue("the check should not hang");
+        if (feeding.PathFirst.Length > 0)
+        {
+            start.Environment["PATH"] = feeding.PathFirst + Path.PathSeparator + Environment.GetEnvironmentVariable("PATH");
+        }
 
-        return (process.ExitCode, error);
+        return start;
+    }
+
+    /// <summary>What a run is handed besides its arguments.</summary>
+    private sealed record Feeding(string? Stdin, string PathFirst)
+    {
+        public static readonly Feeding Nothing = new(null, string.Empty);
     }
 
     /// <summary>A path a POSIX shell will accept, which a Windows one is not.</summary>
@@ -123,3 +177,6 @@ internal static class ReleaseScript
         throw new InvalidOperationException("no checkout above this test binary carries .github/scripts");
     }
 }
+
+/// <summary>What one run of a script came to: its exit code and both of its streams.</summary>
+internal sealed record ShellRun(int Code, string Error, string Output);
