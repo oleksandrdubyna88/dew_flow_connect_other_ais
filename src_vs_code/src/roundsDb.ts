@@ -196,7 +196,7 @@ export function parseLog(text: string, paged = false): DbLog {
 
     return {
       rounds: (raw.rounds ?? []).map(round),
-      consultations: (raw.consultations ?? []).filter((one) => typeof one?.id === 'string'),
+      consultations: (raw.consultations ?? []).filter((one) => typeof one?.id === 'string').map(consultation),
       blindSpots: (raw.blindSpots ?? []).filter((s) => typeof s?.name === 'string'),
       defended: (raw.defended ?? []).map(finding),
       totals: totalsOf(raw.totals),
@@ -319,6 +319,55 @@ function totalsOf(raw: Partial<DbTotals> | undefined): DbTotals {
       tokensOut: number(raw.tokensOut),
       costUsd: number(raw.costUsd),
     };
+}
+
+/**
+ * One consultation, believed only as far as its shape — the rule {@link round} already applied.
+ *
+ * <p>They used to pass through untouched, and the price is what that cost. The server writes `--log`
+ * with `WhenWritingNull`, so a consultation nobody priced arrives with NO `costUsd` key; `undefined`
+ * then slipped past `costUsd !== null` into `toFixed`, and the throw landed before the log page's
+ * push — every tab stopped updating from the first unpriced consultation on (2026-09-23). Absent,
+ * null and anything that is not a finite number are all the same thing here: no price.</p>
+ *
+ * <p>`outcome` and `outcomeBy` stay optional rather than defaulted, for the reason on
+ * {@link DbConsultation}: nothing is not a verdict.</p>
+ */
+function consultation(raw: Partial<DbConsultation>): DbConsultation {
+  return {
+    id: text(raw.id),
+    callerKind: text(raw.callerKind),
+    repoPath: text(raw.repoPath),
+    branch: text(raw.branch),
+    vendor: text(raw.vendor),
+    model: text(raw.model),
+    turns: number(raw.turns),
+    status: text(raw.status),
+    reason: text(raw.reason),
+    startedUtc: text(raw.startedUtc),
+    endedUtc: text(raw.endedUtc),
+    seconds: number(raw.seconds),
+    tokensIn: number(raw.tokensIn),
+    tokensOut: number(raw.tokensOut),
+    costUsd: price(raw.costUsd),
+    ...verdictOf(raw),
+    problem: text(raw.problem),
+    advice: text(raw.advice),
+    alert: text(raw.alert),
+  };
+}
+
+/** A price, or `null` for everything that is not one — absent included, which is what the wire sends. */
+function price(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+/** Only the verdict fields that were actually SENT: an absent outcome stays absent, never a word. */
+function verdictOf(raw: Partial<DbConsultation>): Pick<DbConsultation, 'outcome' | 'outcomeBy'> {
+  return {
+    ...(typeof raw.outcome === 'string' ? { outcome: raw.outcome } : {}),
+    ...(typeof raw.outcomeBy === 'string' ? { outcomeBy: raw.outcomeBy } : {}),
+  };
 }
 
 function round(raw: Partial<DbRound>): DbRound {
