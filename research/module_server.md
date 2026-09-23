@@ -3047,22 +3047,34 @@ orders: with two vendors there are two possible orders and half of all client pa
 Nothing on the server changes — `JobStore.TryClaim` is FIFO by design, and a fair queue fed in a
 biased order is fixed at the feeding end.
 
-**Except that a local reviewer leads it (2026-09-12, issue #155).** `OneLocalFirstTheRestLast` runs
-over the shuffle's output: the first local vendor moves to the head, every other local vendor moves
-to the tail, and the hosted vendors keep the shuffle's relative order — so the Team-account fairness
-above is untouched and a replayed seed still replays. A local engine is the slowest reviewer in any
-round, minutes against tens of seconds, and asked last it makes the round's wall-clock "everything
-else finishes, then we wait".
+**Except that the local reviewers lead it (issue #155).** `LocalRowsFirst` runs over the shuffle's
+output: every local ROW moves to the head as one group, and the local rows and the hosted rows each
+keep the shuffle's relative order — so the Team-account fairness above is untouched and a replayed
+seed still replays. A local engine is the slowest reviewer in any round, minutes against tens of
+seconds, and asked last it makes the round's wall-clock "everything else finishes, then we wait".
 
-**Why only one leads, and the rest go last, is the mirror of the GPU lesson.** `BoundedScheduler`
-takes a machine-wide slot BEFORE the engine — deliberately, since taking the engine first once made a
-local reviewer hold an idle card while queued behind hosted vendors
-([PLAN_one_gpu_one_reviewer.md](PLAN_one_gpu_one_reviewer.md)). With `LocalConcurrency = 1` a second
-local row can only wait for the card, so near the front it would occupy one of three machine slots to
-do nothing and leave the hosted vendors sharing what was left. At the tail it waits where waiting is
-free. What the rule promises is the order reviewers are SUBMITTED in, which is all `BuildWork`
-decides: if another round holds the engine lease, the promoted row waits for the card like anything
-else.
+**Local reviewers have their own lane (2026-09-23).** In `BoundedScheduler` a reviewer with a
+`SharedResource` — only `LocalRuntime` sets one, to the engine's endpoint — waits for its ENGINE and
+for nothing else (`OnEngineAsync`); every other reviewer waits for a machine slot and then its
+vendor's (`OnMachineAsync`). The engine's semaphore outlives the round and hands over FIFO, so the
+local rows run strictly one after another and **the next one starts the moment the last one ends**;
+the hosted vendors keep all three machine slots. The bound is stated rather than implied: hosted ≤
+`globalCap`, local ≤ engines × `sharedResourceCap` — one per card by default. The machine cap exists
+for vendor CLIs, their lock files and 429s; a local reviewer is one small self-invocation speaking
+HTTP to the engine.
+
+It used to be one lane, widest first — machine, vendor, engine — which fixed the GPU lesson (taking
+the engine first once made a local reviewer hold an idle card while queued behind hosted vendors,
+[PLAN_one_gpu_one_reviewer.md](PLAN_one_gpu_one_reviewer.md)) and caused the next defect: from
+2026-09-12 only ONE local row led and the rest went to the tail so they would not hold machine slots
+while waiting for the card, and there they waited for a machine slot behind every hosted reviewer.
+When `local/1` ended, its slot went to the next hosted waiter while the card sat idle. The operator's
+screenshot showed four local roles in one round, three of them behind codex and gemini. With no
+machine slot to hold, the tail had no reason left, and at the head no hosted launch sits between
+`local/1` and `local/2` on the engine queue. See
+[PLAN_the_local_reviewers_have_their_own_lane.md](PLAN_the_local_reviewers_have_their_own_lane.md);
+`SharedEngineTests` holds both halves (the next local starts while every hosted reviewer is still
+blocked; three hosted run at once while locals hold the card).
 
 **The reviewers are shown the project's own rules.** `RuleFiles.Collect` (in `runners/Context`) reads
 `CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`, `.claude/rules/**` and

@@ -15,16 +15,17 @@ namespace CoaiMcp.Tests;
 /// started last, the round's wall-clock becomes the hosted reviewers finishing quickly and then
 /// everybody waiting for the local one to begin.</para>
 ///
-/// <para><b>Why only ONE local row leads.</b> `BoundedScheduler` takes a machine-wide slot BEFORE the
-/// engine (`global → per-provider → shared resource`, deliberately — taking the engine first once
-/// made a local reviewer hold an idle card while queued behind hosted vendors). So a second local row
-/// inside the first `MaxConcurrency` rows would occupy a slot and then block on a card it cannot
-/// have. Every local row after the first goes to the TAIL, where it takes a slot only once everything
-/// else has been served. The plan round caught that the first draft left them in place.</para>
+/// <para><b>Every local row leads, as one group (2026-09-23).</b> Until then only ONE did, and the
+/// rest went to the tail: `BoundedScheduler` made a local reviewer take a machine slot before its
+/// engine, so a second local row near the front would have held a slot while blocked on the card.
+/// That same tail is what made `local/2..4` wait behind every hosted reviewer although the card was
+/// idle — the half of issue #155 the operator restated. Local reviewers now have their own lane,
+/// bounded only by their engine (`SharedEngineTests`), so there is no machine slot to hold and no
+/// reason to keep them apart; at the head they meet the engine queue in order, with no hosted
+/// launch in between. See `todo/PLAN_the_local_reviewers_have_their_own_lane.md`.</para>
 ///
-/// <para><b>What this promises.</b> The order reviewers are SUBMITTED in — not a wall-clock start
-/// time. If another round holds the engine lease, the promoted row waits for the card like anything
-/// else; what changes is that it is asked first rather than after the hosted vendors.</para>
+/// <para><b>What this promises.</b> The order reviewers are SUBMITTED in. The start times are the
+/// scheduler's, and pinned there.</para>
 /// </remarks>
 public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
 {
@@ -89,9 +90,6 @@ public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
     private List<string> Order(PanelService service, int seed) =>
         [.. Rows(service, seed).Distinct(StringComparer.OrdinalIgnoreCase)];
 
-    /// <summary>How many machine slots a round opens with — the window that matters.</summary>
-    private const int MachineSlots = 3;
-
     /// <summary>Several seeds, so a pass cannot be the shuffle agreeing by accident.</summary>
     private static readonly int[] Seeds =
         [.. new[] { "s-alpha", "s-bravo", "s-charlie", "s-delta", "s-echo", "s-foxtrot" }
@@ -110,46 +108,49 @@ public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
     }
 
     /// <summary>
-    /// EXACTLY one local row is in the slots a round opens with, however many roles it serves.
+    /// Every ROW of a local vendor leads, however many roles it serves.
     /// </summary>
     /// <remarks>
-    /// The assertion the provider-level test could not make, and the defect it missed: with one local
-    /// vendor and four roles, reordering providers puts four local rows at the head — two of them
-    /// holding machine slots while blocked on a card only one can have.
+    /// Rows, as the helper above explains: one local vendor serving four roles is four rows, and all
+    /// four meet the engine before any hosted row is launched.
     /// </remarks>
     [Fact]
-    public void OnlyOneLocalRow_IsInTheSlotsTheRoundOpensWith()
+    public void EveryLocalRow_LeadsTheRound()
     {
         var service = Service("local", "alpha", "bravo");
 
         foreach (var seed in Seeds)
         {
             var rows = Rows(service, seed);
+            var locals = rows.Count(IsLocal);
 
-            rows[0].Should().StartWith("local", $"the slowest reviewer leads (seed {seed})");
-            rows.Take(MachineSlots).Count(v => v.StartsWith("local", StringComparison.Ordinal))
-                .Should().Be(1, $"a second local row would hold a slot it cannot use (seed {seed})");
+            locals.Should().Be(4, "one local vendor, four roles");
+            rows.Take(locals).Should().OnlyContain(v => IsLocal(v),
+                $"every local row is ahead of every hosted one (seed {seed})");
         }
     }
 
     [Fact]
-    public void ASecondLocalReviewer_GoesToTheTail_NotIntoTheFirstSlots()
+    public void TwoLocalVendors_BothLead_InTheShufflesOrder()
     {
-        // The trap this change would otherwise open: a machine slot held by a reviewer that cannot
-        // have the card. With LocalConcurrency = 1 the second local row can only wait, so it waits
-        // at the BACK, where waiting costs nothing.
+        // The order they meet the ONE engine in is the order they run in, so it is still the
+        // shuffle's — two local vendors are the Team-account case in miniature.
         var service = Service("local", "local-two", "alpha", "bravo");
 
         foreach (var seed in Seeds)
         {
             var order = Order(service, seed);
+            var shuffledLocals = SeededShuffle
+                .Of<string>(["local", "local-two", "alpha", "bravo"], seed)
+                .Where(IsLocal)
+                .ToList();
 
-            order[0].Should().StartWith("local", $"one local row leads (seed {seed})");
-            order[^1].Should().StartWith("local", $"and the other one is last (seed {seed})");
-            order[1..^1].Should().OnlyContain(v => !v.StartsWith("local", StringComparison.Ordinal),
-                $"nothing local sits between them, where it would hold a slot it cannot use (seed {seed})");
+            order.Take(2).Should().Equal(shuffledLocals, $"both local vendors lead, as shuffled (seed {seed})");
+            order.Skip(2).Should().OnlyContain(v => !IsLocal(v), $"the hosted ones follow (seed {seed})");
         }
     }
+
+    private static bool IsLocal(string vendor) => vendor.StartsWith("local", StringComparison.Ordinal);
 
     [Fact]
     public void ARoundWithNoLocalReviewer_IsOrderedExactlyAsItWasBefore()
@@ -169,9 +170,9 @@ public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
     [Fact]
     public void TheHostedVendorsKeepTheirShuffledOrderRelativeToEachOther()
     {
-        // Asserted AFTER the transform rather than before, which is the point: promoting one row and
-        // demoting another must not reorder the hosted vendors between them, or the fairness the
-        // shuffle buys is spent by this change. Raised on the plan round.
+        // Asserted AFTER the transform rather than before, which is the point: moving the local rows
+        // to the head must not reorder the hosted vendors behind them, or the fairness the shuffle
+        // buys is spent by this change. Raised on the 2026-09-12 plan round.
         var service = Service("local", "alpha", "bravo", "charlie");
 
         foreach (var seed in Seeds)
