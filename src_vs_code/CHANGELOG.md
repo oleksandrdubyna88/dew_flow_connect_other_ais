@@ -1,5 +1,28 @@
 # Changelog
 
+## Server 0.32.0 — 2026-09-23
+
+**The server now says when it died.** A `coai-mcp` that was killed — the window closed hard, the
+machine lost power, the process ran out of memory — used to leave nothing behind, and the
+notifications page simply stopped hearing from it. Every run now keeps a small heartbeat file in
+`runs/` in the data directory, and the next server to start writes the run that went silent without
+finishing onto the page as an **unclean exit**, naming its machine, its process and when it was last
+alive. A run that is merely paused on this machine — under a debugger, say — is not mistaken for a
+dead one, and several servers starting at once on one shared folder record each death once between
+them.
+
+**A crash is written down, and its secrets are not.** An error the server did not expect used to be
+printed by .NET itself, unredacted, into the log your MCP client keeps — a vendor key or a bearer
+token in the message went there in clear. It is now logged with credentials taken out, recorded on
+the page as a **crash** with the error's type, and the server exits with code 70. The same is true of
+an error before the server's log even exists, such as an unusable `COAI_DATA_SIDE`.
+
+**Every server notice says which run wrote it**, so a failure, a refusal and the death that followed
+can be read together.
+
+`runs/` stays behind when you move the data directory: it describes the servers running now, and a
+copied heartbeat would be read at the new location as a death that did not happen.
+
 ## Extension 0.51.0 · Server 0.31.0 — 2026-09-23
 
 **A pair on the Review bugs page can carry what you think of it, and the words travel with it.** Each
