@@ -17,14 +17,14 @@ namespace CoaiMcp.Server;
 /// <param name="Pid">Meaningful only on <paramref name="Host"/>, and only beside the start time.</param>
 /// <param name="StartedUtc">When the PROCESS started, so a reused pid cannot pass for it.</param>
 /// <param name="HeartbeatUtc">When the run last said it was alive.</param>
-public sealed record RunMarker(string Run, int Pid, string Host, DateTime StartedUtc, DateTime HeartbeatUtc);
+internal sealed record RunMarker(string Run, int Pid, string Host, DateTime StartedUtc, DateTime HeartbeatUtc);
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(RunMarker))]
 internal sealed partial class RunMarkerContext : JsonSerializerContext;
 
 /// <summary>What a file in the markers directory is.</summary>
-public enum MarkerFileKind
+internal enum MarkerFileKind
 {
     /// <summary><c>{run}.json</c> — a run's own marker.</summary>
     Marker,
@@ -40,13 +40,13 @@ public enum MarkerFileKind
 /// <param name="Run">The run it is about, from its NAME — so it is known even when it cannot be read.</param>
 /// <param name="Marker">The marker, for a <see cref="MarkerFileKind.Marker"/> that could be read.</param>
 /// <param name="WrittenUtc">Its last write — what a claim's or an unreadable file's age is judged by.</param>
-public sealed record FoundMarker(string Path, MarkerFileKind Kind, string Run, RunMarker? Marker, DateTime WrittenUtc);
+internal sealed record FoundMarker(string Path, MarkerFileKind Kind, string Run, RunMarker? Marker, DateTime WrittenUtc);
 
 /// <summary>What a sweep decided.</summary>
 /// <param name="Claim">Markers of runs that died, to claim and record.</param>
 /// <param name="Break">Claims abandoned by a sweeper that died holding them, to delete before re-claiming.</param>
 /// <param name="Retire">Files nothing will ever read again: a leftover claim, an old torn or unreadable file.</param>
-public sealed record MarkerSweep(
+internal sealed record MarkerSweep(
     IReadOnlyList<FoundMarker> Claim, IReadOnlyList<FoundMarker> Break, IReadOnlyList<FoundMarker> Retire);
 
 /// <summary>
@@ -182,7 +182,12 @@ internal sealed class RunMarkers(
     /// the record LANDED. A marker is removed only after that answer is yes.
     /// </param>
     /// <returns>How many deaths were recorded.</returns>
-    internal int Sweep(Func<ServerNotice, bool> append)
+    /// <param name="stop">
+    /// Honoured BETWEEN deaths: the one being written finishes, because a synchronous append cannot be
+    /// recalled, and every other one stays on disk for the next start. A stop that waited for the whole
+    /// sweep held a quick exit for the full stop budget on a slow share. (gemini, the code round.)
+    /// </param>
+    internal int Sweep(Func<ServerNotice, bool> append, CancellationToken stop)
     {
         var decided = Plan(Read(), clock(), me, Stale, sameProcessAlive);
         foreach (var gone in decided.Retire.Concat(decided.Break))
@@ -190,7 +195,9 @@ internal sealed class RunMarkers(
             Remove(gone.Path);
         }
 
-        return decided.Claim.Count(found => Recorded(found.Marker!, append));
+        return decided.Claim
+            .TakeWhile(_ => !stop.IsCancellationRequested)
+            .Count(found => Recorded(found.Marker!, append));
     }
 
     /// <summary>

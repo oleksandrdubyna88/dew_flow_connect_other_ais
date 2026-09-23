@@ -214,19 +214,49 @@ public sealed class TheRunsAreAccountedForTests : IDisposable
         Leave(Marker("dead00000002", silentFor: AnHour * 3));
         Leave(Marker("alive0000000", silentFor: TimeSpan.FromMinutes(2)));
 
-        Markers(Me).Sweep(Landing).Should().Be(2);
+        Markers(Me).Sweep(Landing, CancellationToken.None).Should().Be(2);
 
         _recorded.Select(n => n.Subject).Should().BeEquivalentTo(["dead00000001", "dead00000002"]);
         Left().Should().Equal(["alive0000000.json"], "the recorded deaths and their claims are gone; the live run is untouched");
     }
 
     [Fact]
+    public async Task AStopDuringTheSweep_IsHonouredBetweenDeaths_AndLeavesTheRestForTheNextStart()
+    {
+        // A client that connects and leaves while a start is still recording deaths on a slow share
+        // used to wait out the whole stop budget, and then be told a HEARTBEAT was stuck. (gemini, the
+        // code round.) The death being written finishes — a synchronous append cannot be recalled —
+        // and every other one is still on disk for the next start, which is where it belongs.
+        Leave(Marker("dead0000000a", silentFor: AnHour));
+        Leave(Marker("dead0000000b", silentFor: AnHour));
+        Leave(Marker("dead0000000c", silentFor: AnHour));
+        using var entered = new ManualResetEventSlim();
+        using var release = new ManualResetEventSlim();
+        var life = RunLife.Start(Markers(Me), notice =>
+        {
+            entered.Set();
+            release.Wait(TimeSpan.FromSeconds(30));
+
+            return Landing(notice);
+        }, Serilog.Core.Logger.None);
+        entered.Wait(TimeSpan.FromSeconds(30)).Should().BeTrue("the sweep reached its first death");
+
+        var stopping = life.StopAsync();
+        release.Set();
+
+        (await stopping).Should().BeTrue();
+        _recorded.Should().ContainSingle("the death already being written finishes; the stop is honoured before the next");
+        Left().Count(name => name.StartsWith("dead", StringComparison.Ordinal) && name.EndsWith(".json", StringComparison.Ordinal))
+            .Should().Be(2, "the deaths not yet recorded stay for the next start to record");
+    }
+
+    [Fact]
     public void ARepeatedStart_RecordsNothingMore()
     {
         Leave(Marker("dead00000003", silentFor: AnHour));
-        Markers(Me).Sweep(Landing);
+        Markers(Me).Sweep(Landing, CancellationToken.None);
 
-        Markers(Me with { Run = "second000000" }).Sweep(Landing).Should().Be(0);
+        Markers(Me with { Run = "second000000" }).Sweep(Landing, CancellationToken.None).Should().Be(0);
 
         _recorded.Should().ContainSingle("exactly once across a repeated start");
     }
@@ -238,10 +268,10 @@ public sealed class TheRunsAreAccountedForTests : IDisposable
         // refused append releases the claim and keeps the marker, so a later start retries.
         Leave(Marker("dead00000004", silentFor: AnHour));
 
-        Markers(Me).Sweep(_ => false).Should().Be(0);
+        Markers(Me).Sweep(_ => false, CancellationToken.None).Should().Be(0);
         Left().Should().Equal(["dead00000004.json"], "the marker stays and the claim is released");
 
-        Markers(Me with { Run = "second000000" }).Sweep(Landing).Should().Be(1);
+        Markers(Me with { Run = "second000000" }).Sweep(Landing, CancellationToken.None).Should().Be(1);
         _recorded.Should().ContainSingle();
     }
 
@@ -261,7 +291,7 @@ public sealed class TheRunsAreAccountedForTests : IDisposable
         var second = Markers(Me with { Run = "other0000000" });
         first.Write();
         second.Write();
-        await Task.WhenAll(Task.Run(() => first.Sweep(Landing)), Task.Run(() => second.Sweep(Landing)));
+        await Task.WhenAll(Task.Run(() => first.Sweep(Landing, CancellationToken.None)), Task.Run(() => second.Sweep(Landing, CancellationToken.None)));
 
         _recorded.Should().HaveCount(Deaths, "one record per death, whichever start won each claim");
         _recorded.Select(n => n.Subject).Should().OnlyHaveUniqueItems();
@@ -287,7 +317,7 @@ public sealed class TheRunsAreAccountedForTests : IDisposable
         File.WriteAllText(torn, "{\"run\":");
         File.SetLastWriteTimeUtc(torn, Now - AnHour);
 
-        Markers(Me).Sweep(Landing);
+        Markers(Me).Sweep(Landing, CancellationToken.None);
 
         File.Exists(torn).Should().BeFalse("the growth budget: every start removes every stale file it finds");
         _recorded.Should().BeEmpty("a write that died before its first marker landed is not a death anyone can name");
@@ -301,7 +331,7 @@ public sealed class TheRunsAreAccountedForTests : IDisposable
         File.WriteAllText(stranger, "hello");
         File.SetLastWriteTimeUtc(stranger, Now - AnHour);
 
-        Markers(Me).Sweep(Landing);
+        Markers(Me).Sweep(Landing, CancellationToken.None);
 
         File.Exists(stranger).Should().BeTrue("the sweep removes its own kinds of file and nothing else");
     }

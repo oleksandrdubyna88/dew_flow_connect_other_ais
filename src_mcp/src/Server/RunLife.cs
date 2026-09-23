@@ -60,7 +60,9 @@ internal sealed class RunLife
         var stopped = await Task.WhenAny(_loop, Task.Delay(StopBudget)) == _loop;
         if (!stopped)
         {
-            _log.Warning("run marker: a heartbeat is stuck on the share, and this run's marker may outlive it");
+            // Not "a heartbeat is stuck": the loop may equally be mid-way through the one death its
+            // sweep was writing when the stop came. (gemini, the code round.)
+            _log.Warning("run marker: a write to the share did not finish in time, and this run's marker may outlive it");
         }
 
         return stopped;
@@ -113,7 +115,7 @@ internal sealed class RunLife
     {
         try
         {
-            _markers.Sweep(append);
+            _markers.Sweep(append, _stop.Token);
         }
         catch (Exception failure)
         {

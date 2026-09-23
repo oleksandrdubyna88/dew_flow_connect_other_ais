@@ -493,6 +493,18 @@ also on the wire (`ProvidersAnswer.Unrecognised`), so it stays as a projection. 
 - **One locator, not four.** Three process-level test classes each carried an identical copy of the
   code that finds the `coai-mcp` binary; the epic's scenario would have been the fourth. It is
   `tests/ServerBinary.cs` now, and all four use it.
+- **What the code round changed — one round for the whole epic, 23 findings, 5 accepted.** codex
+  could not answer (its configured model is refused on a ChatGPT account), so eight of twelve
+  reviewers ran. Accepted: the four marker types are `internal`, not `public`; and a stop that
+  arrives while the start-up sweep is still recording deaths is honoured BETWEEN deaths — the one
+  being written finishes, the rest stay on disk for the next start — where it used to hold a quick
+  exit for the full stop budget and then blame a heartbeat (gemini; RED first, three deaths recorded
+  after the stop). The same pass removed a second resolution of the data directory inside
+  `ServeAsync` that contradicted the comment saying it was resolved once. Rejected, each with its
+  reason in the gate's record: a crash NOTICE from the one-shot modes (they answer on stdout, and
+  `Main`'s throw may be the directory itself failing), a UI spinner in a third-party client, and
+  ten findings the code refutes — among them that `RunLife.Start` runs inside the `try`, that
+  `Read()` scans on every beat, and that a vanished marker is recorded anyway.
 
 Order: 1.1 → 1.2 → 1.3 → 1.4 → 2.1 → 2.2 → 2.3 → 2.4 → 3.1 → 3.2. 1.3 may run beside 1.1/1.2.
 

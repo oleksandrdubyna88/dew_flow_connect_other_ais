@@ -1703,7 +1703,7 @@ internal static class Program
             // notice is the settings layering on the next line — the adoption of a legacy root
             // settings file happens before there is a host to own anything.
             var noticing = Noticing.Through(notices, Environment.GetEnvironmentVariable, log, run);
-            var dataDir = SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path;
+            var dataDir = dir.Path; // the one resolution above, not a second one
             var configuration = SettingsFile.Layer(
                 dataDir,
                 Environment.GetEnvironmentVariable,
