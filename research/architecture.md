@@ -376,6 +376,15 @@ One project edge is new in `src_mcp`: **`Runners → ServiceDefaults`**, for one
 `CoaiMcp.ServiceDefaults.JsonlLedger.AppendLine`, extracted from `UsageLedger` rather than copied
 beside it, so that "there is one append here" is a test rather than a habit.
 
+### A member added to one round's detail: what it ORDERED (2026-09-23, issue #131)
+
+`coai-mcp --findings` gained `orders` — the orders a round handed its caller, as sent, and the size a
+split order was computed from. The same two-directional rule as the member below, with one more state:
+an older server sends no member and the page draws nothing; an older extension ignores it; and a
+database written before schema step 14 has no column, so the read-only reader asks the schema and the
+member is ABSENT — never an empty list, which is reserved for a round that was recorded and gave no
+orders.
+
 ### A field added to the round list, and what "an older half" does with it (2026-09-14)
 
 `coai-mcp --log` is the other seam between the two containers, and it gained a member:

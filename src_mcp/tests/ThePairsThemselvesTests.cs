@@ -515,9 +515,13 @@ public sealed class ThePairsThemselvesTests : IDisposable
             db.RecordKeep([new KeepDecision(id, Keep.Kept)]);
         }
 
+        // Every column a step AFTER twelve added goes too, or the reopen re-runs a later step against a
+        // column it already has: step 14 (issue #131) added two to `rounds`.
         Execute("""
             ALTER TABLE collect_pairs DROP COLUMN comment;
             ALTER TABLE collect_pairs DROP COLUMN comment_lost;
+            ALTER TABLE rounds DROP COLUMN commands;
+            ALTER TABLE rounds DROP COLUMN plan_shape;
             PRAGMA user_version = 12;
             """);
         SqliteConnection.ClearAllPools();

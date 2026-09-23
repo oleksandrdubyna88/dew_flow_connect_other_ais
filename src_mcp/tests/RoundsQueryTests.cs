@@ -315,6 +315,77 @@ public sealed class RoundsQueryTests : IDisposable
     }
 
     [Fact]
+    public void WhatARoundOrdered_ComesBackWithItsFindings_WithTheSizeItMeasured()
+    {
+        // Issue #131: "why five epics?" had no answer anywhere a person could look.
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            db.RecordRound(Session, Round(), [Found("one")], new RoundContext("SCOPE", "7133c2f", "claude-code")
+            {
+                Commands = ["Split this plan into 2-3 EPICS …", "Work AUTONOMOUSLY …"],
+                PlanShape = "Medium: 400 lines, 8 build step(s), 3 file(s) named, 2 area(s) touched",
+            });
+        }
+
+        var orders = RoundsQuery.FindingsOf(_dir, "s1", "CodeReview", 1).Orders;
+
+        orders.Should().NotBeNull("the round was recorded with its orders");
+        orders!.Commands.Should().Equal("Split this plan into 2-3 EPICS …", "Work AUTONOMOUSLY …");
+        orders.PlanShape.Should().StartWith("Medium:");
+    }
+
+    [Fact]
+    public void ARoundThatOrderedNothing_SaysSo_RatherThanSayingNothingWasRecorded()
+    {
+        using (var db = RoundsDb.Open(_dir, _log)!)
+        {
+            db.RecordRound(Session, Round(), [Found("one")]);
+        }
+
+        var orders = RoundsQuery.FindingsOf(_dir, "s1", "CodeReview", 1).Orders;
+
+        orders.Should().NotBeNull("an empty list of orders is a recorded fact");
+        orders!.Commands.Should().BeEmpty();
+        orders.PlanShape.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void ADatabaseFromBeforeTheOrdersWereRecorded_StillAnswersItsFindings_AndNoOrders()
+    {
+        // Read-only, so the new step never runs for the reader: the columns are simply absent, and
+        // the findings — the thing the page opened the row for — must still come back.
+        Directory.CreateDirectory(_dir);
+        var file = Path.Combine(_dir, RoundsDb.FileName);
+        var adds = Array.FindIndex(Schema.Steps, step => step.Contains("ADD COLUMN commands", StringComparison.Ordinal));
+        adds.Should().BeGreaterThan(0, "the step that adds the column is what this test stops before");
+
+        using (var db = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={file};Pooling=False"))
+        {
+            db.Open();
+            using var make = db.CreateCommand();
+            make.CommandText = string.Join(";\n", Schema.Steps[..adds]) + $"; PRAGMA user_version={adds}";
+            make.ExecuteNonQuery();
+            using var insert = db.CreateCommand();
+            insert.CommandText =
+                "INSERT INTO sessions (id, repo_path, branch, opened_utc) VALUES ('s1', 'D:/repo', 'feat/x', '2026-09-01T00:00:00Z');"
+                + "INSERT INTO rounds (session_id, stage, number, status, verdict, started_utc, completed_utc) "
+                + "VALUES ('s1', 'CodeReview', 1, 'done', 'proceed', '2026-09-01T00:00:00Z', '2026-09-01T00:01:00Z');";
+            insert.ExecuteNonQuery();
+        }
+
+        var found = RoundsQuery.FindingsOf(_dir, "s1", "CodeReview", 1);
+
+        found.Known.Should().BeTrue();
+        found.Orders.Should().BeNull("never recorded is not 'no orders'");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("not json")]
+    public void OrdersThatWereNeverWrittenOrCannotBeRead_AreAbsent(string stored) =>
+        RoundsQuery.OrdersFrom(stored, "Small: …").Should().BeNull();
+
+    [Fact]
     public void ADatabaseThatIsNotThereIsAnEmptyLog_NotAFailure()
     {
         // A machine that has never run a round is asking a fair question and deserves an answer it

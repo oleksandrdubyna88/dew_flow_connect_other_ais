@@ -6991,6 +6991,20 @@ sent as `COAI_COMMAND_MODELS`, only for a kind whose pair differs from the shipp
   `data-*` attribute to its `dataset` name as a DOM does (with `rolesPageHarness`' `camel`); the old
   copy dropped them, and `panelPageHarness.test.ts` holds the fake to that.
 
+### One gate per epic or for the whole task, and the orders on the log page (2026-09-23, issue #131)
+
+- **`coai.gatePer`** (`epic` default, `task`) — a segmented radio under *Split the plan into epics and
+  stories*, the `codeWorkspace` shape; sent as `COAI_GATE_PER=task` only when not the default.
+  `gateScope.ts` holds `GATE_PER_SINCE = 0.33.0` and `gatePerSkewNote`: while the split switch is on and
+  the installed server is older, the panel says that server still orders a round after EVERY story.
+- **The split switch's help, tooltip and `markdownDescription`** (five languages) say the owner's sizes
+  and "never once per story"; "close every story properly" is gone.
+- **The rounds log shows *Orders given*** on an opened round: the size line first, then each order as a
+  `<details>` whose summary is its first sentence. `readFindings` reads the optional `orders` member of
+  `--findings` (`parseOrders`, which drops a malformed member rather than refusing the findings), and
+  `roundsLog.tell` carries it to the page. No block at all for a round that gave no orders or recorded
+  none — an empty block on every code round would be noise.
+
 ### A version only the code knows is a version nobody has (2026-09-03)
 
 The snippet has been versioned since v2 and the panel has reported a stale copy since then — but the

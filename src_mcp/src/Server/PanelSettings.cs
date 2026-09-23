@@ -333,6 +333,12 @@ public sealed record PanelSettings
         new Dictionary<string, Core.Commands.ModelPair>();
 
     /// <summary>
+    /// How often split work is gated — once per epic unless <c>COAI_GATE_PER</c> says <c>task</c>
+    /// (issue #131). Never per story.
+    /// </summary>
+    public Core.Commands.GateScope GatePer { get; init; } = Core.Commands.GateScope.Epic;
+
+    /// <summary>
     /// What a CODE reviewer is launched in: <c>none</c> (the default) or <c>worktree</c>.
     /// </summary>
     /// <remarks>
@@ -721,6 +727,7 @@ public sealed record PanelSettings
             Autonomous = Flag(env, "COAI_AUTONOMOUS"),
             SplitPlan = Flag(env, "COAI_SPLIT_PLAN"),
             SplitWithFable = Flag(env, "COAI_SPLIT_WITH_FABLE"),
+            GatePer = GateScopeOf(env(Key.GatePer) ?? string.Empty),
             LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
             ? effort.Trim().ToLowerInvariant()
             : "none",
@@ -801,6 +808,8 @@ public sealed record PanelSettings
         internal const string Roles = "COAI_ROLES";
 
         internal const string Consultants = "COAI_CONSULTANTS";
+
+        internal const string GatePer = "COAI_GATE_PER";
     }
 
     /// <summary>Every setting whose VALUE this build could not use, as one sentence each.</summary>
@@ -814,7 +823,28 @@ public sealed record PanelSettings
     /// </remarks>
     private static IReadOnlyList<UnrecognisedSetting> UnknownValues(
         Func<string, string?> env, RolesSetting roles) =>
-        [.. WhyBackoff(env), .. WhyExhausted(env), .. WhyWorkspace(env), .. WhyRoles(roles)];
+        [.. WhyBackoff(env), .. WhyExhausted(env), .. WhyWorkspace(env), .. WhyGatePer(env), .. WhyRoles(roles)];
+
+    private static IReadOnlyList<UnrecognisedSetting> WhyGatePer(Func<string, string?> env) =>
+        env(Key.GatePer) is { Length: > 0 } scope && !AGateScopeWeKnow(scope)
+            ? [new UnrecognisedSetting(
+                Key.GatePer,
+                $"{Key.GatePer} is '{scope}', which this server does not know — split work is gated "
+              + "once per epic, as it is by default. The values are 'epic' and 'task'.")]
+            : [];
+
+    private static bool AGateScopeWeKnow(string value) =>
+        string.Equals(value.Trim(), "epic", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(value.Trim(), "task", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// <c>COAI_GATE_PER</c> as a scope: <c>task</c> is one gate for the whole task, anything else is
+    /// per epic — an unknown word is said by <see cref="WhyGatePer"/> (issue #131).
+    /// </summary>
+    private static Core.Commands.GateScope GateScopeOf(string value) =>
+        string.Equals(value.Trim(), "task", StringComparison.OrdinalIgnoreCase)
+            ? Core.Commands.GateScope.Task
+            : Core.Commands.GateScope.Epic;
 
     private static IReadOnlyList<UnrecognisedSetting> WhyBackoff(Func<string, string?> env) =>
         env(Key.Backoff) is { Length: > 0 } backoff

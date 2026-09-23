@@ -171,6 +171,14 @@ public sealed class GateCommandsTests
     }
 
     [Fact]
+    public void TheWordsEverySplitOrderCarries_AreTheOnesTheSharedFileHolds()
+    {
+        using var document = System.Text.Json.JsonDocument.Parse(SharedFixtures.Text("command-models.json"));
+
+        GateCommands.GateOrderMarker.Should().Be(document.RootElement.GetProperty("splitOrderCarries").GetString());
+    }
+
+    [Fact]
     public void TheWordsTheBenchReads_AreTheOnesTheSharedFileHolds()
     {
         using var document = System.Text.Json.JsonDocument.Parse(SharedFixtures.Text("command-models.json"));
@@ -206,15 +214,32 @@ public sealed class GateCommandsTests
     }
 
     [Theory]
-    // The corpus's own numbers: the largest open plan, an ordinary one, and a small tail.
-    [InlineData(554, 7, 8, 2, PlanShape.Split.Epics)]
-    [InlineData(440, 0, 16, 5, PlanShape.Split.Epics)]
-    [InlineData(230, 9, 10, 2, PlanShape.Split.Stories)]
-    [InlineData(122, 7, 4, 2, PlanShape.Split.Stories)]
-    [InlineData(85, 3, 3, 2, PlanShape.Split.AsItIs)]
-    public void TheVerdict_IsTwoAxes_BecauseSizeAloneIsRefutedByTheCorpus(
-        int lines, int steps, int files, int areas, PlanShape.Split expected) =>
-        new PlanShape(lines, steps, files, areas).Verdict.Should().Be(expected);
+    // Issue #131: five sizes, from build steps and length only, each at both of its edges. The
+    // thresholds come from the 187 PLAN_*.md of this repository on 2026-09-23, measured with this
+    // reader: 8 % / 68 % / 14 % / 5 % / 2 %.
+    [InlineData(120, 2, PlanShape.Split.AsItIs)]
+    [InlineData(121, 2, PlanShape.Split.Small)]
+    [InlineData(100, 3, PlanShape.Split.Small)]
+    [InlineData(350, 6, PlanShape.Split.Small)]
+    [InlineData(351, 6, PlanShape.Split.Medium)]
+    [InlineData(100, 7, PlanShape.Split.Medium)]
+    [InlineData(600, 9, PlanShape.Split.Medium)]
+    [InlineData(601, 9, PlanShape.Split.Large)]
+    [InlineData(100, 10, PlanShape.Split.Large)]
+    [InlineData(900, 12, PlanShape.Split.Large)]
+    [InlineData(901, 12, PlanShape.Split.Huge)]
+    [InlineData(100, 13, PlanShape.Split.Huge)]
+    public void TheSize_IsTheLargerOfWhatTheStepsAndTheLengthSay(int lines, int steps, PlanShape.Split expected) =>
+        new PlanShape(lines, steps, Files: 3, Areas: 2).Verdict.Should().Be(expected);
+
+    [Fact]
+    public void ManyFilesAndAreas_DoNotMakeASmallPlanIntoEpics()
+    {
+        // The regression #131 is about: the median plan here names 15 files and nine in ten "touch"
+        // four areas, so `Files >= 14` alone sent 106 of 187 plans to epics. Files and areas are
+        // still reported; they no longer decide.
+        new PlanShape(Lines: 150, Steps: 3, Files: 40, Areas: 9).Verdict.Should().Be(PlanShape.Split.Small);
+    }
 
     [Fact]
     public void ThePlanItselfIsMeasured_NotGuessedAt()
@@ -225,20 +250,98 @@ public sealed class GateCommandsTests
         shape.Files.Should().Be(6);
         shape.Areas.Should().BeGreaterThanOrEqualTo(4);
         shape.Lines.Should().BeGreaterThanOrEqualTo(320);
-        shape.Verdict.Should().Be(PlanShape.Split.Epics);
+        shape.Verdict.Should().Be(PlanShape.Split.Medium);
     }
 
     [Fact]
-    public void APlanWithNoBuildOrder_IsStillMeasured()
+    public void APlanWithNoBuildOrder_IsStillSizedByItsLength()
     {
-        // The layout this heuristic must not be fooled by: the one plan in this repository that
-        // WAS split into epics has no build order at all.
-        var text = "# PLAN\n\n" + string.Join("\n", Enumerable.Range(0, 400).Select(i => $"line {i} `f{i % 20}.cs` src_mcp src_vs_code .github research"));
+        // PLAN_every_message_is_written_down is 1224 lines with no recognised build order and was
+        // built as several epics; length alone has to be able to say so.
+        var text = "# PLAN\n\n" + string.Join("\n", Enumerable.Range(0, 1000).Select(i => $"line {i} `f{i % 20}.cs`"));
 
         var shape = PlanShapeReader.Of(text);
 
         shape.Steps.Should().Be(0);
-        shape.Verdict.Should().Be(PlanShape.Split.Epics, "big and broad, whatever shape it is written in");
+        shape.Verdict.Should().Be(PlanShape.Split.Huge, "long, whatever shape it is written in");
+    }
+
+    [Theory]
+    [InlineData(200, 4, "3-5 logically complete STORIES")]
+    [InlineData(400, 8, "2-3 EPICS, each of 2-3 logically complete STORIES")]
+    [InlineData(700, 11, "3-4 EPICS, each of 3-4 logically complete STORIES")]
+    [InlineData(1000, 14, "4-5 EPICS, each of 3-5 logically complete STORIES")]
+    public void EachSize_OrdersTheOwnersNumbers_AndNoMore(int lines, int steps, string numbers)
+    {
+        var order = GateCommands.For(new CommandContext(
+            SplitPlan: true, PlanText: PlanOf(lines, steps, files: 3, areas: 2), PlanStage: true))[0];
+
+        order.Should().StartWith("Split this plan into ").And.Contain(numbers);
+        order.Should().Contain("Fewer is fine when the work is smaller; never more");
+    }
+
+    [Theory]
+    [InlineData(GateScope.Epic)]
+    [InlineData(GateScope.Task)]
+    public void NoOrderEverGatesEachStory(GateScope scope)
+    {
+        // Issue #131, symptom 2: "After EVERY story: call review_code" cost a branch, a plan round
+        // and a code round per story, because a gate session ends at its code round.
+        foreach (var (lines, steps) in new[] { (100, 1), (200, 4), (400, 8), (700, 11), (1000, 14) })
+        {
+            foreach (var first in new[] { true, false })
+            {
+                var orders = GateCommands.For(new CommandContext(
+                    SplitPlan: true, PlanText: PlanOf(lines, steps, 3, 2), PlanStage: true, FirstPlanRound: first)
+                { GatePer = scope });
+
+                string.Join(' ', orders).Should().NotContain("After EVERY story").And.NotContain("every story:");
+            }
+        }
+    }
+
+    [Fact]
+    public void OneGatePerEpic_StacksTheEpics_AndCommitsEachAsOne()
+    {
+        var order = GateCommands.For(new CommandContext(
+            SplitPlan: true, PlanText: PlanOf(400, 8, 3, 2), PlanStage: true))[0];
+
+        order.Should().Contain(GateCommands.GateOrderMarker + " per EPIC")
+            .And.Contain("starting from the previous epic's commit")
+            .And.Contain("previous epic's commit as baseRef")
+            .And.Contain("commit the epic as ONE commit");
+    }
+
+    [Fact]
+    public void OneGateForTheTask_IsOneCodeRoundAtTheEnd_AndStillACommitPerEpic()
+    {
+        var order = GateCommands.For(new CommandContext(
+            SplitPlan: true, PlanText: PlanOf(400, 8, 3, 2), PlanStage: true)
+        { GatePer = GateScope.Task })[0];
+
+        order.Should().Contain(GateCommands.GateOrderMarker + " for the WHOLE task")
+            .And.Contain("ONE review_code over the whole task's diff")
+            .And.Contain("commit each epic as ONE commit");
+    }
+
+    [Fact]
+    public void AStoriesOnlyPlan_IsOneUnitOfReview()
+    {
+        var order = GateCommands.For(new CommandContext(
+            SplitPlan: true, PlanText: PlanOf(200, 4, 3, 2), PlanStage: true))[0];
+
+        order.Should().Contain(GateCommands.GateOrderMarker).And.Contain("ONE review_code over the whole diff");
+        order.Should().NotContain("EPICS").And.NotContain("per EPIC");
+    }
+
+    [Fact]
+    public void APieceComingBack_UnderOneGateForTheTask_IsNotGatedOnItsOwn()
+    {
+        var again = GateCommands.For(new CommandContext(
+            SplitPlan: true, PlanText: SmallPlan, PlanStage: true, FirstPlanRound: false)
+        { GatePer = GateScope.Task })[0];
+
+        again.Should().Contain("do NOT split it again").And.Contain("not gated on its own").And.Contain("ONE commit");
     }
 
     [Fact]
@@ -252,6 +355,18 @@ public sealed class GateCommandsTests
             Enumerable.Range(0, 7).SelectMany(i => new[] { $"- `src/a{i}.cs`", $"- `tests/a{i}.cs`" }));
 
         PlanShapeReader.Of(text).Files.Should().Be(14);
+    }
+
+    [Fact]
+    public void ABuildOrderWithPhasesUnderIt_CountsEveryStepInEveryPhase()
+    {
+        // Issue #131 made the steps decide the size, and the section used to end at ANY heading — so a
+        // "### Phase 1" under "## Build order" cut it at zero steps and a plan built in phases read as
+        // small. The section ends at a heading of its own level or higher. (#131's code review.)
+        var text = "# PLAN\n\n## Build order\n\n### Phase 1\n\n1. a\n2. b\n3. c\n\n### Phase 2\n\n4. d\n5. e\n\n"
+            + "## Test plan\n\n1. x\n2. y\n";
+
+        PlanShapeReader.Of(text).Steps.Should().Be(5, "both phases are the build order, and the test plan is not");
     }
 
     [Fact]
@@ -351,10 +466,10 @@ public sealed class GateCommandsTests
             SplitPlan: splitPlan, PlanText: SmallPlan, PlanStage: planStage, FirstPlanRound: firstRound);
 
         GateCommands.OrdersSplit(context).Should().Be(expected);
-        // "After EVERY story" rather than "Split this plan": a plan small enough to build as it
-        // stands is still a split ORDER — it says so, and the per-story loop is the half that
-        // always applies. Caught by this test on its first run.
-        GateCommands.For(context).Any(c => c.Contains("After EVERY story", StringComparison.Ordinal))
+        // The gate ending rather than "Split this plan": a plan small enough to build as it stands
+        // is still a split ORDER — it says so, and the gate ending is the half that always applies.
+        // (It was "After EVERY story" until issue #131.)
+        GateCommands.For(context).Any(c => c.Contains(GateCommands.GateOrderMarker, StringComparison.Ordinal))
             .Should().Be(expected, "what it says and what it reports must be the same event");
     }
 }

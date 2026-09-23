@@ -41,6 +41,8 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   autonomous: true,
   splitPlan: true,
   splitWithFable: true,
+  // Issue #131: the non-default scope is what reaches the env block.
+  gatePer: 'task',
   // Issue #117: a kind whose pair differs from the shipped one is what reaches the env block.
   commandModels: {
     claude: { strongest: '', implementation: '' },

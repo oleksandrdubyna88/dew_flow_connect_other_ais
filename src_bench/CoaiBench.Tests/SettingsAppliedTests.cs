@@ -73,7 +73,7 @@ public sealed class SettingsAppliedTests
             Asked(("COAI_AUTONOMOUS", "true"), ("COAI_SPLIT_PLAN", "true"), ("COAI_SPLIT_WITH_FABLE", "true")),
             null,
             [Plan("proceed",
-                "Split this plan into 2-4 EPICS … After EVERY story: call review_code …",
+                "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES … THE GATE runs once per EPIC …",
                 "Do the SPLIT itself with Fable at its highest available version …",
                 "Work AUTONOMOUSLY. A question that does not block you …")]);
 
@@ -89,10 +89,41 @@ public sealed class SettingsAppliedTests
         var applied = SettingsCheck.Of(
             Asked(("COAI_SPLIT_WITH_FABLE", "true")),
             null,
-            [Plan("proceed", "Split this plan into 2-4 EPICS …")]);
+            [Plan("proceed", "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES …")]);
 
         applied.Ok.Should().BeFalse();
         applied.Mismatches.Should().ContainSingle().Which.Should().Contain("COAI_SPLIT_WITH_FABLE");
+    }
+
+    [Fact]
+    public void AnOrderToBuildItAsItStands_IsStillTheSplitSwitchApplied()
+    {
+        // Issue #131: the smallest size says "small enough to build as it stands", which carries
+        // neither "Split this plan into" nor "already under way" — only the gate ending every split
+        // order carries. Without it a short plan read as a switch that did nothing.
+        var applied = SettingsCheck.Of(
+            Asked(("COAI_SPLIT_PLAN", "true")),
+            null,
+            [Plan("proceed", "This plan is small enough to build as it stands … THE GATE runs once for this work …")]);
+
+        applied.Ok.Should().BeTrue();
+        applied.Checked.Should().Contain("COAI_SPLIT_PLAN");
+    }
+
+    [Fact]
+    public void TheSplitOrderWords_AreTheOnesTheSharedFileHolds()
+    {
+        var here = new DirectoryInfo(AppContext.BaseDirectory);
+        while (here is not null && !File.Exists(Path.Combine(here.FullName, "shared", "command-models.json")))
+        {
+            here = here.Parent;
+        }
+        here.Should().NotBeNull("shared/command-models.json is what both copies are held to");
+
+        using var document = System.Text.Json.JsonDocument.Parse(
+            File.ReadAllText(Path.Combine(here!.FullName, "shared", "command-models.json")));
+
+        SettingsCheck.SplitOrder.Should().Be(document.RootElement.GetProperty("splitOrderCarries").GetString());
     }
 
     [Fact]
@@ -123,7 +154,7 @@ public sealed class SettingsAppliedTests
             Asked(("COAI_SPLIT_PLAN", "true"), ("COAI_SPLIT_WITH_FABLE", "true")),
             null,
             [Plan("proceed",
-                "Split this plan into 2-4 EPICS …",
+                "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES …",
                 "Do the SPLIT itself with gpt-6-astra at its highest available version …")]);
 
         applied.Ok.Should().BeTrue();

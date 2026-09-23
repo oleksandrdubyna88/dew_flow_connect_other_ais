@@ -190,7 +190,7 @@ export function activate(context: vscode.ExtensionContext): void {
     onFindings: async (key, round) => {
       try {
         const found = await panelRef.roundFindings(round.sessionId, round.stage, round.number);
-        await roundsLog.tell(key, found.state, found.findings);
+        await roundsLog.tell(key, found.state, found.findings, found.orders);
       } catch (reason: unknown) {
         // The row is already showing "Reading…" and only this call can move it off. A rejection
         // here — the binary gone between the list read and the click — would otherwise leave it

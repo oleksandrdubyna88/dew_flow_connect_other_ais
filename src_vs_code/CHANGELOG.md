@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+**The split is sized honestly, gated once per epic — or once for the whole task — and written down**
+(issue #131). *Split the plan into epics and stories* used to call nearly every plan "epics" (it
+measured files and "areas" that every plan has) and told the assistant to run the code gate after
+EVERY story, which cost a new branch and two rounds per story. It now sizes a plan from its build
+steps and its length — build it as it stands, 3-5 stories, or 2-3, 3-4 or 4-5 epics of stories, never
+more — and a new choice under the switch says how often the work comes back: **one gate per epic**
+(each epic on its own branch on top of the last, one plan round, one code round, one commit) or **one
+gate for the whole task**. What every round ordered, and the size it measured, is now in the rounds
+database and shown as **Orders given** when you open a round in the log. Needs coai-mcp 0.33.0 or
+later; the panel says so while an older one is installed.
+
 **The split order names the calling assistant's own models, and you choose them** (issue #117). The
 third switch in *The gate* used to tell every assistant to split with Fable and implement on Opus —
 including a Codex session, which has neither. It is called **Split with the strongest model** now,

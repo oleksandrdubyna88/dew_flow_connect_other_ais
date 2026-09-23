@@ -31,7 +31,8 @@ import {
 } from './commandModels';
 import { chatProvidersFromPresets } from './chatModels';
 import { mainPrompt } from './chatPresets';
-import { CoaiSettings, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
+import { CoaiSettings, GatePer, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
+import { gatePerSkewNote } from './gateScope';
 import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
@@ -1205,9 +1206,38 @@ function gateBody(state: PanelState): string {
   expensive half. All three are off unless you turn them on.</div>
   <label class="check"><input type="checkbox" data-setting="autonomous"${s.autonomous ? ' checked' : ''}> Work autonomously${help('autonomous')}</label>
   <label class="check"><input type="checkbox" data-setting="splitPlan"${s.splitPlan ? ' checked' : ''}> Split the plan into epics and stories${help('splitPlan')}</label>
+${gatePerBlock(state)}
   <label class="check"><input type="checkbox" data-setting="splitWithFable"${s.splitWithFable ? ' checked' : ''}> Split with the strongest model, and give it the risky stories${help('splitWithFable')}</label>
 </div>
 ${commandModelsBlock(state)}`;
+}
+
+/**
+ * How often split work comes back through the gate (issue #131): one gate per epic, or one for the
+ * whole task — never per story. The segmented radio `codeWorkspace` already uses, for the same kind
+ * of choice between two named modes.
+ */
+function gatePerBlock(state: PanelState): string {
+  const note = gatePerSkewNote(state.server.version, state.settings.splitPlan);
+  const choices: readonly (readonly [GatePer, string])[] = [['epic', 'One gate per epic'], ['task', 'One gate for the whole task']];
+
+  return `  ${segmentedRadio('gatePer', state.settings.gatePer, 'How often split work is gated', choices)}${help('gatePer')}
+${note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`}`;
+}
+
+/**
+ * A setting with a few named values, as the segmented control the panel draws for them. ONE place,
+ * extracted when a second such choice arrived (issue #131) beside `codeWorkspace`, so the markup the
+ * page's script and styles rely on cannot drift between the two. Values and labels are the panel's
+ * own literals.
+ */
+function segmentedRadio(setting: string, current: string, label: string, choices: readonly (readonly [string, string])[]): string {
+  const option = ([value, words]: readonly [string, string]): string =>
+    `<label class="${current === value ? 'on' : ''}"><input type="radio" name="${setting}" data-setting="${setting}" value="${value}"${current === value ? ' checked' : ''}> ${words}</label>`;
+
+  return `<div class="seg" role="radiogroup" aria-label="${label}">
+      ${choices.map(option).join('\n      ')}
+    </div>`;
 }
 
 /**
@@ -1930,10 +1960,7 @@ ${roleSwitchSkew(state.server, s)}
   </div>
   <div class="field">
     ${labelled('codeWorkspace', 'What a reviewer gets', 'codeWorkspace')}
-    <div class="seg" role="radiogroup" aria-label="What a reviewer gets">
-      <label class="${s.codeWorkspace === 'none' ? 'on' : ''}"><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="none"${s.codeWorkspace === 'none' ? ' checked' : ''}> Fast — diffs only</label>
-      <label class="${s.codeWorkspace === 'worktree' ? 'on' : ''}"><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="worktree"${s.codeWorkspace === 'worktree' ? ' checked' : ''}> Full — with the code</label>
-    </div>
+    ${segmentedRadio('codeWorkspace', s.codeWorkspace, 'What a reviewer gets', [['none', 'Fast — diffs only'], ['worktree', 'Full — with the code']])}
     <div class="hint">Fast sends the diff, the plan and this project’s rules — and nothing to explore. Measured on one commit: every hosted model found MORE that way, at a half to a third of the tokens. Full also hands them the checkout, for a review that needs the surrounding code.</div>
   </div>
   <div class="hint"><b>Architecture</b> round 1 defaults to <b>Conventions</b>: it judges the diff against the rules this project has written down \u2014 <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> \u2014 and nothing else. The other two roles spend their round on their own subject; pick <b>Conventions</b> for them if you want the rules read again. Anything you pick wins.</div>

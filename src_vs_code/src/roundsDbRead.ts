@@ -1,4 +1,4 @@
-import { BugCorpus, DbFinding, DbLog, EMPTY_CORPUS, EMPTY_LOG, ManyFound, parseBugs, parseFindings, parseLog, parseManyFindings } from './roundsDb';
+import { BugCorpus, DbFinding, DbLog, EMPTY_CORPUS, EMPTY_LOG, ManyFound, parseBugs, parseFindings, parseLog, parseOrders, RoundOrders, parseManyFindings } from './roundsDb';
 import { Decision, ReviewPair } from './reviewPair';
 import { FileAtRead, FileAtRevision, TOO_OLD_FOR_THE_REVISION } from './openAtRevision';
 import { MethodSide, RealMethod, RealRead, TOO_OLD_FOR_THE_REAL_METHOD } from './realMethodView';
@@ -103,6 +103,8 @@ export type FoundState = 'loaded' | 'absent' | 'failed';
 export interface Found {
   readonly state: FoundState;
   readonly findings: readonly DbFinding[];
+  /** What the round ordered (issue #131) — absent when it recorded none, or a server sent none. */
+  readonly orders?: RoundOrders;
 }
 
 /**
@@ -137,7 +139,12 @@ export async function readFindings(
 
   // Exit 0 with an answer nobody can read is a FAILED read. Turning it into an empty list would tell
   // somebody a round was clean because a pipe was truncated. (Code round, codex.)
-  return findings === undefined ? { state: 'failed', findings: [] } : { state: 'loaded', findings };
+  if (findings === undefined) {
+    return { state: 'failed', findings: [] };
+  }
+  const orders = parseOrders(output);
+
+  return orders === undefined ? { state: 'loaded', findings } : { state: 'loaded', findings, orders };
 }
 
 /**

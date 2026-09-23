@@ -235,6 +235,43 @@ export function parseFindings(text: string): readonly DbFinding[] | undefined {
 }
 
 /**
+ * What a round ORDERED its caller to do, and the size it measured (issue #131).
+ *
+ * <p>Absent from an answer when the round was recorded before this was written down, or by a server
+ * or a database too old to hold it — which is NOT RECORDED, a different fact from an empty list.</p>
+ */
+export interface RoundOrders {
+  readonly commands: readonly string[];
+  readonly planShape: string;
+}
+
+/**
+ * The `orders` of a `--findings` answer, or nothing when there are none or they are not that shape.
+ *
+ * <p>Nothing rather than a guess: orders are context beside the findings, never a reason to refuse
+ * them, so a malformed member costs the orders block and nothing else.</p>
+ */
+export function parseOrders(text: string): RoundOrders | undefined {
+  try {
+    const orders: unknown = (JSON.parse(text) as { orders?: unknown }).orders;
+
+    return isOrders(orders) ? { commands: orders.commands, planShape: orders.planShape } : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isOrders(value: unknown): value is RoundOrders {
+  const orders = value as Partial<Record<keyof RoundOrders, unknown>> | null | undefined;
+
+  return typeof orders?.planShape === 'string' && isStrings(orders.commands);
+}
+
+function isStrings(value: unknown): value is readonly string[] {
+  return Array.isArray(value) && value.every((one) => typeof one === 'string');
+}
+
+/**
  * One round's entry in a BATCH answer: the key it was asked about, and what was found.
  *
  * <p>The key is echoed by the server and checked here rather than paired up by position. A batch

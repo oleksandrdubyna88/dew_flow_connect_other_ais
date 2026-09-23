@@ -9,40 +9,71 @@ namespace CoaiMcp.Core.Commands;
 /// <param name="Areas">Distinct top-level directories it touches: how BROAD the work is.</param>
 public sealed record PlanShape(int Lines, int Steps, int Files, int Areas)
 {
-    /// <summary>What this plan should be broken into before anybody starts building it.</summary>
+    /// <summary>How big this plan is — which decides what it is broken into before anybody builds it.</summary>
+    /// <remarks>The declaration order is the order of size; <see cref="Verdict"/> relies on it.</remarks>
     public enum Split
     {
         /// <summary>Small enough to build as it stands.</summary>
         AsItIs,
 
-        /// <summary>Ordinary work: two to four logically complete stories.</summary>
-        Stories,
+        /// <summary>Stories only, three to five of them.</summary>
+        Small,
 
-        /// <summary>Big AND broad: epics first, then stories inside each.</summary>
-        Epics,
+        /// <summary>Two or three epics of two or three stories.</summary>
+        Medium,
+
+        /// <summary>Three or four epics of three or four stories.</summary>
+        Large,
+
+        /// <summary>Four or five epics of three to five stories.</summary>
+        Huge,
     }
 
     /// <summary>
-    /// The verdict — a heuristic, and labelled as one wherever it is shown.
+    /// The size — the LARGER of what the build steps and the length say. A heuristic, and labelled
+    /// as one wherever it is shown.
     /// </summary>
     /// <remarks>
-    /// <para><b>Measured over this repository's own 23 plans</b> (median 120 lines, 4 build steps,
-    /// 6 files, 2 areas; max 554 / 9 / 28 / 5). Two axes rather than one, because size alone is
-    /// refuted by the corpus: the ONE plan that was actually split into epics — the master plan,
-    /// which became `epic_01`…`epic_06` — is 440 lines with 16 files across 5 areas and has no build
-    /// order at all, so a step count misses it, while a 230-line plan with 9 steps shipped whole in
-    /// a day.</para>
-    /// <para>Applied to that corpus this splits one into epics, eighteen into stories, and leaves
-    /// four alone.</para>
+    /// <para><b>Recalibrated for issue #131, on the 187 <c>PLAN_*.md</c> of this repository on
+    /// 2026-09-23</b>, measured with this reader. The first rule was calibrated on 23 plans and
+    /// answered "epics" for 106 of the 187: plans had grown, the median one names 15 files (the old
+    /// threshold was 14), and the area pattern matches <c>src</c>, <c>tests</c> and
+    /// <c>research</c> in prose, so nine plans in ten "touch four areas". Neither discriminates any
+    /// more, so neither decides; both are still reported in <see cref="Numbers"/>.</para>
+    /// <para>This rule sorts the same corpus 15 / 129 / 28 / 10 / 5 — 8 % / 68 % / 14 % / 5 % / 2 % — and,
+    /// re-measured after the build-order section stopped ending at a phase sub-heading, 189 plans (this
+    /// change's own two among them) 15 / 129 / 29 / 10 / 6. The ones it calls Huge include the Team
+    /// server, who-holds-a-key and
+    /// every-message-is-written-down plans, each of which was in fact built as several epics.
+    /// Length must be able to raise the size on its own: the last of those has no recognised build
+    /// order at all.</para>
     /// </remarks>
-    public Split Verdict =>
-        (Lines > 300 && (Steps >= 6 || Areas >= 4)) || Files >= 14 ? Split.Epics
-            : Steps >= 4 || Lines > 100 ? Split.Stories
-                : Split.AsItIs;
+    public Split Verdict => (Split)Math.Max((int)BySteps(Steps), (int)ByLength(Lines));
+
+    private static Split BySteps(int steps) => steps switch
+    {
+        >= 13 => Split.Huge,
+        >= 10 => Split.Large,
+        >= 7 => Split.Medium,
+        >= 3 => Split.Small,
+        _ => Split.AsItIs,
+    };
+
+    private static Split ByLength(int lines) => lines switch
+    {
+        > 900 => Split.Huge,
+        > 600 => Split.Large,
+        > 350 => Split.Medium,
+        > 120 => Split.Small,
+        _ => Split.AsItIs,
+    };
 
     /// <summary>The numbers, for a command that must say what it is judging.</summary>
     public string Numbers =>
         $"{Lines} lines, {Steps} build step(s), {Files} file(s) named, {Areas} area(s) touched";
+
+    /// <summary>The size and the numbers in one line — what a round records it measured.</summary>
+    public string Described => $"{Verdict}: {Numbers}";
 }
 
 /// <summary>
@@ -51,15 +82,15 @@ public sealed record PlanShape(int Lines, int Steps, int Files, int Areas)
 /// <remarks>
 /// <b>The extraction rules are written down here rather than implied</b>, because a plan is markdown
 /// somebody typed and a heuristic that silently reads zero from an unfamiliar layout would call a
-/// large plan small. Raised in this change's own plan round. Where the structure is absent the
-/// verdict falls back to what can still be counted — length and file names — which is why the rule
-/// has a size axis at all.
+/// large plan small. Raised in the first rule's own plan round. Where the structure is absent the
+/// verdict falls back to what can still be counted — the length — which is why the rule has a length
+/// axis at all.
 /// </remarks>
 public static class PlanShapeReader
 {
     private static readonly Regex NumberedItem = new(@"^\s{0,3}\d+[.)]\s", RegexOptions.Multiline);
-    private static readonly Regex BuildHeading = new(@"^##+\s*(build order|steps|implementation)\b", RegexOptions.Multiline | RegexOptions.IgnoreCase);
-    private static readonly Regex NextHeading = new(@"^##+\s", RegexOptions.Multiline);
+    private static readonly Regex BuildHeading = new(@"^(##+)\s*(build order|steps|implementation)\b", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+    private static readonly Regex NextHeading = new(@"^(#+)\s", RegexOptions.Multiline);
     private static readonly Regex FilePath = new(@"[\w./\\-]+\.(cs|ts|tsx|razor|json|yml|yaml|mjs|md|csproj|slnx)\b", RegexOptions.IgnoreCase);
     // A lookbehind rather than `\b` at the start: `\b` before a DOT never matches, so `.github` — a
     // legitimate area, and one of the five this repository has — was invisible to the count. Found
@@ -72,9 +103,8 @@ public static class PlanShapeReader
     {
         var text = planText ?? string.Empty;
         var lines = text.Length == 0 ? 0 : text.Split('\n').Length;
-        // By PATH, not by base name: `src/a.cs` and `tests/a.cs` are two files, and collapsing them
-        // made a plan naming fourteen of them look like a plan naming nine — which is the threshold
-        // the epics verdict turns on. (codex, this change's code round.)
+        // By PATH, not by base name: `src/a.cs` and `tests/a.cs` are two files. Reported with the
+        // size, no longer part of deciding it (issue #131). (codex, the first rule's code round.)
         var files = FilePath.Matches(text)
             .Select(m => m.Value.Replace('\\', '/').TrimStart('.', '/'))
             .Distinct(StringComparer.OrdinalIgnoreCase)
@@ -102,10 +132,19 @@ public static class PlanShapeReader
             return LongestRun(text);
         }
         var after = text[(heading.Index + heading.Length)..];
-        var next = NextHeading.Match(after);
+        var next = SectionEnd(after, heading.Groups[1].Length);
 
-        return NumberedItem.Matches(next.Success ? after[..next.Index] : after).Count;
+        return NumberedItem.Matches(after[..next]).Count;
     }
+
+    /// <summary>Where the build-order section ends: the first heading of its own level or higher.</summary>
+    /// <remarks>
+    /// Not the first heading of ANY level: a build order written in phases carries "### Phase 1" under
+    /// "## Build order", and ending there counted zero steps — harmless while files decided the size,
+    /// wrong since issue #131 made the steps decide it. (#131's code review.)
+    /// </remarks>
+    private static int SectionEnd(string after, int level) =>
+        NextHeading.Matches(after).FirstOrDefault(m => m.Groups[1].Length <= level)?.Index ?? after.Length;
 
     /// <summary>The longest unbroken sequence of numbered lines — a build order without a heading.</summary>
     /// <remarks>
