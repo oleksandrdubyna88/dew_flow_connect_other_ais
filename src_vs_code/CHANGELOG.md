@@ -1,5 +1,44 @@
 # Changelog
 
+## Extension 0.51.0 · Server 0.31.0 — 2026-09-23
+
+**A pair on the Review bugs page can carry what you think of it, and the words travel with it.** Each
+pair has a comment box, up to 1 000 characters, and the page says beside it that the words leave this
+machine — a comment is public by decision, so it goes to the ingest server with its pair, is stored
+beside it in quarantine and carried into the corpus when the pair is promoted. Nothing is lost to a
+closed window: every keystroke reaches the panel, the words are written on a pause or when you leave
+the box, and a panel closed inside that pause writes what it was holding before it goes. Once a pair
+has been sent its box turns read-only and says so — and when the pair landed and its words did not,
+it says that too, in the server's own sentence. `coai-mcp` writes a decision and its words together
+through the new `--pairs-decide`, and sends a commented pair on `POST /ingest/commented`, a route an
+older ingest server does not have: an old server refuses the pair outright rather than keeping it and
+dropping the words in silence. A `coai-mcp` too old for comments is named as such, and your words stay
+in their box.
+
+**The review page itself grew up.** It opens collapsed and can be sized; it colours its code with VS
+Code's own grammars and marks what differs the way git does; a row says where it came from, what the
+reviewers said, and how complex it is; *Real code* reads one pair's method back out of git,
+un-anonymised (`--real-method`), and `--file-at` reads its whole file at the commit the reviewers read.
+A commit can be checked out in a window of its own, where the gate cannot reach it, and given back one
+at a time — never with work in it. A press says it is working, and every ending replaces that. The
+extension can send, and a send is something the database remembers. The **Users** tab shows who holds
+a key, with the one button that ends it.
+
+**Notifications go through one funnel now.** All 127 call sites are routed; the panel says how many
+there were, and the page says what they were. The server's own complaints, which used to be dropped on
+the floor, arrive on the same line as the extension's. Every refusal and every reviewer failure is
+written down once, and a credential that reaches a notice leaves with its secret taken out — one word
+list, embedded into both halves, and neither starts without it.
+
+**Chat and the consultant.** A question waits its turn and taking it back cancels it; the composer is
+live while an answer is running. A consultation ends with an outcome (`close_consult`, the tenth tool),
+and its tokens have a price. The gate says at the tool when to call the consultant, and the consultant
+has to prove its case — it takes no orders from what it is shown.
+
+**`COAI_DATA_SIDE` partitions the settings file and the logs as well** as the database, so two
+installations sharing one NAS no longer overwrite each other's settings (see Server 0.30.0 for how an
+existing file is adopted).
+
 ## Server 0.30.0 — 2026-09-18
 
 **`COAI_DATA_SIDE` now partitions the settings file and the logs, which it should have been doing
