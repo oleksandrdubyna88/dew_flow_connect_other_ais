@@ -99,17 +99,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         }
     }
 
-    private static string ShimExe
-    {
-        get
-        {
-            var configuration = AppContext.BaseDirectory.Contains("Release") ? "Release" : "Debug";
-
-            return Path.GetFullPath(Path.Combine(
-                AppContext.BaseDirectory, "..", "..", "..", "..", "src", "bin", configuration, "net10.0",
-                OperatingSystem.IsWindows() ? "coai-mcp.exe" : "coai-mcp"));
-        }
-    }
+    private static string ShimExe => ServerBinary.Path;
 
     private void SignIn(string token = "a-token") =>
         TeamServerAuth.WriteToken(TeamServerAuth.TokenPath(_dataDir, _prefix), token);
@@ -637,10 +627,36 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     }
 
     /// <summary>
-    /// A child that stays: no arguments, so it serves MCP and waits on a stdin nobody closes.
+    /// A child that stays: no arguments, so it serves MCP and waits on a stdin nobody closes — from THIS
+    /// test's data directory, because a serving child reads settings, writes logs and keeps a run
+    /// marker wherever <c>COAI_DATA_DIR</c> points, and unset that is the machine's real store.
     /// </summary>
-    private static RunningShim StartLivingShim() =>
-        StartShim(new ProcessStartInfo(ShimExe) { RedirectStandardInput = true });
+    private RunningShim StartLivingShim()
+    {
+        var info = new ProcessStartInfo(ShimExe) { RedirectStandardInput = true };
+        info.Environment["COAI_DATA_DIR"] = _dataDir;
+        info.Environment.Remove("COAI_DATA_SIDE");
+
+        return StartShim(info);
+    }
+
+    /// <remarks>
+    /// Found by epic 3 of PLAN_the_server_says_what_it_did.md, in the operator's own data directory: a
+    /// living shim SERVES, and with no <c>COAI_DATA_DIR</c> it served the machine's real store — its
+    /// settings, its logs, and since epic 3 its run markers, which the next real start would have
+    /// recorded as seven deaths on the person's page. One of them had already swept that store and
+    /// died holding a claim. A test's child answers to the test's directory, never the machine's.
+    /// </remarks>
+    [Fact]
+    public async Task ALivingShim_ServesFromTheTestsOwnDirectory_NeverTheMachines()
+    {
+        using var shim = StartLivingShim();
+        var runs = Path.Combine(_dataDir, CoaiMcp.Server.RunMarkers.Folder);
+
+        await WaitBrieflyForAsync(
+            () => Directory.Exists(runs) && Directory.GetFiles(runs, "*.json").Length > 0,
+            "the living shim's run marker in the TEST's data directory", shim, TimeSpan.FromSeconds(30));
+    }
 
     [Fact]
     public async Task AFailedWait_SaysTheChildWasStillRunning()

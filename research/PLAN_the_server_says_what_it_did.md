@@ -490,9 +490,20 @@ also on the wire (`ProvidersAnswer.Unrecognised`), so it stays as a projection. 
   the beat without a word — the live run's marker then goes stale and a peer records a death that is
   not one. RED on a clock that throws (*"to have an item matching … heartbeat"*, with nothing
   logged at all); each beat now has the sweep's catch-all, says what failed, and the next one tries.
-- **One locator, not four.** Three process-level test classes each carried an identical copy of the
-  code that finds the `coai-mcp` binary; the epic's scenario would have been the fourth. It is
-  `tests/ServerBinary.cs` now, and all four use it.
+- **One locator, not five.** Three process-level test classes each carried an identical copy of the
+  code that finds the `coai-mcp` binary, and a fourth hid under another name (`ShimExe`); the epic's
+  scenario would have been the fifth. It is `tests/ServerBinary.cs` now, and all five use it.
+- **A test's child was serving the operator's REAL data directory — found in that directory.**
+  `RemoteShimScenarioTests` starts a "living shim": `coai-mcp` with no arguments, which SERVES, and
+  it set no `COAI_DATA_DIR`. It had been reading the machine's settings and writing its logs into the
+  machine's store all along; epic 3 made it keep run markers there too, and then SWEEP there. It was
+  found as seven stale markers and an orphaned claim in `%LOCALAPPDATA%\coai-mcp\runs`, and the RED
+  run of its own fix — the one run made deliberately without it — appended five `unclean-exit`
+  records about dead test processes to the operator's real `server-notices.jsonl`. Those were cut
+  back to the file's exact previous length after a backup and a line-by-line check, and `runs/` was
+  removed (it had not existed before). `ALivingShim_ServesFromTheTestsOwnDirectory_NeverTheMachines`
+  holds the fix; the class's private copy of the binary locator — a fourth, missed by the first
+  search because it was named `ShimExe` — is `ServerBinary.Path` now.
 - **What the code round changed — one round for the whole epic, 23 findings, 5 accepted.** codex
   could not answer (its configured model is refused on a ChatGPT account), so eight of twelve
   reviewers ran. Accepted: the four marker types are `internal`, not `public`; and a stop that
