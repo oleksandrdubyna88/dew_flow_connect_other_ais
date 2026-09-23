@@ -4,8 +4,9 @@
 > promotion:** the `coai-mcp` release that carries S8, which its DoD names; and the EXTENSION half
 > of *H*'s run marker, which no phase built — *H* says both halves write one, S8 built the server's,
 > and on 2026-09-23 nothing in `src_vs_code/src` outside the tests produces an `unclean-exit`
-> (checked by search for the code and for a marker; whether *H*'s other shutdown items all landed
-> was NOT re-checked). S6 shipped 2026-09-17 as
+> (checked by search for the code and for a marker) — extracted on 2026-09-23 into
+> [PLAN_the_extension_says_when_a_window_died.md](PLAN_the_extension_says_when_a_window_died.md). *H*'s other shutdown items — the drain to quiescence, its ceiling,
+> the write-gap record — DID ship with S5 (checked 2026-09-23: `jsonlLedger.ts:161`). S6 shipped 2026-09-17 as
 > [PLAN_the_rounds_log_in_line.md](../research/PLAN_the_rounds_log_in_line.md); this line said *"S6
 > open"* until 2026-09-23, when promoting S8 found it. S8 was extracted 2026-09-21 into
 > [PLAN_the_server_says_what_it_did.md](../research/PLAN_the_server_says_what_it_did.md), which
@@ -771,6 +772,8 @@ that lies in exactly the situation it exists for:
   failing, labelled as this window's, because until the disk answers there is nowhere else for it to
   be.
 - **A killed process leaves no record at all.** SIGKILL, OOM, power loss: no `catch`, no `deactivate`.
+  *(The server half shipped 2026-09-23 with S8; the extension half is
+  [PLAN_the_extension_says_when_a_window_died.md](PLAN_the_extension_says_when_a_window_died.md).)*
   Both halves write a **run-start marker** and clear it on clean exit; the next start finds a stale
   marker and appends an unclean-exit record. The server already has the machinery — `running/{pid}.json`
   and `ProcessTracking.Sweep` — and this is the same shape, including the part that matters most:
@@ -932,6 +935,7 @@ goes into each plan below in the same task.
 
 | Item | This plan | The sibling |
 |---|---|---|
+| The run marker on the EXTENSION side (section *H*) | promised here, not built | [PLAN_the_extension_says_when_a_window_died.md](PLAN_the_extension_says_when_a_window_died.md) builds it, in its own folder `extension-runs/`, after the server's half (S8) shipped; this plan is promoted once that and the S8 release have both shipped |
 | `rowMatches`' haystack (`roundsLog.ts:801`) | S6 adds the summary sentence to it | [PLAN_the_log_searches_the_findings.md](PLAN_the_log_searches_the_findings.md) queries `findings_fts`; its point 5 keeps the row-text filter. **The two plans cited two different lines — 820 here, 474 there, both written from an older file. Reconciled 2026-09-17 by opening it: 801. This plan goes first** |
 | The rounds log's tab ARIA | not started here | [PLAN_the_tabs_announce_themselves.md](PLAN_the_tabs_announce_themselves.md) owns it; S6 changes only which ids the handler derives |
 | Page tests that run the page | the new page ships this way from the start | [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) owns the backlog of existing source-text assertions |
@@ -1158,6 +1162,7 @@ rename and inflates the count). C#: `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.T
 - [ ] The watermark is a map **per ledger**, acknowledges only the range actually rendered, and treats a
       missing file as a first run rather than an error.
 - [ ] Every run has its own marker; a clean exit clears only its own; startup sweeps them all.
+      *(Server: shipped with S8. Extension: [PLAN_the_extension_says_when_a_window_died.md](PLAN_the_extension_says_when_a_window_died.md).)*
 - [ ] Role deletion writes its tombstone **before** the row, resumes after a kill at any step, and a
       tombstone stranded by a permanent stand-down can be finished from the roles page.
 - [ ] The `.NET` writer applies the same redaction and caps as the TypeScript one, proven by

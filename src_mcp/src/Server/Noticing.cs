@@ -85,19 +85,6 @@ public sealed record Noticing(Func<ServerNotice, bool> Offer, Serilog.ILogger Lo
     }
 
     /// <summary>
-    /// Where this side's data directory is — asked of the ONE resolver, from the ONE place notices ask.
-    /// </summary>
-    /// <remarks>
-    /// It is a named method and it lives here rather than at each caller, because
-    /// <c>TheOneAppendTests</c> asks the ASSEMBLY which members ANSWER a <see cref="ResolvedDataDir"/>
-    /// — that census exists to catch a second IMPLEMENTATION of the rule. Composing this as a lambda
-    /// at the call site put <c>&lt;&gt;c.&lt;ServeAsync&gt;b__46_4</c> into that list: a member with a
-    /// name no reader can place, which is worse than the thing the census was watching for. One
-    /// named pass-through, used by the refusals and by the reviewer failures alike.
-    /// </remarks>
-
-
-    /// <summary>
     /// Writes nothing, says nothing — for a one-shot mode, and for a test that is about something else.
     /// </summary>
     /// <remarks>
