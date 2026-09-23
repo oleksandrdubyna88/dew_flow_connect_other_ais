@@ -1,14 +1,41 @@
 # PLAN — the split order sizes the work honestly, gates it once per epic or per task, and says what it ordered
 
-> Status: **plan only, nothing implemented yet, 2026-09-23.** Scope: the *Split the plan into epics
+> Status: **IMPLEMENTED, 2026-09-23.** Scope: the *Split the plan into epics
 > and stories* switch — `PlanShape`'s verdict, `GateCommands.SplitCommand`/`AlreadySplitCommand`, a new
-> gate-granularity setting, and a record of the orders a round gave (rounds DB, `--log`, the rounds log
-> page). Issue #131; the "1 gate per epic / 1 gate per task" half of issue #467.
+> gate-granularity setting, and a record of the orders a round gave (rounds DB, `--findings`, the rounds
+> log page). Issue #131; the "1 gate per epic / 1 gate per task" half of issue #467. Nothing is left open.
 >
-> Related: [PLAN_commands_and_autonomy.md](../research/PLAN_commands_and_autonomy.md) (the design record
-> of the three switches), [PLAN_the_caller_names_its_strongest_model.md](../research/PLAN_the_caller_names_its_strongest_model.md)
-> (issue #117, which this builds on), [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md).
+> Related: [PLAN_commands_and_autonomy.md](PLAN_commands_and_autonomy.md) (the design record
+> of the three switches), [PLAN_the_caller_names_its_strongest_model.md](PLAN_the_caller_names_its_strongest_model.md)
+> (issue #117, which this builds on), [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md).
+
+## What shipped differently from this plan
+
+Gate: plan round 1 `proceed` (2 of 3 reviewers), code round 1 `proceed` (6 of 12 — codex failed on its
+configured model, two gemini reviewers were refused a tool permission headless). Two reviewers of our own
+ran beside it; one of them found the only functional defect.
+
+- **The orders ride on `--findings`, not on `--log`** (requirement 4, build step 3). The list query is
+  kept as literal SQL, one text per schema shape (a SonarCloud ruling here), and a third optional column
+  would have been a third copy of it for data only an opened round shows. `LoggedRoundFindings.Orders`
+  and `RoundOrders` in C#, `parseOrders`/`readFindings`/`roundsLog.tell` in the extension.
+- **The page draws no block for "no orders" and none for "not recorded"**; `--findings` keeps them apart
+  (an empty list against no member). An empty block on every code round would be noise.
+- **Added, from the code review**, each red first: the orders were dropped from a row on the next rows
+  push (the carry-over copied `found` and not `orders`), and a build order written in phases counted zero
+  steps (the section ended at `### Phase 1`; it now ends at a heading of its own level or higher). The
+  corpus re-measured after that fix: 189 plans, 15 / 129 / 29 / 10 / 6.
+- **The bench recognises every size**: the order "build it as it stands" carries neither of the phrases it
+  read, so `GateCommands.GateOrderMarker` ("THE GATE runs once") joined `shared/command-models.json` as
+  `splitOrderCarries`, with the bench's copy held to it.
+- **The piece order under one gate per task is softened**: the "already split" memory lasts a day per
+  caller, so it can reach a genuinely NEW task; it now says to gate that as usual.
+- **`GATE_PER_SINCE` is `COMMAND_MODELS_SINCE`**: #117 and this ship in one release.
+- **Not pinned as a test**: the corpus distribution itself — it is recorded in `PlanShape`'s remarks and
+  here, measured with a scratch console over the real reader; the boundaries are pinned one by one.
+- `segmentedRadio` was extracted in the panel when this second segmented choice arrived beside
+  `codeWorkspace`.
 
 ## The symptom
 
