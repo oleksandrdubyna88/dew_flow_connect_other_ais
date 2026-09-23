@@ -23,12 +23,18 @@ namespace CoaiMcp.Tests;
 /// published artefact — the second goes through <c>ServeAsync</c>, so a build missing the resource
 /// fails the release loudly. What is pinned here is the WHOLE condition, not a fragment: exactly one
 /// code occurrence, inside <c>ServeAsync</c>, before any other statement of it, before the
-/// transport, and none inside <c>Main</c>. A fragment match — "the file contains the call" — would
+/// transport, and none inside the dispatch <c>Main</c> wraps. A fragment match — "the file contains the call" — would
 /// survive the call moving back into <c>Main</c>.</para>
 /// </remarks>
 public sealed class TheWordListIsLoadedBeforeTheTransportTests
 {
     private const string Call = "CredentialWords.EnsureLoaded();";
+
+    /// <summary>
+    /// Where <c>args[0]</c> is read. <c>Main</c> itself only wraps this in the last-resort catch since
+    /// story 3.2 — the catch is not a startup obligation, so it may stand in front of <c>args[0]</c>.
+    /// </summary>
+    private const string Dispatch = "private static async Task<int> RunAsync(string[] args)";
 
     private static readonly string[] Program = File.ReadAllLines(Path.Combine(
         NoSourceFileCarriesAControlByteTests.RepositoryRoot(), "src_mcp", "src", "Program.cs"));
@@ -37,7 +43,7 @@ public sealed class TheWordListIsLoadedBeforeTheTransportTests
     public void EnsureLoaded_IsTheFirstStatementOfServeAsync_AndAppearsNowhereElse()
     {
         var serve = Body("private static async Task<int> ServeAsync()");
-        var main = Body("private static async Task<int> Main(string[] args)");
+        var main = Body(Dispatch);
         var calls = Program.Select((line, at) => (line, at))
             .Where(x => IsCode(x.line) && x.line.Contains(Call, StringComparison.Ordinal))
             .Select(x => x.at)
@@ -46,7 +52,7 @@ public sealed class TheWordListIsLoadedBeforeTheTransportTests
         calls.Should().ContainSingle("the trigger runs once, in the one place a transport is opened");
         var at = calls[0];
         at.Should().NotBeInRange(main.Start, main.End,
-            "in Main it would run before args[0], making --version and --help depend on the word list");
+            "in the dispatch it would run before args[0], making --version and --help depend on the word list");
         at.Should().BeInRange(serve.Start, serve.End, "ServeAsync is the only path that opens a transport");
         Program[serve.Start..at].Where(IsCode).Should().BeEmpty(
             "it is the FIRST statement of ServeAsync — before the logger, the settings and the transport");
@@ -59,14 +65,14 @@ public sealed class TheWordListIsLoadedBeforeTheTransportTests
     public void TheScanFindsBothMethodsAndTheTransport_SoItCannotPassOverNothing()
     {
         var serve = Body("private static async Task<int> ServeAsync()");
-        var main = Body("private static async Task<int> Main(string[] args)");
+        var main = Body(Dispatch);
 
         serve.End.Should().BeGreaterThan(serve.Start);
         main.End.Should().BeGreaterThan(main.Start);
         Program[serve.Start..serve.End].Should().Contain(line => line.Contains("new StdioServerTransport(", StringComparison.Ordinal),
             "ServeAsync is where the transport is opened, or this test is scanning the wrong method");
         Program[main.Start..main.End].Should().Contain(line => line.Contains("Classify(args)", StringComparison.Ordinal),
-            "Main is where args[0] is read, or this test is scanning the wrong method");
+            "RunAsync is where args[0] is read, or this test is scanning the wrong method");
     }
 
     /// <summary>The line range of a method's body: after its opening brace, up to its closing brace at the class's member indent.</summary>

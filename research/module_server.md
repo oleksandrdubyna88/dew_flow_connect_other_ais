@@ -888,7 +888,7 @@ because the panel saves instantly and says so. Environment variables still outra
 
 `server-notices.jsonl` is read by the extension and has been since 2026-09-17. **It had nothing to
 read until 2026-09-21**, when story 2.2 of
-[PLAN_the_server_says_what_it_did.md](../todo/PLAN_the_server_says_what_it_did.md) instrumented the
+[PLAN_the_server_says_what_it_did.md](PLAN_the_server_says_what_it_did.md) instrumented the
 refusal road; what landed before that — the line, the path, the append — is what both halves had to
 agree on before either wrote a byte. The tense of this paragraph has been corrected twice now, in
 both directions, which is what `knowledge-base.md` means when it says a sentence describing something
@@ -1435,8 +1435,10 @@ population quotes it instead of writing its own:
 **The drain is a `finally` on `ServeAsync`'s existing `try`.** That is what covers BOTH `return 0`
 roads — the one after `server.RunAsync()` and the one in the `catch (IOException or
 ObjectDisposedException)` that is the ordinary "the client hung up" path — and an exception unwinding
-out, which is where story 3.2's crash notice will pass. Without it a refusal answered as the client
-disconnects was one the panel never showed. `using var log` is disposed after the method body, so the
+out, which is where story 3.2's crash notice passes. Without it a refusal answered as the client
+disconnects was one the panel never showed. Since epic 3 that `finally` is one call,
+`Program.EndedAsync`, and the drain is its second step — see *A run that never finished is recorded*
+below for the order and why each step sits where it does. The logger is disposed LAST in there, so the
 drain's own warning still has somewhere to go.
 
 **`Drain` waits on the TASK, not on the in-flight count** (three findings of the plan round said the
@@ -1450,9 +1452,8 @@ append with no cancellation to give it: one kernel write to a share that stopped
 pushed back on 3 s and was right about who pays it: the release smoke runs a real `initialize` over
 stdio against the published binary and then exits.
 
-**What is owed to 3.1/3.2, written here so it is not rediscovered:** the crash `catch`, the ordering
-of the drain against the log flush (drain first, so its warnings reach the log), and the exit code
-all belong to 3.2; surviving SIGKILL is 3.1's run marker.
+**What this owed to 3.1/3.2 has shipped (2026-09-23):** the crash `catch`, the drain before the log
+flush, the exit code, and the run marker that survives SIGKILL — all in the section below.
 
 ## Every refusal is written down, and no notice may cost one (S8 story 2.2, 2026-09-21)
 
@@ -1544,6 +1545,104 @@ a written field is.
 every document refusal is written down as `Refused` and every stage refusal as `RunStageAsync` — one
 collapsed row apiece, which is the thing the subject was introduced to prevent. (CodeRabbit, on the
 pull request.)
+
+## A run that never finished is recorded, and a crash is written down (S8 epic 3, 2026-09-23)
+
+A server killed by SIGKILL, OOM or a power cut runs no `catch` and wrote nothing, and any exception
+`ServeAsync` did not name escaped to the RUNTIME, which printed it unredacted to the stderr an MCP
+client keeps as this server's log. Epic 3 of
+[PLAN_the_server_says_what_it_did.md](PLAN_the_server_says_what_it_did.md) closes both.
+
+```mermaid
+sequenceDiagram
+    participant Main
+    participant Serve as ServeAsync
+    participant Life as RunLife (own thread)
+    participant Runs as runs/
+    participant Notices as server-notices.jsonl
+    Main->>Serve: RunAsync(args) — every mode under one catch
+    Serve->>Life: Start(RunMarkers.Of(dir, run, log))
+    Life->>Runs: write {run}.json (tmp → replace)
+    Life->>Runs: sweep: a stale marker of ANOTHER run
+    Life->>Runs: CreateNew {dead}.claim — exactly one start wins
+    Life->>Runs: re-read the marker UNDER the claim
+    Life->>Notices: unclean-exit (confirmed append)
+    Life->>Runs: delete the marker, THEN release the claim
+    loop every 60 s
+        Life->>Runs: beat — unconditional
+    end
+    Serve-->>Serve: third catch → HostCrash.Handled: log redacted, return 70
+    Serve->>Life: EndedAsync: StopAsync (bounded, 2 s)
+    Serve->>Notices: drain the queue
+    Serve->>Notices: crash? → HostCrash.Recorded (confirmed append)
+    Serve->>Runs: clear own marker only if clean OR the crash landed
+    Serve->>Serve: HostCrash.Flushed(log) — last, guarded
+    Main-->>Main: anything before the logger → HostCrash.Unlogged: stderr, redacted, 70
+```
+
+**The marker.** `runs/{run}.json` holds `{run, pid, host, startedUtc, heartbeatUtc}` in camelCase.
+`run` is twelve hex characters from `RandomNumberGenerator` — the extension's own shape — minted once
+per start, and `Noticing.Stamped` puts it and the pid on EVERY notice this run writes, filling what
+is absent and never overwriting: an `unclean-exit` is written by the start that found the death and
+carries the DEAD run's id. `RunLife` writes the marker, sweeps once, then beats every 60 s on a
+LongRunning thread of its own, because the data directory may be a share and a wedged share must
+stall the beat and nothing else. Its sweep AND each beat have a catch-all: either one taking the
+loop down would leave a live run silent, and half an hour later a peer would record it as dead. The
+sweep honours the run's stop BETWEEN deaths: a client that connects and leaves while a start is
+still recording deaths on a slow share gets the one being written finished and the rest left for the
+next start, instead of a stop that waits out its budget. (The code round, gemini.)
+
+**The decision is pure.** `RunMarkers.Plan(found, now, me, window, sameProcessAlive)` returns what to
+claim, what to break and what to retire, and is tested apart from the disk. A marker is a death when
+it is not this run's and its heartbeat is older than **30 minutes** (thirty beats, the chat-store
+sweep's precedent) — except that a marker written on THIS host whose pid is alive with the same start
+time (`ProcessTracking.StartedAt` + `OrphanSweep.Same`, both made public for it) is a stalled run, not
+a dead one. A claim older than the window was abandoned by a sweeper that died holding it and is
+broken; a claim whose marker is gone is a leftover and is retired. A temporary or unreadable file is
+retired only when it is OLD, because a file being written can be read half-written. A file whose
+name is not ours is left alone.
+
+**The claim is an exclusive create — measured.** A rename was the first design, and two sweepers
+over fifty deaths recorded 72: two threads renaming one file through .NET on Windows both succeeded
+975 times in 1000, where `FileMode.CreateNew` let both succeed 0 times. An exclusive create alone
+still gave 68–75, because a released claim could be won again by a sweeper holding an old listing;
+the fix is the order — **remove the marker before releasing the claim, and re-read the marker under
+the claim** (`StillDead`). After it: 50 of 50 across eight runs, and four sweepers over 500 deaths
+recorded each exactly once, three times out of three. The guarantee is at least once, not exactly
+once: a crash between the append and the delete, or two starts breaking one abandoned claim at the
+same instant, records a death twice — in the SAME row, because the subject is the dead run's id.
+
+**The crash, in two layers.** Inside `ServeAsync` there is a logger and a directory: a third
+`catch (Exception)` calls `HostCrash.Handled`, which logs the exception as a REDACTED STRING — never
+the exception object, which a sink renders raw — and returns **70** (`EX_SOFTWARE`). The `finally`
+then runs `EndedAsync` in the one safe order: stop the beat (bounded, so a wedged share cannot keep a
+dying process alive; a beat that finishes writing after the marker was cleared throws its temporary
+away rather than re-creating it), drain the
+queue, write the crash through the CONFIRMED `ServerNotices.Append` within `NoticeWriter.DrainBudget`,
+clear the marker only when the run ended cleanly or the crash is known to be on disk, and dispose the
+logger last under a guard (`HostCrash.Flushed`) — which is how `logging-serilog.md`'s
+`Log.CloseAndFlush` applies to a host whose logger is a local instance. A crash notice's subject is
+the exception's full type name, so a server that keeps dying the same way is one row with a count.
+
+Before there is a logger there is only stderr, and the first thing a server can fail at is resolving
+the directory its logger lives in: an unusable `COAI_DATA_SIDE` throws there, QUOTING the value. So
+`Main` wraps every mode in `RunAsync` under one catch, and `HostCrash.Unlogged` says it on stderr,
+redacted, and exits 70; it writes no notice, because the directory a notice would go to may be the
+thing that failed. The redactor is a parameter there because it can be what failed — the word list
+loads lazily — and the fallback is the exception's TYPE, never its raw message.
+
+**`runs/` is in `shared/data-inventory.json`** as live state that stays behind on a move: a copied
+live marker would be recorded at the destination as a death it is not. The extension's inventory
+scan cannot see it (it is composed from a constant on `dataDir.Path`), so
+`TheMarkersFolder_IsInTheDataInventory_AndStaysBehindOnAMove` holds it from this side.
+
+**Residuals, stated where they live:** a laptop asleep past the window, seen from another machine on
+the share, is a false death; the duplicate windows above; and a rename still pending on a wedged
+share when the process itself exits. A beat that finishes after the clear used to re-create the
+marker; CodeRabbit found it on the pull request, in two passes — the beat now asks whether its
+owner cleared both before its replace (and throws the temporary away) and after it (and takes the
+marker back). `ABeatThatFinishesAfterTheClear_DoesNotBringTheMarkerBack` and
+`AClearThatLandsDuringTheReplace_StillLeavesNoMarker` hold them, each RED first.
 
 ## The spending ledger
 

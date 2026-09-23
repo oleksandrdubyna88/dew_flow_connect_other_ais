@@ -531,6 +531,16 @@ What the server writes, and where it is observed:
 | Every reviewer that did not answer | `LiveRound.Report`, where the outcome arrives | `reviewer-timed-out`, `reviewer-rate-limited`, `reviewer-exit`, `reviewer-not-started`, `reviewer-unparseable` |
 | A setting this build cannot read, and a legacy settings file adopted | `Program` at startup, AND `PanelServiceHost.Build` on every settings RELOAD — which is what a person editing the panel causes | `unrecognised-setting`, `settings-adopted` |
 | What it found on the DISK | `Program` at startup only: the survey stats the data directory, and re-running it on a settings change would stat a configured NAS (issue #115) | `storage-note` |
+| A run that never finished (epic 3, 2026-09-23) | the NEXT start, sweeping `runs/` — nobody else is left to say it | `unclean-exit`, carrying the DEAD run's `run` and `pid` |
+| An exception nothing else caught (epic 3) | `ServeAsync`'s third `catch`, written through the CONFIRMED append as the process leaves | `crash` |
+
+**Every server notice carries `run` and `pid` since epic 3.** Both fields were in the line the two
+halves share from story 1.2, and no producer set them, so the page could not tell which run a record
+came from. `Noticing` stamps them now — filling what is absent, never overwriting — which is also what
+lets an `unclean-exit` join the dead run's own records. The run id has the extension's shape, twelve
+hex characters, so a run reads the same whichever half wrote the record. The marker files themselves,
+`runs/{run}.json`, are the server's alone; nothing in the extension reads them, and
+`shared/data-inventory.json` keeps them behind when a data directory moves.
 
 **One road, and it is owned by the host.** `ServeAsync` composes a single `Noticing` — a writer, an
 environment, a log — and hands it to `PanelServiceHost`, which holds it and gives it to every service

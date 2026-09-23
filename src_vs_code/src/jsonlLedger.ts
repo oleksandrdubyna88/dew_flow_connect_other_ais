@@ -51,7 +51,7 @@ import { finishedInTime } from './withinTheClock';
  * <h2>The other half of this file has been measured too, and it had to be fixed</h2>
  *
  * <p>`coai-mcp` writes `server-notices.jsonl` into the same data directory, and story 1.4 of
- * `todo/PLAN_the_server_says_what_it_did.md` measured ITS append rather than arguing from the runs
+ * `research/PLAN_the_server_says_what_it_did.md` measured ITS append rather than arguing from the runs
  * above. On 2026-09-21, `--dotnet=8`: <b>5512 of 8000 records survived and 1110 lines were torn</b>,
  * where eight node writers over the same harness kept all 8000. .NET's `FileMode.Append` is not an
  * append — it writes at the offset it remembered when it opened, so two processes overwrite each

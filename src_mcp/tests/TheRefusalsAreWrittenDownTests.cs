@@ -67,7 +67,7 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
     private string? Env(string name) => name == "COAI_DATA_DIR" ? _dir : null;
 
     private Noticing Through(NoticeWriter writer, Serilog.ILogger? log = null) =>
-        Noticing.Through(writer, Env, log ?? Silent);
+        Noticing.Through(writer, Env, log ?? Silent, "testrun00000");
 
     /// <summary>A refusal, written down and waited for — the wait is the TEST's, never the product's.</summary>
     private string Answered(string sentence, string from, NoticeWriter writer, Serilog.ILogger? log = null)
@@ -115,6 +115,10 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
             Code = ServerNoticeCodes.Refused,
             Subject = "ReviewPlan",
             Title = "the plan text is empty",
+            // Since epic 3 every notice carries the run that wrote it and that run's pid, stamped once
+            // in `Noticing.Through` — which is why this line gained two fields and nothing else moved.
+            Run = "testrun00000",
+            Pid = Environment.ProcessId,
         }), "every field is the serialiser's, and the only one this test cannot predict is the clock");
         Field(line, "utc").Should().MatchRegex(@"^\d{4}-\d{2}-\d{2}T[\d:.]+Z$",
             "and the clock is the shape the extension writes, not whatever the culture produces");
@@ -433,11 +437,15 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
             "a notice field is cut by ServerNotice.Shortened, which marks the cut, and by nothing else");
 
         // The companion, without which the census above passes on a scanner that found nothing: the
-        // three producers really are there, and really do call the helper.
+        // producers really are there, and really do call the helper.
         ProductionSources.FilesMentioning("ServerNotice.Shortened(").Keys.Order().Should().Equal(
             [
+                // Story 3.2's crash record: the exception nothing else caught, written as it leaves.
+                "src_mcp/src/Server/HostCrash.cs",
                 "src_mcp/src/Server/RefusalNotices.cs",
                 "src_mcp/src/Server/ReviewerNotices.cs",
+                // Epic 3's death record: the unclean-exit a start writes about a run that never finished.
+                "src_mcp/src/Server/RunMarkers.cs",
                 "src_mcp/src/Server/StartupNotices.cs",
             ],
             "every road that builds a notice goes through the one cut");

@@ -13,23 +13,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")] // the server child inherits our env; keep FAKECLI_* quiet around it
 public sealed class McpContractTests : IDisposable
 {
-    private static string ServerExe
-    {
-        get
-        {
-            // COAI_CONTRACT_EXE points these tests at a PUBLISHED binary — the release smoke.
-            if (Environment.GetEnvironmentVariable("COAI_CONTRACT_EXE") is { Length: > 0 } published)
-            {
-                return published;
-            }
-
-            // tests/bin/<cfg>/net10.0 → src/bin/<cfg>/net10.0/coai-mcp
-            var configuration = AppContext.BaseDirectory.Contains("Release") ? "Release" : "Debug";
-            return Path.GetFullPath(Path.Combine(
-                AppContext.BaseDirectory, "..", "..", "..", "..", "src", "bin", configuration, "net10.0",
-                OperatingSystem.IsWindows() ? "coai-mcp.exe" : "coai-mcp"));
-        }
-    }
+    private static string ServerExe => ServerBinary.Path;
 
     private readonly string _data = Directory.CreateTempSubdirectory("coai-contract-").FullName;
 

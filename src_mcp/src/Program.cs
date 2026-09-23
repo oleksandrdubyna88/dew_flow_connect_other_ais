@@ -237,7 +237,27 @@ internal static class Program
                 _ => Startup.Usage,
             };
 
+    /// <summary>
+    /// Every mode, under the one catch that stops an exception leaving this process through the runtime.
+    /// </summary>
+    /// <remarks>
+    /// The runtime's own report is unredacted and goes to stderr, which an MCP client keeps as this
+    /// server's log. <c>ServeAsync</c> has the first layer, where a logger exists; this is the second,
+    /// for a throw before there is one. (Story 3.2; <see cref="HostCrash.Unlogged"/> says the rest.)
+    /// </remarks>
     private static async Task<int> Main(string[] args)
+    {
+        try
+        {
+            return await RunAsync(args);
+        }
+        catch (Exception crash)
+        {
+            return HostCrash.Unlogged(crash, Console.Error, HostCrash.Redacted);
+        }
+    }
+
+    private static async Task<int> RunAsync(string[] args)
     {
         switch (Classify(args))
         {
@@ -1642,14 +1662,19 @@ internal static class Program
         // published binary, which is what makes this line a check rather than a comment.
         CredentialWords.EnsureLoaded();
 
+        // Resolved once, for the log's root and for the run marker: a local, not a member, so the
+        // census of what answers a `ResolvedDataDir` (TheOneAppendTests) still names every road.
+        var dir = SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable);
+
         // stdio host → the console sink goes to stderr (logging-serilog.md, stdio hosts).
-        using var log = ServiceDefaults.CoaiLogging.CreateDewFlowLogger(
+        // Not `using`: the `finally` disposes it, LAST and under a guard (HostCrash.Flushed), so a
+        // crash's own sentence is flushed and a failing flush cannot replace the crash being reported.
+        var log = ServiceDefaults.CoaiLogging.CreateDewFlowLogger(
             AppName,
             consoleToStdErr: true,
             // Beside the sessions and the database, not beside the binary: the data directory is the
             // one place a person is told about, and the binary's is inside the extension's storage.
-            logsRoot: ServiceDefaults.CoaiLogPath.RootFor(
-                SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path));
+            logsRoot: ServiceDefaults.CoaiLogPath.RootFor(dir.Path));
         // Taken ONCE, here, so the `finally` below cannot start a writer only to drain nothing —
         // and so story 2.3.2 has an instance to hand to the host rather than each caller reaching
         // for the static.
@@ -1660,6 +1685,16 @@ internal static class Program
         // own producers, a producer that outlives this `finally` would be refused as closing rather
         // than written. (codex, on the code round.)
         var notices = NoticeWriter.Shared;
+
+        // This start's identity, and the marker that says it is alive: written, the dead swept and
+        // recorded, then beaten on a thread of its own (RunLife says why its own). Before the `try`, so
+        // the `finally` always has it to stop. The death and the crash records go through the
+        // CONFIRMED append, not the queue: whether this run clears its marker depends on the crash
+        // being on disk, and a sweep's claim is released only once its record landed. (Epic 3.)
+        var run = RunIds.New();
+        Func<ServerNotice, bool> recorded = notice => ServerNotices.Append(dir, notice);
+        var life = RunLife.Start(RunMarkers.Of(dir, run, log), recorded, log);
+        Exception? crash = null;
         try
         {
             // The file the extension writes is the base; the client config env overrides it — a
@@ -1667,8 +1702,8 @@ internal static class Program
             // Composed here rather than at the host below, because the FIRST thing that writes a
             // notice is the settings layering on the next line — the adoption of a legacy root
             // settings file happens before there is a host to own anything.
-            var noticing = Noticing.Through(notices, Environment.GetEnvironmentVariable, log);
-            var dataDir = SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path;
+            var noticing = Noticing.Through(notices, Environment.GetEnvironmentVariable, log, run);
+            var dataDir = dir.Path; // the one resolution above, not a second one
             var configuration = SettingsFile.Layer(
                 dataDir,
                 Environment.GetEnvironmentVariable,
@@ -1746,13 +1781,56 @@ internal static class Program
             Note("the MCP client closed the connection.");
             return 0;
         }
+        catch (Exception e)
+        {
+            // Anything else used to escape the process, and the RUNTIME printed it — unredacted — to
+            // the stderr an MCP client captures as this server's log. Now it is said redacted, written
+            // down in the `finally`, and the exit is non-zero. (Story 3.2; HostCrash says the rest.)
+            crash = e;
+            return HostCrash.Handled(e, log);
+        }
         // A notice is handed to one background thread and the caller returns; without this, a
         // refusal answered as the client hangs up is one the panel never shows. A `finally` is what
-        // covers BOTH `return 0` roads and an exception unwinding out — including, when story 3.2
-        // adds its `catch (Exception)` above, the crash notice that catch will offer. `using var
-        // log` is disposed after the method body, so the sentence below still has somewhere to go.
-        finally { Unresolved(Draining(notices, log), log); }
+        // covers every road out — both `return 0`s and the crash above.
+        finally { await EndedAsync(life, notices, crash, run, recorded, log); }
     }
+
+    /// <summary>
+    /// The end of a serving run, in the one order that is safe: stop the beat, drain the queue, write
+    /// the crash down if there was one, clear the marker if nothing needs it any more, flush the log.
+    /// </summary>
+    /// <remarks>
+    /// <para>The beat stops FIRST, or one landing after the clear re-creates the marker and a later
+    /// start records a clean exit as a death. (gemini, the plan round.)</para>
+    /// <para>The marker is cleared only when the run ended cleanly OR its crash record is known to be
+    /// on disk. A crash that could not be written leaves the marker behind on purpose: the next start
+    /// then records the run as an unclean exit, which is less precise than the crash and far better than
+    /// nothing. (local, the plan round.)</para>
+    /// </remarks>
+    internal static async Task EndedAsync(
+        RunLife life,
+        NoticeWriter notices,
+        Exception? crash,
+        string run,
+        Func<ServerNotice, bool> recorded,
+        Serilog.Core.Logger log)
+    {
+        await life.StopAsync();
+        Unresolved(Draining(notices, log), log);
+        if (crash is null || CrashRecorded(crash, run, recorded))
+        {
+            life.Clear();
+        }
+
+        HostCrash.Flushed(log);
+    }
+
+    /// <summary>The crash, stamped as this run's, through the confirmed append and within the drain's budget.</summary>
+    private static bool CrashRecorded(Exception crash, string run, Func<ServerNotice, bool> recorded) =>
+        HostCrash.Recorded(
+            Noticing.Stamped(HostCrash.Of(crash, DateTime.UtcNow), run, Environment.ProcessId),
+            recorded,
+            NoticeWriter.DrainBudget);
 
     /// <summary>
     /// Drains, and says so BEFORE the wait when there is anything to wait for.
