@@ -14,7 +14,7 @@
 >
 > Related docs: [module_team_server.md](../research/module_team_server.md) — story 2.3,
 > [RESULTS_team_server_under_load.md](../research/RESULTS_team_server_under_load.md),
-> [PLAN_team_server_submission_order.md](PLAN_team_server_submission_order.md) — the neighbouring queue
+> [PLAN_team_server_submission_order.md](../research/PLAN_team_server_submission_order.md) — the neighbouring queue
 > question, which stays as it is.
 
 ## The symptom

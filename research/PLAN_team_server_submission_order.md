@@ -1,11 +1,23 @@
 # PLAN — the Team server's queue is not served in the order everybody typed
 
-> Status: **plan only, nothing implemented yet.** Scope: the SUBMISSION order a client uses when it
+> Status: **IMPLEMENTED, 2026-09-08 — by a different plan.** The problem this describes was solved by
+> [PLAN_vendor_submission_order.md](PLAN_vendor_submission_order.md): `SeededShuffle` in
+> `PanelService.BuildWork` gives every client its own order (a shuffle seeded by session and round,
+> not the rotation this plan also considered), measured as a spread rather than the "different order"
+> this plan promised. `JobStore.TryClaim` stayed FIFO and is pinned by `JobTests.TheOldestQueuedJobGoesFirst`;
+> the reported order is unchanged. **Deviations:** the decision is recorded in
+> [module_server.md](module_server.md) ("Nothing on the server changes — `TryClaim` is FIFO by design"),
+> not in `module_team_server.md` as the DoD below says; the shuffle applies to every round, not only to
+> remote reviewers. **Not built, and still optional:** the depth-aware submission this plan's third open
+> question deferred ("do the cheap one first and measure whether the second is still worth it") — no
+> measurement has asked for it. Closed on 2026-09-23 after an audit found it still filed as open.
+>
+> Original scope: the SUBMISSION order a client uses when it
 > sends a round's reviewers to a Team server — `src_mcp/src/AskRemote.cs`, `RemoteRuntime`, and the
 > scheduler that fans a round out. The server's own FIFO claim is explicitly out of scope.
 >
-> Related docs: [module_team_server.md](../research/module_team_server.md),
-> [architecture.md](../research/architecture.md), [PLAN_team_server.md](../research/PLAN_team_server.md).
+> Related docs: [module_team_server.md](module_team_server.md),
+> [architecture.md](architecture.md), [PLAN_team_server.md](PLAN_team_server.md).
 
 ## The symptom, before anyone has felt it
 
@@ -73,6 +85,6 @@ The load is not skewed because of demand. It is skewed because of a **list order
 ## Where this came from
 
 Asked for by the operator on 2026-09-07, the same evening the Team server completed its first review
-ever ([research/PLAN_team_server_reviewer_never_called.md](../research/PLAN_team_server_reviewer_never_called.md)
+ever ([research/PLAN_team_server_reviewer_never_called.md](PLAN_team_server_reviewer_never_called.md)
 and the three defects fixed after it). It is a load question that only appears once the feature works
 at all — which, until that day, it did not.
