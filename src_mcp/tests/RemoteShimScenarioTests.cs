@@ -656,6 +656,9 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         await WaitBrieflyForAsync(
             () => Directory.Exists(runs) && Directory.GetFiles(runs, "*.json").Length > 0,
             "the living shim's run marker in the TEST's data directory", shim, TimeSpan.FromSeconds(30));
+
+        Directory.GetFiles(runs, "*.json").Should().NotBeEmpty(
+            "a serving child keeps its marker where the test pointed it, not in the machine's store");
     }
 
     [Fact]

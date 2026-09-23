@@ -57,15 +57,22 @@ internal sealed class RunLife
     internal async Task<bool> StopAsync()
     {
         await _stop.CancelAsync();
-        var stopped = await Task.WhenAny(_loop, Task.Delay(StopBudget)) == _loop;
+        var stopped = await Task.WhenAny(_loop, Task.Delay(StopBudget, CancellationToken.None)) == _loop;
         if (!stopped)
         {
             // Not "a heartbeat is stuck": the loop may equally be mid-way through the one death its
             // sweep was writing when the stop came. (gemini, the code round.)
             _log.Warning("run marker: a write to the share did not finish in time, and this run's marker may outlive it");
+
+            // NOT disposed on this road: the loop may still read `_stop.Token` when its stuck write
+            // returns, and the property throws on a disposed source. The process is leaving; it
+            // takes the source with it.
+            return false;
         }
 
-        return stopped;
+        _stop.Dispose();
+
+        return true;
     }
 
     /// <summary>Clear this run's marker. Only after <see cref="StopAsync"/>.</summary>

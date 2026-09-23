@@ -366,11 +366,14 @@ internal sealed class RunMarkers(
     }
 
     /// <summary>What a file name says it is; anything else in the directory is not ours.</summary>
-    private static MarkerFileKind? KindOf(string name) =>
-        name.EndsWith(TemporarySuffix, StringComparison.Ordinal) ? MarkerFileKind.Temporary
-        : name.EndsWith(ClaimSuffix, StringComparison.Ordinal) ? MarkerFileKind.Claim
-        : name.EndsWith(MarkerSuffix, StringComparison.Ordinal) ? MarkerFileKind.Marker
-        : null;
+    /// <remarks>Temporary first: <c>.json.tmp</c> would otherwise never be asked about.</remarks>
+    private static MarkerFileKind? KindOf(string name) => name switch
+    {
+        _ when name.EndsWith(TemporarySuffix, StringComparison.Ordinal) => MarkerFileKind.Temporary,
+        _ when name.EndsWith(ClaimSuffix, StringComparison.Ordinal) => MarkerFileKind.Claim,
+        _ when name.EndsWith(MarkerSuffix, StringComparison.Ordinal) => MarkerFileKind.Marker,
+        _ => null,
+    };
 
     private static RunMarker? Parsed(string path)
     {
