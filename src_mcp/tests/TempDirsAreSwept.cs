@@ -66,18 +66,36 @@ public sealed class TempDirsAreSwept
         Rule.Keeps.Should().Be(TimeSpan.FromMinutes(10));
     }
 
-    /// <summary>Every scratch prefix the product makes is one the test sweep leaves alone.</summary>
+    /// <summary>Every temp directory this program makes at runtime is one the test sweep leaves alone.</summary>
     /// <remarks>
-    /// A new working directory in <c>PanelService</c> that nobody adds to the shared rule would be
-    /// removed out from under a live round by the next test run on the same machine.
+    /// <para>A new working directory that nobody adds to <c>shared/temp-sweep.json</c> would be removed
+    /// out from under a live round by the next test run on the same machine. (Plan round, local.)</para>
+    /// <para>A scan of THIS program's own source, and it cannot go quiet: it must find the prefixes it
+    /// already knows are there, so a reformat that stops it matching is red, not an empty list every
+    /// assertion passes over. Each program holds its own half; the Team server's is in its suite and
+    /// the extension's in <c>sweepTemp.test.mjs</c>.</para>
     /// </remarks>
     [Fact]
-    public void EveryScratchPrefixTheProductMakes_IsNeverTheTestsToSweep()
+    public void EveryTempDirectoryThisProgramMakes_IsNeverTheTestsToSweep()
     {
-        foreach (var prefix in PanelService.ScratchPrefixes.Select(p => p.TrimEnd('*')))
-        {
-            Rule.NeverSwept.Should().Contain(prefix, "the product sweeps {0}* itself, on its own clock", prefix);
-        }
+        var made = TempPrefixesIn("src", "runners", "core");
+
+        made.Should().Contain(["coai-answers-", "coai-plan-"], "the scan must still see what it knows is there");
+        Rule.NeverSwept.Should().Contain(made, "the product sweeps its own directories, on its own clock");
+    }
+
+    /// <summary>Every <c>CreateTempSubdirectory("coai-…")</c> under the named folders of <c>src_mcp</c>.</summary>
+    private static List<string> TempPrefixesIn(params string[] folders)
+    {
+        var program = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", ".."));
+        var literal = new System.Text.RegularExpressions.Regex(@"CreateTempSubdirectory\(""(coai-[a-z-]+)""\)");
+
+        return [.. folders
+            .SelectMany(f => Directory.EnumerateFiles(Path.Combine(program, f), "*.cs", SearchOption.AllDirectories))
+            .Where(f => !f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
+                && !f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal))
+            .SelectMany(f => literal.Matches(File.ReadAllText(f)).Select(m => m.Groups[1].Value))
+            .Distinct()];
     }
 
     [Fact]

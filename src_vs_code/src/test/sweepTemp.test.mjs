@@ -34,6 +34,22 @@ test('the rule is the shared one: coai-, ten minutes, and the product\'s own dir
   assert.ok(rule.neverSwept.includes('coai-chat-'), 'a live chat\'s working directory is not a leftover');
 });
 
+test('every temp directory the extension makes at runtime is one the sweep leaves alone', () => {
+  // A scan of THIS program's own source that cannot go quiet: it must find the one prefix it knows is
+  // there. A new runtime directory nobody adds to the shared rule would be deleted under a live
+  // session by the next test run on the same machine. (Plan round, local.)
+  const src = path.join(here, '..');
+  const made = [...new Set(fs.readdirSync(src)
+    .filter((f) => f.endsWith('.ts'))
+    .flatMap((f) => [...fs.readFileSync(path.join(src, f), 'utf8')
+      .matchAll(/mkdtemp(?:Sync)?\(\s*path\.join\(\s*os\.tmpdir\(\),\s*'(coai-[a-z-]+)'/g)].map((m) => m[1])))];
+
+  assert.ok(made.includes('coai-chat-'), `the scan must still see chatLaunch.ts's directory; it found ${made.join(', ') || 'nothing'}`);
+  for (const prefix of made) {
+    assert.ok(rule.neverSwept.includes(prefix), `${prefix} is made at runtime and is not in shared/temp-sweep.json`);
+  }
+});
+
 test('older than the window is taken, younger is kept — both directions', () => {
   const taken = toSweep([dir('coai-old-1', 11), dir('coai-new-1', 9), dir('coai-edge-1', 10)], now, rule);
 

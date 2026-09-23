@@ -1476,7 +1476,7 @@ public sealed partial class PanelService
     /// and — since Fast became the default — the review launch as well, which is now every code
     /// round rather than an opt-in. Empty directories are cheap; an unbounded count of them is not.
     /// </remarks>
-    internal static readonly string[] ScratchPrefixes =
+    private static readonly string[] ScratchPrefixes =
         ["coai-answers-*", "coai-repair-*", "coai-noworkspace-*"];
 
     /// <summary>

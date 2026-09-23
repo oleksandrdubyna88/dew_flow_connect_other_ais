@@ -281,7 +281,7 @@ two-hour window it replaces never excepted anything, so it could take a live cha
 (about a thousand per server-suite run) is now left to the product's own six-hour sweep, because by
 name it cannot be told from a live round's. Measured on 2026-09-23: a full extension run on a
 swept temp added 19 directories. Each rule in `sweepTemp.mjs` and the C# exception was broken on
-purpose and the test that owns it went red (`sweepTemp.test.mjs`, `TempDirsAreSwept`).
+purpose and the test that owns it went red (`sweepTemp.test.mjs`, `TempDirsAreSwept`). **And the list cannot fall behind the product:** each program scans its OWN source for the temp directories it makes (`CreateTempSubdirectory("coai-…")` in coai-mcp and the Team server, `mkdtemp(path.join(os.tmpdir(), 'coai-…'))` in the extension) and requires every one in `neverSwept` — and requires the scan to find the prefixes it knows are there, so a reformat is red rather than an empty list passing (plan round, local). Removing `coai-plan-`, `coai-server-job-` and `coai-chat-` from the file in turn reddened exactly the owning program's check.
 
 ## The collector's suites (2026-09-16)
 
