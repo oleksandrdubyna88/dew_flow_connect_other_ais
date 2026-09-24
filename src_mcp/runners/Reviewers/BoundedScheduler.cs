@@ -198,9 +198,10 @@ public sealed class BoundedScheduler(
             // other reviewer waits for the machine and then its vendor. See `EngineLaneAsync` for why.
             // A cloud reviewer's outcome is recorded as it finishes, so a local row that reaches the card
             // afterwards can see whether the cloud was quiet (issue #485). Null when the switch is off.
+            var cloudProgress = Recording(onProgress, standDown);
             var tasks = work.Select(w => w.Invocation.IsOnEngine
                 ? EngineLaneAsync(w, executor, onProgress, standDown, ct)
-                : Recorded(MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, onProgress, ct), standDown));
+                : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, cloudProgress, ct));
             return await Task.WhenAll(tasks);
         }
         finally
@@ -328,15 +329,26 @@ public sealed class BoundedScheduler(
         }
     }
 
-    /// <summary>A cloud reviewer's outcome, handed to the stand-down count as it finishes.</summary>
-    private static async Task<(ReviewerInvocation, ReviewerOutcome)> Recorded(
-        Task<(ReviewerInvocation, ReviewerOutcome)> lane, StandDown? standDown)
-    {
-        var result = await lane;
-        standDown?.Record(result.Item2);
-
-        return result;
-    }
+    /// <summary>
+    /// A cloud reviewer's progress, with its outcome handed to the stand-down count BEFORE anybody is told.
+    /// </summary>
+    /// <remarks>
+    /// A row reports its outcome exactly once — the <c>done</c>/<c>failed</c> of a launch or an
+    /// abandonment — so that report is the one place to count it. Counted after the report instead, a
+    /// local row the report woke could check the count in between, find it one short and start (the code
+    /// round's own reviewer found that race).
+    /// </remarks>
+    private static Action<ReviewerProgress>? Recording(Action<ReviewerProgress>? onProgress, StandDown? standDown) =>
+        standDown is null
+            ? onProgress
+            : progress =>
+            {
+                if (progress.Outcome is { } outcome)
+                {
+                    standDown.Record(outcome);
+                }
+                onProgress?.Invoke(progress);
+            };
 
     /// <summary>
     /// A local row that is not launched: said as its own status with the reason, and carrying no outcome

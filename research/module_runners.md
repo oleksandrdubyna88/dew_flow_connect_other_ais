@@ -1102,7 +1102,8 @@ schema's JSON in turn 2. A Team-server reviewer is not covered — its conversat
 
 Behind `COAI_STOP_LOCAL_WHEN_QUIET` (off by default). `BoundedScheduler.RunAllAsync(..., StandDown? standDown)`:
 `StandDown.For(work)` counts the round's cloud (non-engine) rows; each cloud lane's outcome is `Record`ed as it
-finishes (`Recorded`); `Quiet` = at least one cloud row, every one finished, every one `Ok`, and their findings
+finishes — inside its own progress callback (`Recording`), BEFORE the `done`/`failed` report goes out, so a
+local row that report wakes never finds the count one short (a race the code round's own reviewer found); `Quiet` = at least one cloud row, every one finished, every one `Ok`, and their findings
 — any severity, before de-duplication — sum to at most `StandDown.MostRemarks` (1). `EngineLaneAsync` asks
 before it waits for the card and again once it holds it: a launch already on the card always finishes; a row
 that would start afterwards returns `ReviewerOutcome.StoodDown(reason)` and reports progress status
