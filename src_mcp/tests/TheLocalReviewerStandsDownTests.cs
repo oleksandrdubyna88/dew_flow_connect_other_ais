@@ -125,6 +125,27 @@ public sealed class TheLocalReviewerStandsDownTests
         quietWhenTold.Should().Equal([true], "the report of the last cloud outcome comes after the count holds it");
     }
 
+    /// <summary>
+    /// A lens is spent by being ASKED. With lenses dealt, a stood-down local row never used its prompt, so
+    /// marking it spent would skip that lens until the pool resets — CodeRabbit, on the pull request.
+    /// </summary>
+    [Fact]
+    public async Task AStoodDownRow_DoesNotSpendItsLens()
+    {
+        ReviewerWork[] work =
+        [
+            Local(RoleCatalog.ArchitectureRole, held: true) with { Prompt = "arch-lens" },
+            Local(RoleCatalog.SecurityRole) with { Prompt = "security-lens" },
+            Cloud("codex", RoleCatalog.ArchitectureRole) with { Prompt = "codex-lens" },
+        ];
+
+        var results = await Run(work);
+
+        StoodDownRoles(results).Should().Equal([RoleCatalog.SecurityRole], "the premise: the second local row stood down");
+        CoaiMcp.Server.PanelService.SpentPrompts(work, results).Should().BeEquivalentTo(
+            ["arch-lens", "codex-lens"], "a row that stood down was never asked, so its lens is still unspent");
+    }
+
     [Fact]
     public async Task ARoundWithNoCloudReviewer_NeverStopsTheLocalOne()
     {

@@ -1043,6 +1043,19 @@ public sealed partial class PanelService
         return [.. hand, .. roles.Count > 0 ? Pool(session, roles[0]).Skip(1).Take(Math.Max(vendors - hand.Count, 0)) : []];
     }
 
+    /// <summary>The lenses a round spent: the prompt of every row that was asked.</summary>
+    /// <remarks>
+    /// A row that stood down (issue #485) was never asked, so its lens is still unspent — counted as
+    /// spent it would be skipped until the pool reset (CodeRabbit, on the pull request). The results are
+    /// in the work's own order, which is what <c>RunAllAsync</c>'s <c>Task.WhenAll</c> returns.
+    /// </remarks>
+    internal static IEnumerable<string> SpentPrompts(
+        IReadOnlyList<ReviewerWork> work, IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results) =>
+        work.Zip(results)
+            .Where(row => row.Second.Outcome is not ReviewerOutcome.StoodDown)
+            .Select(row => row.First.Prompt)
+            .Where(p => p.Length > 0);
+
     /// <summary>One role's lenses, the unspent ones first and its general prompt first of those.</summary>
     private IReadOnlyList<string> Pool(PersistedSession session, string role)
     {
@@ -1499,7 +1512,7 @@ public sealed partial class PanelService
                 Rounds = [.. session.Rounds, record],
                 Pending = [.. merged],
                 // The lenses this round spent, so the next one asks the ones nobody has yet.
-                UsedPrompts = [.. session.UsedPrompts.Union(work.Select(w => w.Prompt).Where(p => p.Length > 0))],
+                UsedPrompts = [.. session.UsedPrompts.Union(SpentPrompts(work, results))],
                 // The scope is kept with the session so the CODE stage has it without the caller
                 // sending it twice. Asking for it again is how a caller ends up sending nothing,
                 // and a reviewer handed a bare diff answers a different question than the one the
