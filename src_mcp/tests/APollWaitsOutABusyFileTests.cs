@@ -40,7 +40,9 @@ public sealed class APollWaitsOutABusyFileTests : IDisposable
     {
         var file = Path.Combine(_dir, "held.jsonl");
         await File.WriteAllTextAsync(file, Refusal("one") + "\n", TestContext.Current.CancellationToken);
-        var held = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
+        // `await using` as well as the early release: a cancelled test must not strand the handle. Disposing
+        // twice is harmless. (Our own code reviewer.)
+        await using var held = new FileStream(file, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         var releasing = Task.Run(async () =>
         {
             await Task.Delay(300, TestContext.Current.CancellationToken);
@@ -79,7 +81,7 @@ public sealed class APollWaitsOutABusyFileTests : IDisposable
         await File.WriteAllTextAsync(
             file, Refusal("one") + "\n" + Refusal("two") + "\n" + """{"code":"refu""", TestContext.Current.CancellationToken);
 
-        var notices = ARunThatDiesIsRecordedTests.NoticesIn(file, ServerNoticeCodes.Refused);
+        var notices = NoticeLines.Of(file, ServerNoticeCodes.Refused);
 
         notices.Should().HaveCount(2, "the tail a writer is still appending is not a notice yet");
     }
@@ -90,10 +92,22 @@ public sealed class APollWaitsOutABusyFileTests : IDisposable
         var file = Path.Combine(_dir, "corrupt.jsonl");
         await File.WriteAllTextAsync(file, "not json\n" + Refusal("one") + "\n", TestContext.Current.CancellationToken);
 
-        var reading = () => ARunThatDiesIsRecordedTests.NoticesIn(file, ServerNoticeCodes.Refused);
+        var reading = () => NoticeLines.Of(file, ServerNoticeCodes.Refused);
 
         reading.Should().Throw<System.Text.Json.JsonException>(
             "a terminated line that is not JSON is a defect in the writer, and hiding it would hide that");
+    }
+
+    [Fact]
+    public async Task AnEmptyCompleteLine_IsAFailure_Too()
+    {
+        var file = Path.Combine(_dir, "blank.jsonl");
+        await File.WriteAllTextAsync(file, "\n" + Refusal("one") + "\n", TestContext.Current.CancellationToken);
+
+        var reading = () => NoticeLines.Of(file, ServerNoticeCodes.Refused);
+
+        reading.Should().Throw<System.Text.Json.JsonException>(
+            "a terminated line with nothing on it is a writer defect as much as a malformed one (codex, the code round)");
     }
 
     [Fact]
@@ -104,7 +118,7 @@ public sealed class APollWaitsOutABusyFileTests : IDisposable
         // How the server holds it: open to append, letting others read and write.
         await using var writer = new FileStream(file, FileMode.Append, FileAccess.Write, FileShare.ReadWrite | FileShare.Delete);
 
-        var reading = () => ARunThatDiesIsRecordedTests.NoticesIn(file, ServerNoticeCodes.Refused);
+        var reading = () => NoticeLines.Of(file, ServerNoticeCodes.Refused);
 
         reading.Should().NotThrow("a reader must not forbid the writing that is going on").Which.Should().HaveCount(1);
     }

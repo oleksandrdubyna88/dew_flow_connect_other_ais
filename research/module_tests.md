@@ -1936,15 +1936,16 @@ let the `IOException` escape. One unlucky poll failed the whole test.
 - **`Polls.Until(condition, patience)`** (tests) is the poll, replacing that class's private `Eventually`. An
   `IOException` or `UnauthorizedAccessException` from the condition is "not yet" — `SharedRead`'s own contract
   for every product reader of the data directory — and at the deadline it is a plain `false`, so the caller's
-  assertion fails with its own sentence.
-- **`ARunThatDiesIsRecordedTests.NoticesIn(file, code)`** reads through the product's `SharedRead.Text`
+  assertion fails with its own sentence (and a poll still refused at its deadline writes that exception to the
+  test output, so "never came true" and "was never readable" can be told apart).
+- **`NoticeLines.Of(file, code)`** (tests) reads through the product's `SharedRead.Text`
   (`FileShare.ReadWrite | Delete`, the share the server's `AppendOnlyFile` writer grants), and counts only
-  TERMINATED lines: an unterminated tail is an append in flight, "not yet"; a terminated line that is not JSON
-  still throws, because hiding it would hide a writer defect.
+  TERMINATED lines: an unterminated tail is an append in flight, "not yet"; a terminated line that is not JSON —
+  malformed or empty — still throws, because hiding it would hide a writer defect.
 - **`APollWaitsOutABusyFileTests`** pins each half without a server: a file held with `FileShare.None` and
   released after 300 ms is found by a later poll; `UnauthorizedAccessException` is "not yet" too; a condition
-  that never holds still answers `false`; a half-written tail is not a notice; a malformed complete line still
-  throws; and a notices file a writer holds open to append is read without a wait (red before the fix with the
+  that never holds still answers `false`; a half-written tail is not a notice; a malformed or empty complete line
+  still throws; and a notices file a writer holds open to append is read without a wait (red before the fix with the
   exact #512 message). Five were red against the old poll and reader; the malformed-line guard was proved by a
   plant that skipped unparsable lines.
 

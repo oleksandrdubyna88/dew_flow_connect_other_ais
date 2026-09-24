@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Xunit;
 
 namespace CoaiMcp.Tests;
 
@@ -29,10 +30,14 @@ internal static class Polls
             await Task.Delay(100);
         }
 
-        return Holds(condition);
+        return Holds(condition, atTheDeadline: true);
     }
 
-    private static bool Holds(Func<bool> condition)
+    /// <remarks>
+    /// Still busy at the DEADLINE is said in the test's output: the assertion fails with its own sentence,
+    /// and without this line nobody could tell "never came true" from "was never readable". (The code round.)
+    /// </remarks>
+    private static bool Holds(Func<bool> condition, bool atTheDeadline = false)
     {
         try
         {
@@ -40,6 +45,12 @@ internal static class Polls
         }
         catch (Exception busy) when (busy is IOException or UnauthorizedAccessException)
         {
+            if (atTheDeadline)
+            {
+                TestContext.Current.TestOutputHelper?.WriteLine(
+                    $"the poll was still refused at its deadline: {busy.GetType().Name}: {busy.Message}");
+            }
+
             return false;
         }
     }
