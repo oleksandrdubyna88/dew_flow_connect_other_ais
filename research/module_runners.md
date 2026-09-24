@@ -53,7 +53,7 @@ sequenceDiagram
 | `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below |
 | `VendorIdentity`, `RuntimeResolution` | `Reviewers/RuntimeResolution.cs` | the ONE answer to "what is this vendor": which runtime it drives, the adapter for it, and how it authenticates — asked by both binaries, after two incidents where a second copy of it was the one that was wrong |
 | `VendorHealth`, `VendorProbe` | `Reviewers/VendorProbe.cs` | the `--version` health probe behind `providers` and the Team server's catalog; a retired runtime is answered BEFORE the probe, a local engine instead of it, and a CLI that never answers says so rather than reporting the kill's exit code |
-| `RemoteRuntime` | `Reviewers/RemoteRuntime.cs` | the adapter for a vendor whose reviews run on a **Team server**: builds `--ask-remote` against THIS binary (the `LocalRuntime` shim shape), carries no `SharedResource` because the server owns the queue, and holds the cancel-an-abandoned-job half (`Claim` / `ReadClaim` / `CancelAbandonedAsync`) |
+| `RemoteRuntime` | `Reviewers/RemoteRuntime.cs` | the adapter for a vendor whose reviews run on a **Team server**: builds `--ask-remote` against THIS binary (the `LocalRuntime` shim shape), carries no `SharedResource` because the server owns the queue, and holds the cancel-an-abandoned-job half (`Claim` / `ReadClaimAsync` / `CancelAbandonedAsync`) |
 | `RemoteAsk`, `RemotePoll`, `RemoteState` | `Reviewers/RemoteAsk.cs` | the PURE half of the shim: the request body, the poll parse, every exit code and every sentence a person will see — so each failure path is tested without a server |
 | `TeamServerAuth` | `Reviewers/TeamServerAuth.cs` | one canonical spelling of a server URL, the fingerprint that names its token file, and the owner-only read/write of that file. The same normalised value builds the request URLs, not just the hash |
 | `RemoteProbe`, `RemoteCatalog` | `Reviewers/RemoteProbe.cs` | a remote vendor's health over `GET /api/catalog`: the server's own slot counts as the note, 401/403/426/outage told apart, a cache whose FAILURE wait is never shorter than its success wait, and a refusal that says WHICH of a row's two names was tried |
@@ -961,9 +961,12 @@ Four things about it are not obvious from the shape:
   - **A claim another process holds for an instant is still READ** (2026-09-24, issue #462).
     `ReadClaim` answered every `IOException` with `None`, so a scanner or indexer opening the claim just
     after it was renamed into place — the refusal `Replace` has always retried on the write side — made
-    a claim that names its job read as one that names nothing, and `CancelAbandonedAsync` gave up. It now
-    retries that refusal (eight attempts, 10–30 ms × attempt, jittered — well under a second) and still
-    answers `None` at once for a missing file or one that is not a claim.
+    a claim that names its job read as one that names nothing, and `CancelAbandonedAsync` gave up. It is
+    now `ReadClaimAsync(jobFile, ct)`: it retries that refusal (eight attempts, 10–30 ms × attempt,
+    jittered — well under a second) with `Task.Delay` on the caller's token rather than blocking a pool
+    thread, and still answers `None` at once for a missing file or one that is not a claim. "Missing" is
+    the READ's `FileNotFoundException`, no longer `File.Exists`, which answers `false` for a file it was
+    refused a look at — the very refusal being waited out. (The code round.)
   - **The cancellation carries `X-Coai-Contract`.** The server judges that header before it looks at
     the token and answers `426` without it, so the first version would have been refused by every
     server it was ever sent to: wired, and working on nothing.
