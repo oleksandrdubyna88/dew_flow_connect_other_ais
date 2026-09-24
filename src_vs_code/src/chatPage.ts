@@ -1249,7 +1249,6 @@ export function shouldFollow(
   return !(scrollHeight - (scrollTop + clientHeight) > slack);
 }
 
-/** The page's behaviour. Its own function for the same reason the styles are. */
 /**
  * What a right-click in the page hands its menu commands: the conversation's store id (issue #314).
  * The page script's `nameConversation` writes the same shape when the id changes.
@@ -1258,6 +1257,7 @@ export function conversationContext(id: string): string {
   return JSON.stringify({ coaiConversation: id });
 }
 
+/** The page's behaviour. Its own function for the same reason the styles are. */
 function chatScript(state: ChatPageState, regions: Regions): string {
   return `(function () {
   const vscode = acquireVsCodeApi();

@@ -244,6 +244,17 @@ and that difference is `memoryOf` in `chatModels.ts` — it decides whether the 
 every turn and whether the conversation is capped, and it travels with the model when the person
 changes it.
 
+### And one arrow into ANOTHER extension: back to a Claude Code session (2026-09-24, issue #314)
+
+*CoAI: back to where this chat came from* (`chatReturnCommand.ts`) is the first place the extension
+calls into Claude Code rather than only reading its tabs: when a chat no longer has the tab it was
+opened from, it asks Claude Code to open the recorded session with `claude-vscode.editor.open(sessionId,
+…, {programmatic: true})`. That is Claude Code's INTERNAL command, not an API, so it is the last resort:
+a tab that is still open is brought forward with the editor's own recipe (the one Claude Code's own
+`bringTabToFront` uses), a file source opens with `showTextDocument`, and the call to Claude Code is
+itself the check — a rejection, whether the extension is missing or no longer knows the session, is a
+refusal naming the session. Nothing else in this extension depends on Claude Code being installed.
+
 ### And a ledger of its own, because it now spends on its own (2026-09-10)
 
 Spending an edge means accounting for it. `usage.jsonl` is written by `coai-mcp` and only READ by the

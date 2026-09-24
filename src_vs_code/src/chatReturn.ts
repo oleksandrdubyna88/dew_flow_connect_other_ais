@@ -1,4 +1,5 @@
 import type { ConversationSource } from './chatStore';
+import { type TabSnapshot, isOrdinaryEditorTab, rekeysByLabel } from './sessionKey';
 
 /**
  * Where a coai chat goes back to — issue #314. The decision alone, with nothing of VS Code in it.
@@ -32,18 +33,65 @@ export type BackTo =
  * extension's internals.
  */
 export function backTo(asked: ReturnAsked): BackTo {
-  return asked.liveTab ? { kind: 'tab' } : fromSource(asked.source);
+  return asked.liveTab ? { kind: 'tab' } : recordedRoute(asked.source);
 }
 
-function fromSource(source: ConversationSource): BackTo {
+/** The road the conversation RECORDED — also what a tab that would not come forward falls back to. */
+export function recordedRoute(source: ConversationSource): Exclude<BackTo, { kind: 'tab' }> {
   switch (source.kind) {
     case 'claude':
       return { kind: 'session', sessionId: source.sessionId };
     case 'file':
       return { kind: 'file', uri: source.uri };
-    default:
+    case 'none':
       return { kind: 'nowhere' };
+    default:
+      // Exhaustive: a new kind of source is a compile error here, not a chat that silently goes
+      // nowhere. (codex, the code round.)
+      return unknownSource(source);
   }
+}
+
+function unknownSource(source: never): Exclude<BackTo, { kind: 'tab' }> {
+  return source;
+}
+
+/**
+ * The tab to go back to when the chat's own key is no longer one of the tabs — which happens while the
+ * tab is still on screen: adding or removing an editor group rebuilds the host's tab model, and the
+ * `Tab` a chat was registered under stops being one of them (our own code review of issue #314).
+ *
+ * <p>The same identities `sessionKey.ts` re-keys by: a FILE by its document's uri (any tab showing it —
+ * the document is the same wherever it is split), and — for a chat that recorded no session — a Claude
+ * tab by its label, only when ONE Claude tab wears it. Two of one name are never guessed between, and a document tab is never taken for
+ * a Claude session because it happens to wear the chat's name.</p>
+ */
+export function recoveredTab(all: readonly TabSnapshot[], source: ConversationSource, label: string): TabSnapshot | undefined {
+  if (source.kind === 'file') {
+    return all.find((tab) => isOrdinaryEditorTab(tab) && tab.uri === source.uri);
+  }
+
+  // A RECORDED session has an exact road of its own (`session`), and Claude Code reveals the panel
+  // already showing it; a name is only the fallback for a chat that recorded nothing.
+  return source.kind === 'none' ? onlyClaudeTabNamed(all, label) : undefined;
+}
+
+function onlyClaudeTabNamed(all: readonly TabSnapshot[], label: string): TabSnapshot | undefined {
+  const named = all.filter((tab) => rekeysByLabel(tab) && tab.label === label);
+
+  return named.length === 1 ? named[0] : undefined;
+}
+
+/**
+ * Why an unsaved buffer cannot be gone back to, or empty. `showTextDocument` on an `untitled:` uri that is
+ * not open does not fail — it CREATES an empty buffer of that name, which after a reload may even be
+ * somebody else's. So such a source is opened only while it is still one of the open documents. (Our own
+ * code review.)
+ */
+export function bufferGone(uri: string, openUris: readonly string[]): string {
+  return uri.startsWith('untitled:') && !openUris.includes(uri)
+    ? 'the unsaved buffer is no longer open'
+    : '';
 }
 
 /**

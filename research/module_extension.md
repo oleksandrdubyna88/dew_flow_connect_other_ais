@@ -8949,7 +8949,19 @@ is active, and on the SAME chord as *go to* (`Ctrl+Alt+G` / `Cmd+Alt+G`) scoped 
   census in `chatWiring.test.ts` carries an explicit allow-list (`ACTS_INSIDE_A_CHAT`) checked from both
   sides — everything on it is scoped to our page, and everything scoped to our page is on it.
 
-**In a real editor** (`npm run test:host`): the recipe brings the source tab forward, and a chat with no
-tab goes to its recorded file — 12/12 on 2026-09-24; putting the index off by one turns the first red.
+- **When the key is no longer a tab.** MEASURED on VS Code 1.139: a group added beside the tab and
+  removed again leaves its `Tab` object in place, but MOVING the tab to another group replaces it, and
+  the chat's key then names no tab. `recoveredTab` finds the tab still showing the source — a file by its
+  uri, and, for a chat that recorded no session, the ONE Claude tab wearing its name (a recorded session
+  takes the exact session road instead). Before this, the file opened a second time in the active group.
+- **Refusals that were holes** (the code round and our own review): an id that no longer names a chat
+  here is refused rather than swapped for the active chat; a tab that will not come forward falls back to
+  the recorded session or file before giving up; an `untitled:` buffer that is gone is refused, because
+  `showTextDocument` would silently CREATE an empty one of that name.
+
+**In a real editor** (`npm run test:host`), 14/14 on 2026-09-24: the recipe brings the source tab
+forward (an off-by-one index turns it red); a tab moved to another group is still found (red before
+`recoveredTab`, with the file opened twice); a stale right-click refuses while the chord acts on the
+active chat (red when the old fallback is put back); a chat with no tab opens its recorded file.
 **Not observed by the author:** the session route (Claude Code is not installed in the harness) and a
 right-click in the live UI — both left for the person to try.

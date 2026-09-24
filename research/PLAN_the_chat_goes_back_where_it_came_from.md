@@ -1,10 +1,20 @@
 # PLAN — the chat goes back to where it came from
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code` — a new command in the coai
+> Status: **IMPLEMENTED, 2026-09-24.** Deviations: the tab recipe is guarded AND falls back to the
+> recorded session or file when the tab will not come forward; `recoveredTab` finds the tab when its `Tab`
+> object was replaced — MEASURED on VS Code 1.139, moving a tab to another group replaces it (adding or
+> removing a neighbouring group does not), and the file then opened twice; an id that names no chat is
+> refused rather than swapped for the active chat; a gone `untitled:` buffer is refused, because
+> `showTextDocument` would create an empty one; the wiring test lives in `chatWiring.test.ts` and
+> `test/host/scenarios.ts` rather than a separate `chatReturnWiring.test.ts`. Open tail: the SESSION
+> route (`claude-vscode.editor.open`) and a right-click in the live webview were NOT observed by the
+> author — the harness has no Claude Code installed; the DoD item for the session route stays unticked.
+>
+> Scope: `src_vs_code` — a new command in the coai
 > chat's own context menu, a pure decision module, its executor, the page's `data-vscode-context`, the
 > manifest, and the structural door test. Issue #314.
 >
-> Related docs: [module_extension.md](../research/module_extension.md), [architecture.md](../research/architecture.md).
+> Related docs: [module_extension.md](module_extension.md), [architecture.md](architecture.md).
 
 ## The symptom
 
@@ -90,7 +100,7 @@ Claude panel (`package.json:928-953`) — so the way back is to hunt through the
 ## Risks
 
 - `claude-vscode.editor.open` is internal to Claude Code and can change. Mitigated: B first, A only when
-  the command is listed, and a refusal naming the session when it is not.
+  no tab can be used, and a rejection of the call is a refusal naming the session.
 - Claude's panel key after `/clear` or a fork may not be the `.jsonl` UUID the source holds; then A opens
   a panel on the recorded session rather than the tab the person is thinking of. Checked live (below).
 
@@ -100,7 +110,7 @@ Claude panel (`package.json:928-953`) — so the way back is to hunt through the
 2. `RevealablePanel.isActive()`; the page's `data-vscode-context` and its rewrite on *New chat*
    (`chatPage.test.ts` / the page-run harness: present, carries the id, follows a reset).
 3. `chatReturnCommand.ts` — conversation lookup (argument first, active panel second), the B recipe, A
-   behind `getCommands`, `showTextDocument`, refusals.
+   as a call whose rejection is the refusal, `showTextDocument`, refusals.
 4. Manifest + registration; `chatReturnWiring.test.ts` (command, menu scope, chord and its `when`,
    registration with `.catch`, no `noteChatDoor`, every arm of the union executed with an exhaustive
    `never`); `chatWiring.test.ts` door derivation with the two-way scope check; notification census.
@@ -119,11 +129,11 @@ Claude panel (`package.json:928-953`) — so the way back is to hunt through the
 
 ## Definition of Done
 
-- [ ] Right-click in a coai chat offers the command, and it activates the tab the chat came from.
-- [ ] The chord does the same from an active chat, and *go to* still works from a Claude tab.
+- [x] Right-click in a coai chat offers the command, and it activates the tab the chat came from.
+- [x] The chord does the same from an active chat, and *go to* still works from a Claude tab.
 - [ ] A restored chat goes back by its recorded session; a file chat to its file; an unknown source says so.
       The SESSION route is ticked only when it was OBSERVED against a real Claude Code; otherwise it is
       left open and the PR says so (codex, the plan round).
-- [ ] The door census does not count the new command, and fails if a real door hides behind the scope.
-- [ ] Tests for every step; `npm test`, `npm run lint` green; live check reported.
-- [ ] `module_extension.md`, `module_tests.md` and the CHANGELOG updated; this plan promoted to `research/`.
+- [x] The door census does not count the new command, and fails if a real door hides behind the scope.
+- [x] Tests for every step; `npm test`, `npm run lint` green; live check reported.
+- [x] `module_extension.md`, `module_tests.md` and the CHANGELOG updated; this plan promoted to `research/`.
