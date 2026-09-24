@@ -1,6 +1,7 @@
 import type { ChatAccess } from './chatAdapter';
 import { ChatModelChoice } from './chatContracts';
 import { ChatProvider } from './chatModels';
+import type { ChatEntry, RevealablePanel } from './chatPanels';
 import { ChatMessage, TurnMarks, WaitingQuestion, chatCappedHtml, chatFailureHtml, chatMessagesHtml, chatPickerHtml, chatPresetRowsHtml, chatStatusHtml, chatWaitingHtml } from './chatPage';
 import { ModelPreset, PromptPreset } from './chatPresets';
 
@@ -124,10 +125,12 @@ export function chatStateMessage(state: ChatPushState): Record<string, unknown> 
 /**
  * Build the message and post it — unless it is exactly what this conversation was last sent.
  *
+ * @param entry the conversation, narrowed to the two members this reads — through the registry's OWN types, so
+ *   a change to how a panel is posted to is a change here too (codex, the code round)
  * @returns whether anything was actually sent
  */
 export function sendChatState(
-  entry: { readonly id: object; readonly panel: { post(message: unknown): void } }, state: ChatPushState,
+  entry: Pick<ChatEntry, 'id'> & { readonly panel: Pick<RevealablePanel, 'post'> }, state: ChatPushState,
 ): boolean {
   const payload = chatStateMessage(state);
   const serialised = JSON.stringify(payload);
