@@ -2001,3 +2001,12 @@ port to somebody else; the count stays EXACT — `2 + lost for real`, the losses
 failure that is not a taken port still escapes. `ACandidateAnotherProcessTakes_IsCountedAsALossOfItsOwn` makes
 the race deterministic with a held socket as the second candidate: red against the old `== 2` with #520's own
 message ("found 3"), green with the count.
+
+## The chat state carries spend and reask (2026-09-24, issue #492)
+
+`aQuestionCrossesTheSeam.test.ts` drives the REAL send (`sendChatState` with a recording tab) and pushes what
+it posted into the running chat page: a new cost moves `#spend`; a re-ask target renames Send to
+*Re-ask · Opus* and an empty-box Send re-asks, and a later empty target puts Send back and re-asks nothing; an
+unchanged state is not sent twice while a changed spend is. All three were red before the fields were added —
+the third because, without `spend` in the message, a new cost serialised identically and the de-duplication
+swallowed it.
