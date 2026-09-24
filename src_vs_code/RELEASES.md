@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.52.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.51.0...extension-v0.52.0) (2026-09-24)
+
+
+### Features
+
+* **chat:** a local chat can act on the machine, when the person ticks it ([#289](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/289)) ([82d07eb](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/82d07ebe8df745ed4b0c93f71f50c13663bc1b2c))
+* **chat:** the chat goes back to where it came from ([#314](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/314)) ([bd67032](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/bd67032a0d727c50db0979039f5589bd95dc3a34))
+* **extension:** an Edit commands page for the gate's orders and a person's own commands ([#467](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/467), Epic B) ([8b175a8](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8b175a82c5eb9730f42689a23ff376a0c281eddd))
+* **extension:** Export config and Import config ([#467](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/467), Epic C) ([9a56511](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9a565110e084164bd51117c1e1e51f2bd386e9a8))
+* **gate:** the split is sized honestly, gated once per epic or per task, and written down ([#131](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/131)) ([f84280c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/f84280c1ba058f14bbf7737c09e0969011cdf4d8))
+* **gate:** the split order names the caller's own strongest model ([#117](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/117)) ([fdaec38](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fdaec389c040225cfb41da5bd2df9e513a6f93e9))
+* **server:** a run that dies is recorded, and a crash is written down (S8 epic 3) ([#471](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/471)) ([f82566f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/f82566fad8da89e698a8695cb3b9de96e007a445))
+* **server:** the gate's orders are data a person can reword, and a person can add their own ([#467](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/467), Epic A) ([30bd43b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/30bd43b93525bc04cefb3d91984ba6efff7415ba))
+
+
+### Bug Fixes
+
+* **chat:** agent mode closes the workspace shim hole and the stuck tick ([#289](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/289)) ([d3d641a](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d3d641aa3059c32bbe0774d043f9d8cb98a0cf08))
+* **chat:** the way back survives a moved tab, a stale id and a gone buffer ([#314](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/314)) ([ec687d4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ec687d4b3a45a7bbcd93b40550f38fae330219fb))
+* **chat:** Try again sits outside the red box, and the failure wraps ([#346](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/346)) ([09ed37e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/09ed37e62f0061d0fb3f9c97cbafc0312f1885e2))
+* **consult:** a sibling's git bookkeeping no longer withholds a consultation ([#376](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/376)) ([947bc54](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/947bc549d978becc343626e6d2c784e3684a193e))
+* **extension:** the config import never applies a path, and says every failure ([#467](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/467)) ([fb7d067](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fb7d067531fb9c5951fe8e91b2d6c29505b4dbb7))
+* **extension:** the config lists sort by localeCompare, as every other ordering here ([#467](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/467)) ([a8d1c44](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a8d1c44c4ff30b025a68965a8b9c747944be08c4))
+* **gate:** the code review of [#117](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/117) — a picker choice reaches the setting, two spellings of a kind do not throw ([471357d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/471357deb63bc1b61d63f40aa2f7e6fa6b47017e))
+* **gate:** the code review of [#131](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/131) — orders survive a tick, phases count, every size is recognised ([56ae55d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/56ae55d542c10d9c2780bb6f6537f84c522262c3))
+* **log:** an unpriced consultation no longer silences the date switch and the blind-spot tab ([c837410](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/c837410c7a0d39b3e573504e455d7c6ac95f4d4f))
+* **panel:** a split-order model picker gets its focus back after a repaint ([28d511f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/28d511fb0d65a48a13ac06b7d80d53cdb51966db))
+* **roles:** a role is not switched on without a question to ask ([#338](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/338)) ([dfb4479](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/dfb4479688c422281658696c2b12c931e67a6f03))
+* **roles:** the page mark says which rounds skip the role, and the doc says where the name goes ([#338](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/338)) ([94da78b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/94da78bd12cb35be84992ab5cd9a9ce1412080b0))
+* **roles:** the refusal says what to do, and one press is one command ([#338](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/338)) ([ac554d2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ac554d2360e15b6b41b607d5549654e927fa5014))
+
 ## [0.51.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.50.0...extension-v0.51.0) (2026-09-23)
 
 
