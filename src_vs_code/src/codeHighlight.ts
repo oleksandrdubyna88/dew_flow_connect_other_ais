@@ -176,8 +176,9 @@ function touch(key: string, html: string): string {
  * nothing is indistinguishable from a pair that was never collected.</p>
  */
 export function highlight(
-  code: string, language: string, marks: readonly LineMark[] = [], firstLine = 1,
+  code: string, language: string, marks: readonly LineMark[] = [], startingAt = 1,
 ): string {
+  const firstLine = lineNumberFrom(startingAt);
   const grammar = corpusLanguage(language);
   if (grammar === undefined) {
     // No cache entry: this path is a string concatenation, and caching it would spend the bound on
@@ -223,6 +224,14 @@ export function highlight(
 
     return plain(code, 'failed', marks, firstLine);
   }
+}
+
+/**
+ * A line number a block may start from: a whole number from 1. A caller's 0 (none recorded), a negative, a
+ * fraction or NaN would otherwise be drawn as a number no file has, and widen the gutter to fit it. (Code round.)
+ */
+function lineNumberFrom(startingAt: number): number {
+  return Number.isFinite(startingAt) && startingAt >= 1 ? Math.trunc(startingAt) : 1;
 }
 
 /** How many digits the block's LAST line number has — the width its gutter needs. */
@@ -325,9 +334,9 @@ function said(mark: LineMark): {
  * `research/module_tests.md` says so rather than leaving it to be assumed.</p>
  */
 export function plainBlock(
-  code: string, why: 'plain' | 'failed', marks: readonly LineMark[] = [], firstLine = 1,
+  code: string, why: 'plain' | 'failed', marks: readonly LineMark[] = [], startingAt = 1,
 ): string {
-  return plain(code, why, marks, firstLine);
+  return plain(code, why, marks, lineNumberFrom(startingAt));
 }
 
 function plain(code: string, why: 'plain' | 'failed', marks: readonly LineMark[] = [], firstLine = 1): string {

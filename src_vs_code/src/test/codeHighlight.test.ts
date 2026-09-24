@@ -391,3 +391,13 @@ test('the same code numbered from another line is other markup, not a cached cop
   assert.deepEqual(numbered(highlight('x();', 'CSharp', [], 7)), [7]);
   assert.deepEqual(numbered(highlight('x();', 'CSharp', [], 900)), [900], 'the first line is part of the cache key');
 });
+
+test('a first line that is no line number counts from 1, rather than drawing 0, a fraction or NaN', () => {
+  for (const firstLine of [0, -4, Number.NaN, 2.5]) {
+    const html = highlight('a();\nb();', 'CSharp', [], firstLine);
+    const expected = firstLine === 2.5 ? [2, 3] : [1, 2];
+
+    assert.deepEqual(numbered(html), expected, `firstLine ${firstLine}`);
+    assert.doesNotMatch(html, /--coai-ln-digits:\s*(NaN|-|0)/u, `firstLine ${firstLine}: the gutter width stays a real digit count`);
+  }
+});

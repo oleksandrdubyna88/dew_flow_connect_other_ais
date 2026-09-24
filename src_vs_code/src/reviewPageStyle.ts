@@ -66,8 +66,9 @@ ${tabCss('4px 0 10px')}
   /* The tick column is as narrow as a box and must not take the click target of the row with it. */
   th.pick, td.pick { width: 1%; padding-right: 0; }
   th.pick input, td.pick input { cursor: pointer; margin: 0; }
-  /* The whole summary line is the button — every one of the three lines is inside it — so the
-     target is the line and not a glyph. It keeps the page's own text colour: a button coloured as
+  /* All three summary lines are inside the button — so the target is the text and not a glyph. It is
+     as wide as that text, not the row (#488: the row's CoAI: choose sits right after it, and the empty
+     space further right no longer opens the row). It keeps the page's own text colour: a button coloured as
      a button would make every method look pressable in the accent colour and drown the state
      words underneath. */
   button.twist {
