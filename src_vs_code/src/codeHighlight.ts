@@ -347,14 +347,18 @@ export const HIGHLIGHT_CSS = `
     white-space: pre-wrap; word-break: break-word;
   }
   pre.shiki code { font-family: inherit; }
-  pre.shiki .line { display: block; }
+  /* NOT a block (issue #488). Both renderers put a real newline between two lines — it is what a copy
+     of the code carries as its line break — and a BLOCK line followed by that newline inside pre-wrap
+     draws it as an empty row of its own: a blank stripe after every line. An inline-block at full width
+     takes its own row and the newline merely ends it. */
+  pre.shiki .line { display: inline-block; width: 100%; box-sizing: border-box; vertical-align: top; }
   /* What differs, the way the editor's own diff shows it — and through the editor's own diff
      colours, which is the one family of variables a webview IS given for this. insertedLine
      rather than insertedText: these mark whole lines, and the text variant is the tighter
      highlight a character-level diff would use. The gutter letter is a ::before so it costs the
      code no indentation and cannot be selected into a copy. */
   pre.shiki .line[class*="dl-"] {
-    display: block; margin: 0 -6px; padding: 0 6px 0 0; border-radius: 2px;
+    width: calc(100% + 12px); margin: 0 -6px; padding: 0 6px 0 0; border-radius: 2px;
   }
   pre.shiki .line[class*="dl-"]::before {
     display: inline-block; width: 1.1em; opacity: .65; font-weight: 600;
