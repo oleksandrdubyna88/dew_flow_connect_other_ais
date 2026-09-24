@@ -1,11 +1,20 @@
 # PLAN — the consultant is not blamed for what a sibling worktree writes into shared git metadata
 
-> Status: **plan only, nothing implemented yet.** Scope: the consultation's filesystem invariant in
+> Status: **IMPLEMENTED, 2026-09-24.** Deviations, all from our own code review: `config.worktree` is
+> watched too (git reads it under `extensions.worktreeConfig`, and nothing did); entries are ordered by KEY
+> stably, and not at all when an include is present, because sorting every entry hid a swap of two values
+> of one key and a moved include; a truncated listing falls back to bytes; the shared-directory sentence
+> names the location only — the "push -u, branch switch, editor" wording of step 4 was dropped, because
+> what still reaches it is what the rule keeps as dangerous. A malformed config fails `git status` itself,
+> so it throws rather than reaching the byte fallback, which a linked worktree's own config does reach.
+> Open tail: a per-worktree HEAD commit check (`commit --allow-empty`).
+>
+> Scope: the consultation's filesystem invariant in
 > `src_mcp` (`runners/Consultation/FilesystemInvariant.cs`, `core/Consultation/FilesystemSnapshot.cs`) and
 > its tests. Issue #376.
 >
-> Related docs: [module_server.md](../research/module_server.md), [PLAN_consultant.md](../research/PLAN_consultant.md),
-> [architecture.md](../research/architecture.md).
+> Related docs: [module_server.md](module_server.md), [PLAN_consultant.md](PLAN_consultant.md),
+> [architecture.md](architecture.md).
 
 ## The symptom
 
@@ -91,8 +100,8 @@ dangerous keys (every new executable key would be missed). **Open tail:** a per-
 
 ## Definition of Done
 
-- [ ] A sibling worktree or the editor writing branch bookkeeping, or the main checkout switching branch,
+- [x] A sibling worktree or the editor writing branch bookkeeping, or the main checkout switching branch,
       does not withhold a consultation.
-- [ ] A config change that can run code or redirect a push, an include, a hook — still does.
-- [ ] A withheld consultation over shared metadata says it is shared.
-- [ ] Tests red first; the C# suite green; docs updated; this plan promoted to `research/`.
+- [x] A config change that can run code or redirect a push, an include, a hook — still does.
+- [x] A withheld consultation over shared metadata says it is shared.
+- [x] Tests red first; the C# suite green; docs updated; this plan promoted to `research/`.

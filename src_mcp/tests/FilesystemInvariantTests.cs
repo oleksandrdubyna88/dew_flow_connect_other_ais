@@ -347,6 +347,105 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task AConfigWorktreeFile_IsWatched()
+    {
+        // With extensions.worktreeConfig on (git sparse-checkout turns it on by itself) git also reads
+        // <gitdir>/config.worktree, and nothing watched it: core.fsmonitor written there ran code on the next
+        // git status in this checkout. (Our own code review.)
+        await Git("config", "extensions.worktreeConfig", "true");
+        var changes = await AcrossAsync(async () => await Git("config", "--worktree", "core.fsmonitor", "evil-daemon"));
+
+        changes.Should().Contain(c => c.Path == "<git>/config.worktree");
+    }
+
+    [Fact]
+    public async Task TwoValuesOfOneKeySwapped_IsSeen()
+    {
+        // git uses the LAST value of a single-valued key: swapping two changes which one is in force.
+        // Sorting every entry hid it. (Our own code review.)
+        var config = Path.Combine(_repo, ".git", "config");
+        await Git("config", "--add", "core.sshCommand", "ssh -i evil");
+        await Git("config", "--add", "core.sshCommand", "ssh");
+        var original = await File.ReadAllTextAsync(config, TestContext.Current.CancellationToken);
+
+        var changes = await AcrossAsync(async () =>
+        {
+            var lines = original.Replace("\r\n", "\n").Split('\n').ToList();
+            var evil = lines.FindIndex(l => l.Contains("ssh -i evil"));
+            var plain = lines.FindLastIndex(l => l.Trim() == "sshCommand = ssh" || l.Trim() == "sshcommand = ssh");
+            (lines[evil], lines[plain]) = (lines[plain], lines[evil]);
+            await File.WriteAllTextAsync(config, string.Join('\n', lines), TestContext.Current.CancellationToken);
+        });
+
+        changes.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task AnIncludeMovedBelowTheSettingsItOverrides_IsSeen()
+    {
+        // An included file takes effect where the include line IS: moving it changes what wins.
+        var config = Path.Combine(_repo, ".git", "config");
+        await Git("config", "include.path", "../extra.gitconfig");
+        await Git("config", "alias.lg", "log");
+        var original = await File.ReadAllTextAsync(config, TestContext.Current.CancellationToken);
+
+        var changes = await AcrossAsync(async () =>
+        {
+            var text = original.Replace("\r\n", "\n");
+            var include = text[text.IndexOf("[include]", StringComparison.Ordinal)..text.IndexOf("[alias]", StringComparison.Ordinal)];
+            await File.WriteAllTextAsync(config, text.Replace(include, string.Empty) + "\n" + include, TestContext.Current.CancellationToken);
+        });
+
+        changes.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task AnEmptyConfigInALinkedWorktree_IsStable()
+    {
+        var changes = await AcrossLinkedAsync(() => Task.CompletedTask);
+
+        changes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AConfigGitConfigCannotRead_IsComparedByItsBytes()
+    {
+        // A linked worktree's OWN config is not read by git status, so a malformed one does not stop the
+        // snapshot — and `git config --list` refuses it, which is where the byte fallback is the answer.
+        var linked = Path.Combine(Path.GetTempPath(), "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
+        await Git("worktree", "add", "--detach", linked);
+        try
+        {
+            var own = Path.Combine(_repo, ".git", "worktrees", Path.GetFileName(linked), "config");
+            await File.WriteAllTextAsync(own, "[core\n bad one", TestContext.Current.CancellationToken);
+            var before = await _invariant.SnapshotAsync(linked, TestContext.Current.CancellationToken);
+            await File.WriteAllTextAsync(own, "[core\n bad two", TestContext.Current.CancellationToken);
+            var after = await _invariant.SnapshotAsync(linked, TestContext.Current.CancellationToken);
+
+            FilesystemSnapshot.Compare(before, after).Should().ContainSingle().Which.Path.Should().Be("<git>/config");
+        }
+        finally
+        {
+            await Git("worktree", "remove", "--force", linked);
+        }
+    }
+
+    [Fact]
+    public void ASharedHookChange_IsNotExplainedAwayAsASiblingsBookkeeping()
+    {
+        // What still reaches the common directory's sentence is what the rule KEEPS because it is dangerous
+        // — a hook, core.fsmonitor. Naming "a push -u, a branch switch or the editor" there steered the
+        // reader to dismiss exactly that. (Our own code review.)
+        static FilesystemSnapshot With(string fingerprint) => new(
+            System.Collections.Immutable.ImmutableSortedDictionary.CreateRange(StringComparer.Ordinal,
+                [KeyValuePair.Create("<git>/common/hooks/pre-push", new TreeEntry("git", fingerprint))]));
+
+        var change = FilesystemSnapshot.Compare(With("a"), With("b")).Should().ContainSingle().Subject;
+
+        change.What.Should().NotContain("push -u").And.NotContain("editor");
+    }
+
+    [Fact]
     public void ASharedMetadataChange_IsSaidToBeShared()
     {
         // So the person reading a withheld consultation is not led to blame the consultant for a sibling.
@@ -356,7 +455,7 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
 
         var change = FilesystemSnapshot.Compare(With("a"), With("b")).Should().ContainSingle().Subject;
 
-        change.What.Should().Contain("shared").And.Contain("every worktree of this repository");
+        change.What.Should().Contain("the git directory every worktree of this repository shares");
         FilesystemSnapshot.Sentence([change]).Should().Contain("<git>/common/config");
     }
 

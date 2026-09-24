@@ -5,8 +5,10 @@ namespace CoaiMcp.Core.Consultation;
 
 /// <summary>What one path in the tree looked like at one moment, as a comparable string.</summary>
 /// <param name="Kind"><c>tracked</c>, <c>untracked</c>, <c>ignored</c> or <c>git</c> — decides the verb a change gets.</param>
-/// <param name="Fingerprint">The git status code plus size and modification time — whatever this
-/// kind of path can be asked about. Two equal fingerprints mean "nothing observable changed".</param>
+/// <param name="Fingerprint">Whatever this kind of path can be asked about — for a listed file the git
+/// status code plus a content hash (size and modification time past 1 MB), for a config its MEANING
+/// (<c>config|&lt;sha&gt;</c>, <see cref="ConfigMeaning"/>). Two equal fingerprints mean "nothing observable
+/// changed".</param>
 public sealed record TreeEntry(string Kind, string Fingerprint);
 
 /// <summary>One path that changed under the consultant, and what happened to it.</summary>
@@ -68,16 +70,19 @@ public sealed record FilesystemSnapshot(ImmutableSortedDictionary<string, TreeEn
     }
 
     /// <summary>
-    /// A change to the COMMON git directory of a linked worktree, said to be shared — issue #376.
+    /// A change to the COMMON git directory of a linked worktree, said to be in the shared directory — issue
+    /// #376.
     /// </summary>
     /// <remarks>
-    /// Every worktree of the repository writes that directory, and so does an editor open on any of them;
-    /// the person reading a withheld consultation should not be led to blame the consultant for a sibling's
-    /// <c>push -u</c>. The snapshots still cannot say who wrote, and the sentence does not pretend to.
+    /// A location, and nothing more: the sibling bookkeeping that used to land there (a <c>push -u</c>, a
+    /// branch switch, the editor's merge base) is not watched any more, so what still reaches this sentence
+    /// is what the rule keeps because it is dangerous — a hook, <c>core.fsmonitor</c>. Offering benign causes
+    /// here would steer the reader to dismiss exactly that. (Our own code review.) The snapshots cannot say
+    /// who wrote, and the sentence does not pretend to.
     /// </remarks>
     private static string Shared(string path, string what) =>
         path.StartsWith("<git>/common/", StringComparison.Ordinal)
-            ? $"shared {what} — every worktree of this repository can write it: a push -u, a branch switch or the editor in another checkout"
+            ? $"{what}, in the git directory every worktree of this repository shares"
             : what;
 
     private static string Appeared(string kind) => kind switch

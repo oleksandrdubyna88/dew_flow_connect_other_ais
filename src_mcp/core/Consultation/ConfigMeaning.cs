@@ -36,11 +36,25 @@ public static class ConfigMeaning
             .Select(e => e.Subsection)
             .ToHashSet(StringComparer.Ordinal);
 
-        return string.Join('\0', entries
-            .Where(e => !IsBookkeeping(e, remotes))
-            .Select(e => e.Raw)
-            .Order(StringComparer.Ordinal));
+        var kept = entries.Where(e => !IsBookkeeping(e, remotes)).ToList();
+
+        return string.Join('\0', InTheOrderThatMatters(kept).Select(e => e.Raw));
     }
+
+    /// <summary>
+    /// The entries in an order two equivalent configs share — and no more equivalent than that.
+    /// </summary>
+    /// <remarks>
+    /// Sorted by KEY, stably, so settings written in another order compare equal while the values of ONE key
+    /// keep their file order: git uses the last value of a single-valued key, and swapping two of them
+    /// changes which is in force. With an include present nothing is reordered at all, because an included
+    /// file takes effect where its include line stands. Sorting every entry whole hid both. (Our own code
+    /// review of issue #376.)
+    /// </remarks>
+    private static IEnumerable<Entry> InTheOrderThatMatters(IReadOnlyList<Entry> entries) =>
+        entries.Any(e => e.Section is "include" or "includeif")
+            ? entries
+            : entries.OrderBy(e => e.Key, StringComparer.Ordinal);
 
     private static bool IsBookkeeping(Entry entry, IReadOnlySet<string> remotes) =>
         entry.Section == "branch" && entry.Subsection.Length > 0 && IsTracking(entry, remotes);
@@ -56,7 +70,7 @@ public static class ConfigMeaning
     /// the last: branch names contain dots (<c>branch.rel.1.0.merge</c>). git prints section and variable in
     /// lower case and the subsection as written.
     /// </remarks>
-    private sealed record Entry(string Raw, string Section, string Subsection, string Variable, string Value)
+    private sealed record Entry(string Raw, string Key, string Section, string Subsection, string Variable, string Value)
     {
         public static Entry Parse(string raw)
         {
@@ -67,12 +81,12 @@ public static class ConfigMeaning
             var last = key.LastIndexOf('.');
             if (first < 0)
             {
-                return new Entry(raw, key, string.Empty, string.Empty, value);
+                return new Entry(raw, key, key, string.Empty, string.Empty, value);
             }
 
             var subsection = last > first ? key[(first + 1)..last] : string.Empty;
 
-            return new Entry(raw, key[..first], subsection, key[(last + 1)..], value);
+            return new Entry(raw, key, key[..first], subsection, key[(last + 1)..], value);
         }
     }
 }
