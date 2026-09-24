@@ -1,7 +1,7 @@
 # PLAN — the gate's commands and the whole configuration are the person's to edit, export and import
 
-> Status: **IMPLEMENTED, 2026-09-24** — Epic C in #500, Epic A in #505, Epic B in this PR. Deviations are each
-> epic's *As built*; the open tail is the conventions sentence and the unpersisted skip. Scope:
+> Status: **IMPLEMENTED, 2026-09-24** — Epic C in #500, Epic A in #505, Epic B in #506. Deviations are each
+> epic's *As built*; the open tail is the unpersisted skip (the conventions sentence was declined). Scope:
 > `src_vs_code` (a config export/import pair, a commands page) and `src_mcp` (command texts as data, custom commands). Issue #467. Three epics, ONE gate
 > each (the operator's instruction for this batch), built C → A → B.
 >
@@ -215,10 +215,13 @@ and rules → B2 page → (gate, PR).
 
 ## Open tail
 
-- The CLAUDE.md snippet's *"close each one properly"* (`coai-review-gate.md:37`) is a conventions-repository
-  change with a release and a pin move in every consumer.
 - A custom command skipped for having no text is named in the reply and the log, not in the rounds
   database (Epic A's plan round; declined as a schema change for a case Epic B's page prevents).
+
+**Declined, not open (operator, 2026-09-24):** rewording the CLAUDE.md snippet's *"close each one
+properly"* (`coai-review-gate.md:37`) in the conventions repository. The conventions say what the rules
+are; they are not the place that enforces how often the gate runs — the gate's own orders do that, and
+since issue #131 they say *once per epic or once for the task, never per story*.
 
 ## Definition of Done
 
