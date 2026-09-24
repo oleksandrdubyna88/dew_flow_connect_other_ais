@@ -4302,7 +4302,7 @@ backstop for a role switched on some other way.
 ## A round with nothing in it is refused, and a failed round can be retried (2026-09-24)
 
 Four reports, one question — after a round goes wrong, or has nothing to review, does the gate tell the
-truth and let you try again? Plan: [PLAN_a_failed_round_can_be_retried.md](../todo/PLAN_a_failed_round_can_be_retried.md).
+truth and let you try again? Plan: [PLAN_a_failed_round_can_be_retried.md](PLAN_a_failed_round_can_be_retried.md).
 
 ### Nothing to review is said, never passed (S1)
 

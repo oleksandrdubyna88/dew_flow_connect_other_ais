@@ -508,7 +508,7 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Nothing to review is SAID, never passed (todo/PLAN_a_failed_round_can_be_retried.md, S1).
+    // Nothing to review is SAID, never passed (research/PLAN_a_failed_round_can_be_retried.md, S1).
     //
     // An empty diff used to launch every reviewer over an empty "## The change", collect nobody's
     // findings and answer `proceed` — and the session then ended, so the real change could never be
@@ -603,7 +603,7 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------------------------------------
-    // A gate can be run again (issue #490; todo/PLAN_a_failed_round_can_be_retried.md, S3a).
+    // A gate can be run again (issue #490; research/PLAN_a_failed_round_can_be_retried.md, S3a).
     //
     // A code round closed the session, `open` is idempotent, and the refusal said "open a new one" —
     // a door that did not exist. So a checkpoint round forbade the final one, and agents cut ten
@@ -713,7 +713,7 @@ public sealed class EndToEndTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------------------------------------
-    // One mutating call per session (todo/PLAN_a_failed_round_can_be_retried.md, S4).
+    // One mutating call per session (research/PLAN_a_failed_round_can_be_retried.md, S4).
     //
     // A round reads the session, runs for minutes and writes it back; two in flight over one session
     // both computed the next round from the same file, and the loser's round vanished. With `again`

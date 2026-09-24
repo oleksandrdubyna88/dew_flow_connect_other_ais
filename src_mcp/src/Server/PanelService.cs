@@ -1236,7 +1236,7 @@ public sealed partial class PanelService
         }
 
         // One mutating call per session, held for the whole round (S4 of
-        // todo/PLAN_a_failed_round_can_be_retried.md). Taken BEFORE the session is read: two rounds
+        // research/PLAN_a_failed_round_can_be_retried.md). Taken BEFORE the session is read: two rounds
         // that both read it first would both compute the next round from the same file.
         using var claim = SessionClaim.TryTake(_settings.DataDir, repoPath, branch, stage.Document);
         if (claim is null)
@@ -2954,7 +2954,7 @@ internal sealed record StageRun(
     /// </summary>
     /// <remarks>
     /// The code stage asks it whether there is anything to review (S1 of
-    /// todo/PLAN_a_failed_round_can_be_retried.md): a round over an empty diff used to launch every
+    /// research/PLAN_a_failed_round_can_be_retried.md): a round over an empty diff used to launch every
     /// reviewer and answer <c>proceed</c>. Here rather than inside <see cref="MakeWork"/> because by
     /// then a tree has already been checked out for nothing, and because nothing about the session
     /// has been written yet — a refusal leaves it exactly as it was.

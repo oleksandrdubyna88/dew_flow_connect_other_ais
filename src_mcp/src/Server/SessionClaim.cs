@@ -9,7 +9,7 @@ namespace CoaiMcp.Server;
 /// </summary>
 /// <remarks>
 /// <para>Ported from the unmerged <c>coai-ar1-addressable-rounds</c> branch (S4 of
-/// todo/PLAN_a_failed_round_can_be_retried.md), onto today's three-part session key. A review
+/// research/PLAN_a_failed_round_can_be_retried.md), onto today's three-part session key. A review
 /// round reads the session, runs a fan-out for minutes, and writes it back — so two rounds on one
 /// session, from two windows or two agents, both computed the next round from the same file and the
 /// loser's round vanished. Once a code session can be reopened with <c>again</c>, that is an ordinary

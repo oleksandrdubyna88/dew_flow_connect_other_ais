@@ -94,7 +94,7 @@ public sealed record SessionAnswer(
     /// refused until they were resolved, and <c>resolve</c> addresses them by POSITION — while this
     /// answer carried counts only, so a resumed caller decided blind. The read-back idea of the
     /// unmerged <c>coai-ar1</c> branch, without its locators (S3b of
-    /// todo/PLAN_a_failed_round_can_be_retried.md).
+    /// research/PLAN_a_failed_round_can_be_retried.md).
     /// </remarks>
     public IReadOnlyList<Finding> Pending { get; init; } = [];
 }

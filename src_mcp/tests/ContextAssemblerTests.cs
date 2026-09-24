@@ -201,7 +201,7 @@ public sealed class ContextAssemblerTests : IAsyncLifetime
     /// </summary>
     /// <remarks>
     /// It answered an empty list, and a round over committed work then passed without the one sentence
-    /// that names what the reviewers never saw (S1 of todo/PLAN_a_failed_round_can_be_retried.md; code
+    /// that names what the reviewers never saw (S1 of research/PLAN_a_failed_round_can_be_retried.md; code
     /// round, codex).
     /// </remarks>
     [Theory]

@@ -271,7 +271,7 @@ public sealed record PanelSettings
     /// </summary>
     /// <remarks>
     /// A real server reads it from the environment as <see cref="Runners.Worktrees.WorktreeManager.MachineLocalRoot"/>
-    /// (D4 of todo/PLAN_a_failed_round_can_be_retried.md): the data dir is routinely a network share,
+    /// (D4 of research/PLAN_a_failed_round_can_be_retried.md): the data dir is routinely a network share,
     /// where a linked worktree is broken for every other machine and a pid — which the tree's owner
     /// marker records — means nothing. <c>COAI_ROUND_WORKTREES</c> overrides it, which is how a
     /// scenario test keeps a spawned server out of the machine's own directory.

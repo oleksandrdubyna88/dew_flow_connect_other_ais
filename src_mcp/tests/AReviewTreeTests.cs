@@ -643,7 +643,7 @@ public sealed class AReviewTreeTests : IAsyncLifetime
     /// <summary>
     /// Makes a round tree what a KILLED session leaves: its owner marker now names a server that is
     /// gone (this pid with another start time — what a reused number looks like). A tree whose owner
-    /// is alive is no longer swept at all (S2 of todo/PLAN_a_failed_round_can_be_retried.md), so the
+    /// is alive is no longer swept at all (S2 of research/PLAN_a_failed_round_can_be_retried.md), so the
     /// "prune ran and did its job" half of these tests needs a tree that is genuinely an orphan.
     /// </summary>
     private static Task OrphanedAsync(string treePath) =>

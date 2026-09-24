@@ -188,7 +188,7 @@ public sealed class VendorStagesTests
         await Git(path, "checkout", "-b", "feature");
         // A REAL change on the branch. Without one the code round had nothing to review, and since an
         // empty diff is refused before any reviewer is looked for, the refusal this file is about —
-        // no vendor serves code — would never be reached (todo/PLAN_a_failed_round_can_be_retried.md, S1).
+        // no vendor serves code — would never be reached (research/PLAN_a_failed_round_can_be_retried.md, S1).
         await File.WriteAllTextAsync(Path.Combine(path, "app.cs"), "v2" + Environment.NewLine);
         await Git(path, "add", ".");
         await Git(path, "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "the change");
