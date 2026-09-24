@@ -80,6 +80,7 @@ public sealed class AReviewTreeTests : IAsyncLifetime
         var gate = new WorktreeManager(_launcher, _roundStorage);
         var lease = await gate.AddAsync(_repo, _sha, "s1", round: 1);
         Directory.Exists(lease.Path).Should().BeTrue();
+        await OrphanedAsync(lease.Path);
 
         await gate.PruneOursAsync(_repo);
 
@@ -108,6 +109,7 @@ public sealed class AReviewTreeTests : IAsyncLifetime
 
         var gate = new WorktreeManager(_launcher, _roundStorage);
         var lease = await gate.AddAsync(_repo, _sha, "s1", round: 1);
+        await OrphanedAsync(lease.Path);
 
         await gate.PruneOursAsync(_repo);
 
@@ -121,7 +123,10 @@ public sealed class AReviewTreeTests : IAsyncLifetime
     {
         var made = await Trees().PrepareAsync(7, Place(_sha), TestContext.Current.CancellationToken);
 
-        // Exactly the call WorktreeManager.RemoveAsync makes. The lock is what refuses it.
+        // A single forced remove, which the lock refuses. The round-tree eraser now unlocks and forces
+        // TWICE (a half-made add is locked "initializing" and must be clearable), so for it the lock is
+        // no longer the guard — the prefix and the root are: it never touches a path that is not a
+        // `coai-wt-` under its own root, which the two tests above prove.
         var forced = await Run(_repo, "worktree", "remove", "--force", made.Path);
 
         forced.ExitCode.Should().NotBe(0);
@@ -634,6 +639,17 @@ public sealed class AReviewTreeTests : IAsyncLifetime
 
         return path;
     }
+
+    /// <summary>
+    /// Makes a round tree what a KILLED session leaves: its owner marker now names a server that is
+    /// gone (this pid with another start time — what a reused number looks like). A tree whose owner
+    /// is alive is no longer swept at all (S2 of todo/PLAN_a_failed_round_can_be_retried.md), so the
+    /// "prune ran and did its job" half of these tests needs a tree that is genuinely an orphan.
+    /// </summary>
+    private static Task OrphanedAsync(string treePath) =>
+        File.WriteAllTextAsync(
+            treePath + ".owner",
+            $$"""{"Pid":{{Environment.ProcessId}},"StartedUtc":"2001-01-01T00:00:00Z"}""");
 
     private Task<ProcessResult> Run(string cwd, params string[] args) =>
         _launcher.RunAsync(new ProcessRequest(

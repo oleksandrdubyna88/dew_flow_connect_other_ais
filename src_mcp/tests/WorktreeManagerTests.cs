@@ -241,6 +241,113 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
             .Should().BeFalse("a link is not a path inside the checkout, whatever it spells");
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // A failed round's tree never blocks the next attempt (todo/PLAN_a_failed_round_can_be_retried.md, S2).
+    // Both failures below were reproduced against git 2.55 before a line was written.
+
+    /// <summary>
+    /// A <c>worktree add</c> killed half-way leaves its registration LOCKED "initializing" — which
+    /// <c>remove --force</c> refuses and <c>prune</c> skips — so every later add at that path failed
+    /// "missing but locked" for ever. The reported "blocks every retry until a console cleanup".
+    /// </summary>
+    [Fact]
+    public async Task AHalfMadeTreeOfADeadServer_NeverBlocksTheNextRound()
+    {
+        var sha = await _manager.ResolveShaAsync(_repo, "main");
+        var leftover = Path.Combine(_storage, "coai-wt-S-r1");
+        await Git(_repo, "worktree", "add", "--detach", "--lock", "--reason", "initializing", leftover, sha);
+        Directory.Delete(leftover, recursive: true);
+
+        await using (var lease = await _manager.AddAsync(_repo, sha, "S", round: 1))
+        {
+            Directory.Exists(lease.Path).Should().BeTrue("the retry runs");
+        }
+
+        (await GitOut(_repo, "worktree", "list", "--porcelain")).Should().NotContain("coai-wt-S-r1\n",
+            "the dead half-made registration is cleared, not left for a human");
+        (await _manager.ListOursAsync(_repo)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// A file held open inside the tree (a reviewer's child, a scanner) made removal throw from the
+    /// round's <c>await using</c> — and that exception replaced the finished round's verdict with
+    /// <c>{"error":"git worktree remove: …"}</c>. Giving a tree back must never throw.
+    /// </summary>
+    [Fact]
+    public async Task ATreeHeldOpen_IsNeverAnErrorWhenItIsGivenBack()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "only Windows refuses to delete a file that is held open");
+        var sha = await _manager.ResolveShaAsync(_repo, "main");
+        var lease = await _manager.AddAsync(_repo, sha, "held", round: 1);
+        var held = new FileStream(Path.Combine(lease.Path, "a.txt"), FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var giveBack = async () => await lease.DisposeAsync();
+
+        await giveBack.Should().NotThrowAsync("a tree that will not go is the next sweep's job, never the round's error");
+        await held.DisposeAsync();
+        await _manager.PruneOursAsync(_repo);
+        Directory.GetDirectories(_storage).Should().BeEmpty("once let go, the next sweep removes it — moved-aside trash included");
+    }
+
+    /// <summary>
+    /// Every Claude window runs its own server on one data directory, and <c>open</c>'s sweep used to
+    /// remove EVERY round tree by prefix — including a running round's, in another window.
+    /// </summary>
+    [Fact]
+    public async Task OpenInOneServer_LeavesAnotherServersLiveTree()
+    {
+        var sha = await _manager.ResolveShaAsync(_repo, "main");
+        await using var running = await _manager.AddAsync(_repo, sha, "other-window", round: 1);
+        var anotherServer = new WorktreeManager(_launcher, _storage);
+
+        await anotherServer.PruneOursAsync(_repo);
+
+        Directory.Exists(running.Path).Should().BeTrue("its owner is alive, so it is not anybody's to sweep");
+        File.Exists(Path.Combine(running.Path, "a.txt")).Should().BeTrue();
+    }
+
+    [Fact]
+    public async Task ATreeWhoseServerIsGone_IsSweptOnOpen()
+    {
+        var sha = await _manager.ResolveShaAsync(_repo, "main");
+        var lease = await _manager.AddAsync(_repo, sha, "dead-window", round: 1);
+        // The same pid with another start time is exactly what a reused process number looks like.
+        await File.WriteAllTextAsync(
+            lease.Path + ".owner",
+            $$"""{"Pid":{{Environment.ProcessId}},"StartedUtc":"2001-01-01T00:00:00Z"}""",
+            TestContext.Current.CancellationToken);
+
+        await new WorktreeManager(_launcher, _storage).PruneOursAsync(_repo);
+
+        Directory.Exists(lease.Path).Should().BeFalse("its server is gone, so the tree is an orphan");
+        (await _manager.ListOursAsync(_repo)).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// <c>open</c>'s sweep ended in an unguarded <c>Directory.Delete</c>: one held file in a leftover
+    /// directory threw <c>IOException</c> out of <c>open</c> itself, which only caught git's errors.
+    /// </summary>
+    [Fact]
+    public async Task AHeldFileInALeftover_NeverFailsOpen()
+    {
+        Assert.SkipUnless(OperatingSystem.IsWindows(), "only Windows refuses to delete a file that is held open");
+        var leftover = Directory.CreateDirectory(Path.Combine(_storage, "coai-wt-gone-r1")).FullName;
+        var path = Path.Combine(leftover, "held.txt");
+        await File.WriteAllTextAsync(path, "x", TestContext.Current.CancellationToken);
+        await using var held = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+
+        var sweep = () => _manager.PruneOursAsync(_repo);
+
+        await sweep.Should().NotThrowAsync("a directory that will not go is a warning, never a failed open");
+    }
+
+    [Theory]
+    [InlineData("Preparing worktree (detached HEAD abc123)\nfatal: 'x' already exists\n", "fatal: 'x' already exists")]
+    [InlineData("fatal: 'y' is a missing but locked worktree;\nuse 'add -f -f' to override", "fatal: 'y' is a missing but locked worktree;")]
+    [InlineData("error: something else\n", "error: something else")]
+    public void AFailedAdd_QuotesGitsVerdict_NotItsPreamble(string stderr, string expected) =>
+        WorktreeManager.FatalLine(stderr).Should().Be(expected);
+
     private static bool TryLink(string link, string target)
     {
         try

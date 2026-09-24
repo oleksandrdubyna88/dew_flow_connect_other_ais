@@ -4331,3 +4331,42 @@ review_code … and commit", review first.
   into the same one commit; the `review_code` tool text says "COMMITTED changes only".
 - `VendorStagesTests`' fixture branch had no commit at all — it had been reviewing an empty diff to
   reach the "no vendor serves code" refusal. It carries a real change now.
+
+### A failed round's worktree never blocks the next attempt (S2)
+
+Two mechanisms blocked every retry until someone cleaned up in a console, both reproduced against git
+2.55: a `worktree add` killed half-way (the git budget, or the server dying) leaves
+`.git/worktrees/<name>/locked` = `initializing`, which `remove --force` refuses and `prune` skips, so
+every later add at that DETERMINISTIC path (`coai-wt-{session}-r{round}`) failed "missing but locked"
+for ever; and a file held open on Windows left the directory behind, so a retry failed "already
+exists" (the two failed rounds of `RESULTS_bench_campaign_0_17_1.md`). Worse, removal THREW from the
+round's `await using`: a finished round's verdict and findings — already saved as pending — reached the
+caller as `{"error":"git worktree remove: …"}`, and a body exception was replaced by it. And `open`'s
+sweep removed EVERY `coai-wt-*` by prefix, including a round running in another window's server.
+
+`WorktreeManager` now:
+
+- makes a path per ATTEMPT (`coai-wt-{session}-r{round}-{8 hex}`), so no leftover shares a retry's path;
+- writes an **owner marker** beside every tree (`<tree>.owner`: the server's pid and start time) BEFORE
+  the add. The root is machine-local (`WorktreeManager.MachineLocalRoot`, the same
+  `ReviewTreeRoot.MachineLocal` resolution the review trees use, leaf `round-worktrees`), so every
+  process that touches it is on this machine and a pid means something; `OrphanSweep.Same` stops a
+  reused number passing for the owner. A paused owner is still alive and is never reaped — there is
+  no heartbeat, so no threshold, clock skew or sleep/wake to get wrong (plan round);
+- sweeps before EVERY round this session's own leftovers, and on `open` every tree whose owner is
+  gone — never a live tree of another server;
+- erases strictly `coai-wt-` paths under its own root: `worktree unlock`, `remove -f -f`, a delete with
+  three short retries, and otherwise a rename to `coai-wt-trash-*` for the next sweep. For round trees
+  the lock is therefore no longer a guard — the prefix and the root are, and a review tree
+  (`coai-review-`) is never touched;
+- NEVER throws from `WorktreeLease.DisposeAsync` or from the sweep: a tree that will not go is a
+  `worktrees:` warning in the server log;
+- gives `worktree add` the review tree's 10-minute budget, and a failed add quotes git's `fatal:` line
+  rather than "Preparing worktree";
+- bounds its growth: trash is retried on every sweep and named once after 24 h; a marker whose tree
+  and owner are both gone is deleted.
+
+`PanelSettings.RoundTreeRoot` is read as the machine-local root (D4); `COAI_ROUND_WORKTREES`
+overrides it, and a settings object built in a test leaves it empty for `{DataDir}/worktrees`. Trees
+that older builds left under `{DataDir}/worktrees` are not swept by this one — they block nothing,
+because no path is ever reused.
