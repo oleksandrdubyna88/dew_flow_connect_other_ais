@@ -9133,12 +9133,13 @@ sequenceDiagram
     Page->>Panel: {type:'choose', id}
     Panel->>Panel: bugChat(pair, drafts) — reviewChoose.ts
     Panel->>Chat: hooks.choose(chat) via PanelProvider.chooseInChat
-    Chat->>Reg: get(BugChatKeys.keyFor(chat.key))
+    Chat->>Reg: entryOf(BugChats id for chat.key)
     alt the bug already has a conversation
         Chat->>Reg: reveal — composer untouched
     else first press
         Chat->>Chat: readyForChat() / notReady(refusal)
         Chat->>Reg: deliverPassage(…, send = false, fromSession = false, fileUriOf(chat))
+        Chat->>Chat: BugChats.remember(chat.key) — by the new conversation's id
     end
 ```
 
@@ -9146,9 +9147,10 @@ sequenceDiagram
   **Complexity**, **Before**, **After** and **Your comment on this pair**, in the issue's order. The comment is
   the DRAFT the panel holds from keystrokes, else the saved one, else `(none)`. Before/After are fenced with
   the pair's language by `fenced`, one backtick longer than the longest run inside, so a skeleton cannot close
-  its own fence. `key` = `<repoPath>#<findingId>`, `label` = the method name. `BugChatKeys` mints ONE key
-  object per bug for the window, because `ChatPanels` keys conversations by object identity and a bug has no
-  tab.
+  its own fence (its info string keeps only `[a-z0-9#+.-]`). `key` = `<repoPath>#<findingId>`, `label` = the
+  method name. `BugChats` mints ONE key object per bug for the window, because `ChatPanels` keys conversations
+  by object identity and a bug has no tab — and REMEMBERS the conversation by its id, because *go to
+  conversation* and the picker re-key a conversation onto its file's tab and the minted key then names nothing.
 - **`reviewAbout.ts`** — Where and Complexity are formatted by one structure in two voices (`MARKUP` for the
   row, `PLAIN` for the chat, `aboutText`), so the page and the chat cannot say a line or a count differently.
 - **`bugzReviewMessages.ts`** — the page's message union and guard, moved unchanged out of
@@ -9159,8 +9161,9 @@ sequenceDiagram
   (refilling the composer would throw away what the person started writing — gemini, the plan round); a
   first press resolves the model with `readyForChat` and hands `deliverPassage` the passage UNSENT, filed
   under the bug's file (`fileUriOf`), so the person chooses the model and the question in the composer. The
-  "no model can answer" refusal is now one helper, `notReady`, for all three doors that need a model
-  (notification census 141 → 140).
+  "no model can answer" refusal is now one helper, `notReady`, for all three doors that need a model. A throw
+  is CAUGHT in `extension.ts` and said (`bugz`/`bug-not-chosen`, detail written down) — the page starts the hook
+  with `void`. Notification census 141 → 141 (one merged, one added).
 - **Wiring** — `extension.ts` creates `ChatPanels` before `PanelProvider` and passes
   `(chat) => chooseFromBug(chatPanels, …)` as the provider's optional last argument; `reviewBugs` hands it to
   the page's `choose` hook. **No chat door is recorded**: the door inventory is one recorder per MANIFEST

@@ -1,3 +1,4 @@
+import { ChatEntry } from './chatPanels';
 import { aboutText } from './reviewAbout';
 import { ReviewPair } from './reviewPair';
 import { text } from './reviewText';
@@ -40,7 +41,11 @@ export function fenced(code: string, language: string): string {
   const longest = Math.max(0, ...[...code.matchAll(/`+/gu)].map((run) => run[0].length));
   const fence = '`'.repeat(Math.max(3, longest + 1));
 
-  return `${fence}${language.trim().toLowerCase()}\n${code}\n${fence}`;
+  // The info string is the pair's language as the server recorded it, and CommonMark lets it hold no
+  // backtick; a line break would end it early. So it keeps only what a language name is made of.
+  const info = language.toLowerCase().replace(/[^a-z0-9#+.-]/gu, '');
+
+  return `${fence}${info}\n${code}\n${fence}`;
 }
 
 /** The words about this pair: the ones being typed if there are any, else the ones saved, else none. */
@@ -79,27 +84,54 @@ export function bugChat(pair: ReviewPair, drafts: ReadonlyMap<number, string>): 
   };
 }
 
+/** The two lookups a bug's conversation needs from the chat registry — `ChatPanels` has both. */
+export interface Conversations {
+  get(key: object): ChatEntry | undefined;
+  entryOf(id: object): ChatEntry | undefined;
+}
+
 /**
- * One conversation key per bug, for as long as the window lives.
+ * Each bug's conversation, for as long as the window lives.
  *
  * <p>The chat registry keys conversations by object IDENTITY — a Claude tab or a file tab is its own
- * key. A bug has no tab, so it is given one object, minted on the first press and handed back on every
- * later one: that is what makes a second press find the first conversation instead of opening another.
- * After a reload a press opens a new one, the rule every non-Claude source already has
- * (`sessionKey.rekeysByLabel`); the old conversation is kept, under the method's name, in
- * *CoAI: switch conversations*.</p>
+ * key. A bug has no tab, so it is given one object, minted on the first press. After a reload a press
+ * opens a new conversation, the rule every non-Claude source already has (`sessionKey.rekeysByLabel`);
+ * the old one is kept, under the method's name, in *CoAI: switch conversations*.</p>
  */
-export class BugChatKeys {
-  private readonly held = new Map<string, object>();
+export class BugChats {
+  private readonly keys = new Map<string, object>();
+  private readonly ids = new Map<string, object>();
 
-  keyFor(key: string): object {
-    const known = this.held.get(key);
+  keyFor(bug: string): object {
+    const known = this.keys.get(bug);
     if (known !== undefined) {
       return known;
     }
-    const minted = Object.freeze({ bug: key });
-    this.held.set(key, minted);
+    const minted = Object.freeze({ bug });
+    this.keys.set(bug, minted);
 
     return minted;
+  }
+
+  /** The conversation a first press made, written down by its id — nothing, when the press was refused. */
+  remember(bug: string, panels: Conversations): void {
+    const made = panels.get(this.keyFor(bug));
+    if (made !== undefined) {
+      this.ids.set(bug, made.id);
+    }
+  }
+
+  /**
+   * The bug's open conversation, wherever its key has got to — or nothing.
+   *
+   * <p>By the conversation's ID, not by the key it was opened under. *Go to conversation* and the picker
+   * bind a conversation to its file's tab by re-keying it, and the key this class minted then names
+   * nothing: looked up by key, the next press opened a second conversation about the same bug. (Our own
+   * code reviewer.) A closed one is gone from the registry, so the next press opens a new one.</p>
+   */
+  openFor(bug: string, panels: Conversations): ChatEntry | undefined {
+    const id = this.ids.get(bug);
+
+    return id === undefined ? undefined : panels.entryOf(id);
   }
 }

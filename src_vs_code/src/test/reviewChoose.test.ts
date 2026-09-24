@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
+import { ChatEntry, ChatPanels } from '../chatPanels';
 import { ReviewPair } from '../reviewPair';
-import { bugChat, BugChatKeys, fenced } from '../reviewChoose';
+import { bugChat, BugChats, fenced } from '../reviewChoose';
 
 /**
  * What *CoAI: choose* on a bug hands a chat (issue #487): the seven things the row shows, in the
@@ -88,9 +89,64 @@ test('the chat is named after the method and keyed by the bug, in its checkout',
 });
 
 test('one bug is one conversation key for the window, and two bugs are two', () => {
-  const keys = new BugChatKeys();
+  const chats = new BugChats();
 
-  assert.equal(keys.keyFor('D:/r#7'), keys.keyFor('D:/r#7'), 'a second press finds the first conversation');
-  assert.notEqual(keys.keyFor('D:/r#7'), keys.keyFor('D:/r#8'));
-  assert.notEqual(keys.keyFor('D:/r#7'), keys.keyFor('D:/s#7'), 'the same finding id in another checkout is another bug');
+  assert.equal(chats.keyFor('D:/r#7'), chats.keyFor('D:/r#7'));
+  assert.notEqual(chats.keyFor('D:/r#7'), chats.keyFor('D:/r#8'));
+  assert.notEqual(chats.keyFor('D:/r#7'), chats.keyFor('D:/s#7'), 'the same finding id in another checkout is another bug');
+});
+
+/** A conversation the registry can hold — the shape `chatPanel.test.ts` fakes, reduced to what is counted. */
+function conversation(): { entry: ChatEntry; revealed: () => number } {
+  let reveals = 0;
+
+  return {
+    entry: {
+      id: {},
+      panel: { reveal: () => { reveals += 1; }, dispose: () => undefined, post: () => undefined, isActive: () => false },
+      session: { dispose: () => undefined },
+    },
+    revealed: () => reveals,
+  };
+}
+
+test('a second press finds the bug\'s conversation even after *go to* moved it onto a file tab', () => {
+  const panels = new ChatPanels();
+  const chats = new BugChats();
+  const made = conversation();
+  panels.open(chats.keyFor('D:/r#7'), 'Settle', () => made.entry);
+  chats.remember('D:/r#7', panels);
+
+  // What *go to conversation* and the picker do when they bind a conversation to the tab of its file.
+  assert.ok(panels.rekey(chats.keyFor('D:/r#7'), { fileTab: true }));
+
+  assert.equal(chats.openFor('D:/r#7', panels), made.entry,
+    'found by the id that survives a re-key — by the key alone the next press opened a second conversation');
+  assert.equal(chats.openFor('D:/r#8', panels), undefined, 'and another bug has none');
+});
+
+test('a bug whose conversation was closed has none, so the next press opens a new one', () => {
+  const panels = new ChatPanels();
+  const chats = new BugChats();
+  panels.open(chats.keyFor('D:/r#7'), 'Settle', () => conversation().entry);
+  chats.remember('D:/r#7', panels);
+
+  panels.close(chats.keyFor('D:/r#7'));
+
+  assert.equal(chats.openFor('D:/r#7', panels), undefined);
+});
+
+test('a first press that opened nothing remembers nothing', () => {
+  const panels = new ChatPanels();
+  const chats = new BugChats();
+
+  chats.remember('D:/r#7', panels);
+
+  assert.equal(chats.openFor('D:/r#7', panels), undefined, 'a refused press (no CLI, no model) leaves no conversation to find');
+});
+
+test('the fence names its language and nothing else — a stray backtick or line break cannot end it', () => {
+  assert.match(fenced('x', 'C#'), /^```c#\n/u);
+  assert.match(fenced('x', 'TypeScript'), /^```typescript\n/u);
+  assert.match(fenced('x', 'ts`\nalert(1)'), /^```tsalert1\n/u, 'an info string holds no backtick and no line break');
 });

@@ -32,7 +32,7 @@ import {
 import { coaiDataDir } from './dataDir';
 import { Door, chatDoorRecord } from './chatDoors';
 import { recordChatDoor } from './chatDoorsFile';
-import { BugChat, BugChatKeys } from './reviewChoose';
+import { BugChat, BugChats } from './reviewChoose';
 import { chatSettingsFrom } from './chatSettings';
 import { CARRY_EVERYTHING } from './chatCarry';
 import { chatTextTone, chatUiScale, createChatPanel, pushChatDraft, setChatDraft } from './chatPanel';
@@ -549,8 +549,8 @@ export async function takeTheQuestion(
   await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false, claude !== undefined, uri, append);
 }
 
-/** One key object per bug for this window — see {@link BugChatKeys}. */
-const bugKeys = new BugChatKeys();
+/** Each bug's conversation for this window — see {@link BugChats}. */
+const bugChats = new BugChats();
 
 /**
  * One bug from the review page, into a chat of its own — the row's *CoAI: choose* (issue #487).
@@ -564,8 +564,7 @@ const bugKeys = new BugChatKeys();
  * would throw away whatever the person had started writing there. (gemini, the plan round.)</p>
  */
 export async function chooseFromBug(panels: ChatPanels, extensionUri: vscode.Uri, chat: BugChat): Promise<void> {
-  const key = bugKeys.keyFor(chat.key);
-  const open = panels.get(key);
+  const open = bugChats.openFor(chat.key, panels);
   if (open !== undefined) {
     open.panel.reveal();
 
@@ -577,7 +576,9 @@ export async function chooseFromBug(panels: ChatPanels, extensionUri: vscode.Uri
 
     return;
   }
+  const key = bugChats.keyFor(chat.key);
   await deliverPassage(panels, extensionUri, ready, { kind: 'new', key, label: chat.label }, { text: chat.text }, false, false, fileUriOf(chat));
+  bugChats.remember(chat.key, panels);
 }
 
 /** The bug's file, which the conversation is filed under — or nothing, when the round recorded none. */

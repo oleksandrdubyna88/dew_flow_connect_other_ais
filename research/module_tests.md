@@ -1957,8 +1957,10 @@ one-shot reads after the server has answered.
 
 - `reviewChoose.test.ts` — the seven labelled parts in the issue's order with their values; a draft beats
   the saved comment (and another row's draft does not); a skeleton holding ```` ``` ```` stays inside one
-  fence; nothing recorded is said as such, never a blank or a zero; one bug is one key, the same finding in
-  another checkout another. Two compiling plants (drafts ignored; a fixed three-backtick fence) each turned
+  fence, and its language cannot end it; nothing recorded is said as such, never a blank or a zero; one bug
+  is one key, the same finding in another checkout another; with a REAL `ChatPanels`, a bug's conversation is
+  found again after `rekey` moved it onto a file tab (red against the key lookup), a closed one is gone, and a
+  refused press remembers nothing. Two compiling plants (drafts ignored; a fixed three-backtick fence) each turned
   their test red.
 - `bugzReviewMessages.test.ts` — the moved guard, RUN: `choose` needs a whole non-negative id, and every kind
   the panel answered still parses the same.
@@ -1969,5 +1971,6 @@ one-shot reads after the server has answered.
   pair AND `this.drafts`; the provider's hook reaches the extension's callback; `ChatPanels` exists before the
   sidebar; `chooseFromBug` reveals an existing conversation before anything else and delivers a first one
   with `send = false`.
-- `notificationSites.test.mjs` — `PLACES_THIS_SPEAKS` 141 → 140 (the three identical "not ready" refusals
-  became one helper).
+- `notificationSites.test.mjs` — `PLACES_THIS_SPEAKS` 141 → 141: the three identical "not ready" refusals
+  became one helper, and the caught failure of a press is a new place (pinned, with its console line, by
+  `bugzReviewWiring.test.ts`, red before the catch existed).

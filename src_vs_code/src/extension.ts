@@ -212,7 +212,19 @@ export function activate(context: vscode.ExtensionContext): void {
     if (question !== undefined) {
       await watcher.answerCommand(question);
     }
-  }, consultations, (chat) => chooseFromBug(chatPanels, context.extensionUri, chat));
+  }, consultations, (chat) => chooseFromBug(chatPanels, context.extensionUri, chat).catch((reason: unknown) => {
+    // CAUGHT, as `takeTheQuestion` is below: the review page starts this with `void`, and a throw nobody
+    // catches is a press that does nothing and explains nothing. (Our own code reviewer, issue #487.)
+    console.error('CoAI: choose on a bug failed', reason);
+    void notify({
+      as: 'warning',
+      class: 'failure',
+      source: 'bugz',
+      code: 'bug-not-chosen',
+      title: 'The bug could not be put into a chat.',
+      detail: asText(reason),
+    });
+  }));
   // The panel repaints whenever the watcher's state moves, so a question answered in the modal
   // disappears from the sidebar without anyone asking it to.
   watcher.onChanged = () => {
