@@ -4407,9 +4407,17 @@ refused its operator's checkpoint gate to keep the last one, and on 2026-09-22/2
   reply used to be a dead end: the next round was refused until the findings were resolved, and
   `status` carried counts only.
 
-The shared gate rule (`coai-review-gate.md` in the conventions repository, snippet v5) still reads
-"same resolve duty, same loop" for the code stage; saying there that a code round closes the session
-and that `again: true` is the door is a conventions change, and so a pin cascade of its own.
+The shared gate rule tells agents the same thing, since conventions release a847ab7 (2026-09-24). The
+rule is `coai-review-gate.md`, step 5, and its marker is still `coai-snippet v5` because the marker is
+frozen. Step 5 now says:
+
+- only committed changes are reviewed;
+- an empty diff is refused, never passed;
+- a code round resolved at `proceed` closes the session;
+- a further round is `review_code` with `again: true`, with its three refusals.
+
+In this repository the text change moved `SNIPPET_BODY_SHA`, `ARTEFACT_VERSION` 11 and the menu title
+`(v11)`. See [PLAN_the_gate_rule_says_a_code_round_closes_the_session.md](PLAN_the_gate_rule_says_a_code_round_closes_the_session.md).
 
 ### One mutating call per session (S4)
 
