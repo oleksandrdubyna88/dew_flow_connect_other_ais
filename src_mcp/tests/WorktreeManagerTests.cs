@@ -440,6 +440,20 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
             "every link on the way is resolved, including the ones inside a link's own target");
     }
 
+    /// <summary>
+    /// A backslash is a separator only where the OS says so. On Unix it is an ordinary character of a
+    /// name, and splitting on it turned one directory into two that do not exist — so the resolved
+    /// root named nowhere (CodeRabbit, on PR 499).
+    /// </summary>
+    [Fact]
+    public void ANameWithABackslash_IsOneSegment_WhereTheOsSaysSo()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "on Windows a backslash IS a separator");
+        var named = Directory.CreateDirectory(Path.Combine(_storage, "a\\b")).FullName;
+
+        WorktreeManager.Resolved(named).Should().Be(Path.GetFullPath(named));
+    }
+
     private async Task<bool> LinkedAsync(string link, string target) =>
         TryLink(link, target) || await TryJunctionAsync(link, target);
 
