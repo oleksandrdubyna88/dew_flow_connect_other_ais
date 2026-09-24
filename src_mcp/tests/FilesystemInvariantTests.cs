@@ -206,6 +206,160 @@ public sealed class FilesystemInvariantTests : IAsyncLifetime
         }
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Issue #376: a consultation was withheld for `<git>/common/config` changing. The consultant runs in
+    // the caller's live checkout, and when that checkout is a LINKED worktree the invariant also watched
+    // the common directory's HEAD (another worktree's) and every byte of the shared config — which a
+    // sibling's `push -u`, VS Code's merge base or GitLens rewrite as a matter of course.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>Snapshots a linked worktree across what somebody ELSE did in the main checkout.</summary>
+    private async Task<IReadOnlyList<TreeChange>> AcrossLinkedAsync(Func<Task> whatASiblingDid)
+    {
+        var linked = Path.Combine(Path.GetTempPath(), "coai-linked-" + Guid.NewGuid().ToString("N")[..8]);
+        await Git("worktree", "add", "--detach", linked);
+        try
+        {
+            var before = await _invariant.SnapshotAsync(linked, TestContext.Current.CancellationToken);
+            await whatASiblingDid();
+            var after = await _invariant.SnapshotAsync(linked, TestContext.Current.CancellationToken);
+
+            return FilesystemSnapshot.Compare(before, after);
+        }
+        finally
+        {
+            await Git("worktree", "remove", "--force", linked);
+        }
+    }
+
+    [Fact]
+    public async Task InALINKEDWorktree_TheMainCheckoutSwitchingBranch_IsNotABreach()
+    {
+        // The common directory's HEAD is the MAIN worktree's, not this checkout's.
+        var changes = await AcrossLinkedAsync(async () => await Git("switch", "-c", "elsewhere"));
+
+        changes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InALINKEDWorktree_ASiblingSettingAnUpstreamOrAMergeBase_IsNotABreach()
+    {
+        await Git("remote", "add", "origin", "https://example.com/repo.git");
+        var changes = await AcrossLinkedAsync(async () =>
+        {
+            await Git("config", "branch.feat/rel.1.0.remote", "origin");
+            await Git("config", "branch.feat/rel.1.0.merge", "refs/heads/feat/rel.1.0");
+            await Git("config", "branch.feat/rel.1.0.vscode-merge-base", "origin/main");
+            await Git("config", "branch.feat/rel.1.0.gk-merge-target", "main");
+        });
+
+        changes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AnEditorsMergeBaseInThisCheckout_IsNotABreach()
+    {
+        // The same bookkeeping in an ordinary repository — the editor writes it into the only config there is.
+        var changes = await AcrossAsync(async () => await Git("config", "branch.main.vscode-merge-base", "origin/main"));
+
+        changes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task InALINKEDWorktree_ASharedConfigThatRunsCode_IsStillSeen()
+    {
+        var changes = await AcrossLinkedAsync(async () => await Git("config", "core.fsmonitor", "evil-daemon"));
+
+        changes.Should().ContainSingle().Which.Path.Should().Be("<git>/common/config");
+    }
+
+    [Fact]
+    public async Task ABranchPushRemoteSetToAURL_IsStillSeen()
+    {
+        // A URL there is where the next push goes.
+        var changes = await AcrossAsync(async () => await Git("config", "branch.main.pushRemote", "https://evil.example/r.git"));
+
+        changes.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task ABranchRemoteNamingARemoteThisFileDoesNotDefine_IsStillSeen()
+    {
+        // A bare name resolved from ANOTHER scope (~/.gitconfig, /etc/gitconfig) is not one this file vouches
+        // for. (gemini, the plan round.)
+        var changes = await AcrossAsync(async () => await Git("config", "branch.main.remote", "somewhere"));
+
+        changes.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task AnIncludeAddedToConfig_IsStillSeen()
+    {
+        var changes = await AcrossAsync(async () => await Git("config", "include.path", "../../evil.gitconfig"));
+
+        changes.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task ABranchDescription_IsStillSeen()
+    {
+        // Free text of any size: not bookkeeping worth leaving unwatched. (gemini, the plan round.)
+        var changes = await AcrossAsync(async () => await Git("config", "branch.main.description", "payload"));
+
+        changes.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public async Task TheSameSettingsInAnotherOrder_AreTheSameConfig()
+    {
+        var config = Path.Combine(_repo, ".git", "config");
+        await Git("config", "alias.co", "checkout");
+        await Git("config", "alias.st", "status");
+        var original = await File.ReadAllTextAsync(config, TestContext.Current.CancellationToken);
+
+        var changes = await AcrossAsync(async () =>
+        {
+            // Every line kept, the two alias lines swapped: what git reads is the same, the bytes are not.
+            var lines = original.Replace("\r\n", "\n").Split('\n').ToList();
+            var co = lines.FindIndex(l => l.Contains("co = checkout"));
+            var st = lines.FindIndex(l => l.Contains("st = status"));
+            (lines[co], lines[st]) = (lines[st], lines[co]);
+            await File.WriteAllTextAsync(config, string.Join('\n', lines), TestContext.Current.CancellationToken);
+        });
+
+        changes.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task AMalformedConfig_FailsTheSnapshotRatherThanPassingIt()
+    {
+        // A corrupted config is never invisible. Measured: `git status` itself refuses it, so the snapshot
+        // taken after it throws — the consultation cannot come back clean. The byte fallback in the config
+        // fingerprint covers a config `git config --list` cannot read while status still can.
+        var config = Path.Combine(_repo, ".git", "config");
+        var before = await _invariant.SnapshotAsync(_repo, TestContext.Current.CancellationToken);
+        await File.AppendAllTextAsync(config, "\n[core\n bad", TestContext.Current.CancellationToken);
+
+        var after = async () => await _invariant.SnapshotAsync(_repo, TestContext.Current.CancellationToken);
+
+        before.Entries.Should().NotBeEmpty();
+        await after.Should().ThrowAsync<ContextException>();
+    }
+
+    [Fact]
+    public void ASharedMetadataChange_IsSaidToBeShared()
+    {
+        // So the person reading a withheld consultation is not led to blame the consultant for a sibling.
+        static FilesystemSnapshot With(string fingerprint) => new(
+            System.Collections.Immutable.ImmutableSortedDictionary.CreateRange(StringComparer.Ordinal,
+                [KeyValuePair.Create("<git>/common/config", new TreeEntry("git", fingerprint))]));
+
+        var change = FilesystemSnapshot.Compare(With("a"), With("b")).Should().ContainSingle().Subject;
+
+        change.What.Should().Contain("shared").And.Contain("every worktree of this repository");
+        FilesystemSnapshot.Sentence([change]).Should().Contain("<git>/common/config");
+    }
+
     [Fact]
     public async Task ChurnInsideAnIgnoredDIRECTORY_IsNotABreach()
     {

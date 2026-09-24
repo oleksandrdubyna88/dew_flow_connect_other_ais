@@ -4420,3 +4420,26 @@ so there is no lease to outlive a round and no stale lock to break. It is taken 
 read, tried once, and a second call is refused at once with a sentence naming the branch — never made
 to wait on a blocked MCP call. `claims/` is in `shared/data-inventory.json` as neither moved nor
 mentioned: a handle, never content.
+
+## The consultant is not blamed for a sibling's git bookkeeping (2026-09-24, issue #376)
+
+A consultation was withheld because *"`<git>/common/config` (.git metadata changed)"* — which the consultant,
+in plan mode or `-s read-only`, did not write. The consultant runs in the caller's LIVE checkout, and when
+that checkout is a LINKED worktree the filesystem invariant also watched the common git directory's `HEAD`
+(the MAIN worktree's, which moves on any `git switch` there) and every byte of the shared `config` (which a
+sibling's `push -u`, VS Code's `branch.X.vscode-merge-base` and GitLens' `branch.X.gk-*` rewrite).
+
+- **The common directory's `HEAD` is not watched** (`FilesystemInvariant.SharedMetadata`); this checkout's
+  own `HEAD` still is.
+- **`config` is compared by meaning** (`core/Consultation/ConfigMeaning.cs`), read with
+  `git config --file … --list -z` (no `--includes`, so adding an include is itself a change): the entries,
+  sorted, with `branch.X.{merge, rebase, vscode-merge-base, gk-*}` dropped and `branch.X.{remote,
+  pushremote}` dropped only when they say `.` or name a remote whose `url` this same file defines.
+  `core.*`, `alias.*`, `filter.*`, `url.*`, `credential.*`, `include*`, `branch.X.description` and the rest
+  are kept. A config `git config` cannot read falls back to its bytes; a malformed one already fails
+  `git status`, so the snapshot throws rather than passing.
+- **The sentence says shared.** A change under `<git>/common/` reads *"shared .git metadata changed — every
+  worktree of this repository can write it: a push -u, a branch switch or the editor in another
+  checkout"*.
+
+Open tail: a per-worktree HEAD commit check would also catch a consultant's `commit --allow-empty`.

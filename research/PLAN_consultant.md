@@ -360,9 +360,15 @@ reviews, `DiffShaper.cs:28`) and the elided files are listed by name in the prom
 
 1. `git status --porcelain=v1 -z --untracked-files=all --ignored=matching` — tracked changes,
    every untracked file, and ignored entries (files, or a directory as one entry).
-2. `(size, mtimeUtc)` of every ignored FILE the listing named, so an overwritten ignored `.env` is
-   seen even though git does not hash it (codex, plan round).
-3. `(size, mtimeUtc)` of `.git/HEAD`, `.git/config`, `.git/index` and every file under `.git/hooks/`.
+2. A fingerprint of every FILE the listing named — its content hash up to 1 MB, size and mtime past it
+   — so an overwritten ignored `.env` is seen even though git does not hash it (codex, plan round).
+3. The repository's metadata: this checkout's own `HEAD`, the `config` and every hook — in the
+   worktree's own git directory and, for a linked worktree, in the COMMON one (not its `HEAD`, which is
+   another worktree's). `.git/index` is NOT watched: `git status` rewrites it itself. The `config` is
+   compared by MEANING, not bytes (`ConfigMeaning`, issue #376): branch-tracking bookkeeping that a
+   sibling's `push -u`, VS Code or GitLens write is dropped, and everything that can run code or redirect a
+   push is kept. *(Updated 2026-09-24; this list used to name `(size, mtimeUtc)` and `.git/index`, which the
+   code had already moved past.)*
 
 Taken before the launch and after it. **On any difference the consultation fails CLOSED**: the
 advice is withheld, the record carries `alert`, a Serilog **Error** names every path with what
