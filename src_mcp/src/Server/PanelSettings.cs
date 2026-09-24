@@ -275,6 +275,9 @@ public sealed record PanelSettings
     /// where a linked worktree is broken for every other machine and a pid — which the tree's owner
     /// marker records — means nothing. <c>COAI_ROUND_WORKTREES</c> overrides it, which is how a
     /// scenario test keeps a spawned server out of the machine's own directory.
+    /// <para><b>The override must be a LOCAL path.</b> The owner check trusts that every process
+    /// touching the root is on this machine; a network share would let a server on another machine
+    /// read a pid that means nothing here (code round). The default already is local.</para>
     /// </remarks>
     public string RoundTreeRoot { get; init; } = string.Empty;
 

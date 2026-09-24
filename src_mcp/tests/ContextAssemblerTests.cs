@@ -195,4 +195,48 @@ public sealed class ContextAssemblerTests : IAsyncLifetime
         await refused.Should().ThrowAsync<ContextException>().WithMessage("*names no commit*");
         File.Exists(Path.Combine(_repo, "owned.txt")).Should().BeFalse("git was never asked to write it");
     }
+
+    /// <summary>
+    /// A git call that could not read the checkout is SAID, never taken for a clean tree (doctrine §4).
+    /// </summary>
+    /// <remarks>
+    /// It answered an empty list, and a round over committed work then passed without the one sentence
+    /// that names what the reviewers never saw (S1 of todo/PLAN_a_failed_round_can_be_retried.md; code
+    /// round, codex).
+    /// </remarks>
+    [Theory]
+    [InlineData("ls-files")]
+    [InlineData("--name-only")]
+    public async Task ACheckoutThatCannotBeRead_IsSaidToBeUnread_NotClean(string failing)
+    {
+        var head = await _launcher.RunAsync(new ProcessRequest("git", ["rev-parse", "HEAD"], _repo), TestContext.Current.CancellationToken);
+        var unreadable = new ContextAssembler(new FailsOn(failing, _launcher));
+
+        var tail = await unreadable.UncommittedAsync(_repo, head.StdOut.Trim(), TestContext.Current.CancellationToken);
+
+        tail.Paths.Should().BeEmpty();
+        tail.Unreadable.Should().Contain("index.lock", "the reason travels, so the sentence can quote it");
+        NothingToReview.UnreviewedTail(tail).Should().Contain("could not be read").And.Contain("NOT reviewed");
+    }
+
+    [Fact]
+    public async Task ACheckoutThatWasRead_AndHoldsNothing_AddsNothing()
+    {
+        var head = await _launcher.RunAsync(new ProcessRequest("git", ["rev-parse", "HEAD"], _repo), TestContext.Current.CancellationToken);
+
+        var tail = await _assembler.UncommittedAsync(_repo, head.StdOut.Trim(), TestContext.Current.CancellationToken);
+
+        tail.Should().Be(Uncommitted.None with { Paths = tail.Paths });
+        tail.Paths.Should().BeEmpty();
+        NothingToReview.UnreviewedTail(tail).Should().BeEmpty();
+    }
+
+    /// <summary>Real git, except one subcommand, which fails the way a held index lock does.</summary>
+    private sealed class FailsOn(string argument, IProcessLauncher real) : IProcessLauncher
+    {
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default) =>
+            request.Arguments.Contains(argument, StringComparer.Ordinal)
+                ? Task.FromResult(new ProcessResult(128, string.Empty, "fatal: Unable to create '.git/index.lock': File exists.", false))
+                : real.RunAsync(request, ct);
+    }
 }

@@ -349,12 +349,24 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
     /// <summary>Eight hex characters: enough that two attempts never share a path, short enough to read.</summary>
     private static string ShortId() => Guid.NewGuid().ToString("N")[..8];
 
+    /// <summary>
+    /// The marker, written WHOLE or not at all: to a temporary name, then renamed over.
+    /// </summary>
+    /// <remarks>
+    /// Another server's sweep reads an unreadable marker as a dead owner, so a half-written one — an
+    /// empty file for the moment between create and write — would let it take a tree being made
+    /// right now (code round, gemini). A rename within one directory is atomic, so a reader sees no
+    /// marker or the whole marker, never a part; the temporary name does not match the marker glob.
+    /// </remarks>
     private static void WriteOwner(string path)
     {
         using var self = Process.GetCurrentProcess();
+        var marker = OwnerFile(path);
+        var partial = $"{marker}.{ShortId()}.tmp";
         File.WriteAllText(
-            OwnerFile(path),
+            partial,
             JsonSerializer.Serialize(new TreeOwner(self.Id, self.StartTime.ToUniversalTime()), TreeOwnerContext.Default.TreeOwner));
+        File.Move(partial, marker, overwrite: true);
     }
 
     /// <summary>

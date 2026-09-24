@@ -546,9 +546,6 @@ public sealed partial class PanelService
             return Task.FromResult(Error(ReviewScope.Refusal));
         }
 
-        // What `again` would reopen a finished code stage FOR: the last code round's commit. Only a
-        // finished stage is compared — asking again of a stage still open changes nothing.
-        var since = again && before is { State.Stage: Stage.Done } ? LastCodeRound(before) : NoCodeRound;
 
         return RunStageAsync(repoPath, branch, scope, new StageRun(
             again ? RoundMachine.BeginCodeRoundAgain : RoundMachine.BeginCodeRound,
@@ -666,8 +663,13 @@ public sealed partial class PanelService
             // Nothing to review is SAID, never passed. Asked from the resolved commit before any
             // tree or reviewer exists, so a refusal costs two numstats and leaves the session as it
             // was — `again` included: its reopening is in memory until a round actually completes.
-            RefuseBeforeBuilding = async sha =>
-                await NothingSince(repoPath, sha, since, ct) is { Length: > 0 } unchanged
+            //
+            // What `again` would reopen a finished code stage FOR is the last code round's commit, read
+            // from the session as it stands UNDER the claim — never from a read taken before it, which
+            // a round finishing in between would make stale (code round, gemini). Only a finished stage
+            // is compared: asking again of a stage still open changes nothing.
+            RefuseBeforeBuilding = async (loaded, sha) =>
+                await NothingSince(repoPath, sha, again ? SinceWhenFinished(loaded) : NoCodeRound, ct) is { Length: > 0 } unchanged
                     ? unchanged
                     : await NothingOver(repoPath, branch, baseRef, sha, ct),
         },
@@ -678,6 +680,9 @@ public sealed partial class PanelService
     private sealed record CodeRound(int Number, string Sha);
 
     private static readonly CodeRound NoCodeRound = new(0, string.Empty);
+
+    private static CodeRound SinceWhenFinished(PersistedSession session) =>
+        session.State.Stage == Stage.Done ? LastCodeRound(session) : NoCodeRound;
 
     private static CodeRound LastCodeRound(PersistedSession session) =>
         session.Rounds.LastOrDefault(r => r.Stage == nameof(Stage.CodeReview)) is { } last
@@ -1246,6 +1251,8 @@ public sealed partial class PanelService
         }
 
         session = ApplyAnyHumanDecision(session);
+        // The session as read under the claim, BEFORE a begin moves it — what a refusal compares with.
+        var loaded = session;
 
         switch (stage.Begin(session.State))
         {
@@ -1290,7 +1297,7 @@ public sealed partial class PanelService
         try
         {
             var sha = await _worktrees.ResolveShaAsync(repoPath, branch);
-            if (await stage.RefuseBeforeBuilding(sha) is { Length: > 0 } nothingThere)
+            if (await stage.RefuseBeforeBuilding(loaded, sha) is { Length: > 0 } nothingThere)
             {
                 _log.Warning("{Stage} refused before building: {Reason}", stage.Stage, nothingThere);
                 return Error(nothingThere, from);
@@ -2951,8 +2958,12 @@ internal sealed record StageRun(
     /// reviewer and answer <c>proceed</c>. Here rather than inside <see cref="MakeWork"/> because by
     /// then a tree has already been checked out for nothing, and because nothing about the session
     /// has been written yet — a refusal leaves it exactly as it was.
+    /// <para>It is handed the session as read UNDER the claim and before the begin moved it, so a
+    /// decision about the last round is never taken from a read that another call could have made
+    /// stale (code round, gemini).</para>
     /// </remarks>
-    public Func<string, Task<string>> RefuseBeforeBuilding { get; init; } = static _ => Task.FromResult(string.Empty);
+    public Func<PersistedSession, string, Task<string>> RefuseBeforeBuilding { get; init; } =
+        static (_, _) => Task.FromResult(string.Empty);
 
     /// <summary>
     /// How many reviewers ONE vendor runs in this round — the multiplier the deadline is derived

@@ -645,7 +645,8 @@ public sealed class EndToEndTests : IAsyncLifetime
 
         var again = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope, again: true));
 
-        again.GetProperty("error").GetString().Should().Contain("no new commit since code round 1");
+        again.GetProperty("error").GetString().Should().Contain("no new commit since code round 1")
+            .And.Contain("with again: true", "an agent following the sentence literally must not drop the flag");
         (await RoundsOn(service, "feature")).Should().Be(2, "a refusal records no round");
         Parse(await service.StatusAsync(_repo, "feature")).GetProperty("stage").GetString().Should().Be("Done",
             "and leaves the session as it was");
@@ -662,7 +663,7 @@ public sealed class EndToEndTests : IAsyncLifetime
         var again = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope, again: true));
 
         again.GetProperty("error").GetString().Should().Contain("nothing reviewable since code round 1")
-            .And.Contain("package-lock.json");
+            .And.Contain("package-lock.json").And.Contain("with again: true");
         Parse(await service.StatusAsync(_repo, "feature")).GetProperty("stage").GetString().Should().Be("Done");
     }
 
