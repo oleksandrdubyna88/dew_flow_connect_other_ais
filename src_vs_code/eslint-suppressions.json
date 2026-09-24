@@ -52,14 +52,6 @@
       "count": 2
     }
   },
-  "src/bugzReviewMessages.ts": {
-    "complexity": {
-      "count": 1
-    },
-    "max-lines-per-function": {
-      "count": 1
-    }
-  },
   "src/bugzReviewPage.ts": {
     "complexity": {
       "count": 4
