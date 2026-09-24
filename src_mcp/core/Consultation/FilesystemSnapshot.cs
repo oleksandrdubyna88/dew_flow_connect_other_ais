@@ -35,16 +35,16 @@ public sealed record FilesystemSnapshot(ImmutableSortedDictionary<string, TreeEn
         {
             if (!before.Entries.TryGetValue(path, out var was))
             {
-                changes.Add(new TreeChange(path, Appeared(entry.Kind)));
+                changes.Add(new TreeChange(path, Shared(path, Appeared(entry.Kind))));
             }
             else if (was.Fingerprint != entry.Fingerprint)
             {
-                changes.Add(new TreeChange(path, Changed(entry.Kind)));
+                changes.Add(new TreeChange(path, Shared(path, Changed(entry.Kind))));
             }
         }
 
         changes.AddRange(before.Entries.Keys.Except(after.Entries.Keys)
-            .Select(path => new TreeChange(path, Vanished(before.Entries[path].Kind))));
+            .Select(path => new TreeChange(path, Shared(path, Vanished(before.Entries[path].Kind)))));
 
         return changes;
     }
@@ -66,6 +66,19 @@ public sealed record FilesystemSnapshot(ImmutableSortedDictionary<string, TreeEn
 
         return text.ToString();
     }
+
+    /// <summary>
+    /// A change to the COMMON git directory of a linked worktree, said to be shared — issue #376.
+    /// </summary>
+    /// <remarks>
+    /// Every worktree of the repository writes that directory, and so does an editor open on any of them;
+    /// the person reading a withheld consultation should not be led to blame the consultant for a sibling's
+    /// <c>push -u</c>. The snapshots still cannot say who wrote, and the sentence does not pretend to.
+    /// </remarks>
+    private static string Shared(string path, string what) =>
+        path.StartsWith("<git>/common/", StringComparison.Ordinal)
+            ? $"shared {what} — every worktree of this repository can write it: a push -u, a branch switch or the editor in another checkout"
+            : what;
 
     private static string Appeared(string kind) => kind switch
     {

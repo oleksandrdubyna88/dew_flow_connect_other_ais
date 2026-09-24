@@ -38,6 +38,9 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
     /// </remarks>
     private static readonly string[] Metadata = ["HEAD", "config"];
 
+    /// <summary>What is watched in the COMMON directory of a linked worktree: its config, not its HEAD.</summary>
+    private static readonly string[] SharedMetadata = ["config"];
+
     /// <summary>
     /// How much of a file is hashed. Past it, size and mtime stand in.
     /// </summary>
@@ -67,7 +70,8 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
 
         foreach (var (name, full) in GitMetadata(repoPath))
         {
-            entries["<git>/" + name] = new TreeEntry("git", Fingerprint(full));
+            var fingerprint = Path.GetFileName(full) == "config" ? await ConfigFingerprintAsync(full, ct) : Fingerprint(full);
+            entries["<git>/" + name] = new TreeEntry("git", fingerprint);
         }
 
         return new FilesystemSnapshot(entries.ToImmutable());
@@ -143,7 +147,10 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
     {
         foreach (var (label, dir) in GitDirectories(repoPath))
         {
-            foreach (var name in Metadata)
+            // The COMMON directory's HEAD is the main worktree's, not this checkout's: it moves whenever
+            // anybody switches branch there, and watching it withheld consultations over a sibling's
+            // `git switch` (issue #376). This checkout's own HEAD is in its own directory, watched below.
+            foreach (var name in label.Length == 0 ? Metadata : SharedMetadata)
             {
                 yield return ($"{label}{name}", Path.Combine(dir, name));
             }
@@ -178,6 +185,30 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
         {
             return [];
         }
+    }
+
+    /// <summary>
+    /// A config compared by what it SAYS (<see cref="ConfigMeaning"/>), not by its bytes — issue #376.
+    /// </summary>
+    /// <remarks>
+    /// Read with <c>git config --file … --list -z</c>, WITHOUT <c>--includes</c>, so an include being added is
+    /// itself a visible change. A config git cannot read falls back to the byte fingerprint — the strict
+    /// direction — and a missing one to <see cref="Fingerprint"/>'s own marker. Measured: an empty file
+    /// lists nothing and exits 0; a malformed one exits 128 (and <c>git status</c> refuses it too).
+    /// </remarks>
+    private async Task<string> ConfigFingerprintAsync(string config, CancellationToken ct)
+    {
+        if (!File.Exists(config))
+        {
+            return Fingerprint(config);
+        }
+
+        var listed = await launcher.RunAsync(
+            new ProcessRequest("git", ["config", "--file", config, "--list", "-z"], Path.GetDirectoryName(config) ?? "."), ct);
+
+        return listed.ExitCode == 0
+            ? "config|" + Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(ConfigMeaning.Of(listed.StdOut))))
+            : Fingerprint(config);
     }
 
     /// <summary>The worktree's git directory, and the common directory when it is a different one.</summary>

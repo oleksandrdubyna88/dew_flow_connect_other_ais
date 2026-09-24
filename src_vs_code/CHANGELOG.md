@@ -50,6 +50,13 @@ its id.
 the red box instead of inside it, and a long error — a path, a web address, a vendor's multi-line
 message — wraps inside the box instead of running out of it.
 
+**A consultation is no longer withheld for what another worktree wrote into git's shared settings** (issue
+#376). In a linked worktree, the consultant's "the working tree changed" check also watched git metadata
+every worktree of the repository shares — so another checkout switching branch, a `push -u`, or the
+editor recording a merge base withheld the advice although the consultant, read-only, had written
+nothing. That bookkeeping is ignored now; a setting that can run code or send a push elsewhere is still
+caught, and a change to shared metadata says it is shared.
+
 ## Server 0.32.0 — 2026-09-23
 
 **The server now says when it died.** A `coai-mcp` that was killed — the window closed hard, the

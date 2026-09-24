@@ -40,19 +40,25 @@ checkout. Do not watch the bookkeeping other worktrees and tools legitimately wr
 2. **`config` is fingerprinted by MEANING, not bytes** — in both directories. It is read with
    `git config --file <path> --list -z` (without `--includes`, so an `include.path` change is itself
    visible), the known-harmless branch bookkeeping is dropped, and the rest is sorted and hashed:
-   - dropped: `branch.<name>.merge`, `.rebase`, `.description`, `.vscode-merge-base`, `.gk-*`;
-   - `branch.<name>.remote` / `.pushremote` dropped ONLY when the value is `.` or the name of a remote the
-     same config defines — a URL there is where the next push goes, and stays visible.
+   - dropped: `branch.<name>.merge`, `.rebase`, `.vscode-merge-base`, `.gk-*` — tracking bookkeeping.
+     `.description` is KEPT: it is free text of any size, and nothing is gained by leaving a place to
+     smuggle a payload unwatched (gemini, the plan round);
+   - `branch.<name>.remote` / `.pushremote` dropped ONLY when the value is `.` or the name of a remote whose
+     `url` the SAME file defines — a URL there, or a name resolved from another scope, is where the next push
+     goes, and stays visible (gemini, the plan round).
    - everything else — `core.*` (hooksPath, fsmonitor, sshCommand, pager, editor), `alias.*`, `filter.*`,
      `diff.*.textconv`, `merge.*.driver`, `credential.*`, `url.*`, `remote.*`, `include*`, `submodule.*` —
      is kept: those are the ways a repository is turned against its owner.
    - a config git cannot read falls back to the byte fingerprint, so a corrupted file is still seen.
+     Measured 2026-09-24: an EMPTY file exits 0 with no output (so it has a meaning fingerprint of its own,
+     not the fallback); a malformed one exits 128.
    - the variable name is the part after the LAST dot of the key, the subsection everything between the
      first and the last — branch names contain dots.
 3. **The hooks stay watched** in both directories (a shared hook runs in every worktree).
 4. **The sentence says what shared means.** A `<git>/common/…` change is described as *"shared git
-   metadata changed — every worktree of this repository, and the editor, can write it"*, so the person
-   reading a withheld consultation is not led to blame the consultant for what a sibling did.
+   metadata changed — every worktree of this repository can write it: a push -u, a branch switch or the
+   editor in another checkout"*, so the person reading a withheld consultation is not led to blame the
+   consultant for what a sibling did (local, the plan round).
 
 **Declined:** excluding the whole common directory (loses shared hooks and dangerous `core.*`);
 excluding `config` entirely (the existing `EditedGitMetadata_IsSeen` would go silent); an allow-list of
@@ -67,7 +73,10 @@ dangerous keys (every new executable key would be missed). **Open tail:** a per-
    - `AnEditorsMergeBaseInThisCheckout_IsNotABreach` (the same bookkeeping in an ordinary repository; red
      today);
    - still seen: `ASharedConfigThatRunsCode_IsStillSeen` (`core.fsmonitor` set from the main checkout),
-     `ABranchPushRemoteSetToAURL_IsStillSeen`, `AnIncludeAddedToConfig_IsStillSeen`, and the existing
+     `ABranchPushRemoteSetToAURL_IsStillSeen`, `AnIncludeAddedToConfig_IsStillSeen`,
+     `ABranchDescription_IsStillSeen`; the fingerprint's own edges — the same settings written in another
+     ORDER are the same config, a MALFORMED config is still seen changing (byte fallback), an EMPTY config is
+     stable (codex, the plan round); and the existing
      `EditedGitMetadata_IsSeen`, `InALINKEDWorktree_TheCommonConfigAndHooksAreWatchedToo`;
    - the sentence for a `common/` path names shared metadata (`FilesystemSnapshot` unit test).
 2. `FilesystemInvariant`: the common directory without `HEAD`; `config` through the meaning fingerprint.
