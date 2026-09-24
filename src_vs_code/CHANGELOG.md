@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.52.0 · Server 0.33.0 — 2026-09-24
 
 **The split is sized honestly, gated once per epic — or once for the whole task — and written down**
 (issue #131). *Split the plan into epics and stories* used to call nearly every plan "epics" (it
