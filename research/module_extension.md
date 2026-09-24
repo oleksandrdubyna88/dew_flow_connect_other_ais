@@ -9012,5 +9012,7 @@ so nothing else changed.
 
 **Measured**, because no test here has a layout engine: `scripts/measure-failure-layout.mjs` renders the
 page's own stylesheet and the shipped markup in headless Microsoft Edge at 320, 600 and 1000 px with a long
-path, a long URL and a multi-line vendor error, and reads `getBoundingClientRect` back. 2026-09-24: all nine
+path, a long URL and a multi-line vendor error, and reads `getBoundingClientRect` back — the text against the box's CONTENT edge (inside padding and
+border), the button to the box's right and still on the page; a page it cannot read is reported as a
+FAILED case, not a crash. 2026-09-24: all nine
 held; the same script against the markup on main failed all nine (the button inside the box).

@@ -1,9 +1,16 @@
 # PLAN — the retry sits outside the failure, and the failure wraps
 
-> Status: **plan only, nothing implemented yet.** Scope: the chat page's failure line in `src_vs_code`
+> Status: **IMPLEMENTED, 2026-09-24.** Deviations: the wrap declarations sit on `.failure` itself, not on
+> `.failure .said` — the note the page script writes into the same region uses the box without the span,
+> and it is wrapped in the row too (a test pins it, red with the old line); the measurement compares the
+> text against the box's CONTENT edge and keeps the button on the page, and a page it cannot read is a
+> FAILED case rather than a crash (our own review). Measured: nine of nine held; nine of nine failed on
+> main's markup.
+>
+> Scope: the chat page's failure line in `src_vs_code`
 > (`chatPage.ts` `chatFailureHtml` and its CSS). Issue #346.
 >
-> Related docs: [module_extension.md](../research/module_extension.md), [architecture.md](../research/architecture.md).
+> Related docs: [module_extension.md](module_extension.md), [architecture.md](architecture.md).
 
 ## The symptom
 
@@ -61,7 +68,7 @@ red box in the markup the shipped bundle renders (local and codex, the plan roun
 
 ## Definition of Done
 
-- [ ] *Try again* is outside the red box, to its right.
-- [ ] A long failure text wraps inside the box, and keeps its own line breaks.
-- [ ] The retry still works after its region is rewritten, and in the shipped bundle.
-- [ ] Tests red first; `npm test` and lint green; docs updated; this plan promoted to `research/`.
+- [x] *Try again* is outside the red box, to its right.
+- [x] A long failure text wraps inside the box, and keeps its own line breaks.
+- [x] The retry still works after its region is rewritten, and in the shipped bundle.
+- [x] Tests red first; `npm test` and lint green; docs updated; this plan promoted to `research/`.
