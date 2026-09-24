@@ -52,6 +52,11 @@ public sealed class RolePrompts(string dataDir)
     /// </remarks>
     public bool Has(PromptChoice choice) => choice.BuiltIn || !string.IsNullOrWhiteSpace(Override(choice.Id));
 
+    /// <summary>What a person wrote for this id, or empty — the override layer alone, no shipped fallback.</summary>
+    /// <remarks>For the gate's command texts (issue #467): their shipped layer is <c>CommandTexts</c>' in the
+    /// core, so the server hands over only what is on disk, through the same id guard as every prompt.</remarks>
+    public string Written(string promptId) => Override(promptId);
+
     /// <summary>The override file's text, or empty when there is no override.</summary>
     /// <remarks>
     /// Empty covers both "no file" and "a file that says nothing", which is what the callers mean by

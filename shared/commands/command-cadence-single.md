@@ -1,0 +1,1 @@
+for this work, never per story: build it on this branch without gating each piece; COMMIT it, then run review_code over the whole diff — it reviews committed changes only, and uncommitted work is refused as nothing to review; resolve every finding, fix what you accepted, update the documentation and the tests, and fold the fixes into that ONE commit.

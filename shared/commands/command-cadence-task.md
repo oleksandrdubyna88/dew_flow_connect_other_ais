@@ -1,0 +1,1 @@
+for the WHOLE task, never per epic or story: this plan round was its plan gate; build every epic and its stories on this branch without gating them, and commit each epic as ONE commit as you finish it; then ONE review_code over the whole task's diff; resolve every finding, fix what you accepted, update the documentation and the tests, and commit.

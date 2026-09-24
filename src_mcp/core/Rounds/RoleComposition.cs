@@ -355,11 +355,21 @@ public static partial class RoleComposition
     /// A prompt id names one text for the whole catalog: it is the file under
     /// <c>&lt;dataDir&gt;/prompts/</c>, so two roles claiming one id would be two roles sharing one
     /// override. Its own method so <see cref="WhyNot"/> stays inside the complexity bound.
+    /// <para>Spoken for by the gate's commands too (issue #467): their texts are
+    /// <c>&lt;dataDir&gt;/prompts/command-*.md</c>, so a role prompt named <c>command-autonomy</c> would be
+    /// the autonomy order's override — editing the reviewer's prompt would reword the order.</para>
     /// </remarks>
-    private static string? Claimed(string id, string roleId, HashSet<string> promptIds) =>
-        promptIds.Add(id)
+    private static string? Claimed(string id, string roleId, HashSet<string> promptIds)
+    {
+        if (id.StartsWith(Commands.CommandTexts.Prefix, StringComparison.Ordinal))
+        {
+            return $"{roleId}: the prompt id '{id}' starts with '{Commands.CommandTexts.Prefix}', which names the gate's command texts — the two would share one file";
+        }
+
+        return promptIds.Add(id)
             ? null
             : $"{roleId}: the prompt id '{id}' is already in use, and a prompt id names one text for the whole catalog";
+    }
 
     private static bool IsBuiltIn(string roleId) => RoleCatalog.Builtin.ById(roleId) is not null;
 

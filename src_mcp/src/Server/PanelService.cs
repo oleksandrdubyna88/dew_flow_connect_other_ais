@@ -1443,6 +1443,9 @@ public sealed partial class PanelService
                 Models = Core.Commands.CommandModels.For(_settings.CommandModels, callerKind),
                 // Once per epic or once for the task, never per story (issue #131).
                 GatePer = _settings.GatePer,
+                // The words of the orders, read for THIS call like the switches: a file a person saved
+                // a second ago rewords this round's order (issue #467).
+                Texts = CommandTextsNow(),
             };
             // The caller's one order is CLAIMED, and only on a round that would actually give it —
             // a claim taken on a code round would spend it on a round that issues nothing. The
@@ -1455,7 +1458,10 @@ public sealed partial class PanelService
                         caller, DateTime.UtcNow, message => _log.Warning("{Message}", message)),
                 }
                 : provisional;
-            var commands = Core.Commands.GateCommands.For(context);
+            // The person's own commands come AFTER the built-in orders, which keep the positions every
+            // caller and the bench already read them at (issue #467).
+            var custom = CustomOrdersFor(stage.Stage, context.Texts);
+            var commands = (IReadOnlyList<string>)[.. Core.Commands.GateCommands.For(context), .. custom.Orders];
             if (Core.Commands.GateCommands.OrdersSplit(context))
             {
                 _log.Information(
@@ -1474,10 +1480,11 @@ public sealed partial class PanelService
             {
                 Cost = new RoundCost(record.TokensIn, record.TokensOut, record.CostUsd),
                 Commands = commands.Count == 0 ? null : commands,
-                CommandsPreamble = commands.Count == 0 ? null : Core.Commands.GateCommands.Preamble,
+                CommandsPreamble = commands.Count == 0 ? null : Core.Commands.GateCommands.PreambleFor(context),
                 // Absent rather than empty when nobody wrote one, which is every code round: an
                 // empty list in every reply would teach a reader to stop seeing the field.
                 Notes = notes.Count == 0 ? null : notes,
+                CommandsSkipped = custom.Skipped.Count == 0 ? null : custom.Skipped,
             };
             // REQUIRED, and the previous attempt at this was worse than the bug it fixed. Making it
             // best-effort stopped the round dying and started it LYING: the caller was handed
@@ -2411,6 +2418,56 @@ public sealed partial class PanelService
     /// </remarks>
     private static string CallerFor(PersistedSession session) =>
         CallerIdentity.Current().Id is { Length: > 0 } id ? id : $"repo:{session.State.RepoPath}";
+
+    /// <summary>
+    /// What a person wrote for each order part and each custom command, from <c>&lt;dataDir&gt;/prompts/</c>
+    /// — through <see cref="RolePrompts"/>, so the same id guard and the same "empty is no override" rule.
+    /// </summary>
+    /// <remarks>
+    /// <b>Best effort, text by text.</b> This runs AFTER the reviewers have answered and been paid for: a
+    /// file another process holds at that moment — the extension restoring a default, a scanner, a share
+    /// blinking — used to fail the finished round, so its findings were never saved and the caller paid
+    /// for it again. A text that cannot be read is the shipped one this round (a custom command's, which
+    /// ships none, is named as having no text), and the log says which. (our own reviewer, the code round.)
+    /// </remarks>
+    private Core.Commands.CommandTexts CommandTextsNow() => new(
+        Core.Commands.CommandTexts.ShippedIds
+            .Concat(_settings.CustomCommands.Select(command => command.Id))
+            .Distinct(StringComparer.Ordinal)
+            .ToDictionary(id => id, WrittenOrNothing, StringComparer.Ordinal));
+
+    private string WrittenOrNothing(string id)
+    {
+        try
+        {
+            return _prompts.Written(id);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            _log.Warning(e, "the text {Id} could not be read; this round uses the shipped words", id);
+            return string.Empty;
+        }
+    }
+
+    /// <summary>The person's commands for a round of this stage; one with no text is named and logged, not sent.</summary>
+    private Core.Commands.CustomOrders CustomOrdersFor(Stage stage, Core.Commands.CommandTexts texts)
+    {
+        var custom = Core.Commands.CustomCommands.For(_settings.CustomCommands, CommandStageOf(stage), texts, _prompts.FileToWrite);
+        foreach (var skipped in custom.Skipped)
+        {
+            _log.Warning("{Skipped}", skipped);
+        }
+
+        return custom;
+    }
+
+    /// <summary>A document round is neither a plan nor a code round, so only an <c>any</c> command is given in it.</summary>
+    private static Core.Commands.CommandStage CommandStageOf(Stage stage) => stage switch
+    {
+        Stage.PlanReview => Core.Commands.CommandStage.Plan,
+        Stage.CodeReview => Core.Commands.CommandStage.Code,
+        _ => Core.Commands.CommandStage.Any,
+    };
 
     /// <summary>Which models a split order named, as the log line says it (issue #117).</summary>
     private static string ModelsInLog(Core.Commands.CommandContext context) =>

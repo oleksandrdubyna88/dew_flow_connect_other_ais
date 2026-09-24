@@ -1,6 +1,6 @@
 # PLAN — the gate's commands and the whole configuration are the person's to edit, export and import
 
-> Status: **Epic C built 2026-09-24 (its code round and PR open); Epics A and B not started.** Scope: `src_vs_code` (a config export/import pair, a
+> Status: **Epic C shipped 2026-09-24 (PR #500); Epic A built 2026-09-24 (its code round and PR open); Epic B not started.** Scope: `src_vs_code` (a config export/import pair, a
 > commands page) and `src_mcp` (command texts as data, custom commands). Issue #467. Three epics, ONE gate
 > each (the operator's instruction for this batch), built C → A → B.
 >
@@ -102,10 +102,16 @@ recorded for free.
 
 1. **The shipped texts move to `shared/commands/<id>.md`**, embedded in `CoaiMcp.Core` the way
    `shared/builtin-roles.json` is (`CoaiMcp.Core.csproj:17`) — `shared/` because Epic B's page must show the
-   same default text, and one file both halves read cannot drift. Fourteen ids, each one sentence family:
-   `command-preamble`, `command-autonomy`, `command-model`, `command-split-none|small|medium|large|huge`,
-   `command-split-measured`, `command-cadence-epic|task|single`, `command-another-code-round`,
-   `command-already-split-epic|task`.
+   same default text, and one file both halves read cannot drift. **Fifteen** ids, each one sentence
+   family (the plan round counted them; this line said fourteen): `command-preamble`, `command-autonomy`,
+   `command-model`, `command-split-none|small|medium|large|huge`, `command-split-measured`,
+   `command-cadence-epic|task|single`, `command-another-code-round`, `command-already-split-epic|task`.
+   The id IS the file name (`shared/commands/command-autonomy.md`, override `<dataDir>/prompts/command-autonomy.md`
+   — never `command-command-…`, which the first draft of step 5 would have looked for). Embedded by an
+   explicit item, `<EmbeddedResource Include="..\..\shared\commands\*.md" LogicalName="CoaiMcp.Core.commands.%(Filename)%(Extension)" />`;
+   the id list is ONE array in `CommandTexts`, a missing resource throws naming it (as `RolePrompts.Embedded`
+   does), and a test reads every listed id and asserts every `shared/commands/*.md` file is listed — so a
+   file without an id and an id without a file are both red.
 2. **Placeholders** for the computed parts, replaced by plain `string.Replace`: `{scope}` (autonomy),
    `{strongest}` / `{implementation}` (model), `{numbers}` / `{verdict}` (measured). An override that drops
    one simply does not say it — the order is the operator's words.
@@ -117,15 +123,19 @@ recorded for free.
    override, else the shipped text. `CommandContext.Texts` defaults to shipped only, so every existing test
    and caller is unchanged, and **the default orders stay byte-identical** — `GateCommandsTests` pins them,
    and a new test compares every order across every switch combination with the pre-change strings.
-5. **Overrides from `<dataDir>/prompts/command-<id>.md`**, read through `RolePrompts` (its id guard and its
-   rule that an EMPTY override is no override), once per round in `PanelService`, for the fourteen ids.
+5. **Overrides from `<dataDir>/prompts/<id>.md`**, read through `RolePrompts` (its id guard and its rule
+   that an EMPTY override is no override), once per round in `PanelService`, for the fifteen ids.
 6. **Custom commands: `COAI_COMMANDS` = `[{id, title, enabled, stage}]`**, `stage` ∈ `plan | code | any`
    (default `any`), parsed by `CommandsSetting`, a twin of `CommandModelsSetting` (unreadable → no custom
-   commands and one panel complaint; a row with a bad id — not a slug, or one of the fourteen shipped ids —
-   dropped with a complaint naming it). An enabled command whose stage matches the round is appended AFTER
-   the built-in orders with the text of `<dataDir>/prompts/command-<id>.md`; one with no text is left out,
-   logged, and named in a new reply field `commandsSkipped` (absent when empty, like `notes`): *"custom
-   command '<title>' has no text — write it in <file>"*.
+   commands and one panel complaint; a row with a bad id — not a slug, or one of the fifteen shipped ids —
+   dropped with a complaint naming it). A custom id is stored with the `command-` prefix added by the
+   parser (`review-docs` → `command-review-docs`), so its file sits beside the shipped ones and can never
+   shadow a role prompt. An enabled command whose stage matches the round is appended AFTER the built-in
+   orders with the text of `<dataDir>/prompts/<id>.md`; one with no text is left out, logged, and named in
+   a new MCP reply field `commandsSkipped` (absent when empty, like `notes`): *"custom command '<title>'
+   has no text — write it in <file>"*. The reply goes to the calling AI only; coai-server never sees it.
+   Not persisted in the rounds database (a schema change for a case Epic B's page prevents, the way
+   issue #338 keeps a role without a question switched off) — recorded as open tail.
 
 **Tests (red first):** `CommandTextsTests` — every shipped id embedded and non-blank; an override wins, a
 blank override does not; placeholders replaced. `GateCommandsTests` — byte-identical defaults across every
@@ -136,6 +146,12 @@ order and deleting it restores the default; an enabled custom command reaches th
 database; a disabled one or one of the other stage does not; one with no text is in `commandsSkipped` and
 not in `commands`. Docs: `module_server.md`, `module_core.md` if the commands live there, `module_tests.md`,
 CHANGELOG, `PROJECT.md` if a setting list is kept there.
+
+**As built (2026-09-24):** the byte-identical guarantee is a RECORDING, not a second copy of the code:
+`src_mcp/tests/fixtures/gate-commands-before-467.json`, written by the pre-change code over 640
+combinations. An override keeps its leading whitespace (only the end is trimmed), because three texts
+continue the marker before them. The fake-CLI round harness was extracted from `SplitOrderTests` into
+`FakeCliRoundTests` for the end-to-end tests rather than copied.
 
 ## Epic B — an Edit commands page (extension)
 
@@ -155,6 +171,8 @@ and rules → B2 page → (gate, PR).
 
 - The CLAUDE.md snippet's *"close each one properly"* (`coai-review-gate.md:37`) is a conventions-repository
   change with a release and a pin move in every consumer.
+- A custom command skipped for having no text is named in the reply and the log, not in the rounds
+  database (Epic A's plan round; declined as a schema change for a case Epic B's page prevents).
 
 ## Definition of Done
 

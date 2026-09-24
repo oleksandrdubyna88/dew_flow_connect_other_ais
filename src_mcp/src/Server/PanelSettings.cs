@@ -349,6 +349,12 @@ public sealed record PanelSettings
         new Dictionary<string, Core.Commands.ModelPair>();
 
     /// <summary>
+    /// The commands a person added, from <c>COAI_COMMANDS</c> (issue #467) — handed to the caller after the
+    /// built-in orders, each with the text of its own file. None unless somebody added one.
+    /// </summary>
+    public IReadOnlyList<Core.Commands.CustomCommand> CustomCommands { get; init; } = [];
+
+    /// <summary>
     /// How often split work is gated — once per epic unless <c>COAI_GATE_PER</c> says <c>task</c>
     /// (issue #131). Never per story.
     /// </summary>
@@ -669,7 +675,8 @@ public sealed record PanelSettings
         WithCatalog(
             env, roles, catalog, ResolveDataDir(env),
             ConsultantRouting.Parse(env("COAI_CONSULTANTS")),
-            CommandModelsSetting.Parse(env(CommandModelsSetting.Key)));
+            CommandModelsSetting.Parse(env(CommandModelsSetting.Key)),
+            CommandsSetting.Parse(env(CommandsSetting.Key)));
 
     /// <remarks>
     /// The resolution is passed IN rather than computed twice. It was called once for `DataDir` and
@@ -685,7 +692,8 @@ public sealed record PanelSettings
         RoleCatalog catalog,
         string dataDir,
         ConsultantsSetting consultants,
-        CommandModelsSetting commandModels) => new PanelSettings
+        CommandModelsSetting commandModels,
+        CommandsSetting customCommands) => new PanelSettings
         {
             Rounds = Config(env, catalog),
             // The data directory's own notes ride here rather than in a channel of their own: this list
@@ -702,8 +710,11 @@ public sealed record PanelSettings
                     complaint => new UnrecognisedSetting(Key.Consultants, complaint)),
                 .. commandModels.Complaints.Select(
                     complaint => new UnrecognisedSetting(CommandModelsSetting.Key, complaint)),
+                .. customCommands.Complaints.Select(
+                    complaint => new UnrecognisedSetting(CommandsSetting.Key, complaint)),
             ],
             CommandModels = commandModels.Map,
+            CustomCommands = customCommands.Commands,
             RoundTreeRoot = env("COAI_ROUND_WORKTREES") is { Length: > 0 } roundTrees
                 ? roundTrees
                 : Runners.Worktrees.WorktreeManager.MachineLocalRoot,
