@@ -958,6 +958,12 @@ Four things about it are not obvious from the shape:
     was first deleted in a `finally`, so a laptop briefly offline at the wrong moment lost the job id
     for ever and the review ran to completion anyway — precisely the outcome the mechanism exists to
     prevent.
+  - **A claim another process holds for an instant is still READ** (2026-09-24, issue #462).
+    `ReadClaim` answered every `IOException` with `None`, so a scanner or indexer opening the claim just
+    after it was renamed into place — the refusal `Replace` has always retried on the write side — made
+    a claim that names its job read as one that names nothing, and `CancelAbandonedAsync` gave up. It now
+    retries that refusal (eight attempts, 10–30 ms × attempt, jittered — well under a second) and still
+    answers `None` at once for a missing file or one that is not a claim.
   - **The cancellation carries `X-Coai-Contract`.** The server judges that header before it looks at
     the token and answers `426` without it, so the first version would have been refused by every
     server it was ever sent to: wired, and working on nothing.
