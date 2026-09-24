@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.53.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.52.0...extension-v0.53.0) (2026-09-24)
+
+
+### Features
+
+* **bugz:** CoAI: choose on every bug puts the pair into a chat ([#487](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/487)) ([f058e02](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/f058e027913a6249217e4eac4b1da6eac20dfa91))
+* **bugz:** every diff line carries its number ([#488](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/488), stories 2 and 3a) ([9d417b7](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9d417b7e07afc38ad129d447e91e7b7d5f954edc))
+* **bugz:** the real method is numbered as the file is; choose sits by the name ([#488](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/488), story 3) ([2bbd14f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/2bbd14f84a50b5b97150811912c54a2588addb50))
+* **gate:** the local reviewer stands down when the cloud reviewers found almost nothing ([#485](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/485)) ([b30bba7](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b30bba7e9a942b9fe481cad71b53fc955ccf4ddd))
+
+
+### Bug Fixes
+
+* **bugz:** a bug's chat is found by its id after a rekey; a failed press is said ([#487](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/487)) ([7a85084](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7a850844dffa5a5ea8c49ab21e5db736642d8a02))
+* **bugz:** a first line that is no line number counts from 1 ([#488](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/488), code round) ([94698be](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/94698beb5a4eb5af8a16258d2c1017c567e8f0e6))
+* **bugz:** no blank row after every diff line ([#488](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/488), story 1) ([06090bc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/06090bc3c4d395cdbea3c87928a4f41e5e425806))
+* **chat:** the spending line and the Re-ask caption follow the conversation ([#492](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/492)) ([68f680f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/68f680f1c0b55df90f8f86cd39407ef1639dae71))
+* **gate:** count a cloud outcome before reporting it; the stop-local switch is not an order ([#485](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/485)) ([0872768](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0872768b4fa8041db84d526be242dc19e4a377bd))
+* **reviewers:** an agy reviewer whose command was auto-denied is asked again in the same conversation ([#504](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/504)) ([9406838](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9406838f8af21e427e9c26336a6550b2e2970a52))
+
 ## [0.52.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.51.0...extension-v0.52.0) (2026-09-24)
 
 
