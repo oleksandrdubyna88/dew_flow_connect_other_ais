@@ -157,7 +157,22 @@ public static class GateCommands
     private static bool HasEpics(PlanShape.Split size) => size >= PlanShape.Split.Medium;
 
     /// <summary>How often the work comes back through the gate — never per story.</summary>
-    private static string GateEnding(GateScope scope, bool epics) => (scope, epics) switch
+    private static string GateEnding(GateScope scope, bool epics) => GateCadence(scope, epics) + AnotherCodeRound;
+
+    /// <summary>
+    /// What an agent must know about a SECOND code round, said with every gate order.
+    /// </summary>
+    /// <remarks>
+    /// "ONE review_code" was read as "exactly one, ever", and it was nearly true: a code round closed
+    /// the session and the refusal named a door that did not exist. So an agent that had crashed
+    /// mid-epic refused the checkpoint round its operator asked for, to keep the final one (issue
+    /// #490). The door exists now and the order says where it is.
+    /// </remarks>
+    internal const string AnotherCodeRound =
+        " A resolved code round closes the session: for a checkpoint, a final round after one, or a retry "
+        + "after a crash, commit the new work and call review_code with again: true.";
+
+    private static string GateCadence(GateScope scope, bool epics) => (scope, epics) switch
     {
         (GateScope.Epic, true) =>
             $"{GateOrderMarker} per EPIC, never per story: give each epic its own branch, starting from the "

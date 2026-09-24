@@ -4370,3 +4370,34 @@ sweep removed EVERY `coai-wt-*` by prefix, including a round running in another 
 overrides it, and a settings object built in a test leaves it empty for `{DataDir}/worktrees`. Trees
 that older builds left under `{DataDir}/worktrees` are not swept by this one — they block nothing,
 because no path is ever reused.
+
+### A gate can be run again, and a lost reply read back (S3, issue #490)
+
+A code round CLOSED the session: `Resolve` set `Done`, and `BeginCodeRound` refused `Done` with "this
+session is complete; open a new one" — while `open` is idempotent per repo+branch, so that door never
+existed. A checkpoint round therefore forbade the final one: an agent that had crashed mid-epic
+refused its operator's checkpoint gate to keep the last one, and on 2026-09-22/23 agents cut ten
+`review/*` branches for one feature purely to get fresh sessions.
+
+- **`review_code(again: true)`** runs `RoundMachine.BeginCodeRoundAgain`: a finished code stage is
+  reopened (`CodeReview`, a fresh round count and escalation count) keeping what was AGREED —
+  `PlanProceeded`, the plan text, the standing rejections. A held human gate, an unresolved round and a
+  missing plan still refuse first; asking again of a stage that is still open changes nothing.
+  `RunStageAsync` now adopts the state a begin MOVED to (every other begin returns the state it was
+  given), and nothing is saved until the round ends, so a refusal after the reopening leaves the
+  session `Done`.
+- **Only for new commits.** Each round now records the commit it reviewed (`RoundRecord.Sha`, empty
+  on a plan round and on rounds recorded before the field). `again` over the same commit is refused
+  "no new commit since code round N"; over commits that changed only files a reviewer is never shown,
+  "nothing reviewable since code round N", naming them. A round with no recorded commit proves
+  nothing and never refuses.
+- The `Done` refusal (`RoundMachine.CodeDone`) names the door, as `DocumentDone` always did. Every gate
+  order ends with it (`GateCommands.AnotherCodeRound`), and the `review_code` tool text describes it.
+- **`status` returns `pending`**: while a round awaits `resolve`, its findings in the order `resolve`
+  indexes them — the read-back idea of the unmerged `coai-ar1` branch without its locators. A lost
+  reply used to be a dead end: the next round was refused until the findings were resolved, and
+  `status` carried counts only.
+
+The shared gate rule (`coai-review-gate.md` in the conventions repository, snippet v5) still reads
+"same resolve duty, same loop" for the code stage; saying there that a code round closes the session
+and that `again: true` is the door is a conventions change, and so a pin cascade of its own.

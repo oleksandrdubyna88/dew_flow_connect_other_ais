@@ -601,4 +601,113 @@ public sealed class EndToEndTests : IAsyncLifetime
             .And.NotContain("nothing to review");
         (await RoundsOn(service, "feature")).Should().Be(1);
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // A gate can be run again (issue #490; todo/PLAN_a_failed_round_can_be_retried.md, S3a).
+    //
+    // A code round closed the session, `open` is idempotent, and the refusal said "open a new one" —
+    // a door that did not exist. So a checkpoint round forbade the final one, and agents cut ten
+    // review/* branches for one feature just to get fresh sessions.
+
+    /// <summary>A session on "feature" whose code round has passed and been resolved: Done.</summary>
+    private async Task<PanelService> CodeDoneOnFeature()
+    {
+        var service = await PlanPassedOn("feature");
+        Script(Clean);
+        Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope)).GetProperty("verdict").GetString()
+            .Should().Be("proceed");
+        await service.ResolveAsync(_repo, "feature", "[]");
+        Parse(await service.StatusAsync(_repo, "feature")).GetProperty("stage").GetString().Should().Be("Done");
+        return service;
+    }
+
+    [Fact]
+    public async Task ADoneSession_RunsASecondCodeRound_ForNewCommits_WhenAskedAgain()
+    {
+        var service = await CodeDoneOnFeature();
+        await File.AppendAllTextAsync(Path.Combine(_repo, "app.cs"), "the checkpoint's follow-up\n");
+        await Git("add", ".");
+        await Git("commit", "-m", "after the checkpoint");
+
+        var again = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope, again: true));
+
+        again.GetProperty("verdict").GetString().Should().Be("proceed", $"the new commits are reviewed: {again}");
+        (await RoundsOn(service, "feature")).Should().Be(3, "plan, the first code round, and this one");
+        await service.ResolveAsync(_repo, "feature", "[]");
+        Parse(await service.StatusAsync(_repo, "feature")).GetProperty("stage").GetString().Should().Be("Done",
+            "the round it reopened closes the session again");
+    }
+
+    [Fact]
+    public async Task AskingAgain_WithNoNewCommit_IsRefused_AndSaysWhy()
+    {
+        var service = await CodeDoneOnFeature();
+
+        var again = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope, again: true));
+
+        again.GetProperty("error").GetString().Should().Contain("no new commit since code round 1");
+        (await RoundsOn(service, "feature")).Should().Be(2, "a refusal records no round");
+        Parse(await service.StatusAsync(_repo, "feature")).GetProperty("stage").GetString().Should().Be("Done",
+            "and leaves the session as it was");
+    }
+
+    [Fact]
+    public async Task AskingAgain_AfterOnlyExcludedFilesChanged_IsRefused_AndNamesThem()
+    {
+        var service = await CodeDoneOnFeature();
+        await File.WriteAllTextAsync(Path.Combine(_repo, "package-lock.json"), "{}\n");
+        await Git("add", ".");
+        await Git("commit", "-m", "only a lock file since the round");
+
+        var again = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope, again: true));
+
+        again.GetProperty("error").GetString().Should().Contain("nothing reviewable since code round 1")
+            .And.Contain("package-lock.json");
+        Parse(await service.StatusAsync(_repo, "feature")).GetProperty("stage").GetString().Should().Be("Done");
+    }
+
+    [Fact]
+    public async Task ADoneSession_NamesTheDoorItHas()
+    {
+        var service = await CodeDoneOnFeature();
+
+        var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
+
+        code.GetProperty("error").GetString().Should().Contain("again: true",
+            "a refusal with no door is a stall, and 'open a new one' named a door that did not exist");
+    }
+
+    /// <summary>
+    /// A LOST reply is no longer a blind decision (S3b): a round that saved its findings as pending
+    /// refuses the next one until they are resolved, and `resolve` addresses them by index — so
+    /// `status` must hand the same list back, in the same order.
+    /// </summary>
+    [Fact]
+    public async Task ARoundAwaitingResolve_HandsItsFindingsBackThroughStatus()
+    {
+        var service = await PlanPassedOn("feature");
+        Script(FourMajors);
+        var reply = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
+        var sent = reply.GetProperty("findings").EnumerateArray().Select(f => f.GetProperty("title").GetString()).ToList();
+        sent.Should().NotBeEmpty();
+
+        // The reply is lost. A resumed caller has only status to go on.
+        var status = Parse(await service.StatusAsync(_repo, "feature"));
+
+        status.GetProperty("awaitingResolve").GetBoolean().Should().BeTrue();
+        status.GetProperty("pending").EnumerateArray().Select(f => f.GetProperty("title").GetString())
+            .Should().Equal(sent);
+    }
+
+    [Fact]
+    public async Task ASessionWithNothingToResolve_CarriesNoPendingList()
+    {
+        var service = await PlanPassedOn("feature");
+
+        var status = Parse(await service.StatusAsync(_repo, "feature"));
+
+        status.GetProperty("awaitingResolve").GetBoolean().Should().BeFalse();
+        status.TryGetProperty("pending", out var pending).Should().BeTrue();
+        pending.GetArrayLength().Should().Be(0);
+    }
 }

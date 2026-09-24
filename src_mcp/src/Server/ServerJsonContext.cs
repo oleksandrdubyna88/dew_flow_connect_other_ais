@@ -84,6 +84,19 @@ public sealed record SessionAnswer(
     /// checkout, and half the moments that start one happen before a review session exists at all.
     /// </remarks>
     public IReadOnlyList<OpenConsultation> Consultations { get; init; } = [];
+
+    /// <summary>
+    /// The findings a round is waiting on a <c>resolve</c> for, in the order <c>resolve</c> indexes
+    /// them — empty whenever nothing awaits a decision.
+    /// </summary>
+    /// <remarks>
+    /// A lost reply used to be a dead end: the round had saved them as pending, the next round was
+    /// refused until they were resolved, and <c>resolve</c> addresses them by POSITION — while this
+    /// answer carried counts only, so a resumed caller decided blind. The read-back idea of the
+    /// unmerged <c>coai-ar1</c> branch, without its locators (S3b of
+    /// todo/PLAN_a_failed_round_can_be_retried.md).
+    /// </remarks>
+    public IReadOnlyList<Finding> Pending { get; init; } = [];
 }
 
 /// <summary>What a review tool returns: the verdict, the honest reviewer count, the findings.</summary>

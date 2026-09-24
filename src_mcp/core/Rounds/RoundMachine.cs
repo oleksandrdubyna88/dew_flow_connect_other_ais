@@ -136,8 +136,48 @@ public static class RoundMachine
         { PlanProceeded: false } => new Transition.Refused(
             "no plan round has reached 'proceed' in this session — the plan gate comes first (review_plan)"),
         { AwaitingResolve: true } => new Transition.Refused(Unresolved),
-        { Stage: Stage.Done } => new Transition.Refused("this session is complete; open a new one"),
+        { Stage: Stage.Done } => new Transition.Refused(CodeDone),
         _ => new Transition.Moved(s),
+    };
+
+    /// <summary>
+    /// A branch's code review is finished — and the way to run another is NAMED.
+    /// </summary>
+    /// <remarks>
+    /// It said "open a new one", and <c>open</c> is idempotent per repo+branch: that door never
+    /// existed. A checkpoint round therefore forbade the final one, and agents cut ten review/*
+    /// branches for one feature purely to get fresh sessions (issue #490). The door is
+    /// <see cref="BeginCodeRoundAgain"/>, the same shape as <see cref="DocumentDone"/>'s.
+    /// </remarks>
+    internal const string CodeDone =
+        "this branch's code review is complete. To review it again — new commits after a checkpoint, " +
+        "the final round of an epic, or after a crash — commit them and call review_code with again: true, " +
+        "which reopens the code stage; the finished rounds stay on the record";
+
+    /// <summary>
+    /// The code gate, asked AGAIN: a finished code session is reopened for a fresh code round.
+    /// </summary>
+    /// <remarks>
+    /// <para>Everything else is exactly <see cref="BeginCodeRound"/>: a held human gate, an unresolved
+    /// round and a missing plan all still refuse first, and a session that is not finished is simply
+    /// begun — asking again of a session that never closed changes nothing.</para>
+    /// <para>What is kept is what the stage was AGREED on — <c>PlanProceeded</c>, the plan text, the
+    /// standing rejections. What starts over is the stage's own count, so the round is round one of a
+    /// fresh budget rather than a round past an exhausted one. That the branch has MOVED since the
+    /// last code round is the caller's check (<c>PanelService.ReviewCodeAsync</c>): it needs the
+    /// commit, which a pure transition does not have.</para>
+    /// </remarks>
+    public static Transition BeginCodeRoundAgain(SessionState s) => s switch
+    {
+        { Stage: Stage.Done, IsDocumentSession: false, HumanGate: false, AwaitingResolve: false, PlanProceeded: true } =>
+            new Transition.Moved(s with
+            {
+                Stage = Stage.CodeReview,
+                RoundsRunThisStage = 0,
+                EscalationsUsed = 0,
+                AdvanceOnResolve = false,
+            }),
+        _ => BeginCodeRound(s),
     };
 
     /// <summary>

@@ -240,6 +240,40 @@ public sealed class RoundMachineTests
     }
 
     [Fact]
+    public void AFinishedCodeStage_IsReopenedByAgain_KeepingWhatWasAgreed()
+    {
+        // Issue #490: the refusal named a door ("open a new one") that `open` does not have.
+        var done = RoundTrip(RoundTrip(Fresh(), Passing()), Passing());
+
+        var reopened = RoundMachine.BeginCodeRoundAgain(done).Should().BeOfType<Transition.Moved>().Which.State;
+
+        reopened.Stage.Should().Be(Stage.CodeReview);
+        reopened.RoundsRunThisStage.Should().Be(0, "a fresh budget, not a round past an exhausted one");
+        reopened.PlanProceeded.Should().BeTrue("the plan the stage agreed on still stands");
+        reopened.SessionId.Should().Be(done.SessionId);
+    }
+
+    [Fact]
+    public void AskingAgain_StillRefusesAHeldGate_AndAnUnresolvedRound()
+    {
+        var done = RoundTrip(RoundTrip(Fresh(), Passing()), Passing());
+
+        RoundMachine.BeginCodeRoundAgain(done with { HumanGate = true }).Should().BeOfType<Transition.Refused>()
+            .Which.Sentence.Should().Be(RoundMachine.GateHeld);
+        RoundMachine.BeginCodeRoundAgain(done with { AwaitingResolve = true }).Should().BeOfType<Transition.Refused>()
+            .Which.Sentence.Should().Be(RoundMachine.Unresolved);
+    }
+
+    [Fact]
+    public void AskingAgain_OfAStageStillOpen_ChangesNothing()
+    {
+        var planPassed = RoundTrip(Fresh(), Passing());
+
+        RoundMachine.BeginCodeRoundAgain(planPassed).Should().BeOfType<Transition.Moved>()
+            .Which.State.Should().Be(planPassed);
+    }
+
+    [Fact]
     public void SameRepoAndBranch_IsTheSameSessionKey_WhateverTheSpelling()
     {
         SessionKey.For(@"D:\repo\", "main").Should().Be(SessionKey.For("d:/repo", "main"));
