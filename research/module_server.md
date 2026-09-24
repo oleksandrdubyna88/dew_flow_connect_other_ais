@@ -4357,6 +4357,10 @@ sweep removed EVERY `coai-wt-*` by prefix, including a round running in another 
   no heartbeat, so no threshold, clock skew or sleep/wake to get wrong (plan round);
 - sweeps before EVERY round this session's own leftovers, and on `open` every tree whose owner is
   gone — never a live tree of another server;
+- knows its root by ANY name: the configured spelling and the one with every link resolved are both
+  compared against both forms of a listed path — on macOS `/var` is a link to `/private/var` and git
+  lists a tree by the resolved path, so a string comparison left a dead server's half-made tree
+  registered for ever (the macOS job of PR 497);
 - erases strictly `coai-wt-` paths under its own root: `worktree unlock`, `remove -f -f`, a delete with
   three short retries, and otherwise a rename to `coai-wt-trash-*` for the next sweep. For round trees
   the lock is therefore no longer a guard — the prefix and the root are, and a review tree
