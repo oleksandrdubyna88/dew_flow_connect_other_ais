@@ -162,11 +162,7 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         {
             foreach (var path in (await ListOursAsync(repoPath)).Concat(OurDirectories()).Distinct(StringComparer.OrdinalIgnoreCase))
             {
-                var name = Path.GetFileName(path);
-                if (alwaysOurs(name) || !OwnerIsAlive(path))
-                {
-                    await EraseAsync(repoPath, path);
-                }
+                await EraseIfUnusedAsync(repoPath, path, alwaysOurs);
             }
 
             await Git(repoPath, ReviewTreeRoot.Asking, "worktree", "prune");
@@ -175,6 +171,14 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         catch (Exception e)
         {
             note?.Invoke($"the worktree sweep stopped early: {e.Message}");
+        }
+    }
+
+    private async Task EraseIfUnusedAsync(string repoPath, string path, Func<string, bool> alwaysOurs)
+    {
+        if (alwaysOurs(Path.GetFileName(path)) || !OwnerIsAlive(path))
+        {
+            await EraseAsync(repoPath, path);
         }
     }
 
@@ -194,16 +198,7 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         await Git(repoPath, ReviewTreeRoot.Erasing, "worktree", "remove", "-f", "-f", path);
         if (Directory.Exists(path) && !await DeletedAsync(path))
         {
-            var trash = Path.Combine(storageRoot, $"{TrashPrefix}{ShortId()}");
-            try
-            {
-                Directory.Move(path, trash);
-                note?.Invoke($"{path} could not be deleted (a file in it is held open); moved aside to {trash}");
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                note?.Invoke($"{path} could not be deleted or moved aside ({e.Message}); the next sweep tries again");
-            }
+            MoveAside(path);
         }
 
         // The registration may outlive the directory — git drops it on a failed remove, but a
@@ -212,28 +207,56 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         TryDelete(OwnerFile(path));
     }
 
+    /// <summary>A tree that will not go is renamed out of every retry's way, for the next sweep.</summary>
+    private void MoveAside(string path)
+    {
+        var trash = Path.Combine(storageRoot, $"{TrashPrefix}{ShortId()}");
+        try
+        {
+            Directory.Move(path, trash);
+            note?.Invoke($"{path} could not be deleted (a file in it is held open); moved aside to {trash}");
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            note?.Invoke($"{path} could not be deleted or moved aside ({e.Message}); the next sweep tries again");
+        }
+    }
+
+    /// <summary>
+    /// Deleted within three short waits, or not. A scanner or an indexer usually lets go within a
+    /// moment; a process that holds a file for the length of a round does not, and the waits cost
+    /// under a second.
+    /// </summary>
     private static async Task<bool> DeletedAsync(string path)
     {
         for (var attempt = 0; attempt < 3; attempt++)
         {
-            try
-            {
-                Directory.Delete(path, recursive: true);
-                return true;
-            }
-            catch (DirectoryNotFoundException)
+            if (DeletedNow(path))
             {
                 return true;
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // A scanner or an indexer usually lets go within a moment; a process that holds a
-                // file for the length of a round does not, and three short waits cost under a second.
-                await Task.Delay(TimeSpan.FromMilliseconds(250 * (attempt + 1)));
-            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(250 * (attempt + 1)));
         }
 
         return false;
+    }
+
+    private static bool DeletedNow(string path)
+    {
+        try
+        {
+            Directory.Delete(path, recursive: true);
+            return true;
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return true;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
     }
 
     private void EmptyTheTrash()
@@ -243,8 +266,16 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
             return;
         }
 
-        // A marker whose tree is gone and whose owner is gone names nothing any more — left, they
-        // would be the one thing under the root that only ever grows.
+        ForgetDeadMarkers();
+        DeleteTrash();
+    }
+
+    /// <summary>
+    /// A marker whose tree is gone and whose owner is gone names nothing any more — left, markers
+    /// would be the one thing under the root that only ever grows.
+    /// </summary>
+    private void ForgetDeadMarkers()
+    {
         foreach (var marker in Directory.GetFiles(storageRoot, $"{Prefix}*{OwnerSuffix}"))
         {
             var tree = marker[..^OwnerSuffix.Length];
@@ -253,22 +284,28 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
                 TryDelete(marker);
             }
         }
+    }
 
+    private void DeleteTrash()
+    {
         foreach (var trash in Directory.GetDirectories(storageRoot, $"{TrashPrefix}*"))
         {
-            try
+            if (!DeletedNow(trash))
             {
-                Directory.Delete(trash, recursive: true);
+                NameIfOld(trash);
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // Bounded by saying so: trash that outlives a day is named once, never left to grow
-                // in silence (plan round, gemini).
-                if (DateTime.UtcNow - Directory.GetCreationTimeUtc(trash) > TrashNamedAfter && Remember(trash))
-                {
-                    note?.Invoke($"{trash} has been held open for over a day and cannot be deleted ({e.Message})");
-                }
-            }
+        }
+    }
+
+    /// <summary>
+    /// Bounded by saying so: trash that outlives a day is named once per process, never left to grow
+    /// in silence (plan round, gemini).
+    /// </summary>
+    private void NameIfOld(string trash)
+    {
+        if (DateTime.UtcNow - Directory.GetCreationTimeUtc(trash) > TrashNamedAfter && Remember(trash))
+        {
+            note?.Invoke($"{trash} has been held open for over a day and cannot be deleted");
         }
     }
 
@@ -329,15 +366,17 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         try
         {
             var owner = JsonSerializer.Deserialize(File.ReadAllText(OwnerFile(path)), TreeOwnerContext.Default.TreeOwner);
-            return owner is not null
-                && ProcessTracking.StartedAt(owner.Pid) is { } started
-                && OrphanSweep.Same(started, owner.StartedUtc);
+            return owner is not null && IsRunning(owner);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
         {
             return false;
         }
     }
+
+    /// <summary>The pid is alive AND is the process that wrote the marker — a reused number is not.</summary>
+    private static bool IsRunning(TreeOwner owner) =>
+        ProcessTracking.StartedAt(owner.Pid) is { } started && OrphanSweep.Same(started, owner.StartedUtc);
 
     private void TryDelete(string file)
     {
