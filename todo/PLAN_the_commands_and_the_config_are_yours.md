@@ -1,6 +1,6 @@
 # PLAN — the gate's commands and the whole configuration are the person's to edit, export and import
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code` (a config export/import pair, a
+> Status: **Epic C built 2026-09-24 (its code round and PR open); Epics A and B not started.** Scope: `src_vs_code` (a config export/import pair, a
 > commands page) and `src_mcp` (command texts as data, custom commands). Issue #467. Three epics, ONE gate
 > each (the operator's instruction for this batch), built C → A → B.
 >
@@ -42,9 +42,14 @@
 ## Epic C — Export config / Import config (first: independent, and what the person asked for most directly)
 
 1. **A pure module, `configTransfer.ts`** (no `vscode`):
-   - `exportedSettings(declared, read)`: every setting the manifest declares (`contributes.configuration`)
-     whose effective value (through `readerFor`, so the per-side overlay counts) differs from its declared
-     default — compared as canonical JSON.
+   - `exportedSettings(declared, globalValueOf)`: every setting the manifest declares
+     (`contributes.configuration`) whose BASE value (`config.inspect(key).globalValue`) differs from its
+     declared default — compared as canonical JSON. Per-side overrides are NOT transferred: they belong to one
+     side of one machine, and an import writing them into the base layer would change every other side
+     (codex and gemini, the plan round). The file says so in a `note` field.
+   - **Classified, not listed from memory**: a test walks every setting the manifest declares and fails when
+     one whose name or description says key, token, secret or password is exportable — so a secret added
+     tomorrow cannot leak through a list nobody updated (codex, the plan round).
    - **Never exported**, because they are secrets or this machine's layout: `credsKey`, `dataDirectory`,
      `dataSide`, `alsoWatchDataDirectories`, `perSideSettings`; and any `executablePath` field inside a
      value (vendors, consultants) is removed — a path on this machine is not a setting another one can use.
@@ -53,16 +58,24 @@
      secrets.
    - The file: `{ "format": "coai-config", "version": 1, "exportedAt": "…", "settings": {…}, "prompts": {"<id>": "<text>"} }`
      — prompts are every `<dataDir>/prompts/*.md` whose name passes the same id guard `promptFile` applies.
-   - `importedConfig(text, declared)`: parses and validates — the format and version, `settings` an object,
-     every key declared by THIS build and not in the never-exported list, every prompt id valid — and
-     answers what will be applied and what is refused, by name. A file from a newer build with keys this
-     one does not know is not an error: those keys are listed as refused, the rest applies.
+   - `importedConfig(text, declared)`: parses and validates — the format, a version this build writes (1;
+     any other is refused with a sentence saying which build wrote it), `settings` an object, every key
+     declared by THIS build and not in the never-exported list, every prompt id valid — and answers what will
+     be applied and what is refused, each with its REASON (*unknown to this build*, *never transferred:
+     secret or machine path*, *not a valid prompt name*). Unknown keys from a newer build are refused, the
+     rest applies.
+   - **This machine's paths are kept**: an imported `vendors` / `consultants` entry takes the `executablePath`
+     the SAME entry (by id) already has here — whole-value replacement would otherwise wipe every local CLI
+     path the export deliberately left out (gemini, the plan round).
 2. **The host, `configTransferCommands.ts`**: `coai.exportConfig` (save dialog → `writeFileAtomically`) and
    `coai.importConfig` (open dialog → `importedConfig` → ONE modal summary — *"Apply N settings and M prompt
-   texts from <file>? Not applied: …"* → `saveSetting` per key, prompt texts written atomically to
-   `promptFile`). Import replaces each listed setting's value whole; settings not in the file are left as
-   they are. It deletes nothing: a role the file lacks keeps its prompt files, which is the safe direction
-   (`roleDeletions` owns deletion).
+   texts (K of them replace text you have) from <file>? Not applied: …"* → the base value of each key,
+   prompt texts written atomically to `promptFile`). Import replaces each listed setting's value whole;
+   settings not in the file are left as they are. It deletes nothing: a role the file lacks keeps its prompt
+   files (`roleDeletions` owns deletion).
+   - **All or nothing** (local, codex, gemini, the plan round): the previous base value of every key and the
+     previous text (or absence) of every prompt it touches are taken BEFORE the first write; a write that
+     fails restores all of them and the notice names what failed. The restore itself is logged if it fails.
 3. **The manifest**: both commands, in the `…` menu (`view/title`, a `config@1/2` group), with a help
    paragraph (the help-coverage test requires one).
 
@@ -71,6 +84,12 @@ per-side value is the one exported; the never-exported keys and nested `executab
 round trip export → import gives back the same settings and prompts; a wrong format or version is refused
 with a sentence; an unknown key, a never-exported key and a bad prompt id are refused by name while the rest
 applies. Docs: `module_extension.md`, `module_tests.md`, CHANGELOG, help.
+
+**As built (2026-09-24):** the all-or-nothing apply is its own pure module, `configApply.ts`, over an
+`ApplyIo` seam, so the rollback is tested by failing a write on purpose rather than asserted; the declared
+defaults are read through `settingRefused.sectionsOf` (exported, not copied). The classification test sets
+every secret-looking key and runs a real export rather than checking a list. The help article is
+`move-your-config`.
 
 ## Epic A — command texts become data (server)
 
@@ -83,6 +102,9 @@ applies. Docs: `module_extension.md`, `module_tests.md`, CHANGELOG, help.
 - Custom commands: `COAI_COMMANDS` = `[{id, title, enabled, stage}]`, parsed by a `CommandsSetting` twin of
   `CommandModelsSetting`; an enabled one is appended to the orders with its text, one with no text is
   skipped with a sentence, as a role is. Written to the rounds database like every order.
+- **Tests** (gemini, the plan round): an override file changes the order and deleting it restores the
+  default; `COAI_COMMANDS` parsing with its complaints; an empty-text command skipped with its sentence; a
+  custom command recorded in the rounds database; the markers present whatever the override says.
 
 ## Epic B — an Edit commands page (extension)
 
@@ -90,6 +112,8 @@ applies. Docs: `module_extension.md`, `module_tests.md`, CHANGELOG, help.
 - `commandsPage.ts` / `commandsPanel.ts` on the roles page's pattern: the shipped commands with their text
   shown and overridable (restore = delete the file), custom rows added and removed, a server-version note
   for a server too old to read them; opened from the *Gate* section of the panel.
+- **Tests**: the page RUN against the DOM shim (the roles page's harness) — adding, overriding, restoring and
+  removing a command post the commands the parser reads (gemini, the plan round).
 
 ## Build order
 

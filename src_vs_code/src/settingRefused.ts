@@ -69,8 +69,12 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-/** `contributes.configuration` is allowed to be one section or an array of them. Both, here. */
-function sectionsOf(manifest: unknown): readonly Record<string, unknown>[] {
+/**
+ * `contributes.configuration` is allowed to be one section or an array of them. Both, here.
+ *
+ * <p>Exported for `configTransfer`, which reads every declared default from the same walk.</p>
+ */
+export function sectionsOf(manifest: unknown): readonly Record<string, unknown>[] {
   const configuration = asRecord(asRecord(manifest)?.['contributes'])?.['configuration'];
   const many = Array.isArray(configuration) ? configuration : [configuration];
 

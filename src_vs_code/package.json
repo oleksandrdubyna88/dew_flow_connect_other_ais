@@ -217,6 +217,16 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.exportConfig",
+        "title": "Export config",
+        "category": "ConnectOtherAIs"
+      },
+      {
+        "command": "coai.importConfig",
+        "title": "Import config",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.showRounds",
         "title": "Show review rounds",
         "icon": "$(list-unordered)",
@@ -918,6 +928,16 @@
           "command": "coai.copyClaudeSnippet",
           "when": "view == coai.panel",
           "group": "server@3"
+        },
+        {
+          "command": "coai.exportConfig",
+          "when": "view == coai.panel",
+          "group": "config@1"
+        },
+        {
+          "command": "coai.importConfig",
+          "when": "view == coai.panel",
+          "group": "config@2"
         }
       ],
       "commandPalette": [
