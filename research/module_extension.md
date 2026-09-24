@@ -8997,3 +8997,20 @@ with `idFor('', …)` before any name exists.)
 **Declined:** writing a template prompt on save (a placeholder would be a real question a reviewer is
 paid to answer). **Open tail:** `lastStanding` still counts an active role that cannot be asked as the
 stage's reviewer, so the last askable role can be switched off beside it.
+
+## The failure line: Try again outside the red box, the text inside it (2026-09-24, issue #346)
+
+`chatFailureHtml` used to draw *Try again* INSIDE the red box, beside a sentence that could only shrink —
+and a failure carries paths, URLs and ids with no space to wrap at, so the text ran out of the border and
+into the button. It now returns a row: `<div class="failureRow"><div class="failure"><span class="said">…
+</span></div>{Try again}</div>`. The red border belongs to the text alone (`flex: 1 1 auto; min-width:
+0`), the button is its sibling to the right, and the box wraps with `overflow-wrap: anywhere; white-space:
+pre-wrap` — declared on `.failure` itself, because the NOTE the page writes into the same region
+(`noteLine`) uses the box without the inner span; the note is wrapped in a row too, so both keep one
+margin. The delegated retry listener on `#failure` matches `[data-retry]` wherever it sits in the region,
+so nothing else changed.
+
+**Measured**, because no test here has a layout engine: `scripts/measure-failure-layout.mjs` renders the
+page's own stylesheet and the shipped markup in headless Microsoft Edge at 320, 600 and 1000 px with a long
+path, a long URL and a multi-line vendor error, and reads `getBoundingClientRect` back. 2026-09-24: all nine
+held; the same script against the markup on main failed all nine (the button inside the box).

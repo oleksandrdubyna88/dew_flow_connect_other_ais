@@ -743,7 +743,9 @@ export function chatFailureHtml(failure: string, canRetry: boolean, at: number):
     ? `<button type="button" class="retry" data-retry="${escapeHtml(String(at))}">Try again</button>`
     : '';
 
-  return `<div class="failure"><span class="said">${escapeHtml(failure)}</span>${again}</div>`;
+  // The row, and in it the red box with the sentence ALONE, then the button to its right — outside the
+  // border it used to run into (issue #346).
+  return `<div class="failureRow"><div class="failure"><span class="said">${escapeHtml(failure)}</span></div>${again}</div>`;
 }
 
 /** The page's own styles. Its own function so the document below stays readable. */
@@ -969,11 +971,13 @@ function chatStyle(
   #stop { font: inherit; font-size: .9em; color: var(--vscode-textLink-foreground); background: none; border: none; padding: 0 0 0 4px; cursor: pointer; text-decoration: underline; }
   #stop[disabled] { opacity: .5; cursor: default; text-decoration: none; }
   .queued { opacity: .8; font-size: .9em; }
-  .failure { border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border)); border-radius: 4px; padding: 8px 10px; margin: 0 0 12px; display: flex; gap: 12px; align-items: flex-start; }
-  /* The sentence takes the room and the control keeps its own: a long vendor error - and they are
-  long, "UNAVAILABLE (code 503): No capacity available for model ..." - must wrap against the button
-  rather than squeeze it to nothing or push it off the edge. */
-  .failure .said { flex: 1 1 auto; min-width: 0; }
+  /* Issue #346: the red box holds the sentence ALONE and Try again sits beside it, outside the border -
+  the button inside the box is what ran into the text. The box takes the room and the control keeps its
+  own. The text wraps ANYWHERE, because a failure carries paths, URLs and ids with no space to wrap at,
+  and keeps its own line breaks. Declared on the box, not on the span: the note the page writes into the
+  same region uses the box without one. */
+  .failureRow { display: flex; gap: 12px; align-items: flex-start; margin: 0 0 12px; }
+  .failure { flex: 1 1 auto; min-width: 0; border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-panel-border)); border-radius: 4px; padding: 8px 10px; overflow-wrap: anywhere; white-space: pre-wrap; }
   .retry { flex: 0 0 auto; font: inherit; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; border-radius: 4px; padding: 4px 10px; cursor: pointer; }
   .retry:hover:not([disabled]) { background: var(--vscode-button-hoverBackground); }
   .retry[disabled] { opacity: .6; cursor: default; }
@@ -2134,7 +2138,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
         // line without saying so made a later state carrying the same failure as before the note read
         // as unchanged, and the note stood as a stale status line until the failure itself moved.
         // (CodeRabbit, PR #223.) No backticks in this comment either, for the reason above.
-        const noteLine = '<div class="failure">' + data.noteHtml + '</div>';
+        const noteLine = '<div class="failureRow"><div class="failure">' + data.noteHtml + '</div></div>';
         where.innerHTML = noteLine;
         lastWritten.failure = noteLine;
       }
