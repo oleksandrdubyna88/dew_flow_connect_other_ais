@@ -61,7 +61,10 @@ public sealed partial class PanelService
         _noticing = noticing;
         _store = new SessionStore(settings.DataDir, settings.Rounds.Catalog);
         _artifacts = new ArtifactStore(settings.DataDir);
-        _worktrees = new WorktreeManager(launcher, Path.Combine(settings.DataDir, "worktrees"));
+        _worktrees = new WorktreeManager(
+            launcher,
+            settings.RoundTreeRoot is { Length: > 0 } roundTrees ? roundTrees : Path.Combine(settings.DataDir, "worktrees"),
+            message => log.Warning("worktrees: {Detail}", message));
         _context = new ContextAssembler(launcher);
         _scheduler = new BoundedScheduler(
             settings.GlobalConcurrency,

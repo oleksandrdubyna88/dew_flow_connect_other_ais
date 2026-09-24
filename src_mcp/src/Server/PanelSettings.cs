@@ -266,6 +266,19 @@ public sealed record PanelSettings
     public string DataDir { get; init; } = DefaultDataDir;
 
     /// <summary>
+    /// Where a code round's worktree is made. Empty means <c>{DataDir}/worktrees</c>, which is what a
+    /// settings object built in a test gets.
+    /// </summary>
+    /// <remarks>
+    /// A real server reads it from the environment as <see cref="Runners.Worktrees.WorktreeManager.MachineLocalRoot"/>
+    /// (D4 of todo/PLAN_a_failed_round_can_be_retried.md): the data dir is routinely a network share,
+    /// where a linked worktree is broken for every other machine and a pid — which the tree's owner
+    /// marker records — means nothing. <c>COAI_ROUND_WORKTREES</c> overrides it, which is how a
+    /// scenario test keeps a spawned server out of the machine's own directory.
+    /// </remarks>
+    public string RoundTreeRoot { get; init; } = string.Empty;
+
+    /// <summary>
     /// Where the CALLER's own transcripts live, when they are not Claude Code's.
     /// </summary>
     /// <remarks>
@@ -688,6 +701,9 @@ public sealed record PanelSettings
                     complaint => new UnrecognisedSetting(CommandModelsSetting.Key, complaint)),
             ],
             CommandModels = commandModels.Map,
+            RoundTreeRoot = env("COAI_ROUND_WORKTREES") is { Length: > 0 } roundTrees
+                ? roundTrees
+                : Runners.Worktrees.WorktreeManager.MachineLocalRoot,
             Consultants = consultants.Map,
             ConsultTurns = IntVar(env, "COAI_CONSULT_TURNS", 5),
             ConsultCallsPerSession = IntVar(env, "COAI_CONSULT_CALLS_PER_SESSION", 10),

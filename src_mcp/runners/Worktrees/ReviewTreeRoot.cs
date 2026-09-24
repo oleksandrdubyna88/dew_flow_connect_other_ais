@@ -43,10 +43,16 @@ public sealed class ReviewTreeRoot(IProcessLauncher launcher, string path)
     /// tree is bound to one machine and one OS — and this product's data dir is routinely a network
     /// share, where such a tree would be broken for every other machine that mounted it.
     /// </summary>
-    public static string Default => System.IO.Path.Combine(
+    public static string Default => MachineLocal("review-worktrees");
+
+    /// <summary>
+    /// A machine-local directory of this product's, by leaf — the ONE resolution both kinds of tree
+    /// use, so the review trees and the round trees can never disagree about where "local" is.
+    /// </summary>
+    public static string MachineLocal(string leaf) => System.IO.Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "coai-mcp",
-        "review-worktrees");
+        leaf);
 
     /// <summary>
     /// A stable directory name for one (repository, commit): a short digest of the common dir so the
