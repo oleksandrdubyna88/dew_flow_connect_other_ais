@@ -147,6 +147,18 @@ public interface IReviewerRuntime
     string DefaultExecutable => Provider;
 
     /// <summary>
+    /// A second launch that CONTINUES the first, when the first ended in a way only continuing can
+    /// cure — or null, and the round's ordinary repair runs.
+    /// </summary>
+    /// <remarks>
+    /// Issue #504: an agentic reviewer that asked for a shell command in headless mode had it auto-denied
+    /// and ended its turn with nothing. A fresh repair asks the same question in a new conversation and
+    /// meets the same denial; only the SAME conversation can be told the command will not come.
+    /// A default, so no other adapter changes. Pure: it reads the first launch's transcript.
+    /// </remarks>
+    ReviewerInvocation? FollowUp(ReviewerInvocation first, string transcript) => null;
+
+    /// <summary>
     /// The answer text out of a finished run. Default: the file the invocation named (codex's
     /// <c>-o</c>), stdout otherwise (gemini) — override when the CLI wraps its answer (claude's
     /// JSON envelope). Null means "no answer where this vendor puts one" — unparseable, by name.

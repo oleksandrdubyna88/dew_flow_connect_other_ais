@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+**A Gemini reviewer that wanted to run a command now answers anyway** (issue #504). An Antigravity
+(`agy`) reviewer that decided to run a shell command — a `git diff`, a line of Python — had it refused,
+because a reviewer runs unattended and nobody can approve it, and then ended with nothing: the round
+recorded "the vendor returned an empty answer". It is now asked again in the same conversation, told the
+command will not come, and answers from what it has. On a Team server this still happens (#515).
+
 ## Extension 0.52.0 · Server 0.33.0 — 2026-09-24
 
 **The split is sized honestly, gated once per epic — or once for the whole task — and written down**

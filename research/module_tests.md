@@ -1515,6 +1515,12 @@ timed out waiting for a claim file: its child process could not reach a local st
 not a flake and it is not in this diff - it is a load-sensitive test with a hard timeout, recorded
 here for whoever owns it rather than fixed inside an unrelated story.
 
+**`ADeniedCommandIsAskedAgainTests` (issue #504)** — the follow-up of an auto-denied agy reviewer carries
+`--conversation <id>`, keeps `--mode plan` and the schema, and says commands are unavailable; no follow-up
+without a denial or without a conversation id; the executor runs it INSTEAD of the fresh repair (red first:
+Unparseable, the #504 symptom; red again with the follow-up ignored) and a follow-up that is denied again
+is still Unparseable with its reason. The real CLI was measured by hand (agy 1.2.10) — CI has no agy login.
+
 **Issue #462 took it up (2026-09-24), and it has two readings, of which one is now fixed.** Six whole-suite
 runs on this machine did not reproduce it, so the work is by elimination and says so:
 
