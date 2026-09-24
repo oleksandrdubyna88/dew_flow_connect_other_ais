@@ -1,11 +1,6 @@
 {
-<<<<<<< HEAD
-  "src_mcp": "0.32.0",
-  "src_vs_code": "0.52.0",
-=======
   "src_mcp": "0.33.0",
-  "src_vs_code": "0.51.0",
->>>>>>> d631ca63 (chore(main): release mcp 0.33.0)
+  "src_vs_code": "0.52.0",
   "src_server": "0.6.2",
   "src_bugs": "0.4.0"
 }
