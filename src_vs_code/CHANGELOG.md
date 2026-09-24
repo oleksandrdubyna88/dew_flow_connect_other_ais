@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.53.0 · Server 0.34.0 — 2026-09-24
 
 **The Bugz diffs are numbered, and no longer striped** (issue #488). Every line of a Before and After
 carries its number — a skeleton from its method's first line, the real code as its file is numbered — and
