@@ -506,4 +506,99 @@ public sealed class EndToEndTests : IAsyncLifetime
         var status = await _launcher.RunAsync(new ProcessRequest("git", ["status", "--short"], _repo));
         status.StdOut.Trim().Should().BeEmpty("reviewers are read-only, in a worktree");
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // Nothing to review is SAID, never passed (todo/PLAN_a_failed_round_can_be_retried.md, S1).
+    //
+    // An empty diff used to launch every reviewer over an empty "## The change", collect nobody's
+    // findings and answer `proceed` — and the session then ended, so the real change could never be
+    // reviewed on that branch. A developer who forgot to commit was told "all clean".
+
+    /// <summary>A session on <paramref name="branch"/> whose plan round has passed.</summary>
+    private async Task<PanelService> PlanPassedOn(string branch)
+    {
+        var service = Service();
+        await service.OpenAsync(_repo, branch);
+        Script(Clean);
+        await service.ReviewPlanAsync(_repo, branch, "plan");
+        await service.ResolveAsync(_repo, branch, "[]");
+        return service;
+    }
+
+    private async Task<int> RoundsOn(PanelService service, string branch) =>
+        Parse(await service.StatusAsync(_repo, branch)).GetProperty("rounds").GetArrayLength();
+
+    [Fact]
+    public async Task ABranchWithNoChangeOverItsBase_IsRefused_AndNoReviewerRuns()
+    {
+        var service = await PlanPassedOn("feature");
+
+        var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "feature", Scope));
+
+        code.TryGetProperty("verdict", out _).Should().BeFalse($"nothing was reviewed, so nothing may pass: {code}");
+        code.GetProperty("error").GetString().Should().Contain("nothing to review")
+            .And.Contain("no committed change");
+        (await RoundsOn(service, "feature")).Should().Be(1, "the refusal records no round — only the plan round exists");
+        Directory.Exists(_worktreeRoot).Should().BeFalse("no worktree is made for nothing");
+    }
+
+    [Fact]
+    public async Task AChangeLeftUncommitted_IsNamed_InTheRefusal()
+    {
+        // The branch stands where its base does, and the work is in the checkout — the "forgot to
+        // commit" case, and the one where committing is not allowed.
+        await Git("checkout", "-b", "uncommitted");
+        await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "edited but never committed\n");
+        var service = await PlanPassedOn("uncommitted");
+
+        var code = Parse(await service.ReviewCodeAsync(_repo, "uncommitted", "feature", Scope));
+
+        code.GetProperty("error").GetString().Should().Contain("nothing to review")
+            .And.Contain("1 uncommitted file").And.Contain("app.cs")
+            .And.Contain("COMMITTED changes only");
+        (await RoundsOn(service, "uncommitted")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ABranchThatChangedOnlyExcludedFiles_NamesThem_InsteadOfPassing()
+    {
+        await Git("checkout", "-b", "lockonly");
+        await File.WriteAllTextAsync(Path.Combine(_repo, "package-lock.json"), "{}\n");
+        await Git("add", ".");
+        await Git("commit", "-m", "only a lock file");
+        var service = await PlanPassedOn("lockonly");
+
+        var code = Parse(await service.ReviewCodeAsync(_repo, "lockonly", "feature", Scope));
+
+        code.GetProperty("error").GetString().Should().Contain("nothing to review")
+            .And.Contain("package-lock.json");
+        (await RoundsOn(service, "lockonly")).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task AnUncommittedTail_IsSaidNotReviewed_OnARoundThatPasses()
+    {
+        // Committed work AND an uncommitted file: the diff is not empty, so the round runs — and
+        // the answer must say what it did not look at, instead of letting "proceed" cover it.
+        var service = await PlanPassedOn("feature");
+        await File.WriteAllTextAsync(Path.Combine(_repo, "notes.txt"), "not committed yet\n");
+
+        var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
+
+        code.GetProperty("verdict").GetString().Should().Be("proceed");
+        code.GetProperty("reviewers").GetString().Should().Contain("1 uncommitted file")
+            .And.Contain("notes.txt").And.Contain("NOT reviewed");
+    }
+
+    [Fact]
+    public async Task ABaseThatNamesNoCommit_IsRefusedByName_NotCalledEmpty()
+    {
+        var service = await PlanPassedOn("feature");
+
+        var code = Parse(await service.ReviewCodeAsync(_repo, "feature", "origin/nowhere", Scope));
+
+        code.GetProperty("error").GetString().Should().Contain("origin/nowhere")
+            .And.NotContain("nothing to review");
+        (await RoundsOn(service, "feature")).Should().Be(1);
+    }
 }

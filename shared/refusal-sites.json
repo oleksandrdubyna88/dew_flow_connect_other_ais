@@ -7,7 +7,7 @@
     },
     {
       "file": "src_mcp/src/Server/PanelService.cs",
-      "refusals": 25
+      "refusals": 26
     }
   ],
   "reviewerEndings": [

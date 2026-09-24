@@ -58,6 +58,19 @@ public enum DiffBase
 public sealed record CollectedDiff(IReadOnlyList<FileDiff> Files, string ComparedAgainst, DiffBase Kind);
 
 /// <summary>
+/// How much of a change a reviewer would be shown, known before a round is built.
+/// </summary>
+/// <param name="Shown">Files that survive <see cref="DiffExclusions"/> — what a reviewer would read.</param>
+/// <param name="ChangedButExcluded">
+/// When <paramref name="Shown"/> is zero, every path the branch changed anyway (all of them excluded);
+/// empty otherwise, and empty when the branch changed nothing.
+/// </param>
+public sealed record ReviewableChange(int Shown, IReadOnlyList<string> ChangedButExcluded)
+{
+    public bool IsEmpty => Shown == 0;
+}
+
+/// <summary>
 /// Produces the per-file diffs the pure <see cref="DiffShaper"/> then budgets. All git, no rules:
 /// which files gate, what gets elided, what a reviewer reads — none of that is decided here.
 /// </summary>
@@ -239,6 +252,67 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         }
 
         return new CollectedDiff(files, against, kind);
+    }
+
+    /// <summary>
+    /// Whether a round over <paramref name="sha"/> would have anything to show a reviewer — asked
+    /// BEFORE any worktree or launch, from two numstats and nothing else.
+    /// </summary>
+    /// <returns>
+    /// How many files a reviewer would see, and — only when that is none — every path the branch
+    /// changed at all, so a refusal can name the lock files it was made of. An unresolvable
+    /// <paramref name="baseRef"/> throws <see cref="ContextException"/> naming it, exactly as
+    /// <see cref="CollectAsync"/> would: that is a wrong argument, never an empty change.
+    /// </returns>
+    public async Task<ReviewableChange> ReviewableAsync(
+        string repoPath,
+        string baseRef,
+        string sha,
+        IReadOnlyList<string>? exclusions = null,
+        CancellationToken ct = default)
+    {
+        var excludes = (exclusions ?? DiffExclusions.Default).Select(e => $":(exclude,glob){e}").ToArray();
+        var (against, _) = await ComparisonBase(repoPath, baseRef, sha, ct);
+
+        var shown = NumstatReader.Read(
+            await Git(repoPath, ct, ["diff", "--numstat", "-z", $"{against}..{sha}", "--", ".", .. excludes])).Count();
+        if (shown > 0)
+        {
+            return new ReviewableChange(shown, []);
+        }
+
+        var all = NumstatReader.Read(await Git(repoPath, ct, ["diff", "--numstat", "-z", $"{against}..{sha}"]));
+
+        return new ReviewableChange(0, [.. all.Select(c => c.Path)]);
+    }
+
+    /// <summary>
+    /// What is uncommitted in the checkout at <paramref name="repoPath"/> — but only when that
+    /// checkout stands on <paramref name="sha"/>, the commit being reviewed.
+    /// </summary>
+    /// <remarks>
+    /// A tree on another commit says nothing about this one, and naming its files would be a wrong
+    /// sentence; the answer is then empty rather than guessed (plan round, codex). Tracked changes
+    /// against HEAD and untracked files that are not ignored — the same two sources the consultant
+    /// reads, and like it this never touches the index.
+    /// </remarks>
+    public async Task<IReadOnlyList<string>> UncommittedAsync(string repoPath, string sha, CancellationToken ct = default)
+    {
+        var (head, _) = await HeadAsync(repoPath, ct);
+        if (!head.Equals(sha, StringComparison.OrdinalIgnoreCase))
+        {
+            return [];
+        }
+
+        var tracked = await launcher.RunAsync(
+            new ProcessRequest("git", ["diff", "--name-only", "-z", "HEAD"], repoPath), ct);
+        var untracked = await launcher.RunAsync(
+            new ProcessRequest("git", ["ls-files", "--others", "--exclude-standard", "-z"], repoPath), ct);
+
+        return [.. Paths(tracked).Concat(Paths(untracked)).Distinct(StringComparer.Ordinal)];
+
+        static IEnumerable<string> Paths(ProcessResult result) =>
+            result.ExitCode == 0 ? result.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries) : [];
     }
 
     /// <summary>An object id and nothing else — never a ref, never anything git could read as a flag.</summary>

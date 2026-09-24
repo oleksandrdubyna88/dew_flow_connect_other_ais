@@ -162,9 +162,11 @@ public static class GateCommands
         (GateScope.Epic, true) =>
             $"{GateOrderMarker} per EPIC, never per story: give each epic its own branch, starting from the "
                 + "previous epic's commit; call review_plan with that epic's plan; build all of its stories "
-                + "without gating them one by one; then ONE review_code over the epic's whole diff, with the "
-                + "previous epic's commit as baseRef; resolve every finding, fix what you accepted, update the "
-                + "documentation and the tests, and commit the epic as ONE commit. Only then start the next epic.",
+                + "without gating them one by one; COMMIT the epic, then run review_code over the epic's whole "
+                + "diff, with the previous epic's commit as baseRef — it reviews committed changes only, and an "
+                + "uncommitted epic is refused as nothing to review; resolve every finding, fix what you "
+                + "accepted, update the documentation and the tests, and fold the fixes into the epic's ONE "
+                + "commit. Only then start the next epic.",
         (GateScope.Task, true) =>
             $"{GateOrderMarker} for the WHOLE task, never per epic or story: this plan round was its plan "
                 + "gate; build every epic and its stories on this branch without gating them, and commit each "
@@ -172,8 +174,9 @@ public static class GateCommands
                 + "every finding, fix what you accepted, update the documentation and the tests, and commit.",
         _ =>
             $"{GateOrderMarker} for this work, never per story: build it on this branch without gating each "
-                + "piece; then ONE review_code over the whole diff; resolve every finding, fix what you "
-                + "accepted, update the documentation and the tests, and commit it as ONE commit.",
+                + "piece; COMMIT it, then run review_code over the whole diff — it reviews committed changes "
+                + "only, and uncommitted work is refused as nothing to review; resolve every finding, fix what "
+                + "you accepted, update the documentation and the tests, and fold the fixes into that ONE commit.",
     };
 
     /// <summary>
