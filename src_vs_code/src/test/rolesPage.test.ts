@@ -322,17 +322,17 @@ test('the nonce reaches the policy and the script as one value', () => {
   assert.ok(html.includes('<script nonce="aBc123">'), 'and so does the only script on the page');
 });
 
-test('the page says a new role will arrive switched off when the stage is full', () => {
-  // It does arrive switched off, which is honest — but the person finds that out AFTER clicking,
-  // from a hint on a role they have just created. Saying it beside the button is the same sentence
-  // one step earlier. (local, second code round.)
+test('the page says a new role cannot be switched on while the stage is full', () => {
+  // Every new role arrives switched off since issue #338; what the button's hint still owes the person
+  // is that a full stage keeps it off even once its question is written. (local, second code round;
+  // reworded by our own review of #338, where "will arrive switched off" had become true of every role.)
   const full = Array.from({ length: MAX_ACTIVE_PER_BUCKET }, (_, i) => ({
     id: `Extra${i}`, stage: RESULT_STAGE, active: true,
   }));
   const off = BUILTIN_ROLES.filter((r) => r.stage !== PLAN_STAGE).map((r) => ({ id: r.id, active: false }));
   const html = rolesHtml(state({ rows: [...off, ...full] }), 'n0nce');
 
-  assert.match(html, /arrive switched off/);
+  assert.match(html, /cannot be switched on until one of them is switched off/);
 });
 
 test('the page says nothing of the sort when the stage has room', () => {

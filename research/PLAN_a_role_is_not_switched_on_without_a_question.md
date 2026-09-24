@@ -1,11 +1,20 @@
 # PLAN — a role is not switched on without a question to ask
 
-> Status: **plan only, nothing implemented yet.** Scope: the Edit-roles rules and page in `src_vs_code`
+> Status: **IMPLEMENTED, 2026-09-24.** Deviations: the sentences say what to do by REASON — "write the
+> question in the box under it" for an empty prompt, "add a prompt" for none — and nothing is appended
+> to them; a cleared name or label falls back to the id, on both halves; a prompt id that is also an
+> Object property name is read as no text (it used to throw); the page's Active box posts ONCE (the
+> browser fires input and change, and both sent it, so one refused press was two refusals); the
+> full-stage hint beside *Add a role* now says a new role cannot be switched ON, since every new role
+> arrives off; the page mark is asserted on the host's rendered markup, which has no script branch.
+> Open tail: `lastStanding` still counts an active role that cannot be asked as its stage's reviewer.
+>
+> Scope: the Edit-roles rules and page in `src_vs_code`
 > (`roles.ts`, `rolesEdit.ts`, `rolesPanel.ts`, `rolesPage.ts`) and one sentence in `src_mcp`
 > (`PanelService.cs`). Issue #338.
 >
-> Related docs: [module_extension.md](../research/module_extension.md), [module_server.md](../research/module_server.md),
-> [architecture.md](../research/architecture.md).
+> Related docs: [module_extension.md](module_extension.md), [module_server.md](module_server.md),
+> [architecture.md](architecture.md).
 
 ## The symptom
 
@@ -95,9 +104,9 @@ placeholder.
 
 ## Definition of Done
 
-- [ ] A new role is created switched off.
-- [ ] Switching on a role whose asked prompt has no text is refused, naming the role by its name.
-- [ ] An active role that cannot be asked is marked on the page, by name.
-- [ ] The server's skip sentence names the role.
-- [ ] Tests for every step; both suites and lint green.
-- [ ] Docs updated; this plan promoted to `research/`.
+- [x] A new role is created switched off.
+- [x] Switching on a role whose asked prompt has no text is refused, naming the role by its name.
+- [x] An active role that cannot be asked is marked on the page, by name.
+- [x] The server's skip sentence names the role.
+- [x] Tests for every step; both suites and lint green.
+- [x] Docs updated; this plan promoted to `research/`.

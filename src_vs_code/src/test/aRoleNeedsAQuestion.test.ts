@@ -5,6 +5,7 @@ import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { RESULT_STAGE, isActive, whyNotAskable, type RoleRow } from '../roles';
 import { rowsAfter, type RowsOutcome } from '../rolesEdit';
 import { CUSTOM_ROLES_SINCE, rolesHtml, type RolesPageState } from '../rolesPage';
+import { Node, runRolesPage } from './rolesPageHarness';
 
 /**
  * Issue #338: a role could be switched on, counted, and never asked. Every new role was created with a
@@ -146,4 +147,71 @@ test('the mark is absent when the question has text, and when the role is off', 
 
   assert.doesNotMatch(block(texted, 'Role2'), /will not be asked/);
   assert.doesNotMatch(block(off, 'Role2'), /will not be asked/);
+});
+
+// ---------- one press, one command ----------
+
+test('a press on a role’s Active box asks the host ONCE, although the browser fires input and change', () => {
+  // Our own code review: both listeners sent a checkbox, so one press was two commands. It hardly
+  // mattered while a refusal needed five roles already on; now that switching on a role with no
+  // question is refused as a matter of course, it was two reads of every prompt, two refusals and two
+  // notices for one click.
+  const page = runRolesPage(state({ rows: [mine] }));
+  const role = new Node({ id: 'Role2' }, 'DETAILS');
+  const box = new Node({ field: 'active' });
+  box.type = 'checkbox';
+  box.checked = true;
+  box.parent = role;
+
+  page.fire('input', box);
+  page.fire('change', box);
+
+  assert.equal(page.posted.filter((one) => one['field'] === 'active').length, 1, JSON.stringify(page.posted));
+});
+
+test('a typed field is still sent as it is typed', () => {
+  const page = runRolesPage(state({ rows: [mine] }));
+  const role = new Node({ id: 'Role2' }, 'DETAILS');
+  const name = new Node({ field: 'name' });
+  name.value = 'Моя роль, renamed';
+  name.parent = role;
+
+  page.fire('input', name);
+
+  assert.equal(page.posted.filter((one) => one['field'] === 'name').length, 1, JSON.stringify(page.posted));
+});
+
+// ---------- the sentences, at their edges (the code round) ----------
+
+test('a prompt id that is also an Object property name is read as no text, not as a function', () => {
+  // `texts['constructor']` on a plain object is Object's own constructor; `.trim()` on it threw, and
+  // the whole page render with it. A hand-edited settings file can name a prompt anything. (gemini)
+  const odd: RoleRow = { ...mine, prompts: [{ id: 'constructor', label: 'General' }] };
+
+  assert.notEqual(whyNotAskable(odd, {}), '');
+  assert.equal(whyNotAskable(odd, { constructor: 'Is it met?' }), '');
+});
+
+test('a cleared name or label falls back to the id rather than to empty quotation marks', () => {
+  const why = whyNotAskable({ ...mine, name: '  ', prompts: [{ id: 'role2-general', label: '' }] }, {});
+
+  assert.equal(why.includes('“”'), false, why);
+  assert.ok(why.includes('Role2') && why.includes('role2-general'), why);
+});
+
+test('a role with no prompt is told to add one, not to write in a box it does not have', () => {
+  const noPrompt = { ...mine, prompts: [] };
+  const refusal = rowsAfter([noPrompt], { kind: 'edit', id: 'Role2', field: 'active', value: true }, new Set(), {});
+  const hint = block(rolesHtml(state({ rows: [{ ...noPrompt, active: true }] }), 'n'), 'Role2');
+
+  assert.match(whyOf(refusal), /Add a prompt/);
+  assert.doesNotMatch(whyOf(refusal), /box under it/);
+  assert.match(hint, /Add a prompt/);
+  assert.doesNotMatch(hint, /box under it/);
+});
+
+test('a role with an empty prompt is told to write in its box, once', () => {
+  const refusal = whyOf(rowsAfter([mine], { kind: 'edit', id: 'Role2', field: 'active', value: true }, new Set(), {}));
+
+  assert.equal(refusal.split('box under it').length - 1, 1, refusal);
 });

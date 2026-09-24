@@ -8983,7 +8983,13 @@ with `idFor('', …)` before any name exists.)
   as a fourth parameter, and the host (`rolesPanel.ts` `store` → `textsFor`) reads them — through the same
   `texts()` the page is drawn from — only for a switch ON. The refusal reaches the person the way every
   refusal on this page does: `sayRefused` plus a redraw that puts the switch back. The stage's room is
-  checked first; switching OFF is never refused for want of text.
+  checked first; switching OFF is never refused for want of text. The sentence says what to do by reason —
+  write the question in the box, or add a prompt first — and a cleared name or label falls back to the id.
+  A prompt id is read with `Object.hasOwn`: `texts['constructor']` on a plain object is a function, and
+  `.trim()` on it threw.
+- **One press, one command.** The page's `input` listener no longer sends a checkbox or a select — the
+  browser fires `input` AND `change` for them, and both sent, so one refused press was two reads, two
+  refusals and two notices. Tested by running the page (`rolesPageHarness`).
 - **An active role that cannot be asked is marked** in its block (`unaskableHint`, a `.hint.warn`), for
   the routes the refusal cannot see — a text erased after the switch, a settings file edited by hand, a
   prompt file deleted.
