@@ -58,9 +58,10 @@ nothing. That bookkeeping is ignored now; a setting that can run code or send a 
 caught, and a change to shared metadata says it is shared.
 
 **An abandoned Team-server review is cancelled even when a scanner is looking at its claim** (issue
-#462). When a review's process is killed, the server reads a small claim file to cancel the job still
-running on the Team server. A virus scanner or indexer opening that file at the same moment made it
-read as empty, and the job ran on until the server's own deadline. The read now waits out that moment.
+#462). When a Team-server reviewer's process is killed, the coai-mcp that started it reads the small
+claim file the reviewer left and asks the Team server to cancel the job. A virus scanner or indexer
+opening that file at the same moment made it read as empty, so no cancel was sent and the job ran on
+until the Team server's own deadline. The read now waits out that moment.
 
 ## Server 0.32.0 — 2026-09-23
 
