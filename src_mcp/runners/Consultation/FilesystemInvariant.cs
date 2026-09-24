@@ -36,10 +36,24 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
     /// directory's own mtime moves with the index for the same reason. What is left is what a
     /// read-only git command does not write: where HEAD points, the configuration, and the hooks.
     /// </remarks>
-    private static readonly string[] Metadata = ["HEAD", "config"];
+    private static readonly string[] Metadata = ["HEAD", "config", "config.worktree"];
 
-    /// <summary>What is watched in the COMMON directory of a linked worktree: its config, not its HEAD.</summary>
+    /// <summary>
+    /// What is watched in the COMMON directory of a linked worktree: its config — not its HEAD, and not its
+    /// <c>config.worktree</c>, both of which are the MAIN worktree's own (issue #376).
+    /// </summary>
     private static readonly string[] SharedMetadata = ["config"];
+
+    /// <summary>
+    /// The metadata read by MEANING rather than bytes — decided by the metadata name, not by a file that
+    /// merely happens to be called <c>config</c> (a hook can be).
+    /// </summary>
+    /// <remarks>
+    /// <c>config.worktree</c> is here because git reads it whenever <c>extensions.worktreeConfig</c> is on —
+    /// <c>git sparse-checkout</c> turns that on by itself — and nothing watched it: <c>core.fsmonitor</c>
+    /// written there ran code on the next <c>git status</c>. (Our own code review of issue #376.)
+    /// </remarks>
+    private static readonly string[] ReadByMeaning = ["config", "config.worktree"];
 
     /// <summary>
     /// How much of a file is hashed. Past it, size and mtime stand in.
@@ -68,9 +82,9 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
             entries[path] = new TreeEntry(KindOf(code), $"{code}|{Fingerprint(Path.Combine(repoPath, path))}");
         }
 
-        foreach (var (name, full) in GitMetadata(repoPath))
+        foreach (var (name, full, byMeaning) in GitMetadata(repoPath))
         {
-            var fingerprint = Path.GetFileName(full) == "config" ? await ConfigFingerprintAsync(full, ct) : Fingerprint(full);
+            var fingerprint = byMeaning ? await ConfigFingerprintAsync(full, ct) : Fingerprint(full);
             entries["<git>/" + name] = new TreeEntry("git", fingerprint);
         }
 
@@ -134,8 +148,9 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
     }
 
     /// <summary>
-    /// The repository metadata worth watching: <c>HEAD</c>, <c>config</c> and every hook — in the
-    /// worktree's own git directory AND in the common one it shares.
+    /// The repository metadata worth watching: this checkout's own <c>HEAD</c>, <c>config</c> and
+    /// <c>config.worktree</c>, and every hook — and, in the common directory a linked worktree shares, its
+    /// <c>config</c> and hooks (not its <c>HEAD</c> or <c>config.worktree</c>, which are the main worktree's).
     /// </summary>
     /// <remarks>
     /// <c>.git</c> is a FILE in a linked worktree (<c>gitdir: …</c>), which is how this feature is
@@ -143,7 +158,7 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
     /// COMMON directory that <c>commondir</c> points at, and watching only the first leaves an edited
     /// shared hook invisible to both snapshots (codex, code round).
     /// </remarks>
-    private static IEnumerable<(string Name, string Full)> GitMetadata(string repoPath)
+    private static IEnumerable<(string Name, string Full, bool ByMeaning)> GitMetadata(string repoPath)
     {
         foreach (var (label, dir) in GitDirectories(repoPath))
         {
@@ -152,12 +167,12 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
             // `git switch` (issue #376). This checkout's own HEAD is in its own directory, watched below.
             foreach (var name in label.Length == 0 ? Metadata : SharedMetadata)
             {
-                yield return ($"{label}{name}", Path.Combine(dir, name));
+                yield return ($"{label}{name}", Path.Combine(dir, name), ReadByMeaning.Contains(name));
             }
 
             foreach (var hook in HooksIn(Path.Combine(dir, "hooks")))
             {
-                yield return ($"{label}hooks/{Path.GetFileName(hook)}", hook);
+                yield return ($"{label}hooks/{Path.GetFileName(hook)}", hook, false);
             }
         }
     }
@@ -203,10 +218,14 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
             return Fingerprint(config);
         }
 
+        // ABSOLUTE, because the working directory is the config's own: a relative path would be resolved
+        // twice and name a file that is not there, and the meaning would silently fall back to bytes.
+        var file = Path.GetFullPath(config);
         var listed = await launcher.RunAsync(
-            new ProcessRequest("git", ["config", "--file", config, "--list", "-z"], Path.GetDirectoryName(config) ?? "."), ct);
+            new ProcessRequest("git", ["config", "--file", file, "--list", "-z"], Path.GetDirectoryName(file) ?? "."), ct);
 
-        return listed.ExitCode == 0
+        // A TRUNCATED listing is not the whole config, and a change past the cut would be invisible.
+        return listed.ExitCode == 0 && !listed.Truncated
             ? "config|" + Convert.ToHexString(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(ConfigMeaning.Of(listed.StdOut))))
             : Fingerprint(config);
     }

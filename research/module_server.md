@@ -4436,10 +4436,15 @@ sibling's `push -u`, VS Code's `branch.X.vscode-merge-base` and GitLens' `branch
   sorted, with `branch.X.{merge, rebase, vscode-merge-base, gk-*}` dropped and `branch.X.{remote,
   pushremote}` dropped only when they say `.` or name a remote whose `url` this same file defines.
   `core.*`, `alias.*`, `filter.*`, `url.*`, `credential.*`, `include*`, `branch.X.description` and the rest
-  are kept. A config `git config` cannot read falls back to its bytes; a malformed one already fails
-  `git status`, so the snapshot throws rather than passing.
-- **The sentence says shared.** A change under `<git>/common/` reads *"shared .git metadata changed — every
-  worktree of this repository can write it: a push -u, a branch switch or the editor in another
-  checkout"*.
+  are kept. Entries are ordered by KEY, stably — so settings written in another order compare equal while
+  the values of one key keep their file order (git uses the last) — and with an include present nothing is
+  reordered at all (an include takes effect where it stands). A config `git config` cannot read, or whose
+  listing was truncated, falls back to its bytes; a malformed one already fails `git status`, so the snapshot
+  throws rather than passing.
+- **`config.worktree` is watched too**, by meaning, in this checkout's own git directory: git reads it
+  whenever `extensions.worktreeConfig` is on (`git sparse-checkout` turns it on), and nothing watched it.
+- **The sentence says where, not who.** A change under `<git>/common/` reads *"…, in the git directory every
+  worktree of this repository shares"*. It deliberately names no benign cause: the bookkeeping is not
+  watched any more, so what still reaches it is what the rule keeps because it is dangerous.
 
 Open tail: a per-worktree HEAD commit check would also catch a consultant's `commit --allow-empty`.
