@@ -1035,6 +1035,9 @@ test('the shipped page offers Try again on a failure, and one press sends one re
   assert.match(markup, /id="failure"/, 'the shipped page rendered no failure region at all');
   assert.match(markup, /data-retry="1"/, 'the shipped page offered no retry naming the state it was drawn for');
   assert.match(markup, /Try again/, 'the control does not say what pressing it does');
+  // Issue #346: in the SHIPPED markup too, the button is the red box's sibling, not inside it.
+  assert.match(markup, /<div class="failure"><span class="said">[^<]*<\/span><\/div><button [^>]*data-retry/,
+    'the shipped page still draws Try again inside the red box');
 
   // One press. The guard against a SECOND press is unit-level, where the harness can hand the
   // handler the same element twice — this stub fabricates a fresh one per click, so a disabled flag

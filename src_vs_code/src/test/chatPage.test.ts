@@ -3292,3 +3292,44 @@ test('a fork renames it too', () => {
 
   assert.deepEqual(JSON.parse(page.bodyAttribute('data-vscode-context')), { coaiConversation: 'the-copy' });
 });
+
+// ---------------------------------------------------------------------------------------------
+// Issue #346: the failure box and its Try again ran into each other, and a long failure left the box.
+// ---------------------------------------------------------------------------------------------
+
+/** The red box's own markup, from its opening tag to the tag that closes it. */
+function redBox(markup: string): string {
+  const start = markup.indexOf('<div class="failure">');
+  assert.notStrictEqual(start, -1, 'there is no red box');
+  const end = markup.indexOf('</div>', start);
+
+  return markup.slice(start, end + '</div>'.length);
+}
+
+test('Try again sits OUTSIDE the red box, beside it in one row', () => {
+  const html = chatFailureHtml('the model returned an empty answer', true, 3);
+
+  assert.doesNotMatch(redBox(html), /data-retry/, 'the button is still inside the red box');
+  assert.match(html, /^<div class="failureRow"><div class="failure">[\s\S]*<\/div><button [^>]*data-retry="3"/,
+    'the button is not the red box’s sibling to its right');
+});
+
+test('a failure with nothing to retry is the red box alone', () => {
+  const html = chatFailureHtml('the model returned an empty answer', false, 3);
+
+  assert.doesNotMatch(html, /data-retry|<button/);
+  assert.match(html, /^<div class="failureRow"><div class="failure">/);
+});
+
+test('the failure text wraps inside its box and keeps its own line breaks', () => {
+  // A failure carries paths, URLs and ids — tokens with no space to wrap at — so a box that only lets
+  // the text SHRINK still lets it run out of the border. Declared on `.failure` itself, because the
+  // note the page writes into the same region uses the box without the inner span.
+  const css = chatPageHtml(state({ failure: 'x' }), 'n0nce').split('<style>')[1]!.split('</style>')[0]!;
+  const box = ruleFor(css, '.failure');
+
+  assert.match(box, /overflow-wrap: anywhere/);
+  assert.match(box, /white-space: pre-wrap/);
+  assert.match(ruleFor(css, '.failureRow'), /display: flex/);
+  assert.match(ruleFor(css, '.failureRow'), /gap: 12px/);
+});

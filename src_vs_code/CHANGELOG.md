@@ -46,6 +46,10 @@ then says so, by the role's name. A role that is switched on but cannot be asked
 — is marked on the page, and a round that skips it now names it by the name you gave it, not only by
 its id.
 
+**A chat's error no longer runs into its Try again button** (issue #346). The button sits to the right of
+the red box instead of inside it, and a long error — a path, a web address, a vendor's multi-line
+message — wraps inside the box instead of running out of it.
+
 ## Server 0.32.0 — 2026-09-23
 
 **The server now says when it died.** A `coai-mcp` that was killed — the window closed hard, the
