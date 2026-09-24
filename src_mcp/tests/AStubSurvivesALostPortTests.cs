@@ -139,8 +139,11 @@ public sealed class AStubSurvivesALostPortTests
             binds.Bind);
 
         using var _unused = server;
-        binds.LostForReal.Should().ContainSingle("the held port is lost for real, once")
-            .Which.Should().Contain($":{held}/");
+        // The FIRST real loss is the held port. Not "the only one": a parallel test may take the candidate
+        // after it too, and pinning a single loss would put #520's own race back one candidate later. (Our
+        // own code reviewer.) The count below already accounts for every loss there was.
+        binds.LostForReal.Should().NotBeEmpty("the held port is lost for real")
+            .And.Subject.First().Should().Contain($":{held}/");
         binds.ShouldHaveRetriedEachLossOnce(code);
         prefix.Should().NotContain($":{held}/", "and the stub answers on the port it actually took");
     }
@@ -189,7 +192,9 @@ public sealed class AStubSurvivesALostPortTests
             {
                 return Really(prefix);
             }
-            catch (HttpListenerException lost) when (LoopbackStub.Retries(lost))
+            // Whatever the stub itself would retry — the classifier takes a SocketException too — so a
+            // platform that surfaces a lost port that way is counted, not failed. (Our own code reviewer.)
+            catch (Exception lost) when (LoopbackStub.Retries(lost))
             {
                 _lost.Add(prefix);
                 throw;
