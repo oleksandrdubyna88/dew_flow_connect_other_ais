@@ -286,6 +286,7 @@ export function createChatPanel(
     post: (message) => {
       void panel.webview.postMessage(message);
     },
+    isActive: () => panel.active,
   };
 
   return { id, panel: revealable, session };

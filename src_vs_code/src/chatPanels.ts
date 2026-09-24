@@ -30,6 +30,8 @@ export interface RevealablePanel {
   reveal(): void;
   dispose(): void;
   post(message: unknown): void;
+  /** Whether this is the editor's active panel — what a chord with no argument acts on (issue #314). */
+  isActive(): boolean;
 }
 
 /** What the registry needs from a conversation: only that it can be ended. */

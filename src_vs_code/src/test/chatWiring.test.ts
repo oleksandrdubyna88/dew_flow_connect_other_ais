@@ -461,16 +461,52 @@ test('a re-ask brings the mark back with the transcript it truncated', () => {
  */
 const actsOnOurPicker = (row: Contribution): boolean => (row.when ?? '').includes('coai.conversationsPickerOpen');
 
+/**
+ * Commands that act INSIDE an open coai chat — offered from the chat page's own right-click menu and
+ * chord — and therefore open nothing (issue #314).
+ *
+ * <p>An ALLOW-LIST by name, deliberately, and not an exclusion by scope: a later command scoped to our
+ * page that DID open a chat would otherwise leave the count on its `when` alone. (codex, the plan round
+ * of #314.) The test below keeps the list honest from both sides: everything on it is scoped to our page
+ * and nowhere else, and everything scoped to our page is on it — so a new one has to be classified, door
+ * or not, by a person.</p>
+ */
+const ACTS_INSIDE_A_CHAT: readonly string[] = ['coai.backToSource'];
+const OUR_CHAT = "webviewId == 'coaiChat'";
+const OUR_CHAT_ACTIVE = "activeWebviewPanelId == 'coaiChat'";
+
 /** Which commands a person can actually open a chat with, TAKEN FROM THE MANIFEST rather than typed. */
 function doorCommands(): readonly string[] {
   const menus = MANIFEST.contributes.menus;
   const fromMenus = [...(menus['webview/context'] ?? []), ...(menus['editor/context'] ?? [])];
   const offered = [...fromMenus, ...MANIFEST.contributes.keybindings.filter((one) => !actsOnOurPicker(one))]
     .map((one) => one.command ?? '')
-    .filter((one) => one.length > 0);
+    .filter((one) => one.length > 0 && !ACTS_INSIDE_A_CHAT.includes(one));
 
   return [...new Set(offered)];
 }
+
+test('a command that acts inside an open chat is scoped to the chat, and everything scoped there is one', () => {
+  const menus = MANIFEST.contributes.menus;
+  const rows = [
+    ...(menus['webview/context'] ?? []),
+    ...(menus['editor/context'] ?? []),
+    ...MANIFEST.contributes.keybindings,
+  ];
+  for (const command of ACTS_INSIDE_A_CHAT) {
+    const offeredAt = rows.filter((row) => row.command === command);
+    assert.ok(offeredAt.length > 0, command + ' is allow-listed and offered nowhere — the list is watching a command that moved');
+    assert.ok(offeredAt.every((row) => row.when === OUR_CHAT || row.when === OUR_CHAT_ACTIVE),
+      command + ' is offered outside the chat page, where it could be a real way in');
+    assert.ok(!read('src/extension.ts').includes("noteChatDoor('" + command),
+      command + ' records itself as a door although it opens nothing');
+  }
+  const scopedToUs = rows.filter((row) => (row.when ?? '').includes("'coaiChat'")).map((row) => row.command ?? '');
+  for (const command of new Set(scopedToUs)) {
+    assert.ok(ACTS_INSIDE_A_CHAT.includes(command),
+      command + ' is offered from the chat page and is neither allow-listed nor counted — classify it, door or not');
+  }
+});
 
 test('a keybinding scoped to our own picker is not a door, and nothing that is a door hides behind that scope', () => {
   // The exclusion above is a hole if it can be used to smuggle a real door out of the count, so it is
