@@ -277,13 +277,13 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         // needs so the test cannot depend on how fast the machine is. It failed on a win-x64 release
         // runner and nowhere else: `Expected string to be "job-77" ... but "" has a length of 0`.
         await WaitForAsync(
-            () => RemoteRuntime.ReadClaim(invocation.JobFile).JobId.Length > 0,
+            async () => (await RemoteRuntime.ReadClaimAsync(invocation.JobFile)).JobId.Length > 0,
             "the claim file to name its job",
             shim);
         shim.Process.Kill(entireProcessTree: true);
         await shim.Process.WaitForExitAsync();
 
-        var claim = RemoteRuntime.ReadClaim(invocation.JobFile);
+        var claim = await RemoteRuntime.ReadClaimAsync(invocation.JobFile, TestContext.Current.CancellationToken);
         claim.JobId.Should().Be("job-77");
         claim.TokenFile.Should().NotBeEmpty("the parent has no data directory to resolve it from");
 
@@ -360,11 +360,13 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
                 // Issue #462: this failed in the full suite only, and nobody ever saw what the file HELD —
                 // the one fact that tells a torn write from a read refused for an instant. It is in the
                 // message now, on attempt N, so the next failure explains itself.
-                var claim = RemoteRuntime.ReadClaim(invocation.JobFile);
+                var claim = await RemoteRuntime.ReadClaimAsync(invocation.JobFile, TestContext.Current.CancellationToken);
+                // Read again only when it is needed, so a passing run pays nothing for the diagnostic.
+                var held = claim.JobId == "job-77" ? string.Empty : RawText(invocation.JobFile);
                 claim.JobId.Should().Be("job-77",
                     "a claim file that exists must name its job — a parent holding half of one cannot "
                     + "cancel, and the review keeps costing money until the server's own deadline "
-                    + $"(attempt {attempt + 1}; the file held: {RawText(invocation.JobFile)})");
+                    + $"(attempt {attempt + 1}; the file held: {held})");
             }
         }
     }
@@ -516,6 +518,10 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     /// sentence. (codex again, and the same point from local twice.)</para>
     /// </remarks>
     private static Task WaitForAsync(Func<bool> condition, string what, RunningShim shim) =>
+        WaitUntilAsync(() => Task.FromResult(condition()), what, shim, PrerequisiteWait);
+
+    /// <summary>The same wait, for a condition that has to be awaited — reading the claim is one.</summary>
+    private static Task WaitForAsync(Func<Task<bool>> condition, string what, RunningShim shim) =>
         WaitUntilAsync(condition, what, shim, PrerequisiteWait);
 
     /// <summary>
@@ -530,22 +536,22 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     /// </remarks>
     private static Task WaitBrieflyForAsync(
         Func<bool> condition, string what, RunningShim shim, TimeSpan limit) =>
-        WaitUntilAsync(condition, what, shim, limit);
+        WaitUntilAsync(() => Task.FromResult(condition()), what, shim, limit);
 
     private static async Task WaitUntilAsync(
-        Func<bool> condition, string what, RunningShim shim, TimeSpan deadline)
+        Func<Task<bool>> condition, string what, RunningShim shim, TimeSpan deadline)
     {
         var clock = Stopwatch.StartNew();
         // A DO, so the condition is read at least once. A budget small enough to be already spent
         // would otherwise report a failure for something nobody ever looked at. (gemini.)
         do
         {
-            if (condition())
+            if (await condition())
             {
                 return;
             }
 
-            if (Gone(shim.Process) is { } code && !condition())
+            if (Gone(shim.Process) is { } code && !await condition())
             {
                 throw Failure(what, clock.Elapsed, deadline, $"had exited with {code}", Drained(shim));
             }

@@ -34,7 +34,7 @@ public sealed class ClaimIsWrittenAtomicallyTests
     /// shim, in a directory nobody sweeps.
     /// </remarks>
     [Fact]
-    public void TheWriteLeavesNoTemporaryFileBehind()
+    public async Task TheWriteLeavesNoTemporaryFileBehind()
     {
         var dir = Path.Combine(Path.GetTempPath(), $"coai-claimdir-{Guid.NewGuid():N}");
         Directory.CreateDirectory(dir);
@@ -46,7 +46,7 @@ public sealed class ClaimIsWrittenAtomicallyTests
         }
 
         Directory.EnumerateFiles(dir).Should().Equal([jobFile]);
-        RemoteRuntime.ReadClaim(jobFile).JobId.Should().Be("job-4");
+        (await RemoteRuntime.ReadClaimAsync(jobFile, TestContext.Current.CancellationToken)).JobId.Should().Be("job-4");
         Directory.Delete(dir, recursive: true);
     }
 
@@ -84,14 +84,14 @@ public sealed class ClaimIsWrittenAtomicallyTests
     }
 
     [Fact]
-    public void AClaimSurvivesARoundTrip()
+    public async Task AClaimSurvivesARoundTrip()
     {
         // The guard on the other side: making the write atomic must not change what it writes.
         var jobFile = TempFile();
 
         RemoteRuntime.Claim(jobFile, "https://coai.remsoft.dev/", "job-77", "t.json").Should().BeEmpty();
 
-        var claim = RemoteRuntime.ReadClaim(jobFile);
+        var claim = await RemoteRuntime.ReadClaimAsync(jobFile, TestContext.Current.CancellationToken);
         claim.JobId.Should().Be("job-77");
         claim.TokenFile.Should().Be("t.json");
         claim.Server.Should().Be(TeamServerAuth.Normalise("https://coai.remsoft.dev/"));
@@ -108,41 +108,62 @@ public sealed class ClaimIsWrittenAtomicallyTests
     /// that names nothing — the killed-shim test's failure message, and in the product a parent that
     /// gives up on a job it could have cancelled while it keeps costing money.</para>
     /// </remarks>
+    /// <remarks>
+    /// <para>The hold is released from a DEDICATED thread, not the pool: the failure this issue is about
+    /// shows up on a starved machine, and a release that waits for a pool thread could then outlast the
+    /// reader's whole budget (at least 280 ms) and fail for a reason of its own. Fifty milliseconds
+    /// leaves that budget a margin of more than five times. (our own reviewer, the code round.)</para>
+    /// </remarks>
     [Fact]
     public async Task AClaimHeldForAnInstant_IsStillRead()
     {
         var jobFile = TempFile();
         RemoteRuntime.Claim(jobFile, "https://coai.example.com", "job-77", "t.json").Should().BeEmpty();
         var holder = new FileStream(jobFile, FileMode.Open, FileAccess.Read, FileShare.None);
-        var releasing = Task.Run(async () =>
+        var releaser = new Thread(() =>
         {
-            await Task.Delay(TimeSpan.FromMilliseconds(150));
-            await holder.DisposeAsync();
+            Thread.Sleep(HeldFor);
+            holder.Dispose();
         });
+        try
+        {
+            releaser.Start();
 
-        var claim = RemoteRuntime.ReadClaim(jobFile);
+            var claim = await RemoteRuntime.ReadClaimAsync(jobFile, TestContext.Current.CancellationToken);
 
-        await releasing;
-        claim.JobId.Should().Be("job-77", "a claim held for an instant by another reader still names its job");
-        File.Delete(jobFile);
+            claim.JobId.Should().Be("job-77", "a claim held for an instant by another reader still names its job");
+        }
+        finally
+        {
+            releaser.Join();
+            holder.Dispose();
+            File.Delete(jobFile);
+        }
     }
+
+    /// <summary>How long another process holds the claim — well inside the reader's retry budget.</summary>
+    private static readonly TimeSpan HeldFor = TimeSpan.FromMilliseconds(50);
+
+    /// <summary>What a read that can never succeed may cost the cancellation, at the most.</summary>
+    private static readonly TimeSpan GivenUpWithin = TimeSpan.FromSeconds(3);
 
     /// <summary>
     /// And one held for good is given up on in a bounded time, as it always was.
     /// </summary>
     [Fact]
-    public void AClaimHeldForGood_IsGivenUpOnWithinASecondOrTwo()
+    public async Task AClaimHeldForGood_IsGivenUpOnWithinASecondOrTwo()
     {
         var jobFile = TempFile();
         RemoteRuntime.Claim(jobFile, "https://coai.example.com", "job-77", "t.json").Should().BeEmpty();
         var clock = System.Diagnostics.Stopwatch.StartNew();
 
-        using (new FileStream(jobFile, FileMode.Open, FileAccess.Read, FileShare.None))
+        await using (new FileStream(jobFile, FileMode.Open, FileAccess.Read, FileShare.None))
         {
-            RemoteRuntime.ReadClaim(jobFile).Should().Be(RemoteRuntime.RemoteClaim.None);
+            (await RemoteRuntime.ReadClaimAsync(jobFile, TestContext.Current.CancellationToken))
+                .Should().Be(RemoteRuntime.RemoteClaim.None);
         }
 
-        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(3), "a read that cannot succeed must not hold the cancellation up");
+        clock.Elapsed.Should().BeLessThan(GivenUpWithin, "a read that cannot succeed must not hold the cancellation up");
         File.Delete(jobFile);
     }
 

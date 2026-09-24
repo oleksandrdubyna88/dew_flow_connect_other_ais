@@ -381,7 +381,7 @@ public sealed class RemoteRuntimeTests
     }
 
     [Fact]
-    public void AClaimSurvivesSoAKilledShimCanStillBeCancelled()
+    public async Task AClaimSurvivesSoAKilledShimCanStillBeCancelled()
     {
         var file = Path.Combine(Path.GetTempPath(), "coai-claim-" + Guid.NewGuid().ToString("N") + ".job");
         try
@@ -391,7 +391,7 @@ public sealed class RemoteRuntimeTests
 
             // The parent reads this after killing the child, because a killed process runs no
             // cleanup and this file is the only thing left that can stop the job.
-            var claim = RemoteRuntime.ReadClaim(file);
+            var claim = await RemoteRuntime.ReadClaimAsync(file, TestContext.Current.CancellationToken);
             claim.Server.Should().Be("https://coai.example.com");
             claim.JobId.Should().Be("123-abc");
             // It carries its own token path: the parent resolves the adapter from a vendor row, which
@@ -417,8 +417,8 @@ public sealed class RemoteRuntimeTests
     }
 
     [Fact]
-    public void NoClaimIsEmptyRatherThanAnException() =>
-        RemoteRuntime.ReadClaim(Path.Combine(Path.GetTempPath(), "coai-none-" + Guid.NewGuid()))
+    public async Task NoClaimIsEmptyRatherThanAnException() =>
+        (await RemoteRuntime.ReadClaimAsync(Path.Combine(Path.GetTempPath(), "coai-none-" + Guid.NewGuid()), TestContext.Current.CancellationToken))
             .Should().Be(RemoteRuntime.RemoteClaim.None);
 
     [Theory]

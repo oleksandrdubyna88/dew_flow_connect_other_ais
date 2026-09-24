@@ -187,7 +187,7 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
     public static async Task<bool> CancelAbandonedAsync(
         string jobFile, HttpClient http, CancellationToken ct = default)
     {
-        var claim = ReadClaim(jobFile);
+        var claim = await ReadClaimAsync(jobFile, ct);
         var token = TeamServerAuth.ReadToken(claim.TokenFile);
         if (claim.JobId.Length == 0 || token.Length == 0)
         {
@@ -261,9 +261,14 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
     /// scenario, which reads the claim the instant the shim is dead, failed in the full suite only,
     /// where a slower machine gives the scanner time to be there first.</para>
     /// <para>A file that is not there, or that is there and is not a claim, is still <c>None</c> at once:
-    /// waiting cannot change either answer.</para>
+    /// waiting cannot change either answer. "Not there" is the READ's answer, never
+    /// <see cref="File.Exists"/>'s — that one says <c>false</c> for a file it was refused a look at, which
+    /// is the very refusal being waited out here. (codex, the code round.)</para>
+    /// <para><b>Asynchronous, and it takes the caller's token</b>, because its one caller in the product is
+    /// <see cref="CancelAbandonedAsync"/>: a backoff there is a pool thread blocked for as long as the
+    /// scanner holds on, and a cancellation that cannot itself be cancelled. (the code round.)</para>
     /// </remarks>
-    public static RemoteClaim ReadClaim(string jobFile)
+    public static async Task<RemoteClaim> ReadClaimAsync(string jobFile, CancellationToken ct = default)
     {
         for (var attempt = 1; ; attempt++)
         {
@@ -273,7 +278,7 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
             }
             catch (Exception e) when (WorthRereading(e, attempt))
             {
-                Thread.Sleep(Random.Shared.Next(MinReadBackoffMs, MaxReadBackoffMs) * attempt);
+                await Task.Delay(Random.Shared.Next(MinReadBackoffMs, MaxReadBackoffMs) * attempt, ct);
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
             {
@@ -283,9 +288,7 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
     }
 
     private static RemoteClaim ReadClaimOnce(string jobFile) =>
-        File.Exists(jobFile)
-            ? JsonSerializer.Deserialize(File.ReadAllText(jobFile), RemoteClaimContext.Default.RemoteClaim) ?? RemoteClaim.None
-            : RemoteClaim.None;
+        JsonSerializer.Deserialize(File.ReadAllText(jobFile), RemoteClaimContext.Default.RemoteClaim) ?? RemoteClaim.None;
 
     /// <summary>Another process's instant — not a file that is gone — with an attempt left.</summary>
     private static bool WorthRereading(Exception e, int attempt) =>
