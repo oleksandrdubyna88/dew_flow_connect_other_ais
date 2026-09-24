@@ -410,6 +410,40 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     }
 
     /// <summary>
+    /// A link whose TARGET runs through another link. A link's target is stored as written, so on macOS
+    /// a root linked to <c>/var/…/real</c> resolved to that spelling while git printed
+    /// <c>/private/var/…/real</c> — the macOS job of PR 499 caught the first fix stopping one link short.
+    /// </summary>
+    [Fact]
+    public async Task ARootReachedThroughALinkToALink_StillKnowsItsOwnTrees()
+    {
+        var real = Directory.CreateTempSubdirectory("coai-wt-real-").FullName;
+        _temps.Add(real);
+        var links = Directory.CreateTempSubdirectory("coai-wt-links-").FullName;
+        _temps.Add(links);
+        var first = Path.Combine(links, "first");
+        var second = Path.Combine(links, "second");
+        var storage = Directory.CreateDirectory(Path.Combine(real, "storage")).FullName;
+        if (!await LinkedAsync(first, real) || !await LinkedAsync(second, Path.Combine(first, "storage")))
+        {
+            Assert.Skip("this machine can create neither a directory link nor a junction");
+        }
+
+        var sha = await _manager.ResolveShaAsync(_repo, "main");
+        var leftover = Path.Combine(storage, "coai-wt-S-r1");
+        await Git(_repo, "worktree", "add", "--detach", "--lock", "--reason", "initializing", leftover, sha);
+        Directory.Delete(leftover, recursive: true);
+
+        await new WorktreeManager(_launcher, second).PruneOursAsync(_repo);
+
+        (await GitOut(_repo, "worktree", "list", "--porcelain")).Should().NotContain("coai-wt-S-r1",
+            "every link on the way is resolved, including the ones inside a link's own target");
+    }
+
+    private async Task<bool> LinkedAsync(string link, string target) =>
+        TryLink(link, target) || await TryJunctionAsync(link, target);
+
+    /// <summary>
     /// Something inside a directory that cannot be deleted, on every platform: a file held open on
     /// Windows, a read-only subdirectory elsewhere — so the paths that exist for a held tree are run
     /// on the CI machines too, not only on a developer's.
