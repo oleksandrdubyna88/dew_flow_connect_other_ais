@@ -71,21 +71,7 @@ public sealed class ARunThatDiesIsRecordedTests : IDisposable
         return process;
     }
 
-    private static async Task<bool> Eventually(Func<bool> condition)
-    {
-        var waited = Stopwatch.StartNew();
-        while (waited.Elapsed < Patience)
-        {
-            if (condition())
-            {
-                return true;
-            }
-
-            await Task.Delay(100);
-        }
-
-        return condition();
-    }
+    private static Task<bool> Eventually(Func<bool> condition) => Polls.Until(condition, Patience);
 
     /// <summary>The marker of the one run that started since <paramref name="before"/>.</summary>
     private async Task<string> MarkerOf(Process server, string[] before)
@@ -114,10 +100,26 @@ public sealed class ARunThatDiesIsRecordedTests : IDisposable
         return JsonDocument.Parse(Notices(ServerNoticeCodes.Refused).Single()).RootElement;
     }
 
-    private string[] Notices(string code) =>
-        (File.Exists(NoticesFile) ? File.ReadAllLines(NoticesFile) : [])
+    private string[] Notices(string code) => NoticesIn(NoticesFile, code);
+
+    /// <summary>The notices of one code in a notices file, one JSON line each.</summary>
+    /// <remarks>
+    /// Read the way the product reads this directory — <see cref="SharedRead"/>, which does not forbid the
+    /// live server's append (issue #512: <c>File.ReadAllLines</c> did, and Windows refused the read). Only
+    /// TERMINATED lines are notices: an unterminated tail is an append still in flight, "not yet", while a
+    /// terminated line that is not JSON still throws, because that is a defect in the writer.
+    /// </remarks>
+    internal static string[] NoticesIn(string file, string code) =>
+        (File.Exists(file) ? Terminated(SharedRead.Text(file)) : [])
             .Where(line => JsonDocument.Parse(line).RootElement.GetProperty("code").GetString() == code)
             .ToArray();
+
+    /// <summary>Every line that has its newline — the tail after the last one is still being written.</summary>
+    private static IEnumerable<string> Terminated(string text) =>
+        text[..(text.LastIndexOf('\n') + 1)]
+            .Split('\n')
+            .Select(line => line.TrimEnd('\r'))
+            .Where(line => line.Length > 0);
 
     private static async Task Said(Process server, string request)
     {

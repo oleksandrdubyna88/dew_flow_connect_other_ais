@@ -1925,3 +1925,29 @@ re-run without the variable; without it the suite compares read-only. A test tha
 its own expectation cannot fail, one that writes into a read-only CI checkout cannot run, and one
 that goes green after rewriting its own source of truth is worse than both — the first two were named
 on the plan round, the third on the code round.
+
+## A poll waits out a busy file (2026-09-24, issue #512)
+
+`ARunThatDiesIsRecorded` failed the mcp-v0.33.0 release on win-x64, and once locally under the full suite:
+its poll read `server-notices.jsonl` with `File.ReadAllLines` while the child server held it open to append.
+`ReadAllLines` opens with `FileShare.Read`, a reader that forbids writing, so Windows refused it, and the poll
+let the `IOException` escape. One unlucky poll failed the whole test.
+
+- **`Polls.Until(condition, patience)`** (tests) is the poll, replacing that class's private `Eventually`. An
+  `IOException` or `UnauthorizedAccessException` from the condition is "not yet" — `SharedRead`'s own contract
+  for every product reader of the data directory — and at the deadline it is a plain `false`, so the caller's
+  assertion fails with its own sentence.
+- **`ARunThatDiesIsRecordedTests.NoticesIn(file, code)`** reads through the product's `SharedRead.Text`
+  (`FileShare.ReadWrite | Delete`, the share the server's `AppendOnlyFile` writer grants), and counts only
+  TERMINATED lines: an unterminated tail is an append in flight, "not yet"; a terminated line that is not JSON
+  still throws, because hiding it would hide a writer defect.
+- **`APollWaitsOutABusyFileTests`** pins each half without a server: a file held with `FileShare.None` and
+  released after 300 ms is found by a later poll; `UnauthorizedAccessException` is "not yet" too; a condition
+  that never holds still answers `false`; a half-written tail is not a notice; a malformed complete line still
+  throws; and a notices file a writer holds open to append is read without a wait (red before the fix with the
+  exact #512 message). Five were red against the old poll and reader; the malformed-line guard was proved by a
+  plant that skipped unparsable lines.
+
+The sweep for the same shape (a poll over a file a live process writes, letting a busy read escape) found no
+other site: `RemoteShimScenarioTests.RawText` already catches both exceptions, and the remaining reads are
+one-shot reads after the server has answered.
