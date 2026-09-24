@@ -57,6 +57,11 @@ editor recording a merge base withheld the advice although the consultant, read-
 nothing. That bookkeeping is ignored now; a setting that can run code or send a push elsewhere is still
 caught, and a change to shared metadata says it is shared.
 
+**An abandoned Team-server review is cancelled even when a scanner is looking at its claim** (issue
+#462). When a review's process is killed, the server reads a small claim file to cancel the job still
+running on the Team server. A virus scanner or indexer opening that file at the same moment made it
+read as empty, and the job ran on until the server's own deadline. The read now waits out that moment.
+
 ## Server 0.32.0 — 2026-09-23
 
 **The server now says when it died.** A `coai-mcp` that was killed — the window closed hard, the
