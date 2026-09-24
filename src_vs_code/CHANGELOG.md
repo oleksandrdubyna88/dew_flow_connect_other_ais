@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**The Bugz diffs are numbered, and no longer striped** (issue #488). Every line of a Before and After
+carries its number — a skeleton from its method's first line, the real code as its file is numbered — and
+the blank row that followed every line is gone. A copy of the code still carries the code alone. The
+*CoAI: choose* button now sits next to the method's name.
+
 **CoAI: choose on every bug** (issue #487). Each row of the Bugz review page has a *CoAI: choose* button beside
 its method. It puts that pair into a chat — Where, Why, Fix, Complexity, Before, After and your comment, the
 words you are still typing included — and sends nothing: you choose the model and the question in the chat.

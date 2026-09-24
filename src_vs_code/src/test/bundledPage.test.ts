@@ -1135,4 +1135,18 @@ test('the review page bundles without dragging the host into it', () => {
   const render = (shim.exports as { reviewPageHtml?: (view: unknown) => string }).reviewPageHtml;
   assert.equal(typeof render, 'function', 'the bundle exports no page to render');
   assert.match(render!({ pairs: [], nonce: 'n' }), /Review bugs/u);
+
+  // Issue #488, through the bundle the webview actually loads: an open row's code is numbered, and the
+  // stylesheet shipped with it draws the numbers from the attribute rather than carrying them as text.
+  const open = render!({
+    pairs: [{
+      findingId: 1, symbolName: 'm', language: 'TypeScript', skeletonBefore: 'a();\nb();', skeletonAfter: 'a();',
+      keep: -1, severity: 'Major', category: 'x', title: 't', repoPath: '', headSha: '', fixSha: '', file: '', line: 0,
+      why: '', fix: '', comment: '', sentUtc: '', commentLost: '',
+    }],
+    nonce: 'n',
+    expanded: new Set([1]),
+  });
+  assert.match(open, /<span class="ln" data-ln="2" aria-hidden="true"><\/span>/u, 'the bundled page numbers an open row\'s lines');
+  assert.match(open, /\.ln::before\s*\{\s*content:\s*attr\(data-ln\)/u, 'and ships the rule that draws them');
 });

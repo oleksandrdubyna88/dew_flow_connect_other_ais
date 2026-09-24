@@ -9175,3 +9175,22 @@ sequenceDiagram
 **Limits, recorded:** a bug's conversation is found again by the button only for the window's lifetime —
 after a reload a press opens a new one, the rule every non-Claude source has (`sessionKey.rekeysByLabel`);
 the old one is kept, under the method's name, in *CoAI: switch conversations*.
+
+## The diffs are numbered, and have no gaps (2026-09-24, issue #488)
+
+**The gaps.** `HIGHLIGHT_CSS` made every `.line` a BLOCK inside `white-space: pre-wrap`, and both renderers put
+a real newline between lines, so each newline was drawn as an empty row of its own: a blank stripe after every
+line. The newline stays (it is a copy's line break); a line is now a full-width `inline-block`, which the
+newline merely ends. Checked in headless Chrome against the page's own CSS, before and after.
+
+**The numbers.** `highlight(code, language, marks, firstLine = 1)` (and `plain`) put
+`<span class="ln" data-ln="N" aria-hidden="true">` first in every line; the stylesheet draws the number from
+the attribute (`.ln::before { content: attr(data-ln) }`), so it is never part of the code's text, a copy or a
+screen reader's reading. The gutter is as wide as the block's largest number (`--coai-ln-digits` on the
+`<pre>`, from the Shiki `pre` hook or `plain`). The +/−/~ glyph moved from `.line::before` to `.ln::after`
+("5 ~ code"); a marked line's padding keeps its gutter in the same column. `firstLine` is part of the cache
+key. Skeletons count from 1 — the server keeps no start line for them — and the real-method panes
+(`realMethodView.realPane`) from each side's own `startLine`.
+
+**The CoAI: choose button (#487)** sits next to the method's name: the disclosure button is as wide as its own
+lines (`flex: 0 1 auto`) instead of the row's whole width, which had pushed the button to the page's far edge.

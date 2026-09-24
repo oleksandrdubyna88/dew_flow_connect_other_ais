@@ -1976,3 +1976,16 @@ one-shot reads after the server has answered.
 - `notificationSites.test.mjs` — `PLACES_THIS_SPEAKS` 141 → 141: the three identical "not ready" refusals
   became one helper, and the caught failure of a press is a new place (pinned, with its console line, by
   `bugzReviewWiring.test.ts`, red before the catch existed).
+
+## The diffs are numbered, and have no gaps (2026-09-24, issue #488)
+
+- `codeHighlight.test.ts` — no rule makes a `.line` a block, and the newline between lines stays (both
+  paths); every line carries `data-ln` from `firstLine` (1 by default, 41 when asked), the code's readable
+  text is untouched, the number leads the spoken mark, `--coai-ln-digits` is on the block; the first line is
+  part of the cache key. Red first.
+- `bugzReviewPage.test.ts` — a skeleton is numbered from 1, every line of both sides; the real method is
+  numbered from each side's own `startLine` (red first: it counted from 1).
+- `bundledPage.test.ts` — through the bundle the webview loads, an open row's lines are numbered and the
+  shipped stylesheet draws them from the attribute.
+- **Not asserted:** the layout itself (the absence of a blank row, the gutter's alignment, where the choose
+  button sits) needs a browser; it was checked in headless Chrome over the page's real markup and CSS.
