@@ -645,9 +645,25 @@ public sealed partial class PanelService
                 // few lines above, and it is the resolved one the diff was actually taken against.
                 // Recorded here because this local is the only place it exists — by the time the
                 // round is written down the call that computed it has returned.
-                return built with { BaseRef = collected.ComparedAgainst };
+                return built with
+                {
+                    BaseRef = collected.ComparedAgainst,
+                    Unreviewed = NothingToReview.UnreviewedTail(await _context.UncommittedAsync(repoPath, sha, ct)),
+                };
             })
-        { RolesPerVendor = PanelConfig.CodeRoleNames.Length },
+        {
+            RolesPerVendor = PanelConfig.CodeRoleNames.Length,
+            // Nothing to review is SAID, never passed. Asked from the resolved commit before any
+            // tree or reviewer exists, so a refusal costs two numstats and leaves the session as it was.
+            RefuseBeforeBuilding = async sha =>
+            {
+                var change = await _context.ReviewableAsync(repoPath, baseRef, sha, ct: ct);
+                return change.IsEmpty
+                    ? NothingToReview.Refusal(
+                        branch, baseRef, sha, change.ChangedButExcluded, await _context.UncommittedAsync(repoPath, sha, ct))
+                    : string.Empty;
+            },
+        },
             ct);
     }
 
@@ -1208,6 +1224,12 @@ public sealed partial class PanelService
         try
         {
             var sha = await _worktrees.ResolveShaAsync(repoPath, branch);
+            if (await stage.RefuseBeforeBuilding(sha) is { Length: > 0 } nothingThere)
+            {
+                _log.Warning("{Stage} refused before building: {Reason}", stage.Stage, nothingThere);
+                return Error(nothingThere, from);
+            }
+
             // The plan stage gets an empty scratch directory instead of a checkout — there is
             // nothing there to wander into, which is the point.
             await using var lease = stage.NeedsWorktree
@@ -1307,7 +1329,10 @@ public sealed partial class PanelService
             answer = answer with
             {
                 Reviewers = answer.Reviewers
-                    + WhereTheDocumentWent(stage.Stage, work.Select(w => w.Invocation.Provider)),
+                    + WhereTheDocumentWent(stage.Stage, work.Select(w => w.Invocation.Provider))
+                    // And what the round did not look at: a `proceed` must not cover an uncommitted
+                    // tail nobody read. Empty for every round that has none.
+                    + roundWork.Unreviewed,
             };
             var record = live.Finish(answer.Verdict, gate.GatingCount, summary.Sentence, results);
             // The operator's own switches, read for THIS call: the settings file is stamped and
@@ -2781,6 +2806,12 @@ internal sealed record RoundWork(
     /// </remarks>
     public string BaseRef { get; init; } = string.Empty;
 
+    /// <summary>
+    /// What the round did NOT look at and must say so, appended to its reviewer line — today the
+    /// uncommitted tail of a checkout whose committed part was reviewed. Empty for almost every round.
+    /// </summary>
+    public string Unreviewed { get; init; } = string.Empty;
+
     public RoundWork(IReadOnlyList<ReviewerWork> reviewers, IReadOnlyList<SkippedRole> notAsked)
         : this(reviewers, notAsked, [])
     {
@@ -2827,6 +2858,19 @@ internal sealed record StageRun(
     /// document round.
     /// </summary>
     public string Document { get; init; } = string.Empty;
+
+    /// <summary>
+    /// A refusal decided from the resolved commit alone, BEFORE any worktree is made or any reviewer
+    /// launched — an empty sentence when the round may go on.
+    /// </summary>
+    /// <remarks>
+    /// The code stage asks it whether there is anything to review (S1 of
+    /// todo/PLAN_a_failed_round_can_be_retried.md): a round over an empty diff used to launch every
+    /// reviewer and answer <c>proceed</c>. Here rather than inside <see cref="MakeWork"/> because by
+    /// then a tree has already been checked out for nothing, and because nothing about the session
+    /// has been written yet — a refusal leaves it exactly as it was.
+    /// </remarks>
+    public Func<string, Task<string>> RefuseBeforeBuilding { get; init; } = static _ => Task.FromResult(string.Empty);
 
     /// <summary>
     /// How many reviewers ONE vendor runs in this round — the multiplier the deadline is derived

@@ -115,6 +115,12 @@ internal static class Tools
                     the shaped diff of `branch` over `baseRef` (lock files and build output
                     excluded, binaries named not inlined), and a read-only worktree pinned to one SHA.
 
+                    COMMITTED changes only: commit first. A branch with nothing to review over
+                    `baseRef` — the same commit, only uncommitted work, or only lock files and build
+                    output — is REFUSED with a sentence saying which, and no round is recorded; it is
+                    never a `proceed`. Uncommitted files beside a committed change are named in the
+                    reply as NOT reviewed.
+
                     `planText` IS that scope: what this change was supposed to achieve — the
                     symptom or goal, what must be true when it is done, the constraints. Not a
                     commit subject. A reviewer holding only a diff can judge whether the code is

@@ -309,7 +309,42 @@ public sealed class GateCommandsTests
         order.Should().Contain(GateCommands.GateOrderMarker + " per EPIC")
             .And.Contain("starting from the previous epic's commit")
             .And.Contain("previous epic's commit as baseRef")
-            .And.Contain("commit the epic as ONE commit");
+            .And.Contain("fold the fixes into the epic's ONE commit");
+    }
+
+    /// <summary>
+    /// Every gate order COMMITS before it calls review_code — never the other way round.
+    /// </summary>
+    /// <remarks>
+    /// The epic and the default orders used to say "then ONE review_code … and commit", review
+    /// first. review_code reviews committed changes only, so an agent obeying them sent an EMPTY
+    /// diff: the epic's branch starts at the previous epic's commit, which is also its baseRef. That
+    /// used to pass as a clean `proceed` and end the session; it is refused now, and an order that
+    /// walks every obedient caller into a refusal is the defect this pins
+    /// (todo/PLAN_a_failed_round_can_be_retried.md, S1).
+    /// </remarks>
+    [Fact]
+    public void EveryGateOrder_CommitsBeforeItCallsReviewCode()
+    {
+        var orders = new (string Name, string Order, string Commit)[]
+        {
+            ("per epic", GateCommands.For(new CommandContext(
+                SplitPlan: true, PlanText: PlanOf(400, 8, 3, 2), PlanStage: true))[0], "COMMIT the epic"),
+            ("for the task", GateCommands.For(new CommandContext(
+                SplitPlan: true, PlanText: PlanOf(400, 8, 3, 2), PlanStage: true) { GatePer = GateScope.Task })[0],
+                "commit each epic"),
+            ("stories only", GateCommands.For(new CommandContext(
+                SplitPlan: true, PlanText: PlanOf(200, 4, 3, 2), PlanStage: true))[0], "COMMIT it"),
+        };
+
+        foreach (var (name, order, commit) in orders)
+        {
+            var committed = order.IndexOf(commit, StringComparison.Ordinal);
+            var reviewed = order.IndexOf("review_code over", StringComparison.Ordinal);
+
+            committed.Should().BeGreaterThan(-1, $"the {name} order must say to commit ({order})");
+            committed.Should().BeLessThan(reviewed, $"the {name} order must commit BEFORE review_code ({order})");
+        }
     }
 
     [Fact]
@@ -330,7 +365,8 @@ public sealed class GateCommandsTests
         var order = GateCommands.For(new CommandContext(
             SplitPlan: true, PlanText: PlanOf(200, 4, 3, 2), PlanStage: true))[0];
 
-        order.Should().Contain(GateCommands.GateOrderMarker).And.Contain("ONE review_code over the whole diff");
+        order.Should().Contain(GateCommands.GateOrderMarker).And.Contain("review_code over the whole diff")
+            .And.Contain("fold the fixes into that ONE commit");
         order.Should().NotContain("EPICS").And.NotContain("per EPIC");
     }
 

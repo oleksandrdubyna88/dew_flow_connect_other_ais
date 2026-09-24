@@ -4298,3 +4298,36 @@ stays first, because it is the key a person may search for; the name is what the
 `TheRoundSaysWhatItCouldNotAskTests.ARoleThatCannotBeAsked_IsNamedByItsName`. The extension now refuses
 to switch on a role like that in the first place (module_extension.md), so this sentence is the
 backstop for a role switched on some other way.
+
+## A round with nothing in it is refused, and a failed round can be retried (2026-09-24)
+
+Four reports, one question — after a round goes wrong, or has nothing to review, does the gate tell the
+truth and let you try again? Plan: [PLAN_a_failed_round_can_be_retried.md](../todo/PLAN_a_failed_round_can_be_retried.md).
+
+### Nothing to review is said, never passed (S1)
+
+An empty diff used to launch every reviewer over an empty "## The change", merge nobody's findings and
+answer `proceed` — after which the session was `Done` and the real change could never be reviewed on
+that branch. `review_code` reviews COMMITTED objects only (`ResolveShaAsync` is `rev-parse
+<branch>^{commit}`), so a developer who forgot to commit, or may not, was told "all clean" about code
+nobody read. And the gate's own split orders walked every obedient caller into it: they said "ONE
+review_code … and commit", review first.
+
+- **`StageRun.RefuseBeforeBuilding`** runs from the resolved commit, BEFORE any worktree is made or any
+  reviewer launched; a non-empty sentence is returned as the refusal and nothing about the session is
+  written, so a refusal leaves it exactly as it was. The code stage asks
+  `ContextAssembler.ReviewableAsync` — two numstats: the files a reviewer would be shown, and, only when
+  that is none, every path the branch changed at all.
+- **The refusal says WHICH empty** (`Core.Context.NothingToReview.Refusal`): the branch is the base or
+  already in it; that plus N uncommitted files in the checkout, named; or only lock files and build
+  output changed, named. Three causes, three cures. An unresolvable `baseRef` stays its own refusal
+  naming the ref — a wrong argument, never "empty".
+- **The uncommitted tail of a round that DID run is named.** Committed work plus uncommitted files is a
+  non-empty diff, so the round runs — and the reviewer line now ends "N uncommitted file(s) in the
+  checkout were NOT reviewed (…)". `UncommittedAsync` answers only when the checkout at `repoPath`
+  stands on the reviewed commit: a tree on another commit says nothing about this one, and naming its
+  files would be a wrong sentence.
+- **Every gate order commits BEFORE `review_code`** (`GateCommands.GateEnding`), and folds the fixes
+  into the same one commit; the `review_code` tool text says "COMMITTED changes only".
+- `VendorStagesTests`' fixture branch had no commit at all — it had been reviewing an empty diff to
+  reach the "no vendor serves code" refusal. It carries a real change now.
