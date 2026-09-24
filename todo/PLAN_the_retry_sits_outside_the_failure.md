@@ -1,0 +1,57 @@
+# PLAN — the retry sits outside the failure, and the failure wraps
+
+> Status: **plan only, nothing implemented yet.** Scope: the chat page's failure line in `src_vs_code`
+> (`chatPage.ts` `chatFailureHtml` and its CSS). Issue #346.
+>
+> Related docs: [module_extension.md](../research/module_extension.md), [architecture.md](../research/architecture.md).
+
+## The symptom
+
+Issue #346, with a screenshot: in a chat tab the red failure box and its **Try again** button run into
+each other, and a long failure text runs past the box's right edge instead of wrapping. The operator's
+ask: *move Try again out of the red box, to its right; the text must wrap, not leave the box.*
+
+## Why (read from the code)
+
+- The button is INSIDE the red box: `chatFailureHtml` (`src_vs_code/src/chatPage.ts:734-747`) returns
+  `<div class="failure"><span class="said">…</span><button class="retry" data-retry=…>Try again</button></div>`.
+- The box is a flex row (`chatPage.ts:972`), the text is `flex: 1 1 auto; min-width: 0` (`:976`) — enough to
+  shrink, not to break a long unbroken token: failure texts carry paths, URLs and ids, which have no
+  space to wrap at, so they overflow the box. `white-space` is the default, so a failure's own line
+  breaks collapse too.
+
+## The design
+
+1. **Two boxes, not one.** `chatFailureHtml` returns
+   `<div class="failureRow"><div class="failure"><span class="said">…</span></div>{Try again}</div>`: the
+   red border belongs to the text alone, and the button is its sibling to the right, outside it. With
+   no retry the row holds the box alone. `.failureRow` is the flex row (`display: flex; gap; align-items:
+   flex-start`), `.failure` grows (`flex: 1 1 auto; min-width: 0`), `.retry` keeps `flex: 0 0 auto`.
+2. **The text wraps inside its box.** `.failure .said` gets `overflow-wrap: anywhere` (a long path or id
+   breaks rather than overflows) and `white-space: pre-wrap` (a failure's own line breaks are kept).
+3. **Nothing else moves.** The retry listener is delegated to `#failure` and matches `[data-retry]`
+   (`chatPage.ts:2009-2020`), so the button still works wherever it sits inside the region — which is
+   exactly what the existing *"the retry control is still live after its region has been rewritten"*
+   test guards; the host still builds the markup through the one builder both render paths use.
+
+## Build order
+
+1. Tests first (`chatPage.test.ts`): the rendered failure has the button OUTSIDE the `.failure` element and
+   inside the row; no row button without a retry; the parsed stylesheet (`cssRules.ts`) gives `.failure
+   .said` `overflow-wrap: anywhere` and `white-space: pre-wrap`, and `.failureRow` `display: flex`. Red.
+2. The markup and the CSS. Green. Every new assertion proved by breaking it.
+3. Docs: `research/module_extension.md` (the chat page), CHANGELOG `## Unreleased`,
+   `research/module_tests.md` — and what is NOT covered: no layout engine, so the absence of an overlap
+   on screen is asserted through structure and declarations, not measured.
+
+## Test plan
+
+- `cd src_vs_code && npm test`, `npm run lint`. The bundled page test (`bundledPage.test.ts`) still presses
+  *Try again* in the shipped bundle.
+
+## Definition of Done
+
+- [ ] *Try again* is outside the red box, to its right.
+- [ ] A long failure text wraps inside the box, and keeps its own line breaks.
+- [ ] The retry still works after its region is rewritten, and in the shipped bundle.
+- [ ] Tests red first; `npm test` and lint green; docs updated; this plan promoted to `research/`.
