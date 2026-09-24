@@ -29,6 +29,7 @@ import { Choice, manageReviewTrees, TreesDeps } from './reviewTreesCommand';
 import { readTrees, removeTree } from './reviewTreeRead';
 import { openTreeFolder } from './revisionOpen';
 import { goToConversation } from './chatGotoCommand';
+import { backToSource } from './chatReturnCommand';
 import { ChatTabMemory } from './chatTabs';
 import { ChatStoreFile, conversationsDir } from './chatStoreFile';
 import { startHousekeeping } from './chatStoreHousekeeping';
@@ -551,6 +552,23 @@ export function activate(context: vscode.ExtensionContext): void {
             source: 'goToConversation',
             code: 'conversation-not-opened',
             title: 'That conversation could not be opened.',
+            detail: asText(reason),
+          });
+        });
+    }),
+    // The road back (issue #314): from a coai chat to the tab, session or file it came from. NOT a
+    // chat door — it opens no conversation — so nothing is recorded for it. Its decision is
+    // `chatReturn.ts`; a right-click hands it the page's conversation id, the chord hands it nothing.
+    vscode.commands.registerCommand('coai.backToSource', (asked?: unknown) => {
+      void backToSource(chatPanels, asked)
+        .catch((reason: unknown) => {
+          console.error('ConnectOtherAIs: going back from a chat threw', reason);
+          void notify({
+            as: 'warning',
+            class: 'failure',
+            source: 'backToSource',
+            code: 'chat-back-failed',
+            title: 'CoAI could not go back to where this chat came from.',
             detail: asText(reason),
           });
         });

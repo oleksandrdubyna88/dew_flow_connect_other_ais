@@ -35,6 +35,7 @@ function fakes(): Fake {
         reveal: () => { reveals += 1; },
         dispose: () => { panelDisposals += 1; },
         post: (message: unknown) => { messages.push(message); },
+        isActive: () => false,
       },
       session: { dispose: () => { sessionDisposals += 1; } },
     },

@@ -40,7 +40,9 @@ Claude panel (`package.json:928-953`) — so the way back is to hunt through the
   session is revealed, otherwise a remembered tab is revived or a new panel opened on that session. Called
   with `{programmatic: true}` so it does not move Claude's preferred location or grab its input. It is
   another extension's internal command, not an API — so it is asked for only when B cannot be used, and
-  only if `vscode.commands.getCommands(true)` lists it.
+  the CALL is the check: executed, and a rejection (not installed, or installed and failing on a stale
+  session) is a refusal naming the session. No `getCommands` pre-check, which proves only that a name is
+  listed (local and codex, the plan round).
 
 ## The design
 
@@ -54,8 +56,13 @@ Claude panel (`package.json:928-953`) — so the way back is to hunt through the
 2. **The executor, `chatReturnCommand.ts`** — finds the conversation, asks `backTo`, does the one thing
    the answer names, and says so when it cannot (`notify`, refusal class): *"This conversation does not
    know where it came from — it was opened from the picker or restored before its source was recorded."* /
-   *"Claude Code does not offer a way to open session {id} here."* A tab that did not become active within
-   a second (the recipe's own wait) is a refusal too, never silence.
+   *"Claude Code could not open session {id}: {reason}."* A tab that did not become active within a
+   second (the recipe's own wait) is a refusal too, never silence. Recipe B is GUARDED: a tab whose group
+   is past the eighth (`focusEighthEditorGroup` is the last fixed command) or that is no longer in its
+   group's list (`indexOf` = -1, moved or closed since the snapshot) is not attempted, and the decision
+   falls through to the recorded source (gemini, the plan round). A file that no longer opens —
+   deleted, or renamed without the rename follower seeing it — is a refusal naming the file (local).
+   Every sentence goes through `notify`, as *go to*'s do.
 3. **Which chat was right-clicked.** A `webview/context` command receives only `{webview: 'coaiChat'}`
    plus the page's `data-vscode-context` (`chatTrigger.ts:30-38`). The page's `<body>` gets
    `data-vscode-context='{"coaiConversation":"<saveId>"}'` (`chatPage.ts:2346`), rewritten when *New chat*
@@ -67,10 +74,11 @@ Claude panel (`package.json:928-953`) — so the way back is to hunt through the
    ways and the two `when`s never overlap. Registered in `extension.ts` beside *go to*, with its own
    `.catch` → `notify`. **Not a chat door** — it opens no conversation — so `noteChatDoor` is not called.
 5. **The door census.** `chatWiring.test.ts:462-470` derives the doors from EVERY `webview/context` item
-   and would count this one. The derivation excludes items scoped to `webviewId == 'coaiChat'` — our own
-   page's menu acts on a conversation that is already open — with the two-way check `:472-490` already
-   uses for `actsOnOurPicker`: every excluded item really is scoped to our page, and nothing that opens a
-   chat hides behind the scope.
+   and would count this one. It gets an explicit ALLOW-LIST of commands that act inside an open chat —
+   today exactly `coai.backToSource` — rather than a blanket exclusion by scope: a later chat-opening
+   command scoped to our page would otherwise be excluded by its `when` alone (codex, the plan round).
+   Two-way: every allow-listed command is really scoped to `webviewId == 'coaiChat'`, and every item
+   scoped there is allow-listed — so a new one must be classified, door or not, by a person.
 
 ## What is deliberately NOT here
 
@@ -114,6 +122,8 @@ Claude panel (`package.json:928-953`) — so the way back is to hunt through the
 - [ ] Right-click in a coai chat offers the command, and it activates the tab the chat came from.
 - [ ] The chord does the same from an active chat, and *go to* still works from a Claude tab.
 - [ ] A restored chat goes back by its recorded session; a file chat to its file; an unknown source says so.
+      The SESSION route is ticked only when it was OBSERVED against a real Claude Code; otherwise it is
+      left open and the PR says so (codex, the plan round).
 - [ ] The door census does not count the new command, and fails if a real door hides behind the scope.
 - [ ] Tests for every step; `npm test`, `npm run lint` green; live check reported.
 - [ ] `module_extension.md`, `module_tests.md` and the CHANGELOG updated; this plan promoted to `research/`.

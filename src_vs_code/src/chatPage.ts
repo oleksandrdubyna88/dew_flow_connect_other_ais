@@ -1250,6 +1250,14 @@ export function shouldFollow(
 }
 
 /** The page's behaviour. Its own function for the same reason the styles are. */
+/**
+ * What a right-click in the page hands its menu commands: the conversation's store id (issue #314).
+ * The page script's `nameConversation` writes the same shape when the id changes.
+ */
+export function conversationContext(id: string): string {
+  return JSON.stringify({ coaiConversation: id });
+}
+
 function chatScript(state: ChatPageState, regions: Regions): string {
   return `(function () {
   const vscode = acquireVsCodeApi();
@@ -1720,6 +1728,14 @@ function chatScript(state: ChatPageState, regions: Regions): string {
       model.addEventListener('change', function () { pick(provider ? provider.value : '', model.value); });
     }
   }
+  // The id a right-click in this page hands to CoAI: back to where this chat came from (issue #314).
+  // VS Code merges data-vscode-context from the clicked element and every ancestor into the menu
+  // command's argument, so the one on body reaches every click. Rewritten whenever the tab is given a
+  // new id - a New chat, or a fork in another window - or the command would look for a conversation
+  // this tab no longer holds.
+  function nameConversation(id) {
+    document.body.setAttribute('data-vscode-context', JSON.stringify({ coaiConversation: id }));
+  }
   function wireCapped() {
     const restart = document.getElementById('restart');
     if (restart) {
@@ -2109,6 +2125,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
         const held = vscode.getState() || {};
         held.id = data.id;
         vscode.setState(held);
+        nameConversation(data.id);
       }
       const where = document.getElementById('failure');
       if (where && typeof data.noteHtml === 'string' && data.noteHtml.length > 0) {
@@ -2143,6 +2160,7 @@ function chatScript(state: ChatPageState, regions: Regions): string {
         // than replaced for the reason the note handler above gives at length — naming one field
         // would throw away everything else a future page keeps in it. (codex, the code round.)
         vscode.setState(Object.assign({}, vscode.getState() || {}, { id: data.id }));
+        nameConversation(data.id);
       }
       const quoted = document.getElementById('passage');
       if (quoted) {
@@ -2374,7 +2392,7 @@ ${chatStyle(state.uiScale, state.textTone, state.models, state.messages)}
      back, and there is no querySelectorAll in the hot path to get wrong. -->
 <style id="folds"></style>
 </head>
-<body>
+<body data-vscode-context="${escapeHtml(conversationContext(state.id))}">
 ${chatBody(state, regions)}
 <script nonce="${nonce}">
 ${chatScript(state, regions)}

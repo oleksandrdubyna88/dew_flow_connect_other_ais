@@ -5,8 +5,9 @@ import { test } from 'node:test';
 import { ChatMessage } from '../chatPage';
 import { ModelPreset } from '../chatPresets';
 import { ChatProvider } from '../chatModels';
-import { ChatPageState, NO_MARKS, markedTurn, COLLAPSE_AFTER_CHARS, COLLAPSE_AFTER_LINES, FOLLOW_SLACK_PX, chatCappedHtml, chatFailureHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, foldKey, foldLabel, isLong, shouldFollow } from '../chatPage';
+import { ChatPageState, NO_MARKS, conversationContext, markedTurn, COLLAPSE_AFTER_CHARS, COLLAPSE_AFTER_LINES, FOLLOW_SLACK_PX, chatCappedHtml, chatFailureHtml, chatMessagesHtml, chatPresetRowsHtml, chatPageHtml, chatPickerHtml, chatStatusHtml, foldKey, foldLabel, isLong, shouldFollow } from '../chatPage';
 import { ChatModelChoice } from '../chatContracts';
+import { escapeHtml } from '../webviewHtml';
 import { beating, couldMatch, painters, stylesheet, type Element } from './cssRules';
 import { acknowledgement } from '../answerCopy';
 import { chatCommandOf } from '../chatMessages';
@@ -403,6 +404,8 @@ interface RunningPage {
   focusOn(id: string): void;
   /** Every copy control the page has actually rendered, read out of the markup it wrote. */
   copyControls(): Fake[];
+  /** An attribute the page's script wrote onto `<body>` — how its right-click context is read back. */
+  bodyAttribute(name: string): string;
   /** Run what the page asked to happen later — the second a copy acknowledgement lasts.
    *  `count` runs only the oldest N, so one press's timer can fire while another's is still pending. */
   secondPasses(count?: number): void;
@@ -542,6 +545,13 @@ function runChatPage(over: RunOptions = {}): RunningPage {
       });
   };
   const copyControls = (): Fake[] => serve('.copy');
+  // The body is an element too: the page writes its right-click context onto it (issue #314), and a
+  // real DOM answers setAttribute there as anywhere else.
+  const bodyOf = {
+    style: emptyStyle(),
+    attributes: {} as Record<string, string>,
+    setAttribute(name: string, value: string) { bodyOf.attributes[name] = value; },
+  };
   const document_ = {
     get activeElement() { return focused; },
     getElementById: (id: string) => {
@@ -569,7 +579,7 @@ function runChatPage(over: RunOptions = {}): RunningPage {
     // rule `cssRules.ts` follows by answering `undefined` rather than guessing a match.
     querySelectorAll: (selector: string) => serve(selector),
     addEventListener() { /* the page listens on window */ },
-    body: { style: emptyStyle() },
+    body: bodyOf,
     fonts: { ready: fontsReady },
   };
   const window_ = {
@@ -667,6 +677,7 @@ function runChatPage(over: RunOptions = {}): RunningPage {
       focused = element;
     },
     copyControls: () => copyControls(),
+    bodyAttribute: (name: string) => bodyOf.attributes[name] ?? '',
     secondPasses(count = Number.POSITIVE_INFINITY) {
       // The OLDEST first, and only as many as asked — because "the first press's timer fires while
       // the second press still has half its second left" is a real sequence, and draining every
@@ -3251,4 +3262,32 @@ test('an acknowledgement naming no signature is ignored rather than keyed on the
     marked(page), [],
     'a coordinate with no signature was accepted, so two unsignable controls would share one key',
   );
+});
+
+// ---------------------------------------------------------------------------------------------
+// The way back (issue #314): a right-click in the page names the conversation it is in.
+// ---------------------------------------------------------------------------------------------
+
+test('the page names its conversation for a right-click, in the shape the command reads', () => {
+  const html = chatPageHtml(state({ id: 'conv-7' }), 'n0nce');
+  const opening = html.slice(html.indexOf('<body'), html.indexOf('>', html.indexOf('<body')) + 1);
+
+  assert.equal(opening, `<body data-vscode-context="${escapeHtml(conversationContext('conv-7'))}">`);
+  assert.deepEqual(JSON.parse(conversationContext('conv-7')), { coaiConversation: 'conv-7' });
+});
+
+test('a New chat renames the conversation a right-click names', () => {
+  // The tab is given a new id by a reset; a context still naming the old one would send the command
+  // looking for a conversation this tab no longer holds.
+  const page = runChatPage({});
+  page.deliver({ type: 'fresh', id: 'another-conversation' });
+
+  assert.deepEqual(JSON.parse(page.bodyAttribute('data-vscode-context')), { coaiConversation: 'another-conversation' });
+});
+
+test('a fork renames it too', () => {
+  const page = runChatPage({});
+  page.deliver({ type: 'note', id: 'the-copy', noteHtml: '' });
+
+  assert.deepEqual(JSON.parse(page.bodyAttribute('data-vscode-context')), { coaiConversation: 'the-copy' });
 });

@@ -196,7 +196,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 127 → 130 on 2026-09-23, issue #289: agent mode for a local chat. Three places, because they are three
 // kinds: the confirmation asked BEFORE a model is handed the computer (modal), the outcome once the new
 // mode is in force, and the refusal when the model or the folder cannot have it.
-const PLACES_THIS_SPEAKS = 130;
+// 130 → 132 on 2026-09-24, issue #314: the way back from a chat. Two places, because they are two kinds: the
+// refusal when the conversation knows nowhere to go (or the tab, session or file will not come
+// forward), and the failure when the command itself throws.
+const PLACES_THIS_SPEAKS = 132;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this
