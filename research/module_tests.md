@@ -1989,3 +1989,15 @@ one-shot reads after the server has answered.
   shipped stylesheet draws them from the attribute.
 - **Not asserted:** the layout itself (the absence of a blank row, the gutter's alignment, where the choose
   button sits) needs a browser; it was checked in headless Chrome over the page's real markup and CSS.
+
+## A counted retry counts only what it was told to lose (2026-09-24, issue #520)
+
+`AStubSurvivesALostPortTests.EveryCodeTheStubClaims_CostsTheCandidateAndNotTheRun` pinned exactly two binds
+(the injected loss, then the real one), which is true only while nothing else binds a port between
+`LoopbackStub.FreePorts()` listing a candidate and the stub binding it — and the suite runs in parallel: a CI leg
+found 3. The product kept its promise (one retry per LOSS); the test assumed a still machine. `CountedBind`
+injects the loss on the first call, binds for real after that and writes down every real attempt that lost its
+port to somebody else; the count stays EXACT — `2 + lost for real`, the losses named in the message — and a real
+failure that is not a taken port still escapes. `ACandidateAnotherProcessTakes_IsCountedAsALossOfItsOwn` makes
+the race deterministic with a held socket as the second candidate: red against the old `== 2` with #520's own
+message ("found 3"), green with the count.
