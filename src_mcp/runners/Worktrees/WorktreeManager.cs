@@ -363,19 +363,35 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
     }
 
     /// <summary>The path with every link on the way to it resolved — what <c>realpath</c> answers.</summary>
-    internal static string Resolved(string path)
+    internal static string Resolved(string path) => Resolved(path, depth: 0);
+
+    /// <summary>How many links deep a resolution follows before it stops — a loop of links is not a path.</summary>
+    private const int LinkDepth = 16;
+
+    private static string Resolved(string path, int depth)
     {
         var full = Path.GetFullPath(path);
         var root = Path.GetPathRoot(full) ?? string.Empty;
         return full[root.Length..]
             .Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries)
-            .Aggregate(root, (at, part) => Through(Path.Combine(at, part)));
+            .Aggregate(root, (at, part) => Through(Path.Combine(at, part), depth));
     }
 
-    /// <summary>One step of <see cref="Resolved"/>: a directory link is followed to its final target.</summary>
-    private static string Through(string at) =>
-        System.IO.Directory.Exists(at) && new DirectoryInfo(at).ResolveLinkTarget(returnFinalTarget: true) is { } target
-            ? target.FullName
+    /// <summary>
+    /// One step of <see cref="Resolved"/>: a directory link is followed, and its TARGET resolved again.
+    /// </summary>
+    /// <remarks>
+    /// A link's target is stored as it was written, and on Unix <c>ResolveLinkTarget</c> follows the
+    /// chain of targets without canonicalising their own components — so a root linked to
+    /// <c>/var/…/real</c> stopped at that spelling while git printed <c>/private/var/…/real</c>. The
+    /// macOS job of PR 499 caught the first version of this stopping one link short; Windows answers
+    /// the final path by handle and never showed it.
+    /// </remarks>
+    private static string Through(string at, int depth) =>
+        depth < LinkDepth
+        && System.IO.Directory.Exists(at)
+        && new DirectoryInfo(at).ResolveLinkTarget(returnFinalTarget: true) is { } target
+            ? Resolved(target.FullName, depth + 1)
             : at;
 
     private static string OwnerFile(string path) => path.TrimEnd('/', '\\') + OwnerSuffix;
