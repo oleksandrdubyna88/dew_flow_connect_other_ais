@@ -5,6 +5,7 @@ import { ChatModelChoice } from '../chatContracts';
 import { chatCommandOf } from '../chatMessages';
 import { began, isWanted, join, withdraw } from '../chatQueue';
 import type { WaitingQuestion } from '../chatPage';
+import { ChatPushState, sendChatState } from '../chatStateMessage';
 
 /**
  * The page and the host, joined — issue #288.
@@ -327,4 +328,64 @@ test('the host’s push is what ticks the box, and what disables it during a tur
   assert.equal(page.element('agent')['checked'], false);
   assert.equal(page.element('agent')['disabled'], false);
   assert.equal(page.element('agentBox')['hidden'], true, 'a Team-server model was left offered the box');
+});
+
+// ------------------------------------------------------------------------------------------------
+// Issue #492: the spending line and the Re-ask caption follow the conversation. Both were drawn at the
+// first render and never again, because the state the host PUSHED left them out.
+// ------------------------------------------------------------------------------------------------
+
+/** What the host pushes, as `show` builds it — everything idle unless a test says otherwise. */
+function pushState(over: Partial<ChatPushState> = {}): ChatPushState {
+  return {
+    messages: [], running: false, capped: false, waiting: [], failure: '', models: MODELS, providers: [],
+    reask: '', canRetry: false, attached: '', spend: '', access: 'text', agentOffered: false,
+    providerId: 'antigravity', modelId: 'antigravity', promptId: '', promptPresets: [], modelPresets: [],
+    marks: NO_MARKS, chosenModelId: 'antigravity', carryFrom: 0, queued: 0, turn: 0,
+    ...over,
+  };
+}
+
+/** A tab the host can post to, recording what it was sent — the real send path, not a hand-made payload. */
+function aTab(): { readonly entry: { id: object; panel: { post(message: unknown): void } }; readonly sent: Record<string, unknown>[] } {
+  const sent: Record<string, unknown>[] = [];
+
+  return { entry: { id: {}, panel: { post: (message: unknown) => { sent.push(message as Record<string, unknown>); } } }, sent };
+}
+
+test('a turn that costs something moves the spending line, through what the host really sends', () => {
+  const page = runPage({ spend: '' });
+  const tab = aTab();
+
+  assert.equal(sendChatState(tab.entry, pushState({ spend: '$0.04 so far' })), true);
+  page.push(tab.sent.at(-1)!);
+
+  assert.equal(page.element('spend')['textContent'], '$0.04 so far',
+    'the line beside the picker must say what the conversation has cost, not what it cost when the tab opened');
+});
+
+test('the Re-ask caption and the empty-box re-ask follow the model, both ways', () => {
+  const page = runPage({ reask: '' });
+  const tab = aTab();
+
+  sendChatState(tab.entry, pushState({ reask: 'Opus' }));
+  page.push(tab.sent.at(-1)!);
+  assert.equal(page.element('send')['textContent'], 'Re-ask · Opus', 'the button names who a re-ask goes to');
+  page.click('send');
+  assert.deepEqual(page.posted.filter((m) => m['command'] === 'reask').length, 1, 'an empty box and Send re-asks');
+
+  sendChatState(tab.entry, pushState({ reask: '' }));
+  page.push(tab.sent.at(-1)!);
+  assert.equal(page.element('send')['textContent'], 'Send', 'with nothing to re-ask the button is Send again');
+  page.click('send');
+  assert.equal(page.posted.filter((m) => m['command'] === 'reask').length, 1, 'and an empty box re-asks nothing');
+});
+
+test('an unchanged state is not sent twice, and a changed spend is', () => {
+  const tab = aTab();
+
+  assert.equal(sendChatState(tab.entry, pushState({ spend: '$0.01' })), true);
+  assert.equal(sendChatState(tab.entry, pushState({ spend: '$0.01' })), false, 'the same state again sends nothing');
+  assert.equal(sendChatState(tab.entry, pushState({ spend: '$0.02' })), true, 'a new cost is news, and is sent');
+  assert.equal(tab.sent.length, 2);
 });

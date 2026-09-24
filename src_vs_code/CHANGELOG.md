@@ -7,6 +7,10 @@ carries its number — a skeleton from its method's first line, the real code as
 the blank row that followed every line is gone. A copy of the code still carries the code alone. The
 *CoAI: choose* button now sits next to the method's name.
 
+**A chat's cost and its Re-ask button keep up** (issue #492). The spending line beside the picker now
+changes as turns are paid for, and the *Re-ask* caption — and re-asking with an empty box — follows the
+model you switch to. Both used to keep what they showed when the tab opened.
+
 **CoAI: choose on every bug** (issue #487). Each row of the Bugz review page has a *CoAI: choose* button beside
 its method. It puts that pair into a chat — Where, Why, Fix, Complexity, Before, After and your comment, the
 words you are still typing included — and sends nothing: you choose the model and the question in the chat.

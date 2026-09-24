@@ -9194,3 +9194,14 @@ key. Skeletons count from 1 — the server keeps no start line for them — and 
 
 **The CoAI: choose button (#487)** sits next to the method's name: the disclosure button is as wide as its own
 lines (`flex: 0 1 auto`) instead of the row's whole width, which had pushed the button to the page's far edge.
+
+## The chat's spending line and Re-ask caption follow the conversation (2026-09-24, issue #492)
+
+`pushChatState` built the 'state' message without `spend` and `reask`, although `ChatPushState` carries both
+and the page's handler reads both — so after the first render the spending line kept the tab's opening cost
+and the *Re-ask · model* caption (with the empty-box re-ask behind it) kept the model the tab was opened on,
+through every switch. The message builder and the de-duplicated send moved, unchanged, into the
+`vscode`-free `chatStateMessage.ts` (`chatStateMessage`, `sendChatState`, `ChatPushState` re-exported from
+`chatPanel.ts`); `pushChatState` keeps only the `offered` pairs the pick check reads and calls
+`sendChatState`. The message now carries `spend` and `reask`. A model pick already ended in a push
+(`onPick` → `switchModel` → `switchNow` → `show`), so the caption follows it.
