@@ -147,10 +147,13 @@ test('adding a role into a full stage stores it switched off rather than lying a
   assert.strictEqual(isActive(added), false);
 });
 
-test('adding a role into a stage with room stores it switched on', () => {
+test('adding a role into a stage with room still stores it switched off: it has no question yet', () => {
+  // It used to be switched on whenever there was room — issue #338's `Role2`, enabled, counted and
+  // skipped by every round because its one prompt had no text. Switching it on is refused until the
+  // question exists (aRoleNeedsAQuestion.test.ts).
   const after = rowsOf(rowsAfter([], { kind: 'add' }));
 
-  assert.strictEqual(isActive(after[after.length - 1]!), true);
+  assert.strictEqual(isActive(after[after.length - 1]!), false);
 });
 
 test('the last role active in a stage cannot be switched off', () => {

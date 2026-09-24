@@ -1019,6 +1019,13 @@ public sealed partial class PanelService
     /// the adapter, the adapter said what it contends on, and the scheduler picks its lane by the same
     /// property.</para>
     /// </remarks>
+    /// <summary>
+    /// The role's own name as the start of a sentence about it — <c>“My role” — </c> — or nothing when it
+    /// has none but its id. Issue #338.
+    /// </summary>
+    private static string NamedAs(RoleCatalog catalog, string role) =>
+        catalog.ById(role)?.Name is { Length: > 0 } name && name != role ? $"“{name}” — " : string.Empty;
+
     private static IReadOnlyList<ReviewerWork> LocalRowsFirst(IReadOnlyList<ReviewerWork> rows) =>
         [.. rows.Where(r => r.Invocation.IsOnEngine), .. rows.Where(r => !r.Invocation.IsOnEngine)];
 
@@ -1929,7 +1936,9 @@ public sealed partial class PanelService
             // they could fix. (codex, story B2's code round.)
             if (!_prompts.Has(choice))
             {
-                Skip(role, $"its prompt '{choice.Id}' has no text — write it at {_prompts.FileToWrite(choice.Id)}");
+                // BY NAME as well as by id (issue #338): a new role's id is minted before it has a name —
+                // `Role2` — so the id alone names nothing the person recognises.
+                Skip(role, $"{NamedAs(catalog, role)}its prompt '{choice.Id}' has no text — write it at {_prompts.FileToWrite(choice.Id)}");
                 return;
             }
 

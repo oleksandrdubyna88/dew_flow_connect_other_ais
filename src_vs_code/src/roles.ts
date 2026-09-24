@@ -358,6 +358,48 @@ export function bucketAt(row: RoleRow, stage: string): RoleBucket {
   return bucketOf({ ...row, stage });
 }
 
+/**
+ * Why this role cannot be asked anything, or empty when it can — issue #338.
+ *
+ * <p>A round asks a role its FIRST prompt unless a per-round choice says otherwise, and the server
+ * skips a role whose prompt has no text (`RolePrompts.Has`, blank counting as none). A role this
+ * product ships always has text: its prompts are in the binary. A role of one's own has text only when
+ * somebody wrote it — and every new role starts without. The sentence names the role by the NAME a
+ * person gave it, never by the generated id (`Role2`) the only earlier signal used.</p>
+ *
+ * @param texts the prompt bodies that exist, by prompt id — `RolesPageState.texts`
+ */
+export function whyNotAskable(row: RoleRow, texts: Readonly<Record<string, string>>): string {
+  if (isBuiltIn(row.id)) {
+    return '';
+  }
+  const first = firstPrompt(row);
+  if (first === undefined) {
+    return `“${displayName(row)}” has no prompt, so there is no question to ask it.`;
+  }
+
+  return hasText(texts, first.id)
+    ? ''
+    : `“${displayName(row)}” has no question to ask: its first prompt “${promptLabel(first)}” has no text.`;
+}
+
+function promptLabel(prompt: PromptRow): string {
+  return prompt.label ?? prompt.id;
+}
+
+/** The prompt a round asks when nobody chose another for it — the first, by position. */
+function firstPrompt(row: RoleRow): PromptRow | undefined {
+  return (row.prompts ?? [])[0];
+}
+
+function displayName(row: RoleRow): string {
+  return row.name ?? row.id;
+}
+
+function hasText(texts: Readonly<Record<string, string>>, promptId: string): boolean {
+  return (texts[promptId] ?? '').trim().length > 0;
+}
+
 /** Whether a row takes part at all, defaulting to yes as the server defaults it. */
 export function isActive(row: RoleRow): boolean {
   return row.active ?? true;
