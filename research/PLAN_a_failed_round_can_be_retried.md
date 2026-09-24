@@ -1,7 +1,7 @@
 # PLAN — a failed round can be retried, and a round with nothing in it is never a pass
 
 > Status: **IMPLEMENTED, 2026-09-24**, except S3c's shared-rule half, extracted to
-> [PLAN_the_gate_rule_says_a_code_round_closes_the_session.md](../todo/PLAN_the_gate_rule_says_a_code_round_closes_the_session.md)
+> [PLAN_the_gate_rule_says_a_code_round_closes_the_session.md](PLAN_the_gate_rule_says_a_code_round_closes_the_session.md)
 > (a conventions change is a pin cascade of its own). **What shipped differently:** the empty-diff
 > check is a `StageRun.RefuseBeforeBuilding` hook run from the resolved sha before any worktree, and
 > it is handed the session read UNDER the claim (code round); the uncommitted tail is a

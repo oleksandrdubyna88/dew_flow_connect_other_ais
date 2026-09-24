@@ -1,12 +1,30 @@
 # PLAN — the shared gate rule says a code round closes the session, and where the second one is
 
-> Status: **in progress, 2026-09-24 — the rule text is written; the pin cascade to the six consumers
-> is under way.** Scope: `common/coai-review-gate.md` in the conventions repository (the text of step 5;
-> the `coai-snippet v5` marker stays frozen), and the pin cascade that carries it to its six consumers.
-> Extracted from [PLAN_a_failed_round_can_be_retried.md](../research/PLAN_a_failed_round_can_be_retried.md)
+> Status: **IMPLEMENTED, 2026-09-24.** The rule change is conventions #52, promoted to `release` at
+> a847ab7. The cascade landed in the order the README requires:
+>
+> 1. mcp #37
+> 2. sidecar_rust #45
+> 3. benchmark #36
+> 4. creds_for_devs #148
+> 5. connect_other_ais #502
+> 6. rag_qln #43, all three pins
+>
+> **What shipped differently:**
+> - **The marker did not move.** The first draft said "v5 → v6", but the marker is frozen. The
+>   extension's version triple moved instead: `SNIPPET_BODY_SHA`, `ARTEFACT_VERSION` 11 and the
+>   menu title.
+> - **The text is shorter than the draft below.** The first version was +1 038 bytes, which is too
+>   much for a nearly full rules budget. It shipped at +379 bytes.
+> - **The third refusal names `call_human`, not "a person is asked".** This was the one finding
+>   accepted from the document gate (6/6 reviewers, `proceed`).
+>
+> Scope: `common/coai-review-gate.md` in the conventions repository (the text of step 5), and the
+> pin cascade that carries it to its six consumers.
+> Extracted from [PLAN_a_failed_round_can_be_retried.md](PLAN_a_failed_round_can_be_retried.md)
 > (its S3c) when that plan shipped.
 >
-> Related docs: [module_server.md](../research/module_server.md).
+> Related docs: [module_server.md](module_server.md).
 
 ## The symptom
 
@@ -70,6 +88,6 @@ The other halves' markers do not move, because their rules did not change.
 
 ## Definition of Done
 
-- [ ] The rule says a code round closes the session, names `again: true`, and says COMMITTED only.
-- [ ] The version triple has moved in this repository; the cascade landed in all six consumers.
-- [ ] This plan promoted to `research/`.
+- [x] The rule says a code round closes the session, names `again: true`, and says COMMITTED only.
+- [x] The version triple has moved in this repository; the cascade landed in all six consumers.
+- [x] This plan promoted to `research/`.
