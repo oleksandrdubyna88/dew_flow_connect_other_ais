@@ -1110,5 +1110,6 @@ that would start afterwards returns `ReviewerOutcome.StoodDown(reason)` and repo
 `stood down` with the reason and NO outcome (nothing ran, so nothing reaches the spending ledger or the
 notices page). `ReviewerSummaryFactory` counts a stood-down row as neither asked-and-failed nor answered: it
 joins `NotAsked` as a `SkippedRole("provider/role", reason)`, rendered "… was not asked: …". Findings from
-local rows that did run stay in the verdict. The outcome census (`TheReviewerFailuresAreWrittenDownTests`,
+local rows that did run stay in the verdict. A stood-down row does not spend its plan/code lens: `PanelService.SpentPrompts` pairs
+the work with its results and skips `StoodDown`, so a dealt lens it never used stays in the unspent pool. The outcome census (`TheReviewerFailuresAreWrittenDownTests`,
 `shared/refusal-sites.json`) knows it as the third kind of ending: a decision, not a failure.
