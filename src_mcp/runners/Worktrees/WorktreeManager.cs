@@ -67,6 +67,12 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
     private const string TrashPrefix = "coai-wt-trash-";
     private const string OwnerSuffix = ".owner";
 
+    /// <summary>
+    /// The separators THIS OS has. On Unix a backslash is an ordinary character of a name, and
+    /// splitting on it turned one directory into two that do not exist (CodeRabbit, on PR 499).
+    /// </summary>
+    private static readonly char[] Separators = [Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar];
+
     /// <summary>How long trash may sit before it is said out loud — once, per process.</summary>
     private static readonly TimeSpan TrashNamedAfter = TimeSpan.FromHours(24);
 
@@ -339,7 +345,7 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
 
     private static bool HasOurName(string path)
     {
-        var name = Path.GetFileName(path.TrimEnd('/', '\\'));
+        var name = Path.GetFileName(path.TrimEnd(Separators));
         return name.StartsWith(Prefix, StringComparison.Ordinal) && !name.StartsWith(TrashPrefix, StringComparison.Ordinal);
     }
 
@@ -359,7 +365,7 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         string[] candidates = [Path.GetFullPath(path), Resolved(path)];
         return candidates.Any(candidate => roots.Any(root => candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase)));
 
-        static string Directory(string root) => Path.GetFullPath(root).TrimEnd('/', '\\') + Path.DirectorySeparatorChar;
+        static string Directory(string root) => Path.GetFullPath(root).TrimEnd(Separators) + Path.DirectorySeparatorChar;
     }
 
     /// <summary>The path with every link on the way to it resolved — what <c>realpath</c> answers.</summary>
@@ -373,7 +379,7 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
         var full = Path.GetFullPath(path);
         var root = Path.GetPathRoot(full) ?? string.Empty;
         return full[root.Length..]
-            .Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries)
+            .Split(Separators, StringSplitOptions.RemoveEmptyEntries)
             .Aggregate(root, (at, part) => Through(Path.Combine(at, part), depth));
     }
 
@@ -394,7 +400,7 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
             ? Resolved(target.FullName, depth + 1)
             : at;
 
-    private static string OwnerFile(string path) => path.TrimEnd('/', '\\') + OwnerSuffix;
+    private static string OwnerFile(string path) => path.TrimEnd(Separators) + OwnerSuffix;
 
     /// <summary>Eight hex characters: enough that two attempts never share a path, short enough to read.</summary>
     private static string ShortId() => Guid.NewGuid().ToString("N")[..8];
