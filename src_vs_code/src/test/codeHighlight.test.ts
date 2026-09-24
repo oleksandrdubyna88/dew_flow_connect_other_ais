@@ -360,3 +360,34 @@ test('a line is never a block, and the newline between two lines stays for the c
       `${language}: the two line breaks a copy of three lines needs`);
   }
 });
+
+/** The line numbers each line of a block carries, in order. */
+const numbered = (html: string): readonly number[] =>
+  [...html.matchAll(/<span class="ln" data-ln="(\d+)" aria-hidden="true"><\/span>/gu)].map((m) => Number(m[1]));
+
+/**
+ * Every line is numbered (issue #488) — and the number is never TEXT.
+ *
+ * <p>It rides a `data-ln` attribute and the stylesheet draws it, so a copy of the code, a screen reader
+ * and every reading of the block's text get the code and nothing else. The first line's number is the
+ * caller's: a skeleton's method starts at 1, a real method at its line in the file.</p>
+ */
+test('every line carries its number, from the line asked for, and the code\'s text is untouched', () => {
+  for (const language of ['CSharp', 'Fortran']) {
+    const code = 'a();\nb();\nc();';
+
+    assert.deepEqual(numbered(highlight(code, language)), [1, 2, 3], `${language}: a block numbers from 1 by default`);
+    const at41 = highlight(code, language, ['same', 'added', 'same'], 41);
+    assert.deepEqual(numbered(at41), [41, 42, 43], `${language}: a real method numbers from its own first line`);
+    assert.equal(readable(at41).replace(/(added|changed|removed) line: /gu, ''), code,
+      `${language}: the numbers are drawn, never part of what is read or copied`);
+    assert.match(at41, /<span class="ln" data-ln="42" aria-hidden="true"><\/span><span class="srOnly">added line: <\/span>/u,
+      `${language}: the number leads the line, the spoken mark after it`);
+    assert.match(at41, /--coai-ln-digits:\s*2/u, `${language}: the gutter is as wide as the block's largest number`);
+  }
+});
+
+test('the same code numbered from another line is other markup, not a cached copy', () => {
+  assert.deepEqual(numbered(highlight('x();', 'CSharp', [], 7)), [7]);
+  assert.deepEqual(numbered(highlight('x();', 'CSharp', [], 900)), [900], 'the first line is part of the cache key');
+});

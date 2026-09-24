@@ -1,7 +1,7 @@
 import csharp from '@shikijs/langs/csharp';
 import javascript from '@shikijs/langs/javascript';
 import typescript from '@shikijs/langs/typescript';
-import { createCssVariablesTheme, createHighlighterCoreSync, type HighlighterCore } from 'shiki/core';
+import { createCssVariablesTheme, createHighlighterCoreSync, type HighlighterCore, type ShikiTransformer } from 'shiki/core';
 import { createJavaScriptRegexEngine } from 'shiki/engine/javascript';
 
 import { corpusLanguage } from './corpusLanguage';
@@ -176,13 +176,13 @@ function touch(key: string, html: string): string {
  * nothing is indistinguishable from a pair that was never collected.</p>
  */
 export function highlight(
-  code: string, language: string, marks: readonly LineMark[] = [],
+  code: string, language: string, marks: readonly LineMark[] = [], firstLine = 1,
 ): string {
   const grammar = corpusLanguage(language);
   if (grammar === undefined) {
     // No cache entry: this path is a string concatenation, and caching it would spend the bound on
     // the blocks that cost nothing to make.
-    return plain(code, 'plain', marks);
+    return plain(code, 'plain', marks, firstLine);
   }
 
   // The marks are PART of the key. They are not: the same skeleton diffed against a different
@@ -192,7 +192,9 @@ export function highlight(
   // set of words can in principle spell another sequence, and a delimiter costs nothing next to
   // being sure. They are part of the key because the same skeleton diffed against a different
   // counterpart is different markup — a key without them serves one pair's colouring to another.
-  const key = `${grammar}::${marks.join('|')}::${code}`;
+  // And so is the first line's number (issue #488): the same code numbered from another line is
+  // other markup, and a key without it would serve one method's numbers to another.
+  const key = `${grammar}::${firstLine}::${marks.join('|')}::${code}`;
 
 
   const already = rendered.get(key);
@@ -209,23 +211,7 @@ export function highlight(
       // Shiki puts the class on the line's own node, so the diff rides ON TOP of the tokens
       // without a string replace ever touching the markup — which is the one way to add a class
       // per line that cannot cut a token or an entity in half.
-      transformers: [{
-        line(node, line) {
-          const mark = marks[line - 1];
-          if (mark !== undefined && mark !== 'same') {
-            this.addClassToHast(node, `dl-${mark}`);
-            // The +, − and ~ in the gutter are CSS `content`, which most engines keep OUT of the
-            // accessibility tree — three reviewers said so independently. Somebody on a screen
-            // reader would hear both panes as identical code and never learn which lines differ,
-            // which is the whole feature. So the word goes in as real text, hidden visually.
-            //
-            // A NEW array rather than `unshift`: this node is Shiki's, not ours, and mutating
-            // somebody else's object in place is what `coding-style.md` is actually about. Two
-            // reviewers said so and here it costs one allocation per marked line.
-            node.children = [said(mark), ...node.children];
-          }
-        },
-      }],
+      transformers: [numberedAndMarked(marks, firstLine, digitsOf(code, firstLine))],
     }));
   } catch (reason: unknown) {
     // NOT the same answer as an unknown language, which is the distinction two reviewers asked for
@@ -235,8 +221,65 @@ export function highlight(
     // this module is PURE — it cannot reach the funnel — and the row says it in the markup.
     console.warn(`[coai] the ${grammar} grammar could not colour a skeleton:`, reason);
 
-    return plain(code, 'failed', marks);
+    return plain(code, 'failed', marks, firstLine);
   }
+}
+
+/** How many digits the block's LAST line number has — the width its gutter needs. */
+function digitsOf(code: string, firstLine: number): number {
+  return String(firstLine + code.split('\n').length - 1).length;
+}
+
+/** A hast element — the shape Shiki's transformers build lines out of. */
+interface HastElement {
+  type: 'element';
+  tagName: string;
+  properties: Record<string, string>;
+  children: { type: 'text'; value: string }[];
+}
+
+/**
+ * The line's number, as an ATTRIBUTE the stylesheet draws (issue #488).
+ *
+ * <p>Never text: a copy of the code, a screen reader and every reading of the block's text get the code
+ * and nothing else. `aria-hidden` as well, for an engine that would announce generated content.</p>
+ */
+function numberOf(line: number): HastElement {
+  return {
+    type: 'element',
+    tagName: 'span',
+    properties: { class: 'ln', dataLn: String(line), ariaHidden: 'true' },
+    children: [],
+  };
+}
+
+/**
+ * The transformer: every line gets its number, a line that differs its class and its spoken mark.
+ *
+ * <p>The `<pre>` carries the width of the block's largest number, so the gutter is as wide as it needs and
+ * no wider. The page's CSP allows inline styles; Shiki's own colours ride the same attribute.</p>
+ */
+function numberedAndMarked(marks: readonly LineMark[], firstLine: number, digits: number): ShikiTransformer {
+  return {
+    pre(node) {
+      node.properties = { ...node.properties, style: `${String(node.properties['style'] ?? '')};--coai-ln-digits:${digits}` };
+    },
+    line(node, line) {
+      const mark = marks[line - 1];
+      const differs = mark !== undefined && mark !== 'same';
+      if (differs) {
+        this.addClassToHast(node, `dl-${mark}`);
+      }
+      // The +, − and ~ in the gutter are CSS `content`, which most engines keep OUT of the
+      // accessibility tree — three reviewers said so independently. Somebody on a screen
+      // reader would hear both panes as identical code and never learn which lines differ,
+      // which is the whole feature. So the word goes in as real text, hidden visually.
+      //
+      // A NEW array rather than `unshift`: this node is Shiki's, not ours, and mutating
+      // somebody else's object in place is what `coding-style.md` is actually about.
+      node.children = [numberOf(firstLine + line - 1), ...(differs ? [said(mark)] : []), ...node.children];
+    },
+  };
 }
 
 /** The mark as a word, for a reader who cannot see the colour. */
@@ -282,12 +325,12 @@ function said(mark: LineMark): {
  * `research/module_tests.md` says so rather than leaving it to be assumed.</p>
  */
 export function plainBlock(
-  code: string, why: 'plain' | 'failed', marks: readonly LineMark[] = [],
+  code: string, why: 'plain' | 'failed', marks: readonly LineMark[] = [], firstLine = 1,
 ): string {
-  return plain(code, why, marks);
+  return plain(code, why, marks, firstLine);
 }
 
-function plain(code: string, why: 'plain' | 'failed', marks: readonly LineMark[] = []): string {
+function plain(code: string, why: 'plain' | 'failed', marks: readonly LineMark[] = [], firstLine = 1): string {
   // A failure gets a line a PERSON can read. Two reviewers said the attribute alone is a difference
   // only a parser can see: uncoloured is uncoloured, so somebody scrolling past assumes "we do not
   // read this language" and never learns that a grammar broke on their corpus. It is inside the
@@ -306,10 +349,12 @@ function plain(code: string, why: 'plain' | 'failed', marks: readonly LineMark[]
       ? `<span class="srOnly">${spokenFor(mark)}</span>`
       : '';
 
-    return `<span class="line${dl}">${heard}${escapeHtml(line)}</span>`;
+    const number = `<span class="ln" data-ln="${firstLine + at}" aria-hidden="true"></span>`;
+
+    return `<span class="line${dl}">${number}${heard}${escapeHtml(line)}</span>`;
   }).join('\n');
 
-  return `<pre class="shiki" data-highlight="${why}">${said}<code>${lines}</code></pre>`;
+  return `<pre class="shiki" data-highlight="${why}" style="--coai-ln-digits:${digitsOf(code, firstLine)}">${said}<code>${lines}</code></pre>`;
 }
 
 /**
@@ -357,22 +402,32 @@ export const HIGHLIGHT_CSS = `
      rather than insertedText: these mark whole lines, and the text variant is the tighter
      highlight a character-level diff would use. The gutter letter is a ::before so it costs the
      code no indentation and cannot be selected into a copy. */
+  /* The colour bleeds 6px past both edges; the padding puts the gutter back where an unmarked line has
+     it, so the numbers stay in one column. (Before #488 a marked line's content sat 6px to the left.) */
   pre.shiki .line[class*="dl-"] {
-    width: calc(100% + 12px); margin: 0 -6px; padding: 0 6px 0 0; border-radius: 2px;
+    width: calc(100% + 12px); margin: 0 -6px; padding: 0 6px; border-radius: 2px;
   }
-  pre.shiki .line[class*="dl-"]::before {
-    display: inline-block; width: 1.1em; opacity: .65; font-weight: 600;
+  /* The gutter (issue #488): the line's number, drawn from its data-ln so it is never part of the code's
+     text or a copy of it, right-aligned to the width of the block's largest number — then the +, − or ~
+     of a line that differs, or a space of the same width, so code never steps sideways where a
+     difference begins. */
+  pre.shiki .ln::before {
+    content: attr(data-ln); display: inline-block; min-width: calc(var(--coai-ln-digits, 2) * 1ch);
+    text-align: right; margin-right: .6em; opacity: .4; user-select: none;
+  }
+  pre.shiki .ln::after {
+    content: " "; display: inline-block; width: 1.1em; opacity: .65; font-weight: 600; user-select: none;
   }
   pre.shiki .dl-added {
     background: var(--vscode-diffEditor-insertedLineBackground,
                     var(--vscode-diffEditor-insertedTextBackground, rgba(63, 185, 80, .15)));
   }
-  pre.shiki .dl-added::before { content: "+"; }
+  pre.shiki .dl-added .ln::after { content: "+"; }
   pre.shiki .dl-removed {
     background: var(--vscode-diffEditor-removedLineBackground,
                     var(--vscode-diffEditor-removedTextBackground, rgba(248, 81, 73, .15)));
   }
-  pre.shiki .dl-removed::before { content: "−"; }
+  pre.shiki .dl-removed .ln::after { content: "−"; }
   /* The editor has no "changed line" colour of its own — a diff shows a rewrite as a removal
      beside an addition — so this borrows the gutter's modified marker, which is the colour a
      person already reads as "this line moved". */
@@ -380,12 +435,7 @@ export const HIGHLIGHT_CSS = `
     background: color-mix(in srgb,
       var(--vscode-editorGutter-modifiedBackground, #0c7d9d) 14%, transparent);
   }
-  pre.shiki .dl-changed::before { content: "~"; }
-  /* A line with no mark keeps the gutter's width, or the code would step sideways wherever a
-     difference begins and the eye would follow the indentation instead of the change. */
-  pre.shiki .line:not([class*="dl-"])::before {
-    content: " "; display: inline-block; width: 1.1em;
-  }
+  pre.shiki .dl-changed .ln::after { content: "~"; }
   /* Read aloud, never seen. clip-path rather than display:none, which would take it out of the
      accessibility tree along with the view — the one thing it is here for. */
   .srOnly {
