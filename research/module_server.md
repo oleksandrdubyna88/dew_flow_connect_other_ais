@@ -4326,7 +4326,9 @@ review_code … and commit", review first.
   non-empty diff, so the round runs — and the reviewer line now ends "N uncommitted file(s) in the
   checkout were NOT reviewed (…)". `UncommittedAsync` answers only when the checkout at `repoPath`
   stands on the reviewed commit: a tree on another commit says nothing about this one, and naming its
-  files would be a wrong sentence.
+  files would be a wrong sentence. A git call that could not read the checkout is `Uncommitted` with a
+  reason, said as "could not be read … anything uncommitted was NOT reviewed" — never an empty list
+  taken for a clean tree (code round, codex).
 - **Every gate order commits BEFORE `review_code`** (`GateCommands.GateEnding`), and folds the fixes
   into the same one commit; the `review_code` tool text says "COMMITTED changes only".
 - `VendorStagesTests`' fixture branch had no commit at all — it had been reviewing an empty diff to
@@ -4367,7 +4369,10 @@ sweep removed EVERY `coai-wt-*` by prefix, including a round running in another 
   and owner are both gone is deleted.
 
 `PanelSettings.RoundTreeRoot` is read as the machine-local root (D4); `COAI_ROUND_WORKTREES`
-overrides it, and a settings object built in a test leaves it empty for `{DataDir}/worktrees`. Trees
+overrides it — and must itself be a LOCAL path, since the owner check trusts that every process
+touching the root is on this machine — and a settings object built in a test leaves it empty for
+`{DataDir}/worktrees`. The owner marker is written to a temporary name and renamed over, so a
+sweep never reads a half-written one as a dead owner. Trees
 that older builds left under `{DataDir}/worktrees` are not swept by this one — they block nothing,
 because no path is ever reused.
 

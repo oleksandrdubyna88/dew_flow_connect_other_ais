@@ -296,12 +296,12 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
     /// against HEAD and untracked files that are not ignored — the same two sources the consultant
     /// reads, and like it this never touches the index.
     /// </remarks>
-    public async Task<IReadOnlyList<string>> UncommittedAsync(string repoPath, string sha, CancellationToken ct = default)
+    public async Task<Uncommitted> UncommittedAsync(string repoPath, string sha, CancellationToken ct = default)
     {
         var (head, _) = await HeadAsync(repoPath, ct);
         if (!head.Equals(sha, StringComparison.OrdinalIgnoreCase))
         {
-            return [];
+            return Uncommitted.None;
         }
 
         var tracked = await launcher.RunAsync(
@@ -309,10 +309,17 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         var untracked = await launcher.RunAsync(
             new ProcessRequest("git", ["ls-files", "--others", "--exclude-standard", "-z"], repoPath), ct);
 
-        return [.. Paths(tracked).Concat(Paths(untracked)).Distinct(StringComparer.Ordinal)];
+        // A call that failed is an UNREAD checkout, never a clean one — the two used to be the same
+        // empty list, and a round over committed work then passed without naming what it had not seen.
+        return tracked.ExitCode != 0 || untracked.ExitCode != 0
+            ? new Uncommitted([], Reason(tracked.ExitCode != 0 ? tracked : untracked))
+            : new Uncommitted([.. Paths(tracked).Concat(Paths(untracked)).Distinct(StringComparer.Ordinal)], string.Empty);
 
         static IEnumerable<string> Paths(ProcessResult result) =>
-            result.ExitCode == 0 ? result.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries) : [];
+            result.StdOut.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+
+        static string Reason(ProcessResult failed) =>
+            failed.StdErr.Trim() is { Length: > 0 } said ? said : $"git exited {failed.ExitCode}";
     }
 
     /// <summary>An object id and nothing else — never a ref, never anything git could read as a flag.</summary>
