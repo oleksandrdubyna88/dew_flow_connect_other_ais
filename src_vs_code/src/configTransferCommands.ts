@@ -1,39 +1,52 @@
-import { readdir, readFile, rm } from 'node:fs/promises';
-import { basename } from 'node:path';
+import { readFile, rm } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { basename, join } from 'node:path';
 import * as vscode from 'vscode';
 import { writeFileAtomically } from './atomicFile';
-import { applyImport, failureSentence, type ApplyIo } from './configApply';
-import { configFile, declaredSettings, exportedSettings, importQuestion, importedConfig, isPromptName } from './configTransfer';
+import { applyImport, failureSentence, type Applied, type ApplyIo } from './configApply';
+import { promptNames, promptTexts, readPromptOrAbsent } from './configPromptFiles';
+import { configFile, declaredSettings, exportedSettings, importQuestion, importedConfig, type Imported } from './configTransfer';
 import { coaiDataDir } from './dataDir';
 import { notify, notifyAndAsk } from './notify';
+import { oneAtATime } from './oneAtATime';
 import { promptFile, promptsDir } from './rolesPrompts';
 
 /**
- * Export config / Import config, the `…` menu's pair — issue #467. Only VS Code here: every decision is
- * in `configTransfer` (what travels) and `configApply` (all or nothing).
+ * Export config / Import config, the `…` menu's pair — issue #467. Only VS Code here: what travels is
+ * `configTransfer`, all-or-nothing is `configApply`, and what a prompts folder holds is `configPromptFiles`.
  */
 
 const IMPORT = 'Import';
 const JSON_FILTER = { 'ConnectOtherAIs config': ['json'] };
 
+/**
+ * One import at a time: a second press while the first is writing is ignored, not queued — two imports
+ * interleaving would each take the other's half-written values as the state to roll back to. (gemini, the
+ * code round.) The first is visible the whole time, as a progress notification.
+ */
+const oneImport = oneAtATime<void>(undefined);
+
 export function registerConfigTransfer(context: vscode.ExtensionContext): vscode.Disposable[] {
   return [
     vscode.commands.registerCommand('coai.exportConfig', () => exportConfig(context)),
-    vscode.commands.registerCommand('coai.importConfig', () => importConfig(context)),
+    vscode.commands.registerCommand('coai.importConfig', () => oneImport(() => importConfig(context))),
   ];
 }
 
+/** The dialog's starting point: the home folder — a bare file name resolves to the drive's root. */
+function suggestedFile(): vscode.Uri {
+  return vscode.Uri.file(join(homedir(), 'coai-config.json'));
+}
+
 async function exportConfig(context: vscode.ExtensionContext): Promise<void> {
-  const target = await vscode.window.showSaveDialog({
-    defaultUri: vscode.Uri.file('coai-config.json'), filters: JSON_FILTER, saveLabel: 'Export',
-  });
+  const target = await vscode.window.showSaveDialog({ defaultUri: suggestedFile(), filters: JSON_FILTER, saveLabel: 'Export' });
   if (target === undefined) {
     return;
   }
   try {
     const config = vscode.workspace.getConfiguration('coai');
     const settings = exportedSettings(declaredSettings(context.extension.packageJSON), (key) => config.inspect(key)?.globalValue);
-    const prompts = await promptTexts();
+    const prompts = await promptTexts(promptsDir(coaiDataDir()));
     await writeFileAtomically(target.fsPath, `${JSON.stringify(configFile(settings, prompts, new Date().toISOString()), null, 2)}\n`);
     void notify({
       as: 'information', class: 'outcome', source: 'configTransfer', code: 'config-exported',
@@ -50,31 +63,45 @@ async function exportConfig(context: vscode.ExtensionContext): Promise<void> {
 async function importConfig(context: vscode.ExtensionContext): Promise<void> {
   const picked = await vscode.window.showOpenDialog({ canSelectMany: false, filters: JSON_FILTER, openLabel: IMPORT });
   const file = picked?.[0];
-  if (file !== undefined) {
-    await importFrom(context, file);
+  if (file === undefined) {
+    return;
+  }
+  // EVERY failure is said, with the words the thrower used: a file that could not be read is not "not
+  // JSON", and a prompts folder that could not be listed must not escape as a bare "command failed".
+  // (our own reviewer, gemini, the code round.)
+  try {
+    await importFrom(file, importedConfig(await readFile(file.fsPath, 'utf8'), declaredSettings(context.extension.packageJSON)));
+  } catch (error) {
+    refuse(messageOf(error));
   }
 }
 
-async function importFrom(context: vscode.ExtensionContext, file: vscode.Uri): Promise<void> {
-  const imported = importedConfig(await readFile(file.fsPath, 'utf8').catch(() => ''), declaredSettings(context.extension.packageJSON));
+async function importFrom(file: vscode.Uri, imported: Imported): Promise<void> {
   if (!imported.ok) {
-    void notify({
-      as: 'error', class: 'failure', source: 'configTransfer', code: 'config-not-imported',
-      title: 'The config was not imported.', detail: imported.why,
-    });
+    refuse(imported.why);
 
     return;
   }
   const answer = await notifyAndAsk({
     as: 'warning', class: 'confirmation', source: 'configTransfer', code: 'import-config', modal: true,
-    title: importQuestion(imported, basename(file.fsPath), Object.keys(await promptTexts())), action: IMPORT,
+    title: importQuestion(imported, basename(file.fsPath), await promptNames(promptsDir(coaiDataDir()))), action: IMPORT,
   });
   if (answer === IMPORT) {
-    await reportApplied(await applyImport(imported, hostIo()));
+    await reportApplied(await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Importing ${basename(file.fsPath)}…` },
+      () => applyImport(imported, hostIo()),
+    ));
   }
 }
 
-async function reportApplied(applied: Awaited<ReturnType<typeof applyImport>>): Promise<void> {
+function refuse(why: string): void {
+  void notify({
+    as: 'error', class: 'failure', source: 'configTransfer', code: 'config-not-imported',
+    title: 'The config was not imported.', detail: why,
+  });
+}
+
+async function reportApplied(applied: Applied): Promise<void> {
   await (applied.ok
     ? notify({
       as: 'information', class: 'outcome', source: 'configTransfer', code: 'config-imported',
@@ -93,7 +120,7 @@ function hostIo(): ApplyIo {
   return {
     baseValue: (key) => config.inspect(key)?.globalValue,
     writeSetting: async (key, value) => config.update(key, value, vscode.ConfigurationTarget.Global),
-    readPrompt: async (id) => readFile(pathOf(id), 'utf8').catch(() => undefined),
+    readPrompt: (id) => readPromptOrAbsent(pathOf(id)),
     writePrompt: (id, text) => writeFileAtomically(pathOf(id), text),
     removePrompt: (id) => rm(pathOf(id), { force: true }),
   };
@@ -108,15 +135,6 @@ function pathOf(id: string): string {
   }
 
   return file;
-}
-
-/** Every prompt text a person wrote, by id — the files whose names pass the guard, nothing else. */
-async function promptTexts(): Promise<Record<string, string>> {
-  const names = await readdir(promptsDir(coaiDataDir())).catch(() => [] as string[]);
-  const ids = names.filter((name) => name.endsWith('.md')).map((name) => name.slice(0, -'.md'.length)).filter(isPromptName);
-  const texts = await Promise.all(ids.map(async (id) => [id, await readFile(pathOf(id), 'utf8')] as const));
-
-  return Object.fromEntries(texts);
 }
 
 function messageOf(error: unknown): string {

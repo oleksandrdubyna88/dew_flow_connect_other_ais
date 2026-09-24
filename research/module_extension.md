@@ -9047,4 +9047,29 @@ decision is a unit test and only VS Code is left untested:
   nothing the file does not name: a role missing from the file keeps its prompt files
   (`roleDeletions` owns deletion).
 
+- **`configPromptFiles.ts`** (node only) — what a prompts folder holds: `promptNames` keeps REGULAR
+  `.md` files whose name passes the id guard (a folder named `x.md` and a symbolic link are not
+  prompts; no folder is none), `promptTexts` reads them one at a time and names the file that fails,
+  and `readPromptOrAbsent` answers "absent" ONLY for `ENOENT` — any other failure throws, because
+  absent is what a rollback deletes.
+
+**What the code round changed** (2026-09-24, verdict `good_enough`; 10 of 30 findings taken, plus our own
+reviewer's four):
+
+- An imported file's `executablePath` is NEVER applied — it is a path on the machine that wrote the
+  file, and one naming a binary for a vendor this machine does not have would be run by the next round.
+  It is dropped, the rest of the entry applies, and the confirmation lists `vendors → executablePath`
+  with its reason.
+- A value of the wrong JSON kind for its declared `type` (a string where `vendors` is a list) is refused
+  by name. The type only, not the whole schema — see `typeRefusal`.
+- Export strips paths BEFORE comparing with the default, so a value that differs only by a local path is
+  the default and stays home.
+- `Object.hasOwn` for the never-transferred list: `toString in {}` is true, and an imported `toString`
+  was refused with a function's source as its reason.
+- The host: a file that cannot be read says the thrower's words (it used to say "not JSON"); every
+  failure of the import flow is reported rather than escaping as "command failed"; the confirmation
+  lists prompt NAMES rather than reading every body; the apply runs under a progress notification and
+  behind `oneAtATime` (a second press is ignored); the save dialog starts in the home folder, since a
+  bare file name resolved to the drive's root.
+
 Six notification sites (census 132 → 138), a help article `move-your-config` in all five languages.
