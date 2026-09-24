@@ -63,6 +63,14 @@ claim file the reviewer left and asks the Team server to cancel the job. A virus
 opening that file at the same moment made it read as empty, so no cancel was sent and the job ran on
 until the Team server's own deadline. The read now waits out that moment.
 
+**Export config and Import config** (issue #467). The panel's ⋯ menu writes everything you changed
+into one JSON file — every setting whose value differs from its default, and the text of every prompt you
+wrote — and reads such a file back after one confirmation that counts what it will apply, says how many
+prompt texts replace text you already have, and names everything it will not apply with its reason. A
+secret, the data directory, which side of the machine a window is, per-side overrides and every CLI path
+never travel; a reviewer imported keeps the CLI path this machine already has for it. A write that fails
+partway puts back everything the import had changed.
+
 ## Server 0.32.0 — 2026-09-23
 
 **The server now says when it died.** A `coai-mcp` that was killed — the window closed hard, the

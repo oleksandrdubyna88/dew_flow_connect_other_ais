@@ -13,6 +13,7 @@ import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel'
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
 import { openRoles } from './rolesPanel';
+import { registerConfigTransfer } from './configTransferCommands';
 import { ChatPanels } from './chatPanels';
 import {
   chatWithOtherAi,
@@ -620,6 +621,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
     vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
+    ...registerConfigTransfer(context),
     vscode.commands.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, watcher, panel)),
     vscode.commands.registerCommand('coai.answerQuestion', () => answerQuestion(watcher)),
     // The same action under a second id, so the title bar can show a green icon while a question

@@ -486,6 +486,22 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     },
   },
   {
+    id: 'move-your-config',
+    en: {
+      title: 'Moving your setup: Export config and Import config',
+      whatItIs:
+        'The ⋯ menu → **Export config** writes everything you changed into one JSON file: every setting whose value differs from its default, and the text of every prompt you wrote. **Import config** reads such a file back and applies it, after one confirmation.',
+      why:
+        'A panel tuned over weeks — reviewers, models, thresholds, roles and their prompts — is otherwise rebuilt by hand on every new machine, and shared with a colleague by screenshot.',
+      setup:
+        'Nothing to set up. The file is plain JSON you can read, keep in a repository or send to someone.',
+      usage:
+        'Import lists what it will do before it does it: how many settings and prompt texts, how many of those texts replace text you already have, and everything it will NOT apply, each with its reason. Settings the file does not name are left as they are, and nothing is deleted. A CLI path this machine already has for a reviewer is kept, because the export leaves every path out.',
+      whatCanGoWrong:
+        '**A secret and this machine’s layout never travel**: the vault access key, the data directory, which side of the machine this window is, and every CLI path. Tokens are not settings at all and are never read. Per-side overrides are neither exported nor changed — only the shared value is.\n\nA file from another version of this extension is refused with a sentence rather than half-read, and a setting this build does not know is refused by name while the rest applies. If a write fails partway, everything the import had already changed is put back, and the notice says so — or names what could not be.',
+    },
+  },
+  {
     id: 'the-audit-log',
     en: {
       title: 'Under the hood: the audit trail',

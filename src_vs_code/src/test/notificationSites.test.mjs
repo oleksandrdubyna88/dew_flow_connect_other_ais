@@ -199,7 +199,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 130 → 132 on 2026-09-24, issue #314: the way back from a chat. Two places, because they are two kinds: the
 // refusal when the conversation knows nowhere to go (or the tab, session or file will not come
 // forward), and the failure when the command itself throws.
-const PLACES_THIS_SPEAKS = 132;
+// 132 → 138 on 2026-09-24, issue #467: Export config / Import config. Six places, because they are six
+// outcomes: exported, not exported; a file refused before anything is asked; the confirmation (modal);
+// imported; and an import that failed partway and was put back.
+const PLACES_THIS_SPEAKS = 138;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

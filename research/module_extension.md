@@ -9016,3 +9016,35 @@ path, a long URL and a multi-line vendor error, and reads `getBoundingClientRect
 border), the button to the box's right and still on the page; a page it cannot read is reported as a
 FAILED case, not a crash. 2026-09-24: all nine
 held; the same script against the markup on main failed all nine (the button inside the box).
+
+## Export config / Import config (2026-09-24, issue #467, Epic C)
+
+The ⋯ menu's `config` group: `coai.exportConfig` and `coai.importConfig`. Three files, split so every
+decision is a unit test and only VS Code is left untested:
+
+- **`configTransfer.ts`** (pure) — WHAT travels. `declaredSettings(manifest)` reads every setting and its
+  default from `contributes.configuration` through `settingRefused.sectionsOf` (exported for it, not
+  copied). `exportedSettings(declared, baseValueOf)` keeps a setting whose BASE value
+  (`config.inspect(key).globalValue`) differs from its default as canonical JSON (sorted keys, so a
+  reordered object is still the default), drops the `NEVER_TRANSFERRED` keys (`credsKey`,
+  `dataDirectory`, `dataSide`, `alsoWatchDataDirectories`, `perSideSettings` — each with the reason an
+  import repeats) and removes every `executablePath` at any depth. Per-side overrides are never read:
+  they belong to one side of one machine. `configFile` writes `{format: "coai-config", version: 1,
+  exportedAt, note, settings, prompts}`. `importedConfig(text, declared)` refuses a file that is not JSON,
+  not this format, another version (with a sentence naming both) or missing a section; then keeps each
+  entry or refuses it BY NAME with its reason — *never transferred: …*, *unknown to this build*, *not a
+  valid prompt name* (the same `promptFile` guard the roles page writes through), *its text is not text*.
+  `withLocalPaths(imported, current)` puts back the `executablePath` the same entry (by `id` in a list,
+  by key in a map) already has here, since the export left every path out. `importQuestion` is the
+  modal's sentence.
+- **`configApply.ts`** (pure over an `ApplyIo` seam) — ALL OR NOTHING. Every setting's base value and
+  every prompt's text (or its absence) is read before the first write; a failed write restores every
+  step already applied, newest first, including the one that failed; a restore that fails too is
+  named in `notRestored`, and `failureSentence` says which.
+- **`configTransferCommands.ts`** (host, coverage-excluded) — the save/open dialogs, `notifyAndAsk`
+  with `modal: true`, `writeFileAtomically` for the export and every prompt, `config.update(key, value,
+  Global)` for a setting (undefined removes it), `rm` for a prompt the import had created. It deletes
+  nothing the file does not name: a role missing from the file keeps its prompt files
+  (`roleDeletions` owns deletion).
+
+Six notification sites (census 132 → 138), a help article `move-your-config` in all five languages.
