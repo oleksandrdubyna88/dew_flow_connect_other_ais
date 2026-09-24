@@ -173,6 +173,11 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.editCommands",
+        "title": "Edit the gate's commands",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.editPhrases",
         "title": "Edit phrases",
         "category": "ConnectOtherAIs"
@@ -789,6 +794,37 @@
                     }
                   }
                 }
+              }
+            }
+          }
+        },
+        "coai.commands": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "The gate commands you have added, as the server reads them. Edit these in the panel (*The gate* → **Edit commands…**) rather than here: the page makes the ids and writes each command's TEXT to a file beside your other coai data. A command is handed to the calling AI after the built-in orders, in the rounds its stage names. Needs `coai-mcp` **0.33.0** or later.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]*$"
+              },
+              "title": {
+                "type": "string"
+              },
+              "enabled": {
+                "type": "boolean"
+              },
+              "stage": {
+                "type": "string",
+                "enum": [
+                  "plan",
+                  "code",
+                  "any"
+                ]
               }
             }
           }

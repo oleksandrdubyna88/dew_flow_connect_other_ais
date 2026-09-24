@@ -67,6 +67,8 @@ export function readerFor(
  *       chain has a `.catch` that calls its `report`. The repaint is in a `.then` BEFORE that catch,
  *       never a `finally`, so a rejected write skips the repaint — which is the whole repair.</li>
  *   <li><b>`phrasesPanel.apply`</b> — the same, reporting into the page's banner instead.</li>
+ *   <li><b>`commandsPanel.store`</b> — the roles page's shape exactly (issue #467): inside
+ *       `settledWrites.apply`, reported by `reportRefusal`.</li>
  *   <li><b>`extension.askWhereDataLives`</b> — the panel's shape, and it also RETURNS rather than
  *       continuing: the next thing that flow does is copy a client-entry block built from the
  *       choice, so a refusal walked past would hand somebody a directory this window is not

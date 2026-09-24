@@ -9073,3 +9073,38 @@ reviewer's four):
   bare file name resolved to the drive's root.
 
 Six notification sites (census 132 → 138), a help article `move-your-config` in all five languages.
+
+## The Edit commands page (2026-09-24, issue #467, Epic B)
+
+`coai.editCommands` (the Gate section's **Edit commands…**) opens `commandsPanel.ts`, a thin host over three
+pure modules in the roles page's shape (issue #338's):
+
+- **`commands.ts`** — `SHIPPED_COMMANDS`, the fifteen texts with the title, the marker the server keeps
+  before each (`Work AUTONOMOUSLY. `, `Do the SPLIT itself with `, `THE GATE runs once `, `This plan is a
+  PIECE of a split that is already under way`) and the placeholders it may use; the texts themselves come
+  from `commandTexts.generated.ts`, written by `scripts/generate-command-texts.mjs` from `shared/commands/`
+  and held to it by `generatedFilesAreCurrent`. `commandsFrom` reads `coai.commands` with the server's
+  defaults (off, titled by the id, every round) and carries unknown fields (`roles.unknownFields`).
+  `fileIdOf` adds the `command-` prefix the server adds; `whyNotGivable` is the page's half of the server's
+  `commandsSkipped`.
+- **`commandsEdit.ts`** — `commandsAfter`: add (`custom-<token>`, a random token the host draws — two sides
+  of one machine share the texts but not the rows, so counting rows would give both `custom-1` — skipping
+  any id that is a row or a file still on disk), remove (its answer names the text file to delete), retitle, restage, switch — ON
+  refused without text. `textBelongs` keeps a page from writing any file but a shipped text or a listed
+  command's.
+- **`commandsPage.ts`** — the parser `commandEdit`, the markup (every title and text escaped; a shipped
+  text is the faint placeholder of an empty box; Restore only when an override says something), the
+  delegated script (a tick and a select post on `change` only), and `commandsSkewNote` for a server older
+  than `COMMAND_MODELS_SINCE`.
+
+`coai.commands` is in `OVERLAID_SETTINGS` (per side) and reaches the server as `COAI_COMMANDS` only when
+non-empty. The texts live in `<dataDir>/prompts/`, so *Export config* carries them. Two notification sites
+(census 138 → 141), a help article `the-gates-commands` in five languages.
+
+**What the code round changed** (verdict `proceed`; our own reviewer's four findings, and the gate's side-
+collision and test cast): typing never redraws, even when a box is emptied (a redraw mid-sentence
+painted the box from disk and the next keystroke saved alone); a row named after a shipped text is not
+a command (it would have edited, and on Remove deleted, the shipped override — `forgettable` refuses
+a shipped file too); rows are read as the server reads them (id trimmed, stage in any case, an
+unreadable stage KEPT as written rather than turned into every round); only a missing folder is "no
+texts" — any other listing failure is said; ids are random; Remove asks first, as the roles page does.

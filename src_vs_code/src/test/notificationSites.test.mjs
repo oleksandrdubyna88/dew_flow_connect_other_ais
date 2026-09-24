@@ -202,7 +202,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 132 → 138 on 2026-09-24, issue #467: Export config / Import config. Six places, because they are six
 // outcomes: exported, not exported; a file refused before anything is asked; the confirmation (modal);
 // imported; and an import that failed partway and was put back.
-const PLACES_THIS_SPEAKS = 138;
+// 138 → 141 on 2026-09-24, issue #467 Epic B: the Edit commands page. Three places, because they are three
+// kinds: an edit the rules refuse (switching on a command with no text), the confirmation before a command
+// and its text are removed (modal), and a failure of the page itself.
+const PLACES_THIS_SPEAKS = 141;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

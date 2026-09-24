@@ -1931,6 +1931,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // offer no way to reach them — which is the state it shipped in.
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editChatPresets);
         break;
+      case 'editCommands':
+        // The gate's commands page (issue #467), opened the way the roles page is.
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.editCommands);
+        break;
       case 'editRoles':
         // The same shape again: the roles tab owns its own panel and is opened by a registered
         // command, so the Prompts section can point at the roles it draws.

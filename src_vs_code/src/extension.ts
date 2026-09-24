@@ -13,6 +13,7 @@ import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel'
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
 import { openRoles } from './rolesPanel';
+import { openCommands } from './commandsPanel';
 import { registerConfigTransfer } from './configTransferCommands';
 import { ChatPanels } from './chatPanels';
 import {
@@ -434,6 +435,7 @@ export function activate(context: vscode.ExtensionContext): void {
     // The CONTEXT goes with it: the roles page reads and writes `coai.roles`, which is a per-side
     // setting, and only the context says which side this window is.
     vscode.commands.registerCommand('coai.editRoles', () => { openRoles(context); }),
+    vscode.commands.registerCommand('coai.editCommands', () => { openCommands(context); }),
     vscode.commands.registerCommand('coai.editPhrases', () => { openPhrases(context); }),
     // The page every notification has been going into since S1. One panel for the window, so a
     // second press reveals the one already open rather than stacking another over it.
