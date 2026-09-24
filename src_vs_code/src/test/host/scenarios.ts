@@ -723,6 +723,68 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
+    // Our own code review: when the editor's groups change, the Tab object a chat was registered under
+    // may stop being one of the tabs while the tab itself is still on screen. MEASURED here on VS Code
+    // 1.139: a group added beside it and removed again leaves the object in place — but MOVING the tab
+    // to another group makes it a new one, and the old key then names no tab. The way back must still
+    // find it there, rather than opening the file a second time in whatever group is active.
+    name: 'a tab moved to another group is still the one a chat goes back to',
+    run: async (): Promise<void> => {
+      const folder = vscode.workspace.workspaceFolders?.[0];
+      assert.ok(folder !== undefined, 'the harness opens a workspace, and this scenario needs it');
+      const source = path.join(folder.uri.fsPath, 'MovedFrom.txt');
+      const other = path.join(folder.uri.fsPath, 'StaysPut.txt');
+      fs.writeFileSync(source, 'the chat was opened from here\n', 'utf8');
+      fs.writeFileSync(other, 'somewhere else\n', 'utf8');
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await vscode.window.showTextDocument(vscode.Uri.file(other), { preview: false });
+      await vscode.window.showTextDocument(vscode.Uri.file(source), { preview: false });
+      const tab = vscode.window.tabGroups.activeTabGroup.tabs.find((one) => one.label === 'MovedFrom.txt');
+      assert.ok(tab !== undefined, 'the source document has no tab');
+
+      const panels = new ChatPanels();
+      registeredChat(panels, tab, 'host-back-after-move', { kind: 'file', uri: vscode.Uri.file(source).toString() });
+      await vscode.commands.executeCommand('workbench.action.moveEditorToRightGroup');
+      assert.equal(vscode.window.tabGroups.all.length, 2, 'moving the tab did not make a second group');
+      console.log(`      the registered Tab object is still one of the tabs after the move: ${String(
+        vscode.window.tabGroups.all.flatMap((group) => group.tabs).includes(tab))}`);
+      await vscode.window.showTextDocument(vscode.Uri.file(other), { preview: false, viewColumn: vscode.ViewColumn.One });
+      await backToSource(panels, { webview: 'coaiChat', coaiConversation: 'host-back-after-move' });
+
+      const active = vscode.window.tabGroups.activeTabGroup;
+      assert.equal(active.activeTab?.label, 'MovedFrom.txt', 'the tab the chat came from is not in front');
+      assert.equal(active.viewColumn, vscode.ViewColumn.Two,
+        'the file was opened again in the other group instead of its own tab being brought forward');
+      assert.equal(vscode.window.tabGroups.all.flatMap((group) => group.tabs).filter((one) => one.label === 'MovedFrom.txt').length, 1,
+        'a second tab of the same file was opened');
+    },
+  },
+  {
+    // codex and gemini, the code round: a right-click names ITS conversation, and an id that no longer
+    // names one here must be refused — not swapped for whichever chat is active, which would send the
+    // person to a different conversation's source.
+    name: 'a right-click naming a conversation that is gone goes nowhere, not to the active chat’s source',
+    run: async (): Promise<void> => {
+      const folder = vscode.workspace.workspaceFolders?.[0];
+      assert.ok(folder !== undefined, 'the harness opens a workspace, and this scenario needs it');
+      const theirs = path.join(folder.uri.fsPath, 'SomebodyElses.txt');
+      fs.writeFileSync(theirs, 'another conversation recorded this\n', 'utf8');
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+
+      const panels = new ChatPanels();
+      registeredChat(panels, {}, 'host-the-active-one', { kind: 'file', uri: vscode.Uri.file(theirs).toString() }, true);
+      await backToSource(panels, { webview: 'coaiChat', coaiConversation: 'host-a-chat-that-was-closed' });
+
+      assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath.toLowerCase() === theirs.toLowerCase(), false,
+        'a stale right-click opened the ACTIVE chat’s source instead of refusing');
+
+      // And the chord, which hands no argument at all, is exactly where the active chat IS the answer.
+      await backToSource(panels, undefined);
+      assert.equal(vscode.window.activeTextEditor?.document.uri.fsPath.toLowerCase(), theirs.toLowerCase(),
+        'the chord did not act on the active chat');
+    },
+  },
+  {
     // The other arm a host can reach without Claude Code installed: a chat restored after a reload has
     // no tab of its own any more, only the source it recorded. `showTextDocument` is real here.
     name: 'a chat with no tab of its own goes back to the file it recorded',
@@ -748,12 +810,12 @@ const SCENARIOS: readonly Scenario[] = [
  * id and its source. Cast for the reason `conversationHolding` gives — and if the command ever reads a
  * third field, it throws here rather than passing.
  */
-function registeredChat(panels: ChatPanels, key: object, saveId: string, source: Thread['source']): object {
+function registeredChat(panels: ChatPanels, key: object, saveId: string, source: Thread['source'], active = false): object {
   const id = {};
   threads.set(id, { saveId, source } as unknown as Thread);
   panels.open(key, saveId, () => ({
     id,
-    panel: { reveal() {}, dispose() {}, post() {}, isActive: () => false },
+    panel: { reveal() {}, dispose() {}, post() {}, isActive: () => active },
     session: { dispose() {} },
   }));
 

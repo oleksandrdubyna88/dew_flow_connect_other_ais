@@ -498,7 +498,14 @@ test('a command that acts inside an open chat is scoped to the chat, and everyth
     assert.ok(offeredAt.length > 0, command + ' is allow-listed and offered nowhere — the list is watching a command that moved');
     assert.ok(offeredAt.every((row) => row.when === OUR_CHAT || row.when === OUR_CHAT_ACTIVE),
       command + ' is offered outside the chat page, where it could be a real way in');
-    assert.ok(!read('src/extension.ts').includes("noteChatDoor('" + command),
+    // The HANDLER'S body, cut out the way the door test below cuts one: `noteChatDoor` takes a door's
+    // short name, never a command id, so searching the file for the id could never fail. (Our own code
+    // review.)
+    const source = read('src/extension.ts');
+    const at = source.indexOf("registerCommand('" + command + "'");
+    assert.notStrictEqual(at, -1, command + ' is allow-listed and registered by nothing');
+    const next = source.indexOf('registerCommand(', at + 20);
+    assert.ok(!source.slice(at, next === -1 ? source.length : next).includes('noteChatDoor('),
       command + ' records itself as a door although it opens nothing');
   }
   const scopedToUs = rows.filter((row) => (row.when ?? '').includes("'coaiChat'")).map((row) => row.command ?? '');

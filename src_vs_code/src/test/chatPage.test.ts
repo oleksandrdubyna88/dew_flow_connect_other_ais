@@ -547,10 +547,11 @@ function runChatPage(over: RunOptions = {}): RunningPage {
   const copyControls = (): Fake[] => serve('.copy');
   // The body is an element too: the page writes its right-click context onto it (issue #314), and a
   // real DOM answers setAttribute there as anywhere else.
+  const attributes: Record<string, string> = {};
   const bodyOf = {
     style: emptyStyle(),
-    attributes: {} as Record<string, string>,
-    setAttribute(name: string, value: string) { bodyOf.attributes[name] = value; },
+    attributes,
+    setAttribute(name: string, value: string) { attributes[name] = value; },
   };
   const document_ = {
     get activeElement() { return focused; },
