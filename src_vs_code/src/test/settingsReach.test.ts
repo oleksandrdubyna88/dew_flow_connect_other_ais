@@ -52,6 +52,7 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   },
   roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
             prompts: [{ id: 'requirements-general', label: 'General' }] }],
+  commands: [{ id: 'custom-1', title: 'Docs', enabled: true, stage: 'code' }],
   // Every part of it changed at once, because this walk changes ONE top-level setting at a time and
   // `consult` is one setting holding five things — a caller map that differs, and four numbers.
   // The same map on both sides, as a value written as definitions and read back would carry it.

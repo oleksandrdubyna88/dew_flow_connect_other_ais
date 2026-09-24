@@ -104,6 +104,18 @@ export function runRolesPage(
   state: RolesPageState,
   inDocument: Readonly<Record<string, readonly Node[]>> = {},
 ): Page {
+  return runPageHtml(rolesHtml(state, 'test-nonce'), inDocument);
+}
+
+/**
+ * Run ANY page's script — the roles page's shim, widened for the commands page (issue #467) rather than
+ * copied: two copies of a DOM shim drift, and the one that drifts is the one that stops finding a
+ * selector and passes.
+ */
+export function runPageHtml(
+  html: string,
+  inDocument: Readonly<Record<string, readonly Node[]>> = {},
+): Page {
   const posted: Record<string, unknown>[] = [];
   const listeners = new Map<string, ((event: { target: Node }) => void)[]>();
   const add = (kind: string, handler: (event: { target: Node }) => void): void => {
@@ -116,7 +128,7 @@ export function runRolesPage(
     body: { style: { fontSize: '' } },
   };
 
-  const script = pageScript(rolesHtml(state, 'test-nonce'));
+  const script = pageScript(html);
    
   // whole point: a scan of its text cannot tell a matching selector from one that matches nothing.
   const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', script);

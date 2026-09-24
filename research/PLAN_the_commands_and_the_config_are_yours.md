@@ -1,11 +1,12 @@
 # PLAN — the gate's commands and the whole configuration are the person's to edit, export and import
 
-> Status: **Epic C shipped 2026-09-24 (PR #500); Epic A built 2026-09-24 (its code round and PR open); Epic B not started.** Scope: `src_vs_code` (a config export/import pair, a
-> commands page) and `src_mcp` (command texts as data, custom commands). Issue #467. Three epics, ONE gate
+> Status: **IMPLEMENTED, 2026-09-24** — Epic C in #500, Epic A in #505, Epic B in this PR. Deviations are each
+> epic's *As built*; the open tail is the conventions sentence and the unpersisted skip. Scope:
+> `src_vs_code` (a config export/import pair, a commands page) and `src_mcp` (command texts as data, custom commands). Issue #467. Three epics, ONE gate
 > each (the operator's instruction for this batch), built C → A → B.
 >
-> Related docs: [module_extension.md](../research/module_extension.md), [module_server.md](../research/module_server.md),
-> [architecture.md](../research/architecture.md), [PLAN_the_split_is_sized_and_gated_once.md](../research/PLAN_the_split_is_sized_and_gated_once.md).
+> Related docs: [module_extension.md](module_extension.md), [module_server.md](module_server.md),
+> [architecture.md](architecture.md), [PLAN_the_split_is_sized_and_gated_once.md](PLAN_the_split_is_sized_and_gated_once.md).
 
 ## The ask (issue #467)
 
@@ -155,12 +156,57 @@ continue the marker before them. The fake-CLI round harness was extracted from `
 
 ## Epic B — an Edit commands page (extension)
 
-- `coai.commands` setting + pure `commands.ts` / `commandsEdit.ts`, the env block, per-side.
-- `commandsPage.ts` / `commandsPanel.ts` on the roles page's pattern: the shipped commands with their text
-  shown and overridable (restore = delete the file), custom rows added and removed, a server-version note
-  for a server too old to read them; opened from the *Gate* section of the panel.
-- **Tests**: the page RUN against the DOM shim (the roles page's harness) — adding, overriding, restoring and
-  removing a command post the commands the parser reads (gemini, the plan round).
+**The pattern to copy** is the roles page (issue #338's shape): pure `roles.ts` / `rolesEdit.ts` (`rowsAfter`,
+`whyNotOn`) / `rolesPage.ts` (`roleEdit` parser, `rolesHtml`, `script`), the one host file `rolesPanel.ts`
+(`writeText` :484 — blank text removes the file; `settledWrites` :264; `saveSetting` via `sideConfig.ts:78`).
+
+1. **The shipped texts reach the extension by a generator**, as the role catalog does
+   (`scripts/generate-builtin-roles.mjs` → `src/builtinRoles.generated.ts`): a new
+   `scripts/generate-command-texts.mjs` reads `shared/commands/*.md` into `src/commandTexts.generated.ts`
+   (bodies as `JSON.stringify`, never template literals), added to `generatedFilesAreCurrent.test.ts`'s
+   `SCRIPTS`; a test compares the map with the folder both ways.
+2. **`coai.commands`** — an array of `{id, title, enabled, stage}` (`stage` enum `plan|code|any`) in the
+   manifest; `commands` on `CoaiSettings` read by `commandsFrom` (pure `commands.ts`, unknown fields
+   kept like `rolesFrom`), in `OVERLAID_SETTINGS` (so per-side), and `COAI_COMMANDS` in `envBlock` only
+   when non-empty. The stored id is the slug WITHOUT `command-` — the server adds it — and the page writes
+   the text to `<dataDir>/prompts/command-<id>.md` through `promptFile`.
+3. **`commandsEdit.ts`** (pure) — `commandsAfter(rows, command, texts)`: add (id `custom-<n>`, the lowest
+   number that is neither a row NOR a text file still on disk — so an orphaned file can never hand a new
+   command old words; title "New command", off, stage any), remove (its answer names the text file to
+   delete with it, so a removed command leaves nothing behind), retitle, restage, switch on/off.
+   Switching ON a command with no text is refused with a sentence naming it — the page's half of the
+   server's `commandsSkipped`, as `whyNotOn` is for roles (#338). (Plan round: codex, gemini.)
+4. **`commandsPage.ts`** (pure) — two sections. *Shipped*: each of the fifteen texts, its fixed marker shown
+   read-only before the box (the words the server keeps), the box holding the override or empty with the
+   shipped text as its placeholder, a *Restore* button only when the override SAYS something (a blank file
+   is no override, as the server reads it), the placeholders it may use named. Every title and text is
+   HTML-escaped — a text can hold `</textarea><script>` (codex, the plan round).
+   *Yours*: the rows with title, stage, an enabled box, the text, *Remove*; *Add a command*. A note when the
+   installed server is older than `COMMAND_MODELS_SINCE` (0.33.0 — the same release): *"this server
+   ignores these texts and commands; update it to 0.33.0"*.
+5. **`commandsPanel.ts`** — the one host file: a webview (`enableFindWidget`, `onDidDispose`), texts read
+   from `promptsDir(coaiDataDir())`, writes through `writeFileAtomically` / `rm`, rows through
+   `saveSetting`, the queue through `settledWrites`; refusals through `notify`. Command
+   `coai.editCommands`, a button *Edit commands…* in the panel's Gate section (`panelView.ts:1189`
+   `gateBody`, `PANEL_COMMANDS`, `VSCODE_COMMAND_FOR`, the provider's exhaustive switch).
+6. **Structural**: help article + `ALIAS` / `SETTING_ALIAS` in five languages, the notification census,
+   `sonar.coverage.exclusions` for `commandsPanel.ts`, complexity ≤ 4 with NO new eslint suppressions.
+
+**Tests (red first):** `commands.test.ts` (`commandsFrom`, the env block, the generated map equals the folder);
+`commandsEdit.test.ts` (each edit; the lowest free id; switching on without text refused, with text
+allowed, off never refused); `commandsPage.test.ts` — the page RUN against the roles page's DOM shim
+(`rolesPageHarness.ts`, widened to take a renderer rather than copied): typing an override, restoring,
+adding, removing and ticking post exactly the messages the parser reads, and a tick posts once; the
+markup shows the marker, the placeholder text and the server note. `settingsReach.test.ts` gains
+`commands`.
+
+**As built (2026-09-24):** the roles page's DOM shim was widened (`runPageHtml`) rather than copied;
+`roles.ts`'s `unknownFields` is exported for `commandsFrom`; `commandsPanel.ts` joins the `saveSetting`
+callers in the roles page's shape. The Gate section gained the *Edit commands…* button under the
+switches whose words the page edits. No zoom control — the roles page has one, this page has too
+little on it to need one. **Deviation, from the code round:** ids are `custom-<random token>`, not the lowest
+free number — the rows are per side and the texts shared, so two sides counting their own rows would both
+have reached `custom-1` and written one file. Remove asks first, as the roles page does.
 
 ## Build order
 

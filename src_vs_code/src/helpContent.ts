@@ -152,6 +152,22 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
   },
 
   {
+    id: 'the-gates-commands',
+    en: {
+      title: 'The gate’s commands, in your words',
+      whatItIs:
+        'The gate section’s **Edit commands…** opens the commands page. It shows every sentence the gate’s orders are made of — autonomy, the split, the gate’s cadence, the model order — and lets you write your own in their place. Below them you add commands of your own: each has a title, the rounds it is given in (every round, plan rounds or code rounds), a switch, and the text it tells the AI.',
+      why:
+        'The orders are words an AI acts on, and a team has its own: a rule of the house, a checklist, a sentence that makes a model stop cutting corners. Changing a word of a shipped order used to be a release.',
+      setup:
+        'Write in a box to replace a shipped text; an empty box is the shipped text, shown faintly. **Restore the shipped text** deletes yours. Where a box has words in **bold** before it, the server keeps those words whatever you write — they are how an order is recognised as given. Names in braces, such as `{scope}` or `{strongest}`, are filled in by the server.',
+      usage:
+        'Your own commands are handed to the AI after the built-in orders. One is switched on only once it has text, and a new one starts off. Removing a command removes its text too. Everything is saved as you type, in the same data folder as your prompts, so Export config carries it.',
+      whatCanGoWrong:
+        'A server older than 0.33.0 ignores all of this and gives the shipped orders; the page says so. A command switched on without text — written by hand in the settings — is left out of the round, and the reply names the file to write.',
+    },
+  },
+  {
     id: 'a-local-model',
     en: {
       title: 'A model on your own machine as a reviewer',

@@ -71,6 +71,12 @@ secret, the data directory, which side of the machine a window is, per-side over
 never travel; a reviewer imported keeps the CLI path this machine already has for it. A write that fails
 partway puts back everything the import had changed.
 
+**The gate's commands have a page** (issue #467). *The gate* → **Edit commands…** shows every sentence the
+gate's orders are made of, with the words the server keeps before each, and lets you write your own in
+their place — *Restore the shipped text* brings the original back. Below them you add commands of your
+own: a title, the rounds they are given in, a switch that turns on only once a command has text, and
+the text itself. Needs coai-mcp 0.33.0; the page says when the installed one is older.
+
 **The gate's orders can be reworded, and you can add your own** (issue #467). Every sentence the
 gate's commands are made of now ships as a small text file, and writing `<dataDir>/prompts/<name>.md`
 rewords it for your rounds — deleting the file puts the shipped words back. The words an order is

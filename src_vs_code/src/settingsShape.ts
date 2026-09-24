@@ -22,6 +22,7 @@ import {
   sameChoice,
 } from './consultSettings';
 import { CommandModels, ModelSlot, commandModelsEnv, commandModelsFrom, isModelSlot } from './commandModels';
+import { commandsFrom, type CommandRow } from './commands';
 
 export type OnExhausted = 'continue' | 'escalate' | 'human' | 'good_enough';
 
@@ -179,6 +180,12 @@ export interface CoaiSettings {
    * the shipped order, with the shipped budgets.</p>
    */
   readonly roles: readonly RoleRow[];
+
+  /**
+   * The gate commands this person added, as the rows `COAI_COMMANDS` carries (issue #467) — the wire
+   * format, like `roles`. Empty is the normal state and emits no key at all.
+   */
+  readonly commands: readonly CommandRow[];
 }
 
 /** The defaults, matching the master plan's configuration table — pinned by tests. */
@@ -316,6 +323,7 @@ export const DEFAULTS: CoaiSettings = {
   gatePer: 'epic',
   codeWorkspace: 'none',
   roles: [],
+  commands: [],
   consult: DEFAULT_CONSULT,
 };
 
@@ -341,6 +349,9 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   // The prompt BODIES do NOT: they live in one data directory, because a body is the text of a
   // question rather than a configuration, and two sides asking one question is right.
   'roles',
+  // A person's own gate commands, beside their roles and for the same reason; their TEXTS, like the
+  // prompt bodies, live in the one data directory.
+  'commands',
   // The Bugz pair, per side for the reason every row above is: a side is the WORK. Two sides of one
   // machine can face different companies, and the local engine that may read their findings — and
   // the server those pairs would be sent to — are not the same question on both.
@@ -432,6 +443,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     gatePer: read('gatePer') === 'task' ? 'task' : 'epic',
     codeWorkspace: read('codeWorkspace') === 'worktree' ? 'worktree' : 'none',
     roles: rolesFrom(read('roles')),
+    commands: commandsFrom(read('commands')),
     consult: consultSettingsFrom(read),
   };
 }
@@ -453,6 +465,10 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   // a server older than 0.19.0 a non-event for everybody who has added no role of their own.
   if (settings.roles.length > 0) {
     env['COAI_ROLES'] = JSON.stringify(settings.roles);
+  }
+  // The same bargain for a person's own gate commands (issue #467): the rows ARE the wire format.
+  if (settings.commands.length > 0) {
+    env['COAI_COMMANDS'] = JSON.stringify(settings.commands);
   }
   // A key per role, and only where it differs: the panel writes what is not the default so that
   // returning a control to its default REMOVES the key rather than pinning the old value.

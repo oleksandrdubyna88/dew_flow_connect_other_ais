@@ -27,6 +27,8 @@ const SCRIPTS = [
   // generates is what the redactor reads, and a stale copy is a word the extension no longer
   // treats as a secret while the server still does.
   'generate-credential-words.mjs',
+  // Added 2026-09-24, issue #467: the gate's shipped command texts the Edit commands page shows.
+  'generate-command-texts.mjs',
 ] as const;
 
 // out/test at run time, so two levels reach the package root.

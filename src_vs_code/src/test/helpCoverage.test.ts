@@ -95,6 +95,7 @@ function asProse(title: string): string {
 const ALIAS: Record<string, string> = {
   'coai.editChatPresets': 'edit chat presets',
   'coai.editRoles': 'opens the roles page',
+  'coai.editCommands': 'opens the commands page',
   'coai.copyConfigBlock': 'copy the mcp config block',
   'coai.copyClaudeSnippet': 'copy the claude.md snippet',
   'coai.answerQuestion': 'answer it in the panel',
@@ -122,6 +123,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.chatPromptChoice': 'which of your saved prompts a chat opens with',
   'coai.chatModelName': 'which of its models answers',
   'coai.phrases': 'a list of sentences you keep',
+  'coai.commands': 'commands of your own',
   'coai.chatPromptPresets': 'your saved prompts, each with a name',
   'coai.chatModelPresets': 'your saved models, each with a name',
   'coai.chatLanguage': 'the language the other ai answers in',

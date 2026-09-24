@@ -196,7 +196,7 @@ const NOT_A_FIELD: ReadonlySet<string> = new Set(['__proto__', 'constructor', 'p
  * `__proto__` and its family are not carried at all: `JSON.parse` makes one an OWN property, so
  * spreading a parsed row is a prototype write nobody wrote.</p>
  */
-function unknownFields(row: Record<string, unknown>, known: ReadonlySet<string>): Record<string, unknown> {
+export function unknownFields(row: Record<string, unknown>, known: ReadonlySet<string>): Record<string, unknown> {
   const kept: Record<string, unknown> = {};
   for (const key of Object.getOwnPropertyNames(row)) {
     if (!known.has(key) && !NOT_A_FIELD.has(key)) {

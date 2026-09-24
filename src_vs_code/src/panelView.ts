@@ -1209,7 +1209,11 @@ function gateBody(state: PanelState): string {
 ${gatePerBlock(state)}
   <label class="check"><input type="checkbox" data-setting="splitWithFable"${s.splitWithFable ? ' checked' : ''}> Split with the strongest model, and give it the risky stories${help('splitWithFable')}</label>
 </div>
-${commandModelsBlock(state)}`;
+${commandModelsBlock(state)}
+<div class="field">
+  <div class="hint">The words those orders are made of, and commands of your own to hand over with them.</div>
+  <button type="button" class="run" data-command="editCommands">Edit commands…</button>
+</div>`;
 }
 
 /**
@@ -2868,6 +2872,7 @@ export const PANEL_COMMANDS = [
   'editChatPresets',
   // And the way into the roles tab, which the Prompts section points at the same way.
   'editRoles',
+  'editCommands',
   // A phrase, onto the clipboard. Handled in the provider rather than by a registered command,
   // because it needs the id the button carries and nothing outside the panel ever asks for one.
   'copyPhrase',
@@ -2910,6 +2915,7 @@ export const VSCODE_COMMAND_FOR = {
   installServer: 'coai.installServer',
   editChatPresets: 'coai.editChatPresets',
   editRoles: 'coai.editRoles',
+  editCommands: 'coai.editCommands',
   editPhrases: 'coai.editPhrases',
   changeDataDirectory: 'coai.changeDataDirectory',
   moveDataDirectory: 'coai.moveDataDirectory',

@@ -68,8 +68,10 @@ test('every host that saves a setting reports the refusal, because saveSetting n
   // would put a directory in somebody's config that this window is not using.
     // `roleDeletionsHost.ts` is the fifth, and it takes the panel's shape for the same reason: a
   // row that did not move makes everything after it meaningless, so it says so and returns.
+  // `commandsPanel.ts` is the sixth (issue #467), and takes the roles page's shape: its writes go
+  // through `settledWrites`, whose `report` is `reportRefusal`.
   const callers = ['phrasesPanel.ts', 'rolesPanel.ts', 'panelProvider.ts', 'dataCommands.ts',
-    'roleDeletionsHost.ts'];
+    'roleDeletionsHost.ts', 'commandsPanel.ts'];
   for (const file of callers) {
     assert.match(
       source(file),
