@@ -165,7 +165,8 @@ public sealed class BoundedScheduler(
         IReadOnlyList<ReviewerWork> work,
         ReviewerExecutor executor,
         CancellationToken ct = default,
-        Action<ReviewerProgress>? onProgress = null)
+        Action<ReviewerProgress>? onProgress = null,
+        StandDown? standDown = null)
     {
         PeakConcurrency = 0;
         _peakPerProvider.Clear();
@@ -195,9 +196,11 @@ public sealed class BoundedScheduler(
 
             // TWO LANES. A reviewer on a local engine waits for its engine and for nothing else; every
             // other reviewer waits for the machine and then its vendor. See `EngineLaneAsync` for why.
+            // A cloud reviewer's outcome is recorded as it finishes, so a local row that reaches the card
+            // afterwards can see whether the cloud was quiet (issue #485). Null when the switch is off.
             var tasks = work.Select(w => w.Invocation.IsOnEngine
-                ? EngineLaneAsync(w, executor, onProgress, ct)
-                : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, onProgress, ct));
+                ? EngineLaneAsync(w, executor, onProgress, standDown, ct)
+                : Recorded(MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, onProgress, ct), standDown));
             return await Task.WhenAll(tasks);
         }
         finally
@@ -283,19 +286,35 @@ public sealed class BoundedScheduler(
     /// HERE and not when the round was laid out: at lay-out nothing held the card yet, so the sentence
     /// was always blank. (gemini, the engine-cap code round.)</para>
     /// </remarks>
+    /// <remarks>
+    /// <para><b>It may stand down (issue #485).</b> With the switch on, a local row asks whether every
+    /// cloud reviewer has answered and found at most one remark — before it waits for the card and again
+    /// once it holds it, because the cloud may finish while it waits. A launch already on the card is
+    /// never touched: the row that would start AFTER it is the one that stands down.</para>
+    /// </remarks>
     private async Task<(ReviewerInvocation, ReviewerOutcome)> EngineLaneAsync(
         ReviewerWork w,
         ReviewerExecutor executor,
         Action<ReviewerProgress>? onProgress,
+        StandDown? standDown,
         CancellationToken ct)
     {
         var engine = w.Invocation.SharedResource;
         var resource = Limiter(_perResource, engine, sharedResourceCap);
         var queued = System.Diagnostics.Stopwatch.StartNew();
         Report(onProgress, w.Invocation, "queued", note: QueueNote(w.Invocation));
+        if (standDown is { Quiet: true })
+        {
+            return StoodDownNow(onProgress, w.Invocation, standDown);
+        }
         if (!await Took(resource, ct))
         {
             return Abandoned(onProgress, w.Invocation, queued.Elapsed);
+        }
+        if (standDown is { Quiet: true })
+        {
+            resource.Release();
+            return StoodDownNow(onProgress, w.Invocation, standDown);
         }
         EnteredResource(engine);
         try
@@ -308,6 +327,32 @@ public sealed class BoundedScheduler(
             resource.Release();
         }
     }
+
+    /// <summary>A cloud reviewer's outcome, handed to the stand-down count as it finishes.</summary>
+    private static async Task<(ReviewerInvocation, ReviewerOutcome)> Recorded(
+        Task<(ReviewerInvocation, ReviewerOutcome)> lane, StandDown? standDown)
+    {
+        var result = await lane;
+        standDown?.Record(result.Item2);
+
+        return result;
+    }
+
+    /// <summary>
+    /// A local row that is not launched: said as its own status with the reason, and carrying no outcome
+    /// on the progress line — nothing ran, so nothing is written to the spending ledger.
+    /// </summary>
+    private static (ReviewerInvocation, ReviewerOutcome) StoodDownNow(
+        Action<ReviewerProgress>? onProgress, ReviewerInvocation invocation, StandDown standDown)
+    {
+        var reason = standDown.Reason;
+        Report(onProgress, invocation, StoodDownStatus, note: reason);
+
+        return (invocation, new ReviewerOutcome.StoodDown(reason));
+    }
+
+    /// <summary>The progress status of a row that stood down — the same word the round record keeps.</summary>
+    public const string StoodDownStatus = "stood down";
 
     /// <summary>Waits for a slot; <c>false</c> when the round ended first. Never throws the cancellation.</summary>
     private static async Task<bool> Took(SemaphoreSlim slot, CancellationToken ct)
@@ -528,13 +573,17 @@ public static class ReviewerSummaryFactory
         IReadOnlyList<string>? excluded,
         IReadOnlyList<SkippedRole> notAsked) =>
         new(
-            results.Count,
+            results.Count(r => r.Outcome is not ReviewerOutcome.StoodDown),
             results.Count(r => r.Outcome is ReviewerOutcome.Ok),
             [.. results
-                .Where(r => r.Outcome is not ReviewerOutcome.Ok)
+                .Where(r => r.Outcome is not (ReviewerOutcome.Ok or ReviewerOutcome.StoodDown))
                 .Select(r => $"{r.Invocation.Provider}/{r.Invocation.Role}: {Describe(r.Outcome)}")],
             [.. excluded ?? []],
-            [.. notAsked]);
+            // A reviewer that stood down (issue #485) was a decision, never a failure: it joins the roles
+            // the round chose not to ask, with its reason.
+            [.. notAsked, .. results
+                .Where(r => r.Outcome is ReviewerOutcome.StoodDown)
+                .Select(r => new SkippedRole($"{r.Invocation.Provider}/{r.Invocation.Role}", ((ReviewerOutcome.StoodDown)r.Outcome).Reason))]);
 
     public static string Describe(ReviewerOutcome outcome) => outcome switch
     {
@@ -551,6 +600,7 @@ public static class ReviewerSummaryFactory
         // available. Every vendor here but codex uses stderr, so this changes nothing for them.
         ReviewerOutcome.NonZeroExit e => $"exit {e.ExitCode}{Because(e.StdErrTail, e.FailureReason)}",
         ReviewerOutcome.NotStarted n => $"not started: {n.Reason}",
+        ReviewerOutcome.StoodDown s => $"stood down: {s.Reason}",
         ReviewerOutcome.Unparseable u => $"unparseable: {u.Reason}",
         _ => "unknown",
     };

@@ -589,6 +589,11 @@
           "default": false,
           "markdownDescription": "After a plan passes, tell the assistant how big it is — build it as it stands, 3-5 stories, or 2-3, 3-4 or 4-5 epics of stories, never more — measured from its build steps and length. How often the work comes back through the gate is `#coai.gatePer#`: once per epic or once for the whole task, never per story. The order is given once per assistant — an epic coming back for its own review is told it is a piece, not told to split again."
         },
+        "coai.stopLocalWhenQuiet": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "When every cloud reviewer of a round has answered and they found at most one remark between them, the local reviewer finishes the launch it is on and starts no more; the round and the server log say so. Off unless you turn it on. Needs `coai-mcp` **0.34.0** or later."
+        },
         "coai.gatePer": {
           "type": "string",
           "enum": [

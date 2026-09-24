@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**The local reviewer can stop when the cloud reviewers found almost nothing** (issue #485). A new switch in
+*The gate*: once every cloud reviewer of a round has answered and they found at most one remark between them,
+the local reviewer finishes the launch it is on and starts no more — the round lists what it did not start and
+why, and the server log says so. A cloud reviewer that failed keeps the local one running. Off unless you turn
+it on; needs coai-mcp 0.34.0.
+
 **A Gemini reviewer that wanted to run a command now answers anyway** (issue #504). An Antigravity
 (`agy`) reviewer that decided to run a shell command — a `git diff`, a line of Python — had it refused,
 because a reviewer runs unattended and nobody can approve it, and then ended with nothing: the round

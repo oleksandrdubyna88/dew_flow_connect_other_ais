@@ -153,6 +153,7 @@ const SETTING_ALIAS: Record<string, string> = {
   // VS Code does not know about is a setting nothing checks the help for either.
   'coai.autonomous': 'work autonomously',
   'coai.splitPlan': 'split the plan into epics and stories',
+  'coai.stopLocalWhenQuiet': 'stop the local reviewer when the cloud reviewers found almost nothing',
   // Issue #117: the switch names the caller's own strongest model now, and the two models are chosen
   // per kind of assistant — the key keeps its historical name.
   'coai.splitWithFable': 'split with the strongest model',

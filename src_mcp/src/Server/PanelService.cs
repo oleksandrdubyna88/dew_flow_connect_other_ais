@@ -1362,7 +1362,9 @@ public sealed partial class PanelService
                         session.State.Stage.ToString(),
                         progress.Elapsed);
                 }
-            });
+            },
+            // Issue #485: with the switch on, the local reviewer stands down once the cloud was quiet.
+            _settings.StopLocalWhenQuiet ? StandDown.For(work) : null);
             // What ran, and — since 2026-09-07 — who was enabled for this stage and could not.
             //
             // The deadline is reported only when IT is what ended the round: `roundClock` fired and

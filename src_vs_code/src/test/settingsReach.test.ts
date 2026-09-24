@@ -40,6 +40,7 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   codeWorkspace: 'worktree',
   autonomous: true,
   splitPlan: true,
+  stopLocalWhenQuiet: true,
   splitWithFable: true,
   // Issue #131: the non-default scope is what reaches the env block.
   gatePer: 'task',

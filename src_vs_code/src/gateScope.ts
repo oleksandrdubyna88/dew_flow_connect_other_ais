@@ -33,3 +33,19 @@ export function gatePerSkewNote(installedServerVersion: string, splitPlan: boole
     + `story, whichever you choose here — a new branch and two rounds for each one. Update it to ${GATE_PER_SINCE} `
     + 'or later — the MCP server section below.';
 }
+
+/**
+ * The first `coai-mcp` that reads `COAI_STOP_LOCAL_WHEN_QUIET` (issue #485) — the release after 0.33.0.
+ * Set too LOW it stays silent on a server that ignores the switch, the unsafe direction.
+ */
+export const STOP_LOCAL_SINCE = '0.34.0';
+
+/** The sentence beside the switch while the installed server would ignore it — or nothing. */
+export function stopLocalSkewNote(installedServerVersion: string, on: boolean): string {
+  if (!on || installedServerVersion.length === 0 || compareVersions(STOP_LOCAL_SINCE, installedServerVersion) <= 0) {
+    return '';
+  }
+
+  return `The coai-mcp you have installed (${installedServerVersion}) does not read this switch: the local reviewer `
+    + `still runs every round. Update it to ${STOP_LOCAL_SINCE} or later — the MCP server section below.`;
+}

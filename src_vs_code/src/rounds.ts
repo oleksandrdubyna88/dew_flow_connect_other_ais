@@ -371,7 +371,8 @@ export function reviewerRows(round: RoundRecord): readonly ReviewerRow[] {
       s.status === 'done' ? `${s.findings} finding${s.findings === 1 ? '' : 's'}` : '',
       // A queued reviewer's note says what it is waiting for — "2 ahead on this engine, about
       // 4 min". "queued" alone cannot tell ten seconds from ten minutes, and the server knows.
-      s.status === 'failed' || s.status === 'queued' ? s.note : '',
+      // A reviewer that stood down (issue #485) carries WHY — the cloud reviewers were quiet.
+      s.status === 'failed' || s.status === 'queued' || s.status === 'stood down' ? s.note : '',
       // Each part is present only when the server recorded it. A round from an older server says
       // nothing about time or tokens rather than saying zero — which would be a measurement.
       reviewerTime(s),

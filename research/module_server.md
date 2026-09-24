@@ -4509,3 +4509,12 @@ orders are recorded in the rounds database as every order is; the skipped senten
   never saved. A text that cannot be read (`IOException`, `UnauthorizedAccessException`) is the shipped
   one this round, logged — a custom command's is named as having no text.
 - A stage is one of three NAMES: `Enum.TryParse` read `"1"` as `plan`.
+
+## The stand-down switch (2026-09-24, issue #485)
+
+`PanelSettings.StopLocalWhenQuiet` from `COAI_STOP_LOCAL_WHEN_QUIET` (`Flag`, off by default), read per tool
+call like every switch; `RunStageAsync` hands the scheduler `StandDown.For(work)` only when it is on.
+`RoundAudit.Moved` writes one Information line per stood-down row — *"reviewer local/Role stood down: the cloud
+reviewers found N remark(s) between them, so the local reviewer was not started"* — and the round record keeps
+the row with status `stood down` (`ReviewerState.StoodDown`) and that note, which the rounds database stores
+per reviewer like any other.

@@ -146,6 +146,8 @@ export interface CoaiSettings {
   readonly autonomous: boolean;
   /** Break an accepted plan into epics and stories, and close each story properly. */
   readonly splitPlan: boolean;
+  /** The local reviewer stands down after a quiet cloud (issue #485). */
+  readonly stopLocalWhenQuiet: boolean;
   /**
    * Do the split, and the stories where being wrong is expensive, with the caller's STRONGEST model.
    *
@@ -318,6 +320,7 @@ export const DEFAULTS: CoaiSettings = {
   dealCodeLenses: false,
   autonomous: false,
   splitPlan: false,
+  stopLocalWhenQuiet: false,
   splitWithFable: false,
   commandModels: commandModelsFrom(undefined),
   gatePer: 'epic',
@@ -343,7 +346,7 @@ export type SettingsOverlay = Readonly<Record<string, unknown>>;
 export const OVERLAID_SETTINGS: readonly string[] = [
   'vendors', 'rounds', 'thresholds', 'roleEnabled', 'onExhausted', 'maxConcurrency', 'maxPerProvider',
   'reviewerTimeoutMinutes', 'roundTimeoutMinutes', 'credsKey', 'escalationMinutes', 'promptsPerRound',
-  'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'commandModels', 'gatePer', 'codeWorkspace',
+  'dealPlanLenses', 'dealCodeLenses', 'autonomous', 'splitPlan', 'splitWithFable', 'commandModels', 'gatePer', 'codeWorkspace', 'stopLocalWhenQuiet',
   // A person's own review roles belong to the WORK, which is what a side is — beside `rounds`,
   // `thresholds` and `roleEnabled`, which ask the same question about the roles this product ships.
   // The prompt BODIES do NOT: they live in one data directory, because a body is the text of a
@@ -438,6 +441,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     dealCodeLenses: read('dealCodeLenses') === true,
     autonomous: read('autonomous') === true,
     splitPlan: read('splitPlan') === true,
+    stopLocalWhenQuiet: read('stopLocalWhenQuiet') === true,
     splitWithFable: read('splitWithFable') === true,
     commandModels: commandModelsFrom(read('commandModels')),
     gatePer: read('gatePer') === 'task' ? 'task' : 'epic',
@@ -493,6 +497,9 @@ export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DE
   }
   if (settings.splitPlan) {
     env['COAI_SPLIT_PLAN'] = 'true';
+  }
+  if (settings.stopLocalWhenQuiet) {
+    env['COAI_STOP_LOCAL_WHEN_QUIET'] = 'true';
   }
   if (settings.splitWithFable) {
     env['COAI_SPLIT_WITH_FABLE'] = 'true';
