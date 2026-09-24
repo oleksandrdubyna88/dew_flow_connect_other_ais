@@ -101,8 +101,8 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch, string baseRef, string planText) =>
-                await host.Current.ReviewCodeAsync(repoPath, branch, baseRef, planText),
+            async (string repoPath, string branch, string baseRef, string planText, bool again = false) =>
+                await host.Current.ReviewCodeAsync(repoPath, branch, baseRef, planText, again),
             new McpServerToolCreateOptions
             {
                 Name = "review_code",
@@ -134,6 +134,12 @@ internal static class Tools
                     Same reply shape and the same `resolve` duty as review_plan. A finding that
                     changes your mind about the shape of the work is what `consult` is for — call it
                     before `resolve`, once for the round, while the accept-or-reject is still open.
+
+                    A code round CLOSES the session once it is resolved. To review the branch again —
+                    a checkpoint mid-epic, the final round after it, or after a crash — commit, then
+                    call with `again: true`: it reopens the code stage for the new commits, and is
+                    refused (saying why) when nothing reviewable was committed since the last code
+                    round, while that round's findings await `resolve`, or while a person is asked.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
@@ -240,7 +246,9 @@ internal static class Tools
                 Description = """
                     Re-orientation for a resumed conversation: the stage, rounds run, whether a
                     round awaits `resolve`, and the recorded trail of verdicts. Survives a server
-                    restart — sessions are persisted.
+                    restart — sessions are persisted. While a round awaits `resolve`, `pending`
+                    holds its findings in the order `resolve` indexes them — so a lost reply can
+                    still be decided on, finding by finding.
                     """,
                 ReadOnly = true,
                 Idempotent = true,

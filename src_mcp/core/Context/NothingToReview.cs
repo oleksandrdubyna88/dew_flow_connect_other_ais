@@ -72,6 +72,25 @@ public static class NothingToReview
                 + $"{(uncommitted.Count == 1 ? "was" : "were")} NOT reviewed ({Names(uncommitted)}) — "
                 + "review_code reviews committed changes only";
 
+    /// <summary>
+    /// <c>again: true</c> over the very commit the last code round reviewed — refused, with the way on.
+    /// </summary>
+    public static string NoNewCommit(int round, string sha) =>
+        $"no new commit since code round {round} ({Short(sha)}), so there is nothing new to review and no "
+        + "round was recorded. again: true reopens a finished code review for NEW commits: commit the change, "
+        + "then call review_code again.";
+
+    /// <summary>
+    /// <c>again: true</c> over commits that changed nothing a reviewer would be shown.
+    /// </summary>
+    public static string NothingSince(int round, IReadOnlyList<string> changedButExcluded) =>
+        $"nothing reviewable since code round {round}, so no round was recorded: "
+        + (changedButExcluded.Count > 0
+            ? $"the only files changed since are ones the gate never shows a reviewer (lock files and build "
+                + $"output): {Names(changedButExcluded)}."
+            : "the commits since change no file.")
+        + " Commit the source change, then call review_code with again: true.";
+
     private static string Files(int count) => count == 1 ? "1 uncommitted file" : $"{count} uncommitted files";
 
     private static string Names(IReadOnlyList<string> paths) =>

@@ -517,7 +517,8 @@ public sealed partial class PanelService
     /// it was already agreed by both halves, and asking for it twice is how a caller ends up
     /// sending nothing.</para>
     /// </remarks>
-    public Task<string> ReviewCodeAsync(string repoPath, string branch, string baseRef, string planText, CancellationToken ct = default)
+    public Task<string> ReviewCodeAsync(
+        string repoPath, string branch, string baseRef, string planText, bool again = false, CancellationToken ct = default)
     {
         // Before the scope check and before anything is built, because it needs nothing to be true:
         // a code round with every role switched off would launch no reviewer, and that is not an
@@ -535,16 +536,22 @@ public sealed partial class PanelService
         }
 
         var scope = Scope(repoPath, branch, planText);
+        var before = _store.Load(repoPath, branch);
         // Only once the stage itself is reachable. "The plan stage has not passed" is the more
         // useful sentence for a caller who skipped it, and telling them to send a scope for a
         // round that could not have run either way sends them to fix the wrong thing.
-        if (_store.Load(repoPath, branch) is { State.PlanProceeded: true } && !ReviewScope.IsSubstantial(scope))
+        if (before is { State.PlanProceeded: true } && !ReviewScope.IsSubstantial(scope))
         {
             // Refused before any worktree, any launcher, any token: nothing has to run to know it.
             return Task.FromResult(Error(ReviewScope.Refusal));
         }
 
-        return RunStageAsync(repoPath, branch, scope, new StageRun(RoundMachine.BeginCodeRound,
+        // What `again` would reopen a finished code stage FOR: the last code round's commit. Only a
+        // finished stage is compared — asking again of a stage still open changes nothing.
+        var since = again && before is { State.Stage: Stage.Done } ? LastCodeRound(before) : NoCodeRound;
+
+        return RunStageAsync(repoPath, branch, scope, new StageRun(
+            again ? RoundMachine.BeginCodeRoundAgain : RoundMachine.BeginCodeRound,
             NeedsWorktree: true, Stage: Stage.CodeReview, ReadsCheckout: true,
             async (session, workingDir, sha) =>
             {
@@ -657,17 +664,56 @@ public sealed partial class PanelService
         {
             RolesPerVendor = PanelConfig.CodeRoleNames.Length,
             // Nothing to review is SAID, never passed. Asked from the resolved commit before any
-            // tree or reviewer exists, so a refusal costs two numstats and leaves the session as it was.
+            // tree or reviewer exists, so a refusal costs two numstats and leaves the session as it
+            // was — `again` included: its reopening is in memory until a round actually completes.
             RefuseBeforeBuilding = async sha =>
-            {
-                var change = await _context.ReviewableAsync(repoPath, baseRef, sha, ct: ct);
-                return change.IsEmpty
-                    ? NothingToReview.Refusal(
-                        branch, baseRef, sha, change.ChangedButExcluded, await _context.UncommittedAsync(repoPath, sha, ct))
-                    : string.Empty;
-            },
+                await NothingSince(repoPath, sha, since, ct) is { Length: > 0 } unchanged
+                    ? unchanged
+                    : await NothingOver(repoPath, branch, baseRef, sha, ct),
         },
             ct);
+    }
+
+    /// <summary>A code round's number and the commit it reviewed; number 0 is "none".</summary>
+    private sealed record CodeRound(int Number, string Sha);
+
+    private static readonly CodeRound NoCodeRound = new(0, string.Empty);
+
+    private static CodeRound LastCodeRound(PersistedSession session) =>
+        session.Rounds.LastOrDefault(r => r.Stage == nameof(Stage.CodeReview)) is { } last
+            ? new CodeRound(last.Number, last.Sha)
+            : NoCodeRound;
+
+    /// <summary>
+    /// Why `again` has nothing new to review, or an empty sentence: the same commit as the last code
+    /// round, or new commits that changed only files a reviewer is never shown (plan round, codex).
+    /// A round with no recorded commit — one from before the field existed — proves nothing, so it
+    /// never refuses.
+    /// </summary>
+    private async Task<string> NothingSince(string repoPath, string sha, CodeRound since, CancellationToken ct)
+    {
+        if (since.Sha.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        if (sha.Equals(since.Sha, StringComparison.OrdinalIgnoreCase))
+        {
+            return NothingToReview.NoNewCommit(since.Number, sha);
+        }
+
+        var change = await _context.ReviewableAsync(repoPath, since.Sha, sha, ct: ct);
+        return change.IsEmpty ? NothingToReview.NothingSince(since.Number, change.ChangedButExcluded) : string.Empty;
+    }
+
+    /// <summary>Why the branch has nothing to review over its base, or an empty sentence (S1).</summary>
+    private async Task<string> NothingOver(string repoPath, string branch, string baseRef, string sha, CancellationToken ct)
+    {
+        var change = await _context.ReviewableAsync(repoPath, baseRef, sha, ct: ct);
+        return change.IsEmpty
+            ? NothingToReview.Refusal(
+                branch, baseRef, sha, change.ChangedButExcluded, await _context.UncommittedAsync(repoPath, sha, ct))
+            : string.Empty;
     }
 
     /// <summary>
@@ -1192,9 +1238,17 @@ public sealed partial class PanelService
 
         session = ApplyAnyHumanDecision(session);
 
-        if (stage.Begin(session.State) is Transition.Refused refused)
+        switch (stage.Begin(session.State))
         {
-            return Error(refused.Sentence, from);
+            case Transition.Refused refused:
+                return Error(refused.Sentence, from);
+            // The state a begin MOVED to is the state the round runs from. Every begin but one
+            // returns the state it was given; `BeginCodeRoundAgain` reopens a finished code stage,
+            // and dropping that here would complete a round against `Done`. Nothing is saved until
+            // the round ends, so a refusal further down still leaves the session as it was.
+            case Transition.Moved { State: var begun }:
+                session = session with { State = begun };
+                break;
         }
 
         // ARMED BEFORE THE SETUP, not after it. The first build computed the budget from `work.Count`
@@ -1337,7 +1391,11 @@ public sealed partial class PanelService
                     // tail nobody read. Empty for every round that has none.
                     + roundWork.Unreviewed,
             };
-            var record = live.Finish(answer.Verdict, gate.GatingCount, summary.Sentence, results);
+            // The commit it reviewed, kept with the round: what a later `again` compares the branch to.
+            var record = live.Finish(answer.Verdict, gate.GatingCount, summary.Sentence, results) with
+            {
+                Sha = stage.Stage == Stage.CodeReview ? sha : string.Empty,
+            };
             // The operator's own switches, read for THIS call: the settings file is stamped and
             // reloaded per tool call, so a box ticked a second ago governs this round.
             var caller = CallerFor(session);
@@ -2742,6 +2800,7 @@ public sealed partial class PanelService
         },
         HumanAnswer = _escalations.AnswerTextFor(session.State.SessionId),
         Consultations = _consultations.OpenIn(session.State.RepoPath),
+        Pending = session.State.AwaitingResolve ? session.Pending : [],
     };
 
     private static string Json<T>(T value, System.Text.Json.Serialization.Metadata.JsonTypeInfo<T> type) =>

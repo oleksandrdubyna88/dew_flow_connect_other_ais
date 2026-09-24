@@ -347,6 +347,27 @@ public sealed class GateCommandsTests
         }
     }
 
+    /// <summary>
+    /// Every gate order says where the SECOND code round is. "ONE review_code" was read as "one, ever",
+    /// and an agent that crashed mid-epic refused its operator's checkpoint round to keep the final one
+    /// (issue #490).
+    /// </summary>
+    [Fact]
+    public void EveryGateOrder_NamesTheDoorToAnotherCodeRound()
+    {
+        var contexts = new[]
+        {
+            new CommandContext(SplitPlan: true, PlanText: PlanOf(400, 8, 3, 2), PlanStage: true),
+            new CommandContext(SplitPlan: true, PlanText: PlanOf(400, 8, 3, 2), PlanStage: true) { GatePer = GateScope.Task },
+            new CommandContext(SplitPlan: true, PlanText: PlanOf(200, 4, 3, 2), PlanStage: true),
+        };
+
+        foreach (var context in contexts)
+        {
+            GateCommands.For(context)[0].Should().Contain("review_code with again: true");
+        }
+    }
+
     [Fact]
     public void OneGateForTheTask_IsOneCodeRoundAtTheEnd_AndStillACommitPerEpic()
     {

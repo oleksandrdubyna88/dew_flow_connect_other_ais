@@ -82,6 +82,16 @@ public sealed record RoundRecord(
 
     public int RunnerPid { get; init; }
 
+    /// <summary>
+    /// The commit a round reviewed — what <c>review_code</c> with <c>again: true</c> compares the branch
+    /// against, so a finished code stage is reopened only for NEW commits (issue #490).
+    /// </summary>
+    /// <remarks>
+    /// Empty on a round recorded before the field existed, and on a plan round, which reviews no
+    /// commit. An empty one proves nothing about the branch, so it never refuses a round.
+    /// </remarks>
+    public string Sha { get; init; } = string.Empty;
+
     /// <summary>Per-reviewer progress — the live part of a running round.</summary>
     /// <remarks>Normalised on the way in, for the reason spelled out on PersistedSession.UsedPrompts.</remarks>
     public List<ReviewerState> ReviewerStates
