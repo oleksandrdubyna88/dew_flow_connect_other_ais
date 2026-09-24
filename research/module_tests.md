@@ -1952,3 +1952,22 @@ let the `IOException` escape. One unlucky poll failed the whole test.
 The sweep for the same shape (a poll over a file a live process writes, letting a busy read escape) found no
 other site: `RemoteShimScenarioTests.RawText` already catches both exceptions, and the remaining reads are
 one-shot reads after the server has answered.
+
+## CoAI: choose on a bug (2026-09-24, issue #487)
+
+- `reviewChoose.test.ts` — the seven labelled parts in the issue's order with their values; a draft beats
+  the saved comment (and another row's draft does not); a skeleton holding ```` ``` ```` stays inside one
+  fence; nothing recorded is said as such, never a blank or a zero; one bug is one key, the same finding in
+  another checkout another. Two compiling plants (drafts ignored; a fixed three-backtick fence) each turned
+  their test red.
+- `bugzReviewMessages.test.ts` — the moved guard, RUN: `choose` needs a whole non-negative id, and every kind
+  the panel answered still parses the same.
+- `bugzReviewPage.test.ts` — a `Chooser` element built from the rendered markup (its `closest` finds the ROW,
+  as a browser would): one button per row, on the summary line, outside the disclosure button, with a title;
+  a press posts `{type:'choose', id}` once and neither opens nor ticks the row.
+- `bugzReviewWiring.test.ts` (read, not run — every link imports `vscode`) — `received()` hands the hook the
+  pair AND `this.drafts`; the provider's hook reaches the extension's callback; `ChatPanels` exists before the
+  sidebar; `chooseFromBug` reveals an existing conversation before anything else and delivers a first one
+  with `send = false`.
+- `notificationSites.test.mjs` — `PLACES_THIS_SPEAKS` 141 → 140 (the three identical "not ready" refusals
+  became one helper).

@@ -32,6 +32,7 @@ import {
 import { coaiDataDir } from './dataDir';
 import { Door, chatDoorRecord } from './chatDoors';
 import { recordChatDoor } from './chatDoorsFile';
+import { BugChat, BugChatKeys } from './reviewChoose';
 import { chatSettingsFrom } from './chatSettings';
 import { CARRY_EVERYTHING } from './chatCarry';
 import { chatTextTone, chatUiScale, createChatPanel, pushChatDraft, setChatDraft } from './chatPanel';
@@ -215,9 +216,7 @@ export async function chatWithOtherAi(
   // question command — two places deciding which model answers. (gemini, the code round.)
   const ready = readyForChat();
   if (!ready.ok) {
-    void notify({
-      as: 'warning', class: 'refusal', source: 'chat', code: 'chat-not-ready', title: ready.refusal,
-    });
+    notReady(ready.refusal);
 
     return;
   }
@@ -510,9 +509,7 @@ export async function takeTheQuestion(
 ): Promise<void> {
   const ready = readyForChat();
   if (!ready.ok) {
-    void notify({
-      as: 'warning', class: 'refusal', source: 'chat', code: 'chat-not-ready', title: ready.refusal,
-    });
+    notReady(ready.refusal);
 
     return;
   }
@@ -550,4 +547,54 @@ export async function takeTheQuestion(
   // person is in the middle of answering; it goes into the composer so they can look at it, add
   // what they think, and press send themselves.
   await deliverPassage(panels, extensionUri, ready, source, { text: question.text }, false, claude !== undefined, uri, append);
+}
+
+/** One key object per bug for this window — see {@link BugChatKeys}. */
+const bugKeys = new BugChatKeys();
+
+/**
+ * One bug from the review page, into a chat of its own — the row's *CoAI: choose* (issue #487).
+ *
+ * <p>It cannot be the right-click command: that one names the conversation after the ACTIVE tab and
+ * refuses a webview, and the review page is one. A bug has no tab, so the conversation is keyed by the
+ * bug and filed under the bug's file, and the passage comes from the page rather than from a selection.
+ * From there it is the same door: never sent, the model and the question the person's to choose.</p>
+ *
+ * <p><b>A second press on the same bug only brings the conversation back.</b> Refilling the composer
+ * would throw away whatever the person had started writing there. (gemini, the plan round.)</p>
+ */
+export async function chooseFromBug(panels: ChatPanels, extensionUri: vscode.Uri, chat: BugChat): Promise<void> {
+  const key = bugKeys.keyFor(chat.key);
+  const open = panels.get(key);
+  if (open !== undefined) {
+    open.panel.reveal();
+
+    return;
+  }
+  const ready = readyForChat();
+  if (!ready.ok) {
+    notReady(ready.refusal);
+
+    return;
+  }
+  await deliverPassage(panels, extensionUri, ready, { kind: 'new', key, label: chat.label }, { text: chat.text }, false, false, fileUriOf(chat));
+}
+
+/** The bug's file, which the conversation is filed under — or nothing, when the round recorded none. */
+function fileUriOf(chat: BugChat): string {
+  return chat.repoPath.length > 0 && chat.file.length > 0
+    ? vscode.Uri.joinPath(vscode.Uri.file(chat.repoPath), chat.file).toString()
+    : '';
+}
+
+/**
+ * Why no model can answer, said the one way every door says it.
+ *
+ * <p>Three doors reach for a model and each refused in its own copy of this block; the third (issue
+ * #487) is where the copies became one.</p>
+ */
+function notReady(refusal: string): void {
+  void notify({
+    as: 'warning', class: 'refusal', source: 'chat', code: 'chat-not-ready', title: refusal,
+  });
 }

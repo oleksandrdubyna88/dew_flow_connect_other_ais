@@ -259,7 +259,7 @@ function row(
   // browsers merely tolerate.
   return `<tr class="pair" data-row="${id}">
   <td class="pick"><input type="checkbox" data-pick="${id}"></td>
-  <td class="what">
+  <td class="what"><div class="summary">
     <button type="button" class="twist" data-toggle="${id}"
             aria-expanded="${ariaBoolean(open)}" aria-controls="detail-${id}">
       <span class="chev" aria-hidden="true">▸</span>
@@ -269,7 +269,9 @@ function row(
         <span class="state ${decision(pair.keep)}">${decision(pair.keep)}</span>
       </span>
     </button>
-  </td>
+    <button type="button" class="choose" data-choose="${id}"
+            title="Put this pair into a chat — Where, Why, Fix, Complexity, Before, After and your comment. You choose the model and the question there.">CoAI: choose</button>
+  </div></td>
 </tr>
 <tr class="detail" id="detail-${id}" data-detail="${id}"${open ? '' : ' hidden'}>
   <td class="pick"></td>
@@ -624,6 +626,14 @@ ${COMMENT_SCRIPT}
     }
     // The two ways out of a row to its code. The page paints neither answer: the host opens an
     // editor and posts what the row should now say. Each RETURNS, for the reason the tick-box does.
+    // Issue #487: the row's pair into a chat. The host builds the passage from what it holds — the
+    // comment being typed included — so the page names the row and nothing else. It RETURNS, like
+    // every control on a row, so a press never also opens or ticks it.
+    var choosing = target.closest ? target.closest('[data-choose]') : null;
+    if (choosing) {
+      vscode.postMessage({ type: 'choose', id: Number(choosing.getAttribute('data-choose')) });
+      return;
+    }
     var openingAt = target.closest ? target.closest('[data-open-at]') : null;
     if (openingAt) {
       vscode.postMessage({ type: 'openAt', id: Number(openingAt.getAttribute('data-open-at')) });

@@ -444,3 +444,37 @@ test('the provider wires the calls hooks to the real editor, and opens only insi
   assert.match(opening, /if \(inside\.ok\) \{/u,
     'a path the guard refuses opens nothing at all');
 });
+
+// --------------------------------------------------------------------------------------------
+// CoAI: choose on a bug (issue #487): read, not run, for the reason at the top of this file — the
+// panel, the provider, the extension and the chat command all import `vscode`.
+// --------------------------------------------------------------------------------------------
+
+test('a press on a row\'s CoAI: choose hands the hook that row\'s pair and the words being typed about it', () => {
+  assert.match(code('bugzReviewPanel.ts'),
+    /case 'choose':\s*void this\.opened\(m\.id, \(pair\) => this\.hooks\.choose\(bugChat\(pair, this\.drafts\)\)\);\s*return;/u,
+    'the press must reach the hook with the DRAFTS, or the chat is handed a comment the person already changed');
+});
+
+test('the sidebar hands its hook to the chat, and the extension gives it the window\'s own registry', () => {
+  assert.match(code('panelProvider.ts'), /choose: \(chat\) => this\.chooseInChat\?\.\(chat\) \?\? Promise\.resolve\(\),/u,
+    'the review page\'s hook must reach the callback the extension handed in');
+  const extension = code('extension.ts');
+  const registry = extension.indexOf('const chatPanels = new ChatPanels();');
+  const sidebar = extension.indexOf('new PanelProvider(');
+  assert.ok(registry >= 0 && registry < sidebar, 'the registry must exist before the sidebar is handed it');
+  // No door is recorded: the door inventory is one recorder per MANIFEST command, and this button is
+  // not one — recording it as the right-click `choose` would count a press nobody made there.
+  assert.match(extension, /\}, consultations, \(chat\) => chooseFromBug\(chatPanels, context\.extensionUri, chat\)\);/u,
+    'a press goes into THIS window\'s conversations');
+});
+
+test('a second press on the same bug only brings its conversation back, and a first one is never sent', () => {
+  const body = bodyOf(code('chatCommand.ts'), 'export async function chooseFromBug(');
+  const reveal = body.search(/const open = panels\.get\(key\);\s*if \(open !== undefined\) \{\s*open\.panel\.reveal\(\);\s*return;\s*\}/u);
+  const deliver = body.search(/await deliverPassage\(panels, extensionUri, ready, \{ kind: 'new', key, label: chat\.label \}, \{ text: chat\.text \}, false, false, fileUriOf\(chat\)\);/u);
+
+  assert.ok(reveal >= 0, 'an open conversation is revealed and its composer left alone');
+  assert.ok(deliver > reveal, 'and only a bug with no conversation gets a passage — never sent (send = false)');
+  assert.match(body, /const key = bugKeys\.keyFor\(chat\.key\);/u, 'keyed by the bug, not by the active tab');
+});
