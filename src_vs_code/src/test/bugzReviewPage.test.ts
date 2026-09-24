@@ -313,6 +313,25 @@ class Opener {
   }
 }
 
+/**
+ * A row's *CoAI: choose* (issue #487). It sits in the PAIR row, beside the disclosure button and not
+ * inside it, so `closest` finds the row from here exactly as a browser would — which is what a branch
+ * that forgot to return before the row's own behaviour would trip over.
+ */
+class Chooser {
+  readonly id = '';
+
+  constructor(readonly key: string, private readonly row: Row) {}
+
+  getAttribute(name: string): string | null {
+    return name === 'data-choose' ? this.key : null;
+  }
+
+  closest(selector: string): Chooser | Row | null {
+    return selector === '[data-choose]' ? this : this.row.closest(selector);
+  }
+}
+
 /** The container a row's revision actions live in — what the host's `revisions` answer lands in. */
 class Note {
   private text: string;
@@ -427,7 +446,9 @@ interface Page {
   readonly tabs: readonly TabButton[];
   /** Every way out of a row to the code, at its revision or as it is now. */
   readonly openers: readonly Opener[];
-  click(what: Box | Control | Toggle | Line | TabButton | Opener | CommentBox): void;
+  /** Every row's *CoAI: choose*, from the markup. */
+  readonly choosers: readonly Chooser[];
+  click(what: Box | Control | Toggle | Line | TabButton | Opener | CommentBox | Chooser): void;
   /** One row's opener of one kind — asserting it is there, because a row with none has lost the action. */
   opener(findingId: number, kind: 'data-open-at' | 'data-open-current' | 'data-open-tree' | 'data-calls'): Opener;
   /** The container one row's revision actions were rendered into. */
@@ -546,6 +567,7 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
         ? toggle
         : rowFor(toggle.key));
   });
+  const choosers = [...html.matchAll(/data-choose="(\d+)"/g)].map((m) => new Chooser(m[1]!, rowFor(m[1]!)));
   const zoom = [...html.matchAll(/data-zoom="(-?\d+)"/g)].map((m) => new Knob('zoom', m[1]!));
   const tone = [...html.matchAll(/data-tone="(-?\d+)"/g)].map((m) => new Knob('tone', m[1]!));
   const controls: Record<string, Control> = {
@@ -673,6 +695,7 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     host,
     controls,
     openers,
+    choosers,
     click: (what) => onClick!({ target: what }),
     opener: (findingId, kind) => {
       const found = openers.find((one) => one.kind === kind && one.key === String(findingId));
@@ -2194,4 +2217,36 @@ test('a patch reaches the row the GENERATOR named, for both channels', () => {
 
   assert.match(page.revision(1).innerHTML, /reached the revision row/u);
   assert.match(page.callBoxes.find((one) => one.key === '1')?.innerHTML ?? '', /reached the calls row/u);
+});
+
+// --------------------------------------------------------------------------------------------
+// CoAI: choose on every bug (issue #487): the pair goes into a chat, the person picks the model and
+// the question there.
+// --------------------------------------------------------------------------------------------
+
+test('every row offers CoAI: choose on its summary line, beside the disclosure button and not inside it', () => {
+  const html = reviewPageHtml({ pairs: [pair(1), pair(2)], nonce: 'test-nonce' });
+  const page = run([pair(1), pair(2)]);
+
+  assert.deepEqual(page.choosers.map((one) => one.key), ['1', '2'], 'one per row, and only one');
+  for (const id of ['1', '2']) {
+    const summary = html.slice(html.indexOf(`data-row="${id}"`), html.indexOf(`data-detail="${id}"`));
+    assert.match(summary, new RegExp(`data-choose="${id}"`, 'u'),
+      'on the summary line, which a collapsed row still shows');
+    const twist = summary.slice(summary.indexOf('data-toggle='), summary.indexOf('</button>'));
+    assert.doesNotMatch(twist, /data-choose/u, 'a button inside the disclosure button is invalid, and would toggle the row');
+    assert.match(summary, /<button type="button" class="choose"[^>]*title="[^"]+"[^>]*>CoAI: choose<\/button>/u,
+      'a real button, which says what it does');
+  }
+});
+
+test('pressing CoAI: choose names its row, once, and neither opens nor ticks it', () => {
+  const page = run([pair(1), pair(2)]);
+
+  page.click(page.choosers[1]!);
+
+  assert.deepEqual(page.posted.filter((m) => m.type === 'choose'), [{ type: 'choose', id: 2 }]);
+  assert.equal(page.posted.filter((m) => m.type === 'expand').length, 0, 'the row did not open');
+  assert.equal(page.showing(2), false);
+  assert.ok(page.boxes.every((box) => !box.checked), 'and nothing was ticked');
 });

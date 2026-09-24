@@ -9116,3 +9116,56 @@ the "orders to the caller" block — it changes what the gate RUNS. `settingsSha
 (`OVERLAID_SETTINGS`), `COAI_STOP_LOCAL_WHEN_QUIET=true` only when on. `gateScope.stopLocalSkewNote` names a
 server older than `STOP_LOCAL_SINCE` (0.34.0) while the box is ticked. The round view (`rounds.reviewerRows`)
 shows a `stood down` row's reason beside its status. The help's *The gate* article says it in five languages.
+
+## CoAI: choose on every bug (2026-09-24, issue #487)
+
+Every row of the review page carries a **CoAI: choose** button on its summary line — beside the disclosure
+button, not inside it (a button inside a button is invalid, and pressing it would toggle the row), inside a
+`.summary` flex wrapper so it stays on the line a collapsed row still shows. A press posts
+`{type: 'choose', id}` and RETURNS, like every control on a row, so it neither opens nor ticks the row.
+
+```mermaid
+sequenceDiagram
+    participant Page as review page (bugzReviewPage.ts)
+    participant Panel as BugzReviewPanel
+    participant Chat as chooseFromBug (chatCommand.ts)
+    participant Reg as ChatPanels
+    Page->>Panel: {type:'choose', id}
+    Panel->>Panel: bugChat(pair, drafts) — reviewChoose.ts
+    Panel->>Chat: hooks.choose(chat) via PanelProvider.chooseInChat
+    Chat->>Reg: get(BugChatKeys.keyFor(chat.key))
+    alt the bug already has a conversation
+        Chat->>Reg: reveal — composer untouched
+    else first press
+        Chat->>Chat: readyForChat() / notReady(refusal)
+        Chat->>Reg: deliverPassage(…, send = false, fromSession = false, fileUriOf(chat))
+    end
+```
+
+- **`reviewChoose.ts`** (pure) — `bugChat(pair, drafts)` builds the passage: **Where**, **Why**, **Fix**,
+  **Complexity**, **Before**, **After** and **Your comment on this pair**, in the issue's order. The comment is
+  the DRAFT the panel holds from keystrokes, else the saved one, else `(none)`. Before/After are fenced with
+  the pair's language by `fenced`, one backtick longer than the longest run inside, so a skeleton cannot close
+  its own fence. `key` = `<repoPath>#<findingId>`, `label` = the method name. `BugChatKeys` mints ONE key
+  object per bug for the window, because `ChatPanels` keys conversations by object identity and a bug has no
+  tab.
+- **`reviewAbout.ts`** — Where and Complexity are formatted by one structure in two voices (`MARKUP` for the
+  row, `PLAIN` for the chat, `aboutText`), so the page and the chat cannot say a line or a count differently.
+- **`bugzReviewMessages.ts`** — the page's message union and guard, moved unchanged out of
+  `bugzReviewPanel.ts` (which stood at the `max-lines` cap) into a `vscode`-free module that a test RUNS;
+  `choose` joins the whole-non-negative-id group. Its two lint suppressions moved with it.
+- **`chatCommand.chooseFromBug`** — the right-click *CoAI: choose* keys the chat to the ACTIVE tab and refuses
+  a webview, so the bug door is its own entry: a second press on the same bug only REVEALS the conversation
+  (refilling the composer would throw away what the person started writing — gemini, the plan round); a
+  first press resolves the model with `readyForChat` and hands `deliverPassage` the passage UNSENT, filed
+  under the bug's file (`fileUriOf`), so the person chooses the model and the question in the composer. The
+  "no model can answer" refusal is now one helper, `notReady`, for all three doors that need a model
+  (notification census 141 → 140).
+- **Wiring** — `extension.ts` creates `ChatPanels` before `PanelProvider` and passes
+  `(chat) => chooseFromBug(chatPanels, …)` as the provider's optional last argument; `reviewBugs` hands it to
+  the page's `choose` hook. **No chat door is recorded**: the door inventory is one recorder per MANIFEST
+  command and this button is not one.
+
+**Limits, recorded:** a bug's conversation is found again by the button only for the window's lifetime —
+after a reload a press opens a new one, the rule every non-Claude source has (`sessionKey.rekeysByLabel`);
+the old one is kept, under the method's name, in *CoAI: switch conversations*.

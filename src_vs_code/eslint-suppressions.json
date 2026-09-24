@@ -52,6 +52,14 @@
       "count": 2
     }
   },
+  "src/bugzReviewMessages.ts": {
+    "complexity": {
+      "count": 1
+    },
+    "max-lines-per-function": {
+      "count": 1
+    }
+  },
   "src/bugzReviewPage.ts": {
     "complexity": {
       "count": 4
@@ -62,10 +70,10 @@
   },
   "src/bugzReviewPanel.ts": {
     "complexity": {
-      "count": 4
+      "count": 3
     },
     "max-lines-per-function": {
-      "count": 2
+      "count": 1
     }
   },
   "src/bugzView.ts": {

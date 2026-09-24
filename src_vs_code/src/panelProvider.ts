@@ -75,6 +75,7 @@ import { mayStart, outcomeOf } from './bugsSend';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
 import { usersPanel } from './bugsKeysPanel';
 import { BugzReviewPanel } from './bugzReviewPanel';
+import { BugChat } from './reviewChoose';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
 import {
@@ -347,6 +348,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
      * watcher is one.</p>
      */
     private readonly consultations?: ConsultationWatcher,
+    /**
+     * A bug from the review page, into a chat — the row's *CoAI: choose* (issue #487). The chat
+     * registry is the extension's, not this panel's, so it is handed in; optional like the watcher
+     * above, and a build without it simply does nothing on a press.
+     */
+    private readonly chooseInChat?: (chat: BugChat) => Promise<void>,
   ) {
     // BUILT HERE rather than beside its declaration: a field initialiser runs before the constructor
     // parameters are assigned, so `this.dataDir` is undefined at that point and `tsc` says so
@@ -2751,6 +2758,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         this.bugzAt = 0;
         await this.render();
       },
+      choose: (chat) => this.chooseInChat?.(chat) ?? Promise.resolve(),
     });
 
     await this.review.show();

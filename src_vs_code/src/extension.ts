@@ -18,6 +18,7 @@ import { registerConfigTransfer } from './configTransferCommands';
 import { ChatPanels } from './chatPanels';
 import {
   chatWithOtherAi,
+  chooseFromBug,
   noteChatDoor,
   takeTheQuestion,
 } from './chatCommand';
@@ -203,12 +204,15 @@ export function activate(context: vscode.ExtensionContext): void {
       }
     },
   });
+  // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
+  // Made before the sidebar, which hands the review page's bugs to it (issue #487).
+  const chatPanels = new ChatPanels();
   const panel = panelRef = new PanelProvider(context, watcher, dataDir(), async (id) => {
     const question = watcher.openQuestions.find((q) => q.id === id);
     if (question !== undefined) {
       await watcher.answerCommand(question);
     }
-  }, consultations);
+  }, consultations, (chat) => chooseFromBug(chatPanels, context.extensionUri, chat));
   // The panel repaints whenever the watcher's state moves, so a question answered in the modal
   // disappears from the sidebar without anyone asking it to.
   watcher.onChanged = () => {
@@ -267,8 +271,6 @@ export function activate(context: vscode.ExtensionContext): void {
     console.error('ConnectOtherAIs: the sweep of unfinished role deletions failed', reason);
   });
 
-  // One registry per window: a conversation belongs to a Claude Code tab, and tabs are per window.
-  const chatPanels = new ChatPanels();
   // Where conversations are kept so a window reload does not empty every chat tab: the store on
   // disk, one file per conversation beside the two chat ledgers, under the same data directory the
   // MCP server uses. It is the source of truth — the serializer below reads it.

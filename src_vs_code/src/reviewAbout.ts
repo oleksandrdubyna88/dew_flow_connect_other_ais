@@ -46,17 +46,43 @@ const prose = (value: string): string => {
   return said.length > 0 ? escapeHtml(said) : none('none recorded');
 };
 
+/**
+ * How the block says its small things — as page markup, or as the plain text a chat is handed.
+ *
+ * <p>Two voices over ONE sentence structure (issue #487): *CoAI: choose* hands a chat the same Where
+ * and Complexity the row shows, and a second formatter beside this one would be a second place for a
+ * line number or a revision to be said differently.</p>
+ */
+interface Voice {
+  readonly path: (said: string) => string;
+  readonly repo: (said: string) => string;
+  readonly sha: (sha: string) => string;
+  readonly absent: (what: string) => string;
+}
+
+const MARKUP: Voice = {
+  path: (said) => `<code class="path">${escapeHtml(said)}</code>`,
+  repo: (said) => `<span class="repo">${escapeHtml(said)}</span>`,
+  sha: commit,
+  absent: none,
+};
+
+const PLAIN: Voice = {
+  path: (said) => said,
+  repo: (said) => said,
+  sha: (sha) => (text(sha).length > 0 ? text(sha).slice(0, 7) : 'an unrecorded commit'),
+  absent: (what) => `(${what})`,
+};
+
 /** Where the finding was: its path and line at the commit the reviewers read, and in which checkout. */
-function where(pair: AboutRow): string {
+function where(pair: AboutRow, voice: Voice = MARKUP): string {
   const file = text(pair.file);
   const line = Number.isInteger(pair.line) && pair.line > 0 ? `:${pair.line}` : '';
-  const place = file.length > 0
-    ? `<code class="path">${escapeHtml(file)}${line}</code>`
-    : none('no file recorded');
+  const place = file.length > 0 ? voice.path(`${file}${line}`) : voice.absent('no file recorded');
   const repo = text(pair.repoPath);
-  const checkout = repo.length > 0 ? ` in <span class="repo">${escapeHtml(repo)}</span>` : '';
+  const checkout = repo.length > 0 ? ` in ${voice.repo(repo)}` : '';
 
-  return `${place} at ${commit(pair.headSha)}${checkout}`;
+  return `${place} at ${voice.sha(pair.headSha)}${checkout}`;
 }
 
 /**
@@ -68,17 +94,28 @@ function where(pair: AboutRow): string {
  * wrong about today's file. A language the count does not read gets the count's own sentence, not a
  * zero.</p>
  */
-function complexity(pair: AboutRow): string {
+function complexity(pair: AboutRow, voice: Voice = MARKUP): string {
   const before = cyclomatic(pair.skeletonBefore, pair.language);
   const after = cyclomatic(pair.skeletonAfter, pair.language);
   if (!before.known) {
-    return none(before.why);
+    return voice.absent(before.why);
   }
   if (!after.known) {
-    return none(after.why);
+    return voice.absent(after.why);
   }
 
-  return `${before.value} at ${commit(pair.headSha)} → ${after.value} at ${commit(pair.fixSha)}`;
+  return `${before.value} at ${voice.sha(pair.headSha)} → ${after.value} at ${voice.sha(pair.fixSha)}`;
+}
+
+/**
+ * The same four lines the block shows, as plain text — what *CoAI: choose* hands a chat (issue #487).
+ *
+ * <p>Why and Fix are the reviewer's words trimmed; nothing recorded is said as such, never left blank.</p>
+ */
+export function aboutText(pair: AboutRow): { where: string; why: string; fix: string; complexity: string } {
+  const said = (value: string): string => (text(value).length > 0 ? text(value) : PLAIN.absent('none recorded'));
+
+  return { where: where(pair, PLAIN), why: said(pair.why), fix: said(pair.fix), complexity: complexity(pair, PLAIN) };
 }
 
 /**
