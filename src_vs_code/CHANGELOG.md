@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+**CoAI: choose on every bug** (issue #487). Each row of the Bugz review page has a *CoAI: choose* button beside
+its method. It puts that pair into a chat — Where, Why, Fix, Complexity, Before, After and your comment, the
+words you are still typing included — and sends nothing: you choose the model and the question in the chat.
+Each bug gets its own conversation, named after its method; pressing it again brings that conversation back
+without touching what you had started writing there.
+
 **The local reviewer can stop when the cloud reviewers found almost nothing** (issue #485). A new switch in
 *The gate*: once every cloud reviewer of a round has answered and they found at most one remark between them,
 the local reviewer finishes the launch it is on and starts no more — the round lists what it did not start and
