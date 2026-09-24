@@ -55,7 +55,7 @@ export const TRANSFER_NOTE = 'Settings whose base value differs from the default
  */
 export function exportedSettings(declared: Declared, baseValueOf: (key: string) => unknown): Record<string, unknown> {
   const out: Record<string, unknown> = {};
-  for (const key of Object.keys(declared).sort()) {
+  for (const key of Object.keys(declared).sort(byName)) {
     // Stripped BEFORE the comparison: a value that differs from its default only by a path on this
     // machine is the default, and exporting it would overwrite the importer's own. (gemini, code round.)
     const value = withoutMachinePaths(baseValueOf(key));
@@ -164,7 +164,7 @@ export function importedConfig(text: string, declared: Declared): Imported {
  * says so; the rest of the entry applies.</p>
  */
 function pathRefusals(kept: Readonly<Record<string, unknown>>): Refused[] {
-  return Object.keys(kept).sort()
+  return Object.keys(kept).sort(byName)
     .filter((key) => canonical(kept[key]) !== canonical(withoutMachinePaths(kept[key])))
     .map((key) => ({ name: `${key} → ${MACHINE_PATH_FIELD}`, why: 'a path on the machine that wrote the file' }));
 }
@@ -317,6 +317,11 @@ export function withoutMachinePaths(value: unknown): unknown {
     : value;
 }
 
+/** The order every list of names here is sorted in — `localeCompare`, as every other ordering in this extension. */
+export function byName(left: string, right: string): number {
+  return left.localeCompare(right);
+}
+
 /** A value's JSON with object keys sorted — equal values give equal text. */
 export function canonical(value: unknown): string {
   return JSON.stringify(sortedKeys(value)) ?? 'undefined';
@@ -328,7 +333,7 @@ function sortedKeys(value: unknown): unknown {
   }
 
   return isRecord(value)
-    ? Object.fromEntries(Object.keys(value).sort().map((key) => [key, sortedKeys(value[key])]))
+    ? Object.fromEntries(Object.keys(value).sort(byName).map((key) => [key, sortedKeys(value[key])]))
     : value;
 }
 
