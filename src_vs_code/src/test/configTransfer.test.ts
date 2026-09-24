@@ -137,6 +137,65 @@ test('the confirmation counts, names what replaces existing text, and gives ever
   assert.match(asked, /Not applied: nope \(unknown to this build\)/);
 });
 
+test('a CLI path inside an imported file is never applied, and the confirmation says it was left out', () => {
+  // A config from someone else naming `executablePath` for a vendor this machine does not have yet would
+  // otherwise be written into the settings, and the next round would RUN that binary. (gemini, code round.)
+  const back = importedConfig(JSON.stringify({
+    format: CONFIG_FORMAT, version: CONFIG_VERSION, prompts: {},
+    settings: { vendors: [{ id: 'fresh', executablePath: 'C:/Users/Public/evil.cmd' }], consultants: { a: { executablePath: '/tmp/x' } } },
+  }), declared);
+
+  assert.ok(back.ok);
+  assert.equal(JSON.stringify(back.settings).includes('executablePath'), false, JSON.stringify(back.settings));
+  assert.deepEqual(back.refused.map((one) => one.name), ['consultants → executablePath', 'vendors → executablePath']);
+  assert.match(back.refused[0]?.why ?? '', /a path on the machine that wrote the file/);
+});
+
+test('a value of the wrong kind for a setting is refused by name, and the rest applies', () => {
+  const typed: Declared = {
+    reviewTimeoutSeconds: { default: 600, type: 'number' },
+    vendors: { default: [], type: 'array' },
+    either: { default: 'x', type: ['string', 'null'] },
+    rounds: { default: 3, type: 'integer' },
+  };
+  const back = importedConfig(JSON.stringify({
+    format: CONFIG_FORMAT, version: CONFIG_VERSION, prompts: {},
+    settings: { reviewTimeoutSeconds: 'soon', vendors: 'codex', either: null, rounds: 2.5 },
+  }), typed);
+
+  assert.ok(back.ok);
+  assert.deepEqual(back.settings, { either: null });
+  const why = Object.fromEntries(back.refused.map((one) => [one.name, one.why]));
+  assert.match(why['reviewTimeoutSeconds'] ?? '', /its value is not a number, which this build declares/);
+  assert.match(why['vendors'] ?? '', /its value is not a array|its value is not an array/);
+  assert.match(why['rounds'] ?? '', /not a integer|not an integer/);
+});
+
+test('a setting that differs from its default ONLY by a local path is the default, and is not exported', () => {
+  const withEntry: Declared = { vendors: { default: [{ id: 'codex' }] } };
+
+  assert.deepEqual(exportedSettings(withEntry, base({ vendors: [{ id: 'codex', executablePath: 'C:/tools/codex.cmd' }] })), {});
+});
+
+test('a key every object inherits is unknown to this build, not a never-transferred one', () => {
+  // `key in NEVER_TRANSFERRED` answers true for `toString`, which then reads a FUNCTION as the reason.
+  const back = importedConfig(JSON.stringify({
+    format: CONFIG_FORMAT, version: CONFIG_VERSION, prompts: {}, settings: { toString: 1, constructor: 2 },
+  }), declared);
+
+  assert.ok(back.ok);
+  assert.deepEqual(back.refused, [
+    { name: 'toString', why: 'unknown to this build' },
+    { name: 'constructor', why: 'unknown to this build' },
+  ]);
+});
+
+test('a section that is there but is not an object is refused with the sentence, not a crash', () => {
+  const back = importedConfig(JSON.stringify({ format: CONFIG_FORMAT, version: CONFIG_VERSION, settings: null, prompts: [] }), declared);
+
+  assert.deepEqual(back, { ok: false, why: 'The file has no settings or no prompts section.' });
+});
+
 // ---------- the classification, against the REAL manifest ----------
 
 test('no setting the manifest declares that looks like a secret can be exported', () => {
@@ -175,5 +234,8 @@ test('the declared settings are read from the manifest with their defaults', () 
   assert.ok(Object.keys(out).length > 30, `only ${Object.keys(out).length} settings read`);
   assert.equal(Object.keys(out).some((key) => key.startsWith('coai.')), false, 'the prefix was kept');
   assert.deepEqual(declaredSettings(undefined), {});
-  assert.deepEqual(declaredSettings({ contributes: { configuration: { properties: { 'coai.x': { default: 3 } } } } }), { x: { default: 3 } });
+  assert.deepEqual(
+    declaredSettings({ contributes: { configuration: { properties: { 'coai.x': { default: 3, type: 'number' }, 'coai.y': { default: 1 } } } } }),
+    { x: { default: 3, type: 'number' }, y: { default: 1, type: undefined } },
+  );
 });
