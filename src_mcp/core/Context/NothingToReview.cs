@@ -24,7 +24,7 @@ public sealed record Uncommitted(IReadOnlyList<string> Paths, string Unreadable)
 /// <para>An empty diff used to launch every reviewer over an empty "## The change", collect nobody's
 /// findings and answer <c>proceed</c> — after which the session was <c>Done</c> and the real change
 /// could never be reviewed on that branch. A developer who forgot to commit, or who is not allowed to,
-/// was told "all clean" about code nobody read (todo/PLAN_a_failed_round_can_be_retried.md, S1).</para>
+/// was told "all clean" about code nobody read (research/PLAN_a_failed_round_can_be_retried.md, S1).</para>
 /// <para>So an empty diff is a REFUSAL, the rule the product already applies to a stage nobody serves,
 /// and the sentence says WHICH empty it is — three causes with three different cures. Pure, so every
 /// wording is a unit test rather than a round.</para>

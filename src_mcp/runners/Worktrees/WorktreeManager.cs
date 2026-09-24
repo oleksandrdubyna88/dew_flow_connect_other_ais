@@ -13,7 +13,7 @@ public sealed class WorktreeException(string operation, string detail)
 /// the fan-out ends, the worktree goes.
 /// </summary>
 /// <remarks>
-/// Disposal NEVER throws (S2 of todo/PLAN_a_failed_round_can_be_retried.md). It used to, and it ran
+/// Disposal NEVER throws (S2 of research/PLAN_a_failed_round_can_be_retried.md). It used to, and it ran
 /// inside the round's <c>await using</c>: a tree Windows would not let go of replaced a finished
 /// round's verdict and findings with <c>{"error":"git worktree remove: …"}</c> — after the session
 /// had already saved them as pending — and replaced a body exception with its own, so the real cause
@@ -42,7 +42,7 @@ internal sealed partial class TreeOwnerContext : System.Text.Json.Serialization.
 /// </summary>
 /// <remarks>
 /// <para><b>A failed round's tree can never block the next attempt</b> (S2 of
-/// todo/PLAN_a_failed_round_can_be_retried.md). Two mechanisms used to, both reproduced against git
+/// research/PLAN_a_failed_round_can_be_retried.md). Two mechanisms used to, both reproduced against git
 /// 2.55: a <c>worktree add</c> killed half-way leaves <c>.git/worktrees/&lt;name&gt;/locked</c> =
 /// <c>initializing</c>, which <c>remove --force</c> refuses and <c>prune</c> skips, so every later add
 /// at that path failed "missing but locked" for ever; and a file held open on Windows left the

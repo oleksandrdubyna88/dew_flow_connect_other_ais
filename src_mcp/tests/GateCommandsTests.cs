@@ -321,7 +321,7 @@ public sealed class GateCommandsTests
     /// diff: the epic's branch starts at the previous epic's commit, which is also its baseRef. That
     /// used to pass as a clean `proceed` and end the session; it is refused now, and an order that
     /// walks every obedient caller into a refusal is the defect this pins
-    /// (todo/PLAN_a_failed_round_can_be_retried.md, S1).
+    /// (research/PLAN_a_failed_round_can_be_retried.md, S1).
     /// </remarks>
     [Fact]
     public void EveryGateOrder_CommitsBeforeItCallsReviewCode()

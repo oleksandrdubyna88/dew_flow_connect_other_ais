@@ -242,7 +242,7 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     }
 
     // ---------------------------------------------------------------------------------------------
-    // A failed round's tree never blocks the next attempt (todo/PLAN_a_failed_round_can_be_retried.md, S2).
+    // A failed round's tree never blocks the next attempt (research/PLAN_a_failed_round_can_be_retried.md, S2).
     // Both failures below were reproduced against git 2.55 before a line was written.
 
     /// <summary>

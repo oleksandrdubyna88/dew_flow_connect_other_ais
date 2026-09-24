@@ -1,6 +1,16 @@
 # PLAN — a failed round can be retried, and a round with nothing in it is never a pass
 
-> Status: **plan only, nothing implemented yet, 2026-09-24.** Scope: the code gate's round lifecycle —
+> Status: **IMPLEMENTED, 2026-09-24**, except S3c's shared-rule half, extracted to
+> [PLAN_the_gate_rule_says_a_code_round_closes_the_session.md](../todo/PLAN_the_gate_rule_says_a_code_round_closes_the_session.md)
+> (a conventions change is a pin cascade of its own). **What shipped differently:** the empty-diff
+> check is a `StageRun.RefuseBeforeBuilding` hook run from the resolved sha before any worktree, and
+> it is handed the session read UNDER the claim (code round); the uncommitted tail is a
+> `Core.Context.Uncommitted` value that can say it could not be read (code round, codex); the owner
+> marker is written atomically; round records carry `Sha`; `status` returns `pending`; the gate
+> orders gained `GateCommands.AnotherCodeRound`; a refactor split the sweep's methods to the
+> doctrine's complexity of four. Code round: `good_enough`, 12 of 12 reviewers, 5 of 31 accepted.
+>
+> Original scope: the code gate's round lifecycle —
 > `src_mcp/src/Server/PanelService.cs` (`OpenAsync`, `ReviewCodeAsync`, `RunStageAsync`, `status`),
 > `src_mcp/core/Rounds/RoundMachine.cs`, `src_mcp/runners/Worktrees/WorktreeManager.cs`,
 > `src_mcp/core/Commands/GateCommands.cs`, the gate rule in `.agents/conventions/common/coai-review-gate.md`.
@@ -16,9 +26,9 @@
 > blocked) and a second deviation-tracking section (the DoD already requires rule text and
 > `GateEnding` to agree).
 >
-> Related docs: [module_server.md](../research/module_server.md),
-> [PLAN_multi_repo_and_uncommitted.md](PLAN_multi_repo_and_uncommitted.md) (working-tree review, `call_human`),
-> [PLAN_an_empty_review_is_evidence_too.md](../research/PLAN_an_empty_review_is_evidence_too.md).
+> Related docs: [module_server.md](module_server.md),
+> [PLAN_multi_repo_and_uncommitted.md](../todo/PLAN_multi_repo_and_uncommitted.md) (working-tree review, `call_human`),
+> [PLAN_an_empty_review_is_evidence_too.md](PLAN_an_empty_review_is_evidence_too.md).
 
 ## The symptoms — four reports, one theme
 
@@ -234,11 +244,12 @@ the extension's `npm test` before every PR — never `dotnet test`.
 ## Definition of Done
 
 - [x] D1–D5 answered and recorded here (2026-09-24, as recommended).
-- [ ] Every RED test in the table watched failing for the stated reason, then green; break-it checks
+- [x] Every RED test in the table watched failing for the stated reason, then green; break-it checks
       done with compiling code.
-- [ ] No `review_code` can answer `proceed` over an empty diff; the refusal says which empty.
-- [ ] A failed round's worktree never blocks the next attempt and never masks a verdict; `open` never
+- [x] No `review_code` can answer `proceed` over an empty diff; the refusal says which empty.
+- [x] A failed round's worktree never blocks the next attempt and never masks a verdict; `open` never
       removes a live tree of another session.
-- [ ] A code session can run a second round after new commits; a lost reply can be recovered via `status`.
-- [ ] `research/module_server.md` updated; the gate rule text (snippet v6) and `GateEnding` agree.
-- [ ] This plan promoted to `research/` with what shipped differently.
+- [x] A code session can run a second round after new commits; a lost reply can be recovered via `status`.
+- [x] `research/module_server.md` updated; `GateEnding` names the second round. The shared rule text
+      (snippet v6) is the extracted tail — see the status line.
+- [x] This plan promoted to `research/` with what shipped differently.
