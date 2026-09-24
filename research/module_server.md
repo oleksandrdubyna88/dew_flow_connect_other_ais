@@ -4401,3 +4401,17 @@ refused its operator's checkpoint gate to keep the last one, and on 2026-09-22/2
 The shared gate rule (`coai-review-gate.md` in the conventions repository, snippet v5) still reads
 "same resolve duty, same loop" for the code stage; saying there that a code round closes the session
 and that `again: true` is the door is a conventions change, and so a pin cascade of its own.
+
+### One mutating call per session (S4)
+
+A round reads the session, runs a fan-out for minutes and writes it back, so two rounds in flight over
+one session — two windows, two agents — both computed the next round from the same file and the
+loser's round vanished. With `again` reopening finished sessions that is an ordinary thing to try.
+
+`SessionClaim` (ported from the unmerged `coai-ar1-addressable-rounds` branch onto today's three-part
+key) is a file under `claims/` in the data dir held open with `FileShare.None` for the whole of
+`RunStageAsync` — every review tool — and of `resolve`. The kernel releases it when the process dies,
+so there is no lease to outlive a round and no stale lock to break. It is taken BEFORE the session is
+read, tried once, and a second call is refused at once with a sentence naming the branch — never made
+to wait on a blocked MCP call. `claims/` is in `shared/data-inventory.json` as neither moved nor
+mentioned: a handle, never content.

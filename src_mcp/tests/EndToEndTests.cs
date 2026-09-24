@@ -710,4 +710,47 @@ public sealed class EndToEndTests : IAsyncLifetime
         status.TryGetProperty("pending", out var pending).Should().BeTrue();
         pending.GetArrayLength().Should().Be(0);
     }
+
+    // ---------------------------------------------------------------------------------------------
+    // One mutating call per session (todo/PLAN_a_failed_round_can_be_retried.md, S4).
+    //
+    // A round reads the session, runs for minutes and writes it back; two in flight over one session
+    // both computed the next round from the same file, and the loser's round vanished. With `again`
+    // reopening finished sessions, that is an ordinary thing to try. The claim is held here the way
+    // ANOTHER call — another window, another agent — would hold it.
+
+    [Fact]
+    public async Task ARoundOnASessionAnotherCallIsChanging_IsRefused_BeforeAnyReviewerRuns()
+    {
+        var service = await PlanPassedOn("feature");
+        Script(Clean);
+
+        using (SessionClaim.TryTake(_data, _repo, "feature"))
+        {
+            var busy = Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope));
+
+            busy.GetProperty("error").GetString().Should().Contain("another call is already changing");
+            (await RoundsOn(service, "feature")).Should().Be(1, "nothing was started");
+        }
+
+        Parse(await service.ReviewCodeAsync(_repo, "feature", "main", Scope)).GetProperty("verdict").GetString()
+            .Should().Be("proceed", "the claim is released with the call that held it");
+    }
+
+    [Fact]
+    public async Task AResolveWhileAnotherCallHoldsTheSession_IsRefused()
+    {
+        var service = await PlanPassedOn("feature");
+        Script(FourMajors);
+        await service.ReviewCodeAsync(_repo, "feature", "main", Scope);
+
+        using (SessionClaim.TryTake(_data, _repo, "feature"))
+        {
+            Parse(await service.ResolveAsync(_repo, "feature", "[]")).GetProperty("error").GetString()
+                .Should().Contain("another call is already changing");
+        }
+
+        Parse(await service.StatusAsync(_repo, "feature")).GetProperty("awaitingResolve").GetBoolean()
+            .Should().BeTrue("the refused resolve decided nothing");
+    }
 }

@@ -1230,6 +1230,15 @@ public sealed partial class PanelService
                 "planText is required — a reviewer that cannot see the intent reviews its own guess", from);
         }
 
+        // One mutating call per session, held for the whole round (S4 of
+        // todo/PLAN_a_failed_round_can_be_retried.md). Taken BEFORE the session is read: two rounds
+        // that both read it first would both compute the next round from the same file.
+        using var claim = SessionClaim.TryTake(_settings.DataDir, repoPath, branch, stage.Document);
+        if (claim is null)
+        {
+            return Error(SessionClaim.Busy(branch), from);
+        }
+
         var session = _store.Load(repoPath, branch, stage.Document);
         if (session is null)
         {
@@ -2518,6 +2527,17 @@ public sealed partial class PanelService
     /// </param>
     public Task<string> ResolveAsync(
         string repoPath, string branch, string decisionsJson, bool humanSaysProceed = false, string document = "")
+    {
+        // One mutating call per session (S4): a resolve decides the pending list a running round of
+        // another call is about to replace. The body is synchronous, so the claim covers all of it.
+        using var claim = SessionClaim.TryTake(_settings.DataDir, repoPath, branch, DocumentKeyFor(repoPath, branch, document));
+        return claim is null
+            ? Task.FromResult(Error(SessionClaim.Busy(branch)))
+            : ResolveUnderClaim(repoPath, branch, decisionsJson, humanSaysProceed, document);
+    }
+
+    private Task<string> ResolveUnderClaim(
+        string repoPath, string branch, string decisionsJson, bool humanSaysProceed, string document)
     {
         var session = _store.Load(repoPath, branch, DocumentKeyFor(repoPath, branch, document));
         if (session is null)
