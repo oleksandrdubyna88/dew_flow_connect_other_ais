@@ -1,6 +1,6 @@
 import type { Dirent } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { isPromptName } from './configTransfer';
+import { byName, isPromptName } from './configTransfer';
 
 /**
  * The prompt files Export config reads and Import config touches — issue #467, the code round.
@@ -20,7 +20,7 @@ export async function promptNames(dir: string): Promise<string[]> {
     .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
     .map((entry) => entry.name.slice(0, -'.md'.length))
     .filter(isPromptName)
-    .sort();
+    .sort(byName);
 }
 
 /**
