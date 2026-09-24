@@ -346,11 +346,18 @@ function pushState(over: Partial<ChatPushState> = {}): ChatPushState {
   };
 }
 
+/** A message as the page receives it — checked, not cast: a fixture that casts stops the compiler checking. */
+function aMessage(message: unknown): Record<string, unknown> {
+  assert.ok(typeof message === 'object' && message !== null, 'the host posted something that is not a message');
+
+  return Object.fromEntries(Object.entries(message));
+}
+
 /** A tab the host can post to, recording what it was sent — the real send path, not a hand-made payload. */
 function aTab(): { readonly entry: { id: object; panel: { post(message: unknown): void } }; readonly sent: Record<string, unknown>[] } {
   const sent: Record<string, unknown>[] = [];
 
-  return { entry: { id: {}, panel: { post: (message: unknown) => { sent.push(message as Record<string, unknown>); } } }, sent };
+  return { entry: { id: {}, panel: { post: (message: unknown) => { sent.push(aMessage(message)); } } }, sent };
 }
 
 test('a turn that costs something moves the spending line, through what the host really sends', () => {
