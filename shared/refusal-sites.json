@@ -15,6 +15,7 @@
     "NotStarted",
     "Ok",
     "RateLimited",
+    "StoodDown",
     "TimedOut",
     "Unparseable"
   ]

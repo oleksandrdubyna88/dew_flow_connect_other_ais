@@ -1515,6 +1515,12 @@ timed out waiting for a claim file: its child process could not reach a local st
 not a flake and it is not in this diff - it is a load-sensitive test with a hard timeout, recorded
 here for whoever owns it rather than fixed inside an unrelated story.
 
+**`TheLocalReviewerStandsDownTests` (issue #485)** — a local launch held on the card finishes while the queued
+local rows stand down after a cloud of one remark; a stood-down row is not asked, never failed; two remarks,
+a failed cloud reviewer, the switch off and a round with no cloud reviewer each keep every local row running
+(red first; a plant that is never quiet turns the first two red). Extension: `stopLocalWhenQuiet.test.ts` (the
+default, the env key, the box RUN, the skew note) and `rounds.test.ts` (the reason beside the status).
+
 **`ADeniedCommandIsAskedAgainTests` (issue #504)** — the follow-up of an auto-denied agy reviewer carries
 `--conversation <id>`, keeps `--mode plan` and the schema, and says commands are unavailable; no follow-up
 without a denial or without a conversation id; the executor runs it INSTEAD of the fresh repair (red first:

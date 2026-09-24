@@ -21,6 +21,8 @@ import { camel } from './rolesPageHarness';
 export class Control {
   readonly dataset: Record<string, string> = {};
   value = '';
+  /** A checkbox's state, which the script reads instead of `value` (issue #485's switch). */
+  checked = false;
   focused = false;
   selection: readonly [number, number] = [-1, -1];
   private readonly handlers = new Map<string, (() => void)[]>();

@@ -332,6 +332,13 @@ public sealed record PanelSettings
     public bool SplitPlan { get; init; }
 
     /// <summary>
+    /// The local reviewer stands down once every cloud reviewer has answered and they found at most one
+    /// remark between them — the launch already on the card finishes, no other starts (issue #485). Off by
+    /// default: it changes what the gate RUNS. From <c>COAI_STOP_LOCAL_WHEN_QUIET</c>.
+    /// </summary>
+    public bool StopLocalWhenQuiet { get; init; }
+
+    /// <summary>
     /// Do the splitting — and the expensive-to-get-wrong stories — with the caller's strongest model.
     /// </summary>
     /// <remarks>
@@ -756,6 +763,7 @@ public sealed record PanelSettings
             LocalMaxTokens = IntVar(env, "COAI_LOCAL_MAX_TOKENS", 8192),
             Autonomous = Flag(env, "COAI_AUTONOMOUS"),
             SplitPlan = Flag(env, "COAI_SPLIT_PLAN"),
+            StopLocalWhenQuiet = Flag(env, "COAI_STOP_LOCAL_WHEN_QUIET"),
             SplitWithFable = Flag(env, "COAI_SPLIT_WITH_FABLE"),
             GatePer = GateScopeOf(env(Key.GatePer) ?? string.Empty),
             LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort

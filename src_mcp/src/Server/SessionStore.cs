@@ -51,6 +51,9 @@ public sealed record ReviewerState(
     public const string Running = "running";
     public const string Done = "done";
     public const string Failed = "failed";
+
+    /// <summary>A local reviewer not launched because the cloud was quiet (issue #485) — the scheduler's word.</summary>
+    public const string StoodDown = Runners.Reviewers.BoundedScheduler.StoodDownStatus;
 }
 
 /// <summary>

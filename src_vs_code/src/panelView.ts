@@ -32,7 +32,7 @@ import {
 import { chatProvidersFromPresets } from './chatModels';
 import { mainPrompt } from './chatPresets';
 import { CoaiSettings, GatePer, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
-import { gatePerSkewNote } from './gateScope';
+import { gatePerSkewNote, stopLocalSkewNote } from './gateScope';
 import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
@@ -1201,6 +1201,10 @@ function gateBody(state: PanelState): string {
   </select>
 </div>
 <div class="field">
+  <label class="check"><input type="checkbox" data-setting="stopLocalWhenQuiet"${s.stopLocalWhenQuiet ? ' checked' : ''}> Stop the local reviewer when the cloud reviewers found almost nothing${help('stopLocalWhenQuiet')}</label>
+${stopLocalSkew(state)}
+</div>
+<div class="field">
   <div class="hint">These three do not change what the gate DECIDES. They are orders it hands back to
   whichever AI called it — how the work is broken up, when you are interrupted, which model does the
   expensive half. All three are off unless you turn them on.</div>
@@ -1221,6 +1225,13 @@ ${commandModelsBlock(state)}
  * whole task — never per story. The segmented radio `codeWorkspace` already uses, for the same kind
  * of choice between two named modes.
  */
+/** What an older server does with the stand-down switch (issue #485): nothing, and the panel says so. */
+function stopLocalSkew(state: PanelState): string {
+  const note = stopLocalSkewNote(state.server.version, state.settings.stopLocalWhenQuiet);
+
+  return note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>`;
+}
+
 function gatePerBlock(state: PanelState): string {
   const note = gatePerSkewNote(state.server.version, state.settings.splitPlan);
   const choices: readonly (readonly [GatePer, string])[] = [['epic', 'One gate per epic'], ['task', 'One gate for the whole task']];

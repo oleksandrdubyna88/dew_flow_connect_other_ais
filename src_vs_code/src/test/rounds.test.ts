@@ -332,3 +332,16 @@ test('deciding seconds refuses what it cannot measure, and measures what it can'
   assert.equal(decideSecondsOf(finished, '2030-01-01T00:00:00.000Z'), null, 'past the bound');
   assert.equal(decideSecondsOf('', '2026-09-05T07:48:10.000Z'), null, 'the round never finished');
 });
+
+// ---------- a local reviewer that stood down says why (issue #485) ----------
+
+test('a reviewer that stood down carries the reason the cloud was quiet', () => {
+  const [row] = reviewerRows(round({
+    reviewerStates: [
+      { provider: 'local', role: 'Architecture', status: 'stood down', findings: 0,
+        note: 'the cloud reviewers found 1 remark(s) between them, so the local reviewer was not started' },
+    ],
+  }));
+
+  assert.match(row!.said, /^stood down \(the cloud reviewers found 1 remark/);
+});

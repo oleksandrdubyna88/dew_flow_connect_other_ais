@@ -226,10 +226,12 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
 
         endings.Should().HaveCountGreaterThan(3,
             "the reflection found almost nothing, so the comparison below means nothing");
-        ReviewerNotices.ByType.Keys.Append(typeof(ReviewerOutcome.Ok))
+        // StoodDown (issue #485) is the third kind: a DECISION not to launch, never a failure — it raises
+        // no notice, and the round says it among the roles it chose not to ask.
+        ReviewerNotices.ByType.Keys.Append(typeof(ReviewerOutcome.Ok)).Append(typeof(ReviewerOutcome.StoodDown))
             .Should().BeEquivalentTo(endings,
-                "every ending either has a code or is the success — a sixth that is neither is an "
-                + "ending nothing writes down, which §8 of the plan exists to prevent");
+                "every ending either has a code, is the success, or is the decision not to run — one that is "
+                + "none of these is an ending nothing writes down, which §8 of the plan exists to prevent");
         ReviewerNotices.ByType.Values.Should().OnlyContain(code => ServerNoticeCodes.All.Contains(code),
             "and a code outside the catalog cannot be grouped with its own repeats");
     }

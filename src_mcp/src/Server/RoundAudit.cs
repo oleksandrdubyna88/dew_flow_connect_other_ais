@@ -99,6 +99,13 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
                     progress.Provider, progress.Role, progress.Elapsed.TotalSeconds,
                     ReviewerSummaryFactory.Describe(outcome));
                 break;
+
+            case ReviewerState.StoodDown:
+                // The operator's own words for it (issue #485): the clouds found little, local was stopped.
+                // Information, not a warning — it is the switch doing what it was set to do.
+                _log.Information(
+                    "reviewer {Provider}/{Role} stood down: {Reason}", progress.Provider, progress.Role, progress.Note);
+                break;
         }
     }
 

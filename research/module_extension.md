@@ -9108,3 +9108,11 @@ a command (it would have edited, and on Remove deleted, the shipped override —
 a shipped file too); rows are read as the server reads them (id trimmed, stage in any case, an
 unreadable stage KEPT as written rather than turned into every round); only a missing folder is "no
 texts" — any other listing failure is said; ids are random; Remove asks first, as the roles page does.
+
+## Stop the local reviewer when the cloud reviewers found almost nothing (2026-09-24, issue #485)
+
+`coai.stopLocalWhenQuiet` (boolean, off) is a box in *The gate*, after *When the rounds run out* and outside
+the "orders to the caller" block — it changes what the gate RUNS. `settingsShape`: per side
+(`OVERLAID_SETTINGS`), `COAI_STOP_LOCAL_WHEN_QUIET=true` only when on. `gateScope.stopLocalSkewNote` names a
+server older than `STOP_LOCAL_SINCE` (0.34.0) while the box is ticked. The round view (`rounds.reviewerRows`)
+shows a `stood down` row's reason beside its status. The help's *The gate* article says it in five languages.

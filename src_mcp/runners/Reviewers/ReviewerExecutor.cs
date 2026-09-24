@@ -93,6 +93,13 @@ public abstract record ReviewerOutcome
     /// </summary>
     public sealed record NotStarted(string Reason) : ReviewerOutcome;
 
+    /// <summary>
+    /// A local reviewer the round chose NOT to launch, because the cloud reviewers had all answered and
+    /// found almost nothing — issue #485, behind <c>COAI_STOP_LOCAL_WHEN_QUIET</c>. A decision, not a
+    /// failure: the summary lists it as not asked, and it cost nothing.
+    /// </summary>
+    public sealed record StoodDown(string Reason) : ReviewerOutcome;
+
     private ReviewerOutcome() { }
 }
 

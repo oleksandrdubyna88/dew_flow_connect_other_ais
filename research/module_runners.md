@@ -1097,3 +1097,17 @@ a fresh launch — met the same denial.
 `first.Adapter?.FollowUp(first, transcript) ?? repair`, inside the same remaining deadline, billed like any
 repair; its answer is parsed like any repair's. On the real CLI the continued conversation answered with the
 schema's JSON in turn 2. A Team-server reviewer is not covered — its conversation lives on the server (#515).
+
+## The local reviewer stands down after a quiet cloud (2026-09-24, issue #485)
+
+Behind `COAI_STOP_LOCAL_WHEN_QUIET` (off by default). `BoundedScheduler.RunAllAsync(..., StandDown? standDown)`:
+`StandDown.For(work)` counts the round's cloud (non-engine) rows; each cloud lane's outcome is `Record`ed as it
+finishes (`Recorded`); `Quiet` = at least one cloud row, every one finished, every one `Ok`, and their findings
+— any severity, before de-duplication — sum to at most `StandDown.MostRemarks` (1). `EngineLaneAsync` asks
+before it waits for the card and again once it holds it: a launch already on the card always finishes; a row
+that would start afterwards returns `ReviewerOutcome.StoodDown(reason)` and reports progress status
+`stood down` with the reason and NO outcome (nothing ran, so nothing reaches the spending ledger or the
+notices page). `ReviewerSummaryFactory` counts a stood-down row as neither asked-and-failed nor answered: it
+joins `NotAsked` as a `SkippedRole("provider/role", reason)`, rendered "… was not asked: …". Findings from
+local rows that did run stay in the verdict. The outcome census (`TheReviewerFailuresAreWrittenDownTests`,
+`shared/refusal-sites.json`) knows it as the third kind of ending: a decision, not a failure.
