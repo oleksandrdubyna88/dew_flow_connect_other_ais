@@ -2871,8 +2871,8 @@ test('the retry control is still live after its region has been rewritten under 
   page.deliver({ type: 'state', failureHtml: '' });
   page.deliver({
     type: 'state',
-    failureHtml: '<div class="failure"><span class="said">and again</span>'
-      + '<button type="button" class="retry" data-retry>Try again</button></div>',
+    // The markup the host really sends, from the one builder, not a hand-written copy of an older shape.
+    failureHtml: chatFailureHtml('and again', true, 4),
   });
 
   pressRetry(page, { dataset: { retry: '4' }, disabled: false });
@@ -3332,4 +3332,14 @@ test('the failure text wraps inside its box and keeps its own line breaks', () =
   assert.match(box, /white-space: pre-wrap/);
   assert.match(ruleFor(css, '.failureRow'), /display: flex/);
   assert.match(ruleFor(css, '.failureRow'), /gap: 12px/);
+});
+
+test('a note the page writes into the failure region is drawn in the same row and box as a failure', () => {
+  // The margin lives on the ROW since issue #346; a note written as a bare box lost it and sat flush
+  // against whatever came next. (Our own code review.)
+  const page = runChatPage();
+  page.deliver({ type: 'note', noteHtml: 'This tab is now a copy.' });
+
+  assert.strictEqual(page.seen['failure'].innerHTML,
+    '<div class="failureRow"><div class="failure">This tab is now a copy.</div></div>');
 });

@@ -21,7 +21,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const OUT = pathToFileURL(join(process.cwd(), 'out/')).href;
+// From the script's own place, so it runs from any directory. (Our own code review.)
+const OUT = new URL('../out/', import.meta.url).href;
 const { chatFailureHtml, chatPageHtml } = await import(`${OUT}chatPage.js`);
 
 const at = process.argv.indexOf('--browser');
@@ -52,15 +53,35 @@ body { width: ${width}px; margin: 0; }</style></head><body>
 <div id="failure">${chatFailureHtml(failure, true, 1)}</div>
 <pre id="result"></pre>
 <script>
-  const box = document.querySelector('.failure').getBoundingClientRect();
-  const said = document.querySelector('.said').getBoundingClientRect();
-  const button = document.querySelector('.retry').getBoundingClientRect();
-  const within = said.right <= box.right + 0.5 && said.left >= box.left - 0.5;
-  const beside = button.left >= box.right - 0.5;
-  document.getElementById('result').textContent = JSON.stringify({ within, beside,
+  const result = document.getElementById('result');
+  try {
+    const boxEl = document.querySelector('.failure');
+    const box = boxEl.getBoundingClientRect();
+    const style = getComputedStyle(boxEl);
+    // The CONTENT edge, not the border: text that ran into the padding is text out of its box.
+    const inner = box.right - parseFloat(style.paddingRight) - parseFloat(style.borderRightWidth);
+    const said = document.querySelector('.said').getBoundingClientRect();
+    const button = document.querySelector('.retry').getBoundingClientRect();
+    const within = said.right <= inner + 0.5 && said.left >= box.left - 0.5;
+    // Beside the box AND still on the page: a button pushed past the edge is not beside anything.
+    const beside = button.left >= box.right - 0.5 && button.right <= ${width} + 0.5;
+    result.textContent = JSON.stringify({ within, beside,
     box: [Math.round(box.left), Math.round(box.right)], said: [Math.round(said.left), Math.round(said.right)],
     button: [Math.round(button.left), Math.round(button.right)] });
+  } catch (reason) {
+    // Markup the measurement no longer recognises is a FAILED case with its reason, not a crash.
+    result.textContent = JSON.stringify({ within: false, beside: false, error: String(reason) });
+  }
 </script></body></html>`;
+}
+
+/** What the page wrote, or nothing — an empty or broken result is a failed case, never a crash. */
+function parsed(text) {
+  try {
+    return JSON.parse(text.replace(/&quot;/g, '"'));
+  } catch {
+    return undefined;
+  }
 }
 
 const dir = mkdtempSync(join(tmpdir(), 'coai-failure-layout-'));
@@ -74,7 +95,7 @@ try {
         '--headless=new', '--disable-gpu', `--window-size=${width + 40},800`, '--dump-dom', pathToFileURL(file).href,
       ], { encoding: 'utf8', timeout: 60_000 });
       const found = /<pre id="result">([^<]*)<\/pre>/.exec(run.stdout ?? '');
-      const measured = found === null ? undefined : JSON.parse(found[1].replace(/&quot;/g, '"'));
+      const measured = found === null ? undefined : parsed(found[1]);
       const held = measured !== undefined && measured.within && measured.beside;
       ok = ok && held;
       console.log(`${String(width).padStart(5)}px  ${name.padEnd(14)} ${held ? 'HELD  ' : 'FAILED'} ${measured === undefined ? (run.stderr ?? '').slice(0, 200) : JSON.stringify(measured)}`);
