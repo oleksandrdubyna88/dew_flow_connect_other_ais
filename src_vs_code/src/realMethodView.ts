@@ -146,10 +146,13 @@ function sideWho(side: MethodSide, name: string, sha: string): string {
   return `${owner}${escapeHtml(name)} — ${escapeHtml(side.kind)}, lines ${side.startLine}–${side.endLine} at ${commit(sha)}`;
 }
 
-/** One pane of the real view: the real text, coloured and diffed — or the reason there is none. */
+/**
+ * One pane of the real view: the real text, coloured and diffed — or the reason there is none. Numbered as
+ * the FILE is at that commit, from the side's own first line (issue #488).
+ */
 function realPane(label: string, side: MethodSide, pair: RealMethodRow, marks: readonly LineMark[], sha: string, name: string): string {
   const body = side.reason.length === 0
-    ? highlight(side.source, pair.language, marks)
+    ? highlight(side.source, pair.language, marks, side.startLine > 0 ? side.startLine : 1)
     : `<p class="none">${escapeHtml(sideReason(side, sha, name))}</p>`;
 
   return `<div class="side">

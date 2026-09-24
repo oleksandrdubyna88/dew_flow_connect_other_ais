@@ -2250,3 +2250,31 @@ test('pressing CoAI: choose names its row, once, and neither opens nor ticks it'
   assert.equal(page.showing(2), false);
   assert.ok(page.boxes.every((box) => !box.checked), 'and nothing was ticked');
 });
+
+// --------------------------------------------------------------------------------------------
+// Line numbers (issue #488): a skeleton is numbered as the method's own lines, the real method as the
+// file's lines at its commit.
+// --------------------------------------------------------------------------------------------
+
+/** The numbers one block of markup carries, in order. */
+const lineNumbers = (html: string): readonly number[] =>
+  [...html.matchAll(/data-ln="(\d+)"/gu)].map((m) => Number(m[1]));
+
+test('a skeleton is numbered from its method\'s first line, one number per line', () => {
+  const html = reviewPageHtml({ pairs: [pair(1)], nonce: 'test-nonce', expanded: new Set([1]) });
+  const skeleton = html.slice(html.indexOf('data-skel="1"'), html.indexOf('data-real="1"'));
+  const lines = pair(1).skeletonBefore.split('\n').length + pair(1).skeletonAfter.split('\n').length;
+
+  assert.equal(lineNumbers(skeleton).length, lines, 'every line of both sides is numbered');
+  assert.equal(lineNumbers(skeleton)[0], 1, 'the server keeps no start line for a skeleton, so it counts from 1');
+});
+
+test('the real method is numbered as the file is, from each side\'s own first line', () => {
+  const moved: RealMethod = { ...REAL, before: { ...REAL.before, startLine: 120 }, after: { ...REAL.after, startLine: 131 } };
+  const html = realView(pair(1), fetched(moved)).html;
+  const before = html.slice(0, html.indexOf('>After<'));
+  const after = html.slice(html.indexOf('>After<'));
+
+  assert.deepEqual(lineNumbers(before), [120, 121, 122, 123], 'the before side counts from its line at the head commit');
+  assert.deepEqual(lineNumbers(after), [131, 132, 133, 134], 'and the after side from its own line at the fix commit');
+});
