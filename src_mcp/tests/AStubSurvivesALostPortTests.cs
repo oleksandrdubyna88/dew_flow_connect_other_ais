@@ -122,20 +122,84 @@ public sealed class AStubSurvivesALostPortTests
     /// </summary>
     public static TheoryData<int> RetryableCodes => [.. LoopbackStub.RetryableCodes];
 
+    /// <summary>
+    /// Issue #520, made deterministic: the candidate after the injected loss is one somebody else holds —
+    /// what a parallel test did to this theory on a linux-x64 CI leg ("expected 2, found 3").
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(RetryableCodes))]
+    public void ACandidateAnotherProcessTakes_IsCountedAsALossOfItsOwn(int code)
+    {
+        using var thief = Hold(bySecondListener: false, out var held);
+        var binds = new CountedBind(code);
+
+        var (server, prefix) = LoopbackStub.Start(
+            LoopbackStub.FreePorts().Take(1).Append(held).Concat(LoopbackStub.FreePorts()),
+            LoopbackStub.Attempts,
+            binds.Bind);
+
+        using var _unused = server;
+        binds.LostForReal.Should().ContainSingle("the held port is lost for real, once")
+            .Which.Should().Contain($":{held}/");
+        binds.ShouldHaveRetriedEachLossOnce(code);
+        prefix.Should().NotContain($":{held}/", "and the stub answers on the port it actually took");
+    }
+
     [Theory]
     [MemberData(nameof(RetryableCodes))]
     public void EveryCodeTheStubClaims_CostsTheCandidateAndNotTheRun(int code)
     {
-        var calls = 0;
+        var binds = new CountedBind(code);
 
-        var (server, _) = LoopbackStub.Start(
-            LoopbackStub.FreePorts(),
-            LoopbackStub.Attempts,
-            prefix => ++calls == 1 ? throw Taken(code) : Really(prefix));
+        var (server, _) = LoopbackStub.Start(LoopbackStub.FreePorts(), LoopbackStub.Attempts, binds.Bind);
 
         using var _unused = server;
-        calls.Should().Be(2, $"error {code} means the port is gone, so the next candidate is taken");
+        binds.ShouldHaveRetriedEachLossOnce(code);
         server.IsListening.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A bind that loses its FIRST candidate to the code under test, binds for real after that, and writes
+    /// down every real attempt that lost its port to somebody else.
+    /// </summary>
+    /// <remarks>
+    /// Issue #520. The theory above pinned exactly two calls, which is true only while nothing else on the
+    /// machine binds a port between <see cref="LoopbackStub.FreePorts"/> listing a candidate and the stub
+    /// binding it — and the suite runs in parallel. The product's promise is one retry per LOSS, so the
+    /// count stays exact: two, plus one for every candidate that was lost for real. A real failure that is
+    /// not a taken port still escapes the bind and fails the test.
+    /// </remarks>
+    private sealed class CountedBind(int injected)
+    {
+        private readonly List<string> _lost = [];
+
+        public int Calls { get; private set; }
+
+        /// <summary>The prefixes a real bind lost to another process, in order.</summary>
+        public IReadOnlyList<string> LostForReal => _lost;
+
+        public HttpListener Bind(string prefix)
+        {
+            Calls++;
+            if (Calls == 1)
+            {
+                throw Taken(injected);
+            }
+            try
+            {
+                return Really(prefix);
+            }
+            catch (HttpListenerException lost) when (LoopbackStub.Retries(lost))
+            {
+                _lost.Add(prefix);
+                throw;
+            }
+        }
+
+        public void ShouldHaveRetriedEachLossOnce(int code) =>
+            Calls.Should().Be(2 + _lost.Count,
+                $"error {code} costs its candidate — one retry — and each candidate another process took "
+                + $"meanwhile costs one more (lost for real: {(_lost.Count == 0 ? "none" : string.Join(", ", _lost))})");
     }
 
     [Fact]
