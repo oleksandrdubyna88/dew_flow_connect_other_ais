@@ -1521,9 +1521,11 @@ runs on this machine did not reproduce it, so the work is by elimination and say
 - *The assertion reads a claim that names nothing* — **a real defect, fixed**: `ReadClaim` answered a
   transient refusal to open the file (a scanner or indexer, the same instant `Replace` retries on the
   write side) with `None`. `ClaimIsWrittenAtomicallyTests.AClaimHeldForAnInstant_IsStillRead` holds the
-  claim with `FileShare.None` for 150 ms and went red first — *Expected claim.JobId to be "job-77" … but
-  "" has a length of 0* — the killed-shim test's failure exactly; `AClaimHeldForGood_IsGivenUpOnWithinASecondOrTwo`
-  pins the bound.
+  claim with `FileShare.None` for 50 ms, released from a dedicated thread so a starved pool cannot outlast
+  the reader's budget, and went red first (in its first form, a 150 ms hold released from the pool) —
+  *Expected claim.JobId to be "job-77" … but "" has a length of 0* — the killed-shim test's failure
+  exactly; red again with the retry disabled. `AClaimHeldForGood_IsGivenUpOnWithinASecondOrTwo` pins the
+  bound.
 - *The child times out reaching the stub* (the 40-second reading above) — **not explained**. It was
   already diagnosable: a prerequisite wait that runs out names what the child said on stderr.
   The ASSERTION was not, so it now carries the attempt number and what the file held, or why it could

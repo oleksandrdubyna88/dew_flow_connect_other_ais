@@ -290,10 +290,12 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
     private static RemoteClaim ReadClaimOnce(string jobFile) =>
         JsonSerializer.Deserialize(File.ReadAllText(jobFile), RemoteClaimContext.Default.RemoteClaim) ?? RemoteClaim.None;
 
-    /// <summary>Another process's instant — not a file that is gone — with an attempt left.</summary>
-    private static bool WorthRereading(Exception e, int attempt) =>
-        e is (IOException and not FileNotFoundException and not DirectoryNotFoundException) or UnauthorizedAccessException
-        && attempt < ReadAttempts;
+    /// <summary>Another process's instant, with an attempt left.</summary>
+    private static bool WorthRereading(Exception e, int attempt) => IsSomeoneElsesInstant(e) && attempt < ReadAttempts;
+
+    /// <summary>A refusal to open the file — not a file that is gone, which waiting cannot bring back.</summary>
+    private static bool IsSomeoneElsesInstant(Exception e) =>
+        e is (IOException and not FileNotFoundException and not DirectoryNotFoundException) or UnauthorizedAccessException;
 
     /// <summary>
     /// Eight, spread over well under a second: long enough to outlast a scan of a file a few hundred bytes
