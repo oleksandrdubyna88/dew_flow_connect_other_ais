@@ -33,6 +33,13 @@ the conversation's workspace, with twenty minutes a turn instead of three. The c
 across, the choice is saved with it, and every new conversation starts with the box off. A Team-server
 model never gets it: switching to one turns agent mode off and says so.
 
+**Back from a chat to where it came from** (issue #314). *Go to conversation* took a Claude Code tab to
+its coai chat; now the chat goes back too. Right-click inside a conversation — or press the same
+`Ctrl+Alt+G` (`Cmd+Alt+G`) while it is the tab you are in — and **CoAI: back to where this chat came
+from** brings forward the Claude Code tab or the editor it was opened from. After a window reload, when
+that tab is a new one, it opens the Claude Code session the conversation recorded, or its file; a
+conversation that recorded neither says so.
+
 ## Server 0.32.0 — 2026-09-23
 
 **The server now says when it died.** A `coai-mcp` that was killed — the window closed hard, the

@@ -8922,3 +8922,34 @@ the name, not about access; the script plants `note.txt`.
 `todo/PLAN_closing_a_chat_ends_its_whole_tree.md` lands — agent mode raises its priority. The memento
 fallback (`chatTabs`) does not carry `access`, so a conversation restored from it reopens in text mode —
 the safe direction.
+
+## The chat goes back to where it came from (2026-09-24, issue #314)
+
+*Go to* (`coai.goToConversation`) runs from a Claude Code tab or an editor to its conversation. The road
+back is `coai.backToSource` — **CoAI: back to where this chat came from** — offered from the coai chat's
+own right-click menu (`webview/context`, `when: webviewId == 'coaiChat'`), from the palette while a chat
+is active, and on the SAME chord as *go to* (`Ctrl+Alt+G` / `Cmd+Alt+G`) scoped to
+`activeWebviewPanelId == 'coaiChat'`, so one chord goes both ways and the two `when`s never overlap.
+
+- **The decision** is `chatReturn.ts` `backTo({liveTab, source})`, pure: the live tab the chat was opened
+  from wins while it is open and reachable (a group the eight fixed focus commands reach, an index still
+  in its group's list), else the recorded Claude session, else the recorded file, else `nowhere` — said
+  out loud, never a guess by title.
+- **The executor** is `chatReturnCommand.ts`. It finds the chat by the store id the page puts in
+  `<body data-vscode-context='{"coaiConversation": …}'>` (VS Code merges that into a menu command's
+  argument from any clicked child), falling back to the active chat panel for the chord
+  (`RevealablePanel.isActive()`). The page rewrites the id on *New chat* and on a fork
+  (`nameConversation`). A tab comes forward by the editor's own recipe — focus the group, run
+  `workbench.action.openEditorAtIndex` with the tab's index, wait up to a second for `tab.isActive` — the
+  one Claude Code's own `bringTabToFront` uses, so nothing of Claude's is called. A session goes through
+  `claude-vscode.editor.open(sessionId, …, {programmatic: true})`, Claude Code's internal command: the
+  CALL is the check, and a rejection is a refusal naming the session. A file opens with
+  `showTextDocument`.
+- **Not a chat door.** It opens no conversation, so it records nothing on the spending page; the door
+  census in `chatWiring.test.ts` carries an explicit allow-list (`ACTS_INSIDE_A_CHAT`) checked from both
+  sides — everything on it is scoped to our page, and everything scoped to our page is on it.
+
+**In a real editor** (`npm run test:host`): the recipe brings the source tab forward, and a chat with no
+tab goes to its recorded file — 12/12 on 2026-09-24; putting the index off by one turns the first red.
+**Not observed by the author:** the session route (Claude Code is not installed in the harness) and a
+right-click in the live UI — both left for the person to try.

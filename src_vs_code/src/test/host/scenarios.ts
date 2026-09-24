@@ -8,6 +8,7 @@ import { ChatPanels } from '../../chatPanels';
 import { conversationHooks } from '../../chatHooks';
 import { signatureOf } from '../../renderAnswer';
 import { threads, type Thread } from '../../chatThread';
+import { backToSource } from '../../chatReturnCommand';
 
 /**
  * The scenarios that run INSIDE a real extension host, against the extension as it ships.
@@ -693,7 +694,71 @@ const SCENARIOS: readonly Scenario[] = [
       assert.equal(shown.selection.active.line, 1, 'the recorded line, counted from zero');
     },
   },
+  {
+    // Issue #314. The recipe — focus the group, open the editor at the tab's index, wait for the tab to
+    // say it is active — is the editor's own and is exercised nowhere else: a unit test can only assert
+    // which command NAMES were chosen, not that `openEditorAtIndex` takes that argument and brings THAT
+    // tab forward. Here the tab is a real one and so is the editor that moves it.
+    name: 'back to where a chat came from brings the tab it was opened from to the front',
+    run: async (): Promise<void> => {
+      const folder = vscode.workspace.workspaceFolders?.[0];
+      assert.ok(folder !== undefined, 'the harness opens a workspace, and this scenario needs it');
+      const source = path.join(folder.uri.fsPath, 'BackFrom.txt');
+      const other = path.join(folder.uri.fsPath, 'Elsewhere.txt');
+      fs.writeFileSync(source, 'the chat was opened from here\n', 'utf8');
+      fs.writeFileSync(other, 'somewhere else\n', 'utf8');
+      await vscode.window.showTextDocument(vscode.Uri.file(source), { preview: false });
+      await vscode.window.showTextDocument(vscode.Uri.file(other), { preview: false });
+      const tab = vscode.window.tabGroups.activeTabGroup.tabs.find((one) => one.label === 'BackFrom.txt');
+      assert.ok(tab !== undefined, 'the source document has no tab to go back to');
+      assert.equal(tab.isActive, false, 'the source tab is already in front, so this would prove nothing');
+
+      const panels = new ChatPanels();
+      const id = registeredChat(panels, tab, 'host-back-to-tab', { kind: 'none' });
+      assert.ok(id !== undefined);
+      await backToSource(panels, { webview: 'coaiChat', coaiConversation: 'host-back-to-tab' });
+
+      assert.equal(vscode.window.tabGroups.activeTabGroup.activeTab?.label, 'BackFrom.txt',
+        'the command ran and the tab the chat came from is not the one in front');
+    },
+  },
+  {
+    // The other arm a host can reach without Claude Code installed: a chat restored after a reload has
+    // no tab of its own any more, only the source it recorded. `showTextDocument` is real here.
+    name: 'a chat with no tab of its own goes back to the file it recorded',
+    run: async (): Promise<void> => {
+      const folder = vscode.workspace.workspaceFolders?.[0];
+      assert.ok(folder !== undefined, 'the harness opens a workspace, and this scenario needs it');
+      const recorded = path.join(folder.uri.fsPath, 'Recorded.txt');
+      fs.writeFileSync(recorded, 'the conversation recorded this file\n', 'utf8');
+
+      const panels = new ChatPanels();
+      registeredChat(panels, {}, 'host-back-to-file', { kind: 'file', uri: vscode.Uri.file(recorded).toString() });
+      await backToSource(panels, { webview: 'coaiChat', coaiConversation: 'host-back-to-file' });
+
+      const shown = vscode.window.activeTextEditor;
+      assert.ok(shown !== undefined, 'nothing was opened');
+      assert.equal(shown.document.uri.fsPath.toLowerCase(), recorded.toLowerCase());
+    },
+  },
 ];
+
+/**
+ * A chat registered under `key` the way a real one is, carrying only what the way back reads: its store
+ * id and its source. Cast for the reason `conversationHolding` gives — and if the command ever reads a
+ * third field, it throws here rather than passing.
+ */
+function registeredChat(panels: ChatPanels, key: object, saveId: string, source: Thread['source']): object {
+  const id = {};
+  threads.set(id, { saveId, source } as unknown as Thread);
+  panels.open(key, saveId, () => ({
+    id,
+    panel: { reveal() {}, dispose() {}, post() {}, isActive: () => false },
+    session: { dispose() {} },
+  }));
+
+  return id;
+}
 
 /**
  * Run them, and FAIL LOUDLY when there is nothing to run.
