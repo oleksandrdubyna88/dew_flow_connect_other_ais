@@ -137,7 +137,7 @@ test('an ACTIVE role that cannot be asked is marked on the page, by name', () =>
   const html = rolesHtml(state({ rows: [{ ...mine, active: true }] }), 'n');
   const own = block(html, 'Role2');
 
-  assert.match(own, /will not be asked/);
+  assert.match(own, /a round that asks its first prompt will skip it/);
   assert.ok(own.includes('Моя роль'), own);
 });
 
@@ -145,8 +145,8 @@ test('the mark is absent when the question has text, and when the role is off', 
   const texted = rolesHtml(state({ rows: [{ ...mine, active: true }], texts: { 'role2-general': 'Is it met?' } }), 'n');
   const off = rolesHtml(state({ rows: [mine] }), 'n');
 
-  assert.doesNotMatch(block(texted, 'Role2'), /will not be asked/);
-  assert.doesNotMatch(block(off, 'Role2'), /will not be asked/);
+  assert.doesNotMatch(block(texted, 'Role2'), /a round that asks its first prompt will skip it/);
+  assert.doesNotMatch(block(off, 'Role2'), /a round that asks its first prompt will skip it/);
 });
 
 // ---------- one press, one command ----------

@@ -320,7 +320,10 @@ function unaskableHint(role: RoleRow, texts: Readonly<Record<string, string>>): 
 
   return why.length === 0
     ? ''
-    : `<p class="hint warn">It is switched on but will not be asked. ${escapeHtml(why)}</p>`;
+    // "A round that asks its first prompt", not "never": a per-round choice of a later prompt WITH text
+    // is still asked. (CodeRabbit, PR #495.)
+    : `<p class="hint warn">It is switched on, but a round that asks its first prompt will skip it — `
+      + `every round, unless another prompt is chosen for it. ${escapeHtml(why)}</p>`;
 }
 
 function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>): string {
