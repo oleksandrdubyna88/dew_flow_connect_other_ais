@@ -79,11 +79,13 @@ ${tabCss('4px 0 10px')}
           line-height: 1.4; }
   button.twist[aria-expanded="true"] .chev { transform: rotate(90deg); }
   /* Issue #487: the row's CoAI: choose shares the summary line with the disclosure button, beside it
-     rather than inside it. The disclosure button takes what is left; the choose button keeps its size
-     and stays on the line a collapsed row still shows. Secondary colours, so fifty rows of them do not
+     rather than inside it, and NEXT to the method's name, as the issue asked ("где-то возле названия
+     метода"): the disclosure button is as wide as its own three lines, not the row's whole width, which
+     had pushed the choose button to the far edge of the page (seen in a real browser while fixing #488).
+     It stays on the line a collapsed row still shows. Secondary colours, so fifty rows of them do not
      outshout the state words. */
-  .summary { display: flex; align-items: flex-start; gap: 8px; }
-  .summary > button.twist { flex: 1 1 auto; width: auto; min-width: 0; }
+  .summary { display: flex; align-items: flex-start; gap: 12px; }
+  .summary > button.twist { flex: 0 1 auto; width: auto; min-width: 0; }
   button.choose { flex: none; font: inherit; font-size: .8em; padding: 2px 8px; white-space: nowrap;
                   background: var(--vscode-button-secondaryBackground);
                   color: var(--vscode-button-secondaryForeground); }
