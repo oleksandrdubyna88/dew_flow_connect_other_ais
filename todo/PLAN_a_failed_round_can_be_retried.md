@@ -4,7 +4,17 @@
 > `src_mcp/src/Server/PanelService.cs` (`OpenAsync`, `ReviewCodeAsync`, `RunStageAsync`, `status`),
 > `src_mcp/core/Rounds/RoundMachine.cs`, `src_mcp/runners/Worktrees/WorktreeManager.cs`,
 > `src_mcp/core/Commands/GateCommands.cs`, the gate rule in `.agents/conventions/common/coai-review-gate.md`.
-> Five operator decisions are open (§ Decisions) and block the build order below them.
+> **Decisions taken 2026-09-24 by the operator: D1–D5 as recommended** (refuse an empty diff; no
+> working-tree review here; `again: true`; a machine-local root for round trees; only ar1's two ideas).
+>
+>
+> **Plan round (2026-09-24, `good_enough`, 3 of 3 reviewers, 16 findings — 14 accepted, 2 rejected):**
+> the amendments are marked *(plan round)* below. The largest: the owner check is NOT a heartbeat —
+> with D4's machine-local root every process that touches a round tree is on this machine, so a
+> PID plus its start time is exact, and the heartbeat's thresholds, clock skew and sleep/wake (three
+> findings) do not arise. Rejected: a lock pre-check that only reports (it would keep the round
+> blocked) and a second deviation-tracking section (the DoD already requires rule text and
+> `GateEnding` to agree).
 >
 > Related docs: [module_server.md](../research/module_server.md),
 > [PLAN_multi_repo_and_uncommitted.md](PLAN_multi_repo_and_uncommitted.md) (working-tree review, `call_human`),
@@ -123,7 +133,7 @@ best-effort projection (`PanelService.cs:2537-2544`). **It does not fix #490**: 
 through `BeginCodeRound` and meets `Done`. What it adds that matters: reading back a lost answer, and
 one mutating call per session at a time.
 
-## Decisions (the operator's — each blocks the stories under it)
+## Decisions (the operator's — all five taken as recommended on 2026-09-24)
 
 | # | Question | Recommendation |
 |---|---|---|
@@ -146,6 +156,10 @@ one mutating call per session at a time.
   were NOT reviewed".
 - `GateEnding` orders "commit, THEN review_code" for every split mode.
 - `review_code`'s tool text says it reviews COMMITTED changes only.
+- *(plan round)* An unresolvable `baseRef` (missing, not fetched, shallow) is its own refusal naming
+  the ref, never an unhandled exception and never "empty". The working tree is consulted only when
+  the checkout at `repoPath` has HEAD at the SAME sha the round resolved; otherwise nothing is said
+  about uncommitted files rather than something wrong.
 
 **S2 — a round's worktree can never block the next attempt.** *(D4)*
 - `WorktreeLease.DisposeAsync` never throws: a failed removal becomes a notice and a deferred cleanup,
@@ -158,11 +172,25 @@ one mutating call per session at a time.
   per-directory failure is caught; `open` never fails on `IOException`.
 - `worktree add` gets the review tree's 10-minute budget; the error quotes git's `fatal:` line, not
   "Preparing worktree".
+- *(plan round)* **The owner is a PID plus its process start time**, written as a marker beside each
+  tree — exact because the root is machine-local (D4), and a paused owner (a debugger, a sleeping
+  laptop) is still alive, so it is never reaped. No heartbeat, no staleness threshold.
+- *(plan round)* **A half-made registration is found by path**: every `git worktree list --porcelain`
+  entry under OUR root with the `coai-wt-` prefix whose owner is not alive — `locked`/`prunable`
+  included — is unlocked, removed `-f -f` and pruned. Tested by leaving `locked = initializing`.
+- *(plan round)* **The root is `ReviewTreeRoot`'s machine-local resolution with its own leaf**
+  (`round-trees`), one function for both, never `Path.GetTempPath()` guessed separately.
+- *(plan round)* **Trash is bounded**: every sweep retries every `coai-wt-trash-*`; one still held after
+  24 h is named in a notice once. Nothing grows silently.
 
 **S3 — a gate can be run again (#490).** *(D3)*
 - a. `review_code(again: true)` on a `Done` code session reopens `CodeReview` with a fresh round count,
   keeping `PlanProceeded`, `PlanText` and `Rejections` — refused when HEAD has not moved since the last
   code round; `HumanGate` and `Unresolved` still come first. The `Done` message names this door.
+- *(plan round)* The empty-diff check (S1) runs BEFORE `again` changes any state: HEAD that moved only
+  by excluded paths is refused as "nothing reviewable since round N", and the session stays `Done`.
+  Every `again` refusal says which of three it is — no new commit since round N (with its sha), a
+  round awaiting `resolve`, or a human gate — and what to do next.
 - b. `status` returns the PENDING findings of a round awaiting `resolve`, so a lost reply is no longer
   a blind decision (taken from ar1's read-back idea).
 - c. The gate rule (conventions `coai-review-gate.md`, snippet v6) and `GateEnding`: "the code gate is
@@ -205,7 +233,7 @@ the extension's `npm test` before every PR — never `dotnet test`.
 
 ## Definition of Done
 
-- [ ] D1–D5 answered and recorded here.
+- [x] D1–D5 answered and recorded here (2026-09-24, as recommended).
 - [ ] Every RED test in the table watched failing for the stated reason, then green; break-it checks
       done with compiling code.
 - [ ] No `review_code` can answer `proceed` over an empty diff; the refusal says which empty.
