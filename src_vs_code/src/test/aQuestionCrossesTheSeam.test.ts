@@ -369,6 +369,12 @@ test('a turn that costs something moves the spending line, through what the host
 
   assert.equal(page.element('spend')['textContent'], '$0.04 so far',
     'the line beside the picker must say what the conversation has cost, not what it cost when the tab opened');
+
+  // And the NEXT turn moves it again: a page that applied only the first update would pass the line above.
+  // (CodeRabbit, the pull request.)
+  assert.equal(sendChatState(tab.entry, pushState({ spend: '$0.09 so far' })), true);
+  page.push(tab.sent.at(-1)!);
+  assert.equal(page.element('spend')['textContent'], '$0.09 so far', 'every later cost replaces the one before');
 });
 
 test('the Re-ask caption and the empty-box re-ask follow the model, both ways', () => {
