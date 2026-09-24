@@ -451,7 +451,12 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
         Assert.SkipWhen(OperatingSystem.IsWindows(), "on Windows a backslash IS a separator");
         var named = Directory.CreateDirectory(Path.Combine(_storage, "a\\b")).FullName;
 
-        WorktreeManager.Resolved(named).Should().Be(Path.GetFullPath(named));
+        var resolved = WorktreeManager.Resolved(named);
+
+        // The name itself, not the whole string: a temp directory reached through a link (macOS's
+        // /var → /private/var) resolves to another spelling, which is right — the macOS job said so.
+        Path.GetFileName(resolved).Should().Be("a\\b", "one name, not two");
+        Directory.Exists(resolved).Should().BeTrue("the resolved path names the directory that exists");
     }
 
     private async Task<bool> LinkedAsync(string link, string target) =>
