@@ -93,18 +93,49 @@ every secret-looking key and runs a real export rather than checking a list. The
 
 ## Epic A — command texts become data (server)
 
-- The shipped command texts move to embedded templates (`src_mcp/src/commands/command-*.md`, outside
-  `src/prompts/` like `consult.md`), with placeholders for the computed parts; the MARKER phrases stay in
-  code, outside the editable text, so no override can make the bench report a switch as not applied.
-  Default output stays byte-identical (`GateCommandsTests` pins it).
-- `<dataDir>/prompts/command-<id>.md` overrides a shipped text, through the existing `RolePrompts`
-  mechanism; `GateCommands` receives its texts as data (it is pure).
-- Custom commands: `COAI_COMMANDS` = `[{id, title, enabled, stage}]`, parsed by a `CommandsSetting` twin of
-  `CommandModelsSetting`; an enabled one is appended to the orders with its text, one with no text is
-  skipped with a sentence, as a role is. Written to the rounds database like every order.
-- **Tests** (gemini, the plan round): an override file changes the order and deleting it restores the
-  default; `COAI_COMMANDS` parsing with its complaints; an empty-text command skipped with its sentence; a
-  custom command recorded in the rounds database; the markers present whatever the override says.
+**Where the texts are today:** `src_mcp/core/Commands/GateCommands.cs` — `Preamble` (:74), `Judgement`
+(:148-155, five sizes), the measured sentence inside `SplitCommand` (:133-136), `GateCadence` (:175-195,
+three scopes), `AnotherCodeRound` (:171), `AlreadySplitCommand` (:210-219, two scopes), `ModelCommand`
+(:240-250), `AutonomyCommand` (:265-290). The one caller is `PanelService.cs:1419-1481`, which already
+writes every order into the rounds database (`commands`, `:1520`) — a custom command appended there is
+recorded for free.
+
+1. **The shipped texts move to `shared/commands/<id>.md`**, embedded in `CoaiMcp.Core` the way
+   `shared/builtin-roles.json` is (`CoaiMcp.Core.csproj:17`) — `shared/` because Epic B's page must show the
+   same default text, and one file both halves read cannot drift. Fourteen ids, each one sentence family:
+   `command-preamble`, `command-autonomy`, `command-model`, `command-split-none|small|medium|large|huge`,
+   `command-split-measured`, `command-cadence-epic|task|single`, `command-another-code-round`,
+   `command-already-split-epic|task`.
+2. **Placeholders** for the computed parts, replaced by plain `string.Replace`: `{scope}` (autonomy),
+   `{strongest}` / `{implementation}` (model), `{numbers}` / `{verdict}` (measured). An override that drops
+   one simply does not say it — the order is the operator's words.
+3. **The markers stay in code, OUTSIDE the editable text**, prefixed before it: `Work AUTONOMOUSLY. `,
+   `GateCommands.ModelOrderMarker`, `GateCommands.GateOrderMarker`, and `This plan is a PIECE of a split
+   that is already under way` — the phrases the bench (`SettingsApplied.cs:86-99`) and
+   `shared/command-models.json` hold, so no override can make a switch read as not applied.
+4. **`CommandTexts`** (core, pure): the shipped texts plus an override map; `Text(id)` answers a non-blank
+   override, else the shipped text. `CommandContext.Texts` defaults to shipped only, so every existing test
+   and caller is unchanged, and **the default orders stay byte-identical** — `GateCommandsTests` pins them,
+   and a new test compares every order across every switch combination with the pre-change strings.
+5. **Overrides from `<dataDir>/prompts/command-<id>.md`**, read through `RolePrompts` (its id guard and its
+   rule that an EMPTY override is no override), once per round in `PanelService`, for the fourteen ids.
+6. **Custom commands: `COAI_COMMANDS` = `[{id, title, enabled, stage}]`**, `stage` ∈ `plan | code | any`
+   (default `any`), parsed by `CommandsSetting`, a twin of `CommandModelsSetting` (unreadable → no custom
+   commands and one panel complaint; a row with a bad id — not a slug, or one of the fourteen shipped ids —
+   dropped with a complaint naming it). An enabled command whose stage matches the round is appended AFTER
+   the built-in orders with the text of `<dataDir>/prompts/command-<id>.md`; one with no text is left out,
+   logged, and named in a new reply field `commandsSkipped` (absent when empty, like `notes`): *"custom
+   command '<title>' has no text — write it in <file>"*.
+
+**Tests (red first):** `CommandTextsTests` — every shipped id embedded and non-blank; an override wins, a
+blank override does not; placeholders replaced. `GateCommandsTests` — byte-identical defaults across every
+switch combination; an overridden autonomy order still opens with `Work AUTONOMOUSLY.` (and the other three
+markers the same) whatever the override says. `CommandsSettingTests` — parsing, complaints, a shipped id and
+a bad id refused by name, the stage default. Through `PanelService`: an override file changes the reply's
+order and deleting it restores the default; an enabled custom command reaches the reply AND the rounds
+database; a disabled one or one of the other stage does not; one with no text is in `commandsSkipped` and
+not in `commands`. Docs: `module_server.md`, `module_core.md` if the commands live there, `module_tests.md`,
+CHANGELOG, `PROJECT.md` if a setting list is kept there.
 
 ## Epic B — an Edit commands page (extension)
 
