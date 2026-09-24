@@ -26,3 +26,29 @@ test('the moved guard still answers every kind it answered in the panel', () => 
   assert.equal(asReviewMessage(null), undefined);
   assert.equal(asReviewMessage({ type: 'ready' }), undefined);
 });
+
+test('every kind the page sends is parsed to its shape, and each one\'s junk is dropped', () => {
+  assert.deepEqual(asReviewMessage({ type: 'expand', id: 4, open: true }), { type: 'expand', ids: [4], open: true });
+  assert.deepEqual(asReviewMessage({ type: 'expandAll', ids: [4, 5], open: 'yes' }), { type: 'expandAll', ids: [4, 5], open: false },
+    'only a real true opens');
+  assert.deepEqual(asReviewMessage({ type: 'tab', strip: 'lang', key: 'ts' }), { type: 'tab', strip: 'lang', key: 'ts' });
+  assert.deepEqual(asReviewMessage({ type: 'realText', on: true }), { type: 'realText', on: true });
+  assert.deepEqual(asReviewMessage({ type: 'fetchReal', id: 3, generation: 'g1' }), { type: 'fetchReal', id: 3, generation: 'g1' });
+  assert.equal(asReviewMessage({ type: 'fetchReal', id: 3, generation: 7 }), undefined, 'a generation that is not a string');
+  assert.equal(asReviewMessage({ type: 'fetchReal', id: 1.5, generation: 'g1' }), undefined);
+  assert.deepEqual(asReviewMessage({ type: 'openCall', at: 'x#1' }), { type: 'openCall', at: 'x#1' });
+  assert.equal(asReviewMessage({ type: 'openCall', at: 1 }), undefined);
+  assert.deepEqual(asReviewMessage({ type: 'comment', id: 2, text: 'why' }), { type: 'comment', id: 2, text: 'why' });
+  assert.equal(asReviewMessage({ type: 'comment', id: 2 }), undefined, 'String(undefined) must never become somebody\'s comment');
+  assert.equal(asReviewMessage({ type: 'draft', id: -2, text: 'x' }), undefined);
+  for (const type of ['openCurrent', 'openTree', 'calls'] as const) {
+    assert.deepEqual(asReviewMessage({ type, id: 9 }), { type, id: 9 });
+    assert.equal(asReviewMessage({ type, id: -9 }), undefined);
+  }
+  assert.deepEqual(asReviewMessage({ type: 'tone', delta: -1 }), { type: 'tone', delta: -1 });
+  assert.equal(asReviewMessage({ type: 'tone', delta: 'x' }), undefined);
+  assert.equal(asReviewMessage({ type: 'constructor' }), undefined, 'nothing on a prototype answers');
+  assert.equal(asReviewMessage({ type: 'toString' }), undefined);
+  assert.equal(asReviewMessage({}), undefined);
+  assert.equal(asReviewMessage('decide'), undefined);
+});

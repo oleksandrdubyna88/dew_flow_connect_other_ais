@@ -1962,8 +1962,10 @@ one-shot reads after the server has answered.
   found again after `rekey` moved it onto a file tab (red against the key lookup), a closed one is gone, and a
   refused press remembers nothing. Two compiling plants (drafts ignored; a fixed three-backtick fence) each turned
   their test red.
-- `bugzReviewMessages.test.ts` — the moved guard, RUN: `choose` needs a whole non-negative id, and every kind
-  the panel answered still parses the same.
+- `bugzReviewMessages.test.ts` — the moved guard, RUN: `choose` needs a whole non-negative id, and EVERY kind
+  the page sends parses to its shape with its junk dropped (`constructor`/`toString`/`__proto__` answer nothing) —
+  written green against the old switch before it was rewritten as a `Map`, so the rewrite is proved
+  behaviour-preserving.
 - `bugzReviewPage.test.ts` — a `Chooser` element built from the rendered markup (its `closest` finds the ROW,
   as a browser would): one button per row, on the summary line, outside the disclosure button, with a title;
   a press posts `{type:'choose', id}` once and neither opens nor ticks the row.

@@ -9155,7 +9155,10 @@ sequenceDiagram
   row, `PLAIN` for the chat, `aboutText`), so the page and the chat cannot say a line or a count differently.
 - **`bugzReviewMessages.ts`** — the page's message union and guard, moved unchanged out of
   `bugzReviewPanel.ts` (which stood at the `max-lines` cap) into a `vscode`-free module that a test RUNS;
-  `choose` joins the whole-non-negative-id group. Its two lint suppressions moved with it.
+  `choose` joins the whole-non-negative-id group. CI's *Lint suppressions only shrink* refused to carry the old
+  29-branch switch's suppression to a new file, so it became a `Map` of one small parser per kind (`byId`,
+  `words`, `step`) — a `Map` answers `__proto__` with nothing, the reason the switch was chosen over a plain
+  table — and the file needs no suppression at all; the panel's own count fell by one per rule.
 - **`chatCommand.chooseFromBug`** — the right-click *CoAI: choose* keys the chat to the ACTIVE tab and refuses
   a webview, so the bug door is its own entry: a second press on the same bug only REVEALS the conversation
   (refilling the composer would throw away what the person started writing — gemini, the plan round); a
