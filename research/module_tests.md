@@ -1512,6 +1512,23 @@ timed out waiting for a claim file: its child process could not reach a local st
 not a flake and it is not in this diff - it is a load-sensitive test with a hard timeout, recorded
 here for whoever owns it rather than fixed inside an unrelated story.
 
+**Issue #462 took it up (2026-09-24), and it has two readings, of which one is now fixed.** Six whole-suite
+runs on this machine did not reproduce it, so the work is by elimination and says so:
+
+- *The stub dies when a killed client abandons an answer* — **refuted**: a test holding the first answer,
+  cancelling its client and asking again was green against the unchanged stub, and was not kept (a test
+  that never went red is decoration).
+- *The assertion reads a claim that names nothing* — **a real defect, fixed**: `ReadClaim` answered a
+  transient refusal to open the file (a scanner or indexer, the same instant `Replace` retries on the
+  write side) with `None`. `ClaimIsWrittenAtomicallyTests.AClaimHeldForAnInstant_IsStillRead` holds the
+  claim with `FileShare.None` for 150 ms and went red first — *Expected claim.JobId to be "job-77" … but
+  "" has a length of 0* — the killed-shim test's failure exactly; `AClaimHeldForGood_IsGivenUpOnWithinASecondOrTwo`
+  pins the bound.
+- *The child times out reaching the stub* (the 40-second reading above) — **not explained**. It was
+  already diagnosable: a prerequisite wait that runs out names what the child said on stderr.
+  The ASSERTION was not, so it now carries the attempt number and what the file held, or why it could
+  not be read.
+
 ## The review tree's decisions are tested as VALUES (2026-09-21)
 
 `reviewTree.test.ts` — twenty tests, and the reason it exists is worth more than the tests are.

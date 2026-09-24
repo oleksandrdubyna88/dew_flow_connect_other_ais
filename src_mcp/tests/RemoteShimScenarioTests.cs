@@ -357,10 +357,30 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
 
             if (File.Exists(invocation.JobFile))
             {
-                RemoteRuntime.ReadClaim(invocation.JobFile).JobId.Should().Be("job-77",
+                // Issue #462: this failed in the full suite only, and nobody ever saw what the file HELD —
+                // the one fact that tells a torn write from a read refused for an instant. It is in the
+                // message now, on attempt N, so the next failure explains itself.
+                var claim = RemoteRuntime.ReadClaim(invocation.JobFile);
+                claim.JobId.Should().Be("job-77",
                     "a claim file that exists must name its job — a parent holding half of one cannot "
-                    + "cancel, and the review keeps costing money until the server's own deadline");
+                    + "cancel, and the review keeps costing money until the server's own deadline "
+                    + $"(attempt {attempt + 1}; the file held: {RawText(invocation.JobFile)})");
             }
+        }
+    }
+
+    /// <summary>What a file holds, or why it could not be read — for a failure message, never a decision.</summary>
+    private static string RawText(string path)
+    {
+        try
+        {
+            var text = File.ReadAllText(path);
+
+            return text.Length == 0 ? "nothing (an empty file)" : text;
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            return $"unreadable: {e.GetType().Name}: {e.Message}";
         }
     }
 

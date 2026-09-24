@@ -252,23 +252,57 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
     }
 
     /// <summary>The claim a shim left, or <see cref="RemoteClaim.None"/> when there is none.</summary>
+    /// <remarks>
+    /// <para><b>A refusal to OPEN it is retried, because it is somebody else's instant.</b> Issue #462: the
+    /// write side has always known that a scanner or an indexer opens a file just renamed into place
+    /// (see <see cref="Replace"/>), and this side answered that same refusal with <c>None</c> — a claim
+    /// that exists and names its job, read as one that names nothing. The parent then gives up on a job
+    /// it could have cancelled, which is the loss the claim exists to prevent; and the killed-shim
+    /// scenario, which reads the claim the instant the shim is dead, failed in the full suite only,
+    /// where a slower machine gives the scanner time to be there first.</para>
+    /// <para>A file that is not there, or that is there and is not a claim, is still <c>None</c> at once:
+    /// waiting cannot change either answer.</para>
+    /// </remarks>
     public static RemoteClaim ReadClaim(string jobFile)
     {
-        try
+        for (var attempt = 1; ; attempt++)
         {
-            if (!File.Exists(jobFile))
+            try
+            {
+                return ReadClaimOnce(jobFile);
+            }
+            catch (Exception e) when (WorthRereading(e, attempt))
+            {
+                Thread.Sleep(Random.Shared.Next(MinReadBackoffMs, MaxReadBackoffMs) * attempt);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
             {
                 return RemoteClaim.None;
             }
-
-            return JsonSerializer.Deserialize(File.ReadAllText(jobFile), RemoteClaimContext.Default.RemoteClaim)
-                ?? RemoteClaim.None;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
-        {
-            return RemoteClaim.None;
         }
     }
+
+    private static RemoteClaim ReadClaimOnce(string jobFile) =>
+        File.Exists(jobFile)
+            ? JsonSerializer.Deserialize(File.ReadAllText(jobFile), RemoteClaimContext.Default.RemoteClaim) ?? RemoteClaim.None
+            : RemoteClaim.None;
+
+    /// <summary>Another process's instant — not a file that is gone — with an attempt left.</summary>
+    private static bool WorthRereading(Exception e, int attempt) =>
+        e is (IOException and not FileNotFoundException and not DirectoryNotFoundException) or UnauthorizedAccessException
+        && attempt < ReadAttempts;
+
+    /// <summary>
+    /// Eight, spread over well under a second: long enough to outlast a scan of a file a few hundred bytes
+    /// long, short enough that a claim held for good does not hold the cancellation up.
+    /// </summary>
+    private const int ReadAttempts = 8;
+
+    /// <inheritdoc cref="ReadAttempts"/>
+    private const int MinReadBackoffMs = 10;
+
+    /// <inheritdoc cref="ReadAttempts"/>
+    private const int MaxReadBackoffMs = 30;
 
     /// <summary>
     /// Record that this server is running this job, so a kill is still cancellable.

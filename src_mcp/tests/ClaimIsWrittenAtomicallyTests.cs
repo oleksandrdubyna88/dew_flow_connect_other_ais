@@ -99,6 +99,54 @@ public sealed class ClaimIsWrittenAtomicallyTests
     }
 
     /// <summary>
+    /// A claim some other process holds for an instant is still READ — never taken for no claim.
+    /// </summary>
+    /// <remarks>
+    /// <para>Issue #462. The write side learned long ago that a scanner or an indexer opens a file that
+    /// has just been renamed into place (`Replace`'s own remark); the READ side never did. `ReadClaim`
+    /// answered every `IOException` with `None`, so a claim that exists and names its job read as one
+    /// that names nothing — the killed-shim test's failure message, and in the product a parent that
+    /// gives up on a job it could have cancelled while it keeps costing money.</para>
+    /// </remarks>
+    [Fact]
+    public async Task AClaimHeldForAnInstant_IsStillRead()
+    {
+        var jobFile = TempFile();
+        RemoteRuntime.Claim(jobFile, "https://coai.example.com", "job-77", "t.json").Should().BeEmpty();
+        var holder = new FileStream(jobFile, FileMode.Open, FileAccess.Read, FileShare.None);
+        var releasing = Task.Run(async () =>
+        {
+            await Task.Delay(TimeSpan.FromMilliseconds(150));
+            await holder.DisposeAsync();
+        });
+
+        var claim = RemoteRuntime.ReadClaim(jobFile);
+
+        await releasing;
+        claim.JobId.Should().Be("job-77", "a claim held for an instant by another reader still names its job");
+        File.Delete(jobFile);
+    }
+
+    /// <summary>
+    /// And one held for good is given up on in a bounded time, as it always was.
+    /// </summary>
+    [Fact]
+    public void AClaimHeldForGood_IsGivenUpOnWithinASecondOrTwo()
+    {
+        var jobFile = TempFile();
+        RemoteRuntime.Claim(jobFile, "https://coai.example.com", "job-77", "t.json").Should().BeEmpty();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
+
+        using (new FileStream(jobFile, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            RemoteRuntime.ReadClaim(jobFile).Should().Be(RemoteRuntime.RemoteClaim.None);
+        }
+
+        clock.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(3), "a read that cannot succeed must not hold the cancellation up");
+        File.Delete(jobFile);
+    }
+
+    /// <summary>
     /// A destination nothing can replace is REPORTED, after the retries have been spent on it.
     /// </summary>
     /// <remarks>
