@@ -338,3 +338,25 @@ test('the palette follows the theme and the tone, rather than baking colours in'
   assert.doesNotMatch(highlight('public', 'CSharp'), /#[0-9a-fA-F]{6}/u,
     'a baked colour in the output is a block that ignores the theme');
 });
+
+/**
+ * No blank row after every line (issue #488).
+ *
+ * <p>A `.line` that is a BLOCK inside `white-space: pre-wrap`, followed by the newline both renderers put
+ * between lines, gets that newline drawn as an empty row of its own — the stripes the issue's screenshot
+ * shows. The newline has to stay: it is what a copy of the code carries as its line break. So no rule may
+ * make a line a block; an inline-block at full width ends its row with the newline instead. The layout
+ * itself needs a browser and was checked in one (headless Chromium, before and after); what is pinned
+ * here is the cause, on both paths.</p>
+ */
+test('a line is never a block, and the newline between two lines stays for the copy', () => {
+  const rules = [...HIGHLIGHT_CSS.matchAll(/([^{}]*\.line[^{}]*)\{([^}]*)\}/gu)];
+  assert.ok(rules.length > 0, 'the stylesheet dresses its lines');
+  for (const [, selector, body] of rules) {
+    assert.doesNotMatch(body!, /display:\s*block/u, `${selector!.trim()} makes a line a block, and pre-wrap then draws a blank row after it`);
+  }
+  for (const language of ['CSharp', 'Fortran']) {
+    assert.equal((highlight('a();\nb();\nc();', language).match(/\n/gu) ?? []).length, 2,
+      `${language}: the two line breaks a copy of three lines needs`);
+  }
+});
