@@ -361,6 +361,16 @@ function sayRefused(why: string): void {
   });
 }
 
+/** The prompt bodies a command needs: all of them for a switch ON, none for anything else. */
+function textsFor(command: RolesCommand): Promise<Record<string, string>> {
+  return activating(command) ? texts() : Promise.resolve({});
+}
+
+/** Whether this command switches a role ON — the one that has to know whether it can be asked. */
+function activating(command: RolesCommand): boolean {
+  return command.kind === 'edit' && command.field === 'active' && command.value === true;
+}
+
 /** Everything that changes a ROW rather than a file. */
 async function store(command: RolesCommand): Promise<boolean> {
   // Only `add` needs them, and only `add` pays for the read: an id whose deletion has not finished
@@ -368,7 +378,9 @@ async function store(command: RolesCommand): Promise<boolean> {
   // Through the coordinator, not around it: it owns the store, and a reservation read from a second
   // instance would miss whatever the coordinator knows. (antigravity, the code round.)
   const taken = command.kind === 'add' ? await roleDeletions(side()).reserved() : new Set<string>();
-  const outcome = rowsAfter(rows(), command, taken);
+  // And only a switch ON pays for reading the prompt bodies: a role is not switched on without a
+  // question to ask (issue #338). The same reader the page is drawn from, so the two cannot disagree.
+  const outcome = rowsAfter(rows(), command, taken, await textsFor(command));
   if (outcome.kind === 'unchanged') {
     return false;
   }

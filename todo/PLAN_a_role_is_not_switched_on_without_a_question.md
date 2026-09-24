@@ -43,11 +43,16 @@ naming a generated id and a file path rather than the role the person had named.
    asks in the box under it first."* `rowsAfter` gains a parameter carrying that answer, in the shape of
    its existing `reserved` (`rolesEdit.ts:50-58`); `switched()` refuses with it. The host
    (`rolesPanel.ts` `store`) reads the texts the way `texts()` already does, only for a `set active on`.
-   Blank text counts as none, as it does on the server (`RolePrompts.cs:47-51`).
+   Blank text counts as none, as it does on the server (`RolePrompts.cs:47-51`). A role of one's own
+   with NO prompt at all is unaskable too, and says so rather than reading a label that is not there
+   (gemini, the plan round).
 3. **The page marks an active role that cannot be asked** — the issue's option (3), for the ways (2)
    cannot see: a text erased after the role was switched on, a settings file edited by hand, a prompt file
    deleted. A hint in the role's block (`rolesPage.ts` `roleBlock`, beside the existing hints), by name:
-   *"“{name}” is switched on but will not be asked: its prompt “{label}” has no text."*
+   *"“{name}” is switched on but will not be asked: its prompt “{label}” has no text."* Both sentences are
+   about the FIRST prompt — the one every round without a per-round choice asks — and say so; a per-round
+   choice of another empty prompt is the server's sentence to give, and is out of scope (codex, the plan
+   round).
 4. **The server names the role too.** The skip reason gains the role's name when it has one
    (`catalog.ById(role)?.Name`): *"Role2 was not asked: “My role” has a prompt 'role2-general' with no text
    — write it at …"* — the id stays first because it is the key a person may search for.
@@ -74,10 +79,14 @@ placeholder.
    `rolesEdit.test.ts` (the existing *"adding into a stage with room stores it switched on"* is the
    guarantee this change reverses, rewritten to the new one).
 3. `rolesPanel.ts` `store` passes the answer for an activation; `texts()` reuse, no second reader.
-4. `roleBlock` hint + `rolesPage.test.ts` (shown for an active unaskable role, absent when it has text or
-   is off).
+4. `roleBlock` hint, tested by RUNNING the page (`rolesPageHarness.ts` `runRolesPage`), not by reading
+   its source (gemini, the plan round): shown for an active unaskable role, absent when it has text or is
+   off.
 5. Server: the reason names the role + `TheRoundSaysWhatItCouldNotAskTests` (red first).
-6. Docs: `research/module_extension.md`, `research/module_server.md`, CHANGELOG `## Unreleased`.
+6. Docs: `research/module_extension.md`, `research/module_server.md`, `research/module_tests.md` (the flow
+   and what it does NOT prove: no scenario runs a real round with a role a person added — the extension half
+   and the server half are each tested, the seam between them is the settings mirror, already covered),
+   CHANGELOG `## Unreleased`.
 
 ## Test plan
 

@@ -160,6 +160,23 @@ public sealed class TheRoundSaysWhatItCouldNotAskTests : IDisposable
     }
 
     /// <summary>
+    /// The sentence names the role by the name a person gave it, not only by its generated id.
+    /// </summary>
+    /// <remarks>
+    /// Issue #338: six rounds said "Role2 was not asked: its prompt 'role2-general' has no text" — an id
+    /// the person never chose (a new role's id is minted before it has a name) and a file path. The role
+    /// they had named was in none of it.
+    /// </remarks>
+    [Fact]
+    public void ARoleThatCannotBeAsked_IsNamedByItsName()
+    {
+        var work = Service(With("req-general"), withTeamServer: false)
+            .BuildWork(["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true);
+
+        work.NotAsked.Should().ContainSingle().Which.Reason.Should().Contain("“Requirements we wrote”");
+    }
+
+    /// <summary>
     /// A file naming the prompt a person has to go and write.
     /// </summary>
     /// <remarks>

@@ -8965,3 +8965,29 @@ forward (an off-by-one index turns it red); a tab moved to another group is stil
 active chat (red when the old fallback is put back); a chat with no tab opens its recorded file.
 **Not observed by the author:** the session route (Claude Code is not installed in the harness) and a
 right-click in the live UI — both left for the person to try.
+
+## A role is not switched on without a question to ask (2026-09-24, issue #338)
+
+A role a person added was created with one prompt and no text for it, and switched on whenever its
+stage had room. The server skips a role whose prompt has no text in every round, so issue #338's
+`Role2` sat enabled, counted and never asked through six rounds — named only by its generated id in one
+line of a round reply. (The id is `Role2` for every first role, whatever the name: `added` mints it
+with `idFor('', …)` before any name exists.)
+
+- **`whyNotAskable(row, texts)`** (`roles.ts`) is the one rule: a shipped role can always be asked (its
+  prompts are in the binary); a person's own role only when its FIRST prompt — the one a round asks
+  without a per-round choice — has non-blank text, as `RolePrompts.Has` counts it; a role with no prompt
+  at all cannot be. The sentence names the role by its NAME, never by the generated id.
+- **A new role is created switched OFF**, always (`rolesEdit.ts` `added`).
+- **Switching one on is refused** while `whyNotAskable` has a reason: `rowsAfter` takes the prompt bodies
+  as a fourth parameter, and the host (`rolesPanel.ts` `store` → `textsFor`) reads them — through the same
+  `texts()` the page is drawn from — only for a switch ON. The refusal reaches the person the way every
+  refusal on this page does: `sayRefused` plus a redraw that puts the switch back. The stage's room is
+  checked first; switching OFF is never refused for want of text.
+- **An active role that cannot be asked is marked** in its block (`unaskableHint`, a `.hint.warn`), for
+  the routes the refusal cannot see — a text erased after the switch, a settings file edited by hand, a
+  prompt file deleted.
+
+**Declined:** writing a template prompt on save (a placeholder would be a real question a reviewer is
+paid to answer). **Open tail:** `lastStanding` still counts an active role that cannot be asked as the
+stage's reviewer, so the last askable role can be switched off beside it.

@@ -1,4 +1,4 @@
-import { MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, builtInFor, composed, isActive, isBuiltIn, isProgramming, stageOf, type RoleRow } from './roles';
+import { MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, builtInFor, composed, isActive, isBuiltIn, isProgramming, stageOf, whyNotAskable, type RoleRow } from './roles';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
 import { STOOD_DOWN, type Tombstone } from './roleDeletion';
 import { escapeHtml } from './webviewHtml';
@@ -309,6 +309,20 @@ function promptBlock(role: RoleRow, prompt: { id: string; label?: string; purpos
   </div>`;
 }
 
+/**
+ * The mark on an ACTIVE role that will not be asked — issue #338, for the routes the refusal to switch
+ * one on cannot see: a text erased after the switch, a settings file edited by hand, a prompt file
+ * deleted. Until this the only signal was one line in a round reply, naming a generated id and a path.
+ * A role that is off needs no mark: it is not asked anyway, and switching it on says why it cannot be.
+ */
+function unaskableHint(role: RoleRow, texts: Readonly<Record<string, string>>): string {
+  const why = isActive(role) ? whyNotAskable(role, texts) : '';
+
+  return why.length === 0
+    ? ''
+    : `<p class="hint warn">It is switched on but will not be asked. ${escapeHtml(why)} Write the question in the box under it.</p>`;
+}
+
 function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>): string {
   const shipped = isBuiltIn(role.id);
   const on = isActive(role);
@@ -339,6 +353,7 @@ function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Reco
       ? '<p class="hint">The only role still active in this stage — switch another one on before turning this one off, or the stage would have no reviewer in it at all.</p>'
       : `<p class="hint">Five roles are already active in this stage. Switch one off to make room.</p>`}
     ${kindHint(role)}
+    ${unaskableHint(role, texts)}
     ${shipped ? '<p class="hint">A role this product ships. Its id, its name, its stage and its kind are fixed — they key your settings, your open sessions and every round already recorded, and the review server reads none of them from your configuration. Its switch and its prompt text are yours.</p>' : ''}
   </div>
 ${prompts}
@@ -569,6 +584,7 @@ ${ROLE_TONE_CSS}
 .fields label { display: flex; gap: 6px; align-items: center; }
 .fields .flag { gap: 4px; }
 .hint { flex-basis: 100%; font-size: 0.85em; opacity: 0.75; margin: 0; }
+.hint.warn { opacity: 1; color: var(--vscode-editorWarning-foreground); }
 .prompt { border-left: 2px solid var(--vscode-panel-border); padding: 4px 8px; margin: 6px 0; }
 /* A prompt of your own: framed on every side, and it STAYS framed. It is not a highlight of the
    last thing added — it is what the block is. Yours are the ones whose label, purpose and text are

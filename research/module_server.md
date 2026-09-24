@@ -4287,3 +4287,13 @@ consultation has no role. So the embedding is a one-line item that a move or a r
 leaving the source in place and every source-reading test green. `RolePrompts.ShippedDefaultFor` is the
 accessor for what is compiled in; the instance `For(...)` is override-first and would let a developer's
 `<dataDir>/prompts/consult.md` decide whether the suite passes.
+
+## A role that cannot be asked is named by its name (2026-09-24, issue #338)
+
+The round's *not asked* sentence for a prompt with no text (`PanelService.BuildWork…Add`) now starts with
+the role's own name when it has one — `NamedAs(catalog, role)` from `RoleCatalog.ById(role).Name`:
+*"Role2 was not asked: “My role” — its prompt 'role2-general' has no text — write it at …"*. The id
+stays first, because it is the key a person may search for; the name is what they recognise. Pinned by
+`TheRoundSaysWhatItCouldNotAskTests.ARoleThatCannotBeAsked_IsNamedByItsName`. The extension now refuses
+to switch on a role like that in the first place (module_extension.md), so this sentence is the
+backstop for a role switched on some other way.

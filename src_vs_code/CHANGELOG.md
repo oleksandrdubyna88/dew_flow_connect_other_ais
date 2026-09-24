@@ -40,6 +40,12 @@ from** brings forward the Claude Code tab or the editor it was opened from. Afte
 that tab is a new one, it opens the Claude Code session the conversation recorded, or its file; a
 conversation that recorded neither says so.
 
+**A role is not switched on without a question to ask** (issue #338). A role you add on **Edit roles**
+starts switched off, because it has nothing to ask until you write its prompt; switching it on before
+then says so, by the role's name. A role that is switched on but cannot be asked — its text erased, say
+— is marked on the page, and a round that skips it now names it by the name you gave it, not only by
+its id.
+
 ## Server 0.32.0 — 2026-09-23
 
 **The server now says when it died.** A `coai-mcp` that was killed — the window closed hard, the

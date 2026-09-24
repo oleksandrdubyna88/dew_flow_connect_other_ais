@@ -1,6 +1,6 @@
 import {
-  MAX_ACTIVE_PER_BUCKET, RESULT_CODE, RESULT_STAGE, activeCount, bucketAt, bucketOf, idFor, isActive,
-  isBuiltIn, promptIdFor, promptIdsInUse, stageOf, type RoleRow,
+  MAX_ACTIVE_PER_BUCKET, RESULT_STAGE, activeCount, bucketAt, bucketOf, idFor, isActive,
+  isBuiltIn, promptIdFor, promptIdsInUse, stageOf, whyNotAskable, type RoleRow,
 } from './roles';
 import { isShippedPrompt, type RolesCommand } from './rolesPage';
 
@@ -55,6 +55,11 @@ export function rowsAfter(
   current: readonly RoleRow[],
   command: RolesCommand,
   reserved: ReadonlySet<string> = new Set(),
+  /**
+   * The prompt bodies that exist, by id — what decides whether a role can be switched on (issue #338).
+   * Empty means none are known, and a role of one's own with none is not switched on.
+   */
+  texts: Readonly<Record<string, string>> = {},
 ): RowsOutcome {
   // `text` is a FILE and `restorePrompt` deletes one; zoom is a different setting entirely; and
   // `finishDeletion` and `reloadWindow` are about a deletion that has already left the rows. All of
@@ -73,16 +78,17 @@ export function rowsAfter(
     return removed(current, command.id);
   }
 
-  return onRow(current, command);
+  return onRow(current, command, texts);
 }
 
 /**
- * A new role of the person's own.
+ * A new role of the person's own — created switched OFF, always.
  *
- * <p>Switched on only if the stage has room for it. It used to be stored active whatever the count
- * was, so somebody with five already running got a sixth whose box was ticked and which took part
- * in no round: the server caps, names what it capped in a sentence on the panel, and the page went
- * on showing the tick. A role created switched off is a role a person can see is switched off.</p>
+ * <p>It has no question to ask yet: its one prompt has no text until somebody writes it, and the server
+ * skips a role like that in every round. It used to be switched on whenever its stage had room, which is
+ * how issue #338's `Role2` sat enabled, counted and never asked through six rounds. Before that it was
+ * stored active whatever the count was. A role created switched off is a role a person can see is
+ * switched off; switching it on is refused until its question exists (`switched`).</p>
  */
 function added(current: readonly RoleRow[], reserved: ReadonlySet<string>): RowsOutcome {
   // Rows AND tombstones. An id whose deletion has not finished is not free: the four records keyed
@@ -90,11 +96,10 @@ function added(current: readonly RoleRow[], reserved: ReadonlySet<string>): Rows
   // mirror carries the removal, so a new role taking that id opens with a stranger's budget.
   const id = idFor('', new Set([...current.map((r) => r.id.toLowerCase()), ...reserved]));
   const promptId = promptIdFor(id, 'general', promptIdsInUse(current));
-  const room = activeCount(current, RESULT_CODE) < MAX_ACTIVE_PER_BUCKET;
 
   return stored([
     ...current,
-    { id, name: 'A new role', stage: RESULT_STAGE, programmingTask: true, active: room,
+    { id, name: 'A new role', stage: RESULT_STAGE, programmingTask: true, active: false,
       prompts: [{ id: promptId, label: 'General', purpose: '' }] },
   ]);
 }
@@ -130,6 +135,7 @@ function onRow(
   command: Exclude<RolesCommand, {
     kind: 'ignore' | 'zoom' | 'tab' | 'add' | 'remove' | 'restorePrompt' | 'finishDeletion' | 'reloadWindow';
   }>,
+  texts: Readonly<Record<string, string>>,
 ): RowsOutcome {
   const mine = current.find((r) => r.id === command.id);
   const known = mine ?? (isBuiltIn(command.id) ? { id: command.id } : undefined);
@@ -137,7 +143,7 @@ function onRow(
     return UNCHANGED;
   }
 
-  const outcome = changed(known, command, current);
+  const outcome = changed(known, command, current, texts);
   if (outcome.kind !== 'rows') {
     return outcome;
   }
@@ -157,9 +163,10 @@ function changed(
     kind: 'ignore' | 'zoom' | 'tab' | 'add' | 'remove' | 'restorePrompt' | 'finishDeletion' | 'reloadWindow';
   }>,
   all: readonly RoleRow[],
+  texts: Readonly<Record<string, string>>,
 ): RowsOutcome {
   if (command.kind === 'edit') {
-    return edited(row, command.field, command.value, all);
+    return edited(row, command, all, texts);
   }
   if (command.kind === 'addPrompt') {
     const label = 'A new prompt';
@@ -175,7 +182,12 @@ function changed(
 }
 
 /** One field of a role. Which fields may be set at all depends on whose role it is. */
-function edited(row: RoleRow, field: string, value: string | boolean, all: readonly RoleRow[]): RowsOutcome {
+function edited(
+  row: RoleRow,
+  { field, value }: { readonly field: string; readonly value: string | boolean },
+  all: readonly RoleRow[],
+  texts: Readonly<Record<string, string>>,
+): RowsOutcome {
   if (fixedOnShipped(row, field)) {
     return refused(
       'A role this product ships keeps its name, its stage and its kind: they key your settings, '
@@ -184,7 +196,7 @@ function edited(row: RoleRow, field: string, value: string | boolean, all: reado
     );
   }
   if (field === 'active') {
-    return switched(row, value === true, all);
+    return switched(row, value === true, all, texts);
   }
   if (field === 'stage') {
     return restaged(row, String(value), all);
@@ -223,15 +235,31 @@ function lastStanding(row: RoleRow, all: readonly RoleRow[]): boolean {
  *
  * <p>The page disables both of these; this is the twin that catches a webview posting anyway.</p>
  */
-function switched(row: RoleRow, on: boolean, all: readonly RoleRow[]): RowsOutcome {
-  if (on && !isActive(row) && activeCount(all, bucketOf(row)) >= MAX_ACTIVE_PER_BUCKET) {
-    return refused('Five roles are already active in this stage. Switch one off to make room.');
-  }
-  if (!on && lastStanding(row, all)) {
-    return refused(EMPTY_STAGE);
-  }
+function switched(row: RoleRow, on: boolean, all: readonly RoleRow[], texts: Readonly<Record<string, string>>): RowsOutcome {
+  const why = on ? whyNotOn(row, all, texts) : whyNotOff(row, all);
 
-  return stored([{ ...row, active: on }]);
+  return why.length > 0 ? refused(why) : stored([{ ...row, active: on }]);
+}
+
+/**
+ * What stops a role being switched on, or nothing. Only a role that is OFF is asked about — switching on
+ * what is already on changes nothing — and the stage's room first, because a full stage is the answer
+ * whatever the role holds.
+ */
+function whyNotOn(row: RoleRow, all: readonly RoleRow[], texts: Readonly<Record<string, string>>): string {
+  if (isActive(row)) {
+    return '';
+  }
+  if (activeCount(all, bucketOf(row)) >= MAX_ACTIVE_PER_BUCKET) {
+    return 'Five roles are already active in this stage. Switch one off to make room.';
+  }
+  const unaskable = whyNotAskable(row, texts);
+
+  return unaskable.length > 0 ? `${unaskable} Write the question it asks in the box under it, then switch it on.` : '';
+}
+
+function whyNotOff(row: RoleRow, all: readonly RoleRow[]): string {
+  return lastStanding(row, all) ? EMPTY_STAGE : '';
 }
 
 /**
