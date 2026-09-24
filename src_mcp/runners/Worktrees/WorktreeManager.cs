@@ -335,14 +335,48 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
             : [];
 
     /// <summary>Our prefix AND our root — the two independent guards, both required.</summary>
-    private bool IsOurs(string path)
+    private bool IsOurs(string path) => HasOurName(path) && IsUnderOurRoot(path);
+
+    private static bool HasOurName(string path)
     {
         var name = Path.GetFileName(path.TrimEnd('/', '\\'));
-        var root = Path.GetFullPath(storageRoot).TrimEnd('/', '\\') + Path.DirectorySeparatorChar;
-        return name.StartsWith(Prefix, StringComparison.Ordinal)
-            && !name.StartsWith(TrashPrefix, StringComparison.Ordinal)
-            && Path.GetFullPath(path).StartsWith(root, StringComparison.OrdinalIgnoreCase);
+        return name.StartsWith(Prefix, StringComparison.Ordinal) && !name.StartsWith(TrashPrefix, StringComparison.Ordinal);
     }
+
+    /// <summary>
+    /// Under our root by ANY of its names — as configured, or with every link on the way resolved.
+    /// </summary>
+    /// <remarks>
+    /// Comparing the configured spelling alone was wrong on macOS, where the temp directory is
+    /// <c>/var/…</c>, a link to <c>/private/var/…</c>, and git lists a tree by its resolved path: the
+    /// sweep took a half-made tree of a dead server for somebody else's and left it registered (the
+    /// macOS job of PR 497). Both sides are compared both ways, so it does not matter which spelling
+    /// git prints or which one the root was configured with.
+    /// </remarks>
+    private bool IsUnderOurRoot(string path)
+    {
+        string[] roots = [Directory(storageRoot), Directory(Resolved(storageRoot))];
+        string[] candidates = [Path.GetFullPath(path), Resolved(path)];
+        return candidates.Any(candidate => roots.Any(root => candidate.StartsWith(root, StringComparison.OrdinalIgnoreCase)));
+
+        static string Directory(string root) => Path.GetFullPath(root).TrimEnd('/', '\\') + Path.DirectorySeparatorChar;
+    }
+
+    /// <summary>The path with every link on the way to it resolved — what <c>realpath</c> answers.</summary>
+    internal static string Resolved(string path)
+    {
+        var full = Path.GetFullPath(path);
+        var root = Path.GetPathRoot(full) ?? string.Empty;
+        return full[root.Length..]
+            .Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries)
+            .Aggregate(root, (at, part) => Through(Path.Combine(at, part)));
+    }
+
+    /// <summary>One step of <see cref="Resolved"/>: a directory link is followed to its final target.</summary>
+    private static string Through(string at) =>
+        System.IO.Directory.Exists(at) && new DirectoryInfo(at).ResolveLinkTarget(returnFinalTarget: true) is { } target
+            ? target.FullName
+            : at;
 
     private static string OwnerFile(string path) => path.TrimEnd('/', '\\') + OwnerSuffix;
 

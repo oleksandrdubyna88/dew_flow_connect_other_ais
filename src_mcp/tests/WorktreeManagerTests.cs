@@ -276,15 +276,14 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     [Fact]
     public async Task ATreeHeldOpen_IsNeverAnErrorWhenItIsGivenBack()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "only Windows refuses to delete a file that is held open");
         var sha = await _manager.ResolveShaAsync(_repo, "main");
         var lease = await _manager.AddAsync(_repo, sha, "held", round: 1);
-        var held = new FileStream(Path.Combine(lease.Path, "a.txt"), FileMode.Open, FileAccess.Read, FileShare.None);
+        var held = Held.Inside(lease.Path, _storage);
 
         var giveBack = async () => await lease.DisposeAsync();
 
         await giveBack.Should().NotThrowAsync("a tree that will not go is the next sweep's job, never the round's error");
-        await held.DisposeAsync();
+        held.Dispose();
         await _manager.PruneOursAsync(_repo);
         Directory.GetDirectories(_storage).Should().BeEmpty("once let go, the next sweep removes it — moved-aside trash included");
     }
@@ -330,15 +329,131 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     [Fact]
     public async Task AHeldFileInALeftover_NeverFailsOpen()
     {
-        Assert.SkipUnless(OperatingSystem.IsWindows(), "only Windows refuses to delete a file that is held open");
         var leftover = Directory.CreateDirectory(Path.Combine(_storage, "coai-wt-gone-r1")).FullName;
-        var path = Path.Combine(leftover, "held.txt");
-        await File.WriteAllTextAsync(path, "x", TestContext.Current.CancellationToken);
-        await using var held = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.None);
+        using var held = Held.Inside(leftover, _storage);
 
         var sweep = () => _manager.PruneOursAsync(_repo);
 
         await sweep.Should().NotThrowAsync("a directory that will not go is a warning, never a failed open");
+    }
+
+    /// <summary>
+    /// A git that refuses to make the tree leaves nothing behind — no directory, no owner marker — and
+    /// the error quotes git's verdict.
+    /// </summary>
+    [Fact]
+    public async Task AFailedAdd_LeavesNothingBehind_AndSaysWhy()
+    {
+        var add = () => _manager.AddAsync(_repo, "0123456789abcdef0123456789abcdef01234567", "bad", round: 1);
+
+        (await add.Should().ThrowAsync<WorktreeException>()).Which.Message.Should().Contain("fatal:");
+        Directory.GetDirectories(_storage, "coai-wt-bad-*").Should().BeEmpty();
+        Directory.GetFiles(_storage, "coai-wt-bad-*").Should().BeEmpty("the owner marker goes with the tree it named");
+    }
+
+    /// <summary>A tree an older build made has no owner marker — nobody is using it now, so it is swept.</summary>
+    [Fact]
+    public async Task ATreeWithNoOwnerMarker_IsSweptOnOpen()
+    {
+        var sha = await _manager.ResolveShaAsync(_repo, "main");
+        var legacy = Path.Combine(_storage, "coai-wt-legacy-r1");
+        await Git(_repo, "worktree", "add", "--detach", legacy, sha);
+
+        await _manager.PruneOursAsync(_repo);
+
+        Directory.Exists(legacy).Should().BeFalse();
+        (await _manager.ListOursAsync(_repo)).Should().BeEmpty();
+    }
+
+    /// <summary>A marker whose tree is gone and whose owner is gone names nothing, and does not pile up.</summary>
+    [Fact]
+    public async Task AMarkerOfAVanishedTreeWhoseOwnerIsGone_IsForgotten()
+    {
+        var marker = Path.Combine(_storage, "coai-wt-vanished-r1-0000beef.owner");
+        await File.WriteAllTextAsync(
+            marker,
+            $$"""{"Pid":{{Environment.ProcessId}},"StartedUtc":"2001-01-01T00:00:00Z"}""",
+            TestContext.Current.CancellationToken);
+
+        await _manager.PruneOursAsync(_repo);
+
+        File.Exists(marker).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// The root reached through a LINK is still our root. On macOS the temp directory is
+    /// <c>/var/…</c>, a link to <c>/private/var/…</c>, and git lists a tree by its resolved path — so
+    /// the sweep, comparing strings, took a half-made tree of a dead server for somebody else's and left
+    /// it registered for ever (the macOS job of PR 497).
+    /// </summary>
+    [Fact]
+    public async Task ARootReachedThroughALink_StillKnowsItsOwnTrees()
+    {
+        var real = Directory.CreateTempSubdirectory("coai-wt-real-").FullName;
+        _temps.Add(real);
+        var link = Path.Combine(Directory.CreateTempSubdirectory("coai-wt-link-").FullName, "to-real");
+        _temps.Add(Path.GetDirectoryName(link)!);
+        if (!TryLink(link, real) && !await TryJunctionAsync(link, real))
+        {
+            Assert.Skip("this machine can create neither a directory link nor a junction");
+        }
+
+        var sha = await _manager.ResolveShaAsync(_repo, "main");
+        var leftover = Path.Combine(real, "coai-wt-S-r1");
+        await Git(_repo, "worktree", "add", "--detach", "--lock", "--reason", "initializing", leftover, sha);
+        Directory.Delete(leftover, recursive: true);
+
+        await new WorktreeManager(_launcher, link).PruneOursAsync(_repo);
+
+        (await GitOut(_repo, "worktree", "list", "--porcelain")).Should().NotContain("coai-wt-S-r1",
+            "a tree under our root is ours by whichever of the root's names git happens to print");
+    }
+
+    /// <summary>
+    /// Something inside a directory that cannot be deleted, on every platform: a file held open on
+    /// Windows, a read-only subdirectory elsewhere — so the paths that exist for a held tree are run
+    /// on the CI machines too, not only on a developer's.
+    /// </summary>
+    private sealed class Held : IDisposable
+    {
+        private readonly FileStream? _open;
+        private readonly string _root = string.Empty;
+
+        private Held(FileStream open) => _open = open;
+
+        private Held(string root) => _root = root;
+
+        /// <param name="root">
+        /// Where to look for it again on release: a tree that could not be deleted is MOVED aside, so
+        /// the locked directory is no longer at the path it was made at.
+        /// </param>
+        public static Held Inside(string directory, string root)
+        {
+            var inner = Directory.CreateDirectory(Path.Combine(directory, "held")).FullName;
+            var file = Path.Combine(inner, "held.txt");
+            File.WriteAllText(file, "x");
+            if (OperatingSystem.IsWindows())
+            {
+                return new Held(new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.None));
+            }
+
+            File.SetUnixFileMode(inner, UnixFileMode.UserRead | UnixFileMode.UserExecute);
+            return new Held(root);
+        }
+
+        public void Dispose()
+        {
+            _open?.Dispose();
+            if (_root.Length == 0 || OperatingSystem.IsWindows())
+            {
+                return;
+            }
+
+            foreach (var locked in Directory.GetDirectories(_root, "held", SearchOption.AllDirectories))
+            {
+                File.SetUnixFileMode(locked, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+            }
+        }
     }
 
     [Theory]
@@ -347,6 +462,18 @@ public sealed class WorktreeManagerTests : IAsyncLifetime
     [InlineData("error: something else\n", "error: something else")]
     public void AFailedAdd_QuotesGitsVerdict_NotItsPreamble(string stderr, string expected) =>
         WorktreeManager.FatalLine(stderr).Should().Be(expected);
+
+    /// <summary>A junction — Windows' link that needs no elevation, and which .NET reports as a link too.</summary>
+    private async Task<bool> TryJunctionAsync(string link, string target)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return false;
+        }
+
+        var made = await _launcher.RunAsync(new ProcessRequest("cmd", ["/c", "mklink", "/J", link, target], _repo));
+        return made.ExitCode == 0 && Directory.Exists(link);
+    }
 
     private static bool TryLink(string link, string target)
     {
