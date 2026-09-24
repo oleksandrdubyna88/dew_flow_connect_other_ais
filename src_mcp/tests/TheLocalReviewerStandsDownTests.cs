@@ -94,6 +94,37 @@ public sealed class TheLocalReviewerStandsDownTests
         StoodDownRoles(results).Should().BeEmpty(because);
     }
 
+    /// <summary>
+    /// The count must know a cloud outcome before anybody is TOLD of it. Recorded after the report, a local
+    /// row the report woke could check the count in between, find it one short and start — a race the
+    /// code round's own reviewer found in the tests above, which release the card on that very report.
+    /// </summary>
+    [Fact]
+    public async Task WhenTheLastCloudOutcomeIsReported_TheCountAlreadyHoldsIt()
+    {
+        var work = Round(Cloud("codex", RoleCatalog.ArchitectureRole), Cloud("gemini", RoleCatalog.ArchitectureRole));
+        var card = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var standDown = StandDown.For(work);
+        var cloudFinished = 0;
+        var quietWhenTold = new List<bool>();
+
+        await new BoundedScheduler(globalCap: 4, perProviderCap: 3, sharedResourceCap: 1).RunAllAsync(
+            work,
+            new ReviewerExecutor(new CardLauncher(card.Task)),
+            TestContext.Current.CancellationToken,
+            p =>
+            {
+                if (p.Provider != "local" && p.Outcome is not null && Interlocked.Increment(ref cloudFinished) == 2)
+                {
+                    quietWhenTold.Add(standDown.Quiet);
+                    card.TrySetResult();
+                }
+            },
+            standDown);
+
+        quietWhenTold.Should().Equal([true], "the report of the last cloud outcome comes after the count holds it");
+    }
+
     [Fact]
     public async Task ARoundWithNoCloudReviewer_NeverStopsTheLocalOne()
     {
