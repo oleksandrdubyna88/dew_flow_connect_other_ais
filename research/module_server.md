@@ -4291,7 +4291,7 @@ accessor for what is compiled in; the instance `For(...)` is override-first and 
 ## A role that cannot be asked is named by its name (2026-09-24, issue #338)
 
 The round's *not asked* sentence for a prompt with no text (`PanelService.BuildWork…Add`) now starts with
-the role's own name when it has one — `NamedAs(catalog, role)` from `RoleCatalog.ById(role).Name`:
+the role's own name when it has one — `NamedAs(catalog, role)` from `RoleCatalog.ById(role).Name` (a blank name counts as none, as on the extension's side):
 *"Role2 was not asked: “My role” — its prompt 'role2-general' has no text — write it at …"*. The id
 stays first, because it is the key a person may search for; the name is what they recognise. Pinned by
 `TheRoundSaysWhatItCouldNotAskTests.ARoleThatCannotBeAsked_IsNamedByItsName`. The extension now refuses

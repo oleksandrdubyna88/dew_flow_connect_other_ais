@@ -375,16 +375,24 @@ export function whyNotAskable(row: RoleRow, texts: Readonly<Record<string, strin
   }
   const first = firstPrompt(row);
   if (first === undefined) {
-    return `“${displayName(row)}” has no prompt, so there is no question to ask it.`;
+    return `“${displayName(row)}” has no prompt, so there is no question to ask it. Add a prompt and write its question.`;
   }
 
   return hasText(texts, first.id)
     ? ''
-    : `“${displayName(row)}” has no question to ask: its first prompt “${promptLabel(first)}” has no text.`;
+    : `“${displayName(row)}” has no question to ask: its first prompt “${promptLabel(first)}” has no text. `
+      + 'Write the question in the box under it.';
 }
 
+/** A label, or the id when it has none or was cleared — never an empty pair of quotation marks. */
 function promptLabel(prompt: PromptRow): string {
-  return prompt.label ?? prompt.id;
+  return orElse(prompt.label, prompt.id);
+}
+
+function orElse(text: string | undefined, fallback: string): string {
+  const trimmed = (text ?? '').trim();
+
+  return trimmed.length > 0 ? trimmed : fallback;
 }
 
 /** The prompt a round asks when nobody chose another for it — the first, by position. */
@@ -393,11 +401,16 @@ function firstPrompt(row: RoleRow): PromptRow | undefined {
 }
 
 function displayName(row: RoleRow): string {
-  return row.name ?? row.id;
+  return orElse(row.name, row.id);
 }
 
+/**
+ * Non-blank text, and only the object's OWN: a prompt id is whatever a settings file says, and
+ * `texts['constructor']` on a plain object is Object's constructor — `.trim()` on it threw, taking the
+ * page render with it. (gemini, the code round.)
+ */
 function hasText(texts: Readonly<Record<string, string>>, promptId: string): boolean {
-  return (texts[promptId] ?? '').trim().length > 0;
+  return Object.hasOwn(texts, promptId) && String(texts[promptId]).trim().length > 0;
 }
 
 /** Whether a row takes part at all, defaulting to yes as the server defaults it. */

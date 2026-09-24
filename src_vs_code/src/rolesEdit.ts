@@ -253,9 +253,9 @@ function whyNotOn(row: RoleRow, all: readonly RoleRow[], texts: Readonly<Record<
   if (activeCount(all, bucketOf(row)) >= MAX_ACTIVE_PER_BUCKET) {
     return 'Five roles are already active in this stage. Switch one off to make room.';
   }
-  const unaskable = whyNotAskable(row, texts);
-
-  return unaskable.length > 0 ? `${unaskable} Write the question it asks in the box under it, then switch it on.` : '';
+  // The sentence already says what to do about it, and it differs by reason — a box to write in, or a
+  // prompt to add first — so nothing is appended here. (gemini and our own review, the code round.)
+  return whyNotAskable(row, texts);
 }
 
 function whyNotOff(row: RoleRow, all: readonly RoleRow[]): string {

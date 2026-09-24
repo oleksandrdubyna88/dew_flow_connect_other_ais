@@ -320,7 +320,7 @@ function unaskableHint(role: RoleRow, texts: Readonly<Record<string, string>>): 
 
   return why.length === 0
     ? ''
-    : `<p class="hint warn">It is switched on but will not be asked. ${escapeHtml(why)} Write the question in the box under it.</p>`;
+    : `<p class="hint warn">It is switched on but will not be asked. ${escapeHtml(why)}</p>`;
 }
 
 function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Record<string, string>>): string {
@@ -424,12 +424,11 @@ function older(version: string, since: string): boolean {
 }
 
 /**
- * Whether a role added now would arrive switched off.
+ * Whether a role added now could not be switched on even once its question is written.
  *
- * <p>It does arrive switched off, which is honest — but the person found that out AFTER clicking,
- * from a hint on a role they had just created. Said beside the button, it is the same sentence one
- * step earlier. A new role always joins the code bucket of the result stage, so that is the only
- * count to take.</p>
+ * <p>Every new role arrives switched off since issue #338 — it has no question yet — so what is worth
+ * saying beside the button is the other reason it would stay off: the stage is full. A new role always
+ * joins the code bucket of the result stage, so that is the only count to take.</p>
  */
 function stageIsFull(all: readonly RoleRow[]): boolean {
   return activeCount(all, RESULT_CODE) >= MAX_ACTIVE_PER_BUCKET;
@@ -539,7 +538,7 @@ ${code.map((r) => roleBlock(all, r, state.texts)).join('\n')}
      bucket of the result stage, so offered from the plan tab it was a button that quietly
      created something on another tab and moved the person there. (gemini, the code round.) -->
 <button type="button" class="add role" data-add="role">Add a role</button>
-${stageIsFull(all) ? '<p class="hint">Five roles are already active in the code stage, so a new one will arrive switched off. Switch one of them off to make room for it.</p>' : ''}
+${stageIsFull(all) ? '<p class="hint">Five roles are already active in the code stage, so a new one cannot be switched on until one of them is switched off.</p>' : ''}
 </section>
 
 <section id="section-documents" role="tabpanel" aria-labelledby="tab-documents" data-section="documents"${openTab === 'documents' ? '' : ' hidden'}>
@@ -628,8 +627,12 @@ function script(nonce: string): string {
     }
     vscode.postMessage({ type: 'edit', id: role.dataset.id, field: field.dataset.field, value: value });
   };
+  // A checkbox and a select are sent by 'change' below. The browser fires 'input' for them TOO, and
+  // sending from both made one press two commands - two reads of every prompt and two refusals for one
+  // click once switching a role on could be refused. (Our own code review of issue #338.)
   document.addEventListener('input', function (event) {
-    if (event.target && event.target.dataset) { send(event.target); }
+    const typed = event.target;
+    if (typed && typed.dataset && typed.type !== 'checkbox' && typed.tagName !== 'SELECT') { send(typed); }
   });
   document.addEventListener('change', function (event) {
     const field = event.target;

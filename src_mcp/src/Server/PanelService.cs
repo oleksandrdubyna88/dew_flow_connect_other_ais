@@ -1019,15 +1019,15 @@ public sealed partial class PanelService
     /// the adapter, the adapter said what it contends on, and the scheduler picks its lane by the same
     /// property.</para>
     /// </remarks>
+    private static IReadOnlyList<ReviewerWork> LocalRowsFirst(IReadOnlyList<ReviewerWork> rows) =>
+        [.. rows.Where(r => r.Invocation.IsOnEngine), .. rows.Where(r => !r.Invocation.IsOnEngine)];
+
     /// <summary>
     /// The role's own name as the start of a sentence about it — <c>“My role” — </c> — or nothing when it
     /// has none but its id. Issue #338.
     /// </summary>
     private static string NamedAs(RoleCatalog catalog, string role) =>
-        catalog.ById(role)?.Name is { Length: > 0 } name && name != role ? $"“{name}” — " : string.Empty;
-
-    private static IReadOnlyList<ReviewerWork> LocalRowsFirst(IReadOnlyList<ReviewerWork> rows) =>
-        [.. rows.Where(r => r.Invocation.IsOnEngine), .. rows.Where(r => !r.Invocation.IsOnEngine)];
+        catalog.ById(role)?.Name is { } name && !string.IsNullOrWhiteSpace(name) && name != role ? $"“{name.Trim()}” — " : string.Empty;
 
     /// <summary>
     /// A seed that is the same on every replay of one round, and different for the next.
