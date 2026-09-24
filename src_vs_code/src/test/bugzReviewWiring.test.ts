@@ -465,16 +465,22 @@ test('the sidebar hands its hook to the chat, and the extension gives it the win
   assert.ok(registry >= 0 && registry < sidebar, 'the registry must exist before the sidebar is handed it');
   // No door is recorded: the door inventory is one recorder per MANIFEST command, and this button is
   // not one — recording it as the right-click `choose` would count a press nobody made there.
-  assert.match(extension, /\}, consultations, \(chat\) => chooseFromBug\(chatPanels, context\.extensionUri, chat\)\);/u,
+  assert.match(extension, /\}, consultations, \(chat\) => chooseFromBug\(chatPanels, context\.extensionUri, chat\)\.catch\(\(reason: unknown\) => \{/u,
     'a press goes into THIS window\'s conversations');
+  // The panel starts the hook with `void`, so a throw nobody catches is a press that does nothing and
+  // says nothing — every other action on this page catches and says so. (Our own code reviewer.)
+  const failure = bodyOf(extension, '(chat) => chooseFromBug(chatPanels, context.extensionUri, chat).catch((reason: unknown) => {');
+  assert.match(failure, /console\.error\('CoAI: choose on a bug failed', reason\);/u, 'the detail goes to the console');
+  assert.match(failure, /notify\(\{\s*as: 'warning',\s*class: 'failure',\s*source: 'bugz',\s*code: 'bug-not-chosen',[\s\S]*?detail: asText\(reason\),/u,
+    'and a short sentence to the person, with the detail written down');
 });
 
 test('a second press on the same bug only brings its conversation back, and a first one is never sent', () => {
   const body = bodyOf(code('chatCommand.ts'), 'export async function chooseFromBug(');
-  const reveal = body.search(/const open = panels\.get\(key\);\s*if \(open !== undefined\) \{\s*open\.panel\.reveal\(\);\s*return;\s*\}/u);
-  const deliver = body.search(/await deliverPassage\(panels, extensionUri, ready, \{ kind: 'new', key, label: chat\.label \}, \{ text: chat\.text \}, false, false, fileUriOf\(chat\)\);/u);
+  const reveal = body.search(/const open = bugChats\.openFor\(chat\.key, panels\);\s*if \(open !== undefined\) \{\s*open\.panel\.reveal\(\);\s*return;\s*\}/u);
+  const deliver = body.search(/const key = bugChats\.keyFor\(chat\.key\);\s*await deliverPassage\(panels, extensionUri, ready, \{ kind: 'new', key, label: chat\.label \}, \{ text: chat\.text \}, false, false, fileUriOf\(chat\)\);\s*bugChats\.remember\(chat\.key, panels\);/u);
 
-  assert.ok(reveal >= 0, 'an open conversation is revealed and its composer left alone');
-  assert.ok(deliver > reveal, 'and only a bug with no conversation gets a passage — never sent (send = false)');
-  assert.match(body, /const key = bugKeys\.keyFor\(chat\.key\);/u, 'keyed by the bug, not by the active tab');
+  assert.ok(reveal >= 0, 'an open conversation — found by its id, wherever it was re-keyed — is revealed and its composer left alone');
+  assert.ok(deliver > reveal,
+    'only a bug with no conversation gets a passage, keyed by the bug, never sent (send = false), and remembered by its id');
 });

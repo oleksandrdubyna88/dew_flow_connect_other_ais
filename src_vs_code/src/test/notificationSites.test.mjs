@@ -205,9 +205,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 138 → 141 on 2026-09-24, issue #467 Epic B: the Edit commands page. Three places, because they are three
 // kinds: an edit the rules refuse (switching on a command with no text), the confirmation before a command
 // and its text are removed (modal), and a failure of the page itself.
-// 141 → 140 on 2026-09-24, issue #487: CoAI: choose on a bug. Its refusal when no model can answer is the
-// same sentence two chat doors already said in two copies; the third door is where they became one place.
-const PLACES_THIS_SPEAKS = 140;
+// 141 → 141 on 2026-09-24, issue #487: CoAI: choose on a bug. One place fewer — its refusal when no model can
+// answer is the sentence two chat doors already said in two copies, and the third door is where they became
+// one — and one more: the failure when putting a bug into a chat throws, which the page cannot catch itself.
+const PLACES_THIS_SPEAKS = 141;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this
