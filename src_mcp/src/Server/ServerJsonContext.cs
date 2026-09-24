@@ -127,7 +127,13 @@ public sealed record ReviewAnswer(
     /// of one defect, and three vendors' accounts of one document are three accounts — merging them
     /// destroys the only property that makes reading them worth the tokens.
     /// </remarks>
-    IReadOnlyList<ReviewerNote>? Notes = null);
+    IReadOnlyList<ReviewerNote>? Notes = null,
+    /// <summary>
+    /// The custom commands a person switched on that could not be given, each with why — today only "it
+    /// has no text", naming the file to write (issue #467). Null when there is nothing to say, like
+    /// <see cref="Notes"/>: an empty list in every reply teaches a reader to stop seeing the field.
+    /// </summary>
+    IReadOnlyList<string>? CommandsSkipped = null);
 
 /// <summary>One reviewer's prose, with its name on it.</summary>
 public sealed record ReviewerNote(string Provider, string Role, string Notes);

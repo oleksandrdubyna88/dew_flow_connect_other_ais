@@ -71,6 +71,14 @@ secret, the data directory, which side of the machine a window is, per-side over
 never travel; a reviewer imported keeps the CLI path this machine already has for it. A write that fails
 partway puts back everything the import had changed.
 
+**The gate's orders can be reworded, and you can add your own** (issue #467). Every sentence the
+gate's commands are made of now ships as a small text file, and writing `<dataDir>/prompts/<name>.md`
+rewords it for your rounds — deleting the file puts the shipped words back. The words an order is
+recognised by stay fixed, so a reworded order still counts as given. Commands you add yourself
+(`COAI_COMMANDS`) are handed to the calling AI after the built-in ones, in plan rounds, code rounds or
+both; one switched on without any text is left out and the reply says which file to write. With nothing
+changed, every order is exactly what it was.
+
 ## Server 0.32.0 — 2026-09-23
 
 **The server now says when it died.** A `coai-mcp` that was killed — the window closed hard, the

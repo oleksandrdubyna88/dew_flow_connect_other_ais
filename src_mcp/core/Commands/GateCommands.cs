@@ -44,6 +44,13 @@ public sealed record CommandContext(
 
     /// <summary>How often the split work comes back through the gate — once per epic unless told otherwise.</summary>
     public GateScope GatePer { get; init; } = GateScope.Epic;
+
+    /// <summary>
+    /// The words the orders are made of — the shipped ones unless a person overrode some (issue #467).
+    /// </summary>
+    /// <remarks>Defaults to the shipped texts, so a context built without it says exactly what every
+    /// release before the texts became data said; a test holds that byte for byte.</remarks>
+    public CommandTexts Texts { get; init; } = CommandTexts.Shipped;
 }
 
 /// <summary>How often split work is gated (issue #131). Never per story: that cost two rounds a story.</summary>
@@ -70,11 +77,11 @@ public enum GateScope
 /// </remarks>
 public static class GateCommands
 {
-    /// <summary>The sentence that introduces them, so an AI knows what it is reading.</summary>
-    public const string Preamble =
-        "COMMANDS from the operator of this gate. They come from switches a person set in the panel "
-            + "and they outrank your own defaults for this task. Follow them, and say in your summary "
-            + "which ones you applied.";
+    /// <summary>The sentence that introduces them, as shipped.</summary>
+    public static string Preamble => CommandTexts.Shipped.Text(CommandTexts.Preamble);
+
+    /// <summary>The sentence that introduces them in THIS call — a person may have reworded it.</summary>
+    public static string PreambleFor(CommandContext context) => context.Texts.Text(CommandTexts.Preamble);
 
     /// <summary>
     /// Whether this call actually ORDERS a split — the one thing the caller has to remember.
@@ -93,11 +100,11 @@ public static class GateCommands
         var commands = new List<string>();
         if (context.SplitPlan && context.PlanStage)
         {
-            commands.Add(OrdersSplit(context) ? SplitCommand(context) : AlreadySplitCommand(context.GatePer));
+            commands.Add(OrdersSplit(context) ? SplitCommand(context) : AlreadySplitCommand(context.GatePer, context.Texts));
         }
         if (OrdersSplit(context) && context.SplitWithFable)
         {
-            commands.Add(ModelCommand(context.Models));
+            commands.Add(ModelCommand(context.Models, context.Texts));
         }
         if (context.Autonomous)
         {
@@ -129,11 +136,12 @@ public static class GateCommands
     private static string SplitCommand(CommandContext context)
     {
         var shape = PlanShapeReader.Of(context.PlanText);
+        var measured = context.Texts.Text(CommandTexts.SplitMeasured)
+            .Replace("{numbers}", shape.Numbers, StringComparison.Ordinal)
+            .Replace("{verdict}", shape.Verdict.ToString(), StringComparison.Ordinal);
 
-        return $"{Judgement(shape.Verdict)} "
-            + $"(Measured from the plan you sent: {shape.Numbers} — size {shape.Verdict}. That is a "
-            + "heuristic — if it is wrong for this plan, say so in your summary and do what is right.) "
-            + GateEnding(context.GatePer, HasEpics(shape.Verdict));
+        return $"{context.Texts.Text(JudgementId(shape.Verdict))} {measured} "
+            + GateEnding(context.GatePer, HasEpics(shape.Verdict), context.Texts);
     }
 
     /// <summary>
@@ -143,55 +151,38 @@ public static class GateCommands
     public static string ShapeOrdered(CommandContext context) =>
         OrdersSplit(context) ? PlanShapeReader.Of(context.PlanText).Described : string.Empty;
 
-    private const string NeverMore = " Fewer is fine when the work is smaller; never more.";
-
-    private static string Judgement(PlanShape.Split size) => size switch
+    /// <summary>Which text says how to split a plan of this size — "never more" is part of each.</summary>
+    /// <remarks>The numbers of epics and stories are the owner's (issue #131); the texts are
+    /// <c>shared/commands/command-split-*.md</c> since issue #467.</remarks>
+    private static string JudgementId(PlanShape.Split size) => size switch
     {
-        PlanShape.Split.Small => "Split this plan into 3-5 logically complete STORIES — no epics." + NeverMore,
-        PlanShape.Split.Medium => "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES." + NeverMore,
-        PlanShape.Split.Large => "Split this plan into 3-4 EPICS, each of 3-4 logically complete STORIES." + NeverMore,
-        PlanShape.Split.Huge => "Split this plan into 4-5 EPICS, each of 3-5 logically complete STORIES." + NeverMore,
-        _ => "This plan is small enough to build as it stands; split it only if you disagree, and say why.",
+        PlanShape.Split.Small => CommandTexts.SplitSmall,
+        PlanShape.Split.Medium => CommandTexts.SplitMedium,
+        PlanShape.Split.Large => CommandTexts.SplitLarge,
+        PlanShape.Split.Huge => CommandTexts.SplitHuge,
+        _ => CommandTexts.SplitNone,
     };
 
     private static bool HasEpics(PlanShape.Split size) => size >= PlanShape.Split.Medium;
 
-    /// <summary>How often the work comes back through the gate — never per story.</summary>
-    private static string GateEnding(GateScope scope, bool epics) => GateCadence(scope, epics) + AnotherCodeRound;
-
     /// <summary>
-    /// What an agent must know about a SECOND code round, said with every gate order.
+    /// How often the work comes back through the gate — never per story — and the door to a second code round.
     /// </summary>
     /// <remarks>
     /// "ONE review_code" was read as "exactly one, ever", and it was nearly true: a code round closed
     /// the session and the refusal named a door that did not exist. So an agent that had crashed
     /// mid-epic refused the checkpoint round its operator asked for, to keep the final one (issue
-    /// #490). The door exists now and the order says where it is.
+    /// #490). The door exists now and every gate order says where it is
+    /// (<see cref="CommandTexts.AnotherCodeRound"/>).
     /// </remarks>
-    internal const string AnotherCodeRound =
-        " A resolved code round closes the session: for a checkpoint, a final round after one, or a retry "
-        + "after a crash, commit the new work and call review_code with again: true.";
+    private static string GateEnding(GateScope scope, bool epics, CommandTexts texts) =>
+        $"{GateOrderMarker} {texts.Text(CadenceId(scope, epics))} {texts.Text(CommandTexts.AnotherCodeRound)}";
 
-    private static string GateCadence(GateScope scope, bool epics) => (scope, epics) switch
+    private static string CadenceId(GateScope scope, bool epics) => (scope, epics) switch
     {
-        (GateScope.Epic, true) =>
-            $"{GateOrderMarker} per EPIC, never per story: give each epic its own branch, starting from the "
-                + "previous epic's commit; call review_plan with that epic's plan; build all of its stories "
-                + "without gating them one by one; COMMIT the epic, then run review_code over the epic's whole "
-                + "diff, with the previous epic's commit as baseRef — it reviews committed changes only, and an "
-                + "uncommitted epic is refused as nothing to review; resolve every finding, fix what you "
-                + "accepted, update the documentation and the tests, and fold the fixes into the epic's ONE "
-                + "commit. Only then start the next epic.",
-        (GateScope.Task, true) =>
-            $"{GateOrderMarker} for the WHOLE task, never per epic or story: this plan round was its plan "
-                + "gate; build every epic and its stories on this branch without gating them, and commit each "
-                + "epic as ONE commit as you finish it; then ONE review_code over the whole task's diff; resolve "
-                + "every finding, fix what you accepted, update the documentation and the tests, and commit.",
-        _ =>
-            $"{GateOrderMarker} for this work, never per story: build it on this branch without gating each "
-                + "piece; COMMIT it, then run review_code over the whole diff — it reviews committed changes "
-                + "only, and uncommitted work is refused as nothing to review; resolve every finding, fix what "
-                + "you accepted, update the documentation and the tests, and fold the fixes into that ONE commit.",
+        (GateScope.Epic, true) => CommandTexts.CadenceEpic,
+        (GateScope.Task, true) => CommandTexts.CadenceTask,
+        _ => CommandTexts.CadenceSingle,
     };
 
     /// <summary>
@@ -207,16 +198,17 @@ public static class GateCommands
     /// what a caller starting a genuinely NEW task within that day receives, and an order to skip the
     /// code round would leave that task ungated. (#131's code review.)</para>
     /// </remarks>
-    private static string AlreadySplitCommand(GateScope scope) => scope == GateScope.Task
-        ? "This plan is a PIECE of a split that is already under way, so do NOT split it again — and it is "
-            + "not gated on its own: the task is gated once as a whole, so build it on the task's branch, "
-            + "commit it as ONE commit, and leave the review to the single code round at the end of the task. "
-            + "If this is in fact a NEW task rather than a piece of the one you split, gate it as usual: build "
-            + "it, review its diff through this gate, fix, document, test and commit."
-        : "This plan is a PIECE of a split that is already under way, so do NOT split it again: build "
-            + "it as one unit, review its diff through this gate, fix, document, test and commit. If "
-            + "it is genuinely too big for one unit, say so in your summary and say what you would "
-            + "have cut it into — but do not start a second round of splitting on your own.";
+    private static string AlreadySplitCommand(GateScope scope, CommandTexts texts) =>
+        AlreadySplitMarker + texts.Text(scope == GateScope.Task ? CommandTexts.AlreadySplitTask : CommandTexts.AlreadySplitEpic);
+
+    /// <summary>
+    /// The words every "already split" order opens with — the bench recognises the order by "already under
+    /// way", so they stay in code, before the text a person may reword (issue #467).
+    /// </summary>
+    public const string AlreadySplitMarker = "This plan is a PIECE of a split that is already under way";
+
+    /// <summary>The words the autonomy order opens with — what the bench looks for, kept out of the editable text.</summary>
+    public const string AutonomyMarker = "Work AUTONOMOUSLY.";
 
     /// <summary>
     /// The words every model order opens with, whichever models it names.
@@ -237,16 +229,14 @@ public static class GateCommands
     /// <para>A slot with no name reads as generic words rather than as a gap — never "with  at its
     /// highest", and never another vendor's model.</para>
     /// </remarks>
-    private static string ModelCommand(ModelPair models)
+    private static string ModelCommand(ModelPair models, CommandTexts texts)
     {
         var strongest = CommandModels.NamedOr(models.Strongest, "the strongest model your client offers");
         var implementation = CommandModels.NamedOr(models.Implementation, "your usual model");
 
-        return $"{ModelOrderMarker}{strongest} at its highest available version — deciding what the epics "
-            + "and stories are is the judgement that shapes everything after it. Then implement: "
-            + $"ordinary stories on {implementation}, and anything where being wrong is expensive — payments, "
-            + $"money, authentication, security, architecture, data migration — on {strongest} (max) again. "
-            + "Name the model you used for each story in your summary.";
+        return ModelOrderMarker + texts.Text(CommandTexts.Model)
+            .Replace("{strongest}", strongest, StringComparison.Ordinal)
+            .Replace("{implementation}", implementation, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -268,24 +258,9 @@ public static class GateCommands
             ? "re-read every epic and story you have written so far"
             : "re-read the whole plan";
 
-        return "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you "
-            + "are writing right now as you go. Autonomous means these orders, not a mood: "
-            + "(1) every bug and every problem spot gets a RED-GREEN-RED test — a failing test first, "
-            + "then the fix, then the test green, then a check that the test really fails without the "
-            + "fix; (2) the documentation is updated with every change — the README, the manifest if "
-            + "there is one, the module docs and every other file that describes what you changed; "
-            + "(3) before any release, run ALL the tests that exist, not only the ones near your change; "
-            + "(4) if the repository has a release or pull request process, do it — and on a pull "
-            + "request, wait about five minutes, then check whether automatic comments appeared, read "
-            + "them and fix what they name; (5) if a deploy triggers automatically, verify the result "
-            + "against the target environment — dev, stage or test — and read its logs for errors "
-            + "before calling it done; (6) re-read your own code against the repository's rules and "
-            + "follow them, not only the ones you remember. "
-            + "A question that does not block you is not asked now: write it down and put every one "
-            + "of them at the END of your final summary. A question that DOES block you is asked at "
-            + $"once — but before you ask it, {scope} and gather every other blocking question you can "
-            + "foresee, so the person is interrupted once with all of them rather than repeatedly "
-            + "with one. Where you can proceed under a stated assumption, do that instead of asking, "
-            + "and say what you assumed.";
+        // The six orders' words are `shared/commands/command-autonomy.md` since issue #467; the marker
+        // before them is not, so a reworded order is still recognised as the autonomy order.
+        return $"{AutonomyMarker} "
+            + context.Texts.Text(CommandTexts.Autonomy).Replace("{scope}", scope, StringComparison.Ordinal);
     }
 }

@@ -4401,7 +4401,8 @@ refused its operator's checkpoint gate to keep the last one, and on 2026-09-22/2
   "nothing reviewable since code round N", naming them. A round with no recorded commit proves
   nothing and never refuses.
 - The `Done` refusal (`RoundMachine.CodeDone`) names the door, as `DocumentDone` always did. Every gate
-  order ends with it (`GateCommands.AnotherCodeRound`), and the `review_code` tool text describes it.
+  order ends with it (`GateCommands.AnotherCodeRound`; since issue #467 the text
+  `shared/commands/command-another-code-round.md`), and the `review_code` tool text describes it.
 - **`status` returns `pending`**: while a round awaits `resolve`, its findings in the order `resolve`
   indexes them — the read-back idea of the unmerged `coai-ar1` branch without its locators. A lost
   reply used to be a dead end: the next round was refused until the findings were resolved, and
@@ -4460,3 +4461,51 @@ sibling's `push -u`, VS Code's `branch.X.vscode-merge-base` and GitLens' `branch
   watched any more, so what still reaches it is what the rule keeps because it is dangerous.
 
 Open tail: a per-worktree HEAD commit check would also catch a consultant's `commit --allow-empty`.
+
+## The gate's orders are data a person can reword, and a person can add their own (2026-09-24, issue #467, Epic A)
+
+**The texts.** Every sentence the orders are made of is a file in `shared/commands/` — fifteen of them
+(`command-preamble`, `command-autonomy`, `command-model`, `command-split-none|small|medium|large|huge`,
+`command-split-measured`, `command-cadence-epic|task|single`, `command-another-code-round`,
+`command-already-split-epic|task`), embedded in `CoaiMcp.Core` by one `EmbeddedResource` glob.
+`CommandTexts` (core, pure) holds THE list of ids and the layering: a person's override when it says
+something (only its END is trimmed — three texts continue the marker before them), else the shipped
+text. A missing resource throws naming it. The computed parts are placeholders filled by `GateCommands`:
+`{scope}`, `{strongest}`, `{implementation}`, `{numbers}`, `{verdict}`.
+
+**The markers stay in code**, before the editable text: `GateCommands.AutonomyMarker` (`Work AUTONOMOUSLY.`),
+`ModelOrderMarker`, `GateOrderMarker`, `AlreadySplitMarker` (`This plan is a PIECE of a split that is
+already under way`). They are what the bench and `shared/command-models.json` recognise an order by, so no
+override can make a switch that worked read as one that did not.
+
+**Byte-identical by recording.** `fixtures/gate-commands-before-467.json` was written by the code as it
+stood before the move, over 640 combinations (every switch, both scopes, five plan sizes, a named and an
+unnamed model pair) — 14 distinct orders — and `TheOrdersAreWhatTheyWereTests` holds every combination to
+it. A one-word change to a shipped file turns it red naming the combination.
+
+**Overrides** are `<dataDir>/prompts/<id>.md`, read per round through `RolePrompts.Written` (the same id
+guard, the same "blank is no override" rule), in `PanelService.CommandTextsNow`, and handed to the pure
+core as `CommandContext.Texts`. The preamble is `GateCommands.PreambleFor(context)`.
+
+**Custom commands: `COAI_COMMANDS`** = `[{id, title, enabled, stage}]`, parsed by `CommandsSetting` (the
+`CommandModelsSetting` shape): an unreadable value is no custom commands and one panel complaint; a row
+without an id, with an id that is not a slug, with a shipped command's name, listed twice, or with a stage
+other than `plan | code | any` is dropped with a complaint naming it. The parser adds the `command-`
+prefix, so a custom command's file sits beside the shipped ones and never shadows a role prompt. Enabled
+defaults to false, title to the id, stage to `any`. `CustomCommands.For` (core) gives an enabled command
+whose stage matches the round — a document round is neither, so only `any` — AFTER the built-in orders,
+with the text of its file; one with no text is left out, logged, and named in the MCP reply's new
+`commandsSkipped` (absent when empty): *"custom command '<title>' has no text — write it in <file>"*. The
+orders are recorded in the rounds database as every order is; the skipped sentence is not (open tail).
+
+**What the code round changed** (verdict `proceed`; our own reviewer's two findings and three of the gate's):
+
+- **`command-` is a namespace the role prompts may not enter.** Both kinds of text live in
+  `<dataDir>/prompts/`, so a role prompt named `command-autonomy` WAS the autonomy order's override —
+  editing the reviewer's prompt reworded the order. `RoleComposition.Claimed` drops such a prompt with a
+  sentence; the prefix is `CommandTexts.Prefix` in the core.
+- **The texts are read best effort.** `CommandTextsNow` runs after the reviewers have answered and been
+  paid for; a file another process held at that moment failed the finished round, so its findings were
+  never saved. A text that cannot be read (`IOException`, `UnauthorizedAccessException`) is the shipped
+  one this round, logged — a custom command's is named as having no text.
+- A stage is one of three NAMES: `Enum.TryParse` read `"1"` as `plan`.

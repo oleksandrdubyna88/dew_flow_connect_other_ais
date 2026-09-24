@@ -26,10 +26,8 @@ namespace CoaiMcp.Tests;
 /// </list>
 /// </remarks>
 [Collection("fakecli-env")]
-public sealed class SplitOrderTests : IAsyncLifetime
+public sealed class SplitOrderTests : FakeCliRoundTests
 {
-    private const string Clean = """{"findings": []}""";
-
     private const string ThreeMajors = """
         {"findings": [
           {"severity": "major", "category": "security", "file": "app.cs", "line": 10,
@@ -50,94 +48,8 @@ public sealed class SplitOrderTests : IAsyncLifetime
         + "\n\n- under `.github/` and `research/` and `prompts/`\n"
         + string.Join("\n", Enumerable.Range(0, 400).Select(i => $"prose line {i}"));
 
-    private readonly ProcessLauncher _launcher = new();
-    private readonly string _caller = "test-caller-" + Guid.NewGuid().ToString("N")[..8];
-    private string _repo = string.Empty;
-    private string _data = string.Empty;
-
-    private static string FakeCliExe => Path.Combine(
-        AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
-
-    public async ValueTask InitializeAsync()
-    {
-        _repo = Directory.CreateTempSubdirectory("coai-split-repo-").FullName;
-        _data = Directory.CreateTempSubdirectory("coai-split-data-").FullName;
-        await Git("init", "-b", "main");
-        await File.WriteAllTextAsync(Path.Combine(_repo, "app.cs"), "v1\n");
-        await Git("add", ".");
-        await Git("commit", "-m", "base");
-        await Git("checkout", "-b", "feature");
-        await Git("checkout", "-b", "epic-1");
-        Environment.SetEnvironmentVariable("FAKECLI_MODE", "vendor");
-        // The caller Claude Code would have exported for us. A fresh one per test class, so a
-        // developer's own session id can never make these pass or fail.
-        Environment.SetEnvironmentVariable("COAI_CALLER_SESSION", _caller);
-    }
-
-    public ValueTask DisposeAsync()
-    {
-        foreach (var name in (string[])["FAKECLI_MODE", "FAKECLI_STDOUT", "FAKECLI_OUTFILE_TEXT", "FAKECLI_EXIT", "COAI_CALLER_SESSION"])
-        {
-            Environment.SetEnvironmentVariable(name, null);
-        }
-
-        foreach (var dir in (string[])[_repo, _data])
-        {
-            try
-            {
-                Directory.Delete(dir, recursive: true);
-            }
-            catch (IOException) { }
-            catch (UnauthorizedAccessException) { }
-        }
-
-        return ValueTask.CompletedTask;
-    }
-
-    private void Script(string answer)
-    {
-        Environment.SetEnvironmentVariable("FAKECLI_STDOUT", answer);
-        Environment.SetEnvironmentVariable("FAKECLI_OUTFILE_TEXT", answer);
-        Environment.SetEnvironmentVariable("FAKECLI_EXIT", "0");
-    }
-
-    private async Task Git(params string[] args)
-    {
-        var result = await _launcher.RunAsync(new ProcessRequest(
-            "git", ["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", .. args], _repo));
-        result.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {result.StdErr}");
-    }
-
     private PanelService Service(bool splitPlan, Core.Commands.GateScope gatePer = Core.Commands.GateScope.Epic) =>
-        new(
-            new PanelSettings
-            {
-                Providers = [new("codex") { ExecutablePath = FakeCliExe }],
-                Rounds = PanelConfig.Uniform(3, 2),
-                DataDir = _data,
-                ReviewerTimeout = TimeSpan.FromSeconds(30),
-                RateLimitBackoff = TimeSpan.FromMilliseconds(5),
-                SplitPlan = splitPlan,
-                GatePer = gatePer,
-            },
-            VaultKeys.None("no vault in tests"),
-            default,
-            _launcher,
-            Logger.None, Noticing.None);
-
-    private static JsonElement Parse(string json) => JsonDocument.Parse(json).RootElement;
-
-    private static string[] CommandsOf(JsonElement answer) =>
-        answer.TryGetProperty("commands", out var commands) && commands.ValueKind == JsonValueKind.Array
-            ? [.. commands.EnumerateArray().Select(c => c.GetString() ?? string.Empty)]
-            : [];
-
-    private async Task<JsonElement> PlanRound(PanelService service, string branch, string plan)
-    {
-        await service.OpenAsync(_repo, branch);
-        Script(Clean);
-        return Parse(await service.ReviewPlanAsync(_repo, branch, plan));
-    }
+        ServiceFor(Defaults() with { SplitPlan = splitPlan, GatePer = gatePer });
 
     [Theory]
     [InlineData(Core.Commands.GateScope.Epic, "per EPIC")]

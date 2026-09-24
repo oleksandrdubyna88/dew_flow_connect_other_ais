@@ -23,6 +23,12 @@
          Two reviewers found that independently on the plan round. Embedded here, and
          CredentialWords refuses to start without it rather than redacting nothing. -->
     <EmbeddedResource Include="..\..\shared\credential-words.json" LogicalName="CoaiMcp.Core.credential-words.json" />
+
+    <!-- The gate's command texts (issue #467): the words the orders are made of, which a person can
+         override with <dataDir>/prompts/<id>.md. In shared/ because the extension's commands page
+         shows the same defaults; embedded for the same reason as the two above. CommandTexts holds
+         the one list of ids, and a test fails when a file and that list disagree. -->
+    <EmbeddedResource Include="..\..\shared\commands\*.md" LogicalName="CoaiMcp.Core.commands.%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

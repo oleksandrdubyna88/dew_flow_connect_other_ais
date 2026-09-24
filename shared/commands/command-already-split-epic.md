@@ -1,0 +1,1 @@
+, so do NOT split it again: build it as one unit, review its diff through this gate, fix, document, test and commit. If it is genuinely too big for one unit, say so in your summary and say what you would have cut it into — but do not start a second round of splitting on your own.

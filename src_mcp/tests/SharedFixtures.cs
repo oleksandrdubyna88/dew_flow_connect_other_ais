@@ -15,10 +15,16 @@ namespace CoaiMcp.Tests;
 internal static class SharedFixtures
 {
     /// <summary>The text of <c>shared/&lt;name&gt;</c>, or a refusal naming what was not found.</summary>
-    internal static string Text(string name)
+    internal static string Text(string name) => File.ReadAllText(PathOf(name));
+
+    /// <summary>
+    /// Where <c>shared/&lt;name&gt;</c> is — a file or a folder — or a refusal naming what was not found.
+    /// </summary>
+    /// <remarks>A folder too since issue #467: <c>shared/commands/</c> is listed, not read.</remarks>
+    internal static string PathOf(string name)
     {
         var here = new DirectoryInfo(AppContext.BaseDirectory);
-        while (here is not null && !File.Exists(Path.Combine(here.FullName, "shared", name)))
+        while (here is not null && !Path.Exists(Path.Combine(here.FullName, "shared", name)))
         {
             here = here.Parent;
         }
@@ -27,6 +33,6 @@ internal static class SharedFixtures
             ? throw new FileNotFoundException(
                 $"shared/{name} was not found above {AppContext.BaseDirectory}. It is what both "
                 + "halves of the product are held to, so a test that cannot read it asserts nothing.")
-            : File.ReadAllText(Path.Combine(here.FullName, "shared", name));
+            : Path.Combine(here.FullName, "shared", name);
     }
 }

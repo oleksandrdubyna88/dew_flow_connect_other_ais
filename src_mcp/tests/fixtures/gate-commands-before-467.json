@@ -1,0 +1,1581 @@
+{
+  "Preamble": "COMMANDS from the operator of this gate. They come from switches a person set in the panel and they outrank your own defaults for this task. Follow them, and say in your summary which ones you applied.",
+  "Texts": [
+    "This plan is a PIECE of a split that is already under way, so do NOT split it again: build it as one unit, review its diff through this gate, fix, document, test and commit. If it is genuinely too big for one unit, say so in your summary and say what you would have cut it into \u2014 but do not start a second round of splitting on your own.",
+    "This plan is a PIECE of a split that is already under way, so do NOT split it again \u2014 and it is not gated on its own: the task is gated once as a whole, so build it on the task\u0027s branch, commit it as ONE commit, and leave the review to the single code round at the end of the task. If this is in fact a NEW task rather than a piece of the one you split, gate it as usual: build it, review its diff through this gate, fix, document, test and commit.",
+    "This plan is small enough to build as it stands; split it only if you disagree, and say why. (Measured from the plan you sent: 4 lines, 0 build step(s), 1 file(s) named, 0 area(s) touched \u2014 size AsItIs. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) THE GATE runs once for this work, never per story: build it on this branch without gating each piece; COMMIT it, then run review_code over the whole diff \u2014 it reviews committed changes only, and uncommitted work is refused as nothing to review; resolve every finding, fix what you accepted, update the documentation and the tests, and fold the fixes into that ONE commit. A resolved code round closes the session: for a checkpoint, a final round after one, or a retry after a crash, commit the new work and call review_code with again: true.",
+    "Split this plan into 3-5 logically complete STORIES \u2014 no epics. Fewer is fine when the work is smaller; never more. (Measured from the plan you sent: 121 lines, 2 build step(s), 1 file(s) named, 1 area(s) touched \u2014 size Small. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) THE GATE runs once for this work, never per story: build it on this branch without gating each piece; COMMIT it, then run review_code over the whole diff \u2014 it reviews committed changes only, and uncommitted work is refused as nothing to review; resolve every finding, fix what you accepted, update the documentation and the tests, and fold the fixes into that ONE commit. A resolved code round closes the session: for a checkpoint, a final round after one, or a retry after a crash, commit the new work and call review_code with again: true.",
+    "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES. Fewer is fine when the work is smaller; never more. (Measured from the plan you sent: 351 lines, 6 build step(s), 1 file(s) named, 1 area(s) touched \u2014 size Medium. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) THE GATE runs once per EPIC, never per story: give each epic its own branch, starting from the previous epic\u0027s commit; call review_plan with that epic\u0027s plan; build all of its stories without gating them one by one; COMMIT the epic, then run review_code over the epic\u0027s whole diff, with the previous epic\u0027s commit as baseRef \u2014 it reviews committed changes only, and an uncommitted epic is refused as nothing to review; resolve every finding, fix what you accepted, update the documentation and the tests, and fold the fixes into the epic\u0027s ONE commit. Only then start the next epic. A resolved code round closes the session: for a checkpoint, a final round after one, or a retry after a crash, commit the new work and call review_code with again: true.",
+    "Split this plan into 3-4 EPICS, each of 3-4 logically complete STORIES. Fewer is fine when the work is smaller; never more. (Measured from the plan you sent: 601 lines, 9 build step(s), 1 file(s) named, 1 area(s) touched \u2014 size Large. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) THE GATE runs once per EPIC, never per story: give each epic its own branch, starting from the previous epic\u0027s commit; call review_plan with that epic\u0027s plan; build all of its stories without gating them one by one; COMMIT the epic, then run review_code over the epic\u0027s whole diff, with the previous epic\u0027s commit as baseRef \u2014 it reviews committed changes only, and an uncommitted epic is refused as nothing to review; resolve every finding, fix what you accepted, update the documentation and the tests, and fold the fixes into the epic\u0027s ONE commit. Only then start the next epic. A resolved code round closes the session: for a checkpoint, a final round after one, or a retry after a crash, commit the new work and call review_code with again: true.",
+    "Split this plan into 4-5 EPICS, each of 3-5 logically complete STORIES. Fewer is fine when the work is smaller; never more. (Measured from the plan you sent: 901 lines, 12 build step(s), 1 file(s) named, 1 area(s) touched \u2014 size Huge. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) THE GATE runs once per EPIC, never per story: give each epic its own branch, starting from the previous epic\u0027s commit; call review_plan with that epic\u0027s plan; build all of its stories without gating them one by one; COMMIT the epic, then run review_code over the epic\u0027s whole diff, with the previous epic\u0027s commit as baseRef \u2014 it reviews committed changes only, and an uncommitted epic is refused as nothing to review; resolve every finding, fix what you accepted, update the documentation and the tests, and fold the fixes into the epic\u0027s ONE commit. Only then start the next epic. A resolved code round closes the session: for a checkpoint, a final round after one, or a retry after a crash, commit the new work and call review_code with again: true.",
+    "Split this plan into 2-3 EPICS, each of 2-3 logically complete STORIES. Fewer is fine when the work is smaller; never more. (Measured from the plan you sent: 351 lines, 6 build step(s), 1 file(s) named, 1 area(s) touched \u2014 size Medium. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) THE GATE runs once for the WHOLE task, never per epic or story: this plan round was its plan gate; build every epic and its stories on this branch without gating them, and commit each epic as ONE commit as you finish it; then ONE review_code over the whole task\u0027s diff; resolve every finding, fix what you accepted, update the documentation and the tests, and commit. A resolved code round closes the session: for a checkpoint, a final round after one, or a retry after a crash, commit the new work and call review_code with again: true.",
+    "Split this plan into 3-4 EPICS, each of 3-4 logically complete STORIES. Fewer is fine when the work is smaller; never more. (Measured from the plan you sent: 601 lines, 9 build step(s), 1 file(s) named, 1 area(s) touched \u2014 size Large. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) THE GATE runs once for the WHOLE task, never per epic or story: this plan round was its plan gate; build every epic and its stories on this branch without gating them, and commit each epic as ONE commit as you finish it; then ONE review_code over the whole task\u0027s diff; resolve every finding, fix what you accepted, update the documentation and the tests, and commit. A resolved code round closes the session: for a checkpoint, a final round after one, or a retry after a crash, commit the new work and call review_code with again: true.",
+    "Split this plan into 4-5 EPICS, each of 3-5 logically complete STORIES. Fewer is fine when the work is smaller; never more. (Measured from the plan you sent: 901 lines, 12 build step(s), 1 file(s) named, 1 area(s) touched \u2014 size Huge. That is a heuristic \u2014 if it is wrong for this plan, say so in your summary and do what is right.) THE GATE runs once for the WHOLE task, never per epic or story: this plan round was its plan gate; build every epic and its stories on this branch without gating them, and commit each epic as ONE commit as you finish it; then ONE review_code over the whole task\u0027s diff; resolve every finding, fix what you accepted, update the documentation and the tests, and commit. A resolved code round closes the session: for a checkpoint, a final round after one, or a retry after a crash, commit the new work and call review_code with again: true.",
+    "Do the SPLIT itself with Fable at its highest available version \u2014 deciding what the epics and stories are is the judgement that shapes everything after it. Then implement: ordinary stories on Opus, and anything where being wrong is expensive \u2014 payments, money, authentication, security, architecture, data migration \u2014 on Fable (max) again. Name the model you used for each story in your summary.",
+    "Do the SPLIT itself with the strongest model your client offers at its highest available version \u2014 deciding what the epics and stories are is the judgement that shapes everything after it. Then implement: ordinary stories on your usual model, and anything where being wrong is expensive \u2014 payments, money, authentication, security, architecture, data migration \u2014 on the strongest model your client offers (max) again. Name the model you used for each story in your summary.",
+    "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test \u2014 a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change \u2014 the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it \u2014 and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment \u2014 dev, stage or test \u2014 and read its logs for errors before calling it done; (6) re-read your own code against the repository\u0027s rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once \u2014 but before you ask it, re-read the whole plan and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed.",
+    "Work AUTONOMOUSLY. Say that you are working autonomously, and keep saying what you are writing right now as you go. Autonomous means these orders, not a mood: (1) every bug and every problem spot gets a RED-GREEN-RED test \u2014 a failing test first, then the fix, then the test green, then a check that the test really fails without the fix; (2) the documentation is updated with every change \u2014 the README, the manifest if there is one, the module docs and every other file that describes what you changed; (3) before any release, run ALL the tests that exist, not only the ones near your change; (4) if the repository has a release or pull request process, do it \u2014 and on a pull request, wait about five minutes, then check whether automatic comments appeared, read them and fix what they name; (5) if a deploy triggers automatically, verify the result against the target environment \u2014 dev, stage or test \u2014 and read its logs for errors before calling it done; (6) re-read your own code against the repository\u0027s rules and follow them, not only the ones you remember. A question that does not block you is not asked now: write it down and put every one of them at the END of your final summary. A question that DOES block you is asked at once \u2014 but before you ask it, re-read every epic and story you have written so far and gather every other blocking question you can foresee, so the person is interrupted once with all of them rather than repeatedly with one. Where you can proceed under a stated assumption, do that instead of asking, and say what you assumed."
+  ],
+  "Contexts": {
+    "a0 s0 f0 p0 r0 Epic AsItIs claude": [],
+    "a0 s0 f0 p0 r0 Epic AsItIs unnamed": [],
+    "a0 s0 f0 p0 r0 Epic Huge claude": [],
+    "a0 s0 f0 p0 r0 Epic Huge unnamed": [],
+    "a0 s0 f0 p0 r0 Epic Large claude": [],
+    "a0 s0 f0 p0 r0 Epic Large unnamed": [],
+    "a0 s0 f0 p0 r0 Epic Medium claude": [],
+    "a0 s0 f0 p0 r0 Epic Medium unnamed": [],
+    "a0 s0 f0 p0 r0 Epic Small claude": [],
+    "a0 s0 f0 p0 r0 Epic Small unnamed": [],
+    "a0 s0 f0 p0 r0 Task AsItIs claude": [],
+    "a0 s0 f0 p0 r0 Task AsItIs unnamed": [],
+    "a0 s0 f0 p0 r0 Task Huge claude": [],
+    "a0 s0 f0 p0 r0 Task Huge unnamed": [],
+    "a0 s0 f0 p0 r0 Task Large claude": [],
+    "a0 s0 f0 p0 r0 Task Large unnamed": [],
+    "a0 s0 f0 p0 r0 Task Medium claude": [],
+    "a0 s0 f0 p0 r0 Task Medium unnamed": [],
+    "a0 s0 f0 p0 r0 Task Small claude": [],
+    "a0 s0 f0 p0 r0 Task Small unnamed": [],
+    "a0 s0 f0 p0 r1 Epic AsItIs claude": [],
+    "a0 s0 f0 p0 r1 Epic AsItIs unnamed": [],
+    "a0 s0 f0 p0 r1 Epic Huge claude": [],
+    "a0 s0 f0 p0 r1 Epic Huge unnamed": [],
+    "a0 s0 f0 p0 r1 Epic Large claude": [],
+    "a0 s0 f0 p0 r1 Epic Large unnamed": [],
+    "a0 s0 f0 p0 r1 Epic Medium claude": [],
+    "a0 s0 f0 p0 r1 Epic Medium unnamed": [],
+    "a0 s0 f0 p0 r1 Epic Small claude": [],
+    "a0 s0 f0 p0 r1 Epic Small unnamed": [],
+    "a0 s0 f0 p0 r1 Task AsItIs claude": [],
+    "a0 s0 f0 p0 r1 Task AsItIs unnamed": [],
+    "a0 s0 f0 p0 r1 Task Huge claude": [],
+    "a0 s0 f0 p0 r1 Task Huge unnamed": [],
+    "a0 s0 f0 p0 r1 Task Large claude": [],
+    "a0 s0 f0 p0 r1 Task Large unnamed": [],
+    "a0 s0 f0 p0 r1 Task Medium claude": [],
+    "a0 s0 f0 p0 r1 Task Medium unnamed": [],
+    "a0 s0 f0 p0 r1 Task Small claude": [],
+    "a0 s0 f0 p0 r1 Task Small unnamed": [],
+    "a0 s0 f0 p1 r0 Epic AsItIs claude": [],
+    "a0 s0 f0 p1 r0 Epic AsItIs unnamed": [],
+    "a0 s0 f0 p1 r0 Epic Huge claude": [],
+    "a0 s0 f0 p1 r0 Epic Huge unnamed": [],
+    "a0 s0 f0 p1 r0 Epic Large claude": [],
+    "a0 s0 f0 p1 r0 Epic Large unnamed": [],
+    "a0 s0 f0 p1 r0 Epic Medium claude": [],
+    "a0 s0 f0 p1 r0 Epic Medium unnamed": [],
+    "a0 s0 f0 p1 r0 Epic Small claude": [],
+    "a0 s0 f0 p1 r0 Epic Small unnamed": [],
+    "a0 s0 f0 p1 r0 Task AsItIs claude": [],
+    "a0 s0 f0 p1 r0 Task AsItIs unnamed": [],
+    "a0 s0 f0 p1 r0 Task Huge claude": [],
+    "a0 s0 f0 p1 r0 Task Huge unnamed": [],
+    "a0 s0 f0 p1 r0 Task Large claude": [],
+    "a0 s0 f0 p1 r0 Task Large unnamed": [],
+    "a0 s0 f0 p1 r0 Task Medium claude": [],
+    "a0 s0 f0 p1 r0 Task Medium unnamed": [],
+    "a0 s0 f0 p1 r0 Task Small claude": [],
+    "a0 s0 f0 p1 r0 Task Small unnamed": [],
+    "a0 s0 f0 p1 r1 Epic AsItIs claude": [],
+    "a0 s0 f0 p1 r1 Epic AsItIs unnamed": [],
+    "a0 s0 f0 p1 r1 Epic Huge claude": [],
+    "a0 s0 f0 p1 r1 Epic Huge unnamed": [],
+    "a0 s0 f0 p1 r1 Epic Large claude": [],
+    "a0 s0 f0 p1 r1 Epic Large unnamed": [],
+    "a0 s0 f0 p1 r1 Epic Medium claude": [],
+    "a0 s0 f0 p1 r1 Epic Medium unnamed": [],
+    "a0 s0 f0 p1 r1 Epic Small claude": [],
+    "a0 s0 f0 p1 r1 Epic Small unnamed": [],
+    "a0 s0 f0 p1 r1 Task AsItIs claude": [],
+    "a0 s0 f0 p1 r1 Task AsItIs unnamed": [],
+    "a0 s0 f0 p1 r1 Task Huge claude": [],
+    "a0 s0 f0 p1 r1 Task Huge unnamed": [],
+    "a0 s0 f0 p1 r1 Task Large claude": [],
+    "a0 s0 f0 p1 r1 Task Large unnamed": [],
+    "a0 s0 f0 p1 r1 Task Medium claude": [],
+    "a0 s0 f0 p1 r1 Task Medium unnamed": [],
+    "a0 s0 f0 p1 r1 Task Small claude": [],
+    "a0 s0 f0 p1 r1 Task Small unnamed": [],
+    "a0 s0 f1 p0 r0 Epic AsItIs claude": [],
+    "a0 s0 f1 p0 r0 Epic AsItIs unnamed": [],
+    "a0 s0 f1 p0 r0 Epic Huge claude": [],
+    "a0 s0 f1 p0 r0 Epic Huge unnamed": [],
+    "a0 s0 f1 p0 r0 Epic Large claude": [],
+    "a0 s0 f1 p0 r0 Epic Large unnamed": [],
+    "a0 s0 f1 p0 r0 Epic Medium claude": [],
+    "a0 s0 f1 p0 r0 Epic Medium unnamed": [],
+    "a0 s0 f1 p0 r0 Epic Small claude": [],
+    "a0 s0 f1 p0 r0 Epic Small unnamed": [],
+    "a0 s0 f1 p0 r0 Task AsItIs claude": [],
+    "a0 s0 f1 p0 r0 Task AsItIs unnamed": [],
+    "a0 s0 f1 p0 r0 Task Huge claude": [],
+    "a0 s0 f1 p0 r0 Task Huge unnamed": [],
+    "a0 s0 f1 p0 r0 Task Large claude": [],
+    "a0 s0 f1 p0 r0 Task Large unnamed": [],
+    "a0 s0 f1 p0 r0 Task Medium claude": [],
+    "a0 s0 f1 p0 r0 Task Medium unnamed": [],
+    "a0 s0 f1 p0 r0 Task Small claude": [],
+    "a0 s0 f1 p0 r0 Task Small unnamed": [],
+    "a0 s0 f1 p0 r1 Epic AsItIs claude": [],
+    "a0 s0 f1 p0 r1 Epic AsItIs unnamed": [],
+    "a0 s0 f1 p0 r1 Epic Huge claude": [],
+    "a0 s0 f1 p0 r1 Epic Huge unnamed": [],
+    "a0 s0 f1 p0 r1 Epic Large claude": [],
+    "a0 s0 f1 p0 r1 Epic Large unnamed": [],
+    "a0 s0 f1 p0 r1 Epic Medium claude": [],
+    "a0 s0 f1 p0 r1 Epic Medium unnamed": [],
+    "a0 s0 f1 p0 r1 Epic Small claude": [],
+    "a0 s0 f1 p0 r1 Epic Small unnamed": [],
+    "a0 s0 f1 p0 r1 Task AsItIs claude": [],
+    "a0 s0 f1 p0 r1 Task AsItIs unnamed": [],
+    "a0 s0 f1 p0 r1 Task Huge claude": [],
+    "a0 s0 f1 p0 r1 Task Huge unnamed": [],
+    "a0 s0 f1 p0 r1 Task Large claude": [],
+    "a0 s0 f1 p0 r1 Task Large unnamed": [],
+    "a0 s0 f1 p0 r1 Task Medium claude": [],
+    "a0 s0 f1 p0 r1 Task Medium unnamed": [],
+    "a0 s0 f1 p0 r1 Task Small claude": [],
+    "a0 s0 f1 p0 r1 Task Small unnamed": [],
+    "a0 s0 f1 p1 r0 Epic AsItIs claude": [],
+    "a0 s0 f1 p1 r0 Epic AsItIs unnamed": [],
+    "a0 s0 f1 p1 r0 Epic Huge claude": [],
+    "a0 s0 f1 p1 r0 Epic Huge unnamed": [],
+    "a0 s0 f1 p1 r0 Epic Large claude": [],
+    "a0 s0 f1 p1 r0 Epic Large unnamed": [],
+    "a0 s0 f1 p1 r0 Epic Medium claude": [],
+    "a0 s0 f1 p1 r0 Epic Medium unnamed": [],
+    "a0 s0 f1 p1 r0 Epic Small claude": [],
+    "a0 s0 f1 p1 r0 Epic Small unnamed": [],
+    "a0 s0 f1 p1 r0 Task AsItIs claude": [],
+    "a0 s0 f1 p1 r0 Task AsItIs unnamed": [],
+    "a0 s0 f1 p1 r0 Task Huge claude": [],
+    "a0 s0 f1 p1 r0 Task Huge unnamed": [],
+    "a0 s0 f1 p1 r0 Task Large claude": [],
+    "a0 s0 f1 p1 r0 Task Large unnamed": [],
+    "a0 s0 f1 p1 r0 Task Medium claude": [],
+    "a0 s0 f1 p1 r0 Task Medium unnamed": [],
+    "a0 s0 f1 p1 r0 Task Small claude": [],
+    "a0 s0 f1 p1 r0 Task Small unnamed": [],
+    "a0 s0 f1 p1 r1 Epic AsItIs claude": [],
+    "a0 s0 f1 p1 r1 Epic AsItIs unnamed": [],
+    "a0 s0 f1 p1 r1 Epic Huge claude": [],
+    "a0 s0 f1 p1 r1 Epic Huge unnamed": [],
+    "a0 s0 f1 p1 r1 Epic Large claude": [],
+    "a0 s0 f1 p1 r1 Epic Large unnamed": [],
+    "a0 s0 f1 p1 r1 Epic Medium claude": [],
+    "a0 s0 f1 p1 r1 Epic Medium unnamed": [],
+    "a0 s0 f1 p1 r1 Epic Small claude": [],
+    "a0 s0 f1 p1 r1 Epic Small unnamed": [],
+    "a0 s0 f1 p1 r1 Task AsItIs claude": [],
+    "a0 s0 f1 p1 r1 Task AsItIs unnamed": [],
+    "a0 s0 f1 p1 r1 Task Huge claude": [],
+    "a0 s0 f1 p1 r1 Task Huge unnamed": [],
+    "a0 s0 f1 p1 r1 Task Large claude": [],
+    "a0 s0 f1 p1 r1 Task Large unnamed": [],
+    "a0 s0 f1 p1 r1 Task Medium claude": [],
+    "a0 s0 f1 p1 r1 Task Medium unnamed": [],
+    "a0 s0 f1 p1 r1 Task Small claude": [],
+    "a0 s0 f1 p1 r1 Task Small unnamed": [],
+    "a0 s1 f0 p0 r0 Epic AsItIs claude": [],
+    "a0 s1 f0 p0 r0 Epic AsItIs unnamed": [],
+    "a0 s1 f0 p0 r0 Epic Huge claude": [],
+    "a0 s1 f0 p0 r0 Epic Huge unnamed": [],
+    "a0 s1 f0 p0 r0 Epic Large claude": [],
+    "a0 s1 f0 p0 r0 Epic Large unnamed": [],
+    "a0 s1 f0 p0 r0 Epic Medium claude": [],
+    "a0 s1 f0 p0 r0 Epic Medium unnamed": [],
+    "a0 s1 f0 p0 r0 Epic Small claude": [],
+    "a0 s1 f0 p0 r0 Epic Small unnamed": [],
+    "a0 s1 f0 p0 r0 Task AsItIs claude": [],
+    "a0 s1 f0 p0 r0 Task AsItIs unnamed": [],
+    "a0 s1 f0 p0 r0 Task Huge claude": [],
+    "a0 s1 f0 p0 r0 Task Huge unnamed": [],
+    "a0 s1 f0 p0 r0 Task Large claude": [],
+    "a0 s1 f0 p0 r0 Task Large unnamed": [],
+    "a0 s1 f0 p0 r0 Task Medium claude": [],
+    "a0 s1 f0 p0 r0 Task Medium unnamed": [],
+    "a0 s1 f0 p0 r0 Task Small claude": [],
+    "a0 s1 f0 p0 r0 Task Small unnamed": [],
+    "a0 s1 f0 p0 r1 Epic AsItIs claude": [],
+    "a0 s1 f0 p0 r1 Epic AsItIs unnamed": [],
+    "a0 s1 f0 p0 r1 Epic Huge claude": [],
+    "a0 s1 f0 p0 r1 Epic Huge unnamed": [],
+    "a0 s1 f0 p0 r1 Epic Large claude": [],
+    "a0 s1 f0 p0 r1 Epic Large unnamed": [],
+    "a0 s1 f0 p0 r1 Epic Medium claude": [],
+    "a0 s1 f0 p0 r1 Epic Medium unnamed": [],
+    "a0 s1 f0 p0 r1 Epic Small claude": [],
+    "a0 s1 f0 p0 r1 Epic Small unnamed": [],
+    "a0 s1 f0 p0 r1 Task AsItIs claude": [],
+    "a0 s1 f0 p0 r1 Task AsItIs unnamed": [],
+    "a0 s1 f0 p0 r1 Task Huge claude": [],
+    "a0 s1 f0 p0 r1 Task Huge unnamed": [],
+    "a0 s1 f0 p0 r1 Task Large claude": [],
+    "a0 s1 f0 p0 r1 Task Large unnamed": [],
+    "a0 s1 f0 p0 r1 Task Medium claude": [],
+    "a0 s1 f0 p0 r1 Task Medium unnamed": [],
+    "a0 s1 f0 p0 r1 Task Small claude": [],
+    "a0 s1 f0 p0 r1 Task Small unnamed": [],
+    "a0 s1 f0 p1 r0 Epic AsItIs claude": [
+      0
+    ],
+    "a0 s1 f0 p1 r0 Epic AsItIs unnamed": [
+      0
+    ],
+    "a0 s1 f0 p1 r0 Epic Huge claude": [
+      0
+    ],
+    "a0 s1 f0 p1 r0 Epic Huge unnamed": [
+      0
+    ],
+    "a0 s1 f0 p1 r0 Epic Large claude": [
+      0
+    ],
+    "a0 s1 f0 p1 r0 Epic Large unnamed": [
+      0
+    ],
+    "a0 s1 f0 p1 r0 Epic Medium claude": [
+      0
+    ],
+    "a0 s1 f0 p1 r0 Epic Medium unnamed": [
+      0
+    ],
+    "a0 s1 f0 p1 r0 Epic Small claude": [
+      0
+    ],
+    "a0 s1 f0 p1 r0 Epic Small unnamed": [
+      0
+    ],
+    "a0 s1 f0 p1 r0 Task AsItIs claude": [
+      1
+    ],
+    "a0 s1 f0 p1 r0 Task AsItIs unnamed": [
+      1
+    ],
+    "a0 s1 f0 p1 r0 Task Huge claude": [
+      1
+    ],
+    "a0 s1 f0 p1 r0 Task Huge unnamed": [
+      1
+    ],
+    "a0 s1 f0 p1 r0 Task Large claude": [
+      1
+    ],
+    "a0 s1 f0 p1 r0 Task Large unnamed": [
+      1
+    ],
+    "a0 s1 f0 p1 r0 Task Medium claude": [
+      1
+    ],
+    "a0 s1 f0 p1 r0 Task Medium unnamed": [
+      1
+    ],
+    "a0 s1 f0 p1 r0 Task Small claude": [
+      1
+    ],
+    "a0 s1 f0 p1 r0 Task Small unnamed": [
+      1
+    ],
+    "a0 s1 f0 p1 r1 Epic AsItIs claude": [
+      2
+    ],
+    "a0 s1 f0 p1 r1 Epic AsItIs unnamed": [
+      2
+    ],
+    "a0 s1 f0 p1 r1 Epic Huge claude": [
+      6
+    ],
+    "a0 s1 f0 p1 r1 Epic Huge unnamed": [
+      6
+    ],
+    "a0 s1 f0 p1 r1 Epic Large claude": [
+      5
+    ],
+    "a0 s1 f0 p1 r1 Epic Large unnamed": [
+      5
+    ],
+    "a0 s1 f0 p1 r1 Epic Medium claude": [
+      4
+    ],
+    "a0 s1 f0 p1 r1 Epic Medium unnamed": [
+      4
+    ],
+    "a0 s1 f0 p1 r1 Epic Small claude": [
+      3
+    ],
+    "a0 s1 f0 p1 r1 Epic Small unnamed": [
+      3
+    ],
+    "a0 s1 f0 p1 r1 Task AsItIs claude": [
+      2
+    ],
+    "a0 s1 f0 p1 r1 Task AsItIs unnamed": [
+      2
+    ],
+    "a0 s1 f0 p1 r1 Task Huge claude": [
+      9
+    ],
+    "a0 s1 f0 p1 r1 Task Huge unnamed": [
+      9
+    ],
+    "a0 s1 f0 p1 r1 Task Large claude": [
+      8
+    ],
+    "a0 s1 f0 p1 r1 Task Large unnamed": [
+      8
+    ],
+    "a0 s1 f0 p1 r1 Task Medium claude": [
+      7
+    ],
+    "a0 s1 f0 p1 r1 Task Medium unnamed": [
+      7
+    ],
+    "a0 s1 f0 p1 r1 Task Small claude": [
+      3
+    ],
+    "a0 s1 f0 p1 r1 Task Small unnamed": [
+      3
+    ],
+    "a0 s1 f1 p0 r0 Epic AsItIs claude": [],
+    "a0 s1 f1 p0 r0 Epic AsItIs unnamed": [],
+    "a0 s1 f1 p0 r0 Epic Huge claude": [],
+    "a0 s1 f1 p0 r0 Epic Huge unnamed": [],
+    "a0 s1 f1 p0 r0 Epic Large claude": [],
+    "a0 s1 f1 p0 r0 Epic Large unnamed": [],
+    "a0 s1 f1 p0 r0 Epic Medium claude": [],
+    "a0 s1 f1 p0 r0 Epic Medium unnamed": [],
+    "a0 s1 f1 p0 r0 Epic Small claude": [],
+    "a0 s1 f1 p0 r0 Epic Small unnamed": [],
+    "a0 s1 f1 p0 r0 Task AsItIs claude": [],
+    "a0 s1 f1 p0 r0 Task AsItIs unnamed": [],
+    "a0 s1 f1 p0 r0 Task Huge claude": [],
+    "a0 s1 f1 p0 r0 Task Huge unnamed": [],
+    "a0 s1 f1 p0 r0 Task Large claude": [],
+    "a0 s1 f1 p0 r0 Task Large unnamed": [],
+    "a0 s1 f1 p0 r0 Task Medium claude": [],
+    "a0 s1 f1 p0 r0 Task Medium unnamed": [],
+    "a0 s1 f1 p0 r0 Task Small claude": [],
+    "a0 s1 f1 p0 r0 Task Small unnamed": [],
+    "a0 s1 f1 p0 r1 Epic AsItIs claude": [],
+    "a0 s1 f1 p0 r1 Epic AsItIs unnamed": [],
+    "a0 s1 f1 p0 r1 Epic Huge claude": [],
+    "a0 s1 f1 p0 r1 Epic Huge unnamed": [],
+    "a0 s1 f1 p0 r1 Epic Large claude": [],
+    "a0 s1 f1 p0 r1 Epic Large unnamed": [],
+    "a0 s1 f1 p0 r1 Epic Medium claude": [],
+    "a0 s1 f1 p0 r1 Epic Medium unnamed": [],
+    "a0 s1 f1 p0 r1 Epic Small claude": [],
+    "a0 s1 f1 p0 r1 Epic Small unnamed": [],
+    "a0 s1 f1 p0 r1 Task AsItIs claude": [],
+    "a0 s1 f1 p0 r1 Task AsItIs unnamed": [],
+    "a0 s1 f1 p0 r1 Task Huge claude": [],
+    "a0 s1 f1 p0 r1 Task Huge unnamed": [],
+    "a0 s1 f1 p0 r1 Task Large claude": [],
+    "a0 s1 f1 p0 r1 Task Large unnamed": [],
+    "a0 s1 f1 p0 r1 Task Medium claude": [],
+    "a0 s1 f1 p0 r1 Task Medium unnamed": [],
+    "a0 s1 f1 p0 r1 Task Small claude": [],
+    "a0 s1 f1 p0 r1 Task Small unnamed": [],
+    "a0 s1 f1 p1 r0 Epic AsItIs claude": [
+      0
+    ],
+    "a0 s1 f1 p1 r0 Epic AsItIs unnamed": [
+      0
+    ],
+    "a0 s1 f1 p1 r0 Epic Huge claude": [
+      0
+    ],
+    "a0 s1 f1 p1 r0 Epic Huge unnamed": [
+      0
+    ],
+    "a0 s1 f1 p1 r0 Epic Large claude": [
+      0
+    ],
+    "a0 s1 f1 p1 r0 Epic Large unnamed": [
+      0
+    ],
+    "a0 s1 f1 p1 r0 Epic Medium claude": [
+      0
+    ],
+    "a0 s1 f1 p1 r0 Epic Medium unnamed": [
+      0
+    ],
+    "a0 s1 f1 p1 r0 Epic Small claude": [
+      0
+    ],
+    "a0 s1 f1 p1 r0 Epic Small unnamed": [
+      0
+    ],
+    "a0 s1 f1 p1 r0 Task AsItIs claude": [
+      1
+    ],
+    "a0 s1 f1 p1 r0 Task AsItIs unnamed": [
+      1
+    ],
+    "a0 s1 f1 p1 r0 Task Huge claude": [
+      1
+    ],
+    "a0 s1 f1 p1 r0 Task Huge unnamed": [
+      1
+    ],
+    "a0 s1 f1 p1 r0 Task Large claude": [
+      1
+    ],
+    "a0 s1 f1 p1 r0 Task Large unnamed": [
+      1
+    ],
+    "a0 s1 f1 p1 r0 Task Medium claude": [
+      1
+    ],
+    "a0 s1 f1 p1 r0 Task Medium unnamed": [
+      1
+    ],
+    "a0 s1 f1 p1 r0 Task Small claude": [
+      1
+    ],
+    "a0 s1 f1 p1 r0 Task Small unnamed": [
+      1
+    ],
+    "a0 s1 f1 p1 r1 Epic AsItIs claude": [
+      2,
+      10
+    ],
+    "a0 s1 f1 p1 r1 Epic AsItIs unnamed": [
+      2,
+      11
+    ],
+    "a0 s1 f1 p1 r1 Epic Huge claude": [
+      6,
+      10
+    ],
+    "a0 s1 f1 p1 r1 Epic Huge unnamed": [
+      6,
+      11
+    ],
+    "a0 s1 f1 p1 r1 Epic Large claude": [
+      5,
+      10
+    ],
+    "a0 s1 f1 p1 r1 Epic Large unnamed": [
+      5,
+      11
+    ],
+    "a0 s1 f1 p1 r1 Epic Medium claude": [
+      4,
+      10
+    ],
+    "a0 s1 f1 p1 r1 Epic Medium unnamed": [
+      4,
+      11
+    ],
+    "a0 s1 f1 p1 r1 Epic Small claude": [
+      3,
+      10
+    ],
+    "a0 s1 f1 p1 r1 Epic Small unnamed": [
+      3,
+      11
+    ],
+    "a0 s1 f1 p1 r1 Task AsItIs claude": [
+      2,
+      10
+    ],
+    "a0 s1 f1 p1 r1 Task AsItIs unnamed": [
+      2,
+      11
+    ],
+    "a0 s1 f1 p1 r1 Task Huge claude": [
+      9,
+      10
+    ],
+    "a0 s1 f1 p1 r1 Task Huge unnamed": [
+      9,
+      11
+    ],
+    "a0 s1 f1 p1 r1 Task Large claude": [
+      8,
+      10
+    ],
+    "a0 s1 f1 p1 r1 Task Large unnamed": [
+      8,
+      11
+    ],
+    "a0 s1 f1 p1 r1 Task Medium claude": [
+      7,
+      10
+    ],
+    "a0 s1 f1 p1 r1 Task Medium unnamed": [
+      7,
+      11
+    ],
+    "a0 s1 f1 p1 r1 Task Small claude": [
+      3,
+      10
+    ],
+    "a0 s1 f1 p1 r1 Task Small unnamed": [
+      3,
+      11
+    ],
+    "a1 s0 f0 p0 r0 Epic AsItIs claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Epic AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Epic Huge claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Epic Huge unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Epic Large claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Epic Large unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Epic Medium claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Epic Medium unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Epic Small claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Epic Small unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Task AsItIs claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Task AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Task Huge claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Task Huge unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Task Large claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Task Large unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Task Medium claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Task Medium unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Task Small claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r0 Task Small unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Epic AsItIs claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Epic AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Epic Huge claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Epic Huge unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Epic Large claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Epic Large unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Epic Medium claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Epic Medium unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Epic Small claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Epic Small unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Task AsItIs claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Task AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Task Huge claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Task Huge unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Task Large claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Task Large unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Task Medium claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Task Medium unnamed": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Task Small claude": [
+      12
+    ],
+    "a1 s0 f0 p0 r1 Task Small unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Epic AsItIs claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Epic AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Epic Huge claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Epic Huge unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Epic Large claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Epic Large unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Epic Medium claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Epic Medium unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Epic Small claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Epic Small unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Task AsItIs claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Task AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Task Huge claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Task Huge unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Task Large claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Task Large unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Task Medium claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Task Medium unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Task Small claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r0 Task Small unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Epic AsItIs claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Epic AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Epic Huge claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Epic Huge unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Epic Large claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Epic Large unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Epic Medium claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Epic Medium unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Epic Small claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Epic Small unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Task AsItIs claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Task AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Task Huge claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Task Huge unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Task Large claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Task Large unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Task Medium claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Task Medium unnamed": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Task Small claude": [
+      12
+    ],
+    "a1 s0 f0 p1 r1 Task Small unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Epic AsItIs claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Epic AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Epic Huge claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Epic Huge unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Epic Large claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Epic Large unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Epic Medium claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Epic Medium unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Epic Small claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Epic Small unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Task AsItIs claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Task AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Task Huge claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Task Huge unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Task Large claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Task Large unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Task Medium claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Task Medium unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Task Small claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r0 Task Small unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Epic AsItIs claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Epic AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Epic Huge claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Epic Huge unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Epic Large claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Epic Large unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Epic Medium claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Epic Medium unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Epic Small claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Epic Small unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Task AsItIs claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Task AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Task Huge claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Task Huge unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Task Large claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Task Large unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Task Medium claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Task Medium unnamed": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Task Small claude": [
+      12
+    ],
+    "a1 s0 f1 p0 r1 Task Small unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Epic AsItIs claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Epic AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Epic Huge claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Epic Huge unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Epic Large claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Epic Large unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Epic Medium claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Epic Medium unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Epic Small claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Epic Small unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Task AsItIs claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Task AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Task Huge claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Task Huge unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Task Large claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Task Large unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Task Medium claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Task Medium unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Task Small claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r0 Task Small unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Epic AsItIs claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Epic AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Epic Huge claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Epic Huge unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Epic Large claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Epic Large unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Epic Medium claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Epic Medium unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Epic Small claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Epic Small unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Task AsItIs claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Task AsItIs unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Task Huge claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Task Huge unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Task Large claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Task Large unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Task Medium claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Task Medium unnamed": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Task Small claude": [
+      12
+    ],
+    "a1 s0 f1 p1 r1 Task Small unnamed": [
+      12
+    ],
+    "a1 s1 f0 p0 r0 Epic AsItIs claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Epic AsItIs unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Epic Huge claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Epic Huge unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Epic Large claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Epic Large unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Epic Medium claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Epic Medium unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Epic Small claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Epic Small unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Task AsItIs claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Task AsItIs unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Task Huge claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Task Huge unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Task Large claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Task Large unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Task Medium claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Task Medium unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Task Small claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r0 Task Small unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Epic AsItIs claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Epic AsItIs unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Epic Huge claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Epic Huge unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Epic Large claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Epic Large unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Epic Medium claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Epic Medium unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Epic Small claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Epic Small unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Task AsItIs claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Task AsItIs unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Task Huge claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Task Huge unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Task Large claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Task Large unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Task Medium claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Task Medium unnamed": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Task Small claude": [
+      13
+    ],
+    "a1 s1 f0 p0 r1 Task Small unnamed": [
+      13
+    ],
+    "a1 s1 f0 p1 r0 Epic AsItIs claude": [
+      0,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Epic AsItIs unnamed": [
+      0,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Epic Huge claude": [
+      0,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Epic Huge unnamed": [
+      0,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Epic Large claude": [
+      0,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Epic Large unnamed": [
+      0,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Epic Medium claude": [
+      0,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Epic Medium unnamed": [
+      0,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Epic Small claude": [
+      0,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Epic Small unnamed": [
+      0,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Task AsItIs claude": [
+      1,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Task AsItIs unnamed": [
+      1,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Task Huge claude": [
+      1,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Task Huge unnamed": [
+      1,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Task Large claude": [
+      1,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Task Large unnamed": [
+      1,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Task Medium claude": [
+      1,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Task Medium unnamed": [
+      1,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Task Small claude": [
+      1,
+      13
+    ],
+    "a1 s1 f0 p1 r0 Task Small unnamed": [
+      1,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Epic AsItIs claude": [
+      2,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Epic AsItIs unnamed": [
+      2,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Epic Huge claude": [
+      6,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Epic Huge unnamed": [
+      6,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Epic Large claude": [
+      5,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Epic Large unnamed": [
+      5,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Epic Medium claude": [
+      4,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Epic Medium unnamed": [
+      4,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Epic Small claude": [
+      3,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Epic Small unnamed": [
+      3,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Task AsItIs claude": [
+      2,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Task AsItIs unnamed": [
+      2,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Task Huge claude": [
+      9,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Task Huge unnamed": [
+      9,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Task Large claude": [
+      8,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Task Large unnamed": [
+      8,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Task Medium claude": [
+      7,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Task Medium unnamed": [
+      7,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Task Small claude": [
+      3,
+      13
+    ],
+    "a1 s1 f0 p1 r1 Task Small unnamed": [
+      3,
+      13
+    ],
+    "a1 s1 f1 p0 r0 Epic AsItIs claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Epic AsItIs unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Epic Huge claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Epic Huge unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Epic Large claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Epic Large unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Epic Medium claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Epic Medium unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Epic Small claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Epic Small unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Task AsItIs claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Task AsItIs unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Task Huge claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Task Huge unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Task Large claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Task Large unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Task Medium claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Task Medium unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Task Small claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r0 Task Small unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Epic AsItIs claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Epic AsItIs unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Epic Huge claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Epic Huge unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Epic Large claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Epic Large unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Epic Medium claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Epic Medium unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Epic Small claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Epic Small unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Task AsItIs claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Task AsItIs unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Task Huge claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Task Huge unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Task Large claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Task Large unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Task Medium claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Task Medium unnamed": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Task Small claude": [
+      13
+    ],
+    "a1 s1 f1 p0 r1 Task Small unnamed": [
+      13
+    ],
+    "a1 s1 f1 p1 r0 Epic AsItIs claude": [
+      0,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Epic AsItIs unnamed": [
+      0,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Epic Huge claude": [
+      0,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Epic Huge unnamed": [
+      0,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Epic Large claude": [
+      0,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Epic Large unnamed": [
+      0,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Epic Medium claude": [
+      0,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Epic Medium unnamed": [
+      0,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Epic Small claude": [
+      0,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Epic Small unnamed": [
+      0,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Task AsItIs claude": [
+      1,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Task AsItIs unnamed": [
+      1,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Task Huge claude": [
+      1,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Task Huge unnamed": [
+      1,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Task Large claude": [
+      1,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Task Large unnamed": [
+      1,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Task Medium claude": [
+      1,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Task Medium unnamed": [
+      1,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Task Small claude": [
+      1,
+      13
+    ],
+    "a1 s1 f1 p1 r0 Task Small unnamed": [
+      1,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Epic AsItIs claude": [
+      2,
+      10,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Epic AsItIs unnamed": [
+      2,
+      11,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Epic Huge claude": [
+      6,
+      10,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Epic Huge unnamed": [
+      6,
+      11,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Epic Large claude": [
+      5,
+      10,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Epic Large unnamed": [
+      5,
+      11,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Epic Medium claude": [
+      4,
+      10,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Epic Medium unnamed": [
+      4,
+      11,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Epic Small claude": [
+      3,
+      10,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Epic Small unnamed": [
+      3,
+      11,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Task AsItIs claude": [
+      2,
+      10,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Task AsItIs unnamed": [
+      2,
+      11,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Task Huge claude": [
+      9,
+      10,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Task Huge unnamed": [
+      9,
+      11,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Task Large claude": [
+      8,
+      10,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Task Large unnamed": [
+      8,
+      11,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Task Medium claude": [
+      7,
+      10,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Task Medium unnamed": [
+      7,
+      11,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Task Small claude": [
+      3,
+      10,
+      13
+    ],
+    "a1 s1 f1 p1 r1 Task Small unnamed": [
+      3,
+      11,
+      13
+    ]
+  }
+}
