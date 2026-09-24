@@ -70,6 +70,40 @@ public sealed class AntigravityRuntime(string id = "antigravity") : IReviewerRun
     private static string UserMessage(string prompt) => AntigravityStream.UserMessage(prompt);
 
     /// <summary>
+    /// A reviewer whose shell command was auto-denied, asked again in the SAME conversation — issue #504.
+    /// </summary>
+    /// <remarks>
+    /// <para>Headless <c>--mode plan</c> cannot ask a person whether <c>run_command</c> may run, so the CLI
+    /// denies it and ENDS the turn with an empty response. There is no flag that takes the tool away,
+    /// <c>--sandbox</c> changes nothing, and only the person's own global <c>settings.json</c> can allow a
+    /// command — which this product will not write. A fresh repair meets the same denial; the same
+    /// conversation, told the command will not come, answered with the schema's JSON on the real CLI.</para>
+    /// <para>Everything else of the first launch is kept — read-only mode, the schema, the model, the
+    /// workspace — so the follow-up can do nothing the first launch could not.</para>
+    /// </remarks>
+    public ReviewerInvocation? FollowUp(ReviewerInvocation first, string transcript)
+    {
+        var conversation = AntigravityStream.WasDenied(transcript) ? AntigravityStream.ConversationId(transcript) : string.Empty;
+
+        return conversation.Length == 0
+            ? null
+            : first with
+            {
+                Request = first.Request with
+                {
+                    Arguments = [.. first.Request.Arguments, "--conversation", conversation],
+                    StdIn = UserMessage(NoCommands),
+                },
+            };
+    }
+
+    /// <summary>What the continued conversation is told. Measured: it answers, and says what it could not check.</summary>
+    internal const string NoCommands =
+        "Shell commands are not available in this review: run_command was denied and will stay denied. Do not "
+        + "call it again. Everything you need is in the review above and in the files you can read. Answer now "
+        + "with the JSON the schema asks for; if a check needed a command, say in `notes` which one could not be run.";
+
+    /// <summary>
     /// The plan stage runs in an empty scratch directory and must NOT be given a workspace: an
     /// agentic CLI handed a directory goes and reads it, which is what made plan rounds ten
     /// minutes long the first time.
@@ -185,6 +219,66 @@ public static class AntigravityStream
 
         return null;
     }
+
+    /// <summary>
+    /// Whether the CLI auto-denied a tool it could not ask about — its stderr sentence, or the stream's
+    /// <c>denied_actions</c>, whichever the version prints.
+    /// </summary>
+    /// <remarks>A NON-EMPTY <c>denied_actions</c>: an empty list is a turn that was denied nothing.</remarks>
+    public static bool WasDenied(string transcript) =>
+        transcript.Contains("auto-denied", StringComparison.Ordinal)
+        || transcript.Contains("\"denied_actions\":[{", StringComparison.Ordinal);
+
+    /// <summary>The conversation the stream's `init` event names, or empty.</summary>
+    public static string ConversationId(string transcript)
+    {
+        foreach (var line in transcript.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (Init(line) is { } id)
+            {
+                return id;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// The conversation an `init` event names — read by its PROPERTIES, in any key order, and only a
+    /// value that looks like an id. A number, or anything else, is no id: the follow-up is skipped rather
+    /// than an exception escaping the executor's failure path. (codex and our own reviewer, the code round.)
+    /// </summary>
+    private static string? Init(string line)
+    {
+        if (!line.StartsWith('{') || !line.Contains("\"init\"", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(line);
+            return IdOf(document.RootElement);
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static string? IdOf(JsonElement root)
+    {
+        var isInit = root.TryGetProperty("event", out var name) && name.ValueKind == JsonValueKind.String && name.GetString() == "init";
+        var id = isInit && root.TryGetProperty("conversation_id", out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString() ?? string.Empty
+            : string.Empty;
+
+        return ConversationIdShape.IsMatch(id) ? id : null;
+    }
+
+    /// <summary>What a conversation id looks like: it becomes an argument, so nothing else passes.</summary>
+    private static readonly System.Text.RegularExpressions.Regex ConversationIdShape =
+        new("^[A-Za-z0-9_-]{1,128}$", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
     /// <summary>The text of a `result` event, or nothing: how a translated sentence is read.</summary>
     public static string? Response(string stdout) =>

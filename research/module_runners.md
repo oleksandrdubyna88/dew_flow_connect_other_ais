@@ -1078,3 +1078,22 @@ that sales footer reach the decision.
 would subsume the vocabulary; no sample of the string has been observed from a vendor this product
 runs, and this file already records what writing a rule against an imagined string cost once.
 
+## A reviewer whose command was auto-denied is asked again, in the same conversation (2026-09-24, issue #504)
+
+`agy` in headless `--mode plan` cannot ask a person whether `run_command` may run, so a reviewer that
+decides to run one (`git diff … --stat`, `python3 -c …`) has it auto-denied — the stream's
+`denied_actions`, stderr's *"no output produced — a tool required the "command" permission …"* — and the CLI
+ENDS the turn with `status: SUCCESS` and an empty response. Measured on agy 1.2.10: `--sandbox` changes
+nothing; a `settings.json` with `permissions.allow` in the workspace (`.agents/`, `.gemini/`, `.antigravity/`,
+`.agy/`, `.jetski/`) is ignored; only the person's GLOBAL settings could allow a command, which this product
+will not write, and `--dangerously-skip-permissions` would let a reviewer run anything. The ordinary repair —
+a fresh launch — met the same denial.
+
+`IReviewerRuntime.FollowUp(first, transcript)` (default null) is a second launch that CONTINUES the first.
+`AntigravityRuntime.FollowUp` answers it when `AntigravityStream.WasDenied` and the `init` event names a
+`conversation_id`: the first launch's arguments unchanged (read-only mode, schema, model, workspace) plus
+`--conversation <id>`, with one NDJSON message on stdin (`NoCommands`: commands are unavailable, do not call
+`run_command`, answer now). `ReviewerExecutor.RunAsync` makes its ONE second launch
+`first.Adapter?.FollowUp(first, transcript) ?? repair`, inside the same remaining deadline, billed like any
+repair; its answer is parsed like any repair's. On the real CLI the continued conversation answered with the
+schema's JSON in turn 2. A Team-server reviewer is not covered — its conversation lives on the server (#515).

@@ -439,6 +439,17 @@ public sealed class ReviewerExecutor(
             usage,
             review.Findings.IsEmpty ? KeepIn(keepEmptyIn, invocation, raw) ?? string.Empty : string.Empty);
 
+    /// <summary>
+    /// The second launch: the adapter's own continuation of the first when it has one, else the repair.
+    /// </summary>
+    /// <remarks>
+    /// Issue #504: a reviewer whose shell command was auto-denied ended its turn with nothing, and a fresh
+    /// repair asked the same question into the same denial. The adapter that can CONTINUE the conversation
+    /// knows it; this only asks. Still ONE second launch, inside the same remaining deadline.
+    /// </remarks>
+    private static ReviewerInvocation? SecondLaunch(ReviewerInvocation first, ReviewerInvocation? repair, string transcript) =>
+        first.Adapter?.FollowUp(first, transcript) ?? repair;
+
     private static string? NoRepairToRun(ReviewerInvocation? repair, TimeSpan left) => repair switch
     {
         null => "and no repair was configured",
@@ -472,6 +483,7 @@ public sealed class ReviewerExecutor(
         // needed a repair could take twice what it was given — and the operator who reported "the
         // limit did not work again" was reading a real number.
         var left = RetryLadder.Remaining(spent.Elapsed, budget);
+        repair = SecondLaunch(invocation, repair, evidence);
         if (NoRepairToRun(repair, left) is { } why)
         {
             return new ReviewerOutcome.Unparseable(
