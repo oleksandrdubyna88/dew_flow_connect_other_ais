@@ -26,14 +26,15 @@ internal static class CadenceReadMode
 
     private const string Nothing = "null";
 
-    internal static async Task<int> RunAsync(string[] args)
+    /// <param name="noticing">Where a notice goes — handed down from <c>Program</c>, which composes every one of them.</param>
+    internal static async Task<int> RunAsync(string[] args, Noticing noticing)
     {
         var configuration = SettingsFile.Layer(
             SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path,
             Environment.GetEnvironmentVariable,
             // STDERR: stdout carries the answer the panel parses.
             Program.Note);
-        var (code, answer, why) = await AnswerAsync(PanelSettings.FromEnvironment(configuration), args, CancellationToken.None);
+        var (code, answer, why) = await AnswerAsync(PanelSettings.FromEnvironment(configuration), args, noticing, CancellationToken.None);
         if (answer.Length > 0)
         {
             await Console.Out.WriteLineAsync(answer);
@@ -48,7 +49,8 @@ internal static class CadenceReadMode
     }
 
     /// <summary>The exit code, what goes to stdout and what goes to stderr — the whole mode, with no console in it.</summary>
-    internal static async Task<(int Code, string Out, string Err)> AnswerAsync(PanelSettings settings, string[] args, CancellationToken ct)
+    internal static async Task<(int Code, string Out, string Err)> AnswerAsync(
+        PanelSettings settings, string[] args, Noticing noticing, CancellationToken ct)
     {
         var flags = Program.Flags(args);
         flags.TryGetValue("--repo", out var repo);
@@ -61,7 +63,7 @@ internal static class CadenceReadMode
 
         try
         {
-            return await ReadAsync(settings, repo, branch, plan ?? string.Empty, ct);
+            return await ReadAsync(settings, repo, branch, plan ?? string.Empty, noticing, ct);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException)
         {
@@ -70,7 +72,7 @@ internal static class CadenceReadMode
     }
 
     private static async Task<(int Code, string Out, string Err)> ReadAsync(
-        PanelSettings settings, string repo, string branch, string plan, CancellationToken ct)
+        PanelSettings settings, string repo, string branch, string plan, Noticing noticing, CancellationToken ct)
     {
         var session = new SessionStore(settings.DataDir, settings.Rounds.Catalog).Load(repo, branch);
         if (session is null)
@@ -85,7 +87,7 @@ internal static class CadenceReadMode
 
         var launcher = new ProcessLauncher();
         var sha = await new WorktreeManager(launcher, settings.WorktreeRoot).ShaOrNoneAsync(repo, branch);
-        var answer = await CadenceDesk.ForReading(settings, launcher).AnswerAsync(session, plan, sha, ct);
+        var answer = await CadenceDesk.ForReading(settings, launcher, noticing).AnswerAsync(session, plan, sha, ct);
 
         return (0, answer is null ? Nothing : JsonSerializer.Serialize(answer, ServerJsonContext.Default.CadenceAnswer), string.Empty);
     }

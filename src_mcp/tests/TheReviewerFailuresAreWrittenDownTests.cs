@@ -340,7 +340,7 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
             .Equal(["src_mcp/src/Program.cs"], "one composition, in one place");
         ProductionSources.FilesMentioning("Noticing.None").Keys.Should()
             .Equal(["src_mcp/src/Program.cs"],
-                "and the only production users of the silent one are the two one-shot modes, which "
+                "and the only production users of the silent one are the one-shot modes, composed there, which "
                 + "answer on stdout and exit — a writer thread there is one nobody drains");
     }
 

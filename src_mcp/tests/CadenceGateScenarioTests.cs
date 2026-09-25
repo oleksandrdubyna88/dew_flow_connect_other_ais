@@ -524,6 +524,7 @@ public sealed class CadenceGateScenarioTests : FakeCliRoundTests
         await CadenceReadMode.AnswerAsync(
             Defaults() with { CadenceMode = mode },
             ["--cadence", "--repo", _repo, "--branch", branch, "--plan", plan],
+            Noticing.None,
             TestContext.Current.CancellationToken);
 
     private static JsonElement Answer((int Code, string Out, string Err) probe)
@@ -640,7 +641,7 @@ public sealed class CadenceGateScenarioTests : FakeCliRoundTests
     [InlineData("--cadence", "--branch", "main")]
     public async Task AMalformedRequest_Is65_NeverTheOldBinarysCode(params string[] args)
     {
-        var (code, _, err) = await CadenceReadMode.AnswerAsync(Defaults(), args, TestContext.Current.CancellationToken);
+        var (code, _, err) = await CadenceReadMode.AnswerAsync(Defaults(), args, Noticing.None, TestContext.Current.CancellationToken);
 
         code.Should().Be(65);
         err.Should().Contain("--cadence needs --repo");

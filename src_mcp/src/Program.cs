@@ -387,7 +387,8 @@ internal static class Program
                 return await CloseConsultAsync(args);
 
             case Startup.Cadence:
-                return await Server.CadenceReadMode.RunAsync(args);
+                // A one-shot answers on stdout and exits; a writer thread here is one nobody drains.
+                return await Server.CadenceReadMode.RunAsync(args, Server.Noticing.None);
 
             default:
                 return await ServeAsync();
