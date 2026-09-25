@@ -3,9 +3,9 @@
  *
  * <p>The unit tests ask the parsed stylesheet's cascade which `white-space` and `overflow-wrap` win on
  * a `pre` inside an answer. Whether that is what a person SEES — no line cut at the edge, nothing to
- * scroll sideways — is a layout question, so this renders the chat page itself (its markup and its
- * stylesheet, with its scripts and CSP taken out so the probe can run) with one answer from
- * `renderAnswer`, at several widths, and reads the boxes back:</p>
+ * scroll sideways — is a layout question, so this renders the chat page's own stylesheet around the
+ * markup an answer really sits in, with one answer from `renderAnswer`, at several widths, and reads the
+ * boxes back:</p>
  * <ul>
  *   <li>the code block does not overflow its own box (`scrollWidth ≤ clientWidth`);</li>
  *   <li>the conversation does not overflow sideways either;</li>
@@ -70,21 +70,22 @@ const PROBE = `<pre id="result"></pre><script>
   }
 </script>`;
 
+/** The page's own stylesheet: the same `<style>` the chat tab ships, cut out of a whole page. */
+const PAGE_CSS = chatPageHtml(STATE, 'n').split('<style>')[1].split('</style>')[0];
+
 /**
- * The chat page as it ships, with one answer in it, its own scripts and CSP out, and the probe in.
+ * The chat tab's stylesheet around the chain an answer really sits in — `main#scroll > div#messages >
+ * div.msg.model > div.what` — with one answer from `renderAnswer` and the probe.
  *
- * <p>Every insertion is a replacer FUNCTION: a replacement string reads `$&`, `$'` and `` $` `` as
- * patterns, and an answer holding a dollar sign would quietly corrupt the page. (Our own code reviewer.)</p>
+ * <p>Built rather than cut out of the whole page, the way `measure-failure-layout.mjs` builds its own:
+ * stripping the page's script and CSP with regular expressions is HTML filtering CodeQL rightly refuses
+ * (PR #539), and the page's script cannot run outside VS Code anyway.</p>
  */
 function pageFor(width) {
-  const answer = `<div class="msg model"><div class="what">${renderAnswer(ANSWER)}</div></div>`;
-
-  return chatPageHtml(STATE, 'n')
-    .replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, '')
-    .replace(/<script[\s\S]*?<\/script>/g, '')
-    .replace('<div id="messages">', () => `<div id="messages">${answer}`)
-    .replace('</head>', () => `<style>body { width: ${width}px; margin: 0; }</style></head>`)
-    .replace('</body>', () => `${PROBE}</body>`);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><style>${PAGE_CSS}
+body { width: ${width}px; margin: 0; }</style></head><body>
+<main id="scroll"><div id="messages"><div class="msg model"><div class="what">${renderAnswer(ANSWER)}</div></div></div></main>
+${PROBE}</body></html>`;
 }
 
 const results = measured(BROWSER, 'coai-answer-code-layout-', WIDTHS.map((width) => ({ width, html: pageFor(width) })));
