@@ -7,6 +7,11 @@ by its client with a signal now ends cleanly instead of being reported, on the n
 died. And a reviewer or a consultant no longer starts your MCP servers — Claude reviewers were each starting
 a coai-mcp of their own, and Codex reviewers every server in `config.toml`. Needs coai-mcp 0.35.0.
 
+**A Team-server Antigravity reviewer answers after an auto-denied command** (issue #515). When `agy` on the
+Team server tried a shell command that headless mode denied, its turn ended empty and the review was lost. The
+server now continues that same conversation once, told the command will not come, and returns its answer —
+what a local Antigravity reviewer already did. Needs the next Team server release.
+
 ## Extension 0.53.0 · Server 0.34.0 — 2026-09-24
 
 **The Bugz diffs are numbered, and no longer striped** (issue #488). Every line of a Before and After

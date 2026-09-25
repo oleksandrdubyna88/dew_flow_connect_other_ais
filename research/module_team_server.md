@@ -465,13 +465,50 @@ catalog that could not be re-fetched is shown as STALE rather than as absent.
   `coai-server-job-…` directory (gemini, Major) — the allowlist passes them through, and on a shared
   box as root that is one `/tmp` for every job and the host's sockets. The directory is deleted in
   the same `finally`, so nothing a reviewer writes there outlives the job. The retry the finding
-  assumed does not exist in this binary: the launcher makes ONE launch (`LaunchAsync`, no repair),
-  and the server's own retry is the runner requeueing onto another account, which re-enters the same
-  step. What the suite asserts is what is SENT — `ReviewLauncherTests` reads both halves off the
+  assumed does not exist in this binary: the launcher makes ONE launch (`LaunchAsync`, no repair) —
+  plus at most the one continuation its adapter asks for, derived FROM `Confined`'s output (next
+  bullet) — and the server's own retry is the runner requeueing onto another account, which re-enters
+  the same step. What the suite asserts is what is SENT — `ReviewLauncherTests` reads both halves off the
   launched request, `ConfinementTests` holds the derivation — and whether the installed CLI accepts
   that argv is observable only on the box, which is `POST_DEPLOY.md` item 12. Codex and antigravity
   take no new flag; what their sandboxes leave open, reads, is
   [PLAN_team_server_unprivileged.md](../todo/PLAN_team_server_unprivileged.md)'s to close.
+- **An agy reviewer whose shell command was auto-denied is asked again, HERE** (issue #515,
+  2026-09-25). Headless `--mode plan` cannot ask anybody whether `run_command` may run, so agy denies
+  it and ends its turn with an empty response. Locally the executor continues the SAME conversation
+  (#504); on this host the conversation lives in the SLOT's `HOME`, so a repair from the client is a
+  fresh job that meets the same denial. `ReviewLauncher.RunAsync` therefore asks the adapter the same
+  question the local executor does — `IReviewerRuntime.FollowUp(first, transcript)` — after a CLEAN
+  exit with an EMPTY answer (the "nothing" `Read` maps to `Unparseable`; the transcript is
+  `ReviewerLaunch.Evidence`, which is exactly the labelled process transcript in that case). A
+  continuation is `first with { --conversation <id>, stdin "commands are not available — answer
+  now" }`, so it runs as the same account, in the same directory, under the same confinement; it
+  gets the lesser of what the job's `RunBudget` left and its own timeout, and is NOT started below
+  `LeastFollowUp` (10 s), where its timeout would replace the denial with a vaguer story. Its verdict
+  is the job's: an answer (both launches billed), an `Unparseable` that says the continuation came
+  back empty too, or its own terminal outcome. Only agy's adapter implements `FollowUp`; claude and
+  codex jobs are one launch, as before. **Not covered here, as locally:** a denied turn that still
+  wrote a non-JSON answer (the client repairs it) and a denial that exited non-zero. Whether the
+  conversation resolves under a confined environment on the box's installed agy is observable only
+  there — the suite asserts what is SENT (`ReviewLauncherTests`, the seven #515 tests).
+
+  ```mermaid
+  sequenceDiagram
+    participant R as JobRunner
+    participant L as ReviewLauncher
+    participant V as agy (the slot's HOME)
+    R->>L: RunAsync(job)
+    L->>V: first launch (Confined)
+    V-->>L: exit 0, empty response, "auto-denied", conversation_id
+    alt the adapter has a FollowUp and ≥ 10 s of RunBudget is left
+      L->>V: --conversation id, "commands are not available — answer now"
+      V-->>L: the schema's JSON (or nothing, or a terminal outcome)
+      L-->>R: that answer, both launches billed
+    else no follow-up, or too little time
+      L-->>R: Unparseable, as before
+    end
+    Note over L: the job's directory (schema, TMPDIR) is deleted after BOTH launches
+  ```
 - **The cooldown guess errs LONG.** Waiting too long costs one queued review some latency; retrying
   too early spends quota against a live limit, which on some plans extends it. So an unzoned time is
   never allowed to resolve to less than the 30-minute fallback, repeats double to a 5 h ceiling, and

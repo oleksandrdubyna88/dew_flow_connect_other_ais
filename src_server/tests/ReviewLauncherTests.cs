@@ -262,6 +262,154 @@ public sealed class ReviewLauncherTests
         }
     }
 
+    // ------------------------------------------------------------------------------------------
+    // Issue #515: an agy reviewer whose shell command was auto-denied ends its turn with nothing. The
+    // local executor continues the SAME conversation (#504); the conversation lives in the slot's HOME on
+    // this host, so only this server can.
+
+    /// <summary>What agy 1.2.10 prints when headless plan mode denied its <c>run_command</c>.</summary>
+    private static readonly string DeniedStream =
+        """{"event":"init","conversation_id":"conv-7","init":{"model":"gemini-3.8-flash-low"}}""" + "\n"
+        + """{"event":"result","result":{"conversation_id":"conv-7","status":"SUCCESS","response":"","usage":{"input_tokens":100,"output_tokens":5}}}""" + "\n";
+
+    private const string DeniedSaid =
+        "jetski: no output produced — a tool required the \"command\" permission that headless mode cannot "
+        + "prompt for, so it was auto-denied.";
+
+    private static readonly string AnsweredStream =
+        """{"event":"result","result":{"conversation_id":"conv-7","status":"SUCCESS","response":"{\"findings\":[]}","usage":{"input_tokens":40,"output_tokens":20}}}""" + "\n";
+
+    private static readonly string EmptyStream =
+        """{"event":"result","result":{"conversation_id":"conv-7","status":"SUCCESS","response":"","usage":{"input_tokens":40,"output_tokens":20}}}""" + "\n";
+
+    private static ProcessResult Denied() => new(0, DeniedStream, DeniedSaid, TimedOut: false);
+
+    private static Task<ReviewAttempt> RunAgy(IProcessLauncher launcher, TimeSpan? runBudget = null) =>
+        Run(launcher, runtime: "antigravity", vendorId: "antigravity", model: "gemini-3.8-flash-low",
+            environment: SlotEnvironment.For("antigravity", Path.Combine(Path.GetTempPath(), "coai-slot-agy"), token: "not-a-real-token"),
+            runBudget: runBudget);
+
+    [Fact]
+    public async Task ADeniedCommand_IsAskedAgainInTheSameConversation_AndItsAnswerIsTheJobs()
+    {
+        var scripted = new Scripted(Denied(), new ProcessResult(0, AnsweredStream, string.Empty, TimedOut: false));
+
+        var attempt = await RunAgy(scripted);
+
+        scripted.Requests.Should().HaveCount(2, "the denied turn is continued once, on this host, where its conversation lives");
+        var second = scripted.Requests[1];
+        second.Arguments.Should().ContainInConsecutiveOrder("--conversation", "conv-7");
+        second.Arguments.Should().ContainInConsecutiveOrder("--mode", "plan");
+        second.StdIn.Should().Contain("not available", "the continued turn is told the command will not come");
+        attempt.Should().BeOfType<ReviewAttempt.Answered>()
+            .Which.Should().Match<ReviewAttempt.Answered>(a => a.Raw == """{"findings":[]}""" && a.TokensIn == 140 && a.TokensOut == 25,
+                "the continuation's answer is the job's, and both launches were billed");
+    }
+
+    [Fact]
+    public async Task TheFollowUp_RunsAsTheSameAccountInTheSameConfinement()
+    {
+        var scripted = new Scripted(Denied(), new ProcessResult(0, AnsweredStream, string.Empty, TimedOut: false));
+
+        await RunAgy(scripted);
+
+        scripted.Requests.Should().HaveCount(2);
+        var (first, second) = (scripted.Requests[0], scripted.Requests[1]);
+        second.Executable.Should().Be(first.Executable);
+        second.WorkingDirectory.Should().Be(first.WorkingDirectory, "the job's own directory, which still exists");
+        second.InheritsEnvironment.Should().Be(first.InheritsEnvironment).And.BeFalse("a follow-up is as confined as the first launch");
+        second.Environment.Should().BeEquivalentTo(first.Environment,
+            "the conversation is in the slot's HOME — another account, or another TMPDIR, is another machine to agy");
+        scripted.WorkDirectoryExistedAtEveryLaunch.Should().BeTrue("the directory is deleted after BOTH launches, never between");
+        scripted.SchemaExistedAtEveryLaunch.Should().BeTrue("the continuation keeps --json-schema, and the file must still be there");
+    }
+
+    [Fact]
+    public async Task AFollowUpCancelled_StillCleansUp()
+    {
+        var scripted = new Scripted(Denied(), new ProcessResult(0, AnsweredStream, string.Empty, TimedOut: false))
+        {
+            SecondThrows = new OperationCanceledException("the job was abandoned"),
+        };
+
+        var run = () => RunAgy(scripted);
+
+        await run.Should().ThrowAsync<OperationCanceledException>("the job runner owns a cancellation, not this launcher");
+        Directory.Exists(scripted.Requests[0].WorkingDirectory).Should().BeFalse("the finally covers the continuation too");
+    }
+
+    [Fact]
+    public async Task AnEmptyAnswerThatWasNotADenial_IsStillOneLaunch()
+    {
+        var agy = new Scripted(new ProcessResult(0, EmptyStream, string.Empty, TimedOut: false));
+        var claude = new Scripted(new ProcessResult(0, string.Empty, string.Empty, TimedOut: false));
+
+        var fromAgy = await RunAgy(agy);
+        var fromClaude = await Run(claude);
+
+        agy.Requests.Should().ContainSingle("nothing was denied, so there is nothing to continue");
+        claude.Requests.Should().ContainSingle("an adapter with no follow-up is one launch, as it always was");
+        fromAgy.Should().BeOfType<ReviewAttempt.Failed>().Which.Outcome.Should().BeOfType<ReviewerOutcome.Unparseable>();
+        fromClaude.Should().BeOfType<ReviewAttempt.Failed>().Which.Outcome.Should().BeOfType<ReviewerOutcome.Unparseable>();
+    }
+
+    [Fact]
+    public async Task AFollowUpThatSaysNothing_IsStillUnparseable_SaysSo_AndBothLaunchesAreBilled()
+    {
+        var scripted = new Scripted(Denied(), new ProcessResult(0, EmptyStream, string.Empty, TimedOut: false));
+
+        var attempt = await RunAgy(scripted);
+
+        scripted.Requests.Should().HaveCount(2);
+        var outcome = attempt.Should().BeOfType<ReviewAttempt.Failed>()
+            .Which.Outcome.Should().BeOfType<ReviewerOutcome.Unparseable>().Subject;
+        outcome.Reason.Should().Contain("same conversation", "the reader is told a continuation ran and came back empty too");
+        outcome.Usage.Should().Match<Usage>(u => u.TokensIn == 140 && u.TokensOut == 25);
+    }
+
+    [Fact]
+    public async Task AFollowUpThatFailed_IsThatFailure()
+    {
+        var scripted = new Scripted(Denied(), new ProcessResult(0, string.Empty, string.Empty, TimedOut: true));
+
+        var attempt = await RunAgy(scripted);
+
+        attempt.Should().BeOfType<ReviewAttempt.Failed>()
+            .Which.Outcome.Should().BeOfType<ReviewerOutcome.TimedOut>("the continuation's own verdict is the latest and the most specific");
+    }
+
+    [Fact]
+    public async Task AFollowUp_GetsOnlyWhatIsLeftOfTheJobsBudget()
+    {
+        var budget = TimeSpan.FromSeconds(30);
+        var scripted = new Scripted(Denied(), new ProcessResult(0, AnsweredStream, string.Empty, TimedOut: false))
+        {
+            FirstTakes = TimeSpan.FromMilliseconds(700),
+        };
+
+        await RunAgy(scripted, budget);
+
+        scripted.Requests.Should().HaveCount(2);
+        scripted.Requests[0].Timeout.Should().Be(budget);
+        (scripted.ElapsedAtSecondLaunch + scripted.Requests[1].Timeout).Should().BeLessThanOrEqualTo(budget,
+            "the first launch and its continuation TOGETHER stay inside the job's budget");
+    }
+
+    /// <remarks>
+    /// Also below the floor, not only at zero: a continuation started with a second left times out, and its
+    /// "did not answer within the budget" would hide the denial that is the real story. (Our own reviewer.)
+    /// </remarks>
+    [Fact]
+    public async Task ADeniedCommandWithTooLittleBudgetLeft_IsNotAskedAgain()
+    {
+        var scripted = new Scripted(Denied(), new ProcessResult(0, AnsweredStream, string.Empty, TimedOut: false));
+
+        var attempt = await RunAgy(scripted, ReviewLauncher.LeastFollowUp - TimeSpan.FromSeconds(1));
+
+        scripted.Requests.Should().ContainSingle("a continuation with no real time left is a process killed on arrival");
+        attempt.Should().BeOfType<ReviewAttempt.Failed>().Which.Outcome.Should().BeOfType<ReviewerOutcome.Unparseable>();
+    }
+
     /// <summary>The tools that reach past the prompt: the filesystem, a shell, the web, a sub-agent.</summary>
     /// <remarks>
     /// The same eight `ClaudeRuntimeTests` holds, on purpose: that list is the STORY's contract with
@@ -304,14 +452,15 @@ public sealed class ReviewLauncherTests
         string runtime = "claude",
         string vendorId = "claude",
         string model = "haiku",
-        IReadOnlyDictionary<string, string?>? environment = null)
+        IReadOnlyDictionary<string, string?>? environment = null,
+        TimeSpan? runBudget = null)
     {
         var slot = new AccountSlot(
             vendorId, "a", Path.GetTempPath(), DateTimeOffset.UtcNow, null, false, string.Empty, 0);
         var job = new JobRecord(
             JobId.New(), "dev@example.com", vendorId, model, "PlanCritique", "review this",
             JobStatus.Running, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddMinutes(10),
-            TimeSpan.FromSeconds(60));
+            runBudget ?? TimeSpan.FromSeconds(60));
 
         return await new ReviewLauncher(launcher).RunAsync(
             new VendorConfig(vendorId, runtime, [model], ["a"]),
@@ -319,6 +468,48 @@ public sealed class ReviewLauncherTests
             job,
             environment ?? new Dictionary<string, string?>(),
             CancellationToken.None);
+    }
+
+    /// <summary>Answers each launch with the next result in order, and keeps every request it was handed.</summary>
+    private sealed class Scripted(params ProcessResult[] results) : IProcessLauncher
+    {
+        private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
+
+        public List<ProcessRequest> Requests { get; } = [];
+
+        /// <summary>How long the FIRST launch takes — the time the job's budget has already spent.</summary>
+        public TimeSpan FirstTakes { get; init; } = TimeSpan.Zero;
+
+        public TimeSpan ElapsedAtSecondLaunch { get; private set; }
+
+        public bool WorkDirectoryExistedAtEveryLaunch { get; private set; } = true;
+
+        public bool SchemaExistedAtEveryLaunch { get; private set; } = true;
+
+        /// <summary>Thrown by the SECOND launch instead of answering — a job abandoned mid-continuation.</summary>
+        public Exception? SecondThrows { get; init; }
+
+        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            Requests.Add(request);
+            WorkDirectoryExistedAtEveryLaunch &= Directory.Exists(request.WorkingDirectory);
+            SchemaExistedAtEveryLaunch &= File.Exists(Path.Combine(request.WorkingDirectory, SchemaFile.Name));
+            if (Requests.Count == 1)
+            {
+                _clock.Restart();
+                await Task.Delay(FirstTakes, ct);
+            }
+            else if (Requests.Count == 2)
+            {
+                ElapsedAtSecondLaunch = _clock.Elapsed;
+                if (SecondThrows is { } thrown)
+                {
+                    throw thrown;
+                }
+            }
+
+            return results[Math.Min(Requests.Count, results.Length) - 1];
+        }
     }
 
     private sealed class Fixed(ProcessResult result) : IProcessLauncher
