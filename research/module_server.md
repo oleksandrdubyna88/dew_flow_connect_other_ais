@@ -4518,3 +4518,23 @@ call like every switch; `RunStageAsync` hands the scheduler `StandDown.For(work)
 reviewers found N remark(s) between them, so the local reviewer was not started"* — and the round record keeps
 the row with status `stood down` (`ReviewerState.StoodDown`) and that note, which the rounds database stores
 per reviewer like any other.
+
+## A signal ends the server; it does not kill it (2026-09-25, issue #514)
+
+An MCP client stops its server with SIGTERM, SIGINT or SIGHUP. With no handler the runtime left at once, the
+`finally` of `ServeAsync` never ran, and the run marker stayed for the next start to report as a run that
+"never finished" — 26 such rows on one Linux machine, most from Claude reviewers' own coai-mcp children
+(see module_runners: reviewers now start none). `ServeStop` registers SIGTERM, SIGINT, SIGHUP and SIGQUIT
+(on Windows the runtime maps them onto console events; an unsupported one is skipped):
+
+```mermaid
+flowchart LR
+    S1[first signal] --> C[context.Cancel = true] --> T[stopping.Cancel] --> R[RunAsync ends] --> F[finally: stop.Ended, EndedAsync — beat stopped, notices drained, marker cleared]
+    T --> D{still running at Grace 3 s?}
+    D -- yes --> X[clear marker, Environment.Exit 0]
+    S2[second signal] --> Y[clear marker, default exit goes ahead]
+```
+
+A cancelled `RunAsync` is caught as `OperationCanceledException` when the stop was asked for, said as "stopped
+by a signal", and returns 0 — never recorded as a crash. SIGKILL cannot be caught, and a run killed that way
+is still, correctly, an unclean exit.

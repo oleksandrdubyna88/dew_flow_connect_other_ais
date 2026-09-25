@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+**No more "never finished" rows for servers that were simply closed** (issue #514). A coai-mcp stopped
+by its client with a signal now ends cleanly instead of being reported, on the next start, as a run that
+died. And a reviewer or a consultant no longer starts your MCP servers — Claude reviewers were each starting
+a coai-mcp of their own, and Codex reviewers every server in `config.toml`. Needs coai-mcp 0.35.0.
+
 ## Extension 0.53.0 · Server 0.34.0 — 2026-09-24
 
 **The Bugz diffs are numbered, and no longer striped** (issue #488). Every line of a Before and After

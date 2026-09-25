@@ -633,6 +633,8 @@ public sealed class ConsultationService(
         Model = consultant.Model,
         Timeout = settings.ReviewerTimeout,
         DataDir = settings.DataDir,
+        // A consultant starts no MCP server either (issue #514).
+        McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
     };
 
     private async Task<string> ShapedTreeAsync(string repo, CancellationToken ct)

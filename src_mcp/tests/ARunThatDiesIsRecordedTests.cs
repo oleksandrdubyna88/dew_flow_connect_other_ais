@@ -124,6 +124,41 @@ public sealed class ARunThatDiesIsRecordedTests : IDisposable
         File.WriteAllText(marker, json.ToJsonString());
     }
 
+    /// <summary>
+    /// Issue #514: a server its client stops with a signal ENDED — it did not die. Without a handler the
+    /// runtime left at once, the marker stayed, and the next start wrote an unclean exit for it: 26 rows on
+    /// one Linux machine. POSIX only: Windows has no <c>kill -TERM</c>, and its console events are pinned as
+    /// values in <see cref="ASignalEndsTheServerCleanlyTests"/>.
+    /// </summary>
+    [Theory]
+    [InlineData("TERM")]
+    [InlineData("INT")]
+    [InlineData("HUP")]
+    public async Task AServerStoppedByASignal_ClearsItsMarker_AndNoLaterStartCallsItADeath(string signal)
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "a POSIX signal cannot be sent to a process on Windows");
+        var stopped = Start();
+        var marker = await MarkerOf(stopped, []);
+
+        using (var kill = Process.Start(new ProcessStartInfo("kill", ["-" + signal, stopped.Id.ToString(System.Globalization.CultureInfo.InvariantCulture)]))!)
+        {
+            await kill.WaitForExitAsync(TestContext.Current.CancellationToken);
+        }
+        using var budget = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+        await stopped.WaitForExitAsync(budget.Token);
+
+        File.Exists(marker).Should().BeFalse($"a SIG{signal} is a client ending the server, and the server clears its own marker");
+        if (File.Exists(marker))
+        {
+            // Made old enough to be judged, so the rest of the test shows what a left marker COSTS.
+            Backdated(marker, TimeSpan.FromHours(1));
+        }
+        var next = Start();
+        await MarkerOf(next, [marker]);
+        (await EndedCleanly(next)).Should().Be(0);
+        UncleanExits().Should().BeEmpty("a run its client stopped is never written down as one that never finished");
+    }
+
     [Fact]
     public async Task AKilledServer_IsRecordedOnce_ByTheNextStart_AndACleanExitLeavesNothingBehind()
     {

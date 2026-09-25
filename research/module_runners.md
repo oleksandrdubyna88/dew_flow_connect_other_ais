@@ -1113,3 +1113,22 @@ joins `NotAsked` as a `SkippedRole("provider/role", reason)`, rendered "… was 
 local rows that did run stay in the verdict. A stood-down row does not spend its plan/code lens: `PanelService.SpentPrompts` pairs
 the work with its results and skips `StoodDown`, so a dealt lens it never used stays in the unspent pool. The outcome census (`TheReviewerFailuresAreWrittenDownTests`,
 `shared/refusal-sites.json`) knows it as the third kind of ending: a decision, not a failure.
+
+## A reviewer and a consultant start no MCP servers (2026-09-25, issue #514)
+
+Each vendor CLI loads the person's own MCP servers unless told not to — for Claude that list held `coai`
+itself, so every Claude reviewer started a serving coai-mcp of its own (and a `creds` server) and killed it
+on the way out; for Codex it held `azure-devops`, an `npx` package started per reviewer. The user's decision:
+reviewers and the consultant need NONE. `NoMcpServers` (runners/Reviewers) holds the one rule per vendor:
+
+- **Claude** (`ClaudeRuntime`, `ClaudeConsultant`): `--strict-mcp-config` and no `--mcp-config` — servers only
+  from a config it is never given.
+- **Codex** (`CodexRuntime` and its `DeepseekRuntime`, `CodexConsultant` first turn and resume): one
+  `-c mcp_servers.<key>.enabled=false` per server `$CODEX_HOME/config.toml` declares
+  (`ReviewerSettings.McpServersToSwitchOff`, filled where settings are composed — `PanelService`,
+  `ConsultationService`, the Team server's `ReviewLauncher` — so the runtimes stay pure). The key is bare,
+  `'literal'`, or `"basic"` when the name holds a single quote. `CodexServerNames` reads tables, sub-tables,
+  keys under `[mcp_servers]` and root dotted keys; a line it cannot read is skipped. Not
+  `--ignore-user-config`: that would also drop the model, service tier and the Windows sandbox mode.
+- **agy / gemini**: no per-launch switch exists; a server named in `~/.gemini/config/mcp_config.json` or
+  `~/.gemini/settings.json` is reported once per start as a log warning (`GeminiFamilyConfigured`).

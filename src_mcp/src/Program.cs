@@ -1,6 +1,7 @@
 using System.Reflection;
 using CoaiMcp.Core.Notices;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Server;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
@@ -1695,6 +1696,12 @@ internal static class Program
         Func<ServerNotice, bool> recorded = notice => ServerNotices.Append(dir, notice);
         var life = RunLife.Start(RunMarkers.Of(dir, run, log), recorded, log);
         Exception? crash = null;
+        // A client stops its server with a SIGNAL, and with no handler the runtime left at once — the
+        // `finally` below never ran and the marker was left for the next start to call a death (issue
+        // #514). The first signal now stops serving and lets this method end the ordinary way.
+        using var stopping = new CancellationTokenSource();
+        var stop = new ServeStop(stopping, life.Clear, Environment.Exit, ServeStop.Grace, log);
+        using var signals = stop.Register();
         try
         {
             // The file the extension writes is the base; the client config env overrides it — a
@@ -1724,6 +1731,7 @@ internal static class Program
             log.Information("starting: {Providers} enabled, vault: {Vault}",
                 string.Join(",", settings.Providers.Where(p => p.Enabled).Select(p => p.Provider)),
                 keys.Available ? "keys loaded" : keys.Unavailability);
+            GeminiFamilyServersSaid(settings, log);
 
             // A setting this build cannot understand is said out loud at startup, because the
             // alternative is what actually happened: a configuration that had been applied, read and
@@ -1772,7 +1780,13 @@ internal static class Program
 
             await using var transport = new StdioServerTransport(ServerName);
             await using var server = McpServer.Create(transport, options);
-            await server.RunAsync();
+            await server.RunAsync(stopping.Token);
+            return 0;
+        }
+        catch (OperationCanceledException) when (stopping.IsCancellationRequested)
+        {
+            // Asked to stop by a signal, which is an ending and not a failure.
+            Note("stopped by a signal.");
             return 0;
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException)
@@ -1792,7 +1806,30 @@ internal static class Program
         // A notice is handed to one background thread and the caller returns; without this, a
         // refusal answered as the client hangs up is one the panel never shows. A `finally` is what
         // covers every road out — both `return 0`s and the crash above.
-        finally { await EndedAsync(life, notices, crash, run, recorded, log); }
+        finally
+        {
+            stop.Ended();
+            await EndedAsync(life, notices, crash, run, recorded, log);
+        }
+    }
+
+    /// <summary>
+    /// A reviewer starts no MCP server (issue #514) — except where its CLI cannot be told so.
+    /// </summary>
+    /// <remarks>
+    /// agy and gemini read their servers from a global file and take no per-launch switch, so a server
+    /// named there is started by every such reviewer. Said once per start, where a person reading the log
+    /// finds it, rather than silently loaded.
+    /// </remarks>
+    private static void GeminiFamilyServersSaid(PanelSettings settings, Serilog.ILogger log)
+    {
+        var enabled = settings.Providers.Any(p => p.Enabled && p.Provider is "antigravity" or "gemini");
+        if (enabled && NoMcpServers.GeminiFamilyConfigured() is { Count: > 0 } loaded)
+        {
+            log.Warning(
+                "agy/gemini reviewers will start the MCP servers their own files name — {Servers} — because those CLIs have no switch to start none; remove them from ~/.gemini/config/mcp_config.json or ~/.gemini/settings.json if reviewers should not have them",
+                string.Join(", ", loaded));
+        }
     }
 
     /// <summary>
