@@ -302,6 +302,49 @@ of them deploy on a push to their default branch** —
 `scoreMeter`, `orchestrator` and `llm-jira-estimates` per its own 2026-09-16 plan — so they go last,
 separately, each through its own PR, never merged by this work without the operator's word.
 
+## Cadence consultation for epics 1–3 (2026-09-25, codex `gpt-6-astra`, by hand)
+
+This plan's own rule, applied to itself before the feature exists. Every point below was checked
+against the code before it was taken, and all of them were; they override the design above where
+they disagree.
+
+1. **The check runs under the session claim.** `SessionClaim` is taken before the session is read
+   (`PanelService.cs:1254`); the cadence check belongs in `review_code`'s `RefuseBeforeBuilding`
+   (`:671`, called at `:1313` with the loaded session and the resolved sha), not ahead of the claim.
+2. **Each ROUND carries its epic identity**, stamped before the live round is first persisted:
+   `RoundRecord` gains the plan key and the epic NUMBER. "First code round of this epic" is *no earlier
+   `CodeReview` round on this session with the same plan key and k* — `interrupted` rounds included
+   (they passed admission); k compared, never the literal `k/N`, so a changed N does not make a
+   started epic new. Legacy rounds carry no identity and never match, so the first identity-carrying
+   round of an old session is checked once. This is what makes `gatePer = task` right: one session,
+   many epics.
+3. **The refusal covers ANY epic of an unsatisfied triple**, not only its first number — a first
+   call of `2/6` with no consultation is refused. (The design above said "an epic that opens a
+   triple"; that was wrong.)
+4. **"Epics closed" is "epics through the code gate".** `CodeReview → Done` also happens for a
+   passed CHECKPOINT, so the counter says what it measures, in the panel as well.
+5. **Closing is reconciled, not written once.** `Finish` saves the session before anything else
+   (`:2765`), so a failed cadence write cannot un-move the stage. The epic-closed record is idempotent
+   and reconciled from the session's own rounds on the next `review_code` and on `status`.
+6. **The store holds its lock across read–modify–write**, and refuses (fail closed) when the turn is
+   not held after its retries; a write-only lock loses one of two simultaneous closes.
+7. **The preflight covers every refusal the vendor path makes**, including the runtime resolution and
+   the missing answer schema (`ConsultationService.cs:389-401`) — otherwise `require` could demand a
+   consultation that cannot be had.
+8. **Repository identity is `git rev-parse --git-common-dir`, not the checkout path.** This plan is
+   being built in a worktree whose path differs from the main checkout's while both resolve to
+   `D:/rsd/dew_flow_connect_other_ais/.git`. The cadence key is common-dir + plan file name; the
+   consultant still runs in the actual checkout.
+9. **The plan is read at the resolved sha** (`git show <sha>:<plan>`), the revision under review,
+   never the working file of whatever branch the checkout holds. A plan not in that commit → the
+   caller's N, recorded as such.
+
+Tests added by it: `AnAgainRoundForTheSameEpic_IsNotAskedAgain_ButOneForEpicFour_Is`,
+`TheSameAfterAServerKill`, `AFirstCallOfEpicTwo_IsRefusedWithoutTheTriplesConsultation`,
+`AFailedCadenceWrite_IsReconciledOnTheNextCall`, `TwoSessionsClosingTogether_BothEpicsLand`,
+`AMissingAnswerSchema_StandsTheCadenceDown`, `TwoWorktreesOfOneRepository_ShareOneRecord`,
+`ThePlanIsCountedAtTheReviewedSha_NotTheCheckout`.
+
 ## Build order
 
 Six epics, so this plan is its own first customer: it owes two cadence consultations (epics 1–3,
