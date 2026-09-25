@@ -347,26 +347,49 @@ export function beating(
  * <p>Issue #537 asked for it: "does a code block wrap" is a question about which declaration WINS,
  * and a substring over the stylesheet cannot see a later rule taking it back. `undefined` means no
  * rule that reaches the element declares the property — it inherits, or takes the UA default.</p>
+ *
+ * <p>What the first version missed, each probed by our own code reviewer and each now a test in
+ * `cssRules.test.ts`: `names` is EVERY name that decides the property — its legacy alias and its
+ * shorthand compete too (`word-wrap` takes `overflow-wrap` back, `overflow` takes `overflow-x`); within
+ * one rule the LAST declaration counts; and `!important`, which this cascade does not model, makes its
+ * rule UNREADABLE rather than a guess. The caller's `ancestors` must be the element's whole chain — a
+ * rule through an ancestor left out is a definite no-match, not an unreadable one.</p>
  */
 export function winning(
   sheet: readonly Rule[],
   element: Element,
   ancestors: readonly Element[],
-  property: string,
+  names: readonly string[],
 ): { readonly value: string | undefined; readonly unreadable: Rule[] } {
-  const declaring = sheet.filter((rule) => declared(rule.body, property) !== undefined);
-  const matching = declaring.filter((rule) => couldMatch(rule.selector, element, ancestors) === true);
-  const top = matching.find((rule) => beating(rule, matching, element, ancestors).length === 0);
+  const declaring = sheet.filter((rule) => declared(rule.body, names) !== undefined);
+  const reaching = declaring.filter((rule) => couldMatch(rule.selector, element, ancestors) === true);
+  const top = reaching.find((rule) => beating(rule, reaching, element, ancestors).length === 0);
 
   return {
-    value: top === undefined ? undefined : declared(top.body, property),
-    unreadable: declaring.filter((rule) => couldMatch(rule.selector, element, ancestors) === undefined),
+    value: top === undefined ? undefined : declared(top.body, names)?.value,
+    unreadable: declaring.filter((rule) => unreadableFor(rule, names, element, ancestors)),
   };
 }
 
-/** What a rule's body declares for `property`, or `undefined` when it says nothing about it. */
-function declared(body: string, property: string): string | undefined {
-  const found = new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`).exec(body);
+/** A declaring rule whose verdict cannot be trusted: its selector is unreadable, or it may reach with !important. */
+function unreadableFor(rule: Rule, names: readonly string[], element: Element, ancestors: readonly Element[]): boolean {
+  const reaches = couldMatch(rule.selector, element, ancestors);
 
-  return found?.[1]?.trim();
+  return reaches === undefined || (reaches === true && declared(rule.body, names)?.important === true);
+}
+
+/** The LAST declaration in a rule's body of any of `names`, or `undefined` when it says nothing about them. */
+function declared(body: string, names: readonly string[]): { readonly value: string; readonly important: boolean } | undefined {
+  return body.split(';')
+    .map(declaration)
+    .filter((one) => one !== undefined && names.includes(one.name))
+    .map((one) => ({ value: one!.value.replace(/\s*!important$/i, ''), important: /!important$/i.test(one!.value) }))
+    .at(-1);
+}
+
+/** One `name: value` — the name matched WHOLE, so `overflow` is never read out of `overflow-x`. */
+function declaration(text: string): { readonly name: string; readonly value: string } | undefined {
+  const colon = text.indexOf(':');
+
+  return colon < 0 ? undefined : { name: text.slice(0, colon).trim(), value: text.slice(colon + 1).trim() };
 }

@@ -1506,21 +1506,51 @@ test('the captured passage wraps too', () => {
   );
 });
 
-/** A box inside an answer bubble, as the cascade sees it — outermost ancestor first. */
+/**
+ * A box inside an answer bubble, as the cascade sees it — the WHOLE chain, outermost first.
+ *
+ * <p>All of it, because a rule reaching the box through an ancestor left out here is answered as a
+ * definite "does not match" rather than as unreadable: `#messages .what pre { white-space: pre }`
+ * would stop the wrap in the browser while this test said it wraps. (Our own code reviewer.)</p>
+ */
 const IN_AN_ANSWER: readonly Element[] = [
+  { tag: 'html', classes: [], attrs: { lang: 'en' } },
+  { tag: 'body', classes: [], attrs: { 'data-vscode-context': '{}' } },
+  { tag: 'main', classes: [], attrs: { id: 'scroll' } },
+  { tag: 'div', classes: [], attrs: { id: 'messages' } },
   { tag: 'div', classes: ['msg', 'model'], attrs: {} },
   { tag: 'div', classes: ['what'], attrs: {} },
 ];
 
+/** Every name that decides each property asked about here: its alias and its shorthand compete too. */
+const DECIDED_BY: Readonly<Record<string, readonly string[]>> = {
+  'white-space': ['white-space', 'text-wrap-mode', 'text-wrap', 'white-space-collapse'],
+  'overflow-wrap': ['overflow-wrap', 'word-wrap'],
+  'overflow-x': ['overflow-x', 'overflow'],
+  display: ['display'],
+};
+
+const SHIPPED = stylesheet(chatPageHtml(state(), 'n0nce'));
+
 /** The value the cascade gives `property` on `tag` inside an answer — refusing a rule it cannot read. */
-function inAnAnswer(tag: string, property: string): string | undefined {
-  const sheet = stylesheet(chatPageHtml(state(), 'n0nce'));
-  const { value, unreadable } = winning(sheet, { tag, classes: [], attrs: {} }, IN_AN_ANSWER, property);
+function inAnAnswer(tag: string, property: string, sheet = SHIPPED): string | undefined {
+  const { value, unreadable } = winning(sheet, { tag, classes: [], attrs: {} }, IN_AN_ANSWER, DECIDED_BY[property] ?? [property]);
   assert.deepEqual(unreadable.map((rule) => rule.selector), [],
     `a rule declaring ${property} is written in a form this test cannot read, so its verdict is not trustworthy`);
 
   return value;
 }
+
+test('the cascade helper sees an override through ANY ancestor the answer really sits in', () => {
+  // The check on the check: each of these would stop the wrap in a browser, so each must turn the
+  // page's own answer to `pre` here. With a two-element chain the first three were invisible.
+  const html = chatPageHtml(state(), 'n0nce');
+  for (const override of ['#messages .what pre', 'main#scroll pre', 'body .msg .what pre', '.msg .what pre']) {
+    const planted = stylesheet(html.replace('</style>', `${override} { white-space: pre; }</style>`));
+    assert.equal(inAnAnswer('pre', 'white-space', planted), 'pre',
+      `${override} takes the wrap back in the browser, and the test did not see it`);
+  }
+});
 
 test('a code block in an answer wraps its lines, and never scrolls the conversation sideways', () => {
   // Issue #537: "в чате, когда предлагается ответ — не должно быть гориз скрола. нужно текст врап

@@ -922,7 +922,9 @@ function chatStyle(
      itself ("a long line of code must not widen the page"), and a reply prompt the person is meant
      to read was cut at the edge. pre-wrap keeps the indentation and the line breaks and wraps at
      spaces; anywhere breaks a path or a URL with no space in it rather than letting it hold the box
-     open. Both stated here rather than inherited, so the cascade test can hold them. What is COPIED
+     open — anywhere, not break-word, for the reason .msg .what gives: only anywhere also shrinks the
+     box's min-content width. Both stated here rather than inherited, so the cascade test can hold
+     them. What is COPIED
      is the stored markdown's own line — the wrap is the page's alone. overflow-x stays as a
      backstop that nothing should now reach. */
   .msg .what pre { margin: 0 0 .7em; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: auto; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.14)); border-radius: 4px; }

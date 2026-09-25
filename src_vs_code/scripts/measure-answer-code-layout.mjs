@@ -57,6 +57,7 @@ const PROBE = `<pre id="result"></pre><script>
     const code = document.querySelector('.msg .what pre');
     const table = document.querySelector('.msg .what table');
     const scroll = document.getElementById('scroll');
+    // + 1: scrollWidth and clientWidth are rounded separately, so a box that fits can read one pixel over.
     result.textContent = JSON.stringify({
       codeFits: code.scrollWidth <= code.clientWidth + 1,
       pageFits: scroll.scrollWidth <= scroll.clientWidth + 1,
@@ -69,14 +70,21 @@ const PROBE = `<pre id="result"></pre><script>
   }
 </script>`;
 
-/** The chat page as it ships, with one answer in it, its own scripts and CSP out, and the probe in. */
+/**
+ * The chat page as it ships, with one answer in it, its own scripts and CSP out, and the probe in.
+ *
+ * <p>Every insertion is a replacer FUNCTION: a replacement string reads `$&`, `$'` and `` $` `` as
+ * patterns, and an answer holding a dollar sign would quietly corrupt the page. (Our own code reviewer.)</p>
+ */
 function pageFor(width) {
+  const answer = `<div class="msg model"><div class="what">${renderAnswer(ANSWER)}</div></div>`;
+
   return chatPageHtml(STATE, 'n')
     .replace(/<meta http-equiv="Content-Security-Policy"[^>]*>/, '')
     .replace(/<script[\s\S]*?<\/script>/g, '')
-    .replace('<div id="messages">', `<div id="messages"><div class="msg model"><div class="what">${renderAnswer(ANSWER)}</div></div>`)
-    .replace('</head>', `<style>body { width: ${width}px; margin: 0; }</style></head>`)
-    .replace('</body>', `${PROBE}</body>`);
+    .replace('<div id="messages">', () => `<div id="messages">${answer}`)
+    .replace('</head>', () => `<style>body { width: ${width}px; margin: 0; }</style></head>`)
+    .replace('</body>', () => `${PROBE}</body>`);
 }
 
 const results = measured(BROWSER, 'coai-answer-code-layout-', WIDTHS.map((width) => ({ width, html: pageFor(width) })));
