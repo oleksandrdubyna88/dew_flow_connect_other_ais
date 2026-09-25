@@ -182,6 +182,11 @@ public sealed record LoggedLog(
     /// the table answers none — an absent list is EMPTY on both sides, never an error.
     /// </summary>
     public IReadOnlyList<LoggedConsultation> Consultations { get; init; } = [];
+
+    /// <summary>
+    /// The instant the blind spots and the defended list were counted from, or empty for all time.
+    /// </summary>
+    public string Since { get; init; } = string.Empty;
 }
 
 /// <summary>
@@ -378,12 +383,12 @@ public static class RoundsQuery
     /// otherwise show a log with every findings list silently empty.
     /// </param>
     public static LoggedLog Read(
-        string dataDir, int limit = DefaultLimit, string before = "", bool withFindings = false)
+        string dataDir, int limit = DefaultLimit, string before = "", bool withFindings = false, string since = "")
     {
         var file = Path.Combine(dataDir, RoundsDb.FileName);
         if (!File.Exists(file))
         {
-            return new LoggedLog([], [], [], new LoggedTotals());
+            return new LoggedLog([], [], [], new LoggedTotals()) { Since = since };
         }
 
         // Read-only, unpooled, and with a busy timeout rather than the default of none: a reader
@@ -393,11 +398,14 @@ public static class RoundsQuery
 
         return new LoggedLog(
             Rounds(db, Math.Clamp(limit, 1, MaxLimit), Cursor(before), withFindings),
-            BlindSpots(db),
-            Defended(db),
+            BlindSpots(db, since),
+            Defended(db, since),
             Totals(db))
         {
             Consultations = Consultations(db, Math.Clamp(limit, 1, MaxLimit)),
+            // The echo is the proof it was applied: a coai-mcp 0.36.0 given `--since` was measured to
+            // ignore it and answer all time with exit 0, so nothing else could tell the two apart.
+            Since = since,
         };
     }
 
@@ -824,25 +832,38 @@ public static class RoundsQuery
     /// findings and gets two accepted says something different from one that produces two and gets
     /// both — and only the second is a blind spot worth acting on.
     /// </remarks>
-    private static List<BlindSpot> BlindSpots(SqliteConnection db)
+    private static List<BlindSpot> BlindSpots(SqliteConnection db, string since)
     {
         var spots = new List<BlindSpot>();
-        spots.AddRange(GroupedBy(db, "category"));
-        spots.AddRange(GroupedBy(db, "role"));
-        spots.AddRange(GroupedBy(db, "providers"));
+        spots.AddRange(GroupedBy(db, "category", since));
+        spots.AddRange(GroupedBy(db, "role", since));
+        spots.AddRange(GroupedBy(db, "providers", since));
 
         return spots;
     }
 
-    private static List<BlindSpot> GroupedBy(SqliteConnection db, string column)
+    /// <summary>
+    /// Only the findings of rounds that started at or after `$since` — every finding when it is empty.
+    /// The period switch on the page's *What it keeps missing* (2026-09-25).
+    /// </summary>
+    /// <remarks>
+    /// A parameter, never interpolated; and compared as TEXT against `started_utc`, which is sound only
+    /// because <c>Program.SinceOf</c> writes the instant exactly the way the column is stored (`"O"`,
+    /// UTC). An empty value matches every round, so all time is the same query.
+    /// </remarks>
+    private const string InPeriod =
+        "round_id IN (SELECT r.id FROM rounds r WHERE $since = '' OR r.started_utc >= $since)";
+
+    private static List<BlindSpot> GroupedBy(SqliteConnection db, string column, string since)
     {
         using var read = db.CreateCommand();
         // The column is one of three names written HERE, never anything a caller sends — and it is
         // quoted anyway, so the shape cannot become an injection the day somebody makes it dynamic.
         read.CommandText = $"""
             SELECT "{column}" AS grouped, SUM(resolution = 'accept') AS accepted, COUNT(*) AS total
-            FROM findings WHERE resolution <> '' GROUP BY "{column}" ORDER BY accepted DESC
+            FROM findings WHERE resolution <> '' AND {InPeriod} GROUP BY "{column}" ORDER BY accepted DESC
             """;
+        read.Parameters.AddWithValue("$since", since);
         using var rows = read.ExecuteReader();
         var spots = new List<BlindSpot>();
         while (rows.Read())
@@ -868,15 +889,16 @@ public static class RoundsQuery
     /// is worse than no list, because somebody counts it later and reads the cap as the measurement.
     /// One extra row is fetched so the caller can tell "exactly two hundred" from "more than that".</para>
     /// </remarks>
-    private static List<LoggedFinding> Defended(SqliteConnection db)
+    private static List<LoggedFinding> Defended(SqliteConnection db, string since)
     {
         using var read = db.CreateCommand();
-        read.CommandText = """
+        read.CommandText = $"""
             SELECT ordinal, severity, category, file, line, title, why, fix, role, is_gating,
                    providers, resolution, reason, re_raised
-            FROM findings WHERE re_raised = 1 AND resolution = 'reject' ORDER BY id DESC LIMIT $limit
+            FROM findings WHERE re_raised = 1 AND resolution = 'reject' AND {InPeriod} ORDER BY id DESC LIMIT $limit
             """;
         read.Parameters.AddWithValue("$limit", DefendedCap + 1);
+        read.Parameters.AddWithValue("$since", since);
         using var rows = read.ExecuteReader();
         var defended = new List<LoggedFinding>();
         while (rows.Read())

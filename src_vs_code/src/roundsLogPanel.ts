@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { Escalation } from './escalations';
 import { LogRow, questionsHtml, roundsLogHtml } from './roundsLog';
 import { DbTotals, EMPTY_TOTALS } from './roundsDb';
+import { LogPeriod } from './logPeriod';
 import { Push, PushLedger, Region } from './pushLedger';
 import { ExportedRow, LogCommand, logCommandOf, LogPageMessage } from './roundsLogMessages';
 
@@ -12,6 +13,8 @@ export interface RoundsLogHooks {
   readonly onAnswer: (id: string) => Promise<void>;
   /** Today / Week / Month / Year on the spending tab. */
   readonly onUsageWindow: (window: string) => Promise<void>;
+  /** Today … All on *What it keeps missing*, which the server counts, so the host is asked. */
+  readonly onSpotsPeriod: (period: LogPeriod) => Promise<void>;
   /** ✕ beside a vendor on the spending tab. */
   readonly onForget: (provider: string) => Promise<void>;
   /** Record how a consultation ended — the log is where every one of them is, lapsed included. */
@@ -209,6 +212,9 @@ export class RoundsLogPanel {
     }
     if (command.kind === 'usageWindow') {
       void this.hooks.onUsageWindow(command.window);
+    }
+    if (command.kind === 'spotsPeriod') {
+      void this.hooks.onSpotsPeriod(command.period);
     }
     if (command.kind === 'closeConsultation') {
       void this.hooks.onCloseConsultation(command.id);

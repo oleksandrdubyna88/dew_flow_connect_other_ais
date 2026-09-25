@@ -122,6 +122,11 @@ export function activate(context: vscode.ExtensionContext): void {
       panelRef.setUsageWindow(window);
       await refreshRoundsLog(roundsLog, watcher, panelRef, true);
     },
+    // *What it keeps missing*'s period: the server counts it, so the log is read again over it.
+    onSpotsPeriod: async (period) => {
+      panelRef.setSpotsPeriod(period);
+      await refreshRoundsLog(roundsLog, watcher, panelRef, true);
+    },
     onForget: async (provider) => {
       await panelRef.forgetUsage(provider);
       await refreshRoundsLog(roundsLog, watcher, panelRef, true);
@@ -1268,7 +1273,7 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
   // runs. Built inline as arguments, an unpriced consultation's TypeError skipped this whole call, and
   // the date switch and *What it keeps missing* stopped answering with it (2026-09-23).
   const usage = await regionOr('spending', () => panel.usageTab());
-  const spots = await regionOr('blind-spot', () => blindSpotsHtml(fresh));
+  const spots = await regionOr('blind-spot', () => blindSpotsHtml(fresh, panel.spotsPeriod()));
   const consultations = await regionOr('consultations', () => panel.consultationsTab(fresh));
   log.update(
     await logRows(panel, fresh),

@@ -177,10 +177,19 @@ export interface DbLog {
    * the tick that knew better was then held off by the row it had already drawn.</p>
    */
   readonly read: boolean;
+  /**
+   * The instant the server counted the blind spots and the defended list from, or `''` for all time.
+   *
+   * <p>The server's own ECHO of `--since`, and the only proof it applied one: a coai-mcp 0.36.0 given
+   * the flag was measured to ignore it and answer all time with exit 0. The Review rounds page's period
+   * switch on *What it keeps missing* reads this to say when its server could not split by period.</p>
+   */
+  readonly spotsSince: string;
 }
 
 export const EMPTY_LOG: DbLog = {
   rounds: [], consultations: [], blindSpots: [], defended: [], totals: EMPTY_TOTALS, paged: false, read: false,
+  spotsSince: '',
 };
 
 /**
@@ -202,6 +211,7 @@ export function parseLog(text: string, paged = false): DbLog {
       totals: totalsOf(raw.totals),
       paged,
       read: true,
+      spotsSince: typeof (raw as { since?: unknown }).since === 'string' ? (raw as { since: string }).since : '',
     };
   } catch {
     return EMPTY_LOG;

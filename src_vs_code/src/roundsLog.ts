@@ -11,6 +11,7 @@ import { ChatTurnRecord } from './chatUsage';
 import { PriceLookup, consultationCost, priceOfLine, shortNumber, UsageEntry, Window, WINDOWS } from './usage';
 import { outcomeBySaid, outcomeSaid } from './consultations';
 import { foldedCell } from './consultationFold';
+import { DEFAULT_PERIOD, LogPeriod, periodButtonsHtml } from './logPeriod';
 import { Vendor } from './vendors';
 import { calledBy, decideSecondsOf, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
@@ -1003,7 +1004,7 @@ export function consultationsHtml(
       + ' the <b>Consultant</b> section of the panel says who it asks.</div>';
   }
 
-  const rows = log.consultations.map((one) => `<tr>
+  const rows = log.consultations.map((one) => `<tr data-started="${startedMsOf(one.startedUtc)}">
     <td>${escapeHtml(startedOf(one.startedUtc))}</td>
     <td>${escapeHtml(callerOf(one.callerKind))} → ${escapeHtml(one.vendor)}${one.model.length > 0 ? ` · ${escapeHtml(one.model)}` : ''}</td>
     <td>${escapeHtml(repoNameOf(one.repoPath))}${one.branch.length > 0 ? ` · ${escapeHtml(one.branch)}` : ''}</td>
@@ -1014,7 +1015,7 @@ export function consultationsHtml(
     <td class="what">${foldedCell(one.problem, `${one.id}:problem`)}</td>
     <td class="what">${foldedCell(one.advice, `${one.id}:advice`)}</td>
   </tr>${one.alert.length === 0 ? '' : `
-  <tr><td colspan="10" class="failed">${escapeHtml(one.alert)}</td></tr>`}`).join('');
+  <tr data-started="${startedMsOf(one.startedUtc)}"><td colspan="10" class="failed">${escapeHtml(one.alert)}</td></tr>`}`).join('');
 
   // The server answers the newest N for the same N the rounds use. Said out loud when the list is
   // AT that number, because an older consultation silently not existing is a page telling a lie
@@ -1101,13 +1102,43 @@ function badgeOf(status: string): string {
   return status === 'failed' ? 'interrupted' : status === 'interrupted' ? 'awaiting' : 'done';
 }
 
+/**
+ * When a consultation started, in ms, for the page's period filter — `''` when it cannot be read, which
+ * the page shows only under All rather than guessing which period it belongs to.
+ */
+function startedMsOf(utc: string): string {
+  const at = Date.parse(utc);
+
+  return Number.isFinite(at) ? String(at) : '';
+}
+
 function startedOf(utc: string): string {
   const at = Date.parse(utc);
 
   return Number.isFinite(at) ? new Date(at).toLocaleString() : utc;
 }
 
-export function blindSpotsHtml(log: DbLog): string {
+/**
+ * *What it keeps missing*, over the period the person chose — counted by the server (2026-09-25).
+ *
+ * <p>The period row comes FIRST and is drawn on every road, the empty one included: with nothing
+ * decided today there must still be a way to reach Week. A server that did not echo the period it was
+ * sent could not apply it (coai-mcp 0.36.0 was measured to ignore the flag), and says so in one
+ * sentence rather than passing all time off as the period marked above it.</p>
+ */
+export function blindSpotsHtml(log: DbLog, period: LogPeriod = 'all'): string {
+  return periodButtonsHtml('spots', period) + notSplitSaid(log, period) + spotsBody(log);
+}
+
+/** The one sentence an older server earns, or nothing: All is all time whoever counts it. */
+function notSplitSaid(log: DbLog, period: LogPeriod): string {
+  return period === 'all' || log.spotsSince.length > 0
+    ? ''
+    : '<div class="hint">This coai-mcp counts every decision it holds, whatever the period — update it to'
+      + ' 0.37.0 or newer to split this tab by period. Showing all time.</div>';
+}
+
+function spotsBody(log: DbLog): string {
   if (log.blindSpots.length === 0 && log.defended.length === 0) {
     return '<div class="empty">Nothing decided yet. This fills in as gates are closed —'
       + ' every accepted finding is something the AI had not seen and then agreed was worth having.</div>';
@@ -1390,6 +1421,7 @@ export function roundsLogHtml(
 <div id="questions">${questionsHtml(questions)}</div>
 <div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="conversations">Conversations</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
 <section id="tab-rounds" data-section="rounds" class="view-rounds">
+<div class="asChat">${periodButtonsHtml('conversations', DEFAULT_PERIOD)}</div>
 <div class="toolbar">
       <input id="search" type="search" placeholder="Search subject, branch, repository, reviewers, models…" autocomplete="off">
       <label>From <input id="from" type="datetime-local" step="60"></label>
@@ -1417,7 +1449,7 @@ export function roundsLogHtml(
 <div id="recorded" class="hint"></div>
 <div class="hint">Showing <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. <b>Took</b> is how long the reviewers ran and, after a <code>&#183;</code>, how long the deciding took — from the round finishing to its last decision; one number alone means nobody has decided it yet. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
-<section id="tab-consultations" data-section="consultations" hidden><div id="consultations-body">${consultationsHtmlText || waitingFor()}</div></section>
+<section id="tab-consultations" data-section="consultations" hidden>${periodButtonsHtml('consultations', DEFAULT_PERIOD)}<div id="consultations-none" class="empty" hidden>No consultation in this period — All shows every one.</div><div id="consultations-body">${consultationsHtmlText || waitingFor()}</div></section>
 <section id="tab-usage" data-section="usage" hidden><div id="usage-body">${usageHtml || waitingFor()}</div></section>
 <section id="tab-spots" data-section="spots" hidden><div id="spots-body">${spotsHtml || waitingFor()}</div></section>
 <script nonce="${nonce}">
@@ -1790,6 +1822,14 @@ export function roundsLogHtml(
       }
       return;
     }
+    // A PERIOD button on Conversations or Consultations: filtered here, because their rows are on the
+    // page. What it keeps missing sends a command instead (data-command), because the server counts it.
+    var periodButton = target.closest('[data-period]');
+    if (periodButton) {
+      var group = periodButton.closest('[data-periods]');
+      if (group) { choosePeriod(group.getAttribute('data-periods'), periodButton.getAttribute('data-period')); }
+      return;
+    }
     var button = target.closest('[data-command]');
     if (button) {
       // The model rides along because a CHAT row is a vendor AND a model, and one id cannot name
@@ -1915,13 +1955,19 @@ export function roundsLogHtml(
     toInput.value = localDay(now) + 'T23:59';
     readDates();
   }
-  fromInput.addEventListener('change', readDates);
-  toInput.addEventListener('change', readDates);
-  document.getElementById('today').addEventListener('click', setToday);
+  // A date typed by hand is the person's own range, so no period is marked; Today and All dates are
+  // two of the periods, so the Conversations row follows them. (The period switch, 2026-09-25.)
+  fromInput.addEventListener('change', function () { markPeriod('conversations', ''); readDates(); });
+  toInput.addEventListener('change', function () { markPeriod('conversations', ''); readDates(); });
+  document.getElementById('today').addEventListener('click', function () {
+    setToday();
+    markPeriod('conversations', 'day');
+  });
   document.getElementById('alldates').addEventListener('click', function () {
     fromInput.value = '';
     toInput.value = '';
     readDates();
+    markPeriod('conversations', 'all');
   });
   document.getElementById('exportpicked').addEventListener('click', function () {
     askExport(Object.keys(state.selected));
@@ -1967,6 +2013,58 @@ export function roundsLogHtml(
   // after STILL_NOTHING_MS is a section nothing ever reached, and it says so rather than promising
   // for ever that something is coming.
   var told = {};
+  // THE PERIOD SWITCH on Conversations and Consultations (operator, 2026-09-25). The days per period
+  // are the spending tab's own table, handed in as data, so "this week" is one answer on every tab;
+  // Today is since local midnight, the rest rolling — usage.ts windowStart, the same rule.
+  var PERIOD_DAYS = ${JSON.stringify(Object.fromEntries(WINDOWS.map((w) => [w.id, w.days])))};
+  function periodStartMs(period, now) {
+    if (period === 'all') { return -Infinity; }
+    if (period === 'day') { return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(); }
+    return now.getTime() - (PERIOD_DAYS[period] || 1) * 86400000;
+  }
+  function localStamp(d) {
+    var p = function (n) { return (n < 10 ? '0' : '') + n; };
+    return localDay(d) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  }
+  function markPeriod(tab, period) {
+    var group = document.querySelector('[data-periods="' + tab + '"]');
+    if (!group) { return; }
+    var buttons = group.querySelectorAll('[data-period]');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].className = buttons[i].getAttribute('data-period') === period ? 'tab on' : 'tab';
+    }
+  }
+  var consultationsPeriod = 'day';
+  // Rows older than the period are hidden — a row whose start cannot be read shows under All alone —
+  // and when rows exist but none is inside the period one line says so, rather than an empty table.
+  function filterConsultations() {
+    var start = periodStartMs(consultationsPeriod, new Date());
+    var rows = document.getElementById('consultations-body').querySelectorAll('tr[data-started]');
+    var shown = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var at = rows[i].getAttribute('data-started');
+      var inside = consultationsPeriod === 'all' || (at !== '' && Number(at) >= start);
+      rows[i].hidden = !inside;
+      if (inside) { shown++; }
+    }
+    document.getElementById('consultations-none').hidden = !(rows.length > 0 && shown === 0);
+  }
+  function choosePeriod(tab, period) {
+    markPeriod(tab, period);
+    if (tab === 'consultations') {
+      consultationsPeriod = period;
+      filterConsultations();
+      return;
+    }
+    if (tab !== 'conversations') { return; }
+    if (period === 'day') {
+      setToday();
+      return;
+    }
+    fromInput.value = period === 'all' ? '' : localStamp(new Date(periodStartMs(period, new Date())));
+    toInput.value = '';
+    readDates();
+  }
   // A live push REPLACES the consultations table, and a fold the person opened would snap shut under
   // them. So the keys of the open ones are read first and opened again after — compared as decoded
   // attribute values, never built into a selector, because a key carries a consultation id. A fold
@@ -1986,6 +2084,7 @@ export function roundsLogHtml(
     if (message.type === 'consultations' && typeof message.html === 'string') {
       told.consultations = true;
       replaceKeepingFolds(document.getElementById('consultations-body'), message.html);
+      filterConsultations();
       return;
     }
     if (message.type === 'spots' && typeof message.html === 'string') {
@@ -2069,6 +2168,7 @@ export function roundsLogHtml(
   try {
     // Today by default. Everything older is one click away on "All dates"; the hint says so.
     setToday();
+    filterConsultations();
   } catch (e) {
     failed(String(e && e.message ? e.message : e));
   }

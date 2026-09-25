@@ -1,3 +1,5 @@
+import { LogPeriod, periodOf } from './logPeriod';
+
 /**
  * What a message from the rounds log page MEANS, decided without a host.
  *
@@ -49,6 +51,8 @@ export type LogCommand =
   | { readonly kind: 'ready' }
   | { readonly kind: 'answer'; readonly id: string }
   | { readonly kind: 'usageWindow'; readonly window: string }
+  /** The period *What it keeps missing* is counted over — the server counts it, so the host is asked. */
+  | { readonly kind: 'spotsPeriod'; readonly period: LogPeriod }
   | { readonly kind: 'forget'; readonly provider: string }
   /** Record how a consultation ended. The id is the consultation, not a round. */
   | { readonly kind: 'closeConsultation'; readonly id: string }
@@ -78,6 +82,13 @@ export interface ExportedRow {
 }
 
 const IGNORE: LogCommand = { kind: 'ignore' };
+
+/** A period the page named, or nothing — a word the switch never offers is not a period. */
+function spotsPeriodOf(id: string): LogCommand {
+  const period = periodOf(id);
+
+  return period === undefined ? IGNORE : { kind: 'spotsPeriod', period };
+}
 
 /** A string, or nothing at all — the page's values arrive over a bridge and are not typed there. */
 function text(value: unknown): string {
@@ -146,6 +157,8 @@ export function logCommandOf(message: LogPageMessage | undefined | null): LogCom
       return { kind: 'answer', id };
     case 'usageWindow':
       return { kind: 'usageWindow', window: id };
+    case 'spotsPeriod':
+      return spotsPeriodOf(id);
     case 'closeConsultation':
       return { kind: 'closeConsultation', id };
     case 'forgetUsage':

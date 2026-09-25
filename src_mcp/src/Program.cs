@@ -532,12 +532,19 @@ internal static class Program
             // A caller that cannot page also cannot ask for a second page, so its default stays
             // the three hundred it has always been. (CodeRabbit, on the pull request.)
             var paged = Paged(args);
+            if (SinceOf(args) is not { } since)
+            {
+                Note("--since needs an instant, such as 2026-09-25T00:00:00Z.");
+
+                return 65; // EX_DATAERR — never 64, which an extension reads as an older binary
+            }
             Console.Out.WriteLine(System.Text.Json.JsonSerializer.Serialize(
                 Store.RoundsQuery.Read(
                     settings.DataDir,
                     Limit(args, paged ? Store.RoundsQuery.DefaultLimit : Store.RoundsQuery.LegacyLimit),
                     Before(args),
-                    withFindings: !paged),
+                    withFindings: !paged,
+                    since: since),
                 Server.ServerJsonContext.Default.LoggedLog));
         }
         catch (Exception e) when (Unreadable(e))
@@ -1473,6 +1480,31 @@ internal static class Program
     /// refuses the unknown argument with exit 64 and the extension retries without it.
     /// </remarks>
     internal static bool Paged(string[] args) => Array.IndexOf(args, "--paged") >= 0;
+
+    /// <summary>
+    /// `--since &lt;instant&gt;`, written the way `started_utc` is stored — empty when absent, null when
+    /// it is not an instant.
+    /// </summary>
+    /// <remarks>
+    /// The period switch on the page's *What it keeps missing* (2026-09-25). Refused rather than
+    /// ignored: a malformed period that quietly became all time is the one failure this flag must not
+    /// have. The comparison in <c>RoundsQuery</c> is textual, which is why the value is re-written as
+    /// `"O"` UTC — seven fractional digits and a `Z`, exactly like the column.
+    /// </remarks>
+    internal static string? SinceOf(string[] args)
+    {
+        var at = Array.IndexOf(args, "--since");
+        if (at < 0)
+        {
+            return string.Empty;
+        }
+
+        return at + 1 < args.Length && DateTimeOffset.TryParse(
+            args[at + 1], System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal, out var instant)
+            ? instant.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
+            : null;
+    }
 
     internal static async Task<int> AskLocalAsync(string[] args)
     {
