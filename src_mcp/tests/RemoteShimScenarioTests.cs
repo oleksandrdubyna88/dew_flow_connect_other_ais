@@ -36,6 +36,16 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
 
     private readonly List<string> _paths = [];
 
+    /// <summary>
+    /// Every request the stub saw and what became of it, and how its loop ended — issue #462.
+    /// </summary>
+    /// <remarks>
+    /// Written by the serving loop and read by a failure message, on two threads, so under its own lock.
+    /// </remarks>
+    private readonly List<string> _journal = [];
+
+    private readonly Stopwatch _stubClock = Stopwatch.StartNew();
+
     public ValueTask InitializeAsync()
     {
         _dataDir = Directory.CreateTempSubdirectory("coai-shim-data-").FullName;
@@ -51,6 +61,10 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
 
     public ValueTask DisposeAsync()
     {
+        // Issue #462: an assertion anywhere in this class can fail because the stub did not answer, and only
+        // a wait's own message carried the journal. The test output carries it for every test, and a runner
+        // shows the output of the ones that failed.
+        TestContext.Current.TestOutputHelper?.WriteLine(Journal());
         try
         {
             _server.Stop();
@@ -70,6 +84,16 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         return ValueTask.CompletedTask;
     }
 
+    /// <summary>
+    /// The stub's loop: one request at a time, and no request can end it — only the listener stopping can.
+    /// </summary>
+    /// <remarks>
+    /// Issue #462. An answer that threw, or a response that could not be written because the child was
+    /// killed mid-answer — which <see cref="AShimKilledMidClaim_LeavesEitherNothingOrAWholeClaim_NeverHalf"/>
+    /// does six times a run — used to escape this loop, fault the unobserved task, and leave every later
+    /// request to the child's 40 s HttpClient timeout: the exact words the release legs recorded. Each is now
+    /// written down and the loop goes on; so is a failed accept while the listener still listens.
+    /// </remarks>
     private async Task ServeAsync()
     {
         while (_server.IsListening)
@@ -79,16 +103,31 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
             {
                 context = await _server.GetContextAsync();
             }
-            catch (Exception e) when (e is HttpListenerException or ObjectDisposedException)
+            catch (Exception e) when (e is HttpListenerException or ObjectDisposedException or InvalidOperationException)
             {
-                return;
+                Noted($"accept failed: {e.GetType().Name} ({e.Message}){(_server.IsListening ? string.Empty : "; the listener has stopped")}");
+                if (!_server.IsListening)
+                {
+                    return;
+                }
+                continue;
             }
 
-            lock (_paths)
-            {
-                _paths.Add($"{context.Request.HttpMethod} {context.Request.Url!.AbsolutePath}");
-            }
+            await AnsweredAsync(context);
+        }
+        Noted("the listener stopped; the loop ended");
+    }
 
+    /// <summary>One request, answered — or written down as what went wrong with it, and aborted.</summary>
+    private async Task AnsweredAsync(HttpListenerContext context)
+    {
+        var request = $"{context.Request.HttpMethod} {context.Request.Url!.AbsolutePath}";
+        lock (_paths)
+        {
+            _paths.Add(request);
+        }
+        try
+        {
             var (status, body) = _answer(context);
             var bytes = Encoding.UTF8.GetBytes(body);
             context.Response.StatusCode = status;
@@ -96,6 +135,38 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
             context.Response.ContentLength64 = bytes.Length;
             await context.Response.OutputStream.WriteAsync(bytes);
             context.Response.Close();
+            Noted($"{request} -> {status}");
+        }
+        catch (Exception e)
+        {
+            Noted($"{request} -> {e.GetType().Name} ({e.Message})");
+            try
+            {
+                context.Response.Abort();
+            }
+            catch (Exception torn) when (torn is HttpListenerException or ObjectDisposedException or InvalidOperationException)
+            {
+                // Already torn down; the request is over either way.
+            }
+        }
+    }
+
+    /// <summary>What the stub saw, one line per request, and how its loop ended — for a failure message.</summary>
+    private string Journal()
+    {
+        lock (_journal)
+        {
+            return _journal.Count == 0
+                ? "The stub saw no request."
+                : "The stub saw:" + Environment.NewLine + string.Join(Environment.NewLine, _journal);
+        }
+    }
+
+    private void Noted(string line)
+    {
+        lock (_journal)
+        {
+            _journal.Add($"  +{_stubClock.Elapsed.TotalSeconds:0.000}s {line}");
         }
     }
 
@@ -517,11 +588,11 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     /// with the moment it was taken, since a process can change state between the check and the
     /// sentence. (codex again, and the same point from local twice.)</para>
     /// </remarks>
-    private static Task WaitForAsync(Func<bool> condition, string what, RunningShim shim) =>
+    private Task WaitForAsync(Func<bool> condition, string what, RunningShim shim) =>
         WaitUntilAsync(() => Task.FromResult(condition()), what, shim, PrerequisiteWait);
 
     /// <summary>The same wait, for a condition that has to be awaited — reading the claim is one.</summary>
-    private static Task WaitForAsync(Func<Task<bool>> condition, string what, RunningShim shim) =>
+    private Task WaitForAsync(Func<Task<bool>> condition, string what, RunningShim shim) =>
         WaitUntilAsync(condition, what, shim, PrerequisiteWait);
 
     /// <summary>
@@ -534,11 +605,11 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     /// side — a diagnostic test inheriting the two-minute budget blocks the suite for two minutes the
     /// day it regresses.
     /// </remarks>
-    private static Task WaitBrieflyForAsync(
+    private Task WaitBrieflyForAsync(
         Func<bool> condition, string what, RunningShim shim, TimeSpan limit) =>
         WaitUntilAsync(() => Task.FromResult(condition()), what, shim, limit);
 
-    private static async Task WaitUntilAsync(
+    private async Task WaitUntilAsync(
         Func<Task<bool>> condition, string what, RunningShim shim, TimeSpan deadline)
     {
         var clock = Stopwatch.StartNew();
@@ -553,14 +624,14 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
 
             if (Gone(shim.Process) is { } code && !await condition())
             {
-                throw Failure(what, clock.Elapsed, deadline, $"had exited with {code}", Drained(shim));
+                throw Failure(what, clock.Elapsed, deadline, $"had exited with {code}", Drained(shim), Journal());
             }
 
             await Task.Delay(50);
         }
         while (clock.Elapsed < deadline);
 
-        throw Failure(what, clock.Elapsed, deadline, StateOf(shim.Process), shim.Said);
+        throw Failure(what, clock.Elapsed, deadline, StateOf(shim.Process), shim.Said, Journal());
     }
 
     /// <summary>
@@ -615,10 +686,12 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     /// minutes from a diagnostic test's fraction of a second without opening the file. (gemini.)
     /// </remarks>
     private static TimeoutException Failure(
-        string what, TimeSpan waited, TimeSpan budget, string state, string said) =>
+        string what, TimeSpan waited, TimeSpan budget, string state, string said, string journal) =>
         new($"waiting for {what}: it was still not true after {waited.TotalSeconds:0.0}s "
             + $"of a {budget.TotalSeconds:0.0}s budget. The child {state} when that was checked. "
-            + (said.Length == 0 ? "It had said nothing on stderr." : $"It had said:{Environment.NewLine}{said}"));
+            + (said.Length == 0 ? "It had said nothing on stderr." : $"It had said:{Environment.NewLine}{said}")
+            // Issue #462: whether the request ever reached the stub, and what the stub did with it.
+            + Environment.NewLine + journal);
 
     // ------------------------------------------------------------------------------------------
     // What a prerequisite wait has to say when it runs out (2026-09-09).
@@ -634,6 +707,91 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     // version answers 404. The sentence above is every word of evidence there was, and it cannot
     // tell a slow machine from a child that died on the way.
     // ------------------------------------------------------------------------------------------
+
+    // ------------------------------------------------------------------------------------------
+    // Issue #462: the stub itself. The child's own words said "the Team server could not be reached:
+    // HttpClient.Timeout of 40 seconds" and nothing said why the stub did not answer. One way it can
+    // stop for good is a single request its loop could not finish.
+
+    [Fact]
+    public async Task AnAnswerThatThrows_DoesNotSilenceTheStub()
+    {
+        var first = true;
+        _answer = _ =>
+        {
+            if (first)
+            {
+                first = false;
+                throw new InvalidOperationException("a test's answer went wrong");
+            }
+
+            return (200, "{}");
+        };
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+
+        await Record.ExceptionAsync(() => client.GetAsync(_prefix + "first", TestContext.Current.CancellationToken));
+        var second = await client.GetAsync(_prefix + "second", TestContext.Current.CancellationToken);
+
+        second.StatusCode.Should().Be(HttpStatusCode.OK,
+            "one request the loop could not finish must not leave every later one to a 40 s timeout");
+    }
+
+    [Fact]
+    public async Task AResponseThatCannotBeWritten_DoesNotSilenceTheStub()
+    {
+        var first = true;
+        _answer = context =>
+        {
+            if (first)
+            {
+                first = false;
+                // The connection gone under the answer — what a child killed mid-request leaves behind.
+                context.Response.Abort();
+            }
+
+            return (200, "{}");
+        };
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+
+        await Record.ExceptionAsync(() => client.GetAsync(_prefix + "first", TestContext.Current.CancellationToken));
+        var second = await client.GetAsync(_prefix + "second", TestContext.Current.CancellationToken);
+
+        second.StatusCode.Should().Be(HttpStatusCode.OK, "a write that failed is that request's problem, not the stub's");
+    }
+
+    [Fact]
+    public async Task TheStubsJournal_NamesEveryRequestAndWhatBecameOfIt()
+    {
+        _answer = context => context.Request.Url!.AbsolutePath.EndsWith("/bad", StringComparison.Ordinal)
+            ? throw new InvalidOperationException("no answer for this one")
+            : (202, "{}");
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+
+        await client.PostAsync(_prefix + "good", new StringContent("{}"), TestContext.Current.CancellationToken);
+        await Record.ExceptionAsync(() => client.GetAsync(_prefix + "bad", TestContext.Current.CancellationToken));
+        await Polls.Until(() => Journal().Contains("/bad", StringComparison.Ordinal), TimeSpan.FromSeconds(10));
+
+        var journal = Journal();
+        journal.Should().Contain("POST /good -> 202", "an answered request says what it was answered");
+        journal.Should().Contain("GET /bad -> InvalidOperationException", "and one that failed says what failed it");
+        journal.IndexOf("/good", StringComparison.Ordinal).Should().BeLessThan(journal.IndexOf("/bad", StringComparison.Ordinal),
+            "in the order they came");
+    }
+
+    [Fact]
+    public async Task AFailedWait_CarriesWhatTheStubSaw()
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+        await client.GetAsync(_prefix + "seen", TestContext.Current.CancellationToken);
+        using var shim = StartShim(new ProcessStartInfo(ShimExe) { ArgumentList = { "--not-a-real-flag" } });
+        await shim.Process.WaitForExitAsync(TestContext.Current.CancellationToken);
+
+        var failure = await Record.ExceptionAsync(
+            () => WaitBrieflyForAsync(() => false, "the claim file to appear", shim, TimeSpan.FromMilliseconds(200)));
+
+        failure.Should().BeOfType<TimeoutException>().Which.Message.Should().Contain("GET /seen",
+            "a wait that runs out says whether the stub ever saw the request — the one fact #462 never had");
+    }
 
     [Fact]
     public async Task AFailedWait_NamesWhatItWaitedForAndWhatTheChildSaid()
