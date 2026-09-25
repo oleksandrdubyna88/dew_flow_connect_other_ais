@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.54.0 · Server 0.36.0 — 2026-09-25
 
 **The Consultations tab no longer has to be scrolled through.** On the Review rounds page each long *What
 was stuck* and *What was advised* is folded: its first line shows, and a click opens the rest. A fold you
