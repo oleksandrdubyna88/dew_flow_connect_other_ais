@@ -917,18 +917,21 @@ function chatStyle(
   .msg .what ul, .msg .what ol { margin: 0 0 .7em; padding-left: 1.6em; }
   .msg .what li { margin: .15em 0; }
   .msg .what code { font-family: var(--vscode-editor-font-family, monospace); font-size: .92em; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.18)); border-radius: 3px; padding: 0 .3em; }
-  /* Its own box, and it scrolls inside it: a long line of code must not widen the page. The
-     white-space is stated rather than left to the UA default for pre, because the whole of that
-     decision now rests on it: with the wrap above inherited, a pre that became pre-wrap would start
-     breaking code mid-token. Saying it here is what makes the test below able to hold it. */
-  .msg .what pre { margin: 0 0 .7em; padding: 8px 10px; white-space: pre; overflow-x: auto; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.14)); border-radius: 4px; }
-  /* The wrap above is INHERITED, and these two are the boxes it must not reach. The pre would be
-     safe by accident — white-space: pre leaves overflow-wrap nothing to act on — and safe by
-     accident stops being safe the day somebody makes it pre-wrap. The table is the real one: it is
-     display: block with overflow-x: auto and its CELLS do wrap, so inheriting the wrap would break
-     a long token in a cell, re-flow the columns, and quietly remove the horizontal scroll this rule
-     was written for. Declared rather than reasoned about, and asserted. */
-  .msg .what pre, .msg .what table { overflow-wrap: normal; }
+  /* Its own box, and it WRAPS — issue #537: "в чате, когда предлагается ответ — не должно быть гориз
+     скрола. нужно текст врап делать". It used to keep each line whole and scroll sideways inside
+     itself ("a long line of code must not widen the page"), and a reply prompt the person is meant
+     to read was cut at the edge. pre-wrap keeps the indentation and the line breaks and wraps at
+     spaces; anywhere breaks a path or a URL with no space in it rather than letting it hold the box
+     open. Both stated here rather than inherited, so the cascade test can hold them. What is COPIED
+     is the stored markdown's own line — the wrap is the page's alone. overflow-x stays as a
+     backstop that nothing should now reach. */
+  .msg .what pre { margin: 0 0 .7em; padding: 8px 10px; white-space: pre-wrap; overflow-wrap: anywhere; overflow-x: auto; background: var(--vscode-textCodeBlock-background, rgba(127,127,127,.14)); border-radius: 4px; }
+  /* The wrap above is INHERITED, and the table is the box it must not reach: it is display: block
+     with overflow-x: auto and its CELLS do wrap, so inheriting the wrap would break a long token in
+     a cell, re-flow the columns, and quietly remove the horizontal scroll this rule was written for.
+     Declared rather than reasoned about, and asserted. (The code block was the other box here until
+     #537 made it wrap.) */
+  .msg .what table { overflow-wrap: normal; }
   .msg .what pre code { background: none; padding: 0; }
   /* The control for ONE block, under the block it belongs to. Right-aligned and pulled up against
      it, so it reads as that block's footer rather than as the start of what follows — the same

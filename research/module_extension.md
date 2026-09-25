@@ -515,14 +515,35 @@ its automatic minimum is on height (which is why the neighbouring comment sets `
 nothing, because `panelView.ts`'s `.round .line` already settled on it for this same symptom, and
 because it makes the question moot rather than something the next reader has to re-derive.
 
-**`.msg .what pre, .msg .what table { overflow-wrap: normal; }`** takes it back where it must not
-apply. `overflow-wrap` is inherited, and both of those boxes scroll on purpose. The `pre` would have
-been safe by accident — `white-space: pre` leaves the property nothing to act on — and safe by
-accident stops being safe the day somebody makes it `pre-wrap`. The **table** is the real one: it is
-`display: block; overflow-x: auto` and its cells *do* wrap, so inheriting the wrap would have broken
-a long token in a cell, re-flowed the columns and quietly removed the horizontal scroll the rule was
-written for. Its test pins both halves — the exclusion, and that `pre` keeps `overflow-x: auto`
-*without* gaining `white-space: pre-wrap`.
+**`.msg .what table { overflow-wrap: normal; }`** takes it back where it must not apply. The
+**table** is `display: block; overflow-x: auto` and its cells *do* wrap, so inheriting the wrap would
+break a long token in a cell, re-flow the columns and quietly remove the horizontal scroll the rule was
+written for. Until issue #537 the rule named the answer's code block (`pre`) too, which then kept every
+line whole and scrolled sideways inside its own box; #537 reversed that — see *A code block in an answer
+wraps* below.
+
+### A code block in an answer wraps (2026-09-25, issue #537)
+
+*"в чате, когда предлагается ответ — не должно быть гориз скрола. нужно текст врап делать"* — a reply
+prompt the model proposed in a fenced block was cut at the right edge and had to be scrolled to be
+read. `.msg .what pre` is now `white-space: pre-wrap; overflow-wrap: anywhere`: indentation and line
+breaks are kept, a line wraps at spaces, and a path or URL with no space in it breaks rather than
+holding the box open. `overflow-x: auto` stays as a backstop nothing should reach. What **Copy block**
+and **Copy answer** put on the clipboard is the stored markdown's own text, so the wrap is the page's
+alone and a pasted prompt carries no invented break. The table keeps its own scroll (above).
+
+The sweep the decision asked for: `renderAnswer` — the only producer of answer code blocks — is used by
+the chat alone, and `white-space: pre;` appeared in `chatPage.ts` only. The Bugz review page's
+Before/After are numbered code lines (#488), where not wrapping is the point.
+
+Tested through the CASCADE, not a substring: `cssRules.ts` gained `winning(sheet, element, ancestors,
+property)`, which answers the value one property ends up with on an element and names any declaring rule
+it cannot read. **Measured** in headless Edge by `scripts/measure-answer-code-layout.mjs` (320, 700,
+1000 px, the issue's answer plus a no-space path, a long URL and a table wider than the page): the code
+block's `scrollWidth ≤ clientWidth`, `#scroll` does not overflow, and the table still scrolls inside its
+own box. 2026-09-25: all three held; against main's stylesheet all three failed on the code block. The
+browser half both measurements share is `scripts/browserLayout.mjs`, extracted from
+`measure-failure-layout.mjs` when this second one arrived.
 
 **What this is not:** evidence that text wraps. No test here can observe that — the page harness runs
 the page's script against a DOM shim with no layout engine, so `scrollWidth` is a number the test

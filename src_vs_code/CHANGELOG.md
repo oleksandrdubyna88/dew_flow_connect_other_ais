@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+**A code block in a chat answer wraps** (issue #537). A reply prompt or any other code the model proposes
+no longer runs off the right edge and has to be scrolled sideways: its lines wrap, keeping their indentation,
+and a long path or URL breaks rather than holding the block open. *Copy block* still copies the lines exactly
+as written. Tables keep scrolling inside their own box.
+
 ## Extension 0.53.1 · Server 0.35.0 — 2026-09-25
 
 **No more "never finished" rows for servers that were simply closed** (issue #514). A coai-mcp stopped

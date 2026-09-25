@@ -627,3 +627,16 @@ test('both controls refuse in the same words', () => {
     'the two controls tell a person the same thing in different words',
   );
 });
+
+test('a long line in a code block is copied whole, whatever the page wraps it into', () => {
+  // Issue #537 made the block WRAP on screen. The wrap is the page's; what is copied is the stored
+  // markdown's own line, so a reply prompt pasted elsewhere carries no break the display invented.
+  const line = 'a_path_with_no_spaces/' + 'and/going/'.repeat(30) + 'end.ts and then some words after it';
+  const answer = ['Paste this:', '', '```', line, 'second line', '```'].join('\n');
+
+  const decision = blockToCopy(answer, 0, signatureOf(answer));
+
+  assert.equal(decision.kind, 'copy');
+  assert.equal(decision.kind === 'copy' ? decision.text : '', `${line}\nsecond line`,
+    'the copied block is not the block as written: a line was cut, joined or broken');
+});
