@@ -3,11 +3,11 @@
   "callers": [
     {
       "file": "src_mcp/src/Server/Consultation/ConsultationService.cs",
-      "refusals": 23
+      "refusals": 22
     },
     {
       "file": "src_mcp/src/Server/PanelService.cs",
-      "refusals": 28
+      "refusals": 29
     }
   ],
   "reviewerEndings": [

@@ -1,7 +1,9 @@
 # PLAN — The consultant is called on a cadence, not only when an agent admits it is stuck
 
-> Status: **in progress, 2026-09-25 — epic 1 of 6 built** (branch `feat/cadence-1-core`: the arithmetic,
-> the orders, `Massive`; inert until epic 3 wires it). Scope: the gate's orders and refusals
+> Status: **in progress, 2026-09-25 — epics 1 and 2 of 6 built** (epic 1, PR #540: the arithmetic, the
+> orders, `Massive`; epic 2, branch `feat/cadence-2-record`: `consult` kinds, the record, the store, the
+> gate — deviation: `consult`'s `kind`/`plan`/`epics` arguments and one sentence of its description landed
+> in epic 2, not story 3.1, because the kinds cannot be tested end to end without them). Scope: the gate's orders and refusals
 > (`src_mcp/core/Commands`, a new `src_mcp/core/Cadence`, `src_mcp/src/Server/PanelService.cs`,
 > `src_mcp/src/Server/Consultation`), the plan-size heuristic (`PlanShape.cs`), the panel's settings
 > and sidebar (`src_vs_code`), and — last — the consultant rule's move into BOTH conventions

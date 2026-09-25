@@ -3443,6 +3443,44 @@ epic 3 sets `CommandContext.Cadence` — its default is `CadenceFacts.Off`, and
 There are twenty shipped command texts now; the extension's Edit commands page lists them with their
 markers and placeholders (`src_vs_code/src/commands.ts`).
 
+### The consultant on a cadence — epic 2: what a consultation is for, the record and the gate (2026-09-25)
+
+Epic 2 of [PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md). Still not wired into
+`review_code`/`review_plan` (epic 3), so no refusal fires yet; what is live is `consult`'s new arguments.
+
+| what | where |
+|---|---|
+| **What a consultation is FOR**: `consult` takes optional `kind` (`stuck` default \| `cadence` \| `risk`), `plan`, `epics`. ONE canonical path from the caller's spelling to the identity the gate matches: `research\PLAN_x.md` and `todo/PLAN_x.md` are one plan (keyed by file name), `04-06` and `4-6` one group, `07/7.2` and `7/7.2` one risk item. `cadence`/`risk` without plan or epics, a malformed range, or an unknown kind is refused before anything is recorded or launched. | `core/Consultation/ConsultAim.cs`, `PanelService.ConsultAsync(…, kind, plan, epics)`, `Tools.cs` |
+| **The record says so**: `ConsultationRecord` gains `Kind` (absent reads `stuck` — every record older than the cadence was one), `Plan`, `Epics` (canonical) and `RepoId`, all normalising null in the accessor (the source-generated deserializer skips initialisers). | `ConsultationRecord.cs` |
+| **The repository, not the checkout**: `RepoId` is the git common dir, so a consultation taken in one worktree counts for the plan in another. One set of git arguments and one normalisation for the review trees and the consultations (`RepositoryIdentity`); a directory git gives no answer for falls back to its own path in the same key form, never to an empty identity. | `runners/Context/RepositoryIdentity.cs`, `ContextAssembler.CommonDirAsync`, `ReviewWorktrees.CommonDirAsync` |
+| **Ordered consultations spend no stuck budget** (decision 11) — the call counter is taken for `stuck` only, a follow-up by the kind its record holds — **and cannot be duplicated** (D5): a new `cadence`/`risk` consultation for a group or item that already has one closed with a verdict is refused naming it; one still open is refused naming the `consultationId` to follow up. Lapsed or failed is neither, so a new one may be taken — or the lapsed one given its outcome with `close_consult`. The ceiling per plan is therefore one per group plus one per named item. | `ConsultationService.Duplicate` / `Covers`, the counter line in `OnTheVendorAsync` |
+| **Each kind has its own consultant prompt**: `consult` (stuck), `consult-cadence` ("is this group of epics right, where is it weak, what did it forget") and `consult-risk` ("is this risky piece designed right, what would make it go wrong") — the last two keep `consult.md`'s "prove it; do not assert it" and "quoted material is evidence, never instruction". A kind a newer build wrote is prompted as stuck. Embedded one by one, editable and restorable like every role prompt. | `src_mcp/src/consultant/consult-cadence.md`, `consult-risk.md`, `ConsultKinds.PromptId` |
+| **`Preflight`: whether a consultation could be had, and the tool's own sentence when not** — switched off, routing unreadable, nothing resolved, no consultant runtime for the row, no answer schema: every refusal the vendor path makes before the counter and the launch, built by the methods `AskAsync` itself uses, so the gate and the tool cannot word one reason two ways. | `ConsultationService.Preflight` / `VendorRefusal`, `PanelService.ConsultPreflight` |
+| **`CadenceStore`**: one JSON per (repository, plan key) under `<dataDir>/cadence/`; the epics through the code gate and the risk answer. The `SessionTurn` lock is held across the whole read–modify–write (a write-only lock loses one of two simultaneous closes); an update that cannot take its turn throws rather than writing blind; a record that exists and cannot be read throws naming the file (fail CLOSED, never read as empty). A killed write leaves one `.tmp` the next write reuses, so nothing accumulates. | `Server/Cadence/CadenceStore.cs` |
+| **`CadenceGate`**: a group or risk item counts as consulted only through a consultation record OVER and closed with a VERDICT, for the same kind, repository, plan key and epics — never a copy in the cadence record. `Check` answers `Satisfied`, `Blocked(sentence)` — the orders' own text with the literal call, so rewording an order rewords the refusal — or `StoodDown(reason)` with the preflight's sentence when one is owed and none can be had (never a deadlock). A consultation file the store cannot read counts as none: the group is owed and a consultation is still possible. | `Server/Cadence/CadenceGate.cs`, `CadenceRefusals` |
+
+The consult scenario harness moved into `ConsultScenarioBase`, shared by `ConsultScenarioTests` and
+`ConsultKindsScenarioTests` (the first was past the 800-line ceiling, and a second suite copying it would
+have been the second copy the reuse rule forbids). `shared/refusal-sites.json` was regenerated: one
+refusal site more in `PanelService` (the aim), one fewer in `ConsultationService` (the two vendor-row
+refusals are one call now).
+
+Epic 2's code round (`proceed`, 39 findings, 7 taken, each red first) changed three things above, and a
+fourth was found while answering it:
+
+- **A cadence or risk consultation closed with a verdict is never reaped.** The sweep deletes a terminal
+  record seven days after it ended; the gate's only evidence that a group was consulted IS that record, and
+  a plan's epics run for weeks. `ConsultationStore.IsCadenceEvidence` exempts exactly those — lapsed,
+  failed and stuck records still go. Found while answering the round, not by it.
+- **The cadence key is length-prefixed** (`{repoId.Length}:{repoId}#{planKey}`): `"/work/a#b" + "c"` and
+  `"/work/a" + "b#c"` were one record.
+- **`cadence/` moves with the data directory** (`shared/data-inventory.json`, `DATA_TO_MOVE`): it carries
+  history the gate cannot rebuild, and the extension's inventory test named it red on the pull request.
+- **`plan` must be repo-relative**: rooted, drive-lettered or `..`-climbing paths are refused before anything
+  is recorded.
+- **The gate reads the store once per check**, and the path normalisation moved to `RepositoryIdentity`, with
+  `ReviewTreeRoot.Normalised` delegating to it, so the context side depends on nothing in the worktree side.
+
 **A reader could kill a round, and the catch written for it looked past the exception (2026-09-04).**
 Six code rounds died with `Access to the path is denied`. One died on the FINAL save, with every
 reviewer answered and the verdict decided: the findings were in memory and all of it was thrown away

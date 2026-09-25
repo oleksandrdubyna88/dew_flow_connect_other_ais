@@ -67,8 +67,7 @@ public sealed class ReviewTreeRoot(IProcessLauncher launcher, string path)
     /// slash, case folded. Story 2.2 measured the cost of folding case before a filesystem call and
     /// this is the other side of that line — nothing here is ever handed to <c>Directory.Exists</c>.
     /// </summary>
-    public static string Normalised(string repository) =>
-        repository.Replace('\\', '/').TrimEnd('/').ToLowerInvariant();
+    public static string Normalised(string repository) => Context.RepositoryIdentity.Normalised(repository);
 
     private static string Digest(string key) =>
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..8];

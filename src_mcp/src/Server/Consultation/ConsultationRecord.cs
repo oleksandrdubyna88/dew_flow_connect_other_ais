@@ -123,6 +123,25 @@ public sealed record ConsultationRecord(
     /// </remarks>
     public string OutcomeBy { get => field ?? string.Empty; init; } = string.Empty;
 
+    /// <summary>
+    /// What the consultation was FOR — <c>stuck</c>, <c>cadence</c> or <c>risk</c>
+    /// (<c>todo/PLAN_consult_on_a_cadence.md</c>). Absent on every record older than the cadence, which
+    /// reads as <c>stuck</c> because that is what every one of them was.
+    /// </summary>
+    public string Kind { get => field ?? Core.Consultation.ConsultKinds.Stuck; init; } = Core.Consultation.ConsultKinds.Stuck;
+
+    /// <summary>The plan a cadence or risk consultation was about, repo-relative; empty for a stuck one.</summary>
+    public string Plan { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>The group (<c>4-6</c>) or risk item (<c>7/7.2</c>) it covers, canonical; empty for a stuck one.</summary>
+    public string Epics { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
+    /// The repository it was about — the git common dir, so a consultation taken in one worktree counts for
+    /// the plan in another. Empty on records older than the cadence, which therefore never cover a group.
+    /// </summary>
+    public string RepoId { get => field ?? string.Empty; init; } = string.Empty;
+
     public int RunnerPid { get; init; }
 
     /// <summary>The filesystem invariant's sentence, when it fired. The one field a person must read.</summary>
