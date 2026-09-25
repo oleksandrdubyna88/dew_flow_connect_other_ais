@@ -160,14 +160,17 @@ function open(rows: readonly LogRow[], totals: DbTotals = TOTALS, extra = ''): P
       const start = html.indexOf(`data-periods="${tab}"`);
       if (start < 0) { return []; }
       const group = at(`data-periods:${tab}`);
-      const buttons = [...html.slice(start, html.indexOf('</div>', start)).matchAll(/data-period="([\w-]+)"/g)]
+      // Every button of the group, with the attributes it really carries — a spots button says its
+      // period in data-id, a page-filtered one in data-period.
+      const buttons = [...html.slice(start, html.indexOf('</div>', start)).matchAll(/<button[^>]*>/g)]
         .map((found) => {
-          const button = at(`period:${tab}:${found[1]}`);
-          button.getAttribute = (asked: string) => (asked === 'data-period' ? found[1] ?? null : null);
+          const attributes = Object.fromEntries([...found[0].matchAll(/\s([\w-]+)="([^"]*)"/g)].map((a) => [a[1], a[2]]));
+          const button = at(`period:${tab}:${attributes['data-period'] ?? attributes['data-id']}`);
+          button.getAttribute = (asked: string) => attributes[asked] ?? null;
 
           return button;
         });
-      group.querySelectorAll = (asked: string) => (asked === '[data-period]' ? buttons : []);
+      group.querySelectorAll = (asked?: string) => (asked === 'button' ? buttons : []);
 
       return [group];
     }
@@ -1200,4 +1203,34 @@ test('every consultation row, its alert row too, carries when it started — and
   assert.equal((html.match(new RegExp(`<tr data-started="${at}"`, 'g')) ?? []).length, 2,
     'the row and its alert row must hide together, so both carry the start');
   assert.match(html, /<tr data-started="">/, 'an unreadable start is empty, which the page shows only under All');
+});
+
+test('a What it keeps missing press marks itself at once, before the server answers', async () => {
+  // Our own code reviewer: the host spawns coai-mcp before it pushes, and a press that changed nothing
+  // until then looked like a press that did nothing.
+  const { periodButtonsHtml } = await import('../logPeriod');
+  const page = open([], TOTALS, periodButtonsHtml('spots', 'day'));
+  const button = {
+    getAttribute: (asked: string) => ({ 'data-command': 'spotsPeriod', 'data-id': 'week' } as Record<string, string>)[asked] ?? null,
+  };
+
+  page.click({ closest: (asked: string) => (asked === '[data-command]' ? button : null) });
+
+  assert.deepEqual(marked(page, 'spots'), ['week'], 'the press marked nothing until the host answered');
+  assert.ok(page.posted.some((one) => (one as { command?: string }).command === 'spotsPeriod'), 'and it still asks the host');
+});
+
+test('a period with no consultation hides the table too, not only its rows', () => {
+  const page = open([]);
+  consultationRows(page);
+  const table = page.at('consultations-table');
+  const body = page.at('consultations-body');
+  const rowsOf = body.querySelectorAll.bind(body);
+  body.querySelectorAll = (selector?: string) => (selector === 'table' ? [table] : rowsOf(selector));
+
+  page.deliver({ type: 'consultations', html: CONSULTATIONS(String(Date.now() - 3 * 86_400_000)) });
+  assert.equal(table.hidden, true, 'an empty period left a header row under the line that says it is empty');
+
+  page.click(periodPress('consultations', 'all'));
+  assert.equal(table.hidden, false);
 });

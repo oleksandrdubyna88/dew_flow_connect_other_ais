@@ -3892,19 +3892,26 @@ because their rows are already on it:
 
 - *Conversations* — a row in the shared table, inside `.asChat` so it shows only in that view; a press sets
   `#from` / `#to` and runs the existing date filter (Today = `setToday`; a rolling period from its first
-  minute with no end; All clears both). The page is handed the days per period as JSON, so there is no
-  second table of numbers. Today and All dates follow the row; a date typed by hand unmarks it.
+  minute with no end; All clears both). The page runs the host's own `startOfPeriodMs` (usage.ts), handed
+  its source the way `asInstant` is, with the days through `jsonForScript` — one rule for the spending
+  tab, the host and the page, not a second copy written for the page. The row follows the Today and All
+  dates buttons; a date typed by hand unmarks it. The Rounds hint reads *Opens on today*, since the range
+  is shared.
 - *Consultations* — a row OUTSIDE `#consultations-body`, so a push does not replace it; every row and its
   alert row carry `data-started`, and `filterConsultations` hides those older than the period after every
   push and every press. A start that cannot be read shows under All only; a period with rows but none in
-  it says *"No consultation in this period — All shows every one."*
+  it says *"No consultation in this period — All shows every one."* and hides the table header with them.
 
 *What it keeps missing* is counted by the SERVER (`--log --since`, `module_server.md`): its buttons are the
-host command `spotsPeriod`, `RoundsLogCache` holds the period (Today by default), works out the instant at
-read time so Today moves at midnight, and forgets the cached log when it changes. `blindSpotsHtml(log,
+host command `spotsPeriod` (the press marks itself at once; the push confirms it), `RoundsLogCache` holds
+the period (Today by default), works out the instant at read time so Today moves at midnight, and forgets
+the cached log when it changes. A read in flight over the OLD period when a press lands is dropped and the
+new period read instead, and a cached log is never served under another period's mark — otherwise Today's
+counts could sit under Week with a real echo and nothing to say so. `blindSpotsHtml(log,
 period)` draws the row first on every road, the empty one included. A server that did not echo the instant
 (`DbLog.spotsSince` empty) could not apply it, and the tab says so in one sentence and that it shows all
-time — never passing all time off as the period marked above it.
+time — never passing all time off as the period marked above it. An empty PERIOD says *"Nothing decided in
+this period"*, not the all-time *"Nothing decided yet"*.
 
 **The Consultations tab folds each long field** (2026-09-25, operator: *"список консультантов по умолчанию
 должен быть свернут. а то сильно много листать"*). A consultation's problem can be thousands of characters,

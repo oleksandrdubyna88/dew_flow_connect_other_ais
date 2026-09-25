@@ -40,6 +40,9 @@ export class RoundsLogCache {
   /** The period *What it keeps missing* is counted over — Today by default, like the spending tab. */
   private spots: LogPeriod = DEFAULT_PERIOD;
 
+  /** The period the cached log was COUNTED over — which a press can have moved on from since. */
+  private cachedPeriod: LogPeriod = DEFAULT_PERIOD;
+
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   /**
@@ -69,24 +72,47 @@ export class RoundsLogCache {
   }
 
   async roundsLog(): Promise<DbLog> {
-    // Cached for a few seconds, because the log page refreshes every tick while a round runs and
-    // each read is a process spawn plus a walk of the whole findings table. The gate called that
-    // out twice: a hot path is not where a child process belongs. A few seconds is shorter than any
-    // round and longer than any burst of ticks.
-    const AGE_MS = 10_000;
-    if (Date.now() - this.roundsLogAt < AGE_MS) {
+    if (this.stillFresh()) {
       return this.roundsLogCache;
     }
-    const server = serverPath(this.context.globalStorageUri);
+    const period = this.spots;
     this.roundsLogAt = Date.now();
-    this.roundsLogCache = server === undefined
+    const read = await this.readOver(period);
+    // A press can land while a tick's read is still running. That read was counted over the OLD period,
+    // and written into the cache it would be drawn under the new mark with a real echo — Today's counts
+    // labelled Week, and nothing on screen to say so. It is dropped and the new period read instead.
+    // (Our own code reviewer, the code round.)
+    if (period !== this.spots) {
+      return this.roundsLog();
+    }
+    this.cachedPeriod = period;
+    this.roundsLogCache = read;
+
+    return read;
+  }
+
+  /**
+   * Cached for a few seconds, because the log page refreshes every tick while a round runs and each
+   * read is a process spawn plus a walk of the whole findings table. The gate called that out twice: a
+   * hot path is not where a child process belongs. A few seconds is shorter than any round and longer
+   * than any burst of ticks — and a log counted over ANOTHER period is never fresh.
+   */
+  private stillFresh(): boolean {
+    const AGE_MS = 10_000;
+
+    return Date.now() - this.roundsLogAt < AGE_MS && this.cachedPeriod === this.spots;
+  }
+
+  /** One read of the log, its blind spots counted over `period`. */
+  private async readOver(period: LogPeriod): Promise<DbLog> {
+    const server = serverPath(this.context.globalStorageUri);
+
+    return server === undefined
       ? EMPTY_LOG
       // The whole window rather than one page: this list is what gives every row its decision
       // counts, and the page paginates the rows it already holds. See MAX_LIMIT for the arithmetic.
       // The instant is worked out HERE, at read time, so Today moves at midnight with nobody pressing.
-      : await readLog(server.fsPath, { limit: MAX_LIMIT }, serverRun(server.fsPath), sinceOf(this.spots, new Date()));
-
-    return this.roundsLogCache;
+      : readLog(server.fsPath, { limit: MAX_LIMIT }, serverRun(server.fsPath), sinceOf(period, new Date()));
   }
 
   /**

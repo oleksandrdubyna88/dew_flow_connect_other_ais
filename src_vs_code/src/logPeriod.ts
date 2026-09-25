@@ -1,4 +1,4 @@
-import { Window, WINDOWS, windowStart } from './usage';
+import { DAYS_OF, startOfPeriodMs, Window, WINDOWS } from './usage';
 import { escapeHtml } from './webviewHtml';
 
 /**
@@ -28,7 +28,7 @@ export function periodOf(value: unknown): LogPeriod | undefined {
 
 /** The first instant of the period, in ms — the spending tab's own rule, and minus infinity for All. */
 export function periodStart(period: LogPeriod, now: Date): number {
-  return period === 'all' ? Number.NEGATIVE_INFINITY : windowStart(period, now);
+  return startOfPeriodMs(period, now.getTime(), DAYS_OF);
 }
 
 /** What `--log --since` is handed: the period's first instant in UTC, or nothing for All. */

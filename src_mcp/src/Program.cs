@@ -1491,6 +1491,12 @@ internal static class Program
     /// have. The comparison in <c>RoundsQuery</c> is textual, which is why the value is re-written as
     /// `"O"` UTC — seven fractional digits and a `Z`, exactly like the column.
     /// </remarks>
+    private static readonly string[] IsoInstants =
+    [
+        "yyyy-MM-dd'T'HH:mm:ssK", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFFK",
+        "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss.FFFFFFF",
+    ];
+
     internal static string? SinceOf(string[] args)
     {
         var at = Array.IndexOf(args, "--since");
@@ -1499,8 +1505,14 @@ internal static class Program
             return string.Empty;
         }
 
-        return at + 1 < args.Length && DateTimeOffset.TryParse(
-            args[at + 1], System.Globalization.CultureInfo.InvariantCulture,
+        // Exactly one: two periods are no period, and taking the first let argument ORDER decide the
+        // request's meaning. (codex, the code round.)
+        var once = Array.LastIndexOf(args, "--since") == at;
+
+        // ISO 8601 only: TryParse also took "9/25/2026", which is a guess about a culture, not an
+        // instant. (Our own code reviewer, the code round.)
+        return once && at + 1 < args.Length && DateTimeOffset.TryParseExact(
+            args[at + 1], IsoInstants, System.Globalization.CultureInfo.InvariantCulture,
             System.Globalization.DateTimeStyles.AssumeUniversal, out var instant)
             ? instant.UtcDateTime.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
             : null;

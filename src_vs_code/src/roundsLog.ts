@@ -8,7 +8,7 @@ import { ChatLedgers, roundKey, usageRegion } from './panelView';
 import { TeamServerState } from './teamServerView';
 import { ModelPrice } from './modelPrices';
 import { ChatTurnRecord } from './chatUsage';
-import { PriceLookup, consultationCost, priceOfLine, shortNumber, UsageEntry, Window, WINDOWS } from './usage';
+import { DAYS_OF, PriceLookup, consultationCost, priceOfLine, shortNumber, startOfPeriodMs, UsageEntry, Window, WINDOWS } from './usage';
 import { outcomeBySaid, outcomeSaid } from './consultations';
 import { foldedCell } from './consultationFold';
 import { DEFAULT_PERIOD, LogPeriod, periodButtonsHtml } from './logPeriod';
@@ -1127,7 +1127,18 @@ function startedOf(utc: string): string {
  * sentence rather than passing all time off as the period marked above it.</p>
  */
 export function blindSpotsHtml(log: DbLog, period: LogPeriod = 'all'): string {
-  return periodButtonsHtml('spots', period) + notSplitSaid(log, period) + spotsBody(log);
+  return periodButtonsHtml('spots', period) + notSplitSaid(log, period) + spotsBody(log, period);
+}
+
+/**
+ * What an empty tab says — about the PERIOD when one was applied. Under Today, "nothing decided yet"
+ * read as never, on a machine with a year of decisions behind it. (Our own code reviewer.)
+ */
+function nothingDecided(log: DbLog, period: LogPeriod): string {
+  return period !== 'all' && log.spotsSince.length > 0
+    ? '<div class="empty">Nothing decided in this period — a wider one, or All, shows what was.</div>'
+    : '<div class="empty">Nothing decided yet. This fills in as gates are closed —'
+      + ' every accepted finding is something the AI had not seen and then agreed was worth having.</div>';
 }
 
 /** The one sentence an older server earns, or nothing: All is all time whoever counts it. */
@@ -1138,10 +1149,9 @@ function notSplitSaid(log: DbLog, period: LogPeriod): string {
       + ' 0.37.0 or newer to split this tab by period. Showing all time.</div>';
 }
 
-function spotsBody(log: DbLog): string {
+function spotsBody(log: DbLog, period: LogPeriod): string {
   if (log.blindSpots.length === 0 && log.defended.length === 0) {
-    return '<div class="empty">Nothing decided yet. This fills in as gates are closed —'
-      + ' every accepted finding is something the AI had not seen and then agreed was worth having.</div>';
+    return nothingDecided(log, period);
   }
 
   return '<div class="spots">'
@@ -1447,7 +1457,7 @@ export function roundsLogHtml(
   <span id="pageinfo"></span>
 </div>
 <div id="recorded" class="hint"></div>
-<div class="hint">Showing <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. <b>Took</b> is how long the reviewers ran and, after a <code>&#183;</code>, how long the deciding took — from the round finishing to its last decision; one number alone means nobody has decided it yet. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
+<div class="hint">Opens on <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. <b>Took</b> is how long the reviewers ran and, after a <code>&#183;</code>, how long the deciding took — from the round finishing to its last decision; one number alone means nobody has decided it yet. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
 <section id="tab-consultations" data-section="consultations" hidden>${periodButtonsHtml('consultations', DEFAULT_PERIOD)}<div id="consultations-none" class="empty" hidden>No consultation in this period — All shows every one.</div><div id="consultations-body">${consultationsHtmlText || waitingFor()}</div></section>
 <section id="tab-usage" data-section="usage" hidden><div id="usage-body">${usageHtml || waitingFor()}</div></section>
@@ -1837,6 +1847,9 @@ export function roundsLogHtml(
       // it. Without this the cross on a chat row looked right in the markup and forgot nothing,
       // because the page never sent the half that says which model. (No backticks in here: this is
       // inside a template literal.)
+      // What it keeps missing's period is counted by the server, which takes a spawn to answer: the
+      // press marks itself now and the push confirms it. (Our own code reviewer.)
+      if (button.getAttribute('data-command') === 'spotsPeriod') { markPeriod('spots', button.getAttribute('data-id')); }
       vscode.postMessage({ type: 'command', command: button.getAttribute('data-command'), id: button.getAttribute('data-id'), model: button.getAttribute('data-model') });
       return;
     }
@@ -2013,25 +2026,29 @@ export function roundsLogHtml(
   // after STILL_NOTHING_MS is a section nothing ever reached, and it says so rather than promising
   // for ever that something is coming.
   var told = {};
-  // THE PERIOD SWITCH on Conversations and Consultations (operator, 2026-09-25). The days per period
-  // are the spending tab's own table, handed in as data, so "this week" is one answer on every tab;
-  // Today is since local midnight, the rest rolling — usage.ts windowStart, the same rule.
-  var PERIOD_DAYS = ${JSON.stringify(Object.fromEntries(WINDOWS.map((w) => [w.id, w.days])))};
+  // THE PERIOD SWITCH on Conversations and Consultations (operator, 2026-09-25): usage.ts's own
+  // startOfPeriodMs and days, so "this week" is one answer on every tab — Today since local midnight,
+  // the rest rolling.
+  // The host's own function, handed over as source, and its days as data through the one escaper —
+  // not a second copy of the rule written for the page. (The code round, 2026-09-25.)
+  var PERIOD_DAYS = ${jsonForScript(DAYS_OF)};
+  var startOfPeriodMs = ${startOfPeriodMs.toString()};
   function periodStartMs(period, now) {
-    if (period === 'all') { return -Infinity; }
-    if (period === 'day') { return new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(); }
-    return now.getTime() - (PERIOD_DAYS[period] || 1) * 86400000;
+    return startOfPeriodMs(period, now.getTime(), PERIOD_DAYS);
   }
   function localStamp(d) {
     var p = function (n) { return (n < 10 ? '0' : '') + n; };
     return localDay(d) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
+  // A page-filtered row's buttons say their period in data-period; What it keeps missing's are host
+  // commands and say it in data-id. Both are read, or a spots press marked nothing (the code round).
   function markPeriod(tab, period) {
     var group = document.querySelector('[data-periods="' + tab + '"]');
     if (!group) { return; }
-    var buttons = group.querySelectorAll('[data-period]');
+    var buttons = group.querySelectorAll('button');
     for (var i = 0; i < buttons.length; i++) {
-      buttons[i].className = buttons[i].getAttribute('data-period') === period ? 'tab on' : 'tab';
+      var id = buttons[i].getAttribute('data-period') || buttons[i].getAttribute('data-id');
+      buttons[i].className = id === period ? 'tab on' : 'tab';
     }
   }
   var consultationsPeriod = 'day';
@@ -2047,7 +2064,11 @@ export function roundsLogHtml(
       rows[i].hidden = !inside;
       if (inside) { shown++; }
     }
-    document.getElementById('consultations-none').hidden = !(rows.length > 0 && shown === 0);
+    var none = rows.length > 0 && shown === 0;
+    document.getElementById('consultations-none').hidden = !none;
+    // The table goes with its rows: a header over nothing, under a line saying there is nothing, is noise.
+    var tables = document.getElementById('consultations-body').querySelectorAll('table');
+    for (var t = 0; t < tables.length; t++) { tables[t].hidden = none; }
   }
   function choosePeriod(tab, period) {
     markPeriod(tab, period);
