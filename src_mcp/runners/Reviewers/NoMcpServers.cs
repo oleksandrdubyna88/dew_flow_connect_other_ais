@@ -25,28 +25,36 @@ namespace CoaiMcp.Runners.Reviewers;
 /// reported at startup (<see cref="GeminiFamilyConfigured"/>) rather than switched off.</item>
 /// </list>
 /// </remarks>
-public static class NoMcpServers
+public static partial class NoMcpServers
 {
+    /// <summary>The root table Codex declares its MCP servers under.</summary>
+    private const string ServersTable = "mcp_servers";
+
+    /// <summary>How long one match may run: the input is a local config file, but a pattern is never unbounded.</summary>
+    private const int MatchTimeoutMs = 1000;
+
     /// <summary>Claude Code: take MCP servers only from <c>--mcp-config</c>, which is never passed.</summary>
     public const string ClaudeFlag = "--strict-mcp-config";
 
     /// <summary>A TOML key that needs no quotes.</summary>
-    private static readonly Regex Bare = new("^[A-Za-z0-9_-]+$", RegexOptions.CultureInvariant);
+    [GeneratedRegex("^[A-Za-z0-9_-]+$", RegexOptions.CultureInvariant, MatchTimeoutMs)]
+    private static partial Regex Bare { get; }
 
     /// <summary>
     /// A name that can ride argv to codex safely: on Windows codex is an npm <c>.cmd</c> shim, and cmd.exe
     /// reads an unquoted <c>&amp;</c>, <c>|</c>, <c>%</c> or <c>^</c> as part of a command line of its own.
     /// A name outside this set is not passed, which leaves that one server loaded. (gemini, the code round.)
     /// </summary>
-    private static readonly Regex Passable = new("^[A-Za-z0-9 _.'@-]+$", RegexOptions.CultureInvariant);
+    [GeneratedRegex("^[A-Za-z0-9 _.'@-]+$", RegexOptions.CultureInvariant, MatchTimeoutMs)]
+    private static partial Regex Passable { get; }
 
     /// <summary>One segment of a dotted TOML key, and what follows it.</summary>
-    private static readonly Regex Segment = new(
-        """\G\s*("(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z0-9_-]+)\s*(\.|$)""", RegexOptions.CultureInvariant);
+    [GeneratedRegex("""\G\s*("(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z0-9_-]+)\s*(\.|$)""", RegexOptions.CultureInvariant, MatchTimeoutMs)]
+    private static partial Regex Segment { get; }
 
     /// <summary>The <c>-c</c> overrides that switch every named Codex MCP server off for one launch.</summary>
     public static IEnumerable<string> CodexArgs(IReadOnlyList<string> names) =>
-        names.Where(name => Passable.IsMatch(name)).SelectMany(name => (string[])["-c", $"mcp_servers.{CodexKey(name)}.enabled=false"]);
+        names.Where(name => Passable.IsMatch(name)).SelectMany(name => (string[])["-c", $"{ServersTable}.{CodexKey(name)}.enabled=false"]);
 
     /// <summary>
     /// A server name as a TOML key segment: bare when it can be, else a LITERAL key.
@@ -56,10 +64,19 @@ public static class NoMcpServers
     /// shim is a re-tokenisation waiting for the wrong input (the codex consultant's own note). A name
     /// holding a single quote can only be a basic string, escaped.
     /// </remarks>
-    public static string CodexKey(string name) =>
-        Bare.IsMatch(name) ? name
-        : !name.Contains('\'', StringComparison.Ordinal) ? $"'{name}'"
-        : "\"" + name.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+    public static string CodexKey(string name)
+    {
+        if (Bare.IsMatch(name))
+        {
+            return name;
+        }
+        if (!name.Contains('\'', StringComparison.Ordinal))
+        {
+            return $"'{name}'";
+        }
+
+        return "\"" + name.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
+    }
 
     /// <summary>The MCP servers Codex would load from <c>$CODEX_HOME/config.toml</c> — none when it cannot say.</summary>
     /// <param name="env">
@@ -69,9 +86,8 @@ public static class NoMcpServers
     /// </param>
     public static IReadOnlyList<string> CodexConfigured(Func<string, string?> env)
     {
-        var home = env("HOME") is { Length: > 0 } unix ? unix : env("USERPROFILE") is { Length: > 0 } windows ? windows : Home();
         var path = Path.Combine(
-            env("CODEX_HOME") is { Length: > 0 } codexHome ? codexHome : Path.Combine(home, ".codex"), "config.toml");
+            env("CODEX_HOME") is { Length: > 0 } codexHome ? codexHome : Path.Combine(HomeIn(env), ".codex"), "config.toml");
         try
         {
             return File.Exists(path) ? CodexServerNames(File.ReadAllText(path)) : [];
@@ -124,7 +140,7 @@ public static class NoMcpServers
 
     /// <summary>The server a table header names — <c>[mcp_servers.x]</c> and its sub-tables — or nothing.</summary>
     private static string? HeaderServer(IReadOnlyList<string>? table) =>
-        table is ["mcp_servers", var name, ..] ? name : null;
+        table is [ServersTable, var name, ..] ? name : null;
 
     /// <summary>
     /// The server a <c>key = value</c> line declares: an inline table under <c>[mcp_servers]</c>, or a dotted
@@ -141,9 +157,9 @@ public static class NoMcpServers
 
         return (table, keys) switch
         {
-            (["mcp_servers"], [var name]) when inline => name,
-            ([], ["mcp_servers", var name]) when inline => name,
-            ([], ["mcp_servers", var name, _, ..]) => name,
+            ([ServersTable], [var name]) when inline => name,
+            ([], [ServersTable, var name]) when inline => name,
+            ([], [ServersTable, var name, _, ..]) => name,
             _ => null,
         };
     }
@@ -191,6 +207,17 @@ public static class NoMcpServers
 
     private static string Home() => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
+    /// <summary>The home directory the given environment names — <c>HOME</c>, then <c>USERPROFILE</c> — else this process's.</summary>
+    private static string HomeIn(Func<string, string?> env)
+    {
+        if (env("HOME") is { Length: > 0 } unix)
+        {
+            return unix;
+        }
+
+        return env("USERPROFILE") is { Length: > 0 } windows ? windows : Home();
+    }
+
     /// <summary>The key path of a <c>[table]</c> header, or nothing when it is not one.</summary>
     private static IReadOnlyList<string>? HeaderPath(string line)
     {
@@ -225,9 +252,10 @@ public static class NoMcpServers
     private static string Unescaped(string body)
     {
         var text = new StringBuilder(body.Length);
-        for (var at = 0; at < body.Length; at++)
+        var at = 0;
+        while (at < body.Length)
         {
-            at = Escaped(body, at, text);
+            at = Escaped(body, at, text) + 1;
         }
 
         return text.ToString();
