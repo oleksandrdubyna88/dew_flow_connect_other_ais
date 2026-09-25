@@ -537,8 +537,11 @@ the chat alone, and `white-space: pre;` appeared in `chatPage.ts` only. The Bugz
 Before/After are numbered code lines (#488), where not wrapping is the point.
 
 Tested through the CASCADE, not a substring: `cssRules.ts` gained `winning(sheet, element, ancestors,
-property)`, which answers the value one property ends up with on an element and names any declaring rule
-it cannot read. **Measured** in headless Edge by `scripts/measure-answer-code-layout.mjs` (320, 700,
+names)`, which answers the value one property ends up with on an element and names any declaring rule it
+cannot read. It counts every name that decides the property (an alias like `word-wrap`, a shorthand like
+`overflow`), reads a rule's LAST declaration, reports `!important` as unreadable, and is given the answer's
+whole ancestor chain — `html > body > main#scroll > div#messages > div.msg > div.what` — because a rule
+through an ancestor left out would be a silent no-match (our own code reviewer, the code round). **Measured** in headless Edge by `scripts/measure-answer-code-layout.mjs` (320, 700,
 1000 px, the issue's answer plus a no-space path, a long URL and a table wider than the page): the code
 block's `scrollWidth ≤ clientWidth`, `#scroll` does not overflow, and the table still scrolls inside its
 own box. 2026-09-25: all three held; against main's stylesheet all three failed on the code block. The
