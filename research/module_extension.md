@@ -3887,9 +3887,10 @@ accepted the turn, the process died before the answer was read, and the turn was
 должен быть свернут. а то сильно много листать"*). A consultation's problem can be thousands of characters,
 and one of them filled the whole screen, so the tab was a scroll. `foldedCell` (`consultationFold.ts`)
 renders *What was stuck* and *What was advised* as the page already renders a round's orders: a native
-`<details class="fold">`, closed by default — the first line, cut to 160 characters, with `…`, as the
-summary, the whole text inside. A field folds when it is longer than 160 characters or has a line break;
-a short one-liner stays plain. Both roads are escaped, the key (`<id>:problem`, `<id>:advice`) too. Open,
+`<details class="fold">`, closed by default — the first line with words in it, cut to 160 characters,
+with `…`, as the summary, the whole text inside. A field folds when, its trailing whitespace aside, it is
+longer than 160 characters or has a line break — `\r`, `\n` and the Unicode line and paragraph
+separators alike; a short one-liner stays plain. Both roads are escaped, the key (`<id>:problem`, `<id>:advice`) too. Open,
 the preview gives way to *Collapse*, so the first line is not read or copied twice. A live push replaces
 `#consultations-body` wholesale, so the page's `replaceKeepingFolds` reads the keys of the open folds
 first and opens the same ones again after — compared as decoded attribute values, never built into a

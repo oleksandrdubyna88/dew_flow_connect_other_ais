@@ -32,12 +32,28 @@ export function foldedCell(text: string, key: string): string {
     + `<div class="whole">${escapeHtml(text)}</div></details>`;
 }
 
-/** A field folds when it is longer than the cap or has a line break: a break hides what follows it. */
+/**
+ * Every line terminator a vendor's text may carry — `\r` alone and the Unicode separators too, or a
+ * field broken by one of those would show whole. (codex, the code round.)
+ */
+const LINE_BREAK = /\r\n|[\r\n\u2028\u2029]/;
+
+/**
+ * A field folds when it is longer than the cap or has a line break: a break hides what follows it. A
+ * break with nothing after it hides nothing, so the end is trimmed first. (Our own code reviewer.)
+ */
 function folds(text: string): boolean {
-  return text.length > FOLD_AFTER || text.includes('\n');
+  const shown = text.trimEnd();
+
+  return shown.length > FOLD_AFTER || LINE_BREAK.test(shown);
 }
 
-/** The first line, never longer than the cap, and `…` — something is always hidden behind a fold. */
+/**
+ * The first line with words in it, never longer than the cap, and `…` — something is always hidden
+ * behind a fold. A field that opens on a blank line used to show `…` alone. (Our own code reviewer.)
+ */
 function preview(text: string): string {
-  return `${(text.split('\n', 1)[0] ?? '').slice(0, FOLD_AFTER)}…`;
+  const first = text.split(LINE_BREAK).find((line) => line.trim().length > 0) ?? '';
+
+  return `${first.slice(0, FOLD_AFTER)}…`;
 }
