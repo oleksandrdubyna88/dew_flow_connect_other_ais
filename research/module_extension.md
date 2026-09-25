@@ -2511,6 +2511,12 @@ Two tests were asserting a stand-in for their rule, and each was corrected to th
 imports `help` from `panelControls`; the radio test allowed at most two radios per name, which meant "one
 group" only while every group had two options — it now asserts each name belongs to exactly one group.
 
+Epic 4's code round (`good_enough`, 26 findings, 5 taken, each red first): a round dated more than five
+minutes in the FUTURE no longer makes a session recent for ever (`SKEW_MS` allows the clocks of two sides);
+the latest instant is found in one pass, since `Math.max(...all)` threw `RangeError` on a 300 000-round
+history; each changed answer is painted as it LANDS rather than after the whole batch; and the test
+fixtures build a real `SessionFile` instead of casting to one.
+
 ## The Claude list is ASKED, not listed (2026-09-16, issue #301)
 
 Four of the panel's five model sources were discovered by asking the machine — a local engine's

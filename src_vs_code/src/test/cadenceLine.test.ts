@@ -115,12 +115,12 @@ test('a group or a risk item of the wrong shape is dropped rather than drawn as 
   assert.deepEqual(parsed?.risk, []);
 });
 
-const session = (over: Partial<SessionFile> & { plan?: string } = {}): SessionFile => ({
+const session = (over: Partial<SessionFile> = {}): SessionFile => ({
   state: { sessionId: 's', repoPath: 'D:/repo', branch: 'feat/x', stage: 'CodeReview', awaitingResolve: false },
   rounds: [{ stage: 'PlanReview', number: 1, verdict: 'proceed', gatingCount: 0, reviewers: '', completedUtc: '2026-09-25T10:00:00Z' }],
   plan: 'todo/PLAN_x.md',
   ...over,
-} as SessionFile);
+});
 
 const NOW = Date.parse('2026-09-25T12:00:00Z');
 
@@ -128,7 +128,7 @@ test('only a session touched in the last day, holding a plan, on a named repo an
   assert.equal(cadenceWanted(session(), NOW), true);
   assert.equal(cadenceWanted(session({ plan: '' }), NOW), false, 'no plan, nothing to count');
   const { plan: _, ...older } = session();
-  assert.equal(cadenceWanted(older as SessionFile, NOW), false, 'a file from before the field');
+  assert.equal(cadenceWanted(older, NOW), false, 'a file from before the field');
   assert.equal(cadenceWanted(session({ rounds: [] }), NOW), false, 'nothing ever ran');
   assert.equal(
     cadenceWanted(session({ rounds: [{ stage: 'PlanReview', number: 1, verdict: 'proceed', gatingCount: 0, reviewers: '', completedUtc: '2026-09-24T11:00:00Z' }] }), NOW),
@@ -142,4 +142,21 @@ test('a round still running counts by when it started', () => {
   const running = session({ rounds: [{ stage: 'CodeReview', number: 1, verdict: 'running', gatingCount: 0, reviewers: '', completedUtc: '', startedUtc: '2026-09-25T11:59:00Z' }] });
 
   assert.equal(cadenceWanted(running, NOW), true);
+});
+
+// The code round (codex): a round dated in the future made a session eligible for ever; a round a
+// minute ahead is a skewed clock between two sides of one machine, and still counts.
+test('a session dated in the future is not probed for ever — a clock a few minutes out still counts', () => {
+  const at = (instant: string): SessionFile => session({ rounds: [{ stage: 'PlanReview', number: 1, verdict: 'proceed', gatingCount: 0, reviewers: '', completedUtc: instant }] });
+
+  assert.equal(cadenceWanted(at('2026-09-27T12:00:00Z'), NOW), false, 'two days ahead is a broken stamp, not a recent session');
+  assert.equal(cadenceWanted(at('2026-09-25T12:03:00Z'), NOW), true, 'three minutes ahead is a clock between two sides');
+});
+
+// The code round (codex): the latest instant was found by spreading every one into Math.max, which
+// throws past the engine's argument limit on a long enough history.
+test('a session with a very long history is still judged, not thrown on', () => {
+  const rounds = Array.from({ length: 300_000 }, () => ({ stage: 'CodeReview', number: 1, verdict: 'proceed', gatingCount: 0, reviewers: '', completedUtc: '2026-09-25T11:00:00Z' }));
+
+  assert.equal(cadenceWanted(session({ rounds }), NOW), true);
 });
