@@ -58,10 +58,8 @@ test('the real pinned resolver rejects a dirty or wrong mount and leaves no stal
   fs.copyFileSync(path.join(sourceRoot, 'AGENTS.md'), path.join(root, 'AGENTS.md'));
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
   fs.writeFileSync(path.join(root, '.agents/PROJECT.md'), '# Fixture project\n');
-  // The consultant half is this PRODUCT's own file rather than a mounted rule, so the fixture
-  // needs it too — and taking the real one keeps the fixture honest about what the build reads.
-  fs.mkdirSync(path.dirname(path.join(root, CONSULTANT_SOURCE)), { recursive: true });
-  fs.copyFileSync(path.join(sourceRoot, CONSULTANT_SOURCE), path.join(root, CONSULTANT_SOURCE));
+  // The consultant half is a MOUNTED rule since story 5.2 of todo/PLAN_consult_on_a_cadence.md: the
+  // submodule above carries it, and the fixture needs nothing of this product's own.
   git(root, 'add', 'AGENTS.md', 'CLAUDE.md', '.agents/PROJECT.md');
   commit(root);
   const output = path.join(root, OUTPUT);
@@ -80,13 +78,6 @@ test('the real pinned resolver rejects a dirty or wrong mount and leaves no stal
   assert.equal(fs.existsSync(output + '.tmp'), false);
   // Generated artifacts are ignored in the product; keep this fixture equivalent.
   fs.writeFileSync(path.join(root, '.gitignore'), 'src_vs_code/src/generated/\n');
-  // A consultant source that is not ours by its marker fails the build rather than shipping
-  // text nobody can recognise as the block.
-  const consultantSource = path.join(root, CONSULTANT_SOURCE);
-  const ourBlock = fs.readFileSync(consultantSource);
-  fs.writeFileSync(consultantSource, '## Something else entirely\n');
-  assert.throws(() => prepareGate(root), /coai-consultant/);
-  fs.writeFileSync(consultantSource, ourBlock);
   const rule = path.join(mount, 'common/coai-review-gate.md');
   const original = fs.readFileSync(rule);
   fs.appendFileSync(rule, '\nUnreviewed edit.\n');
@@ -124,4 +115,62 @@ test('missing canonical checkout fails preparation and invalidates previous gene
   fs.writeFileSync(output, 'previous generated policy');
   assert.throws(() => prepareGate(root), /git submodule update --init/);
   assert.equal(fs.existsSync(output), false);
+});
+
+/**
+ * A consultant rule that is not ours by its marker is refused rather than shipped.
+ *
+ * <p>Asked of `consultantBody` directly since the source moved into the mount: corrupting the mounted
+ * file made the mount DIRTY, and the resolver — which runs first — refused it for that instead, so the
+ * old case went red for a reason that was not the one it named (the risk consultation for story 5.2,
+ * point 1).</p>
+ */
+test('a consultant rule without its marker is refused, with and without delivery metadata', () => {
+  const body = '<!-- coai-consultant v3 -->\n## When you are stuck, ask another vendor (ConnectOtherAIs)\n\nFirst.\n';
+  const owns = "<!-- owns: coai — the MCP server's own name -->\n";
+
+  assert.equal(consultantBody('---\nid: common.coai-consultant\n---\n' + owns + body), body);
+  assert.throws(() => consultantBody('---\nid: common.coai-consultant\n---\n## Something else entirely\n'), /coai-consultant/);
+  assert.throws(() => consultantBody('## Something else entirely\n'), /coai-consultant/);
+});
+
+/**
+ * A clean, correctly pinned mount that LACKS the consultant rule fails the build naming it.
+ *
+ * <p>The case a consumer meets when its pin predates the move: nothing is dirty and nothing
+ * mismatches, the file is simply not there — and a bare ENOENT would not say which half is missing
+ * or why.</p>
+ */
+test('a pinned mount without the consultant rule fails naming it', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-gate-no-consultant-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const sourceRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
+  const sourceMount = path.join(sourceRoot, '.agents/conventions');
+  const git = (cwd, ...args) => execFileSync('git', ['-C', cwd, ...args], {
+    encoding: 'utf8', timeout: 30_000, maxBuffer: 1024 * 1024, windowsHide: true,
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  const commit = (cwd, message) => git(cwd, '-c', 'user.name=Gate fixture', '-c', 'user.email=gate@example.invalid',
+    '-c', 'commit.gpgsign=false', 'commit', '--allow-empty', '-qm', message);
+  git(root, 'init', '-q');
+  git(root, '-c', 'protocol.file.allow=always', 'submodule', 'add', '-q', sourceMount, '.agents/conventions');
+  const mount = path.join(root, '.agents/conventions');
+  fs.cpSync(path.join(sourceMount, 'node_modules'), path.join(mount, 'node_modules'), { recursive: true });
+  // The rule and its body record leave together, as a conventions commit from before the move would.
+  git(mount, 'rm', '-q', 'common/coai-consultant.md');
+  const bodies = path.join(mount, 'research/rule-bodies.json');
+  const manifest = JSON.parse(fs.readFileSync(bodies, 'utf8'));
+  manifest.rules = manifest.rules.filter((rule) => rule.id !== 'common.coai-consultant');
+  fs.writeFileSync(bodies, JSON.stringify(manifest, null, 2) + '\n');
+  git(mount, 'add', 'research/rule-bodies.json');
+  commit(mount, 'a conventions pin from before the consultant rule');
+  fs.copyFileSync(path.join(sourceRoot, 'AGENTS.md'), path.join(root, 'AGENTS.md'));
+  fs.writeFileSync(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
+  fs.writeFileSync(path.join(root, '.agents/PROJECT.md'), '# Fixture project\n');
+  git(root, 'add', 'AGENTS.md', 'CLAUDE.md', '.agents/PROJECT.md', '.agents/conventions');
+  commit(root, 'fixture');
+
+  assert.throws(() => prepareGate(root), (error) => error instanceof Error
+    && error.message.includes('.agents/conventions/common/coai-consultant.md') && /consultant/i.test(error.message));
+  assert.equal(fs.existsSync(path.join(root, CONSULTANT_OUTPUT)), false, 'no consultant constant is left from a previous build');
 });

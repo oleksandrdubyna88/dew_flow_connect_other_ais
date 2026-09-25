@@ -38,7 +38,7 @@ import { CONSULTANT_RULE } from './generated/consultantRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '18ba0fdd9ad6aaa5';
+export const SNIPPET_BODY_SHA = 'c428bb502c5c7079';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
@@ -63,7 +63,7 @@ export const SNIPPET_BODY_SHA = '18ba0fdd9ad6aaa5';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 11;
+export const ARTEFACT_VERSION = 12;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -142,19 +142,18 @@ export const CALLER_VERSION = 2;
 /**
  * The CONSULTANT half's version — when to ask another vendor, and what to do with the answer.
  *
- * <p><b>A fourth number, and the first one whose rule file is not in the conventions repository.</b>
- * The other three halves are shared: every repository in this family is reviewed by the gate, asked
- * to declare its model, and may have a document reviewed. This one says when to call ONE tool of ONE
- * server, which is this product's own material — asked where it should live, the operator answered
- * that conventions holds only shared rules and specific material belongs to the project that owns
- * it. So the source is <c>src_vs_code/src/consultantRule.md</c> here, emitted beside the generated
- * gate rules, and everything else about it follows the pattern the two halves above established.</p>
+ * <p><b>A fourth number, and a mounted rule like the other three since v3.</b> Until then it was
+ * this product's own file, <c>src_vs_code/src/consultantRule.md</c>, on the operator's ruling of
+ * 2026-09-13 that a rule about when to call one tool of one server is not shared. The ruling was
+ * reversed on 2026-09-25 — this server gates every repository in the family, so a rule about when to
+ * call its consultant is as shared as the gate rule — and v3, which added the cadence trigger, is the
+ * first read from <c>.agents/conventions/common/coai-consultant.md</c>.</p>
  *
  * <p>It is not cosmetic, for the same reason theirs are not: a copy pasted before the consultant
  * existed carries no consultant marker, and the AI obeying it never calls `consult` — it goes on
  * trying the same fix a third time, which is the whole thing this feature exists to interrupt.</p>
  */
-export const CONSULTANT_VERSION = 2;
+export const CONSULTANT_VERSION = 3;
 
 /**
  * The halves the artefact is made of: the one place that knows which they are, in what order, and
@@ -249,7 +248,27 @@ export function halvesIn(text: string): readonly { readonly id: string; readonly
     .map((match) => ({ id: match[1], version: Number.parseInt(match[2], 10) }));
 }
 
-/** The first applicable paste wins, using the same reader for the panel and copy command. */
+/**
+ * The shared-rule mounts, and the folder each keeps its rules in. A gate rule found in one of these is
+ * one file of four: the other halves are its siblings, not text inside it.
+ */
+const MOUNTED_RULE_FOLDERS: Readonly<Record<string, string>> = {
+  '.agents/conventions/common/coai-review-gate.md': '.agents/conventions/common/',
+  '.claude/rules/shared/common/coai-review-gate.md': '.claude/rules/shared/common/',
+};
+
+/** The rule files beside a mounted gate rule that carry the other three halves. */
+export const MOUNTED_SIBLINGS: readonly string[] = ['coai-document-gate.md', 'coai-caller-model.md', 'coai-consultant.md'];
+
+/**
+ * The first applicable paste wins, using the same reader for the panel and copy command.
+ *
+ * <p><b>A mount is read with its siblings</b> (todo/PLAN_consult_on_a_cadence.md, story 5.2). A repository
+ * that mounts the rules and pasted nothing holds its four halves as four files, and reading the gate
+ * rule alone told it that it was behind on the three it had. Only the SELECTED location's own mount is
+ * read — a half missing from it is never filled from another mount — and a real paste still wins over
+ * any mount, because that is the text the AI in the repository actually reads.</p>
+ */
 export async function readSnippetStatus(read: (name: string) => Promise<string>): Promise<SnippetStatus> {
   const texts = await Promise.all(SNIPPET_LOCATIONS.map(read));
   const at = texts.findIndex(text => text.includes(SNIPPET_MARKER));
@@ -257,7 +276,18 @@ export async function readSnippetStatus(read: (name: string) => Promise<string>)
     return snippetStatus(undefined);
   }
 
-  return snippetStatus(texts[at]);
+  return snippetStatus(await withMountedSiblings(SNIPPET_LOCATIONS[at], texts[at], read));
+}
+
+/** A mounted gate rule and the sibling rules beside it, as one text; any other location as it is. */
+async function withMountedSiblings(location: string, text: string, read: (name: string) => Promise<string>): Promise<string> {
+  const folder = MOUNTED_RULE_FOLDERS[location];
+  if (folder === undefined) {
+    return text;
+  }
+  const siblings = await Promise.all(MOUNTED_SIBLINGS.map((name) => read(folder + name)));
+
+  return [text, ...siblings].join('\n');
 }
 
 /** The GATE half's version out of a file the snippet was pasted into, or nothing when it has none. */
@@ -403,8 +433,8 @@ export function callerVersionIn(text: string): number | undefined {
  * the only thing that matters about the arrangement.</p>
  *
  * <p>The consultant is last on purpose: the three before it are about work being REVIEWED, and this
- * one is about the assistant asking for help mid-task. It is also the only one whose source is this
- * repository rather than the shared conventions — see `CONSULTANT_VERSION`.</p>
+ * one is about the assistant asking for help mid-task. All four come from the shared conventions —
+ * the consultant since v3, see `CONSULTANT_VERSION`.</p>
  */
 export function claudeSnippet(): string {
   return KNOWN_HALVES.map((half) => half.text).join('\n');

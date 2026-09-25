@@ -16,6 +16,11 @@ call written out. *Consultation cadence* in the **Consultant** section sets the 
 is closed with an outcome, *Off* is as before. A consultant that cannot be reached never jams the work. A plan
 of more than fourteen epics is refused — split it in two.
 
+**The CLAUDE.md snippet is v12 — copy it again.** Its consultant half is now a shared rule, read from the
+conventions like the other three, and it carries the seventh trigger: a review reply that orders a
+consultation on a cadence. A repository that only mounts the rules and pasted nothing is no longer told it
+is behind on halves it has.
+
 **Active rounds says where each plan stands** — `PLAN_x.md · epics closed 4/14 · consultation for epics 4-6:
 due` — and **the Consultations tab says what each one was for** in a new *For* column.
 

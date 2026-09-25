@@ -11,7 +11,8 @@ namespace CoaiMcp.Tests;
 /// <remarks>
 /// <para>The requirement: never agree with a consultant because it sounds right — it has to PROVE the
 /// defect is real, or that its shape is better and why — and the caller re-verifies everything itself.
-/// The caller's half shipped first: <c>consultantRule.md</c> carries "Never agree because it sounds
+/// The caller's half shipped first: the consultant rule (<c>.agents/conventions/common/coai-consultant.md</c>
+/// since 2026-09-25, <c>src_vs_code/src/consultantRule.md</c> before) carries "Never agree because it sounds
 /// right — make it prove the case", and <c>consult</c>'s tool description carries "Advice that only
 /// asserts is not yet usable". <b>Neither is read by the model ANSWERING.</b> It reads
 /// <c>consultant/consult.md</c>, and until this story that file never asked it for evidence — so the

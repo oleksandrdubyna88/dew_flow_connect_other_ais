@@ -2517,6 +2517,24 @@ the latest instant is found in one pass, since `Math.max(...all)` threw `RangeEr
 history; each changed answer is painted as it LANDS rather than after the whole batch; and the test
 fixtures build a real `SessionFile` instead of casting to one.
 
+## The consultant rule is read from the mount (2026-09-25, epic 5 story 5.2)
+
+Story 5.2 of [PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md). The consultant half of
+the pasted snippet moved into the conventions (story 5.1, `common/coai-consultant.md`, v3 — the six
+triggers as they were plus trigger 7, the cadence), and this repository takes it from the mount.
+
+| what | where |
+|---|---|
+| **The generator reads the mount.** `CONSULTANT_SOURCE` is `.agents/conventions/common/coai-consultant.md`; `consultantBody` is `ruleBody` with the consultant marker, so the frontmatter and `owns:` lines are stripped as they are for the other three. A pin from before the move fails naming the file and the fix (move the pin). The output module is unchanged. | `scripts/prepare-gate.mjs` |
+| **The local copy is deleted**, and a test asserts it stays deleted: two sources for one half is the drift the move ended. | `src_vs_code/src/consultantRule.md` (gone), `snippetVersion.test.ts` |
+| **Versions**: `CONSULTANT_VERSION` 3, `ARTEFACT_VERSION` 12, the menu title `(v12)`, `SNIPPET_BODY_SHA` recorded — the gate half's pointer sentence moved the body too, and its marker stays frozen at v5. | `claudeSnippet.ts`, `package.json` |
+| **Discovery reads a mount with its siblings.** A repository that mounts the rules and pasted nothing holds its halves as four files; reading the gate rule alone told it that it was behind on three halves it had. `readSnippetStatus` now joins the selected mount's `MOUNTED_SIBLINGS`, only for that mount — a half is never filled from another — and an actual paste still wins. | `claudeSnippet.ts` (`withMountedSiblings`) |
+
+The risk consultation for this story named the trap in the old test: corrupting the consultant file once
+it is IN the mount makes the mount dirty, and the resolver — which runs first — refuses it for that
+instead. So the malformed-text case asks `consultantBody` directly, and a clean pinned mount that lacks
+the rule is its own case.
+
 ## The Claude list is ASKED, not listed (2026-09-16, issue #301)
 
 Four of the panel's five model sources were discovered by asking the machine — a local engine's
@@ -3442,6 +3460,12 @@ on conventions `main` makes every consumer's pin stale at once.
 
 So `src_vs_code/src/consultantRule.md` is ours, `prepare-gate.mjs` emits it beside `gateRule.ts`
 (prose stays prose — a backtick inside a template literal has broken this build three times).
+
+> **Reversed 2026-09-25, at consultant v3.** The operator ruled the consultant rule shared: this server
+> gates every repository in the family, so a rule about when to call its consultant is as shared as the
+> gate rule. It now lives in the conventions as `common/coai-consultant.md` and is read from the pinned
+> mount like the other three halves; the local file is gone. See *The consultant rule is read from the
+> mount* below.
 
 **Every half carries its own marker, and that is not a preference either.** `coai-review-gate.md` is
 one of the 24 rule bodies the conventions repository hashes against its migration baseline, so its

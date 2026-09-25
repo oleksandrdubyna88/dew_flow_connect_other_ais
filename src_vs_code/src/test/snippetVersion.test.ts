@@ -173,11 +173,11 @@ test('the caller half of a current paste is the current caller version', () => {
  * and the pinned source, while the version/hash guard above stays independent of generation.
  */
 test('the mounted shared rules are byte-identical to what the menu hands out', () => {
-  // THREE shared files since #174, joined by newlines. The gate rule could not grow a section: it is
-  // one of the 24 bodies the conventions repository hashes against its migration baseline, so the
-  // document flow is a second rule file and the caller declaration a third — and this is what
+  // FOUR shared files, joined by newlines: the gate rule, the document flow, the caller declaration
+  // and — since 2026-09-25 — the consultant, which moved from this repository into the conventions
+  // when the operator ruled it shared (todo/PLAN_consult_on_a_cadence.md, story 5.2). This is what
   // proves all of them travel verbatim.
-  const bodies = [mountedRuleFile(), mountedDocumentRuleFile(), mountedCallerRuleFile()].map((mounted) => {
+  const bodies = [mountedRuleFile(), mountedDocumentRuleFile(), mountedCallerRuleFile(), mountedConsultantRuleFile()].map((mounted) => {
     assert.ok(fs.existsSync(mounted), `run git submodule update --init .agents/conventions (${mounted})`);
     const source = fs.readFileSync(mounted, 'utf8').replace(/\r\n/g, '\n');
     assert.match(source, /^---\n/, 'the neutral canonical rule carries delivery metadata');
@@ -185,13 +185,10 @@ test('the mounted shared rules are byte-identical to what the menu hands out', (
     return ruleBody(source);
   });
 
-  // And a FOURTH that is not shared and has no frontmatter: the consultant rule is this
-  // repository's own file. Asked where it should live, the operator answered that conventions holds
-  // only shared rules and specific material belongs to the project that owns it — a rule about when
-  // to call one tool of one server is ours. It is still held to travelling verbatim.
+  // And no local copy is left beside the mount: a second source for the same half is the drift this
+  // move ended, so its absence is part of the guarantee.
   const own = path.resolve(__dirname, '../../..', 'src_vs_code/src/consultantRule.md');
-  assert.ok(fs.existsSync(own), 'the consultant block is this repository\'s own file');
-  bodies.push(fs.readFileSync(own, 'utf8').replace(/\r\n/g, '\n'));
+  assert.ok(!fs.existsSync(own), 'the consultant half has one source now — the mounted rule; delete the local copy');
 
   assert.equal(
     bodies.join('\n'),
@@ -342,6 +339,27 @@ function mountedDocumentRuleFile(): string {
 function mountedCallerRuleFile(): string {
   return path.resolve(__dirname, '../../..', '.agents/conventions/common/coai-caller-model.md');
 }
+
+function mountedConsultantRuleFile(): string {
+  return path.resolve(__dirname, '../../..', '.agents/conventions/common/coai-consultant.md');
+}
+
+/**
+ * The seventh reason reaches the paste: a review reply that ORDERS a consultation on a cadence.
+ *
+ * <p>Story 5.2 of todo/PLAN_consult_on_a_cadence.md. The server orders it and, in `require`, refuses
+ * the group's code round until it is taken — but an AI obeying a paste without this trigger has never
+ * been told what the order is, and meets a refusal nothing in its instructions explains.</p>
+ */
+test('the seventh reason — the cadence — survives into the paste', () => {
+  const snippet = claudeSnippet();
+
+  assert.match(snippet, /7\. \*\*A review reply orders one — the cadence\.\*\*/,
+    'the cadence trigger is missing from the paste');
+  assert.match(snippet, /`CONSULT ON A CADENCE\.`/, 'the paste does not name the order a reply carries');
+  assert.match(snippet, /`kind` \(`cadence` or `risk`\), `plan` and\s+`epics`/, 'the paste does not say what to call it with');
+  assert.match(snippet, /mcp__coai__close_consult/, 'the paste does not say to close it with an outcome');
+});
 
 test('the same text pasted into a CLAUDE.md is still a stale paste, with the old advice', () => {
   // The distinction is WHERE it was found, not what it says: the identical body in an instruction

@@ -28,19 +28,19 @@ export const CALLER_SOURCE = '.agents/conventions/common/coai-caller-model.md';
 export const OUTPUT = 'src_vs_code/src/generated/gateRule.ts';
 
 /**
- * The consultant half, which is THIS product's own rule and not a shared one.
+ * The consultant half — a mounted rule like the other three since 2026-09-25.
  *
- * <p>The gate rule is mounted from the conventions submodule because every repository in the family
- * is reviewed by it — it is a rule ABOUT how work is done. The consultant block is different in kind:
- * it describes when to call one tool of one product, so it belongs to the product. Conventions holds
- * what is shared; specific material lives in the project that owns it. (The operator, 2026-09-13,
- * when the alternative on the table was a new shared rule plus a six-repository pin cascade.)</p>
+ * <p>It was this product's own file until then, on the operator's ruling of 2026-09-13 that a rule
+ * about when to call one tool of one product is not shared. The ruling was reversed on 2026-09-25:
+ * this server gates every repository in the family, so a rule about when to call its consultant is
+ * as shared as the gate rule itself (todo/PLAN_consult_on_a_cadence.md, epic 5). So it is read from
+ * the pinned mount and held to its marker the way the three others are.</p>
  *
- * <p>It is generated rather than written as a TypeScript literal for one reason that has cost this
- * repository three broken builds: a backtick inside a template literal ends it, and this text is
- * full of `code spans`. Prose stays prose; the generator turns it into a JSON string.</p>
+ * <p>It keeps an output of its own, `generated/consultantRule.ts`, rather than a fourth export in
+ * `gateRule.ts`: that is the module `claudeSnippet.ts` already imports, and nothing is gained by moving
+ * a constant whose readers do not care where it was generated.</p>
  */
-export const CONSULTANT_SOURCE = 'src_vs_code/src/consultantRule.md';
+export const CONSULTANT_SOURCE = '.agents/conventions/common/coai-consultant.md';
 export const CONSULTANT_OUTPUT = 'src_vs_code/src/generated/consultantRule.ts';
 
 /** The marker this file is recognised by, so a truncated or wrong file fails the build. */
@@ -99,16 +99,9 @@ function withoutLeadingComments(body, marker) {
   return rest;
 }
 
-/** The consultant block, verbatim. Ours, so there is no frontmatter to strip. */
+/** And for the consultant rule: frontmatter and `owns:` lines stripped, held to its marker and heading. */
 export function consultantBody(source) {
-  const text = source.replaceAll('\r\n', '\n');
-  // Held to its marker AND its heading, the way the three shared halves are — the version rides in
-  // the marker now, so a rule file that lost it cannot be emitted as though it still had one.
-  if (!CONSULTANT_MARKER.test(text)) {
-    throw new Error(`${CONSULTANT_SOURCE}: missing the coai-consultant marker or its heading`);
-  }
-
-  return text;
+  return ruleBody(source, CONSULTANT_SOURCE, CONSULTANT_MARKER);
 }
 
 function removeOutput(file) {
@@ -157,22 +150,22 @@ export function prepareGate(repo) {
     fs.renameSync(temporary, output);
   } finally { removeOutput(temporary); }
 
-  // The consultant half, from this repository's own file. Same invalidate-then-write, so a build
-  // never compiles against a constant left by the previous one.
+  // The consultant half, from the same pinned mount. Same invalidate-then-write, so a build never
+  // compiles against a constant left by the previous one.
   const consultantFile = path.join(repo, CONSULTANT_OUTPUT);
   const consultantTemporary = consultantFile + '.tmp';
   removeOutput(consultantFile);
   removeOutput(consultantTemporary);
   const consultantSource = path.join(repo, CONSULTANT_SOURCE);
   if (!fs.existsSync(consultantSource)) {
-    // Named, because this is a file somebody could move without knowing what reads it — and the
-    // message it would otherwise produce is a bare ENOENT on a path. (local, code round.)
+    // Named, because the case is a pin from before the rule moved: nothing is dirty and nothing
+    // mismatches, the file is simply not there — and a bare ENOENT would not say which half.
     throw new Error(`${CONSULTANT_SOURCE} is missing. It is the consultant half of the pasted snippet, `
-      + 'kept as markdown in this repository; restore it from git rather than editing the generated constant.');
+      + 'a shared rule since 2026-09-25: move the .agents/conventions pin to a release that carries it.');
   }
   const consultant = consultantBody(boundedSource(consultantSource));
   try {
-    fs.writeFileSync(consultantTemporary, '// Generated from src_vs_code/src/consultantRule.md; do not edit.\n'
+    fs.writeFileSync(consultantTemporary, '// Generated from pinned conventions; do not edit.\n'
       + 'export const CONSULTANT_RULE = ' + JSON.stringify(consultant) + ';\n', { flag: 'wx' });
     fs.renameSync(consultantTemporary, consultantFile);
   } finally { removeOutput(consultantTemporary); }
