@@ -2490,6 +2490,27 @@ reason, and is written to the extension host's console; everything else is pushe
 `logRegions.test.ts` also holds the shape of the wiring, since `extension.ts` imports `vscode` and
 cannot run under the unit tests: every builder call in it must be the body of a `regionOr`.
 
+## The consultant on a cadence — what the person sees (2026-09-25, epic 4)
+
+Epic 4 of [PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md): the operator's "make 3 and 5
+editable in the panel", the line that says where a plan stands, and the log saying what each consultation
+was for. The server half is `module_server.md`, *epic 4*.
+
+| what | where |
+|---|---|
+| **Four settings** in the *Consultant* section, under who is asked: the mode (Off / Remind / Require, a segmented control) and three counts. Read the way the server reads them — a mode matched without case, anything else `remind`; a count a positive whole number the server can hold, or the default — and crossing as `COAI_CADENCE_*` only when they differ. Declared in `package.json`, kept per side, described in the consultant article in all five languages. | `cadenceSettings.ts`, `settingsShape.ts` (`CoaiSettings.cadence`), `panelView.ts` |
+| **The defaults are the server's**: `cadenceSettings.test.ts` reads `CadenceRule.cs` for every number, the enum for the modes, and `PanelSettings.cs` for the keys and the mode's fallback. | `src/test/cadenceSettings.test.ts` |
+| **The line in *Active rounds***: `PLAN_x.md · epics closed 4/14 · consultation for epics 4-6: due` — the current group is the one holding the first epic not yet closed; `taken` once consulted; in `require`, `due — the code round waits for it`; the risky pieces counted when named; a whole plan closed says so; an unreadable record is said and nothing else. Marked `stale` when it asks something of the reader. | `cadenceLine.ts` (`cadenceSaid`, `cadenceLinesHtml`) |
+| **One body for the first paint and the live push** (`activeRounds`), in the `#live-rounds` region rather than a new one, so the two cannot disagree about whether the line is there. | `panelView.ts` |
+| **The probes are bounded** (the risk consultation for story 4.2, point 3): only sessions that moved in the last day and hold a plan; one `--cadence` at a time; a 30 s TTL; never awaited by a render; a repaint only when an answer CHANGED, which with the TTL is what stops the loop; the last answer kept on a timeout, a 65 or a body that is not an answer, and the 65 logged once; a 64 ends probing for the window's life; no probing at all while the cadence is off. The consultation watcher resets the TTL; an outcome recorded on a LAPSED consultation, which the watcher does not see, is picked up by the TTL. | `cadenceProbe.ts`, `panelProvider.ts`, `extension.ts` |
+| **The log's *For* column**: `stuck`, `cadence · epics 4-6`, `risk · story 7.2`, the plan by its file name with the path on hover; a kind this build does not know is shown as written. `DbConsultation.kind` defaults to `stuck` at the boundary — before the kinds, that was every consultation. | `roundsLog.ts` (`forCell`), `roundsDb.ts` |
+| **Two pieces moved to leaves** rather than copied: `segmentedRadio` and `help` from `panelView.ts` to `panelControls.ts` (a section in another module draws the same markup); `repoNameOf` from `roundsLog.ts` to `pathTail.ts` (the cadence line needs it, and importing `roundsLog` would have closed a cycle through `panelView`). | `panelControls.ts`, `pathTail.ts` |
+
+Two tests were asserting a stand-in for their rule, and each was corrected to the rule: the tooltip census read
+`panelView.ts` alone ("the panel is the only thing that attaches tooltips"), and now reads every module that
+imports `help` from `panelControls`; the radio test allowed at most two radios per name, which meant "one
+group" only while every group had two options — it now asserts each name belongs to exactly one group.
+
 ## The Claude list is ASKED, not listed (2026-09-16, issue #301)
 
 Four of the panel's five model sources were discovered by asking the machine — a local engine's

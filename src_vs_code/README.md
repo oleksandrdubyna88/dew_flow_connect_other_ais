@@ -162,6 +162,14 @@ by caps you set in the panel — turns per consultation, calls per session, and 
 which one is closed — because the failure mode of a tool an AI can call on its own judgement is
 calling it forty times.
 
+**It is also called when nobody is stuck.** After a plan is split into epics, every group of three
+owes one consultation before its first code round — is this group right, where is it weak, what did it
+forget — and from five epics the assistant is asked which epics and stories carry the most risk, each
+of which gets one of its own. *Consultation cadence* in the same section sets the numbers and what the
+gate does: *Remind* puts the order in every review reply, *Require* also holds the group's code round
+until it is taken. *Active rounds* says where each plan stands — `epics closed 4/14 · consultation for
+epics 4-6: due`.
+
 ---
 
 ## A company box, if you have one
