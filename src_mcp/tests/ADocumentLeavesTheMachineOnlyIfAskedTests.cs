@@ -137,7 +137,7 @@ public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
             new Runners.Processes.ProcessLauncher(),
             Serilog.Core.Logger.None, Noticing.None);
 
-        var work = service.BuildWork(
+        var work = service.Roster.BuildWork(
             [RoleCatalog.DocumentRole], scratch, "ctx", round: 1,
             stage: Stage.DocumentReview, readsCheckout: false);
 
@@ -157,7 +157,7 @@ public sealed class ADocumentLeavesTheMachineOnlyIfAskedTests
             new Runners.Processes.ProcessLauncher(),
             Serilog.Core.Logger.None, Noticing.None);
 
-        var work = service.BuildWork(
+        var work = service.Roster.BuildWork(
             [RoleCatalog.DocumentRole], scratch, "ctx", round: 1,
             stage: Stage.DocumentReview, readsCheckout: false);
 

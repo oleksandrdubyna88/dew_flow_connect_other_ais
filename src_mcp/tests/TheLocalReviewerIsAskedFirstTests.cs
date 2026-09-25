@@ -80,7 +80,7 @@ public sealed class TheLocalReviewerIsAskedFirstTests : IDisposable
     /// which is true and useless.
     /// </remarks>
     private List<string> Rows(PanelService service, int seed) =>
-        [.. service.BuildWork(
+        [.. service.Roster.BuildWork(
                 [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole],
                 Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, seed: seed)
             .Reviewers

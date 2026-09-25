@@ -283,7 +283,7 @@ public sealed class BoundedScheduler(
     /// bounds. (Code round.)</para>
     /// <para>The engine's semaphore outlives the round and hands over FIFO, so local reviewers run
     /// strictly one after another in the order they were submitted — which is why
-    /// <c>PanelService.LocalRowsFirst</c> puts every one of them at the head. The note is computed
+    /// <c>RosterBuilder.LocalRowsFirst</c> puts every one of them at the head. The note is computed
     /// HERE and not when the round was laid out: at lay-out nothing held the card yet, so the sentence
     /// was always blank. (gemini, the engine-cap code round.)</para>
     /// </remarks>

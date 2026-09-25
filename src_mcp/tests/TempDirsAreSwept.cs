@@ -44,7 +44,7 @@ public sealed class TempDirsAreSwept
     /// <remarks>
     /// <para><b>Ten minutes, and it was two hours, and before that a day.</b> A day was far too slow:
     /// a machine running this suite repeatedly accumulated everything it made IN that day, and what
-    /// that cost was not disk — it was <c>PanelService.BuildWork</c>, which walks the temp directory.
+    /// that cost was not disk — it was <c>RosterBuilder.BuildWork</c>, which walks the temp directory.
     /// Measured here 2026-09-13: <b>81,986</b> directories, and a test that calls <c>BuildWork</c> a
     /// hundred times went from 8 seconds to over four minutes. Ten minutes is the operator's ruling of
     /// 2026-09-18, for both runners: the longest single run of this suite is under ten minutes, so a
