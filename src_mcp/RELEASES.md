@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.37.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.36.0...mcp-v0.37.0) (2026-09-25)
+
+
+### Features
+
+* **consult:** a consultation says what it is for, and the gate can tell whether a group had one — epic 2 ([367f868](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/367f8685a8112b081d25028049f7df75acc723a2))
+* **gate:** a code review can be run again for new commits, and a lost reply read back (S3, [#490](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/490)) ([aa4b0a6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/aa4b0a6ab01957686655bd6ad2d454fcc4816db4))
+* **gate:** nothing to review is said, never passed (S1) ([61c22f2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/61c22f2c969686fea722845bf54dac99d31221be))
+* **gate:** one mutating call per session (S4) ([4181cdb](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4181cdbfaca8e4b4b9add5ceb51e2bf7d5f4fd65))
+* **gate:** the consultant's cadence is counted, ordered and sized — epic 1, pure core ([7e5e399](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7e5e399c575bc33e295f96e0455bdb6cc9ba7d7c))
+* **gate:** the local reviewer stands down when the cloud reviewers found almost nothing ([#485](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/485)) ([b30bba7](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b30bba7e9a942b9fe481cad71b53fc955ccf4ddd))
+* **gate:** the split is sized honestly, gated once per epic or per task, and written down ([#131](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/131)) ([f84280c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/f84280c1ba058f14bbf7737c09e0969011cdf4d8))
+* **gate:** the split order names the caller's own strongest model ([#117](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/117)) ([fdaec38](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fdaec389c040225cfb41da5bd2df9e513a6f93e9))
+* **log:** a period switch on Conversations, Consultations and What it keeps missing ([e46af4a](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e46af4a52fb8ab82bc2469e25add808fbb77fa41))
+* **scheduler:** local reviewers get their own lane, so the next one starts when the last one ends ([7383800](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7383800434c9307ce8b38199c3e4e2e9162adff7))
+* **server:** a run that dies is recorded, and a crash is written down (S8 epic 3) ([#471](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/471)) ([f82566f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/f82566fad8da89e698a8695cb3b9de96e007a445))
+* **server:** the gate's orders are data a person can reword, and a person can add their own ([#467](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/467), Epic A) ([30bd43b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/30bd43b93525bc04cefb3d91984ba6efff7415ba))
+* the feature review, epic 1 — honest stages, an api runtime, a seven-language outline ([d8c0bca](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d8c0bcaada76949a24d4ce94b1c6e5e32467872f))
+
+
+### Bug Fixes
+
+* **consult:** a sibling's git bookkeeping no longer withholds a consultation ([#376](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/376)) ([947bc54](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/947bc549d978becc343626e6d2c784e3684a193e))
+* **consult:** config.worktree is watched, and a value's order still counts ([#376](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/376)) ([ed8d191](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ed8d19114aefd1025c8c6341af092289150a42b1))
+* **gate:** a stood-down local row does not spend its lens ([#485](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/485)) ([09b38f3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/09b38f3f22328bda0934a0f91c62eff090412219))
+* **gate:** count a cloud outcome before reporting it; the stop-local switch is not an order ([#485](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/485)) ([0872768](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0872768b4fa8041db84d526be242dc19e4a377bd))
+* **gate:** the code review of [#117](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/117) — a picker choice reaches the setting, two spellings of a kind do not throw ([471357d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/471357deb63bc1b61d63f40aa2f7e6fa6b47017e))
+* **gate:** the code review of [#131](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/131) — orders survive a tick, phases count, every size is recognised ([56ae55d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/56ae55d542c10d9c2780bb6f6537f84c522262c3))
+* **gate:** the code round's five — an unread checkout is said, and `again` reads under the claim ([ce16489](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ce16489808f8e80690c6e2026d4c56fcc8f7c7ab))
+* **log:** one period rule for page and host, and no counts under another period (code round) ([6cba81e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/6cba81e6d5bbe49e938971890ebc7231193d2d94))
+* **panel:** a split-order model picker gets its focus back after a repaint ([28d511f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/28d511fb0d65a48a13ac06b7d80d53cdb51966db))
+* **remote:** a claim another process holds for an instant is still read ([#462](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/462)) ([48e8344](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/48e834483c5425bdfee460cbc9042bcfa6cf6d53))
+* **remote:** the claim doc states the 50 ms hold, and the refusal test is its own predicate ([#462](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/462)) ([a8140ab](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a8140ab1a38cc4835923774da745c5390d403d07))
+* **review:** a review tree behind a link is still ours ([#470](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/470)) ([7739069](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7739069571c8384e9f780e48599c8f71358fd5b6))
+* **reviewers:** an agy reviewer whose command was auto-denied is asked again in the same conversation ([#504](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/504)) ([9406838](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9406838f8af21e427e9c26336a6550b2e2970a52))
+* **roles:** a role is not switched on without a question to ask ([#338](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/338)) ([dfb4479](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/dfb4479688c422281658696c2b12c931e67a6f03))
+* **roles:** the refusal says what to do, and one press is one command ([#338](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/338)) ([ac554d2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ac554d2360e15b6b41b607d5549654e927fa5014))
+* **runners:** the MCP-server reader's patterns are generated and time-bounded ([#514](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/514), Sonar) ([9851b3a](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9851b3af66990916353e3600344fbe1b2ab350ec))
+* **server:** a signal ends the server cleanly; reviewers start no MCP servers ([#514](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/514)) ([89b4986](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/89b49860d4c810efb1c81a7a46a09c8034749d51))
+* **server:** the stop really takes the ordinary road; the codex reader never invents a name ([#514](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/514), code round) ([b35c580](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b35c580b12b0d96cf59f77f422e8882f0ce73bfe))
+* **tests:** a counted retry counts only what it was told to lose ([#520](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/520)) ([ee35420](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ee3542062dff0d8f70eead9b36466e7d1731e3d0))
+* **tests:** a poll waits out a notices file a live server holds ([#512](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/512)) ([057ccd4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/057ccd4a0731e25010e7276f7d776e35c7b5143a))
+* **tests:** the new case pins the FIRST loss, not the only one ([#520](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/520), code round) ([3a683e5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/3a683e50239e8d0e4bb0dc920cc189afa279d301))
+* **tests:** the notice reader is its own helper; an empty line fails too ([#512](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/512)) ([7725ba4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7725ba408c705efa149ba83acc7fcaf7efacc166))
+* **tests:** the shim tests' stub survives a bad request and says what it saw ([#462](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/462)) ([fc12afd](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fc12afd3b1e3c7b60a25d4ab36a7d9698b53c60b))
+* **tests:** the write-failure test breaks a real write; any accept failure is journalled ([#462](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/462), code round) ([fd8c0f0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fd8c0f0f4adb3a4b8ce84cc7ebdaab9a936a61f0))
+* **worktrees:** a failed round's tree never blocks the next attempt, and never masks a verdict (S2) ([e86dcf7](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e86dcf7a7895efc97203001444332dde30ca387e))
+* **worktrees:** a link's target is resolved again, so no link on the way is missed ([99ba9f8](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/99ba9f82f6562f2acfc8b77a61d9b6e0ce32e9bb))
+* **worktrees:** split and trim paths on this OS's separators only ([ff295bd](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ff295bdae19d090495d336a20f5a159c4eee0b5d))
+* **worktrees:** the sweep knows its root by any name, and the held-tree paths run on every OS ([fcc58e7](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fcc58e7161eb759f3e2596fbb58abedf9c641f33))
+
 ## [0.36.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.35.0...mcp-v0.36.0) (2026-09-25)
 
 
