@@ -70,7 +70,7 @@ planning a file the rule forbids.)
 6. **Resolve path** (`ResolvePath`).
 7. **Document stage** (`DocumentStage`) — last, because it is the largest behaviour surface.
 
-Steps 1–4 are the feature review's prerequisite (D16); 5–7 may run beside that plan's epic B, one PR
+Steps 1–4 are the feature review's prerequisite (D16); 5–7 may run beside that plan's Epic 2, one PR
 each, and are what brings the file under 800.
 
 Each step: `node src_vs_code/scripts/prove-move.mjs origin/main <original> <new files…>` shows every
@@ -81,8 +81,12 @@ region meanwhile (the extension's first split nearly did exactly that, with ever
 `shared/refusal-sites.json` is re-recorded (`COAI_RECORD_REFUSAL_SITES=1`) in the step that moves a
 refusal — the counts are per file.
 
-The feature review's epic A1 defect fixes that touch these members (`Finish`, `CommandStageOf`,
-round numbering) land BEFORE the move, so the move carries them.
+**The boundary with [PLAN_feature_review.md](PLAN_feature_review.md) §7.1:** that plan's Epic 1 merges
+FIRST — it carries every defect fix that touches these members (`Finish`, `CommandStageOf`, round
+numbering), so the move carries them. Steps 1–4 land next, and that plan's Epic 2 branches only after
+step 4 is on `main`. Steps 5–7 run beside its Epic 2 or between its Epics 2 and 3, never concurrently
+with its story S2.2 (which edits `resolve`/`status`/`ask_human`); whichever lands second rebases and
+re-proves.
 
 ## 4. Test plan
 
