@@ -258,7 +258,12 @@ export function serviceLines(language: LanguageCode): readonly string[] {
  * the fence, the passage, and anything the person wrote below it.</p>
  */
 export function reinstructed(draft: string, was: string, now: string): string | undefined {
-  return was.length > 0 && draft.startsWith(was) ? now + draft.slice(was.length) : undefined;
+  // Followed by a line break, or the whole box: an instruction of ours always ends its line. A paste that
+  // merely BEGINS with the same word — "Explain why…" while "Explain" is in force — is the person's text,
+  // and swapping it rewrote their own word (our own code reviewer, issue #538's code round).
+  const ours = was.length > 0 && (draft === was || draft.startsWith(`${was}\n`));
+
+  return ours ? now + draft.slice(was.length) : undefined;
 }
 
 /**
@@ -334,6 +339,7 @@ function rebuiltTurn(box: Composer, now: string, language: LanguageCode, typed: 
     return openingTurn(now, language, box.passage);
   }
 
+  // `draft !== undefined` narrows the type: an undefined draft has already gone to the passage above.
   return typed === 'adopt' && box.draft !== undefined ? openingTurn(now, language, box.draft) : undefined;
 }
 

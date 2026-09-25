@@ -81,7 +81,9 @@ function writeInstruction(
   // The decision is `instructedBox`'s, where a test can reach every shape of box: the instruction
   // swapped where it stands, or at our service lines when somebody edited it; else a whole opening
   // turn — around the captured passage when the box is ours, around the person's own text when a
-  // prompt button adopts it. Everything the person wrote is kept byte for byte on every road.
+  // prompt button adopts it. What the person wrote below our lines, or as the adopted material, is kept
+  // byte for byte; the one cut is at a WHOLE line of ours (the material note or the fence), which a
+  // paste carries only when it is itself a turn of ours.
   const next = instructedBox(
     { draft, ours: thread.ourDraft, passage: thread.passage },
     was,

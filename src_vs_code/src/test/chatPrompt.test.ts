@@ -475,7 +475,24 @@ test('an empty box, or one still ours, is rebuilt around the captured passage, w
       assert.equal(instructedBox(box(draft), '', 'explain', 'en', typed), ours,
         `an empty box (${JSON.stringify(draft)}, ${typed}) did not get the captured passage back`);
     }
+    // STILL OURS without a front match or a cut: the very text this side last wrote, pressed with an
+    // instruction it does not start with. (Our own code reviewer: the name promised this arm.)
+    const stale = 'an instruction the page no longer shows';
+    assert.equal(instructedBox(box(stale, stale), 'something else', 'explain', 'en', typed), ours,
+      `the box this side last wrote (${typed}) was not rebuilt around the captured passage`);
   }
+});
+
+test('a paste that merely BEGINS with the current question is the person\'s text, not our instruction', () => {
+  // Our own code reviewer, the code round: the swap matched `startsWith(was)` alone, so with "Explain" in
+  // force a pasted "Explain why the cache misses…" became "Summarize why the cache misses…" — the person's
+  // own word rewritten, and no fence. Ours is always followed by a line break.
+  const pasted = 'Explain why the cache misses on the second read.';
+
+  const next = instructedBox(box(pasted), 'Explain', 'Summarize', 'en', 'adopt') ?? '';
+
+  assert.ok(next.startsWith('Summarize\n'), `the question is not on top: ${JSON.stringify(next.slice(0, 40))}`);
+  assert.ok(next.endsWith(`\n${pasted}`), 'the pasted text was rewritten instead of kept whole as the material');
 });
 
 test('an instruction the person edited by hand is still swapped at the service lines', () => {
