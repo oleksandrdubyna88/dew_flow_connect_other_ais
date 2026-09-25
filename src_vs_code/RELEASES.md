@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.55.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.54.0...extension-v0.55.0) (2026-09-25)
+
+
+### Features
+
+* **consult:** a consultation says what it is for, and the gate can tell whether a group had one — epic 2 ([367f868](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/367f8685a8112b081d25028049f7df75acc723a2))
+* **log:** a period switch on Conversations, Consultations and What it keeps missing ([e46af4a](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e46af4a52fb8ab82bc2469e25add808fbb77fa41))
+* the feature review, epic 1 — honest stages, an api runtime, a seven-language outline ([d8c0bca](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d8c0bcaada76949a24d4ce94b1c6e5e32467872f))
+
+
+### Bug Fixes
+
+* **log:** one period rule for page and host, and no counts under another period (code round) ([6cba81e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/6cba81e6d5bbe49e938971890ebc7231193d2d94))
+
 ## [0.54.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.53.1...extension-v0.54.0) (2026-09-25)
 
 
