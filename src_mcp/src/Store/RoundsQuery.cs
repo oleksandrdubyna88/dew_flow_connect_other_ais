@@ -123,7 +123,13 @@ public sealed record LoggedConsultation(
     double? CostUsd,
     string Problem,
     string Advice,
-    string Alert);
+    string Alert,
+    /// <summary>What it was FOR — <c>stuck</c>, <c>cadence</c> or <c>risk</c>; <c>stuck</c> for a row from before the kinds.</summary>
+    string Kind = "stuck",
+    /// <summary>The plan a cadence or risk consultation was about, as the caller wrote it; empty for a stuck one.</summary>
+    string Plan = "",
+    /// <summary>The group (<c>4-6</c>) or the item (<c>7/7.2</c>) it covered; empty for a stuck one.</summary>
+    string Epics = "");
 
 /// <summary>How often one kind of thing was accepted — a category, a role, or a vendor.</summary>
 public sealed record BlindSpot(string Kind, string Name, int Accepted, int Total);
@@ -647,9 +653,7 @@ public static class RoundsQuery
             // and the totals down with it, because this composes the whole page. The rounds half has
             // carried two texts for exactly this since story 6's counter; this half had one.
             // (codex, the code round.)
-            read.CommandText = HasColumn(db, "consultations", "outcome_by")
-                ? SqlConsultationsAuthored
-                : HasColumn(db, "consultations", "outcome") ? SqlConsultationsEnded : SqlConsultationsPlain;
+            read.CommandText = ConsultationsShape(db);
             read.Parameters.AddWithValue("$limit", limit);
             using var rows = read.ExecuteReader();
             while (rows.Read())
@@ -660,7 +664,8 @@ public static class RoundsQuery
                     Text(rows, "reason"), Text(rows, "outcome"), Text(rows, "outcome_by"), Text(rows, "started_utc"), Text(rows, "ended_utc"),
                     Real(rows, "seconds"), Big(rows, "tokens_in"), Big(rows, "tokens_out"),
                     MaybeReal(rows, "cost_usd"),
-                    Text(rows, "problem"), Text(rows, "advice"), Text(rows, "alert")));
+                    Text(rows, "problem"), Text(rows, "advice"), Text(rows, "alert"),
+                    Text(rows, "kind"), Text(rows, "plan"), Text(rows, "epics")));
             }
         }
         catch (SqliteException e) when (e.SqliteErrorCode == SqliteNoSuchTable && Missing(e))
@@ -680,23 +685,39 @@ public static class RoundsQuery
         return consultations;
     }
 
+    /// <summary>The newest shape this file has, asked rather than assumed — the steps are ordered, so one column each tells.</summary>
+    private static string ConsultationsShape(SqliteConnection db) =>
+        HasColumn(db, "consultations", "kind") ? SqlConsultationsKinded
+        : HasColumn(db, "consultations", "outcome_by") ? SqlConsultationsAuthored
+        : HasColumn(db, "consultations", "outcome") ? SqlConsultationsEnded
+        : SqlConsultationsPlain;
+
     /// <summary>
-    /// The consultations page, in the three shapes a database can be in — written out, not composed.
+    /// The consultations page, in the four shapes a database can be in — written out, not composed.
     /// </summary>
     /// <remarks>
     /// <para>Three literals for the same reason the rounds page has two, and the reason is in the
     /// comment above those: one text with the columns spliced in reads as SQL built at runtime to
     /// every scanner and to a person skimming, and a query that needs a paragraph to prove it is
     /// safe costs more than the duplicated lines that need none.</para>
-    /// <para>Three rather than four, because the steps are ORDERED: a file with <c>outcome_by</c>
+    /// <para>Four rather than eight, because the steps are ORDERED: a file with <c>outcome_by</c>
     /// has <c>outcome</c>, since the step that adds the second ran after the step that adds the
-    /// first. The missing columns are substituted as empty strings, which is what they mean —
-    /// nobody recorded a verdict, and nobody is not <c>solved</c>.</para>
+    /// first, and a file with <c>kind</c> has both. The missing columns are substituted as what they
+    /// mean — nobody recorded a verdict, and nobody is not <c>solved</c>; and before the kinds every
+    /// consultation was an agent that was stuck, so <c>stuck</c> is the truth, not a guess.</para>
     /// </remarks>
+    private const string SqlConsultationsKinded = """
+        SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
+               outcome, outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
+               problem, advice, alert, kind, plan, epics
+        FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
+        """;
+
+    /// <summary>The same page against a file written before a consultation could say what it was for.</summary>
     private const string SqlConsultationsAuthored = """
         SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
                outcome, outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
-               problem, advice, alert
+               problem, advice, alert, 'stuck' AS kind, '' AS plan, '' AS epics
         FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
         """;
 
@@ -704,7 +725,7 @@ public static class RoundsQuery
     private const string SqlConsultationsEnded = """
         SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
                outcome, '' AS outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
-               problem, advice, alert
+               problem, advice, alert, 'stuck' AS kind, '' AS plan, '' AS epics
         FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
         """;
 
@@ -712,7 +733,7 @@ public static class RoundsQuery
     private const string SqlConsultationsPlain = """
         SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
                '' AS outcome, '' AS outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
-               problem, advice, alert
+               problem, advice, alert, 'stuck' AS kind, '' AS plan, '' AS epics
         FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
         """;
 
