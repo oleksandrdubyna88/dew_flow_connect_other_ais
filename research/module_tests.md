@@ -2034,6 +2034,25 @@ swallowed it.
 - `TheWriterDrainsBeforeTheProcessLeavesTests.TheHostDrainsOnEveryRoadOut` now pins the whole `finally`
   (`EndedAsync`, then `stop.Ended();`).
 
+**Issue #515 — a Team-server agy reviewer whose command was auto-denied is asked again (2026-09-25).**
+`src_server` `ReviewLauncherTests`, against the REAL `ReviewLauncher`, `ReviewerExecutor`, `AntigravityRuntime`
+and `Confined`, with a scripted process (`Scripted`) that answers each launch in order and keeps every request:
+- `ADeniedCommand_IsAskedAgainInTheSameConversation_AndItsAnswerIsTheJobs` — two launches, the second with
+  `--conversation conv-7`, `--mode plan` and the "not available" stdin; the answer is the job's, both launches
+  billed (red first: one launch).
+- `TheFollowUp_RunsAsTheSameAccountInTheSameConfinement` — same executable, working directory, environment and
+  `InheritsEnvironment = false`; the work directory and the schema file exist at BOTH launches (red first).
+- `AFollowUpThatSaysNothing_IsStillUnparseable_SaysSo_AndBothLaunchesAreBilled`, `AFollowUpThatFailed_IsThatFailure`,
+  `AFollowUpCancelled_StillCleansUp` (red first: one launch, and no cancellation reached the launcher).
+- `AFollowUp_GetsOnlyWhatIsLeftOfTheJobsBudget` — elapsed-before-the-second-launch plus its timeout fits the
+  budget (red with the timeout left whole); `ADeniedCommandWithTooLittleBudgetLeft_IsNotAskedAgain` (red with
+  the `LeastFollowUp` floor removed); `AnEmptyAnswerThatWasNotADenial_IsStillOneLaunch` (a guard: agy with no
+  denial, and claude, stay one launch).
+- Each guard was planted out with COMPILING code (the transcript handed to `FollowUp` emptied; the floor
+  removed; the timeout left whole) and the named tests went red. **NOT covered:** the real agy on the box —
+  the conversation resolving under the confined slot environment was measured locally on #504 (agy 1.2.10)
+  and is observable on the Team server only after a deploy.
+
 ## The shim tests' stub survives a bad request and says what it saw (2026-09-25, issue #462)
 
 `RemoteShimScenarioTests`' stub served one request at a time and caught nothing inside its loop: an answer that

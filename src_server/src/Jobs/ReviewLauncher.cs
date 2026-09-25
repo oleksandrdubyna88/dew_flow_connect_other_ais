@@ -64,6 +64,16 @@ public interface IReviewLauncher
 /// <summary>Runs the vendor's real CLI through the executor both binaries share.</summary>
 public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exception>? onFailure = null) : IReviewLauncher
 {
+    /// <summary>
+    /// The least time a follow-up is worth starting with — issue #515.
+    /// </summary>
+    /// <remarks>
+    /// A continuation started with a second left times out, and its "did not answer within the budget"
+    /// would replace the auto-denial that is the real story with a vaguer one. Below this, the first
+    /// launch's own failure stands. (Our own reviewer, the plan round.)
+    /// </remarks>
+    internal static readonly TimeSpan LeastFollowUp = TimeSpan.FromSeconds(10);
+
     public async Task<ReviewAttempt> RunAsync(
         VendorConfig vendor,
         AccountSlot slot,
@@ -88,14 +98,66 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
         {
             work = Directory.CreateTempSubdirectory("coai-server-job-").FullName;
 
-            return Read(await new ReviewerExecutor(launcher)
-                .LaunchAsync(Confined(runtime, vendor, job, work, environment), ct));
+            // The clock starts before the FIRST launch: the job's budget bounds the reviewer, and a
+            // follow-up gets what the first launch left — the executor's own arithmetic.
+            var spent = System.Diagnostics.Stopwatch.StartNew();
+            var executor = new ReviewerExecutor(launcher);
+            var first = Confined(runtime, vendor, job, work, environment);
+            var launch = await executor.LaunchAsync(first, ct);
+            if (FollowUpOf(first, launch, RetryLadder.Remaining(spent.Elapsed, job.RunBudget)) is not { } followUp)
+            {
+                return Read(launch);
+            }
+
+            // Inside the same try: the schema file and the job's TMPDIR are still there for it, and the
+            // finally deletes them after BOTH launches.
+            return Continued(launch, await executor.LaunchAsync(followUp, ct));
         }
         finally
         {
             Delete(work);
         }
     }
+
+    /// <summary>
+    /// The adapter's continuation of a launch that ended its turn with nothing — issue #515 — or null.
+    /// </summary>
+    /// <remarks>
+    /// <para>The same hook the local executor asks (<c>IReviewerRuntime.FollowUp</c>, #504): an agy reviewer
+    /// whose shell command was auto-denied is continued in the SAME conversation, told the command will not
+    /// come. The client cannot do it — the conversation lives in the slot's HOME on this host, so a repair
+    /// from the client is a fresh job that meets the same denial.</para>
+    /// <para>Asked only after a CLEAN exit with an EMPTY answer — the "nothing" <see cref="Read"/> maps to
+    /// <c>Unparseable</c>. This server has no parser, so an answer that is there but is not the schema's
+    /// JSON is the client's to repair, as before. <c>Evidence</c> is the labelled process transcript exactly
+    /// when the answer is empty (<c>ReviewerExecutor.Read</c>) — the very string the local executor hands
+    /// the same hook.</para>
+    /// <para>The follow-up is built FROM the confined invocation, so it keeps the slot's environment, the
+    /// job's directory and the confinement; it gets the lesser of what the budget left and its own timeout,
+    /// and nothing at all below <see cref="LeastFollowUp"/>.</para>
+    /// </remarks>
+    private static ReviewerInvocation? FollowUpOf(ReviewerInvocation first, ReviewerLaunch launch, TimeSpan left) =>
+        launch is { Terminal: null } && string.IsNullOrWhiteSpace(launch.Answer) && left >= LeastFollowUp
+        && first.Adapter?.FollowUp(first, launch.Evidence) is { } followUp
+            ? followUp with { Request = followUp.Request with { Timeout = left < followUp.Request.Timeout ? left : followUp.Request.Timeout } }
+            : null;
+
+    /// <summary>What a launch and its continuation mean together.</summary>
+    /// <remarks>
+    /// The continuation decides — it is the later and the more specific word — and both launches are billed
+    /// when it answered or came back empty. A continuation that ended in a terminal outcome is that outcome,
+    /// which carries no usage on this server, like every terminal outcome here.
+    /// </remarks>
+    private static ReviewAttempt Continued(ReviewerLaunch first, ReviewerLaunch second) =>
+        Read(second with { Usage = first.Usage.Add(second.Usage) }) switch
+        {
+            ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable nothing } when second.Terminal is null =>
+                new ReviewAttempt.Failed(nothing with
+                {
+                    Reason = $"{nothing.Reason}, and again when asked in the same conversation after an auto-denied command",
+                }),
+            var read => read,
+        };
 
     /// <summary>What one launch means to this server.</summary>
     /// <remarks>
@@ -139,10 +201,13 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
     /// handed to <c>Build</c>, <c>InheritsEnvironment</c> on the request that came back — with nothing
     /// making them agree (codex, Major, epic 1's code round). Every launch this server makes now
     /// passes through this method and no other, so a later edit cannot set one half and miss the
-    /// other without also bypassing the method by name.</para>
+    /// other without also bypassing the method by name — the one follow-up included: the adapter
+    /// derives it FROM this method's output (<see cref="FollowUpOf"/>, issue #515), so it inherits the
+    /// confinement rather than repeating it.</para>
     /// <para><b>The retry that finding worried about does not rebuild an invocation here.</b> It
-    /// assumed the ladder re-BUILDS; it does not. This launcher makes exactly ONE launch — the
-    /// executor's <c>LaunchAsync</c>, not its <c>RunAsync</c>, so there is no repair launch, and the
+    /// assumed the ladder re-BUILDS; it does not. This launcher makes ONE launch, plus at most the one
+    /// continuation its adapter asks for — the executor's <c>LaunchAsync</c>, not its <c>RunAsync</c>,
+    /// so there is no repair launch, and the
     /// rate-limit ladder lives in the client's scheduler rather than in this binary. The server's own
     /// retry is <see cref="JobRunner"/> parking a rate-limited account and REQUEUEING the job, and the
     /// next pump enters <see cref="RunAsync"/> from the top — a fresh directory, a fresh build, this
