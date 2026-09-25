@@ -2300,6 +2300,22 @@ to. That is how a model preset's role came to be dropped press after press while
 beside it worked — both rebuilt, and only one of them happened to match. The whole-turn write is the
 fallback, guarded by `stillOurs`, for a box this side has never written to.
 
+**A prompt button ADOPTS text the person wrote; a model button leaves it alone** (2026-09-25, issue
+#538 — *"переключение вопрос не работает, если вставил текст вручную"*). A box holding only the person's
+own text — pasted or typed, with no line of ours in it — failed all three roads above, and the prompt
+button left it alone with a notice (`preset-instruction-left-alone`), so a person who pasted another
+AI's questions could not ask anything about them. A prompt button IS "ask this about the text in front
+of me": it now builds the opening turn around THAT text — the question on top, the language line, the
+material note and the fence, then the person's text whole, byte for byte. The next press swaps only the
+question (the first road). A model button's role frames a conversation rather than asking about the
+text, so it still leaves such a box alone, with its own notice (`preset-prompt-left-alone`). The
+captured passage (`thread.passage`) is untouched: it is what the tab was opened on; the box is what is
+sent. The decision is one pure function, `instructedBox(box, was, now, language, typed)` in
+`chatPrompt.ts`, where `typed: 'adopt' | 'leave'` says what text the PERSON wrote gets;
+`writeInstruction` applies it, `onUsePrompt` passes `'adopt'` and `chooseModel` `'leave'`. With
+`'adopt'` no shape of box answers "left alone", which is why the refusal branch and its notice are gone
+(`notification-sites.json` regenerated: 141 → 140 sites).
+
 **Pressing a model changes the screen NOW; the process follows.** A switch disposes one process,
 resolves a CLI and starts another, and everything the button did to the screen used to ride on its
 answer — so the pressed button and the role waited for all of that, and were dropped outright

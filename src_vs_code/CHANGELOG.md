@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+**A prompt button works on text you pasted** (issue #538). Pasting your own text into a chat's box and
+pressing a prompt button — *Explain*, *What would you answer?* — used to leave the box alone with a notice.
+The question now goes on top and your text, whole, becomes what it is about; pressing another prompt button
+swaps just the question. A model button still leaves a box you wrote in alone.
+
 **A code block in a chat answer wraps** (issue #537). A reply prompt or any other code the model proposes
 no longer runs off the right edge and has to be scrolled sideways: its lines wrap, keeping their indentation,
 and a long path or URL breaks rather than holding the block open. *Copy block* still copies the lines exactly

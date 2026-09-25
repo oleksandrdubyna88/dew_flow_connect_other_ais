@@ -12,7 +12,7 @@ import { freshStart } from './chatArchive';
 import { resolveAndPin } from './chatSessionJoin';
 import { ModelPreset } from './chatPresets';
 import { savedModels, savedPrompts, taskOf } from './chatConfig';
-import { chatInstruction, openingTurn, reinstructed, reinstructedHead, stillOurs } from './chatPrompt';
+import { chatInstruction, instructedBox, type TypedText } from './chatPrompt';
 import { chatSettingsFrom } from './chatSettings';
 import { carriedFrom, carryMark } from './chatCarry';
 import { imageFileName, imageRefusal, pastedImage } from './chatImage';
@@ -65,8 +65,10 @@ const asking = new WeakMap<object, number>();
  *
  * @param draft what the page says is in the box, or `undefined` when the caller did not ask for it —
  *   a prompt button IS the instruction "ask this instead", so it replaces without asking.
- * @returns whether it was written. A box somebody has typed their own question into is left alone,
- *   which two vendors refused to ship without on the plan round.
+ * @param typed what text the PERSON wrote gets: a prompt button `'adopt'`s it as the material under
+ *   its question (issue #538 — "переключение вопрос не работает, если вставил текст вручную"); a model
+ *   button `'leave'`s it alone, which two vendors refused to ship without on the plan round.
+ * @returns whether it was written.
  */
 function writeInstruction(
   entry: ChatEntry,
@@ -74,32 +76,22 @@ function writeInstruction(
   draft: string | undefined,
   was: string,
   config: vscode.WorkspaceConfiguration,
+  typed: TypedText,
 ): boolean {
-  const now = instructionOf(thread, config);
-  // FIRST, AND ALMOST ALWAYS: swap the instruction where it stands. The box is the only place that
-  // knows what is really in it, so keeping everything after the instruction byte for byte is both
-  // the safest thing to do with somebody's words and the only version of this that cannot drift out
-  // of step with the conversation's memory of the passage.
-  // AND THE SAME SWAP when the instruction in the box is not the one this side wrote, because
-  // somebody typed over it. That is ordinary — edit the role, press a preset, and the preset has to
-  // win — and it used to fall through to the rebuild below, which refused and left the box alone
-  // with a message about it. Cut at the service lines, everything below them kept byte for byte.
-  const swapped = draft === undefined
-    ? undefined
-    : reinstructed(draft, was, now) ?? reinstructedHead(draft, now, chatLanguage());
-  if (swapped !== undefined) {
-    thread.ourDraft = swapped;
-    setChatDraft(entry, swapped);
-
-    return true;
-  }
-  // The instruction is not at the front any more — somebody wrote over it, or this is a box we have
-  // never written to. Then the old test applies: a whole turn goes in when the box is empty or still
-  // holds what this side built, and a question somebody typed is left alone.
-  if (draft !== undefined && draft !== thread.ourDraft && !stillOurs(draft, thread.passage)) {
+  // The decision is `instructedBox`'s, where a test can reach every shape of box: the instruction
+  // swapped where it stands, or at our service lines when somebody edited it; else a whole opening
+  // turn — around the captured passage when the box is ours, around the person's own text when a
+  // prompt button adopts it. Everything the person wrote is kept byte for byte on every road.
+  const next = instructedBox(
+    { draft, ours: thread.ourDraft, passage: thread.passage },
+    was,
+    instructionOf(thread, config),
+    chatLanguage(),
+    typed,
+  );
+  if (next === undefined) {
     return false;
   }
-  const next = openingTurn(now, chatLanguage(), thread.passage);
   thread.ourDraft = next;
   setChatDraft(entry, next);
 
@@ -131,7 +123,7 @@ function chooseModel(
   const press = thread.presses;
   thread.chosenId = preset.id;
   thread.role = preset.startingPrompt ?? '';
-  if (!writeInstruction(entry, thread, draft, was, config)) {
+  if (!writeInstruction(entry, thread, draft, was, config, 'leave')) {
     // The box holds something the person wrote, so it keeps the instruction it has — and the
     // conversation keeps the role that MATCHES it, or the two would disagree about the same words
     // and the marking behind the box would stop finding them.
@@ -274,25 +266,16 @@ export function conversationHooks(panels: ChatPanels): Parameters<typeof createC
         // happen every time they pressed a second button. Rebuilt from the same three parts instead.
         const config = vscode.workspace.getConfiguration('coai');
         const was = instructionOf(thread, config);
-        const wasPrompt = thread.promptId;
         // The TASK changes; the role the model carries is untouched, because pressing "explain" does
         // not stop it being an architect. The two buttons run the same three lines with different
         // halves, which is the only way they can go on behaving the same.
         thread.promptId = presetId;
-        if (!writeInstruction(found, thread, draft, was, config)) {
-          // The box was not rewritten, so the conversation keeps the task the words in it were
-          // written with — otherwise the marking, and the pair recorded with the question when it is
-          // sent, would both name a prompt nothing on screen used. (gemini, the second code round.)
-          thread.promptId = wasPrompt;
-          void notify({
-            as: 'information',
-            class: 'outcome',
-            source: 'chat',
-            code: 'preset-instruction-left-alone',
-            subject: preset.id,
-            title: `${preset.name} replaces the instruction, and the box holds something you wrote — so it was left alone.`,
-          });
-        }
+        // ADOPT: text the person pasted or typed becomes the material under this question (issue
+        // #538). It used to be left alone with a notice — "the box holds something you wrote" — so a
+        // person who pasted their own text could not switch the question at all. With 'adopt' every
+        // shape of box is written (instructedBox's tests hold that), so the task always matches the
+        // words on screen and there is no longer a refusal to take the prompt back from.
+        writeInstruction(found, thread, draft, was, config, 'adopt');
         show(found, thread.running, '');
       },
       onUseModel: (id, presetId, draft) => {
