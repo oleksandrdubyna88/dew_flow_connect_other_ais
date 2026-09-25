@@ -2,7 +2,7 @@
    The limit is a boundary, not a rewrite mandate: splitting this file is a change with its own
    review. `reportUnusedDisableDirectives` turns this line into an error the day that happens. */
 import { PAGE_SIZE, asInstant, compareRows } from './pageTables';
-import { asText } from './asText';
+import { repoNameOf } from './pathTail';
 import { Escalation } from './escalations';
 import { ChatLedgers, roundKey, usageRegion } from './panelView';
 import { TeamServerState } from './teamServerView';
@@ -12,6 +12,9 @@ import { DAYS_OF, PriceLookup, consultationCost, priceOfLine, shortNumber, start
 import { outcomeBySaid, outcomeSaid } from './consultations';
 import { foldedCell } from './consultationFold';
 import { DEFAULT_PERIOD, LogPeriod, periodButtonsHtml } from './logPeriod';
+
+// Moved to a leaf so the sidebar's cadence line can use it without an import cycle; still exported here.
+export { repoNameOf };
 import { Vendor } from './vendors';
 import { calledBy, decideSecondsOf, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
@@ -635,14 +638,6 @@ function round4(value: number): number {
   return Math.round(value * 10_000) / 10_000;
 }
 
-export function repoNameOf(repoPath: string): string {
-  // Coerced for the reason the escapers are: this reads `session.state.repoPath` straight out of a
-  // JSON file that nothing validates, and `.replace` on a number is the error that stopped a person
-  // opening the log on 2026-09-08 — at the moment a question was waiting on them.
-  const text = asText(repoPath);
-  const parts = text.replace(/\\/g, '/').replace(/\/+$/, '').split('/');
-  return parts[parts.length - 1] ?? text;
-}
 
 /**
  * How long a round took, or has taken — and no number at all for one that died.
@@ -1005,8 +1000,7 @@ export function consultationsHtml(
   }
 
   const rows = log.consultations.map((one) => `<tr data-started="${startedMsOf(one.startedUtc)}">
-    <td>${escapeHtml(startedOf(one.startedUtc))}</td>
-    <td>${forCell(one)}</td>
+    <td>${escapeHtml(startedOf(one.startedUtc))}</td><td>${forCell(one)}</td>
     <td>${escapeHtml(callerOf(one.callerKind))} → ${escapeHtml(one.vendor)}${one.model.length > 0 ? ` · ${escapeHtml(one.model)}` : ''}</td>
     <td>${escapeHtml(repoNameOf(one.repoPath))}${one.branch.length > 0 ? ` · ${escapeHtml(one.branch)}` : ''}</td>
     <td class="num">${one.turns}</td>
@@ -1054,17 +1048,19 @@ function forCell(one: DbConsultation): string {
 
 /** `cadence · epics 4-6`, `risk · story 7.2`, `risk · epic 7`, or the kind alone. */
 function kindSaid(kind: string, epics: string): string {
-  if (kind === 'cadence' && epics.length > 0) {
-    return `cadence · ${epics.includes('-') ? 'epics' : 'epic'} ${epics}`;
-  }
+  // `Object.hasOwn`, for the reason `statusMark` gives: the kind is a string off a disk, and a plain
+  // object answers for every name it inherited.
+  return epics.length > 0 && Object.hasOwn(KINDS_SAID, kind) ? KINDS_SAID[kind]!(epics) : kind;
+}
 
-  if (kind === 'risk' && epics.length > 0) {
+/** How each kind this build knows names what it covered. */
+const KINDS_SAID: Readonly<Record<string, (epics: string) => string>> = {
+  cadence: (epics) => `cadence · ${epics.includes('-') ? 'epics' : 'epic'} ${epics}`,
+  risk: (epics) => {
     const story = epics.split('/')[1];
     return story === undefined ? `risk · epic ${epics}` : `risk · story ${story}`;
-  }
-
-  return kind;
-}
+  },
+};
 
 /**
  * Who recorded it, beside the word — muted, because the word is the answer and this is its author.

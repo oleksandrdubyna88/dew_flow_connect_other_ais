@@ -39,6 +39,7 @@ import { HELP, HelpKey } from './help';
 import { apiRuntimeSkewNote, DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
 import { help, segmentedRadio } from './panelControls';
 import { cadenceBlock } from './cadenceSettings';
+import { CadenceLine, cadenceLinesHtml } from './cadenceLine';
 import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance, Runtime } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
@@ -129,6 +130,12 @@ export interface PanelState {
    * supply it is a panel where nobody is consulting anybody, which is the ordinary state.</p>
    */
   readonly consultations?: readonly Consultation[] | undefined;
+  /**
+   * Each recent plan's consultation cadence, as `coai-mcp --cadence` answered it
+   * (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.2). Optional for the reason
+   * {@link consultations} is: absent means no line, which is what a panel with no plan in flight shows.
+   */
+  readonly cadence?: readonly CadenceLine[] | undefined;
   readonly vendors: readonly Vendor[];
   readonly codexModels: readonly ModelChoice[];
   /** What `agy models` lists on this machine, or none when it could not be asked. */
@@ -420,7 +427,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
     section('teamServers', 'Team servers', open, teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '')),
     section('side', 'This side', open, sideBody(state)),
     section('server', 'MCP server', open, serverBody(state)),
-    section('rounds', 'Active rounds', open, `<div id="live-rounds">${roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id))}</div>`),
+    section('rounds', 'Active rounds', open, `<div id="live-rounds">${activeRounds(state, nowMs)}</div>`),
     // `notifications`, lowercase, because `panelView.test.ts` scans the rendered html with
     // /data-section="([a-z]\+)" open/ and a capital letter would make this section invisible to
     // the test that proves which sections a person has open.
@@ -2546,10 +2553,21 @@ export function liveRegions(
 ): { questions: string; rounds: string; consultations: string; notifications: string } {
   return {
     questions: questionsSection(state.questions),
-    rounds: roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id)),
+    rounds: activeRounds(state, nowMs),
     consultations: consultationsBody(state.consultations ?? [], nowMs),
     notifications: notificationsBody(state),
   };
+}
+
+/**
+ * What the Active rounds region shows: each recent plan's cadence line, then the rounds running now.
+ *
+ * <p>ONE function for the first paint and the live push, so the two cannot disagree about whether the
+ * line is there. In this region rather than one of its own, because a new region is a new branch in the
+ * page's script, and the cadence is about the same thing the rounds are — where the gate stands.</p>
+ */
+function activeRounds(state: PanelState, nowMs: number): string {
+  return cadenceLinesHtml(state.cadence ?? []) + roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id));
 }
 
 /**

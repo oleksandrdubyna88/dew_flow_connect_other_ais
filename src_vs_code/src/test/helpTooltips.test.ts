@@ -17,10 +17,22 @@ import { HELP } from '../help';
  * them is caught by using the product.</p>
  */
 
-/** The panel is the only thing that attaches tooltips; a key reaches it by name or by literal. */
-const panel = ['panelView.ts']
-  .map((f) => fs.readFileSync(path.join(__dirname, '..', '..', 'src', f), 'utf8'))
-  .join('\n');
+/**
+ * Every module that attaches tooltips: the panel, and any section that imports `help` from
+ * `panelControls` — read off the imports, so a section moved out of `panelView.ts` is not a tooltip
+ * this test stops seeing. A key reaches one by name or by literal.
+ */
+const source = path.join(__dirname, '..', '..', 'src');
+const attaching = fs.readdirSync(source)
+  .filter((f) => f.endsWith('.ts'))
+  .filter((f) => f === 'panelView.ts'
+    || /import \{[^}]*\bhelp\b[^}]*\} from '\.\/panelControls'/.test(fs.readFileSync(path.join(source, f), 'utf8')));
+const panel = attaching.map((f) => fs.readFileSync(path.join(source, f), 'utf8')).join('\n');
+
+test('the modules that attach tooltips are found — a search that finds only one has stopped working', () => {
+  assert.ok(attaching.includes('panelView.ts'), attaching.join(', '));
+  assert.ok(attaching.includes('cadenceSettings.ts'), attaching.join(', '));
+});
 
 test('every tooltip key is attached to a control in the panel', () => {
   const orphans = Object.keys(HELP).filter(
