@@ -3569,7 +3569,7 @@ sequenceDiagram
 | **The caller declares where it is**: `review_plan` and `review_code` take optional `plan`, `epic` (`k/N`), `riskItems` (JSON), `riskNote`; `status` takes `plan`. An empty argument keeps the session's; naming a DIFFERENT plan clears the held epic. The session keeps `Plan`, `Epic`, `CadenceRepoId`, set before the live round is first written, so every `RoundRecord` — an interrupted one too — carries `PlanKey`, `EpicNumber` and `CadenceNote`. | `CadenceArgs`, `PersistedSession`, `RoundRecord`, `LiveRound.Record`, `Tools.cs` |
 | **Worked out once, under the claim, at the reviewed sha**: the plan file is read with `git show <sha>:<plan>`; a plan of more than 14 epics is refused (on the COUNT); when the plan names epics, N must be its last heading and k one of its numbers, else refused naming both; a plan file not in the commit leaves N the caller's word, noted. A WRONG declaration is refused in remind and require alike; a record the gate could not READ refuses only in `require` — `remind` goes ahead with a note. | `CadenceDesk.PrepareAsync`, `StageRun.RefuseBeforeBuilding` + `StageRun.Cadence` (`CadenceTrace`) |
 | **The refusal** (`require` only): after the nothing-to-review checks; a plan that names epics with no `epic` declared is refused; otherwise asked only on the FIRST code round of an epic in this session — a checkpoint `again` of the same epic is not asked twice — and `CadenceGate.Check` decides: refused with the orders' own call, stood down with the preflight's sentence (the round runs, `cadence-stood-down` notice, `stood down: …` on the round), or met. | `CadenceDesk.BeforeTheCode`, `PanelService.CadenceBeforeTheCode` |
-| **The risk answer**: each entry checked first (epic ≥ 1, a reason, a story like `7.2`), then the list (at most `RiskMax`; empty needs `riskNote`); stored on the plan's record. | `CadenceDesk.RiskAnswer` / `StoreRisk` |
+| **The risk answer**: each entry checked first (epic ≥ 1, a reason, a story like `7.2`), then the list (at most `RiskMax`; empty needs `riskNote`); stored on the plan's record. | `RiskAnswer.Of`, `CadenceDesk.StoredRisk`; a story is stored in `consult`'s canonical form (`2.01` → `2.1`, `ConsultAim.CanonicalStory`) |
 | **Orders in every reply**: the facts go to `CommandContext.Cadence`, so plan and code replies carry the forecast, the group due, the risk question and the risk item due (epic 1's `CadenceOrders`). | `RunStageAsync` |
 | **Closing an epic** (D3): on `CodeReview → Done`, for proceed, good_enough and continue_anyway, the epic is recorded through its code gate BEFORE the session is saved; a write that fails is logged, never fails the `resolve`, and is reconciled by the next `review_code` or `status` for that plan from the session's last code round. | `CadenceDesk.Close` / `Reconciled`, `PanelService.Finish` |
 | **`status` for a plan**: a `cadence` block — mode, epics, epics through the code gate, each group and whether consulted, risk items and whether consulted, risk answered — read from the plan's record, so the same from any branch. | `CadenceDesk.AnswerAsync`, `SessionAnswer.Cadence` / `CadenceAnswer` |
@@ -3589,6 +3589,11 @@ Epic 3's code round (`good_enough`, 31 findings, 12 taken, each red first):
   the next call, never turned into a refusal.
 - The desk's decisions are closed records (`Where`, `RecordRead`, `RiskStored`, `RiskAnswer`) rather than
   tuples with nulls, each method within the family's complexity ceiling.
+- **PR #549 (CodeRabbit):** a risk story is stored in `consult`'s canonical form — `2.01` had been stored as
+  written, so its consultation (`2/2.1`) never counted and `require` kept the round refused, and `02.1` was
+  refused outright (`ARiskStoryWithLeadingZeros_IsTheStoryConsultNames`, red on both first); `BeforeTheCode`,
+  `Close`, `Reconciled` and `DeclareTheEpic` split to the complexity ceiling (`OnTheFirstCodeRound`,
+  `Closing`, `Missed` / `OfThisPlan`, `IsSplit`).
 
 **A reader could kill a round, and the catch written for it looked past the exception (2026-09-04).**
 Six code rounds died with `Access to the path is denied`. One died on the FINAL save, with every

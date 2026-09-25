@@ -88,7 +88,7 @@ public abstract partial record RiskAnswer
     private static RiskAnswer Entry(JsonElement element)
     {
         var epic = element.ValueKind == JsonValueKind.Object && element.TryGetProperty("epic", out var e) && e.TryGetInt32(out var n) ? n : 0;
-        var story = Text(element, "story");
+        var story = Canonical(Text(element, "story"));
         var reason = Text(element, "reason");
         if (epic < 1)
         {
@@ -106,6 +106,14 @@ public abstract partial record RiskAnswer
 
     /// <summary>One entry that is usable — private to the reading, never an answer on its own.</summary>
     private sealed record GivenItem(RiskItem Item) : RiskAnswer;
+
+    /// <summary>
+    /// The story in the form <c>consult</c> keys it — <c>2.01</c> and <c>02.1</c> are <c>2.1</c> — or as written when
+    /// it is not a story number at all, which <see cref="Entry"/> then refuses. Stored raw, <c>2.01</c> was an item
+    /// no consultation could ever satisfy (PR #549, CodeRabbit).
+    /// </summary>
+    private static string Canonical(string story) =>
+        StoryNumber().IsMatch(story) ? ConsultAim.CanonicalStory(story) : story;
 
     private static string Text(JsonElement element, string name) =>
         element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
