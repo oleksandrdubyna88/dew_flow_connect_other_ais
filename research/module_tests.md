@@ -2014,15 +2014,22 @@ swallowed it.
 ## A signal ends the server; reviewers start no MCP servers (2026-09-25, issue #514)
 
 - `ARunThatDiesIsRecordedTests.AServerStoppedByASignal_ClearsItsMarker_AndNoLaterStartCallsItADeath` — a real
-  serving child, `kill -TERM/-INT/-HUP`, then no marker and no unclean exit from the next start. POSIX only
-  (skipped on Windows); red first on Linux (WSL Ubuntu, .NET 10) with "Expected File.Exists(marker) to be False
-  … but found True" for all three signals, green after `ServeStop`.
+  serving child, `kill -TERM/-INT/-HUP`, then no marker, "stopped by a signal" on its stderr, and no unclean
+  exit from the next start. POSIX only (skipped on Windows); run on Linux through WSL Ubuntu (.NET 10). Red
+  first with "Expected File.Exists(marker) to be False … but found True" for all three signals; then red AGAIN
+  once the stderr check was added (our own reviewer: the deadline also clears the marker) — the child had left
+  by the 3 s deadline, "the shutdown was still running", because a blocked stdin read ignores the token; green
+  after the stop also closes the transport.
 - `ASignalEndsTheServerCleanlyTests` — the decision as values: the first signal cancels the runtime's exit and
   stops serving without touching the marker; a second clears it and lets the default exit through; a shutdown
   still running at its deadline is cut with the marker cleared; one that finishes is not.
 - `AReviewerStartsNoMcpServersTests` — Claude reviewer and consultant carry `--strict-mcp-config` and no
   `--mcp-config`; Codex reviewer and consultant (first turn and resume) carry one `enabled=false` per server,
-  each a valid TOML key (red first for all three argv tests); the `config.toml` reader's forms; the gemini-family
-  JSON reader.
+  each a valid TOML key (red first for all three argv tests); the `config.toml` reader's forms, and what it must
+  NOT report (a plain value under `[mcp_servers]`, a key after `[[…]]`, a dotted key outside the root — red
+  first); a name with `&`/`|`/`%` is not passed (red first); the config is read through the launch's `HOME`
+  (red first); the gemini-family JSON reader.
+- `src_server` `ReviewLauncherTests.ACodexJob_SwitchesOffTheSlotsOwnMcpServers` — a Team-server codex job reads
+  the SLOT's `config.toml` (red first: the server's own was read).
 - `TheWriterDrainsBeforeTheProcessLeavesTests.TheHostDrainsOnEveryRoadOut` now pins the whole `finally`
-  (`stop.Ended();` then `EndedAsync`).
+  (`EndedAsync`, then `stop.Ended();`).

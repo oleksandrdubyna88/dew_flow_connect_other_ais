@@ -33,13 +33,20 @@ public static class NoMcpServers
     /// <summary>A TOML key that needs no quotes.</summary>
     private static readonly Regex Bare = new("^[A-Za-z0-9_-]+$", RegexOptions.CultureInvariant);
 
+    /// <summary>
+    /// A name that can ride argv to codex safely: on Windows codex is an npm <c>.cmd</c> shim, and cmd.exe
+    /// reads an unquoted <c>&amp;</c>, <c>|</c>, <c>%</c> or <c>^</c> as part of a command line of its own.
+    /// A name outside this set is not passed, which leaves that one server loaded. (gemini, the code round.)
+    /// </summary>
+    private static readonly Regex Passable = new("^[A-Za-z0-9 _.'@-]+$", RegexOptions.CultureInvariant);
+
     /// <summary>One segment of a dotted TOML key, and what follows it.</summary>
     private static readonly Regex Segment = new(
         """\G\s*("(?:[^"\\]|\\.)*"|'[^']*'|[A-Za-z0-9_-]+)\s*(\.|$)""", RegexOptions.CultureInvariant);
 
     /// <summary>The <c>-c</c> overrides that switch every named Codex MCP server off for one launch.</summary>
     public static IEnumerable<string> CodexArgs(IReadOnlyList<string> names) =>
-        names.SelectMany(name => (string[])["-c", $"mcp_servers.{CodexKey(name)}.enabled=false"]);
+        names.Where(name => Passable.IsMatch(name)).SelectMany(name => (string[])["-c", $"mcp_servers.{CodexKey(name)}.enabled=false"]);
 
     /// <summary>
     /// A server name as a TOML key segment: bare when it can be, else a LITERAL key.
@@ -55,10 +62,16 @@ public static class NoMcpServers
         : "\"" + name.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal) + "\"";
 
     /// <summary>The MCP servers Codex would load from <c>$CODEX_HOME/config.toml</c> — none when it cannot say.</summary>
+    /// <param name="env">
+    /// The environment the LAUNCH will have: on the Team server codex runs as a slot, with the slot's own
+    /// <c>CODEX_HOME</c> and <c>HOME</c>, and the config it reads is that home's, not the server's. (Our own code
+    /// reviewer.)
+    /// </param>
     public static IReadOnlyList<string> CodexConfigured(Func<string, string?> env)
     {
+        var home = env("HOME") is { Length: > 0 } unix ? unix : env("USERPROFILE") is { Length: > 0 } windows ? windows : Home();
         var path = Path.Combine(
-            env("CODEX_HOME") is { Length: > 0 } home ? home : Path.Combine(Home(), ".codex"), "config.toml");
+            env("CODEX_HOME") is { Length: > 0 } codexHome ? codexHome : Path.Combine(home, ".codex"), "config.toml");
         try
         {
             return File.Exists(path) ? CodexServerNames(File.ReadAllText(path)) : [];
@@ -70,34 +83,69 @@ public static class NoMcpServers
     }
 
     /// <summary>
-    /// Every MCP server a Codex <c>config.toml</c> declares, in order, once each.
+    /// Every MCP server a Codex <c>config.toml</c> declares for certain, in order, once each.
     /// </summary>
     /// <remarks>
-    /// Tables (<c>[mcp_servers.x]</c>, <c>[mcp_servers.x.env]</c>), keys under <c>[mcp_servers]</c>
-    /// (<c>x = { … }</c>) and dotted keys at the root (<c>mcp_servers.x.command = …</c>), with bare,
-    /// "basic" and 'literal' key segments. Not a TOML parser: a line it cannot read as a key is skipped,
-    /// which at worst leaves one server loaded — the state before this existed.
+    /// <para>Only the forms that cannot be anything else: a table <c>[mcp_servers.x]</c> (with its
+    /// sub-tables, which are not new servers), an inline table under <c>[mcp_servers]</c>
+    /// (<c>x = { … }</c>), and a dotted key at the ROOT (<c>mcp_servers.x.command = …</c>); bare, "basic"
+    /// and 'literal' key segments. Not a TOML parser.</para>
+    /// <para><b>Unsure means silent, and that is not a style choice.</b> Measured on codex-cli 0.156.1: an
+    /// override for a server config.toml does not declare stops codex from starting at all ("failed to load
+    /// bootstrap configuration"). A name missed leaves one server loaded; a name invented breaks every Codex
+    /// review. So an array table <c>[[…]]</c> or a header this cannot read ends what it knows about the
+    /// current table, and nothing is collected until the next header it can read. (Our own code
+    /// reviewer.)</para>
     /// </remarks>
     public static IReadOnlyList<string> CodexServerNames(string toml)
     {
         var names = new List<string>();
-        IReadOnlyList<string> table = [];
+        IReadOnlyList<string>? table = [];
         foreach (var raw in toml.Split('\n'))
         {
             var line = raw.Trim();
-            if (line.StartsWith("[[", StringComparison.Ordinal) || line.StartsWith('#'))
+            if (line.Length == 0 || line.StartsWith('#'))
             {
                 continue;
             }
-            var path = line.StartsWith('[') ? HeaderPath(line) : KeyPath(line, table);
-            table = line.StartsWith('[') ? path ?? [] : table;
-            if (path is ["mcp_servers", var name, ..] && !names.Contains(name, StringComparer.Ordinal))
+            if (line.StartsWith('['))
             {
-                names.Add(name);
+                table = line.StartsWith("[[", StringComparison.Ordinal) ? null : HeaderPath(line);
+            }
+            var name = line.StartsWith('[') ? HeaderServer(table) : KeyServer(line, table);
+            if (name is { } found && !names.Contains(found, StringComparer.Ordinal))
+            {
+                names.Add(found);
             }
         }
 
         return names;
+    }
+
+    /// <summary>The server a table header names — <c>[mcp_servers.x]</c> and its sub-tables — or nothing.</summary>
+    private static string? HeaderServer(IReadOnlyList<string>? table) =>
+        table is ["mcp_servers", var name, ..] ? name : null;
+
+    /// <summary>
+    /// The server a <c>key = value</c> line declares: an inline table under <c>[mcp_servers]</c>, or a dotted
+    /// key at the root — or nothing, which is every other line.
+    /// </summary>
+    private static string? KeyServer(string line, IReadOnlyList<string>? table)
+    {
+        var equals = line.IndexOf('=', StringComparison.Ordinal);
+        if (table is null || equals <= 0 || Keys(line[..equals]) is not { } keys)
+        {
+            return null;
+        }
+        var inline = line[(equals + 1)..].TrimStart().StartsWith('{');
+
+        return (table, keys) switch
+        {
+            (["mcp_servers"], [var name]) when inline => name,
+            ([], ["mcp_servers", var name]) when inline => name,
+            ([], ["mcp_servers", var name, _, ..]) => name,
+            _ => null,
+        };
     }
 
     /// <summary>The servers the agy and gemini CLIs load from their global files — which no launch can switch off.</summary>
@@ -149,14 +197,6 @@ public static class NoMcpServers
         var close = line.LastIndexOf(']');
 
         return close > 0 ? Keys(line[1..close]) : null;
-    }
-
-    /// <summary>The full key path of a <c>key = value</c> line inside <paramref name="table"/>, or nothing.</summary>
-    private static IReadOnlyList<string>? KeyPath(string line, IReadOnlyList<string> table)
-    {
-        var equals = line.IndexOf('=', StringComparison.Ordinal);
-
-        return equals > 0 && Keys(line[..equals]) is { } keys ? [.. table, .. keys] : null;
     }
 
     /// <summary>A dotted key, each segment unquoted — or nothing when the text is not wholly a key.</summary>

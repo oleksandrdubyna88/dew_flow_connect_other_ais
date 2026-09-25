@@ -103,6 +103,53 @@ public sealed class AReviewerStartsNoMcpServersTests
         NoMcpServers.CodexServerNames(string.Empty).Should().BeEmpty();
     }
 
+    /// <summary>
+    /// A name the reader is NOT sure of is never reported — measured on codex-cli 0.156.1, an override for
+    /// a server config.toml does not declare stops codex from starting at all ("failed to load bootstrap
+    /// configuration"). A missed name leaves one server loaded; a wrong one breaks every Codex review. (Our
+    /// own code reviewer.)
+    /// </summary>
+    [Fact]
+    public void ANameTheReaderIsNotSureOf_IsNeverReported_BecauseAWrongOneStopsCodex()
+    {
+        const string toml = """
+            [mcp_servers]
+            real = { command = "x" }
+            notatable = 1
+            [[plugins]]
+            foo = 1
+            mcp_servers.fake.command = "not at the root"
+            """;
+
+        NoMcpServers.CodexServerNames(toml).Should().Equal(["real"],
+            "a plain value is not a server, an array table ends [mcp_servers], and a dotted key outside the root is not one either");
+    }
+
+    [Fact]
+    public void ANameCmdWouldReadAsACommand_IsNotPassed()
+    {
+        Overrides(CodexReviewer(["ok", "srv&calc", "a|b", "per%cent"])).Should().Equal(["mcp_servers.ok.enabled=false"],
+            "on Windows codex is an npm .cmd shim, and cmd.exe splits an unquoted & or | into a second command (gemini, the code round)");
+    }
+
+    [Fact]
+    public void TheCodexConfigIsTheOneTheLaunchWillRead_HomeIncluded()
+    {
+        var home = Directory.CreateTempSubdirectory("coai-codex-home-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(home, ".codex"));
+            File.WriteAllText(Path.Combine(home, ".codex", "config.toml"), "[mcp_servers.from-slot]\ncommand = \"x\"\n");
+
+            NoMcpServers.CodexConfigured(name => name == "HOME" ? home : null).Should().Equal(["from-slot"],
+                "on the Team server codex runs as a slot, with the slot's HOME — the config is that home's, not the server's");
+        }
+        finally
+        {
+            Directory.Delete(home, recursive: true);
+        }
+    }
+
     [Fact]
     public void AGeminiFamilyFile_NamesItsServers_OrNone()
     {

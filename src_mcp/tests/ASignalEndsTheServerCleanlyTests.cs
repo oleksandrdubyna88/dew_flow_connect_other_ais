@@ -35,8 +35,10 @@ public sealed class ASignalEndsTheServerCleanlyTests
             .Should().BeTrue("the runtime's own exit is cancelled, so the host's finally runs and clears its marker");
 
         run.Stopping.IsCancellationRequested.Should().BeTrue("serving stops");
-        run.Cleared.Should().Be(0, "the marker is the host's to clear, after the notices drain");
-        run.Exits.Should().BeEmpty();
+        run.Cleared.Should().Be(1,
+            "a signal is an ending by request, never a death — the marker goes at once, so a drain that is itself cut short "
+            + "(a second signal, the deadline, the client's SIGKILL) cannot leave one behind (gemini and our own reviewer, the code round)");
+        run.Exits.Should().BeEmpty("the host still leaves by its ordinary road, draining its notices");
     }
 
     [Fact]
@@ -48,7 +50,7 @@ public sealed class ASignalEndsTheServerCleanlyTests
         stop.OnSignal("SIGTERM");
 
         stop.OnSignal("SIGINT").Should().BeFalse("a second signal is somebody insisting, and the default exit goes ahead");
-        run.Cleared.Should().Be(1, "but not before the marker is cleared, or the insisted stop is reported as a death");
+        run.Cleared.Should().BeGreaterThanOrEqualTo(1, "with the marker already gone, so the insisted stop is not reported as a death");
     }
 
     [Fact]
@@ -59,8 +61,8 @@ public sealed class ASignalEndsTheServerCleanlyTests
         run.Stop(TimeSpan.FromMilliseconds(50)).OnSignal("SIGTERM");
 
         (await Polls.Until(() => run.Exits.Count == 1, TimeSpan.FromSeconds(10)))
-            .Should().BeTrue("a review still running when the signal came must not keep the process past its deadline");
-        run.Cleared.Should().Be(1, "and the exit it forces clears the marker first");
+            .Should().BeTrue("a review still running when the signal came — or a drain that hangs — must not keep the process past its deadline");
+        run.Cleared.Should().BeGreaterThanOrEqualTo(1, "and the marker is gone by then");
     }
 
     [Fact]
@@ -74,6 +76,5 @@ public sealed class ASignalEndsTheServerCleanlyTests
         await Task.Delay(600, TestContext.Current.CancellationToken);
 
         run.Exits.Should().BeEmpty("a host that reached its own end needs no deadline");
-        run.Cleared.Should().Be(0);
     }
 }
