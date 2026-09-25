@@ -409,6 +409,36 @@ it. Checked against the code, taken:
    the grouping, and the status answer also needs the plan at a commit, the repository identity and the
    consultation evidence. One computation, in C#.
 
+## Risk consultation for story 5.2 (2026-09-25, codex `gpt-6-astra`, by hand)
+
+Story 5.2 was the second piece named as risky (generation and discovery together), and this was its
+consultation. Every point was checked against the code before it was taken:
+
+1. **The malformed-source test will fail for the wrong reason.** `prepareGate.test.mjs:87` corrupts the
+   consultant source and expects a `coai-consultant` error. Once the source is in the mount, the resolver
+   at `prepare-gate.mjs:144` runs FIRST and rejects the now-dirty mount with "uncommitted changes". So the
+   malformed-text case moves to `consultantBody` directly, and a clean, correctly pinned fixture that
+   LACKS the consultant file is its own case.
+2. **The menu title carries the version.** `package.json:221` reads `Copy the CLAUDE.md snippet (v11)`, and
+   `snippetVersionIsVisible.test.ts:30` checks it separately from the constants: the bump to v12 changes
+   the title in the same commit.
+3. **The byte-identity test joins THREE mounted bodies** (`snippetVersion.test.ts:180`); the consultant rule
+   is the fourth. The composite hash is computed from the final four bodies, including 5.1's pointer
+   change in `coai-review-gate.md`.
+4. **Packaging reads the mount at BUILD time only.** `prebundle` regenerates and esbuild embeds the
+   constants; the VSIX excludes `src/**`. An installed extension needs no mount to copy the snippet. CI
+   initialises the committed pin (`ci.yml:305`), so a new generator beside an old pin fails closed — the
+   gitlink and the generator change go in one commit, as point 4 of the epics 4–6 consultation said.
+5. **`prepare-gate.mjs --check` is not a check**: its entry point generates whatever the arguments
+   (`prepare-gate.mjs:184`). Nothing here depends on it; noted so nobody reads it as read-only.
+6. **Discovery**: the aggregation in point 5 of the epics 4–6 consultation is right, with three fixtures —
+   four mounted rules and no paste → `current`; the same plus a CLAUDE paste with consultant v2 → `older`,
+   behind `coai-consultant`; a paste with no consultant half → still `older`. The existing fixtures put the
+   whole snippet in the gate file (`snippetDiscovery.test.ts:31`), which no real mount does. A missing half
+   is never filled from ANOTHER mount.
+7. **No other reader** of `consultantRule.md` / `CONSULTANT_RULE` / `CONSULTANT_SOURCE` exists. The
+   ownership premise does survive in prose: `research/module_extension.md:3443`, which 5.2 rewrites.
+
 ## Build order
 
 Six epics, so this plan is its own first customer: it owes two cadence consultations (epics 1–3,
