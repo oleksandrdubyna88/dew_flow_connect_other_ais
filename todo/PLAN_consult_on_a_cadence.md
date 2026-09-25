@@ -355,6 +355,36 @@ Tests added by it: `AnAgainRoundForTheSameEpic_IsNotAskedAgain_ButOneForEpicFour
 `AMissingAnswerSchema_StandsTheCadenceDown`, `TwoWorktreesOfOneRepository_ShareOneRecord`,
 `ThePlanIsCountedAtTheReviewedSha_NotTheCheckout`.
 
+## Cadence consultation for epics 4–6 (2026-09-25, codex `gpt-6-astra`, by hand)
+
+The second group's consultation, before epic 4. Each point was checked against the code before it was
+taken; they override the build order below where they disagree.
+
+1. **The sidebar never calls `status`.** `panelProvider.readSessions` reads `<dataDir>/sessions/*.json`
+   through `rounds.parseSession`; the `cadence` block epic 3 put on `status` cannot reach the card that way.
+   Story 4.2 therefore gains a **one-shot CLI mode, `coai-mcp --cadence <repo> <plan>`**, answering the same
+   `CadenceAnswer` JSON (the sanctioned one-shot pattern `--log` and `--close-consult` already follow), read
+   by the extension on its refresh. A consultation closed WITHOUT another review round must still flip the
+   line — asserted.
+2. **The settings agreement test does not cover the cadence yet.** `panelServerDefaultsAgreement.test.ts`
+   checks the role and consultant defaults only, and the C# numbers are `CadenceRule` constants rather than
+   literals its regex reads. Story 4.1 extends it, `settingsReach.test.ts` and `settingsAreDeclared.test.ts`,
+   and declares the four settings in `package.json` (without which VS Code cannot persist them).
+3. **The log drops a consultation's `kind`.** `roundsDb.ts` rebuilds each consultation from named fields;
+   `kind` joins `DbConsultation` and that projection, asserted through `parseLog` itself, not a page fixture.
+4. **Epic 5's safe order**: the conventions release first; then, in ONE commit here, the gitlink bump, the
+   generator's source switch (`consultantBody` stripping the new file's frontmatter), the deletion of
+   `consultantRule.md`, the version and hash updates and the re-pointed tests; the other consumers after.
+   Another consumer's older mount cannot break this extension's build — `prepare-gate.mjs` reads under its own
+   repository root — but new generator code beside an old local pin would.
+5. **Epic 5 forgot discovery.** `readSnippetStatus` finds the first file carrying the gate marker and reads
+   halves from that file alone, so a mount carrying all four rules and no paste would still be reported as
+   missing the consultant half. Story 5.2 aggregates the mounted siblings in the mount fallback, keeping an
+   actual (stale) paste's precedence — with a fixture of four mounted rules and no paste.
+6. **The risky pieces** (the operator's rule at five or more epics): **story 4.2** (its assumed data path did
+   not exist — point 1), then **story 5.2** (generation and discovery together). Story 6.3 carries the
+   largest deployment consequence and is gated on the operator's word already.
+
 ## Build order
 
 Six epics, so this plan is its own first customer: it owes two cadence consultations (epics 1–3,
