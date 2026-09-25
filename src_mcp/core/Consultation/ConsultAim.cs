@@ -122,7 +122,7 @@ public sealed partial record ConsultAim(string Kind, string Plan, string Epics)
             return string.Empty;
         }
         var epic = Number(match.Groups[1].Value);
-        var story = match.Groups[2].Success ? Story(match.Groups[2].Value) : string.Empty;
+        var story = match.Groups[2].Success ? CanonicalStory(match.Groups[2].Value) : string.Empty;
 
         // A story of ANOTHER epic is a contradiction, not a key (epic 3's code round, gemini).
         return StoryBelongsTo(story, epic) ? new RiskItem(epic, story, string.Empty).Key : string.Empty;
@@ -133,7 +133,9 @@ public sealed partial record ConsultAim(string Kind, string Plan, string Epics)
         story.Length == 0 || story.StartsWith($"{epic}.", StringComparison.Ordinal);
 
     /// <summary>A story number without leading zeros on either side of its dot: <c>07.02</c> is <c>7.2</c>.</summary>
-    private static string Story(string story) =>
+    /// <remarks>Public because the risk answer must store the SAME key <c>consult</c> matches (PR #549, CodeRabbit).
+    /// The caller has already matched it as digits and a dot.</remarks>
+    public static string CanonicalStory(string story) =>
         string.Join('.', story.Split('.').Select(part => Number(part).ToString(CultureInfo.InvariantCulture)));
 
     private static int Number(string digits) => int.Parse(digits, CultureInfo.InvariantCulture);

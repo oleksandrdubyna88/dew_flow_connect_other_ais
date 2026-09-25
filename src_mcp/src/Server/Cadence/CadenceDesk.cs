@@ -240,13 +240,14 @@ public sealed class CadenceDesk(
         {
             return (call.Refusal, call);
         }
-        if (call.Facts.Epic == 0)
-        {
-            return (DeclareTheEpic(loaded) is { Length: > 0 } declare ? declare : string.Empty, call);
-        }
 
-        return FirstCodeRound(loaded, call) ? Checked(call, texts, branch) : (string.Empty, call);
+        // No epic declared: DeclareTheEpic is empty for a plan that names none, which is no refusal.
+        return call.Facts.Epic == 0 ? (DeclareTheEpic(loaded), call) : OnTheFirstCodeRound(loaded, call, texts, branch);
     }
+
+    /// <summary>Asked only on an epic's FIRST code round in this session — a checkpoint of the same epic is not asked twice.</summary>
+    private (string, CadenceCall) OnTheFirstCodeRound(PersistedSession loaded, CadenceCall call, CommandTexts texts, string branch) =>
+        FirstCodeRound(loaded, call) ? Checked(call, texts, branch) : (string.Empty, call);
 
     private (string, CadenceCall) Checked(CadenceCall call, CommandTexts texts, string branch)
     {
@@ -271,8 +272,7 @@ public sealed class CadenceDesk(
     /// </summary>
     public void Close(PersistedSession session, string verdict)
     {
-        if (settings.CadenceMode == CadenceMode.Off || session.CadenceRepoId.Length == 0
-            || EpicRef.Parse(session.Epic, session.Plan) is not EpicRef.Some some)
+        if (Closing(session) is not EpicRef.Some some)
         {
             return;
         }
@@ -287,6 +287,12 @@ public sealed class CadenceDesk(
                 + "the next review_code or status for this plan records it", some.Number, session.Plan, e.Message);
         }
     }
+
+    /// <summary>The epic a finished code stage closes — none when the cadence is off or the session holds no plan identity.</summary>
+    private EpicRef Closing(PersistedSession session) =>
+        settings.CadenceMode == CadenceMode.Off || session.CadenceRepoId.Length == 0
+            ? new EpicRef.None()
+            : EpicRef.Parse(session.Epic, session.Plan);
 
     /// <summary>The plan's standing for <c>status</c>, or null when no plan is asked about or held.</summary>
     public async Task<CadenceAnswer?> AnswerAsync(PersistedSession session, string plan, string sha, CancellationToken ct)
@@ -356,8 +362,7 @@ public sealed class CadenceDesk(
     private CadenceState Reconciled(PersistedSession session, string repoId, string plan, CadenceState state)
     {
         var last = session.Rounds.LastOrDefault(r => r.Stage == nameof(Stage.CodeReview));
-        if (session.State.Stage != Stage.Done || last is not { EpicNumber: > 0 } || last.PlanKey != EpicRef.PlanKey(plan)
-            || state.IsClosed(last.EpicNumber))
+        if (!Missed(session, last, plan, state))
         {
             return state;
         }
@@ -373,6 +378,14 @@ public sealed class CadenceDesk(
             return state.WithClosed(last.EpicNumber, last.Verdict, Stamp());
         }
     }
+
+    /// <summary>Whether the session's last code round closed an epic of this plan that the record does not hold.</summary>
+    private static bool Missed(
+        PersistedSession session, [System.Diagnostics.CodeAnalysis.NotNullWhen(true)] RoundRecord? last, string plan, CadenceState state) =>
+        session.State.Stage == Stage.Done && OfThisPlan(last, plan) && !state.IsClosed(last.EpicNumber);
+
+    private static bool OfThisPlan([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] RoundRecord? last, string plan) =>
+        last is { EpicNumber: > 0 } && last.PlanKey == EpicRef.PlanKey(plan);
 
     private static IReadOnlyList<int> Numbers(PersistedSession session, string plan, PlanOutline outline)
     {
@@ -400,9 +413,7 @@ public sealed class CadenceDesk(
     private string DeclareTheEpic(PersistedSession loaded)
     {
         var outline = PlanOutlineReader.Of(loaded.PlanText);
-        var split = outline.Epics.Count >= 2
-            || (settings.SplitPlan && PlanShapeReader.Of(loaded.PlanText).Verdict >= PlanShape.Split.Medium);
-        if (!split)
+        if (!IsSplit(outline, loaded.PlanText))
         {
             return string.Empty;
         }
@@ -413,6 +424,10 @@ public sealed class CadenceDesk(
             + "code round is: call review_code again with plan: \"<the plan file, repo-relative>\" and epic: \"k/N\" — k the "
             + "epic's own number as the plan writes it, N the plan's last." + NothingReviewed;
     }
+
+    /// <summary>Whether this work is split into epics: the plan names two or more, or the split order sized it so.</summary>
+    private bool IsSplit(PlanOutline outline, string planText) =>
+        outline.Epics.Count >= 2 || (settings.SplitPlan && PlanShapeReader.Of(planText).Verdict >= PlanShape.Split.Medium);
 
     // ---------- the risk answer ----------
 

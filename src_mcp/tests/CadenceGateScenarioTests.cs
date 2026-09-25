@@ -319,6 +319,33 @@ public sealed class CadenceGateScenarioTests : FakeCliRoundTests
         Reviewed(await CodeRound(service, "2/6")).Should().BeTrue();
     }
 
+    /// <summary>
+    /// A story written with leading zeros is the story `consult` names — or its consultation never counts.
+    /// </summary>
+    /// <remarks>
+    /// PR #549 (CodeRabbit): the risk answer stored <c>2.01</c> as written while <c>consult</c> canonicalised
+    /// <c>2/2.1</c>, so in require the code round stayed refused although the consultation had been taken; and
+    /// <c>02.1</c>, which <c>consult</c> accepts, was refused here outright.
+    /// </remarks>
+    [Theory]
+    [InlineData("2.01")]
+    [InlineData("02.1")]
+    public async Task ARiskStoryWithLeadingZeros_IsTheStoryConsultNames(string written)
+    {
+        await CommitPlan();
+        var service = Service(CadenceMode.Require);
+        await Consulted(service, "cadence", "1-3");
+        await service.OpenAsync(_repo, "epic-1");
+        Script(Clean);
+        var items = "[{\"epic\":2,\"story\":\"" + written + "\",\"reason\":\"moves the data\"}]";
+        Refusal(Parse(await service.ReviewPlanAsync(_repo, "epic-1", Scope, At("2/6", items)))).Should().BeEmpty();
+        await service.ResolveAsync(_repo, "epic-1", "[]");
+        await CommitWork();
+        await Consulted(service, "risk", "2/2.1");
+
+        Reviewed(await CodeRound(service, "2/6")).Should().BeTrue();
+    }
+
     [Fact]
     public async Task AnEmptyRiskAnswerWithAReason_StopsTheQuestion()
     {
