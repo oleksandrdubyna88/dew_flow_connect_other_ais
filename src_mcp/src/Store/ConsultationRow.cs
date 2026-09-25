@@ -35,4 +35,10 @@ public sealed record ConsultationRow(
     double? CostUsd,
     string Problem,
     string Advice,
-    string Alert);
+    string Alert,
+    /// <summary>stuck / cadence / risk — what the consultation was FOR (todo/PLAN_consult_on_a_cadence.md).</summary>
+    string Kind = "stuck",
+    /// <summary>The plan a cadence or risk consultation was about; empty for a stuck one.</summary>
+    string Plan = "",
+    /// <summary>The group or risk item it covers; empty for a stuck one.</summary>
+    string Epics = "");

@@ -95,6 +95,20 @@ public sealed record RoundRecord(
     /// </remarks>
     public string Sha { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The plan this round's epic belongs to, as its cadence key (the file name) — empty for a round of no
+    /// declared epic, and for every round older than the cadence (<c>todo/PLAN_consult_on_a_cadence.md</c>).
+    /// </summary>
+    /// <remarks>Stamped from the session when the round is FIRST written, so an interrupted round carries it
+    /// too — the epic-1-3 consultation, point 2: "the first code round of this epic" is asked of these.</remarks>
+    public string PlanKey { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>The declared epic's own number; 0 for none.</summary>
+    public int EpicNumber { get; init; }
+
+    /// <summary>What the cadence said about this round — "met", "stood down: &lt;reason&gt;", or empty.</summary>
+    public string CadenceNote { get => field ?? string.Empty; init; } = string.Empty;
+
     /// <summary>Per-reviewer progress — the live part of a running round.</summary>
     /// <remarks>Normalised on the way in, for the reason spelled out on PersistedSession.UsedPrompts.</remarks>
     public List<ReviewerState> ReviewerStates
@@ -175,6 +189,18 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
     /// whether the code is defensible, never whether it is what was asked for.
     /// </remarks>
     public string PlanText { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The plan file the caller last declared for this session, repo-relative — the cadence's plan
+    /// (<c>todo/PLAN_consult_on_a_cadence.md</c>). Empty until one is declared; an empty argument keeps it.
+    /// </summary>
+    public string Plan { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>The epic the caller last declared, <c>k/N</c>; cleared when a different plan is declared.</summary>
+    public string Epic { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>The repository's common dir, as the cadence record is keyed — what <c>resolve</c> closes an epic under.</summary>
+    public string CadenceRepoId { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>
     /// Which AI opened this session, and which model it declared. Never null.

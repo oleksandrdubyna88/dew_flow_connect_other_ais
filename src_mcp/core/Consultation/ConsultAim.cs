@@ -72,7 +72,7 @@ public sealed partial record ConsultAim(string Kind, string Plan, string Epics)
             return (Stuck, $"a {kind} consultation needs plan (the plan file, repo-relative, e.g. 'todo/PLAN_x.md') and epics "
                            + $"({Shape(kind)}) — this call sent no {(plan.Length == 0 ? "plan" : "epics")}.");
         }
-        if (!RepoRelative(plan))
+        if (!IsRepoRelative(plan))
         {
             return (Stuck, $"plan must be the plan file's repo-relative path, e.g. 'todo/PLAN_x.md' — '{plan}' is absolute or "
                            + "climbs out of the repository with '..'.");
@@ -88,7 +88,7 @@ public sealed partial record ConsultAim(string Kind, string Plan, string Epics)
     /// A path inside the repository: not rooted, no drive, no '..' segment (epic 2's code round, gemini) — the
     /// plan names a record and an audit line, and one that names something outside the repository misleads both.
     /// </summary>
-    private static bool RepoRelative(string plan)
+    public static bool IsRepoRelative(string plan)
     {
         var slashed = plan.Replace('\\', '/');
 
@@ -121,9 +121,16 @@ public sealed partial record ConsultAim(string Kind, string Plan, string Epics)
         {
             return string.Empty;
         }
+        var epic = Number(match.Groups[1].Value);
+        var story = match.Groups[2].Success ? Story(match.Groups[2].Value) : string.Empty;
 
-        return new RiskItem(Number(match.Groups[1].Value), match.Groups[2].Success ? Story(match.Groups[2].Value) : string.Empty, string.Empty).Key;
+        // A story of ANOTHER epic is a contradiction, not a key (epic 3's code round, gemini).
+        return StoryBelongsTo(story, epic) ? new RiskItem(epic, story, string.Empty).Key : string.Empty;
     }
+
+    /// <summary>Whether a story number is one of this epic's: <c>7.2</c> is epic 7's; an empty story is the epic itself.</summary>
+    public static bool StoryBelongsTo(string story, int epic) =>
+        story.Length == 0 || story.StartsWith($"{epic}.", StringComparison.Ordinal);
 
     /// <summary>A story number without leading zeros on either side of its dot: <c>07.02</c> is <c>7.2</c>.</summary>
     private static string Story(string story) =>

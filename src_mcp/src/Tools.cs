@@ -74,8 +74,11 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch, string planText) =>
-                await host.Current.ReviewPlanAsync(repoPath, branch, planText),
+            // The cadence's four arguments are optional, with C# defaults — the `resolve` lesson: without
+            // one the SDK publishes an argument as REQUIRED (todo/PLAN_consult_on_a_cadence.md).
+            async (string repoPath, string branch, string planText,
+                   string? plan = null, string? epic = null, string? riskItems = null, string? riskNote = null) =>
+                await host.Current.ReviewPlanAsync(repoPath, branch, planText, Cadence(plan, epic, riskItems, riskNote)),
             new McpServerToolCreateOptions
             {
                 Name = "review_plan",
@@ -93,6 +96,11 @@ internal static class Tools
                     is still open. And this is the gate for a document that code will be written
                     FROM, the only one that unlocks `review_code`; a document that is itself the
                     deliverable goes to `review_document` instead.
+
+                    When the operator has switched the consultation cadence on, work split into epics
+                    declares where it is: `plan` (the plan file, repo-relative) and `epic` (`k/N` — the
+                    epic's own number, the plan's last). The reply's orders then say which consultation
+                    is owed; `riskItems` (a JSON array) and `riskNote` answer the risk question.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
@@ -101,8 +109,9 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch, string baseRef, string planText, bool again = false) =>
-                await host.Current.ReviewCodeAsync(repoPath, branch, baseRef, planText, again),
+            async (string repoPath, string branch, string baseRef, string planText, bool again = false,
+                   string? plan = null, string? epic = null, string? riskItems = null, string? riskNote = null) =>
+                await host.Current.ReviewCodeAsync(repoPath, branch, baseRef, planText, again, Cadence(plan, epic, riskItems, riskNote)),
             new McpServerToolCreateOptions
             {
                 Name = "review_code",
@@ -140,6 +149,11 @@ internal static class Tools
                     call with `again: true`: it reopens the code stage for the new commits, and is
                     refused (saying why) when nothing reviewable was committed since the last code
                     round, while that round's findings await `resolve`, or while a person is asked.
+
+                    When the operator has switched the consultation cadence on, pass `plan` and `epic`
+                    (`k/N`) here too. In `require` the first code round of an epic whose group of epics
+                    has no consultation closed with an outcome is refused, and the refusal carries the
+                    exact `consult` call to make.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
@@ -237,8 +251,8 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch, string? document = null) =>
-                await host.Current.StatusAsync(repoPath, branch, document ?? string.Empty),
+            async (string repoPath, string branch, string? document = null, string? plan = null) =>
+                await host.Current.StatusAsync(repoPath, branch, document ?? string.Empty, plan ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "status",
@@ -249,6 +263,10 @@ internal static class Tools
                     restart — sessions are persisted. While a round awaits `resolve`, `pending`
                     holds its findings in the order `resolve` indexes them — so a lost reply can
                     still be decided on, finding by finding.
+
+                    When the operator has switched the consultation cadence on, `cadence` says where a
+                    plan stands: epics through the code gate, each group of epics and whether it was
+                    consulted, the risky items named. `plan` asks about one plan from any branch.
                     """,
                 ReadOnly = true,
                 Idempotent = true,
@@ -380,4 +398,8 @@ internal static class Tools
                 OpenWorld = true,
             });
     }
+
+    /// <summary>The cadence's four optional arguments, as the service reads them.</summary>
+    private static Server.CadenceArgs Cadence(string? plan, string? epic, string? riskItems, string? riskNote) =>
+        new(plan ?? string.Empty, epic ?? string.Empty, riskItems ?? string.Empty, riskNote ?? string.Empty);
 }

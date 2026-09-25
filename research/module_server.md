@@ -3528,6 +3528,68 @@ fourth was found while answering it:
 - **The gate reads the store once per check**, and the path normalisation moved to `RepositoryIdentity`, with
   `ReviewTreeRoot.Normalised` delegating to it, so the context side depends on nothing in the worktree side.
 
+### The consultant on a cadence — epic 3: the gate enforces it (2026-09-25)
+
+Epic 3 of [PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md). The cadence now reaches the
+caller in every review reply and, in `require`, refuses. Every decision lives in `CadenceDesk`
+(`Server/Cadence/CadenceDesk.cs`), out of `PanelService`, which only asks it.
+
+```mermaid
+sequenceDiagram
+    participant C as caller
+    participant P as PanelService
+    participant D as CadenceDesk
+    participant G as CadenceGate
+    participant S as CadenceStore
+    C->>P: review_code(plan, epic "k/N", riskItems?)
+    P->>P: SessionClaim, load, begin
+    P->>P: NothingSince / NothingOver (a round with nothing to review owes nothing)
+    P->>D: PrepareAsync(loaded, args, sha)
+    D->>D: EpicRef.Parse; plan at the SHA (git show); PlanOutline
+    D->>D: >14 epics? N and k match the headings?
+    D->>S: risk answer (WithRisk) · Load + reconcile
+    D->>G: WithEvidence (consultations closed with a verdict)
+    P->>D: BeforeTheCode (require, first code round of this epic)
+    D->>G: Check
+    alt Blocked
+        G-->>C: refusal carrying the literal consult call
+    else StoodDown (no consultant can be had)
+        D-->>P: note "stood down: reason" + cadence-stood-down notice
+        P-->>C: the round runs
+    else Satisfied
+        P-->>C: the round runs, orders appended
+    end
+    C->>P: resolve → CodeReview → Done
+    P->>D: Close (before the session is saved; failure logged, reconciled)
+```
+
+| what | where |
+|---|---|
+| **Settings**: `COAI_CADENCE_MODE` off \| remind \| require (default `remind`, D4; an unknown word is an unrecognised setting that names the key), `COAI_CADENCE_EVERY` (3), `COAI_CADENCE_RISK_THRESHOLD` (5), `COAI_CADENCE_RISK_MAX` (3). `off` parses nothing, refuses nothing and adds no order — replies are what they were. | `PanelSettings.CadenceMode` / `CadenceEvery` / `CadenceRiskThreshold` / `CadenceRiskMax`, `WhyCadenceMode` |
+| **The caller declares where it is**: `review_plan` and `review_code` take optional `plan`, `epic` (`k/N`), `riskItems` (JSON), `riskNote`; `status` takes `plan`. An empty argument keeps the session's; naming a DIFFERENT plan clears the held epic. The session keeps `Plan`, `Epic`, `CadenceRepoId`, set before the live round is first written, so every `RoundRecord` — an interrupted one too — carries `PlanKey`, `EpicNumber` and `CadenceNote`. | `CadenceArgs`, `PersistedSession`, `RoundRecord`, `LiveRound.Record`, `Tools.cs` |
+| **Worked out once, under the claim, at the reviewed sha**: the plan file is read with `git show <sha>:<plan>`; a plan of more than 14 epics is refused (on the COUNT); when the plan names epics, N must be its last heading and k one of its numbers, else refused naming both; a plan file not in the commit leaves N the caller's word, noted. A WRONG declaration is refused in remind and require alike; a record the gate could not READ refuses only in `require` — `remind` goes ahead with a note. | `CadenceDesk.PrepareAsync`, `StageRun.RefuseBeforeBuilding` + `StageRun.Cadence` (`CadenceTrace`) |
+| **The refusal** (`require` only): after the nothing-to-review checks; a plan that names epics with no `epic` declared is refused; otherwise asked only on the FIRST code round of an epic in this session — a checkpoint `again` of the same epic is not asked twice — and `CadenceGate.Check` decides: refused with the orders' own call, stood down with the preflight's sentence (the round runs, `cadence-stood-down` notice, `stood down: …` on the round), or met. | `CadenceDesk.BeforeTheCode`, `PanelService.CadenceBeforeTheCode` |
+| **The risk answer**: each entry checked first (epic ≥ 1, a reason, a story like `7.2`), then the list (at most `RiskMax`; empty needs `riskNote`); stored on the plan's record. | `CadenceDesk.RiskAnswer` / `StoreRisk` |
+| **Orders in every reply**: the facts go to `CommandContext.Cadence`, so plan and code replies carry the forecast, the group due, the risk question and the risk item due (epic 1's `CadenceOrders`). | `RunStageAsync` |
+| **Closing an epic** (D3): on `CodeReview → Done`, for proceed, good_enough and continue_anyway, the epic is recorded through its code gate BEFORE the session is saved; a write that fails is logged, never fails the `resolve`, and is reconciled by the next `review_code` or `status` for that plan from the session's last code round. | `CadenceDesk.Close` / `Reconciled`, `PanelService.Finish` |
+| **`status` for a plan**: a `cadence` block — mode, epics, epics through the code gate, each group and whether consulted, risk items and whether consulted, risk answered — read from the plan's record, so the same from any branch. | `CadenceDesk.AnswerAsync`, `SessionAnswer.Cadence` / `CadenceAnswer` |
+| **The database** (schema step 15, `WhatTheCadenceCounts`): `rounds.plan_key`, `epic_number`, `cadence_note` (from the round, which owns them); `consultations.kind` (default `stuck`), `plan`, `epics`. A projection — the files stay the truth. | `Store/Schema.cs`, `RoundsDb.RecordRoundRow` / `RecordConsultation`, `ConsultationRow` |
+| **Tool descriptions**: one paragraph each on `review_plan`, `review_code`, `status`, opening "When the operator has switched the consultation cadence on"; the header comment says ten tools. | `Tools.cs` |
+
+Epic 3's code round (`good_enough`, 31 findings, 12 taken, each red first):
+
+- **A plan may be declared without an epic.** One plan gate for the whole task has no epic yet, and it is
+  where the risk question is naturally answered: the session holds the plan, the risk answer is kept, and a
+  code round in `require` then asks for the epic — naming the plan's own epics (`it names epics 1-6`).
+- **The risk answer is bounded before it is built** (`RiskAnswer`): refused past 16 KB, and an array longer
+  than the cap is refused on its length alone; each entry's fields come before the count; a story must be
+  its own epic's (`7.2` belongs to epic 7 — `ConsultAim.StoryBelongsTo`, used by `consult`'s `epics` too).
+- **A risk answer that cannot be written refuses only in `require`**; `remind` goes ahead with a note.
+- **Reconciling a missed close is catch-up work**: a record it cannot write this time is logged and left for
+  the next call, never turned into a refusal.
+- The desk's decisions are closed records (`Where`, `RecordRead`, `RiskStored`, `RiskAnswer`) rather than
+  tuples with nulls, each method within the family's complexity ceiling.
+
 **A reader could kill a round, and the catch written for it looked past the exception (2026-09-04).**
 Six code rounds died with `Access to the path is denied`. One died on the FINAL save, with every
 reviewer answered and the verdict decided: the findings were in memory and all of it was thrown away

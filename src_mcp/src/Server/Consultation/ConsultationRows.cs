@@ -42,5 +42,8 @@ public static class ConsultationRows
             : null,
         record.Turns.Count > 0 ? record.Turns[0].Problem : string.Empty,
         record.Turns.Count > 0 ? record.Turns[^1].Advice : string.Empty,
-        record.Alert);
+        record.Alert,
+        Kind: record.Kind,
+        Plan: record.Plan,
+        Epics: record.Epics);
 }

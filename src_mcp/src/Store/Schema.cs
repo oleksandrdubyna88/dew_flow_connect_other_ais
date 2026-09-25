@@ -32,7 +32,7 @@ internal static class Schema
     [
         Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
-        TheSendsThemselves, WhatAPersonSaid, WhatItWasTold,
+        TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
     ];
 
     internal const string Tables = """
@@ -438,5 +438,23 @@ internal static class Schema
     internal const string WhatItWasTold = """
         ALTER TABLE rounds ADD COLUMN commands   TEXT NOT NULL DEFAULT '';
         ALTER TABLE rounds ADD COLUMN plan_shape TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>
+    /// Step 15: the consultation cadence (<c>todo/PLAN_consult_on_a_cadence.md</c>) — which epic a round was
+    /// for and what the cadence said about it, and what a consultation was FOR.
+    /// </summary>
+    /// <remarks>
+    /// <para>A projection, as everything here is: the session file and the consultation record stay the truth.
+    /// The defaults say "not recorded" — a round of no epic, a consultation from before kinds, which is a
+    /// stuck one because every consultation before the cadence was.</para>
+    /// </remarks>
+    internal const string WhatTheCadenceCounts = """
+        ALTER TABLE rounds ADD COLUMN plan_key     TEXT NOT NULL DEFAULT '';
+        ALTER TABLE rounds ADD COLUMN epic_number  INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE rounds ADD COLUMN cadence_note TEXT NOT NULL DEFAULT '';
+        ALTER TABLE consultations ADD COLUMN kind  TEXT NOT NULL DEFAULT 'stuck';
+        ALTER TABLE consultations ADD COLUMN plan  TEXT NOT NULL DEFAULT '';
+        ALTER TABLE consultations ADD COLUMN epics TEXT NOT NULL DEFAULT '';
         """;
 }
