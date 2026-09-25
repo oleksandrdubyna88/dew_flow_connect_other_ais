@@ -51,6 +51,7 @@
     { "path": "documents/", "kind": "directory", "move": true, "mention": true, "clash": true, "why": "the documents reviews were run against" },
     { "path": "escalations/", "kind": "directory", "move": true, "mention": true, "clash": true, "why": "questions put to a person, and their answers" },
     { "path": "consultations/", "kind": "directory", "move": true, "mention": true, "clash": true, "why": "consultation records, their answers and their per-caller counts" },
+    { "path": "cadence/", "kind": "directory", "move": true, "mention": true, "clash": true, "why": "each plan's consultation cadence - which epics passed their code gate and the risk answer; the gate cannot rebuild it, so a move that left it would ask for consultations already had" },
     { "path": "callers/", "kind": "directory", "move": true, "mention": true, "clash": true, "why": "which assistant called which round" },
     { "path": "chat-conversations/", "kind": "directory", "move": true, "mention": true, "clash": true, "why": "every chat conversation - the chat half of the product" },
     { "path": "chat-usage.jsonl", "kind": "file", "move": true, "mention": true, "clash": true, "why": "what the chats have cost" },

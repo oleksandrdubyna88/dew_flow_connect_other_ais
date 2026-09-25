@@ -322,8 +322,12 @@ internal static class Tools
             // Both optional arguments carry a C# default — the `resolve` lesson above: without one
             // the SDK publishes the argument as REQUIRED, and the ordinary first call, which has no
             // consultationId yet, fails as "An error occurred invoking 'consult'".
-            async (string repoPath, string problem, string? suspectedFiles = null, string? consultationId = null) =>
-                await host.Current.ConsultAsync(repoPath, problem, suspectedFiles ?? "[]", consultationId ?? string.Empty),
+            // `kind`, `plan` and `epics` too (todo/PLAN_consult_on_a_cadence.md): absent is a stuck
+            // consultation, exactly what every call before them was.
+            async (string repoPath, string problem, string? suspectedFiles = null, string? consultationId = null,
+                   string? kind = null, string? plan = null, string? epics = null) =>
+                await host.Current.ConsultAsync(repoPath, problem, suspectedFiles ?? "[]", consultationId ?? string.Empty,
+                    kind ?? string.Empty, plan ?? string.Empty, epics ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "consult",
@@ -359,6 +363,10 @@ internal static class Tools
                     an earlier turn is refused. Turns per consultation and calls per session are capped.
                     Nothing in your tree is ever changed by this tool; if the consultant's process
                     changes anything, its advice is withheld and the paths are named.
+
+                    `kind`, `plan` and `epics` are for a consultation the gate ORDERED: `kind: "cadence"`
+                    with the plan file and a group of epics (`"4-6"`), or `kind: "risk"` with a piece you
+                    named as risky (`"7"`, `"7/7.2"`). Leave all three out when you are simply stuck.
                     """,
                 ReadOnly = true,
                 Idempotent = false,

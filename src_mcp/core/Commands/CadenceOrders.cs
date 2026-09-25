@@ -159,7 +159,8 @@ public static class CadenceOrders
             .Replace("{owed}", owed, StringComparison.Ordinal);
     }
 
-    private static string GroupOrder(CadenceFacts facts, EpicGroup group, CommandTexts texts)
+    /// <summary>The order for a group's consultation — also what the gate's refusal carries, so there is one copy of the call.</summary>
+    public static string GroupOrder(CadenceFacts facts, EpicGroup group, CommandTexts texts)
     {
         var titles = facts.Outline.TitlesOf(group.First, group.Last);
         var named = titles.Length > 0 ? $"{titles}" : $"epics {group.Range}";
@@ -177,7 +178,8 @@ public static class CadenceOrders
         $"{RiskQuestionMarker} " + Fill(texts.Text(CommandTexts.ConsultRiskQuestion), facts)
             .Replace("{count}", facts.EpicCount.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal);
 
-    private static string RiskOrder(CadenceFacts facts, RiskItem item, CommandTexts texts)
+    /// <summary>The order for a risky item's consultation — also what the gate's refusal carries.</summary>
+    public static string RiskOrder(CadenceFacts facts, RiskItem item, CommandTexts texts)
     {
         var problem = $"Plan {facts.Plan}, {Describe(item)}, named as the risky piece because: {item.Reason}. "
             + "Is it designed right, and what would make it go wrong? <what you are least sure of>";

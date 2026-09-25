@@ -148,7 +148,7 @@ public sealed class ReviewWorktrees(IProcessLauncher launcher, GitHistory git, s
     /// </remarks>
     private async Task<string> CommonDirAsync(TreePlace place, CancellationToken ct)
     {
-        var answer = await _at.GitAsync(place.RepoPath, ["rev-parse", "--path-format=absolute", "--git-common-dir"], ReviewTreeRoot.Asking, ct);
+        var answer = await _at.GitAsync(place.RepoPath, [.. Context.RepositoryIdentity.CommonDirArgs], ReviewTreeRoot.Asking, ct);
 
         return answer.Ran && answer.Ok ? answer.Out.Trim() : string.Empty;
     }

@@ -451,7 +451,7 @@ export const DATA_TO_MOVE: readonly string[] = [
   DATABASE_FILE, `${DATABASE_FILE}-wal`, `${DATABASE_FILE}-shm`,
   'sessions/', 'unparseable/', 'empty/',
   'prompts/', 'usage.jsonl',
-  'documents/', 'escalations/', 'consultations/', 'callers/',
+  'documents/', 'escalations/', 'consultations/', 'cadence/', 'callers/',
   'chat-conversations/', 'chat-usage.jsonl', 'chat-doors.jsonl', 'pictures/',
   // The notifications ledgers — two files rather than one because their writers release on
   // different days, which is the reason this repository refused a shared file twice already.

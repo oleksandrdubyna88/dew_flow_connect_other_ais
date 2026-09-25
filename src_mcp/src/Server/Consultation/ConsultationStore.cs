@@ -241,9 +241,23 @@ public sealed partial class ConsultationStore(
 
     private const string Died = "the server running this turn died before the answer was read";
 
+    /// <summary>Whether a record is what the cadence gate counts: an ordered consultation closed with a verdict.</summary>
+    internal static bool IsCadenceEvidence(ConsultationRecord record) =>
+        record.Kind != Core.Consultation.ConsultKinds.Stuck
+        && record.IsOver
+        && ConsultationOutcomes.IsVerdict(record.Outcome);
+
+    /// <remarks>
+    /// <b>A cadence or risk consultation closed with a verdict is never reaped</b> (todo/PLAN_consult_on_a_cadence.md,
+    /// found while answering epic 2's code round): it is the only evidence the cadence gate reads that a group of
+    /// epics or a risky piece was consulted on, and a plan's epics run for weeks — email-service's fourteen did —
+    /// while retention is seven days. They are few (a group per three epics and at most three risk items per
+    /// plan). A lapsed or failed one is no evidence and goes like any other.
+    /// </remarks>
     private bool Expire(ConsultationRecord record, DateTime nowUtc, TimeSpan retention)
     {
-        if (nowUtc - Parse(record.EndedUtc.Length > 0 ? record.EndedUtc : record.UpdatedUtc, nowUtc) <= retention)
+        if (IsCadenceEvidence(record)
+            || nowUtc - Parse(record.EndedUtc.Length > 0 ? record.EndedUtc : record.UpdatedUtc, nowUtc) <= retention)
         {
             return false;
         }

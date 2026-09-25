@@ -97,6 +97,20 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
             : (string.Empty, $"'{path}' is not inside a git checkout ({result.StdErr.Trim()}) — repoPath must be a path inside the repository you are working in");
     }
 
+    /// <summary>
+    /// The repository a checkout belongs to (<see cref="RepositoryIdentity"/>) — or, where git gives no
+    /// answer, the checkout's own path in the same key form: git's refusal is not an identity, and an
+    /// empty one would make every such checkout the same repository.
+    /// </summary>
+    public async Task<string> CommonDirAsync(string repoPath, CancellationToken ct = default)
+    {
+        var result = await launcher.RunAsync(new ProcessRequest("git", RepositoryIdentity.CommonDirArgs, repoPath), ct);
+
+        return RepositoryIdentity.Normalised(result.ExitCode == 0 && result.StdOut.Trim().Length > 0
+            ? result.StdOut
+            : Path.GetFullPath(repoPath));
+    }
+
     /// <summary>The commit and branch the working tree stands on — for the record and the prompt.</summary>
     public async Task<(string Sha, string Branch)> HeadAsync(string repoPath, CancellationToken ct = default)
     {

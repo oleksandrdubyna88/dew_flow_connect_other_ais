@@ -257,9 +257,12 @@ internal sealed class SessionTurn : IDisposable
     /// <summary>Whether the turn is actually ours — a writer decides how to write on this.</summary>
     public bool Held => _held is not null;
 
+    /// <summary>The lock file a turn on this file takes — one derivation, for the turn and for anything that must hold it.</summary>
+    public static string LockFileFor(string file) => Path.ChangeExtension(file, null) + ".turn";
+
     public static SessionTurn Take(string sessionFile)
     {
-        var lockFile = Path.ChangeExtension(sessionFile, null) + ".turn";
+        var lockFile = LockFileFor(sessionFile);
         for (var attempt = 0; attempt < 40; attempt++)
         {
             try

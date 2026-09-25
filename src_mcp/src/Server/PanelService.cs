@@ -2861,6 +2861,26 @@ public sealed partial class PanelService
         _consultations.AskAsync(repoPath, problem, suspectedFiles, consultationId, ct);
 
     /// <summary>
+    /// The same, FOR something: a group of epics or a risky piece the cadence ordered
+    /// (<c>todo/PLAN_consult_on_a_cadence.md</c>). The three arguments are read into ONE canonical aim before
+    /// anything else, so a spelling the gate would not match is refused rather than paid for.
+    /// </summary>
+    public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, string kind, string plan, string epics, CancellationToken ct = default)
+    {
+        var (aim, refusal) = Core.Consultation.ConsultAim.Parse(kind, plan, epics);
+
+        return refusal.Length > 0
+            ? Task.FromResult(Error(refusal))
+            : _consultations.AskAsync(repoPath, problem, suspectedFiles, consultationId, aim, ct);
+    }
+
+    /// <summary>Whether a consultation could be had right now — what the cadence gate asks before it refuses.</summary>
+    public ConsultPreflight ConsultPreflight() => _consultations.Preflight();
+
+    /// <summary>The consultation records, for the cadence gate and the tests that read what was written.</summary>
+    public ConsultationStore Consultations => _consultations.Store;
+
+    /// <summary>
     /// The tenth tool: how a consultation ENDED, recorded by whoever knows.
     /// </summary>
     /// <remarks>
