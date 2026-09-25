@@ -1000,12 +1000,13 @@ export function consultationsHtml(
   listed: PriceLookup,
 ): string {
   if (log.consultations.length === 0) {
-    return '<div class="empty">No consultations yet. One happens when a stuck AI calls <code>consult</code> —'
+    return '<div class="empty">No consultations yet. One happens when an AI calls <code>consult</code> — stuck, or because the cadence asked for one —'
       + ' the <b>Consultant</b> section of the panel says who it asks.</div>';
   }
 
   const rows = log.consultations.map((one) => `<tr data-started="${startedMsOf(one.startedUtc)}">
     <td>${escapeHtml(startedOf(one.startedUtc))}</td>
+    <td>${forCell(one)}</td>
     <td>${escapeHtml(callerOf(one.callerKind))} → ${escapeHtml(one.vendor)}${one.model.length > 0 ? ` · ${escapeHtml(one.model)}` : ''}</td>
     <td>${escapeHtml(repoNameOf(one.repoPath))}${one.branch.length > 0 ? ` · ${escapeHtml(one.branch)}` : ''}</td>
     <td class="num">${one.turns}</td>
@@ -1015,7 +1016,7 @@ export function consultationsHtml(
     <td class="what">${foldedCell(one.problem, `${one.id}:problem`)}</td>
     <td class="what">${foldedCell(one.advice, `${one.id}:advice`)}</td>
   </tr>${one.alert.length === 0 ? '' : `
-  <tr data-started="${startedMsOf(one.startedUtc)}"><td colspan="10" class="failed">${escapeHtml(one.alert)}</td></tr>`}`).join('');
+  <tr data-started="${startedMsOf(one.startedUtc)}"><td colspan="${CONSULTATION_COLUMNS}" class="failed">${escapeHtml(one.alert)}</td></tr>`}`).join('');
 
   // The server answers the newest N for the same N the rounds use. Said out loud when the list is
   // AT that number, because an older consultation silently not existing is a page telling a lie
@@ -1025,10 +1026,44 @@ export function consultationsHtml(
     : '';
 
   return `${capped}<table><thead><tr>
-    <th>Started</th><th>Who asked whom</th><th>Where</th><th class="num">Turns</th>
+    <th>Started</th><th>For</th><th>Who asked whom</th><th>Where</th><th class="num">Turns</th>
     <th>How it ended</th><th>Outcome</th><th class="num">Tokens</th><th class="num">Cost</th>
-    <th>What was stuck</th><th>What was advised</th>
+    <th>What was asked</th><th>What was advised</th>
   </tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+/** How many cells a consultation row has — the alert row under it spans them all. */
+const CONSULTATION_COLUMNS = 11;
+
+/**
+ * What the consultation was FOR: an agent that was stuck, a group of epics, or one risky item.
+ *
+ * <p>The column the cadence made necessary (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.3).
+ * Without it the log read every consultation as an agent admitting it was stuck, and a cadence
+ * consultation is the opposite — one the gate asked for while nothing was wrong. The plan is named by
+ * its file (`repoNameOf` is the last segment of ANY path, either separator), with the path kept for
+ * the hover, because the path is long and the file is what a person recognises. A kind this build does not know is shown as written rather than dressed up as one it does.</p>
+ */
+function forCell(one: DbConsultation): string {
+  const plan = one.plan.length === 0
+    ? ''
+    : `<br><span class="decided" title="${escapeHtml(one.plan)}">${escapeHtml(repoNameOf(one.plan))}</span>`;
+
+  return `${escapeHtml(kindSaid(one.kind, one.epics))}${plan}`;
+}
+
+/** `cadence · epics 4-6`, `risk · story 7.2`, `risk · epic 7`, or the kind alone. */
+function kindSaid(kind: string, epics: string): string {
+  if (kind === 'cadence' && epics.length > 0) {
+    return `cadence · ${epics.includes('-') ? 'epics' : 'epic'} ${epics}`;
+  }
+
+  if (kind === 'risk' && epics.length > 0) {
+    const story = epics.split('/')[1];
+    return story === undefined ? `risk · epic ${epics}` : `risk · story ${story}`;
+  }
+
+  return kind;
 }
 
 /**

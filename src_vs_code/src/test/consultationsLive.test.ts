@@ -148,7 +148,7 @@ test('the log lists a consultation with what was stuck and what was advised', ()
       startedUtc: '2026-09-13T09:00:00.000Z', endedUtc: '2026-09-13T09:04:00.000Z',
       seconds: 36.8, tokensIn: 40_402, tokensOut: 1_112, costUsd: 0.15,
       problem: 'The parser returns 3 where 4 is expected.', advice: 'Your loop stops one short.',
-      alert: '',
+      alert: '', kind: 'stuck', plan: '', epics: '',
     }],
   });
 
@@ -165,6 +165,7 @@ test('a consultation that ended normally is not painted as a failure', () => {
       id: 'abc', callerKind: 'claude', repoPath: 'D:/repo', branch: 'main', vendor: 'codex', model: '',
       turns: 1, status, reason: '', startedUtc: '2026-09-13T09:00:00.000Z', endedUtc: '',
       seconds: 1, tokensIn: 0, tokensOut: 0, costUsd: null, problem: 'p', advice: 'a', alert: '',
+      kind: 'stuck', plan: '', epics: '',
     }],
   });
 
@@ -178,6 +179,7 @@ test('a full page says it is the newest N rather than letting the rest not exist
     id, callerKind: 'claude', repoPath: 'D:/repo', branch: 'main', vendor: 'codex', model: '',
     turns: 1, status: 'closed', reason: '', startedUtc: '2026-09-13T09:00:00.000Z', endedUtc: '',
     seconds: 1, tokensIn: 0, tokensOut: 0, costUsd: null, problem: 'p', advice: 'a', alert: '',
+    kind: 'stuck', plan: '', epics: '',
   });
   const full = priced({
     ...EMPTY_LOG,
@@ -216,6 +218,7 @@ test('a consultation the server wrote with NO price draws a dash, not a page tha
       model: 'qwen3', turns: 1, status: 'closed', reason: '', outcome: '', outcomeBy: '',
       startedUtc: '2026-09-23T09:00:00.000Z', endedUtc: '2026-09-23T09:01:00.000Z', seconds: 60,
       tokensIn: 1_200, tokensOut: 300, problem: 'p', advice: 'a', alert: '',
+      kind: 'stuck', plan: '', epics: '',
     }],
   });
   const log = parseLog(wire, true);
@@ -319,6 +322,7 @@ test('the LOG offers it for a consultation nobody decided, and withholds it once
     startedUtc: '2026-09-15T22:30:59.000Z', endedUtc: '2026-09-15T22:40:00.000Z',
     seconds: 36.8, tokensIn: 100, tokensOut: 20, costUsd: null,
     problem: 'stuck', advice: 'try this', alert: '',
+    kind: 'stuck', plan: '', epics: '',
   };
   const table = (outcome: string, status = 'closed'): string =>
     priced({ ...EMPTY_LOG, consultations: [{ ...row, outcome, status }] });
@@ -343,6 +347,7 @@ test('the TABLE prices a consultation whose vendor reported no money', () => {
     startedUtc: '2026-09-15T22:30:59.000Z', endedUtc: '',
     seconds: 36.8, tokensIn: 200_000, tokensOut: 45_700, costUsd: null,
     problem: 'which is better, C# or Java?', advice: 'it depends on the team.', alert: '',
+    kind: 'stuck', plan: '', epics: '',
   };
   const vendors = [{
     id: 'codex', runtime: 'codex' as const, model: 'gpt-6-astra', baseUrl: '', executablePath: '',
@@ -355,4 +360,56 @@ test('the TABLE prices a consultation whose vendor reported no money', () => {
 
   // With nothing that knows a price it is still a dash, which is the honest answer rather than zero.
   assert.doesNotMatch(priced({ ...EMPTY_LOG, consultations: [row] }), /~\$/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// What a consultation was FOR (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.3)
+// ---------------------------------------------------------------------------------------------
+
+const asked = {
+  id: 'abc', callerKind: 'claude', repoPath: 'D:/rsd/repo', branch: 'main', vendor: 'codex',
+  model: '', turns: 1, status: 'closed', reason: '', startedUtc: '2026-09-25T09:00:00.000Z',
+  endedUtc: '', seconds: 1, tokensIn: 1, tokensOut: 1, costUsd: null, outcome: 'solved',
+  problem: 'p', advice: 'a', alert: '', kind: 'stuck', plan: '', epics: '',
+};
+
+test('the log says what each consultation was FOR: a stuck agent, a group of epics, a risky item', () => {
+  const html = priced({
+    ...EMPTY_LOG,
+    consultations: [
+      { ...asked, id: 's' },
+      { ...asked, id: 'c', kind: 'cadence', plan: 'todo/PLAN_x.md', epics: '4-6' },
+      { ...asked, id: 'r', kind: 'risk', plan: 'todo/PLAN_x.md', epics: '7/7.2' },
+      { ...asked, id: 'e', kind: 'risk', plan: 'todo/PLAN_x.md', epics: '7' },
+    ],
+  });
+
+  assert.match(html, /<th>For<\/th>/);
+  assert.match(html, />stuck</);
+  assert.match(html, /cadence · epics 4-6/);
+  assert.match(html, /risk · story 7\.2/);
+  assert.match(html, /risk · epic 7</);
+  assert.match(html, /title="todo\/PLAN_x\.md">PLAN_x\.md/, 'the plan is named by its file, the path kept for the hover');
+});
+
+test('a consultation from a server that predates the kinds reads as stuck, because that is all there was', () => {
+  const one = parseLog(JSON.stringify({ consultations: [{ id: 'abc' }] }), true).consultations[0];
+
+  assert.equal(one?.kind, 'stuck');
+  assert.equal(one?.plan, '');
+  assert.equal(one?.epics, '');
+});
+
+test('a kind this build does not know is shown as written, not dressed up as one it does', () => {
+  const html = priced({ ...EMPTY_LOG, consultations: [{ ...asked, kind: 'a-newer-kind', epics: '<b>' }] });
+
+  assert.match(html, />a-newer-kind</);
+  assert.ok(!html.includes('<b>'), 'the epics came off a disk and are escaped like every other value');
+});
+
+test('an alert under a consultation spans every column the table has', () => {
+  const html = priced({ ...EMPTY_LOG, consultations: [{ ...asked, alert: 'two records claim one id' }] });
+  const columns = (html.match(/<th[ >]/g) ?? []).length;
+
+  assert.match(html, new RegExp(`colspan="${columns}"`));
 });

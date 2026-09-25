@@ -37,6 +37,9 @@ function consultation(over: Partial<DbConsultation> = {}): DbConsultation {
     problem: LONG,
     advice: 'your loop stops one short',
     alert: '',
+    kind: 'stuck',
+    plan: '',
+    epics: '',
     ...over,
   };
 }

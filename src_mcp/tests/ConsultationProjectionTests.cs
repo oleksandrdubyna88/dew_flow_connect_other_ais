@@ -327,4 +327,59 @@ public sealed class ConsultationProjectionTests : IDisposable
         ask.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'consultations'";
         ask.ExecuteScalar().Should().Be(1L);
     }
+
+    /// <summary>
+    /// What a consultation was FOR reaches the log, so the page can tell a stuck one from the cadence's.
+    /// </summary>
+    /// <remarks>
+    /// Epic 4 story 4.3 of <c>todo/PLAN_consult_on_a_cadence.md</c>: the log listed every consultation as
+    /// if it were an agent admitting it was stuck, and a cadence consultation is the opposite — one the
+    /// gate asked for while nothing was wrong.
+    /// </remarks>
+    [Fact]
+    public void ACadenceConsultation_IsListedWithItsKindPlanAndEpics()
+    {
+        Store().Write(Record() with { Kind = "cadence", Plan = "todo/PLAN_x.md", Epics = "4-6" });
+
+        var listed = Listed().Should().ContainSingle().Subject;
+        listed.Kind.Should().Be("cadence");
+        listed.Plan.Should().Be("todo/PLAN_x.md");
+        listed.Epics.Should().Be("4-6");
+    }
+
+    /// <summary>
+    /// A database from before the kinds lists its consultations as what they were: stuck ones.
+    /// </summary>
+    /// <remarks>
+    /// Read-only opening steps nothing, so the release before this one leaves the table without the three
+    /// columns — and a SELECT naming one would take the whole log page down (the reason the older shapes
+    /// exist at all, <c>ConsultationOutcomeSourceTests</c>). Before kinds, every consultation WAS stuck.
+    /// </remarks>
+    [Fact]
+    public void ADatabaseFromBeforeTheKinds_ListsItsConsultationsAsStuck()
+    {
+        Directory.CreateDirectory(_dir);
+        var file = Path.Combine(_dir, RoundsDb.FileName);
+        var adds = Array.FindIndex(Schema.Steps, step => step.Contains("ADD COLUMN kind", StringComparison.Ordinal));
+        adds.Should().BeGreaterThan(0, "the kinds are their own step, appended rather than folded into an earlier one");
+
+        using (var db = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={file};Pooling=False"))
+        {
+            db.Open();
+            using var make = db.CreateCommand();
+            make.CommandText = string.Join(";\n", Schema.Steps[..adds]) + $"; PRAGMA user_version={adds}";
+            make.ExecuteNonQuery();
+
+            using var insert = db.CreateCommand();
+            insert.CommandText =
+                "INSERT INTO consultations (id, status, started_utc, outcome) VALUES ('old1', 'closed', '2026-09-01T00:00:00Z', 'solved')";
+            insert.ExecuteNonQuery();
+        }
+
+        var listed = RoundsQuery.Read(_dir).Consultations.Should().ContainSingle().Subject;
+        listed.Kind.Should().Be("stuck");
+        listed.Plan.Should().BeEmpty();
+        listed.Epics.Should().BeEmpty();
+        listed.Outcome.Should().Be("solved", "the columns older than the kinds are still read");
+    }
 }

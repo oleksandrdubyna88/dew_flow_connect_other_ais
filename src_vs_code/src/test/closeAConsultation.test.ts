@@ -65,6 +65,9 @@ function consultation(over: Partial<DbConsultation> = {}): DbConsultation {
     problem: 'the parser returns 3 where 4 is expected',
     advice: 'your loop stops one short',
     alert: '',
+    kind: 'stuck',
+    plan: '',
+    epics: '',
     ...over,
   };
 }
