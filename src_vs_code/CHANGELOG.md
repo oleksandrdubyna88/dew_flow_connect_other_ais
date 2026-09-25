@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-**A prompt button works on text you pasted** (issue #538). Pasting your own text into a chat's box and
+**A prompt button works on text you pasted or typed** (issue #538). Putting your own text into a chat's box and
 pressing a prompt button — *Explain*, *What would you answer?* — used to leave the box alone with a notice.
 The question now goes on top and your text, whole, becomes what it is about; pressing another prompt button
 swaps just the question. A model button still leaves a box you wrote in alone.
