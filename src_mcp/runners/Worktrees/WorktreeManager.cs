@@ -96,6 +96,20 @@ public sealed class WorktreeManager(IProcessLauncher launcher, string storageRoo
             : throw new WorktreeException("rev-parse", $"cannot resolve '{branch}': {result.StdErr.Trim()}");
     }
 
+    /// <summary>The branch's commit, or empty when git cannot resolve it — for a READ that must not fail over it.</summary>
+    /// <remarks>Here rather than in each caller: <c>status</c> and the <c>--cadence</c> one-shot both ask it.</remarks>
+    public async Task<string> ShaOrNoneAsync(string repoPath, string branch)
+    {
+        try
+        {
+            return await ResolveShaAsync(repoPath, branch);
+        }
+        catch (WorktreeException)
+        {
+            return string.Empty;
+        }
+    }
+
     public async Task<WorktreeLease> AddAsync(string repoPath, string sha, string sessionId, int round)
     {
         Directory.CreateDirectory(storageRoot);
