@@ -103,13 +103,16 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
             {
                 context = await _server.GetContextAsync();
             }
-            catch (Exception e) when (e is HttpListenerException or ObjectDisposedException or InvalidOperationException)
+            catch (Exception e)
             {
+                // ANY failure is written down: the loop's end is exactly what #462 could never see.
                 Noted($"accept failed: {e.GetType().Name} ({e.Message}){(_server.IsListening ? string.Empty : "; the listener has stopped")}");
                 if (!_server.IsListening)
                 {
                     return;
                 }
+                // Never a hot loop, whatever keeps failing while the listener still listens. (gemini, the code round.)
+                await Task.Delay(50);
                 continue;
             }
 
@@ -144,7 +147,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
             {
                 context.Response.Abort();
             }
-            catch (Exception torn) when (torn is HttpListenerException or ObjectDisposedException or InvalidOperationException)
+            catch (Exception torn) when (torn is not OutOfMemoryException)
             {
                 // Already torn down; the request is over either way.
             }
@@ -736,24 +739,35 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
             "one request the loop could not finish must not leave every later one to a 40 s timeout");
     }
 
+    /// <summary>
+    /// A client that goes away while its answer is being WRITTEN — what a child killed mid-request leaves behind.
+    /// </summary>
+    /// <remarks>
+    /// A real failed write, not a stand-in: a raw request, a 16 MB answer the client never reads, and the socket
+    /// reset under it. (Our own code reviewer: aborting the response inside the answer failed at the first property
+    /// assignment instead, the same road as a throwing answer.)
+    /// </remarks>
     [Fact]
-    public async Task AResponseThatCannotBeWritten_DoesNotSilenceTheStub()
+    public async Task AnAnswerWhoseClientWentAwayMidWrite_DoesNotSilenceTheStub()
     {
-        var first = true;
-        _answer = context =>
+        var big = new string('x', 16 * 1024 * 1024);
+        _answer = context => context.Request.Url!.AbsolutePath.EndsWith("/first", StringComparison.Ordinal) ? (200, big) : (200, "{}");
+        var at = new Uri(_prefix);
+        using (var raw = new System.Net.Sockets.TcpClient())
         {
-            if (first)
-            {
-                first = false;
-                // The connection gone under the answer — what a child killed mid-request leaves behind.
-                context.Response.Abort();
-            }
+            await raw.ConnectAsync(at.Host, at.Port, TestContext.Current.CancellationToken);
+            var request = Encoding.ASCII.GetBytes($"GET {at.AbsolutePath}first HTTP/1.1\r\nHost: {at.Authority}\r\nConnection: close\r\n\r\n");
+            await raw.GetStream().WriteAsync(request, TestContext.Current.CancellationToken);
+            await Polls.Until(() => { lock (_paths) { return _paths.Exists(path => path.EndsWith("/first", StringComparison.Ordinal)); } }, TimeSpan.FromSeconds(10));
+            await Task.Delay(300, TestContext.Current.CancellationToken);
+            // A reset, not a polite close: the stub's write meets a connection that is gone.
+            raw.Client.LingerState = new System.Net.Sockets.LingerOption(true, 0);
+        }
+        (await Polls.Until(() => Journal().Contains("/first -> ", StringComparison.Ordinal), TimeSpan.FromSeconds(30)))
+            .Should().BeTrue("the stub finishes with the first request one way or the other");
+        Journal().Should().NotContain("/first -> 200", "the write really failed — this is the road a killed child takes, not a thrown answer");
 
-            return (200, "{}");
-        };
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
-
-        await Record.ExceptionAsync(() => client.GetAsync(_prefix + "first", TestContext.Current.CancellationToken));
         var second = await client.GetAsync(_prefix + "second", TestContext.Current.CancellationToken);
 
         second.StatusCode.Should().Be(HttpStatusCode.OK, "a write that failed is that request's problem, not the stub's");
@@ -783,6 +797,8 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
     {
         using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
         await client.GetAsync(_prefix + "seen", TestContext.Current.CancellationToken);
+        // The journal line is written after the response is closed, so the client can be back first.
+        await Polls.Until(() => Journal().Contains("GET /seen", StringComparison.Ordinal), TimeSpan.FromSeconds(10));
         using var shim = StartShim(new ProcessStartInfo(ShimExe) { ArgumentList = { "--not-a-real-flag" } });
         await shim.Process.WaitForExitAsync(TestContext.Current.CancellationToken);
 
