@@ -144,17 +144,10 @@ export interface DbConsultation {
   readonly problem: string;
   readonly advice: string;
   readonly alert: string;
-  /**
-   * What it was FOR — `stuck`, `cadence` or `risk` (todo/PLAN_consult_on_a_cadence.md).
-   *
-   * <p>Defaulted to `stuck`, unlike `outcome`, and the difference is the point: before the kinds
-   * existed every consultation WAS an agent that was stuck, so a server too old to send the field is
-   * telling the truth by omission. An absent verdict is not a verdict; an absent kind is this one.</p>
-   */
+  /** What it was FOR — `stuck`, `cadence` or `risk`; `stuck` from a server older than the kinds, when every one was. */
   readonly kind: string;
-  /** The plan a cadence or risk consultation was about, as the caller wrote it; empty for a stuck one. */
+  /** The plan, and the group (`4-6`) or item (`7/7.2`), a cadence or risk consultation covered; empty for a stuck one. */
   readonly plan: string;
-  /** The group (`4-6`) or the item (`7/7.2`) it covered; empty for a stuck one. */
   readonly epics: string;
 }
 
@@ -414,8 +407,7 @@ function consultation(raw: Partial<DbConsultation>): DbConsultation {
     advice: text(raw.advice),
     alert: text(raw.alert),
     kind: text(raw.kind).length > 0 ? text(raw.kind) : 'stuck',
-    plan: text(raw.plan),
-    epics: text(raw.epics),
+    plan: text(raw.plan), epics: text(raw.epics),
   };
 }
 
