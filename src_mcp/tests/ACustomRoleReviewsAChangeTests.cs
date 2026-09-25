@@ -274,7 +274,7 @@ public sealed class ACustomRoleReviewsAChangeTests : IAsyncLifetime
         await service.ResolveAsync(_repo, "feature", AcceptAll(plan));
         Script(OneMajor);
 
-        var work = service.BuildWork(["Requirements"], _repo, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+        var work = service.Roster.BuildWork(["Requirements"], _repo, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
         var arguments = work[0].Invocation.Request.Arguments.ToList();
 
         // codex takes its prompt on stdin, so there is no file to read — the request carries it.

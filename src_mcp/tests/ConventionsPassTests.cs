@@ -92,7 +92,7 @@ public sealed class ConventionsPassTests
         string[] scheduled =
             [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole];
 
-        PanelService.RolesWithRulesInMind(scheduled, hasRules: false)
+        RosterBuilder.RolesWithRulesInMind(scheduled, hasRules: false)
             .Should().Equal([RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole]);
     }
 
@@ -101,7 +101,7 @@ public sealed class ConventionsPassTests
     {
         string[] scheduled = [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole];
 
-        PanelService.RolesWithRulesInMind(scheduled, hasRules: true).Should().Equal(scheduled);
+        RosterBuilder.RolesWithRulesInMind(scheduled, hasRules: true).Should().Equal(scheduled);
     }
 
     [Fact]
@@ -111,8 +111,8 @@ public sealed class ConventionsPassTests
         // must not be spelled as a special case anywhere.
         string[] scheduled = [RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole];
 
-        PanelService.RolesWithRulesInMind(scheduled, hasRules: false).Should().Equal(scheduled);
-        PanelService.RolesWithRulesInMind(scheduled, hasRules: true).Should().Equal(scheduled);
+        RosterBuilder.RolesWithRulesInMind(scheduled, hasRules: false).Should().Equal(scheduled);
+        RosterBuilder.RolesWithRulesInMind(scheduled, hasRules: true).Should().Equal(scheduled);
     }
 
     /// <summary>
@@ -244,15 +244,15 @@ public sealed class ConventionsPassTests
         IReadOnlyList<string> scheduled =
             [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole];
 
-        PanelService.RolesNotAsked(scheduled, hasRules: true).Should().BeEmpty();
+        RosterBuilder.RolesNotAsked(scheduled, hasRules: true).Should().BeEmpty();
 
-        var skipped = PanelService.RolesNotAsked(scheduled, hasRules: false);
+        var skipped = RosterBuilder.RolesNotAsked(scheduled, hasRules: false);
         skipped.Should().ContainSingle();
         skipped[0].Role.Should().Be(RoleCatalog.ConventionsRole);
-        skipped[0].Reason.Should().Be(PanelService.NoWrittenRules);
+        skipped[0].Reason.Should().Be(RosterBuilder.NoWrittenRules);
         // Derived from the filter, never written out beside it: what is not asked and what ran are
         // the same decision read twice.
         skipped.Select(s => s.Role).Should()
-            .NotIntersectWith(PanelService.RolesWithRulesInMind(scheduled, hasRules: false).Select(r => r.ToString()));
+            .NotIntersectWith(RosterBuilder.RolesWithRulesInMind(scheduled, hasRules: false).Select(r => r.ToString()));
     }
 }

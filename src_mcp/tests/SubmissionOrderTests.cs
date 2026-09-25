@@ -71,7 +71,7 @@ public sealed class SubmissionOrderTests : IDisposable
     /// <summary>The vendors in the order this round would offer them, first appearance first.</summary>
     private List<string> ProviderOrder(int seed)
     {
-        var work = Service("alpha", "bravo", "charlie", "delta").BuildWork(
+        var work = Service("alpha", "bravo", "charlie", "delta").Roster.BuildWork(
             [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole, RoleCatalog.SecurityRole, RoleCatalog.UxDxRole],
             Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, seed: seed).Reviewers;
 
@@ -115,7 +115,7 @@ public sealed class SubmissionOrderTests : IDisposable
         var counts = new Dictionary<string, int>(StringComparer.Ordinal);
         for (var i = 0; i < 100; i++)
         {
-            var work = Service(vendors).BuildWork(
+            var work = Service(vendors).Roster.BuildWork(
                 [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole],
                 Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true,
                 seed: PanelService.StableSeed($"session-{i}", 1)).Reviewers;
@@ -146,7 +146,7 @@ public sealed class SubmissionOrderTests : IDisposable
         // fixed, and it is the failure mode a hand-written shuffle actually has.
         foreach (var id in Sessions)
         {
-            var work = Service("alpha", "bravo", "charlie").BuildWork(
+            var work = Service("alpha", "bravo", "charlie").Roster.BuildWork(
                 [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole],
                 Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, seed: PanelService.StableSeed(id, 1)).Reviewers;
 
@@ -162,7 +162,7 @@ public sealed class SubmissionOrderTests : IDisposable
     [Fact]
     public void ARoundWithOneVendor_IsNotReorderedIntoAnything()
     {
-        var work = Service("only").BuildWork(
+        var work = Service("only").Roster.BuildWork(
             [RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole],
             Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true, seed: 12345).Reviewers;
 

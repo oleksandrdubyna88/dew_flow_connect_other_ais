@@ -93,6 +93,7 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         // builds, and the call site passes the REAL mode rather than a constant. A `true` wired in
         // here would pass every other test in this file and ship the original defect.
         var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "PanelService.cs"))
+            + File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"))
             + File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "ReviewerPrompt.cs"));
 
         source.Should().Contain("{WhatYouHave(hasCheckout)}",
@@ -114,7 +115,8 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         // to describe exactly one failure: "YOUR PREVIOUS ANSWER WAS NOT VALID JSON". A model that
         // returned NOTHING because a tool was refused was then told its JSON was malformed — advice
         // about a failure it did not have, which is why the retries died the same way as the runs.
-        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "PanelService.cs"));
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "PanelService.cs"))
+            + File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"));
 
         source.Should().Contain("DID NOT PRODUCE A USABLE ANSWER");
         source.Should().Contain("refused", "the second failure shape has to be named to be answered");

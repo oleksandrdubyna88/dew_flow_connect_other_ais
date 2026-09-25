@@ -260,7 +260,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
         var service = new PanelService(settings, VaultKeys.None("no vault"), default,
             new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
-        var work = service.BuildWork(
+        var work = service.Roster.BuildWork(
             [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true);
 
         work.Reviewers.Should().ContainSingle()
@@ -286,7 +286,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
         var service = new PanelService(settings, VaultKeys.None("no vault"), default,
             new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
-        var work = service.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true);
+        var work = service.Roster.BuildWork(["Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true);
 
         work.NotAsked.Should().ContainSingle("a person needs to know the ROLE did not run");
     }
@@ -331,7 +331,7 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
         var service = new PanelService(settings, VaultKeys.None("no vault"), default,
             new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
-        var work = service.BuildWork(
+        var work = service.Roster.BuildWork(
             [RoleCatalog.ArchitectureRole, "Requirements"], Scratch(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true);
 
         work.Reviewers.Where(w => w.Invocation.Role == "Requirements").Select(w => w.Invocation.Provider)

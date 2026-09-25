@@ -244,7 +244,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
         var service = Service();
         await service.OpenAsync(_repo, "main");
 
-        var work = service.BuildWork(
+        var work = service.Roster.BuildWork(
             ["Spec"], _repo,
             $"## What this document is for\n\n{Purpose}\n\n## The document under review — spec.md\n\n{Document}",
             // The stage this test is NAMED for. It rode `Stage.PlanReview` because that is what the
