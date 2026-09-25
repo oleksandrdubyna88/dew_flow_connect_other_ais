@@ -265,6 +265,7 @@ function dbLog(over: Partial<DbRound> = {}): DbLog {
     totals: EMPTY_TOTALS,
     read: true,
     paged: true,
+    spotsSince: '',
   };
 }
 

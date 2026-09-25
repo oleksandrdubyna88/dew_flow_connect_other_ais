@@ -53,7 +53,7 @@ test('every tab the log page is pushed is built through regionOr, never inline',
   // inline as an argument to `update`, one throw would again silence every tab.
   const source = fs.readFileSync(EXTENSION, 'utf8');
 
-  for (const call of ['panel.usageTab()', 'blindSpotsHtml(fresh)', 'panel.consultationsTab(fresh)']) {
+  for (const call of ['panel.usageTab()', 'blindSpotsHtml(fresh, panel.spotsPeriod())', 'panel.consultationsTab(fresh)']) {
     const all = source.split(call).length - 1;
     const wrapped = source.split(`() => ${call})`).length - 1;
     assert.ok(all > 0, `${call} is no longer called from extension.ts; this test must follow it`);

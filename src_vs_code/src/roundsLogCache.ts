@@ -12,6 +12,7 @@ import {
   serverRun,
 } from './roundsDbRead';
 import { serverPath } from './installer';
+import { DEFAULT_PERIOD, LogPeriod, sinceOf } from './logPeriod';
 
 /**
  * What the rounds log page reads, and the few seconds it is allowed to remember.
@@ -36,6 +37,9 @@ export class RoundsLogCache {
 
   private roundsLogAt = 0;
 
+  /** The period *What it keeps missing* is counted over — Today by default, like the spending tab. */
+  private spots: LogPeriod = DEFAULT_PERIOD;
+
   constructor(private readonly context: vscode.ExtensionContext) {}
 
   /**
@@ -49,6 +53,19 @@ export class RoundsLogCache {
    */
   forgetRoundsLog(): void {
     this.roundsLogAt = 0;
+  }
+
+  spotsPeriod(): LogPeriod {
+    return this.spots;
+  }
+
+  /**
+   * A new period for *What it keeps missing* — and a fresh read, because the cached log was counted
+   * over the old one. A press is a person asking, not the unattended tick the cache is there for.
+   */
+  setSpotsPeriod(period: LogPeriod): void {
+    this.spots = period;
+    this.forgetRoundsLog();
   }
 
   async roundsLog(): Promise<DbLog> {
@@ -66,7 +83,8 @@ export class RoundsLogCache {
       ? EMPTY_LOG
       // The whole window rather than one page: this list is what gives every row its decision
       // counts, and the page paginates the rows it already holds. See MAX_LIMIT for the arithmetic.
-      : await readLog(server.fsPath, { limit: MAX_LIMIT });
+      // The instant is worked out HERE, at read time, so Today moves at midnight with nobody pressing.
+      : await readLog(server.fsPath, { limit: MAX_LIMIT }, serverRun(server.fsPath), sinceOf(this.spots, new Date()));
 
     return this.roundsLogCache;
   }

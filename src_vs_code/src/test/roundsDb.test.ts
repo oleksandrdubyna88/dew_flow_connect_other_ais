@@ -79,6 +79,7 @@ const LOG: DbLog = {
   totals: EMPTY_TOTALS,
   read: true,
   paged: true,
+  spotsSince: '',
 };
 
 // ---------- believing another program's JSON, only as far as its shape ----------

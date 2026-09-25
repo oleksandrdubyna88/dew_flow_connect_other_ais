@@ -1921,6 +1921,19 @@ simply take a hundred rounds off the only list it can show. A paged caller whose
 read is told so with **74**; the legacy shape keeps exit 0 and an empty log, which is what it has
 always answered.
 
+**`--since <instant>` — what it keeps missing, over a period (2026-09-25).** The Review rounds page's
+*What it keeps missing* tab gained the period switch its neighbours have (Today / Week / Month / Year /
+All). Its numbers are aggregates over every finding, so only this binary can count them over a period:
+given `--since`, `RoundsQuery.GroupedBy` and `Defended` count only the findings of rounds whose
+`started_utc` is at or after it (`round_id IN (SELECT r.id FROM rounds r WHERE $since = '' OR
+r.started_utc >= $since)` — a parameter, never interpolated). Rounds, consultations and totals are not
+split. `Program.SinceOf` parses the value as an instant and RE-WRITES it as `"O"` UTC, because the
+comparison is textual and `started_utc` is stored exactly that way; a value that is not an instant exits
+**65**, never 64, which an extension reads as an older binary. The answer **echoes** the instant it applied
+(`LoggedLog.Since`, `""` for all time), and the echo is the only proof: a coai-mcp **0.36.0** given the flag
+was measured to ignore it and exit 0 with the all-time answer, so no exit code could have told the two
+apart. Tests: `ALogSplitByPeriodTests` (red first; red again with the period condition planted always true).
+
 *The cursor's timestamp is validated, not only its number.* `0000|1` used to parse and then compare
 `0000` against `started_utc`, matching nothing — so a malformed cursor answered with an EMPTY page
 instead of the first one, which is the opposite of treating it as absent.

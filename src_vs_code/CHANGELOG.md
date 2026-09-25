@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+**Today, Week, Month, Year or All — on three more tabs.** On the Review rounds page, *Conversations*,
+*Consultations* and *What it keeps missing* now have the period switch *What each AI has used* has, plus
+**All**, opening on Today. *What it keeps missing* is counted by coai-mcp over the period and needs
+coai-mcp 0.37.0; an older one says so and shows all time.
+
 ## Extension 0.54.0 · Server 0.36.0 — 2026-09-25
 
 **The Consultations tab no longer has to be scrolled through.** On the Review rounds page each long *What

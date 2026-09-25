@@ -62,6 +62,7 @@ import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog } from './roundsDb';
+import { LogPeriod } from './logPeriod';
 import { NO_NOTES, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
@@ -467,6 +468,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
   async roundsLog(): Promise<DbLog> {
     return this.roundsLog_.roundsLog();
+  }
+
+  /** The period *What it keeps missing* is counted over. */
+  spotsPeriod(): LogPeriod {
+    return this.roundsLog_.spotsPeriod();
+  }
+
+  setSpotsPeriod(period: LogPeriod): void {
+    this.roundsLog_.setSpotsPeriod(period);
   }
 
   async roundFindings(sessionId: string, stage: string, number: number): Promise<Found> {

@@ -68,7 +68,7 @@ interface Stub {
   /** Answered for controls served by SELECTOR, which have no id to be found by. */
   getAttribute(asked: string): string | null;
   setAttribute(): void;
-  querySelectorAll(): [];
+  querySelectorAll(selector?: string): Stub[];
 }
 
 interface Page {
@@ -152,6 +152,25 @@ function open(rows: readonly LogRow[], totals: DbTotals = TOTALS, extra = ''): P
         });
     }
     if (selector === 'th[data-sort]') { return byAttribute('data-sort', 'th'); }
+    // A tab's PERIOD row (2026-09-25): the group, with its own buttons read out of its own markup —
+    // two rows carry the same data-period values, so they are keyed by the group they sit in.
+    const periods = /^\[data-periods="([\w-]+)"\]$/.exec(selector);
+    if (periods !== null) {
+      const tab = periods[1] as string;
+      const start = html.indexOf(`data-periods="${tab}"`);
+      if (start < 0) { return []; }
+      const group = at(`data-periods:${tab}`);
+      const buttons = [...html.slice(start, html.indexOf('</div>', start)).matchAll(/data-period="([\w-]+)"/g)]
+        .map((found) => {
+          const button = at(`period:${tab}:${found[1]}`);
+          button.getAttribute = (asked: string) => (asked === 'data-period' ? found[1] ?? null : null);
+
+          return button;
+        });
+      group.querySelectorAll = (asked: string) => (asked === '[data-period]' ? buttons : []);
+
+      return [group];
+    }
     const one = /^\[data-filter="([\w-]+)"\]$/.exec(selector);
     if (one !== null) { return byAttribute('data-filter').filter((s) => s.getAttribute('data-filter') === one[1]); }
 
@@ -1044,4 +1063,141 @@ test('a search finds what the Reviewers cell SAYS, not only the names behind it'
   search(page, 'a phrase on no row at all');
 
   assert.equal(page.at('pageinfo').textContent, 'nothing to show', 'and the control: a real miss still misses');
+});
+
+// ------------------------------------------------------------------------------------------------
+// THE PERIOD SWITCH on Conversations and Consultations (operator, 2026-09-25) — the page's own script,
+// run in this harness, because both are filtered by the page: their rows are already on it.
+
+/** A press on one button of one tab's period row, walked up the way the browser would. */
+function periodPress(tab: string, period: string): unknown {
+  const group = { getAttribute: (asked: string) => (asked === 'data-periods' ? tab : null) };
+  const button = {
+    getAttribute: (asked: string) => (asked === 'data-period' ? period : null),
+    closest: (asked: string) => (asked === '[data-periods]' ? group : null),
+  };
+
+  return { closest: (asked: string) => (asked === '[data-period]' ? button : null) };
+}
+
+function marked(page: Page, tab: string): string[] {
+  return ['day', 'week', 'month', 'year', 'all'].filter((one) => page.at(`period:${tab}:${one}`).className === 'tab on');
+}
+
+function localDayOf(d: Date): string {
+  const p = (n: number) => (n < 10 ? '0' : '') + n;
+
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+test('a Conversations period sets the date range the table filters by, and marks itself', () => {
+  const page = open([]);
+
+  page.click(periodPress('conversations', 'week'));
+  assert.ok(page.at('from').value.startsWith(`${localDayOf(new Date(Date.now() - 7 * 86_400_000))}T`),
+    `Week did not start the range seven days back: ${page.at('from').value}`);
+  assert.equal(page.at('to').value, '', 'a rolling period runs up to now, with no end');
+  assert.deepEqual(marked(page, 'conversations'), ['week']);
+
+  page.click(periodPress('conversations', 'day'));
+  assert.equal(page.at('from').value, `${localDayOf(new Date())}T00:00`, 'Today is since local midnight');
+  assert.deepEqual(marked(page, 'conversations'), ['day']);
+
+  page.click(periodPress('conversations', 'all'));
+  assert.equal(page.at('from').value, '');
+  assert.equal(page.at('to').value, '');
+  assert.deepEqual(marked(page, 'conversations'), ['all']);
+});
+
+test('a date typed by hand is the person\'s own range, so no period stays marked', () => {
+  const page = open([]);
+  page.click(periodPress('conversations', 'month'));
+
+  page.at('from').value = '2026-01-01T00:00';
+  page.at('from').heard['change']?.();
+
+  assert.deepEqual(marked(page, 'conversations'), [], 'a hand-typed range still claimed to be Month');
+});
+
+/** The consultations body, rebuilt from each push's markup as the browser would: rows and when each started. */
+function consultationRows(page: Page): () => Stub[] {
+  const body = page.at('consultations-body');
+  let rows: Stub[] = [];
+  Object.defineProperty(body, 'innerHTML', {
+    get: () => '',
+    set: (html: string) => {
+      rows = [...html.matchAll(/<tr data-started="(\d*)"/g)].map((found) => ({
+        ...page.at(`row-${Math.random()}`),
+        hidden: false,
+        getAttribute: (asked: string) => (asked === 'data-started' ? found[1] ?? '' : null),
+      }));
+    },
+  });
+  body.querySelectorAll = (selector?: string) => (selector === 'tr[data-started]' ? rows : []);
+
+  return () => rows;
+}
+
+const CONSULTATIONS = (...started: string[]) => started
+  .map((at) => `<tr data-started="${at}"><td>row</td></tr>`).join('');
+
+test('Consultations hides the rows older than the period, on every push and every press', () => {
+  const page = open([]);
+  const rows = consultationRows(page);
+  const now = String(Date.now());
+  const threeDaysAgo = String(Date.now() - 3 * 86_400_000);
+
+  page.deliver({ type: 'consultations', html: CONSULTATIONS(now, threeDaysAgo, '') });
+  assert.deepEqual(rows().map((one) => one.hidden), [false, true, true],
+    'Today showed a consultation three days old, or one whose start cannot be read');
+
+  page.click(periodPress('consultations', 'week'));
+  assert.deepEqual(rows().map((one) => one.hidden), [false, false, true], 'Week hid a row from this week');
+  assert.deepEqual(marked(page, 'consultations'), ['week']);
+
+  page.click(periodPress('consultations', 'all'));
+  assert.deepEqual(rows().map((one) => one.hidden), [false, false, false], 'All is every row, the unreadable one too');
+
+  page.deliver({ type: 'consultations', html: CONSULTATIONS(threeDaysAgo) });
+  assert.deepEqual(rows().map((one) => one.hidden), [false], 'a push forgot the period the person chose');
+});
+
+test('a period with no consultation in it says so, rather than showing an empty table', () => {
+  const page = open([]);
+  consultationRows(page);
+
+  page.deliver({ type: 'consultations', html: CONSULTATIONS(String(Date.now() - 3 * 86_400_000)) });
+  assert.equal(page.at('consultations-none').hidden, false, 'Today, with only an older row, said nothing');
+
+  page.click(periodPress('consultations', 'week'));
+  assert.equal(page.at('consultations-none').hidden, true);
+});
+
+test('each tab\'s row renders where its filter can reach it', () => {
+  const html = roundsLogHtml([], [], 'n0nce');
+
+  assert.match(html, /<div class="asChat"><div class="windows" data-periods="conversations">/,
+    'the Conversations row is not inside the shared table, shown only in its view');
+  assert.match(html, /data-periods="consultations">[\s\S]*?<\/div><div id="consultations-none"[^>]*hidden>[\s\S]*?<div id="consultations-body">/,
+    'the Consultations row is not OUTSIDE the body a push replaces');
+  assert.match(html, /class="tab on" data-period="day">Today</, 'the tabs do not open on Today');
+});
+
+test('every consultation row, its alert row too, carries when it started — and an unreadable start is empty', async () => {
+  const { consultationsHtml } = await import('../roundsLog');
+  const { EMPTY_LOG } = await import('../roundsDb');
+  const one = (id: string, startedUtc: string, alert = '') => ({
+    id, callerKind: 'claude', repoPath: 'D:/repo', branch: 'x', vendor: 'codex', model: 'm', turns: 1,
+    status: 'closed', reason: '', startedUtc, endedUtc: '', seconds: 1, tokensIn: 1, tokensOut: 1, costUsd: 0,
+    problem: 'p', advice: 'a', alert,
+  });
+  const html = consultationsHtml({
+    ...EMPTY_LOG, read: true,
+    consultations: [one('a', '2026-09-25T10:00:00.000Z', 'it failed'), one('b', 'not a time')],
+  }, [], () => undefined);
+
+  const at = String(Date.parse('2026-09-25T10:00:00.000Z'));
+  assert.equal((html.match(new RegExp(`<tr data-started="${at}"`, 'g')) ?? []).length, 2,
+    'the row and its alert row must hide together, so both carry the start');
+  assert.match(html, /<tr data-started="">/, 'an unreadable start is empty, which the page shows only under All');
 });

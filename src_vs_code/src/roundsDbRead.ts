@@ -61,14 +61,20 @@ export interface Page {
  * it gave yesterday. The two halves of this product update separately; the log that comes back says
  * which shape it came from, so the page offers paging only where paging exists.</p>
  */
-export async function readLog(executable: string, page: Page = {}, run: Run = serverRun(executable)): Promise<DbLog> {
+export async function readLog(
+  executable: string, page: Page = {}, run: Run = serverRun(executable), since = '',
+): Promise<DbLog> {
   if (executable.length === 0) {
     return EMPTY_LOG;
   }
   const limit = ['--limit', String(page.limit ?? DEFAULT_LIMIT)];
   const cursor = page.before ?? '';
   const before = cursor.length > 0 ? ['--before', cursor] : [];
-  const paged = await run(['--log', '--paged', ...limit, ...before], CAP_MS);
+  // The period *What it keeps missing* is counted over, sent only to the paged read: a server too old
+  // to page is far too old to split by period. An older server that pages ignores the flag (measured on
+  // 0.36.0: exit 0, the all-time answer), and its missing echo is what says so — see `spotsSince`.
+  const period = since.length > 0 ? ['--since', since] : [];
+  const paged = await run(['--log', '--paged', ...limit, ...before, ...period], CAP_MS);
   if (paged.code === 0) {
     return parseLog(paged.output, true);
   }

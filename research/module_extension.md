@@ -3883,6 +3883,29 @@ the card shows `asking`, `open` and `interrupted` only, and a fourth tab on the 
 cost. `interrupted` reads as **resumable** in both places, because that is what it is: the vendor
 accepted the turn, the process died before the answer was read, and the turn was not counted.
 
+**A period switch on Conversations, Consultations and What it keeps missing** (2026-09-25, operator:
+*"нужно добавить аналогичный переключатель на конверсейшин, консультейшин, вот ит кипс мисинг"*). The
+spending tab's Today / Week / Month / Year — the same `WINDOWS`, the same `windowStart` (Today since local
+midnight, the rest rolling) — plus **All**, opening on Today, by the operator's answers. `logPeriod.ts` holds
+the periods, `periodStart`, `sinceOf` and the button row. Two of the three tabs are filtered by the PAGE,
+because their rows are already on it:
+
+- *Conversations* — a row in the shared table, inside `.asChat` so it shows only in that view; a press sets
+  `#from` / `#to` and runs the existing date filter (Today = `setToday`; a rolling period from its first
+  minute with no end; All clears both). The page is handed the days per period as JSON, so there is no
+  second table of numbers. Today and All dates follow the row; a date typed by hand unmarks it.
+- *Consultations* — a row OUTSIDE `#consultations-body`, so a push does not replace it; every row and its
+  alert row carry `data-started`, and `filterConsultations` hides those older than the period after every
+  push and every press. A start that cannot be read shows under All only; a period with rows but none in
+  it says *"No consultation in this period — All shows every one."*
+
+*What it keeps missing* is counted by the SERVER (`--log --since`, `module_server.md`): its buttons are the
+host command `spotsPeriod`, `RoundsLogCache` holds the period (Today by default), works out the instant at
+read time so Today moves at midnight, and forgets the cached log when it changes. `blindSpotsHtml(log,
+period)` draws the row first on every road, the empty one included. A server that did not echo the instant
+(`DbLog.spotsSince` empty) could not apply it, and the tab says so in one sentence and that it shows all
+time — never passing all time off as the period marked above it.
+
 **The Consultations tab folds each long field** (2026-09-25, operator: *"список консультантов по умолчанию
 должен быть свернут. а то сильно много листать"*). A consultation's problem can be thousands of characters,
 and one of them filled the whole screen, so the tab was a scroll. `foldedCell` (`consultationFold.ts`)
