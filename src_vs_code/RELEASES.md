@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.54.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.53.1...extension-v0.54.0) (2026-09-25)
+
+
+### Features
+
+* **gate:** the consultant's cadence is counted, ordered and sized — epic 1, pure core ([7e5e399](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7e5e399c575bc33e295f96e0455bdb6cc9ba7d7c))
+
+
+### Bug Fixes
+
+* **chat:** a code block in an answer wraps instead of scrolling sideways ([9bb14a2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9bb14a27f40061c82f0b3301fbfae8d69dad75b3)), closes [#537](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/537)
+* **chat:** a paste that begins with the current question is adopted, not rewritten ([#538](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/538), code round) ([daa5798](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/daa5798113a5fcdd00a0a558bca6732e7b4bda0f))
+* **chat:** a prompt button applies its question to text the person pasted ([90086d1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/90086d196c0a03d14edba7e265e53247be065581)), closes [#538](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/538)
+* **chat:** the cascade check sees every override of the code block's wrap ([#537](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/537), code round) ([24c6abd](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/24c6abd83d796ca7072a594146f3651dd3a6f531))
+* **chat:** the code-block measurement builds its page instead of filtering HTML ([#537](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/537), CodeQL) ([58d010d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/58d010d8c4502e0244fdcbfd81d2a51becb1ec66))
+* **log:** a fold reads every line break, skips a blank first line, and keeps its key set immutable (code round) ([1ceb4b5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/1ceb4b50a561f32a3137081e80adc6e5729be56d))
+* **log:** the Consultations tab folds each long problem and advice ([001c0ad](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/001c0adf1cd756bdfffafc6f0c3a77369bdb1711))
+
 ## [0.53.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.53.0...extension-v0.53.1) (2026-09-25)
 
 
