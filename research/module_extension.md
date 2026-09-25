@@ -3883,6 +3883,19 @@ the card shows `asking`, `open` and `interrupted` only, and a fourth tab on the 
 cost. `interrupted` reads as **resumable** in both places, because that is what it is: the vendor
 accepted the turn, the process died before the answer was read, and the turn was not counted.
 
+**The Consultations tab folds each long field** (2026-09-25, operator: *"список консультантов по умолчанию
+должен быть свернут. а то сильно много листать"*). A consultation's problem can be thousands of characters,
+and one of them filled the whole screen, so the tab was a scroll. `foldedCell` (`consultationFold.ts`)
+renders *What was stuck* and *What was advised* as the page already renders a round's orders: a native
+`<details class="fold">`, closed by default — the first line, cut to 160 characters, with `…`, as the
+summary, the whole text inside. A field folds when it is longer than 160 characters or has a line break;
+a short one-liner stays plain. Both roads are escaped, the key (`<id>:problem`, `<id>:advice`) too. Open,
+the preview gives way to *Collapse*, so the first line is not read or copied twice. A live push replaces
+`#consultations-body` wholesale, so the page's `replaceKeepingFolds` reads the keys of the open folds
+first and opens the same ones again after — compared as decoded attribute values, never built into a
+selector, because a key carries an id. A fold nobody opened stays closed. Checked in headless Edge, closed
+and open.
+
 **The prompt box is not a setting.** `coai-mcp` reads its prompts override-first from its own data
 directory, so what a person types goes to `<dataDir>/prompts/consult.md` and nowhere else — the file
 IS the value, and the panel reads it at paint time like the pasted snippet beside it. A mirrored

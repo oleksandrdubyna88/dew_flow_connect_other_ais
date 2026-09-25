@@ -10,6 +10,7 @@ import { ModelPrice } from './modelPrices';
 import { ChatTurnRecord } from './chatUsage';
 import { PriceLookup, consultationCost, priceOfLine, shortNumber, UsageEntry, Window, WINDOWS } from './usage';
 import { outcomeBySaid, outcomeSaid } from './consultations';
+import { foldedCell } from './consultationFold';
 import { Vendor } from './vendors';
 import { calledBy, decideSecondsOf, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
@@ -1010,8 +1011,8 @@ export function consultationsHtml(
     <td><span class="badge ${badgeOf(one.status)}">${escapeHtml(one.status)}</span>${one.reason.length > 0 ? ` <span class="decided" title="${escapeHtml(one.reason)}">why…</span>` : ''}</td>
     <td>${escapeHtml(outcomeSaid(one.outcome))}${byCell(one)}${closeControl(one)}</td>
     ${costCell(one, vendors, listed)}
-    <td class="what">${escapeHtml(one.problem)}</td>
-    <td class="what">${escapeHtml(one.advice)}</td>
+    <td class="what">${foldedCell(one.problem, `${one.id}:problem`)}</td>
+    <td class="what">${foldedCell(one.advice, `${one.id}:advice`)}</td>
   </tr>${one.alert.length === 0 ? '' : `
   <tr><td colspan="10" class="failed">${escapeHtml(one.alert)}</td></tr>`}`).join('');
 
@@ -1272,6 +1273,13 @@ export function roundsLogHtml(
   th[data-sort].asc::after { content: " ▲"; opacity: .7; }
   th[data-sort].desc::after { content: " ▼"; opacity: .7; }
   td.what { white-space: normal; min-width: 260px; max-width: 560px; }
+  /* A consultation's long field, folded: the first line as the summary, the whole inside. Open, the
+     preview gives way to "Collapse" so the first line is not shown twice. */
+  details.fold > summary { cursor: pointer; }
+  details.fold .less { display: none; opacity: .7; }
+  details.fold[open] > summary .preview { display: none; }
+  details.fold[open] > summary .less { display: inline; }
+  details.fold .whole { white-space: pre-wrap; margin-top: 4px; }
   /* Long cells are cut with an ellipsis rather than pushing the table sideways; the full text is
      the cell's own title, so hovering reads it. */
   td.who-answered { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
@@ -1959,12 +1967,26 @@ export function roundsLogHtml(
   // after STILL_NOTHING_MS is a section nothing ever reached, and it says so rather than promising
   // for ever that something is coming.
   var told = {};
+  // A live push REPLACES the consultations table, and a fold the person opened would snap shut under
+  // them. So the keys of the open ones are read first and opened again after — compared as decoded
+  // attribute values, never built into a selector, because a key carries a consultation id. A fold
+  // nobody opened stays closed. (The Consultations tab folds its long fields, 2026-09-25.)
+  function replaceKeepingFolds(body, html) {
+    var open = {};
+    var before = body.querySelectorAll('details[data-fold][open]');
+    for (var b = 0; b < before.length; b++) { open[before[b].getAttribute('data-fold')] = true; }
+    body.innerHTML = html;
+    var after = body.querySelectorAll('details[data-fold]');
+    for (var a = 0; a < after.length; a++) {
+      if (open[after[a].getAttribute('data-fold')] === true) { after[a].open = true; }
+    }
+  }
   window.addEventListener('message', function (event) {
     var message = event.data;
     if (!message) { return; }
     if (message.type === 'consultations' && typeof message.html === 'string') {
       told.consultations = true;
-      document.getElementById('consultations-body').innerHTML = message.html;
+      replaceKeepingFolds(document.getElementById('consultations-body'), message.html);
       return;
     }
     if (message.type === 'spots' && typeof message.html === 'string') {

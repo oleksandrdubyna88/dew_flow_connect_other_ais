@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+**The Consultations tab no longer has to be scrolled through.** On the Review rounds page each long *What
+was stuck* and *What was advised* is folded: its first line shows, and a click opens the rest. A fold you
+opened stays open while a live consultation updates the table.
+
 **A prompt button works on text you pasted or typed** (issue #538). Putting your own text into a chat's box and
 pressing a prompt button — *Explain*, *What would you answer?* — used to leave the box alone with a notice.
 The question now goes on top and your text, whole, becomes what it is about; pressing another prompt button
