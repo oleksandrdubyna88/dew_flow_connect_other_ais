@@ -17,7 +17,12 @@ namespace CoaiMcp.Core.Commands;
 /// so no override can make a switch that worked read as one that did not.</para>
 /// <para><b>Placeholders</b> — <c>{scope}</c>, <c>{strongest}</c>, <c>{implementation}</c>,
 /// <c>{numbers}</c>, <c>{verdict}</c> — are the computed parts, filled by <see cref="GateCommands"/>. An
-/// override that leaves one out simply does not say it: the order is the operator's words.</para>
+/// override that leaves one out simply does not say it: the order is the operator's words. The cadence
+/// texts (<c>command-consult-*</c>) have their own — <c>{owed}</c>, <c>{range}</c>, <c>{titles}</c>,
+/// <c>{call}</c>, <c>{item}</c>, <c>{reason}</c>, <c>{count}</c>, <c>{load}</c>, <c>{every}</c>,
+/// <c>{threshold}</c>, <c>{max}</c>, <c>{most}</c>, <c>{plan}</c>, <c>{enforced}</c> — filled by
+/// <see cref="CadenceOrders"/>; an override that drops <c>{call}</c> drops the one thing a caller with a
+/// deferred schema cannot write for itself.</para>
 /// </remarks>
 public sealed record CommandTexts(IReadOnlyDictionary<string, string> Overrides)
 {
@@ -35,6 +40,7 @@ public sealed record CommandTexts(IReadOnlyDictionary<string, string> Overrides)
     public const string SplitMedium = "command-split-medium";
     public const string SplitLarge = "command-split-large";
     public const string SplitHuge = "command-split-huge";
+    public const string SplitMassive = "command-split-massive";
     public const string SplitMeasured = "command-split-measured";
     public const string CadenceEpic = "command-cadence-epic";
     public const string CadenceTask = "command-cadence-task";
@@ -42,12 +48,17 @@ public sealed record CommandTexts(IReadOnlyDictionary<string, string> Overrides)
     public const string AnotherCodeRound = "command-another-code-round";
     public const string AlreadySplitEpic = "command-already-split-epic";
     public const string AlreadySplitTask = "command-already-split-task";
+    public const string ConsultForecast = "command-consult-forecast";
+    public const string ConsultGroup = "command-consult-group";
+    public const string ConsultRiskQuestion = "command-consult-risk-question";
+    public const string ConsultRiskItem = "command-consult-risk-item";
 
     /// <summary>Every text this build ships — THE list; a test holds it and <c>shared/commands/</c> equal.</summary>
     public static readonly IReadOnlyList<string> ShippedIds =
     [
-        Preamble, Autonomy, Model, SplitNone, SplitSmall, SplitMedium, SplitLarge, SplitHuge, SplitMeasured,
+        Preamble, Autonomy, Model, SplitNone, SplitSmall, SplitMedium, SplitLarge, SplitHuge, SplitMassive, SplitMeasured,
         CadenceEpic, CadenceTask, CadenceSingle, AnotherCodeRound, AlreadySplitEpic, AlreadySplitTask,
+        ConsultForecast, ConsultGroup, ConsultRiskQuestion, ConsultRiskItem,
     ];
 
     /// <summary>What every release said before a person could change a word of it.</summary>

@@ -4,7 +4,7 @@ import { unknownFields } from './roles';
 /**
  * The gate's commands, as the Edit commands page shows them — issue #467, Epic B.
  *
- * <p>Two kinds. The fifteen SHIPPED texts are what the gate's orders are made of (the server embeds
+ * <p>Two kinds. The twenty SHIPPED texts are what the gate's orders are made of (the server embeds
  * `shared/commands/`, this page gets a generated copy); a person rewords one by writing
  * `<dataDir>/prompts/<id>.md`, and Restore deletes that file. A person's OWN commands are rows of
  * `coai.commands`, mirrored to the server as `COAI_COMMANDS`, each with its text in
@@ -37,11 +37,13 @@ export const COMMAND_PREFIX = 'command-';
 
 const GATE_MARKER = 'THE GATE runs once ';
 const ALREADY_SPLIT_MARKER = 'This plan is a PIECE of a split that is already under way';
+// The cadence orders' markers — the server's `CadenceOrders.*Marker`, each followed by one space.
+const CONSULT_FILL = ['{load}', '{every}', '{threshold}', '{max}', '{most}', '{plan}', '{enforced}'];
 
 const shipped = (id: string, title: string, marker = '', placeholders: readonly string[] = []): ShippedCommand =>
   ({ id: COMMAND_PREFIX + id, title, marker, placeholders });
 
-/** The fifteen, in the order an order is read. A test holds these ids and the generated texts equal. */
+/** The twenty, in the order an order is read. A test holds these ids and the generated texts equal. */
 export const SHIPPED_COMMANDS: readonly ShippedCommand[] = [
   shipped('preamble', 'The sentence before the orders'),
   shipped('autonomy', 'Work autonomously', 'Work AUTONOMOUSLY. ', ['{scope}']),
@@ -50,6 +52,7 @@ export const SHIPPED_COMMANDS: readonly ShippedCommand[] = [
   shipped('split-medium', 'Split: 2-3 epics'),
   shipped('split-large', 'Split: 3-4 epics'),
   shipped('split-huge', 'Split: 4-5 epics'),
+  shipped('split-massive', 'Split: 6-14 epics'),
   shipped('split-measured', 'Split: what the plan was measured at', '', ['{numbers}', '{verdict}']),
   shipped('cadence-epic', 'Gate: once per epic', GATE_MARKER),
   shipped('cadence-task', 'Gate: once for the whole task', GATE_MARKER),
@@ -58,6 +61,13 @@ export const SHIPPED_COMMANDS: readonly ShippedCommand[] = [
   shipped('already-split-epic', 'A piece of a split, gated per epic', ALREADY_SPLIT_MARKER),
   shipped('already-split-task', 'A piece of a split, gated once for the task', ALREADY_SPLIT_MARKER),
   shipped('model', 'Split with the strongest model', 'Do the SPLIT itself with ', ['{strongest}', '{implementation}']),
+  shipped('consult-forecast', 'Consult on a cadence: what the plan will owe', 'CONSULT ON A CADENCE. ', ['{owed}', ...CONSULT_FILL]),
+  shipped('consult-group', 'Consult on a cadence: a group of epics is due', 'CONSULT BEFORE YOU BUILD this group of epics. ',
+    ['{range}', '{titles}', '{call}', ...CONSULT_FILL]),
+  shipped('consult-risk-question', 'Consult on a cadence: name the risky epics and stories', 'NAME THE RISKY EPICS AND STORIES. ',
+    ['{count}', ...CONSULT_FILL]),
+  shipped('consult-risk-item', 'Consult on a cadence: a risky piece is due', 'CONSULT BEFORE YOU BUILD this risky piece. ',
+    ['{item}', '{reason}', '{call}', ...CONSULT_FILL]),
 ];
 
 /** The shipped text of one id, or empty for an id this build does not ship. */

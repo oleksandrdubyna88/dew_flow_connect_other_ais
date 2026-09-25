@@ -3422,6 +3422,27 @@ The orders ride on `--findings` (one round's detail), not on the `--log` list: t
 as literal SQL in one text per schema shape, and a third optional column would have meant a third
 copy of it for data only the opened row shows.
 
+### The consultant on a cadence — epic 1: the arithmetic, the orders, a sixth size (2026-09-25)
+
+[PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md), epic 1. Measured first: ~1 260
+gate rounds on this machine's two data directories against 18 consultations, none after 2026-09-22,
+zero across the fourteen epics of one real product, and not one consultation carrying an outcome.
+Every shipped trigger is reactive. This epic is the PURE half of the answer; nothing here runs until
+epic 3 sets `CommandContext.Cadence` — its default is `CadenceFacts.Off`, and
+`TheOrdersAreWhatTheyWereTests` stays byte-identical.
+
+| what | where |
+|---|---|
+| **Where a caller says it is**: `epic: "k/N"` with `plan` — k the epic's OWN number as the plan writes it, N the plan's LAST (a plan may continue another: email-service's second plan runs 5–14). Refusals name the shape, the missing half, or the range. The plan's cadence key is its FILE NAME, lower-cased, so `todo/` → `research/` promotion keeps it. | `core/Cadence/EpicRef.cs` |
+| **The arithmetic**: one consultation per group of `every` epics (3), counted from the plan's own first epic and cut at its last (5–14 → 5-7, 8-10, 11-13, 14); the risk question from `threshold` epics (5); more than 14 epics IN THE FILE — a count, never the last number — is refused with "split into two plans". `CadenceMode` is `Off \| Remind \| Require`, `Remind` the shipped default. | `core/Cadence/CadenceRule.cs` |
+| **What a plan's cadence records**: the epics through the code gate (idempotent, first verdict kept — a passed checkpoint closes an epic too, so the counter is "through the code gate", not "finished") and the risk answer. Which groups are SATISFIED is not stored: only a consultation closed with an outcome is evidence of that. | `core/Cadence/CadenceState.cs` |
+| **The plan's own outline**: `Epic N` headings at `##`–`####` (any usual separator after the number; distinct by number, first title wins) and `Story N(.M)` headings. Prose is not a heading, and neither is anything inside a fenced code block (a plan that SHOWS an example outline is not sized by it). Fences follow CommonMark (CodeRabbit on #540): a backtick fence whose info string holds a backtick is prose, a fence closes only on the same character, at least as long, with nothing but whitespace after it — so a ```` ```js ```` line inside an open block does not end it — and an unclosed fence runs to the end. `Numbers` names the epic and story heading counts whenever there are any, since either can decide the size. Numbers are `[0-9]`, never `\d` — .NET's `\d` is every Unicode digit, and `٥/١٤` passed the pattern only to throw in `int.Parse` (found in epic 1's code round, red first). Time-bounded `[GeneratedRegex]`. | `core/Commands/PlanOutline.cs` |
+| **Four orders, after every existing one**: the FORECAST on the first plan round of work with epics (named in headings, or ordered by a split); a GROUP DUE when the declared epic's group has no closed consultation; the RISK QUESTION from the threshold until answered; a RISK ITEM DUE for the declared epic. Each carries the call LITERALLY — the ToolSearch line that loads a deferred schema, then `mcp__coai__consult({...})` as JSON with repoPath, kind, plan, epics and a problem naming the group's titles — and the `close_consult` with its outcomes. `Require` adds "until then this gate refuses the code round". None says "critical" (the canonical invented severity `ReviewParser` rejects). Markers `CadenceOrders.ForecastMarker` / `GroupMarker` / `RiskQuestionMarker` / `RiskItemMarker` stay in code; the texts are `shared/commands/command-consult-forecast\|group\|risk-question\|risk-item.md`. | `core/Commands/CadenceOrders.cs`, `GateCommands.For` / `ForecastsCadence` |
+| **`Massive`, a sixth size: 6–14 epics.** A plan that names its epics is sized by them (1 → Small, 2–3 → Medium, 4 → Large, 5 → Huge, 6+ → Massive); story headings count as steps when there are no epics; the #131 table is untouched for a plan with neither. Measured on email-service: the 10-epic plan has 5 numbered steps and the 4-epic plan 31, and the longer file is the smaller plan — steps and length both invert. `Numbers` names the headings only when there are some. The order: "6-14 EPICS … never more than 14 — past that, split the PLAN into two plans". | `core/Commands/PlanShape.cs` (`ByEpics`), `shared/commands/command-split-massive.md` |
+
+There are twenty shipped command texts now; the extension's Edit commands page lists them with their
+markers and placeholders (`src_vs_code/src/commands.ts`).
+
 **A reader could kill a round, and the catch written for it looked past the exception (2026-09-04).**
 Six code rounds died with `Access to the path is denied`. One died on the FINAL save, with every
 reviewer answered and the verdict decided: the findings were in memory and all of it was thrown away

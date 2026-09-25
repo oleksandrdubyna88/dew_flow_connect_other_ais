@@ -1,3 +1,5 @@
+using CoaiMcp.Core.Cadence;
+
 namespace CoaiMcp.Core.Commands;
 
 /// <summary>What the operator has switched on, at the moment of this call.</summary>
@@ -51,6 +53,12 @@ public sealed record CommandContext(
     /// <remarks>Defaults to the shipped texts, so a context built without it says exactly what every
     /// release before the texts became data said; a test holds that byte for byte.</remarks>
     public CommandTexts Texts { get; init; } = CommandTexts.Shipped;
+
+    /// <summary>
+    /// What the server knows about the plan's consultation cadence (<c>todo/PLAN_consult_on_a_cadence.md</c>).
+    /// </summary>
+    /// <remarks>Off by default, so a context built without it says what every release before it said.</remarks>
+    public CadenceFacts Cadence { get; init; } = CadenceFacts.Off;
 }
 
 /// <summary>How often split work is gated (issue #131). Never per story: that cost two rounds a story.</summary>
@@ -110,9 +118,27 @@ public static class GateCommands
         {
             commands.Add(AutonomyCommand(context));
         }
+        // Last, so no order a bench or a person already knows by position moves when the cadence is on.
+        // The plan is read once, and only when the cadence is on (epic 1's code round, gemini).
+        if (context.Cadence.Mode != CadenceMode.Off)
+        {
+            var outline = PlanOutlineReader.Of(context.PlanText);
+            commands.AddRange(CadenceOrders.For(ForecastsCadence(context, outline), context.Cadence, context.Texts, outline));
+        }
 
         return commands;
     }
+
+    /// <summary>
+    /// Whether this call says what consultations the plan will owe: the first plan round of work that
+    /// has, or is being ordered to have, epics — said once, like the split.
+    /// </summary>
+    /// <remarks>The outline is the PLAN TEXT under review, not <see cref="CadenceFacts.Outline"/>: at the
+    /// plan stage the text sent is the plan, and the server's copy is read from a commit it may not be
+    /// in yet.</remarks>
+    private static bool ForecastsCadence(CommandContext context, PlanOutline outline) =>
+        context.PlanStage && context.FirstPlanRound
+        && (outline.Epics.Count >= 2 || (OrdersSplit(context) && HasEpics(PlanShapeReader.Of(context.PlanText).Verdict)));
 
     /// <summary>
     /// The words every split order's gate ending carries, whichever size and scope it is.
@@ -160,6 +186,7 @@ public static class GateCommands
         PlanShape.Split.Medium => CommandTexts.SplitMedium,
         PlanShape.Split.Large => CommandTexts.SplitLarge,
         PlanShape.Split.Huge => CommandTexts.SplitHuge,
+        PlanShape.Split.Massive => CommandTexts.SplitMassive,
         _ => CommandTexts.SplitNone,
     };
 

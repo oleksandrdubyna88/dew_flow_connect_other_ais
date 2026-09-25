@@ -1,6 +1,7 @@
 # PLAN — The consultant is called on a cadence, not only when an agent admits it is stuck
 
-> Status: **plan only, nothing implemented yet (2026-09-25).** Scope: the gate's orders and refusals
+> Status: **in progress, 2026-09-25 — epic 1 of 6 built** (branch `feat/cadence-1-core`: the arithmetic,
+> the orders, `Massive`; inert until epic 3 wires it). Scope: the gate's orders and refusals
 > (`src_mcp/core/Commands`, a new `src_mcp/core/Cadence`, `src_mcp/src/Server/PanelService.cs`,
 > `src_mcp/src/Server/Consultation`), the plan-size heuristic (`PlanShape.cs`), the panel's settings
 > and sidebar (`src_vs_code`), and — last — the consultant rule's move into BOTH conventions
@@ -129,13 +130,16 @@ which the reader does not look at.
 
 ### Core — `src_mcp/core/Cadence/` (pure, no I/O)
 
-- `EpicRef.Parse(epic, plan)` → `None` | `Some(k, N, plan)` | refusal: malformed (`"'5-14' does not parse as k/N"`),
-  one of `plan`/`epic` without the other, `k < 1 || k > N`, **`N > 14`** (decision 7).
+- `EpicRef.Parse(epic, plan)` → `None` | `Some(Number, Last, Plan)` | refusal: malformed (`"'5-14' does
+  not read as k/N"`), one of `plan`/`epic` without the other, `k < 1 || k > N`. **k is the epic's own
+  number as the plan writes it and N the plan's LAST epic number**, because a plan may continue another
+  (email-service's second plan runs 5–14) — so the ceiling of decision 7 is NOT here: it is
+  `CadenceRule.RefuseIfTooMany`, on the COUNT of epics in the file (*as built in epic 1*).
 - **The declared N is checked against the plan, not trusted** (gate round 1, codex + local). The
-  server reads the plan file at `plan` from the checkout — inside the repository, resolved the way
-  `review_document`'s path is — and counts its `Epic N` headings with the same reader `PlanShape` uses.
-  Headings present and N different → refused, naming both numbers (*"todo/PLAN_x.md names 14 epics;
-  you declared 1/1"*). No headings → N is the caller's word, recorded as such in the round. A later
+  server reads the plan file at `plan` — at the reviewed sha (the epic-1-3 consultation, point 9) — and
+  reads its `Epic N` headings with `PlanOutlineReader`, the reader `PlanShape` uses. Headings present:
+  N must be the plan's last heading number and k one of its numbers, else refused naming both (*"todo/PLAN_x.md
+  names epics 1–14; you declared 1/1"*). No headings → N is the caller's word, recorded as such in the round. A later
   call with a different N re-derives the triples; a consultation satisfies the triple whose RANGE it
   names, so 1–3 stays satisfied while 4–6 may move. Consultations are NOT bound to the plan's
   content hash: plans are edited all the time (status lines, deviations), and a fresh consultation per
@@ -145,10 +149,12 @@ which the reader does not look at.
   `research/PLAN_x.md` are one plan, because promotion moves a finished plan and an unfinished tail
   may still be gated after it. Two different plans with one file name in one repository would share a
   record; the lifecycle convention (one `PLAN_<topic>.md` per topic) makes that a defect of its own.
-- `CadenceRule` — `TripleOf(k, every)` (`every = 3` → epic 7 is triple 7–9), `TriplesOwed(N, every)`,
-  `AsksForRisk(N, threshold)`.
-- `CadenceState` (record): `RepoPath`, `Plan`, `TotalEpics`, `EpicsClosed` (sorted set, with the
-  verdict of each), `RiskItems` (`{ Epic, Story, Reason }`), `RiskAnsweredUtc` (empty = not yet
+- `CadenceRule` (*as built in epic 1*) — `GroupOf(epic, every, firstEpic)`: groups of `every` counted
+  from the plan's OWN first epic (floor division, so an epic before it still falls in a group that holds
+  it); `GroupsOwed(epicNumbers, every)`: one per group the plan's epics fall in, cut at its last
+  (1–14 → 5; 5–14 → 5-7, 8-10, 11-13, 14); `AsksForRisk(count, threshold)`; `RefuseIfTooMany(count, plan)`.
+- `CadenceState` (record, *as built*): `Plan`, `Closed` (`ClosedEpic(Number, Verdict, ClosedUtc)`,
+  number-ordered, `WithClosed` idempotent, first verdict kept), `RiskItems` (`{ Epic, Story, Reason }`), `RiskAnsweredUtc` (empty = not yet
   asked-and-answered), `RiskNote` (the reason when the list is empty).
 - `CadenceOrders.For(facts)` → which orders this reply carries: the forecast on the split round
   ("this plan owes N consultations: triples … plus risk items"), *consult before this triple* on the
@@ -195,9 +201,9 @@ which the reader does not look at.
 - `PersistedSession` gains `Plan` and `Epic` beside `PlanText` (`SessionStore.cs:177`), carried the
   way `planText` is: an empty argument keeps what the session already holds.
 - `ReviewCodeAsync`: after the substance check (`PanelService.cs:543`) and before any worktree or
-  launcher, parse `epic`; refuse N > 14; on the FIRST code round of an epic that opens a triple (or
-  carries a risk item) in `require` mode, ask `CadenceGate`; `Blocked` → the refusal; `StoodDown` →
-  proceed and record.
+  launcher, parse `epic`; refuse a plan of more than 14 epics (`RefuseIfTooMany`, on the count); on the
+  FIRST code round of ANY epic of an unconsulted group (or one carrying a risk item) in `require` mode,
+  ask `CadenceGate`; `Blocked` → the refusal; `StoodDown` → proceed and record.
 - **Leaving `epic` out is not a way round it** (gate round 1, gemini). In `require` mode a `review_code`
   with no `epic` — none passed and none on the session — is refused when the session's plan text
   names two or more `Epic N` headings, or when this session was given a split order with epics
@@ -469,7 +475,7 @@ Six epics, so this plan is its own first customer: it owes two cadence consultat
       cadence and risk consultations, each closed with an outcome, or stood down with a reason.
 - [ ] `review_code` refuses the first code round of an unconsulted triple in `require`, orders in
       `remind`, is silent in `off` — each pinned by a test watched red.
-- [ ] N > 14 is refused; `Massive` sizes both `email-service` plans correctly; the recalibration table
+- [ ] A plan of more than 14 epics is refused; `Massive` sizes both `email-service` plans correctly; the recalibration table
       is in `PlanShape.cs`'s docstring.
 - [ ] Cadence consultations spend no stuck budget, cannot be duplicated, count only with an outcome.
 - [ ] An unavailable consultant never blocks a round, and says so in the round and in a notice.
