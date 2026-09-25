@@ -7,6 +7,18 @@
 **All**, opening on Today. *What it keeps missing* is counted by coai-mcp over the period and needs
 coai-mcp 0.37.0; an older one says so and shows all time.
 
+**The consultant is asked on a cadence, not only when an AI admits it is stuck.** After a plan is split into
+epics, every group of three owes one consultation before its first code round — is the group right, where is
+it weak, what did it forget — and from five epics the assistant is asked which epics and stories carry the most
+risk; each one it names gets a consultation of its own. The order is in every review reply with the `consult`
+call written out. *Consultation cadence* in the **Consultant** section sets the numbers and the mode: *Remind*
+(the default) orders and refuses nothing, *Require* holds the group's first code round until its consultation
+is closed with an outcome, *Off* is as before. A consultant that cannot be reached never jams the work. A plan
+of more than fourteen epics is refused — split it in two.
+
+**Active rounds says where each plan stands** — `PLAN_x.md · epics closed 4/14 · consultation for epics 4-6:
+due` — and **the Consultations tab says what each one was for** in a new *For* column.
+
 ## Extension 0.54.0 · Server 0.36.0 — 2026-09-25
 
 **The Consultations tab no longer has to be scrolled through.** On the Review rounds page each long *What

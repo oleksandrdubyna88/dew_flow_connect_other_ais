@@ -3595,6 +3595,36 @@ Epic 3's code round (`good_enough`, 31 findings, 12 taken, each red first):
   `Close`, `Reconciled` and `DeclareTheEpic` split to the complexity ceiling (`OnTheFirstCodeRound`,
   `Closing`, `Missed` / `OfThisPlan`, `IsSplit`).
 
+### The consultant on a cadence — epic 4: the person sees it (2026-09-25)
+
+Epic 4 of [PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md) is mostly the extension's
+(`module_extension.md`); this half is what the server gained so the sidebar could draw the cadence at all.
+The sidebar never calls `status` — it reads session files — and the cadence cannot be worked out from them:
+the record holds neither the plan's epics nor the grouping (the risk consultation for story 4.2, point 4).
+
+```mermaid
+sequenceDiagram
+    participant W as sidebar (CadenceProbes)
+    participant M as coai-mcp --cadence
+    participant R as CadenceReadMode
+    participant D as CadenceDesk.ForReading
+    W->>M: --repo --branch --plan (one at a time, 30 s TTL)
+    M->>R: RunAsync(args, Noticing.None)
+    R->>R: SettingsFile.Layer · SessionStore.Load (none → 65)
+    R->>R: mode off → "null"
+    R->>D: AnswerAsync(session, plan, WorktreeManager.ShaOrNoneAsync)
+    D->>D: record (unreadable → Unreadable), outline at the sha, evidence
+    D-->>W: CadenceAnswer JSON, exit 0 — or 65 / 74, never 64
+```
+
+| what | where |
+|---|---|
+| **`--cadence --repo --branch [--plan]`**, a sanctioned one-shot (`.agents/PROJECT.md`): 0 with exactly what `status` carries as `cadence`, or `null` when there is nothing to draw (the cadence is off, or no plan held or named); 65 for a malformed request or a branch with no session (a torn session file reads as none); 74 for what could not be read; never 64. | `Server/Cadence/CadenceReadMode.cs`, `Program.Startup.Cadence` |
+| **A reader builds no `PanelService`**: its constructor sweeps rounds and consultations, reprojects the log and sweeps orphan processes, and a sidebar probing every half minute would run that each time (point 1). `CadenceDesk.ForReading` is the stores and nothing else; its gate is never asked to CHECK, so its preflight says so. The one write it can make is the reconciliation `status` makes too. `Noticing.None` is composed in `Program`, as every one-shot's is. | `CadenceDesk.ForReading` |
+| **An unreadable record says so** (point 2): `CadenceAnswer.Unreadable` carries the store's sentence; the counts beside it are an empty record's and the line does not draw them. `status` carries it too. | `CadenceAnswer`, `CadenceDesk.AnswerAsync` |
+| **Shared rather than copied**: resolving the branch's commit for a read (`WorktreeManager.ShaOrNoneAsync`, which `PanelService.StatusAsync` now calls) and the worktree root (`PanelSettings.WorktreeRoot`). | `WorktreeManager`, `PanelSettings` |
+| **The log's consultations say what each was for**: `LoggedConsultation` gains `Kind`, `Plan`, `Epics`; a fourth SQL shape reads them, and the three older shapes substitute `'stuck'` — before the kinds every consultation was one. | `Store/RoundsQuery.cs` |
+
 **A reader could kill a round, and the catch written for it looked past the exception (2026-09-04).**
 Six code rounds died with `Access to the path is denied`. One died on the FINAL save, with every
 reviewer answered and the verdict decided: the findings were in memory and all of it was thrown away
