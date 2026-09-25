@@ -87,7 +87,7 @@ public sealed class LiveRoundTests : IDisposable
         var claude = Session() with { Caller = new CallerDeclaration("claude", "claude-code", "7.3.1", "claude-opus-5") };
         store.Save(claude);
 
-        _ = new LiveRound(store, claude, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
+        _ = new LiveRound(store, claude, 1, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
         var round = store.Load("D:/repo", "feature/x")!.Rounds.Single();
 
         round.Caller!.Model.Should().Be("claude-opus-5");
@@ -123,7 +123,7 @@ public sealed class LiveRoundTests : IDisposable
         var session = Session();
         store.Save(session);
 
-        _ = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
+        _ = new LiveRound(store, session, 1, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
 
         store.Load("D:/repo", "feature/x")!.Rounds.Single().Caller.Should().BeNull();
     }
@@ -146,7 +146,7 @@ public sealed class LiveRoundTests : IDisposable
         var session = Session();
         store.Save(session);
 
-        _ = new LiveRound(store, session, [
+        _ = new LiveRound(store, session, 1, [
             Work("codex", RoleCatalog.ArchitectureRole) with
             {
                 Invocation = Work("codex", RoleCatalog.ArchitectureRole).Invocation with { Model = "gpt-5-codex" },
@@ -176,7 +176,7 @@ public sealed class LiveRoundTests : IDisposable
 
         var codex = Work("codex", RoleCatalog.ArchitectureRole);
         var local = Work("local", RoleCatalog.SecurityRole);
-        _ = new LiveRound(store, session, [
+        _ = new LiveRound(store, session, 1, [
             codex with { Invocation = codex.Invocation with { Model = null! } },
             local with { Invocation = local.Invocation with { Model = "   " } },
         ], "", Noticing.None);
@@ -193,7 +193,7 @@ public sealed class LiveRoundTests : IDisposable
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        _ = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
+        _ = new LiveRound(store, session, 1, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
 
         // Removed STRUCTURALLY, not by string surgery. The first draft replaced `"model": "",`
         // — and `Model` is the trailing property, so there is no comma after it, so the replacement
@@ -227,7 +227,7 @@ public sealed class LiveRoundTests : IDisposable
         var session = Session();
         store.Save(session);
 
-        _ = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole), Work("claude", RoleCatalog.ArchitectureRole)], "", Noticing.None);
+        _ = new LiveRound(store, session, 1, [Work("codex", RoleCatalog.ArchitectureRole), Work("claude", RoleCatalog.ArchitectureRole)], "", Noticing.None);
 
         var round = store.Load("D:/repo", "feature/x")!.Rounds.Should().ContainSingle().Subject;
         round.Status.Should().Be(RoundRecord.Running);
@@ -242,7 +242,7 @@ public sealed class LiveRoundTests : IDisposable
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        var live = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole), Work("gemini", RoleCatalog.ArchitectureRole)], "", Noticing.None);
+        var live = new LiveRound(store, session, 1, [Work("codex", RoleCatalog.ArchitectureRole), Work("gemini", RoleCatalog.ArchitectureRole)], "", Noticing.None);
 
         live.Report(new ReviewerProgress("codex", RoleCatalog.ArchitectureRole, "running"));
 
@@ -272,7 +272,7 @@ public sealed class LiveRoundTests : IDisposable
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        var live = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
+        var live = new LiveRound(store, session, 1, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
 
         live.Report(new ReviewerProgress("codex", RoleCatalog.ArchitectureRole, "running"));
         StateOf(store, "codex").Seconds.Should().Be(0, "a running reviewer has no duration yet");
@@ -295,7 +295,7 @@ public sealed class LiveRoundTests : IDisposable
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        var live = new LiveRound(store, session, [Work("gemini", RoleCatalog.ArchitectureRole)], "", Noticing.None);
+        var live = new LiveRound(store, session, 1, [Work("gemini", RoleCatalog.ArchitectureRole)], "", Noticing.None);
 
         live.Report(new ReviewerProgress("gemini", RoleCatalog.ArchitectureRole, "done", null, TimeSpan.FromSeconds(12.5)));
         live.Report(new ReviewerProgress("gemini", RoleCatalog.ArchitectureRole, "running"));
@@ -309,7 +309,7 @@ public sealed class LiveRoundTests : IDisposable
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        var live = new LiveRound(store, session, [Work("gemini", RoleCatalog.PlanRole)], "", Noticing.None);
+        var live = new LiveRound(store, session, 1, [Work("gemini", RoleCatalog.PlanRole)], "", Noticing.None);
 
         live.Report(new ReviewerProgress("gemini", RoleCatalog.PlanRole, "failed", new ReviewerOutcome.TimedOut()));
 
@@ -325,7 +325,7 @@ public sealed class LiveRoundTests : IDisposable
         var session = Session();
         store.Save(session);
         var work = new[] { Work("codex", RoleCatalog.ArchitectureRole), Work("claude", RoleCatalog.ArchitectureRole) };
-        var live = new LiveRound(store, session, work, "", Noticing.None);
+        var live = new LiveRound(store, session, 1, work, "", Noticing.None);
 
         var record = live.Finish("revise", 4, "all 2 reviewers answered",
         [
@@ -345,7 +345,7 @@ public sealed class LiveRoundTests : IDisposable
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        _ = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
+        _ = new LiveRound(store, session, 1, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
 
         var swept = store.SweepOrphanedRounds(_ => false);
 
@@ -363,7 +363,7 @@ public sealed class LiveRoundTests : IDisposable
         var store = new SessionStore(_dir);
         var session = Session();
         store.Save(session);
-        _ = new LiveRound(store, session, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
+        _ = new LiveRound(store, session, 1, [Work("codex", RoleCatalog.ArchitectureRole)], "", Noticing.None);
 
         store.SweepOrphanedRounds(_ => true).Should().Be(0);
         store.Load("D:/repo", "feature/x")!.Rounds.Single().Status.Should().Be(RoundRecord.Running);

@@ -6,9 +6,10 @@
          core, which knows nothing of this dependency; an architecture test in CoaiMcp.Tests holds
          that line, because the whole point of the seam is that a native dependency does not leak.
 
-         NOT referenced by CoaiMcp.csproj. That one is Native AOT and publishes one file per
-         platform; a reference here would pull twenty-eight native grammars into it. The host for
-         this library is decided in its own story. -->
+         Referenced by CoaiMcp.csproj since the normalizer became a MODE of the server binary
+         (the normalize one-shot mode, 2026-09-15): the grammars that ride into the Native AOT publish
+         are the ones `shared/kept-grammars.txt` keeps, and `KeptGrammarsTests` holds that list
+         to the languages the code actually names. -->
     <JsonSerializerIsReflectionEnabledByDefault>false</JsonSerializerIsReflectionEnabledByDefault>
   </PropertyGroup>
 

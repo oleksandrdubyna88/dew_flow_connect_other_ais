@@ -21,6 +21,12 @@ public sealed record ProviderSettings(string Provider)
     public string BaseUrl { get; init; } = string.Empty;
 
     /// <summary>
+    /// For an <c>api</c> row: which row of <c>shared/api-dialects.json</c> spells its request. Empty
+    /// means the generic <c>openai</c> one — the runtime decides, not the parser.
+    /// </summary>
+    public string Dialect { get; init; } = string.Empty;
+
+    /// <summary>
     /// For a <c>remote</c> row: the vendor id the TEAM SERVER knows it by.
     /// </summary>
     /// <remarks>
@@ -1017,6 +1023,9 @@ public sealed record PanelSettings
                         Runtime = RuntimeOf(v.Runtime),
                         Model = v.Model?.Trim() ?? string.Empty,
                         BaseUrl = v.BaseUrl?.Trim() ?? string.Empty,
+                        // Lower-cased like the runtime: it names a row of a file this build ships,
+                        // and the rows are lower-case. Absent stays empty so the runtime picks.
+                        Dialect = v.Dialect?.Trim().ToLowerInvariant() ?? string.Empty,
                         // NOT lower-cased, unlike the row's own id: this is the SERVER's spelling
                         // of its vendor, and a catalog that says `DeepSeek` matches `DeepSeek`. The
                         // row id is ours to normalise; this one is not. Caught on the code round.

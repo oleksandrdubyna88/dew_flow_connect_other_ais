@@ -36,7 +36,8 @@ import { gatePerSkewNote, stopLocalSkewNote } from './gateScope';
 import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
-import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance } from './models';
+import { apiRuntimeSkewNote, DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
+import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance, Runtime } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
 import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
@@ -915,6 +916,8 @@ function reviewersBody(state: PanelState): string {
   // Built ONCE, from the whole configured list: "no two reviewers share a colour" is a statement
   // about the list, and it cannot be decided one card at a time.
   const colour = vendorPalette(state.vendors.map((v) => v.id));
+  // Once, not per card: a server that is absent or cannot be versioned is not called old.
+  const serverVersion = state.server.kind === 'known' ? state.server.version : '';
 
   return `${state.vendors.map((v) => vendorCard(v, {
     colour: colour(v.id),
@@ -927,6 +930,8 @@ function reviewersBody(state: PanelState): string {
     localEngine: state.localEngines[v.id],
     allowedRemote: allowedModelsFor(v, state.teamServers ?? []),
     reported: state.providers?.reported ?? {},
+    // Per card, so the sentence names THIS row (`apiRuntimeOnServer` decides whether there is one).
+    apiNote: apiRuntimeSkewNote(serverVersion, [v]),
   })).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
@@ -1002,6 +1007,12 @@ interface CardContext {
   readonly reported: Readonly<Record<string, ProviderHealth>>;
   /** This vendor's colour, already decided against every other configured vendor. */
   readonly colour: string;
+  /**
+   * For an `api` row: the sentence naming a server too old to run it — or empty. Non-empty DISABLES
+   * the card's controls and is shown on it; the writer keeps the same row out of the settings file
+   * (`vendorsEnv`), so the card and the file agree about what the old server will run.
+   */
+  readonly apiNote: string;
 }
 
 /**
@@ -1017,30 +1028,81 @@ interface CardContext {
  * endpoint" ships with an empty one), so it could never be filled in. Found by Gemma4 26B,
  * 2026-09-02, and it is the only defect in that campaign no hosted model found.</p>
  */
-function endpointField(vendor: Vendor, id: string, local: boolean, remote: boolean): string {
-  return remote || (KNOWS_ITS_OWN_ENDPOINT.has(vendor.id) && vendor.baseUrl.length === 0)
-      ? ''
-      : `
-  <div class="field">
-    <input type="url" data-setting="baseUrl" data-vendor="${id}" title="${escapeHtml(local ? HELP.localEndpoint : HELP.vendorBaseUrl)}"
-           placeholder="${local ? 'http://127.0.0.1:11434/v1 — empty uses whatever was found' : ''}"
-           value="${escapeHtml(vendor.baseUrl)}">
-    <div class="hint">${local
-      ? 'Its OpenAI-compatible base, ending in <code>/v1</code>. Empty means the engine the probe found.'
-      : `Its OpenAI-compatible endpoint. The key for it lives in the vault entry under <code>${id}</code>.`}</div>
-${local ? remoteNotice(vendor.baseUrl) : ''}
-  </div>`;
+function endpointField(vendor: Vendor, id: string, local: boolean, remote: boolean, off: boolean): string {
+  if (remote || (KNOWS_ITS_OWN_ENDPOINT.has(vendor.id) && vendor.baseUrl.length === 0)) {
+    return '';
+  }
 
-  // Shown for EVERY vendor, not only a custom endpoint. PATH is not always able to answer: in WSL
-  // `codex` and `gemini` resolve to the WINDOWS npm shims through the interop PATH and die on a
-  // missing Linux binary, and until this field existed nothing could point at the native one.
+  const words = endpointWords(vendor, id, local);
+
+  return `
+  <div class="field">
+    <input type="url" data-setting="baseUrl" data-vendor="${id}" title="${escapeHtml(words.title)}"
+           placeholder="${endpointPlaceholder(vendor.runtime)}"
+           value="${escapeHtml(vendor.baseUrl)}"${disabledAttr(off)}>
+    ${words.hint}
+  </div>`;
 }
+
+/** What an empty endpoint box suggests, per runtime — the two that have a usual address say it. */
+function endpointPlaceholder(runtime: Runtime): string {
+  switch (runtime) {
+    case 'local':
+      return 'http://127.0.0.1:11434/v1 — empty uses whatever was found';
+    case 'api':
+      return 'https://api.x.ai/v1 — the OpenAI-compatible base, ending in /v1';
+    default:
+      return '';
+  }
+}
+
+/**
+ * The endpoint box's tooltip and the line under it — and, for a local engine, the notice about where it
+ * answers from. Two runtimes say two different things about the same box.
+ */
+function endpointWords(vendor: Vendor, id: string, local: boolean): { title: string; hint: string } {
+  return local
+    ? {
+      title: HELP.localEndpoint,
+      hint: `<div class="hint">Its OpenAI-compatible base, ending in <code>/v1</code>. Empty means the engine the probe found.</div>
+${remoteNotice(vendor.baseUrl)}`,
+    }
+    : {
+      title: HELP.vendorBaseUrl,
+      hint: `<div class="hint">Its OpenAI-compatible endpoint. The key for it lives in the vault entry under <code>${id}</code>.</div>`,
+    };
+}
+
+// The CLI-path field is shown for EVERY vendor with a CLI, not only a custom endpoint. PATH is not
+// always able to answer: in WSL `codex` and `gemini` resolve to the WINDOWS npm shims through the
+// interop PATH and die on a missing Linux binary, and until this field existed nothing could point
+// at the native one.
 
 function runtimeFields(vendor: Vendor, id: string, remote: boolean): string {
   return remote ? '' : `
   <div class="field">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
            placeholder="CLI path — empty means look it up on PATH" value="${escapeHtml(vendor.executablePath)}">
+  </div>`;
+}
+
+/**
+ * The dialect picker of an `api` row: which row of `shared/api-dialects.json` spells its request.
+ *
+ * <p>A closed dropdown, unlike the model field, because a dialect is a row this build SHIPS — typing
+ * one that is not there would be refused by `coai-mcp --ask-api` with 65 on every round. The generic
+ * `openai` is the only choice until a vendor's own row has been measured (`API_PRESETS` says where
+ * the next ones go).</p>
+ */
+function dialectField(vendor: Vendor, id: string, off: boolean): string {
+  const current = vendor.dialect ?? DEFAULT_API_DIALECT;
+
+  return `
+  <div class="field">
+    <select data-setting="dialect" data-vendor="${id}" title="${escapeHtml(HELP.apiDialect)}"${off ? ' disabled' : ''}>
+      ${dialectChoices().map((dialect) => `<option value="${dialect}"${dialect === current ? ' selected' : ''}>${dialect}</option>`).join('\n      ')}
+    </select>
+    <div class="hint">dialect · how the request is spelled for this endpoint family. <code>openai</code> is the generic one; a vendor’s own arrives once it has been measured.</div>
   </div>`;
 }
 
@@ -1054,17 +1116,18 @@ function runtimeFields(vendor: Vendor, id: string, remote: boolean): string {
  * answered yes and silently lost both stage controls. Now the question and the answer are the same
  * thing.</p>
  */
-function priceFields(vendor: Vendor, id: string, local: boolean, remote: boolean, price: ModelPrice | undefined, plan: string, code: string): string {
+function priceFields(vendor: Vendor, id: string, local: boolean, remote: boolean, price: ModelPrice | undefined, plan: string, code: string, off: boolean): string {
   // The two rows differ in five values and in nothing else, so they are one row rendered twice
   // rather than two near-identical blocks — which is also what SonarCloud measured as duplication
   // on the pull request that moved the stage boxes onto them.
+  const disabled = disabledAttr(off);
   const rate = (which: 'in' | 'out', listed: number | undefined, typed: number, stage: string): string => `
   <div class="field priced">
     ${labelled(`price-${which}-${id}`, `$ / 1M ${which}`, 'vendorPrice')}
     <input type="number" id="price-${which}-${id}" min="0" step="0.01"
            data-setting="pricePerMillion${which === 'in' ? 'In' : 'Out'}" data-vendor="${id}"
            value="${typed === 0 ? '' : typed}"
-           placeholder="${ratePlaceholder(listed)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}">${stage}
+           placeholder="${ratePlaceholder(listed)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}"${disabled}>${stage}
   </div>`;
 
   return remote
@@ -1075,10 +1138,19 @@ function priceFields(vendor: Vendor, id: string, local: boolean, remote: boolean
 
 function vendorCard(vendor: Vendor, context: CardContext): string {
   const {
-    codexModels, cli, price, localEngine, agyModels, allowedRemote, reported, colour, claudeProbe, askingClaude,
+    codexModels, cli, price, localEngine, agyModels, allowedRemote, reported, colour, claudeProbe, askingClaude, apiNote,
   } = context;
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
+  // A hosted API reached directly: no CLI to run, install or update, so the three CLI buttons are
+  // hidden as they are for a local engine; an endpoint, a model typed by hand, and a dialect. When
+  // the installed server is too old to know the runtime the whole card is switched OFF and says why
+  // — the writer keeps the same row out of the settings file, so what the card shows is what the
+  // old server will run: nothing, rather than the wrong vendor (PLAN_feature_review.md §4.13).
+  const api = vendor.runtime === 'api';
+  const off = api && apiNote.length > 0;
+  const disabled = disabledAttr(off);
+  const stageOn = vendor.enabled && !off;
   // A Team server row is configured ON THE SERVER, not here: its endpoint is the server's address,
   // its CLI runs there, and its price is the company's subscription rather than this person's. Three
   // fields that could only be filled in wrongly.
@@ -1087,20 +1159,23 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
     vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote.models, claudeProbe,
     executableFor(vendor),
   );
-  const endpoint = endpointField(vendor, id, local, remote);
+  const endpoint = endpointField(vendor, id, local, remote, off);
   // The two stage boxes ride with the prices — `reviews plans` after the in rate, `reviews code`
   // after the out one (issue #124). They used to sit in a row of their own directly under the model,
   // four lines from the vendor's own checkbox, and the three read as one group of three although the
   // master switch is a different kind of decision from the two stages.
-  const plan = stageBox('plan', id, vendor.plan, vendor.enabled, 'reviews plans', help('vendorStages'));
-  const code = stageBox('code', id, vendor.code, vendor.enabled, 'reviews code');
+  const plan = stageBox('plan', id, vendor.plan, stageOn, 'reviews plans', help('vendorStages'));
+  const code = stageBox('code', id, vendor.code, stageOn, 'reviews code');
   // The third one is drawn from the RULE rather than from the stored field, because the stored field
   // can be absent and an unticked box would then be lying about what the next round will do. See
   // `reviewsDocuments`, which `ProviderSettings.Serves` mirrors on the side that decides.
   const document = stageBox(
-    'document', id, reviewsDocuments(vendor), vendor.enabled, 'reviews documents', help('vendorDocuments'));
-  const executable = runtimeFields(vendor, id, remote);
-  const prices = priceFields(vendor, id, local, remote, price, plan, code);
+    'document', id, reviewsDocuments(vendor), stageOn, 'reviews documents', help('vendorDocuments'));
+  // An api row's "CLI" is coai-mcp itself, so a CLI path would only ever be filled in wrongly.
+  const executable = runtimeFields(vendor, id, remote || api);
+  const prices = priceFields(vendor, id, local, remote, price, plan, code, off);
+  const dialect = api ? dialectField(vendor, id, off) : '';
+  const skew = off ? `<div class="stale">${escapeHtml(apiNote)}</div>` : '';
   // Keyed off whether the PRICE rows came back empty — not off `remote`, and not off whether any
   // runtime field was rendered. A card with nothing to hang the boxes on keeps the row: a Team
   // server's CLI runs on the server and its price is the company's subscription, so it has no price
@@ -1118,32 +1193,77 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
 
   return `<div class="vendor" style="border-left-color:${colour}">
   <div class="head">
-    <input type="checkbox" id="v-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}
+    <input type="checkbox" id="v-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}${disabled}
            title="${escapeHtml(HELP.vendorEnabled)}">
     <label class="name" for="v-${id}">${id}</label>${cannotRun(vendor.id, reported)}
-    ${local ? `${(localEngine?.elsewhere ?? '').length > 0 ? `<button class="run get" data-command="fixWslNetwork" data-id="${id}"
-            title="${escapeHtml(HELP.fixWslNetwork)}"
-            aria-label="Switch WSL to mirrored networking">⇄</button>` : ''}<button class="run upd" data-command="reprobeLocal" data-id="${id}"
-            title="${escapeHtml(HELP.reprobeLocal)}"
-            aria-label="Look for local models again">⟳</button>` : `<button class="run" data-command="runVendor" data-id="${id}" title="${escapeHtml(HELP.runVendor)}"
-            aria-label="Open ${id} in a terminal">▶</button>
-    <button class="run get" data-command="installVendorCli" data-id="${id}" title="${escapeHtml(HELP.installVendorCli)}"
-            aria-label="Install the ${id} CLI">⤓</button>
-    <button class="run upd${updateAvailable(cli.installed, cli.latest) ? ' has-update' : ''}"
-            data-command="updateVendorCli" data-id="${id}" title="${escapeHtml(cliStatusNote(vendor.id, cli))}"
-            aria-label="${escapeHtml(updateLabel(vendor.id, cli))}">⟳</button>`}
+    ${headButtons(vendor, id, local, api, localEngine, cli)}
     <button class="link" data-command="removeVendor" data-id="${id}">remove</button>
   </div>
   <div class="field">
-    <select data-setting="model" data-vendor="${id}" title="${escapeHtml(local ? HELP.localModel : HELP.vendorModel)}">
-      ${modelOptions(models, vendor.model, local ? 'whatever the engine answers with' : "the CLI's default")}
+    <select data-setting="model" data-vendor="${id}" title="${escapeHtml(modelWords(vendor.runtime).title)}"${disabled}>
+      ${modelOptions(models, vendor.model, modelWords(vendor.runtime).empty)}
     </select>
     <div class="hint">${claudeNote(vendor.runtime, askingClaude ?? false).length === 0 ? '' : LOOKING}${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(
       vendor.runtime, codexModels, localEngine, agyModels, allowedRemote, claudeProbe, askingClaude ?? false,
     ))}</div>
   </div>
-  ${stages}${endpoint}${executable}${prices}${documentRow}
+  ${skew}${stages}${endpoint}${dialect}${executable}${prices}${documentRow}
 </div>`;
+}
+
+/** The attribute that switches a control off, or nothing — one spelling for every control of a card. */
+function disabledAttr(off: boolean): string {
+  return off ? ' disabled' : '';
+}
+
+/**
+ * The buttons in a card's head: a local engine's re-probe (and the WSL fix when it applies), a CLI
+ * vendor's run / install / update — and NOTHING for a hosted API, which has no CLI to run, install
+ * or update. The model caption tells an api row about `coai-mcp --probe-api` instead.
+ */
+function headButtons(vendor: Vendor, id: string, local: boolean, api: boolean, localEngine: LocalEngine | undefined, cli: CliStatus): string {
+  if (api) {
+    return '';
+  }
+
+  return local ? localButtons(id, localEngine) : cliButtons(vendor, id, cli);
+}
+
+/** A local engine's buttons: re-probe, and the WSL networking fix when the engine answers from the other side. */
+function localButtons(id: string, localEngine: LocalEngine | undefined): string {
+  const elsewhere = localEngine?.elsewhere ?? '';
+  const wslFix = elsewhere.length > 0
+    ? `<button class="run get" data-command="fixWslNetwork" data-id="${id}"
+            title="${escapeHtml(HELP.fixWslNetwork)}"
+            aria-label="Switch WSL to mirrored networking">⇄</button>`
+    : '';
+
+  return `${wslFix}<button class="run upd" data-command="reprobeLocal" data-id="${id}"
+            title="${escapeHtml(HELP.reprobeLocal)}"
+            aria-label="Look for local models again">⟳</button>`;
+}
+
+/** A CLI vendor's buttons: run it, install it, update it — the last one green when there is an update. */
+function cliButtons(vendor: Vendor, id: string, cli: CliStatus): string {
+  return `<button class="run" data-command="runVendor" data-id="${id}" title="${escapeHtml(HELP.runVendor)}"
+            aria-label="Open ${id} in a terminal">▶</button>
+    <button class="run get" data-command="installVendorCli" data-id="${id}" title="${escapeHtml(HELP.installVendorCli)}"
+            aria-label="Install the ${id} CLI">⤓</button>
+    <button class="run upd${updateAvailable(cli.installed, cli.latest) ? ' has-update' : ''}"
+            data-command="updateVendorCli" data-id="${id}" title="${escapeHtml(cliStatusNote(vendor.id, cli))}"
+            aria-label="${escapeHtml(updateLabel(vendor.id, cli))}">⟳</button>`;
+}
+
+/** The model picker's tooltip and its empty-choice label, per runtime: three runtimes say three different things. */
+function modelWords(runtime: Runtime): { title: string; empty: string } {
+  switch (runtime) {
+    case 'local':
+      return { title: HELP.localModel, empty: 'whatever the engine answers with' };
+    case 'api':
+      return { title: HELP.apiModel, empty: 'no model yet — type the id the key can call' };
+    default:
+      return { title: HELP.vendorModel, empty: "the CLI's default" };
+  }
 }
 
 /**

@@ -15,7 +15,7 @@
 | `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
-| `ask_human` | `Escalations` — a question FILE the extension watches | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
+| `ask_human` | `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
 | `consult` | `ConsultationService` — another vendor's model over the LIVE working tree | eleven ways, each a sentence naming its cure — see below |
 | `close_consult` | `CloseAsync` — how a consultation ENDED, recorded by whoever knows | not your consultation; a word outside the closed set; `lapsed`, which is the server's own; a consultation that FAILED and produced no advice; a different verdict over one already recorded |
 
@@ -812,6 +812,23 @@ running a local model against the hosted models' baseline.
 third reader of those two fields became the third caller of one answer. Pure because the round that
 would have caught it needs a model, a machine and seventeen minutes, and a decision that expensive to
 observe has to be observable another way.
+
+## `api` is validated by the same list, and the Team server subtracts the machine-only set (2026-09-25)
+
+Story S1.2 of `PLAN_feature_review.md` added `api` — a hosted OpenAI-compatible endpoint reached directly with
+a vault key — to `ReviewerRuntimeSelector.RuntimeNames`, so `PanelSettings.RuntimeOf` keeps it
+(`VendorRuntimeSurvivesParsingTests`: RED with `Expected … to be "api" … but "codex"` before the name was
+in the set — the third copy of the defect above, refused before it shipped). `VendorDto` gained `Dialect`
+→ `ProviderSettings.Dialect` (lower-cased, empty = the generic `openai`) → `ReviewerSettings.Dialect`, read
+by `ApiRuntime` alone. The Team server's `VendorConfig.KnownRuntimes` is now
+`RuntimeNames − ReviewerRuntimeSelector.MachineOnlyRuntimes` (`{local, api}`) rather than the set minus a
+literal `"local"`: the next machine-only runtime is refused there by name instead of admitted because a set
+grew (D10 — the Team server does not take part in v1). Two one-shot modes, `--ask-api` and `--probe-api`, are
+listed in `.agents/PROJECT.md`; both answer 65 for a bad request and never 64. Both read a vendor's
+answer through `Api/BoundedBody` — streamed after the headers (`ResponseHeadersRead`), a declared
+`Content-Length` over 8 MiB refused unread, an undeclared one refused the moment the count passes it —
+because `ReadAsStringAsync` buffered the whole body before any cap ran (epic 1's code round). The shim itself, its exit
+codes and the probe are in [module_runners.md](module_runners.md#a-hosted-api-is-a-direct-call-with-a-vault-key--the-api-runtime-2026-09-25-plan_feature_review-s12).
 
 ## `call_human` stops the review (2026-09-02)
 
@@ -1997,8 +2014,10 @@ complaint — measured, zero IL warnings — so a second binary would have bough
 and nothing else. The grammars ride beside the binary exactly as `e_sqlite3` does, and for exactly
 the same reason: a companion executable is one somebody eventually copies without.
 
-**The publish keeps four native libraries and deletes twenty-seven.** The binding ships 28+ grammars
-and this product parses three: left alone that is 69 MB of a 177 MB publish, per RID, on a file people
+**The publish keeps eight native libraries** (four until the feature review's outliner, S1.3 of
+[PLAN_feature_review.md](../todo/PLAN_feature_review.md), added `tree-sitter-tsx`, `-rust`, `-php` and
+`-python`: +4.3 MiB on win-x64, +4.0 MiB on linux-x64, measured in its §6). The binding ships 28+ grammars
+and this product parsed three at the time: left alone that is 69 MB of a 177 MB publish, per RID, on a file people
 download. `DropGrammarsNobodyParses` in `CoaiMcp.csproj` deletes the rest after publish, taking it to
 116 MB. The names come from `shared/kept-grammars.txt`, which is read by three things that must not
 disagree — the target, `KeptGrammarsTests`, and the release workflow.
@@ -2014,6 +2033,18 @@ Exit codes: **66** (EX_NOINPUT) for a request file that is missing or will not p
 it — and **73** (EX_CANTCREAT) for answers that could not be written, which is a disk rather than a
 request. A method that could not be located is neither: it is an ANSWER carrying a skip reason, and a
 batch of fifty where two failed to resolve is a successful batch.
+
+### `--outline <file> [--json]` — the feature review's reader, by hand (2026-09-25)
+
+`src/Normalising/OutlineMode.cs` prints one file's body-free outline (`ISourceOutliner`, see
+[module_core.md](module_core.md)): one line per declaration, indented by depth, `signature [start-end]`;
+`--json` prints the `SourceOutline` record through `ServerJsonContext`. It exists because the feature
+review's budget had to be measured with the product's own outliner in the product's own AOT binary
+([PLAN_feature_review.md](../todo/PLAN_feature_review.md) §6, S0.1/S0.2), and it stays for the question
+that comes back whenever an outline looks wrong. Exit codes: **0** whenever the file was read —
+"not outlined" (language, over the 1 MB ceiling, parse failure) is a reason on stdout; **65** with no
+file; **66** when the file cannot be read. The ceiling is checked on the file's length before a byte is
+read. Never 64.
 
 Plan: `research/PLAN_a_corpus_of_real_defects.md`, story 2.
 
@@ -3664,9 +3695,17 @@ any work, and that asks every configured server every round with no skip — so 
 evaluated against `Answered` or `Unreachable`. The state exists because the sentence for it must;
 a round cannot reach it.
 
-**`resolve` and `status` take the same `document` back.** A caller that omits it lands on the
-branch's session, which is idle and has nothing to decide; both refusals say so rather than sending
-them to run another review.
+**`resolve`, `status` and `ask_human` take the same `document` back.** A caller that omits it lands
+on the branch's session, which is idle and has nothing to decide; both refusals say so rather than
+sending them to run another review. `ask_human` gained the argument on 2026-09-25 (§9.3 of the
+feature-review plan): it always loaded the branch session, so a document review's question carried
+the branch's pending findings and was filed under the branch session's ID — and
+`Escalations.DecisionFor`, keyed by session id, never found the person's answer for the document
+session. The same plan round fixed the two sentences a document review was given in the branch's
+words: its `call_human` notice read "The **done** gate needs your decision" (`RoundSubject.StageName`
+knew two stages) and its `resolve` at `Done` said "The code stage is complete" (`Finish` answered that
+for any session reaching `Done`). Both now come from the stage's own row in `Stages` —
+[module_core.md](module_core.md), *Every stage answers by name*.
 
 ## A document reaches a Team server (2026-09-14)
 
@@ -4508,6 +4547,26 @@ so there is no lease to outlive a round and no stale lock to break. It is taken 
 read, tried once, and a second call is refused at once with a sentence naming the branch — never made
 to wait on a blocked MCP call. `claims/` is in `shared/data-inventory.json` as neither moved nor
 mentioned: a handle, never content.
+
+### A round's number comes from the journal (2026-09-25, §9.6 of the feature-review plan)
+
+**A later round overwrote an earlier one in the log.** `LiveRound` numbered a round
+`RoundsRunThisStage + 1`, and that counter is the BUDGET's: `BeginCodeRoundAgain` resets it to zero,
+so does the escalation ladder, and so does a person's Continue/Fix — while `rounds` upserts on
+`(session_id, stage, number)`. So: finish code round 1, resolve, commit, run `again`, and the second
+round REPLACED the first round's row — its findings, its cost, the commit it reviewed. The same after
+`escalated`, and after a person granted a fresh set of rounds. Confirmed from the code path by the
+consultant, then RED end to end (`ARoundsNumberComesFromTheJournalTests`: `{1L} contains 1 item(s)
+less` for all three resets).
+
+The number is `RoundNumber.Next(session.Rounds, stage)`: one past the highest the session's journal
+holds for that stage, computed ONCE in `RunStageAsync` under the session claim and handed to
+`LiveRound`, the audit and the worktree name — never derived inside `LiveRound` again. The budget
+counter keeps counting rounds for the budget; the number is the round's NAME. For every ordinary
+sequence the two agree, which is why nothing already on disk changes; they part exactly where the
+counter is reset. An interrupted round keeps its number, so a retry after a crash is the next round
+and the row that says a round died stays beside it. No migration: the table's key was always
+`(session_id, stage, number)`, and the rows that were lost were lost before this.
 
 ## The consultant is not blamed for a sibling's git bookkeeping (2026-09-24, issue #376)
 

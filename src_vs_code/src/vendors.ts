@@ -1,3 +1,4 @@
+import { apiRuntimeOnServer, DEFAULT_API_DIALECT } from './apiRuntime';
 import { Runtime, RUNTIMES } from './models';
 
 /** Every CLI shape this build can drive. Kept beside the parser that has to recognise them. */
@@ -86,6 +87,16 @@ export interface Vendor {
    */
   readonly pricePerMillionIn: number;
   readonly pricePerMillionOut: number;
+  /**
+   * For an `api` row: which row of `shared/api-dialects.json` spells its request. Absent means the
+   * generic `openai` one — `coai-mcp` decides, not this side.
+   *
+   * <p>Optional and only ever written when it was said, like `remoteVendor`: `coai.vendors` is JSON a
+   * person reads, and a `"dialect": ""` on every codex row would be noise that means nothing. A vendor's
+   * own dialect (`xai`, `qwen`) arrives as a preset only once `coai-mcp --probe-api` has measured it
+   * (PLAN_feature_review.md §4.10) — never typed from documentation.</p>
+   */
+  readonly dialect?: string | undefined;
 }
 
 /** The model an Antigravity row starts on: flash at high effort, the CLI's own active model. */
@@ -130,6 +141,30 @@ export const LOCAL_PRESET: Vendor & { label: string; hint: string } = {
   executablePath: '',
   pricePerMillionIn: 0,
   pricePerMillionOut: 0,
+};
+
+/**
+ * A hosted OpenAI-compatible API, reached DIRECTLY — `coai-mcp --ask-api` with a key from the vault,
+ * no CLI in between (PLAN_feature_review.md, S1.2).
+ *
+ * <p>Not the blank codex-endpoint entry, and the difference is measured: that one rides the Codex CLI,
+ * which puts 21k tokens of its own system prompt in front of every review and sends fields a hosted
+ * reasoning model refuses. This one sends what the dialect says and nothing else. The id names the
+ * vault entry and the row; a second API is `api-2`, exactly as a second claude is `claude-2`. The
+ * endpoint is the person's to fill in, so the card shows the field.</p>
+ */
+export const API_PRESET: Vendor & { label: string; hint: string } = {
+  label: 'API (OpenAI-compatible)',
+  hint: 'A hosted endpoint reached directly with a key from the vault — xAI, DashScope, any /v1 — no CLI in between. Give it the base URL; the key goes in the vault entry under this row’s name.',
+  id: 'api',
+  runtime: 'api',
+  model: '',
+  enabled: true, plan: true, code: true,
+  baseUrl: '',
+  executablePath: '',
+  pricePerMillionIn: 0,
+  pricePerMillionOut: 0,
+  dialect: DEFAULT_API_DIALECT,
 };
 
 export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })[] = [
@@ -210,6 +245,13 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     pricePerMillionIn: 0,
     pricePerMillionOut: 0,
   },
+  API_PRESET,
+  // ---- the measured vendor presets go HERE (PLAN_feature_review.md §4.10, S1.2 part iii) ----
+  // xAI (Grok): https://api.x.ai/v1, dialect `xai`; Qwen (DashScope): the operator's regional
+  // endpoint, dialect `qwen`. Each arrives together with its dialect row in shared/api-dialects.json,
+  // written FROM `coai-mcp --probe-api` rows — model ids from GET /models, refused fields from the
+  // vendor's own answers — never from documentation. Until then the generic preset above is the
+  // only api entry, and `apiRuntime.test.ts` pins that.
   {
     label: 'Another OpenAI-compatible endpoint',
     hint: 'Give it a name and a base URL; the key goes in the vault entry under that name.',
@@ -257,16 +299,7 @@ export function vendorsFrom(value: unknown): Vendor[] {
       // Only written when there IS one, so a codex row is byte-identical to what it always was —
       // `coai.vendors` is JSON a person reads and edits, and a `"remoteVendor": ""` on every row
       // is noise that means nothing.
-      ...(typeof v['remoteVendor'] === 'string' && v['remoteVendor'].trim().length > 0
-        // NOT lower-cased: this is the SERVER's own spelling of its vendor id, and a server whose
-        // catalog says `DeepSeek` matches `DeepSeek`. Lower-casing it here (and again in the C#
-        // parser) would have had every such vendor refused as one the server "does not offer".
-        // Caught on the code round.
-        ? { remoteVendor: v['remoteVendor'].trim() }
-        : {}),
-      ...(typeof v['teamServerId'] === 'string' && v['teamServerId'].trim().length > 0
-        ? { teamServerId: v['teamServerId'].trim().toLowerCase() }
-        : {}),
+      ...namedFields(v),
       executablePath: typeof v['executablePath'] === 'string' ? v['executablePath'].trim() : '',
       pricePerMillionIn: rate(v['pricePerMillionIn']),
       pricePerMillionOut: rate(v['pricePerMillionOut']),
@@ -276,6 +309,44 @@ export function vendorsFrom(value: unknown): Vendor[] {
 
   // A stored list that names nothing runnable is not a configuration, it is an accident.
   return vendors.length > 0 ? dedupe(vendors) : [...DEFAULT_VENDORS];
+}
+
+/**
+ * The three fields a row carries only when it SAID them — each one absent rather than empty, because
+ * `coai.vendors` is JSON a person reads and edits.
+ */
+function namedFields(v: Record<string, unknown>): { remoteVendor?: string; teamServerId?: string; dialect?: string } {
+  // `remoteVendor` is NOT lower-cased: this is the SERVER's own spelling of its vendor id, and a
+  // server whose catalog says `DeepSeek` matches `DeepSeek`. Lower-casing it here (and again in the
+  // C# parser) would have had every such vendor refused as one the server "does not offer". Caught
+  // on the code round. The other two ARE: an id is ours to normalise, and a dialect names a row of
+  // a file both halves ship, whose rows are lower-case (`coai-mcp` lower-cases it again on its side).
+  const remoteVendor = saidText(v['remoteVendor']);
+  const teamServerId = saidText(v['teamServerId'], 'lower');
+  const dialect = saidText(v['dialect'], 'lower');
+
+  return {
+    ...(remoteVendor === undefined ? {} : { remoteVendor }),
+    ...(teamServerId === undefined ? {} : { teamServerId }),
+    ...(dialect === undefined ? {} : { dialect }),
+  };
+}
+
+/**
+ * A stored text field, trimmed — or nothing when it is absent, not a string, or only spaces.
+ *
+ * <p>Guarded by `typeof`, not by `!== undefined`: this is JSON a person edits, and a hand-written
+ * `"remoteVendor": null` passes an undefined check and then has `.trim()` called on it, which throws
+ * inside the settings sync — and a sync that throws leaves the server on the file's previous contents
+ * with nothing saying the write never happened. A name made only of spaces is absent for the same
+ * reason. (Both raised on the remote-vendor code round.)</p>
+ */
+function saidText(value: unknown, casing: 'as-is' | 'lower' = 'as-is'): string | undefined {
+  if (typeof value !== 'string' || value.trim().length === 0) {
+    return undefined;
+  }
+
+  return casing === 'lower' ? value.trim().toLowerCase() : value.trim();
 }
 
 /**
@@ -410,50 +481,76 @@ export function reviewerPickItems(offered: readonly OfferedPreset[]): readonly R
  * cannot carry a runtime and a base URL, and inventing a second encoding for them would be a
  * format nobody could read in a config file.
  */
-export function vendorsEnv(vendors: readonly Vendor[]): string {
+export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = ''): string {
   return JSON.stringify(
     vendors
       .filter((v) => v.enabled)
+      // An `api` row is SUPPRESSED from the file for a server older than `API_RUNTIME_SINCE`, not
+      // merely disabled in the card: the old server reads the settings file, not the panel, and its
+      // `RuntimeOf` turns a runtime it does not know into codex WITH the base URL — a Grok review
+      // through the Codex CLI against xAI's endpoint, under the row's own name (§4.13). Every other
+      // row still crosses, so a person's codex and antigravity keep reviewing while the api row waits
+      // for the update. Unknown is not old — see `apiRuntimeOnServer`.
+      .filter((v) => v.runtime !== 'api' || apiRuntimeOnServer(installedServerVersion))
       .map((v) => ({
         id: v.id,
         runtime: v.runtime,
         model: v.model,
         baseUrl: v.baseUrl,
         executablePath: v.executablePath,
-        // The SERVER's own name for this vendor, which is not the row's id and must not be
-        // confused with it: a row is `<server>-<vendor>` so two Team servers offering `codex` do
-        // not collide, while `--vendor` has to carry what the server actually knows. This was
-        // missing for the whole life of the `remote` runtime — the server received the row id,
-        // refused it as a vendor it "does not offer", and the reviewer was dropped from every
-        // round while the panel went on reporting it as configured.
-        //
-        // `teamServerId` deliberately stays behind: the server has no field for it and no
-        // question it answers. It exists so the PANEL can follow a row to its server entry after
-        // somebody fixes a typo in a hostname.
-        //
-        // Guarded by `typeof`, not by `!== undefined`, and trimmed before it is weighed. This is
-        // JSON a person edits: a hand-written `"remoteVendor": null` passes an undefined check and
-        // then has `.length` read off it, which throws inside the settings sync — and a sync that
-        // throws leaves the server on the file's previous contents with nothing saying the write
-        // never happened. A name made only of spaces is absent for the same reason it is absent
-        // from `vendorsFrom`. Trimming is not the normalisation this field forbids: that one is
-        // about CASE, and neither side lower-cases, because a server whose catalog says `DeepSeek`
-        // matches `DeepSeek`. Both raised on this change's code round.
-        ...(typeof v.remoteVendor === 'string' && v.remoteVendor.trim().length > 0
-          ? { remoteVendor: v.remoteVendor.trim() }
-          : {}),
-        // Written only when NARROWED, like every other value in the env block: a vendor that
-        // reviews both stages says nothing, and the server reads an absent flag as both. So the
-        // block a person opens still carries only what differs from the defaults.
-        ...(v.plan ? {} : { plan: false }),
-        ...(v.code ? {} : { code: false }),
-        // And this one is written whenever it was SAID, in either direction — the one field here
-        // whose absence is a value rather than a default. `coai-mcp` reads an absent `document` as
-        // "the plan tick for a local vendor, no for a Team server", which is the whole consent rule;
-        // emitting `true` only when narrowed would have thrown away the half that says yes.
-        ...(v.document === undefined ? {} : { document: v.document }),
+        ...saidOnTheWire(v),
       })),
   );
+}
+
+/**
+ * The fields a row carries on the wire only when it SAID or NARROWED them.
+ *
+ * <p>`remoteVendor` is the SERVER's own name for this vendor, which is not the row's id and must not
+ * be confused with it: a row is `<server>-<vendor>` so two Team servers offering `codex` do not
+ * collide, while `--vendor` has to carry what the server actually knows. This was missing for the
+ * whole life of the `remote` runtime — the server received the row id, refused it as a vendor it
+ * "does not offer", and the reviewer was dropped from every round while the panel went on reporting
+ * it as configured. `teamServerId` deliberately stays behind: the server has no field for it and no
+ * question it answers. It exists so the PANEL can follow a row to its server entry after somebody
+ * fixes a typo in a hostname.</p>
+ *
+ * <p>Guarded by `typeof`, not by `!== undefined`, and trimmed before it is weighed. This is JSON a
+ * person edits: a hand-written `"remoteVendor": null` passes an undefined check and then has
+ * `.length` read off it, which throws inside the settings sync — and a sync that throws leaves the
+ * server on the file's previous contents with nothing saying the write never happened. A name made
+ * only of spaces is absent for the same reason it is absent from `vendorsFrom`. Trimming is not the
+ * normalisation this field forbids: that one is about CASE, and neither side lower-cases, because a
+ * server whose catalog says `DeepSeek` matches `DeepSeek`. Both raised on this change's code round.</p>
+ *
+ * <p>`plan` and `code` are written only when NARROWED, like every other value in the env block: a
+ * vendor that reviews both stages says nothing, and the server reads an absent flag as both. So the
+ * block a person opens still carries only what differs from the defaults. `document` is written
+ * whenever it was SAID, in either direction — the one field here whose absence is a value rather
+ * than a default: `coai-mcp` reads an absent `document` as "the plan tick for a local vendor, no for
+ * a Team server", which is the whole consent rule, and emitting `true` only when narrowed would have
+ * thrown away the half that says yes. `dialect` only when SAID, like `remoteVendor`: absent lets
+ * `coai-mcp` pick the generic dialect, and a row that never named one stays byte-identical to what
+ * it always was.</p>
+ */
+function saidOnTheWire(v: Vendor): Record<string, unknown> {
+  const remoteVendor = saidText(v.remoteVendor);
+  const dialect = saidText(v.dialect);
+
+  return {
+    ...(remoteVendor === undefined ? {} : { remoteVendor }),
+    ...narrowedStages(v),
+    ...(dialect === undefined ? {} : { dialect }),
+  };
+}
+
+/** The three stage switches as the wire wants them: two only when narrowed, the third whenever it was said. */
+function narrowedStages(v: Vendor): { plan?: false; code?: false; document?: boolean } {
+  return {
+    ...(v.plan ? {} : { plan: false }),
+    ...(v.code ? {} : { code: false }),
+    ...(v.document === undefined ? {} : { document: v.document }),
+  };
 }
 
 /**

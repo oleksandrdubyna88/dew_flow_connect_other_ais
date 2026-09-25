@@ -129,6 +129,18 @@ internal static class Program
         AskRemote,
 
         /// <summary>
+        /// One review, sent to a hosted OpenAI-compatible API with a key from the environment — the
+        /// reviewer "CLI" for a vendor that has none. Story S1.2 of <c>PLAN_feature_review.md</c>.
+        /// </summary>
+        AskApi,
+
+        /// <summary>
+        /// The measurement behind a vendor dialect: the vault read the product's way, <c>GET /models</c>,
+        /// and the S0.5 request matrix, printed as an allowlist of fields.
+        /// </summary>
+        ProbeApi,
+
+        /// <summary>
         /// Print the rounds database as JSON and leave.
         /// </summary>
         /// <remarks>
@@ -197,6 +209,16 @@ internal static class Program
         /// </remarks>
         Normalize,
 
+        /// <summary>
+        /// Print one file's body-free outline and leave — the feature review's reader, run by hand.
+        /// </summary>
+        /// <remarks>
+        /// For measurement and debugging (plan §4.7): the budget of the feature review was calibrated
+        /// by running exactly this over three shipped features (plan §6, S0.2). The feature stage
+        /// itself calls the outliner in-process; this is the same code behind a door a person can use.
+        /// </remarks>
+        Outline,
+
         /// <summary>Decide what became of every unprocessed candidate, and write it down.</summary>
         /// <remarks>
         /// The half that makes the rest real: a classifier that never persists leaves every
@@ -217,11 +239,14 @@ internal static class Program
                 "--version" or "-v" or "version" => Startup.Version,
                 "--ask-local" => Startup.AskLocal,
                 "--ask-remote" => Startup.AskRemote,
+                "--ask-api" => Startup.AskApi,
+                "--probe-api" => Startup.ProbeApi,
                 "--log" => Startup.Log,
                 "--findings" => Startup.Findings,
                 "--findings-many" => Startup.FindingsMany,
                 "--bugs-json" => Startup.Bugs,
                 "--normalize" => Startup.Normalize,
+                "--outline" => Startup.Outline,
                 "--collect-bugs" => Startup.Collect,
                 "--pairs-json" => Startup.Pairs,
                 "--pairs-keep" => Startup.PairsKeep,
@@ -283,6 +308,16 @@ internal static class Program
             case Startup.AskRemote:
                 return await AskRemote.RunAsync(Flags(args), Note, Console.Out);
 
+            case Startup.AskApi:
+                // The key is read from THIS process's environment inside the mode, never from argv.
+                return await Api.AskApiMode.RunAsync(args, Note, Console.Out, Environment.GetEnvironmentVariable);
+
+            case Startup.ProbeApi:
+                // The vault is read the way `--providers` reads it: `creds config`, the one child this
+                // mode ever starts. Every HTTP call it then makes is in-process, under its own timeout.
+                return await Api.ProbeApiMode.RunAsync(
+                    args, Note, Console.Out, Environment.GetEnvironmentVariable, new Runners.Processes.ProcessLauncher());
+
             case Startup.Log:
                 return LogJson(args);
 
@@ -297,6 +332,9 @@ internal static class Program
 
             case Startup.Normalize:
                 return NormalizeJson(args);
+
+            case Startup.Outline:
+                return Normalising.OutlineMode.Run(args, Console.Out, Note);
 
             case Startup.Collect:
                 return await CollectBugsAsync(args);
@@ -1147,7 +1185,10 @@ internal static class Program
         if (!flags.TryGetValue("--in", out var input) || !flags.TryGetValue("--out", out var output))
         {
             Note("--normalize needs --in <requests.json> and --out <answers.json>");
-            return 64; // EX_USAGE
+
+            // 65, never 64: this binary KNOWS the mode, and 64 is how a caller detects one too old
+            // to have it (.agents/PROJECT.md).
+            return 65; // EX_DATAERR
         }
 
         Normalising.NormalizeRequest? request;
@@ -1534,8 +1575,12 @@ internal static class Program
 
         if (promptFile.Length == 0 || outFile.Length == 0)
         {
+            // 65, never 64: this binary KNOWS the mode and is refusing the request. 64 is how a
+            // caller detects a binary too old for a mode, and a request fault wearing it would send
+            // the caller looking for an older shim (`.agents/PROJECT.md`; §9.7 of the feature-review
+            // plan, which found this answering 64).
             Note("--ask-local needs --prompt-file and --out");
-            return 64;
+            return 65; // EX_DATAERR
         }
 
         // Hoisted out of the try because the CATCH has to name them: how long this waited and what
@@ -2028,6 +2073,15 @@ internal static class Program
 
         Takes no arguments; an MCP client starts it and speaks JSON-RPC over stdio.
         `--version` prints the version this binary was stamped with, and nothing else.
+        `--ask-api --vendor <id> --endpoint <base> --model <id> --dialect <name> --prompt-file <p>
+        --schema-file <s> --out <answer> [--timeout-seconds n] [--max-tokens n] [--reasoning-effort e]`
+        sends one review to a hosted OpenAI-compatible API; the key is COAI_API_KEY in the
+        environment, never an argument. Exits 0 answered, 65 refused before sending, 69 unreachable,
+        70 not a review, 75 rate-limited (429/503), 77 the key was refused (401/403).
+        `--probe-api --vendor <id> [--model <id>] [--endpoint <base>] [--dialect <name>]
+        [--timeout-seconds 60]` reads the vault (COAI_CREDS_KEY), lists GET /models and runs the
+        request matrix a dialect is written from; prints status codes, model ids, refused fields and
+        token counts — vendor text redacted and capped, the key never. 65 bad arguments, 78 no vault.
         `--log --paged [--limit 200] [--before <cursor>]` prints a PAGE of the rounds database as
         JSON, with the totals SQL counted over the whole table; without `--paged` it prints the
         older shape, which carries every listed round's findings inline.
@@ -2039,6 +2093,9 @@ internal static class Program
         reads no source files itself; each request carries the text. Exits 66 when the request cannot
         be read and 73 when the answers cannot be written; a method it could not locate is an answer,
         not a failure.
+        `--outline <file> [--json]` prints one source file's declarations — signatures up to their bodies,
+        with lines — as the feature review would outline it; `--json` for the structured form. A file it
+        does not outline (language, over 1 MB, parse failure) is a reason on stdout, exit 0; no file is 65.
         `--collect-bugs [--limit 200] [--all] [--model local/<name>]` decides what became of every unprocessed candidate — the fix
         commit, or the reason there is none — and writes it to the findings rows. Prints the funnel on
         stdout and its progress on stderr. `--all` revisits candidates an earlier run handled.

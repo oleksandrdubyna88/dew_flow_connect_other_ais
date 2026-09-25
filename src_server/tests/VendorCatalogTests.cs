@@ -54,6 +54,12 @@ public sealed class VendorCatalogTests : IDisposable
     [InlineData("""[{ "id": "x", "runtime": "codex", "models": ["m"], "slots": [] }]""", "slots")]
     [InlineData("""[{ "id": "x", "runtime": "codex", "models": ["m"], "slots": ["../etc"] }]""", "../etc")]
     [InlineData("""[{ "id": "x", "runtime": "local", "models": ["m"], "slots": ["a"] }]""", "local")]
+    // `api` is the second machine-only runtime (PLAN_feature_review.md, D10): the Team server does not
+    // take part in v1, and a vendor it accepted would need a vault key on the shared box. It is
+    // refused HERE rather than by a missing account: `KnownRuntimes` is derived from the library's
+    // set minus the machine-only ones, so a runtime added on the client side is refused by name
+    // until somebody decides otherwise — not admitted because a set grew.
+    [InlineData("""[{ "id": "x", "runtime": "api", "models": ["m"], "slots": ["a"] }]""", "api")]
     // An id becomes a directory under <DataDir>/accounts, so an id that can climb out of it is the
     // same defect as a slot name that can — and only the slot name was checked at first.
     [InlineData("""[{ "id": "../shared", "runtime": "codex", "models": ["m"], "slots": ["a"] }]""", "../shared")]

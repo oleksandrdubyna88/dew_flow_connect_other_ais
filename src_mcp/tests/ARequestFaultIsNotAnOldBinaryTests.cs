@@ -115,6 +115,37 @@ public sealed class ARequestFaultIsNotAnOldBinaryTests : IDisposable
             + "this binary knows the mode and is refusing the argument");
     }
 
+    /// <summary>
+    /// <c>--ask-local</c> without its arguments is a bad REQUEST: the binary knows the mode.
+    /// </summary>
+    /// <remarks>
+    /// It answered 64 (§9.7 of the feature-review plan), which is the code that means "this binary
+    /// has never heard of that mode" — so a caller that learns to fall back on 64 would have gone
+    /// looking for an older shim because a prompt file was not named.
+    /// </remarks>
+    [Fact]
+    public async Task AnAskLocalWithoutItsArguments_IsADataError_NotAnUnknownMode()
+    {
+        var code = await Program.AskLocalAsync(["--ask-local"]);
+
+        code.Should().Be(65, "the mode is known and its request is malformed — 64 would read as an old binary");
+    }
+
+    /// <summary>
+    /// <c>--normalize</c> without <c>--in</c>/<c>--out</c> is a bad REQUEST too: the binary knows the mode.
+    /// </summary>
+    /// <remarks>
+    /// The same defect as <c>--ask-local</c>'s, found beside it while the feature-review plan's §9.7 was
+    /// being fixed: it answered 64, which a caller reads as "this binary is older than that mode".
+    /// </remarks>
+    [Fact]
+    public void ANormalizeWithoutItsArguments_IsADataError_NotAnUnknownMode()
+    {
+        var code = Program.NormalizeJson(["--normalize"]);
+
+        code.Should().Be(65, "the mode is known and its request is malformed — 64 would read as an old binary");
+    }
+
     /// <summary>And the refusal still says why, in the collector's own words.</summary>
     /// <remarks>
     /// An exit code a person cannot act on is a number. The sentence naming the vendor and the reason

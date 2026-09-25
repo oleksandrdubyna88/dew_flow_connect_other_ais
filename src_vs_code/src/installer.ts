@@ -75,6 +75,27 @@ export function installedVersion(state: vscode.Memento, storage: vscode.Uri): st
 }
 
 /**
+ * The version of the binary on this side, as far as this window knows WITHOUT spawning anything.
+ *
+ * <p>The settings writer runs from a configuration listener — every keystroke in settings.json —
+ * and cannot launch `--version` per write. What it can have is the answer the panel's probe last
+ * cached for this side's path ({@link serverOnThisSide} fills it on every repaint), else the install
+ * record, else nothing. Empty means unknown, and the one reader — the `api` runtime gate — treats
+ * unknown as "not old" rather than guessing.</p>
+ */
+export function knownServerVersion(storage: vscode.Uri, state: vscode.Memento): string {
+  const target = serverPath(storage);
+  const fromProbe = target === undefined ? undefined : probed.get(target.fsPath)?.version;
+
+  return firstNonEmpty(fromProbe, installedVersion(state, storage));
+}
+
+/** The first answer that says something, or empty. */
+function firstNonEmpty(...answers: readonly (string | undefined)[]): string {
+  return answers.find((answer) => answer !== undefined && answer.length > 0) ?? '';
+}
+
+/**
  * What is on this side's disk, asked of the disk and then of the binary.
  *
  * <p><b>`stat` runs every time; only the PROBE is cached.</b> A cached `stat` would keep claiming a

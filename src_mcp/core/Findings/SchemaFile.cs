@@ -26,16 +26,28 @@ public static class SchemaFile
 {
     public const string Name = "finding-schema.json";
 
-    /// <summary>The schema's path in <paramref name="dataDir"/>, written there if it is not already right.</summary>
-    public static string Ensure(string dataDir)
+    /// <summary>The feature reviewer's schema file — its own name, never the one every other round reads.</summary>
+    public const string FeatureName = "finding-schema-feature.json";
+
+    /// <summary>The finding schema's path in <paramref name="dataDir"/>, written there if it is not already right.</summary>
+    public static string Ensure(string dataDir) => Ensure(dataDir, SchemaShape.Finding);
+
+    /// <summary>The path of one SHAPE's schema in <paramref name="dataDir"/>, written there if it is not already right.</summary>
+    /// <remarks>
+    /// One file per shape (S1.3): a code round launched beside a feature round reads the finding
+    /// schema's file at the same moment the feature round ensures its own, so the two must never share
+    /// a name — otherwise a code reviewer could be handed <c>sourceRequests</c>.
+    /// </remarks>
+    public static string Ensure(string dataDir, SchemaShape shape)
     {
-        var file = Path.Combine(dataDir, Name);
+        var (name, content) = Of(shape);
+        var file = Path.Combine(dataDir, name);
         try
         {
             Directory.CreateDirectory(dataDir);
-            if (!File.Exists(file) || !SameAsSchema(file))
+            if (!File.Exists(file) || !Holds(file, content))
             {
-                File.WriteAllText(file, FindingSchema.Json);
+                File.WriteAllText(file, content);
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
@@ -46,15 +58,23 @@ public static class SchemaFile
         return file;
     }
 
-    /// <summary>Whether the file already holds the schema — a read that a concurrent write may refuse.</summary>
-    private static bool SameAsSchema(string file)
+#pragma warning disable CS8524 // an unnamed (cast) value throws; a NAMED shape without an arm is CS8509
+    private static (string Name, string Content) Of(SchemaShape shape) => shape switch
+    {
+        SchemaShape.Finding => (Name, FindingSchema.Json),
+        SchemaShape.Feature => (FeatureName, FindingSchema.FeatureJson),
+    };
+#pragma warning restore CS8524
+
+    /// <summary>Whether the file already holds <paramref name="content"/> — a read that a concurrent write may refuse.</summary>
+    private static bool Holds(string file, string content)
     {
         try
         {
             using var stream = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete);
             using var reader = new StreamReader(stream);
 
-            return reader.ReadToEnd() == FindingSchema.Json;
+            return reader.ReadToEnd() == content;
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
@@ -62,4 +82,14 @@ public static class SchemaFile
             return true;
         }
     }
+}
+
+/// <summary>Which schema a reviewer answers in.</summary>
+public enum SchemaShape
+{
+    /// <summary><see cref="FindingSchema.Json"/> — every plan, code and document round.</summary>
+    Finding,
+
+    /// <summary><see cref="FindingSchema.FeatureJson"/> — the feature review, which may ask for source.</summary>
+    Feature,
 }

@@ -37,7 +37,9 @@ internal sealed record VendorDto(
     bool? Code = null,
     bool? Document = null,
     /// <summary>For a `remote` row: the vendor id the TEAM SERVER knows, which is not this row's id.</summary>
-    string? RemoteVendor = null);
+    string? RemoteVendor = null,
+    /// <summary>For an `api` row: the dialect its request is spelled in. Absent = the generic `openai`.</summary>
+    string? Dialect = null);
 
 /// <summary>
 /// One entry of `COAI_CONSULTANTS`: what consults for one caller kind — a DEFINITION, or a legacy

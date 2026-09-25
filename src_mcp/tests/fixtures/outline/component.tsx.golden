@@ -1,0 +1,6 @@
+interface Props [3-5]
+  title: string [4-4]
+export function Header({ title }: Props) [7-9]
+export const Footer = (props: Props) => [11-13]
+export class Panel extends React.Component<Props> [15-19]
+  render() [16-18]

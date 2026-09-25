@@ -96,4 +96,28 @@ public sealed record NormalisedReview(ImmutableArray<Finding> Findings, Immutabl
     /// notes, so the field arrives absent and this is the answer.</para>
     /// </remarks>
     public string Notes { get; init; } = string.Empty;
+
+    /// <summary>The code a FEATURE reviewer asked to see before it could judge (plan §4.9).</summary>
+    /// <remarks>
+    /// Empty, never null — and empty on every other stage, whose schema has no such field. Only
+    /// requests that name a repository-relative file and a sane span survive here; the rest are in
+    /// <see cref="RejectedSourceRequests"/>, named.
+    /// </remarks>
+    public ImmutableArray<SourceRequest> SourceRequests { get; init; } = [];
+
+    /// <summary>Requests that could not be served as asked — a path out of the repository, a span that is no span.</summary>
+    /// <remarks>
+    /// Kept apart from <see cref="NormalisedReview.Rejected"/>, which counts FINDING entries: a refused
+    /// request is not a refused finding, and folding the two would change what every existing reader
+    /// of that list reports.
+    /// </remarks>
+    public ImmutableArray<RejectedEntry> RejectedSourceRequests { get; init; } = [];
 }
+
+/// <summary>One request for source, as a feature reviewer made it — validated, not yet served.</summary>
+/// <param name="File">Repository-relative; <see cref="RepoPaths.IsRelative"/> held when this was made.</param>
+/// <param name="Symbol">A declaration's name from the outline, or empty.</param>
+/// <param name="StartLine">1-based, or 0 when the request named no span.</param>
+/// <param name="EndLine">1-based and inclusive, or 0 when the request named no span.</param>
+/// <param name="Why">What the reviewer means to check — carried to the served text's heading.</param>
+public sealed record SourceRequest(string File, string Symbol, int StartLine, int EndLine, string Why);

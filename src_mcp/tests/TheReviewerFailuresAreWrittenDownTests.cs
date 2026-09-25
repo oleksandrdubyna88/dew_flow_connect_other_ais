@@ -59,7 +59,7 @@ public sealed class TheReviewerFailuresAreWrittenDownTests : IDisposable
             new SessionState("s-failures", "D:/repo", "feature/x", new PanelConfig()), []);
         _store.Save(session);
 
-        return new LiveRound(_store, session, [.. providers.Select(Work)], "", noticing);
+        return new LiveRound(_store, session, 1, [.. providers.Select(Work)], "", noticing);
     }
 
     /// <summary>What the session file says about one reviewer, after the round persisted it.</summary>

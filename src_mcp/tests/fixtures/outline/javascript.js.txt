@@ -1,0 +1,32 @@
+import path from "node:path";
+
+export class Runner {
+  count = 0;
+  static #instances = 0;
+
+  constructor(options) {
+    secretOptions(options);
+  }
+
+  run(task) {
+    secretRun(task);
+  }
+}
+
+export function start(argv) {
+  return secretStart(argv);
+}
+
+function* ids() {
+  yield secretId();
+}
+
+const stop = function () {
+  secretStop();
+};
+
+export const VERSION = "1.0.0";
+
+describe("runner", () => {
+  it("runs", () => secretTest());
+});

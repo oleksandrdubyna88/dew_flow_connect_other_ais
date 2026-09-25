@@ -52,7 +52,7 @@ node .agents/conventions/tools/pin-check.mjs
   What is sanctioned is not a fixed list of two flags but a shape: a **one-shot CLI mode**, selected
   by `args[0]` before any transport is opened, that answers and exits and never speaks JSON-RPC at
   all. Those are `--help`, `--version`, `--log`, `--findings`, `--findings-many`, `--ask-local`,
-  `--ask-remote`, `--providers`, `--bugs-json`, `--normalize`, `--collect-bugs`, `--pairs-json`,
+  `--ask-remote`, `--ask-api`, `--probe-api`, `--providers`, `--bugs-json`, `--normalize`, `--outline`, `--collect-bugs`, `--pairs-json`,
   `--pairs-keep`, `--pairs-decide`, `--real-method`, `--file-at`, `--tree-at`, `--trees`, `--tree-remove`, `--upload-pairs`, `--requeue-refused` and `--close-consult`,
   and their stdout is their entire interface — `--log` has been read from stdout by
   the panel since the rounds-log page shipped (`roundsDbRead.ts`), `--findings` since the log
@@ -64,10 +64,8 @@ node .agents/conventions/tools/pin-check.mjs
   that rule: **a binary that KNOWS a one-shot mode must never exit 64**, whatever is wrong with the
   request. `--findings-many` answers a keys file it cannot read with **65 (EX_DATAERR)**, because a
   request fault that presented as an old binary would send the client down the fallback and hide the
-  fault behind a successful-looking export. This paragraph used to name only `--help` and
-  `--version`, which the code had already outgrown by three flags; a reviewer read it literally on
-  2026-09-07 and was right to; a code round read it literally again on 2026-09-15, when the corpus
-  collector had added three modes and named none of them here.
+  fault behind a successful-looking export. Reviewers read this list literally, and have
+  been right to (2026-09-07, 2026-09-15).
   **Adding a one-shot mode means adding it here — in THIS file.** Inside `ServeAsync`
   the rule is unchanged and absolute.
 

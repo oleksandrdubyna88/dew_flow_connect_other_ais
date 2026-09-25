@@ -109,7 +109,11 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
     }
 
     /// <summary>One custom DOCUMENT role, with every shipped role switched off.</summary>
-    private PanelService Service()
+    /// <param name="escalationBudget">
+    /// How long <c>ask_human</c> waits for a person. The shipped thirty minutes for every test that
+    /// never asks one; a test that DOES ask sets a budget nobody is expected to meet.
+    /// </param>
+    private PanelService Service(TimeSpan? escalationBudget = null)
     {
         var catalog = RoleComposition.Compose([
             new RoleEntry(RoleCatalog.PlanRole, Active: false),
@@ -135,6 +139,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
                 },
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
+                EscalationBudget = escalationBudget ?? TimeSpan.FromMinutes(30),
             },
             VaultKeys.None("no vault in tests"),
             default,
@@ -429,5 +434,112 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
         store.Keep("eeeeeeeeeeeeeeee", "another").Should().BeNull();
 
         store.Has("dddddddddddddddd").Should().BeTrue();
+    }
+
+    // ---------- what the feature-review plan found (§9, 2026-09-25) ----------
+
+    /// <summary>
+    /// A document round nobody answered calls the person about the DOCUMENT gate — not about a gate
+    /// called "done".
+    /// </summary>
+    /// <remarks>
+    /// <c>RoundSubject.StageName</c> knew two stages and answered <c>done</c> for everything else, so
+    /// the notice a document round left in the panel read "The done gate needs your decision". A
+    /// person reading that has no idea which of their reviews stopped. (§9.1)
+    /// </remarks>
+    [Fact]
+    public async Task ADocumentRoundNobodyAnswered_AsksThePersonAboutTheDocumentGate_NotAboutDone()
+    {
+        var service = Service();
+        await service.OpenAsync(_repo, "main");
+
+        Environment.SetEnvironmentVariable("FAKECLI_STDOUT", "");
+        Environment.SetEnvironmentVariable("FAKECLI_OUTFILE_TEXT", "");
+        Environment.SetEnvironmentVariable("FAKECLI_EXIT", "1");
+        Environment.SetEnvironmentVariable("FAKECLI_STDERR", "429 Too Many Requests");
+        var answer = Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument()));
+        answer.GetProperty("verdict").GetString().Should().Be("call_human", $"nothing was reviewed: {answer}");
+
+        var notice = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
+            .Single(f => !f.EndsWith(".answer.json", StringComparison.Ordinal));
+        var question = JsonDocument.Parse(await File.ReadAllTextAsync(notice)).RootElement.GetProperty("question").GetString();
+
+        question.Should().StartWith("The document review gate needs your decision",
+            "the notice names the gate a person can find in their panel");
+        question.Should().NotContain("done gate");
+    }
+
+    /// <summary>
+    /// Resolving a document review that passed says the DOCUMENT stage is complete — never that the
+    /// code stage is.
+    /// </summary>
+    /// <remarks>
+    /// <c>Finish</c> answered "The code stage is complete. This session is done." for ANY session
+    /// that reached <c>Done</c>, a document review included: a caller that had never run a code
+    /// round was told one had finished. (§9.2)
+    /// </remarks>
+    [Fact]
+    public async Task ResolvingADocumentReviewThatPassed_SaysTheDocumentStageIsComplete_NotTheCodeStage()
+    {
+        var service = Service();
+        await service.OpenAsync(_repo, "main");
+        Script("""{"findings": []}""");
+        Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument()))
+            .GetProperty("verdict").GetString().Should().Be("proceed");
+
+        var resolved = Parse(await service.ResolveAsync(_repo, "main", "[]", document: "docs/spec.md"));
+
+        resolved.GetProperty("stage").GetString().Should().Be("Done");
+        resolved.GetProperty("instruction").GetString().Should().Contain("document stage is complete")
+            .And.NotContain("code stage", "no code round ran in this session, and the sentence must not say one did");
+    }
+
+    /// <summary>
+    /// <c>ask_human</c> for a document review is filed under the DOCUMENT's session, with that
+    /// session's open findings — so the person's answer reaches the review that asked.
+    /// </summary>
+    /// <remarks>
+    /// It always loaded the branch session: for a document review it showed the wrong pending
+    /// findings and filed the question under the branch session's id, so <c>Escalations.DecisionFor</c>
+    /// — keyed by session id — never found the person's answer for the document session. (§9.3)
+    /// </remarks>
+    [Fact]
+    public async Task AskHumanForADocumentReview_FilesTheQuestionUnderTheDocumentsSession_WithItsFindings()
+    {
+        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
+        await service.OpenAsync(_repo, "main");
+        Script(WithNotes);
+        await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument());
+        var documentSession = Parse(await service.StatusAsync(_repo, "main", "docs/spec.md")).GetProperty("sessionId").GetString();
+        var branchSession = Parse(await service.StatusAsync(_repo, "main")).GetProperty("sessionId").GetString();
+        documentSession.Should().NotBe(branchSession, "the fixture holds two sessions, or the test proves nothing");
+
+        var reply = Parse(await service.AskHumanAsync(_repo, "main", "Ship the spec as it stands?", document: "docs/spec.md"));
+
+        reply.GetProperty("status").GetString().Should().Be("no_answer_yet", "nobody is at the keyboard in a test");
+        var asked = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
+            .Single(f => !f.EndsWith(".answer.json", StringComparison.Ordinal));
+        var question = JsonDocument.Parse(await File.ReadAllTextAsync(asked)).RootElement;
+        question.GetProperty("sessionId").GetString().Should().Be(documentSession,
+            "the person's answer is looked up by session id, so a question filed under the branch's session is never answered");
+        question.GetProperty("openFindings").GetArrayLength().Should().Be(1,
+            "the document round's own gating finding rides with the question");
+    }
+
+    /// <summary>And with no document named, the question is the BRANCH session's, exactly as before.</summary>
+    [Fact]
+    public async Task AskHumanWithNoDocument_StillFilesUnderTheBranchsSession()
+    {
+        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
+        await service.OpenAsync(_repo, "main");
+        var branchSession = Parse(await service.StatusAsync(_repo, "main")).GetProperty("sessionId").GetString();
+
+        var reply = Parse(await service.AskHumanAsync(_repo, "main", "Ship it?"));
+
+        reply.GetProperty("status").GetString().Should().Be("no_answer_yet");
+        var asked = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
+            .Single(f => !f.EndsWith(".answer.json", StringComparison.Ordinal));
+        JsonDocument.Parse(await File.ReadAllTextAsync(asked)).RootElement.GetProperty("sessionId").GetString()
+            .Should().Be(branchSession);
     }
 }

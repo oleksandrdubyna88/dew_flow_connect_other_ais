@@ -89,6 +89,10 @@ public static class RuntimeResolution
         // Team server vendor as a custom codex endpoint. This file's own remarks below predicted
         // exactly that split before the name existed.
         : vendor.Runtime == "remote" ? "remote"
+        // `api` too, and for the same reason a third time: an api row HAS a base URL — that is the
+        // whole point of it — so the base-URL arm would send a Grok or a Qwen review through the
+        // Codex CLI against xAI's endpoint, under the row's own name. (PLAN_feature_review.md §4.10.)
+        : vendor.Runtime == "api" ? "api"
         : vendor.BaseUrl.Length > 0 ? "codex"
         : vendor.Runtime.Length > 0 ? vendor.Runtime
         : vendor.Provider;
@@ -113,6 +117,10 @@ public static class RuntimeResolution
     {
         "local" => new LocalRuntime(vendor.Provider, vendor.BaseUrl),
         "remote" => new RemoteRuntime(vendor.Provider, vendor.BaseUrl, vendor.VendorOnServer),
+        // Built here rather than in `Named`, as `remote` is: it needs the base URL, which only the
+        // full identity carries. An empty URL still builds — the shim refuses it with a sentence,
+        // and `AuthOf` has already answered `unavailable` for it.
+        "api" => new ApiRuntime(vendor.Provider, vendor.BaseUrl),
         "codex" when vendor.BaseUrl.Length > 0 => new CustomCodexRuntime(vendor.Provider, vendor.BaseUrl),
         // An EXPLICIT runtime outranks the id, and that order is the fix for a real defect: the id
         // was consulted first, so a vendor called `claude` worked by accident while `my-claude` —
@@ -139,6 +147,9 @@ public static class RuntimeResolution
         // a key at all — it is a session this machine holds. Saying "vault key" for a vendor that
         // uses none would send somebody to configure the wrong thing entirely.
         NameOf(vendor) == "remote" ? TeamServerAuthOf(vendor, hasServerToken)
+        // `api` is decided before the bare key check too: a key with no endpoint to send it to is
+        // not a vendor that can run, and "vault key" would badge a row that fails every round.
+        : NameOf(vendor) == "api" ? ApiAuthOf(vendor, hasVaultKey)
         : hasVaultKey
             ? ("vault key", "")
             : NameOf(vendor) == "local"
@@ -180,6 +191,23 @@ public static class RuntimeResolution
             ? "no credential for it on this machine"
             : "it cannot run here";
     }
+
+    /// <summary>
+    /// An <c>api</c> vendor authenticates with a key under its own id in the vault — and needs an
+    /// endpoint to send it to.
+    /// </summary>
+    /// <remarks>
+    /// Two named refusals rather than one, because they have different cures: one is the creds
+    /// config entry, the other is the row's endpoint field. The "how to get a key in" sentence is the
+    /// one the codex custom-endpoint arm has always used, so a person who has configured DeepSeek
+    /// reads the same instruction here.
+    /// </remarks>
+    private static (string Auth, string Note) ApiAuthOf(VendorIdentity vendor, bool hasVaultKey) =>
+        !hasVaultKey
+            ? ("unavailable", $"needs a key under '{vendor.Provider}' in the vault and it holds none — see the creds config entry")
+            : vendor.BaseUrl.Length == 0
+                ? ("unavailable", $"'{vendor.Provider}' has no base URL — an api vendor needs the OpenAI-compatible endpoint it is reached at")
+                : ("vault key", "");
 
     private static (string Auth, string Note) TeamServerAuthOf(VendorIdentity vendor, bool hasServerToken) =>
         hasServerToken

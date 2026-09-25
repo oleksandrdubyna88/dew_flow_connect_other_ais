@@ -1,0 +1,49 @@
+using System;
+using System.Collections.Generic;
+
+namespace Shop.Orders
+{
+    /// <summary>A comment above a type is not part of it.</summary>
+    [Serializable]
+    public sealed class Cart : IDisposable
+    {
+        private readonly List<int> _items = [];
+
+        public event EventHandler? Changed;
+
+        public int Count { get; private set; }
+
+        public int Total
+        {
+            get { return secretTotal(); }
+        }
+
+        public int Doubled => secretDoubled();
+
+        public Cart(int capacity) : base()
+        {
+            secretInit(capacity);
+        }
+
+        public void Add<T>(T item) where T : notnull
+        {
+            secretAdd(item);
+            if (secretCheck())
+            {
+                secretMore();
+            }
+        }
+
+        public static Cart operator +(Cart a, Cart b) => secretCombine(a, b);
+
+        public int this[int index] => secretIndex(index);
+
+        public void Dispose() { secretDispose(); }
+
+        private enum State { Open, Closed }
+
+        public delegate void Handler(int x);
+    }
+
+    public record Line(string Sku, int Quantity);
+}

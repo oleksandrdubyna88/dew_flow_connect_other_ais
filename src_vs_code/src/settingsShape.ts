@@ -456,10 +456,19 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
  * The `env` block for `mcpServers` — only what differs from the server's own defaults, so a
  * pristine configuration produces NO env at all and the block stays readable.
  */
-export function envBlock(settings: CoaiSettings, vendors: readonly Vendor[] = DEFAULT_VENDORS): Record<string, string> {
+export function envBlock(
+  settings: CoaiSettings,
+  vendors: readonly Vendor[] = DEFAULT_VENDORS,
+  /**
+   * The `coai-mcp` this side has, when known — it decides whether an `api` row may cross at all
+   * (`vendorsEnv`). Empty means unknown, which is not old. Threaded from the writer rather than read
+   * here, so this stays pure.
+   */
+  installedServerVersion = '',
+): Record<string, string> {
   const env: Record<string, string> = {};
   if (!sameVendors(vendors, DEFAULT_VENDORS)) {
-    env['COAI_VENDORS'] = vendorsEnv(vendors);
+    env['COAI_VENDORS'] = vendorsEnv(vendors, installedServerVersion);
   }
   if (Object.keys(settings.promptsPerRound).length > 0) {
     env['COAI_PROMPTS_PER_ROUND'] = JSON.stringify(settings.promptsPerRound);

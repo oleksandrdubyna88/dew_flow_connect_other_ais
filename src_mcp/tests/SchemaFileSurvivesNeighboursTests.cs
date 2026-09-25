@@ -89,4 +89,35 @@ public sealed class SchemaFileSurvivesNeighboursTests : IDisposable
 
         SchemaFile.Ensure(_dir).Should().Be(Path_);
     }
+
+    /// <summary>One file per SHAPE: the feature schema never lands on the file every other round reads.</summary>
+    /// <remarks>
+    /// The finding schema's file is shared by every server on this machine, and a round of any stage
+    /// may be reading it at any moment. If the feature shape were written to the same name, a code
+    /// round launched beside a feature round would hand its reviewers <c>sourceRequests</c> — which is
+    /// the one thing the derived schema exists to prevent. (S1.3.)
+    /// </remarks>
+    [Fact]
+    public void TheFeatureShape_HasItsOwnFile_AndLeavesTheFindingFileAlone()
+    {
+        var finding = SchemaFile.Ensure(_dir, SchemaShape.Finding);
+        var feature = SchemaFile.Ensure(_dir, SchemaShape.Feature);
+
+        feature.Should().NotBe(finding);
+        Path.GetDirectoryName(feature).Should().Be(_dir);
+        File.ReadAllText(feature).Should().Be(FindingSchema.FeatureJson);
+        File.ReadAllText(finding).Should().Be(FindingSchema.Json, "writing the feature shape must not touch this one");
+        finding.Should().Be(SchemaFile.Ensure(_dir), "the one-argument form is still the finding schema");
+    }
+
+    [Fact]
+    public void AStaleFeatureFile_IsReplacedWithTheFeatureShape()
+    {
+        var feature = SchemaFile.Ensure(_dir, SchemaShape.Feature);
+        File.WriteAllText(feature, FindingSchema.Json);
+
+        SchemaFile.Ensure(_dir, SchemaShape.Feature);
+
+        File.ReadAllText(feature).Should().Be(FindingSchema.FeatureJson);
+    }
 }

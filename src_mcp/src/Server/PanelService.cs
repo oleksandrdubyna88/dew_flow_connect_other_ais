@@ -1316,10 +1316,18 @@ public sealed partial class PanelService
                 return Error(nothingThere, from);
             }
 
+            // The number this round is written under: the next one in the session's journal for
+            // this stage, allocated here — under the claim — and nowhere else. NOT the budget
+            // counter plus one: `again`, the escalation ladder and a person's Continue/Fix all reset
+            // that counter to zero, and the database upserts on (session, stage, number), so the
+            // round after any of them REPLACED the round before it in the log (§9.6 of the
+            // feature-review plan). The counter keeps counting rounds for the budget; this is the
+            // round's name.
+            var number = RoundNumber.Next(session.Rounds, stage.Stage);
             // The plan stage gets an empty scratch directory instead of a checkout — there is
             // nothing there to wander into, which is the point.
             await using var lease = stage.NeedsWorktree
-                ? await _worktrees.AddAsync(repoPath, sha, session.State.SessionId, session.State.RoundsRunThisStage + 1)
+                ? await _worktrees.AddAsync(repoPath, sha, session.State.SessionId, number)
                 : null;
             using var scratch = stage.NeedsWorktree ? null : new ScratchDirectory();
             var workingDir = lease?.Path ?? scratch!.Path;
@@ -1345,8 +1353,8 @@ public sealed partial class PanelService
             // What the round is about, derived from the plan the caller passed — a file name if
             // they handed a path, its title otherwise. Nobody has to remember to name the work.
             var subject = RoundSubject.From(planText, File.Exists);
-            var live = new LiveRound(_store, session, work, subject, _noticing);
-            var audit = new RoundAudit(_log, session.State.Stage.ToString(), session.State.RoundsRunThisStage + 1);
+            var live = new LiveRound(_store, session, number, work, subject, _noticing);
+            var audit = new RoundAudit(_log, session.State.Stage.ToString(), number);
             // Two kinds of exclusion, one list: a vendor this round cannot run AT ALL — no adapter,
             // no credential — and a vendor that cannot run one particular ROLE, which is what a Team
             // server does with a role a person defined. The second is only discovered while the work
@@ -1409,7 +1417,7 @@ public sealed partial class PanelService
                 return Error("the round could not complete — this is a bug, report it", from);
             }
 
-            var answer = AnswerFor(completed.Verdict, gate, summary, merged, reviews, StageGate(session).Threshold);
+            var answer = AnswerFor(stage.Stage, completed.Verdict, gate, summary, merged, reviews, StageGate(session).Threshold);
             // And, on a document round whose work reached a Team server, where the document went.
             // Appended to the reviewer line rather than given a field of its own: it is a fact about
             // THIS round's reviewers, and it has to be read by an AI that was not told to look for a
@@ -1425,7 +1433,7 @@ public sealed partial class PanelService
             // The commit it reviewed, kept with the round: what a later `again` compares the branch to.
             var record = live.Finish(answer.Verdict, gate.GatingCount, summary.Sentence, results) with
             {
-                Sha = stage.Stage == Stage.CodeReview ? sha : string.Empty,
+                Sha = Stages.Of(stage.Stage).RecordsSha ? sha : string.Empty,
             };
             // The operator's own switches, read for THIS call: the settings file is stamped and
             // reloaded per tool call, so a box ticked a second ago governs this round.
@@ -2091,6 +2099,8 @@ public sealed partial class PanelService
                 ExecutablePath = provider.ExecutablePath,
                 Model = provider.Model,
                 ApiKey = _keys.Keys.GetValueOrDefault(provider.Provider, string.Empty),
+                // Only ApiRuntime reads it: which row of shared/api-dialects.json spells the request.
+                Dialect = provider.Dialect,
                 Timeout = _settings.ReviewerTimeout,
                 ReasoningEffort = _settings.LocalReasoningEffort,
                 MaxTokens = _settings.LocalMaxTokens,
@@ -2479,13 +2489,12 @@ public sealed partial class PanelService
         return custom;
     }
 
-    /// <summary>A document round is neither a plan nor a code round, so only an <c>any</c> command is given in it.</summary>
-    private static Core.Commands.CommandStage CommandStageOf(Stage stage) => stage switch
-    {
-        Stage.PlanReview => Core.Commands.CommandStage.Plan,
-        Stage.CodeReview => Core.Commands.CommandStage.Code,
-        _ => Core.Commands.CommandStage.Any,
-    };
+    /// <summary>
+    /// Which of a person's commands a round of this stage is given — the stage's own row, so a
+    /// document round (neither a plan nor a code round) gets only an <c>any</c> command, and a stage
+    /// added later cannot inherit that by omission (§9.4 of the feature-review plan).
+    /// </summary>
+    internal static Core.Commands.CommandStage CommandStageOf(Stage stage) => Stages.Of(stage).Commands;
 
     /// <summary>Which models a split order named, as the log line says it (issue #117).</summary>
     private static string ModelsInLog(Core.Commands.CommandContext context) =>
@@ -2563,7 +2572,12 @@ public sealed partial class PanelService
                 + "given the change alone finds more of what matters than one sent exploring a "
                 + "repository.";
 
+    /// <param name="stage">
+    /// Whose round this is: a <c>revise</c> verdict's instruction ends with what THIS stage does
+    /// with accepted findings, read off the stage's own row.
+    /// </param>
     private ReviewAnswer AnswerFor(
+        Stage stage,
         RoundVerdict verdict,
         GateResult gate,
         ReviewerSummary summary,
@@ -2577,7 +2591,7 @@ public sealed partial class PanelService
             RoundVerdict.Proceed => ("proceed", (string?)null,
                 "The gate passed. Record a decision for EVERY finding via resolve (rejections need reasons); the next stage opens after that."),
             RoundVerdict.Revise r => ("revise", null,
-                $"Findings gate. Resolve every finding with accept/reject + reason, fix the accepted ones, then run this review again ({r.RoundsLeft} round(s) left)."),
+                $"Findings gate. Resolve every finding with accept/reject + reason, {Stages.Of(stage).ReviseInstruction} ({r.RoundsLeft} round(s) left)."),
             RoundVerdict.ContinueAnyway => ("continue_anyway", null,
                 "Rounds exhausted; policy says proceed as-is. Record decisions via resolve and say in your summary that findings remain."),
             RoundVerdict.GoodEnough => ("good_enough", null,
@@ -2771,13 +2785,12 @@ public sealed partial class PanelService
                     session.Rounds.Count == 0 ? session.State.Stage.ToString() : session.Rounds[^1].Stage,
                     session.Rounds.Count == 0 ? 0 : session.Rounds[^1].Number,
                     decisions));
-                var instruction = moved.State switch
-                {
-                    { Stage: Stage.CodeReview, RoundsRunThisStage: 0 } when session.State.Stage == Stage.PlanReview =>
-                        "The plan stage is complete. Implement the plan on the branch, then call review_code.",
-                    { Stage: Stage.Done } => "The code stage is complete. This session is done.",
-                    _ => "Decisions recorded. Apply the accepted findings, then run the review again.",
-                };
+                // A stage that ADVANCED says so in its own words — the stage that just completed
+                // owns the sentence. It read `Done => "The code stage is complete"`, which told a
+                // document review a code round had finished (§9.2 of the feature-review plan).
+                var instruction = moved.State.Stage != session.State.Stage
+                    ? Stages.Of(session.State.Stage).CompletedSentence
+                    : "Decisions recorded. Apply the accepted findings, then run the review again.";
                 return Json(new ResolveAnswer(moved.State.Stage.ToString(), moved.State.AwaitingResolve, decisions.Count, instruction),
                     ServerJsonContext.Default.ResolveAnswer);
             default:
@@ -2795,14 +2808,24 @@ public sealed partial class PanelService
     /// The open findings ride with it: a person deciding "ship anyway?" needs to see what is still
     /// gating, and going to look for it elsewhere is how a decision gets made on a summary.
     /// </remarks>
-    public async Task<string> AskHumanAsync(string repoPath, string branch, string question, CancellationToken ct = default)
+    /// <param name="document">
+    /// Which document's review is asking, when it is a document round: the same <c>documentPath</c>
+    /// or <c>documentName</c> that was passed to <c>review_document</c>, as <c>resolve</c> and
+    /// <c>status</c> take it. Empty asks on behalf of the BRANCH's session, which is what plan and
+    /// code rounds have always meant. It always loaded the branch session, so a document review's
+    /// question carried the branch's pending findings and was filed under the branch session's id —
+    /// and the person's answer, looked up by that id, never reached the document session (§9.3 of
+    /// the feature-review plan).
+    /// </param>
+    public async Task<string> AskHumanAsync(
+        string repoPath, string branch, string question, string document = "", CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(question))
         {
             return Error("a question is required — an empty escalation tells a person nothing");
         }
 
-        var session = _store.Load(repoPath, branch);
+        var session = _store.Load(repoPath, branch, DocumentKeyFor(repoPath, branch, document));
         var id = Guid.NewGuid().ToString("N")[..12];
 
         // English, as the caller wrote it. There used to be a translator here, and a set of

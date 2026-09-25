@@ -1,11 +1,14 @@
 # The tree-sitter native libraries `coai-mcp` publishes. Everything else the package ships is
-# deleted from the publish — 30 grammars, 69 MB of a 170 MB publish, against 8 MB for these four.
+# deleted from the publish — 30 grammars, 69 MB of a 170 MB publish, against 8 MB for the first four;
+# the outliner's four (tsx, rust, php, python) added 4.3 MiB of grammars on win-x64 and 4.0 MiB on
+# linux-x64, +14 % of the shipped files on both (measured 2026-09-25, plan §6, S0.1).
 #
 # ONE list, read by two things that must not disagree:
 #   - `DropGrammarsNobodyParses` in src_mcp/src/CoaiMcp.csproj, which does the deleting;
-#   - `KeptGrammarsTests`, which asserts it covers every language `IAstNormalizer` supports.
+#   - `KeptGrammarsTests`, which asserts it covers every language `IAstNormalizer` AND
+#     `ISourceOutliner` supports — the union, read off `normalizer/Grammars.cs`.
 #
-# So adding a language is: a case in TreeSitterNormalizer.Grammar, and a line here. Forget the line
+# So adding a language is: a row in normalizer/Grammars.cs, and a line here. Forget the line
 # and the test fails rather than the binary — which is the point, because the alternative is a
 # `DllNotFoundException` on somebody else's machine, and this repository has shipped one of those
 # before (mcp-v0.18.1, e_sqlite3).
@@ -17,3 +20,7 @@ tree-sitter
 tree-sitter-c-sharp
 tree-sitter-typescript
 tree-sitter-javascript
+tree-sitter-tsx
+tree-sitter-rust
+tree-sitter-php
+tree-sitter-python

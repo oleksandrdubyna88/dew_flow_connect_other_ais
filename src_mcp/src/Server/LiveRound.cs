@@ -28,6 +28,18 @@ public sealed class LiveRound
     private readonly Noticing _noticing;
 
     /// <summary>
+    /// The number this round is written under, in the session file and in the database.
+    /// </summary>
+    /// <remarks>
+    /// Handed in, never derived here. This read <c>RoundsRunThisStage + 1</c>, and that counter is
+    /// the BUDGET's — reset to zero by <c>again</c>, by the escalation ladder and by a person's
+    /// Continue/Fix — so the round after any of them took the number of the round before it and
+    /// replaced its row (§9.6 of the feature-review plan). The number comes from the journal
+    /// (<see cref="RoundNumber"/>), and the caller allocates it under the session claim.
+    /// </remarks>
+    private readonly int _number;
+
+    /// <summary>
     /// Which reviewers have had their ending written down, so a second report does not write a second line.
     /// </summary>
     /// <remarks>
@@ -44,15 +56,18 @@ public sealed class LiveRound
     /// one is the trap the plan round named, where production takes the quiet path while every
     /// injected test passes.
     /// </param>
+    /// <param name="number">The round's number in this session's journal for its stage — see <see cref="_number"/>.</param>
     public LiveRound(
         SessionStore store,
         PersistedSession session,
+        int number,
         IReadOnlyList<ReviewerWork> work,
         string subject,
         Noticing noticing)
     {
         _subject = subject;
         _noticing = noticing;
+        _number = number;
         _store = store;
         _session = session;
         _states = work.ToDictionary(
@@ -229,7 +244,7 @@ public sealed class LiveRound
     private RoundRecord Record(string verdict, int gatingCount, string reviewers, string status) =>
         new(
             _session.State.Stage.ToString(),
-            _session.State.RoundsRunThisStage + 1,
+            _number,
             verdict,
             gatingCount,
             reviewers,

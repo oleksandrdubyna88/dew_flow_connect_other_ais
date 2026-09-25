@@ -24,3 +24,7 @@ shared/refusal-sites.json text eol=lf
 # The gate's shipped command texts (issue #467). Single lines read by both halves; LF so a Windows
 # checkout cannot put a carriage return into an order.
 shared/commands/*.md text eol=lf
+
+# The outliner's fixtures and their goldens (S1.3): real source in seven languages whose line numbers
+# are part of the expected answer. LF everywhere, so a Windows checkout parses the same bytes CI does.
+src_mcp/tests/fixtures/outline/** text eol=lf

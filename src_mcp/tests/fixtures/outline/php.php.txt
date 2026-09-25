@@ -1,0 +1,47 @@
+<html><body>
+<?php
+namespace App\Billing;
+
+use App\Models\Invoice;
+
+final class InvoiceService extends BaseService implements Billable
+{
+    use Loggable;
+
+    public const TAX = 0.2;
+
+    private array $cache = [];
+
+    public function __construct(private Repository $repo)
+    {
+        secretConstruct($repo);
+    }
+
+    public function total(Invoice $invoice): float
+    {
+        return secretTotal($invoice);
+    }
+
+    protected static function round(float $amount): float { return secretRound($amount); }
+}
+
+enum Status: string
+{
+    case Paid = 'paid';
+
+    public function label(): string
+    {
+        return secretLabel($this);
+    }
+}
+
+function helper(int $x): int
+{
+    return secretHelper($x);
+}
+
+$callback = function ($y) {
+    return secretCallback($y);
+};
+?>
+</body></html>

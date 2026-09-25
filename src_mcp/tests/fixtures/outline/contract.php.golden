@@ -1,0 +1,6 @@
+interface Store [2-9]
+  const LIMIT = 10; [4-4]
+  public function save(array $item): bool; [6-6]
+  public static function create(): static; [8-8]
+abstract class Base implements Store [11-14]
+  abstract protected function run(int $n): void; [13-13]

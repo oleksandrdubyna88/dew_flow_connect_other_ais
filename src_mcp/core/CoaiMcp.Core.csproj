@@ -29,6 +29,13 @@
          shows the same defaults; embedded for the same reason as the two above. CommandTexts holds
          the one list of ids, and a test fails when a file and that list disagree. -->
     <EmbeddedResource Include="..\..\shared\commands\*.md" LogicalName="CoaiMcp.Core.commands.%(Filename)%(Extension)" />
+
+    <!-- The completion-request dialects (PLAN_feature_review.md §4.10): how the local reviewer and the
+         `api` reviewer spell one request per endpoint family. Embedded for the reason the two above
+         are, and ApiDialects refuses to load without the `local` and `openai` rows: a reviewer sent
+         with a guessed body would spend a paid call to find out. The extension mirrors the NAMES
+         (apiDialects.ts) and a test on each side is held to this file. -->
+    <EmbeddedResource Include="..\..\shared\api-dialects.json" LogicalName="CoaiMcp.Core.api-dialects.json" />
   </ItemGroup>
 
   <ItemGroup>

@@ -31,7 +31,7 @@ export interface ModelChoice {
  * the one thing the local runtime exists to avoid. The comment beside that check already said the
  * two had to be kept in step, which is the argument for there being only one of them.</p>
  */
-export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local', 'remote'] as const;
+export const RUNTIMES = ['codex', 'gemini', 'claude', 'antigravity', 'local', 'remote', 'api'] as const;
 
 export type Runtime = (typeof RUNTIMES)[number];
 
@@ -133,6 +133,15 @@ export function modelsFor(
     return current.length > 0 && !offered.some((m) => m.id === current)
       ? [{ id: current, label: `${current} — this server does not offer it any more` }, ...offered]
       : offered;
+  }
+
+  // A hosted API's list is neither discovered here nor curated: the panel does not spend a paid call
+  // per repaint, and a list shipped with this extension would be wrong for every vendor a person
+  // can point the row at. `coai-mcp --probe-api` prints the ids the key can call; the person types
+  // one, and the one they typed is the whole dropdown — never the Codex cache, which this arm's
+  // absence would have fallen through to (PLAN_feature_review.md, S1.2).
+  if (runtime === 'api') {
+    return current.length > 0 ? [{ id: current, label: current }] : [];
   }
 
   // A local engine's list is DISCOVERED, and that is the whole difference from the others: what can
@@ -311,6 +320,11 @@ export function modelsProvenance(
     // The engine's own note carries the reason when nothing answered, which is the case this line
     // exists for: an empty dropdown with no explanation reads as "you have no models".
     return localEngine === undefined ? 'no engine probed yet.' : engineNote(localEngine);
+  }
+  if (runtime === 'api') {
+    // Not asked from here, and the caption says how to ask: the probe is the product's own key path,
+    // and its `models` block is the list this key can actually call today.
+    return 'the endpoint is not asked from here — `coai-mcp --probe-api --vendor <id>` lists the model ids this key can call; type the exact id.';
   }
   if (runtime === 'gemini') {
     return 'a curated list — the Gemini CLI publishes none. Any other model can be typed in.';

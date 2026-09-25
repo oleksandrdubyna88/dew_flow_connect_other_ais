@@ -694,7 +694,7 @@
   },
   "src/panelView.ts": {
     "complexity": {
-      "count": 18
+      "count": 17
     },
     "max-lines-per-function": {
       "count": 7
@@ -963,9 +963,6 @@
   "src/vendors.ts": {
     "complexity": {
       "count": 2
-    },
-    "max-lines-per-function": {
-      "count": 1
     }
   },
   "src/versionProbe.ts": {

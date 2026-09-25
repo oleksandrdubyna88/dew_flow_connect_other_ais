@@ -23,19 +23,11 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
     /// The grammar for a language: a LIBRARY and an ENTRY POINT, which are not the same word.
     /// </summary>
     /// <remarks>
-    /// The binding's one-argument constructor derives both from a single string — library
-    /// <c>tree-sitter-{id}</c>, function <c>tree_sitter_{id}</c> — and therefore cannot name C# at
-    /// all: that grammar is <c>tree-sitter-c-sharp</c> with an entry point of
-    /// <c>tree_sitter_c_sharp</c>, and no one id produces both. Spelled out here so the pair is
-    /// visibly deliberate rather than looking like a typo a year from now.
+    /// Read from <see cref="Grammars"/>, the one table the outliner reads too — this class held it
+    /// privately until the outliner needed the same pairs (plan §4.7).
     /// </remarks>
-    private static (string Library, string Function)? Grammar(SourceLanguage language) => language switch
-    {
-        SourceLanguage.CSharp => ("tree-sitter-c-sharp", "tree_sitter_c_sharp"),
-        SourceLanguage.TypeScript => ("tree-sitter-typescript", "tree_sitter_typescript"),
-        SourceLanguage.JavaScript => ("tree-sitter-javascript", "tree_sitter_javascript"),
-        _ => null,
-    };
+    private static (string Library, string Function)? Grammar(SourceLanguage language) =>
+        Grammars.Of(language) is { } grammar ? (grammar.Library, grammar.EntryPoint) : null;
 
     /// <summary>Which node kinds count as "a function" — the per-language table, as data.</summary>
     /// <remarks>
@@ -57,7 +49,8 @@ public sealed class TreeSitterNormalizer : IAstNormalizer
     };
 
     /// <summary>
-    /// TypeScript and TSX are one grammar file with two entry points; `.tsx` is read as TypeScript.
+    /// `.tsx` is read with the TypeScript grammar. The package ships a separate `tree-sitter-tsx`;
+    /// this normaliser does not load it.
     /// </summary>
     /// <remarks>
     /// No `.tsx` appeared among the 462 measured candidates, so nothing is lost today by reading one

@@ -363,7 +363,9 @@ public static class RoundMachine
             {
                 AdvanceOnResolve = false,
                 RoundsRunThisStage = 0,
-                Stage = s.Stage == Stage.PlanReview ? Stage.CodeReview : Stage.Done,
+                // Where this stage goes is the stage's own row: it was `PlanReview ? CodeReview :
+                // Done`, which is right for three stages and a silent answer for a fourth.
+                Stage = Stages.Of(s.Stage).AdvancesTo,
                 PlanProceeded = s.PlanProceeded || s.Stage == Stage.PlanReview,
             };
         }

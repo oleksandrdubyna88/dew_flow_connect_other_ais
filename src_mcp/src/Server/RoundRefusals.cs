@@ -79,13 +79,10 @@ public sealed record RoundRefusals(RoleCatalog Catalog)
     /// Not <c>RoundSubject.StageName</c>, which renders a stage as a phrase for a person reading the
     /// rounds log ("code review"). Two names one letter apart for two different jobs is what the
     /// earlier spelling of this was called out for; this is the adjective in "every code-review role".
+    /// Read off the stage's own row rather than a switch with a discard, so a stage added to the
+    /// enum cannot be called "code" by omission (§9.4 of the feature-review plan).
     /// </remarks>
-    public static string ReviewKindOf(Stage stage) => stage switch
-    {
-        Stage.PlanReview => "plan",
-        Stage.DocumentReview => "document",
-        _ => "code",
-    };
+    public static string ReviewKindOf(Stage stage) => Stages.Of(stage).Kind;
 
     /// <summary>
     /// The roles a refusal may offer: the stage's OWN bucket, switched on or NOT.

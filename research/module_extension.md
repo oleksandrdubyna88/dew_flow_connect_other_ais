@@ -9289,3 +9289,51 @@ through every switch. The message builder and the de-duplicated send moved, unch
 `chatPanel.ts`); `pushChatState` keeps only the `offered` pairs the pick check reads and calls
 `sendChatState`. The message now carries `spend` and `reask`. A model pick already ended in a push
 (`onPick` → `switchModel` → `switchNow` → `show`), so the caption follows it.
+
+## The `api` runtime in the panel, and a version gate that reaches the settings FILE (2026-09-25, PLAN_feature_review S1.2)
+
+`RUNTIMES` gained `api` (`models.ts`) — a hosted OpenAI-compatible endpoint the server reaches directly
+with a vault key (`coai-mcp --ask-api`, [module_runners.md](module_runners.md)). RED first, observed
+through a value rather than a literal because the literal was a type error until the name existed:
+`RUNTIMES` without `api` → `actual: false`; zero api presets; `modelsFor('api', …)` falling through to the
+curated gemini list. What shipped:
+
+- **The row.** `Vendor.dialect?` (absent = the generic `openai`; kept only when SAID and lower-cased, like
+  `remoteVendor`); ONE preset, `API_PRESET` (`id: 'api'`, `runtime: 'api'`, an empty endpoint the card asks
+  for) — and a marked place in `VENDOR_PRESETS` where the xAI and Qwen presets go, with their dialect rows,
+  once `coai-mcp --probe-api` has measured them (part iii). `vendorsFrom` round-trips both fields
+  (`namedFields`); `vendorsEnv` emits `dialect` only when said (`saidOnTheWire`). `package.json` lists `api`
+  in both runtime enums (`coai.vendors`, `coai.consultants` — the consultant reader accepts every runtime
+  and refuses by name at ask time) and describes `dialect`.
+- **Not a chat partner, not a consultant.** `CHAT_RUNTIMES` derives from the chat adapters and
+  `CONSULTING_RUNTIMES` is unchanged, so both pickers leave `api` out and `consultableVendors` names the
+  preset under *refused* with "runs on 'api'".
+- **The version gate reaches the file** (`apiRuntime.ts`): `API_RUNTIME_SINCE = '0.37.0'`, the release S1.2
+  ships in (`mcp-v0.36.0` shipped without it). An older `coai-mcp` turns a runtime it does not know into codex WITH the base URL — a Grok
+  review through the Codex CLI against xAI's endpoint, under the row's own name (§4.13) — and it reads the
+  settings file, not the panel. So `vendorsEnv(vendors, installedServerVersion)` SUPPRESSES an api row for
+  a server known to be older while every other row still crosses; `envBlock(settings, vendors,
+  installedServerVersion)` → `serverSettingsJson(…, installedServerVersion)` → `ServerSettingsSync`'s new
+  `installedServerVersion: () => string` supplier, read at every sync; `extension.ts` hands it
+  `knownServerVersion(storage, state)` (`installer.ts`): the panel probe's cached `--version` answer for
+  this side's binary, else the install record, else empty — never a spawn from a configuration listener.
+  Unknown is not old (`apiRuntimeOnServer('')` is true), like every other skew gate here. Teeth: with the
+  filter removed, three tests went red with `grok` in the emitted rows.
+- **The card** (`panelView.ts`): no ▶ ⤓ ⟳ (`headButtons` returns nothing for `api`), the endpoint field
+  with an `https://api.x.ai/v1` placeholder, a model the person TYPES (`modelsFor('api')` offers only what
+  was typed; `modelsProvenance` says `coai-mcp --probe-api --vendor <id>` lists the ids the key can call), a
+  `dialect` picker (`dialectField`, `dialectChoices()` = the shared file's rows minus `local`). Against an
+  older server every control is `disabled` and a `.stale` line names the row and the release
+  (`apiRuntimeSkewNote`, per card through `CardContext.apiNote`); teeth: with `off` forced false the RUN
+  page test listed every control as still live. Two tooltips, `HELP.apiModel` and `HELP.apiDialect`; the
+  *choose-reviewers* article names **API (OpenAI-compatible)** in all five languages.
+- **Tests.** `apiRuntime.test.ts` (round trip, manifest enum, the pickers, the one preset, the model
+  list), `apiRuntimeGate.test.ts` (the dialect mirror against `shared/api-dialects.json`, suppression, the
+  threading through `envBlock`/`serverSettingsJson`/`ServerSettingsSync`, the note, the card RUN with the
+  harness's new `Control.disabled`, the five-language check). The runtime NAMES are deliberately not read
+  off `ReviewerRuntime.cs` here — `NothingReadsAnotherProgramsSourceTests` refuses a test that parses
+  another program's source, and did.
+- **Left where it was, on purpose.** `panelView.ts` and `installer.ts` carry pre-existing `complexity`
+  lint errors in functions this change did not touch; the new code stays under the rule
+  (`endpointField` / `priceFields` / `vendorCard` were brought DOWN by `disabledAttr`, `headButtons`,
+  `modelWords`, `endpointPlaceholder`, `endpointHint`).

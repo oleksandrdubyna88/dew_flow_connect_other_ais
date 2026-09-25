@@ -1,0 +1,49 @@
+use std::fmt;
+
+#[derive(Debug)]
+pub struct Point {
+    pub x: i32,
+    y: i32,
+}
+
+pub enum Shape {
+    Circle(f64),
+    Square(f64),
+}
+
+pub trait Area {
+    fn area(&self) -> f64;
+    fn describe(&self) -> String {
+        secret_describe()
+    }
+}
+
+impl fmt::Display for Point {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        secret_fmt(f)
+    }
+}
+
+impl<T: Clone> Wrapper<T> {
+    pub fn new(value: T) -> Self {
+        secret_new(value)
+    }
+}
+
+pub mod geometry {
+    pub fn distance(a: &Point, b: &Point) -> f64 {
+        secret_distance(a, b)
+    }
+}
+
+pub const LIMIT: usize = 10;
+static NAME: &str = "shape";
+pub type Result<T> = std::result::Result<T, Error>;
+
+macro_rules! square {
+    ($x:expr) => { secret_square($x) };
+}
+
+pub async fn fetch(url: &str) -> Result<String> {
+    secret_fetch(url).await
+}

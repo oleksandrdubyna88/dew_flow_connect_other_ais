@@ -23,6 +23,8 @@ export class Control {
   value = '';
   /** A checkbox's state, which the script reads instead of `value` (issue #485's switch). */
   checked = false;
+  /** Whether the page rendered the control switched off — an `api` row against an older server (S1.2). */
+  disabled = false;
   focused = false;
   selection: readonly [number, number] = [-1, -1];
   private readonly handlers = new Map<string, (() => void)[]>();
@@ -56,6 +58,7 @@ export class Control {
 export function controlFrom(tag: string, attributes: string): Control {
   const control = new Control(tag.toUpperCase(), attribute(attributes, 'type'));
   control.value = attribute(attributes, 'value');
+  control.disabled = /\sdisabled(?=[\s>]|$)/.test(attributes);
   for (const [, name, value] of attributes.matchAll(/data-([a-zA-Z-]+)="([^"]*)"/g)) {
     control.dataset[camel(name!)] = value!;
   }
