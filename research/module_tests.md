@@ -2033,3 +2033,22 @@ swallowed it.
   the SLOT's `config.toml` (red first: the server's own was read).
 - `TheWriterDrainsBeforeTheProcessLeavesTests.TheHostDrainsOnEveryRoadOut` now pins the whole `finally`
   (`EndedAsync`, then `stop.Ended();`).
+
+## The shim tests' stub survives a bad request and says what it saw (2026-09-25, issue #462)
+
+`RemoteShimScenarioTests`' stub served one request at a time and caught nothing inside its loop: an answer that
+threw, or a response it could not write because the child had been killed mid-answer — which
+`AShimKilledMidClaim` does six times a run — escaped the loop, faulted the unobserved `Task.Run`, and left every
+later request to the child's 40 s `HttpClient.Timeout`: the words both Windows legs of mcp-v0.34.0 recorded.
+Reproduced DETERMINISTICALLY by two tests, red before the change with exactly that timeout:
+`AnAnswerThatThrows_DoesNotSilenceTheStub` and `AResponseThatCannotBeWritten_DoesNotSilenceTheStub` (the first
+request's response aborted under it). Load itself was ruled out the same day: two full suites at once (0
+failures) and a thread-pool starvation experiment (384 pool threads blocked; an outside `curl` still answered in
+0.5 s).
+
+Now each request is `AnsweredAsync`: a failure is written down and the response aborted, and the loop goes on;
+a failed accept ends it only when the listener has stopped. The stub keeps a JOURNAL (time since start, method
+and path, status or exception, the loop's end) under its own lock; a prerequisite wait's timeout message
+carries it (`AFailedWait_CarriesWhatTheStubSaw`), and every test in the class writes it to its output on
+disposal, so any failure there shows whether the stub ever saw the request. #462 stays open until the release
+legs have been quiet long enough to call it.
