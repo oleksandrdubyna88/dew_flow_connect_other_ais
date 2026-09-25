@@ -97,14 +97,14 @@ public sealed class CadenceDesk(
     /// <c>status</c> makes too: <see cref="Reconciled"/> catching the record up with an epic whose close was missed,
     /// idempotent by construction.</para>
     /// </remarks>
-    public static CadenceDesk ForReading(PanelSettings settings, Runners.Processes.IProcessLauncher launcher) => new(
+    public static CadenceDesk ForReading(PanelSettings settings, Runners.Processes.IProcessLauncher launcher, Noticing noticing) => new(
         settings,
         new CadenceStore(settings.DataDir),
         new CadenceGate(new ConsultationStore(settings.DataDir), () => new ConsultPreflight(false, "a reader never checks the cadence")),
         new ContextAssembler(launcher),
         new GitHistory(launcher),
         Serilog.Core.Logger.None,
-        Noticing.None);
+        noticing);
 
     /// <summary>Where the caller says it is: a plan, and an epic of it or none (Number 0).</summary>
     private sealed record Where(string Plan, string Epic, int Number, int Last)
