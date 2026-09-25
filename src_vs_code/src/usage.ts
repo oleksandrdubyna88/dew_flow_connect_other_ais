@@ -101,11 +101,29 @@ export function parseUsage(text: string): UsageEntry[] {
  * month and year stay rolling: a quiet Monday morning must still show last week's work.</p>
  */
 export function windowStart(window: Window, now: Date): number {
-  const days = WINDOWS.find((w) => w.id === window)?.days ?? 1;
+  return startOfPeriodMs(window, now.getTime(), DAYS_OF);
+}
 
-  return window === 'day'
+/** How many days each window spans, keyed by its id — `WINDOWS`, as data a page can be handed. */
+export const DAYS_OF: Readonly<Record<string, number>> = Object.fromEntries(WINDOWS.map((w) => [w.id, w.days]));
+
+/**
+ * THE rule for where a window starts — the spending tab's, and the Review rounds page's period switch.
+ *
+ * <p>Self-contained on purpose, with no import reaching inside it: the Review rounds page runs THIS
+ * function, handed its source the way `asInstant` is, so the page and the host cannot drift into two
+ * answers for "this week". A second hand-written copy in the page was the code round's finding
+ * (gemini and local, 2026-09-25). `all` has no start; an unknown id spans one day, as it always did.</p>
+ */
+export function startOfPeriodMs(period: string, nowMs: number, days: Readonly<Record<string, number>>): number {
+  if (period === 'all') {
+    return Number.NEGATIVE_INFINITY;
+  }
+  const now = new Date(nowMs);
+
+  return period === 'day'
     ? new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
-    : now.getTime() - days * 24 * 60 * 60 * 1000;
+    : nowMs - (days[period] ?? 1) * 24 * 60 * 60 * 1000;
 }
 
 export function within<T extends { readonly utc: string }>(

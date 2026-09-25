@@ -118,9 +118,20 @@ public sealed class ALogSplitByPeriodTests : IDisposable
     [InlineData("yesterday")]
     [InlineData("")]
     [InlineData("2026-13-40T00:00:00Z")]
+    [InlineData("9/25/2026")]
+    [InlineData("25.09.2026 10:00")]
     public void AnInstantThatIsNotOne_IsRefused_NotIgnored(string given) =>
         Program.SinceOf(["--log", "--since", given]).Should().BeNull(
             "a period that silently became all time is the failure this flag must never have");
+
+    [Fact]
+    public void TwoInstants_AreRefused_RatherThanOneChosenByPosition()
+    {
+        // (codex, the code round.) With the first taken, `--since yesterday --since <valid>` was refused
+        // while the same two in the other order answered — the request's meaning decided by argument order.
+        Program.SinceOf(["--log", "--since", "2026-09-25T00:00:00Z", "--since", "2026-09-24T00:00:00Z"])
+            .Should().BeNull("two periods are no period");
+    }
 
     [Fact]
     public void NoInstantAtAll_IsAllTime()

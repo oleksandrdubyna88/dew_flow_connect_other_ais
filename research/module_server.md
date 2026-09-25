@@ -1925,11 +1925,14 @@ always answered.
 *What it keeps missing* tab gained the period switch its neighbours have (Today / Week / Month / Year /
 All). Its numbers are aggregates over every finding, so only this binary can count them over a period:
 given `--since`, `RoundsQuery.GroupedBy` and `Defended` count only the findings of rounds whose
-`started_utc` is at or after it (`round_id IN (SELECT r.id FROM rounds r WHERE $since = '' OR
-r.started_utc >= $since)` — a parameter, never interpolated). Rounds, consultations and totals are not
-split. `Program.SinceOf` parses the value as an instant and RE-WRITES it as `"O"` UTC, because the
-comparison is textual and `started_utc` is stored exactly that way; a value that is not an instant exits
-**65**, never 64, which an extension reads as an older binary. The answer **echoes** the instant it applied
+`started_utc` is at or after it (`round_id IN (SELECT r.id FROM rounds r WHERE r.started_utc >= $since)` — a
+parameter, never interpolated; an empty value matches every round, since every string is `>= ''` and the
+column is NOT NULL, so all time needs no `OR` to keep SQLite off `rounds_by_time`). Both lists are counted
+by when the ROUND started. Rounds, consultations and totals are not split. `Program.SinceOf` accepts ISO
+8601 only (`TryParseExact` — `9/25/2026` is a guess about a culture, not an instant), exactly ONE `--since`
+(two would let argument order decide the meaning), and RE-WRITES the instant as `"O"` UTC, because the
+comparison is textual and `started_utc` is stored exactly that way; anything else exits **65**, never 64,
+which an extension reads as an older binary. The answer **echoes** the instant it applied
 (`LoggedLog.Since`, `""` for all time), and the echo is the only proof: a coai-mcp **0.36.0** given the flag
 was measured to ignore it and exit 0 with the all-time answer, so no exit code could have told the two
 apart. Tests: `ALogSplitByPeriodTests` (red first; red again with the period condition planted always true).

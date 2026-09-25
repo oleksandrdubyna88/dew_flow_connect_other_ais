@@ -849,10 +849,12 @@ public static class RoundsQuery
     /// <remarks>
     /// A parameter, never interpolated; and compared as TEXT against `started_utc`, which is sound only
     /// because <c>Program.SinceOf</c> writes the instant exactly the way the column is stored (`"O"`,
-    /// UTC). An empty value matches every round, so all time is the same query.
+    /// UTC). An empty value matches every round — every string is at least `''` and the column is
+    /// NOT NULL — so all time is the same query, with no `OR` to keep SQLite off `rounds_by_time`.
+    /// (Our own code reviewer, the code round.)
     /// </remarks>
     private const string InPeriod =
-        "round_id IN (SELECT r.id FROM rounds r WHERE $since = '' OR r.started_utc >= $since)";
+        "round_id IN (SELECT r.id FROM rounds r WHERE r.started_utc >= $since)";
 
     private static List<BlindSpot> GroupedBy(SqliteConnection db, string column, string since)
     {

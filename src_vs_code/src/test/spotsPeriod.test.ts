@@ -111,7 +111,7 @@ test('a press reaches the server: the page command, the hook, a fresh read over 
   const cache = read('roundsLogCache.ts');
   assert.match(cache, /setSpotsPeriod\(period: LogPeriod\): void \{\s*this\.spots = period;\s*this\.forgetRoundsLog\(\);/,
     'a new period is served from the cache counted over the old one');
-  assert.match(cache, /readLog\(server\.fsPath, \{ limit: MAX_LIMIT \}, serverRun\(server\.fsPath\), sinceOf\(this\.spots, new Date\(\)\)\)/,
+  assert.match(cache, /readOver\(period: LogPeriod\)[\s\S]*?readLog\(server\.fsPath, \{ limit: MAX_LIMIT \}, serverRun\(server\.fsPath\), sinceOf\(period, new Date\(\)\)\)/,
     'the log is no longer read over the chosen period, worked out at read time');
 });
 
@@ -152,4 +152,28 @@ test('the real server echoes the period it counted over, and the real reader car
   } finally {
     rmSync(data, { recursive: true, force: true });
   }
+});
+
+test('an empty PERIOD says nothing was decided in it, not that nothing ever was', () => {
+  // Our own code reviewer: under Today, "Nothing decided yet — this fills in as gates are closed" read
+  // as never, on a machine with a year of decisions behind it.
+  const counted = { ...EMPTY_LOG, read: true, spotsSince: '2026-09-25T00:00:00.0000000Z' };
+
+  assert.match(blindSpotsHtml(counted, 'day'), /Nothing decided in this period/);
+  assert.match(blindSpotsHtml(counted, 'all'), /Nothing decided yet/);
+});
+
+test('the cache never serves the counts of one period under the mark of another', async () => {
+  // Our own code reviewer, the code round: a tick's read over Today could land AFTER a press for Week
+  // had started its own, and the cache then held Today's counts under Week's mark with a real echo, so
+  // nothing on screen said so. The read remembers what it was counted over and is thrown away if the
+  // period moved under it; a cached log for another period is never served.
+  const { readFileSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const cache = readFileSync(join(process.cwd(), 'src', 'roundsLogCache.ts'), 'utf8');
+
+  assert.match(cache, /Date\.now\(\) - this\.roundsLogAt < AGE_MS && this\.cachedPeriod === this\.spots/,
+    'a cached log counted over another period is served');
+  assert.match(cache, /if \(period !== this\.spots\) \{\s*return this\.roundsLog\(\);/,
+    'a read overtaken by a press is still written into the cache');
 });
