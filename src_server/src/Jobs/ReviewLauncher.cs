@@ -104,14 +104,19 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
             var executor = new ReviewerExecutor(launcher);
             var first = Confined(runtime, vendor, job, work, environment);
             var launch = await executor.LaunchAsync(first, ct);
-            if (FollowUpOf(first, launch, RetryLadder.Remaining(spent.Elapsed, job.RunBudget)) is not { } followUp)
+            var left = RetryLadder.Remaining(spent.Elapsed, job.RunBudget);
+            if (FollowUpOf(first, launch) is not { } followUp)
             {
                 return Read(launch);
+            }
+            if (left < LeastFollowUp)
+            {
+                return Noted(Read(launch), $"; not asked again in its conversation: less than {LeastFollowUp.TotalSeconds:0} s of the job's budget was left");
             }
 
             // Inside the same try: the schema file and the job's TMPDIR are still there for it, and the
             // finally deletes them after BOTH launches.
-            return Continued(launch, await executor.LaunchAsync(followUp, ct));
+            return Continued(launch, await executor.LaunchAsync(Within(followUp, left), ct));
         }
         finally
         {
@@ -127,37 +132,42 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
     /// whose shell command was auto-denied is continued in the SAME conversation, told the command will not
     /// come. The client cannot do it — the conversation lives in the slot's HOME on this host, so a repair
     /// from the client is a fresh job that meets the same denial.</para>
-    /// <para>Asked only after a CLEAN exit with an EMPTY answer — the "nothing" <see cref="Read"/> maps to
-    /// <c>Unparseable</c>. This server has no parser, so an answer that is there but is not the schema's
-    /// JSON is the client's to repair, as before. <c>Evidence</c> is the labelled process transcript exactly
-    /// when the answer is empty (<c>ReviewerExecutor.Read</c>) — the very string the local executor hands
-    /// the same hook.</para>
+    /// <para>Asked only after the launch <see cref="Read"/> calls "nothing" — a clean exit with an empty
+    /// answer, <c>Unparseable</c> — so the executor's contract is still read in one place. This server has
+    /// no parser, so an answer that is there but is not the schema's JSON is the client's to repair, as
+    /// before. <c>Evidence</c> is the labelled process transcript exactly when the answer is empty
+    /// (<c>ReviewerExecutor.Read</c>) — the very string the local executor hands the same hook.</para>
     /// <para>The follow-up is built FROM the confined invocation, so it keeps the slot's environment, the
-    /// job's directory and the confinement; it gets the lesser of what the budget left and its own timeout,
-    /// and nothing at all below <see cref="LeastFollowUp"/>.</para>
+    /// job's directory and the confinement.</para>
     /// </remarks>
-    private static ReviewerInvocation? FollowUpOf(ReviewerInvocation first, ReviewerLaunch launch, TimeSpan left) =>
-        launch is { Terminal: null } && string.IsNullOrWhiteSpace(launch.Answer) && left >= LeastFollowUp
-        && first.Adapter?.FollowUp(first, launch.Evidence) is { } followUp
-            ? followUp with { Request = followUp.Request with { Timeout = left < followUp.Request.Timeout ? left : followUp.Request.Timeout } }
+    private static ReviewerInvocation? FollowUpOf(ReviewerInvocation first, ReviewerLaunch launch) =>
+        Read(launch) is ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable }
+            ? first.Adapter?.FollowUp(first, launch.Evidence)
             : null;
+
+    /// <summary>The follow-up, allowed the lesser of what the job's budget left and its own timeout.</summary>
+    private static ReviewerInvocation Within(ReviewerInvocation followUp, TimeSpan left) =>
+        followUp with
+        {
+            Request = followUp.Request with { Timeout = left < followUp.Request.Timeout ? left : followUp.Request.Timeout },
+        };
 
     /// <summary>What a launch and its continuation mean together.</summary>
     /// <remarks>
     /// The continuation decides — it is the later and the more specific word — and both launches are billed
     /// when it answered or came back empty. A continuation that ended in a terminal outcome is that outcome,
-    /// which carries no usage on this server, like every terminal outcome here.
+    /// which carries no usage on this server, like every terminal outcome here: the first launch's tokens
+    /// are then not recorded. (Our own reviewer; the documented gap, not a new one.)
     /// </remarks>
     private static ReviewAttempt Continued(ReviewerLaunch first, ReviewerLaunch second) =>
-        Read(second with { Usage = first.Usage.Add(second.Usage) }) switch
-        {
-            ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable nothing } when second.Terminal is null =>
-                new ReviewAttempt.Failed(nothing with
-                {
-                    Reason = $"{nothing.Reason}, and again when asked in the same conversation after an auto-denied command",
-                }),
-            var read => read,
-        };
+        Noted(Read(second with { Usage = first.Usage.Add(second.Usage) }),
+            ", and again when asked in the same conversation after an auto-denied command");
+
+    /// <summary>An empty answer's reason, with what became of its continuation; any other attempt unchanged.</summary>
+    private static ReviewAttempt Noted(ReviewAttempt attempt, string note) =>
+        attempt is ReviewAttempt.Failed { Outcome: ReviewerOutcome.Unparseable nothing }
+            ? new ReviewAttempt.Failed(nothing with { Reason = nothing.Reason + note })
+            : attempt;
 
     /// <summary>What one launch means to this server.</summary>
     /// <remarks>

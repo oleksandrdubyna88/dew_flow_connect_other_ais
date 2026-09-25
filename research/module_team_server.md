@@ -484,31 +484,36 @@ catalog that could not be re-fetched is shown as STALE rather than as absent.
   continuation is `first with { --conversation <id>, stdin "commands are not available — answer
   now" }`, so it runs as the same account, in the same directory, under the same confinement; it
   gets the lesser of what the job's `RunBudget` left and its own timeout, and is NOT started below
-  `LeastFollowUp` (10 s), where its timeout would replace the denial with a vaguer story. Its verdict
-  is the job's: an answer (both launches billed), an `Unparseable` that says the continuation came
-  back empty too, or its own terminal outcome. Only agy's adapter implements `FollowUp`; claude and
-  codex jobs are one launch, as before. **Not covered here, as locally:** a denied turn that still
+  `LeastFollowUp` (10 s), where its timeout would replace the denial with a vaguer story — the
+  `Unparseable` then says it was "not asked again" and why. Its verdict is the job's: an answer (both
+  launches billed), an `Unparseable` that says the continuation came back empty too (both billed), or
+  its own terminal outcome — which, like every terminal outcome on this server, carries no usage, so
+  the first launch's tokens are then not recorded. Only agy's adapter implements `FollowUp`; claude
+  and codex jobs are one launch, as before. **Not covered here, as locally:** a denied turn that still
   wrote a non-JSON answer (the client repairs it) and a denial that exited non-zero. Whether the
   conversation resolves under a confined environment on the box's installed agy is observable only
-  there — the suite asserts what is SENT (`ReviewLauncherTests`, the seven #515 tests).
+  there — the suite asserts what is SENT (`ReviewLauncherTests`, the eight #515 tests).
 
-  ```mermaid
-  sequenceDiagram
-    participant R as JobRunner
-    participant L as ReviewLauncher
-    participant V as agy (the slot's HOME)
-    R->>L: RunAsync(job)
-    L->>V: first launch (Confined)
-    V-->>L: exit 0, empty response, "auto-denied", conversation_id
-    alt the adapter has a FollowUp and ≥ 10 s of RunBudget is left
-      L->>V: --conversation id, "commands are not available — answer now"
-      V-->>L: the schema's JSON (or nothing, or a terminal outcome)
-      L-->>R: that answer, both launches billed
-    else no follow-up, or too little time
-      L-->>R: Unparseable, as before
-    end
-    Note over L: the job's directory (schema, TMPDIR) is deleted after BOTH launches
-  ```
+```mermaid
+sequenceDiagram
+  participant R as JobRunner
+  participant L as ReviewLauncher
+  participant V as agy (the slot's HOME)
+  R->>L: RunAsync(job)
+  L->>V: first launch (Confined)
+  V-->>L: exit 0, empty response, "auto-denied", conversation_id
+  alt the adapter has a FollowUp and at least 10 s of RunBudget is left
+    L->>V: --conversation id, "commands are not available, answer now"
+    V-->>L: the schema's JSON, or nothing, or a terminal outcome
+    L-->>R: that answer or Unparseable (both launches billed), or the terminal outcome
+  else a FollowUp, but less than 10 s left
+    L-->>R: Unparseable, "not asked again" and why
+  else no follow-up
+    L-->>R: as before
+  end
+  Note over L: the job's directory (schema, TMPDIR) is deleted after BOTH launches
+```
+
 - **The cooldown guess errs LONG.** Waiting too long costs one queued review some latency; retrying
   too early spends quota against a live limit, which on some plans extends it. So an unzoned time is
   never allowed to resolve to less than the 30-minute fallback, repeats double to a 5 h ceiling, and
