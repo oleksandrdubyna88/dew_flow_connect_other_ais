@@ -247,6 +247,8 @@ export function activate(context: vscode.ExtensionContext): void {
   // compares what it read before telling anybody, so a directory polled every five seconds for an
   // afternoon repaints the sidebar exactly as often as a consultation changes.
   consultations.onChanged = () => {
+    // A consultation that closed may be the one a plan's cadence was waiting on — ask again before painting.
+    panel.forgetCadence();
     void panel.render();
     // And the LOG, which draws the same consultations on its own tab. Repainting only the sidebar
     // left an open Consultations tab showing history from before the conversation started, advanced

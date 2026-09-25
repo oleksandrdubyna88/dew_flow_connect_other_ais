@@ -260,10 +260,18 @@ test('every setting appears once, so two controls cannot disagree about it', () 
     seen.add(label);
   }
 
-  const named = [...html.matchAll(/<input type="radio" name="([^"]+)"/g)].map((m) => m[1]!);
-  for (const name of new Set(named)) {
-    const values = named.filter((n) => n === name).length;
-    assert.ok(values <= 2, `radio name "${name}" appears ${values} times — more than one group shares it`);
+  // Each NAME belongs to exactly one group. This counted a name's radios and allowed two, which stood in
+  // for "one group" only while every group had two options; the cadence's three modes are one group.
+  const owners = new Map<string, number>();
+  for (const group of html.split('role="radiogroup"').slice(1)) {
+    const inside = group.slice(0, group.indexOf('</div>'));
+    for (const name of new Set([...inside.matchAll(/<input type="radio" name="([^"]+)"/g)].map((m) => m[1]!))) {
+      owners.set(name, (owners.get(name) ?? 0) + 1);
+    }
+  }
+  assert.ok(owners.size > 0, 'no radio group was found, so this proves nothing');
+  for (const [name, groups] of owners) {
+    assert.equal(groups, 1, `radio name "${name}" is shared by ${groups} groups — a browser makes them ONE`);
   }
 });
 

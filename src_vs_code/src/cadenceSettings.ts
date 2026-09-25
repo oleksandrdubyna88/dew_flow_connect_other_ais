@@ -74,22 +74,18 @@ function modeOf(value: unknown): CadenceMode {
  * while the defaults agree — the test that reads the C# is what keeps them agreeing.</p>
  */
 export function cadenceEnv(cadence: CadenceSettings): Record<string, string> {
-  const env: Record<string, string> = {};
-  if (cadence.mode !== DEFAULT_CADENCE.mode) {
-    env['COAI_CADENCE_MODE'] = cadence.mode;
-  }
-  if (cadence.every !== DEFAULT_CADENCE.every) {
-    env['COAI_CADENCE_EVERY'] = String(cadence.every);
-  }
-  if (cadence.riskThreshold !== DEFAULT_CADENCE.riskThreshold) {
-    env['COAI_CADENCE_RISK_THRESHOLD'] = String(cadence.riskThreshold);
-  }
-  if (cadence.riskMax !== DEFAULT_CADENCE.riskMax) {
-    env['COAI_CADENCE_RISK_MAX'] = String(cadence.riskMax);
-  }
-
-  return env;
+  return Object.fromEntries(CADENCE_KEYS
+    .filter(([, of]) => of(cadence) !== of(DEFAULT_CADENCE))
+    .map(([key, of]) => [key, of(cadence)]));
 }
+
+/** Each env key and the value it carries — one row per setting, so no fifth can be half-wired. */
+const CADENCE_KEYS: readonly (readonly [string, (cadence: CadenceSettings) => string])[] = [
+  ['COAI_CADENCE_MODE', (cadence) => cadence.mode],
+  ['COAI_CADENCE_EVERY', (cadence) => String(cadence.every)],
+  ['COAI_CADENCE_RISK_THRESHOLD', (cadence) => String(cadence.riskThreshold)],
+  ['COAI_CADENCE_RISK_MAX', (cadence) => String(cadence.riskMax)],
+];
 
 /** The labels the three modes wear in the panel. */
 const MODE_WORDS: readonly (readonly [CadenceMode, string])[] = [

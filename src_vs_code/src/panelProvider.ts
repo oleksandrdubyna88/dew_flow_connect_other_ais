@@ -53,6 +53,7 @@ import {
   versionSourceFor,
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
+import { CADENCE_CAP_MS, CadenceProbes } from './cadenceProbe';
 import { ClaudeProbeCache } from './claudeProbeCache';
 import { ConsultPromptFile } from './consultPromptFile';
 import { RoundsLogCache } from './roundsLogCache';
@@ -160,7 +161,7 @@ import { access } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { asText } from './asText';
 import { notify, notifyAndAsk, notifyOnce } from './notify';
-import { chosenRoot, coaiDataDir, dataSideName, whereData, type DataLocation } from './dataDir';
+import { chosenRoot, coaiDataDir, dataSideName, serverEnv, whereData, type DataLocation } from './dataDir';
 import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
 import { consultationsHtml } from './roundsLog';
@@ -230,6 +231,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * view gone" — which are the three it is handed below.</p>
    */
   private readonly claudeProbes: ClaudeProbeCache;
+
+  /** Each recent plan's consultation cadence, asked of `coai-mcp --cadence` and never awaited by a render. */
+  private readonly cadenceProbes: CadenceProbes;
 
   private readonly consultPrompt: ConsultPromptFile;
   private readonly roundsLog_: RoundsLogCache;
@@ -366,6 +370,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       render: () => this.render(),
       held: this.held,
     });
+    this.cadenceProbes = new CadenceProbes({
+      executable: () => serverPath(this.context.globalStorageUri)?.fsPath ?? '',
+      // With this window's data directory, for the reason `readProviders` gives: the answer comes out of
+      // the settings file and the session files inside it.
+      run: (executable, args) => capture(executable, args, false, CADENCE_CAP_MS, undefined, serverEnv()),
+      now: Date.now,
+      render: () => { void this.render(); },
+      log: (message) => console.warn(message),
+    });
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -464,6 +477,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   // name; what left is the caching, the process spawning and the reasons for both.
   forgetRoundsLog(): void {
     this.roundsLog_.forgetRoundsLog();
+  }
+
+  /** A consultation changed, so every plan's cadence line is asked again — each stays up until its answer lands. */
+  forgetCadence(): void {
+    this.cadenceProbes.forget();
   }
 
   async roundsLog(): Promise<DbLog> {
@@ -916,6 +934,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       questions: this.watcher.openQuestions,
       openSections: this.openSections,
       sessions,
+      // Not asked at all while the cadence is off: the server would answer `null` for every session.
+      cadence: settings.cadence.mode === 'off' ? [] : this.cadenceProbes.lines(sessions),
       usage: this.remembered(await this.readUsage()),
       usageWindow: this.usageWindow,
       latestServerVersion: published,

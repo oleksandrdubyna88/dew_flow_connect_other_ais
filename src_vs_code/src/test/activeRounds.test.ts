@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { panelHtml, PanelState, roundsBody, statusMark } from '../panelView';
+import { liveRegions, panelHtml, PanelState, roundsBody, statusMark } from '../panelView';
 import { RoundRecord, SessionFile } from '../rounds';
 import { DEFAULTS } from '../settingsShape';
 import { SNIPPET_VERSION } from '../claudeSnippet';
@@ -301,4 +301,34 @@ test('a live patch that carries the same HTML as last time does not touch the DO
 
   assert.match(script, /message\.rounds !== lastRounds/, 'the rounds region is compared before it is replaced');
   assert.match(script, /message\.questions !== lastQuestions/);
+});
+
+// ---------------------------------------------------------------------------------------------
+// The cadence line (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.2)
+// ---------------------------------------------------------------------------------------------
+
+const cadence = [{
+  repoPath: 'D:/repo',
+  branch: 'feat/epic-4',
+  answer: {
+    plan: 'todo/PLAN_x.md', mode: 'remind', epics: 14, epicsClosed: [1, 2, 3, 4],
+    groups: [{ range: '1-3', consulted: true }, { range: '4-6', consulted: false }],
+    risk: [], riskAnswered: true, unreadable: '',
+  },
+}];
+
+test('the cadence line is in Active rounds on the first paint AND on every live push — one body for both', () => {
+  const withLine = { ...state([session([round()])]), cadence };
+  const line = 'PLAN_x.md · epics closed 4/14 · consultation for epics 4-6: due';
+
+  const live = /<div id="live-rounds">([\s\S]*?)<\/div>\s*<\/details>/.exec(panelHtml(withLine, 'n0nce'));
+  assert.ok(live, 'the Active rounds region was not found in the panel');
+  assert.ok(live[1]!.includes(line), 'the first paint does not draw the line');
+  assert.ok(liveRegions(withLine, NOW).rounds.includes(line), 'the live push would wipe the line on the next tick');
+});
+
+test('with no cadence line the region is exactly the running rounds, as before', () => {
+  const plain = state([session([round()])]);
+
+  assert.equal(liveRegions(plain, NOW).rounds, roundsBody(plain.sessions, NOW, []));
 });

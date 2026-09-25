@@ -1192,7 +1192,7 @@ test('every consultation row, its alert row too, carries when it started — and
   const one = (id: string, startedUtc: string, alert = '') => ({
     id, callerKind: 'claude', repoPath: 'D:/repo', branch: 'x', vendor: 'codex', model: 'm', turns: 1,
     status: 'closed', reason: '', startedUtc, endedUtc: '', seconds: 1, tokensIn: 1, tokensOut: 1, costUsd: 0,
-    problem: 'p', advice: 'a', alert,
+    problem: 'p', advice: 'a', alert, kind: 'stuck', plan: '', epics: '',
   });
   const html = consultationsHtml({
     ...EMPTY_LOG, read: true,
