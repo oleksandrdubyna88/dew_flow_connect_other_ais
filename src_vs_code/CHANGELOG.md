@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.55.0 · Server 0.37.0 — 2026-09-25
 
 **Today, Week, Month, Year or All — on three more tabs.** On the Review rounds page, *Conversations*,
 *Consultations* and *What it keeps missing* now have the period switch *What each AI has used* has, plus
