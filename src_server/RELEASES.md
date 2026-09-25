@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.7.0...server-v0.8.0) (2026-09-25)
+
+
+### Features
+
+* the feature review, epic 1 — honest stages, an api runtime, a seven-language outline ([d8c0bca](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d8c0bcaada76949a24d4ce94b1c6e5e32467872f))
+
 ## [0.7.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.6.2...server-v0.7.0) (2026-09-25)
 
 
