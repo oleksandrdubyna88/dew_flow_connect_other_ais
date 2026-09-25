@@ -2041,13 +2041,15 @@ threw, or a response it could not write because the child had been killed mid-an
 `AShimKilledMidClaim` does six times a run — escaped the loop, faulted the unobserved `Task.Run`, and left every
 later request to the child's 40 s `HttpClient.Timeout`: the words both Windows legs of mcp-v0.34.0 recorded.
 Reproduced DETERMINISTICALLY by two tests, red before the change with exactly that timeout:
-`AnAnswerThatThrows_DoesNotSilenceTheStub` and `AResponseThatCannotBeWritten_DoesNotSilenceTheStub` (the first
-request's response aborted under it). Load itself was ruled out the same day: two full suites at once (0
+`AnAnswerThatThrows_DoesNotSilenceTheStub` and `AnAnswerWhoseClientWentAwayMidWrite_DoesNotSilenceTheStub` — a
+raw request, a 16 MB answer the client never reads, the socket reset under the write (a genuinely failed write;
+our own reviewer caught that the first version aborted the response inside the answer, which failed at the first
+property instead). A plant that lets a failed write end the loop again turns it red with the same timeout. Load itself was ruled out the same day: two full suites at once (0
 failures) and a thread-pool starvation experiment (384 pool threads blocked; an outside `curl` still answered in
 0.5 s).
 
 Now each request is `AnsweredAsync`: a failure is written down and the response aborted, and the loop goes on;
-a failed accept ends it only when the listener has stopped. The stub keeps a JOURNAL (time since start, method
+any failed accept is written down and ends the loop only when the listener has stopped (with a 50 ms pause, never a hot loop). The stub keeps a JOURNAL (time since start, method
 and path, status or exception, the loop's end) under its own lock; a prerequisite wait's timeout message
 carries it (`AFailedWait_CarriesWhatTheStubSaw`), and every test in the class writes it to its output on
 disposal, so any failure there shows whether the stub ever saw the request. #462 stays open until the release
