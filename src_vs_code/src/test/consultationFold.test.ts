@@ -79,6 +79,22 @@ test('a short single-line field stays plain, and an empty one is empty', () => {
 
 test('a short field with a line break is folded, because the break hides what follows', () => {
   assert.match(foldedCell('one\ntwo', 'k'), /^<details /);
+  // Every line terminator a vendor may send, not only \n. (codex, the code round.)
+  for (const brk of ['\r', '\r\n', '\u2028', '\u2029']) {
+    assert.match(foldedCell(`one${brk}two`, 'k'), /^<details /, `a break of ${JSON.stringify(brk)} was not seen`);
+  }
+});
+
+test('a break with nothing after it hides nothing, so it does not fold', () => {
+  assert.equal(foldedCell('your loop stops one short\n', 'k'), 'your loop stops one short\n',
+    'a field whose only "second line" is empty was folded behind a summary that hides nothing');
+});
+
+test('the summary is the first line with words in it, not a blank one', () => {
+  // A field that begins with a blank line showed "…" alone as its summary. (Our own code reviewer.)
+  const preview = between(foldedCell('\n  \nthe real first line\nmore', 'k'), '<span class="preview">', '</span>');
+
+  assert.equal(preview, 'the real first line…');
 });
 
 test('the text and the key are escaped on every road', () => {
@@ -179,9 +195,25 @@ test('a fold the person opened stays open when a live push replaces the table, a
 });
 
 test('a click on a fold\'s summary posts nothing', () => {
+  // A real chain for `closest` to walk — summary, its details, the cell, the row — each answering the
+  // selectors the page's delegated handler asks, so a row or cell that grows a data-* attribute the
+  // handler acts on turns this red. A stub answering null to everything could never fail. (Our own
+  // code reviewer.)
   const page = runPage();
   const before = page.posted.length;
-  const summary = { closest: () => null };
+  const chain: { readonly tag: string; readonly attrs: Readonly<Record<string, string>> }[] = [
+    { tag: 'summary', attrs: {} },
+    { tag: 'details', attrs: { class: 'fold', 'data-fold': 'c1:problem' } },
+    { tag: 'td', attrs: { class: 'what' } },
+    { tag: 'tr', attrs: {} },
+  ];
+  const matches = (one: (typeof chain)[number], selector: string): boolean =>
+    selector.split(',').some((part) => {
+      const m = /^\s*([a-z]*)((?:\[[\w-]+\])*)\s*$/.exec(part);
+      const names = [...(m?.[2] ?? '').matchAll(/\[([\w-]+)\]/g)].map((x) => x[1] ?? '');
+      return m !== null && (m[1] === '' || m[1] === one.tag) && names.every((name) => name in one.attrs);
+    });
+  const summary = { closest: (selector: string) => chain.find((one) => matches(one, selector)) ?? null };
 
   page.click({ target: summary });
 

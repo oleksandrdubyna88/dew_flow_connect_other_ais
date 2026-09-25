@@ -1279,7 +1279,7 @@ export function roundsLogHtml(
   details.fold .less { display: none; opacity: .7; }
   details.fold[open] > summary .preview { display: none; }
   details.fold[open] > summary .less { display: inline; }
-  details.fold .whole { white-space: pre-wrap; margin-top: 4px; }
+  details.fold .whole { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 4px; }
   /* Long cells are cut with an ellipsis rather than pushing the table sideways; the full text is
      the cell's own title, so hovering reads it. */
   td.who-answered { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
@@ -1972,14 +1972,13 @@ export function roundsLogHtml(
   // attribute values, never built into a selector, because a key carries a consultation id. A fold
   // nobody opened stays closed. (The Consultations tab folds its long fields, 2026-09-25.)
   function replaceKeepingFolds(body, html) {
-    var open = {};
-    var before = body.querySelectorAll('details[data-fold][open]');
-    for (var b = 0; b < before.length; b++) { open[before[b].getAttribute('data-fold')] = true; }
+    var open = new Set(Array.prototype.map.call(body.querySelectorAll('details[data-fold][open]'), function (one) {
+      return one.getAttribute('data-fold');
+    }));
     body.innerHTML = html;
-    var after = body.querySelectorAll('details[data-fold]');
-    for (var a = 0; a < after.length; a++) {
-      if (open[after[a].getAttribute('data-fold')] === true) { after[a].open = true; }
-    }
+    Array.prototype.forEach.call(body.querySelectorAll('details[data-fold]'), function (one) {
+      if (open.has(one.getAttribute('data-fold'))) { one.open = true; }
+    });
   }
   window.addEventListener('message', function (event) {
     var message = event.data;
