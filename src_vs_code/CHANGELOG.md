@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.53.1 · Server 0.35.0 — 2026-09-25
 
 **No more "never finished" rows for servers that were simply closed** (issue #514). A coai-mcp stopped
 by its client with a signal now ends cleanly instead of being reported, on the next start, as a run that
