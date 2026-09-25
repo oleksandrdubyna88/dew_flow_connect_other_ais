@@ -93,25 +93,25 @@ export class CadenceProbes {
     }
 
     this.inFlight = true;
-    const changed = await this.probeAll(executable, sessions).finally(() => {
+    await this.probeAll(executable, sessions).finally(() => {
       this.inFlight = false;
     });
-    if (changed) {
-      this.host.render();
-    }
   }
 
-  /** Each session in turn, stopping at a server too old for the mode; whether anything drawn changed. */
-  private async probeAll(executable: string, sessions: readonly SessionFile[]): Promise<boolean> {
-    let changed = false;
+  /**
+   * Each session in turn, stopping at a server too old for the mode — and a repaint as each changed answer
+   * LANDS, not once the batch is done: twenty cold probes in a row were a minute of no lines while the first
+   * answers were already in hand (the code round, codex).
+   */
+  private async probeAll(executable: string, sessions: readonly SessionFile[]): Promise<void> {
     for (const session of sessions) {
       if (this.tooOld) {
         break;
       }
-      changed = (await this.probeOne(executable, session)) || changed;
+      if (await this.probeOne(executable, session)) {
+        this.host.render();
+      }
     }
-
-    return changed;
   }
 
   /** One session asked; whether what is drawn for it changed. */

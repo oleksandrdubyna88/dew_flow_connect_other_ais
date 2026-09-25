@@ -56,7 +56,18 @@ const A_DAY_MS = 24 * 60 * 60 * 1000;
  * a process per stale branch for nothing a person is looking at.</p>
  */
 export function cadenceWanted(session: SessionFile, nowMs: number): boolean {
-  return planOf(session).length > 0 && isNamed(session) && nowMs - lastMoved(session) <= A_DAY_MS;
+  return planOf(session).length > 0 && isNamed(session) && isRecent(nowMs - lastMoved(session));
+}
+
+/**
+ * How far AHEAD a round may be dated and still count — two sides of one machine (Windows and WSL) keep
+ * their own clocks. Past it the stamp is broken, and a broken stamp must not make a session recent for
+ * ever (the code round, codex).
+ */
+const SKEW_MS = 5 * 60 * 1000;
+
+function isRecent(ageMs: number): boolean {
+  return ageMs >= -SKEW_MS && ageMs <= A_DAY_MS;
 }
 
 /** The plan a session holds, trimmed — empty for one that holds none or predates the field. */
@@ -68,14 +79,22 @@ function isNamed(session: SessionFile): boolean {
   return session.state.repoPath.length > 0 && session.state.branch.length > 0;
 }
 
-/** When a session last moved, by its rounds' own instants; never, for a session with none. */
+/**
+ * When a session last moved, by its rounds' own instants; never, for a session with none.
+ *
+ * <p>One pass, no spread: `Math.max(...all)` throws past the engine's argument limit on a long enough
+ * history (the code round, codex).</p>
+ */
 function lastMoved(session: SessionFile): number {
-  const instants = session.rounds
-    .flatMap((round) => [round.completedUtc, round.startedUtc ?? ''])
-    .map((instant) => Date.parse(instant))
-    .filter((ms) => Number.isFinite(ms));
+  return session.rounds.reduce((latest, round) => Math.max(latest, instantOf(round.completedUtc), instantOf(round.startedUtc ?? '')),
+    Number.NEGATIVE_INFINITY);
+}
 
-  return instants.length === 0 ? Number.NEGATIVE_INFINITY : Math.max(...instants);
+/** An ISO instant in ms, or never for anything that is not one. */
+function instantOf(instant: string): number {
+  const ms = Date.parse(instant);
+
+  return Number.isFinite(ms) ? ms : Number.NEGATIVE_INFINITY;
 }
 
 /**

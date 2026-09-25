@@ -14,7 +14,7 @@ const session = (branch = 'feat/x', plan = 'todo/PLAN_x.md'): SessionFile => ({
   state: { sessionId: branch, repoPath: 'D:/repo', branch, stage: 'CodeReview', awaitingResolve: false },
   rounds: [{ stage: 'PlanReview', number: 1, verdict: 'proceed', gatingCount: 0, reviewers: '', completedUtc: '2026-09-25T11:00:00Z' }],
   plan,
-} as SessionFile);
+});
 
 const body = (closed: number[]): string => JSON.stringify({
   plan: 'todo/PLAN_x.md', mode: 'remind', epics: 6, epicsClosed: closed,
@@ -141,7 +141,7 @@ test('an unchanged answer does not repaint — the probe must not feed its own l
 
 test('a session nobody should probe is never asked about', async () => {
   const h = harness([]);
-  const old = { ...session(), rounds: [{ stage: 'PlanReview', number: 1, verdict: 'proceed', gatingCount: 0, reviewers: '', completedUtc: '2026-09-20T00:00:00Z' }] } as SessionFile;
+  const old = { ...session(), rounds: [{ stage: 'PlanReview', number: 1, verdict: 'proceed', gatingCount: 0, reviewers: '', completedUtc: '2026-09-20T00:00:00Z' }] };
 
   h.probes.lines([old, session('feat/y', '')]);
   await settled();
@@ -217,4 +217,33 @@ test('no server installed asks nothing', async () => {
   await settled();
 
   assert.deepEqual(asked, []);
+});
+
+// The code round (codex): the sidebar painted only after the whole batch, so twenty cold probes in a
+// row were a minute of no lines although the first answers were in hand.
+test('each answer is painted as it lands, not after the whole batch', async () => {
+  let second: (() => void) | undefined;
+  let renders = 0;
+  let calls = 0;
+  const probes = new CadenceProbes({
+    executable: () => 'coai-mcp',
+    run: async () => {
+      calls += 1;
+      if (calls === 2) {
+        await new Promise<void>((resolve) => { second = resolve; });
+      }
+      return { code: 0, output: body([calls]) };
+    },
+    now: () => T0,
+    render: () => { renders += 1; },
+    log: () => undefined,
+  });
+
+  probes.lines([session('a'), session('b')]);
+  await settled();
+
+  assert.equal(renders, 1, 'the first answer is on screen while the second is still being asked');
+  second?.();
+  await settled();
+  assert.equal(renders, 2);
 });
