@@ -136,6 +136,12 @@ export class ServerSettingsSync {
     private readonly readExisting: ReadExisting = NO_FILE,
     private readonly report: ReportRefusal = () => {},
     private readonly critical: CriticalSection = NO_LOCK,
+    /**
+     * The `coai-mcp` on this side as far as this window knows WITHOUT spawning — read at every sync,
+     * because the answer changes when the person installs an update. It decides whether an `api`
+     * row may cross into the file (`vendorsEnv`); empty means unknown, which is not old.
+     */
+    private readonly installedServerVersion: () => string = () => '',
   ) {}
 
   /**
@@ -158,7 +164,7 @@ export class ServerSettingsSync {
    */
   async sync(): Promise<SyncOutcome> {
     const { settings, vendors } = this.read();
-    const json = serverSettingsJson(settings, vendors, this.version);
+    const json = serverSettingsJson(settings, vendors, this.version, this.installedServerVersion());
     if (json === this.lastWritten && !this.stoodDown) {
       return 'unchanged';
     }

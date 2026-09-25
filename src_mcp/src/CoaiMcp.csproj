@@ -66,7 +66,8 @@
   </PropertyGroup>
 
   <!--
-    The binding ships 28+ grammars and this product parses three. Left alone that is 69 MB of a
+    The binding ships 28+ grammars and this product parses seven languages (the outliner's seven,
+    of which the normalizer reads three). Left alone that is 69 MB of a
     170 MB publish, per RID, on a file people download — Haskell, Verilog, Agda and twenty-five more
     that nothing here will ever hand to a parser.
 

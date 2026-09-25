@@ -87,16 +87,10 @@ public sealed partial class GitHistory(IProcessLauncher launcher)
     /// in</i>) — measured on real git before this was written — so the guard is not what keeps the
     /// read inside the object database; it is what keeps a malformed row from costing a process, and
     /// what answers <c>path_refused</c> rather than a sentence from git.</para>
+    /// <para>The rule itself is <see cref="Core.RepoPaths.IsRelative"/> in the core, since a
+    /// reviewer's source request needs the same answer from a project that cannot reach this one.</para>
     /// </remarks>
-    public static bool IsRepoRelative(string path) =>
-        path.Length > 0 && !path.Contains('\0') && !IsRooted(path) && !Traverses(path);
-
-    private static readonly char[] Separators = ['/', '\\'];
-
-    private static bool IsRooted(string path) =>
-        path[0] is '/' or '\\' || (path.Length > 1 && char.IsAsciiLetter(path[0]) && path[1] == ':');
-
-    private static bool Traverses(string path) => path.Split(Separators).Contains("..");
+    public static bool IsRepoRelative(string path) => Core.RepoPaths.IsRelative(path);
 
     /// <summary>A ref NAME, which the end of an interval may legitimately be.</summary>
     /// <remarks>

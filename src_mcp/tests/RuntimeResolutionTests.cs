@@ -62,6 +62,38 @@ public sealed class RuntimeResolutionTests
         RuntimeResolution.For(mistral).Should().BeOfType<CustomCodexRuntime>();
     }
 
+    /// <summary>
+    /// An <c>api</c> row HAS a base URL — that is the whole point of it — and the base-URL arm means
+    /// "ride the Codex CLI". Decided before that arm, as <c>local</c> and <c>remote</c> are.
+    /// </summary>
+    /// <remarks>
+    /// Story S1.2 of <c>PLAN_feature_review.md</c>: falling through would send a Grok or a Qwen review
+    /// through the Codex CLI against xAI's endpoint, under the row's own name, with codex's 21k-token
+    /// system prompt in front of it — the exact split the local runtime was extracted to end.
+    /// </remarks>
+    [Fact]
+    public void AnApiVendor_IsApi_NotACustomCodexEndpoint_EvenThoughItHasABaseUrl()
+    {
+        var grok = Vendor("grok", "api", "https://api.x.ai/v1");
+
+        RuntimeResolution.NameOf(grok).Should().Be("api",
+            "an api row has a base url by definition, and the base-url arm means ride the Codex CLI");
+    }
+
+    [Fact]
+    public void AnApiVendor_NeedsAKeyInTheVault_AndABaseUrl()
+    {
+        var withUrl = Vendor("grok", "api", "https://api.x.ai/v1");
+        var withoutUrl = Vendor("grok", "api", "");
+
+        RuntimeResolution.AuthOf(withUrl, hasVaultKey: true).Auth.Should().Be("vault key");
+        var noKey = RuntimeResolution.AuthOf(withUrl, hasVaultKey: false);
+        noKey.Auth.Should().Be("unavailable");
+        noKey.Note.Should().Contain("'grok'").And.Contain("vault");
+        RuntimeResolution.AuthOf(withoutUrl, hasVaultKey: true).Auth.Should().Be("unavailable",
+            "an api vendor with nowhere to send the request cannot review, key or no key");
+    }
+
     [Fact]
     public void AProviderNobodyKnows_ResolvesToNothing()
     {

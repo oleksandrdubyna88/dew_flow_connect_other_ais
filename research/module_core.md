@@ -37,7 +37,12 @@ flowchart LR
 | Type | File | Role |
 |---|---|---|
 | `Finding`, `NormalisedReview`, `RejectedEntry` | `Findings/Finding.cs` | the normalised remark; rejects are named, never dropped |
-| `FindingSchema.Json` | `Findings/FindingSchema.cs` | THE one copy of the wire contract (codex `--output-schema`, Gemini prompt) |
+| `FindingSchema.Json` | `Findings/FindingSchema.cs` | THE one copy of the wire contract (codex `--output-schema`, Gemini prompt) — pinned by SHA-256 |
+| `FindingSchema.FeatureJson`, `SchemaFile`, `SchemaShape` | `Findings/FindingSchema.cs`, `Findings/SchemaFile.cs` | the feature reviewer's shape: `Json` + `sourceRequests`, DERIVED; one file per shape on disk |
+| `SourceRequest`, `NormalisedReview.SourceRequests` / `RejectedSourceRequests` | `Findings/Finding.cs` | a feature reviewer's request for code, validated at the parser; a bad path is a named rejection |
+| `RepoPaths` | `RepoPaths.cs` | whether a path names something INSIDE a repository — lexical; moved here from `GitHistory` |
+| `ISourceOutliner`, `OutlineLanguage`, `SourceOutline`, `OutlineLimits` | `Outlining/ISourceOutliner.cs` | the seam of the body-free outline (seven languages); implemented in `CoaiMcp.Normalizer` |
+| `FeatureBudget` | `Feature/FeatureBudget.cs` | the feature review's byte budgets, each traced to a measurement (plan §6, S0.2) |
 | `ReviewParser` | `Findings/ReviewParser.cs` | vendor JSON → review; unknown severity/category = per-entry rejection |
 | `GeminiPayload` | `Findings/GeminiPayload.cs` | `-o json` envelope → fence stripping → string-aware balanced `{…}` |
 | `FindingDedup` | `Gate/FindingDedup.cs` | cross-provider merge; severity disagreement resolves toward caution |
@@ -45,6 +50,7 @@ flowchart LR
 | `TextSimilarity` | `Gate/TextSimilarity.cs` | token Jaccard ≥ 0.5 = "same remark" — deterministic, arguable-with |
 | `StuckFindings`, `EarlierDecision`, `Survivors` | `Gate/StuckFindings.cs` | how many of this round's findings the caller had already ACCEPTED — phase 2's instrument, calling nothing |
 | `SessionState`, `PanelConfig`, `SessionKey` | `Rounds/SessionState.cs` | immutable session; key = normalised repo path + branch |
+| `Stage`, `StageDescriptor`, `Stages` | `Rounds/SessionState.cs`, `Rounds/Stages.cs` | the stages, and the ONE table of what each answers by name — bucket, phrase, kind, commands, next stage, sentences, whether it records a commit |
 | `RoundMachine`, `RoundVerdict`, `Decision`, `Transition` | `Rounds/RoundMachine.cs` | ordering by refusal; the escalation ladder; resolve feeds rejections forward |
 | `RoleDefinition`, `RoleCatalog`, `RoleStages` | `Rounds/RoleCatalog.cs` | which roles exist and which prompt a round of one gets; `Builtin` is the embedded seed |
 | `RoleEntry`, `PromptEntry`, `RoleComposition` | `Rounds/RoleComposition.cs` | a person's `COAI_ROLES` rows composed onto the seed; every refusal is a sentence, never an exception |
@@ -175,16 +181,53 @@ somebody just created work with no further settings at all.
 ## Tests
 
 `CoaiMcp.Tests`: ReviewParserTests, GeminiPayloadTests, FindingDedupTests, GateRuleTests,
-RoundMachineTests, ArchitectureTests, BuiltinRoleCatalogTests, StuckFindingsTests. Teeth proven red
-for: the balanced-brace scan (naive first-to-last), the standing-rejection discount (disabled), the ladder
-order (reversed), and the catalog loader (written before `RoleCatalog` existed, watched failing to
-compile, then watched failing on the prompt COUNT — the plan said 26 and the seed has 25, which is
-why the number is pinned rather than the shape).
+RoundMachineTests, ArchitectureTests, BuiltinRoleCatalogTests, StuckFindingsTests, StagesTests. Teeth
+proven red for: the balanced-brace scan (naive first-to-last), the standing-rejection discount
+(disabled), the ladder order (reversed), the catalog loader (written before `RoleCatalog` existed,
+watched failing to compile, then watched failing on the prompt COUNT — the plan said 26 and the seed
+has 25, which is why the number is pinned rather than the shape), and the stage table (a `FeatureReview`
+member planted in the enum with no row: six tests red, in this module and the server's).
+
+## Every stage answers by name — `Stages` (2026-09-25)
+
+`Rounds/Stages.cs` is one exhaustive table, a `StageDescriptor` row per `Stage`, and the only place
+these facts about a stage live:
+
+| column | read by | what it answers |
+|---|---|---|
+| `Bucket` | `PanelConfig.BucketFor` | which roles review it (the bridge to the persisted role string, below) |
+| `Phrase` | `Stages.PhraseOf` → `RoundSubject.StageName` | "plan review" / "code review" / "document review" / "done" — a notice, a log line |
+| `Kind` | `RoundRefusals.ReviewKindOf` (server) | the adjective in "every code-review role is switched off" |
+| `Commands` | `PanelService.CommandStageOf` (server) | which of a person's custom commands a round of it is given |
+| `AdvancesTo` | `RoundMachine.Resolve` | where `resolve` moves the session once a round passed |
+| `CompletedSentence` | `PanelService.Finish` (server) | what `resolve` says at that moment |
+| `ReviseInstruction` | `PanelService.AnswerFor` (server) | what a `revise` verdict tells the caller to do with accepted findings |
+| `RecordsSha` | the `Sha` write on the finished round (server) | whether the round keeps the commit it reviewed, for `again` |
+
+`Stages.Of(stage)` throws for a value outside the enum ("map it here"), and `StagesTests` walks
+`Enum.GetValues<Stage>()` so a member without a row is a red test rather than a silent default.
+`PhraseOf` takes the stage as it was WRITTEN DOWN — a round record's string — and answers the text
+itself when this build has no row for it: never "done", because a round written by a newer build is
+not a finished one.
+
+**Why a table.** §9 of the feature-review plan counted the switches: two were exhaustive
+(`BucketFor`, `ProviderSettings.Reviews` in the server) and four swallowed an unknown stage with a
+discard — `StageName` said "done" (so a document review's `call_human` notice read "The **done** gate
+needs your decision"), `ReviewKindOf` said "code", `CommandStageOf` said `Any`, and `Finish` said
+"The code stage is complete" for any session that reached `Done`, a document review included. A
+fourth stage would have inherited all four without a compile error. Every existing bucket, phrase and
+sentence is pinned by LITERAL in `StagesTests`, so the table changed nothing on disk or on the wire;
+only the document review's two sentences are new, because they were wrong. `Stage.Done` is a row
+rather than an exception (`status` reads a finished session's budget through its bucket), and its
+other columns are what the discards used to answer. Only the columns the existing stages READ are
+there — a field nothing reads is a claim nothing checks; the fourth stage adds its own with the
+reader that needs them. `ProviderSettings.Reviews` stays a throwing switch in the server, by the plan.
 
 ## Which roles a round runs — the BUCKET
 
 `RoleCatalog.InBucket(bucket)` is what selects a round's roster, and `PanelConfig.BucketFor(Stage)`
-is the ONE place the orchestration `Stage` meets the string a role is persisted with:
+— reading the stage's row in `Stages` — is the ONE place the orchestration `Stage` meets the string a
+role is persisted with:
 
 | `Stage` | bucket | what it reads |
 |---|---|---|
@@ -288,3 +331,63 @@ normaliser in mind. It caught four real defects that fixtures had not:
 Each is now its own test. The class also carries a positive control — that the finder finds methods at
 all — because a property test iterating an empty list reports success, which is the failure mode such a
 test is least able to notice about itself.
+
+## `ISourceOutliner` — the feature review's reader, and the shape its reviewer answers in (2026-09-25)
+
+Story S1.3 of [PLAN_feature_review.md](../todo/PLAN_feature_review.md). A feature reviewer is sent the
+SHAPE of every changed file and asks for code by name (plan D3/D4); this is that shape, and the schema
+it asks in.
+
+```mermaid
+flowchart LR
+  file[file text at head] --> OL[OutlineLanguages.Of\nby extension]
+  OL --> CEIL{UTF-8 bytes over\nOutlineLimits.MaxInputBytes?}
+  CEIL -- yes --> TL[TooLarge — never parsed]
+  CEIL -- no --> G[Grammars.Of — the ONE\nlibrary + entry point table]
+  G --> P[parse] --> ERR{ERROR share\nover 20 %?}
+  ERR -- yes --> PF[ParseFailed]
+  ERR -- no --> W[TreeSitterOutliner walk\ndriven by OutlineTables]
+  W --> SO[SourceOutline\nentries: depth, kind, name,\nsignature, lines]
+  SO --> R[Render — what the reviewer reads]
+  AN[reviewer answer\nin FeatureJson] --> RP[ReviewParser]
+  RP --> SR[SourceRequests]
+  RP --> RJ[RejectedSourceRequests\nRepoPaths said no]
+```
+
+- **A separate seam, not a wider `SourceLanguage`.** `OutlineLanguage` names seven languages (C#,
+  TypeScript, TSX, JavaScript, Rust, PHP, Python); `SourceLanguage` stays three, because it is the defect
+  corpus's trust boundary and the normalizer's function table falls through to JavaScript kinds for
+  anything it does not name. The collector still reads `.tsx` as TypeScript — pinned by
+  `OutlinerGrammarTests.TheCollectorsTsxBehaviour_IsUnchanged`.
+- **One grammar table for both implementations** — `normalizer/Grammars.cs`. PHP's entry point is
+  `tree_sitter_php`, decided by loading: `tree_sitter_php_only` is not exported by the library this
+  package ships. `shared/kept-grammars.txt` is the union of both interfaces' grammars, and
+  `KeptGrammarsTests` asks `Grammars` rather than keeping a third list.
+- **No body by construction.** A signature runs from the declaration's start (a wrapper's — `export`,
+  `declare`, a Python decorator — when it has one) to the start of its `body` field or the table's other
+  cut fields (a C# property's `accessors`/`value`), whitespace collapsed, at most 240 characters. A
+  declaration with no body field is shown whole, cut at the first body nested in it. The walk goes
+  THROUGH nodes the table does not name, never into anybody's `body`, never into an anonymous callable.
+  Every fixture marks its body lines with `secret…`, and `OutlinerTests.NoLineOfABody_AppearsInTheOutline`
+  holds all seven languages to it. Special cases are table data: Python's `decorated_definition` and
+  TypeScript's `export` are wrappers; `const f = () =>` is kind `function`; a Rust `impl` is named
+  `Trait for Type`.
+- **Tables are data, exhaustive, no `_ =>`.** `OutlineTables.For` names every `OutlineLanguage` with
+  CS8524 silenced, so a named language without a table is a build error (CS8509).
+- **Refusals are answers.** Over 1 MiB of UTF-8 is `TooLarge`, checked before any parse; more than 20 %
+  of the text under ERROR nodes is `ParseFailed`; every result carries its size and its measured
+  `ErrorShare`.
+- **The feature schema is derived.** `FindingSchema.FeatureJson` = `FindingSchema.Json` plus
+  `sourceRequests: [{file, symbol|null, startLine|null, endLine|null, why}] | null`, added to the PARSED
+  base (`JsonNode`, written through a `Utf8JsonWriter` — no reflection) so the findings part cannot drift
+  and a reindented base derives the same schema (the first version searched the text for literal
+  anchors; epic 1's code round, `TheFeatureSchema_DerivesFromAReformattedBase_TheSameWay`); `Json` is pinned by SHA-256
+  (`TheFeatureSchemaTests`) and both shapes meet OpenAI's strict rules (`FindingSchemaTests`).
+  `SchemaFile.Ensure(dir, SchemaShape.Feature)` writes `finding-schema-feature.json`, never the file
+  every other round reads.
+- **A request is validated where it is parsed.** `ReviewParser` reads `sourceRequests` into
+  `NormalisedReview.SourceRequests` (empty, never null); a path that is absolute, drive-qualified or climbs
+  out with `..` (`RepoPaths`, moved to the core from `GitHistory`), or a span that is no span, is a
+  `RejectedEntry` in `RejectedSourceRequests` — never a crash, never a lost finding.
+- **`FeatureBudget`** holds only the budgets S0.2 could measure (plan, outline, collapse threshold,
+  omissions reserve, file cap), each traced to a row in the plan's §6.

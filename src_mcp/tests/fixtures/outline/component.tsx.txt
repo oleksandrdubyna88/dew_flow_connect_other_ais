@@ -1,0 +1,19 @@
+import React from "react";
+
+interface Props {
+  title: string;
+}
+
+export function Header({ title }: Props) {
+  return <h1 className="secretHeader">{title}</h1>;
+}
+
+export const Footer = (props: Props) => (
+  <footer>{secretFooter(props)}</footer>
+);
+
+export class Panel extends React.Component<Props> {
+  render() {
+    return <div>{secretRender()}</div>;
+  }
+}

@@ -69,6 +69,10 @@ export const HELP = {
     "Which model this vendor reviews with. Empty means the CLI's own default, which is usually its newest. A stronger model finds more and costs more; the panel exists so you can mix.",
   vendorBaseUrl:
     'The OpenAI-compatible endpoint this vendor is reached at. Its API key lives in the CredsForDevs config entry under this vendor’s name, never here.',
+  apiModel:
+    'Which model this API reviews with, typed exactly as the endpoint names it — the panel does not spend a paid call per repaint to list them, and a list shipped with this extension would be wrong for every endpoint you can point the row at. `coai-mcp --probe-api --vendor <this row>` lists the ids your key can actually call; an empty model is refused by the endpoint with a 400 on every review, and the row says so before a round does.',
+  apiDialect:
+    'How the request is spelled for this endpoint’s family — which of temperature, seed and the frequency penalty travel, the name of the token ceiling, whether the finding schema is demanded or merely asked for. `openai` is the generic one and sends nothing a reasoning model is documented to refuse. A vendor’s own dialect is added only once it has been measured against the real endpoint, never typed from its documentation, which is why this list is short.',
   vendorExecutablePath:
     'Where this vendor’s CLI is, for when PATH cannot be trusted to answer. Empty means "look it up on PATH", which is right almost everywhere — and wrong in WSL, where codex and gemini resolve to the WINDOWS npm shims through the interop PATH and die on a missing Linux binary. Put the native path here and the round stops depending on which shell happened to start the server.',
 

@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using CoaiMcp.Core.Api;
 using CoaiMcp.Core.Findings;
 
 namespace CoaiMcp.Runners.Reviewers;
@@ -183,70 +184,34 @@ public static class LocalAsk
     /// gate's own reviewers caught the contradiction. A schema that cannot be parsed is a bug on
     /// this side, and failing before the request costs nothing and says so.
     /// </exception>
-    public static string RequestBody(string model, string prompt, string schemaJson, int seed, string reasoningEffort = "", int maxTokens = 8192)
-    {
-        using var validate = JsonDocument.Parse(schemaJson);
-
-        using var stream = new MemoryStream();
-        using (var json = new Utf8JsonWriter(stream))
-        {
-            json.WriteStartObject();
-            json.WriteString("model", model);
-            json.WriteBoolean("stream", false);
-            json.WriteNumber("temperature", 0);
-            json.WriteNumber("seed", seed);
-            // Greedy decoding loops, and a schema does not save it: a sentence repeated inside a
-            // string value stays schema-valid right up to the token that runs out. Measured here on
-            // 2026-09-04 — a local reviewer opened with a good finding, collapsed into "The client
-            // retries again." for forty kilobytes, and spent 6.7 minutes of the one GPU while every
-            // other window queued behind it. The round then reported "not the schema's JSON", which
-            // was true and nothing like the story.
-            //
-            // Small on purpose. A review repeats words legitimately — the file names it is talking
-            // about — and a large penalty is an opinion about content rather than a guard against a
-            // degenerate loop. Deterministic, so `temperature: 0` and the seed still mean what they
-            // meant: the same prompt is still the same request.
-            json.WriteNumber("frequency_penalty", 0.2);
-            // The ceiling that was missing. Measured 2026-09-03: uncapped, this engine did not
-            // finish a one-line question in 90 seconds, and the same question capped at twenty
-            // tokens came back in 8.5 — the model does not stop, and nothing else here bounds it.
-            // Every local reviewer of a round therefore spent its whole deadline and was reported as
-            // a slow engine, which was true and useless.
-            if (maxTokens > 0)
-            {
-                json.WriteNumber("max_tokens", maxTokens);
-            }
-
-            // Only when somebody said something. `engine` is the explicit way to send nothing: the
-            // field is ABSENT rather than set to a value this build guessed would be neutral, so the
-            // engine's own default applies, whatever it is on that version.
-            if (reasoningEffort.Length > 0 && !string.Equals(reasoningEffort, "engine", StringComparison.OrdinalIgnoreCase))
-            {
-                json.WriteString("reasoning_effort", reasoningEffort);
-            }
-
-            json.WriteStartArray("messages");
-            json.WriteStartObject();
-            json.WriteString("role", "user");
-            json.WriteString("content", prompt);
-            json.WriteEndObject();
-            json.WriteEndArray();
-
-            json.WriteStartObject("response_format");
-            json.WriteString("type", "json_schema");
-            json.WriteStartObject("json_schema");
-            json.WriteString("name", "findings");
-            json.WriteBoolean("strict", true);
-            json.WritePropertyName("schema");
-            Bounded(schemaJson).WriteTo(json);
-            json.WriteEndObject();
-            json.WriteEndObject();
-
-            json.WriteEndObject();
-        }
-
-        return Encoding.UTF8.GetString(stream.ToArray());
-    }
+    /// <remarks>
+    /// <para><b>One writer, one row of data.</b> Since story S1.2 of <c>PLAN_feature_review.md</c> the
+    /// body is spelled by <see cref="ChatRequest.Body"/> from the <c>local</c> row of
+    /// <c>shared/api-dialects.json</c>, and <c>LocalRequestBodyIsPinnedTests</c> holds it byte for
+    /// byte to what shipped before the move. Every decision the old inline writer carried is now a
+    /// value in that row — and the reasons are recorded here, because a JSON file cannot hold
+    /// them:</para>
+    /// <para><i>temperature 0, seed sent.</i> Ollama's <c>/v1</c> route substitutes its own defaults
+    /// over anything a Modelfile sets, so sampling travels in the request; zero, because a review is
+    /// not a place for variety.</para>
+    /// <para><i>frequency_penalty 0.2.</i> Greedy decoding loops, and a schema does not save it: a
+    /// sentence repeated inside a string value stays schema-valid right up to the token that runs
+    /// out. Measured 2026-09-04 — a local reviewer opened with a good finding, collapsed into "The
+    /// client retries again." for forty kilobytes, and spent 6.7 minutes of the one GPU while every
+    /// other window queued behind it. Small on purpose: a review repeats words legitimately, and a
+    /// large penalty is an opinion about content rather than a guard against a degenerate loop.</para>
+    /// <para><i>max_tokens.</i> The ceiling that was missing. Measured 2026-09-03: uncapped, the engine
+    /// did not finish a one-line question in 90 seconds; capped at twenty tokens it came back in
+    /// 8.5 — the model does not stop, and nothing else bounds it.</para>
+    /// <para><i>reasoning_effort only when somebody said something.</i> <c>engine</c> is the explicit
+    /// way to send nothing: the field is ABSENT rather than set to a value this build guessed would be
+    /// neutral, so the engine's own default applies, whatever it is on that version.</para>
+    /// <para><i>json_schema, strict, bounded.</i> <c>json_object</c> was tried against the real
+    /// endpoint and answered with an invented shape; only <c>json_schema</c> binds it. The bound on
+    /// free text is local-only — see <see cref="ChatRequest.Bounded"/>.</para>
+    /// </remarks>
+    public static string RequestBody(string model, string prompt, string schemaJson, int seed, string reasoningEffort = "", int maxTokens = 8192) =>
+        ChatRequest.Body(ApiDialects.Local, model, prompt, schemaJson, seed, reasoningEffort, maxTokens);
 
     /// <summary>How long a finding's free text may be, in characters, on the local route only.</summary>
     /// <remarks>
@@ -263,53 +228,15 @@ public static class LocalAsk
     /// reject <c>maxLength</c> as an unsupported keyword with a 400 — so the bound is added to the copy
     /// this route sends, never to <c>FindingSchema.Json</c>.</para>
     /// </remarks>
-    /// <summary>How many findings one local reviewer may return. See <see cref="Bounded"/>.</summary>
-    private const int MaxFindings = 10;
-
-    private static readonly (string Field, int MaxLength)[] FreeTextBounds =
-    [
-        ("title", 200),
-        ("why", 1000),
-        ("fix", 1000),
-    ];
-
     /// <summary>
     /// The finding schema with its free-text fields bounded — or any other schema exactly as given.
     /// </summary>
     /// <remarks>
-    /// The walker looks for the finding schema's own shape and touches nothing else: a probe or a test
-    /// handing this route a schema of another shape must get it back unchanged rather than rewritten
-    /// by code that assumed what it was looking at.
+    /// The walker itself moved to <see cref="ChatRequest.Bounded"/> with the dialect table (story
+    /// S1.2), because which dialects bound the schema is a row of that table. This name stays for
+    /// the callers and tests that have always asked here: the answer is the same walker.
     /// </remarks>
-    internal static JsonNode Bounded(string schemaJson)
-    {
-        var root = JsonNode.Parse(schemaJson) ?? throw new JsonException("the schema parsed to nothing");
-        if (root["properties"]?["findings"] is not JsonObject findings
-            || findings["items"]?["properties"] is not JsonObject fields)
-        {
-            return root;
-        }
-
-        // The third way the local model fails, found once the strings were bounded: forty-three
-        // findings in 385 lines, and the token ceiling inside the forty-third's `why`. Every string
-        // was finite; the array was not. Ten is the number at which a full-length review — every
-        // string at its bound, ~2,400 characters a finding — still fits the 8,192-token ceiling, so a
-        // schema-valid answer can always finish; it is also more than any local reviewer here has
-        // returned and been worth resolving. A review with forty findings is a review nobody reads.
-        findings["maxItems"] = MaxFindings;
-
-        foreach (var (field, maxLength) in FreeTextBounds)
-        {
-            if (fields[field] is JsonObject property && property["type"]?.GetValue<string>() == "string")
-            {
-                property["maxLength"] = maxLength;
-                var description = property["description"]?.GetValue<string>() ?? string.Empty;
-                property["description"] = $"{description} (at most {maxLength} characters)".Trim();
-            }
-        }
-
-        return root;
-    }
+    internal static JsonNode Bounded(string schemaJson) => ChatRequest.Bounded(schemaJson);
 
     /// <summary>
     /// The answer text and what it consumed, or null when the endpoint said nothing usable.

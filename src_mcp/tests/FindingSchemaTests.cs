@@ -20,10 +20,21 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class FindingSchemaTests
 {
-    [Fact]
-    public void EveryObject_ForbidsAdditionalProperties()
+    /// <summary>Both shapes the product hands a vendor — every rule below holds for each.</summary>
+    public static TheoryData<string> Schemas => [nameof(FindingSchema.Json), nameof(FindingSchema.FeatureJson)];
+
+    private static string Schema(string name) => name switch
     {
-        using var doc = JsonDocument.Parse(FindingSchema.Json);
+        nameof(FindingSchema.Json) => FindingSchema.Json,
+        nameof(FindingSchema.FeatureJson) => FindingSchema.FeatureJson,
+        _ => throw new ArgumentOutOfRangeException(nameof(name), name, "not a schema this product ships"),
+    };
+
+    [Theory]
+    [MemberData(nameof(Schemas))]
+    public void EveryObject_ForbidsAdditionalProperties(string schema)
+    {
+        using var doc = JsonDocument.Parse(Schema(schema));
 
         foreach (var (path, obj) in Objects(doc.RootElement, "$"))
         {
@@ -32,10 +43,11 @@ public sealed class FindingSchemaTests
         }
     }
 
-    [Fact]
-    public void EveryObject_RequiresEveryPropertyItDeclares()
+    [Theory]
+    [MemberData(nameof(Schemas))]
+    public void EveryObject_RequiresEveryPropertyItDeclares(string schema)
     {
-        using var doc = JsonDocument.Parse(FindingSchema.Json);
+        using var doc = JsonDocument.Parse(Schema(schema));
 
         foreach (var (path, obj) in Objects(doc.RootElement, "$"))
         {

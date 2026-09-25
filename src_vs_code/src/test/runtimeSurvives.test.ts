@@ -85,5 +85,6 @@ test('the runtime list and the runtime type are one declaration', () => {
   const asType: readonly Runtime[] = RUNTIMES;
 
   assert.ok(asType.includes('local'));
-  assert.deepEqual([...RUNTIMES].sort(), ['antigravity', 'claude', 'codex', 'gemini', 'local', 'remote']);
+  // `api` since S1.2 of PLAN_feature_review.md: a hosted OpenAI-compatible endpoint reached directly.
+  assert.deepEqual([...RUNTIMES].sort(), ['antigravity', 'api', 'claude', 'codex', 'gemini', 'local', 'remote']);
 });

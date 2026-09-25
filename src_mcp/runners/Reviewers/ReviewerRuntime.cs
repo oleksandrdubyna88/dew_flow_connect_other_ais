@@ -23,6 +23,17 @@ public sealed record ReviewerSettings(string Provider)
     /// <summary>Empty = the CLI's own authentication (the normal case for codex and gemini).</summary>
     public string ApiKey { get; init; } = string.Empty;
 
+    /// <summary>
+    /// For an <c>api</c> vendor only: which row of <c>shared/api-dialects.json</c> spells its request.
+    /// Empty means the generic <c>openai</c> row.
+    /// </summary>
+    /// <remarks>
+    /// Launch data rather than identity: which dialect a row speaks changes what is SENT, not what the
+    /// vendor is — <see cref="VendorIdentity"/> stays three strings, and this travels beside the model
+    /// as the model does.
+    /// </remarks>
+    public string Dialect { get; init; } = string.Empty;
+
     /// <summary>Where this machine keeps its own state — sessions, tokens, the rounds log.</summary>
     /// <remarks>
     /// Only <see cref="RemoteRuntime"/> uses it, to find the Team server token file. It is a
@@ -493,8 +504,22 @@ public sealed class ReviewerRuntimeSelector(IEnumerable<IReviewerRuntime> runtim
     public static readonly IReadOnlySet<string> RuntimeNames =
         new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "codex", "gemini", "claude", "antigravity", "local", "remote",
+            "codex", "gemini", "claude", "antigravity", "local", "remote", "api",
         };
+
+    /// <summary>
+    /// The runtimes that run ONLY on the machine that configured them — never on a Team server.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>local</c> reaches an engine on this machine's loopback; <c>api</c> reaches a hosted
+    /// endpoint with a key from THIS person's vault (PLAN_feature_review.md, D10: the Team server does
+    /// not take part in v1). The Team server derives its own accepted set as
+    /// <see cref="RuntimeNames"/> minus this one, so a runtime added on the client side is refused there
+    /// by name until somebody decides otherwise — it used to subtract the literal <c>"local"</c>, and
+    /// the next machine-only runtime would have been admitted because a set grew.</para>
+    /// </remarks>
+    public static readonly IReadOnlySet<string> MachineOnlyRuntimes =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "local", "api" };
 
     public IReadOnlyCollection<string> Providers => _byProvider.Keys;
 

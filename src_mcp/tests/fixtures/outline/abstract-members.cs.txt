@@ -1,0 +1,21 @@
+namespace Shop.Contracts;
+
+public interface IRepository<T> where T : class
+{
+    T? Find(int id);
+
+    void Save(T item);
+
+    int Count { get; }
+
+    event EventHandler Saved;
+
+    T this[int index] { get; }
+}
+
+public abstract class Base
+{
+    protected abstract void Run(CancellationToken token);
+
+    public abstract string Name { get; }
+}

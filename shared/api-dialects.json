@@ -1,0 +1,27 @@
+{
+  "$comment": "How one OpenAI-compatible completion request is spelled for each endpoint family. Read by coai-mcp (embedded in CoaiMcp.Core, ChatRequest.Body) and mirrored by the extension's API_DIALECTS (apiDialects.ts); a test on each side is held to this file. `local` is the body the local reviewer has sent since 2026-09-02, pinned byte for byte by LocalRequestBodyIsPinnedTests — every value in it was measured against a real engine. `openai` is the generic hosted dialect: it sends nothing a reasoning model is documented to refuse. A vendor dialect (xai, qwen) is added ONLY from rows measured through `coai-mcp --probe-api` (PLAN_feature_review.md §6 S0.5), never from documentation; the `--probe-api` matrix exists to write those rows. Fields: temperature — a number to send, or null to omit; seed — whether to send the per-prompt seed; frequencyPenalty — a number or null; maxTokensField — the name of the ceiling field, or empty to send none; responseFormat — `json_schema` (the schema is DEMANDED) or `json_object`; strict — the json_schema strict flag; boundedSchema — whether the finding schema's free-text fields get maxLength/maxItems bounds (local engines honour them through grammar-constrained decoding; OpenAI's strict mode rejects maxLength with a 400); reasoningEffortField — the field the effort travels in, or empty to send none; reasoningEffortMap — a value translated before it is sent, an empty translation meaning the field is omitted; a value not in the map is sent verbatim. `engine` is never sent by any dialect: it is the panel's word for 'let the endpoint decide'.",
+  "dialects": {
+    "local": {
+      "temperature": 0,
+      "seed": true,
+      "frequencyPenalty": 0.2,
+      "maxTokensField": "max_tokens",
+      "responseFormat": "json_schema",
+      "strict": true,
+      "boundedSchema": true,
+      "reasoningEffortField": "reasoning_effort",
+      "reasoningEffortMap": {}
+    },
+    "openai": {
+      "temperature": null,
+      "seed": false,
+      "frequencyPenalty": null,
+      "maxTokensField": "max_completion_tokens",
+      "responseFormat": "json_schema",
+      "strict": true,
+      "boundedSchema": false,
+      "reasoningEffortField": "reasoning_effort",
+      "reasoningEffortMap": { "none": "" }
+    }
+  }
+}

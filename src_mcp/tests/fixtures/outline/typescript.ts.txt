@@ -1,0 +1,52 @@
+import { readFile } from "node:fs/promises";
+
+export interface Options {
+  retries: number;
+  onDone(result: string): void;
+}
+
+export type Mode = "fast" | "slow";
+
+export enum Level { Low, High }
+
+export abstract class Loader<T> implements Options {
+  retries = 3;
+  private readonly cache = new Map<string, T>();
+
+  constructor(private readonly root: string) {
+    secretConstruct(root);
+  }
+
+  get size(): number {
+    return secretSize();
+  }
+
+  async load(path: string): Promise<T> {
+    const text = await secretRead(path);
+    return secretParse(text);
+  }
+
+  onDone(result: string): void { secretDone(result); }
+
+  abstract parse(text: string): T;
+}
+
+export function createLoader(root: string): Loader<string> {
+  return secretCreate(root);
+}
+
+export const double = (n: number): number => secretDouble(n);
+
+const handler = async (event: Event) => {
+  secretHandle(event);
+};
+
+export default async function* stream(): AsyncGenerator<string> {
+  yield secretStream();
+}
+
+namespace Internal {
+  export function helper(): void {
+    secretHelper();
+  }
+}

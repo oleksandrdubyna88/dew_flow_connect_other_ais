@@ -1,0 +1,8 @@
+class Cart: [3-11]
+  items: list[int] [4-4]
+  def __init__(self, capacity: int) -> None: [5-5]
+  @overload def add(self, item: int) -> None: [6-7]
+  @overload def add(self, item: str) -> None: [8-9]
+  @property def total(self) -> int: [10-11]
+def open_cart(cart_id: str) -> Cart: [13-13]
+VERSION: str [15-15]

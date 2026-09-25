@@ -1138,3 +1138,60 @@ reviewers and the consultant need NONE. `NoMcpServers` (runners/Reviewers) holds
   `--ignore-user-config`: that would also drop the model, service tier and the Windows sandbox mode.
 - **agy / gemini**: no per-launch switch exists; a server named in `~/.gemini/config/mcp_config.json` or
   `~/.gemini/settings.json` is reported once per start as a log warning (`GeminiFamilyConfigured`).
+
+## A hosted API is a direct call with a vault key — the `api` runtime (2026-09-25, PLAN_feature_review S1.2)
+
+`ApiRuntime` (`runners/Reviewers/ApiRuntime.cs`) is the seventh adapter and the second whose "CLI" is this
+binary: `coai-mcp --ask-api` (`src/Api/AskApiMode.cs`) POSTs one completion to a hosted OpenAI-compatible
+endpoint — xAI, DashScope, any `/v1` — with `Authorization: Bearer <key>`, and writes the answer where the
+executor looks. Not `CustomCodexRuntime`, for the reason the local runtime is not: codex's own system prompt
+is 21k tokens before any review content, and it sends fields a hosted reasoning model refuses.
+
+- **The key travels in the child's ENVIRONMENT and nowhere else.** `ApiRuntime.Build` puts
+  `ReviewerSettings.ApiKey` (composed by `PanelService` from the vault under the row's id) into
+  `ProcessRequest.Environment["COAI_API_KEY"]`; argv carries the vendor, the endpoint (`OpenAiBaseOf`),
+  the model, the dialect, the prompt/schema/answer files, the derived deadline (`ShimDeadlineSeconds`),
+  the token ceiling and the effort — never the key. `ApiRuntimeTests` asserts no argv element carries it;
+  `ApiShimScenarioTests` launches the REAL binary with the adapter's argv and environment against a real
+  `HttpListener` and asserts the bearer the child sent is the key the adapter placed, and that it is on
+  neither stream. Teeth: with the key moved to argv the environment test went red
+  (`Expected … Environment {empty} to contain key "COAI_API_KEY"`).
+- **No shared resource.** `SharedResource` is empty, so an api reviewer takes the machine lane and its
+  per-provider cap, never `EngineLease`, never the GPU stand-down: a vendor's fleet is bounded by its rate
+  limit, not by a card on this machine.
+- **Dialects are data.** `shared/api-dialects.json` is embedded in `CoaiMcp.Core`
+  (`core/Api/ApiDialects.cs`, `ApiDialect.cs`) and `ChatRequest.Body(dialect, …)` (`core/Api/ChatRequest.cs`)
+  spells the request from a row: which of `temperature` / `seed` / `frequency_penalty` travel, the name of
+  the token ceiling, `json_schema` vs `json_object`, `strict`, whether the finding schema's free text is
+  bounded (`maxLength` — local engines honour it through grammar-constrained decoding; OpenAI's strict mode
+  refuses it with a 400), where the effort travels and how it is translated. `LocalAsk.RequestBody` now
+  delegates to `ChatRequest.Body(ApiDialects.Local, …)` and is **pinned byte for byte** by
+  `LocalRequestBodyIsPinnedTests` — the golden was captured from the pre-refactor writer and the pin was
+  green before a line moved. Two rows ship: `local` (the measured Ollama body) and `openai` (generic:
+  no sampling fields, `max_completion_tokens`, unbounded strict schema, `none` → no effort field). `xai`
+  and `qwen` arrive only from `--probe-api` rows (§6 S0.5 of the plan), never from documentation.
+- **Resolution.** `RuntimeResolution.NameOf` answers `api` BEFORE the base-URL arm — an api row has a base
+  URL by definition, and the arm means "ride the Codex CLI". `AuthOf` → `ApiAuthOf`: no key → `unavailable`
+  naming the vault entry; no URL → `unavailable`; both → `vault key`. `VendorProbe`'s `api` arm contacts
+  nothing: key present, URL well-formed, model named, note "endpoint not contacted (`coai-mcp --probe-api
+  --vendor <id>` asks it)". `ConsultantResolution.Consulting` is unchanged, so an api consultant is refused
+  by its own name. `ReviewerRuntimeSelector.MachineOnlyRuntimes = {local, api}`, and the Team server derives
+  `VendorConfig.KnownRuntimes = RuntimeNames − MachineOnlyRuntimes` (it used to subtract the literal
+  `"local"`).
+- **The shim's exit codes are the contract.** 0 answered; 65 refused before sending (missing arguments,
+  no `COAI_API_KEY`, an unknown dialect, an unreadable schema — never 64, the mode is known); 69 unreachable
+  or out of time; 70 not a review; 75 on 429/503 with `HTTP 429 Too Many Requests from <endpoint> — try
+  again in Ns: …`, the shape `RateLimit.Hit` reads off the TEXT with a non-zero exit (teeth: reworded to
+  "answered 429" the matcher went `False`); 77 on 401/403 — "the API refused the key for vendor '<id>'",
+  and the body is NOT quoted. Every other vendor text on stderr passes `Redaction.SafeText` and a
+  300-character cap first.
+- **`--probe-api`** (`src/Api/ProbeApiMode.cs`) is the S0.5 instrument: it reads the vault exactly as
+  `KeyVault.ReadAsync` does (`creds config`, the only child it starts), runs `GET /models` and then the
+  matrix — `json_schema`, `json_object`, `temperature`, `seed`, `frequency_penalty`,
+  `reasoning_effort=low|medium|high`, a second turn with the same prefix (cached tokens), a wrong key on
+  purpose (the 401 shape) — each call under its own `CancellationTokenSource`, and prints an ALLOWLIST:
+  status codes, model ids, the request field a refusal names (`KnownFields`), token and cached-token
+  counts, `cost: null`; vendor text only redacted and capped. Exit 0 ran, 65 bad arguments, 78 no vault
+  or no key under the vendor. Teeth: with the redaction removed the stub's echoed `Authorization` reached
+  stdout and two tests went red. **Not yet run against a real endpoint** — the vault was not configured on
+  the build machine (`--providers` → `vaultNote: "no COAI_CREDS_KEY configured"`, 2026-09-25).

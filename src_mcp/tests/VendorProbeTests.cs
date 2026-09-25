@@ -164,6 +164,54 @@ public sealed class VendorProbeTests : IDisposable
         health.CliFound.Should().BeFalse("nothing was run — the answer is about the vendor, not the binary");
     }
 
+    // ---------- the api arm: a hosted endpoint, a key in the vault, nothing to run ----------
+
+    /// <summary>
+    /// An <c>api</c> vendor is probed WITHOUT contacting the endpoint: the key is present, the URL
+    /// parses, and the note says the endpoint was not asked — a live <c>GET /models</c> is
+    /// <c>--probe-api</c>'s job, and a health probe that spent a paid call on every panel repaint
+    /// would be a bill nobody chose. (PLAN_feature_review.md §4.10.)
+    /// </summary>
+    [Fact]
+    public async Task AnApiVendorWithAKeyAndAWellFormedUrl_IsHealthy_WithoutTheEndpointBeingContacted()
+    {
+        var health = await Probe(Vendor("grok", "api", "https://api.x.ai/v1"), model: "grok-4", hasKey: true);
+
+        health.CliFound.Should().BeTrue("there is no CLI to find — this binary is the shim");
+        health.Auth.Should().Be("vault key");
+        health.Note.Should().Contain("endpoint not contacted");
+    }
+
+    [Fact]
+    public async Task AnApiVendorWithoutAKey_IsUnavailable_AndNamesTheVaultEntry()
+    {
+        var health = await Probe(Vendor("grok", "api", "https://api.x.ai/v1"), model: "grok-4", hasKey: false);
+
+        health.Auth.Should().Be("unavailable");
+        health.Note.Should().Contain("'grok'").And.Contain("vault");
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("api.x.ai/v1")]
+    [InlineData("ftp://api.x.ai/v1")]
+    public async Task AnApiVendorWhoseUrlIsNotOne_IsUnavailable_AndSaysSo(string baseUrl)
+    {
+        var health = await Probe(Vendor("grok", "api", baseUrl), model: "grok-4", hasKey: true);
+
+        health.Auth.Should().Be("unavailable");
+        health.Note.Should().Contain("URL");
+    }
+
+    [Fact]
+    public async Task AnApiVendorWithNoModel_IsUnavailable_LikeALocalEngineWithNone()
+    {
+        var health = await Probe(Vendor("grok", "api", "https://api.x.ai/v1"), hasKey: true);
+
+        health.Auth.Should().Be("unavailable");
+        health.Note.Should().Contain("no model");
+    }
+
     // ---------- the local arm: no CLI to ask ----------
 
     [Fact]

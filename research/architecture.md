@@ -27,7 +27,9 @@ C4Container
   System_Ext(codex, "codex exec", "Reviewer CLI")
   System_Ext(gem, "agy (Antigravity)", "Reviewer CLI")
   System_Ext(creds, "CredsForDevs", "config entry holding vendor keys")
+  System_Ext(api, "OpenAI-compatible API", "a hosted model with no CLI — xAI, Qwen, any /v1 endpoint")
   Rel(main, mcp, "MCP tools over stdio")
+  Rel(mcp, api, "--ask-api child: POST /chat/completions, Bearer key from the vault via ENV")
   Rel(mcp, codex, "spawn, read-only sandbox")
   Rel(mcp, codex, "consult — one turn in the LIVE checkout, read-only, resumable")
   Rel(mcp, gem, "spawn, approval-mode plan")
@@ -64,6 +66,36 @@ accepts at least five, so `[]` can only be a bug.
 **coai-mcp asks before it assembles a round**, because assembling one is synchronous and cannot. The
 panel probes constantly while it is open, but the panel is the EXTENSION and coai-mcp is a separate
 process with a separate cache — nothing guarantees the one building the round has ever asked.
+
+## A reviewer with no CLI, and an outline of code nobody sends (2026-09-25)
+
+Epic 1 of [../todo/PLAN_feature_review.md](../todo/PLAN_feature_review.md) — the groundwork for a
+fourth gate that reviews a whole FEATURE — changed three things that cross the containers:
+
+- **A sixth runtime, `api`.** A reviewer row whose runtime is `api` runs as a child of coai-mcp itself
+  (`--ask-api`), POSTing to an OpenAI-compatible `/chat/completions` with a `Bearer` key the vault
+  holds under the row's id. The key reaches the child only through its ENVIRONMENT (`COAI_API_KEY`),
+  never argv, and the answer is streamed against an 8 MiB ceiling. Request shapes are data
+  (`shared/api-dialects.json`, read by both halves); vendor dialects are added only from a measured
+  answer (`--probe-api`, which prints an allowlist and redacts vendor text). It is a MACHINE-ONLY
+  runtime, like `local`: `MachineOnlyRuntimes` is subtracted from what the Team server accepts, so a
+  Team server never takes a key it has nowhere to keep.
+- **The settings file now depends on the installed server's version.** An older coai-mcp turns a
+  runtime it does not know into `codex` WITH the row's base URL — a Grok row would ride the Codex CLI
+  against xAI's endpoint under its own name. So the extension threads the installed server version
+  into the writer and SUPPRESSES `api` rows from `COAI_VENDORS` below `API_RUNTIME_SINCE`
+  (`apiRuntime.ts`); disabling them in the card alone would not reach a server that reads the file.
+- **An outline, not code.** `ISourceOutliner` (core) and `TreeSitterOutliner` (normalizer) turn a C#,
+  TS, TSX, JS, Rust, PHP or Python file into signatures without bodies — for a reviewer that is sent
+  no checkout and asks for source by name through the `sourceRequests` field of
+  `FindingSchema.FeatureJson`. It is deliberately a second language set beside the defect corpus's
+  `SourceLanguage`, which is a trust boundary `coai-bugs` parses; widening that one would have changed
+  what the collector uploads.
+
+Also in force from this epic: every stage answers by name from one table (`core/Rounds/Stages.cs`),
+and a round's number comes from the journal, so a later round no longer overwrites an earlier one's
+row in the log. See [module_core.md](module_core.md), [module_runners.md](module_runners.md),
+[module_server.md](module_server.md) and [module_extension.md](module_extension.md).
 
 ## Three gates, not two (2026-09-13)
 

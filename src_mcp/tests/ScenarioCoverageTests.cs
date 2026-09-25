@@ -51,7 +51,9 @@ public sealed class ScenarioCoverageTests
     {
         ["ask_human"] = "it BLOCKS until a person answers in the panel or on their phone; the wait is "
             + "the behaviour, and a scenario that answers it from a fake surface would exercise the "
-            + "fake. Its pieces are covered by EscalationsTests and HumanDecisionTests.",
+            + "fake. Its pieces are covered by EscalationsTests and HumanDecisionTests; which SESSION "
+            + "a question is filed under (the document's, when `document` is passed) by "
+            + "ADocumentIsReviewedEndToEndTests, against the real service with a budget nobody meets.",
     };
 
     [Fact]

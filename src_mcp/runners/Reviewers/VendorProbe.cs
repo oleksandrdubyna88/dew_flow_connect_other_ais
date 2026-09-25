@@ -71,6 +71,7 @@ public static class VendorProbe
         return runtimeName switch
         {
             "local" => LocalHealth(vendor, enabled, model),
+            "api" => ApiHealth(vendor, enabled, model, hasVaultKey),
             "remote" => await RemoteHealthAsync(vendor, enabled, remoteHealth, ct),
             _ => await CliHealthAsync(launcher, vendor, runtimeName, enabled, executablePath, hasVaultKey, timeout, ct),
         };
@@ -162,6 +163,48 @@ public static class VendorProbe
             : new VendorHealth(enabled, true, "", "own auth",
                 $"a local engine at {endpoint} — no CLI, no key, no bill");
     }
+
+    /// <summary>
+    /// An <c>api</c> vendor is probed WITHOUT contacting its endpoint: is there a key, does the URL
+    /// parse, is a model named. A live <c>GET /models</c> is <c>coai-mcp --probe-api</c>'s job.
+    /// </summary>
+    /// <remarks>
+    /// <para>Deliberately not a request. <c>providers</c> is answered on every panel repaint and by the
+    /// Team server's catalog, and a paid call per repaint is a bill nobody chose — and a probe that
+    /// reaches the network is a probe that hangs when the network does. What CAN be known without
+    /// asking is said, and the note says the endpoint was not asked, so nobody reads "vault key" as
+    /// "the key works". (PLAN_feature_review.md §4.10.)</para>
+    /// <para>The model is checked for the reason the local arm checks it: an api call with no model is
+    /// a 400 on every review, and a health probe that said the vendor was fine would be the third time
+    /// this product reported a reviewer as healthy while every round lost it.</para>
+    /// </remarks>
+    private static VendorHealth ApiHealth(VendorIdentity vendor, bool enabled, string model, bool hasVaultKey)
+    {
+        var (auth, authNote) = RuntimeResolution.AuthOf(vendor, hasVaultKey);
+        if (auth == "unavailable")
+        {
+            return new VendorHealth(enabled, true, "", auth, authNote);
+        }
+
+        if (!IsHttpUrl(vendor.BaseUrl))
+        {
+            return new VendorHealth(enabled, true, "", "unavailable",
+                $"'{vendor.BaseUrl}' is not an http(s) URL — an api vendor's endpoint is its OpenAI-compatible base, e.g. https://api.x.ai/v1");
+        }
+
+        return model.Length == 0
+            ? new VendorHealth(enabled, true, "", "unavailable",
+                $"an API at {vendor.BaseUrl} with no model — name one in this vendor's Model field, or the "
+                    + "endpoint answers 400 to every reviewer; `coai-mcp --probe-api --vendor "
+                    + $"{vendor.Provider}` lists the ids the key can call")
+            : new VendorHealth(enabled, true, "", auth,
+                $"an OpenAI-compatible API at {vendor.BaseUrl} — key present, endpoint not contacted "
+                    + $"(`coai-mcp --probe-api --vendor {vendor.Provider}` asks it)");
+    }
+
+    private static bool IsHttpUrl(string value) =>
+        Uri.TryCreate(value, UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
     private static async Task<VendorHealth> AskItsVersionAsync(
         IProcessLauncher launcher,

@@ -96,10 +96,14 @@ public sealed class NormalizeModeTests
         Program.Classify(["--normalise"]).Should().Be(Program.Startup.Usage, "a near miss is refused, not guessed");
     }
 
-    /// <summary>Without both file arguments it refuses with 64, rather than writing somewhere odd.</summary>
+    /// <summary>
+    /// Without both file arguments it refuses with 65, rather than writing somewhere odd — and never
+    /// with 64, which means "this binary is too old for that mode" (.agents/PROJECT.md). This test
+    /// pinned 64 until 2026-09-25; nothing read the code, so the pin only protected the defect.
+    /// </summary>
     [Fact]
     public void TheModeNeedsBothFiles() =>
-        Program.NormalizeJson(["--normalize", "--in", "only-one.json"]).Should().Be(64);
+        Program.NormalizeJson(["--normalize", "--in", "only-one.json"]).Should().Be(65);
 
     /// <summary>A request file that is not there is the CALLER's mistake, and says so with 66.</summary>
     [Fact]

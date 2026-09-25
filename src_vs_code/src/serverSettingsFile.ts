@@ -93,8 +93,10 @@ export function serverSettingsJson(
   settings: CoaiSettings,
   vendors: readonly Vendor[],
   writtenBy = '',
+  /** The `coai-mcp` on this side, when known — `envBlock` keeps an `api` row out of the file of an older one. */
+  installedServerVersion = '',
 ): string {
-  const block = envBlock(settings, vendors);
+  const block = envBlock(settings, vendors, installedServerVersion);
 
   return JSON.stringify(
     writtenBy.length === 0 ? block : { ...block, [WRITTEN_BY]: writtenBy },

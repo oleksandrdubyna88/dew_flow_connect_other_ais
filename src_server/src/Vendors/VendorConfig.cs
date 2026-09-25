@@ -30,14 +30,19 @@ public sealed record VendorConfig(
     /// The runtimes a vendor may name, taken from the adapters that exist rather than typed again.
     /// </summary>
     /// <remarks>
-    /// <c>local</c> is in <see cref="ReviewerRuntimeSelector.RuntimeNames"/> and is refused here: it
-    /// points at a local model endpoint, which is not a subscription and has no account to sign in.
-    /// A Team server exists to share paid CLIs; naming <c>local</c> would configure something this
-    /// server cannot run.
+    /// <para><see cref="ReviewerRuntimeSelector.RuntimeNames"/> minus
+    /// <see cref="ReviewerRuntimeSelector.MachineOnlyRuntimes"/>. <c>local</c> points at a model
+    /// endpoint on the machine that configured it, which is not a subscription and has no account to
+    /// sign in; <c>api</c> reaches a hosted endpoint with a key from that person's vault, and the Team
+    /// server does not take part in v1 (PLAN_feature_review.md, D10). A Team server exists to share paid
+    /// CLIs; naming either would configure something this server cannot run.</para>
+    /// <para>It used to subtract the literal <c>"local"</c>. The library now names the machine-only set
+    /// beside the runtimes themselves, so the next runtime added on the client side is refused here by
+    /// name — not admitted because a set it was never meant to enter grew by one.</para>
     /// </remarks>
     public static IReadOnlySet<string> KnownRuntimes { get; } =
         new HashSet<string>(
-            ReviewerRuntimeSelector.RuntimeNames.Where(r => !r.Equals("local", StringComparison.OrdinalIgnoreCase)),
+            ReviewerRuntimeSelector.RuntimeNames.Where(r => !ReviewerRuntimeSelector.MachineOnlyRuntimes.Contains(r)),
             StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Why this entry cannot be used, or empty when it can.</summary>

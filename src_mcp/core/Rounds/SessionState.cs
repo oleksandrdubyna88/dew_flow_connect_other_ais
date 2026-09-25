@@ -199,18 +199,11 @@ public sealed record PanelConfig(
     /// would select the plan roster and the plan vendor switch with no compile error and no
     /// exception — a round quietly asking the wrong reviewers. A finished session runs no round, so
     /// the value it maps to is never used; it is the fall-through that had to go, not the case.</para>
+    /// <para>The row itself lives in <see cref="Stages"/> since the feature-review plan (2026-09-25),
+    /// beside the stage's phrase, its next stage and its sentences — one table, so a stage cannot be
+    /// mapped here and forgotten there.</para>
     /// </remarks>
-    public static RoleBucket BucketFor(Stage stage) => stage switch
-    {
-        Stage.PlanReview => RoleBuckets.PlanCode,
-        Stage.CodeReview => RoleBuckets.ResultCode,
-        Stage.DocumentReview => RoleBuckets.ResultDocument,
-        // Never asked for: a finished session runs no round. Answered rather than thrown because
-        // `status` reads `For(Stage)` on a session that has reached it.
-        Stage.Done => RoleBuckets.PlanCode,
-        _ => throw new ArgumentOutOfRangeException(
-            nameof(stage), stage, "a stage with no bucket cannot choose a roster — map it here"),
-    };
+    public static RoleBucket BucketFor(Stage stage) => Stages.Of(stage).Bucket;
 
     /// <summary>
     /// The same gate for every role — what the legacy single-value settings mean, and what a test

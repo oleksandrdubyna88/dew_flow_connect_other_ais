@@ -1,0 +1,14 @@
+<?php
+interface Store
+{
+    const LIMIT = 10;
+
+    public function save(array $item): bool;
+
+    public static function create(): static;
+}
+
+abstract class Base implements Store
+{
+    abstract protected function run(int $n): void;
+}

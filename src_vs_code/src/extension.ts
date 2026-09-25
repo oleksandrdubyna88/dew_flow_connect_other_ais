@@ -44,7 +44,7 @@ import { installFailureHint, SingleFlight } from './coaiInstall';
 import { claudeSnippet, copiedMessage } from './claudeSnippet';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } from './mcpBlock';
-import { installedVersion, installLatest, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
+import { installedVersion, installLatest, knownServerVersion, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
 import { ConsultationWatcher } from './consultationWatcher';
 import { PanelProvider } from './panelProvider';
@@ -278,6 +278,10 @@ export function activate(context: vscode.ExtensionContext): void {
     readSettingsFile,
     reportStandDown,
     underSettingsLock,
+    // Read at every sync, never spawned: the last `--version` answer the panel's probe cached for
+    // this side's binary, else the install record. It gates an `api` row out of the file of a
+    // server too old to know the runtime (PLAN_feature_review.md §4.13).
+    () => knownServerVersion(context.globalStorageUri, context.globalState),
   );
   mirrorSettings(settingsSync);
   // Every deletion a crashed or reloaded window left half-done: step 2 again, idempotent, and then

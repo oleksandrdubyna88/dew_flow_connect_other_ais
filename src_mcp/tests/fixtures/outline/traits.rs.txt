@@ -1,0 +1,10 @@
+pub trait Store {
+    type Item;
+    const LIMIT: usize;
+    fn save(&mut self, item: Self::Item) -> Result<(), Error>;
+    fn count(&self) -> usize;
+}
+
+extern "C" {
+    fn native_call(x: i32) -> i32;
+}

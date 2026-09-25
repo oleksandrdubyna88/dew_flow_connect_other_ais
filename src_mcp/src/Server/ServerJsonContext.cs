@@ -210,6 +210,7 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(Store.BugCorpus))]
 [JsonSerializable(typeof(Normalising.NormalizeRequest))]
 [JsonSerializable(typeof(Normalising.NormalizeResult))]
+[JsonSerializable(typeof(Core.Outlining.SourceOutline))]
 [JsonSerializable(typeof(Collecting.CollectSummary))]
 [JsonSerializable(typeof(Collecting.PairsAnswer))]
 [JsonSerializable(typeof(Core.Collecting.RealMethod))]

@@ -85,10 +85,11 @@ public static class RoundSubject
     }
 
     /// <summary>The stage as a person would say it, not as the enum spells it.</summary>
-    public static string StageName(string stage) => stage switch
-    {
-        "PlanReview" => "plan review",
-        "CodeReview" => "code review",
-        _ => "done",
-    };
+    /// <remarks>
+    /// It knew two stages and said "done" for everything else — so a document review's
+    /// <c>call_human</c> notice read "The done gate needs your decision" (§9.1 of the feature-review
+    /// plan). The phrase is the stage's own row now, and a stage this build has no row for is said
+    /// as itself.
+    /// </remarks>
+    public static string StageName(string stage) => Stages.PhraseOf(stage);
 }

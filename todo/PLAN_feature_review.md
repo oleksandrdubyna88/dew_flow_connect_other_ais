@@ -489,10 +489,88 @@ sequenceDiagram
 | S0.1 grammars | Do `tree-sitter-tsx/rust/php/python` load by their entry points (`tree_sitter_php` vs `_php_only`) on win-x64 and linux-x64 **in the AOT publish**? Publish size delta? Outline quality on 20 real files per language | ≥95 % of named declarations against a regex baseline; ERROR share per language recorded |
 | S0.2 budget | A throwaway `--outline` over three shipped features of this repo (the consultant, `review_document` PR #230, the S8 notices) | bytes, file counts, `git show` vs `cat-file --batch` time; calibrate the 112 KB / 400-file limits |
 | S0.3 turns | Two hand-driven resend turns on codex, claude, agy and one OpenAI-compatible API | share of useful requests; does the model stop on FINAL; cache hit on turn 2 (`cache_read` / `cached_tokens`); resume (C3) only if turn 2 costs >40 % of turn 1 |
-| S0.5 xAI and Qwen | With the operator's keys (through the vault, never on argv): `GET /models`; one `chat/completions` per candidate model with the review schema as strict `json_schema`, then as `json_object`; with and without `frequency_penalty`, `seed`, `temperature`; each `reasoning_effort` value; a 429 and a 401 provoked on purpose; a second turn with the same prefix | per vendor: the model ids the key can call, which fields are refused and with what verbatim error, whether strict schema holds, the effort values accepted, the exact 429/401 text (for `RateLimit.Hit`), cached-token counts on turn 2, cost of one review-sized call. These rows ARE the `xai` / `qwen` dialects |
+| S0.5 xAI and Qwen | With the operator's keys (through the vault, never on argv): `GET /models`; one `chat/completions` per candidate model with the review schema as strict `json_schema`, then as `json_object`; with and without `frequency_penalty`, `seed`, `temperature`; each `reasoning_effort` value; a 429 and a 401 provoked on purpose; a second turn with the same prefix | per vendor: the model ids the key can call, which fields are refused and with what verbatim error, whether strict schema holds, the effort values accepted, the exact 429/401 text (for `RateLimit.Hit`), cached-token counts on turn 2, cost of one review-sized call. These rows ARE the `xai` / `qwen` dialects. **Not measured as of 2026-09-25: the vault is not configured on the build machine** (`coai-mcp --providers` → `vaultNote: "no COAI_CREDS_KEY configured"`), so `--probe-api` — built and tested against a stub in S1.2 (i) — has not been run against a real endpoint and no `xai`/`qwen` row exists. See the S1.2 status line in §7.2 for the operator's steps |
 | S0.4 old side | Previous RELEASED `coai-mcp` against a data dir with a feature session, `COAI_VENDORS` with `api`+`feature`, the new DB; previous released extension against the new `--log` | each row of §4.13 recorded with versions |
 
 Each spike is folded into the story whose code it measures (§7.1); its rows are that story's acceptance evidence.
+
+#### S0.1 results — measured 2026-09-25 in S1.3 (the product's own `--outline`, Native AOT publish)
+
+**Every grammar loads by its entry point in the AOT publish, on both RIDs.** win-x64 (this machine) and
+linux-x64 (WSL, dotnet 10.0.112, built in `~` and not over `/mnt/d`): `coai-mcp --outline` over the seven
+per-language golden fixtures printed output byte-identical to the goldens, exit 0, nothing on stderr.
+**PHP's entry point is `tree_sitter_php`**, decided by loading: `tree_sitter_php_only` throws
+`EntryPointNotFoundException` — the library in TreeSitter.DotNet 1.3.0 does not export it
+(`OutlinerGrammarTests.ThePhpEntryPointIsTheOneTheLibraryExports` keeps that measurement).
+
+| RID | shipped files before (bytes) | after | delta | of which the 4 grammars | of which the binary |
+|---|---|---|---|---|---|
+| win-x64 | 33 818 624 | 38 665 216 | **+4 846 592 (+14.3 %)** | +4 482 048 (tsx 1 547 264, rust 1 217 024, php 1 155 584, python 562 176) | +364 544 |
+| linux-x64 | 30 336 048 | 34 832 496 | **+4 496 448 (+14.8 %)** | +4 208 128 | +288 320 |
+
+"Shipped files" = the publish directory without `.pdb`/`.dbg`; before = `git archive` of `ef4b961c`
+published the same way. The publish log reads `keeping 8 grammar(s)` (was 4).
+
+**Quality against a regex baseline, 20 real files per language** (declaration keywords anchored at line
+start; a hit counts as found when an outline entry of that name spans its line; hits strictly inside a
+callable's or a declaration's body are excluded as *nested, by design* — the outline never enters a body):
+
+| Language | files (source) | bytes in | regex hits | nested (by design) | eligible | found | recall | ERROR share mean / max |
+|---|---|---|---|---|---|---|---|---|
+| C# | 20 — `src_mcp` | 194 015 | 210 | 3 | 207 | 207 | **100 %** | 0.00 % / 0.00 % |
+| TypeScript | 20 — `src_vs_code/src` | 338 309 | 245 | 2 | 243 | 243 | **100 %** | 0.00 % / 0.00 % |
+| TSX | 20 — React apps in WSL `~/git` | 178 436 | 210 | 128 | 82 | 79 | 96.3 % raw, **100 %** corrected | 0.00 % / 0.00 % |
+| JavaScript | 20 — `.mjs` of this repo + conventions | 181 956 | 91 | 11 | 80 | 74 | 92.5 % raw, **100 %** corrected | 0.00 % / 0.00 % |
+| Rust | 20 — `dew_flow_sidecar_rust` | 379 315 | 458 | 6 | 452 | 452 | **100 %** | 0.00 % / 0.00 % |
+| PHP | 20 — a PHP application in WSL `~/git` | 68 281 | 106 | 0 | 106 | 106 | **100 %** | 0.00 % / 0.00 % |
+| Python | 20 — projects in WSL `~/git` | 166 878 | 148 | 6 | 142 | 142 | **100 %** | 0.00 % / 0.00 % |
+
+Every miss was read. **TSX, 3:** all three are the regex's false positives — `type ReactNode,` inside an
+`import { … }` list, not declarations. **JavaScript, 6:** all six are `const x = (…) =>` inside a
+`test("…", () => { … })` callback — a body the outline deliberately never enters (an anonymous callable
+is opaque), which the classifier could not see because the callback has no outline entry of its own.
+Corrected for those, every language is at 100 % of the named declarations the baseline finds; the ≥95 %
+bar passes raw for six languages and corrected for JavaScript. No real file came near the 20 % ERROR
+threshold (the maximum was 0.00 %); the threshold is exercised by `OutlinerTests` instead. The largest
+real source file read was 93 KB, a tenth of the 1 MB input ceiling.
+
+#### S0.2 results — measured 2026-09-25 in S1.3 (AOT `--outline` over every changed file, read at head)
+
+Ranges from `git log`: the consultant = its plan's first commit `d35b831f` to its promotion `0e8fc6a7`;
+PR #230 = its six rebase-merged commits `2a5c79ae`…`3979e765` (`gh pr view 230`); the S8 notices = the
+server plan's first commit `f3b3abdb` to epic 3's `f82566fa` (#471). `DiffExclusions.Default` applied;
+an outline's bytes include one `### path (A|M|R, +a/-d)` heading per file.
+
+| Feature | range | commits | files at head | outlined | not outlined | source | **outline** | not-outlined list | plan | per-file outline p50 / p90 / max | `git show` ×N | `cat-file --batch` | outline per file |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| consultant | `92c22bd8..0e8fc6a7` | 42 | 126 | 105 | 21 (language) | 3 147 KB | **166.1 KB** | 1.5 KB | 52.7 KB | 940 B / 3.7 KB / 11.8 KB | 4 244 ms | 58 ms | 55 ms |
+| `review_document` #230 | `ab16744c..3979e765` | 6 | 78 | 64 | 14 (language) | 2 106 KB | **96.6 KB** | 1.0 KB | 36.3 KB | 1.1 KB / 3.1 KB / 11.4 KB | 3 852 ms | 95 ms | 72 ms |
+| S8 notices | `7383170c..f82566fa` | 61 | 258 | 202 | 56 (54 language, 2 binary) | 6 277 KB | **322.4 KB** | 4.2 KB | 49.2 KB | 1.1 KB / 3.4 KB / 12.7 KB | 7 074 ms | 79 ms | 47 ms |
+
+The largest outline is `PanelService.cs` in all three (11.1–12.4 KB). An outline is 4.6–5.3 % of the
+source it describes. The notices' range carries 61 commits because other work merged between its epics —
+which is exactly what `base..head` is, and why the cutting rule has to exist.
+
+**`git show` per file costs 50–70× what one `git cat-file --batch` costs** (≈30 ms a spawn on Windows
+against one process for the whole set). §4.7 says the builder reads each file "with `git show`"; S2.x
+should read the set through one `cat-file --batch` instead (deviation proposed, not taken here — the
+builder is not this story's).
+
+**How `FeatureBudget` was set from these rows** (`src_mcp/core/Feature/FeatureBudget.cs`,
+`FeatureBudgetTests` restates each row):
+
+| Constant | Value | Plan's guess | From |
+|---|---|---|---|
+| `PlanBytes` | 64 KB | 64 KB | largest plan 52.7 KB + a fifth — the guess stands, now measured |
+| `OutlineBytes` | **168 KB** | 112 KB | 112 KB held only PR #230 whole; 168 KB = the median feature (consultant, 166.1 KB) rounded up to 8 KB. The notices (322.4 KB) go through the cutting |
+| `CollapseAboveBytes` | 4 KB | — | per-file p90 3.1–3.7 KB: collapse starts in the top tenth |
+| `OmissionsReserveBytes` | **8 KB** | 4 KB | the notices' not-outlined list alone is 4.2 KB — 4 KB would truncate the section §4.6 says is never truncated |
+| `MaxOutlinedFiles` | 400 | 400 | widest range 258 files at head — the guess holds with half again to spare |
+
+Epics (16 KB), lessons (16 KB) and history (24 KB) are **not** in `FeatureBudget` yet: they do not exist
+until Epic 2, and a constant nobody measured would be the guess this rule forbids. With the plan's figures
+for those three the whole context is ≈ 64 + 168 + 8 + 56 + rules ≈ 296 KB, past the ≈256 KB precedent —
+Epic 2 either measures and accepts that or takes it back out of the outline.
 
 ## 7. Build order — three epics, nine stories, the coai gate once per epic
 
@@ -591,12 +669,17 @@ this plan's merge commit.
     `KnownRuntimes = RuntimeNames − MachineOnlyRuntimes` (`VendorConfig.cs:38-41`);
     `ConsultantResolution.Consulting` unchanged, so `api` is refused by name; **`--probe-api`** — a
     one-shot mode that reads the vault as `KeyVault.ReadAsync` does (`COAI_CREDS_KEY` from ENV), runs
-    `GET /models` and the §6 S0.5 matrix, prints results only, with a test that neither stdout nor
-    stderr ever contains a key. **(ii) Run S0.5** through `--probe-api` with the operator's `grok`
+    `GET /models` and the §6 S0.5 matrix, prints results only — an ALLOWLIST of fields (status code,
+    model ids, which request field was refused, cached-token counts, cost), and any vendor error text
+    only after the existing `Notices/Redaction` pass and a length cap; each HTTP call has its own
+    timeout and the probe starts no child process. Tests: neither stdout nor stderr ever contains the
+    key, and a stubbed vendor error body carrying a key-shaped token and an `Authorization:` echo comes
+    out redacted (plan round E1, 2026-09-25). **(ii) Run S0.5** through `--probe-api` with the operator's `grok`
     and `qwen` vault entries; write the rows into §6. **(iii)** the `xai` and `qwen` dialects and
     `shared/api-presets.json` written FROM those rows (model ids from `GET /models`; the Token-Plan
     base URL of Q5 as data), mirrored by a TS check. **(iv)** Extension: `models.ts` `RUNTIMES += 'api'`
-    (not in the chat or consultant pickers), `vendors.ts` `dialect?`, the three presets, `vendorsFrom`
+    (not in the chat or consultant pickers), `vendors.ts` `dialect?`, the generic "API (OpenAI-compatible)"
+    preset — the xAI and Qwen presets arrive only with (iii), from measured rows —, `vendorsFrom`
     survives, `API_RUNTIME_SINCE = <the mcp version this ships in>` — rows disabled in the card AND
     suppressed from the emitted `COAI_VENDORS` for an older installed server, which means the installed
     version is threaded into the writer (`envBlock(settings, vendors)`, `settingsShape.ts:459`, has no
@@ -615,8 +698,28 @@ this plan's merge commit.
     the S0.4 rows for `runtime: "api"` and the version gate measured against released `mcp-v0.35.0`
     and `extension-v0.53.1`.
   - Model: **Fable** — API keys, the 401/403 path, and a key that must never reach argv or a log line.
+  - **Status 2026-09-25: PARTIAL — (i) and (iv) shipped, (ii)/(iii) blocked on the vault.** On
+    `feat/feature-review-e1-s12`: `LocalAsk.RequestBody` pinned byte for byte, then moved onto
+    `ChatRequest.Body(dialect, …)` reading the embedded `shared/api-dialects.json` (`local` + `openai`
+    only); `--ask-api` (0/65/69/70/75/77, the 429/503 sentence `RateLimit.Hit` reads, the 401 body never
+    quoted); `ApiRuntime` (self-invocation, key in ENV only, no shared resource); `NameOf` with `api`
+    before the base-URL arm; `ApiAuthOf`; the `VendorProbe` api arm; `MachineOnlyRuntimes = {local, api}`
+    and the Team server's `KnownRuntimes` derived from it; the consultant refusing by name; `--probe-api`
+    (vault read as `KeyVault.ReadAsync`, `GET /models`, the S0.5 matrix, an allowlisted report, redaction,
+    a timeout per call); both modes in `.agents/PROJECT.md`. Extension: `RUNTIMES += 'api'`, `dialect?`,
+    the one generic preset with a marked place for xAI/Qwen, `API_RUNTIME_SINCE = 0.37.0` (0.36.0 was released without it) with the installed
+    version threaded into the writer and api rows SUPPRESSED from `COAI_VENDORS` for an older server, the
+    card switched off with its reason, help in five languages. **The vault is not configured on the build
+    machine** (`coai-mcp --providers` → `vaultNote: "no COAI_CREDS_KEY configured"`), so S0.5 was not run,
+    §6 has no xAI/Qwen rows, and no vendor dialect or preset exists — per the paragraph below, (ii)/(iii)
+    become the first story of Epic 2. **Operator's steps:** put the xAI and Qwen keys into the CredsForDevs
+    config entry under `grok` and `qwen`, set `COAI_CREDS_KEY`, add the two rows in the panel (runtime
+    `api`, their base URLs), then `coai-mcp --probe-api --vendor grok --model <an id from the models block>`
+    and the same for `qwen`, copy the report's rows into §6, and only then write the `xai`/`qwen` rows of
+    `shared/api-dialects.json` and the two presets. The S0.4 rows for `runtime: "api"` against released
+    `mcp-v0.35.0` / `extension-v0.53.1` are also still to be measured.
 
-- [ ] **S1.3 — the outline for seven languages, `--outline`, and the feature finding schema.**
+- [x] **S1.3 — the outline for seven languages, `--outline`, and the feature finding schema.**
   Goal: a body-free AST outline of any supported file, measured for budget, and the schema the feature
   reviewer answers in — every other stage untouched.
   - Deliverables: `ISourceOutliner` + `OutlineLanguage` in core (separate from `SourceLanguage`, the
@@ -625,7 +728,10 @@ this plan's merge commit.
     (node kinds as data, exhaustive, no `_ =>`); `normalizer/TreeSitterOutliner.cs` (signature = node
     start to `body` start, whitespace collapsed, ≤240 chars; the four special cases; the 20 % ERROR
     threshold); `shared/kept-grammars.txt` + `tree-sitter-tsx`, `-rust`, `-php`, `-python`;
-    `--outline <file>` (listed in `.agents/PROJECT.md`); `FindingSchema.FeatureJson` derived from
+    `--outline <file>` (listed in `.agents/PROJECT.md`); an INPUT ceiling of 1 MB enforced by the
+    outliner itself, before any parse — a larger file is reported "unsupported (too large)" with its
+    size, never parsed, so a minified bundle cannot stall the stdio process (plan round E1);
+    `FindingSchema.FeatureJson` derived from
     `FindingSchema.Json` (`sourceRequests`, strict), `SchemaFile.Ensure` one file per shape,
     `RawReview`/`NormalisedReview.SourceRequests` (empty, never null; an invalid request is a named
     rejection); `core/Feature/FeatureBudget.cs` — constants calibrated by S0.2, not typed.
@@ -634,12 +740,22 @@ this plan's merge commit.
     unique to a body appears in the outline); the parse-failure threshold; every grammar loads by its
     entry point (`tree_sitter_php` vs `_php_only` decided by loading, not by reading);
     `FindingSchema.Json` byte-identical; `FeatureJson` meets the OpenAI strict rules; the collector's
-    `.tsx` behaviour unchanged.
+    `.tsx` behaviour unchanged; a declaration-only file per language (a `.d.ts`, a C# interface with
+    abstract members, a Python stub) outlines every member with no body field; a file over the ceiling
+    is refused unparsed.
   - Acceptance: S0.1 rows (≥95 % of named declarations against a regex baseline on 20 real files per
     language; ERROR share; publish size delta, win-x64 and linux-x64, in the AOT publish) and S0.2 rows
     (`--outline` over the consultant, PR #230 and the S8 notices: bytes, file counts, `git show` against
     `cat-file --batch`) written into §6; every `FeatureBudget` constant traces to a row.
   - Model: **Opus** — a decided design, per-language tables, and a schema pinned byte-for-byte.
+
+**If the vault never arrives (plan round E1, 2026-09-25).** S1.2 (ii)/(iii) need the operator's
+`grok`/`qwen` vault entries. When the rest of Epic 1 is done and the vault is still not configured,
+the epic does NOT wait: its commit carries (i) and (iv) with the generic `openai` dialect only — no
+xAI/Qwen preset, nothing unmeasured — and S1.2's acceptance is recorded as PARTIAL in this plan, naming
+the missing rows. (ii)/(iii) then become the first story of Epic 2, run the day the vault is configured,
+with the setup steps handed to the operator in the epic's summary. Epic 2's live acceptance (Grok and
+Qwen through `api`) cannot pass without them, so nothing is lost silently.
 
 ### 7.3 Epic 2 — the stage
 
@@ -895,6 +1011,8 @@ xUnit v3 through the MTP executables (never `dotnet test`); extension pages test
    and independent of the budget counter, which keeps counting rounds for the budget only. **A
    prerequisite of the skip path** (§4.4).
 7. `--ask-local` exits **64** on missing arguments (`Program.cs:1491-1494`) — must be 65.
+   `--normalize` had the same defect (`Program.cs:1157`, found by S1.3) and a test that PINNED 64
+   (`NormalizeModeTests.TheModeNeedsBothFiles`); nothing read that code, so both now say 65.
 8. `settingsShape.ts:728` `enabledCodeRoles` treats "not plan" as code — becomes wrong the moment a
    third result bucket exists.
 9. Stale text: `normalizer/CoaiMcp.Normalizer.csproj:9-11` says it is not referenced by `CoaiMcp.csproj`

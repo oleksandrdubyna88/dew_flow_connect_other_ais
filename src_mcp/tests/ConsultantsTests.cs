@@ -370,6 +370,22 @@ public sealed class ConsultantResolutionAfterStoryTwoTests : IDisposable
         ConsultantResolution.CannotConsult(identity).Should().Contain(provider).And.Contain("Consultant section");
     }
 
+    /// <summary>
+    /// An <c>api</c> vendor is refused BY NAME in v1 (PLAN_feature_review.md §4.10): the refusal says
+    /// it runs on <c>api</c>, not that it is a codex endpoint — which is what an api row read through
+    /// the base-URL arm would have been called, and a sentence about the wrong runtime sends a person
+    /// to the wrong setting.
+    /// </summary>
+    [Fact]
+    public void AnApiVendorIsRefusedByItsOwnName_NotAsACodexEndpoint()
+    {
+        var grok = new VendorIdentity("grok", "api", "https://api.x.ai/v1");
+
+        ConsultantResolution.For(grok).Should().BeNull("consultations over a hosted API are not in this build");
+        ConsultantResolution.CannotConsult(grok).Should().Contain("runs on 'api'").And.NotContain("'codex'");
+        ConsultantResolution.Consulting.Should().NotContain("api");
+    }
+
     [Fact]
     public void EveryRuntimeTheListADVERTISESCanActuallyBeBuilt()
     {

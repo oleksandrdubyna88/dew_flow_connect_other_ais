@@ -79,9 +79,23 @@ public sealed class RoundSubjectTests
         Subject("   \n  ").Should().BeEmpty();
     }
 
+    /// <remarks>
+    /// The third row is §9.1 of the feature-review plan: a document review was said as "done",
+    /// because the switch knew two stages and swallowed the rest with a discard.
+    /// </remarks>
     [Theory]
     [InlineData("PlanReview", "plan review")]
     [InlineData("CodeReview", "code review")]
+    [InlineData("DocumentReview", "document review")]
+    [InlineData("Done", "done")]
     public void TheStage_IsSaidTheWayAPersonWouldSayIt(string stage, string spoken) =>
         RoundSubject.StageName(stage).Should().Be(spoken);
+
+    /// <summary>
+    /// A stage this build has no phrase for is said AS ITSELF — a round written by a newer build
+    /// is not "done".
+    /// </summary>
+    [Fact]
+    public void AStageWithNoPhrase_IsSaidAsItself_NeverAsDone() =>
+        RoundSubject.StageName("FeatureReview").Should().Be("FeatureReview");
 }

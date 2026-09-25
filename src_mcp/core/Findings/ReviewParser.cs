@@ -59,6 +59,10 @@ public static class ReviewParser
             }
         }
 
+        var requests = ImmutableArray.CreateBuilder<SourceRequest>();
+        var refusedRequests = ImmutableArray.CreateBuilder<RejectedEntry>();
+        ReadRequests(raw.SourceRequests, requests, refusedRequests);
+
         return new ParseOutcome.Success(
             new NormalisedReview(findings.ToImmutable(), rejected.ToImmutable())
             {
@@ -66,8 +70,74 @@ public static class ReviewParser
                 // field with a space has said nothing, and a caller must not have to tell the two
                 // apart. Absent, null and blank are one answer.
                 Notes = raw.Notes?.Trim() ?? string.Empty,
+                SourceRequests = requests.ToImmutable(),
+                RejectedSourceRequests = refusedRequests.ToImmutable(),
             });
     }
+
+    /// <summary>
+    /// A feature reviewer's requests for code, each one read or refused BY NAME — never a crash.
+    /// </summary>
+    /// <remarks>
+    /// Only the feature schema offers the field, so on every other stage this sees nothing and
+    /// answers two empty lists. A path is checked here, lexically, with the same rule the collector
+    /// uses for a stored path (<see cref="RepoPaths"/>): a request that could climb out of the
+    /// repository is refused before anything could spend a process on it.
+    /// </remarks>
+    private static void ReadRequests(
+        List<RawSourceRequest?>? raw,
+        ImmutableArray<SourceRequest>.Builder requests,
+        ImmutableArray<RejectedEntry>.Builder refused)
+    {
+        foreach (var (entry, index) in (raw ?? []).Select((r, i) => (r, i)))
+        {
+            switch (Request(entry))
+            {
+                case (SourceRequest request, null):
+                    requests.Add(request);
+                    break;
+                case (null, string reason):
+                    refused.Add(new RejectedEntry(index, reason));
+                    break;
+            }
+        }
+    }
+
+    private static (SourceRequest?, string?) Request(RawSourceRequest? raw)
+    {
+        if (raw is null)
+        {
+            return (null, "not a request object");
+        }
+
+        var file = raw.File?.Trim() ?? string.Empty;
+        if (RepoPaths.WhyNotRelative(file) is { Length: > 0 } why)
+        {
+            return (null, file.Length == 0 ? $"the request {why}" : $"'{file}' {why}; only files in the repository are served");
+        }
+
+        if (SpanProblem(raw.StartLine, raw.EndLine) is { } problem)
+        {
+            return (null, $"'{file}': {problem}");
+        }
+
+        return (new SourceRequest(
+            file,
+            raw.Symbol?.Trim() ?? string.Empty,
+            raw.StartLine ?? 0,
+            raw.EndLine ?? 0,
+            raw.Why?.Trim() ?? string.Empty), null);
+    }
+
+    /// <summary>What is wrong with a requested span, or nothing. Lines are 1-based, the end inclusive.</summary>
+    private static string? SpanProblem(int? start, int? end) => (start, end) switch
+    {
+        ( < 1, _) => $"startLine {start} is not a line (lines are 1-based)",
+        (null, not null) => "an endLine needs a startLine",
+        (_, < 1) => $"endLine {end} is not a line (lines are 1-based)",
+        ({ } from, { } to) when to < from => $"endLine {to} is before startLine {from}, so the lines name no span",
+        _ => null,
+    };
 
     private static (Finding?, string?) Normalise(RawFinding raw, string provider)
     {

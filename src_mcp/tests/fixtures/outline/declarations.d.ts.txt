@@ -1,0 +1,18 @@
+declare module "shop" {
+  export interface Cart {
+    readonly id: string;
+    add(item: Item, count?: number): void;
+    total(): number;
+  }
+  export function open(id: string): Cart;
+  export const version: string;
+  export type Item = { sku: string };
+}
+
+declare function helper(x: number): string;
+
+declare class Legacy {
+  constructor(name: string);
+  run(): Promise<void>;
+  static create(): Legacy;
+}

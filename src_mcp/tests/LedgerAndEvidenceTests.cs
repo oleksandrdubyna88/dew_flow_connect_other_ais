@@ -149,7 +149,7 @@ public sealed class LedgerAndEvidenceTests : IDisposable
         var store = new SessionStore(_dir);
         var session = new PersistedSession(new SessionState("s", "D:/r", "main", new PanelConfig()), []);
         var work = new List<ReviewerWork> { new(Invocation()) };
-        var live = new LiveRound(store, session, work, "", Noticing.None);
+        var live = new LiveRound(store, session, 1, work, "", Noticing.None);
 
         var record = live.Finish("revise", 1, "1 of 2", [
             (Invocation(), new ReviewerOutcome.Ok(new NormalisedReview([], []), false, new Usage(100, 10, null))),

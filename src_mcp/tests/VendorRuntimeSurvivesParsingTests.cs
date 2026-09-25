@@ -39,9 +39,26 @@ public class VendorRuntimeSurvivesParsingTests
     [InlineData("antigravity")]
     [InlineData("local")]
     [InlineData("remote")]
+    [InlineData("api")]
     public void EveryRuntimeThisBuildKnowsSurvivesParsing(string runtime)
     {
         Parse(runtime).Runtime.Should().Be(runtime, "a vendor that arrives as another runtime runs the wrong thing");
+    }
+
+    /// <summary>
+    /// The THIRD copy of this defect, refused before it shipped: an <c>api</c> row read by a parser that
+    /// does not know the name becomes a codex row with a base URL — and with a vault key under its id,
+    /// that row RUNS, through the Codex CLI, against xAI's endpoint, as a vendor nobody chose.
+    /// </summary>
+    [Fact]
+    public void AnApiRowKeepsItsRuntimeAndItsDialect()
+    {
+        var vendor = PanelSettings.ParseVendors(
+            """[{"id":"grok","runtime":"api","model":"grok-4","baseUrl":"https://api.x.ai/v1","dialect":"OpenAI"}]""")
+            .Should().ContainSingle().Subject;
+
+        vendor.Runtime.Should().Be("api", "a row that arrives as codex would ride the Codex CLI to a hosted API");
+        vendor.BaseUrl.Should().Be("https://api.x.ai/v1");
     }
 
     [Fact]

@@ -4,7 +4,7 @@ using ModelContextProtocol.Server;
 namespace CoaiMcp;
 
 /// <summary>
-/// The nine tools, wired to <see cref="PanelService"/>. No prefix of their own: the client
+/// The ten tools, wired to <see cref="PanelService"/>. No prefix of their own: the client
 /// namespaces by its config key, so these surface as <c>mcp__coai__review_plan</c> and so on.
 /// Every answer is a JSON string — trivial schemas, which is what an AOT binary with
 /// reflection-based JSON turned off wants, and what agents read anyway.
@@ -257,8 +257,8 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch, string question) =>
-                await host.Current.AskHumanAsync(repoPath, branch, question),
+            async (string repoPath, string branch, string question, string? document = null) =>
+                await host.Current.AskHumanAsync(repoPath, branch, question, document ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "ask_human",
@@ -269,6 +269,12 @@ internal static class Tools
                     bar, and the open-questions list) together with the round's still-gating
                     findings, and THIS CALL BLOCKS until they answer or the budget runs out
                     (30 minutes by default).
+
+                    Asking about a DOCUMENT review: pass `document` — the same `documentPath` or
+                    `documentName` you gave `review_document`, exactly as `resolve` and `status`
+                    take it. A document review is its own session, and without it the question is
+                    filed under the branch's session, carries the branch's findings, and the
+                    person's answer never reaches the review that asked.
 
                     Two possible replies. `status: "answered"` carries their words in `answer` — act
                     on them. `status: "no_answer_yet"` means nobody was at the keyboard: ask the
