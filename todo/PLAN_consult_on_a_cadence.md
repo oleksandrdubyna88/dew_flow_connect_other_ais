@@ -385,6 +385,26 @@ taken; they override the build order below where they disagree.
    not exist — point 1), then **story 5.2** (generation and discovery together). Story 6.3 carries the
    largest deployment consequence and is gated on the operator's word already.
 
+## Risk consultation for story 4.2 (2026-09-25, codex `gpt-6-astra`, by hand)
+
+The operator's rule gives each piece named as risky its own consultation; story 4.2 was named, and this was
+it. Checked against the code, taken:
+
+1. **`--cadence` builds no `PanelService`.** Its constructor sweeps rounds and consultations, reprojects
+   into SQLite and sweeps orphan processes (`PanelService.cs:105-125`) — a sidebar that probed it every few
+   seconds would run that maintenance every time. The mode builds the READER only: the session store, the
+   cadence store, the consultation evidence. A `CadenceDesk` factory for reading does exactly that.
+2. **An unreadable cadence record must not read as zero.** `CadenceDesk.AnswerAsync` dropped the record's
+   `Readable` flag and answered empty state — a believable "0 epics through the gate". The answer carries the
+   reason (`unreadable`) and the line says it.
+3. **Probes are bounded**: only sessions touched in the last day and holding a plan, one probe at a time, a
+   30 s TTL, never awaited by the render, the last answer kept on a torn session read. The consultation
+   watcher's change resets the cache for the common case; the watcher compares LIVE consultations only, so an
+   outcome recorded on a lapsed one is picked up by the TTL instead — asserted with an injected clock.
+4. **The extension does not compute the line itself**: the cadence record holds neither the plan's epics nor
+   the grouping, and the status answer also needs the plan at a commit, the repository identity and the
+   consultation evidence. One computation, in C#.
+
 ## Build order
 
 Six epics, so this plan is its own first customer: it owes two cadence consultations (epics 1–3,
