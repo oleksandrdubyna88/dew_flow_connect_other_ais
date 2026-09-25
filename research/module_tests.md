@@ -2043,10 +2043,14 @@ and `Confined`, with a scripted process (`Scripted`) that answers each launch in
 - `TheFollowUp_RunsAsTheSameAccountInTheSameConfinement` — same executable, working directory, environment and
   `InheritsEnvironment = false`; the work directory and the schema file exist at BOTH launches (red first).
 - `AFollowUpThatSaysNothing_IsStillUnparseable_SaysSo_AndBothLaunchesAreBilled`, `AFollowUpThatFailed_IsThatFailure`,
-  `AFollowUpCancelled_StillCleansUp` (red first: one launch, and no cancellation reached the launcher).
-- `AFollowUp_GetsOnlyWhatIsLeftOfTheJobsBudget` — elapsed-before-the-second-launch plus its timeout fits the
-  budget (red with the timeout left whole); `ADeniedCommandWithTooLittleBudgetLeft_IsNotAskedAgain` (red with
-  the `LeastFollowUp` floor removed); `AnEmptyAnswerThatWasNotADenial_IsStillOneLaunch` (a guard: agy with no
+  `AFollowUpCancelled_Propagates_AndTheDirectoryIsStillDeleted` (red first: one launch, and no cancellation
+  reached the launcher). That the directory survives BETWEEN the launches is the confinement test's
+  `WorkDirectoryExistedAtEveryLaunch`, not this one's.
+- `AFollowUp_GetsOnlyWhatIsLeftOfTheJobsBudget` — the second launch's timeout is at most the budget less the
+  fake's KNOWN first-launch delay (a second stopwatch in the fake made the margin microseconds; our own code
+  reviewer) — red with the timeout left whole; `ADeniedCommandWithTooLittleBudgetLeft_IsNotAskedAgain` — one
+  launch, and the `Unparseable` says "not asked again" (red with the `LeastFollowUp` floor removed, and red on
+  the reason before the code round's fix); `AnEmptyAnswerThatWasNotADenial_IsStillOneLaunch` (a guard: agy with no
   denial, and claude, stay one launch).
 - Each guard was planted out with COMPILING code (the transcript handed to `FollowUp` emptied; the floor
   removed; the timeout left whole) and the named tests went red. **NOT covered:** the real agy on the box —

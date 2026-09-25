@@ -325,7 +325,7 @@ public sealed class ReviewLauncherTests
     }
 
     [Fact]
-    public async Task AFollowUpCancelled_StillCleansUp()
+    public async Task AFollowUpCancelled_Propagates_AndTheDirectoryIsStillDeleted()
     {
         var scripted = new Scripted(Denied(), new ProcessResult(0, AnsweredStream, string.Empty, TimedOut: false))
         {
@@ -391,7 +391,9 @@ public sealed class ReviewLauncherTests
 
         scripted.Requests.Should().HaveCount(2);
         scripted.Requests[0].Timeout.Should().Be(budget);
-        (scripted.ElapsedAtSecondLaunch + scripted.Requests[1].Timeout).Should().BeLessThanOrEqualTo(budget,
+        // Against the fake's KNOWN delay, not a second stopwatch: the launcher's clock and the fake's cover
+        // different spans, and comparing them made the margin microseconds either way. (Our own reviewer.)
+        scripted.Requests[1].Timeout.Should().BeLessThanOrEqualTo(budget - scripted.FirstTakes + TimeSpan.FromMilliseconds(50),
             "the first launch and its continuation TOGETHER stay inside the job's budget");
     }
 
@@ -407,7 +409,9 @@ public sealed class ReviewLauncherTests
         var attempt = await RunAgy(scripted, ReviewLauncher.LeastFollowUp - TimeSpan.FromSeconds(1));
 
         scripted.Requests.Should().ContainSingle("a continuation with no real time left is a process killed on arrival");
-        attempt.Should().BeOfType<ReviewAttempt.Failed>().Which.Outcome.Should().BeOfType<ReviewerOutcome.Unparseable>();
+        attempt.Should().BeOfType<ReviewAttempt.Failed>().Which.Outcome.Should().BeOfType<ReviewerOutcome.Unparseable>()
+            .Which.Reason.Should().Contain("not asked again",
+                "an operator reading the failure is told a continuation was possible and why it did not run (the code round)");
     }
 
     /// <summary>The tools that reach past the prompt: the filesystem, a shell, the web, a sub-agent.</summary>
@@ -473,14 +477,10 @@ public sealed class ReviewLauncherTests
     /// <summary>Answers each launch with the next result in order, and keeps every request it was handed.</summary>
     private sealed class Scripted(params ProcessResult[] results) : IProcessLauncher
     {
-        private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
-
         public List<ProcessRequest> Requests { get; } = [];
 
         /// <summary>How long the FIRST launch takes — the time the job's budget has already spent.</summary>
         public TimeSpan FirstTakes { get; init; } = TimeSpan.Zero;
-
-        public TimeSpan ElapsedAtSecondLaunch { get; private set; }
 
         public bool WorkDirectoryExistedAtEveryLaunch { get; private set; } = true;
 
@@ -496,16 +496,11 @@ public sealed class ReviewLauncherTests
             SchemaExistedAtEveryLaunch &= File.Exists(Path.Combine(request.WorkingDirectory, SchemaFile.Name));
             if (Requests.Count == 1)
             {
-                _clock.Restart();
                 await Task.Delay(FirstTakes, ct);
             }
-            else if (Requests.Count == 2)
+            else if (Requests.Count == 2 && SecondThrows is { } thrown)
             {
-                ElapsedAtSecondLaunch = _clock.Elapsed;
-                if (SecondThrows is { } thrown)
-                {
-                    throw thrown;
-                }
+                throw thrown;
             }
 
             return results[Math.Min(Requests.Count, results.Length) - 1];
