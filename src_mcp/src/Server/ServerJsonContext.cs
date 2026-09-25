@@ -114,6 +114,9 @@ public sealed record SessionAnswer(
 /// <param name="Groups">Every group the plan owes a consultation for, and whether it has one closed with an outcome.</param>
 /// <param name="Risk">The risky epics and stories named, and whether each has its consultation.</param>
 /// <param name="RiskAnswered">Whether the risk question has been answered, with items or with a reason for none.</param>
+/// <param name="Unreadable">Why the plan's record could not be read, or empty. When it is not, the closed epics and the
+/// risk items above are NOT the record's — they are what an empty one says, and a line drawn from them would read as
+/// "nothing done yet", which is believable and false (the risk consultation for story 4.2, point 2).</param>
 public sealed record CadenceAnswer(
     string Plan,
     string Mode,
@@ -121,7 +124,8 @@ public sealed record CadenceAnswer(
     IReadOnlyList<int> EpicsClosed,
     IReadOnlyList<CadenceGroupAnswer> Groups,
     IReadOnlyList<CadenceRiskAnswer> Risk,
-    bool RiskAnswered);
+    bool RiskAnswered,
+    string Unreadable = "");
 
 /// <summary>One group of epics and whether its consultation is on record.</summary>
 public sealed record CadenceGroupAnswer(string Range, bool Consulted);

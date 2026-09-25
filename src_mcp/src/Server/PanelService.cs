@@ -64,7 +64,7 @@ public sealed partial class PanelService
         _artifacts = new ArtifactStore(settings.DataDir);
         _worktrees = new WorktreeManager(
             launcher,
-            settings.RoundTreeRoot is { Length: > 0 } roundTrees ? roundTrees : Path.Combine(settings.DataDir, "worktrees"),
+            settings.WorktreeRoot,
             message => log.Warning("worktrees: {Detail}", message));
         _context = new ContextAssembler(launcher);
         _scheduler = new BoundedScheduler(
@@ -414,7 +414,7 @@ public sealed partial class PanelService
 
         var cadence = _settings.CadenceMode == Core.Cadence.CadenceMode.Off || document.Length > 0
             ? null
-            : await _cadence.AnswerAsync(session, plan, await ShaOrNone(repoPath, branch), ct);
+            : await _cadence.AnswerAsync(session, plan, await _worktrees.ShaOrNoneAsync(repoPath, branch), ct);
 
         return Json(SessionAnswerFor(session) with { Cadence = cadence }, ServerJsonContext.Default.SessionAnswer);
     }
@@ -739,19 +739,6 @@ public sealed partial class PanelService
         trace.Call = call;
 
         return refusal;
-    }
-
-    /// <summary>The branch's commit, or empty when git cannot resolve it — a status must not fail over it.</summary>
-    private async Task<string> ShaOrNone(string repoPath, string branch)
-    {
-        try
-        {
-            return await _worktrees.ResolveShaAsync(repoPath, branch);
-        }
-        catch (WorktreeException)
-        {
-            return string.Empty;
-        }
     }
 
     /// <summary>A code round's number and the commit it reviewed; number 0 is "none".</summary>

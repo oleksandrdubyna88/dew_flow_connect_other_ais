@@ -513,6 +513,142 @@ public sealed class CadenceGateScenarioTests : FakeCliRoundTests
         var cadence = Parse(await service.StatusAsync(_repo, "epic-1", string.Empty, Plan)).GetProperty("cadence");
         cadence.GetProperty("epicsClosed").EnumerateArray().Select(e => e.GetInt32()).Should().Equal(1);
     }
+
+    // ---------- the `--cadence` one-shot the sidebar reads (epic 4 story 4.2) ----------
+    //
+    // The sidebar never calls `status` — it reads session files — so the line it draws comes from this
+    // mode, which answers what `status` answers from a READER: no PanelService, whose constructor sweeps
+    // rounds, consultations and orphan processes (the risk consultation for story 4.2, point 1).
+
+    private async Task<(int Code, string Out, string Err)> Probe(CadenceMode mode, string branch = "epic-1", string plan = Plan) =>
+        await CadenceReadMode.AnswerAsync(
+            Defaults() with { CadenceMode = mode },
+            ["--cadence", "--repo", _repo, "--branch", branch, "--plan", plan],
+            TestContext.Current.CancellationToken);
+
+    private static JsonElement Answer((int Code, string Out, string Err) probe)
+    {
+        probe.Code.Should().Be(0, probe.Err);
+
+        return Parse(probe.Out);
+    }
+
+    private async Task ThroughEpicOne(PanelService service)
+    {
+        await ThroughThePlan(service, "1/6");
+        await CommitWork();
+        await CodeRound(service, "1/6");
+        await service.ResolveAsync(_repo, "epic-1", "[]");
+    }
+
+    [Fact]
+    public async Task TheSidebarsProbe_AnswersExactlyWhatStatusAnswers()
+    {
+        await CommitPlan();
+        var service = Service(CadenceMode.Require);
+        await Consulted(service, "cadence", "1-3");
+        await ThroughEpicOne(service);
+
+        var probed = Answer(await Probe(CadenceMode.Require));
+        var status = Parse(await service.StatusAsync(_repo, "epic-1", string.Empty, Plan)).GetProperty("cadence");
+
+        // The VALUE, not the text: `status` answers indented and the one-shot a line the panel parses.
+        JsonElement.DeepEquals(probed, status).Should().BeTrue(
+            $"one computation, in C#, whichever door asks — probed {probed.GetRawText()}, status {status.GetRawText()}");
+        probed.GetProperty("epicsClosed").EnumerateArray().Select(e => e.GetInt32()).Should().Equal(1);
+        probed.GetProperty("groups").EnumerateArray().Select(g => g.GetProperty("consulted").GetBoolean()).Should().Equal(true, false);
+    }
+
+    /// <summary>
+    /// A consultation closed with no review round after it still changes the line — the sidebar does not
+    /// wait for the next round to learn a group was consulted (the cadence consultation for epics 4–6, point 1).
+    /// </summary>
+    [Fact]
+    public async Task AConsultationClosedWithoutAnotherRound_FlipsTheLine()
+    {
+        await CommitPlan();
+        var service = Service(CadenceMode.Remind);
+        await ThroughEpicOne(service);
+        Answer(await Probe(CadenceMode.Remind)).GetProperty("groups")[0].GetProperty("consulted").GetBoolean().Should().BeFalse();
+
+        await Consulted(service, "cadence", "1-3");
+
+        Answer(await Probe(CadenceMode.Remind)).GetProperty("groups")[0].GetProperty("consulted").GetBoolean().Should().BeTrue();
+    }
+
+    /// <summary>
+    /// A record that cannot be read says so. Answering its empty state would be "0 epics through the gate" —
+    /// believable, and false (the risk consultation for story 4.2, point 2).
+    /// </summary>
+    [Fact]
+    public async Task AnUnreadableRecord_SaysSo_RatherThanReadingAsNothing()
+    {
+        await CommitPlan();
+        var service = Service(CadenceMode.Remind);
+        await ThroughEpicOne(service);
+        foreach (var file in Directory.GetFiles(Path.Combine(_data, "cadence"), "cadence-*.json"))
+        {
+            await File.WriteAllTextAsync(file, "{ torn", TestContext.Current.CancellationToken);
+        }
+
+        var probed = Answer(await Probe(CadenceMode.Remind));
+
+        probed.GetProperty("unreadable").GetString().Should().Contain("could not be read");
+    }
+
+    [Fact]
+    public async Task AReadableRecord_IsNotUnreadable()
+    {
+        await CommitPlan();
+        var service = Service(CadenceMode.Remind);
+        await ThroughEpicOne(service);
+
+        Answer(await Probe(CadenceMode.Remind)).GetProperty("unreadable").GetString().Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task OffMode_AnswersNothingToDraw()
+    {
+        await CommitPlan();
+        await ThroughEpicOne(Service(CadenceMode.Remind));
+
+        (await Probe(CadenceMode.Off)).Should().Be((0, "null", string.Empty));
+    }
+
+    [Fact]
+    public async Task ASessionWithNoPlan_AnswersNothingToDraw()
+    {
+        var service = Service(CadenceMode.Remind);
+        await service.OpenAsync(_repo, "epic-1");
+
+        (await Probe(CadenceMode.Remind, plan: string.Empty)).Should().Be((0, "null", string.Empty));
+    }
+
+    /// <summary>65 and never 64: 64 is "this binary has never heard of the mode", which is how the panel spots an old server.</summary>
+    [Fact]
+    public async Task NoSessionForTheBranch_Is65_NamingIt()
+    {
+        var (code, _, err) = await Probe(CadenceMode.Remind, branch: "nowhere");
+
+        code.Should().Be(65);
+        err.Should().Contain("no session");
+    }
+
+    [Theory]
+    [InlineData("--cadence")]
+    [InlineData("--cadence", "--repo", "D:/repo")]
+    [InlineData("--cadence", "--branch", "main")]
+    public async Task AMalformedRequest_Is65_NeverTheOldBinarysCode(params string[] args)
+    {
+        var (code, _, err) = await CadenceReadMode.AnswerAsync(Defaults(), args, TestContext.Current.CancellationToken);
+
+        code.Should().Be(65);
+        err.Should().Contain("--cadence needs --repo");
+    }
+
+    [Fact]
+    public void TheModeIsSelectedByItsFlag() =>
+        Program.Classify(["--cadence"]).Should().Be(Program.Startup.Cadence);
 }
 
 /// <summary>The cadence's four settings, read the way every other one is (<c>todo/PLAN_consult_on_a_cadence.md</c>, story 3.1).</summary>

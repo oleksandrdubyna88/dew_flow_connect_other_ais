@@ -287,6 +287,10 @@ public sealed record PanelSettings
     /// </remarks>
     public string RoundTreeRoot { get; init; } = string.Empty;
 
+    /// <summary>The root a <see cref="Runners.Worktrees.WorktreeManager"/> is given: <see cref="RoundTreeRoot"/>, or the data dir's own.</summary>
+    /// <remarks>One expression for every place that builds a manager — the service and the <c>--cadence</c> reader.</remarks>
+    public string WorktreeRoot => RoundTreeRoot is { Length: > 0 } roundTrees ? roundTrees : Path.Combine(DataDir, "worktrees");
+
     /// <summary>
     /// Where the CALLER's own transcripts live, when they are not Claude Code's.
     /// </summary>

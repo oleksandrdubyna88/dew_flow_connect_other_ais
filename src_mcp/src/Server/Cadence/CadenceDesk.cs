@@ -87,6 +87,25 @@ public sealed class CadenceDesk(
 {
     private const string NothingReviewed = " Nothing was reviewed.";
 
+    /// <summary>A desk that only ANSWERS — for the <c>--cadence</c> one-shot the sidebar probes (epic 4 story 4.2).</summary>
+    /// <remarks>
+    /// <para>Built from the stores and nothing else. A <see cref="PanelService"/> sweeps rounds and consultations,
+    /// reprojects the log and sweeps orphan processes in its constructor, and a sidebar that probed through one every
+    /// half minute would run that maintenance every time (the risk consultation for story 4.2, point 1).</para>
+    /// <para>Its gate is never asked to CHECK — <see cref="AnswerAsync"/> reads the evidence and nothing else — so the
+    /// preflight it holds says so rather than probing a consultant. The one write it can make is the one
+    /// <c>status</c> makes too: <see cref="Reconciled"/> catching the record up with an epic whose close was missed,
+    /// idempotent by construction.</para>
+    /// </remarks>
+    public static CadenceDesk ForReading(PanelSettings settings, Runners.Processes.IProcessLauncher launcher) => new(
+        settings,
+        new CadenceStore(settings.DataDir),
+        new CadenceGate(new ConsultationStore(settings.DataDir), () => new ConsultPreflight(false, "a reader never checks the cadence")),
+        new ContextAssembler(launcher),
+        new GitHistory(launcher),
+        Serilog.Core.Logger.None,
+        Noticing.None);
+
     /// <summary>Where the caller says it is: a plan, and an epic of it or none (Number 0).</summary>
     private sealed record Where(string Plan, string Epic, int Number, int Last)
     {
@@ -317,7 +336,8 @@ public sealed class CadenceDesk(
             [.. CadenceRule.GroupsOwed(numbers, settings.CadenceEvery)
                 .Select(group => new CadenceGroupAnswer(group.Range, known.Satisfied.Any(done => done.Holds(group.First))))],
             [.. record.State.RiskItems.Select(item => new CadenceRiskAnswer(item.Key, item.Reason, known.SatisfiedRisk.Contains(item.Key)))],
-            record.State.RiskAnswered);
+            record.State.RiskAnswered,
+            record.Readable ? string.Empty : record.Why);
     }
 
     // ---------- the pieces ----------
