@@ -1127,8 +1127,14 @@ reviewers and the consultant need NONE. `NoMcpServers` (runners/Reviewers) holds
   `-c mcp_servers.<key>.enabled=false` per server `$CODEX_HOME/config.toml` declares
   (`ReviewerSettings.McpServersToSwitchOff`, filled where settings are composed — `PanelService`,
   `ConsultationService`, the Team server's `ReviewLauncher` — so the runtimes stay pure). The key is bare,
-  `'literal'`, or `"basic"` when the name holds a single quote. `CodexServerNames` reads tables, sub-tables,
-  keys under `[mcp_servers]` and root dotted keys; a line it cannot read is skipped. Not
+  `'literal'`, or `"basic"` when the name holds a single quote; a name with a character cmd.exe reads as
+  its own (`&`, `|`, `%`, `^`) is not passed. **A name it is not sure of is never reported**: measured on
+  codex-cli 0.156.1, an override for a server config.toml does not declare stops codex from starting at all
+  ("failed to load bootstrap configuration"), so `CodexServerNames` reads only `[mcp_servers.x]` tables (and
+  their sub-tables), inline tables under `[mcp_servers]`, and dotted keys at the ROOT — and an array table
+  `[[…]]` or an unreadable header ends what it knows until the next header. `CodexConfigured(env)` reads the
+  config the LAUNCH will read: `CODEX_HOME`, else `HOME`/`USERPROFILE` + `.codex`, through the environment it
+  is given — on the Team server that is the SLOT's (`ReviewLauncher`), not the server's. Not
   `--ignore-user-config`: that would also drop the model, service tier and the Windows sandbox mode.
 - **agy / gemini**: no per-launch switch exists; a server named in `~/.gemini/config/mcp_config.json` or
   `~/.gemini/settings.json` is reported once per start as a log warning (`GeminiFamilyConfigured`).

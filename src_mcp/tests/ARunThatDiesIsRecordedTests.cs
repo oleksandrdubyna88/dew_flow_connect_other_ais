@@ -27,6 +27,9 @@ public sealed class ARunThatDiesIsRecordedTests : IDisposable
 
     private readonly string _data = Directory.CreateTempSubdirectory("coai-deaths-").FullName;
 
+    /// <summary>What every child said on stderr — which road a signalled stop took is only visible there.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentQueue<string> _said = new();
+
     public void Dispose()
     {
         try
@@ -64,7 +67,13 @@ public sealed class ARunThatDiesIsRecordedTests : IDisposable
         var process = Process.Start(info)!;
         // Drained, so a chatty stderr can never fill its pipe and stall the child.
         process.OutputDataReceived += (_, _) => { };
-        process.ErrorDataReceived += (_, _) => { };
+        process.ErrorDataReceived += (_, line) =>
+        {
+            if (line.Data is { } said)
+            {
+                _said.Enqueue(said);
+            }
+        };
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
 
@@ -148,6 +157,9 @@ public sealed class ARunThatDiesIsRecordedTests : IDisposable
         await stopped.WaitForExitAsync(budget.Token);
 
         File.Exists(marker).Should().BeFalse($"a SIG{signal} is a client ending the server, and the server clears its own marker");
+        _said.Should().Contain(line => line.Contains("stopped by a signal", StringComparison.Ordinal),
+            "and it left by its ORDINARY road, notices drained — the deadline also clears the marker, so the marker alone "
+            + "cannot tell a working stop from a RunAsync that never returned (our own code reviewer)");
         if (File.Exists(marker))
         {
             // Made old enough to be judged, so the rest of the test shows what a left marker COSTS.

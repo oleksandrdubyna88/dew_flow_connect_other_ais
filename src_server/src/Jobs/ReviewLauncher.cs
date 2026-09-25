@@ -173,8 +173,11 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
             {
                 Model = job.Model,
                 Timeout = job.RunBudget,
-                // A reviewer on this host starts no MCP server of the host's either (issue #514).
-                McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
+                // A reviewer on this host starts no MCP server either (issue #514) — and the config codex
+                // reads is the SLOT's (its CODEX_HOME and HOME), not this server's: naming a server the
+                // slot does not declare would stop codex from starting at all.
+                McpServersToSwitchOff = NoMcpServers.CodexConfigured(name =>
+                    slot.TryGetValue(name, out var value) && value is { Length: > 0 } ? value : Environment.GetEnvironmentVariable(name)),
             }));
 
         return built with

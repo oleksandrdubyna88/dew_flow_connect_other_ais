@@ -4529,12 +4529,22 @@ An MCP client stops its server with SIGTERM, SIGINT or SIGHUP. With no handler t
 
 ```mermaid
 flowchart LR
-    S1[first signal] --> C[context.Cancel = true] --> T[stopping.Cancel] --> R[RunAsync ends] --> F[finally: stop.Ended, EndedAsync — beat stopped, notices drained, marker cleared]
+    S1[first signal] --> M[marker cleared at once] --> C[context.Cancel = true] --> T[stopping.Cancel + transport closed]
+    T --> R[RunAsync ends] --> F[finally: EndedAsync — beat stopped, notices drained; then stop.Ended]
     T --> D{still running at Grace 3 s?}
-    D -- yes --> X[clear marker, Environment.Exit 0]
-    S2[second signal] --> Y[clear marker, default exit goes ahead]
+    D -- yes --> X[Environment.Exit 0]
+    S2[second signal] --> Y[default exit goes ahead]
 ```
 
-A cancelled `RunAsync` is caught as `OperationCanceledException` when the stop was asked for, said as "stopped
-by a signal", and returns 0 — never recorded as a crash. SIGKILL cannot be caught, and a run killed that way
+The marker goes on the FIRST signal because a signal is an ending by request, never a death — so nothing that
+cuts the ending short (a second signal, the deadline, the client's own SIGKILL) can make it one; the flag inside
+`RunLife` keeps a late heartbeat from writing it back. The token alone does not end a blocked stdin read
+(measured on Linux: `RunAsync` still running 3 s after the signal), so the stop also DISPOSES the stdio
+transport, which ends the read; every road out then says "stopped by a signal" when a stop was asked for.
+`stop.Ended()` comes after the drain, so the deadline covers a drain that hangs. On Windows, closing the
+window or shutting down ends the process as soon as the handler returns — there the marker is cleared and the
+drain is not promised; Ctrl+C and Ctrl+Break are held.
+
+A cancelled `RunAsync` — or the disposed transport under a read — returns 0 with "stopped by a signal"
+(`Ended`), never recorded as a crash. SIGKILL cannot be caught, and a run killed that way
 is still, correctly, an unclean exit.

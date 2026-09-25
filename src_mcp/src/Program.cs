@@ -1779,21 +1779,23 @@ internal static class Program
             }
 
             await using var transport = new StdioServerTransport(ServerName);
+            // The token alone does not end a blocked stdin read — measured on Linux, RunAsync was still running
+            // three seconds after the signal and the deadline had to end the process, notices undrained. So the
+            // stop also closes the transport, which ends the read. (Found by the signal test's own stderr check.)
+            using var unblock = stopping.Token.Register(() => _ = transport.DisposeAsync().AsTask());
             await using var server = McpServer.Create(transport, options);
             await server.RunAsync(stopping.Token);
-            return 0;
+            return Ended(stopping, string.Empty);
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
         {
             // Asked to stop by a signal, which is an ending and not a failure.
-            Note("stopped by a signal.");
-            return 0;
+            return Ended(stopping, string.Empty);
         }
         catch (Exception e) when (e is IOException or ObjectDisposedException)
         {
-            // The client went away mid-stream. Not a failure of ours.
-            Note("the MCP client closed the connection.");
-            return 0;
+            // The client went away mid-stream — or the stop closed the transport under a read. Not a failure of ours.
+            return Ended(stopping, "the MCP client closed the connection.");
         }
         catch (Exception e)
         {
@@ -1808,9 +1810,27 @@ internal static class Program
         // covers every road out — both `return 0`s and the crash above.
         finally
         {
-            stop.Ended();
             await EndedAsync(life, notices, crash, run, recorded, log);
+            stop.Ended();
         }
+    }
+
+    /// <summary>
+    /// An ordinary end of serving, said the way it happened: stopped by a signal, or the client's own ending.
+    /// </summary>
+    /// <remarks>
+    /// The signal is checked first on every road, because the stop closes the transport and that surfaces as
+    /// an input ending or a disposed stream — a person reading the log is told which it really was.
+    /// </remarks>
+    private static int Ended(CancellationTokenSource stopping, string otherwise)
+    {
+        var said = stopping.IsCancellationRequested ? "stopped by a signal." : otherwise;
+        if (said.Length > 0)
+        {
+            Note(said);
+        }
+
+        return 0;
     }
 
     /// <summary>

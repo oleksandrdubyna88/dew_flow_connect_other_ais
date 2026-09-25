@@ -229,6 +229,39 @@ public sealed class ReviewLauncherTests
             "the vendor writes its first temp file before it writes its answer");
     }
 
+    /// <summary>
+    /// A Codex job switches off the MCP servers of the SLOT it runs as — issue #514.
+    /// </summary>
+    /// <remarks>
+    /// Codex runs here with the slot's own <c>CODEX_HOME</c>, so the config it reads is the slot's. Read from
+    /// the server's own home instead, the job would leave the slot's servers loaded — and name servers the
+    /// slot does not declare, which stops codex from starting at all (measured on codex-cli 0.156.1). (Our own
+    /// code reviewer.)
+    /// </remarks>
+    [Fact]
+    public async Task ACodexJob_SwitchesOffTheSlotsOwnMcpServers()
+    {
+        var slotDir = Directory.CreateTempSubdirectory("coai-slot-codex-").FullName;
+        try
+        {
+            Directory.CreateDirectory(Path.Combine(slotDir, ".codex"));
+            await File.WriteAllTextAsync(
+                Path.Combine(slotDir, ".codex", "config.toml"), "[mcp_servers.from-slot]\ncommand = \"x\"\n",
+                TestContext.Current.CancellationToken);
+            var watching = new Watching(new ProcessResult(0, Envelope, string.Empty, TimedOut: false));
+
+            await Run(watching, runtime: "codex", vendorId: "codex", model: "gpt-5",
+                environment: SlotEnvironment.For("codex", slotDir, token: "not-a-real-token"));
+
+            watching.Request.Arguments.Should().Contain("mcp_servers.from-slot.enabled=false",
+                "the servers switched off are the ones the slot's own config.toml declares");
+        }
+        finally
+        {
+            Directory.Delete(slotDir, recursive: true);
+        }
+    }
+
     /// <summary>The tools that reach past the prompt: the filesystem, a shell, the web, a sub-agent.</summary>
     /// <remarks>
     /// The same eight `ClaudeRuntimeTests` holds, on purpose: that list is the STORY's contract with
