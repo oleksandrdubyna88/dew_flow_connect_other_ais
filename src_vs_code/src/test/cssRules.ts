@@ -339,3 +339,34 @@ export function beating(
     return against > 0 || (against === 0 && other.at > rule.at);
   });
 }
+
+/**
+ * The value ONE property ends up with on `element`, by the cascade — and the rules declaring it that
+ * this module cannot read, which a caller must assert about rather than ignore.
+ *
+ * <p>Issue #537 asked for it: "does a code block wrap" is a question about which declaration WINS,
+ * and a substring over the stylesheet cannot see a later rule taking it back. `undefined` means no
+ * rule that reaches the element declares the property — it inherits, or takes the UA default.</p>
+ */
+export function winning(
+  sheet: readonly Rule[],
+  element: Element,
+  ancestors: readonly Element[],
+  property: string,
+): { readonly value: string | undefined; readonly unreadable: Rule[] } {
+  const declaring = sheet.filter((rule) => declared(rule.body, property) !== undefined);
+  const matching = declaring.filter((rule) => couldMatch(rule.selector, element, ancestors) === true);
+  const top = matching.find((rule) => beating(rule, matching, element, ancestors).length === 0);
+
+  return {
+    value: top === undefined ? undefined : declared(top.body, property),
+    unreadable: declaring.filter((rule) => couldMatch(rule.selector, element, ancestors) === undefined),
+  };
+}
+
+/** What a rule's body declares for `property`, or `undefined` when it says nothing about it. */
+function declared(body: string, property: string): string | undefined {
+  const found = new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+)`).exec(body);
+
+  return found?.[1]?.trim();
+}

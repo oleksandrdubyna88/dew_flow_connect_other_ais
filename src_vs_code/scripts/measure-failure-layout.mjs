@@ -15,22 +15,13 @@
  * at every width holds. It needs Edge (or pass `--browser <path>` to any Chromium). Not part of `npm test`:
  * CI's runners have no browser to measure with, and a check that skips itself there is not one.</p>
  */
-import { spawnSync } from 'node:child_process';
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { browserOrExit, measured } from './browserLayout.mjs';
 
 // From the script's own place, so it runs from any directory. (Our own code review.)
 const OUT = new URL('../out/', import.meta.url).href;
 const { chatFailureHtml, chatPageHtml } = await import(`${OUT}chatPage.js`);
 
-const at = process.argv.indexOf('--browser');
-const BROWSER = at >= 0 ? process.argv[at + 1] : 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe';
-if (!existsSync(BROWSER)) {
-  console.log(`no browser at ${BROWSER} — pass --browser <path to a Chromium>`);
-  process.exit(2);
-}
+const BROWSER = browserOrExit();
 
 const FAILURES = {
   'a long path': 'The model could not read C:\\Users\\somebody\\AppData\\Local\\coai-mcp\\prompts\\a-very-long-role-name-general-prompt-file-that-never-ends.md',
@@ -75,34 +66,15 @@ body { width: ${width}px; margin: 0; }</style></head><body>
 </script></body></html>`;
 }
 
-/** What the page wrote, or nothing — an empty or broken result is a failed case, never a crash. */
-function parsed(text) {
-  try {
-    return JSON.parse(text.replace(/&quot;/g, '"'));
-  } catch {
-    return undefined;
-  }
-}
-
-const dir = mkdtempSync(join(tmpdir(), 'coai-failure-layout-'));
+const cases = WIDTHS.flatMap((width) => Object.entries(FAILURES).map(([name, failure]) => ({ width, name, failure })));
+const results = measured(BROWSER, 'coai-failure-layout-', cases.map(({ width, failure }) => ({ width, html: pageFor(width, failure) })));
 let ok = true;
-try {
-  for (const width of WIDTHS) {
-    for (const [name, failure] of Object.entries(FAILURES)) {
-      const file = join(dir, `w${width}.html`);
-      writeFileSync(file, pageFor(width, failure), 'utf8');
-      const run = spawnSync(BROWSER, [
-        '--headless=new', '--disable-gpu', `--window-size=${width + 40},800`, '--dump-dom', pathToFileURL(file).href,
-      ], { encoding: 'utf8', timeout: 60_000 });
-      const found = /<pre id="result">([^<]*)<\/pre>/.exec(run.stdout ?? '');
-      const measured = found === null ? undefined : parsed(found[1]);
-      const held = measured !== undefined && measured.within && measured.beside;
-      ok = ok && held;
-      console.log(`${String(width).padStart(5)}px  ${name.padEnd(14)} ${held ? 'HELD  ' : 'FAILED'} ${measured === undefined ? (run.stderr ?? '').slice(0, 200) : JSON.stringify(measured)}`);
-    }
-  }
-} finally {
-  rmSync(dir, { recursive: true, force: true });
-}
+cases.forEach(({ width, name }, index) => {
+  // An empty or broken result is a failed case, never a crash.
+  const { verdict, said } = results[index];
+  const held = verdict !== undefined && verdict.within && verdict.beside;
+  ok = ok && held;
+  console.log(`${String(width).padStart(5)}px  ${name.padEnd(14)} ${held ? 'HELD  ' : 'FAILED'} ${verdict === undefined ? said : JSON.stringify(verdict)}`);
+});
 console.log(ok ? 'THE TEXT STAYS IN ITS BOX AND THE BUTTON BESIDE IT, AT EVERY WIDTH' : 'SOMETHING OVERFLOWED');
 process.exit(ok ? 0 : 1);
