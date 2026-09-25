@@ -106,6 +106,20 @@ test('a mount is read with its sibling rules, and an actual paste still takes pr
     'a paste with no consultant half is older, whatever the mount holds');
 });
 
+test('the legacy mount location is read with its siblings too', async t => {
+  // Two mount folders are known, and a reader tested through one of them says nothing about the other.
+  // (Story 5.2's plan round, codex.)
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-snippet-legacy-mount-'));
+  t.after(() => fs.rm(root, { recursive: true, force: true }));
+  const real = path.resolve(__dirname, '../../..', '.agents/conventions/common');
+  const files = new Map<string, string>();
+  for (const name of ['coai-review-gate.md', 'coai-document-gate.md', 'coai-caller-model.md', 'coai-consultant.md']) {
+    files.set(`.claude/rules/shared/common/${name}`, await fs.readFile(path.join(real, name), 'utf8'));
+  }
+
+  assert.deepEqual(await readSnippetStatus(async (name) => files.get(name) ?? ''), { kind: 'current', current: ARTEFACT_VERSION });
+});
+
 test('a missing half is never filled from ANOTHER mount', async t => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-snippet-two-mounts-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
