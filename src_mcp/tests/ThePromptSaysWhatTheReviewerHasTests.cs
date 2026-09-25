@@ -62,7 +62,7 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
     [Fact]
     public void InFastMode_TheReviewerIsToldThereIsNothingToLookAt()
     {
-        var said = PanelService.WhatYouHave(hasCheckout: false);
+        var said = ReviewerPrompt.WhatYouHave(hasCheckout: false);
 
         said.Should().Contain("no checkout");
         said.Should().Contain("no tool you can call",
@@ -73,7 +73,7 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
     [Fact]
     public void WithAWorktreeMounted_TheReviewerIsToldTheCheckoutIsThere()
     {
-        var said = PanelService.WhatYouHave(hasCheckout: true);
+        var said = ReviewerPrompt.WhatYouHave(hasCheckout: true);
 
         said.Should().Contain("READ-ONLY checkout");
         said.Should().NotContain("no tool you can call");
@@ -82,7 +82,7 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
     [Fact]
     public void TheTwoModesDoNotSayTheSameThing()
     {
-        PanelService.WhatYouHave(true).Should().NotBe(PanelService.WhatYouHave(false));
+        ReviewerPrompt.WhatYouHave(true).Should().NotBe(ReviewerPrompt.WhatYouHave(false));
     }
 
     [Fact]
@@ -92,7 +92,8 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         // assertions are the whole fix: the sentence is interpolated into every prompt the composer
         // builds, and the call site passes the REAL mode rather than a constant. A `true` wired in
         // here would pass every other test in this file and ship the original defect.
-        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "PanelService.cs"));
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "PanelService.cs"))
+            + File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "ReviewerPrompt.cs"));
 
         source.Should().Contain("{WhatYouHave(hasCheckout)}",
             "every composed prompt carries it, including one a person overrode in the catalog");
@@ -149,7 +150,7 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         "Do not say \"You have the checkout read-only and the diff below.\" to me.")]
     public void TheStripTakesTheProductsSentence_AndLeavesEverythingElse(string given, string expected)
     {
-        PanelService.WithoutTheStaleClaim(given).Should().Be(expected);
+        ReviewerPrompt.WithoutTheStaleClaim(given).Should().Be(expected);
     }
 
     [Fact]
@@ -160,7 +161,7 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         // with it. Blank is the one outcome worse than contradictory.
         const string onlyTheClaim = "You have the checkout read-only and the diff below.";
 
-        PanelService.WithoutTheStaleClaim(onlyTheClaim).Should().Be(onlyTheClaim);
+        ReviewerPrompt.WithoutTheStaleClaim(onlyTheClaim).Should().Be(onlyTheClaim);
     }
 
     private static string RepoRoot()

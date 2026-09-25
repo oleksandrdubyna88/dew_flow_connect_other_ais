@@ -1,6 +1,5 @@
 using System.Collections.Immutable;
 using System.Runtime.CompilerServices;
-using System.Text.RegularExpressions;
 using System.Text.Json;
 using CoaiMcp.Core.Context;
 using CoaiMcp.Core.Findings;
@@ -19,9 +18,7 @@ namespace CoaiMcp.Server;
 /// this class carries data between the wire, the runners and the state machine — and answers
 /// every failure as a sentence in JSON, never as an exception up the stdio stack.
 /// </summary>
-// `partial` for exactly one reason: to host a source-generated regex. Native AOT cannot compile a
-// regex at runtime, so [GeneratedRegex] does it at build time and needs a partial method to fill in.
-public sealed partial class PanelService
+public sealed class PanelService
 {
     private readonly PanelSettings _settings;
     private readonly VaultKeys _keys;
@@ -37,6 +34,7 @@ public sealed partial class PanelService
     private readonly BoundedScheduler _scheduler;
     private readonly ReviewerExecutor _executor;
     private readonly RolePrompts _prompts;
+    private readonly ReviewerPrompt _reviewerPrompt;
     private readonly Escalations _escalations;
     private readonly UsageLedger _ledger;
     private readonly Store.Projection _projection;
@@ -88,6 +86,7 @@ public sealed partial class PanelService
             // takes as proof that no round was ever silent.
             problem => _log.Warning("evidence: {Problem}", problem));
         _prompts = new RolePrompts(settings.DataDir);
+        _reviewerPrompt = new ReviewerPrompt(_prompts);
         _escalations = new Escalations(settings.DataDir);
         _ledger = new UsageLedger(settings.DataDir);
         _callers = new CallerSessions(settings.DataDir);
@@ -2193,7 +2192,7 @@ public sealed partial class PanelService
                 // config.toml is switched off from the next round on.
                 McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
             };
-            var prompt = ComposePrompt(choice, context, hasCheckout);
+            var prompt = _reviewerPrompt.ComposePrompt(choice, context, hasCheckout);
             // The repair is composed with hasCheckout: FALSE always, because the repair launch always
             // runs in repairDir — an empty temp directory, whatever the review was given (see above).
             // Composing it with the REVIEW's mode is what shipped on 2026-09-06: in worktree mode the
@@ -2205,7 +2204,7 @@ public sealed partial class PanelService
             // The paragraph itself is built before anybody knows which way the first attempt failed,
             // so it covers both. Its second sentence exists because a refused tool produces NO answer
             // at all, and telling that model its JSON was malformed describes a failure it never had.
-            var repairPrompt = ComposePrompt(choice, context, hasCheckout: false) +
+            var repairPrompt = _reviewerPrompt.ComposePrompt(choice, context, hasCheckout: false) +
                 "\n\nYOUR PREVIOUS ATTEMPT DID NOT PRODUCE A USABLE ANSWER."
                 + " If it returned text that was not the schema's JSON: return ONLY the JSON object — no fences, no prose."
                 + " If it returned nothing because a command or a file read was refused: there are no tools here"
@@ -2586,74 +2585,6 @@ public sealed partial class PanelService
             : "no model order";
 
     private static string NamedInLog(string name) => name.Length > 0 ? name : "(generic words)";
-
-    private string ComposePrompt(PromptChoice choice, string context, bool hasCheckout) =>
-        $"{WithoutTheStaleClaim(_prompts.ForChoice(choice))}\n\n{WhatYouHave(hasCheckout)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{FindingSchema.Json}\n\n{context}";
-
-    /// <summary>
-    /// What the reviewer actually has — said once, by the only code that knows which it is.
-    /// </summary>
-    /// <remarks>
-    /// <para>Eighteen of the twenty-five shipped prompts opened with "You have the checkout
-    /// read-only and the diff below", unconditionally — and the DEFAULT mode hands a code reviewer
-    /// an empty temp directory and no checkout at all. So the product told the model a repository
-    /// was there, the model went to look, and an agentic CLI running headless has nobody to ask for
-    /// the permission a shell command needs: it refused itself and returned NOTHING. Measured
-    /// 2026-09-06 over 71 antigravity reviewer runs: 15 of them, 21 %, all at that same wall, on two
-    /// different reasoning efforts.</para>
-    /// <para>The claim could never live in the prompt FILES, because there it can only ever be one
-    /// of the two truths — and a prompt somebody has overridden in the catalog needs the sentence
-    /// just as much as a shipped one, which is the second reason it is here.</para>
-    /// </remarks>
-    /// <summary>
-    /// The old claim, removed from a prompt that still carries it.
-    /// </summary>
-    /// <remarks>
-    /// <para>The prompt catalog is EDITABLE: a prompt somebody overrode before 2026-09-06 sits in
-    /// their own data directory still opening with "You have the checkout read-only and the diff
-    /// below", and no edit to the shipped files can reach it. Composing the true sentence underneath
-    /// it hands the model two opposite instructions in one prompt — which is worse than either
-    /// sentence alone, and is the shape that made a headless CLI go looking for a tool in the first
-    /// place. Raised by gemini at the plan gate of the change that removed the claim, and again by
-    /// the local reviewer at its code gate.</para>
-    /// <para>Only that one sentence is removed. A person's own prompt is theirs; this strips the
-    /// line the product used to put in it and nothing else.</para>
-    /// </remarks>
-    internal static string WithoutTheStaleClaim(string prompt)
-    {
-        var stripped = StaleClaim().Replace(prompt, string.Empty).TrimStart();
-
-        // An override consisting ONLY of that sentence would become an empty prompt, and an empty
-        // prompt to a reviewer is worse than a contradictory one: it produces the silent empty
-        // answer this whole change exists to stop. Keep their text and let the composed sentence
-        // disagree with it — visible beats blank. (Raised at the code gate, 2026-09-06.)
-        return stripped.Length > 0 ? stripped : prompt;
-    }
-
-    // ANCHORED, and only to horizontal whitespace. Both halves were bought at the same gate round:
-    // unanchored, "I know you have the checkout read-only and the diff below." inside somebody's own
-    // sentence would be stripped and leave "I know"; with \s* instead of [ \t]*, a claim standing
-    // between two paragraphs took a paragraph separator with it. So the match must begin a line or
-    // follow a sentence end, and it may only eat the indentation in front of itself. The \s+ BETWEEN
-    // the words stays — that is what tolerates the line wrap the prompt files were written with.
-    // The TAIL matters as much: eat the line's own terminator when the claim stood on its own line,
-    // otherwise eat the space after it. Without that, removing a mid-sentence claim left two spaces
-    // and removing a whole line left a blank one.
-    [GeneratedRegex(
-        @"(?:(?<=^)|(?<=[.!?][ \t]))[ \t]*You\s+have\s+the\s+(?:repository\s+)?checkout\s+read-only\s+and\s+the\s+diff\s+below\.(?:[ \t]*\r?\n)?[ \t]*",
-        RegexOptions.IgnoreCase | RegexOptions.Multiline)]
-    private static partial Regex StaleClaim();
-
-    internal static string WhatYouHave(bool hasCheckout) =>
-        hasCheckout
-            ? "## What you have\n\nA READ-ONLY checkout of the repository in your working "
-                + "directory, and the material below. Review the change, not the codebase."
-            : "## What you have\n\nThe material below — the change, the plan and this "
-                + "project's written rules — and NOTHING else. There is no checkout in your working "
-                + "directory and no tool you can call: do not try to run a command, list a directory "
-                + "or read a file. Answer from what is here.\n\nThat is deliberate: a reviewer "
-                + "given the change alone finds more of what matters than one sent exploring a "
-                + "repository.";
 
     /// <param name="stage">
     /// Whose round this is: a <c>revise</c> verdict's instruction ends with what THIS stage does
