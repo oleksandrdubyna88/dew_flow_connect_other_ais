@@ -374,6 +374,23 @@ public sealed record PanelSettings
     public Core.Commands.GateScope GatePer { get; init; } = Core.Commands.GateScope.Epic;
 
     /// <summary>
+    /// Whether the gate orders a consultation per group of epics, and refuses without one —
+    /// <c>COAI_CADENCE_MODE</c> = off | remind | require (<c>todo/PLAN_consult_on_a_cadence.md</c>).
+    /// </summary>
+    /// <remarks><c>remind</c> by default (D4): the extension is on the Marketplace, and a refusal by default
+    /// would change every user's gate on an update. The operator turns <c>require</c> on.</remarks>
+    public Core.Cadence.CadenceMode CadenceMode { get; init; } = Core.Cadence.CadenceMode.Remind;
+
+    /// <summary>One consultation per this many epics — <c>COAI_CADENCE_EVERY</c>, three by the operator's rule.</summary>
+    public int CadenceEvery { get; init; } = Core.Cadence.CadenceRule.DefaultEvery;
+
+    /// <summary>From this many epics the caller is asked which carry the most risk — <c>COAI_CADENCE_RISK_THRESHOLD</c>.</summary>
+    public int CadenceRiskThreshold { get; init; } = Core.Cadence.CadenceRule.DefaultRiskThreshold;
+
+    /// <summary>The most risky epics and stories one plan may name — <c>COAI_CADENCE_RISK_MAX</c> (D6).</summary>
+    public int CadenceRiskMax { get; init; } = Core.Cadence.CadenceRule.DefaultRiskMax;
+
+    /// <summary>
     /// What a CODE reviewer is launched in: <c>none</c> (the default) or <c>worktree</c>.
     /// </summary>
     /// <remarks>
@@ -772,6 +789,10 @@ public sealed record PanelSettings
             StopLocalWhenQuiet = Flag(env, "COAI_STOP_LOCAL_WHEN_QUIET"),
             SplitWithFable = Flag(env, "COAI_SPLIT_WITH_FABLE"),
             GatePer = GateScopeOf(env(Key.GatePer) ?? string.Empty),
+            CadenceMode = CadenceModeOf(env(Key.CadenceMode) ?? string.Empty),
+            CadenceEvery = IntVar(env, "COAI_CADENCE_EVERY", Core.Cadence.CadenceRule.DefaultEvery),
+            CadenceRiskThreshold = IntVar(env, "COAI_CADENCE_RISK_THRESHOLD", Core.Cadence.CadenceRule.DefaultRiskThreshold),
+            CadenceRiskMax = IntVar(env, "COAI_CADENCE_RISK_MAX", Core.Cadence.CadenceRule.DefaultRiskMax),
             LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
             ? effort.Trim().ToLowerInvariant()
             : "none",
@@ -854,6 +875,8 @@ public sealed record PanelSettings
         internal const string Consultants = "COAI_CONSULTANTS";
 
         internal const string GatePer = "COAI_GATE_PER";
+
+        internal const string CadenceMode = "COAI_CADENCE_MODE";
     }
 
     /// <summary>Every setting whose VALUE this build could not use, as one sentence each.</summary>
@@ -867,7 +890,22 @@ public sealed record PanelSettings
     /// </remarks>
     private static IReadOnlyList<UnrecognisedSetting> UnknownValues(
         Func<string, string?> env, RolesSetting roles) =>
-        [.. WhyBackoff(env), .. WhyExhausted(env), .. WhyWorkspace(env), .. WhyGatePer(env), .. WhyRoles(roles)];
+        [.. WhyBackoff(env), .. WhyExhausted(env), .. WhyWorkspace(env), .. WhyGatePer(env), .. WhyCadenceMode(env), .. WhyRoles(roles)];
+
+    private static IReadOnlyList<UnrecognisedSetting> WhyCadenceMode(Func<string, string?> env) =>
+        env(Key.CadenceMode) is { Length: > 0 } mode && CadenceModeOf(mode) == Core.Cadence.CadenceMode.Remind
+        && !string.Equals(mode.Trim(), "remind", StringComparison.OrdinalIgnoreCase)
+            ? [new UnrecognisedSetting(
+                Key.CadenceMode,
+                $"{Key.CadenceMode} is '{mode}', which this server does not know — the consultation cadence "
+              + "reminds, as it does by default. The values are 'off', 'remind' and 'require'.")]
+            : [];
+
+    /// <summary><c>COAI_CADENCE_MODE</c> as a mode; anything it cannot read is <c>remind</c>, said by <see cref="WhyCadenceMode"/>.</summary>
+    private static Core.Cadence.CadenceMode CadenceModeOf(string value) =>
+        Enum.TryParse<Core.Cadence.CadenceMode>(value.Trim(), ignoreCase: true, out var mode) && Enum.IsDefined(mode)
+            ? mode
+            : Core.Cadence.CadenceMode.Remind;
 
     private static IReadOnlyList<UnrecognisedSetting> WhyGatePer(Func<string, string?> env) =>
         env(Key.GatePer) is { Length: > 0 } scope && !AGateScopeWeKnow(scope)

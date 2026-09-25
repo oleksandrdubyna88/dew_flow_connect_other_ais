@@ -440,6 +440,8 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
         // producers really are there, and really do call the helper.
         ProductionSources.FilesMentioning("ServerNotice.Shortened(").Keys.Order().Should().Equal(
             [
+                // The consultation cadence standing down: a consultation owed and none to be had.
+                "src_mcp/src/Server/Cadence/CadenceDesk.cs",
                 // Story 3.2's crash record: the exception nothing else caught, written as it leaves.
                 "src_mcp/src/Server/HostCrash.cs",
                 "src_mcp/src/Server/RefusalNotices.cs",

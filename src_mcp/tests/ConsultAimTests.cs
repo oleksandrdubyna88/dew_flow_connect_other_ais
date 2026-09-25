@@ -72,6 +72,8 @@ public sealed class ConsultAimTests
     [InlineData("cadence", "٤-٦")]
     [InlineData("risk", "7-9")]
     [InlineData("risk", "7/x")]
+    // Epic 3's code round (gemini): a story of another epic is a contradiction, not a key.
+    [InlineData("risk", "2/7.2")]
     public void AMalformedEpics_IsRefusedNamingTheShape(string kind, string epics) =>
         ConsultAim.Parse(kind, "todo/PLAN_x.md", epics).Refusal.Should().Contain($"'{epics}'");
 

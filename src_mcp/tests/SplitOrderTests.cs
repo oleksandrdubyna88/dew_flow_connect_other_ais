@@ -49,7 +49,10 @@ public sealed class SplitOrderTests : FakeCliRoundTests
         + string.Join("\n", Enumerable.Range(0, 400).Select(i => $"prose line {i}"));
 
     private PanelService Service(bool splitPlan, Core.Commands.GateScope gatePer = Core.Commands.GateScope.Epic) =>
-        ServiceFor(Defaults() with { SplitPlan = splitPlan, GatePer = gatePer });
+        // The cadence OFF: these assert the split orders one by one, and the consultation cadence's
+        // forecast rides after them by default now (todo/PLAN_consult_on_a_cadence.md, D4) —
+        // CadenceOrdersTests and CadenceGateScenarioTests are where it is asserted.
+        ServiceFor(Defaults() with { SplitPlan = splitPlan, GatePer = gatePer, CadenceMode = Core.Cadence.CadenceMode.Off });
 
     [Theory]
     [InlineData(Core.Commands.GateScope.Epic, "per EPIC")]
@@ -193,6 +196,7 @@ public sealed class SplitOrderTests : FakeCliRoundTests
                     RateLimitBackoff = TimeSpan.FromMilliseconds(5),
                     SplitPlan = true,
                     SplitWithFable = true,
+                    CadenceMode = Core.Cadence.CadenceMode.Off,
                     CommandModels = new Dictionary<string, Core.Commands.ModelPair>
                     {
                         ["codex"] = new("gpt-6-astra", "gpt-6-luna"),

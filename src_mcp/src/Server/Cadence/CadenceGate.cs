@@ -44,16 +44,19 @@ public sealed class CadenceGate(ConsultationStore consultations, Func<ConsultPre
     /// <summary>The risk-item keys of a plan a closed consultation covers.</summary>
     public IReadOnlyList<string> SatisfiedRisk(string repoId, string plan) => RiskKeys(Evidence(repoId, plan));
 
-    /// <summary>What is owed before the declared epic's code round, if anything, and whether it can be had.</summary>
-    public CadenceCheck Check(string repoId, CadenceFacts facts, CommandTexts texts)
+    /// <summary>The facts with what the consultations on record already cover — one read of the store.</summary>
+    public CadenceFacts WithEvidence(string repoId, CadenceFacts facts)
     {
         // ONE read of the store for both questions (epic 2's code round, codex and gemini).
         var evidence = Evidence(repoId, facts.Plan);
-        var known = facts with
-        {
-            Satisfied = Groups(evidence),
-            SatisfiedRisk = RiskKeys(evidence),
-        };
+
+        return facts with { Satisfied = Groups(evidence), SatisfiedRisk = RiskKeys(evidence) };
+    }
+
+    /// <summary>What is owed before the declared epic's code round, if anything, and whether it can be had.</summary>
+    public CadenceCheck Check(string repoId, CadenceFacts facts, CommandTexts texts)
+    {
+        var known = WithEvidence(repoId, facts);
         var owed = Owed(known, texts);
         if (owed.Count == 0)
         {

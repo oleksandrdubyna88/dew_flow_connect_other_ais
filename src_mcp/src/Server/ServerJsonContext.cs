@@ -97,7 +97,37 @@ public sealed record SessionAnswer(
     /// research/PLAN_a_failed_round_can_be_retried.md).
     /// </remarks>
     public IReadOnlyList<Finding> Pending { get; init; } = [];
+
+    /// <summary>
+    /// The plan's consultation cadence — absent unless a plan was asked about or is held by this session
+    /// (<c>todo/PLAN_consult_on_a_cadence.md</c>). Read from the plan's own record, so it answers the same
+    /// from every branch the plan is built on.
+    /// </summary>
+    public CadenceAnswer? Cadence { get; init; }
 }
+
+/// <summary>Where a plan stands against its consultation cadence — what the sidebar line is made of.</summary>
+/// <param name="Plan">The plan, repo-relative, as it was named.</param>
+/// <param name="Mode">off | remind | require, as the operator set it.</param>
+/// <param name="Epics">How many epics the plan holds — its headings, else the declared last number.</param>
+/// <param name="EpicsClosed">The epics whose code gate has passed, in number order.</param>
+/// <param name="Groups">Every group the plan owes a consultation for, and whether it has one closed with an outcome.</param>
+/// <param name="Risk">The risky epics and stories named, and whether each has its consultation.</param>
+/// <param name="RiskAnswered">Whether the risk question has been answered, with items or with a reason for none.</param>
+public sealed record CadenceAnswer(
+    string Plan,
+    string Mode,
+    int Epics,
+    IReadOnlyList<int> EpicsClosed,
+    IReadOnlyList<CadenceGroupAnswer> Groups,
+    IReadOnlyList<CadenceRiskAnswer> Risk,
+    bool RiskAnswered);
+
+/// <summary>One group of epics and whether its consultation is on record.</summary>
+public sealed record CadenceGroupAnswer(string Range, bool Consulted);
+
+/// <summary>One named risky epic or story and whether its consultation is on record.</summary>
+public sealed record CadenceRiskAnswer(string Key, string Reason, bool Consulted);
 
 /// <summary>What a review tool returns: the verdict, the honest reviewer count, the findings.</summary>
 /// <param name="Cost">What the round consumed, as the vendors themselves reported it.</param>
