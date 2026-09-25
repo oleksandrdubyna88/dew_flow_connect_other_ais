@@ -582,3 +582,19 @@ test('nothing records a door the manifest does not offer', () => {
   assert.strictEqual(source.split("noteChatDoor('").length - 1, doorCommands().length,
     'the number of recorders and the number of doors the manifest offers have drifted apart');
 });
+
+test('a prompt button adopts text the person wrote, and a model button leaves it alone', () => {
+  // Issue #538. The decision is `instructedBox`'s and tested there; what only the handlers can get
+  // wrong is WHICH answer each button asks for. Each call is pinned whole, inside its own handler,
+  // because a match anywhere in the file would stay green with the arguments swapped.
+  const text = read(join('src', 'chatHooks.ts'));
+  const prompt = /onUsePrompt:[\s\S]*?onUseModel:/.exec(text)?.[0] ?? '';
+  // `\r?`: a Windows checkout has CRLF in the working copy, and the function's end is found either way.
+  const model = /function chooseModel\([\s\S]*?\r?\n}\r?\n/.exec(text)?.[0] ?? '';
+
+  assert.ok(prompt.length > 0 && model.length > 0, 'the two handlers are no longer where this test reads them');
+  assert.match(prompt, /writeInstruction\(found, thread, draft, was, config, 'adopt'\)/,
+    'a prompt button leaves pasted text alone again, which is issue #538');
+  assert.match(model, /writeInstruction\(entry, thread, draft, was, config, 'leave'\)/,
+    'a model button now rewrites a question somebody was half-way through writing');
+});

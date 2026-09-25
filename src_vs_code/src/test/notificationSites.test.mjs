@@ -208,7 +208,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 141 → 141 on 2026-09-24, issue #487: CoAI: choose on a bug. One place fewer — its refusal when no model can
 // answer is the sentence two chat doors already said in two copies, and the third door is where they became
 // one — and one more: the failure when putting a bug into a chat throws, which the page cannot catch itself.
-const PLACES_THIS_SPEAKS = 141;
+// 141 → 140 on 2026-09-25, issue #538: a prompt button adopts text the person wrote as the material under its
+// question, so its "the box holds something you wrote — so it was left alone" notice can no longer happen and
+// went with the branch that raised it. The model button's own notice of the same kind stays.
+const PLACES_THIS_SPEAKS = 140;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

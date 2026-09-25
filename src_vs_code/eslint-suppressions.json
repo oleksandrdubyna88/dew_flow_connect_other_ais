@@ -160,7 +160,7 @@
   },
   "src/chatHooks.ts": {
     "complexity": {
-      "count": 9
+      "count": 7
     },
     "max-lines-per-function": {
       "count": 2

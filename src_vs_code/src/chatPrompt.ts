@@ -292,6 +292,56 @@ export function reinstructedHead(draft: string, now: string, language: LanguageC
   return opening + 'Answer in ' + named + '.' + '\n\n' + draft.slice(at);
 }
 
+/** The composer as a press finds it: what is in it, what this side last wrote, and the captured passage. */
+export interface Composer {
+  /** What the page says is in the box, or `undefined` when the caller did not ask. */
+  readonly draft: string | undefined;
+  /** The text this side last put there. */
+  readonly ours: string;
+  /** The passage the conversation was opened on. */
+  readonly passage: string;
+}
+
+/**
+ * What text the PERSON wrote gets from a press: `'adopt'` makes it the material under the new
+ * question; `'leave'` leaves the box alone. A prompt button adopts, a model button leaves — see
+ * {@link instructedBox}.
+ */
+export type TypedText = 'adopt' | 'leave';
+
+/**
+ * The composer's next text after a preset press, or `undefined` for "left alone".
+ *
+ * <p>Three ways in, in order: swap the instruction where it stands ({@link reinstructed}); swap it at
+ * our service lines when somebody edited it by hand ({@link reinstructedHead}); else rebuild the opening
+ * turn — around the captured passage when the box is empty or still ours.</p>
+ */
+export function instructedBox(box: Composer, was: string, now: string, language: LanguageCode, typed: TypedText): string | undefined {
+  return swappedInstruction(box.draft, was, now, language) ?? rebuiltTurn(box, now, language, typed);
+}
+
+/** The instruction swapped where it stands, or at our service lines — `undefined` when neither is there. */
+function swappedInstruction(draft: string | undefined, was: string, now: string, language: LanguageCode): string | undefined {
+  return draft === undefined ? undefined : reinstructed(draft, was, now) ?? reinstructedHead(draft, now, language);
+}
+
+/**
+ * A whole opening turn: around the captured passage when the box is ours to fill, around the person's
+ * own text when the press adopts it — whole, byte for byte, as the material under the new question.
+ */
+function rebuiltTurn(box: Composer, now: string, language: LanguageCode, typed: TypedText): string | undefined {
+  if (ourBox(box)) {
+    return openingTurn(now, language, box.passage);
+  }
+
+  return typed === 'adopt' && box.draft !== undefined ? openingTurn(now, language, box.draft) : undefined;
+}
+
+/** An empty box is nobody's; one still holding what this side built is ours. */
+function ourBox(box: Composer): boolean {
+  return box.draft === undefined || box.draft === box.ours || stillOurs(box.draft, box.passage);
+}
+
 /**
  * Where the turn THIS SIDE wrote begins, as an offset - or -1 when no line of ours is in the box.
  *

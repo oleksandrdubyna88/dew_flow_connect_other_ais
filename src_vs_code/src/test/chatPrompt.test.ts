@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CARRY_BUDGET, DEFAULT_CHAT_PROMPT, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn, chatInstruction, MATERIAL_NOTE, reinstructed, reinstructedHead, stillOurs } from '../chatPrompt';
+import { CARRY_BUDGET, DEFAULT_CHAT_PROMPT, REMOTE_CARRY_BUDGET, carriedTurn, openingTurn, chatInstruction, MATERIAL_NOTE, reinstructed, reinstructedHead, stillOurs, instructedBox, type Composer } from '../chatPrompt';
 
 /**
  * What a captured passage actually travels in.
@@ -429,4 +429,81 @@ test('the cut lands on the line, not one character beside it', () => {
 
   assert.strictEqual(swapped, openingTurn('explain instead', 'en', 'the captured passage'),
     'the swapped turn is not byte for byte what an opening turn writes');
+});
+
+// ------------------------------------------------------------------------------------------
+// Issue #538: "переключение вопрос не работает, если вставил текст вручную". A person pasted their own
+// text into the box and pressed a prompt button; the box was left alone with a notice. A prompt button
+// IS "ask this about the text in front of me", so it ADOPTS the person's text as the material.
+
+const PASTED = 'Questions (none blocking):\n\nShould I fix §11 (log 4xx at INFO or WARNING)?\n  Still open from before.';
+const CAPTURED = 'the captured passage';
+
+function box(draft: string | undefined, ours = ''): Composer {
+  return { draft, ours, passage: CAPTURED };
+}
+
+test('a prompt button puts its question on top of text the person pasted, and keeps every byte of it', () => {
+  const next = instructedBox(box(PASTED), '', 'what would you answer?', 'ru', 'adopt');
+
+  assert.ok(next !== undefined, 'the box holding pasted text was left alone, which is issue #538');
+  assert.ok(next.startsWith('what would you answer?\n'), 'the question is not at the top of the turn');
+  assert.ok(next.includes('Answer in Russian.'), 'the language line is missing');
+  assert.ok(next.includes(MATERIAL_NOTE), 'the pasted text is not marked as material');
+  assert.ok(next.endsWith(`\n${PASTED}`), 'the pasted text did not survive whole, as the last thing in the turn');
+  assert.ok(!next.includes(CAPTURED), 'the captured passage was put back instead of the text the person pasted');
+});
+
+test('pressing a second prompt button after that swaps only the question', () => {
+  const first = instructedBox(box(PASTED), '', 'what would you answer?', 'ru', 'adopt') ?? '';
+
+  const second = instructedBox(box(first, first), 'what would you answer?', 'explain', 'ru', 'adopt');
+
+  assert.equal(second, 'explain' + first.slice('what would you answer?'.length),
+    'the second press did more than swap the question — it rebuilt, re-wrapped or dropped something');
+});
+
+test('a model button still leaves a box the person wrote alone', () => {
+  assert.equal(instructedBox(box(PASTED), '', 'You are an architect', 'en', 'leave'), undefined,
+    'a model preset replaced a question somebody was half-way through writing');
+});
+
+test('an empty box, or one still ours, is rebuilt around the captured passage, whichever button', () => {
+  const ours = openingTurn('explain', 'en', CAPTURED);
+  for (const typed of ['adopt', 'leave'] as const) {
+    for (const draft of [undefined, '', '   \n  ']) {
+      assert.equal(instructedBox(box(draft), '', 'explain', 'en', typed), ours,
+        `an empty box (${JSON.stringify(draft)}, ${typed}) did not get the captured passage back`);
+    }
+  }
+});
+
+test('an instruction the person edited by hand is still swapped at the service lines', () => {
+  const edited = openingTurn('my own words about the role', 'en', CAPTURED);
+
+  assert.equal(instructedBox(box(edited, 'something else'), 'the old one', 'explain', 'en', 'adopt'),
+    reinstructedHead(edited, 'explain', 'en'), 'a hand-edited instruction was adopted as material instead of swapped');
+});
+
+test('with adopt, a press is never left alone, whatever the box holds', () => {
+  // What makes it safe to drop the "left alone" branch from the prompt button: no shape of box answers
+  // undefined. (gemini, the plan round.)
+  const ours = openingTurn('explain', 'en', CAPTURED);
+  for (const draft of [undefined, '', ours, PASTED, openingTurn('edited', 'en', CAPTURED), 'x']) {
+    assert.notEqual(instructedBox(box(draft, ours), 'explain', 'why', 'en', 'adopt'), undefined,
+      `a prompt press left ${JSON.stringify(draft)} alone`);
+  }
+});
+
+test('pasted text that QUOTES our lines survives two presses byte for byte', () => {
+  // (codex, the plan round.) Quoted inside other lines they are the person's words, not ours. A pasted
+  // text holding one of our lines as a WHOLE line is cut there by reinstructedHead — our lines always
+  // stand alone, which is that function's documented rule.
+  const quoting = `Is "${MATERIAL_NOTE}" a good note?\nand is --- the text --- a heading?`;
+  const first = instructedBox(box(quoting), '', 'explain', 'en', 'adopt') ?? '';
+  const second = instructedBox(box(first, first), 'explain', 'what would you answer?', 'en', 'adopt') ?? '';
+
+  assert.ok(first.endsWith(`\n${quoting}`), 'the first press changed the quoting text');
+  assert.ok(second.endsWith(`\n${quoting}`), 'the second press changed the quoting text');
+  assert.ok(second.startsWith('what would you answer?\n'), 'the second question is not on top');
 });
