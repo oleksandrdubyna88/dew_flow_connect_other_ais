@@ -223,7 +223,9 @@ public sealed class TheWriterDrainsBeforeTheProcessLeavesTests : IDisposable
         // flushed last so everything above still has somewhere to be said.
         var code = ProductionSources.CodeOf("src_mcp/src/Program.cs");
 
-        code.Should().Contain("finally { await EndedAsync(life, notices, crash, run, recorded, log); }",
+        // Since issue #514 the finally first tells the signal handler the host reached its own end, so the
+        // shutdown deadline does not cut the drain short — pinned as the whole block, nothing else in it.
+        code.Should().MatchRegex(@"finally\s*\{\s*stop\.Ended\(\);\s*await EndedAsync\(life, notices, crash, run, recorded, log\);\s*\}",
             "one end, in the finally of the try that wraps every exit — a `finally` is what a "
             + "`return` cannot escape, and it sits below story 3.2's crash catch");
         string[] order =

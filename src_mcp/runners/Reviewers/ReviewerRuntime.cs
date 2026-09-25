@@ -34,6 +34,13 @@ public sealed record ReviewerSettings(string Provider)
     public TimeSpan Timeout { get; init; } = TimeSpan.FromMinutes(10);
 
     /// <summary>
+    /// The Codex MCP servers this machine's <c>config.toml</c> declares, each switched off for the launch —
+    /// a reviewer and a consultant start none (issue #514). Filled where the settings are composed, so the
+    /// runtimes stay pure and a test's argv does not depend on the machine it runs on.
+    /// </summary>
+    public IReadOnlyList<string> McpServersToSwitchOff { get; init; } = [];
+
+    /// <summary>
     /// For a local engine only: the most tokens one answer may be.
     /// </summary>
     /// <remarks>
@@ -270,6 +277,8 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
                 "--json",
                 .. ModelArgs(settings),
                 .. ProviderOverrides,
+                // Every MCP server this machine declares, switched off for this launch (issue #514).
+                .. NoMcpServers.CodexArgs(settings.McpServersToSwitchOff),
                 // `-` is codex's documented "read the instructions from stdin". The prompt does
                 // NOT travel in argv: on Windows this is an npm .cmd shim, and cmd.exe truncates
                 // an argument at its first newline — silently, so the model simply answers as if

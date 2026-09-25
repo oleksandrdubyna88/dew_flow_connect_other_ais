@@ -49,13 +49,13 @@ public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "cod
 
     private static IEnumerable<string> Argv(ConsultantLaunch launch, string outputFile) =>
         launch.Handle.Length == 0
-            ? ["exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", launch.RepoPath, "--json", "-o", outputFile, .. Model(launch.Settings), "-"]
+            ? ["exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", launch.RepoPath, "--json", "-o", outputFile, .. Model(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"]
             // UNQUOTED, and measured: `-c` parses its value as TOML and falls back to the raw string,
             // so `sandbox_mode=read-only` arrives as the string this wants. The quoted form worked
             // too, but an embedded double quote inside an argument that reaches cmd.exe through an
             // npm shim is a re-tokenisation waiting for the wrong input. Verified 2026-09-12:
             // a thread resumed with this exact form returned the number planted in turn 1. (gemini, code round.)
-            : ["exec", "resume", launch.Handle, "-c", "sandbox_mode=read-only", "--skip-git-repo-check", "--json", "-o", outputFile, .. Model(launch.Settings), "-"];
+            : ["exec", "resume", launch.Handle, "-c", "sandbox_mode=read-only", "--skip-git-repo-check", "--json", "-o", outputFile, .. Model(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"];
 
     private static IEnumerable<string> Model(ReviewerSettings settings) =>
         settings.Model.Length > 0 ? ["-m", settings.Model] : [];

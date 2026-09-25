@@ -169,7 +169,13 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
             work,
             SchemaFile.Ensure(work),
             work,
-            policy.Apply(new ReviewerSettings(vendor.Id) { Model = job.Model, Timeout = job.RunBudget }));
+            policy.Apply(new ReviewerSettings(vendor.Id)
+            {
+                Model = job.Model,
+                Timeout = job.RunBudget,
+                // A reviewer on this host starts no MCP server of the host's either (issue #514).
+                McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
+            }));
 
         return built with
         {

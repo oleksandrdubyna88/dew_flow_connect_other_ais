@@ -57,6 +57,8 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
                 "--output-format", "json",
                 "--permission-mode", "plan",
                 "--disallowedTools", .. Denied,
+                // No MCP server at all, like a reviewer (issue #514).
+                NoMcpServers.ClaudeFlag,
                 "--add-dir", launch.RepoPath,
                 .. launch.Handle.Length > 0 ? (string[])["--resume", launch.Handle] : [],
                 .. launch.Settings.Model.Length > 0 ? (string[])["--model", launch.Settings.Model] : [],

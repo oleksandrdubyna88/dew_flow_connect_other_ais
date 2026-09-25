@@ -2096,6 +2096,9 @@ public sealed partial class PanelService
                 MaxTokens = _settings.LocalMaxTokens,
                 // Only RemoteRuntime uses it, to find this machine's token for its Team server.
                 DataDir = _settings.DataDir,
+                // A reviewer starts no MCP server (issue #514); read per round, so a server added to
+                // config.toml is switched off from the next round on.
+                McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
             };
             var prompt = ComposePrompt(choice, context, hasCheckout);
             // The repair is composed with hasCheckout: FALSE always, because the repair launch always

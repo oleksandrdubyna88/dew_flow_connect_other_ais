@@ -75,6 +75,8 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 "--output-format", "json",
                 "--permission-mode", "plan",
                 "--disallowedTools", .. DisallowedTools(settings),
+                // No MCP server at all: the person's own list held coai itself (issue #514).
+                NoMcpServers.ClaudeFlag,
                 "--add-dir", worktreePath,
                 .. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [],
             ],
