@@ -21,6 +21,7 @@ import {
   CONSULT_SETTINGS,
   sameChoice,
 } from './consultSettings';
+import { CADENCE_SETTINGS, CadenceSettings, DEFAULT_CADENCE, cadenceEnv, cadenceSettingsFrom } from './cadenceSettings';
 import { CommandModels, ModelSlot, commandModelsEnv, commandModelsFrom, isModelSlot } from './commandModels';
 import { commandsFrom, type CommandRow } from './commands';
 
@@ -92,6 +93,15 @@ export interface CoaiSettings {
    * answers and it enforces the caps.</p>
    */
   readonly consult: ConsultSettings;
+
+  /**
+   * When the consultant is asked without anybody being stuck — once per group of epics, and on the
+   * riskiest pieces of a big plan (todo/PLAN_consult_on_a_cadence.md).
+   *
+   * <p>Its own module (`cadenceSettings.ts`) for the reason `consult` has one: the panel block and the
+   * env block read it through ONE function.</p>
+   */
+  readonly cadence: CadenceSettings;
 
   /**
    * Which local model a ranking pass over the collected corpus would use.
@@ -328,6 +338,7 @@ export const DEFAULTS: CoaiSettings = {
   roles: [],
   commands: [],
   consult: DEFAULT_CONSULT,
+  cadence: DEFAULT_CADENCE,
 };
 
 /** A raw configuration reader: `get(section)` returns whatever the host stored, if anything. */
@@ -363,6 +374,8 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   // sides of one machine serving two companies want their own, like every other row above. Spread
   // rather than listed, so adding a sixth consult setting cannot leave it silently shared.
   ...CONSULT_SETTINGS,
+  // When the consultant is asked is a property of the work too, and spread for the same reason.
+  ...CADENCE_SETTINGS,
 ];
 
 /**
@@ -449,6 +462,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     roles: rolesFrom(read('roles')),
     commands: commandsFrom(read('commands')),
     consult: consultSettingsFrom(read),
+    cadence: cadenceSettingsFrom(read),
   };
 }
 
@@ -582,6 +596,8 @@ export function envBlock(
   if (!settings.consult.enabled) {
     env['COAI_CONSULT_ENABLED'] = 'false';
   }
+  // Only the cadence values that differ from the server's own — a pristine panel adds nothing.
+  Object.assign(env, cadenceEnv(settings.cadence));
   if (settings.maxConcurrency !== DEFAULTS.maxConcurrency) {
     env['COAI_MAX_CONCURRENCY'] = String(settings.maxConcurrency);
   }

@@ -925,6 +925,39 @@
           "type": "boolean",
           "default": true,
           "markdownDescription": "Whether the `consult` tool answers at all. Off refuses by NAME, so a stuck AI is told the feature is switched off rather than left to guess why nothing came back."
+        },
+        "coai.cadenceMode": {
+          "type": "string",
+          "enum": [
+            "off",
+            "remind",
+            "require"
+          ],
+          "enumDescriptions": [
+            "No cadence orders, nothing refused.",
+            "Every review reply carries the order to consult on the current group of epics; nothing is refused.",
+            "The first code round of a group of epics is refused until its consultation has been taken and closed with an outcome."
+          ],
+          "default": "remind",
+          "markdownDescription": "The consultation cadence: after a plan is split into epics, every group of epics owes one consultation before its first code round, and from `coai.cadenceRiskThreshold` epics the riskiest epics and stories get one each. A consultant that cannot be reached never jams the work — the round goes through with the reason written on it."
+        },
+        "coai.cadenceEvery": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "description": "One cadence consultation per this many epics of a plan."
+        },
+        "coai.cadenceRiskThreshold": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 1,
+          "description": "From this many epics, the assistant is asked which epics and stories carry the most risk, and each one it names gets a consultation of its own."
+        },
+        "coai.cadenceRiskMax": {
+          "type": "integer",
+          "default": 3,
+          "minimum": 1,
+          "description": "The most risky epics and stories one plan may name for a consultation of their own."
         }
       }
     },

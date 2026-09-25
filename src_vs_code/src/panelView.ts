@@ -37,6 +37,8 @@ import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { apiRuntimeSkewNote, DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
+import { help, segmentedRadio } from './panelControls';
+import { cadenceBlock } from './cadenceSettings';
 import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance, Runtime } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
 import { PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
@@ -391,7 +393,10 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
         // when no reviewer is configured: the anchored ids answer regardless, which is what an
         // anchor is for.
         palette: vendorPalette(state.vendors.map((v) => v.id)),
-      })),
+      })
+      // WHEN the consultant is asked without anybody being stuck, under WHO is asked
+      // (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
+      + cadenceBlock(state.settings.cadence)),
     section('bugz', 'Bugz', open, bugzBody({
       corpus: state.bugz ?? EMPTY_CORPUS,
       // Only the engines that run on THIS machine, because the ranking pass reads findings that
@@ -1358,21 +1363,6 @@ function gatePerBlock(state: PanelState): string {
 
   return `  ${segmentedRadio('gatePer', state.settings.gatePer, 'How often split work is gated', choices)}${help('gatePer')}
 ${note.length === 0 ? '' : `  <div class="stale">${escapeHtml(note)}</div>\n`}`;
-}
-
-/**
- * A setting with a few named values, as the segmented control the panel draws for them. ONE place,
- * extracted when a second such choice arrived (issue #131) beside `codeWorkspace`, so the markup the
- * page's script and styles rely on cannot drift between the two. Values and labels are the panel's
- * own literals.
- */
-function segmentedRadio(setting: string, current: string, label: string, choices: readonly (readonly [string, string])[]): string {
-  const option = ([value, words]: readonly [string, string]): string =>
-    `<label class="${current === value ? 'on' : ''}"><input type="radio" name="${setting}" data-setting="${setting}" value="${value}"${current === value ? ' checked' : ''}> ${words}</label>`;
-
-  return `<div class="seg" role="radiogroup" aria-label="${label}">
-      ${choices.map(option).join('\n      ')}
-    </div>`;
 }
 
 /**
@@ -2577,16 +2567,6 @@ function modelOptions(models: readonly ModelChoice[], current: string, emptyLabe
   return `<option value=""${current === '' ? ' selected' : ''}>${emptyLabel}</option>
       ${known}
       <option value="__other__">another model…</option>`;
-}
-
-/**
- * The little "?" that explains a setting on hover.
- *
- * <p>A native `title` rather than a scripted popup: it works with the keyboard, it cannot escape
- * the webview, and it needs no state of its own.</p>
- */
-export function help(key: HelpKey): string {
-  return `<span class="help" title="${escapeHtml(HELP[key])}" role="img" aria-label="What this means">?</span>`;
 }
 
 /** A label with its explanation beside it. */

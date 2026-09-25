@@ -66,6 +66,9 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
     idleMinutes: 30,
     enabled: false,
   },
+  // The consultation cadence (todo/PLAN_consult_on_a_cadence.md): one setting holding four things,
+  // every one of them changed, for the reason `consult` above gives.
+  cadence: { mode: 'require', every: 4, riskThreshold: 6, riskMax: 2 },
 };
 
 test('every setting, changed on its own, reaches the server file', () => {
