@@ -758,7 +758,7 @@ function asRecord(value: unknown): Record<string, unknown> {
  */
 const SERVER_MAX = 2_147_483_647;
 
-function positive(value: unknown, fallback: number): number {
+export function positive(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isInteger(value) && value > 0 && value <= SERVER_MAX
     ? value
     : fallback;
