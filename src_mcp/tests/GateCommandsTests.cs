@@ -266,6 +266,91 @@ public sealed class GateCommandsTests
         shape.Verdict.Should().Be(PlanShape.Split.Huge, "long, whatever shape it is written in");
     }
 
+    private static string PlanWithEpicHeadings(int epics, int steps = 0, int lines = 0)
+    {
+        var text = new System.Text.StringBuilder("# PLAN — generated\n\n## Build order\n\n");
+        for (var i = 1; i <= steps; i++)
+        {
+            text.Append(System.Globalization.CultureInfo.InvariantCulture, $"{i}. do the {i}th thing\n");
+        }
+        for (var epic = 1; epic <= epics; epic++)
+        {
+            text.Append(System.Globalization.CultureInfo.InvariantCulture, $"\n### Epic {epic} — piece {epic}\n\n#### Story {epic}.1 — one\n");
+        }
+        while (text.ToString().Split('\n').Length < lines)
+        {
+            text.Append("filler\n");
+        }
+
+        return text.ToString();
+    }
+
+    [Theory]
+    // todo/PLAN_consult_on_a_cadence.md, D8: a plan that names its epics has answered the question.
+    [InlineData(1, PlanShape.Split.Small)]
+    [InlineData(2, PlanShape.Split.Medium)]
+    [InlineData(3, PlanShape.Split.Medium)]
+    [InlineData(4, PlanShape.Split.Large)]
+    [InlineData(5, PlanShape.Split.Huge)]
+    [InlineData(6, PlanShape.Split.Massive)]
+    [InlineData(14, PlanShape.Split.Massive)]
+    public void APlanThatNamesItsEpics_IsSizedByThem(int epics, PlanShape.Split expected) =>
+        PlanShapeReader.Of(PlanWithEpicHeadings(epics)).Verdict.Should().Be(expected);
+
+    [Fact]
+    public void APlanWithTenEpicHeadings_IsMassive_WhateverItsSteps()
+    {
+        // email-service's PLAN_first_application_live: 10 epics, 50 stories, 5 numbered steps.
+        var shape = PlanShapeReader.Of(PlanWithEpicHeadings(epics: 10, steps: 5));
+
+        shape.Steps.Should().Be(5);
+        shape.Epics.Should().Be(10);
+        shape.Verdict.Should().Be(PlanShape.Split.Massive);
+    }
+
+    [Fact]
+    public void APlanWithFourEpicHeadingsAndThirtyOneSteps_IsLarge()
+    {
+        // email-service's PLAN_stage_foundation: 4 epics, 31 numbered steps, 1452 lines — the longer
+        // file is the smaller plan, and only its headings say so.
+        PlanShapeReader.Of(PlanWithEpicHeadings(epics: 4, steps: 31, lines: 1452)).Verdict
+            .Should().Be(PlanShape.Split.Large);
+    }
+
+    [Fact]
+    public void StoryHeadingsWithoutEpics_CountAsSteps() =>
+        PlanShapeReader.Of("# PLAN\n\n" + string.Concat(Enumerable.Range(1, 10).Select(i => $"### Story {i} — s\n\ntext\n\n")))
+            .Verdict.Should().Be(PlanShape.Split.Large, "ten stories is ten steps, the #131 table");
+
+    [Fact]
+    public void ANumbersLineWithoutEpicHeadings_IsWhatItAlwaysWas() =>
+        new PlanShape(100, 3, 2, 1).Numbers.Should().Be("100 lines, 3 build step(s), 2 file(s) named, 1 area(s) touched");
+
+    [Fact]
+    public void ANumbersLineWithStoryHeadingsThatDecidedTheSize_SaysHowMany()
+    {
+        // CodeRabbit on #540: ten story headings and no numbered steps size a plan Large, and the order must
+        // show the number that did it — the numbers are there so the AI can argue with them.
+        var shape = PlanShapeReader.Of("# PLAN\n\n" + string.Concat(Enumerable.Range(1, 10).Select(i => $"### Story {i} — s\n\ntext\n\n")));
+
+        shape.Verdict.Should().Be(PlanShape.Split.Large);
+        shape.Numbers.Should().Contain("10 story heading(s)");
+    }
+
+    [Fact]
+    public void ANumbersLineWithEpicHeadings_SaysHowMany() =>
+        PlanShapeReader.Of(PlanWithEpicHeadings(epics: 7)).Numbers.Should().Contain("7 epic heading(s)");
+
+    [Fact]
+    public void TheMassiveOrder_SaysSplitThePlanPastFourteen()
+    {
+        var order = GateCommands.For(new CommandContext(SplitPlan: true, PlanText: PlanWithEpicHeadings(9), PlanStage: true))[0];
+
+        order.Should().StartWith("Split this plan into 6-14 EPICS");
+        order.Should().Contain("never more than 14").And.Contain("two plans");
+        order.Should().Contain("per EPIC", "a Massive plan has epics, so it is gated per epic");
+    }
+
     [Theory]
     [InlineData(200, 4, "3-5 logically complete STORIES")]
     [InlineData(400, 8, "2-3 EPICS, each of 2-3 logically complete STORIES")]

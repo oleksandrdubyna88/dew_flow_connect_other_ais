@@ -7,7 +7,9 @@ namespace CoaiMcp.Core.Commands;
 /// <param name="Steps">Numbered items under a "Build order" heading — one step is nearly one story.</param>
 /// <param name="Files">Distinct source files it names.</param>
 /// <param name="Areas">Distinct top-level directories it touches: how BROAD the work is.</param>
-public sealed record PlanShape(int Lines, int Steps, int Files, int Areas)
+/// <param name="Epics">Distinct <c>Epic N</c> headings — when there are any, they decide the size.</param>
+/// <param name="Stories"><c>Story N</c> / <c>Story N.M</c> headings — counted as steps when there are no epics.</param>
+public sealed record PlanShape(int Lines, int Steps, int Files, int Areas, int Epics = 0, int Stories = 0)
 {
     /// <summary>How big this plan is — which decides what it is broken into before anybody builds it.</summary>
     /// <remarks>The declaration order is the order of size; <see cref="Verdict"/> relies on it.</remarks>
@@ -27,6 +29,13 @@ public sealed record PlanShape(int Lines, int Steps, int Files, int Areas)
 
         /// <summary>Four or five epics of three to five stories.</summary>
         Huge,
+
+        /// <summary>
+        /// Six to fourteen epics — past that, two plans (<c>todo/PLAN_consult_on_a_cadence.md</c>). Reached
+        /// only by a plan that names its epics: no count of steps or lines was able to tell a ten-epic plan
+        /// from a four-epic one.
+        /// </summary>
+        Massive,
     }
 
     /// <summary>
@@ -47,8 +56,33 @@ public sealed record PlanShape(int Lines, int Steps, int Files, int Areas)
     /// every-message-is-written-down plans, each of which was in fact built as several epics.
     /// Length must be able to raise the size on its own: the last of those has no recognised build
     /// order at all.</para>
+    /// <para><b>A plan that names its epics has answered the question</b> (<c>todo/PLAN_consult_on_a_cadence.md</c>,
+    /// D8, 2026-09-25). Measured on email-service's two plans: the 10-epic one has 5 numbered steps and the
+    /// 4-epic one 31, and the longer file (1452 lines) is the smaller plan — steps and length both invert.
+    /// So <c>Epic N</c> headings decide when present; story headings count as steps when there are no
+    /// epics; the table above is untouched for a plan with neither.</para>
+    /// <para><b>Re-measured on 201 plans</b> — every <c>PLAN_*.md</c> in <c>research/</c> and <c>todo/</c>
+    /// plus those two — sizes before → after: AsItIs 15 → 9, Small 137 → 141, Medium 30 → 31, Large 10 →
+    /// 11, Huge 9 → 7, Massive 0 → 2. Thirteen moved, and every move is to the size of the split the
+    /// plan's AUTHOR wrote down: the five <c>PLAN_epic_0N</c> files (four story headings each, called
+    /// AsItIs) → Small; four plans with three or four epic headings → Medium or Large, including one the
+    /// old rule called Large on length (<c>PLAN_the_server_says_what_it_did</c>, 641 lines, three epics) →
+    /// Medium; <c>PLAN_family_ci_hardening</c> (five epics) → Huge; the two email-service plans → Massive
+    /// and Large; and <c>PLAN_consult_on_a_cadence</c> itself (six epics) → Massive. The heuristic now
+    /// echoes a split that was already made instead of contradicting it.</para>
     /// </remarks>
-    public Split Verdict => (Split)Math.Max((int)BySteps(Steps), (int)ByLength(Lines));
+    public Split Verdict => Epics > 0
+        ? ByEpics(Epics)
+        : (Split)Math.Max((int)BySteps(Math.Max(Steps, Stories)), (int)ByLength(Lines));
+
+    private static Split ByEpics(int epics) => epics switch
+    {
+        >= 6 => Split.Massive,
+        5 => Split.Huge,
+        4 => Split.Large,
+        >= 2 => Split.Medium,
+        _ => Split.Small,
+    };
 
     private static Split BySteps(int steps) => steps switch
     {
@@ -69,8 +103,12 @@ public sealed record PlanShape(int Lines, int Steps, int Files, int Areas)
     };
 
     /// <summary>The numbers, for a command that must say what it is judging.</summary>
+    /// <remarks>The heading counts are said only when there ARE headings — epic or story, the two that can
+    /// decide the size (CodeRabbit on #540: ten story headings sized a plan Large while the line said
+    /// "0 build steps") — so every order recorded before them reads byte for byte as it did.</remarks>
     public string Numbers =>
-        $"{Lines} lines, {Steps} build step(s), {Files} file(s) named, {Areas} area(s) touched";
+        $"{Lines} lines, {Steps} build step(s), {Files} file(s) named, {Areas} area(s) touched"
+        + (Epics > 0 || Stories > 0 ? $", {Epics} epic heading(s), {Stories} story heading(s)" : string.Empty);
 
     /// <summary>The size and the numbers in one line — what a round records it measured.</summary>
     public string Described => $"{Verdict}: {Numbers}";
@@ -114,7 +152,9 @@ public static class PlanShapeReader
             .Distinct(StringComparer.Ordinal)
             .Count();
 
-        return new PlanShape(lines, StepsIn(text), files, areas);
+        var outline = PlanOutlineReader.Of(text);
+
+        return new PlanShape(lines, StepsIn(text), files, areas, outline.Epics.Count, outline.Stories);
     }
 
     /// <summary>
