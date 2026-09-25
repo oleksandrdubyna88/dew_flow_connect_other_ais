@@ -143,6 +143,13 @@ pinned by literal.
   MCP handshake, as `consult` does.
 - After `Done`, the only door is the optional **`again: true`** (D14, mirrors `review_code`), refused
   when `head` equals the last feature round's SHA.
+- **The session records the resolved `baseSha`** of its first round (`PersistedSession.FeatureBase`).
+  A later call on the same plan with a DIFFERENT base — the same plan reviewed on a release branch, a
+  backport, a caller who mistyped — is refused with a sentence naming both SHAs, rather than silently
+  inheriting the other work's rejections and budget; `again: true` is the door, and it starts a fresh
+  review against the new base (earlier rounds stay in the log). Same base, moved head is the normal
+  fix-and-rerun path. (Plan round, 2026-09-25 — a path alone could not tell two release trains of one
+  plan apart.)
 - `SessionStore.Load/Exists/FileFor` and `SessionClaim` gain the optional `feature` argument; `Save`
   reads it from `State.Feature`, so the orphan sweep re-saves a feature session under its own key.
 
@@ -182,12 +189,17 @@ Three things the skip path must get right (consultant, 2026-09-25, each verified
 review_feature(repoPath, planPath, baseRef, head, epics, lessons, again = false)
 ```
 
-1. **`lessons`** — `{"pitfalls":[…],"blockers":[…],"findings":[…]}`. Refused (phrased as an
-   instruction, the `ReviewScope.Refusal` shape) when absent, not JSON, all arrays empty, or below
-   `ReviewScope.Floor` in total. The refusal lists the questions: what went wrong or nearly wrong and
-   where; what blocked and how it resolved (or is still open); what a reviewer of the whole feature
-   must know — a seam between epics, a workaround, something deliberately left undone; which rejected
-   gate finding you are least sure of. "none" is accepted only with a reason. Capped at 32 KB.
+1. **`lessons`** — `{"pitfalls":[…],"blockers":[…],"findings":[…]}`. **Each of the three arrays must
+   be non-empty**; "nothing here" is written as an entry that says so and why (`"none — every epic
+   merged without a blocker; the one risk was X and it did not happen"`), never as `[]`. Refused
+   (phrased as an instruction, the `ReviewScope.Refusal` shape) when absent, not JSON, a key is
+   unknown, ANY of the three arrays is empty, a "none" entry carries no reason, or the total is below
+   `ReviewScope.Floor`. The refusal names which array was empty and lists the questions: what went
+   wrong or nearly wrong and where; what blocked and how it resolved (or is still open); what a
+   reviewer of the whole feature must know — a seam between epics, a workaround, something deliberately
+   left undone; which rejected gate finding you are least sure of. Capped at 32 KB. (Plan round,
+   2026-09-25: "all arrays empty" and "none only with a reason" contradicted each other for one empty
+   array.)
 2. **`epics`** — `[{title, summary, branch?, pr?}]`, 1–20 entries, ≤16 KB. `branch` is optional but
    the tool description says it is what lets the history of a squash-merged epic be found.
 3. **`planPath`** — `DocumentReader.Read` (repo confinement, UTF-8, not binary).
@@ -375,6 +387,16 @@ and the rest lives in dedicated classes (`FeatureSessions`, `FeatureOutlineBuild
   DEFAULT ''` — the skip reason. Turns and served source go into the existing `reviewers.note`
   ("3 turns; source: 5 file(s), 38 KB; refused 1").
 - `--log` gains `note`; absent means `''` (the "empty string is the one spelling of no data" rule).
+- **Volume and retention** (plan round, 2026-09-25). A feature review runs once per plan, plus one
+  round per fix-and-rerun: at this repository's pace (about one plan a day at the busiest) that is a
+  handful of `rounds` rows a day, each a few KB with its `plan_text` — the same order as a code round,
+  which the log already keeps. Real rounds follow the existing rule: **every round is kept**, because
+  the log is the product's record and its export is how a person keeps it elsewhere. The one shape that
+  could grow without an owner is the **skipped** row — a caller retrying with no reviewer ticked, over
+  and over. So **consecutive skips on one session coalesce**: a skip whose reason equals the previous
+  round's skip reason updates that row (`completed_utc`, a repeat count in `note`) instead of appending
+  one, and only a changed reason or a real round opens a new number. Test: ten identical skips → one
+  row saying "×10".
 - Session file: `SessionState.Feature`; `PlanText` = plan; `RoundRecord.Sha` = `headSha`; the last
   round's `FeatureInputs` (baseSha, epics, lessons) for `status`.
 
