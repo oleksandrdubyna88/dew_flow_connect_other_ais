@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.56.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.56.1...extension-v0.56.2) (2026-09-26)
+
+
+### Bug Fixes
+
+* **panel:** a refused write no longer freezes the panel, and a refused dropdown snaps back too ([#568](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/568)) ([47c3a8e](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/47c3a8eceb9466f0058219906fe035ffb6e6569c))
+* **panel:** the consultation line labels its branch ([f9bfcf4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/f9bfcf4c9a5f975573d6d66098eb777c9c8e59da))
+
 ## [0.56.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.56.0...extension-v0.56.1) (2026-09-26)
 
 
