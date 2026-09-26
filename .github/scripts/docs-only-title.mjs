@@ -44,7 +44,7 @@ export function isDocumentation(file) {
 }
 
 /** The packages a change would release on documentation alone: touched there, and every file there documentation. */
-export function markdownOnlyPackages(files, packages) {
+export function documentationOnlyPackages(files, packages) {
   return packages.filter((pkg) => {
     const inside = files.filter((file) => file.startsWith(`${pkg}/`));
 
@@ -58,7 +58,7 @@ function problemsOf(what, header, files, packages) {
     return [];
   }
 
-  return markdownOnlyPackages(files, packages).map((pkg) => {
+  return documentationOnlyPackages(files, packages).map((pkg) => {
     const md = files.filter((file) => file.startsWith(`${pkg}/`));
     return `${what} "${header}" would release ${pkg} on documentation alone (${md.join(', ')}).`;
   });
