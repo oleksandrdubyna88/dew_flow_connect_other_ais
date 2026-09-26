@@ -157,6 +157,13 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
     protected async Task<JsonElement> Consult(PanelService service, string problem, string id = "", string files = "[]") =>
         JsonDocument.Parse(await service.ConsultAsync(_repo, problem, files, id, TestContext.Current.CancellationToken)).RootElement;
 
+    /// <summary>The plan an ordered (cadence or risk) consultation names, unless a test says otherwise.</summary>
+    protected const string OrderedPlan = "todo/PLAN_x.md";
+
+    /// <summary>A consultation FOR something: a group of epics (<c>cadence</c>) or one risky piece (<c>risk</c>).</summary>
+    protected async Task<JsonElement> ConsultFor(PanelService service, string kind, string epics, string problem = "is this group right?", string id = "", string plan = OrderedPlan) =>
+        JsonDocument.Parse(await service.ConsultAsync(_repo, problem, "[]", id, kind, plan, epics, TestContext.Current.CancellationToken)).RootElement;
+
     protected static string Advise(JsonElement reply) => reply.GetProperty("advice").GetString()!;
 
     protected static string Refusal(JsonElement reply) => reply.GetProperty("error").GetString()!;

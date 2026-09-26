@@ -1694,6 +1694,12 @@ public sealed class PanelService
     public ConsultationStore Consultations => _consultations.Store;
 
     /// <summary>
+    /// The consultation sweep the constructor runs, for <see cref="ConsultationSweeper"/> to run while the
+    /// server serves: without it an idle consultation read <c>open</c> until the next start.
+    /// </summary>
+    public int SweepConsultations() => _consultations.Sweep(ProcessIsAlive);
+
+    /// <summary>
     /// The tenth tool: how a consultation ENDED, recorded by whoever knows.
     /// </summary>
     /// <remarks>

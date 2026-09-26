@@ -85,6 +85,21 @@ test('every setting, changed on its own, reaches the server file', () => {
   }
 });
 
+// The walk above changes `consult` as one object, so dropping any ONE of its three caps from the env block
+// would stay green there. Each cap is changed alone here and must arrive as its own key with its own value
+// (todo/PLAN_consult_limits_kinds_and_help.md, story 1).
+for (const [cap, key, value] of [
+  ['turns', 'COAI_CONSULT_TURNS', 3],
+  ['callsPerSession', 'COAI_CONSULT_CALLS_PER_SESSION', 4],
+  ['idleMinutes', 'COAI_CONSULT_IDLE_MINUTES', 30],
+] as const) {
+  test(`the consultant's ${cap}, changed alone, reaches the server as ${key}`, () => {
+    const settings = { ...DEFAULTS, consult: { ...DEFAULTS.consult, [cap]: value } } as CoaiSettings;
+
+    assert.deepEqual(envBlock(settings, DEFAULT_VENDORS), { [key]: String(value) });
+  });
+}
+
 test('a pristine configuration writes nothing, so the block stays readable', () => {
   assert.deepEqual(envBlock(DEFAULTS, DEFAULT_VENDORS), {});
 });

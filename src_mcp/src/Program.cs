@@ -1895,7 +1895,20 @@ internal static class Program
             // stop also closes the transport, which ends the read. (Found by the signal test's own stderr check.)
             using var unblock = stopping.Token.Register(() => _ = transport.DisposeAsync().AsTask());
             await using var server = McpServer.Create(transport, options);
-            await server.RunAsync(stopping.Token);
+            // The consultation sweep, while serving and not only at start: an idle consultation is closed
+            // within a minute of its budget instead of reading `open` until the next start. Its own token,
+            // cancelled when serving ends however it ends — a client closing stdin sends no signal.
+            using var serving = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
+            var sweeping = ConsultationSweeper.RunAsync(() => host.Current, ConsultationSweeper.Every, log, serving.Token);
+            try
+            {
+                await server.RunAsync(stopping.Token);
+            }
+            finally
+            {
+                await serving.CancelAsync();
+                await sweeping;
+            }
             return Ended(stopping, string.Empty);
         }
         catch (OperationCanceledException) when (stopping.IsCancellationRequested)
