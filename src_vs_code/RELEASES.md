@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.56.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.56.0...extension-v0.56.1) (2026-09-26)
+
+
+### Bug Fixes
+
+* **panel:** a refused switch snaps back, and the stand-down switch says it waits for the next round ([#561](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/561)) ([24eb045](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/24eb04512ca105f1cb41b09fc165bc9828a72911))
+
 ## [0.56.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.55.0...extension-v0.56.0) (2026-09-26)
 
 
