@@ -31,7 +31,7 @@ import { Asked, Found, oneAnswerFrom, pinnable, promptsFrom, sessionFileIn, sess
  * <p>A window with NO FOLDER still runs Claude Code — and it runs it in the HOME directory, which is
  * where a VS Code terminal starts when there is no folder to start in. So that is where this looks,
  * as though home were the workspace: the operator's own session, which the button could not see, is
- * filed under `C--Users-strug`.</p>
+ * filed under `C--Users-<user>`.</p>
  *
  * <p><b>Not every project on the machine.</b> That was the first attempt and it was worse than the
  * bug: 77 project directories and a gigabyte of transcript on this machine, read to compare titles,

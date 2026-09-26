@@ -28,7 +28,7 @@
 
 The Asked region, on the operator's screen, under a chat tab called *coai 7 issues*:
 
-> No session in `C:\Users\strug\.claude\projects\d--rsd-ClaudeRag` is called “coai 7 issues” —
+> No session in `C:\Users\<user>\.claude\projects\d--rsd-ClaudeRag` is called “coai 7 issues” —
 > Claude Code names a conversation once it has one.
 
 The session was open in the editor group beside it while that sentence was on screen. In their

@@ -55,7 +55,7 @@ and there is no button. Nobody ever installed 0.12.2 in WSL. What is actually th
 | the same key in WSL (`~/.vscode-server/data/User/globalStorage/state.vscdb`) | the file is **0 bytes**; the key is not in it |
 | the binary on the Windows side | `coai-mcp.exe`, written 11:52 — one minute after `mcp-v0.12.2` was published (11:51:02Z) |
 | the binary on the WSL side | `coai-mcp`, written 10:55, sha256 `2db675ae…` — byte-identical to the **published 0.12.1** (both tarballs downloaded and hashed) |
-| what WSL's Claude Code actually launches | `/home/jinx/.vscode-server/data/User/globalStorage/remsoftdev.connect-other-ais/coai-mcp` (`~/.claude.json:1374`) — i.e. **0.12.1** |
+| what WSL's Claude Code actually launches | `/home/<user>/.vscode-server/data/User/globalStorage/remsoftdev.connect-other-ais/coai-mcp` (`~/.claude.json:1374`) — i.e. **0.12.1** |
 
 **The cause is a split neither half of the code accounts for.** The version is remembered in
 `globalState` ([installer.ts:30-38](../src_vs_code/src/installer.ts#L30-L38)); the binary is written under

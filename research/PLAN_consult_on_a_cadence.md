@@ -3,7 +3,7 @@
 > Status: **IMPLEMENTED, 2026-09-26.** All six epics shipped; released as extension 0.56.0 · server
 > 0.38.0 (2026-09-26), and the live check ran under `require` the same day (its row is in *The symptom*).
 > Epic 1 PR #540; epic 2 PR #548; epic 3 PR #549; epic 4 and story 5.2 PR #556; story 5.1 conventions PR #53;
-> story 5.3 — all six consumers pinned to conventions `release` 8355757; epic 6 OrgMeter `ai_conventions`
+> story 5.3 — all six consumers pinned to conventions `release` 8355757; epic 6 the corporate family's conventions repository
 > PR #26 (94fe09a), all ten of its consumers pinned to it, the three that deploy on push merged on the
 > operator's word and their deploys verified. **Deviations:** `consult`'s `kind`/`plan`/`epics` arguments and
 > one sentence of its description landed in epic 2, not story 3.1, because the kinds cannot be tested end to
@@ -13,13 +13,13 @@
 > corrected to assert their own rule — the tooltip census and the radio-name check; the conventions rule
 > gained a Definition of Done on CodeRabbit's review, and the pointer in `coai-review-gate.md` names the
 > rule's id rather than linking it; story 5.2 rode in epic 4's PR because the mount pin had to move with it;
-> OrgMeter's `review-gate.md` says three things the dew_flow rule does not — the groups are numbered in threes
+> the corporate family's `review-gate.md` says three things the dew_flow rule does not — the groups are numbered in threes
 > from 1 (1–3, 4–6), `abandoned` counts as an outcome as `solved` and `not_solved` do, and a lapsed
 > consultation can still be closed; the live check found that the sidebar line ran the branch on as the
 > sentence's last word (`…due epic-1`) and it now reads `· branch epic-1`. **Open tail:** of those three clarifications,
 > decided on 2026-09-26 after a consultation (codex, verified against `CadenceRule.GroupOf` and
 > `ConsultationClosing.IsVerdict`): the fixed numbering was WRONG for a plan that starts past epic 1 and is
-> corrected in OrgMeter instead (`ai_conventions` PR #27, which also drops the lapsed and lost-reply
+> corrected in the corporate family instead (its conventions repository's PR #27, which also drops the lapsed and lost-reply
 > sentences `close_consult`'s description already says); only "which outcomes count" goes into
 > `common/coai-consultant.md`, as one sentence folded into the NEXT conventions change rather than a
 > six-repo pin cascade of its own; `PanelSettings.cs` over the 800 ceiling is
@@ -31,7 +31,7 @@
 > (`src_mcp/core/Commands`, a new `src_mcp/core/Cadence`, `src_mcp/src/Server/PanelService.cs`,
 > `src_mcp/src/Server/Consultation`), the plan-size heuristic (`PlanShape.cs`), the panel's settings
 > and sidebar (`src_vs_code`), and — last — the consultant rule's move into BOTH conventions
-> repositories (`dew_flow_conventions` and OrgMeter's `ai_conventions`).
+> repositories (`dew_flow_conventions` and the corporate family's conventions repository).
 >
 > **Plan gate: round 1, 2026-09-25 — `good_enough`, 3 of 3 reviewers, 11 findings: 7 accepted and
 > folded in below (each marked *gate round 1*), 4 rejected with reasons.** The gate's split order sized
@@ -59,7 +59,7 @@ machine (Windows `%LOCALAPPDATA%\coai-mcp\coai.db`, WSL `~/.local/share/coai-mcp
 |---|---|---|---|
 | Windows, since 2026-09-05 | 425 | 872 | 15 — the last on 2026-09-18 |
 | WSL, since 2026-09-07 | 176 | 390 | 3 — the last (a diagnostic probe) on 2026-09-22 |
-| of which `email-service`, 14 epics over two plans | 20 | 51 | **0** |
+| of which private repo A, 14 epics over two plans | 20 | 51 | **0** |
 | **Live check, `require`, 2026-09-26** — a 4-epic throwaway plan, released 0.38.0 | 1 | 2 run, 1 refused | **1** `cadence` (epics 1–3), closed `solved`; 0 `risk` (below 5 epics); 0 stood down |
 | **Second live check, `require`, 2026-09-26** — a 6-epic plan (one story each), the risk path | 6 | 12 run, 0 refused | **3**, as the arithmetic says: 2 `cadence` (epics 1–3, 4–6) and 1 `risk` (5/5.1), each closed `solved`; 0 stood down |
 
@@ -123,9 +123,9 @@ ONE named risk makes three consultations. Naming the maximum would have made fiv
    `dew_flow_*` repository) and `dew_flow_conventions/common/coai-review-gate.md` never says "consult".
    The tool DESCRIPTIONS carry the triggers (`src_mcp/src/Tools.cs:321-367`), but Claude Code defers
    MCP tool schemas: until something loads them the model knows `mcp__coai__consult` by name only.
-3. **Prose in conventions is necessary and not sufficient.** OrgMeter's `ai_conventions` has carried
+3. **Prose in conventions is necessary and not sufficient.** The corporate family's conventions repository has carried
    five consult triggers in `common/review-gate.md` since 2026-09-16, mounted in nine repositories —
-   `email-service` and `scoreMeter` among them. They produced the WSL row above.
+   private repo A and private repo B among them. They produced the WSL row above.
 
 The one channel that verifiably reaches every caller is the gate's own reply: the `commands` list
 built by `GateCommands.For` (`src_mcp/core/Commands/GateCommands.cs:98`), which the server
@@ -136,7 +136,7 @@ refusal.
 
 `PlanShape.Split` ends at `Huge` — "4-5 EPICS … never more" (`shared/commands/command-split-huge.md`).
 The operator reports about ten cases where the caller disagreed and split into 9–15 epics, and was
-right to. `email-service` is the measured one: `todo/PLAN_stage_foundation.md` (4 epics, 16 stories,
+right to. Private repo A is the measured one: `todo/PLAN_stage_foundation.md` (4 epics, 16 stories,
 1452 lines) then `todo/PLAN_first_application_live.md` (10 epics, 50 stories, 1358 lines).
 
 Neither signal the reader has can tell them apart — run through `PlanShapeReader`'s longest-run rule
@@ -174,8 +174,8 @@ which the reader does not look at.
     the epic numbers of the triple) — because the caller has usually never loaded `consult`'s schema.
 14. **`status` and the sidebar show the cadence**: *epics closed 4/14 · consultation for triple 4–6:
     due.*
-15. **The consultant rule is SHARED** and moves into conventions — `dew_flow_conventions` and OrgMeter's
-    `ai_conventions` — at the END of this work. This reverses the 2026-09-13 ruling recorded in
+15. **The consultant rule is SHARED** and moves into conventions — `dew_flow_conventions` and the corporate family's
+    conventions repository — at the END of this work. This reverses the 2026-09-13 ruling recorded in
     [PLAN_consultant.md](PLAN_consultant.md) ("a rule about one tool of one server is one
     product's own"): `coai` gates every repository of the family, so a rule about its tools is as
     shared as the gate rule itself.
@@ -202,7 +202,7 @@ which the reader does not look at.
 - `EpicRef.Parse(epic, plan)` → `None` | `Some(Number, Last, Plan)` | refusal: malformed (`"'5-14' does
   not read as k/N"`), one of `plan`/`epic` without the other, `k < 1 || k > N`. **k is the epic's own
   number as the plan writes it and N the plan's LAST epic number**, because a plan may continue another
-  (email-service's second plan runs 5–14) — so the ceiling of decision 7 is NOT here: it is
+  (private repo A's second plan runs 5–14) — so the ceiling of decision 7 is NOT here: it is
   `CadenceRule.RefuseIfTooMany`, on the COUNT of epics in the file (*as built in epic 1*).
 - **The declared N is checked against the plan, not trusted** (gate round 1, codex + local). The
   server reads the plan file at `plan` — at the reviewed sha (the epic-1-3 consultation, point 9) — and
@@ -244,7 +244,7 @@ which the reader does not look at.
   the PLAN into two plans, each gated on its own.* `JudgementId` (`GateCommands.cs:157`) maps it;
   `HasEpics` (`:166`) already answers `>=` and needs nothing.
 - Recalibration run, recorded in the docstring the way #131's was: every `PLAN_*.md` in this
-  repository plus the two `email-service` plans, before and after, with the count of verdicts that
+  repository plus the two private repo A plans, before and after, with the count of verdicts that
   moved.
 
 ### Server — `src_mcp/src/Server/Cadence/`
@@ -369,12 +369,12 @@ mount.
 others; its code pins go stale and its build is run). A worktree per consumer off `origin/main`,
 paths added explicitly.
 
-**OrgMeter `ai_conventions`:** `common/review-gate.md` § *When you are stuck, ask another vendor* is
+**The corporate family's conventions repository:** `common/review-gate.md` § *When you are stuck, ask another vendor* is
 brought level — the sixth trigger, the cadence, the fields, the outcome — in place (no body hash
 there; `tools/conventions-check.mjs` checks links and bookkeeping). Its consumers (the nine its own
-2026-09-16 plan names, plus `email-service`) are bumped per its `common/shared-rules-pin.md`; **three
+2026-09-16 plan names, plus private repo A) are bumped per its `common/shared-rules-pin.md`; **three
 of them deploy on a push to their default branch** —
-`scoreMeter`, `orchestrator` and `llm-jira-estimates` per its own 2026-09-16 plan — so they go last,
+private repo B, private repo C and private repo D per its own 2026-09-16 plan — so they go last,
 separately, each through its own PR, never merged by this work without the operator's word.
 
 ## Cadence consultation for epics 1–3 (2026-09-25, codex `gpt-6-astra`, by hand)
@@ -571,7 +571,7 @@ Six epics, so this plan is its own first customer: it owes two cadence consultat
     and reads the MOUNTED file; `prepareGate.test.mjs` fails when the mount lacks the consultant rule.
 18. **Story 5.3 — the five other consumers**, one PR each, `rag_qln` last with its build run.
 
-### Epic 6 — OrgMeter `ai_conventions`
+### Epic 6 — the corporate family's conventions repository
 
 19. **Story 6.1 — `common/review-gate.md` brought level** (read the live file first — its current text
     is quoted from a WSL read on 2026-09-25, not from a review). `conventions-check` green; PR.
@@ -615,7 +615,7 @@ Six epics, so this plan is its own first customer: it owes two cadence consultat
 - **The reversal of 2026-09-13.** `KNOWN_HALVES`, the mount test and three docblocks were written on the
   premise that the consultant half is this product's own; Epic 5 changes all of them in one PR so no
   window exists where the snippet is built from a file that is gone.
-- **OrgMeter is another organisation.** Its merge rules and deploy-on-push consumers are not ours to
+- **The corporate family is another organisation.** Its merge rules and deploy-on-push consumers are not ours to
   shortcut; Epic 6 ends in open PRs if the operator does not merge them.
 
 ## Definition of Done
@@ -624,14 +624,14 @@ Six epics, so this plan is its own first customer: it owes two cadence consultat
       cadence and risk consultations, each closed with an outcome, or stood down with a reason.
 - [x] `review_code` refuses the first code round of an unconsulted triple in `require`, orders in
       `remind`, is silent in `off` — each pinned by a test watched red.
-- [x] A plan of more than 14 epics is refused; `Massive` sizes both `email-service` plans correctly; the recalibration table
+- [x] A plan of more than 14 epics is refused; `Massive` sizes both private repo A plans correctly; the recalibration table
       is in `PlanShape.cs`'s docstring.
 - [x] Cadence consultations spend no stuck budget, cannot be duplicated, count only with an outcome.
 - [x] An unavailable consultant never blocks a round, and says so in the round and in a notice.
 - [x] `status` and the sidebar show *epics closed k/N* and the next triple's state.
 - [x] `common/coai-consultant.md` is on `dew_flow_conventions`' `release`, all six consumers pinned to it,
       `consultantRule.md` gone from this repository, `ARTEFACT_VERSION` 12.
-- [x] OrgMeter `review-gate.md` level with it; its PRs merged or waiting on the operator, stated which.
+- [x] The corporate family's `review-gate.md` level with it; its PRs merged or waiting on the operator, stated which.
 - [x] The two scenario-harness flows run green and are listed in `research/module_tests.md`.
 - [x] Module docs, README, CHANGELOG updated; this plan promoted to `research/` with `IMPLEMENTED <date>`
       and its deviations; `todo/README.md` updated both ways.

@@ -37,7 +37,7 @@ three sessions against it at once.
 
 ## The symptom, measured
 
-`C:\Users\strug\AppData\Local\Temp` held **5 455** directories named `coai-*` on 2026-09-18. The
+`C:\Users\<user>\AppData\Local\Temp` held **5 455** directories named `coai-*` on 2026-09-18. The
 oldest was stamped 11:47 and the newest 14:06 — **every one made that day**, by eight runs of
 `npm test` and a few `src_mcp` runs. 53.5 MB, which is nothing; 5 455 entries in one folder, which
 is not.

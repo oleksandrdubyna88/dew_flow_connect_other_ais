@@ -240,7 +240,7 @@ public sealed class CadenceGateScenarioTests : FakeCliRoundTests
     [Fact]
     public async Task AContinuingPlan_IsCountedByItsOwnEpics()
     {
-        // email-service's second plan runs epics 5-14: ten epics, last number fourteen, not refused.
+        // private repo A's second plan runs epics 5-14: ten epics, last number fourteen, not refused.
         await CommitPlan(epics: 10, first: 5);
         var service = Service(CadenceMode.Require);
         await Consulted(service, "cadence", "5-7");

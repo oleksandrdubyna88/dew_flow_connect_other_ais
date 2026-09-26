@@ -319,7 +319,7 @@ public sealed partial class ConsultationStore(
     /// <remarks>
     /// <b>A cadence or risk consultation closed with a verdict is never reaped</b> (research/PLAN_consult_on_a_cadence.md,
     /// found while answering epic 2's code round): it is the only evidence the cadence gate reads that a group of
-    /// epics or a risky piece was consulted on, and a plan's epics run for weeks — email-service's fourteen did —
+    /// epics or a risky piece was consulted on, and a plan's epics run for weeks — private repo A's fourteen did —
     /// while retention is seven days. They are few (a group per three epics and at most three risk items per
     /// plan). A lapsed or failed one is no evidence and goes like any other.
     /// </remarks>

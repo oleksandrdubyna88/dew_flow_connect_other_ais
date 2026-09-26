@@ -14,7 +14,7 @@
 >
 > Raw data — packs, records, blinded inputs and verdicts, the keys — stays on the operator's machine and is
 > **not** committed: seven of the fourteen repositories are corporate, and the packs carry their source.
-> Those seven appear here by name only.
+> Those seven appear here only under neutral labels, corporate A–G.
 
 ## The question
 
@@ -150,23 +150,23 @@ a fourth pass by the same method, blind to its key, then joined the same way.
 | C# | cs2 | dew_flow_mcp | direct commits under one plan | 3 / 6 | 27 | seed |
 | C# | cs3 | dew_flow_rag_qln | direct commits | 3 / 7 | 58 | — |
 | TS | ts1 | coai | squash | 3 / 3 | 44 | — |
-| TS | ts2 | email-service (corporate) | merge commits | 3 / 3 | 86 | seed |
+| TS | ts2 | corporate A | merge commits | 3 / 3 | 86 | seed |
 | TS | ts3 | dew_flow_creds_for_devs | rebase-merged PR | 5 / 5 | 60 | control |
-| TSX | tsx1 | vault (corporate) | squash + tickets | 4 / 5 | 96 | control |
+| TSX | tsx1 | corporate B | squash + tickets | 4 / 5 | 96 | control |
 | TSX | tsx2 | OpenHands | squash | 3 / 22 | 146 | seed |
-| TSX | tsx3 | ocroform-js (corporate) | rebase-merged tickets | 10 / 13 | 24 | — |
-| JS | js1 | org (corporate) | one merge commit | 1 / 1 | 34 | — |
+| TSX | tsx3 | corporate C | rebase-merged tickets | 10 / 13 | 24 | — |
+| JS | js1 | corporate D | one merge commit | 1 / 1 | 34 | — |
 | JS | js2 | dew_flow_sidecar_rust | direct commits | 8 / 9 | 6 | control |
 | JS | js3 | coai | direct commits under one plan | 2 / 2 | 5 | seed |
 | Rust | rs1 | dew_flow_sidecar_rust | direct commits under one plan | 3 / 5 | 8 | — |
 | Rust | rs2 | dew_flow_sidecar_rust | direct commits under one plan | 7 / 7 | 31 | control |
 | Rust | rs3 | dew_flow_sidecar_rust | direct commits under one plan | 5 / 6 | 22 | seed |
 | PHP | php1 | laravel/framework | squash | 3 / 9 | 13 | seed |
-| PHP | php2 | vault (corporate) | squash + tickets | 3 / 7 | 64 | — |
-| PHP | php3 | LOC-core (corporate) | merge commits | 2 / 3 | 54 | control |
-| Python | py1 | robocr-parser (corporate) | merge commits | 4 / 5 | 33 | — |
+| PHP | php2 | corporate B | squash + tickets | 3 / 7 | 64 | — |
+| PHP | php3 | corporate E | merge commits | 2 / 3 | 54 | control |
+| Python | py1 | corporate F | merge commits | 4 / 5 | 33 | — |
 | Python | py2 | software-agent-sdk | squash, numbered [k/4] | 4 / 6 | 19 | control |
-| Python | py3 | scoreMeter (corporate) | direct commits under one plan | 6 / 6 | 46 | seed |
+| Python | py3 | corporate G | direct commits under one plan | 6 / 6 | 46 | seed |
 
 Seed tasks were drawn with RNG seed 20260925 among tasks able to host a cross-epic defect (js1, js2 and rs1
 have one code file or one PR and cannot). Model cells ran in an order shuffled with seed 20260926 (part 2:
@@ -354,8 +354,8 @@ Every seed, by cell. "hit" = an assessor matched trigger and mechanism, not mere
 |---|---|---|---|---|---|---|---|
 | cs2-S1 — the invoke gate built from the unfiltered tool list | yes | dew_flow_mcp | **hit** | miss | **hit** | yes | not run |
 | cs2-S2 — a description hash over the unsorted order | no | dew_flow_mcp | miss | miss | miss | yes | not run |
-| ts2-S1 — a case-insensitive check with a case-preserving return | yes | email-service | miss | miss | miss | cut | not run (interrupted) |
-| ts2-S2 — an error's cause chain no longer inspected | no | email-service | miss | miss | miss | cut | not run (interrupted) |
+| ts2-S1 — a case-insensitive check with a case-preserving return | yes | corporate A | miss | miss | miss | cut | not run (interrupted) |
+| ts2-S2 — an error's cause chain no longer inspected | no | corporate A | miss | miss | miss | cut | not run (interrupted) |
 | tsx2-S1 — a shared helper stops encoding the id in a URL | yes | OpenHands | miss | miss | miss | cut | miss |
 | tsx2-S2 — the enabled check moved after the run check | no | OpenHands | miss | miss | miss | cut | **hit** |
 | js3-S1 — a timeout reported as a clean close, code 0 | yes | coai | **hit** | **hit** | **hit** | yes | not run |
@@ -364,8 +364,8 @@ Every seed, by cell. "hit" = an assessor matched trigger and mechanism, not mere
 | rs3-S2 — the input shape dropped from the compile-cache path | no | dew_flow_sidecar_rust | **hit** | **hit** | **hit** | yes | not run |
 | php1-S1 — `read` missing from the list the unpooled connection strips | yes | laravel | miss | miss | miss | yes | **hit** |
 | php1-S2 — `=== null` instead of `blank()` for an empty override | no | laravel | miss | **hit** | **hit** | not a changed line | **hit** |
-| py3-S1 — positional parameters swapped in the callee only | yes | scoreMeter | **hit** | **hit** | **hit** | yes | not run |
-| py3-S2 — a status value renamed at the producer only | yes | scoreMeter | miss | miss | **hit** | yes | not run |
+| py3-S1 — positional parameters swapped in the callee only | yes | corporate G | **hit** | **hit** | **hit** | yes | not run |
+| py3-S2 — a status value renamed at the producer only | yes | corporate G | miss | miss | **hit** | yes | not run |
 | **found** | | | **5 of 14** (4 of 8 cross-epic) | **5 of 14** (3 of 8) | **7 of 14** (5 of 8) | 9 yes, 4 cut, 1 neither | 3 of 4 run (1 of 2) |
 
 "In F's hunks" says whether the seeded line reached F's pack as a hunk line: *cut* = its member was cut by the

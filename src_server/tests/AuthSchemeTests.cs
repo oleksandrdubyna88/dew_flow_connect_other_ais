@@ -36,7 +36,7 @@ public sealed class AuthSchemeTests
         services.AddLogging();
         Auth.AddSchemes(
             services,
-            msTenant: "34cedc64-a7d3-4e3b-a7c2-93858254abaa",
+            msTenant: "5f0d6c1a-2b3c-4d5e-8f90-a1b2c3d4e5f6",
             msAudiences: ["api://something"],
             googleEnabled: googleEnabled,
             googleAudiences: googleAudiences ?? [GoogleClientId],
@@ -116,7 +116,7 @@ public sealed class AuthSchemeTests
         schemes.AddLogging();
         Auth.AddSchemes(
             schemes,
-            msTenant: "34cedc64-a7d3-4e3b-a7c2-93858254abaa",
+            msTenant: "5f0d6c1a-2b3c-4d5e-8f90-a1b2c3d4e5f6",
             msAudiences: ["api://something"],
             googleEnabled: false,
             googleAudiences: [],

@@ -438,7 +438,7 @@ test('what may be PINNED is exactly what the button would answer', () => {
 
 test('a window with NO FOLDER open looks where Claude Code actually ran — the home directory', async () => {
   // Measured on the operator's machine, with the button open beside a live conversation it could not
-  // see: the tab read "Подключение к scoreMeter DB" and `workspaceFolders` was undefined, so the
+  // see: the tab read "Подключение к sampleApp DB" and `workspaceFolders` was undefined, so the
   // search was scoped to a workspace that did not exist. Claude Code does not need a folder — a VS
   // Code terminal with none starts in the home directory, and the session is filed under it.
   const home = mkdtempSync(join(tmpdir(), 'coai-asked-'));
@@ -446,14 +446,14 @@ test('a window with NO FOLDER open looks where Claude Code actually ran — the 
     // The project directory home itself would have: every separator becomes a dash.
     const dir = join(home, '.claude', 'projects', home.replace(/[\\/:]/g, '-'));
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'one.jsonl'), `${titled('Подключение к scoreMeter DB')}\n${said('мой вопрос')}\n`, 'utf8');
+    writeFileSync(join(dir, 'one.jsonl'), `${titled('Подключение к sampleApp DB')}\n${said('мой вопрос')}\n`, 'utf8');
     // And another project entirely — 77 of them on the machine this was found on, a gigabyte in all.
     // Reading them to compare titles was the first attempt and was worse than the bug it fixed.
     const other = join(home, '.claude', 'projects', 'D--rsd-something');
     mkdirSync(other, { recursive: true });
     writeFileSync(join(other, 'two.jsonl'), `${titled('Something else')}\n${said('not yours')}\n`, 'utf8');
 
-    const found = await sessionFileIn(home, home, true, 'Подключение к scoreMeter DB');
+    const found = await sessionFileIn(home, home, true, 'Подключение к sampleApp DB');
 
     assert.strictEqual(found.kind, 'one', 'a window with no folder open could not find a session that exists');
     const read = await promptsFrom(found.kind === 'one' ? found.file : '');
@@ -487,8 +487,8 @@ test('a tab wearing a SHORTENED title still finds its session', () => {
   // Code truncates the title on its own panel and writes the whole thing to the session file. An
   // exact comparison matched short conversations and never long ones — and said so, correctly and
   // uselessly, with the ellipsis still in the refusal.
-  assert.strictEqual(namesTheSame('Подключение к scoreMeter DB', 'Подключение к scoreMeter...'), true);
-  assert.strictEqual(namesTheSame('Подключение к scoreMeter DB', 'Подключение к scoreMeter…'), true,
+  assert.strictEqual(namesTheSame('Подключение к sampleApp DB', 'Подключение к sampleApp...'), true);
+  assert.strictEqual(namesTheSame('Подключение к sampleApp DB', 'Подключение к sampleApp…'), true,
     'the single-character ellipsis is the same truncation');
 
   // A whole name is still matched whole. Nothing is loosened where nothing was truncated.
@@ -497,7 +497,7 @@ test('a tab wearing a SHORTENED title still finds its session', () => {
     'a name that was not truncated became a prefix anyway');
 
   // A prefix is a prefix, not a substring, and an ellipsis alone names everything — so it names nothing.
-  assert.strictEqual(namesTheSame('Подключение к scoreMeter DB', 'scoreMeter...'), false);
+  assert.strictEqual(namesTheSame('Подключение к sampleApp DB', 'sampleApp...'), false);
   assert.strictEqual(namesTheSame('Anything at all', '...'), false, 'an ellipsis alone matched a session');
   assert.strictEqual(namesTheSame('Anything at all', ''), false);
 });
@@ -509,10 +509,10 @@ test('a shortened title that fits TWO sessions is still a refusal', async () => 
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'one.jsonl'), `${titled('Подключение к scoreMeter DB')}\n${said('the first')}\n`, 'utf8');
-    writeFileSync(join(dir, 'two.jsonl'), `${titled('Подключение к scoreMeter API')}\n${said('the second')}\n`, 'utf8');
+    writeFileSync(join(dir, 'one.jsonl'), `${titled('Подключение к sampleApp DB')}\n${said('the first')}\n`, 'utf8');
+    writeFileSync(join(dir, 'two.jsonl'), `${titled('Подключение к sampleApp API')}\n${said('the second')}\n`, 'utf8');
 
-    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'Подключение к scoreMeter...');
+    const answer = await sessionFileIn(home, 'D:\\work\\app', true, 'Подключение к sampleApp...');
 
     assert.strictEqual(answer.kind, 'several', 'a shortened title picked between two conversations');
   } finally {
@@ -525,9 +525,9 @@ test('the shortened title reaches the whole session, not just its name', async (
   try {
     const dir = join(home, '.claude', 'projects', 'D--work-app');
     mkdirSync(dir, { recursive: true });
-    writeFileSync(join(dir, 'one.jsonl'), `${titled('Подключение к scoreMeter DB')}\n${said('мой вопрос')}\n`, 'utf8');
+    writeFileSync(join(dir, 'one.jsonl'), `${titled('Подключение к sampleApp DB')}\n${said('мой вопрос')}\n`, 'utf8');
 
-    const found = await sessionFileIn(home, 'D:\\work\\app', true, 'Подключение к scoreMeter...');
+    const found = await sessionFileIn(home, 'D:\\work\\app', true, 'Подключение к sampleApp...');
     assert.strictEqual(found.kind, 'one');
 
     const read = await promptsFrom(found.kind === 'one' ? found.file : '');
@@ -542,12 +542,12 @@ test('a window with no folder open looks in the home directory, not nowhere', ()
   // sentence confident enough that nobody went behind it: "Open a folder first — a Claude Code
   // session belongs to one." It does not. For an operator who works without a folder — which is how
   // the one who found this works — that command had never once worked.
-  assert.deepStrictEqual(foldersToSearch([], 'C:\\Users\\strug'), ['C:\\Users\\strug']);
+  assert.deepStrictEqual(foldersToSearch([], 'C:\\Users\\user'), ['C:\\Users\\user']);
 
   // And a window that HAS folders is scoped to them: two projects may legitimately hold a
   // conversation by the same name, and the folder is what tells them apart.
   assert.deepStrictEqual(
-    foldersToSearch(['D:\\rsd\\app'], 'C:\\Users\\strug'), ['D:\\rsd\\app']);
+    foldersToSearch(['D:\\rsd\\app'], 'C:\\Users\\user'), ['D:\\rsd\\app']);
   assert.deepStrictEqual(foldersToSearch(['a', 'b'], 'home'), ['a', 'b']);
 });
 
@@ -1209,8 +1209,8 @@ test('a walk cut short by its budget is carried as UNREADABLE, not as an absence
  *
  * <p>The rule here was `[\\/:]` and it was verified, honestly, against a real `~/.claude/projects`
  * — on a machine whose paths happen to contain nothing else. A person on a Mac found the rest of it:
- * a repository called `dew_flow_payroll` has its sessions under `…-dew-flow-payroll`, and the
- * extension looked for `…-dew_flow_payroll` and said no session existed.</p>
+ * a repository called `sample_service` has its sessions under `…-sample-service`, and the
+ * extension looked for `…-sample_service` and said no session existed.</p>
  *
  * <p>Measured on 84 pairs of (the `cwd` a transcript records, the folder that transcript is in) from
  * this machine on 2026-09-17: the shipped rule was right for 51 of them, and replacing everything
@@ -1220,8 +1220,8 @@ test('a walk cut short by its budget is carried as UNREADABLE, not as an absence
  */
 test('every character that is not a letter or a digit becomes a dash', () => {
   // The pair that started it, from the report: a repo with underscores in its name.
-  assert.strictEqual(projectDirName('/Users/mark/Desktop/Development/RSDPay/dew_flow_payroll'),
-    '-Users-mark-Desktop-Development-RSDPay-dew-flow-payroll',
+  assert.strictEqual(projectDirName('/Users/user/Desktop/Development/Acme/sample_service'),
+    '-Users-user-Desktop-Development-Acme-sample-service',
     'a repository with underscores in its path is looked for under a name Claude Code never uses');
 
   // And on this machine, measured: D:\rsd\dew_flow_benchmark really is D--rsd-dew-flow-benchmark.

@@ -34,8 +34,8 @@ export interface ReadFailure {
  * `D--rsd-dew-flow-benchmark`.</p>
  *
  * <p><b>It used to replace three characters and it was verified — on a machine whose paths contained
- * nothing else.</b> A person on a Mac found the rest: a repository called `dew_flow_payroll` keeps
- * its sessions under `…-dew-flow-payroll`, this looked for `…-dew_flow_payroll`, and the answer was
+ * nothing else.</b> A person on a Mac found the rest: a repository called `sample_service` keeps
+ * its sessions under `…-sample-service`, this looked for `…-sample_service`, and the answer was
  * that no session existed. Re-measured 2026-09-17 over 84 pairs of (the `cwd` a transcript records,
  * the folder that transcript sits in): the three-character rule was right for 51 of them and this one
  * for all 84. The characters actually seen changing were `\` `:` `.` and `_`; between the last two
@@ -273,8 +273,8 @@ export function foldersToSearch(open: readonly string[], home: string): readonly
  * Whether a tab's name and a session's name are the same name.
  *
  * <p><b>A tab wears a SHORTENED title.</b> Claude Code truncates what it puts on its own panel and
- * writes the whole thing to the session file: the operator's tab reads *Подключение к scoreMeter...*
- * where the file reads *Подключение к scoreMeter DB*. An exact comparison therefore matched short
+ * writes the whole thing to the session file: the operator's tab reads *Подключение к sampleApp...*
+ * where the file reads *Подключение к sampleApp DB*. An exact comparison therefore matched short
  * conversations and never long ones — and reported, correctly and uselessly, that no session on the
  * machine was called what the tab was called. Found by them, on the shipped build, from the ellipsis
  * in the refusal itself.</p>
@@ -516,8 +516,8 @@ export function waitingIn(sessions: readonly WaitingSession[], looking = ''): Wa
   // It used to hand over a lone waiting session without reading the tab's name at all, and consult
   // the title only when two were waiting. That is backwards: two waiting is the case where a wrong
   // pick is at least suspected, and ONE waiting is the case where nobody would ever know. Probed on
-  // the operator's machine with their question on screen — asked for `scoreMeter DB запись в c...`
-  // and handed `Подключение к scoreMeter DB`, because that was the only unanswered one anywhere.
+  // the operator's machine with their question on screen — asked for `sampleApp DB запись в c...`
+  // and handed `Подключение к sampleApp DB`, because that was the only unanswered one anywhere.
   //
   // The shortened-title rule applies here as it does for the Asked button: a tab's name is what
   // Claude Code put on its panel, and for a long conversation that is not what it wrote to the file.

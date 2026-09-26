@@ -23,10 +23,10 @@ public sealed class VendorExecutableTests
     public void AVendorsExecutablePath_TravelsInTheVendorList()
     {
         var vendors = PanelSettings.ParseVendors(
-            """[{"id":"codex","runtime":"codex","model":"","baseUrl":"","executablePath":"/home/jinx/.npm-global/bin/codex"}]""");
+            """[{"id":"codex","runtime":"codex","model":"","baseUrl":"","executablePath":"/home/user/.npm-global/bin/codex"}]""");
 
         vendors.Should().ContainSingle()
-            .Which.ExecutablePath.Should().Be("/home/jinx/.npm-global/bin/codex");
+            .Which.ExecutablePath.Should().Be("/home/user/.npm-global/bin/codex");
     }
 
     [Fact]
@@ -37,12 +37,12 @@ public sealed class VendorExecutableTests
         var env = new Dictionary<string, string>
         {
             ["COAI_VENDORS"] = """[{"id":"codex","runtime":"codex","model":"","baseUrl":""}]""",
-            ["COAI_EXE_CODEX"] = "/home/jinx/.npm-global/bin/codex",
+            ["COAI_EXE_CODEX"] = "/home/user/.npm-global/bin/codex",
         };
 
         PanelSettings.FromEnvironment(name => env.GetValueOrDefault(name))
             .Providers.Should().ContainSingle()
-            .Which.ExecutablePath.Should().Be("/home/jinx/.npm-global/bin/codex");
+            .Which.ExecutablePath.Should().Be("/home/user/.npm-global/bin/codex");
     }
 
     [Fact]

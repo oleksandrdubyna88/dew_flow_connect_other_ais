@@ -142,10 +142,10 @@ test('nothing saved is no servers, not a default one', () => {
 });
 
 test('a scope must name an application id AND the one permission', () => {
-  const good = 'api://3afb5834-1111-2222-3333-444455556666/coai.access';
+  const good = 'api://c0a1b2d3-1111-2222-3333-444455556666/coai.access';
   assert.ok(isSafeAdvertisedScope(good));
   assert.ok(isSafeAdvertisedScope(good.toUpperCase()), 'a guid is not case-sensitive');
-  assert.strictEqual(applicationIdOf(good), '3afb5834-1111-2222-3333-444455556666');
+  assert.strictEqual(applicationIdOf(good), 'c0a1b2d3-1111-2222-3333-444455556666');
 });
 
 test('a hostile server cannot name a scope that reads anybody’s mail', () => {
@@ -158,8 +158,8 @@ test('a hostile server cannot name a scope that reads anybody’s mail', () => {
     'Mail.ReadWrite',
     'api://graph.microsoft.com/coai.access',
     // The right application shape, the WRONG permission — a different scope on the same app.
-    'api://3afb5834-1111-2222-3333-444455556666/Files.ReadWrite.All',
-    'api://3afb5834-1111-2222-3333-444455556666/coai.access extra',
+    'api://c0a1b2d3-1111-2222-3333-444455556666/Files.ReadWrite.All',
+    'api://c0a1b2d3-1111-2222-3333-444455556666/coai.access extra',
     'api://not-a-guid/coai.access',
     '',
     undefined,

@@ -131,8 +131,8 @@ test('an id the server invents is checked before it becomes an authenticated URL
 
   // What a real server sends still passes — a GUID, and the shapes around it.
   assert.strictEqual(
-    acceptedId({ id: '3afb5834-0c1e-4a9b-9f2d-5c7e8a1b2c3d' }),
-    '3afb5834-0c1e-4a9b-9f2d-5c7e8a1b2c3d',
+    acceptedId({ id: 'c0a1b2d3-0c1e-4a9b-9f2d-5c7e8a1b2c3d' }),
+    'c0a1b2d3-0c1e-4a9b-9f2d-5c7e8a1b2c3d',
   );
   assert.strictEqual(acceptedId({ id: 'review_1.2-3' }), 'review_1.2-3');
 });

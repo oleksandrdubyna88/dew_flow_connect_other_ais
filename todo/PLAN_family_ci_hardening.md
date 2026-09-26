@@ -308,8 +308,8 @@ settled by counting rather than taste:
 | `no-await-in-loop` | 73, against 5 `eslint-disable` markers | LEFT OUT; the five decorative markers were removed instead |
 | `max-lines` (800) | 8 files | kept — nameable, and each file says its measured size at the top |
 
-And the escape findings were real defects rather than lint noise: `'C:\Users\strug'` in a JavaScript
-string is `C:Usersstrug`, so **two tests asserted on Windows paths that were never Windows paths** and
+And the escape findings were real defects rather than lint noise: `'C:\Users\<user>'` in a JavaScript
+string is `C:Users<user>`, so **two tests asserted on Windows paths that were never Windows paths** and
 passed because both sides carried the same mangling.
 
 > **Consequence for Dependabot, still standing.** `rag_qln` has an open PR bumping ITS extension to

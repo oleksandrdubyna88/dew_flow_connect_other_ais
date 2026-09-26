@@ -172,7 +172,7 @@ always allowed several, and picking one arbitrarily would be a display that is r
 ```
 Team server — RemSoft Dev
 [ https://coai.remsoft.dev                    ]   ← readonly
-coai-server 0.5.2 — signed in as oleksandr@remsoft.dev
+coai-server 0.5.2 — signed in as user@example.com
 Every side of this machine uses this sign-in.
 To point this side somewhere else, sign out under Team servers first.
 ```

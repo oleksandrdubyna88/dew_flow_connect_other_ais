@@ -79,7 +79,7 @@ what it produces.
 
 ## The measurement, before any solution
 
-Taken 2026-09-15 over the live store, `C:\Users\strug\AppData\Local\coai-mcp\chat-conversations`:
+Taken 2026-09-15 over the live store, `C:\Users\<user>\AppData\Local\coai-mcp\chat-conversations`:
 22 conversations, 39 model answers, **every one of them `gemini-3.8-flash-medium`** — so this
 describes that model and licenses nothing about the others.
 

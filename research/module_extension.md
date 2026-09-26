@@ -2074,8 +2074,8 @@ one whose title matches the active tab wins, and a title matching neither or bot
 **And the FOLDER was spelled wrong for five of the six repositories here (2026-09-17).**
 `projectDirName` replaced `\`, `/` and `:` — verified, honestly, against a real `~/.claude/projects`
 on a machine whose paths contained nothing else. A person on a Mac found the rest: a repository called
-`dew_flow_payroll` keeps its sessions under `…-dew-flow-payroll`, this looked for
-`…-dew_flow_payroll`, and the answer was that no session existed. Re-measured over **84 pairs** of
+`sample_service` keeps its sessions under `…-sample-service`, this looked for
+`…-sample_service`, and the answer was that no session existed. Re-measured over **84 pairs** of
 (the `cwd` a transcript records, the folder that transcript sits in): the three-character rule was
 right for **51**, and replacing everything that is not a letter or a digit is right for **84 of 84**.
 The characters seen changing were `\` `:` `.` and `_`. Checked against the folders on disk
@@ -2148,8 +2148,8 @@ lines to compare a title, and five reviewers across two vendors measured the sam
 seconds of a blocked extension host.
 
 **The tab wears a SHORTENED name.** Claude Code truncates the title it puts on its own panel and
-writes the whole of it to the session file: a tab reading *Подключение к scoreMeter…* belongs to a
-session called *Подключение к scoreMeter DB*. Comparing the two as written therefore matched short
+writes the whole of it to the session file: a tab reading *Подключение к sampleApp…* belongs to a
+session called *Подключение к sampleApp DB*. Comparing the two as written therefore matched short
 conversations and never long ones — `namesTheSame` reads a name ending in an ellipsis as a prefix
 and anything else exactly. Nothing else is loosened: a prefix fitting two sessions is the same
 refusal a whole name fitting two always was. Verified against every session on the machine it was
@@ -3431,7 +3431,7 @@ second installation's logs land beside the first's and overwrite nothing, where 
 top of another. Refusing on logs would have refused every folder a server had ever been pointed at.
 
 **The live check also settled the tail the plan was carrying.** On a UNC-backed drive
-(`\\192.168.1.113\Shared_Drive_Work`): both halves resolve the same string for the same pair,
+(`\\192.168.0.10\Team_Share`): both halves resolve the same string for the same pair,
 partitioned and not; a 46 MB history copied in 19.5 s and read back as the same 548 rounds and 9 090
 findings; a side directory read 0 rounds while the root held 548, so the partition does not leak; a
 refused side name exits non-zero, which `readLog` turns into `read: false` rather than a verified

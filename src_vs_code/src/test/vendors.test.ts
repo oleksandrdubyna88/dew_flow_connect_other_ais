@@ -86,9 +86,9 @@ test('a vendor riding its own endpoint is never migrated', () => {
 // ---------- where a vendor's CLI actually is ----------
 
 test('a vendor carries the path to its own CLI', () => {
-  const stored = [{ id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '/home/jinx/.npm-global/bin/codex', pricePerMillionIn: 0, pricePerMillionOut: 0 }];
+  const stored = [{ id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '/home/user/.npm-global/bin/codex', pricePerMillionIn: 0, pricePerMillionOut: 0 }];
 
-  assert.equal(vendorsFrom(stored)[0]!.executablePath, '/home/jinx/.npm-global/bin/codex');
+  assert.equal(vendorsFrom(stored)[0]!.executablePath, '/home/user/.npm-global/bin/codex');
 });
 
 test('the path travels to the server, because PATH cannot always answer', () => {

@@ -11,7 +11,7 @@ namespace CoaiMcp.Core.Cadence;
 /// which epic it is looking at: an <c>again: true</c> code round is as often a checkpoint or a retry as a
 /// new epic. The caller declares it, the way it declares its model on <c>open</c>.</para>
 /// <para><b><c>k</c> is the epic's own number as the plan writes it, <c>N</c> the plan's last.</b> A plan
-/// may continue another — email-service's second plan numbers its epics 5 to 14 — so <c>N</c> is not a
+/// may continue another — private repo A's second plan numbers its epics 5 to 14 — so <c>N</c> is not a
 /// count, and the ceiling of fourteen is applied to the count (<see cref="CadenceRule.RefuseIfTooMany"/>),
 /// never to this number. Whether <c>k</c> is one of the plan's OWN numbers needs the plan text and is
 /// the server's check, made where it reads the plan.</para>

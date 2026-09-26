@@ -12,7 +12,7 @@ one run each.
 |---|---|---|---|---|
 | payment_instruments | 4 | 4 | 4 | 9 |
 | corpus_variants | 6 | 3 | 4 | 12 |
-| scoremeter_port | 4 | 4 | 3 | 8 |
+| private_port | 4 | 4 | 3 | 8 |
 | **total** | **14** | **11** | **11** | **29** |
 
 Read alone this looks decisive: the union finds roughly twice what the best single prompt does, and

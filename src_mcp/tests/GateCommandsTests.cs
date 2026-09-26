@@ -300,7 +300,7 @@ public sealed class GateCommandsTests
     [Fact]
     public void APlanWithTenEpicHeadings_IsMassive_WhateverItsSteps()
     {
-        // email-service's PLAN_first_application_live: 10 epics, 50 stories, 5 numbered steps.
+        // private repo A's PLAN_first_application_live: 10 epics, 50 stories, 5 numbered steps.
         var shape = PlanShapeReader.Of(PlanWithEpicHeadings(epics: 10, steps: 5));
 
         shape.Steps.Should().Be(5);
@@ -311,7 +311,7 @@ public sealed class GateCommandsTests
     [Fact]
     public void APlanWithFourEpicHeadingsAndThirtyOneSteps_IsLarge()
     {
-        // email-service's PLAN_stage_foundation: 4 epics, 31 numbered steps, 1452 lines — the longer
+        // private repo A's PLAN_stage_foundation: 4 epics, 31 numbered steps, 1452 lines — the longer
         // file is the smaller plan, and only its headings say so.
         PlanShapeReader.Of(PlanWithEpicHeadings(epics: 4, steps: 31, lines: 1452)).Verdict
             .Should().Be(PlanShape.Split.Large);

@@ -96,7 +96,7 @@ On this machine's WSL the four CLIs are four different shapes:
 | CLI | What it actually is |
 |---|---|
 | `claude` | `/usr/bin/claude` → a native ELF binary; `comm` is `claude` |
-| `agy` | `/home/jinx/.local/bin/agy` → a native ELF binary |
+| `agy` | `/home/<user>/.local/bin/agy` → a native ELF binary |
 | `codex` | `/mnt/c/Users/…/AppData/Roaming/npm/codex` → a `#!/bin/sh` script, in the **Windows** npm directory |
 | `gemini` | same shape, same directory |
 

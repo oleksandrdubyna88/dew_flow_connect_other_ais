@@ -1,8 +1,8 @@
 # The settings this campaign ran under
 
-From `C:\Users\strug\AppData\Local\coai-mcp\settings.json`, with `--set` on top.
+From `C:\Users\<user>\AppData\Local\coai-mcp\settings.json`, with `--set` on top.
 
-Server: `C:\Users\strug\AppData\Roaming/Code/User/globalStorage/remsoftdev.connect-other-ais/coai-mcp.exe`
+Server: `C:\Users\<user>\AppData\Roaming/Code/User/globalStorage/remsoftdev.connect-other-ais/coai-mcp.exe`
 
 CLAUDE.md snippet in the checkout: **none — CLAUDE.md carries no snippet marker**
 

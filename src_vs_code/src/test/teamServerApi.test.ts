@@ -31,7 +31,7 @@ function stub(
   return impl;
 }
 
-const GOOD_SCOPE = 'api://3afb5834-1111-2222-3333-444455556666/coai.access';
+const GOOD_SCOPE = 'api://c0a1b2d3-1111-2222-3333-444455556666/coai.access';
 
 test('a request carries the contract version, and the token when there is one', async () => {
   const fetchImpl = stub(() => ({ status: 200, body: '{"ok":true}' }));

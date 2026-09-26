@@ -35,7 +35,7 @@ public sealed record PlanOutline(IReadOnlyList<OutlineEpic> Epics, int Stories)
 /// Reading a plan's outline out of its text.
 /// </summary>
 /// <remarks>
-/// <para><c>research/PLAN_consult_on_a_cadence.md</c>, D8. Measured on email-service's two plans on
+/// <para><c>research/PLAN_consult_on_a_cadence.md</c>, D8. Measured on private repo A's two plans on
 /// 2026-09-25: the 10-epic one has 5 numbered build steps and the 4-epic one 31, and the longer file is
 /// the smaller plan. Steps and length both invert; a plan that names its epics has answered the question.</para>
 /// <para>A heading is a line that STARTS with two to four <c>#</c> (five for a story) — prose that mentions

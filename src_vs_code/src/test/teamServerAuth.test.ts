@@ -42,7 +42,7 @@ function store(seed: Record<string, unknown> = {}): StateStore & { readonly all:
   };
 }
 
-const GOOD_SCOPE = 'api://3afb5834-1111-2222-3333-444455556666/coai.access';
+const GOOD_SCOPE = 'api://c0a1b2d3-1111-2222-3333-444455556666/coai.access';
 
 /** A server that says the right things: an acceptable scope, then a session. */
 function serverThatWorks(): typeof fetch & { seen: string[] } {
@@ -186,7 +186,7 @@ test('a renewal that is due is attempted WITHOUT asking the person anything', as
       [signedInKey(SERVER.id)]: { email: 'a@b.c', expiresUtc: '2026-09-06T13:00:00Z' } satisfies SignedIn,
       // Approved earlier, by a person. A renewal for an application nobody approved is refused
       // before it reaches the identity provider — see the test below.
-      [trustedKey(SERVER.id)]: '3afb5834-1111-2222-3333-444455556666',
+      [trustedKey(SERVER.id)]: 'c0a1b2d3-1111-2222-3333-444455556666',
       [tokenFactKey(SERVER.id, '')]: {
         email: 'a@b.c', expiresUtc: '2026-09-06T13:00:00Z', mintedAtMs: 1,
       } satisfies TokenFact,
@@ -277,7 +277,7 @@ test('the person is asked to confirm the application ONCE, then never again', as
     await signIn(SERVER, asking);
     await signIn(SERVER, asking);
 
-    assert.deepStrictEqual(shown, ['3afb5834-1111-2222-3333-444455556666']);
+    assert.deepStrictEqual(shown, ['c0a1b2d3-1111-2222-3333-444455556666']);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

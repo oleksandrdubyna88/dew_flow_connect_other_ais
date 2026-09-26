@@ -633,7 +633,7 @@
         "verdict": "proceed",
         "error": "",
         "gatingCount": 6,
-        "reviewers": "8 of 9 reviewers answered; failed: local/Architecture: unparseable: the answer was not the schema\u0027s JSON after one repair attempt (the answer was kept at C:\\Users\\strug\\AppData\\Local\\coai-mcp\\unparseable\\local-Architecture-20260905-094056-051.txt)",
+        "reviewers": "8 of 9 reviewers answered; failed: local/Architecture: unparseable: the answer was not the schema\u0027s JSON after one repair attempt (the answer was kept at C:\\Users\\<user>\\AppData\\Local\\coai-mcp\\unparseable\\local-Architecture-20260905-094056-051.txt)",
         "tokensIn": 430586,
         "tokensOut": 26376,
         "costUsd": null,

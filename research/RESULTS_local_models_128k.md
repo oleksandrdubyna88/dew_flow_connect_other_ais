@@ -5,7 +5,7 @@
 > [RESULTS_model_comparison.md](RESULTS_model_comparison.md) for the plan half and
 > [RESULTS_model_comparison_code.md](RESULTS_model_comparison_code.md) for the code half.
 >
-> **8 cells, all completed.** Raw output: `C:/Users/strug/gemma128` and `C:/Users/strug/qwen128`.
+> **8 cells, all completed.** Raw output: `C:/Users/<user>/gemma128` and `C:/Users/<user>/qwen128`.
 
 ## What had to be true first
 
