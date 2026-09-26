@@ -1,15 +1,32 @@
 # PLAN — The consultant's three limits work while the server runs, every surface says the consultation's kind, and every consultant setting explains itself
 
-> Status: **plan only, nothing implemented yet, 2026-09-26.** Scope: the idle sweep's schedule
+> Status: **IMPLEMENTED, 2026-09-26.** All three stories shipped in one epic through one gate: the plan
+> round (`good_enough`, 6 of 12 accepted) and the code round (`proceed`, 12 reviewers, 3 of 17 accepted).
+> **Deviations**, each from the code round:
+> - **The sweep decides under the repository's lock, on a fresh read.** It used to take the lock only to see
+>   that it was free, release it, and write from the copy it had enumerated. A follow-up starting in that
+>   window could have its `asking` overwritten by a stale close. The window was rare once per start and worth
+>   closing once the sweep ran every minute (`ConsultationStore.SweepOne`, pinned by a stale-copy test and
+>   broken by compiling code).
+> - **A checkbox's `?` sits after its label, not inside it.** A click anywhere inside a label toggles its
+>   checkbox, so the `?` on *Let an AI consult another vendor* flipped consulting off when someone read its
+>   help. The census enforces it.
+> - **The record-outcome pick looks the consultation up first,** so one gone from the log is said before an
+>   outcome is chosen; `ConsultFor` moved into the shared scenario base rather than being copied.
+>
+> **Open tail:** the four existing checkboxes in `panelView.ts` (*Separate settings for each side*, *Stop the
+> local reviewer…*, *Work autonomously*, *Split the plan…*) carry their `?` inside the label and so have the
+> same toggle-on-click defect. That is outside this plan, named and not changed. The Spending page still
+> shows a consult turn without its kind, as D2 decided. Scope: the idle sweep's schedule
 > (`src_mcp/src/Program.cs` serve path, `src_mcp/src/Server/PanelService.cs`), the consultation's kind on
 > every surface a person reads (`src_vs_code/src/roundsLog.ts`, `consultations.ts`, `panelProvider.ts`,
 > `ConsultationService.cs` log lines, `ServerJsonContext.cs` `OpenConsultation`), the `?` on every consultant
 > and cadence setting (`help.ts`, `consultantView.ts`, `cadenceSettings.ts`), and the docs (README, the
 > help article in five languages, the `consult` tool description).
 >
-> Related docs: [PLAN_consult_on_a_cadence.md](../research/PLAN_consult_on_a_cadence.md) (the kinds and the
-> exemption this documents), [PLAN_consultant.md](../research/PLAN_consultant.md) (the three caps),
-> [module_server.md](../research/module_server.md), [module_extension.md](../research/module_extension.md).
+> Related docs: [PLAN_consult_on_a_cadence.md](PLAN_consult_on_a_cadence.md) (the kinds and the
+> exemption this documents), [PLAN_consultant.md](PLAN_consultant.md) (the three caps),
+> [module_server.md](module_server.md), [module_extension.md](module_extension.md).
 
 ## The symptom
 
@@ -138,13 +155,13 @@ Declined, with reasons recorded at the gate:
 
 ## Definition of Done
 
-- [ ] An idle consultation reads `lapsed` within a minute of its budget in a running server, pinned by a
+- [x] An idle consultation reads `lapsed` within a minute of its budget in a running server, pinned by a
       test watched red.
-- [ ] Each of the three limits has a test that fails when its enforcement is removed, for every kind it
+- [x] Each of the three limits has a test that fails when its enforcement is removed, for every kind it
       applies to; each value's crossing from the panel is tested on its own.
-- [ ] The kind is on the log (its own column), the sidebar card, `status`, the server log lines and the
+- [x] The kind is on the log (its own column), the sidebar card, `status`, the server log lines and the
       quick pick.
-- [ ] Every Consultant and cadence control has a `?`, enforced by a test.
-- [ ] README, the help in five languages, the tool description, module docs and CHANGELOG say the kinds,
+- [x] Every Consultant and cadence control has a `?`, enforced by a test.
+- [x] README, the help in five languages, the tool description, module docs and CHANGELOG say the kinds,
       the exemption, and what applies to every kind.
-- [ ] This plan promoted to `research/`.
+- [x] This plan promoted to `research/`.

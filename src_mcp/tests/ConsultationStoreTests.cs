@@ -215,6 +215,21 @@ public sealed class ConsultationStoreTests : IDisposable
     }
 
     [Fact]
+    public void ASweepHoldingAStaleCopy_DoesNotCloseAConsultationThatHasSinceStartedATurn()
+    {
+        // The race the live sweep made worth closing (the code round, codex): the sweep read the record
+        // while it was open and idle, then a follow-up took the lock, marked it asking and released
+        // nothing yet visible to the sweep's copy. The decision must be made on the record as it is NOW.
+        var stale = Record(ConsultationStatuses.Open, handle: "0198-eeee", updated: DateTime.UtcNow.AddMinutes(-40));
+        _store.Write(stale with { Status = ConsultationStatuses.Asking, RunnerPid = Environment.ProcessId, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow) });
+
+        var swept = _store.SweepOne(stale, _ => true, DateTime.UtcNow, TimeSpan.FromMinutes(15), TimeSpan.FromDays(7));
+
+        swept.Should().BeFalse("the record on disk is running a turn; the sweep's copy is out of date");
+        _store.Read(stale.Id)!.Status.Should().Be(ConsultationStatuses.Asking);
+    }
+
+    [Fact]
     public void AFinishedRecordPastRetention_IsDeleted()
     {
         var record = Record(ConsultationStatuses.Closed, updated: DateTime.UtcNow.AddDays(-9)) with

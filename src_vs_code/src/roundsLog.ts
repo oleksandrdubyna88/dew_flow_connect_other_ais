@@ -1034,7 +1034,7 @@ const CONSULTATION_COLUMNS = 12;
  * What an ordered consultation covered — the epics or the story, and the plan — beside its own Kind column.
  *
  * <p>Kind and For were one cell (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.3), which left
- * `stuck` a bare word; now the kind has a column of its own (todo/PLAN_consult_limits_kinds_and_help.md,
+ * `stuck` a bare word; now the kind has a column of its own (research/PLAN_consult_limits_kinds_and_help.md,
  * story 2) and this says what the rest was for. A stuck consultation covered nothing but its problem: a
  * dash. The plan is named by its file, the path kept for the hover.</p>
  */

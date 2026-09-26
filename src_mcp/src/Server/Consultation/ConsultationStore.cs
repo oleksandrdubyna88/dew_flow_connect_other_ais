@@ -165,52 +165,50 @@ public sealed partial class ConsultationStore(
     private static bool OurOwn(string name) => Runners.Consultation.ConsultantArtefacts.Ours(name);
 
     /// <summary>
-    /// Whether this repository is free for the sweep to decide anything about.
+    /// One record's sweep: expired, orphaned by a dead process, or idle past its budget — decided while
+    /// HOLDING the repository's lock, on the record as it is then.
     /// </summary>
     /// <remarks>
-    /// The one decision the pid check does not already cover: another server can be holding the
-    /// repository lock, having READ an open record and be preparing its next turn, while this sweep
-    /// closes that record and clears its handle — after which the other server's write resurrects a
-    /// consultation the sweep had ended. A held lock means somebody is deciding about this repository
-    /// right now, and the sweep's decision can wait for the next startup. (codex, second code round.)
+    /// <para>The lock is what every writer of a consultation in this repository takes: a follow-up
+    /// takes it, re-reads the record and only then marks it <c>asking</c>. So a held lock means somebody
+    /// is deciding about this repository right now, and the sweep leaves it to the next beat — the pid
+    /// alone was not enough, since a second server in another container reads a live process as gone.
+    /// (CodeRabbit and codex, earlier rounds.)</para>
+    /// <para>And the decision is made on a FRESH read under that lock, not on the copy the enumeration
+    /// handed in. The lock used to be taken and released just to check it was free, and the write
+    /// came after, from the copy: a follow-up starting in between had its <c>asking</c> overwritten by a
+    /// stale close. A sweep once per start made that window rare; a sweep every minute made it worth
+    /// closing (<c>research/PLAN_consult_limits_kinds_and_help.md</c>, the code round).</para>
     /// </remarks>
-    private bool NobodyIsWorkingIn(string repoPath)
-    {
-        using var held = RepositoryLock.TryTakeAsync(dataDir, repoPath, TimeSpan.Zero).GetAwaiter().GetResult();
-
-        return held is not null;
-    }
-
-    private bool SweepOne(ConsultationRecord record, Func<int, bool> isAlive, DateTime nowUtc, TimeSpan idle, TimeSpan retention)
+    internal bool SweepOne(ConsultationRecord record, Func<int, bool> isAlive, DateTime nowUtc, TimeSpan idle, TimeSpan retention)
     {
         if (record.IsOver)
         {
             return Expire(record, nowUtc, retention);
         }
-
-        // A dead pid AND nobody holding the repository's lock. The pid alone was not enough: a
-        // second server that cannot observe the first one's process — a different container, a
-        // different user — reads it as gone and writes a terminal record over a consultation that is
-        // still running, which the live card and the log then show as interrupted while the vendor is
-        // mid-answer. The lock is the fact both servers CAN see, and it is the same zero-wait check
-        // the idle branch below already makes. (CodeRabbit, on the pull request.)
-        if (record.Status == ConsultationStatuses.Asking && !isAlive(record.RunnerPid)
-            && NobodyIsWorkingIn(record.RepoPath))
+        if (Swept(record, isAlive, nowUtc, idle) is null)
         {
-            Write(Orphaned(record, nowUtc));
-
-            return true;
+            return false; // the cheap look, before any lock: most records are simply in use
         }
 
-        if (record.Status != ConsultationStatuses.Asking && IdleFor(record, nowUtc) > idle && NobodyIsWorkingIn(record.RepoPath))
+        using var held = RepositoryLock.TryTakeAsync(dataDir, record.RepoPath, TimeSpan.Zero).GetAwaiter().GetResult();
+        var now = held is null ? null : Read(record.Id);
+        var next = now is null || now.IsOver ? null : Swept(now, isAlive, nowUtc, idle);
+        if (next is null)
         {
-            Write(Idled(record, nowUtc, idle));
-
-            return true;
+            return false;
         }
 
-        return false;
+        Write(next);
+
+        return true;
     }
+
+    /// <summary>What the sweep writes for a record that is orphaned or idle, or null when it is neither.</summary>
+    private static ConsultationRecord? Swept(ConsultationRecord record, Func<int, bool> isAlive, DateTime nowUtc, TimeSpan idle) =>
+        record.Status == ConsultationStatuses.Asking
+            ? (isAlive(record.RunnerPid) ? null : Orphaned(record, nowUtc))
+            : (IdleFor(record, nowUtc) > idle ? Idled(record, nowUtc, idle) : null);
 
     /// <summary>
     /// A turn whose server died: <c>interrupted</c> when it can be resumed, <c>failed</c> when it cannot.

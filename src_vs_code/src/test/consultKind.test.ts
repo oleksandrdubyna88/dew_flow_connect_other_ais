@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { closeTitle, coveredSaid, kindLine, kindOf } from '../consultKind';
 
-// A consultation's kind, worded once for every surface (todo/PLAN_consult_limits_kinds_and_help.md, story 2).
+// A consultation's kind, worded once for every surface (research/PLAN_consult_limits_kinds_and_help.md, story 2).
 
 test('a record from before the kinds existed was a stuck consultation', () => {
   assert.equal(kindOf(''), 'stuck');

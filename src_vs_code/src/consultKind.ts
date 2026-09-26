@@ -1,6 +1,6 @@
 /**
  * A consultation's kind, said the same way everywhere a person reads one: the log's table and the
- * sidebar's card (todo/PLAN_consult_limits_kinds_and_help.md, story 2).
+ * sidebar's card (research/PLAN_consult_limits_kinds_and_help.md, story 2).
  *
  * <p>Three kinds exist. <b>stuck</b>: an AI asked because it was not getting out — the one the calls-per-
  * session cap counts. <b>cadence</b>: the gate ordered one for a group of epics. <b>risk</b>: the gate
