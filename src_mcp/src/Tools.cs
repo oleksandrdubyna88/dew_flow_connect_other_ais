@@ -75,7 +75,7 @@ internal static class Tools
 
         yield return McpServerTool.Create(
             // The cadence's four arguments are optional, with C# defaults — the `resolve` lesson: without
-            // one the SDK publishes an argument as REQUIRED (todo/PLAN_consult_on_a_cadence.md).
+            // one the SDK publishes an argument as REQUIRED (research/PLAN_consult_on_a_cadence.md).
             async (string repoPath, string branch, string planText,
                    string? plan = null, string? epic = null, string? riskItems = null, string? riskNote = null) =>
                 await host.Current.ReviewPlanAsync(repoPath, branch, planText, Cadence(plan, epic, riskItems, riskNote)),
@@ -346,7 +346,7 @@ internal static class Tools
             // Both optional arguments carry a C# default — the `resolve` lesson above: without one
             // the SDK publishes the argument as REQUIRED, and the ordinary first call, which has no
             // consultationId yet, fails as "An error occurred invoking 'consult'".
-            // `kind`, `plan` and `epics` too (todo/PLAN_consult_on_a_cadence.md): absent is a stuck
+            // `kind`, `plan` and `epics` too (research/PLAN_consult_on_a_cadence.md): absent is a stuck
             // consultation, exactly what every call before them was.
             async (string repoPath, string problem, string? suspectedFiles = null, string? consultationId = null,
                    string? kind = null, string? plan = null, string? epics = null) =>

@@ -829,7 +829,7 @@ public sealed class RoundsDb : IDisposable
             [.. context.Commands.IsDefault ? [] : context.Commands], Server.ServerJsonContext.Default.ListString));
         Bind(write, "$planShape", context.PlanShape ?? string.Empty);
         // The epic this round was for and what the cadence said — from the ROUND, which owns them, as
-        // the caller is (todo/PLAN_consult_on_a_cadence.md).
+        // the caller is (research/PLAN_consult_on_a_cadence.md).
         Bind(write, "$planKey", round.PlanKey);
         Bind(write, "$epicNumber", round.EpicNumber);
         Bind(write, "$cadenceNote", round.CadenceNote);

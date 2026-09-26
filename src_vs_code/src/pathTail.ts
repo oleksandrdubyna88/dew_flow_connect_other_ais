@@ -5,7 +5,7 @@ import { asText } from './asText';
  * plan's file name.
  *
  * <p>A leaf module, moved out of `roundsLog.ts` when the sidebar's cadence line needed it
- * (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.2): importing it from there would have made
+ * (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2): importing it from there would have made
  * `panelView` → `cadenceLine` → `roundsLog` → `panelView` a cycle. `roundsLog` re-exports it.</p>
  */
 export function repoNameOf(repoPath: string): string {

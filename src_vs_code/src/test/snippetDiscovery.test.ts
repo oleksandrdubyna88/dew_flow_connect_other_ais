@@ -61,7 +61,7 @@ test('all candidate reads start together but a slower older root copy still wins
 
 /**
  * A repository that MOUNTS the rules and has pasted nothing is current — its halves are the mount's
- * sibling files, not one file (todo/PLAN_consult_on_a_cadence.md, story 5.2; the epics 4–6
+ * sibling files, not one file (research/PLAN_consult_on_a_cadence.md, story 5.2; the epics 4–6
  * consultation, point 5).
  *
  * <p>The reader found the first file carrying the gate marker and read every half from it. A mount

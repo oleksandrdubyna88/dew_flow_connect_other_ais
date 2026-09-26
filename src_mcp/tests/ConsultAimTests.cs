@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// What a consultation is FOR — being stuck, a group of epics, or a risky piece — read from the three
-/// arguments <c>consult</c> gained in <c>todo/PLAN_consult_on_a_cadence.md</c>, epic 2.
+/// arguments <c>consult</c> gained in <c>research/PLAN_consult_on_a_cadence.md</c>, epic 2.
 /// </summary>
 /// <remarks>
 /// One canonical path from the caller's spelling to the identity the gate matches on (epic 2's plan round,

@@ -50,7 +50,7 @@
          extension's generate-help-prompts.mjs walks that folder and refuses any file the role seed
          does not name, and a consultation has no role. -->
     <EmbeddedResource Include="consultant\consult.md" LogicalName="CoaiMcp.prompts.consult.md" />
-    <!-- The consultant's prompts for a consultation the cadence ORDERED (todo/PLAN_consult_on_a_cadence.md):
+    <!-- The consultant's prompts for a consultation the cadence ORDERED (research/PLAN_consult_on_a_cadence.md):
          a group of epics before it is built, and a piece the caller named as risky. Listed one by one like
          the first, for the same reason it is not a glob. -->
     <EmbeddedResource Include="consultant\consult-cadence.md" LogicalName="CoaiMcp.prompts.consult-cadence.md" />

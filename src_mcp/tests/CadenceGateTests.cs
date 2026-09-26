@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Whether a group of epics has had its consultation — and what happens when one cannot be had
-/// (<c>todo/PLAN_consult_on_a_cadence.md</c>, epic 2, stories 2.1 and 2.5).
+/// (<c>research/PLAN_consult_on_a_cadence.md</c>, epic 2, stories 2.1 and 2.5).
 /// </summary>
 /// <remarks>
 /// <para>Only a consultation CLOSED WITH AN OUTCOME is evidence (decision 10). Lapsed and empty are not
@@ -196,7 +196,7 @@ public sealed class CadenceGateTests : IDisposable
 
 /// <summary>
 /// The one place the consult tool and the cadence gate ask whether a consultant can be had
-/// (<c>todo/PLAN_consult_on_a_cadence.md</c>, epic 2, story 2.1).
+/// (<c>research/PLAN_consult_on_a_cadence.md</c>, epic 2, story 2.1).
 /// </summary>
 /// <remarks>
 /// Extracted from <c>AskAsync</c> so the gate stands down on EVERY reason the tool would refuse on —

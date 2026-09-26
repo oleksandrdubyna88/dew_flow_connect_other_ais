@@ -125,7 +125,7 @@ public sealed record ConsultationRecord(
 
     /// <summary>
     /// What the consultation was FOR — <c>stuck</c>, <c>cadence</c> or <c>risk</c>
-    /// (<c>todo/PLAN_consult_on_a_cadence.md</c>). Absent on every record older than the cadence, which
+    /// (<c>research/PLAN_consult_on_a_cadence.md</c>). Absent on every record older than the cadence, which
     /// reads as <c>stuck</c> because that is what every one of them was.
     /// </summary>
     public string Kind { get => field ?? Core.Consultation.ConsultKinds.Stuck; init; } = Core.Consultation.ConsultKinds.Stuck;

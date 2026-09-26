@@ -36,7 +36,7 @@ public sealed record ConsultationRow(
     string Problem,
     string Advice,
     string Alert,
-    /// <summary>stuck / cadence / risk — what the consultation was FOR (todo/PLAN_consult_on_a_cadence.md).</summary>
+    /// <summary>stuck / cadence / risk — what the consultation was FOR (research/PLAN_consult_on_a_cadence.md).</summary>
     string Kind = "stuck",
     /// <summary>The plan a cadence or risk consultation was about; empty for a stuck one.</summary>
     string Plan = "",

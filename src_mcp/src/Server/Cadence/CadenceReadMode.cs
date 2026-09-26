@@ -7,7 +7,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// <c>--cadence --repo &lt;path&gt; --branch &lt;name&gt; [--plan &lt;file&gt;]</c>: a plan's consultation cadence, exactly as
-/// <c>status</c> answers it, for the sidebar (<c>todo/PLAN_consult_on_a_cadence.md</c>, epic 4 story 4.2).
+/// <c>status</c> answers it, for the sidebar (<c>research/PLAN_consult_on_a_cadence.md</c>, epic 4 story 4.2).
 /// </summary>
 /// <remarks>
 /// <para><b>Why a mode.</b> The sidebar never calls <c>status</c> — it reads the session files — and the cadence

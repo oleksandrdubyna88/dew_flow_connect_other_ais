@@ -259,7 +259,7 @@ public sealed class LiveRound
             // cannot relabel it. See RoundRecord.Caller for what the two fields say apart.
             Caller = _session.Caller,
             // The epic this round is FOR, from its first write — so a round a crash interrupted still
-            // says which epic it was, and the cadence never asks the same epic twice (todo/PLAN_consult_on_a_cadence.md).
+            // says which epic it was, and the cadence never asks the same epic twice (research/PLAN_consult_on_a_cadence.md).
             PlanKey = _session.Plan.Length > 0 ? Core.Cadence.EpicRef.PlanKey(_session.Plan) : string.Empty,
             EpicNumber = Core.Cadence.EpicRef.Parse(_session.Epic, _session.Plan) is Core.Cadence.EpicRef.Some epic ? epic.Number : 0,
         };

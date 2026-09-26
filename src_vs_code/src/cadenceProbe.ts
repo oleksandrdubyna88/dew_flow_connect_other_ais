@@ -3,7 +3,7 @@ import type { SessionFile } from './rounds';
 
 /**
  * The sidebar's cadence probes: `coai-mcp --cadence` per session worth asking about, bounded
- * (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.2; the risk consultation for that story, point 3).
+ * (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2; the risk consultation for that story, point 3).
  *
  * <p><b>Never awaited by a render.</b> {@link CadenceProbes.lines} answers from what is already known and
  * starts a probe for whatever is stale; the probe repaints when it lands — and only when an answer CHANGED,

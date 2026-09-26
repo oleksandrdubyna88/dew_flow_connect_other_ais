@@ -105,7 +105,7 @@ export interface SessionFile {
   readonly caller?: CallerDeclaration;
   /**
    * The plan this session is building, repo-relative, and the epic of it (`k/N`) — as the caller declared
-   * them to `review_plan` / `review_code` (todo/PLAN_consult_on_a_cadence.md). Absent in files written
+   * them to `review_plan` / `review_code` (research/PLAN_consult_on_a_cadence.md). Absent in files written
    * before the cadence, and empty in a session nobody declared a plan for: either way, no cadence line.
    */
   readonly plan?: string;

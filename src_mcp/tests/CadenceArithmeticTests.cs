@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// Where a caller says it is in a plan, and what that plan owes the consultant
-/// (<c>todo/PLAN_consult_on_a_cadence.md</c>, epic 1).
+/// (<c>research/PLAN_consult_on_a_cadence.md</c>, epic 1).
 /// </summary>
 /// <remarks>
 /// Pure arithmetic, so every rule the operator gave on 2026-09-25 is a test rather than a sentence:

@@ -3,7 +3,7 @@ import { escapeHtml } from './escapeHtml';
 import { help, segmentedRadio } from './panelControls';
 
 /**
- * The consultation cadence, as the panel holds it (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
+ * The consultation cadence, as the panel holds it (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
  *
  * <p>The rule is the operator's: one consultation for every three epics of a plan, and at five or
  * more epics the caller is asked which epics and stories carry the most risk, each of which gets a

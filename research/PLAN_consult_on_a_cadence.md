@@ -1,18 +1,26 @@
 # PLAN — The consultant is called on a cadence, not only when an agent admits it is stuck
 
-> Status: **in progress, 2026-09-25 — epics 1 to 4 of 6 built, epic 5 under way** (epic 1 MERGED, PR #540: the arithmetic,
-> the orders, `Massive`; epic 2 MERGED, PR #548: `consult` kinds, the record, the store, the
-> gate — deviation: `consult`'s `kind`/`plan`/`epics` arguments and one sentence of its description landed
-> in epic 2, not story 3.1, because the kinds cannot be tested end to end without them; epic 3, branch
-> `feat/cadence-3-gate`: the settings, the refusal, closing an epic, `status`, schema step 15 — deviation:
-> the round's projection takes plan key, epic and note from the ROUND, not `RoundContext`; PR #549; epic 4,
-> branch `feat/cadence-4-panel`: the four settings, the `--cadence` one-shot and the sidebar line, the log's
-> *For* column, the docs — deviations: `segmentedRadio`/`help` moved to `panelControls.ts` and `repoNameOf` to
-> `pathTail.ts` rather than copied; `WorktreeManager.ShaOrNoneAsync` and `PanelSettings.WorktreeRoot` shared
-> with `status`; two tests corrected to assert their own rule — the tooltip census and the radio-name check;
-> PR #556; epic 5: story 5.1 MERGED and promoted, conventions PR #53, `common/coai-consultant.md` v3 — deviation:
-> the rule gained a Definition of Done on CodeRabbit's review, and the pointer in `coai-review-gate.md` names the
-> rule's id rather than linking it; story 5.2 on branch `feat/cadence-5-conventions`; story 5.3 not started). Scope: the gate's orders and refusals
+> Status: **IMPLEMENTED, 2026-09-26.** All six epics shipped; released as extension 0.56.0 · server
+> 0.38.0 (2026-09-26), and the live check ran under `require` the same day (its row is in *The symptom*).
+> Epic 1 PR #540; epic 2 PR #548; epic 3 PR #549; epic 4 and story 5.2 PR #556; story 5.1 conventions PR #53;
+> story 5.3 — all six consumers pinned to conventions `release` 8355757; epic 6 OrgMeter `ai_conventions`
+> PR #26 (94fe09a), all ten of its consumers pinned to it, the three that deploy on push merged on the
+> operator's word and their deploys verified. **Deviations:** `consult`'s `kind`/`plan`/`epics` arguments and
+> one sentence of its description landed in epic 2, not story 3.1, because the kinds cannot be tested end to
+> end without them; the round's projection takes plan key, epic and note from the ROUND, not `RoundContext`;
+> `segmentedRadio`/`help` moved to `panelControls.ts` and `repoNameOf` to `pathTail.ts` rather than copied;
+> `WorktreeManager.ShaOrNoneAsync` and `PanelSettings.WorktreeRoot` are shared with `status`; two tests were
+> corrected to assert their own rule — the tooltip census and the radio-name check; the conventions rule
+> gained a Definition of Done on CodeRabbit's review, and the pointer in `coai-review-gate.md` names the
+> rule's id rather than linking it; story 5.2 rode in epic 4's PR because the mount pin had to move with it;
+> OrgMeter's `review-gate.md` says three things the dew_flow rule does not — the groups are numbered in threes
+> from 1 (1–3, 4–6), `abandoned` counts as an outcome as `solved` and `not_solved` do, and a lapsed
+> consultation can still be closed; the live check found that the sidebar line ran the branch on as the
+> sentence's last word (`…due epic-1`) and it now reads `· branch epic-1`. **Open tail:** bringing those three
+> clarifications into `dew_flow_conventions`' `common/coai-consultant.md`; the risk path (five epics or
+> more) and a second group were exercised by the scenario tests, not by the live check; a Claude Code
+> session whose tool list was cached before 0.38.0 still shows the old `consult`/`review_code` schemas until
+> `/mcp` reconnects — the new arguments pass through regardless. Scope: the gate's orders and refusals
 > (`src_mcp/core/Commands`, a new `src_mcp/core/Cadence`, `src_mcp/src/Server/PanelService.cs`,
 > `src_mcp/src/Server/Consultation`), the plan-size heuristic (`PlanShape.cs`), the panel's settings
 > and sidebar (`src_vs_code`), and — last — the consultant rule's move into BOTH conventions
@@ -28,12 +36,12 @@
 > for the gate to re-litigate; findings against them are rejected with that reason. What is open is
 > HOW each is built.
 >
-> Related docs: [PLAN_consultant.md](../research/PLAN_consultant.md),
-> [PLAN_a_finding_that_changes_everything_calls_the_consultant.md](../research/PLAN_a_finding_that_changes_everything_calls_the_consultant.md),
-> [PLAN_consultant_defaults_from_phase_0.md](PLAN_consultant_defaults_from_phase_0.md),
-> [PLAN_the_split_is_sized_and_gated_once.md](../research/PLAN_the_split_is_sized_and_gated_once.md),
-> [module_server.md](../research/module_server.md), [module_core.md](../research/module_core.md),
-> [module_extension.md](../research/module_extension.md).
+> Related docs: [PLAN_consultant.md](PLAN_consultant.md),
+> [PLAN_a_finding_that_changes_everything_calls_the_consultant.md](PLAN_a_finding_that_changes_everything_calls_the_consultant.md),
+> [PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md),
+> [PLAN_the_split_is_sized_and_gated_once.md](PLAN_the_split_is_sized_and_gated_once.md),
+> [module_server.md](module_server.md), [module_core.md](module_core.md),
+> [module_extension.md](module_extension.md).
 
 ## The symptom
 
@@ -45,14 +53,28 @@ machine (Windows `%LOCALAPPDATA%\coai-mcp\coai.db`, WSL `~/.local/share/coai-mcp
 | Windows, since 2026-09-05 | 425 | 872 | 15 — the last on 2026-09-18 |
 | WSL, since 2026-09-07 | 176 | 390 | 3 — the last (a diagnostic probe) on 2026-09-22 |
 | of which `email-service`, 14 epics over two plans | 20 | 51 | **0** |
+| **Live check, `require`, 2026-09-26** — a 4-epic throwaway plan, released 0.38.0 | 1 | 2 run, 1 refused | **1** `cadence` (epics 1–3), closed `solved`; 0 `risk` (below 5 epics); 0 stood down |
 
 Claude Code transcripts agree: from 2026-09-19 to 2026-09-25, 56 `review_plan` and 61 `review_code`
 calls on Windows and **zero** `consult`. Of the ~12 first turns that did happen, about five were a
 person saying "ask the consultant"; the ~7 the agent started on its own all fell on 17–18.09, while
 the consultant itself was being built. And 13 of the 15 Windows consultations closed on the
 15-minute idle; **not one** carries an `outcome`, so the phase-0 table
-([PLAN_consultant_defaults_from_phase_0.md](PLAN_consultant_defaults_from_phase_0.md)) has no rows
+([PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md)) has no rows
 because nothing ever wrote one.
+
+**The live check (2026-09-26).** A four-epic plan in a throwaway repository, the released server 0.38.0,
+the panel on `require`. The plan round, declared `epic: 1/4`, passed and carried the order *CONSULT BEFORE
+YOU BUILD this group of epics. Epics 1-3* with the call written out. Epic 1 was built red-first, and its
+code round was **refused** — *"epic 1 of todo/PLAN_wordcount.md cannot go through its code round yet: the
+operator's cadence owes a consultation first … Nothing was reviewed."* — while `coai-mcp --cadence` read
+both groups (1–3, 4) unconsulted. `consult` with `kind: cadence`, `epics: 1-3` was answered by codex
+`gpt-6-astra`; its claims were verified against the code, two epics of the plan were sharpened with
+explicit fixtures, and `close_consult` recorded `solved`. `--cadence` then read group 1–3 `consulted: true`
+with NO round in between, the same code round was let through (`proceed`, 9 reviewers, 3 findings
+accepted and fixed red-first, 12 rejected with reasons), and after `resolve` epic 1 read closed and group
+4 still owed. The one thing a person noticed on the way was the sidebar line's wording, fixed in the same
+promotion.
 
 ### Why — three causes, each verified
 
@@ -118,7 +140,7 @@ which the reader does not look at.
     due.*
 15. **The consultant rule is SHARED** and moves into conventions — `dew_flow_conventions` and OrgMeter's
     `ai_conventions` — at the END of this work. This reverses the 2026-09-13 ruling recorded in
-    [PLAN_consultant.md](../research/PLAN_consultant.md) ("a rule about one tool of one server is one
+    [PLAN_consultant.md](PLAN_consultant.md) ("a rule about one tool of one server is one
     product's own"): `coai` gates every repository of the family, so a rule about its tools is as
     shared as the gate rule itself.
 
@@ -542,10 +564,10 @@ Six epics, so this plan is its own first customer: it owes two cadence consultat
 
 | Item | Owner |
 |---|---|
-| the turn cap, the stuck budget, which vendor answers which caller | [PLAN_consultant_defaults_from_phase_0.md](PLAN_consultant_defaults_from_phase_0.md) — unchanged. This plan FEEDS it: every cadence and risk consultation arrives with an outcome |
+| the turn cap, the stuck budget, which vendor answers which caller | [PLAN_consultant_defaults_from_phase_0.md](../todo/PLAN_consultant_defaults_from_phase_0.md) — unchanged. This plan FEEDS it: every cadence and risk consultation arrives with an outcome |
 | whether the SERVER ever calls a consultant by itself (`consult_missed`, phase 2) | still that plan. Nothing here fires a consultation; it orders the CALLER and refuses the round, which the caller can answer or have stood down |
-| the six reactive triggers | shipped ([PLAN_a_finding_that_changes_everything_calls_the_consultant.md](../research/PLAN_a_finding_that_changes_everything_calls_the_consultant.md)); moved, not changed, by Epic 5 |
-| the split sizes Small–Huge and the gate cadence per epic or per task | [PLAN_the_split_is_sized_and_gated_once.md](../research/PLAN_the_split_is_sized_and_gated_once.md); this plan adds `Massive` and a structural reading ahead of its rule, and leaves its table as it is for plans without headings |
+| the six reactive triggers | shipped ([PLAN_a_finding_that_changes_everything_calls_the_consultant.md](PLAN_a_finding_that_changes_everything_calls_the_consultant.md)); moved, not changed, by Epic 5 |
+| the split sizes Small–Huge and the gate cadence per epic or per task | [PLAN_the_split_is_sized_and_gated_once.md](PLAN_the_split_is_sized_and_gated_once.md); this plan adds `Massive` and a structural reading ahead of its rule, and leaves its table as it is for plans without headings |
 
 ## Risks
 
@@ -562,18 +584,18 @@ Six epics, so this plan is its own first customer: it owes two cadence consultat
 
 ## Definition of Done
 
-- [ ] A real plan of ≥ 4 epics ran under `require` on this machine, and *The symptom* carries its row:
+- [x] A real plan of ≥ 4 epics ran under `require` on this machine, and *The symptom* carries its row:
       cadence and risk consultations, each closed with an outcome, or stood down with a reason.
-- [ ] `review_code` refuses the first code round of an unconsulted triple in `require`, orders in
+- [x] `review_code` refuses the first code round of an unconsulted triple in `require`, orders in
       `remind`, is silent in `off` — each pinned by a test watched red.
-- [ ] A plan of more than 14 epics is refused; `Massive` sizes both `email-service` plans correctly; the recalibration table
+- [x] A plan of more than 14 epics is refused; `Massive` sizes both `email-service` plans correctly; the recalibration table
       is in `PlanShape.cs`'s docstring.
-- [ ] Cadence consultations spend no stuck budget, cannot be duplicated, count only with an outcome.
-- [ ] An unavailable consultant never blocks a round, and says so in the round and in a notice.
-- [ ] `status` and the sidebar show *epics closed k/N* and the next triple's state.
-- [ ] `common/coai-consultant.md` is on `dew_flow_conventions`' `release`, all six consumers pinned to it,
+- [x] Cadence consultations spend no stuck budget, cannot be duplicated, count only with an outcome.
+- [x] An unavailable consultant never blocks a round, and says so in the round and in a notice.
+- [x] `status` and the sidebar show *epics closed k/N* and the next triple's state.
+- [x] `common/coai-consultant.md` is on `dew_flow_conventions`' `release`, all six consumers pinned to it,
       `consultantRule.md` gone from this repository, `ARTEFACT_VERSION` 12.
-- [ ] OrgMeter `review-gate.md` level with it; its PRs merged or waiting on the operator, stated which.
-- [ ] The two scenario-harness flows run green and are listed in `research/module_tests.md`.
-- [ ] Module docs, README, CHANGELOG updated; this plan promoted to `research/` with `IMPLEMENTED <date>`
+- [x] OrgMeter `review-gate.md` level with it; its PRs merged or waiting on the operator, stated which.
+- [x] The two scenario-harness flows run green and are listed in `research/module_tests.md`.
+- [x] Module docs, README, CHANGELOG updated; this plan promoted to `research/` with `IMPLEMENTED <date>`
       and its deviations; `todo/README.md` updated both ways.

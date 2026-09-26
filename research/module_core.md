@@ -53,6 +53,9 @@ flowchart LR
 | `Stage`, `StageDescriptor`, `Stages` | `Rounds/SessionState.cs`, `Rounds/Stages.cs` | the stages, and the ONE table of what each answers by name — bucket, phrase, kind, commands, next stage, sentences, whether it records a commit |
 | `RoundMachine`, `RoundVerdict`, `Decision`, `Transition` | `Rounds/RoundMachine.cs` | ordering by refusal; the escalation ladder; resolve feeds rejections forward |
 | `RoleDefinition`, `RoleCatalog`, `RoleStages` | `Rounds/RoleCatalog.cs` | which roles exist and which prompt a round of one gets; `Builtin` is the embedded seed |
+| `CadenceMode`, `EpicGroup`, `CadenceRule` | `Cadence/CadenceRule.cs` | the consultation cadence's arithmetic: groups of `every` epics counted from the plan's OWN first epic, the risk question from `threshold` epics, nothing past `MostEpics` (14); the defaults 3 / 5 / 3 are the numbers the panel is tested to agree with |
+| `EpicRef` (`None` / `Some` / `Refused`), `CadenceState`, `ClosedEpic`, `RiskItem` | `Cadence/EpicRef.cs`, `Cadence/CadenceState.cs` | where the caller says it is (`plan` + `epic: "k/N"`) — a bad declaration is a sentence, never an exception; what one plan has recorded: the epics through the code gate and the risk answer |
+| `CadenceFacts`, `CadenceOrders`, `PlanOutline`, `PlanOutlineReader` | `Commands/CadenceOrders.cs`, `Commands/PlanOutline.cs` | the orders a round carries — the group due, the risky pieces due — from facts the server gathered; the plan's own Epic headings, which also size a split `Massive` (`PlanShape.ByEpics`) |
 | `RoleEntry`, `PromptEntry`, `RoleComposition` | `Rounds/RoleComposition.cs` | a person's `COAI_ROLES` rows composed onto the seed; every refusal is a sentence, never an exception |
 
 ### The catalog is data, and the seed belongs to neither half (2026-09-12)
@@ -142,6 +145,25 @@ somebody just created work with no further settings at all.
   `coai.db` row is keyed by the role id, so a rename in the seed is a migration and not an edit.
   `PromptChoice.BuiltIn` marks a prompt the binary ships a text for: it can be overridden and
   restored, never deleted.
+
+### The consultation cadence is decided here and gathered elsewhere (2026-09-26)
+
+What a plan owes is arithmetic and lives in Core; what it has already had is on disk and lives in the
+server ([PLAN_consult_on_a_cadence.md](PLAN_consult_on_a_cadence.md), [module_server.md](module_server.md)).
+Core never reads a consultation record or a round: the server's `CadenceDesk` builds the
+`CadenceFacts`, `CadenceGate.WithEvidence` adds what the store holds, and Core answers with orders and a
+refusal sentence.
+
+```mermaid
+flowchart LR
+  decl[caller: plan + epic k/N] --> ER[EpicRef.Parse\nNone / Some / Refused sentence]
+  text[plan text] --> PO[PlanOutlineReader.Of\nEpic headings]
+  ER --> CR[CadenceRule\nGroupOf / GroupsOwed / AsksForRisk / RefuseIfTooMany]
+  PO --> CR
+  store[(consultations + closed epics)] -. gathered by the server, never by Core .-> CF[CadenceFacts]
+  CR --> CF
+  CF --> CO[CadenceOrders\nGroupDue / RiskDue → the orders]
+```
 
 ## The decisions a reader needs
 

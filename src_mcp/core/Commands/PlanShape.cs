@@ -31,7 +31,7 @@ public sealed record PlanShape(int Lines, int Steps, int Files, int Areas, int E
         Huge,
 
         /// <summary>
-        /// Six to fourteen epics — past that, two plans (<c>todo/PLAN_consult_on_a_cadence.md</c>). Reached
+        /// Six to fourteen epics — past that, two plans (<c>research/PLAN_consult_on_a_cadence.md</c>). Reached
         /// only by a plan that names its epics: no count of steps or lines was able to tell a ten-epic plan
         /// from a four-epic one.
         /// </summary>
@@ -56,7 +56,7 @@ public sealed record PlanShape(int Lines, int Steps, int Files, int Areas, int E
     /// every-message-is-written-down plans, each of which was in fact built as several epics.
     /// Length must be able to raise the size on its own: the last of those has no recognised build
     /// order at all.</para>
-    /// <para><b>A plan that names its epics has answered the question</b> (<c>todo/PLAN_consult_on_a_cadence.md</c>,
+    /// <para><b>A plan that names its epics has answered the question</b> (<c>research/PLAN_consult_on_a_cadence.md</c>,
     /// D8, 2026-09-25). Measured on email-service's two plans: the 10-epic one has 5 numbered steps and the
     /// 4-epic one 31, and the longer file (1452 lines) is the smaller plan — steps and length both invert.
     /// So <c>Epic N</c> headings decide when present; story headings count as steps when there are no

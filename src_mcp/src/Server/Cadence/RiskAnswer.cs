@@ -7,7 +7,7 @@ namespace CoaiMcp.Server;
 
 /// <summary>
 /// The caller's answer to the risk question, read — or the sentence that says what is wrong with it
-/// (<c>todo/PLAN_consult_on_a_cadence.md</c>, D6).
+/// (<c>research/PLAN_consult_on_a_cadence.md</c>, D6).
 /// </summary>
 /// <remarks>
 /// <para><b>Bounded before it is built</b> (epic 3's code round, codex and local): the text is refused past

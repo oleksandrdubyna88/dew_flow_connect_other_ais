@@ -60,7 +60,7 @@ public sealed record CadenceFacts
 }
 
 /// <summary>
-/// The orders that make a caller consult on a cadence (<c>todo/PLAN_consult_on_a_cadence.md</c>).
+/// The orders that make a caller consult on a cadence (<c>research/PLAN_consult_on_a_cadence.md</c>).
 /// </summary>
 /// <remarks>
 /// <para><b>Why orders at all.</b> Measured on 2026-09-25: ~1 260 gate rounds against 18 consultations, none

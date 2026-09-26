@@ -4,7 +4,7 @@ import { CadenceAnswer, cadenceLinesHtml, cadenceSaid, cadenceWanted, parseCaden
 import type { SessionFile } from '../rounds';
 
 /**
- * The line the sidebar draws for a plan's consultation cadence (todo/PLAN_consult_on_a_cadence.md, epic 4
+ * The line the sidebar draws for a plan's consultation cadence (research/PLAN_consult_on_a_cadence.md, epic 4
  * story 4.2): the operator's "epics closed 4/14 · consultation for triple 4-6: due".
  *
  * <p>Everything here is read from the answer `coai-mcp --cadence` gives — the extension does not work

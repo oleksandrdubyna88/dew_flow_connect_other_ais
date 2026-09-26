@@ -3527,7 +3527,7 @@ copy of it for data only the opened row shows.
 
 ### The consultant on a cadence — epic 1: the arithmetic, the orders, a sixth size (2026-09-25)
 
-[PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md), epic 1. Measured first: ~1 260
+[PLAN_consult_on_a_cadence.md](PLAN_consult_on_a_cadence.md), epic 1. Measured first: ~1 260
 gate rounds on this machine's two data directories against 18 consultations, none after 2026-09-22,
 zero across the fourteen epics of one real product, and not one consultation carrying an outcome.
 Every shipped trigger is reactive. This epic is the PURE half of the answer; nothing here runs until
@@ -3548,7 +3548,7 @@ markers and placeholders (`src_vs_code/src/commands.ts`).
 
 ### The consultant on a cadence — epic 2: what a consultation is for, the record and the gate (2026-09-25)
 
-Epic 2 of [PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md). Still not wired into
+Epic 2 of [PLAN_consult_on_a_cadence.md](PLAN_consult_on_a_cadence.md). Still not wired into
 `review_code`/`review_plan` (epic 3), so no refusal fires yet; what is live is `consult`'s new arguments.
 
 | what | where |
@@ -3586,7 +3586,7 @@ fourth was found while answering it:
 
 ### The consultant on a cadence — epic 3: the gate enforces it (2026-09-25)
 
-Epic 3 of [PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md). The cadence now reaches the
+Epic 3 of [PLAN_consult_on_a_cadence.md](PLAN_consult_on_a_cadence.md). The cadence now reaches the
 caller in every review reply and, in `require`, refuses. Every decision lives in `CadenceDesk`
 (`Server/Cadence/CadenceDesk.cs`), out of `PanelService`, which only asks it.
 
@@ -3653,7 +3653,7 @@ Epic 3's code round (`good_enough`, 31 findings, 12 taken, each red first):
 
 ### The consultant on a cadence — epic 4: the person sees it (2026-09-25)
 
-Epic 4 of [PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md) is mostly the extension's
+Epic 4 of [PLAN_consult_on_a_cadence.md](PLAN_consult_on_a_cadence.md) is mostly the extension's
 (`module_extension.md`); this half is what the server gained so the sidebar could draw the cadence at all.
 The sidebar never calls `status` — it reads session files — and the cadence cannot be worked out from them:
 the record holds neither the plan's epics nor the grouping (the risk consultation for story 4.2, point 4).

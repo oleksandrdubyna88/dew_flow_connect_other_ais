@@ -21,7 +21,7 @@ public abstract record CadenceCheck
 
 /// <summary>
 /// Whether an epic's group, and each risky item in it, has had its consultation
-/// (<c>todo/PLAN_consult_on_a_cadence.md</c>, story 2.5).
+/// (<c>research/PLAN_consult_on_a_cadence.md</c>, story 2.5).
 /// </summary>
 /// <remarks>
 /// <para><b>The evidence is a consultation record, and nothing else.</b> One counts when it is OVER and closed

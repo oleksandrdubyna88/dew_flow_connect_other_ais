@@ -67,7 +67,7 @@ internal sealed record StageRun(
     /// <summary>
     /// This call's consultation cadence, filled by <see cref="RefuseBeforeBuilding"/> under the claim and read
     /// by the rest of the round — the orders, the session's plan and epic, the record's note
-    /// (<c>todo/PLAN_consult_on_a_cadence.md</c>). Off for every stage that does not set it.
+    /// (<c>research/PLAN_consult_on_a_cadence.md</c>). Off for every stage that does not set it.
     /// </summary>
     public CadenceTrace Cadence { get; init; } = new();
 

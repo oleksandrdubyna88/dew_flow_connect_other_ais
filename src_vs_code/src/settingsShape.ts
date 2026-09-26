@@ -96,7 +96,7 @@ export interface CoaiSettings {
 
   /**
    * When the consultant is asked without anybody being stuck — once per group of epics, and on the
-   * riskiest pieces of a big plan (todo/PLAN_consult_on_a_cadence.md).
+   * riskiest pieces of a big plan (research/PLAN_consult_on_a_cadence.md).
    *
    * <p>Its own module (`cadenceSettings.ts`) for the reason `consult` has one: the panel block and the
    * env block read it through ONE function.</p>

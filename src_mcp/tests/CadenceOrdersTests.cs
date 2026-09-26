@@ -7,7 +7,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// The orders that make a caller consult on a cadence (<c>todo/PLAN_consult_on_a_cadence.md</c>, story 1.4).
+/// The orders that make a caller consult on a cadence (<c>research/PLAN_consult_on_a_cadence.md</c>, story 1.4).
 /// </summary>
 /// <remarks>
 /// <para>Measured before any of this existed: ~1 260 gate rounds against 18 consultations, none after

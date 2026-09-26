@@ -175,7 +175,7 @@ test('the caller half of a current paste is the current caller version', () => {
 test('the mounted shared rules are byte-identical to what the menu hands out', () => {
   // FOUR shared files, joined by newlines: the gate rule, the document flow, the caller declaration
   // and — since 2026-09-25 — the consultant, which moved from this repository into the conventions
-  // when the operator ruled it shared (todo/PLAN_consult_on_a_cadence.md, story 5.2). This is what
+  // when the operator ruled it shared (research/PLAN_consult_on_a_cadence.md, story 5.2). This is what
   // proves all of them travel verbatim.
   const bodies = [mountedRuleFile(), mountedDocumentRuleFile(), mountedCallerRuleFile(), mountedConsultantRuleFile()].map((mounted) => {
     assert.ok(fs.existsSync(mounted), `run git submodule update --init .agents/conventions (${mounted})`);
@@ -347,7 +347,7 @@ function mountedConsultantRuleFile(): string {
 /**
  * The seventh reason reaches the paste: a review reply that ORDERS a consultation on a cadence.
  *
- * <p>Story 5.2 of todo/PLAN_consult_on_a_cadence.md. The server orders it and, in `require`, refuses
+ * <p>Story 5.2 of research/PLAN_consult_on_a_cadence.md. The server orders it and, in `require`, refuses
  * the group's code round until it is taken — but an AI obeying a paste without this trigger has never
  * been told what the order is, and meets a refusal nothing in its instructions explains.</p>
  */

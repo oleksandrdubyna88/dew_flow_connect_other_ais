@@ -6,7 +6,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The epics and stories a plan names in its own headings — what the gate counts before it guesses
-/// (<c>todo/PLAN_consult_on_a_cadence.md</c>, D8).
+/// (<c>research/PLAN_consult_on_a_cadence.md</c>, D8).
 /// </summary>
 /// <remarks>
 /// Measured on 2026-09-25 against email-service's two plans: the 10-epic one has 5 numbered build

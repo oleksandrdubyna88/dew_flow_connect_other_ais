@@ -292,7 +292,7 @@ public sealed class ConsultationService(
     /// refuse with when it could not.
     /// </summary>
     /// <remarks>
-    /// <para><c>todo/PLAN_consult_on_a_cadence.md</c>, story 2.1. The cadence gate asks this before it refuses a
+    /// <para><c>research/PLAN_consult_on_a_cadence.md</c>, story 2.1. The cadence gate asks this before it refuses a
     /// code round for want of a consultation: a consultant that cannot be had must stand the refusal down,
     /// never deadlock the work (decision 12).</para>
     /// <para><b>Every</b> refusal the vendor path makes before the counter and the launch — switched off,
@@ -458,7 +458,7 @@ public sealed class ConsultationService(
     /// A new cadence or risk consultation that is already had, or already under way — or null.
     /// </summary>
     /// <remarks>
-    /// D5 of <c>todo/PLAN_consult_on_a_cadence.md</c>: an ordered consultation spends none of the stuck budget,
+    /// D5 of <c>research/PLAN_consult_on_a_cadence.md</c>: an ordered consultation spends none of the stuck budget,
     /// so "none" must not become "unlimited". The ceiling is structural — one per group and one per named
     /// item, per plan. Two sentences, because they are two situations (epic 2's plan round, gemini): one
     /// already CLOSED with a verdict needs nothing more; one still OPEN is followed up, not duplicated. A
@@ -516,7 +516,7 @@ public sealed class ConsultationService(
         // cap could be exhausted entirely on refusals. Counting here means the number measures what
         // it is named after: consultations. (CodeRabbit, on the pull request.)
         //
-        // And only a STUCK consultation is counted (decision 11 of todo/PLAN_consult_on_a_cadence.md): the cap
+        // And only a STUCK consultation is counted (decision 11 of research/PLAN_consult_on_a_cadence.md): the cap
         // was sized for the calls an agent makes on its own, and an ordered one — a group of epics, a risky
         // piece — is bounded by `Duplicate` instead. A follow-up is counted by the kind its record holds.
         var stuck = record is null ? aimed.Aim.IsStuck : record.Kind == ConsultKinds.Stuck;

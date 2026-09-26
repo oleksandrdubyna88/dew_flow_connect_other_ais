@@ -87,7 +87,7 @@ public sealed class PanelService
         _consultations = new ConsultationService(
             settings, launcher, executor, _context, prompts, ledger, log,
             Environment.GetEnvironmentVariable, noticing);
-        // The consultation cadence (todo/PLAN_consult_on_a_cadence.md): its record, its gate over the
+        // The consultation cadence (research/PLAN_consult_on_a_cadence.md): its record, its gate over the
         // consultation records, and every decision a round makes about it — kept out of this file.
         _cadence = new CadenceDesk(
             settings,
@@ -421,7 +421,7 @@ public sealed class PanelService
         StatusAsync(repoPath, branch, document, string.Empty);
 
     /// <param name="plan">A plan to report the consultation cadence of — or empty for the one this session holds,
-    /// if any (<c>todo/PLAN_consult_on_a_cadence.md</c>). Read from the plan's own record, so it answers the same
+    /// if any (<c>research/PLAN_consult_on_a_cadence.md</c>). Read from the plan's own record, so it answers the same
     /// on every branch the plan is built on.</param>
     public async Task<string> StatusAsync(string repoPath, string branch, string document, string plan, CancellationToken ct = default)
     {
@@ -485,7 +485,7 @@ public sealed class PanelService
         ReviewPlanAsync(repoPath, branch, planText, CadenceArgs.None, ct);
 
     /// <param name="cadence">What the caller declared about the consultation cadence — the plan, the epic, the
-    /// risk answer (<c>todo/PLAN_consult_on_a_cadence.md</c>). Checked under the claim; a false declaration is
+    /// risk answer (<c>research/PLAN_consult_on_a_cadence.md</c>). Checked under the claim; a false declaration is
     /// refused, and the facts shape the orders the reply carries.</param>
     public Task<string> ReviewPlanAsync(string repoPath, string branch, string planText, CadenceArgs cadence, CancellationToken ct = default)
     {
@@ -582,7 +582,7 @@ public sealed class PanelService
         ReviewCodeAsync(repoPath, branch, baseRef, planText, again, CadenceArgs.None, ct);
 
     /// <param name="cadence">The plan and epic this code round is for, and any risk answer — what the
-    /// consultation cadence refuses on in <c>require</c> (<c>todo/PLAN_consult_on_a_cadence.md</c>).</param>
+    /// consultation cadence refuses on in <c>require</c> (<c>research/PLAN_consult_on_a_cadence.md</c>).</param>
     public Task<string> ReviewCodeAsync(
         string repoPath, string branch, string baseRef, string planText, bool again, CadenceArgs cadence, CancellationToken ct = default)
     {
@@ -748,7 +748,7 @@ public sealed class PanelService
 
     /// <summary>
     /// The consultation cadence's word on this code round — after the checks that need nothing but the commit,
-    /// because a round with nothing to review owes no consultation (todo/PLAN_consult_on_a_cadence.md, story 3.3).
+    /// because a round with nothing to review owes no consultation (research/PLAN_consult_on_a_cadence.md, story 3.3).
     /// </summary>
     private async Task<string> CadenceBeforeTheCode(
         PersistedSession loaded, CadenceArgs cadence, CadenceTrace trace, string repoPath, string branch, string sha, CancellationToken ct)
@@ -1515,7 +1515,7 @@ public sealed class PanelService
             case Transition.Moved moved:
                 // An epic through its code gate is recorded BEFORE the session moves, so the commoner
                 // failure — this save — cannot lose it; its own failure is logged and reconciled by the
-                // next call, never allowed to fail the resolve (todo/PLAN_consult_on_a_cadence.md, D3).
+                // next call, never allowed to fail the resolve (research/PLAN_consult_on_a_cadence.md, D3).
                 if (session.State.Stage == Stage.CodeReview && moved.State.Stage == Stage.Done && session.Rounds.Count > 0)
                 {
                     _cadence.Close(session, session.Rounds[^1].Verdict);
@@ -1629,7 +1629,7 @@ public sealed class PanelService
 
     /// <summary>
     /// The same, FOR something: a group of epics or a risky piece the cadence ordered
-    /// (<c>todo/PLAN_consult_on_a_cadence.md</c>). The three arguments are read into ONE canonical aim before
+    /// (<c>research/PLAN_consult_on_a_cadence.md</c>). The three arguments are read into ONE canonical aim before
     /// anything else, so a spelling the gate would not match is refused rather than paid for.
     /// </summary>
     public Task<string> ConsultAsync(string repoPath, string problem, string suspectedFiles, string consultationId, string kind, string plan, string epics, CancellationToken ct = default)

@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// A consultation that is FOR something — a group of epics, a risky piece — over the whole flow and the
-/// fake CLI (<c>todo/PLAN_consult_on_a_cadence.md</c>, epic 2, story 2.4).
+/// fake CLI (<c>research/PLAN_consult_on_a_cadence.md</c>, epic 2, story 2.4).
 /// </summary>
 /// <remarks>
 /// <para>The cadence makes consultations the gate ORDERS; the stuck budget was sized for the ones an

@@ -6,7 +6,7 @@ namespace CoaiMcp.Core.Consultation;
 
 /// <summary>The three things a consultation can be FOR — and which prompt the consultant is given for each.</summary>
 /// <remarks>
-/// <c>todo/PLAN_consult_on_a_cadence.md</c>, epic 2. <c>stuck</c> is every consultation there was before:
+/// <c>research/PLAN_consult_on_a_cadence.md</c>, epic 2. <c>stuck</c> is every consultation there was before:
 /// the caller recognised it was stuck and asked. <c>cadence</c> and <c>risk</c> are the ones the gate ORDERS,
 /// before a group of epics or a risky piece is built.
 /// </remarks>

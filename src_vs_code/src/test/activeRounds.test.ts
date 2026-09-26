@@ -305,7 +305,7 @@ test('a live patch that carries the same HTML as last time does not touch the DO
 });
 
 // ---------------------------------------------------------------------------------------------
-// The cadence line (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.2)
+// The cadence line (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2)
 // ---------------------------------------------------------------------------------------------
 
 const cadence = [{

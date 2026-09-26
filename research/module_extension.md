@@ -2492,7 +2492,7 @@ cannot run under the unit tests: every builder call in it must be the body of a 
 
 ## The consultant on a cadence — what the person sees (2026-09-25, epic 4)
 
-Epic 4 of [PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md): the operator's "make 3 and 5
+Epic 4 of [PLAN_consult_on_a_cadence.md](PLAN_consult_on_a_cadence.md): the operator's "make 3 and 5
 editable in the panel", the line that says where a plan stands, and the log saying what each consultation
 was for. The server half is `module_server.md`, *epic 4*.
 
@@ -2519,7 +2519,7 @@ fixtures build a real `SessionFile` instead of casting to one.
 
 ## The consultant rule is read from the mount (2026-09-25, epic 5 story 5.2)
 
-Story 5.2 of [PLAN_consult_on_a_cadence.md](../todo/PLAN_consult_on_a_cadence.md). The consultant half of
+Story 5.2 of [PLAN_consult_on_a_cadence.md](PLAN_consult_on_a_cadence.md). The consultant half of
 the pasted snippet moved into the conventions (story 5.1, `common/coai-consultant.md`, v3 — the six
 triggers as they were plus trigger 7, the cadence), and this repository takes it from the mount.
 

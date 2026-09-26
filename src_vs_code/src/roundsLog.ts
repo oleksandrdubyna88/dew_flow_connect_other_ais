@@ -1032,7 +1032,7 @@ const CONSULTATION_COLUMNS = 11;
 /**
  * What the consultation was FOR: an agent that was stuck, a group of epics, or one risky item.
  *
- * <p>The column the cadence made necessary (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.3).
+ * <p>The column the cadence made necessary (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.3).
  * Without it the log read every consultation as an agent admitting it was stuck, and a cadence
  * consultation is the opposite — one the gate asked for while nothing was wrong. The plan is named by
  * its file (`repoNameOf` is the last segment of ANY path, either separator), with the path kept for

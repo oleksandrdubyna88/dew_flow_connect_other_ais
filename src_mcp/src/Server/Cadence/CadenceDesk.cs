@@ -62,7 +62,7 @@ public sealed class CadenceTrace
 }
 
 /// <summary>
-/// The consultation cadence, as the gate applies it to one call (<c>todo/PLAN_consult_on_a_cadence.md</c>, epic 3).
+/// The consultation cadence, as the gate applies it to one call (<c>research/PLAN_consult_on_a_cadence.md</c>, epic 3).
 /// </summary>
 /// <remarks>
 /// <para>Out of <see cref="PanelService"/>, which is past the family's ceiling already: this class holds every

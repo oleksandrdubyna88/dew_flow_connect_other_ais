@@ -441,7 +441,7 @@ internal static class Schema
         """;
 
     /// <summary>
-    /// Step 15: the consultation cadence (<c>todo/PLAN_consult_on_a_cadence.md</c>) — which epic a round was
+    /// Step 15: the consultation cadence (<c>research/PLAN_consult_on_a_cadence.md</c>) — which epic a round was
     /// for and what the cadence said about it, and what a consultation was FOR.
     /// </summary>
     /// <remarks>

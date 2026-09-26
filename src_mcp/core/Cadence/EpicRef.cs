@@ -7,7 +7,7 @@ namespace CoaiMcp.Core.Cadence;
 /// Where the caller says it is in a plan: epic <c>k</c> of a plan whose last epic is <c>N</c>, or nowhere.
 /// </summary>
 /// <remarks>
-/// <para><c>todo/PLAN_consult_on_a_cadence.md</c>, story 1.1. The server does not COUNT rounds to know
+/// <para><c>research/PLAN_consult_on_a_cadence.md</c>, story 1.1. The server does not COUNT rounds to know
 /// which epic it is looking at: an <c>again: true</c> code round is as often a checkpoint or a retry as a
 /// new epic. The caller declares it, the way it declares its model on <c>open</c>.</para>
 /// <para><b><c>k</c> is the epic's own number as the plan writes it, <c>N</c> the plan's last.</b> A plan

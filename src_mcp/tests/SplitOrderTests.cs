@@ -50,7 +50,7 @@ public sealed class SplitOrderTests : FakeCliRoundTests
 
     private PanelService Service(bool splitPlan, Core.Commands.GateScope gatePer = Core.Commands.GateScope.Epic) =>
         // The cadence OFF: these assert the split orders one by one, and the consultation cadence's
-        // forecast rides after them by default now (todo/PLAN_consult_on_a_cadence.md, D4) —
+        // forecast rides after them by default now (research/PLAN_consult_on_a_cadence.md, D4) —
         // CadenceOrdersTests and CadenceGateScenarioTests are where it is asserted.
         ServiceFor(Defaults() with { SplitPlan = splitPlan, GatePer = gatePer, CadenceMode = Core.Cadence.CadenceMode.Off });
 
