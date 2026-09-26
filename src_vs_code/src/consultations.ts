@@ -12,6 +12,7 @@
  */
 
 import { escapeHtml } from './escapeHtml';
+import { kindLine, kindOf } from './consultKind';
 import { shortDuration, shortNumber } from './usage';
 
 /** One answered turn, as the record keeps it. */
@@ -139,6 +140,12 @@ export interface Consultation {
   readonly turns: readonly ConsultationTurn[];
   readonly alert: string;
   readonly reason: string;
+  /** `stuck`, `cadence` or `risk` — `stuck` for a record written before the kinds existed. */
+  readonly kind: string;
+  /** The plan an ordered consultation named, repo-relative; empty for a stuck one. */
+  readonly plan: string;
+  /** What it covered: `4-6`, `7`, `5/5.1`; empty for a stuck one. */
+  readonly epics: string;
 }
 
 /**
@@ -169,6 +176,9 @@ export function parseConsultation(text: string): Consultation | undefined {
       turns: Array.isArray(parsed.turns) ? parsed.turns.filter(isTurn) : [],
       alert: text_(parsed.alert),
       reason: text_(parsed.reason),
+      kind: kindOf(text_(parsed.kind)),
+      plan: text_(parsed.plan),
+      epics: text_(parsed.epics),
     };
   } catch {
     return undefined;
@@ -216,6 +226,7 @@ function card(consultation: Consultation, nowMs: number): string {
 
   return `<div class="round" data-consultation="${escapeHtml(consultation.id)}">
   <div class="subject">${escapeHtml(who(consultation))}</div>
+  <div class="line kind">${escapeHtml(kindLine(consultation.kind, consultation.epics, consultation.plan))}</div>
   <div class="line branch">${escapeHtml(consultation.branch)}</div>
   <div class="line"><span class="badge ${badgeClass(consultation.status)}">${escapeHtml(label(consultation.status))}</span> · ${escapeHtml(budget)}</div>
   <div class="usage">${escapeHtml(age(consultation, nowMs))}${spent.tokens > 0 ? ` · ${escapeHtml(shortNumber(spent.tokens))} tokens` : ''}</div>

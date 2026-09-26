@@ -49,6 +49,9 @@ function record(over: Partial<Consultation> = {}): Consultation {
     turns: [],
     alert: '',
     reason: '',
+    kind: 'stuck',
+    plan: '',
+    epics: '',
     ...over,
   };
 }
@@ -373,7 +376,7 @@ const asked = {
   problem: 'p', advice: 'a', alert: '', kind: 'stuck', plan: '', epics: '',
 };
 
-test('the log says what each consultation was FOR: a stuck agent, a group of epics, a risky item', () => {
+test('the kind has a column of its own, and For says what an ordered one covered', () => {
   const html = priced({
     ...EMPTY_LOG,
     consultations: [
@@ -383,13 +386,30 @@ test('the log says what each consultation was FOR: a stuck agent, a group of epi
       { ...asked, id: 'e', kind: 'risk', plan: 'todo/PLAN_x.md', epics: '7' },
     ],
   });
+  const plan = '<br><span class="decided" title="todo/PLAN_x.md">PLAN_x.md</span>';
 
-  assert.match(html, /<th>For<\/th>/);
-  assert.match(html, />stuck</);
-  assert.match(html, /cadence · epics 4-6/);
-  assert.match(html, /risk · story 7\.2/);
-  assert.match(html, /risk · epic 7</);
-  assert.match(html, /title="todo\/PLAN_x\.md">PLAN_x\.md/, 'the plan is named by its file, the path kept for the hover');
+  assert.match(html, /<th>Kind<\/th><th>For<\/th>/);
+  assert.ok(html.includes('<td>stuck</td><td>—</td>'), 'a stuck consultation covered nothing but the problem it names');
+  assert.ok(html.includes(`<td>cadence</td><td>epics 4-6${plan}</td>`), html);
+  assert.ok(html.includes(`<td>risk</td><td>story 7.2${plan}</td>`), html);
+  assert.ok(html.includes(`<td>risk</td><td>epic 7${plan}</td>`), html);
+});
+
+test('the sidebar card says the kind of a running consultation, and a record from before the kinds reads stuck', () => {
+  const cadence = parseConsultation(JSON.stringify({ ...record(), kind: 'cadence', plan: 'todo/PLAN_x.md', epics: '1-3' }))!;
+  const risk = parseConsultation(JSON.stringify({ ...record({ id: 'r1' }), kind: 'risk', plan: 'todo/PLAN_x.md', epics: '5/5.1' }))!;
+  const stuck = parseConsultation(JSON.stringify({ ...record({ id: 's1' }), kind: 'stuck' }))!;
+  // Written by a server from before the kinds: no kind, plan or epics on the file at all.
+  const written = JSON.parse(JSON.stringify(record({ id: 'l1' }))) as Record<string, unknown>;
+  for (const field of ['kind', 'plan', 'epics']) {
+    delete written[field];
+  }
+  const legacy = parseConsultation(JSON.stringify(written))!;
+
+  assert.match(consultationsBody([cadence], NOW), /cadence · epics 1-3 · PLAN_x\.md/);
+  assert.match(consultationsBody([risk], NOW), /risk · story 5\.1 · PLAN_x\.md/);
+  assert.match(consultationsBody([stuck], NOW), /<div class="line kind">stuck<\/div>/);
+  assert.match(consultationsBody([legacy], NOW), /<div class="line kind">stuck<\/div>/);
 });
 
 test('a consultation from a server that predates the kinds reads as stuck, because that is all there was', () => {
