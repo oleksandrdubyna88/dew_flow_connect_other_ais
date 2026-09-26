@@ -91,9 +91,9 @@ test('the lines are escaped, carry where they are from, and a due one is marked'
 
 test('the branch is set apart from the sentence, labelled, not run on as its last word', () => {
   const html = cadenceLinesHtml([{ repoPath: 'D:/repo', branch: 'epic-1', answer: answer() }]);
-  const text = html.replace(/<[^>]*>/g, '').trim();
 
-  assert.ok(text.endsWith(`${cadenceSaid(answer())} · branch epic-1`), text);
+  // The markup itself, not a tag-stripped copy of it: the sentence, then the labelled branch in its own span.
+  assert.ok(html.includes(`${cadenceSaid(answer())} <span class="decided">· branch epic-1</span></div>`), html);
 });
 
 test('no lines draw nothing at all', () => {
