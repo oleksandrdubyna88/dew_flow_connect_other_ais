@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { liveRegions, panelHtml, PanelState, roundsBody, statusMark } from '../panelView';
+import { panelState, runPanel } from './panelPageHarness';
 import { RoundRecord, SessionFile } from '../rounds';
 import { DEFAULTS } from '../settingsShape';
 import { SNIPPET_VERSION } from '../claudeSnippet';
@@ -317,14 +318,19 @@ const cadence = [{
   },
 }];
 
-test('the cadence line is in Active rounds on the first paint AND on every live push — one body for both', () => {
-  const withLine = { ...state([session([round()])]), cadence };
-  const line = 'PLAN_x.md · epics closed 4/14 · consultation for epics 4-6: due';
+test('the cadence line is in Active rounds as the page renders it, and a live push to the page replaces it', () => {
+  // RUN, not matched (PR #556, CodeRabbit; `.agents/PROJECT.md`): the panel's own script receives each
+  // live push and replaces the region, so what is on screen is what this watches.
+  const page = runPanel(panelState('rounds', { cadence }));
+  assert.ok(page.region('live-rounds').includes('PLAN_x.md · epics closed 4/14 · consultation for epics 4-6: due'),
+    'the first paint does not draw the line');
 
-  const live = /<div id="live-rounds">([\s\S]*?)<\/div>\s*<\/details>/.exec(panelHtml(withLine, 'n0nce'));
-  assert.ok(live, 'the Active rounds region was not found in the panel');
-  assert.ok(live[1]!.includes(line), 'the first paint does not draw the line');
-  assert.ok(liveRegions(withLine, NOW).rounds.includes(line), 'the live push would wipe the line on the next tick');
+  const moved = [{ ...cadence[0]!, answer: { ...cadence[0]!.answer, epicsClosed: [1, 2, 3, 4, 5] } }];
+  page.deliver({ type: 'live', ...liveRegions(panelState('rounds', { cadence: moved }), NOW) });
+  assert.ok(page.region('live-rounds').includes('epics closed 5/14'), 'a live push did not bring the new line');
+
+  page.deliver({ type: 'live', ...liveRegions(panelState('rounds', { cadence: [] }), NOW) });
+  assert.ok(!page.region('live-rounds').includes('PLAN_x.md'), 'the line stayed on screen after the cadence went');
 });
 
 test('with no cadence line the region is exactly the running rounds, as before', () => {

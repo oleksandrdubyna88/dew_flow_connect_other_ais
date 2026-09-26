@@ -53,6 +53,13 @@ export class CadenceProbes {
 
   private tooOld = false;
 
+  /**
+   * Moves on every {@link forget}. A probe remembers the generation it STARTED in, and an answer from an
+   * older one is stored as already stale: it may predate the consultation that changed, and taking it as
+   * fresh would undo the `forget` for a whole TTL (PR #556, CodeRabbit).
+   */
+  private generation = 0;
+
   constructor(private readonly host: CadenceProbeHost) {}
 
   /** The lines to draw now, from what is known — and a probe started for whatever is stale. */
@@ -81,6 +88,7 @@ export class CadenceProbes {
 
   /** A consultation changed: every answer is stale, and each stays drawn until its next one lands. */
   forget(): void {
+    this.generation += 1;
     for (const [key, known] of this.known) {
       this.known.set(key, { ...known, at: Number.NEGATIVE_INFINITY });
     }
@@ -117,21 +125,29 @@ export class CadenceProbes {
   /** One session asked; whether what is drawn for it changed. */
   private async probeOne(executable: string, session: SessionFile): Promise<boolean> {
     const key = keyOf(session);
+    const asked = this.generation;
     const { code, output } = await this.host.run(executable, [
       '--cadence', '--repo', session.state.repoPath, '--branch', session.state.branch, '--plan', planOf(session),
     ]);
     const previous = this.lastAnswer(key);
     const answer = code === 0 ? parseCadence(output) : undefined;
 
-    return answer === undefined ? this.failed(key, code, previous) : this.answered(key, answer, previous);
+    const at = this.stampFor(asked);
+
+    return answer === undefined ? this.failed(key, code, previous, at) : this.answered(key, answer, previous, at);
+  }
+
+  /** Now, for an answer asked in this generation; never, for one asked before the last `forget`. */
+  private stampFor(asked: number): number {
+    return asked === this.generation ? this.host.now() : Number.NEGATIVE_INFINITY;
   }
 
   private lastAnswer(key: string): CadenceAnswer | null {
     return this.known.get(key)?.answer ?? null;
   }
 
-  private answered(key: string, answer: CadenceAnswer | null, previous: CadenceAnswer | null): boolean {
-    this.known.set(key, { at: this.host.now(), answer });
+  private answered(key: string, answer: CadenceAnswer | null, previous: CadenceAnswer | null, at: number): boolean {
+    this.known.set(key, { at, answer });
 
     return JSON.stringify(answer) !== JSON.stringify(previous);
   }
@@ -140,7 +156,7 @@ export class CadenceProbes {
    * A probe that did not answer: the last answer stays, and the reason is said once per session. Whether
    * what is drawn changed — which only a 64 does, by taking every line away.
    */
-  private failed(key: string, code: number, previous: CadenceAnswer | null): boolean {
+  private failed(key: string, code: number, previous: CadenceAnswer | null, at: number): boolean {
     if (code === TOO_OLD) {
       this.tooOld = true;
       this.known.clear();
@@ -148,7 +164,7 @@ export class CadenceProbes {
     }
 
     // Kept, and its clock restarted, so a session that keeps failing is asked at the TTL and not on every render.
-    this.known.set(key, { at: this.host.now(), answer: previous });
+    this.known.set(key, { at, answer: previous });
     if (!this.logged.has(key)) {
       this.logged.add(key);
       this.host.log(`ConnectOtherAIs: the cadence of ${key} could not be read (exit ${code}); the last answer stays up`);

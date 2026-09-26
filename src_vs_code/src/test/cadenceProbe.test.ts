@@ -247,3 +247,21 @@ test('each answer is painted as it lands, not after the whole batch', async () =
   await settled();
   assert.equal(renders, 2);
 });
+
+// PR #556 (CodeRabbit): a probe that STARTED before a consultation changed and finished after it came
+// back with a fresh timestamp, so `forget` was undone by the late answer and a stale "due" stayed up
+// for the whole TTL.
+test('an answer that was in flight when a consultation changed is not taken as fresh', async () => {
+  const h = harness([{ code: 0, output: body([1]) }, { code: 0, output: body([1]) }]);
+  h.holdNext();
+  h.probes.lines([session()]);
+  await settled();
+  h.probes.forget();
+  h.release();
+  await settled();
+
+  h.probes.lines([session()]);
+  await settled();
+
+  assert.equal(h.asked.length, 2, 'the answer asked before the change was trusted as if it came after it');
+});

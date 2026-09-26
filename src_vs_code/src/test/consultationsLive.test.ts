@@ -413,3 +413,16 @@ test('an alert under a consultation spans every column the table has', () => {
 
   assert.match(html, new RegExp(`colspan="${columns}"`));
 });
+
+// PR #556 (CodeRabbit): the test above sends an UNKNOWN kind, which returns before the epics are ever
+// formatted — so it could not see an unescaped epics value. Through a kind this build formats:
+test('the epics a known kind formats come off a disk and are escaped', () => {
+  for (const kind of ['cadence', 'risk']) {
+    // No `/` in the payload: the risk formatter splits the epics on it, and a closing tag would be cut.
+    const html = priced({ ...EMPTY_LOG, consultations: [{ ...asked, kind, epics: '<img src=x onerror=alert(1)>', plan: 'todo/<i>x.md' }] });
+
+    assert.ok(!html.includes('<img src=x'), `${kind}: the epics reached the table unescaped`);
+    assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt;'), `${kind}: the epics are not shown at all`);
+    assert.ok(!html.includes('<i>x.md'), `${kind}: the plan reached the table unescaped`);
+  }
+});
