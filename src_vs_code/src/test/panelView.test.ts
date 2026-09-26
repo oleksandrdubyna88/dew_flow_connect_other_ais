@@ -379,18 +379,6 @@ test('every setting carries a "?" that explains it', () => {
   assert.ok(html.includes('Rate limits are per vendor'), 'and the explanation says WHY, not just what');
 });
 
-test('no checkbox in the panel has its "?" inside its label, where a click on it would flip the setting', () => {
-  // A click anywhere inside a <label> activates its control, so a "?" inside a checkbox's label turned the
-  // setting on or off when somebody only wanted to read what it does (research/PLAN_consult_limits_kinds_and_help.md).
-  const html = panelHtml(state(), 'n');
-  const flipping = [...html.matchAll(/<label[^>]*>[\s\S]*?<\/label>/gu)]
-    .map((match) => match[0])
-    .filter((label) => label.includes('type="checkbox"') && label.includes('class="help"'))
-    .map((label) => /data-setting="([^"]+)"/u.exec(label)?.[1] ?? label.slice(0, 80));
-
-  assert.deepEqual(flipping, [], `a click on the "?" flips these: ${flipping.join(', ')}`);
-});
-
 test('the keys section answers "do I need this?" before showing the field', () => {
   const noKeys = panelHtml(state(), 'n');
   assert.ok(noKeys.includes('Nothing to fill in yet'), 'codex and gemini sign in through their own CLIs');

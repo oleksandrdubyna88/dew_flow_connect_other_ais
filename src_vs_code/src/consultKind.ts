@@ -8,6 +8,7 @@
  * word it differently.</p>
  */
 import { repoNameOf } from './pathTail';
+import type { DbConsultation } from './roundsDb';
 
 /** A record from before the kinds existed was a stuck consultation: that is all there was. */
 export function kindOf(kind: string): string {
@@ -43,4 +44,21 @@ export function kindLine(kind: string, epics: string, plan: string): string {
 /** The title of the pick that records how a consultation ended — naming WHICH one, by its kind. */
 export function closeTitle(kind: string, epics: string, plan: string): string {
   return `How did this consultation end? — ${kindLine(kind, epics, plan)}`;
+}
+
+/** What the record-outcome pick needs for one consultation, or `gone` when the log no longer has it. */
+export type CloseTarget = { readonly kind: 'pick'; readonly repo: string; readonly title: string } | { readonly kind: 'gone' };
+
+/**
+ * The decision half of closing a consultation by hand, apart from the VS Code calls around it: which row,
+ * which checkout's lock to take (THE CONSULTATION'S OWN, never this window's first folder — the log lists
+ * every repository a person has reviewed), and the pick's title naming its kind. A row gone from the log,
+ * or one with no checkout on it, is `gone`, said before anybody chooses an outcome.
+ */
+export function closeTarget(consultations: readonly DbConsultation[], id: string): CloseTarget {
+  const found = consultations.find((one) => one.id === id);
+
+  return found === undefined || found.repoPath.length === 0
+    ? { kind: 'gone' }
+    : { kind: 'pick', repo: found.repoPath, title: closeTitle(found.kind, found.epics, found.plan) };
 }

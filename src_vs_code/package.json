@@ -1160,7 +1160,8 @@
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",
     "measure:image": "npm run compile && node scripts/measure-image.mjs",
     "measure:append": "node scripts/measure-append.mjs",
-    "measure:consultant-skew": "npm run compile && node scripts/measure-consultant-skew.mjs"
+    "measure:consultant-skew": "npm run compile && node scripts/measure-consultant-skew.mjs",
+    "measure:help-clicks": "npm run compile && node scripts/measure-help-clicks.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

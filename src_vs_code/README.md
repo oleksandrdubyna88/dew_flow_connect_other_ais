@@ -161,7 +161,7 @@ It gates nothing and blocks nothing; it comes back as an answer, not a verdict. 
 by caps you set in the panel — turns per consultation, calls per session, and an idle time after
 which one is closed — because the failure mode of a tool an AI can call on its own judgement is
 calling it forty times. The turns and the idle time bound every consultation; calls per session counts
-only the ones an AI opens because it is stuck. The idle close is checked every minute while the server
+only the calls an AI makes because it is stuck — its first question and every follow-up alike. The idle close is checked every minute while the server
 runs.
 
 **It is also called when nobody is stuck.** After a plan is split into epics, every group of three
@@ -171,7 +171,8 @@ of which gets one of its own. *Consultation cadence* in the same section sets th
 gate does: *Remind* puts the order in every review reply, *Require* also holds the group's code round
 until it is taken. *Active rounds* says where each plan stands — `epics closed 4/14 · consultation for
 epics 4-6: due · branch feat/x`. An ordered consultation spends none of the calls-per-session budget: the
-gate bounds it instead, one per group of epics or risky piece.
+gate bounds it instead — one open or answered consultation per group of epics or risky piece, and
+another only after one failed or lapsed without a verdict.
 
 **Every consultation says what kind it is** — `stuck`, `cadence` or `risk` — on its card in the sidebar,
 in the server's log, and in the *Kind* column of *Consultations* in **Show review rounds**, beside *For*:
