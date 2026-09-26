@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.56.3 — 2026-09-26
 
 **The chat's button says what a press will do.** *Re-ask · model* — ask the other model the same thing —
 is what an empty box means; with a question in the box the press sends it, and the button now says
