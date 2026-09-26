@@ -45,7 +45,7 @@ test('every caller kind has both pickers, and each writes for its own kind', () 
 
       assert.deepEqual(lastWrite(page), {
         type: 'setting', key: slot, value: `${id}-${slot}-model`,
-        vendor: undefined, role: undefined, caller: undefined, commandModel: id,
+        vendor: undefined, role: undefined, caller: undefined, commandModel: id, control: 'select',
       }, 'eight pickers share two slot names, so a write with no kind lands in whichever the host guesses');
     }
   }
@@ -61,7 +61,7 @@ test('what a picker sends reaches the host as a commandModel write, not as a set
   control.fire('change');
 
   assert.deepEqual(settingWrite(settingMessageFrom(lastWrite(page))), {
-    kind: 'commandModel', key: 'strongest', value: 'gpt-6-astra', commandModel: 'codex',
+    kind: 'commandModel', key: 'strongest', value: 'gpt-6-astra', commandModel: 'codex', control: 'select',
   });
 });
 

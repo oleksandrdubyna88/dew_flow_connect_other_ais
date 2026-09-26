@@ -96,10 +96,12 @@ import {
   SettingMessage,
   CoaiSettings,
   settingMessageFrom,
+  type SettingWrite,
   settingsFrom,
   settingWrite,
 } from './settingsShape';
-import { writePlain } from './refusedWrite';
+import { afterTheWrite, saveOrSnapBack, writePlain } from './refusedWrite';
+import { WriteQueue } from './writeQueue';
 import {
   mirroredLines,
   NetworkingMode,
@@ -338,7 +340,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * and a render could read a configuration a write had not finished applying. They queue now, and
    * `render` awaits the queue.</p>
    */
-  private queued: Promise<void> = Promise.resolve();
+  private readonly writes = new WriteQueue();
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -401,7 +403,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
             ? [...new Set([...this.openSections, m.id])]
             : this.openSections.filter((s) => s !== m.id);
         } else if (m.type === 'prompt' && m.role !== undefined && m.round !== undefined) {
-          void this.choosePrompt(m.role, m.round, String(m.value));
+          // A setting write like any other, so it is serialised with them (the gate's code round).
+          const { role, round } = m;
+          this.enqueue(() => this.choosePrompt(role, round, String(m.value)));
         } else if (m.type === 'setting') {
           this.enqueue(() => this.write(settingMessageFrom(m)));
         } else if (m.type === 'focus') {
@@ -900,17 +904,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // it followed and re-stamp the box with the value being replaced — the symptom, reintroduced by
     // the fix. `queued` never stays rejected; see `enqueue`.
     //
-    // Awaited until it is STABLE, because a write appended while this render was suspended would
-    // otherwise be read a moment too late. Bounded: under continuous typing the queue never settles,
-    // and a render that waits for silence is a render that never happens.
-    for (let round = 0; round < 5; round += 1) {
-      const seen = this.queued;
-       
-      await seen;
-      if (seen === this.queued) {
-        break;
-      }
-    }
+    // Awaited until it is STABLE and bounded — see `WriteQueue.settled`. Never awaited FROM a write:
+    // that is a wait on itself (`afterTheWrite`).
+    await this.writes.settled();
     const config = vscode.workspace.getConfiguration('coai');
     const settings = settingsFrom((section) => config.get(section));
     const vendors = vendorsFrom(this.read(config)('vendors'));
@@ -1509,12 +1505,20 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       rounds.push('');
     }
     rounds[round - 1] = id;
-    await config.update(
-      'promptsPerRound',
-      { ...settings.promptsPerRound, [role]: rounds },
-      vscode.ConfigurationTarget.Global,
-    );
-    await this.render();
+    try {
+      await config.update(
+        'promptsPerRound',
+        { ...settings.promptsPerRound, [role]: rounds },
+        vscode.ConfigurationTarget.Global,
+      );
+    } catch (error: unknown) {
+      // A dropdown too, and not in the write queue: said like every other refusal, and put back.
+      reportRefusal(this.context, 'promptsPerRound', error);
+      await afterTheWrite(() => this.snapBack())();
+      return;
+    }
+    // Started, not awaited: this runs in the write queue, and a render waits for that queue.
+    await afterTheWrite(() => this.render())();
   }
 
   /**
@@ -1542,7 +1546,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * only place that knows what could not be written.</p>
    */
   private enqueue(work: () => Promise<void>): void {
-    this.queued = this.queued.then(work, work).catch(() => undefined);
+    this.writes.enqueue(work);
   }
 
   /**
@@ -1668,14 +1672,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
             ? { ...v, ...pinnedDocument(v, write.key), [write.key]: write.value }
             : v,
         );
-        await this.save(config, 'vendors', vendors);
+        await this.saveWrite(config, 'vendors', vendors, write);
         return;
       }
       case 'role': {
         // A record, merged rather than replaced: writing one role's number must not drop the other
         // three, and the stored object is what every other role reads on the next repaint.
         const current = config.get<Record<string, unknown>>(write.key) ?? {};
-        await this.save(config, write.key, roleRecordUpdate(current, write.role, write.value));
+        await this.saveWrite(config, write.key, roleRecordUpdate(current, write.role, write.value), write);
         return;
       }
       case 'caller': {
@@ -1693,7 +1697,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // be worked out from the rows this side can see — the same reader, on the same config, as the
         // line above.
         const rows = vendorsFrom(this.read(config)('vendors'));
-        await this.save(config, 'consultants', consultantRecordUpdate(current, write.caller, write.key, write.value, rows));
+        await this.saveWrite(config, 'consultants', consultantRecordUpdate(current, write.caller, write.key, write.value, rows), write);
         return;
       }
       case 'commandModel': {
@@ -1702,7 +1706,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // the overlaid settings. A cleared box removes the field, which is how a person gets the
         // shipped model back (issue #117).
         const current = this.read(config)('commandModels');
-        await this.save(config, 'commandModels', commandModelsAfter(current, write.commandModel, write.key, String(write.value ?? '')));
+        await this.saveWrite(config, 'commandModels', commandModelsAfter(current, write.commandModel, write.key, String(write.value ?? '')), write);
         return;
       }
       case 'plain': {
@@ -1713,12 +1717,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // order matters for the crash in between: cleared first, an extension host killed mid-write
         // leaves a provider with no model, which is a state the pair has a meaning for. Written
         // first, it would leave the NEW provider paired with the OLD provider's model. (codex.)
-        // A refused box snaps back and stops there — `writePlain` holds that order, and is run by its tests.
+        // A refused box or dropdown snaps back and stops there — `writePlain` holds that order, run by its tests.
         await writePlain(write.key, write.value, clearedByWriting(write.key), {
           save: (key, value) => this.save(config, key, value),
-          repaint: () => this.render(),
+          repaint: afterTheWrite(() => this.snapBack()),
           follow: () => this.followPlain(config, write.key, write.value),
-        });
+        }, write.control);
         return;
       }
       default: {
@@ -1837,6 +1841,25 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * catch is here rather than inside `saveSetting` — and why what it reports is
    * {@link reportRefusal}, which offers the reload instead of describing the failure.</p>
    */
+  /** One composite setting's save, snapping a refused box or dropdown back — `saveOrSnapBack` decides. */
+  private async saveWrite(config: vscode.WorkspaceConfiguration, key: string, stored: unknown, write: SettingWrite): Promise<void> {
+    await saveOrSnapBack(() => this.save(config, key, stored), afterTheWrite(() => this.snapBack()), write.value, write.control);
+  }
+
+  /**
+   * Repaints the WHOLE page from what is stored, after a refused write.
+   *
+   * <p>The paint key is cleared first, because nothing stored changed: the key a render computes equals the
+   * one already painted, so it would post only the live regions and leave the control on the refused
+   * choice — which is how PR #561's snap-back painted nothing. A paint withheld while a control has focus
+   * is not recorded, so the render after focus leaves still paints.</p>
+   */
+  private snapBack(): Promise<void> {
+    this.paintedKey = '';
+
+    return this.render();
+  }
+
   /** What follows a plain write that stands. */
   private async followPlain(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
     // Turning the per-side switch ON seeds this side with what it reads today, so nothing

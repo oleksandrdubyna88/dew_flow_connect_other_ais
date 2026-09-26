@@ -155,7 +155,7 @@ test('the api card offers a dialect picker, and changing it writes coai.vendors 
   picker[0]!.value = 'openai';
   picker[0]!.fire('change');
 
-  assert.deepEqual(settingWrite(settingMessageFrom(lastWrite(page))), { kind: 'vendor', key: 'dialect', vendor: 'grok', value: 'openai' });
+  assert.deepEqual(settingWrite(settingMessageFrom(lastWrite(page))), { kind: 'vendor', key: 'dialect', vendor: 'grok', value: 'openai', control: 'select' });
 });
 
 test('against an older server every control of the api card is switched off and the card says why; the others are not', () => {

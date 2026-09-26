@@ -22,7 +22,7 @@ import {
   sameChoice,
 } from './consultSettings';
 import { CADENCE_SETTINGS, CadenceSettings, DEFAULT_CADENCE, cadenceEnv, cadenceSettingsFrom } from './cadenceSettings';
-import { CommandModels, ModelSlot, commandModelsEnv, commandModelsFrom, isModelSlot } from './commandModels';
+import { CommandModels, commandModelsEnv, commandModelsFrom } from './commandModels';
 import { commandsFrom, type CommandRow } from './commands';
 
 export type OnExhausted = 'continue' | 'escalate' | 'human' | 'good_enough';
@@ -200,85 +200,8 @@ export interface CoaiSettings {
   readonly commands: readonly CommandRow[];
 }
 
-/** The defaults, matching the master plan's configuration table — pinned by tests. */
-/**
- * Where one changed control is kept: a plain setting, one vendor's property, or one role's entry in
- * a role-keyed record.
- *
- * <p>Three kinds because there ARE three, and the panel used to have two slots for them. `rounds`
- * and `thresholds` are records keyed by role, and their inputs travelled in the vendor slot — so the
- * provider looked for a vendor called `Architecture`, found none, and wrote nothing. The number
- * reverted on the next repaint and the prompt pickers never changed count.</p>
- */
-/**
- * <p>A FOURTH kind arrived with the consultant, and for the same reason the third did: its controls
- * are keyed by CALLER — which agent is stuck — and travelling in the vendor slot would have the
- * provider hunt for a vendor called `claude` when the row means "what Claude Code asks", and
- * sometimes find one.</p>
- */
-export type SettingWrite =
-  | { readonly kind: 'plain'; readonly key: string; readonly value: unknown }
-  | { readonly kind: 'vendor'; readonly key: string; readonly value: unknown; readonly vendor: string }
-  | { readonly kind: 'role'; readonly key: string; readonly value: unknown; readonly role: string }
-  | { readonly kind: 'caller'; readonly key: string; readonly value: unknown; readonly caller: string }
-  | { readonly kind: 'commandModel'; readonly key: ModelSlot; readonly value: unknown; readonly commandModel: string };
-
-/** What the webview said it changed. A message with no key changes nothing. */
-export interface SettingMessage {
-  readonly key: string | undefined;
-  readonly value: unknown;
-  readonly vendor?: string | undefined;
-  readonly role?: string | undefined;
-  readonly caller?: string | undefined;
-  /** The caller KIND whose split-order model a box names (issue #117) — a key of `coai.commandModels`. */
-  readonly commandModel?: string | undefined;
-}
-
-/**
- * The write the page ASKED for, rebuilt from the raw webview message — every routing field it may
- * carry, and nothing else.
- *
- * <p>Its own function because this step is where a routing field can be lost with every test green:
- * the page sent it and `settingWrite` would have routed it, and the one line between them rebuilt the
- * message from a hand-written list of four fields. (Issue #117's code review.)</p>
- */
-export function settingMessageFrom(m: {
-  readonly key?: string | undefined;
-  readonly value?: unknown;
-  readonly vendor?: string | undefined;
-  readonly role?: string | undefined;
-  readonly caller?: string | undefined;
-  readonly commandModel?: string | undefined;
-}): SettingMessage {
-  return { key: m.key, value: m.value, vendor: m.vendor, role: m.role, caller: m.caller, commandModel: m.commandModel };
-}
-
-/**
- * Route one changed control. Pure: the `vscode` call it leads to is the provider's business, and
- * this is the part that was wrong.
- */
-export function settingWrite(message: SettingMessage): SettingWrite | undefined {
-  const { key, value } = message;
-  if (key === undefined || key.length === 0) {
-    return undefined;
-  }
-  if (message.commandModel !== undefined && message.commandModel.length > 0) {
-    // The key names WHICH slot changed, and only the two slots exist: anything else is a page and a
-    // host that disagree, and writing it would store a field no reader looks at.
-    return isModelSlot(key) ? { kind: 'commandModel', key, value, commandModel: message.commandModel } : undefined;
-  }
-  if (message.caller !== undefined && message.caller.length > 0) {
-    return { kind: 'caller', key, value, caller: message.caller };
-  }
-  if (message.role !== undefined && message.role.length > 0) {
-    return { kind: 'role', key, value, role: message.role };
-  }
-  if (message.vendor !== undefined && message.vendor.length > 0) {
-    return { kind: 'vendor', key, value, vendor: message.vendor };
-  }
-
-  return { kind: 'plain', key, value };
-}
+// How a changed control is routed lives in its own module; re-exported so every importer keeps its path.
+export { settingMessageFrom, settingWrite, type ControlKind, type SettingMessage, type SettingWrite } from './settingRoute';
 
 /**
  * One role's entry changed inside a role-keyed record, with every other role kept.
@@ -295,6 +218,7 @@ export function roleRecordUpdate(
   return { ...current, [role]: value };
 }
 
+/** The defaults, matching the master plan's configuration table — pinned by tests. */
 export const DEFAULTS: CoaiSettings = {
   // The operator's own settings, after a day of running the gate on this repository's real work
   // (2026-09-07). One plan round rather than three: the second and third rounds re-raise what the

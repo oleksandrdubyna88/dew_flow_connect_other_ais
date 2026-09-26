@@ -1537,6 +1537,23 @@ stub; red again with the early `return` planted out). Read from the host is only
 calls `writePlain`, and `save` returns false in its catch. The panel harness now reads a box's `checked` from the markup, as it
 already read `disabled`: every box used to start unticked there, so no test could tell a page drawn from the stored value
 from one that was not; *the panel draws the box from what is STORED* holds that (red with `checked` planted out of the box).
+Then the dropdowns (`refusedSelect.test.ts`): the page RUN says `control: 'select'` for a changed select and
+nothing for a number or a box; `settingMessageFrom` believes only the literal, and `settingWrite` carries it
+on all five kinds; `saveOrSnapBack` repaints a refused select and a refused box, never refused text, and
+never a save that stood; a refused plain select stops in `writePlain`; and the harness now reads a select's
+value from the option the page marked `selected`, so *the panel draws a dropdown on what is STORED* can see
+it (all seven red against stubs; red again with the page's spread planted out, and with the rule ignoring the
+control). Four existing page tests now expect `control: 'select'` in a select's write — the shape change.
+`snapBackQueue.test.ts` runs the REAL `WriteQueue`: a refused dropdown's repaint comes after its write and
+the next write still runs (red with a timeout, *a write is waiting on itself*, against a repaint awaited
+inside the write — which is what 0.56.1 shipped; green once `afterTheWrite` starts it instead); a write
+appended while the queue was being waited for is waited for too; a failed write does not stop the rest. The
+last two replace regexes over the old in-class queue in `thePromptBoxRemembers.test.ts`, which now pins only
+that `render` waits on `this.writes` and the host enqueues there. `refusedSelect.test.ts` pins each wiring
+link whole: `saveWrite` passes `write.control` and a started repaint, `snapBack` clears the paint key, and
+`choosePrompt` reports and snaps back. Code round two: a repaint that fails after its write is said, never
+an unhandled rejection (red without the catch); and a prompt pick goes through the write queue (red while it
+was `void this.choosePrompt(…)`).
 
 **`ADeniedCommandIsAskedAgainTests` (issue #504)** — the follow-up of an auto-denied agy reviewer carries
 `--conversation <id>`, keeps `--mode plan` and the schema, and says commands are unavailable; no follow-up

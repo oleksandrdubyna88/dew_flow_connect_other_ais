@@ -9262,6 +9262,31 @@ The whole plain write is `refusedWrite.writePlain(key, value, cleared, steps)` �
 invalidates, save the key, and on a refused box repaint and STOP (a per-side switch that never saved must not
 seed or carry), else run what follows (`PanelProvider.followPlain`). It takes its steps as arguments so the
 order is run in a test, not read from the host's text.
+**A refused dropdown snaps back too (2026-09-26, the follow-up).** A select posts a string, which the host
+could not tell from typed text — so the page now adds `control: 'select'` to a write from a `<select>` (and
+to nothing else), `settingMessageFrom` believes only that literal, and `settingWrite` carries it onto every
+kind of write. `refusedWrite.snapsBackWhenRefused(value, control)` is true for a boolean or a select, and
+`refusedWrite.saveOrSnapBack` is the one save every kind goes through — the plain case inside `writePlain`,
+the vendor, role, consultant and split-order cases through `PanelProvider.saveWrite` — so a refused vendor
+dialect, consultant vendor or split-order model goes back to what is stored as a box does. A text field or
+a number is still never repainted. The repaint is the same full `render()` every successful `coai` write
+already triggers (`extension.ts`, `onDidChangeConfiguration`). The routing itself moved to
+`settingRoute.ts` when `settingsShape.ts` passed 800 lines; `settingsShape` re-exports it, so no importer
+changed.
+**…and in 0.56.1 it froze the panel instead (found on review of the follow-up, fixed in the same PR).** Two
+defects, both from PR #561's first cut. (1) The snap-back AWAITED `render()` from inside the queued write,
+and `render()` waits for the write queue — which is that very write: a wait on itself. A refused box froze the
+sidebar until the window was reloaded, and every later setting write queued behind it and never ran. The
+repaint is now STARTED, not awaited (`refusedWrite.afterTheWrite`), so it runs once the queue has settled.
+The queue itself is `WriteQueue` (`writeQueue.ts`, moved out of `PanelProvider`), so the hazard is run in a
+test rather than read. (2) Even unfrozen, the repaint painted nothing: nothing stored had changed, so
+`staticKey` equalled `paintedKey` and `render()` posted only the live regions. `PanelProvider.snapBack`
+clears the paint key first, which rebuilds the page from what is stored. A paint withheld while a control
+has focus is not recorded, so the render after focus leaves still paints. The prompt-per-round pickers
+(`choosePrompt`, which writes outside the queue with a bare `config.update`) now say a refusal like every
+other write and snap back too; before, a refusal there was an unhandled rejection. A prompt pick is now
+queued through `WriteQueue` like every other setting write, so it cannot race them, and its repaint is started
+the same way. A started repaint that fails is said (`console.error`), since nothing upstream can catch it.
 
 ## CoAI: choose on every bug (2026-09-24, issue #487)
 
