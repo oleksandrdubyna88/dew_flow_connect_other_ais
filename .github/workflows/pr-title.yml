@@ -41,10 +41,10 @@ jobs:
             build
           requireScope: false
 
-      # MARKDOWN ALONE NEVER OPENS A RELEASE — the operator's rule, 2026-09-26
+      # DOCUMENTATION ALONE (Markdown and pictures) NEVER OPENS A RELEASE — the operator's rule, 2026-09-26
       # (research/PLAN_the_release_guards_contradict.md). release-please releases on the commit TYPE and
       # cannot exclude files by pattern, so the type is held here: a releasing title or commit whose
-      # files under some package are all `.md` is refused. A step of THIS job, because this job is a
+      # files under some package are all documentation (`.md` and pictures) is refused. A step of THIS job, because this job is a
       # required check — a job of its own would be advisory until branch protection named it.
       #
       # `pull_request_target` checks out the BASE branch, so the script that runs is main's, never the
@@ -54,7 +54,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Markdown alone never opens a release
+      - name: Documentation alone never opens a release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}

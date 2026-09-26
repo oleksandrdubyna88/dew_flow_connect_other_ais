@@ -1,10 +1,10 @@
 #!/usr/bin/env node
-// docs-only-title.mjs — Markdown alone never opens a release.
+// docs-only-title.mjs — documentation alone (Markdown and pictures) never opens a release.
 //
 //   node .github/scripts/docs-only-title.mjs --pr <number>      (the facts come from `gh`)
 //   node .github/scripts/docs-only-title.mjs --facts <file>     (the same facts, as JSON)
 //
-// Exit 0  nothing here would release a package on Markdown alone.
+// Exit 0  nothing here would release a package on documentation alone.
 // Exit 1  a releasing title or commit would — the message names the package, the files and the repair.
 // Exit 2  the facts or the configuration could not be read. A check that cannot look must not pass.
 //
@@ -13,7 +13,10 @@
 // release-please cannot say that itself — its `exclude-paths` are directory prefixes, not globs — and
 // what decides a release is the commit TYPE. So the rule is held where the type is chosen: a title (a
 // squash merge's commit) or a commit (a rebase merge keeps each one) of a releasing type, whose files
-// under some package are ALL Markdown, would release that package with no code in it.
+// under some package are ALL documentation, would release that package with no code in it.
+//
+// DOCUMENTATION is Markdown and pictures — the operator's word, 2026-09-26: a screenshot or a diagram
+// beside a README is still documentation. A picture beside CODE does not make it one: the code releases.
 //
 // PER PACKAGE, not per pull request: a `feat:` for the extension that also edits `src_mcp/README.md`
 // puts that commit on the mcp line too, and would open an mcp release for a README.
@@ -31,16 +34,21 @@ export function releases(header) {
   return m !== null && (m[3] === '!' || ['feat', 'fix', 'perf', 'revert'].includes(m[1]));
 }
 
-export function isMarkdown(file) {
-  return file.toLowerCase().endsWith('.md');
+/** What counts as documentation: Markdown, and the pictures a document shows. */
+export const DOCUMENTATION = ['.md', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.webp'];
+
+export function isDocumentation(file) {
+  const lower = file.toLowerCase();
+
+  return DOCUMENTATION.some((extension) => lower.endsWith(extension));
 }
 
-/** The packages a change would release on Markdown alone: touched there, and every file there `.md`. */
+/** The packages a change would release on documentation alone: touched there, and every file there documentation. */
 export function markdownOnlyPackages(files, packages) {
   return packages.filter((pkg) => {
     const inside = files.filter((file) => file.startsWith(`${pkg}/`));
 
-    return inside.length > 0 && inside.every(isMarkdown);
+    return inside.length > 0 && inside.every(isDocumentation);
   });
 }
 
@@ -52,7 +60,7 @@ function problemsOf(what, header, files, packages) {
 
   return markdownOnlyPackages(files, packages).map((pkg) => {
     const md = files.filter((file) => file.startsWith(`${pkg}/`));
-    return `${what} "${header}" would release ${pkg} on Markdown alone (${md.join(', ')}).`;
+    return `${what} "${header}" would release ${pkg} on documentation alone (${md.join(', ')}).`;
   });
 }
 
@@ -63,14 +71,15 @@ export function docsOnlyVerdict({ title, files, commits }, packages) {
     ...commits.flatMap((c) => problemsOf(`Commit ${c.sha.slice(0, 8)}`, c.message.split('\n')[0], c.files, packages)),
   ];
   if (problems.length === 0) {
-    return { code: 0, said: 'No package would be released on Markdown alone.' };
+    return { code: 0, said: 'No package would be released on documentation alone.' };
   }
 
   return {
     code: 1,
     said: [...problems, '',
-      'A change to Markdown is not a release (the operator\'s rule). Say it as docs: — or, where the same',
-      'change also carries code for ANOTHER package, move the Markdown into its own docs: commit.',
+      'A change to documentation — Markdown and pictures — is not a release (the operator\'s rule). Say it',
+      'as docs: — or, where the same change also carries code for ANOTHER package, move the documentation',
+      'into its own docs: commit.',
     ].join('\n'),
   };
 }
