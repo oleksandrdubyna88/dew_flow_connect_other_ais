@@ -10,7 +10,11 @@
 >   broken by compiling code).
 > - **A checkbox's `?` sits after its label, not inside it.** A click anywhere inside a label toggles its
 >   checkbox, so the `?` on *Let an AI consult another vendor* flipped consulting off when someone read its
->   help. The census enforces it.
+>   help. So did nine more in the panel (the five gate/side switches and each reviewer's plan and document
+>   boxes), fixed in the same PR on the operator's word. Because that is BEHAVIOUR, it is measured in real
+>   Chromium (`scripts/measure-help-clicks.mjs`, `npm run measure:help-clicks`): all 61 `?` are clicked, none
+>   flips, and a planted wrong control must flip. Against `main` it reported exactly the nine. It is not a
+>   markup assertion, since a new behavioural assertion over page text is refused (`.agents/PROJECT.md`).
 > - **The record-outcome pick looks the consultation up first,** so one gone from the log is said before an
 >   outcome is chosen; `ConsultFor` moved into the shared scenario base rather than being copied.
 >

@@ -460,7 +460,7 @@ internal static class Tools
                     the `consultationId`; the consultant resumes its own conversation. A follow-up is for
                     REPORTING what your verification showed, not for arguing: a problem text that repeats
                     an earlier turn is refused. Turns per consultation are capped for every kind; calls per session
-                    count only stuck consultations — a cadence or risk one is bounded to one per group or piece.
+                    count only stuck calls, follow-ups included — a cadence or risk one is bounded by the gate: one open or answered per group or piece.
                     Nothing in your tree is ever changed by this tool; if the consultant's process
                     changes anything, its advice is withheld and the paths are named.
 

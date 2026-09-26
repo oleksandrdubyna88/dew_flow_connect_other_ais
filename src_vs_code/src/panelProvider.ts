@@ -169,7 +169,7 @@ import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
 import { consultationsHtml } from './roundsLog';
 import { CLOSE_CHOICES, refusalIn, SERVER_TOO_OLD } from './consultations';
-import { closeTitle } from './consultKind';
+import { closeTarget } from './consultKind';
 import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
 import {
   executableFor,
@@ -2605,9 +2605,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
     // Looked up FIRST: the pick names the consultation's kind, and a consultation gone from the log is
     // said before anybody chooses an outcome for it (research/PLAN_consult_limits_kinds_and_help.md, story 2).
-    const found = (await this.roundsLog()).consultations.find((one) => one.id === id);
-    const repo = found?.repoPath ?? '';
-    if (found === undefined || repo.length === 0) {
+    const target = closeTarget((await this.roundsLog()).consultations, id);
+    if (target.kind === 'gone') {
       await notify({
         as: 'warning',
         class: 'refusal',
@@ -2625,7 +2624,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
     const chosen = await vscode.window.showQuickPick(
       CLOSE_CHOICES.map((one) => ({ label: one.label, detail: one.detail, outcome: one.outcome })),
-      { title: closeTitle(found.kind, found.epics, found.plan), placeHolder: 'Escape leaves it open' },
+      { title: target.title, placeHolder: 'Escape leaves it open' },
     );
     if (chosen === undefined) {
       return; // cancelled, and a cancelled close changes nothing
@@ -2640,10 +2639,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return; // Escape on the note is Escape on the whole thing
     }
 
-    // `repo` is THE CONSULTATION'S OWN checkout, read from the row above, not this window's first folder.
-    // The log lists consultations from every repository a person has reviewed, so a close made from it
-    // must take the repository lock on the one it belongs to — a lock on whatever happens to be open
-    // would guard nothing and could block something unrelated. (The review pass, 2026-09-17.)
+    // `target.repo` is THE CONSULTATION'S OWN checkout (closeTarget says why), not this window's first folder.
     const { code, output } = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
@@ -2653,7 +2649,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // The WHOLE wait: the run takes the consultation's repository lock, and a turn running in
       // that checkout holds it for as long as a vendor takes to answer.
       async () => serverRun(server.fsPath)(
-        ['--close-consult', '--repo', repo, '--id', id, '--outcome', chosen.outcome,
+        ['--close-consult', '--repo', target.repo, '--id', id, '--outcome', chosen.outcome,
           ...(note.trim().length > 0 ? ['--note', note.trim()] : [])],
         PanelProvider.CLOSE_CONSULT_CAP_MS));
 

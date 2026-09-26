@@ -230,6 +230,25 @@ public sealed class ConsultationStoreTests : IDisposable
     }
 
     [Fact]
+    public void ASweepHoldingAStaleCopy_DoesNotDeleteAnOldConsultationThatHasSinceBeenGivenItsVerdict()
+    {
+        // The same race on the expiry side (CodeRabbit, the pull request): a lapsed cadence consultation past
+        // retention is read by the sweep, then somebody records how it ended — which makes it the group's
+        // evidence, never to be deleted — and the sweep's delete, decided on the old copy, would take it.
+        var ended = ConsultationStore.Stamp(DateTime.UtcNow.AddDays(-9));
+        var stale = Record(ConsultationStatuses.Closed, updated: DateTime.UtcNow.AddDays(-9)) with
+        {
+            Kind = "cadence", Outcome = ConsultationOutcomes.Lapsed, EndedUtc = ended,
+        };
+        _store.Write(stale with { Outcome = ConsultationOutcomes.Solved, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow) });
+
+        var swept = _store.SweepOne(stale, _ => true, DateTime.UtcNow, TimeSpan.FromMinutes(15), TimeSpan.FromDays(7));
+
+        swept.Should().BeFalse("the record on disk now carries a verdict; the sweep's copy is out of date");
+        _store.Read(stale.Id)!.Outcome.Should().Be(ConsultationOutcomes.Solved);
+    }
+
+    [Fact]
     public void AFinishedRecordPastRetention_IsDeleted()
     {
         var record = Record(ConsultationStatuses.Closed, updated: DateTime.UtcNow.AddDays(-9)) with

@@ -15,9 +15,9 @@ const LABELS = [...HTML.matchAll(/<label[^>]*>[\s\S]*?<\/label>(?:<span class="h
   .map((match) => match[0])
   .filter((label) => !label.includes('type="radio"'));
 
-/** A label that wraps its own checkbox: a click anywhere inside it — a "?" included — toggles the switch. */
-const wrapsACheckbox = (label: string): boolean => label.includes('type="checkbox"');
-const insideTheLabel = (label: string): string => label.slice(0, label.indexOf('</label>'));
+// Where a "?" sits relative to a checkbox is BEHAVIOUR — a "?" inside the label flips the setting when
+// clicked — so it is measured in a real browser (scripts/measure-help-clicks.mjs), not asserted over this
+// text: a new behavioural assertion over page text is refused (.agents/PROJECT.md).
 
 test('every consultant and cadence setting has a "?" that explains it', () => {
   const bare = LABELS.filter((label) => !label.includes('class="help"'))
@@ -26,13 +26,6 @@ test('every consultant and cadence setting has a "?" that explains it', () => {
     .map((label) => /for="([^"]+)"/u.exec(label)?.[1] ?? label.slice(0, 80));
 
   assert.deepEqual(bare, [], `settings with no "?": ${bare.join(', ')}`);
-});
-
-test('a checkbox’s "?" sits outside its label, so reading the help does not flip the switch', () => {
-  const inside = LABELS.filter((label) => wrapsACheckbox(label) && insideTheLabel(label).includes('class="help"'))
-    .map((label) => /for="([^"]+)"/u.exec(label)?.[1] ?? label);
-
-  assert.deepEqual(inside, [], `a click on these "?" would toggle the setting: ${inside.join(', ')}`);
 });
 
 test('the census covers every control it is about, so an empty list of labels cannot pass it', () => {

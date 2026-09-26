@@ -179,36 +179,68 @@ public sealed partial class ConsultationStore(
     /// came after, from the copy: a follow-up starting in between had its <c>asking</c> overwritten by a
     /// stale close. A sweep once per start made that window rare; a sweep every minute made it worth
     /// closing (<c>research/PLAN_consult_limits_kinds_and_help.md</c>, the code round).</para>
+    /// <para>Expiry is decided the same way (CodeRabbit, the pull request): a lapsed cadence consultation past
+    /// retention can be given its verdict at any moment — which makes it the group's evidence — so its
+    /// delete, too, is decided on the record as it is under the lock.</para>
     /// </remarks>
     internal bool SweepOne(ConsultationRecord record, Func<int, bool> isAlive, DateTime nowUtc, TimeSpan idle, TimeSpan retention)
     {
-        if (record.IsOver)
-        {
-            return Expire(record, nowUtc, retention);
-        }
-        if (Swept(record, isAlive, nowUtc, idle) is null)
+        var rule = new SweepRule(isAlive, nowUtc, idle, retention);
+        if (StepFor(record, rule).Action == SweepAction.Keep)
         {
             return false; // the cheap look, before any lock: most records are simply in use
         }
 
         using var held = RepositoryLock.TryTakeAsync(dataDir, record.RepoPath, TimeSpan.Zero).GetAwaiter().GetResult();
-        var now = held is null ? null : Read(record.Id);
-        var next = now is null || now.IsOver ? null : Swept(now, isAlive, nowUtc, idle);
-        if (next is null)
-        {
-            return false;
-        }
 
-        Write(next);
+        return held is not null && Settled(record.Id, rule);
+    }
+
+    /// <summary>What one sweep compares a record against: who is alive, the time, and the two budgets.</summary>
+    private readonly record struct SweepRule(Func<int, bool> IsAlive, DateTime NowUtc, TimeSpan Idle, TimeSpan Retention);
+
+    /// <summary>What the sweep does to one record.</summary>
+    private enum SweepAction { Keep, Delete, Rewrite }
+
+    /// <summary>The action, and for <see cref="SweepAction.Rewrite"/> the record to write.</summary>
+    private readonly record struct SweepStep(SweepAction Action, ConsultationRecord Record)
+    {
+        public static SweepStep Keep(ConsultationRecord record) => new(SweepAction.Keep, record);
+    }
+
+    /// <summary>Under the lock: the record re-read, and its step applied — a record gone since is left alone.</summary>
+    private bool Settled(string id, SweepRule rule) =>
+        Read(id) is { } now && Applied(StepFor(now, rule));
+
+    private static SweepStep StepFor(ConsultationRecord record, SweepRule rule) =>
+        record.IsOver ? ExpiryOf(record, rule) : LiveStepOf(record, rule);
+
+    /// <summary>A finished record: deleted past retention, unless it is cadence evidence, which is kept.</summary>
+    private static SweepStep ExpiryOf(ConsultationRecord record, SweepRule rule) =>
+        !IsCadenceEvidence(record)
+        && rule.NowUtc - Parse(record.EndedUtc.Length > 0 ? record.EndedUtc : record.UpdatedUtc, rule.NowUtc) > rule.Retention
+            ? new SweepStep(SweepAction.Delete, record)
+            : SweepStep.Keep(record);
+
+    /// <summary>A running record: orphaned when its process is dead, closed when it sat idle past its budget.</summary>
+    private static SweepStep LiveStepOf(ConsultationRecord record, SweepRule rule) =>
+        record.Status == ConsultationStatuses.Asking
+            ? (rule.IsAlive(record.RunnerPid) ? SweepStep.Keep(record) : new SweepStep(SweepAction.Rewrite, Orphaned(record, rule.NowUtc)))
+            : (IdleFor(record, rule.NowUtc) > rule.Idle ? new SweepStep(SweepAction.Rewrite, Idled(record, rule.NowUtc, rule.Idle)) : SweepStep.Keep(record));
+
+    private bool Applied(SweepStep step) => step.Action switch
+    {
+        SweepAction.Delete => Deleted(step.Record),
+        SweepAction.Rewrite => Rewritten(step.Record),
+        _ => false,
+    };
+
+    private bool Rewritten(ConsultationRecord record)
+    {
+        Write(record);
 
         return true;
     }
-
-    /// <summary>What the sweep writes for a record that is orphaned or idle, or null when it is neither.</summary>
-    private static ConsultationRecord? Swept(ConsultationRecord record, Func<int, bool> isAlive, DateTime nowUtc, TimeSpan idle) =>
-        record.Status == ConsultationStatuses.Asking
-            ? (isAlive(record.RunnerPid) ? null : Orphaned(record, nowUtc))
-            : (IdleFor(record, nowUtc) > idle ? Idled(record, nowUtc, idle) : null);
 
     /// <summary>
     /// A turn whose server died: <c>interrupted</c> when it can be resumed, <c>failed</c> when it cannot.
@@ -252,14 +284,9 @@ public sealed partial class ConsultationStore(
     /// while retention is seven days. They are few (a group per three epics and at most three risk items per
     /// plan). A lapsed or failed one is no evidence and goes like any other.
     /// </remarks>
-    private bool Expire(ConsultationRecord record, DateTime nowUtc, TimeSpan retention)
+    /// <summary>A record past retention, removed — its decision made by <see cref="ExpiryOf"/>.</summary>
+    private bool Deleted(ConsultationRecord record)
     {
-        if (IsCadenceEvidence(record)
-            || nowUtc - Parse(record.EndedUtc.Length > 0 ? record.EndedUtc : record.UpdatedUtc, nowUtc) <= retention)
-        {
-            return false;
-        }
-
         try
         {
             File.Delete(PathFor(record.Id));
