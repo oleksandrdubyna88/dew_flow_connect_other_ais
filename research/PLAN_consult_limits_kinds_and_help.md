@@ -18,10 +18,9 @@
 > - **The record-outcome pick looks the consultation up first,** so one gone from the log is said before an
 >   outcome is chosen; `ConsultFor` moved into the shared scenario base rather than being copied.
 >
-> **Open tail:** the four existing checkboxes in `panelView.ts` (*Separate settings for each side*, *Stop the
-> local reviewer…*, *Work autonomously*, *Split the plan…*) carry their `?` inside the label and so have the
-> same toggle-on-click defect. That is outside this plan, named and not changed. The Spending page still
-> shows a consult turn without its kind, as D2 decided. Scope: the idle sweep's schedule
+> **Open tail:** the Spending page still shows a consult turn without its kind, as D2 decided: the usage
+> ledger does not record it. (The panel's other checkboxes with a `?` inside their label were found at the
+> code round, and fixed in this same PR on the operator's word — see the deviation above.) Scope: the idle sweep's schedule
 > (`src_mcp/src/Program.cs` serve path, `src_mcp/src/Server/PanelService.cs`), the consultation's kind on
 > every surface a person reads (`src_vs_code/src/roundsLog.ts`, `consultations.ts`, `panelProvider.ts`,
 > `ConsultationService.cs` log lines, `ServerJsonContext.cs` `OpenConsultation`), the `?` on every consultant
