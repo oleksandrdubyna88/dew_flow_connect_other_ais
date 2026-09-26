@@ -1560,6 +1560,7 @@ running page's button reads *Re-ask · model* over an empty box, *Send* once a q
 Re-ask again after ✕. A host push while the box holds text keeps it *Send*, and names the pushed model
 once the box is emptied. Both cases were red first, the second with the real symptom (the push painted
 Re-ask over a typed question), and red again with the call from `paintBackdrop()` planted out.
+
 **Release anchors and the Markdown rule (2026-09-26, `research/PLAN_the_release_guards_contradict.md`).**
 `changelogNamesTheRelease.test.ts` now passes a release whose version the baseline does not name YET, as
 long as its note exists. That was red first, naming the missing row. It still refuses a release with
