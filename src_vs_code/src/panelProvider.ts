@@ -100,7 +100,8 @@ import {
   settingsFrom,
   settingWrite,
 } from './settingsShape';
-import { saveOrSnapBack, writePlain } from './refusedWrite';
+import { afterTheWrite, saveOrSnapBack, writePlain } from './refusedWrite';
+import { WriteQueue } from './writeQueue';
 import {
   mirroredLines,
   NetworkingMode,
@@ -339,7 +340,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * and a render could read a configuration a write had not finished applying. They queue now, and
    * `render` awaits the queue.</p>
    */
-  private queued: Promise<void> = Promise.resolve();
+  private readonly writes = new WriteQueue();
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -901,17 +902,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // it followed and re-stamp the box with the value being replaced — the symptom, reintroduced by
     // the fix. `queued` never stays rejected; see `enqueue`.
     //
-    // Awaited until it is STABLE, because a write appended while this render was suspended would
-    // otherwise be read a moment too late. Bounded: under continuous typing the queue never settles,
-    // and a render that waits for silence is a render that never happens.
-    for (let round = 0; round < 5; round += 1) {
-      const seen = this.queued;
-       
-      await seen;
-      if (seen === this.queued) {
-        break;
-      }
-    }
+    // Awaited until it is STABLE and bounded — see `WriteQueue.settled`. Never awaited FROM a write:
+    // that is a wait on itself (`afterTheWrite`).
+    await this.writes.settled();
     const config = vscode.workspace.getConfiguration('coai');
     const settings = settingsFrom((section) => config.get(section));
     const vendors = vendorsFrom(this.read(config)('vendors'));
@@ -1510,11 +1503,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       rounds.push('');
     }
     rounds[round - 1] = id;
-    await config.update(
-      'promptsPerRound',
-      { ...settings.promptsPerRound, [role]: rounds },
-      vscode.ConfigurationTarget.Global,
-    );
+    try {
+      await config.update(
+        'promptsPerRound',
+        { ...settings.promptsPerRound, [role]: rounds },
+        vscode.ConfigurationTarget.Global,
+      );
+    } catch (error: unknown) {
+      // A dropdown too, and not in the write queue: said like every other refusal, and put back.
+      reportRefusal(this.context, 'promptsPerRound', error);
+      await this.snapBack();
+      return;
+    }
     await this.render();
   }
 
@@ -1543,7 +1543,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * only place that knows what could not be written.</p>
    */
   private enqueue(work: () => Promise<void>): void {
-    this.queued = this.queued.then(work, work).catch(() => undefined);
+    this.writes.enqueue(work);
   }
 
   /**
@@ -1717,7 +1717,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // A refused box or dropdown snaps back and stops there — `writePlain` holds that order, run by its tests.
         await writePlain(write.key, write.value, clearedByWriting(write.key), {
           save: (key, value) => this.save(config, key, value),
-          repaint: () => this.render(),
+          repaint: afterTheWrite(() => this.snapBack()),
           follow: () => this.followPlain(config, write.key, write.value),
         }, write.control);
         return;
@@ -1840,7 +1840,21 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   /** One composite setting's save, snapping a refused box or dropdown back — `saveOrSnapBack` decides. */
   private async saveWrite(config: vscode.WorkspaceConfiguration, key: string, stored: unknown, write: SettingWrite): Promise<void> {
-    await saveOrSnapBack(() => this.save(config, key, stored), () => this.render(), write.value, write.control);
+    await saveOrSnapBack(() => this.save(config, key, stored), afterTheWrite(() => this.snapBack()), write.value, write.control);
+  }
+
+  /**
+   * Repaints the WHOLE page from what is stored, after a refused write.
+   *
+   * <p>The paint key is cleared first, because nothing stored changed: the key a render computes equals the
+   * one already painted, so it would post only the live regions and leave the control on the refused
+   * choice — which is how PR #561's snap-back painted nothing. A paint withheld while a control has focus
+   * is not recorded, so the render after focus leaves still paints.</p>
+   */
+  private snapBack(): Promise<void> {
+    this.paintedKey = '';
+
+    return this.render();
   }
 
   /** What follows a plain write that stands. */

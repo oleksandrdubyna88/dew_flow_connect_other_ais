@@ -118,4 +118,16 @@ test('the host saves every non-plain kind through saveOrSnapBack', async () => {
   }
   assert.match(host, /await writePlain\(write\.key, write\.value, clearedByWriting\(write\.key\), \{[\s\S]*?\}, write\.control\);/,
     'the plain case no longer hands writePlain the control');
+  // Each link pinned whole (PR review): the control reaching the rule, the repaint STARTED rather than
+  // awaited inside the queued write (`snapBackQueue.test.ts` runs why), and the paint key cleared, without
+  // which the repaint finds nothing changed and paints nothing.
+  assert.match(host,
+    /await saveOrSnapBack\(\(\) => this\.save\(config, key, stored\), afterTheWrite\(\(\) => this\.snapBack\(\)\), write\.value, write\.control\);/,
+    'a composite write drops the control or awaits its repaint inside the write queue');
+  assert.match(host, /repaint: afterTheWrite\(\(\) => this\.snapBack\(\)\),/,
+    'the plain case awaits its repaint inside the write queue, which is a wait on itself');
+  assert.match(host, /private snapBack\(\): Promise<void> \{\s*this\.paintedKey = '';\s*return this\.render\(\);/,
+    'the snap-back no longer clears the paint key, so the page is never rebuilt from what is stored');
+  assert.match(host, /catch \(error: unknown\) \{\s*\/\/[^\n]*\n\s*reportRefusal\(this\.context, 'promptsPerRound', error\);\s*await this\.snapBack\(\);/,
+    'a refused prompt pick is neither said nor put back');
 });

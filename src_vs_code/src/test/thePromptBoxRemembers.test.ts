@@ -406,14 +406,15 @@ test('the host never renders from a configuration it has not finished writing', 
   // class, which is exactly what a unit test could not see even if it could reach them.
   const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
 
-  const awaits = source.indexOf('const seen = this.queued;');
+  const awaits = source.indexOf('await this.writes.settled();');
   const paints = source.indexOf('const key = staticKey(state);');
   assert.ok(awaits > 0 && paints > awaits, 'render must await the write queue before it decides what to paint');
 
   assert.match(source, /if \(key !== this\.paintedKey && !withholdsRepaint\(this\.editingSince, Date\.now\(\)\)\)/,
     'the paint no longer consults whether a control is being edited');
-  assert.match(source, /this\.queued = this\.queued\.then\(work, work\)\.catch\(/,
-    'a rejected write would poison the queue and freeze every later one');
+  // That a rejected write does not poison the queue is RUN in `snapBackQueue.test.ts`, on `WriteQueue`.
+  assert.match(source, /private enqueue\(work: \(\) => Promise<void>\): void \{\s*this\.writes\.enqueue\(work\);/,
+    'the host queues its writes somewhere other than WriteQueue, whose ordering is the tested one');
   assert.match(source, /this\.enqueue\(\(\) => this\.write\(/,
     'settings are written straight off the message again, so two of them can race');
 });
@@ -439,8 +440,10 @@ test('the hold is not renewed by moving between controls, and disposal forgets i
     'every focus restarts the clock again, so tabbing between controls withholds a paint forever');
   assert.match(source, /onDidDispose\(\(\) => \{[\s\S]{0,120}this\.forgetEditing\(\);/,
     'a sidebar closed mid-sentence leaves the host believing a control is still being edited');
-  assert.match(source, /const seen = this\.queued;[\s\S]{0,200}if \(seen !== this\.queued\)|if \(seen === this\.queued\)/,
-    'render awaits one snapshot of the queue, so a write appended while it waited is read too late');
+  // The wait itself moved into `WriteQueue` and is RUN in `snapBackQueue.test.ts` — a write appended while
+  // it waited is waited for too. What stays read here is only that render is the one that waits.
+  assert.match(source, /async render\(\): Promise<void> \{[\s\S]{0,900}await this\.writes\.settled\(\);/,
+    'render no longer waits for the write queue, so it paints a configuration it has not finished writing');
 });
 
 test('a chosen dropdown RELEASES the repaint it is holding, so its neighbour can re-fill', () => {

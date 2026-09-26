@@ -4,9 +4,11 @@
 
 **The consultation line names its branch as a branch.** The sidebar line under *Active rounds* ended with the bare branch name, so `…consultation for epics 4-6: due epic-1` read as one phrase; it now ends `· branch epic-1`.
 
-**A dropdown that did not save no longer looks saved either.** When VS Code refuses a choice — a provider,
-a model, what happens when the rounds run out — the dropdown goes back to what is really stored, as a switch
-already does. What you type into a text box is still never reset.
+**A setting that VS Code refuses no longer freezes the panel — and it really goes back.** In 0.56.1 a
+refused switch made the sidebar stop responding until the window was reloaded, and did not put the box back
+either. Now a refused switch, dropdown or prompt pick returns to what is really stored — a provider, a model,
+what happens when the rounds run out — and the panel carries on. What you type into a text box is still
+never reset.
 
 ## Extension 0.56.1 — 2026-09-26
 

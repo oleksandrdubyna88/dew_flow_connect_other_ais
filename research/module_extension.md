@@ -9273,6 +9273,18 @@ a number is still never repainted. The repaint is the same full `render()` every
 already triggers (`extension.ts`, `onDidChangeConfiguration`). The routing itself moved to
 `settingRoute.ts` when `settingsShape.ts` passed 800 lines; `settingsShape` re-exports it, so no importer
 changed.
+**…and in 0.56.1 it froze the panel instead (found on review of the follow-up, fixed in the same PR).** Two
+defects, both from PR #561's first cut. (1) The snap-back AWAITED `render()` from inside the queued write,
+and `render()` waits for the write queue — which is that very write: a wait on itself. A refused box froze the
+sidebar until the window was reloaded, and every later setting write queued behind it and never ran. The
+repaint is now STARTED, not awaited (`refusedWrite.afterTheWrite`), so it runs once the queue has settled.
+The queue itself is `WriteQueue` (`writeQueue.ts`, moved out of `PanelProvider`), so the hazard is run in a
+test rather than read. (2) Even unfrozen, the repaint painted nothing: nothing stored had changed, so
+`staticKey` equalled `paintedKey` and `render()` posted only the live regions. `PanelProvider.snapBack`
+clears the paint key first, which rebuilds the page from what is stored. A paint withheld while a control
+has focus is not recorded, so the render after focus leaves still paints. The prompt-per-round pickers
+(`choosePrompt`, which writes outside the queue with a bare `config.update`) now say a refusal like every
+other write and snap back too; before, a refusal there was an unhandled rejection.
 
 ## CoAI: choose on every bug (2026-09-24, issue #487)
 

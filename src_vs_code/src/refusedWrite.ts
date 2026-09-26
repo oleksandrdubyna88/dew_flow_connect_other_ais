@@ -64,3 +64,19 @@ export async function saveOrSnapBack(
 
   return true;
 }
+
+/**
+ * A repaint STARTED, never awaited, by the write that asks for it — it runs once the queue has settled.
+ *
+ * <p>`render()` waits for the write queue before it reads anything, and a write asking for the repaint is
+ * still IN that queue: awaiting it there is a wait on itself. From PR #561 until this was found on review, a
+ * refused box froze the panel that way until the window was reloaded, and every later write queued behind
+ * it. Started instead, the repaint waits for this write and the ones after it, then paints what is stored.</p>
+ */
+export function afterTheWrite(repaint: () => Promise<void>): () => Promise<void> {
+  return () => {
+    void repaint();
+
+    return Promise.resolve();
+  };
+}
