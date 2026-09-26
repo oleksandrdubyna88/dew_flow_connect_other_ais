@@ -77,3 +77,15 @@ test('the panel repaints after a refused plain write that snaps back, and save s
     /catch \(error: unknown\) \{\s*reportRefusal\(this\.context, key, error\);\s*return false;/,
     'save no longer says it failed, so no caller can act on a refusal');
 });
+
+test('the panel draws the box from what is STORED, which is what a repaint after a refusal shows', () => {
+  // The snap-back is a repaint from the stored configuration: the refused tick left the setting off, and
+  // the page drawn from that has the box unticked, whatever the person clicked. (codex, the plan round.)
+  const drawn = (stored: boolean) => {
+    const page = runPanel(panelState('gate', { settings: { ...DEFAULTS, stopLocalWhenQuiet: stored } }));
+    return page.controls.find((one) => one.dataset['setting'] === 'stopLocalWhenQuiet')?.checked;
+  };
+
+  assert.equal(drawn(false), false, 'a stored OFF was drawn ticked, so a refused tick would still look saved');
+  assert.equal(drawn(true), true);
+});
