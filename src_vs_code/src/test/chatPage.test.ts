@@ -2170,6 +2170,16 @@ test('the button says Re-ask only while the box is empty — text in it is sent,
   assert.equal(button.textContent, 'Re-ask · gemini-3.8-flash-medium', 'an emptied box is a re-ask again');
 });
 
+test('a box holding only whitespace is empty to the label, as it is to the press', () => {
+  // send() trims before deciding, so spaces and newlines re-ask; the label must read the same way or
+  // it says Send over a press that re-asks. (The gate's plan round.)
+  const page = runChatPage({ reask: 'Claude Opus' });
+  page.seen['say'].value = '  \n ';
+  page.fire('say', 'input');
+
+  assert.equal(page.seen['send'].textContent, 'Re-ask · Claude Opus');
+});
+
 test('a host push while the box holds text keeps the button a Send button', () => {
   const page = runChatPage({ reask: 'Claude Opus' });
   page.seen['say'].value = 'a question being typed';
