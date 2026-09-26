@@ -24,7 +24,7 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolved } from './branch-protection.mjs';
+import { resolved } from './lib/resolved.mjs';
 
 /** What a line's tag looks like here: `<component>-v<version>` (include-component-in-tag, separator `-`). */
 export function tagOf(component, version) {

@@ -25,7 +25,7 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolved } from './branch-protection.mjs';
+import { resolved } from './lib/resolved.mjs';
 
 /** A conventional-commit header release-please releases on: feat, fix, perf, revert — or anything with `!`. */
 export function releases(header) {
