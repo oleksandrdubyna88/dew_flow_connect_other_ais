@@ -1,26 +1,18 @@
 # Changelog
 
+## Unreleased
+
+**A setting that did not save no longer looks saved.** When VS Code refuses a switch — typically right after
+the extension updated and before the window was reloaded — the panel's box goes back to what is really stored
+instead of staying ticked. *Stop the local reviewer when the cloud reviewers found almost nothing* now says it
+takes effect from the next round: a round already running keeps the setting it started with.
+
 ## Extension 0.56.0 · Server 0.38.0 — 2026-09-26
 
 **coai-mcp's review trees can be kept somewhere else.** `COAI_REVIEW_ROOT`, set to an absolute path, is
 where coai-mcp keeps the checkouts it makes for reviewing a pair; the test suite uses it so it never reads
 the trees on your machine (issue #544). Nothing changes when it is not set.
 
-<<<<<<< HEAD
-=======
-**A setting that did not save no longer looks saved.** When VS Code refuses a switch — typically right after
-the extension updated and before the window was reloaded — the panel's box goes back to what is really stored
-instead of staying ticked. *Stop the local reviewer when the cloud reviewers found almost nothing* now says it
-takes effect from the next round: a round already running keeps the setting it started with.
-
-## Extension 0.55.0 · Server 0.37.0 — 2026-09-25
-
-**Today, Week, Month, Year or All — on three more tabs.** On the Review rounds page, *Conversations*,
-*Consultations* and *What it keeps missing* now have the period switch *What each AI has used* has, plus
-**All**, opening on Today. *What it keeps missing* is counted by coai-mcp over the period and needs
-coai-mcp 0.37.0; an older one says so and shows all time.
-
->>>>>>> d4b84e4d (fix(panel): a refused switch snaps back, and the stand-down switch says it waits for the next round)
 **The consultant is asked on a cadence, not only when an AI admits it is stuck.** After a plan is split into
 epics, every group of three owes one consultation before its first code round — is the group right, where is
 it weak, what did it forget — and from five epics the assistant is asked which epics and stories carry the most
