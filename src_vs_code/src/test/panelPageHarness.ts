@@ -116,6 +116,52 @@ export interface Page {
   readonly html: string;
   readonly controls: readonly Control[];
   readonly posted: readonly Record<string, unknown>[];
+  /** What a live region holds NOW — its rendered content until a delivered message replaces it. */
+  readonly region: (id: string) => string;
+  /** Hand the page's own message listener what the host posts, as `webview.postMessage` does. */
+  readonly deliver: (data: Record<string, unknown>) => void;
+}
+
+/** The regions the host's live push replaces, by id. */
+const LIVE_REGIONS: readonly string[] = ['live-questions', 'live-rounds', 'live-consultations', 'live-notifications'];
+
+/** A live region as the script meets it: content it can read and replace, and no controls of its own. */
+class Region {
+  constructor(public innerHTML: string) {}
+
+  querySelectorAll(): readonly Control[] {
+    return [];
+  }
+}
+
+/**
+ * A region's rendered content: what sits between `<div id="…">` and ITS closing tag, nested `div`s
+ * counted — so a region holding cards of its own is read whole rather than cut at the first `</div>`.
+ */
+function regionContent(html: string, id: string): string | undefined {
+  const open = `<div id="${id}">`;
+  const start = html.indexOf(open);
+  if (start < 0) {
+    return undefined;
+  }
+  const tags = /<div\b|<\/div>/g;
+  tags.lastIndex = start + open.length;
+  let depth = 1;
+  for (let tag = tags.exec(html); tag !== null; tag = tags.exec(html)) {
+    depth += tag[0] === '</div>' ? -1 : 1;
+    if (depth === 0) {
+      return html.slice(start + open.length, tag.index);
+    }
+  }
+
+  return undefined;
+}
+
+function regionsOf(html: string): Map<string, Region> {
+  return new Map(LIVE_REGIONS.flatMap((id): [string, Region][] => {
+    const content = regionContent(html, id);
+    return content === undefined ? [] : [[id, new Region(content)]];
+  }));
 }
 
 /** Render the panel, parse its controls, and run its own script over them. */
@@ -123,12 +169,16 @@ export function runPanel(state: PanelState): Page {
   const html = panelHtml(state, 'test-nonce');
   const controls = controlsOf(html);
   const posted: Record<string, unknown>[] = [];
+  const regions = regionsOf(html);
+  let listener: ((event: { data: unknown }) => void) | undefined;
   const fakeDocument = {
     addEventListener: () => undefined,
     querySelectorAll: (selector: string): readonly Control[] =>
       (selector === '[data-setting]' ? controls : []),
     querySelector: (): null => null,
-    getElementById: (): null => null,
+    // The live regions answer, so the script's live push can be watched landing — widened when the
+    // cadence line joined Active rounds (PR #556, CodeRabbit). Every other id is absent, as before.
+    getElementById: (id: string): Region | null => regions.get(id) ?? null,
     body: { style: { fontSize: '' } },
     documentElement: { style: { setProperty: () => undefined } },
   };
@@ -141,12 +191,27 @@ export function runPanel(state: PanelState): Page {
       setState: () => undefined,
     }),
     fakeDocument,
-    { addEventListener: () => undefined },
+    {
+      addEventListener: (kind: string, handler: (event: { data: unknown }) => void): void => {
+        if (kind === 'message') {
+          listener = handler;
+        }
+      },
+    },
     (): number => 0,
     (): void => undefined,
   );
 
-  return { html, controls, posted };
+  return {
+    html,
+    controls,
+    posted,
+    region: (id) => regions.get(id)?.innerHTML ?? '',
+    deliver: (data) => {
+      assert.ok(listener !== undefined, 'the panel registers no message listener, so a live push drives nothing');
+      listener({ data });
+    },
+  };
 }
 
 /** Whatever the script last sent as a setting write. */
