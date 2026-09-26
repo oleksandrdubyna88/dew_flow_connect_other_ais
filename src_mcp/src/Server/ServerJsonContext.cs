@@ -40,6 +40,8 @@ public sealed record ProvidersAnswer(
 /// </remarks>
 public sealed record OpenConsultation(
     string Id,
+    // stuck, cadence or risk: what it is FOR. Never empty — a record written before the kinds reads stuck.
+    string Kind,
     string Vendor,
     string Model,
     string Status,

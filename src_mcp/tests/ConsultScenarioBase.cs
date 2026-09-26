@@ -91,7 +91,8 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
         int callsPerSession = 10,
         bool enabled = true,
         IReadOnlyList<ProviderSettings>? providers = null,
-        IReadOnlyDictionary<string, ConsultantChoice>? consultants = null) => new(
+        IReadOnlyDictionary<string, ConsultantChoice>? consultants = null,
+        Serilog.ILogger? log = null) => new(
         new PanelSettings
         {
             Providers = providers ?? [new("codex") { ExecutablePath = FakeCliExe }],
@@ -106,7 +107,7 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
         VaultKeys.None("no vault in tests"),
         default,
         _launcher,
-        Logger.None, Noticing.None);
+        log ?? Logger.None, Noticing.None);
 
     protected static readonly string[] CallerVariables =
         ["COAI_CALLER_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_SESSION_ID", "GEMINI_CLI_SESSION_ID"];

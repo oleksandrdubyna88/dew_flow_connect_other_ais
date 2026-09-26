@@ -113,6 +113,7 @@ public sealed class ConsultationService(
             .OrderByDescending(record => record.StartedUtc, StringComparer.Ordinal)
             .Select(record => new OpenConsultation(
                 record.Id,
+                record.Kind,
                 record.Vendor,
                 record.Model,
                 record.Status,
@@ -607,7 +608,7 @@ public sealed class ConsultationService(
             _answerSchema.Path));
         var asking = record with { Status = ConsultationStatuses.Asking, RunnerPid = Environment.ProcessId, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow) };
         _store.Write(asking);
-        log.Information("consultation {Id}: turn {Turn}/{Cap} on {Vendor} in {Repo}", record.Id, record.Budget.Turn, record.MaxTurns, consultant.Row.Provider, repo);
+        log.Information("{Kind} consultation {Id}: turn {Turn}/{Cap} on {Vendor} in {Repo}", record.Kind, record.Id, record.Budget.Turn, record.MaxTurns, consultant.Row.Provider, repo);
 
         var started = Stopwatch.StartNew();
         ReviewerLaunch launched;
@@ -673,7 +674,7 @@ public sealed class ConsultationService(
     private string Breach(ConsultationRecord record, IReadOnlyList<TreeChange> changes, Consultant consultant, ReviewerLaunch launched, TimeSpan elapsed)
     {
         var sentence = FilesystemSnapshot.Sentence(changes);
-        log.Error("consultation {Id}: {Alert}", record.Id, sentence);
+        log.Error("{Kind} consultation {Id}: {Alert}", record.Kind, record.Id, sentence);
         _store.Write(Ended(record, ConsultationStatuses.Failed, "the working tree changed while the consultant was running") with
         {
             Alert = sentence,
@@ -709,7 +710,7 @@ public sealed class ConsultationService(
         var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), spent.TokensIn, spent.TokensOut, spent.CostUsd);
         _store.Write(Answered(record, turn, handle));
         Record(consultant, "ok", elapsed, spent);
-        log.Information("consultation {Id}: answered turn {Turn} in {Seconds}s ({TokensIn}/{TokensOut} tokens)", record.Id, record.Budget.Turn, turn.Seconds, turn.TokensIn, turn.TokensOut);
+        log.Information("{Kind} consultation {Id}: answered turn {Turn} in {Seconds}s ({TokensIn}/{TokensOut} tokens)", record.Kind, record.Id, record.Budget.Turn, turn.Seconds, turn.TokensIn, turn.TokensOut);
 
         var advice = ConsultationFence.Advice(consultant.Row.Provider, consultant.Model, record.Budget, nonce, advised);
         var note = consultant.Caller.CounterNote;

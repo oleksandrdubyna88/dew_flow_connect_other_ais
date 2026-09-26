@@ -169,6 +169,7 @@ import { alsoWatchDataDirectories } from './escalationWatcher';
 import { watchedDirs, type WatchedDir } from './escalationDirs';
 import { consultationsHtml } from './roundsLog';
 import { CLOSE_CHOICES, refusalIn, SERVER_TOO_OLD } from './consultations';
+import { closeTitle } from './consultKind';
 import { CALLER_KINDS, ConsultSettings, ResolvedConsultant } from './consultSettings';
 import {
   executableFor,
@@ -2602,29 +2603,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return;
     }
 
-    const chosen = await vscode.window.showQuickPick(
-      CLOSE_CHOICES.map((one) => ({ label: one.label, detail: one.detail, outcome: one.outcome })),
-      { title: 'How did this consultation end?', placeHolder: 'Escape leaves it open' },
-    );
-    if (chosen === undefined) {
-      return; // cancelled, and a cancelled close changes nothing
-    }
-
-    const note = await vscode.window.showInputBox({
-      title: `Recording '${chosen.label}'`,
-      prompt: 'One sentence for the log — what you did, or why it was dropped. Optional.',
-      placeHolder: 'leave empty to record the outcome alone',
-    });
-    if (note === undefined) {
-      return; // Escape on the note is Escape on the whole thing
-    }
-
-    // THE CONSULTATION'S OWN checkout, read from the row, not this window's first folder. The log
-    // lists consultations from every repository a person has reviewed, so a close made from it must
-    // take the repository lock on the one it belongs to — a lock on whatever happens to be open
-    // would guard nothing and could block something unrelated. (The review pass, 2026-09-17.)
-    const repo = (await this.roundsLog()).consultations.find((one) => one.id === id)?.repoPath ?? '';
-    if (repo.length === 0) {
+    // Looked up FIRST: the pick names the consultation's kind, and a consultation gone from the log is
+    // said before anybody chooses an outcome for it (todo/PLAN_consult_limits_kinds_and_help.md, story 2).
+    const found = (await this.roundsLog()).consultations.find((one) => one.id === id);
+    const repo = found?.repoPath ?? '';
+    if (found === undefined || repo.length === 0) {
       await notify({
         as: 'warning',
         class: 'refusal',
@@ -2639,6 +2622,28 @@ export class PanelProvider implements vscode.WebviewViewProvider {
 
       return;
     }
+
+    const chosen = await vscode.window.showQuickPick(
+      CLOSE_CHOICES.map((one) => ({ label: one.label, detail: one.detail, outcome: one.outcome })),
+      { title: closeTitle(found.kind, found.epics, found.plan), placeHolder: 'Escape leaves it open' },
+    );
+    if (chosen === undefined) {
+      return; // cancelled, and a cancelled close changes nothing
+    }
+
+    const note = await vscode.window.showInputBox({
+      title: `Recording '${chosen.label}'`,
+      prompt: 'One sentence for the log — what you did, or why it was dropped. Optional.',
+      placeHolder: 'leave empty to record the outcome alone',
+    });
+    if (note === undefined) {
+      return; // Escape on the note is Escape on the whole thing
+    }
+
+    // `repo` is THE CONSULTATION'S OWN checkout, read from the row above, not this window's first folder.
+    // The log lists consultations from every repository a person has reviewed, so a close made from it
+    // must take the repository lock on the one it belongs to — a lock on whatever happens to be open
+    // would guard nothing and could block something unrelated. (The review pass, 2026-09-17.)
     const { code, output } = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,

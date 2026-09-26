@@ -136,6 +136,37 @@ public sealed class ConsultKindsScenarioTests : ConsultScenarioBase
     }
 
     [Fact]
+    public async Task TheStatusReply_NamesTheKindOfEachOpenConsultation()
+    {
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var service = Service();
+        await service.OpenAsync(_repo, "main");
+        var cadence = Id(await ConsultFor(service, "cadence", "1-3"));
+        Answer("0198-second", Advice);
+        var stuck = Id(await Consult(service, "the parser returns 3 where 4 is expected"));
+
+        var status = JsonDocument.Parse(await service.StatusAsync(_repo, "main")).RootElement;
+        var kinds = status.GetProperty("consultations").EnumerateArray()
+            .ToDictionary(one => one.GetProperty("id").GetString()!, one => one.GetProperty("kind").GetString());
+
+        kinds.Should().Equal(new Dictionary<string, string?> { [cadence] = "cadence", [stuck] = "stuck" });
+    }
+
+    [Fact]
+    public async Task TheServerLog_SaysTheKindOfEachTurn()
+    {
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var sink = new ListSink();
+        var service = Service(log: new Serilog.LoggerConfiguration().WriteTo.Sink(sink).CreateLogger());
+
+        Id(await ConsultFor(service, "risk", "5/5.2", "is the migration right?"));
+
+        var said = string.Join(Environment.NewLine, sink.Lines);
+        sink.Lines.Should().Contain(line => line.Contains("risk consultation") && line.Contains("turn 1/5"), said);
+        sink.Lines.Should().Contain(line => line.Contains("risk consultation") && line.Contains("answered turn 1"), said);
+    }
+
+    [Fact]
     public async Task AFollowUpKeepsTheKindItWasOpenedWith()
     {
         using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");

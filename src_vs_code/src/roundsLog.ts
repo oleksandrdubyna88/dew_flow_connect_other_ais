@@ -11,6 +11,7 @@ import { ChatTurnRecord } from './chatUsage';
 import { DAYS_OF, PriceLookup, consultationCost, priceOfLine, shortNumber, startOfPeriodMs, UsageEntry, Window, WINDOWS } from './usage';
 import { outcomeBySaid, outcomeSaid } from './consultations';
 import { foldedCell } from './consultationFold';
+import { coveredSaid, kindOf } from './consultKind';
 import { DEFAULT_PERIOD, LogPeriod, periodButtonsHtml } from './logPeriod';
 
 // Moved to a leaf so the sidebar's cadence line can use it without an import cycle; still exported here.
@@ -1000,7 +1001,7 @@ export function consultationsHtml(
   }
 
   const rows = log.consultations.map((one) => `<tr data-started="${startedMsOf(one.startedUtc)}">
-    <td>${escapeHtml(startedOf(one.startedUtc))}</td><td>${forCell(one)}</td>
+    <td>${escapeHtml(startedOf(one.startedUtc))}</td><td>${escapeHtml(kindOf(one.kind))}</td><td>${forCell(one)}</td>
     <td>${escapeHtml(callerOf(one.callerKind))} → ${escapeHtml(one.vendor)}${one.model.length > 0 ? ` · ${escapeHtml(one.model)}` : ''}</td>
     <td>${escapeHtml(repoNameOf(one.repoPath))}${one.branch.length > 0 ? ` · ${escapeHtml(one.branch)}` : ''}</td>
     <td class="num">${one.turns}</td>
@@ -1020,47 +1021,31 @@ export function consultationsHtml(
     : '';
 
   return `${capped}<table><thead><tr>
-    <th>Started</th><th>For</th><th>Who asked whom</th><th>Where</th><th class="num">Turns</th>
+    <th>Started</th><th>Kind</th><th>For</th><th>Who asked whom</th><th>Where</th><th class="num">Turns</th>
     <th>How it ended</th><th>Outcome</th><th class="num">Tokens</th><th class="num">Cost</th>
     <th>What was asked</th><th>What was advised</th>
   </tr></thead><tbody>${rows}</tbody></table>`;
 }
 
 /** How many cells a consultation row has — the alert row under it spans them all. */
-const CONSULTATION_COLUMNS = 11;
+const CONSULTATION_COLUMNS = 12;
 
 /**
- * What the consultation was FOR: an agent that was stuck, a group of epics, or one risky item.
+ * What an ordered consultation covered — the epics or the story, and the plan — beside its own Kind column.
  *
- * <p>The column the cadence made necessary (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.3).
- * Without it the log read every consultation as an agent admitting it was stuck, and a cadence
- * consultation is the opposite — one the gate asked for while nothing was wrong. The plan is named by
- * its file (`repoNameOf` is the last segment of ANY path, either separator), with the path kept for
- * the hover, because the path is long and the file is what a person recognises. A kind this build does not know is shown as written rather than dressed up as one it does.</p>
+ * <p>Kind and For were one cell (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.3), which left
+ * `stuck` a bare word; now the kind has a column of its own (todo/PLAN_consult_limits_kinds_and_help.md,
+ * story 2) and this says what the rest was for. A stuck consultation covered nothing but its problem: a
+ * dash. The plan is named by its file, the path kept for the hover.</p>
  */
 function forCell(one: DbConsultation): string {
+  const covered = coveredSaid(one.kind, one.epics);
   const plan = one.plan.length === 0
     ? ''
     : `<br><span class="decided" title="${escapeHtml(one.plan)}">${escapeHtml(repoNameOf(one.plan))}</span>`;
 
-  return `${escapeHtml(kindSaid(one.kind, one.epics))}${plan}`;
+  return covered.length === 0 && plan.length === 0 ? '—' : `${escapeHtml(covered)}${plan}`;
 }
-
-/** `cadence · epics 4-6`, `risk · story 7.2`, `risk · epic 7`, or the kind alone. */
-function kindSaid(kind: string, epics: string): string {
-  // `Object.hasOwn`, for the reason `statusMark` gives: the kind is a string off a disk, and a plain
-  // object answers for every name it inherited.
-  return epics.length > 0 && Object.hasOwn(KINDS_SAID, kind) ? KINDS_SAID[kind]!(epics) : kind;
-}
-
-/** How each kind this build knows names what it covered. */
-const KINDS_SAID: Readonly<Record<string, (epics: string) => string>> = {
-  cadence: (epics) => `cadence · ${epics.includes('-') ? 'epics' : 'epic'} ${epics}`,
-  risk: (epics) => {
-    const story = epics.split('/')[1];
-    return story === undefined ? `risk · epic ${epics}` : `risk · story ${story}`;
-  },
-};
 
 /**
  * Who recorded it, beside the word — muted, because the word is the answer and this is its author.
