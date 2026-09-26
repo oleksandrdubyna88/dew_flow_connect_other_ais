@@ -16,8 +16,15 @@
 > OrgMeter's `review-gate.md` says three things the dew_flow rule does not — the groups are numbered in threes
 > from 1 (1–3, 4–6), `abandoned` counts as an outcome as `solved` and `not_solved` do, and a lapsed
 > consultation can still be closed; the live check found that the sidebar line ran the branch on as the
-> sentence's last word (`…due epic-1`) and it now reads `· branch epic-1`. **Open tail:** bringing those three
-> clarifications into `dew_flow_conventions`' `common/coai-consultant.md`; the risk path (five epics or
+> sentence's last word (`…due epic-1`) and it now reads `· branch epic-1`. **Open tail:** of those three clarifications,
+> decided on 2026-09-26 after a consultation (codex, verified against `CadenceRule.GroupOf` and
+> `ConsultationClosing.IsVerdict`): the fixed numbering was WRONG for a plan that starts past epic 1 and is
+> corrected in OrgMeter instead (`ai_conventions` PR #27, which also drops the lapsed and lost-reply
+> sentences `close_consult`'s description already says); only "which outcomes count" goes into
+> `common/coai-consultant.md`, as one sentence folded into the NEXT conventions change rather than a
+> six-repo pin cascade of its own; `PanelSettings.cs` over the 800 ceiling is
+> [PLAN_panel_settings_is_too_big.md](../todo/PLAN_panel_settings_is_too_big.md), and `PanelService.cs` stays with
+> steps 5–7 of [PLAN_the_round_engine_leaves_the_panel_service.md](../todo/PLAN_the_round_engine_leaves_the_panel_service.md); the risk path (five epics or
 > more) and a second group were exercised by the scenario tests, not by the live check; a Claude Code
 > session whose tool list was cached before 0.38.0 still shows the old `consult`/`review_code` schemas until
 > `/mcp` reconnects — the new arguments pass through regardless. Scope: the gate's orders and refusals
