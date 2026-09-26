@@ -232,8 +232,12 @@ export function differences(want, have) {
  *
  * <p>Done in JavaScript rather than by shelling out to `which`, because `which` would be the same
  * problem one level down.</p>
+ *
+ * <p>Exported (2026-09-26) so `release-anchors.mjs` and `docs-only-title.mjs` resolve `git` and `gh`
+ * through this ONE resolver instead of a second copy of it. The family's copy of this file can take
+ * the same `export` the next time it keeps pace.</p>
  */
-function resolved(name) {
+export function resolved(name) {
   // ONLY what `execFileSync` can start directly, which is narrower than PATHEXT. Node refuses
   // `.cmd` and `.bat` without `shell: true` — the 2024 argument-injection fix — and `.ps1`/`.vbs`
   // are not executables at all. The first version walked PATHEXT and would have returned such a

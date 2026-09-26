@@ -22,6 +22,7 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolved } from './branch-protection.mjs';
 
 /** A conventional-commit header release-please releases on: feat, fix, perf, revert — or anything with `!`. */
 export function releases(header) {
@@ -79,7 +80,7 @@ const GH_OUTPUT_BYTES = 64 * 1024 * 1024;
 const GH_TIMEOUT_MS = 120_000;
 
 function gh(args) {
-  return execFileSync('gh', args,
+  return execFileSync(resolved('gh'), args,
     { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: GH_OUTPUT_BYTES, timeout: GH_TIMEOUT_MS, killSignal: 'SIGKILL' });
 }
 

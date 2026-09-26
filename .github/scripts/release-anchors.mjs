@@ -24,6 +24,7 @@ import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolved } from './branch-protection.mjs';
 
 /** What a line's tag looks like here: `<component>-v<version>` (include-component-in-tag, separator `-`). */
 export function tagOf(component, version) {
@@ -80,7 +81,7 @@ const GIT_TIMEOUT_MS = 60_000;
 
 /** One git answer, or a refusal the caller turns into exit 2. */
 function git(repo, args) {
-  return execFileSync('git', args,
+  return execFileSync(resolved('git'), args,
     { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' }).trim();
 }
 
@@ -146,7 +147,7 @@ function main(argv) {
     lines = Object.entries(config.packages ?? {}).map(([packagePath, pkg]) => {
       const version = manifest[packagePath];
       if (typeof version !== 'string' || typeof pkg.component !== 'string') {
-        throw new Error(`${packagePath} has no component in the config or no version in the manifest`);
+        throw new TypeError(`${packagePath} has no component in the config or no version in the manifest`);
       }
       return factsFor(repo, packagePath, pkg.component, version);
     });
