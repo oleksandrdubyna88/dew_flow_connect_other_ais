@@ -74,8 +74,13 @@ export function docsOnlyVerdict({ title, files, commits }, packages) {
   };
 }
 
+/** Room for a large pull request's file list, and a bound on one API question. */
+const GH_OUTPUT_BYTES = 64 * 1024 * 1024;
+const GH_TIMEOUT_MS = 120_000;
+
 function gh(args) {
-  return execFileSync('gh', args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 });
+  return execFileSync('gh', args,
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: GH_OUTPUT_BYTES, timeout: GH_TIMEOUT_MS, killSignal: 'SIGKILL' });
 }
 
 /** The facts for a pull request, from the API: its title, its files, and each commit with its own files. */
@@ -87,11 +92,15 @@ function factsOf(pr) {
   const title = process.env.PR_TITLE ?? JSON.parse(gh(['api', `repos/${repo}/pulls/${pr}`])).title;
   const lines = (text) => text.split('\n').filter(Boolean);
   const files = lines(gh(['api', '--paginate', `repos/${repo}/pulls/${pr}/files`, '--jq', '.[].filename']));
-  const shas = lines(gh(['api', '--paginate', `repos/${repo}/pulls/${pr}/commits`, '--jq', '.[].sha']));
-  const commits = shas.map((sha) => {
-    const one = JSON.parse(gh(['api', `repos/${repo}/commits/${sha}`]));
-    return { sha, message: one.commit.message, files: (one.files ?? []).map((f) => f.filename) };
-  });
+  // The list carries each commit's message; only a commit of a RELEASING type can break the rule, so
+  // only those are asked for their files — not one request per commit (the code round).
+  const listed = JSON.parse(gh(['api', '--paginate', '--slurp', `repos/${repo}/pulls/${pr}/commits`])).flat();
+  const commits = listed
+    .filter((c) => releases(c.commit.message.split('\n')[0]))
+    .map((c) => {
+      const one = JSON.parse(gh(['api', `repos/${repo}/commits/${c.sha}`]));
+      return { sha: c.sha, message: c.commit.message, files: (one.files ?? []).map((f) => f.filename) };
+    });
 
   return { title, files, commits };
 }

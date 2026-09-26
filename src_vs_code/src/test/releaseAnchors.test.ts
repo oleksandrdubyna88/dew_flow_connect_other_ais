@@ -94,7 +94,7 @@ test('a tag moved onto a commit outside its package is refused, and the way back
     assert.equal(code, ADRIFT, 'release-please would count every pkg commit in its window as new');
     assert.match(said, /pkg-v1\.0\.0/, 'the refusal names the tag');
     assert.match(said, /\.github\/changelog-baseline\.json/, 'and what its commit touches instead');
-    assert.ok(said.includes(`refs/tags/pkg-v1.0.0 -f sha=${release}`),
+    assert.ok(said.includes(`"repos/o/r/git/refs/tags/pkg-v1.0.0" -f sha=${release}`),
       'and the command that puts it back on the release commit, found rather than guessed');
     assert.match(said, /identical/, 'and that the package tree is the same there, so the release is unchanged');
   });
@@ -129,6 +129,19 @@ test('a configuration it cannot read is refused, not passed', () => {
     git(dir, 'init', '-q');
 
     assert.equal(run(dir).code, REFUSED, 'a check that cannot look must not say all is well');
+  });
+});
+
+test('git failing is refused, never read as "not cut yet"', () => {
+  // The code round: a git error swallowed into an empty SHA reads as an uncut tag, which PASSES — so a
+  // broken checkout would wave the run through without looking at a single anchor.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'anchors-'));
+  cleaned(dir, () => {
+    fs.writeFileSync(path.join(dir, 'release-please-config.json'), JSON.stringify({ packages: { pkg: { component: 'pkg' } } }));
+    fs.writeFileSync(path.join(dir, '.release-please-manifest.json'), JSON.stringify({ pkg: '1.0.0' }));
+
+    const { code, said } = run(dir);
+    assert.equal(code, REFUSED, `no repository at all was read as a release waiting for its tag: ${said}`);
   });
 });
 

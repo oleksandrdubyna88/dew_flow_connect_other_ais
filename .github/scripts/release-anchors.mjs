@@ -71,21 +71,32 @@ function repair(line, repository) {
     : `its ${line.path}/ tree DIFFERS from the tag's — check which one the release was built from first`;
 
   return `${line.tag}: put it back on ${line.candidate.sha.slice(0, 8)} "${line.candidate.subject}" (${same}):\n`
-    + `  gh api -X PATCH repos/${repository}/git/refs/tags/${line.tag} -f sha=${line.candidate.sha} -F force=true\n`
+    + `  gh api -X PATCH "repos/${repository}/git/refs/tags/${line.tag}" -f sha=${line.candidate.sha} -F force=true\n`
     + '  A PATCH of the ref, not a delete: deleting the tag of a published release turns it into a draft.';
 }
 
+/** How long one git question may take: a local read, so a minute is already a hang. */
+const GIT_TIMEOUT_MS = 60_000;
+
 /** One git answer, or a refusal the caller turns into exit 2. */
 function git(repo, args) {
-  return execFileSync('git', args, { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim();
+  return execFileSync('git', args,
+    { cwd: repo, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: GIT_TIMEOUT_MS, killSignal: 'SIGKILL' }).trim();
 }
 
+/**
+ * The tag's commit, or empty when the tag has not been cut. ABSENT is asked separately from READ: a
+ * git failure swallowed into an empty answer would read as "not cut yet", which passes — a broken
+ * checkout waving the run through without looking at one anchor (the code round). So only a tag git
+ * LISTS no such name for is uncut; any failure throws, and the caller exits 2.
+ */
 function tagCommit(repo, tag) {
-  try {
-    return git(repo, ['rev-list', '-n', '1', `refs/tags/${tag}`]);
-  } catch {
+  const listed = git(repo, ['tag', '--list', tag]);
+  if (listed.length === 0) {
     return '';
   }
+
+  return git(repo, ['rev-list', '-n', '1', `refs/tags/${tag}`]);
 }
 
 /** The git facts for one line; the decision above never runs git. */
@@ -140,7 +151,7 @@ function main(argv) {
       return factsFor(repo, packagePath, pkg.component, version);
     });
   } catch (error) {
-    console.error(`release-anchors: could not read what to check: ${error.message}`);
+    console.error(`release-anchors: could not read what to check — the configuration or git: ${error.message}`);
     return 2;
   }
   if (lines.length === 0) {

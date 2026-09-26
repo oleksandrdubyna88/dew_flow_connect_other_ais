@@ -1571,6 +1571,7 @@ neither row nor note, and the ratchet and phantom cases are unchanged. `releaseA
 - a tag on a rebase merge's trailing commit is refused;
 - an uncut tag passes;
 - an unreadable configuration is exit 2;
+- a git that fails is exit 2, never "not cut yet" (code round; red while `tagCommit` swallowed the error);
 - `release-please.yml` runs the check before the action, over a checkout with `fetch-depth: 0` and tags.
 
 The check was red with `touches()` planted to always answer yes. Run against this repository before its
@@ -1585,6 +1586,8 @@ exact repair that had been applied by hand.
 - a Markdown-only `fix:` commit under a `docs:` title is refused;
 - malformed facts are exit 2;
 - `pr-title.yml` runs it with the title passed as data.
+
+In `--pr` mode it asks for files only for commits of a releasing type, not one request per commit.
 
 It was red with `releases()` planted to always answer no. Run live with `--pr` against #568 (code)
 and #571 (`docs:` over CHANGELOG), both passed.
