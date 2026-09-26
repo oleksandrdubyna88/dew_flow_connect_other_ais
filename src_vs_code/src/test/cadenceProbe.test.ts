@@ -265,3 +265,23 @@ test('an answer that was in flight when a consultation changed is not taken as f
 
   assert.equal(h.asked.length, 2, 'the answer asked before the change was trusted as if it came after it');
 });
+
+// PR #556 (CodeRabbit), the second half of the race above: an answer from before the forget is stored
+// stale — but if it is also UNCHANGED nothing repaints, so nothing asks again until unrelated panel
+// activity happens to render. The probe that was overtaken must ask for the render itself.
+test('a probe overtaken by a forget asks for a render, so the fresh answer is fetched at once', async () => {
+  const h = harness([{ code: 0, output: body([1]) }, { code: 0, output: body([1]) }, { code: 0, output: body([1, 2]) }]);
+  h.probes.lines([session()]);
+  await settled();
+  assert.equal(h.renders(), 1);
+
+  h.advance(CADENCE_TTL_MS);
+  h.holdNext();
+  h.probes.lines([session()]);
+  await settled();
+  h.probes.forget();
+  h.release();
+  await settled();
+
+  assert.equal(h.renders(), 2, 'nothing repainted, so the stale line waits for unrelated activity');
+});

@@ -101,9 +101,22 @@ export class CadenceProbes {
     }
 
     this.inFlight = true;
+    const started = this.generation;
     await this.probeAll(executable, sessions).finally(() => {
       this.inFlight = false;
+      this.renderIfOvertaken(started);
     });
+  }
+
+  /**
+   * A probe a `forget` overtook stored its answers stale — and if they were also unchanged, nothing
+   * repainted, so nothing would ask again until unrelated panel activity. It asks for the render itself,
+   * and that render starts the probe the `forget` was for (PR #556, CodeRabbit).
+   */
+  private renderIfOvertaken(started: number): void {
+    if (started !== this.generation) {
+      this.host.render();
+    }
   }
 
   /**
