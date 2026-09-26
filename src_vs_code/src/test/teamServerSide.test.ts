@@ -32,7 +32,7 @@ import { TeamServer, tokenFileName } from '../teamServers';
  */
 
 const SERVER: TeamServer = { id: 'remsoft-dev', name: 'RemSoft Dev', url: 'https://coai.example.com/' };
-const APPLICATION = '3afb5834-1111-2222-3333-444455556666';
+const APPLICATION = 'c0a1b2d3-1111-2222-3333-444455556666';
 const GOOD_SCOPE = `api://${APPLICATION}/coai.access`;
 const WINDOWS = 'local|C%3A/Users/x/AppData/Roaming/Code';
 const WSL = 'wsl|Ubuntu-24.04|/home/x/.vscode-server';

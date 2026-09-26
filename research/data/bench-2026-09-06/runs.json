@@ -3710,7 +3710,7 @@
         "verdict": "proceed",
         "error": "",
         "gatingCount": 4,
-        "reviewers": "5 of 6 reviewers answered; failed: gemini/SecurityReliability: unparseable: the vendor returned an empty answer after one repair attempt (the answer was kept at C:\\Users\\strug\\AppData\\Local\\coai-mcp\\unparseable\\gemini-SecurityReliability-20260905-210430-488.txt)",
+        "reviewers": "5 of 6 reviewers answered; failed: gemini/SecurityReliability: unparseable: the vendor returned an empty answer after one repair attempt (the answer was kept at C:\\Users\\<user>\\AppData\\Local\\coai-mcp\\unparseable\\gemini-SecurityReliability-20260905-210430-488.txt)",
         "tokensIn": 350125,
         "tokensOut": 11967,
         "costUsd": null,

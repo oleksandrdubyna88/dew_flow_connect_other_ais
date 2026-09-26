@@ -157,7 +157,7 @@ public sealed class CadenceGateTests : IDisposable
     public void AGroupConsultedWeeksAgo_IsStillConsulted_AfterTheSweep()
     {
         // Found while answering epic 2's code round: the sweep deletes a terminal record seven days after
-        // it ended, and email-service's fourteen epics ran for weeks. A cadence or risk consultation closed
+        // it ended, and private repo A's fourteen epics ran for weeks. A cadence or risk consultation closed
         // with a verdict is the gate's EVIDENCE, so it is kept; a stuck one still goes.
         var cadence = Written("cadence", "4-6", ConsultationStatuses.Closed, "solved") with { EndedUtc = "2026-08-01T00:00:00Z" };
         var stuck = Written("stuck", "", ConsultationStatuses.Closed, "solved") with { EndedUtc = "2026-08-01T00:00:00Z" };

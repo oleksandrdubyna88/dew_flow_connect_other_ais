@@ -142,14 +142,14 @@ test('an unreadable published version never lights the button', () => {
 test('the two sides of one machine cannot share a record', () => {
   // The measured pair: one Windows profile directory, one ~/.vscode-server in a distro.
   const windows = installedKey({
-    hostname: 'jinx',
-    storagePath: 'c:\\Users\\strug\\AppData\\Roaming\\Code\\User\\globalStorage\\remsoftdev.connect-other-ais',
+    hostname: 'devbox',
+    storagePath: 'c:\\Users\\user\\AppData\\Roaming\\Code\\User\\globalStorage\\remsoftdev.connect-other-ais',
   });
   const ubuntu = installedKey({
     remoteName: 'wsl',
     distro: 'Ubuntu',
-    hostname: 'jinx',
-    storagePath: '/home/jinx/.vscode-server/data/User/globalStorage/remsoftdev.connect-other-ais',
+    hostname: 'devbox',
+    storagePath: '/home/user/.vscode-server/data/User/globalStorage/remsoftdev.connect-other-ais',
   });
 
   assert.notEqual(ubuntu, windows, 'the record a Windows press leaves must not satisfy the WSL side');
@@ -158,9 +158,9 @@ test('the two sides of one machine cannot share a record', () => {
 test('two distros of one machine cannot share a record either', () => {
   // The storage path is IDENTICAL in both: same user name, same ~/.vscode-server. Keying on the
   // path alone — the first fix attempted here — would have collided exactly as Gemini predicted.
-  const storagePath = '/home/jinx/.vscode-server/data/User/globalStorage/remsoftdev.connect-other-ais';
-  const ubuntu = installedKey({ remoteName: 'wsl', distro: 'Ubuntu', hostname: 'jinx', storagePath });
-  const debian = installedKey({ remoteName: 'wsl', distro: 'Debian', hostname: 'jinx', storagePath });
+  const storagePath = '/home/user/.vscode-server/data/User/globalStorage/remsoftdev.connect-other-ais';
+  const ubuntu = installedKey({ remoteName: 'wsl', distro: 'Ubuntu', hostname: 'devbox', storagePath });
+  const debian = installedKey({ remoteName: 'wsl', distro: 'Debian', hostname: 'devbox', storagePath });
 
   assert.notEqual(ubuntu, debian);
 });
@@ -174,7 +174,7 @@ test('two SSH hosts with the same home are two sides', () => {
 });
 
 test('a local window is not identified by a name the machine can be renamed with', () => {
-  const storagePath = 'c:\\Users\\strug\\AppData\\Roaming\\Code\\User\\globalStorage\\remsoftdev.connect-other-ais';
+  const storagePath = 'c:\\Users\\user\\AppData\\Roaming\\Code\\User\\globalStorage\\remsoftdev.connect-other-ais';
 
   assert.equal(
     installedKey({ hostname: 'before', storagePath }),
@@ -267,8 +267,8 @@ test('a key stays legible for whoever has to read the state later', () => {
   const key = installedKey({
     remoteName: 'wsl',
     distro: 'Ubuntu',
-    hostname: 'jinx',
-    storagePath: '/home/jinx/.vscode-server/data/User/globalStorage/remsoftdev.connect-other-ais',
+    hostname: 'devbox',
+    storagePath: '/home/user/.vscode-server/data/User/globalStorage/remsoftdev.connect-other-ais',
   });
 
   assert.ok(key.startsWith('coai.installedVersion@wsl|Ubuntu|'), key);

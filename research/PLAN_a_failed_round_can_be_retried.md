@@ -129,7 +129,7 @@ session and forbid the final one. It is a real limit:
   `resolve` duty, same loop" where no loop exists; `GateEnding` says "ONE review_code".
 - A LOST reply after the round saved `AwaitingResolve` is a second dead end: `resolve` needs a
   decision per finding index, and `status` returns counts only (`ServerJsonContext.cs:53-61`). One such
-  session is sitting now: `b76e3924` (orchestrator `fix/host-cli-step-sudo`, 23 pending since 18:57Z).
+  session is sitting now: `b76e3924` (a private repository, `fix/host-cli-step-sudo`, 23 pending since 18:57Z).
 - A crash MID-round is safe on main: state is saved only at the end, and `SweepOrphanedRounds`
   (`SessionStore.cs:434-470`) marks the dead round `interrupted`.
 

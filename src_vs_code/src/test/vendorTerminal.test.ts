@@ -136,20 +136,20 @@ test('the run button uses the CLI path when one is set', () => {
   // A button that then runs the bare name ignores the one thing they told it.
   const term = vendorTerminal({
     id: 'gemini', runtime: 'antigravity', model: 'gemini-3.7-flash-high', enabled: true, plan: true, code: true, baseUrl: '',
-    executablePath: '/mnt/c/Users/strug/AppData/Local/agy/bin/agy.exe', pricePerMillionIn: 0, pricePerMillionOut: 0,
+    executablePath: '/mnt/c/Users/user/AppData/Local/agy/bin/agy.exe', pricePerMillionIn: 0, pricePerMillionOut: 0,
   });
 
-  assert.match(term.command, /^\/mnt\/c\/Users\/strug\/AppData\/Local\/agy\/bin\/agy\.exe\b/);
+  assert.match(term.command, /^\/mnt\/c\/Users\/user\/AppData\/Local\/agy\/bin\/agy\.exe\b/);
   assert.ok(term.usageCommand.endsWith('agy.exe usage'), 'the usage line must run the same binary: ' + term.usageCommand);
 });
 
 test('a path with a space survives being put on a command line', () => {
   const term = vendorTerminal({
     id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '',
-    executablePath: '/home/jinx/my tools/codex', pricePerMillionIn: 0, pricePerMillionOut: 0,
+    executablePath: '/home/user/my tools/codex', pricePerMillionIn: 0, pricePerMillionOut: 0,
   });
 
-  assert.ok(term.command.startsWith('"/home/jinx/my tools/codex"'), term.command);
+  assert.ok(term.command.startsWith('"/home/user/my tools/codex"'), term.command);
 });
 
 test('the install prerequisite is the one for THIS operating system', () => {

@@ -21,31 +21,31 @@ test('the window always watches its own directory, whatever the setting says', (
 });
 
 test('a named directory is watched beside the window’s own', () => {
-  const dirs = watchedDirs('C:\\Own', ['\\\\wsl.localhost\\Ubuntu\\home\\jinx\\.local\\share\\coai-mcp'], 'win32');
+  const dirs = watchedDirs('C:\\Own', ['\\\\wsl.localhost\\Ubuntu\\home\\user\\.local\\share\\coai-mcp'], 'win32');
 
   assert.strictEqual(dirs.length, 2);
   assert.strictEqual(dirs[1]?.refusal, '', 'a reachable directory was refused');
-  assert.deepStrictEqual(usableDirs(dirs), ['C:\\Own', '\\\\wsl.localhost\\Ubuntu\\home\\jinx\\.local\\share\\coai-mcp']);
+  assert.deepStrictEqual(usableDirs(dirs), ['C:\\Own', '\\\\wsl.localhost\\Ubuntu\\home\\user\\.local\\share\\coai-mcp']);
 });
 
 test('a WSL path named from a Windows window is refused with the shape that works', () => {
   // THE trap this whole feature would otherwise walk into. `/home/...` resolved by a Windows host is
   // `C:\home\...`, which does not exist — and an absent directory contributes nothing and says
   // nothing, which is the original symptom with extra steps. (gemini, the plan round.)
-  const dirs = watchedDirs('C:\\Own', ['/home/jinx/.local/share/coai-mcp'], 'win32');
+  const dirs = watchedDirs('C:\\Own', ['/home/user/.local/share/coai-mcp'], 'win32');
 
   assert.strictEqual(dirs[1]?.refusal, POSIX_ON_WINDOWS, 'a POSIX path was accepted on Windows');
-  assert.strictEqual(dirs[1]?.asked, '/home/jinx/.local/share/coai-mcp', 'the panel cannot name what to correct');
+  assert.strictEqual(dirs[1]?.asked, '/home/user/.local/share/coai-mcp', 'the panel cannot name what to correct');
   assert.strictEqual(dirs[1]?.path, '', 'a refused directory was still handed to the watcher');
   assert.deepStrictEqual(usableDirs(dirs), ['C:\\Own'], 'the refused directory was watched anyway');
 
   // And NO distribution is invented: the refusal names the shape, it does not guess a path.
-  assert.doesNotMatch(dirs[1]?.refusal ?? '', /Ubuntu|Debian|wsl\.localhost\\[A-Za-z]+\\home\\jinx/,
+  assert.doesNotMatch(dirs[1]?.refusal ?? '', /Ubuntu|Debian|wsl\.localhost\\[A-Za-z]+\\home\\user/,
     'a distribution was guessed rather than asked for');
 });
 
 test('the same POSIX path is fine on the platform it belongs to', () => {
-  const dirs = watchedDirs('/home/jinx/.local/share/coai-mcp', ['/mnt/c/Users/strug/AppData/Local/coai-mcp'], 'linux');
+  const dirs = watchedDirs('/home/user/.local/share/coai-mcp', ['/mnt/c/Users/user/AppData/Local/coai-mcp'], 'linux');
 
   assert.strictEqual(dirs[1]?.refusal, '', 'a POSIX path was refused on Linux');
   assert.strictEqual(usableDirs(dirs).length, 2);
@@ -99,7 +99,7 @@ test('the temporary file is in the same directory as the answer — the EXDEV ru
   // The write is atomic: temp, then rename. A rename across two filesystems throws EXDEV, so a temp
   // written in this window's directory and renamed into a WSL or NAS one fails EVERY time and the
   // answer never lands. Asserted rather than commented. (gemini, the plan round, Blocking.)
-  for (const from of [undefined, 'file:///c:/Wsl', '\\\\wsl.localhost\\Ubuntu\\home\\jinx']) {
+  for (const from of [undefined, 'file:///c:/Wsl', '\\\\wsl.localhost\\Ubuntu\\home\\user']) {
     const paths = answerPaths('q1', 'file:///c:/Own', from);
     assert.ok(paths, 'a plain id was refused');
     const dirOf = (path: string): string => path.slice(0, path.lastIndexOf('/'));
@@ -135,7 +135,7 @@ test('an id that is not a name gets no answer path at all', () => {
 test('a UNC path written with forward slashes is not mistaken for a POSIX one', () => {
   // `//server/share` is reachable from Windows; only a SINGLE leading slash is the shape that
   // resolves to C:\… here and quietly watches nothing.
-  const dirs = watchedDirs('C:\\Own', ['//wsl.localhost/Ubuntu/home/jinx/.local/share/coai-mcp'], 'win32');
+  const dirs = watchedDirs('C:\\Own', ['//wsl.localhost/Ubuntu/home/user/.local/share/coai-mcp'], 'win32');
 
   assert.strictEqual(dirs[1]?.refusal, '', 'a forward-slash UNC path was refused as if it were POSIX');
 });

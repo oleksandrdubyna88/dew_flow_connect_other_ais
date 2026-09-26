@@ -96,7 +96,7 @@ public sealed class CadenceArithmeticTests
     [Fact]
     public void APlanThatContinuesAnother_IsGroupedFromItsOwnFirstEpic()
     {
-        // email-service's PLAN_first_application_live numbers its epics 5-14, continuing the plan
+        // private repo A's PLAN_first_application_live numbers its epics 5-14, continuing the plan
         // before it. Its groups start where IT starts (epic 1's plan round, codex): a group 4-6 would
         // ask the consultant about an epic that is in another file.
         var groups = CadenceRule.GroupsOwed(Enumerable.Range(5, 10), every: 3);

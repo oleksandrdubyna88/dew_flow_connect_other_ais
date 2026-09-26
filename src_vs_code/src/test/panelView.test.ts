@@ -1407,15 +1407,15 @@ test('another installation’s directories are named, and a refused one says why
     storage: where({
       alsoWatched: [
         { asked: '/srv/coai/windows', path: '/srv/coai/windows', refusal: '' },
-        { asked: '\\\\wsl.localhost\\Ubuntu\\home\\jinx\\.local\\share\\coai-mcp', path: '\\\\wsl.localhost\\Ubuntu\\home\\jinx\\.local\\share\\coai-mcp', refusal: '' },
-        { asked: '/home/jinx/.local/share/coai-mcp', path: '', refusal: 'this looks like a path inside WSL.' },
+        { asked: '\\\\wsl.localhost\\Ubuntu\\home\\user\\.local\\share\\coai-mcp', path: '\\\\wsl.localhost\\Ubuntu\\home\\user\\.local\\share\\coai-mcp', refusal: '' },
+        { asked: '/home/user/.local/share/coai-mcp', path: '', refusal: 'this looks like a path inside WSL.' },
       ],
     }),
   }), 'n');
 
   assert.ok(html.includes('Questions from another installation'), 'the extra directories are not introduced');
   assert.ok(html.includes('wsl.localhost'), 'a watched directory is not named');
-  assert.ok(html.includes('/home/jinx/.local/share/coai-mcp'), 'the refused directory is not named — a typo stays invisible');
+  assert.ok(html.includes('/home/user/.local/share/coai-mcp'), 'the refused directory is not named — a typo stays invisible');
   assert.ok(html.includes('this looks like a path inside WSL.'), 'the refusal gives no reason');
 });
 

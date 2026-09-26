@@ -48,7 +48,7 @@ repository on their own.
 similarity of 0.5 on titles, and on plan findings there is no file or line to anchor it, so five
 models describing one defect in five different sentences look like five defects.
 
-The reading is auditable: the clusters are in `C:/Users/strug/coai-clusters.json`, one entry per
+The reading is auditable: the clusters are in `C:/Users/<user>/coai-clusters.json`, one entry per
 defect naming the models that raised it, and every assignment can be checked against the raw cells.
 
 | model | update | local | snippet | conventions | per-role | in a cluster with another model |

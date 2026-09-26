@@ -2,7 +2,7 @@
 
 > Phase B of the focused-prompt campaign, run 2026-09-02 against the real `coai-mcp` over stdio.
 > **32 cells**, 79 minutes, 11.8 M input tokens, **1 failed cell** (named below). Raw output:
-> `C:/Users/strug/coai-phaseb/*.json`.
+> `C:/Users/<user>/coai-phaseb/*.json`.
 >
 > Phase A — which WORDING of each lens, and the shape result that came out of it — is
 > [RESULTS_focused_prompts.md](RESULTS_focused_prompts.md). This is the question phase A could not

@@ -28,7 +28,7 @@ public sealed class RoundSubjectTests
         // CI caught the first version on Linux: `Path.GetFileName` asks the RUNNING platform what
         // separates directories, so a Windows path came back whole. A server under WSL is handed
         // Windows-shaped paths routinely.
-        Subject("/home/jinx/coai/todo/PLAN_corpus_variants.md", exists: _ => true)
+        Subject("/home/user/coai/todo/PLAN_corpus_variants.md", exists: _ => true)
             .Should().Be("PLAN_corpus_variants.md");
     }
 

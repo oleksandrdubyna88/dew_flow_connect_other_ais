@@ -149,7 +149,7 @@ public sealed class IdempotencyTests
     {
         Idempotency.Refusal(null).Should().BeNull("not sending one is allowed");
         Idempotency.Refusal("").Should().BeNull();
-        Idempotency.Refusal("3afb5834-0c1e-4a9b-9f2d-5c7e8a1b2c3d").Should().BeNull();
+        Idempotency.Refusal("c0a1b2d3-0c1e-4a9b-9f2d-5c7e8a1b2c3d").Should().BeNull();
         Idempotency.Refusal("turn_1.2:3").Should().BeNull();
 
         Idempotency.Refusal("has a space").Should().Contain("idempotency key");

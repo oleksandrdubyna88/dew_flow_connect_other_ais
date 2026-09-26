@@ -542,7 +542,7 @@ described the CredsForDevs compose stack as the edge and proposed two generic kn
 to share it. That is not how this VM is put together, and the difference removes the whole
 sub-project rather than complicating it:
 
-| What the draft assumed | What `82.165.44.219` actually runs |
+| What the draft assumed | What `<server-ip>` actually runs |
 |---|---|
 | the creds compose nginx binds 80/443 | it binds **`127.0.0.1:8081` and `127.0.0.1:8443`** and runs with `TLS_MODE=none` |
 | that nginx is the public edge | the edge is a **host nginx** under systemd, with one site file per service in `/etc/nginx/sites-enabled/` (`credsfordevs`, `rsd`, `apiwebscraper`) |
@@ -567,7 +567,7 @@ host-level steps that cannot affect the vault's own site file:
    renewal timer. One name, one certificate, like every other site here — the vault's certificate is
    never touched, so a mistake in ours cannot take it with it.
 
-**The name is `coai.remsoft.dev`** (A → 82.165.44.219, TTL 600).
+**The name is `coai.remsoft.dev`** (A → <server-ip>, TTL 600).
 
 ### The machine is small, and that is a design input rather than a footnote
 

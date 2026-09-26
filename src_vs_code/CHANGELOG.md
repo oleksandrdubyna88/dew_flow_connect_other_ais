@@ -416,8 +416,8 @@ a caller at the moment it reaches for the tool, and most repositories only ever 
 underscore or a dot in it** (#340). Claude Code keeps a session under a folder named after your
 working directory with every character that is not a letter or a digit turned into a dash. This
 extension turned three of them — the slashes and the drive colon — so a checkout called
-`dew_flow_payroll` was looked for under `dew_flow_payroll` while its sessions sat under
-`dew-flow-payroll`, and the answer was that no session existed.
+`sample_service` was looked for under `sample_service` while its sessions sat under
+`sample-service`, and the answer was that no session existed.
 
 Found on a Mac and measured here over 84 real pairs of session folder and working directory: the old
 rule was right for 51 of them, the new one for all 84. On this machine it means five of six

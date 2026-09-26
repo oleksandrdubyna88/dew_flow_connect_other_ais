@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 /// (<c>research/PLAN_consult_on_a_cadence.md</c>, D8).
 /// </summary>
 /// <remarks>
-/// Measured on 2026-09-25 against email-service's two plans: the 10-epic one has 5 numbered build
+/// Measured on 2026-09-25 against private repo A's two plans: the 10-epic one has 5 numbered build
 /// steps and the 4-epic one has 31, and the longer file is the smaller plan. Neither signal the reader
 /// had could tell them apart; the headings can.
 /// </remarks>

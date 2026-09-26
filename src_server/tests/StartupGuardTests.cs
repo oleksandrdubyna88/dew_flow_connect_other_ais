@@ -66,13 +66,13 @@ public sealed class StartupGuardTests
     [Fact]
     public void AMicrosoftTenantWithNoAudience_RefusesToStart()
     {
-        Guard(tenant: "34cedc64-a7d3-4e3b-a7c2-93858254abaa").Should().Throw<InvalidOperationException>()
+        Guard(tenant: "5f0d6c1a-2b3c-4d5e-8f90-a1b2c3d4e5f6").Should().Throw<InvalidOperationException>()
             .WithMessage("*Audiences is empty*");
 
         // `localKey: null` is the point of this line rather than noise: a real provider and the
         // local scheme together are refused by the guard below, so leaving the helper's default
         // key here would pass for the wrong reason.
-        Guard(tenant: "34cedc64-a7d3-4e3b-a7c2-93858254abaa", audiences: ["api://something"], localKey: null)
+        Guard(tenant: "5f0d6c1a-2b3c-4d5e-8f90-a1b2c3d4e5f6", audiences: ["api://something"], localKey: null)
             .Should().NotThrow();
     }
 
@@ -123,7 +123,7 @@ public sealed class StartupGuardTests
     [Fact]
     public void TheLocalSchemeBesideARealProvider_RefusesToStart()
     {
-        Guard(tenant: "34cedc64-a7d3-4e3b-a7c2-93858254abaa", audiences: ["api://something"])
+        Guard(tenant: "5f0d6c1a-2b3c-4d5e-8f90-a1b2c3d4e5f6", audiences: ["api://something"])
             .Should().Throw<InvalidOperationException>()
             .WithMessage("*alongside a real identity provider*");
 

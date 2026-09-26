@@ -133,14 +133,14 @@ test('a file this build cannot read as text is refused, not merged', () => {
 // ---------- where the file is ----------
 
 test('a Windows profile path becomes the mount path WSL reads it through', () => {
-  assert.equal(mountPathOf('C:\\Users\\strug'), '/mnt/c/Users/strug');
-  assert.equal(mountPathOf('D:\\home\\jinx\\'), '/mnt/d/home/jinx');
+  assert.equal(mountPathOf('C:\\Users\\user'), '/mnt/c/Users/user');
+  assert.equal(mountPathOf('D:\\home\\user\\'), '/mnt/d/home/user');
 });
 
 test('anything that is not a drive path yields nothing rather than a guess', () => {
   assert.equal(mountPathOf(''), '');
   assert.equal(mountPathOf('\\\\server\\share'), '');
-  assert.equal(mountPathOf('/home/jinx'), '');
+  assert.equal(mountPathOf('/home/user'), '');
 });
 
 // ---------- what the confirmation shows before anything is written ----------

@@ -405,8 +405,8 @@ test('an answered session is reported answered, from a real directory', async ()
 test('the TAB decides between two sessions that are both waiting', () => {
   // There is no window id to ask for — but Claude Code writes the conversation's title into its
   // session file, and the tab shows that same title. Measured against a live session before this
-  // was built: a tab reading 'Подключение к scoreMeter DB' has a row saying exactly that.
-  const one = session('a', false, '2026-09-11T10:00:00.000Z', 'Подключение к scoreMeter DB');
+  // was built: a tab reading 'Подключение к sampleApp DB' has a row saying exactly that.
+  const one = session('a', false, '2026-09-11T10:00:00.000Z', 'Подключение к sampleApp DB');
   const two = session('b', false, '2026-09-11T18:00:00.000Z', 'Пул с несколькими PR');
 
   const found = waitingIn([one, two], 'Пул с несколькими PR');
@@ -428,17 +428,17 @@ test('a tab that names NEITHER of them still refuses, rather than picking the ne
 });
 
 test('ONE waiting session is not handed to a tab that names a different conversation', () => {
-  // Probed on the operator's machine with their question on screen: asked for `scoreMeter DB запись
-  // в c...` and handed `Подключение к scoreMeter DB`, because that was the only unanswered question
+  // Probed on the operator's machine with their question on screen: asked for `sampleApp DB запись
+  // в c...` and handed `Подключение к sampleApp DB`, because that was the only unanswered question
   // anywhere. The title was consulted only to break a TIE — which is backwards, because a tie is
   // where a wrong pick is at least suspected and a single candidate is where nobody would ever know.
-  const other = session('a', false, '2026-09-11T10:00:00.000Z', 'Подключение к scoreMeter DB');
+  const other = session('a', false, '2026-09-11T10:00:00.000Z', 'Подключение к sampleApp DB');
 
-  assert.strictEqual(waitingIn([other], 'scoreMeter DB запись в c...').kind, 'elsewhere',
+  assert.strictEqual(waitingIn([other], 'sampleApp DB запись в c...').kind, 'elsewhere',
     'the only waiting session was handed to a tab showing a different conversation');
 
   // Its own tab still gets it, shortened title and all.
-  assert.strictEqual(waitingIn([other], 'Подключение к scoreMeter...').kind, 'one');
+  assert.strictEqual(waitingIn([other], 'Подключение к sampleApp...').kind, 'one');
   // And with no tab at all, a lone waiting session is still the answer — nothing contradicts it.
   assert.strictEqual(waitingIn([other]).kind, 'one');
 });

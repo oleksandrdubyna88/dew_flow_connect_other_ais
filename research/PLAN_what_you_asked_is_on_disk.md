@@ -46,7 +46,7 @@ else's question.
 
 Claude Code writes `{"type":"ai-title","aiTitle":"…","sessionId":"…"}` into the session file as it
 names the conversation, and **that title is exactly what VS Code shows on the tab**. Measured against
-a live session before this was built: a tab reading *Подключение к scoreMeter DB* has a row saying
+a live session before this was built: a tab reading *Подключение к sampleApp DB* has a row saying
 precisely that.
 
 So the tab's own label joins it to its session. Everything that still cannot be told apart still
@@ -202,7 +202,7 @@ opens and keeps it; only ever when exactly one session across every root matches
 CodeRabbit, and every one of them needed a real machine to show itself.
 
 The deciding one was visible in the refusal on the very first screenshot and was read past three
-times: *No session on this machine is called "Подключение к scoreMeter…"* — the ellipsis was the
+times: *No session on this machine is called "Подключение к sampleApp…"* — the ellipsis was the
 answer, and it was quoted back in the complaint. **When a refusal quotes data, read the data first.**
 
 The other two: a window with no folder open was sent to read every project on the machine, which was

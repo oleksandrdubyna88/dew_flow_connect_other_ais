@@ -61,14 +61,14 @@ test('one repository spelled three ways is one project', () => {
 test('a linked worktree belongs to the repository its .git names', () => {
   // Verbatim from this worktree's own `.git` file.
   const read = marksFrom({
-    'C:/Users/strug/AppData/Local/Temp/claude/d--rsd-ClaudeRag/23347fea/scratchpad/wt-rp': {
+    'C:/Users/user/AppData/Local/Temp/claude/d--rsd-ClaudeRag/23347fea/scratchpad/wt-rp': {
       kind: 'linked',
       gitdir: 'D:/rsd/dew_flow_connect_other_ais/.git/worktrees/wt-rp',
     },
     'D:/rsd/dew_flow_connect_other_ais': { kind: 'checkout' },
   });
 
-  const one = identityOf('C:/Users/strug/AppData/Local/Temp/claude/d--rsd-ClaudeRag/23347fea/scratchpad/wt-rp', read);
+  const one = identityOf('C:/Users/user/AppData/Local/Temp/claude/d--rsd-ClaudeRag/23347fea/scratchpad/wt-rp', read);
 
   assert.equal(one.key, 'd:/rsd/dew_flow_connect_other_ais');
   assert.equal(one.label, 'dew_flow_connect_other_ais', 'the tab is named after the repository, not the scratch directory');
@@ -206,10 +206,10 @@ test('a memoised reader answers each distinct path once, and KEEPS answering it'
 
 test('a UNC share keeps the two separators that make it one', () => {
   // `collapsed()` exists for this and nothing asserted it. The operator's coai data folder has
-  // lived on \\\\192.168.1.113\\Shared_Drive_Work, so a session recorded against a share is a real
+  // lived on \\\\192.168.0.10\\Team_Share, so a session recorded against a share is a real
   // shape: collapsing its leading pair to one separator would turn the host into a directory under
   // the root and every project on that share into a sibling of the machine's own files.
-  assert.equal(normalisePath('\\\\192.168.1.113\\Shared_Drive_Work\\repo'), '//192.168.1.113/shared_drive_work/repo');
+  assert.equal(normalisePath('\\\\192.168.0.10\\Team_Share\\repo'), '//192.168.0.10/team_share/repo');
   assert.equal(shaped('\\\\Server\\Share\\Repo'), '//Server/Share/Repo', 'and the case is kept for the filesystem');
   assert.equal(normalisePath('//host//share///deep'), '//host/share/deep', 'every OTHER run is still one');
 

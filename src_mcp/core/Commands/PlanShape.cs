@@ -57,7 +57,7 @@ public sealed record PlanShape(int Lines, int Steps, int Files, int Areas, int E
     /// Length must be able to raise the size on its own: the last of those has no recognised build
     /// order at all.</para>
     /// <para><b>A plan that names its epics has answered the question</b> (<c>research/PLAN_consult_on_a_cadence.md</c>,
-    /// D8, 2026-09-25). Measured on email-service's two plans: the 10-epic one has 5 numbered steps and the
+    /// D8, 2026-09-25). Measured on private repo A's two plans: the 10-epic one has 5 numbered steps and the
     /// 4-epic one 31, and the longer file (1452 lines) is the smaller plan — steps and length both invert.
     /// So <c>Epic N</c> headings decide when present; story headings count as steps when there are no
     /// epics; the table above is untouched for a plan with neither.</para>
@@ -67,7 +67,7 @@ public sealed record PlanShape(int Lines, int Steps, int Files, int Areas, int E
     /// plan's AUTHOR wrote down: the five <c>PLAN_epic_0N</c> files (four story headings each, called
     /// AsItIs) → Small; four plans with three or four epic headings → Medium or Large, including one the
     /// old rule called Large on length (<c>PLAN_the_server_says_what_it_did</c>, 641 lines, three epics) →
-    /// Medium; <c>PLAN_family_ci_hardening</c> (five epics) → Huge; the two email-service plans → Massive
+    /// Medium; <c>PLAN_family_ci_hardening</c> (five epics) → Huge; the two private repo A plans → Massive
     /// and Large; and <c>PLAN_consult_on_a_cadence</c> itself (six epics) → Massive. The heuristic now
     /// echoes a split that was already made instead of contradicting it.</para>
     /// </remarks>

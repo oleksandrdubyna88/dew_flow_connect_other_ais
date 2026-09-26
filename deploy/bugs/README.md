@@ -87,10 +87,10 @@ The two must match. **One A record is the whole prerequisite** — certbot uses 
 the name to resolve to this box and port 80 reachable. No TXT, no CNAME, no wildcard:
 
 ```
-bugs.remsoft.dev.    A    82.165.44.219
+bugs.remsoft.dev.    A    <server-ip>
 ```
 
-**Done on 2026-09-16** — `bugs.remsoft.dev` resolves to 82.165.44.219 on both 1.1.1.1 and
+**Done on 2026-09-16** — `bugs.remsoft.dev` resolves to <server-ip> on both 1.1.1.1 and
 8.8.8.8, and the name has **no AAAA**, so this host is IPv4-only for the purpose below.
 
 Add an `AAAA` only if the host really answers on IPv6, and if you do, read *Verifying the
@@ -172,10 +172,10 @@ repository's secret store, and `deploy the ingest server` delivers them.
 |---|---|---|
 | `COAI_BUGS_SECRET` | The HMAC secret keys are hashed with. | `openssl rand -base64 32` |
 | `COAI_BUGS_ADMIN_KEYS` | The administrators, **base64**, marked. | `printf '# coai-bugs-admin-keys v1\n# alice\n<alice-key>\n' \| base64 -w0` |
-| `BUGS_DEPLOY_HOST` | The host. | `82.165.44.219` |
+| `BUGS_DEPLOY_HOST` | The host. | `<server-ip>` |
 | `BUGS_DEPLOY_USER` | The account the forced-command key belongs to. | `coai-bugs-deploy` |
 | `BUGS_DEPLOY_KEY` | The PRIVATE half of the deploy key. | `ssh-keygen -t ed25519 -f coai-bugs-deploy-ci -C coai-bugs-deploy-ci -N ""` |
-| `BUGS_DEPLOY_KNOWN_HOSTS` | The host’s public key, pinned. | `ssh-keyscan -t ed25519 82.165.44.219` |
+| `BUGS_DEPLOY_KNOWN_HOSTS` | The host’s public key, pinned. | `ssh-keyscan -t ed25519 <server-ip>` |
 
 **Changing `COAI_BUGS_SECRET` invalidates every issued key**, because the stored hashes were
 computed with the old one. That is a deliberate property — it is the one lever that ends every
