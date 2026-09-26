@@ -1,9 +1,10 @@
 # PLAN — the two halves of the notes guard stop contradicting each other
 
-> Status: **plan only, nothing implemented yet, 2026-09-18.** Scope:
+> Status: **plan only, nothing implemented yet, 2026-09-18; widened 2026-09-26.** Scope:
 > `.github/scripts/changelog-names-the-release.mjs`,
-> `src_vs_code/src/test/changelogNamesTheRelease.test.ts`, and the release workflow's `mcp-draft`
-> job.
+> `src_vs_code/src/test/changelogNamesTheRelease.test.ts`, the release workflow's `mcp-draft`
+> job — and, since 2026-09-26, `release-please.yml`, `pr-title.yml` and two new scripts beside the
+> guard (see *2026-09-26: the recovery broke release-please* below).
 >
 > **Found while cutting `mcp-v0.29.0`**, the first release under the guard that
 > [PLAN_a_release_says_what_it_shipped.md](../research/PLAN_a_release_says_what_it_shipped.md)
@@ -89,6 +90,85 @@ satisfy its own check is a workflow nobody can reason about, and this job delibe
 - [ ] Each assertion watched failing first, and both observations reported.
 - [ ] Promotion per `common/planning-docs.md`, then `plan-lifecycle.mjs`.
 - [ ] Through `review_plan` and `review_code`.
+
+## 2026-09-26: the recovery broke release-please
+
+The four-step recovery ends by moving the tag to the head of `main` — the baseline commit. Under
+release-please, the tag's commit is also the anchor the NEXT release is counted from. Twice on
+2026-09-26 that opened an empty `mcp 0.39.0` (#562, #566, #572), listing every mcp feature since long
+before 0.37.0. The cause was found in release-please's own source (`src/manifest.ts`,
+`buildPullRequests`):
+
+- it finds each line's release commit by the tag (`mcp-v0.38.0` → `ad06b589`, the baseline commit);
+- it splits the commits since the oldest line's release by package path (`CommitSplit`), and then
+  `commitsAfterSha(splitCommits['src_mcp'], releaseSha)` looks for the release commit INSIDE the
+  `src_mcp` list;
+- `ad06b589` touches only `.github/changelog-baseline.json`, so it is not in that list;
+  `findIndex` answers −1 and the function returns EVERY `src_mcp` commit in the window.
+
+Checked on all four lines: `extension-v0.56.2`, `server-v0.8.0` and `bugs-v0.4.0` sit on commits
+that touch their package; `mcp-v0.38.0` did not. The ref was moved back to its release commit
+`5cb1bcb3` (the same `src_mcp` tree — an empty diff), with the release left published and its twelve
+assets untouched. The next run logged `No user facing commits found since 5cb1bcb3 - skipping` for
+`src_mcp`. The same shape comes back from a REBASE merge of a release pull request that has a
+commit added on top, which is how #560 merged: the tag lands on the last commit, which is the
+CHANGELOG one.
+
+And the operator's rule, stated the same day: **a release pull request opens only for a change to
+CODE; a change to Markdown files alone never opens one.** release-please cannot say that itself —
+`exclude-paths` entries are directory prefixes, not globs. What decides a release is the commit
+TYPE: `docs`/`chore`/`test` release nothing, while `feat`/`fix`/`perf`/`revert` or a `!` do. So the
+rule has to be enforced where the type is chosen.
+
+### The work, in build order
+
+1. **Way out A**, as costed above. `verdict` in `changelog-names-the-release.mjs` stops refusing a
+   tag whose version the baseline does not name yet — the changelog section is still demanded, and
+   the `lost` check over every recorded version stays. The release order becomes:
+   1. release-please opens the pull request;
+   2. the CHANGELOG section goes onto it;
+   3. merge it by SQUASH, and dispatch;
+   4. the bot tags the squash commit, which touches `src_mcp/version.txt`, and `mcp-draft` passes
+      first time;
+   5. the baseline row follows in its own pull request, now that the tag exists.
+
+   No tag is ever moved again.
+2. **`release-anchors.mjs`**, a new script beside the guard. For every package in
+   `release-please-config.json`, the tag `<component>-v<manifest version>` must exist and sit on a
+   commit that touches a file under that package. When it does not, the script exits 1, naming the
+   tag, the commit and the files, and the repair: the ref back onto its release commit. It runs as
+   the first step of `release-please.yml`, with a full-history checkout carrying tags. So a moved tag
+   or a rebase-merged release pull request stops the next run loudly, instead of it opening an empty
+   release. A pure `anchorVerdict(lines)` holds the decision; the CLI only gathers the git facts.
+3. **`docs-only-title.mjs`**, a new script run by a new job in `pr-title.yml`. When every file a pull
+   request changes ends in `.md`, a title of a releasing type (`feat`, `fix`, `perf`, `revert`, any
+   `!`) is refused, with the repair: say it as `docs:`. The same holds per commit, for a commit whose
+   own files are all `.md`, because a rebase merge keeps each commit's message and release-please
+   reads those. A pure `docsOnlyVerdict({ title, files, commits })` holds the decision; the job gets
+   files and commits from the API with `pull-requests: read`, and never checks out the pull
+   request's code (`pull_request_target` runs the base branch's script).
+4. **Docs.**
+   - `release-please-config.json`'s `$order` note is corrected: it tells a releaser to put the
+     baseline entry on the release pull request, which is the deadlock.
+   - `research/module_tests.md` records the release order as a sequence to follow.
+   - The CHANGELOG is not touched: this ships nothing a person installs.
+
+### Tests, each watched failing first
+
+| # | Test | Red today because |
+|---|---|---|
+| 1 | The guard passes a tag whose notes exist and whose version the baseline does not name. | `verdict` pushes the baseline problem. |
+| 2 | The guard still refuses a tag with no notes, baseline or not; the ratchet and the phantom test still refuse theirs. | These must survive A. They are green today and stay green, and planting A too wide turns them red. |
+| 3 | `anchorVerdict`: a tag on a commit touching its package passes; a tag on a `.github`-only commit fails naming it; a missing tag fails. | New. |
+| 4 | `release-anchors.mjs` against this repository's real tags passes — and names `mcp-v0.38.0` when pointed at `ad06b589`. | That run IS 2026-09-26. |
+| 5 | `docsOnlyVerdict`: an all-`.md` PR titled `feat:`/`fix:`/`perf:`/`revert:`/`feat!:` fails; `docs:` passes; a PR with one `.ts` passes whatever its type; an all-`.md` COMMIT with a `fix:` message fails even under a `docs:` title. | New. |
+| 6 | The workflows wire them: `release-please.yml` runs the anchor script before the action, with `fetch-depth: 0` and tags; `pr-title.yml` runs the title script. | A script nobody runs guards nothing. |
+
+### Definition of Done, for the widened scope
+
+- [ ] Items 1–3 built, each test red first and red again with its fix planted out.
+- [ ] `release-please-config.json`'s `$order` and `research/module_tests.md` describe the order that works.
+- [ ] Every suite green before the pull request.
 
 ## What this will NOT do
 
