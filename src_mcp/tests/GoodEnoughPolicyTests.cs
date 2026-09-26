@@ -106,7 +106,7 @@ public sealed class VerdictInstructionTests
 
         verdicts.Should().HaveCountGreaterThan(4, "the union has grown; this test is the reason to look");
 
-        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "PanelService.cs"));
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "RoundEngine.cs"));
         foreach (var name in verdicts)
         {
             source.Should().Contain($"RoundVerdict.{name}",

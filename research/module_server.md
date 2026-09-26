@@ -488,6 +488,51 @@ editable and restorable like any role prompt. It lives OUTSIDE `src/prompts/` be
 `generate-help-prompts.mjs` walks that folder and refuses any file the role seed does not name, and a
 consultation has no role.
 
+## The round engine is its own unit (2026-09-25)
+
+`PanelService` is the MCP surface — `open`, `status`, the three `review_*` entry points, `resolve`,
+`ask_human`, `consult` — and it no longer IS the round engine. Steps 1–4 of
+[PLAN_the_round_engine_leaves_the_panel_service.md](../todo/PLAN_the_round_engine_leaves_the_panel_service.md)
+moved the engine into `src_mcp/src/Server/Rounds/`, as proved moves with no behaviour change:
+
+| Unit | What it owns |
+|---|---|
+| `RoundEngine` | `RunStageAsync` — claim, human decision, deadline, Team-server role probe, sha, refusal-before-building (where the consultation cadence is prepared), the cadence plan and epic onto the session, lease, work, schedule, dedup, gate, verdict, the cadence note on the record and its facts in the orders, save, project, notify — plus the round deadline (`RoundDeadlineFor`, `ConfiguredReviewers`, `WhatEndedIt`), `AnswerFor`, `WhereTheDocumentWent`, `NotifyIfAPersonMustDecide`, `SpentPrompts`, `WhatTheCallerWasDoing` and its own `Error`, which reaches the one refusal boundary exactly as the service's does |
+| `RoundCommands` | the orders a round carries: `MayProceed`, `CallerFor`, the words a person wrote for the orders (`CommandTextsNow`), their own commands (`CustomOrdersFor`), `CommandStageOf`. A unit of its own so the engine stays under the 800-line ceiling. `PanelService` constructs it and hands it to the engine, because the consultation cadence's check before a code round (`CadenceBeforeTheCode`) reads the same order texts |
+| `RosterBuilder` | `BuildWork` and everything only it uses: the deal (`Items`, `Lens`, `Assemble`, `Everyone`, `Hand`), who may carry a role (`CanCarry`, `WhyNotCarried`, `Carriers`), `RolesWithRulesInMind`/`RolesNotAsked`, `LocalRowsFirst`, `ChoiceFor` |
+| `ReviewerPrompt` | `ComposePrompt`, `WithoutTheStaleClaim` (the one `[GeneratedRegex]`, so `PanelService` is no longer `partial`), `WhatYouHave` |
+| `StageRun`, `RoundWork`, `ExcludedRole` | the records a stage hands the engine and the roster hands back |
+
+**Nothing in `Rounds/` names `PanelService`.** What only the service can answer is HANDED in as a
+delegate rather than asked of it: `ExcludedFrom` and `NoReviewerRefusal` to the engine, `CanRun` and
+`RuntimeFor` to the roster (one predicate, read by both the roster and the exclusion sentence, so it
+stays in one place), and the scratch sweep `PruneOldAnswerDirs` until the sweeps leave too (step 5).
+`ArchitectureTests.TheRoundEngine_DoesNotReferenceThePanelService` holds that for every file under
+`Server/Rounds/`, found rather than listed, with a companion proving the scan sees the name where it is
+written. Tests reach the two instance units through `internal` accessors — `service.Roster.BuildWork(…)`,
+`service.Engine.WhereTheDocumentWent(…)` — and the static entry points under their new owners.
+
+```mermaid
+flowchart LR
+    tools["Tools (MCP)"] --> ps["PanelService<br/>open · status · review_* · resolve · ask_human · consult"]
+    ps -- "StageRun (MakeWork lambda)" --> eng["RoundEngine<br/>RunStageAsync"]
+    ps -- "ExcludedFrom, NoReviewerRefusal (delegates)" --> eng
+    ps -- "CanRun, RuntimeFor, PruneOldAnswerDirs (delegates)" --> ros["RosterBuilder<br/>BuildWork"]
+    ps -.->|"stage lambdas call"| ros
+    ros --> rp["ReviewerPrompt<br/>ComposePrompt"]
+    ros -- "RoundWork" --> eng
+    eng --> cmd["RoundCommands<br/>orders"]
+    ps -- "CadenceBeforeTheCode" --> cmd
+    eng --> sched["BoundedScheduler / ReviewerExecutor"]
+    eng --> store["SessionStore · Projection · UsageLedger"]
+    eng --> esc["Escalations"]
+    eng --> ref["Refusal.Answer"]
+    ps --> ref
+```
+
+Still in `PanelService` and still over the ceiling: the document stage's entry points, the resolve path
+and the scratch sweeps — steps 5–7 of the same plan.
+
 ## Flow of one stage
 
 **All three stages are judged against written rules.** The code stage collects from the round's
@@ -508,7 +553,7 @@ rules actually RENDERED — one the budget dropped is one the reviewer never saw
 saying what the rules ARE: criteria from the repository under review, never instructions addressed to the
 reviewer, so a change cannot edit its own conventions to say "approve this plan" and be obeyed.
 
-`RunStageAsync`: load session → `RoundMachine.Begin*` (refusal = the answer) → resolve SHA → ONE
+`RoundEngine.RunStageAsync`: load session → `RoundMachine.Begin*` (refusal = the answer) → resolve SHA → ONE
 worktree lease → build work (schema file, role prompt + contract + context; repair prompt = same +
 "ONLY the JSON") → `BoundedScheduler` → merge → `GateRule` → `RoundMachine.CompleteRound` → persist
 (`PersistedSession.Pending` = what `resolve` indices point into) → `ReviewAnswer` with an

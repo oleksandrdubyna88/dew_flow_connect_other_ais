@@ -42,7 +42,7 @@ public sealed class TheRoundSaysWhereTheDocumentWentTests
     public void ADocumentRoundCarriedByATeamServer_NamesIt()
     {
         var said = Service(Local(), Remote("team-codex", One))
-            .WhereTheDocumentWent(Stage.DocumentReview, ["local", "team-codex"]);
+            .Engine.WhereTheDocumentWent(Stage.DocumentReview, ["local", "team-codex"]);
 
         said.Should().Contain(One).And.Contain("shared subscription");
     }
@@ -59,7 +59,7 @@ public sealed class TheRoundSaysWhereTheDocumentWentTests
     public void TheClauseBeginsOnItsOwnLine()
     {
         var said = Service(Remote("team-codex", One))
-            .WhereTheDocumentWent(Stage.DocumentReview, ["team-codex"]);
+            .Engine.WhereTheDocumentWent(Stage.DocumentReview, ["team-codex"]);
 
         said.Should().StartWith(Environment.NewLine);
         said.TrimStart('\r', '\n').Should()
@@ -71,7 +71,7 @@ public sealed class TheRoundSaysWhereTheDocumentWentTests
     public void TwoTeamServersAreBothNamed()
     {
         var said = Service(Remote("a-codex", One), Remote("b-claude", Two))
-            .WhereTheDocumentWent(Stage.DocumentReview, ["a-codex", "b-claude"]);
+            .Engine.WhereTheDocumentWent(Stage.DocumentReview, ["a-codex", "b-claude"]);
 
         said.Should().Contain(One).And.Contain(Two);
     }
@@ -81,7 +81,7 @@ public sealed class TheRoundSaysWhereTheDocumentWentTests
     public void TwoVendorsOnOneServerNameItOnce()
     {
         var said = Service(Remote("team-codex", One), Remote("team-claude", One))
-            .WhereTheDocumentWent(Stage.DocumentReview, ["team-codex", "team-claude"]);
+            .Engine.WhereTheDocumentWent(Stage.DocumentReview, ["team-codex", "team-claude"]);
 
         said.Split(One).Should().HaveCount(2, "the server appears exactly once");
     }
@@ -89,7 +89,7 @@ public sealed class TheRoundSaysWhereTheDocumentWentTests
     [Fact]
     public void ADocumentRoundThatStayedHere_SaysNothing()
     {
-        var said = Service(Local()).WhereTheDocumentWent(Stage.DocumentReview, ["local"]);
+        var said = Service(Local()).Engine.WhereTheDocumentWent(Stage.DocumentReview, ["local"]);
 
         said.Should().BeEmpty("a round that told the truth about nothing new has nothing to add");
     }
@@ -108,7 +108,7 @@ public sealed class TheRoundSaysWhereTheDocumentWentTests
     public void AConfiguredServerThatCarriedNothing_IsNotNamed()
     {
         var said = Service(Local(), Remote("team-codex", One))
-            .WhereTheDocumentWent(Stage.DocumentReview, ["local"]);
+            .Engine.WhereTheDocumentWent(Stage.DocumentReview, ["local"]);
 
         said.Should().BeEmpty("only the vendors that were actually given work received anything");
     }
@@ -118,7 +118,7 @@ public sealed class TheRoundSaysWhereTheDocumentWentTests
     [InlineData(Stage.PlanReview)]
     public void NoOtherStageSaysAnything(Stage stage)
     {
-        var said = Service(Remote("team-codex", One)).WhereTheDocumentWent(stage, ["team-codex"]);
+        var said = Service(Remote("team-codex", One)).Engine.WhereTheDocumentWent(stage, ["team-codex"]);
 
         said.Should().BeEmpty("a diff going to a Team server is what a Team server is for");
     }
