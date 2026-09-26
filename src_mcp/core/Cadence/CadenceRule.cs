@@ -2,7 +2,7 @@ namespace CoaiMcp.Core.Cadence;
 
 /// <summary>What the operator switched on: nothing, orders, or orders the gate enforces.</summary>
 /// <remarks>
-/// <c>Remind</c> is the shipped default (D4 of <c>todo/PLAN_consult_on_a_cadence.md</c>): the extension is
+/// <c>Remind</c> is the shipped default (D4 of <c>research/PLAN_consult_on_a_cadence.md</c>): the extension is
 /// on the Marketplace, and a refusal by default would change every user's gate on an update.
 /// </remarks>
 public enum CadenceMode

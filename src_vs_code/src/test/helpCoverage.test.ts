@@ -168,7 +168,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.consultCallsPerSession': 'calls per session',
   'coai.consultIdleMinutes': 'close an idle consultation after, minutes',
   'coai.consultEnabled': 'let a stuck ai consult another vendor',
-  // The consultation cadence's four (todo/PLAN_consult_on_a_cadence.md), by the panel's own labels.
+  // The consultation cadence's four (research/PLAN_consult_on_a_cadence.md), by the panel's own labels.
   'coai.cadenceMode': 'consultation cadence',
   'coai.cadenceEvery': 'one consultation per this many epics',
   'coai.cadenceRiskThreshold': 'ask for the riskiest pieces from this many epics',

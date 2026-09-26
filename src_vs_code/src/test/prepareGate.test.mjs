@@ -58,7 +58,7 @@ test('the real pinned resolver rejects a dirty or wrong mount and leaves no stal
   fs.copyFileSync(path.join(sourceRoot, 'AGENTS.md'), path.join(root, 'AGENTS.md'));
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
   fs.writeFileSync(path.join(root, '.agents/PROJECT.md'), '# Fixture project\n');
-  // The consultant half is a MOUNTED rule since story 5.2 of todo/PLAN_consult_on_a_cadence.md: the
+  // The consultant half is a MOUNTED rule since story 5.2 of research/PLAN_consult_on_a_cadence.md: the
   // submodule above carries it, and the fixture needs nothing of this product's own.
   git(root, 'add', 'AGENTS.md', 'CLAUDE.md', '.agents/PROJECT.md');
   commit(root);

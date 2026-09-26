@@ -5,7 +5,7 @@ import type { SessionFile } from '../rounds';
 
 /**
  * The sidebar's cadence probes — bounded, never awaited, and honest about what failed
- * (todo/PLAN_consult_on_a_cadence.md, the risk consultation for story 4.2, point 3).
+ * (research/PLAN_consult_on_a_cadence.md, the risk consultation for story 4.2, point 3).
  */
 
 const T0 = Date.parse('2026-09-25T12:00:00Z');

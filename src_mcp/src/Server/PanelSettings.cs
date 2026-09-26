@@ -379,7 +379,7 @@ public sealed record PanelSettings
 
     /// <summary>
     /// Whether the gate orders a consultation per group of epics, and refuses without one —
-    /// <c>COAI_CADENCE_MODE</c> = off | remind | require (<c>todo/PLAN_consult_on_a_cadence.md</c>).
+    /// <c>COAI_CADENCE_MODE</c> = off | remind | require (<c>research/PLAN_consult_on_a_cadence.md</c>).
     /// </summary>
     /// <remarks><c>remind</c> by default (D4): the extension is on the Marketplace, and a refusal by default
     /// would change every user's gate on an update. The operator turns <c>require</c> on.</remarks>

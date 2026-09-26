@@ -33,7 +33,7 @@ export const OUTPUT = 'src_vs_code/src/generated/gateRule.ts';
  * <p>It was this product's own file until then, on the operator's ruling of 2026-09-13 that a rule
  * about when to call one tool of one product is not shared. The ruling was reversed on 2026-09-25:
  * this server gates every repository in the family, so a rule about when to call its consultant is
- * as shared as the gate rule itself (todo/PLAN_consult_on_a_cadence.md, epic 5). So it is read from
+ * as shared as the gate rule itself (research/PLAN_consult_on_a_cadence.md, epic 5). So it is read from
  * the pinned mount and held to its marker the way the three others are.</p>
  *
  * <p>It keeps an output of its own, `generated/consultantRule.ts`, rather than a fourth export in

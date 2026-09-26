@@ -16,7 +16,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// Extracted from <c>ConsultScenarioTests</c> when the cadence kinds arrived
-/// (<c>todo/PLAN_consult_on_a_cadence.md</c>, epic 2): that file was already past the 800-line ceiling,
+/// (<c>research/PLAN_consult_on_a_cadence.md</c>, epic 2): that file was already past the 800-line ceiling,
 /// and a second suite copying its harness would have been the second copy the reuse rule forbids.
 /// Every derived class belongs to the <c>fakecli-env</c> collection, for the reason
 /// <see cref="CallingAs"/> gives.

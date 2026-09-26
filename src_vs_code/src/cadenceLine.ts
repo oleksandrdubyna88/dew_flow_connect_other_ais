@@ -3,7 +3,7 @@ import { repoNameOf } from './pathTail';
 import type { SessionFile } from './rounds';
 
 /**
- * A plan's consultation cadence as the sidebar draws it (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.2).
+ * A plan's consultation cadence as the sidebar draws it (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2).
  *
  * <p>The answer is the server's — `coai-mcp --cadence` prints exactly what `status` carries as `cadence` —
  * and this module only reads and words it. The extension cannot work the cadence out from the session

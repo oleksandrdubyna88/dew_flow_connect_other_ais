@@ -132,7 +132,7 @@ export interface PanelState {
   readonly consultations?: readonly Consultation[] | undefined;
   /**
    * Each recent plan's consultation cadence, as `coai-mcp --cadence` answered it
-   * (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.2). Optional for the reason
+   * (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2). Optional for the reason
    * {@link consultations} is: absent means no line, which is what a panel with no plan in flight shows.
    */
   readonly cadence?: readonly CadenceLine[] | undefined;
@@ -402,7 +402,7 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
         palette: vendorPalette(state.vendors.map((v) => v.id)),
       })
       // WHEN the consultant is asked without anybody being stuck, under WHO is asked
-      // (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
+      // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
       + cadenceBlock(state.settings.cadence)),
     section('bugz', 'Bugz', open, bugzBody({
       corpus: state.bugz ?? EMPTY_CORPUS,

@@ -11,7 +11,7 @@ public sealed class CadenceStoreException(string message, Exception? inner = nul
 
 /// <summary>
 /// Where a plan's cadence is kept: one JSON file per (repository, plan) under <c>&lt;dataDir&gt;/cadence/</c>
-/// (<c>todo/PLAN_consult_on_a_cadence.md</c>, story 2.3).
+/// (<c>research/PLAN_consult_on_a_cadence.md</c>, story 2.3).
 /// </summary>
 /// <remarks>
 /// <para><b>Keyed by repository and plan, never by session.</b> With one gate for the whole task a session

@@ -8,7 +8,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Where a plan's cadence is kept, and the two ways it may fail — loudly (<c>todo/PLAN_consult_on_a_cadence.md</c>,
+/// Where a plan's cadence is kept, and the two ways it may fail — loudly (<c>research/PLAN_consult_on_a_cadence.md</c>,
 /// epic 2, story 2.3).
 /// </summary>
 /// <remarks>

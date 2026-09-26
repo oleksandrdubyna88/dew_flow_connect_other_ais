@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The cadence REACHING a caller, and in <c>require</c> refusing it — real rounds over the fake CLI in a
-/// throwaway repository (<c>todo/PLAN_consult_on_a_cadence.md</c>, epic 3).
+/// throwaway repository (<c>research/PLAN_consult_on_a_cadence.md</c>, epic 3).
 /// </summary>
 /// <remarks>
 /// <para>Measured before any of this: ~1 260 gate rounds against 18 consultations, zero across fourteen
@@ -652,7 +652,7 @@ public sealed class CadenceGateScenarioTests : FakeCliRoundTests
         Program.Classify(["--cadence"]).Should().Be(Program.Startup.Cadence);
 }
 
-/// <summary>The cadence's four settings, read the way every other one is (<c>todo/PLAN_consult_on_a_cadence.md</c>, story 3.1).</summary>
+/// <summary>The cadence's four settings, read the way every other one is (<c>research/PLAN_consult_on_a_cadence.md</c>, story 3.1).</summary>
 public sealed class CadenceSettingsTests
 {
     private static PanelSettings From(params (string Key, string Value)[] vars)

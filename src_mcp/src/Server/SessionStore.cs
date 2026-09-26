@@ -97,7 +97,7 @@ public sealed record RoundRecord(
 
     /// <summary>
     /// The plan this round's epic belongs to, as its cadence key (the file name) — empty for a round of no
-    /// declared epic, and for every round older than the cadence (<c>todo/PLAN_consult_on_a_cadence.md</c>).
+    /// declared epic, and for every round older than the cadence (<c>research/PLAN_consult_on_a_cadence.md</c>).
     /// </summary>
     /// <remarks>Stamped from the session when the round is FIRST written, so an interrupted round carries it
     /// too — the epic-1-3 consultation, point 2: "the first code round of this epic" is asked of these.</remarks>
@@ -192,7 +192,7 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
 
     /// <summary>
     /// The plan file the caller last declared for this session, repo-relative — the cadence's plan
-    /// (<c>todo/PLAN_consult_on_a_cadence.md</c>). Empty until one is declared; an empty argument keeps it.
+    /// (<c>research/PLAN_consult_on_a_cadence.md</c>). Empty until one is declared; an empty argument keeps it.
     /// </summary>
     public string Plan { get => field ?? string.Empty; init; } = string.Empty;
 

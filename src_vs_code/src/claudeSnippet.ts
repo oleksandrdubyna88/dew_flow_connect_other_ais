@@ -267,7 +267,7 @@ export const MOUNTED_SIBLINGS: readonly string[] = KNOWN_HALVES.filter((half) =>
 /**
  * The first applicable paste wins, using the same reader for the panel and copy command.
  *
- * <p><b>A mount is read with its siblings</b> (todo/PLAN_consult_on_a_cadence.md, story 5.2). A repository
+ * <p><b>A mount is read with its siblings</b> (research/PLAN_consult_on_a_cadence.md, story 5.2). A repository
  * that mounts the rules and pasted nothing holds its four halves as four files, and reading the gate
  * rule alone told it that it was behind on the three it had. Only the SELECTED location's own mount is
  * read — a half missing from it is never filled from another mount — and a real paste still wins over

@@ -332,7 +332,7 @@ public sealed class ConsultationProjectionTests : IDisposable
     /// What a consultation was FOR reaches the log, so the page can tell a stuck one from the cadence's.
     /// </summary>
     /// <remarks>
-    /// Epic 4 story 4.3 of <c>todo/PLAN_consult_on_a_cadence.md</c>: the log listed every consultation as
+    /// Epic 4 story 4.3 of <c>research/PLAN_consult_on_a_cadence.md</c>: the log listed every consultation as
     /// if it were an agent admitting it was stuck, and a cadence consultation is the opposite — one the
     /// gate asked for while nothing was wrong.
     /// </remarks>

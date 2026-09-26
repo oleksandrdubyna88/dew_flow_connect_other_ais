@@ -52,7 +52,7 @@ public static class ServerNoticeCodes
     /// <summary>Written by the run itself, from the catch that wraps the host.</summary>
     public const string Crash = "crash";
 
-    /// <summary>A consultation the cadence owed and nobody could have — the round went ahead (todo/PLAN_consult_on_a_cadence.md).</summary>
+    /// <summary>A consultation the cadence owed and nobody could have — the round went ahead (research/PLAN_consult_on_a_cadence.md).</summary>
     public const string CadenceStoodDown = "cadence-stood-down";
 
     /// <summary>Every code, for the test that asserts the redactor rewrites none of them.</summary>

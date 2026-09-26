@@ -416,7 +416,7 @@ internal sealed class RoundEngine(
                 // a second ago rewords this round's order (issue #467).
                 Texts = _commands.CommandTextsNow(),
                 // The consultation cadence as it stands for this call — Off unless the operator switched it on
-                // (todo/PLAN_consult_on_a_cadence.md).
+                // (research/PLAN_consult_on_a_cadence.md).
                 Cadence = stage.Cadence.Call.Facts,
             };
             // The caller's one order is CLAIMED, and only on a round that would actually give it —

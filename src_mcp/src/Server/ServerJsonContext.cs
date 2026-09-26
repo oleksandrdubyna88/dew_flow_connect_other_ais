@@ -100,7 +100,7 @@ public sealed record SessionAnswer(
 
     /// <summary>
     /// The plan's consultation cadence — absent unless a plan was asked about or is held by this session
-    /// (<c>todo/PLAN_consult_on_a_cadence.md</c>). Read from the plan's own record, so it answers the same
+    /// (<c>research/PLAN_consult_on_a_cadence.md</c>). Read from the plan's own record, so it answers the same
     /// from every branch the plan is built on.
     /// </summary>
     public CadenceAnswer? Cadence { get; init; }

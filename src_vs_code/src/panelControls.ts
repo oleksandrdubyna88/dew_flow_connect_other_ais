@@ -5,7 +5,7 @@ import { HELP, HelpKey } from './help';
  * Two controls every section of the panel draws, in a module of their own.
  *
  * <p>Moved out of `panelView.ts` when a section in ANOTHER module needed them — the consultation
- * cadence (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.1). Copying them would have given the page's
+ * cadence (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1). Copying them would have given the page's
  * script and styles two markups to rely on; importing `panelView` from a module `panelView` imports
  * would have been a cycle. So they live here, and both import them.</p>
  */

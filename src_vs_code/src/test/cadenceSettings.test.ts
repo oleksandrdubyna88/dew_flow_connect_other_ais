@@ -7,7 +7,7 @@ import { DEFAULTS, OVERLAID_SETTINGS, envBlock } from '../settingsShape';
 
 /**
  * The consultation cadence's four settings — the operator's "make 3 and 5 editable in the panel"
- * (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
+ * (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
  *
  * <p>The server half shipped in epic 3 (`PanelSettings.CadenceMode` and the three counts, read from
  * `COAI_CADENCE_*`). What these pin is the seam: the panel's defaults ARE the server's fallbacks,

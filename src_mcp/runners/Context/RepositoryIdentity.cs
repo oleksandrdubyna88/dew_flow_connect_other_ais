@@ -7,7 +7,7 @@ namespace CoaiMcp.Runners.Context;
 /// <para>A worktree is registered in exactly one object store, so every linked worktree of a repository and
 /// every spelling of one checkout answer the same common dir. The review trees learnt this first
 /// (<c>ReviewWorktrees.CommonDirAsync</c>); the consultation cadence needs the same answer, because a plan
-/// built in a worktree is still the repository's plan (<c>todo/PLAN_consult_on_a_cadence.md</c>, the
+/// built in a worktree is still the repository's plan (<c>research/PLAN_consult_on_a_cadence.md</c>, the
 /// epic-1-3 consultation, point 8). One set of arguments and one normalisation, so the two cannot drift
 /// (epic 2's plan round, gemini) — and it lives HERE, the neutral side, with the review trees delegating
 /// to it, so neither capability depends on the other (epic 2's code round, codex).</para>

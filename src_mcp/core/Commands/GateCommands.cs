@@ -55,7 +55,7 @@ public sealed record CommandContext(
     public CommandTexts Texts { get; init; } = CommandTexts.Shipped;
 
     /// <summary>
-    /// What the server knows about the plan's consultation cadence (<c>todo/PLAN_consult_on_a_cadence.md</c>).
+    /// What the server knows about the plan's consultation cadence (<c>research/PLAN_consult_on_a_cadence.md</c>).
     /// </summary>
     /// <remarks>Off by default, so a context built without it says what every release before it said.</remarks>
     public CadenceFacts Cadence { get; init; } = CadenceFacts.Off;

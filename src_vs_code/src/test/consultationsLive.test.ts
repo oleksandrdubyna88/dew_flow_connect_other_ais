@@ -363,7 +363,7 @@ test('the TABLE prices a consultation whose vendor reported no money', () => {
 });
 
 // ---------------------------------------------------------------------------------------------
-// What a consultation was FOR (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.3)
+// What a consultation was FOR (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.3)
 // ---------------------------------------------------------------------------------------------
 
 const asked = {

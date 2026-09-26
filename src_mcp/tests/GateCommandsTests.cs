@@ -286,7 +286,7 @@ public sealed class GateCommandsTests
     }
 
     [Theory]
-    // todo/PLAN_consult_on_a_cadence.md, D8: a plan that names its epics has answered the question.
+    // research/PLAN_consult_on_a_cadence.md, D8: a plan that names its epics has answered the question.
     [InlineData(1, PlanShape.Split.Small)]
     [InlineData(2, PlanShape.Split.Medium)]
     [InlineData(3, PlanShape.Split.Medium)]

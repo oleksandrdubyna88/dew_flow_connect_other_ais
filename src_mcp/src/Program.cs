@@ -176,7 +176,7 @@ internal static class Program
         /// </summary>
         /// <remarks>
         /// For the SIDEBAR, which reads session files and never calls `status`, and cannot work the cadence
-        /// out from them (todo/PLAN_consult_on_a_cadence.md, epic 4 story 4.2). See
+        /// out from them (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2). See
         /// <see cref="Server.CadenceReadMode"/>.
         /// </remarks>
         Cadence,
