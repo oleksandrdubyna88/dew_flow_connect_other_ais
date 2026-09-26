@@ -200,6 +200,47 @@ public sealed class ConsultationStoreTests : IDisposable
         _store.Read(record.Id)!.Status.Should().Be(ConsultationStatuses.Asking);
     }
 
+    /// <summary>
+    /// An <c>asking</c> record older than any turn may run is not a running turn, whoever its pid is.
+    /// </summary>
+    /// <remarks>
+    /// Observed live on 2026-09-26: a turn's record could not be rewritten after the consultant had
+    /// answered, the exception left the turn without settling it, and the record sat at <c>asking</c>
+    /// for over an hour naming the SERVER's own pid — which was alive, so the pid rule kept it for
+    /// ever while the cadence gate refused the epic's code round for want of a consultation nobody
+    /// could end. A live turn is protected by the repository's lock, not by its pid; a record nobody
+    /// holds the lock for, past the deadline the turn itself runs under, was left behind.
+    /// </remarks>
+    [Fact]
+    public void AnAskingRecordPastItsTurnDeadline_IsSweptAlthoughItsServerIsAlive()
+    {
+        var record = Record(updated: DateTime.UtcNow.AddMinutes(-16));
+        _store.Write(record);
+
+        _store.Sweep(_ => true, DateTime.UtcNow, TimeSpan.FromMinutes(15), TimeSpan.FromDays(7))
+            .Should().Be(1, "nobody holds the repository's lock and the turn's deadline is long past");
+
+        var swept = _store.Read(record.Id)!;
+        swept.Status.Should().Be(ConsultationStatuses.Failed, "nothing was said on the stream, so there is no handle to resume");
+        swept.Reason.Should().Contain("deadline");
+        swept.EndedUtc.Should().NotBeEmpty();
+    }
+
+    [Fact]
+    public void AnAskingRecordPastItsTurnDeadline_WithAHandle_IsInterruptedRatherThanFailed()
+    {
+        // The same distinction the dead-pid sweep makes: a turn the vendor accepted may be resumed.
+        var record = Record(handle: "0198-ffff", updated: DateTime.UtcNow.AddMinutes(-16));
+        _store.Write(record);
+
+        _store.Sweep(_ => true, DateTime.UtcNow, TimeSpan.FromMinutes(15), TimeSpan.FromDays(7)).Should().Be(1);
+
+        var swept = _store.Read(record.Id)!;
+        swept.Status.Should().Be(ConsultationStatuses.Interrupted);
+        swept.Handle.Should().Be("0198-ffff");
+        swept.Reason.Should().Contain("deadline");
+    }
+
     [Fact]
     public void AnOpenRecordIdlePastItsBudget_IsClosedAndItsHandleDropped()
     {

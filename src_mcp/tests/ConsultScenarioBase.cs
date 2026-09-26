@@ -86,19 +86,27 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
 
     /// <param name="providers">The REVIEWER rows — by default the one codex row the legacy-shaped shipped map borrows from.</param>
     /// <param name="consultants">The caller map — by default the shipped one, four legacy references.</param>
+    /// <param name="launcher">
+    /// The launcher the service runs every process through — by default the real one. A test that must
+    /// act at a moment INSIDE a turn (after the record says <c>asking</c>, before the consultant answers)
+    /// hands in a decorator of the real one; that seam is the only deterministic way to that moment.
+    /// </param>
+    /// <param name="reviewerTimeout">The launch's own deadline, which the turn's is derived from.</param>
     protected PanelService Service(
         int turns = 5,
         int callsPerSession = 10,
         bool enabled = true,
         IReadOnlyList<ProviderSettings>? providers = null,
         IReadOnlyDictionary<string, ConsultantChoice>? consultants = null,
-        Serilog.ILogger? log = null) => new(
+        Serilog.ILogger? log = null,
+        IProcessLauncher? launcher = null,
+        TimeSpan? reviewerTimeout = null) => new(
         new PanelSettings
         {
             Providers = providers ?? [new("codex") { ExecutablePath = FakeCliExe }],
             Rounds = PanelConfig.Uniform(3, 2, StagePolicy.Human),
             DataDir = _data,
-            ReviewerTimeout = TimeSpan.FromSeconds(30),
+            ReviewerTimeout = reviewerTimeout ?? TimeSpan.FromSeconds(30),
             ConsultTurns = turns,
             ConsultCallsPerSession = callsPerSession,
             ConsultEnabled = enabled,
@@ -106,7 +114,7 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
         },
         VaultKeys.None("no vault in tests"),
         default,
-        _launcher,
+        launcher ?? _launcher,
         log ?? Logger.None, Noticing.None);
 
     protected static readonly string[] CallerVariables =
