@@ -1,6 +1,7 @@
 using System.Collections.Frozen;
 using System.Collections.Immutable;
 using CoaiMcp.Core.Commands;
+using CoaiMcp.Core.Findings;
 
 namespace CoaiMcp.Core.Rounds;
 
@@ -18,6 +19,12 @@ namespace CoaiMcp.Core.Rounds;
 /// What a <c>revise</c> verdict tells the caller to do with the accepted findings before the next
 /// round. The same words for every stage that exists today; a stage whose fixes land elsewhere
 /// (as new pull requests, say) writes its own.
+/// </param>
+/// <param name="Answers">Which schema a reviewer of this stage answers in — the feature review's may ask for source.</param>
+/// <param name="Reads">
+/// What a reviewer of this stage holds when it has no checkout: the change itself, or — the feature
+/// review — an outline with the changed hunks (<see cref="ReaderMaterial"/>). A mounted worktree still
+/// overrides it with <see cref="ReaderMaterial.Checkout"/>; that is a fact about the launch, not the stage.
 /// </param>
 /// <param name="RecordsSha">
 /// Whether a round of this stage keeps the commit it reviewed, which is what a later <c>again</c>
@@ -43,7 +50,9 @@ public sealed record StageDescriptor(
     Stage AdvancesTo,
     string CompletedSentence,
     string ReviseInstruction,
-    bool RecordsSha);
+    bool RecordsSha,
+    SchemaShape Answers,
+    ReaderMaterial Reads);
 
 /// <summary>The one exhaustive table of stages; adding a stage is adding a row.</summary>
 public static class Stages
@@ -63,22 +72,41 @@ public static class Stages
             AdvancesTo: Stage.CodeReview,
             CompletedSentence: "The plan stage is complete. Implement the plan on the branch, then call review_code.",
             ReviseInstruction: RunThisReviewAgain,
-            RecordsSha: false),
+            RecordsSha: false,
+            Answers: SchemaShape.Finding,
+            Reads: ReaderMaterial.Change),
         new(Stage.CodeReview, RoleBuckets.ResultCode, "code review", "code", CommandStage.Code,
             AdvancesTo: Stage.Done,
             CompletedSentence: "The code stage is complete. This session is done.",
             ReviseInstruction: RunThisReviewAgain,
-            RecordsSha: true),
+            RecordsSha: true,
+            Answers: SchemaShape.Finding,
+            Reads: ReaderMaterial.Change),
         new(Stage.Done, RoleBuckets.PlanCode, "done", "code", CommandStage.Any,
             AdvancesTo: Stage.Done,
             CompletedSentence: string.Empty,
             ReviseInstruction: RunThisReviewAgain,
-            RecordsSha: false),
+            RecordsSha: false,
+            Answers: SchemaShape.Finding,
+            Reads: ReaderMaterial.Change),
         new(Stage.DocumentReview, RoleBuckets.ResultDocument, "document review", "document", CommandStage.Any,
             AdvancesTo: Stage.Done,
             CompletedSentence: "The document stage is complete. This review is done.",
             ReviseInstruction: RunThisReviewAgain,
-            RecordsSha: false),
+            RecordsSha: false,
+            Answers: SchemaShape.Finding,
+            Reads: ReaderMaterial.Change),
+        // The fourth stage (S2.1 of the feature-review plan). Its fixes land ELSEWHERE — the epics
+        // have merged, so a fix is a new pull request — and the review runs again over the head those
+        // pull requests moved, which is why it records the head it read: `again` compares against it.
+        new(Stage.FeatureReview, RoleBuckets.FeatureCode, "feature review", "feature", CommandStage.Any,
+            AdvancesTo: Stage.Done,
+            CompletedSentence: "The feature stage is complete. This review is done.",
+            ReviseInstruction: "fix the accepted ones as new pull requests, then run this review again with the new head",
+            RecordsSha: true,
+            // The one stage whose reviewer may ask for source, and whose code is an outline with hunks (§4.6, §4.9).
+            Answers: SchemaShape.Feature,
+            Reads: ReaderMaterial.Outline),
     ];
 
     private static readonly FrozenDictionary<Stage, StageDescriptor> ByStage =

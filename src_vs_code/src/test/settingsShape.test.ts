@@ -2,7 +2,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { DEFAULTS, envBlock, settingsFrom } from '../settingsShape';
+import { DEFAULTS, enabledCodeRoles, envBlock, settingsFrom } from '../settingsShape';
 import { DEFAULT_VENDORS, normaliseId, Vendor, vendorsEnv, vendorsFrom } from '../vendors';
 import { ROLES } from '../prompts';
 
@@ -210,13 +210,37 @@ test('the manifest’s own default vendor list matches the one the code ships', 
  * describing different rounds, silently. Named by the gate on the code round; this is the guard.</p>
  */
 test('every role with a round has a switch, and every switch names one', () => {
-  // Both buckets that HAVE a round, since plan 4: a document role is switchable for exactly the
-  // reason a code role is — it takes part in a round, so a person must be able to take it out.
+  // Every bucket that HAS a round, since plan 4: a document role is switchable for exactly the
+  // reason a code role is — it takes part in a round, so a person must be able to take it out. The
+  // feature role too (S2.1 of the feature-review plan): its switch IS the feature gate's.
   const switchable = Object.keys(DEFAULTS.roleEnabled).sort();
-  const withRounds = ROLES.filter((r) => r.stage === 'code' || r.stage === 'document')
+  const withRounds = ROLES.filter((r) => r.stage === 'code' || r.stage === 'document' || r.stage === 'feature')
     .map((r) => r.id).sort();
 
   assert.deepEqual(switchable, withRounds, 'the switch list and the roles that run have drifted apart');
   assert.ok(!switchable.includes('PlanCritique'), 'the plan role must never gain a switch');
   assert.ok(switchable.includes('DocumentReview'), 'a document role is switchable like any other');
+});
+
+// ---------- the code roles are a BUCKET, not "everything that is not the plan" (§9.8 of the feature-review plan) ----------
+
+test('a feature role is not a code role, shipped or a person\'s own', () => {
+  // `enabledCodeRoles` read "not the plan stage" as code, which was right while there were two
+  // result buckets and wrong the moment a third bucket existed: the shipped FeatureReview role — and
+  // any feature-stage row a person adds — was counted into the fan-out sentence and the
+  // last-role-standing check of a round that never asks it anything.
+  assert.ok(!enabledCodeRoles(DEFAULTS).includes('FeatureReview'),
+    'the shipped feature role reads an outline in its own round, never a diff in a code round');
+
+  const withSeams = {
+    ...DEFAULTS,
+    roles: [{ id: 'Seams', name: 'Cross-epic seams', stage: 'feature', prompts: [{ id: 'seams-general', label: 'General' }] }],
+  };
+  assert.ok(!enabledCodeRoles(withSeams).includes('Seams'));
+  assert.deepStrictEqual(enabledCodeRoles(withSeams), enabledCodeRoles(DEFAULTS), 'a feature row changes no code count');
+});
+
+test('a document role is still not a code role either', () => {
+  assert.ok(!enabledCodeRoles(DEFAULTS).includes('DocumentReview'));
+  assert.ok(enabledCodeRoles(DEFAULTS).includes('Architecture'), 'the premise: the code roles are still counted');
 });

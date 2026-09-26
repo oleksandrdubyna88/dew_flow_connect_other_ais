@@ -52,6 +52,7 @@ internal sealed class RoundEngine(
     private readonly RoundCommands _commands = commands;
     private readonly Func<Stage, IReadOnlyList<string>> _excludedFrom = excludedFrom;
     private readonly Func<Stage, RoundWork, string> _noReviewerRefusal = noReviewerRefusal;
+    private readonly RoundSkips _skips = new(settings, log, store, projection, excludedFrom);
 
     /// <summary>The lenses a round spent: the prompt of every row that was asked.</summary>
     /// <remarks>
@@ -182,13 +183,16 @@ internal sealed class RoundEngine(
         // One mutating call per session, held for the whole round (S4 of
         // research/PLAN_a_failed_round_can_be_retried.md). Taken BEFORE the session is read: two rounds
         // that both read it first would both compute the next round from the same file.
-        using var claim = SessionClaim.TryTake(_settings.DataDir, repoPath, branch, stage.Document);
+        using var claim = SessionClaim.TryTake(_settings.DataDir, repoPath, branch, stage.Document, stage.Feature);
         if (claim is null)
         {
             return Error(SessionClaim.Busy(branch), from);
         }
 
-        var session = _store.Load(repoPath, branch, stage.Document);
+        // Loaded — or, for a stage that needs no `open`, CREATED — under the claim just taken, so two
+        // first calls on one plan are one creator: the second either waits out the claim and finds
+        // the first's session, or is refused as busy. Never before the claim (§4.3).
+        var session = _store.Load(repoPath, branch, stage.Document, stage.Feature) ?? Created(stage);
         if (session is null)
         {
             return Error("no session for this repo+branch — call open first", from);
@@ -240,7 +244,9 @@ internal sealed class RoundEngine(
 
         try
         {
-            var sha = await _worktrees.ResolveShaAsync(repoPath, branch);
+            // From the stage's own head when it names one: a feature session lives under a branch no
+            // git ref can spell, and the commit its round reads is the ref the caller passed.
+            var sha = await _worktrees.ResolveShaAsync(repoPath, stage.Head.Length > 0 ? stage.Head : branch);
             if (await stage.RefuseBeforeBuilding(loaded, sha) is { Length: > 0 } nothingThere)
             {
                 _log.Warning("{Stage} refused before building: {Reason}", stage.Stage, nothingThere);
@@ -255,6 +261,23 @@ internal sealed class RoundEngine(
             // feature-review plan). The counter keeps counting rounds for the budget; this is the
             // round's name.
             var number = RoundNumber.Next(session.Rounds, stage.Stage);
+
+            // A skip decided BEFORE anything is built: the stage's own reason (D17: a plan of fewer epics
+            // than the feature gate runs for), or — for a stage that records skips — nobody to ask, read
+            // from the settings alone (D1, rows 1–3 of §4.4). After `stage.Begin`, like the empty-roster
+            // skip below, so a standing call_human is still a person's decision; and before `MakeWork`,
+            // because with nobody to read it the pack — the outline's git processes, up to 16 MiB of blob
+            // reads, the history query — would be built and thrown away.
+            if (_skips.BeforeBuilding(stage) is { Length: > 0 } skipped)
+            {
+                return _skips.Record(stage.Stage, loaded, number, sha, planText, skipped);
+            }
+
+            // The base a feature review is held to from here on — saved with the round, never by a skip
+            // or a refusal (§4.3). ANOTHER base than the recorded one is a different review, reached only
+            // through `again` (the stage refused it otherwise, above): its count and its standing
+            // rejections start over, whatever the stage was.
+            session = HeldToBase(session, stage.FeatureBase);
 
             // The plan and epic this round is FOR go on the session BEFORE the live round first writes it,
             // so even a round a crash interrupts carries its epic (the epic-1-3 consultation, point 2).
@@ -282,6 +305,13 @@ internal sealed class RoundEngine(
             // runs nothing, merges nothing, and passes the gate — reporting `proceed` having
             // reviewed exactly nothing, which is worse than any verdict it could have given. Now
             // reachable on purpose: a vendor can be set to review plans and not code.
+            //
+            // For ONE stage it is a recorded SKIP instead (D1 of the feature-review plan): the feature
+            // gate is optional per vendor, so nobody ticked is the ordinary state, and the skip is
+            // written on the trail with its reason rather than blocking a release on a review nobody
+            // configured. It sits AFTER `stage.Begin` on purpose — a standing call_human from a
+            // round whose reviewers all failed is a person's decision, and un-ticking every vendor
+            // must not dissolve it (§4.4).
             if (work.Count == 0)
             {
                 // And if a role was dropped on the way here, the refusal says which and why. This
@@ -289,7 +319,9 @@ internal sealed class RoundEngine(
                 // filtered out would otherwise be refused with a sentence about vendors — sending
                 // somebody to check a configuration that is perfectly correct. (codex, the code
                 // round, twice.)
-                return Error(_noReviewerRefusal(session.State.Stage, roundWork), from);
+                return stage.WhenNobody == NobodyPolicy.RecordSkip
+                    ? _skips.Record(stage.Stage, loaded, number, sha, planText, _skips.NobodyFor(stage.Stage, roundWork))
+                    : Error(_noReviewerRefusal(session.State.Stage, roundWork), from);
             }
 
             // The round exists on disk BEFORE the first CLI starts: the panel shows "running" for
@@ -442,12 +474,14 @@ internal sealed class RoundEngine(
             // Built HERE because this is the only place that holds both a reviewer's answer and the
             // invocation that produced it, which is the same reason the ROLE is stamped on a finding
             // twenty lines up. A note with no name on it is three accounts in a heap.
+            // A feature reviewer's source requests ride on its note: RECORDED, as its prompt says, until
+            // the turn loop that answers them exists (S3.2). Every other stage's schema has no such field.
             var notes = (IReadOnlyList<ReviewerNote>)[.. results
-                .Where(r => r.Outcome is ReviewerOutcome.Ok { Review.Notes.Length: > 0 })
+                .Where(r => r.Outcome is ReviewerOutcome.Ok ok && Core.Feature.SourceRequestNote.With(ok.Review).Length > 0)
                 .Select(r => new ReviewerNote(
                     r.Invocation.Provider.ToString(),
                     r.Invocation.Role.ToString(),
-                    ((ReviewerOutcome.Ok)r.Outcome).Review.Notes))];
+                    Core.Feature.SourceRequestNote.With(((ReviewerOutcome.Ok)r.Outcome).Review)))];
             answer = answer with
             {
                 Cost = new RoundCost(record.TokensIn, record.TokensOut, record.CostUsd),
@@ -545,6 +579,42 @@ internal sealed class RoundEngine(
 
     /// <summary>The gate for the stage this session is in — the only way this class reads it.</summary>
     private StageGate StageGate(PersistedSession session) => _settings.Rounds.For(session.State.Stage);
+
+    /// <summary>
+    /// The session held to a feature base: the base recorded — and, when it is another base than the one
+    /// recorded, a fresh review (<see cref="RoundMachine.FreshFeatureReview"/>). Unchanged for every stage
+    /// that names no base.
+    /// </summary>
+    private static PersistedSession HeldToBase(PersistedSession session, string featureBase) =>
+        featureBase.Length == 0
+            ? session
+            : session with
+            {
+                FeatureBase = featureBase,
+                State = FeatureBases.IsAnother(session.FeatureBase, featureBase)
+                    ? RoundMachine.FreshFeatureReview(session.State)
+                    : session.State,
+            };
+
+    /// <summary>
+    /// The session a stage makes for itself, saved under the claim the caller holds — or nothing, for
+    /// a stage that needs <c>open</c> first.
+    /// </summary>
+    private PersistedSession? Created(StageRun stage)
+    {
+        if (stage.Session is not SessionRule.CreateIfAbsent create)
+        {
+            return null;
+        }
+
+        var fresh = create.Make();
+        _store.Save(fresh);
+        _log.Information(
+            "session {SessionId} open for the {Stage} of {Feature}",
+            fresh.State.SessionId, Stages.Of(stage.Stage).Phrase, fresh.State.Feature);
+
+        return fresh;
+    }
 
     private string ModelOf(string provider) =>
         _settings.Providers.FirstOrDefault(p => p.Provider == provider)?.Model ?? string.Empty;

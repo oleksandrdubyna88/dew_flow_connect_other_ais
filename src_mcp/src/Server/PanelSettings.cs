@@ -64,6 +64,17 @@ public sealed record ProviderSettings(string Provider)
     /// </remarks>
     public DocumentReviews Documents { get; init; } = DocumentReviews.Unspecified;
 
+    /// <summary>
+    /// Whether this vendor reviews FEATURES — and absent is NO, unlike the plan and code ticks.
+    /// </summary>
+    /// <remarks>
+    /// The feature gate is optional per vendor (D6): a settings file written before the stage
+    /// existed carries no field, and a vendor nobody ticked must not silently be sent a whole plan's
+    /// outline. Reading absent as "no" is what makes an old extension's file skip the stage with a
+    /// reason rather than run it with every vendor (§4.4, row 2).
+    /// </remarks>
+    public bool Feature { get; init; }
+
     /// <summary>Whether this vendor's reviews run somewhere other than this machine.</summary>
     /// <remarks>
     /// The same question <c>PanelService.Remote</c> asked privately, asked of the row instead: the
@@ -107,6 +118,9 @@ public sealed record ProviderSettings(string Provider)
         Stage.PlanReview => Plan,
         Stage.CodeReview => Code,
         Stage.DocumentReview => ReviewsDocuments,
+        // Its own tick, and never a Team server in this version (D10): a feature review sends a
+        // whole plan's outline, and the box has no code for it yet.
+        Stage.FeatureReview => Feature && !IsRemote,
         // Exhaustive on purpose, and throwing rather than guessing: a stage added later that lands
         // here would otherwise take the code switch in silence. The same shape `PanelConfig.BucketFor`
         // already has, for the same reason.
@@ -393,6 +407,13 @@ public sealed record PanelSettings
 
     /// <summary>The most risky epics and stories one plan may name — <c>COAI_CADENCE_RISK_MAX</c> (D6).</summary>
     public int CadenceRiskMax { get; init; } = Core.Cadence.CadenceRule.DefaultRiskMax;
+
+    /// <summary>
+    /// How many epics a plan needs before the feature gate runs for it — <c>COAI_FEATURE_MIN_EPICS</c>,
+    /// three by the operator's rule (D17 of the feature-review plan). A smaller plan is covered by
+    /// <c>review_code</c>; the feature stage records a <c>skipped</c> round for it and does not block.
+    /// </summary>
+    public int FeatureMinEpics { get; init; } = Core.Feature.FeatureGate.DefaultMinEpics;
 
     /// <summary>
     /// What a CODE reviewer is launched in: <c>none</c> (the default) or <c>worktree</c>.
@@ -797,6 +818,8 @@ public sealed record PanelSettings
             CadenceEvery = IntVar(env, "COAI_CADENCE_EVERY", Core.Cadence.CadenceRule.DefaultEvery),
             CadenceRiskThreshold = IntVar(env, "COAI_CADENCE_RISK_THRESHOLD", Core.Cadence.CadenceRule.DefaultRiskThreshold),
             CadenceRiskMax = IntVar(env, "COAI_CADENCE_RISK_MAX", Core.Cadence.CadenceRule.DefaultRiskMax),
+            // `IntVar`: a plan of zero epics is not a plan, so zero falls back rather than meaning "always".
+            FeatureMinEpics = IntVar(env, "COAI_FEATURE_MIN_EPICS", Core.Feature.FeatureGate.DefaultMinEpics),
             LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
             ? effort.Trim().ToLowerInvariant()
             : "none",
@@ -1081,6 +1104,9 @@ public sealed record PanelSettings
                         // field is legitimately a nullable at this boundary, and one line past it
                         // the state has to be a value with a name. See `VendorDto.Document`.
                         Documents = DocumentReviewsOf(v.Document),
+                        // Absent is NO, and only a written `true` is yes: the feature gate is opt-in
+                        // per vendor, and a file written before the stage existed ticked nobody.
+                        Feature = v.Feature == true,
                     })
                     // One id, one vendor — the extension already refuses a duplicate row, and a
                     // hand-edited settings file is how one reaches the server. The id is the
@@ -1249,8 +1275,8 @@ public sealed record PanelSettings
     private static RoleGate GateFor(Func<string, string?> env, RoleDefinition definition)
     {
         var isPlan = definition.Stage == RoleStages.Plan;
-        var stage = isPlan ? "PLAN" : "CODE";
-        var shipped = isPlan ? PanelConfig.PlanDefault : PanelConfig.CodeDefault;
+        var stage = StageKeyOf(definition.Stage);
+        var shipped = PanelConfig.ShippedDefault(definition.Stage);
         var key = definition.Id.ToUpperInvariant();
 
         return new RoleGate(
@@ -1262,6 +1288,22 @@ public sealed record PanelSettings
                     CountVar(env, "COAI_GATE_THRESHOLD", shipped.Threshold))),
             (isPlan && definition.BuiltIn) || NotSwitchedOff(env, $"COAI_ENABLED_{key}"));
     }
+
+    /// <summary>
+    /// The stage's segment of its budget keys — <c>COAI_MAX_ROUNDS_PLAN</c>, <c>_CODE</c>, <c>_FEATURE</c>.
+    /// </summary>
+    /// <remarks>
+    /// It was <c>isPlan ? "PLAN" : "CODE"</c>, which handed the feature stage the CODE keys in
+    /// silence: a person tightening their code gate would have tightened a gate they never meant to
+    /// (§4.2 of the feature-review plan). A role the catalog composed has one of the three stages, so
+    /// the discard is the result stage and nothing else.
+    /// </remarks>
+    private static string StageKeyOf(string stage) => stage switch
+    {
+        RoleStages.Plan => "PLAN",
+        RoleStages.Feature => "FEATURE",
+        _ => "CODE",
+    };
 
     /// <summary>The round configuration: which roles exist, and what each may spend.</summary>
     /// <remarks>

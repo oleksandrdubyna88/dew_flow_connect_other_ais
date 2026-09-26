@@ -1,8 +1,9 @@
+using System.Collections.Immutable;
 using System.Text.Json;
 
 namespace CoaiMcp.Core.Rounds;
 
-/// <summary>The two stages a role can belong to, spelled the way the seed and the settings spell them.</summary>
+/// <summary>The three stages a role can belong to, spelled the way the seed and the settings spell them.</summary>
 public static class RoleStages
 {
     /// <summary>The plan gate — a document, no checkout, no diff.</summary>
@@ -10,6 +11,22 @@ public static class RoleStages
 
     /// <summary>The result gate — a diff for a programming role, a document for one that is not.</summary>
     public const string Result = "result";
+
+    /// <summary>The feature gate — a whole plan's worth of code, outlined, once every epic landed.</summary>
+    public const string Feature = "feature";
+
+    /// <summary>
+    /// Every stage a role can belong to — the ONE list the seed loader and a person's composition read.
+    /// </summary>
+    /// <remarks>
+    /// Two readers each spelled the pair <c>Plan or Result</c> by hand until the third stage arrived
+    /// (S2.1 of the feature-review plan); a stage added to one and not the other would have been a
+    /// shipped role the seed accepts and a person's row composition refuses, in the same build.
+    /// </remarks>
+    public static readonly ImmutableArray<string> All = [Plan, Result, Feature];
+
+    /// <summary>The list as a refusal spells it: <c>'plan', 'result' or 'feature'</c>.</summary>
+    public static string Spelled => $"{string.Join(", ", All[..^1].Select(s => $"'{s}'"))} or '{All[^1]}'";
 }
 
 /// <summary>
@@ -35,6 +52,9 @@ public static class RoleBuckets
     public static readonly RoleBucket ResultCode = new(RoleStages.Result, ProgrammingTask: true);
 
     public static readonly RoleBucket ResultDocument = new(RoleStages.Result, ProgrammingTask: false);
+
+    /// <summary>The feature stage's roster: a programming task, because what it reads is code — outlined.</summary>
+    public static readonly RoleBucket FeatureCode = new(RoleStages.Feature, ProgrammingTask: true);
 }
 
 /// <summary>
@@ -146,6 +166,9 @@ public sealed record RoleCatalog
     /// </remarks>
     public const string DocumentRole = "DocumentReview";
     public const string DocumentSummaryRole = "DocumentSummary";
+
+    /// <summary>The one shipped role of the feature stage (D8) — editable in settings like every role.</summary>
+    public const string FeatureRole = "FeatureReview";
 
     /// <summary>The one prompt that judges nothing but the project's own written rules.</summary>
     public const string ConventionsId = "conventions";
@@ -270,9 +293,9 @@ public sealed record RoleCatalog
             throw Broken($"role '{role.Id}' has no prompts, and a role's first prompt is its general one");
         }
 
-        if (role.Stage is not (RoleStages.Plan or RoleStages.Result))
+        if (!RoleStages.All.Contains(role.Stage))
         {
-            throw Broken($"role '{role.Id}' has stage '{role.Stage}', which this build does not know — it would run in no round and say nothing");
+            throw Broken($"role '{role.Id}' has stage '{role.Stage}', which this build does not know ({RoleStages.Spelled}) — it would run in no round and say nothing");
         }
     }
 

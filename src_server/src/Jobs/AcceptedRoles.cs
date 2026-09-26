@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 using System.Text.RegularExpressions;
 using CoaiMcp.Core.Rounds;
 
@@ -68,6 +69,28 @@ public sealed partial class AcceptedRoles
     /// <summary>Whether any well-formed id is accepted, whoever named it.</summary>
     public bool AllowAny { get; }
 
+    /// <summary>
+    /// The stages a Team server RUNS: the plan and the result. The feature stage stays on the machine
+    /// that asked, in this version (D10 of the feature-review plan).
+    /// </summary>
+    private static readonly FrozenSet<string> StagesRunHere =
+        new[] { RoleStages.Plan, RoleStages.Result }.ToFrozenSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// The shipped roles of a stage this server does NOT run — refused by name whatever the
+    /// configuration says, because the box has no code for the review they ask for.
+    /// </summary>
+    /// <remarks>
+    /// Derived from the seed rather than listed, so a second stage that stays client-side joins it
+    /// without an edit here; and consulted BEFORE <see cref="AllowAny"/>, which bypasses the catalog
+    /// and must not bypass this — "any role" means any role this server could run, not a review it
+    /// knows it cannot. The client never sends one (<c>ProviderSettings.Serves</c> excludes remote
+    /// rows), so this is the second line, not the first.
+    /// </remarks>
+    private static readonly FrozenSet<string> RunElsewhere =
+        RoleCatalog.Builtin.Roles.Where(r => !StagesRunHere.Contains(r.Stage)).Select(r => r.Id)
+            .ToFrozenSet(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>What every refusal message lists, in the order a person configured them.</summary>
     public IReadOnlyList<string> Names { get; }
 
@@ -100,7 +123,10 @@ public sealed partial class AcceptedRoles
     {
         var spelling = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         var names = new List<string>();
-        foreach (var role in RoleCatalog.Builtin.Roles)
+        // The built-ins of the stages this server runs, and only those: a role of a stage that stays
+        // on the client would otherwise enter the catalog on the next rebuild and be advertised on
+        // /api/catalog as a review this box performs.
+        foreach (var role in RoleCatalog.Builtin.Roles.Where(r => StagesRunHere.Contains(r.Stage)))
         {
             spelling[role.Id] = role.Id;
             names.Add(role.Id);
@@ -127,6 +153,16 @@ public sealed partial class AcceptedRoles
 
     private static void Guard(string id)
     {
+        if (RunElsewhere.Contains(Said(id)))
+        {
+            // Configured, and could never run: the same boot-time refusal as a malformed id, for the
+            // same reason — every request naming it would be refused, and nobody is looking then.
+            throw new InvalidOperationException(
+                $"Coai:ExtraRoles contains '{id}', which is a built-in role of the feature stage, and a Team "
+                + "server runs no feature review in this version — the feature gate runs on the machine that "
+                + "asked. Every request naming it would be refused, so this server will not start with it.");
+        }
+
         if (WellFormed(id))
         {
             return;
@@ -176,7 +212,7 @@ public sealed partial class AcceptedRoles
     /// membership refuses one of them first. (gemini, the plan round.)
     /// </remarks>
     public bool Knows(string? id) =>
-        WellFormed(id) && (AllowAny || _spelling.ContainsKey(Said(id)));
+        WellFormed(id) && !RunElsewhere.Contains(Said(id)) && (AllowAny || _spelling.ContainsKey(Said(id)));
 
     /// <summary>
     /// The spelling to RECORD for a role somebody named.
@@ -250,8 +286,18 @@ public sealed partial class AcceptedRoles
             return $"'{said}' is not a role id. {ShapeRule}";
         }
 
-        return Knows(said) ? null : $"'{said}' is not a review role here. Accepted: {string.Join(", ", Names)}";
+        return WhyNotHere(said) ?? (Knows(said) ? null : $"'{said}' is not a review role here. Accepted: {string.Join(", ", Names)}");
     }
+
+    /// <summary>
+    /// A shipped role of a stage this server does not run: named as such, so a client is not sent to
+    /// configure a role the box could never accept.
+    /// </summary>
+    private string? WhyNotHere(string said) =>
+        RunElsewhere.Contains(said)
+            ? $"'{said}' is a feature-review role, which this Team server does not run in this version — the "
+              + $"feature gate runs on the machine that asked. Accepted: {string.Join(", ", Names)}"
+            : null;
 
     /// <summary>One casing, chosen once, so two spellings of one role meet.</summary>
     private static string Fold(string id) => id.ToLowerInvariant();

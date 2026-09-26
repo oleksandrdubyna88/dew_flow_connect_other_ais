@@ -1,4 +1,4 @@
-import { MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, builtInFor, composed, isActive, isBuiltIn, isProgramming, stageOf, whyNotAskable, type RoleRow } from './roles';
+import { FEATURE_CODE, FEATURE_DOCUMENT, FEATURE_STAGE, MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, builtInFor, composed, isActive, isBuiltIn, isProgramming, stageOf, whyNotAskable, type RoleRow } from './roles';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
 import { STOOD_DOWN, type Tombstone } from './roleDeletion';
 import { escapeHtml } from './webviewHtml';
@@ -32,8 +32,8 @@ import { tabCss, tabStrip } from './tabStrip';
  */
 const PROMPT_ROWS = 10;
 
-/** The three tabs this page is divided into, in the order they are drawn. */
-export const ROLE_TABS: readonly string[] = ['plan', 'code', 'documents'];
+/** The four tabs this page is divided into, in the order they are drawn — one per bucket that has a round. */
+export const ROLE_TABS: readonly string[] = ['plan', 'code', 'documents', 'feature'];
 
 /** Where a page with no choice yet opens: the first section. */
 export const DEFAULT_ROLE_TAB = 'plan';
@@ -284,13 +284,22 @@ export function canDeactivate(rows: readonly RoleRow[], role: RoleRow): boolean 
  * different states, and this is where a person meets the difference.</p>
  */
 function kindHint(role: RoleRow): string {
-  if (isProgramming(role) || stageOf(role) !== PLAN_STAGE) {
+  if (isProgramming(role)) {
     return '';
   }
 
-  return '<p class="hint">A plan-stage role that is not a programming task is kept and takes part in '
-    + 'no round yet — there is no plan gate for non-programming work. Move it to the result stage and '
-    + '<code>review_document</code> will run it.</p>';
+  switch (stageOf(role)) {
+    case PLAN_STAGE:
+      return '<p class="hint">A plan-stage role that is not a programming task is kept and takes part in '
+        + 'no round yet — there is no plan gate for non-programming work. Move it to the result stage and '
+        + '<code>review_document</code> will run it.</p>';
+    case FEATURE_STAGE:
+      return '<p class="hint">A feature-stage role that is not a programming task is kept and takes part in '
+        + 'no round — a feature review reads code, outlined. Mark it a programming task and '
+        + '<code>review_feature</code> will run it.</p>';
+    default:
+      return '';
+  }
 }
 
 function promptBlock(role: RoleRow, prompt: { id: string; label?: string; purpose?: string }, texts: Readonly<Record<string, string>>): string {
@@ -442,6 +451,7 @@ const TAB_NAMES: Readonly<Record<string, string>> = {
   plan: 'Plan review',
   code: 'Code review',
   documents: 'Document review',
+  feature: 'Feature review',
 };
 
 /**
@@ -511,6 +521,10 @@ export function rolesHtml(state: RolesPageState, nonce: string): string {
   // part in nothing. A section for something nothing runs would be a promise the product has
   // not made.
   const waiting = all.filter((r) => bucketOf(r) === PLAN_DOCUMENT);
+  // The fourth stage (S2.1 of the feature-review plan): its shipped role is drawn under a tab of its
+  // own, and a feature-stage row that is not a programming task is drawn beside it the way
+  // `plan:document` is drawn with the plan roles — stored, counted, run by nothing.
+  const features = all.filter((r) => bucketOf(r) === FEATURE_CODE || bucketOf(r) === FEATURE_DOCUMENT);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -547,6 +561,11 @@ ${stageIsFull(all) ? '<p class="hint">Five roles are already active in the code 
 <section id="section-documents" role="tabpanel" aria-labelledby="tab-documents" data-section="documents"${openTab === 'documents' ? '' : ' hidden'}>
 <p class="note">Roles that read a document rather than a diff — what <code>review_document</code> runs. A role here never sees a checkout or a change.</p>
 ${documents.map((r) => roleBlock(all, r, state.texts)).join('\n')}
+</section>
+
+<section id="section-feature" role="tabpanel" aria-labelledby="tab-feature" data-section="feature"${openTab === 'feature' ? '' : ' hidden'}>
+<p class="note">Roles that read a whole feature once every epic has landed — what <code>review_feature</code> runs: the plan, the epics, the implementer&#39;s lessons and an outline of every changed file, never the code itself unless the reviewer asks for it by name.</p>
+${features.map((r) => roleBlock(all, r, state.texts)).join('\n')}
 </section>
 
 ${script(nonce)}

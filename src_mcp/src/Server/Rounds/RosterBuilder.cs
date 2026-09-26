@@ -130,7 +130,10 @@ internal sealed class RosterBuilder(
         // what the refusals downstream quote back. (codex, this story's code round.)
         roles = [.. roles.Select(r => _settings.Rounds.Catalog.ById(r)?.Id ?? r)];
 
-        var schemaFile = SchemaFile.Ensure(_settings.DataDir);
+        // The schema THIS stage answers in, from its row: the feature review's offers `sourceRequests`,
+        // and a file of its own, so a code round launched beside it is never handed that field.
+        var stageRow = Stages.Of(stage);
+        var schemaFile = SchemaFile.Ensure(_settings.DataDir, stageRow.Answers);
         var outputDir = Directory.CreateTempSubdirectory("coai-answers-").FullName;
         _pruneOldAnswerDirs();
 
@@ -162,6 +165,8 @@ internal sealed class RosterBuilder(
         // is the exact lie this change removed from the prompt files; only a mounted worktree is a
         // checkout.
         var hasCheckout = readsCheckout && !fastCode;
+        // And what it holds without one is the stage's to say — the change, or an outline with hunks.
+        var material = hasCheckout ? ReaderMaterial.Checkout : stageRow.Reads;
 
         // Only what can actually run: a vendor whose CLI is missing or whose key is absent is
         // reported by `providers` and left out of the deal rather than dealt work it cannot do.
@@ -297,9 +302,10 @@ internal sealed class RosterBuilder(
                 // config.toml is switched off from the next round on.
                 McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
             };
-            var prompt = _reviewerPrompt.ComposePrompt(choice, context, hasCheckout);
-            // The repair is composed with hasCheckout: FALSE always, because the repair launch always
-            // runs in repairDir — an empty temp directory, whatever the review was given (see above).
+            var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers);
+            // The repair is composed WITHOUT a checkout always — the stage's own no-checkout material —
+            // because the repair launch always runs in repairDir, an empty temp directory, whatever the
+            // review was given (see above).
             // Composing it with the REVIEW's mode is what shipped on 2026-09-06: in worktree mode the
             // repair opened by promising a read-only checkout and closed by saying there were no
             // tools, in one prompt, to the reviewer that had already failed once. Found by codex at
@@ -309,7 +315,7 @@ internal sealed class RosterBuilder(
             // The paragraph itself is built before anybody knows which way the first attempt failed,
             // so it covers both. Its second sentence exists because a refused tool produces NO answer
             // at all, and telling that model its JSON was malformed describes a failure it never had.
-            var repairPrompt = _reviewerPrompt.ComposePrompt(choice, context, hasCheckout: false) +
+            var repairPrompt = _reviewerPrompt.ComposePrompt(choice, context, stageRow.Reads, stageRow.Answers) +
                 "\n\nYOUR PREVIOUS ATTEMPT DID NOT PRODUCE A USABLE ANSWER."
                 + " If it returned text that was not the schema's JSON: return ONLY the JSON object — no fences, no prose."
                 + " If it returned nothing because a command or a file read was refused: there are no tools here"

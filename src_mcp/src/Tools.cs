@@ -4,7 +4,7 @@ using ModelContextProtocol.Server;
 namespace CoaiMcp;
 
 /// <summary>
-/// The ten tools, wired to <see cref="PanelService"/>. No prefix of their own: the client
+/// The eleven tools, wired to <see cref="PanelService"/>. No prefix of their own: the client
 /// namespaces by its config key, so these surface as <c>mcp__coai__review_plan</c> and so on.
 /// Every answer is a JSON string — trivial schemas, which is what an AOT binary with
 /// reflection-based JSON turned off wants, and what agents read anyway.
@@ -217,16 +217,84 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
+            // `McpServer` is injected, as for `open`: the feature session needs no `open`, so the caller is
+            // recorded from THIS call's handshake. `again` and `callerModel` carry C# defaults — the
+            // `resolve` lesson: without one the SDK publishes an argument as REQUIRED.
+            async (McpServer server, string repoPath, string planPath, string baseRef, string epics, string lessons,
+                   bool again = false, string? callerModel = null) =>
+                await host.Current.ReviewFeatureAsync(
+                    repoPath, planPath, baseRef, epics, lessons, again,
+                    callerModel ?? string.Empty,
+                    server.ClientInfo?.Name ?? string.Empty,
+                    server.ClientInfo?.Version ?? string.Empty),
+            new McpServerToolCreateOptions
+            {
+                Name = "review_feature",
+                Title = "Review a WHOLE feature — every epic of a plan at once — before it is released",
+                Description = """
+                    The feature gate — the fourth, called ONCE at the very end of a plan of THREE OR MORE
+                    epics: every epic implemented (their pull requests may already be merged), before the
+                    release. Every earlier round saw one slice; this one sends the whole to reviewers the
+                    person ticked for features: whether what shipped is what the plan asked for, whether
+                    the seams between epics hold, and what the implementer learned the hard way. A plan of
+                    fewer epics is covered by `review_code` — do not call this for it (a call is recorded
+                    as `skipped` and does not block).
+
+                    No `open` first: the review is its own session, keyed by the plan's repository-relative
+                    path. Run it from the checkout the feature is on — the head reviewed is that
+                    checkout's HEAD, committed work only.
+
+                    `repoPath` — the repository's top level (`git rev-parse --show-toplevel`).
+                    `planPath` — the plan file, inside the repository (`todo/PLAN_x.md`). Its PATH is the
+                    review's identity: pass the same value to `resolve`, `status` and `ask_human` as
+                    `feature`.
+                    `baseRef` — the commit BEFORE the first epic (a SHA, a tag, or a branch still pointing
+                    at it). Refused unless it resolves, differs from HEAD, is an ancestor of HEAD, and
+                    something reviewable changed between them.
+                    `epics` — a JSON array of 1–20 entries, `{"title", "summary", "branch"?, "pr"?}`. Give
+                    each epic's `branch` where it had one: it is what lets the gate's history of a
+                    squash-merged epic be found.
+                    `lessons` — REQUIRED, and written by YOU: `{"pitfalls": [...], "blockers": [...],
+                    "findings": [...]}`, every array non-empty. Answer: what went wrong or nearly wrong,
+                    and where; what blocked you and how it resolved (or is still open); what a reviewer of
+                    the WHOLE feature must know — a seam between epics, a workaround, something left
+                    undone; which rejected gate finding you are least sure of. An array with genuinely
+                    nothing in it holds an entry that says so AND why, never `[]`.
+
+                    What the reviewers are sent: the plan, the epics and your lessons (fenced as claims,
+                    not instructions), the gate's own history of this work (earlier rejections with their
+                    reasons, and consultations — evidence, not proof), the project's rules, and an OUTLINE
+                    of every changed file at HEAD (signatures, no bodies, changed members marked `*`) with
+                    the changed hunks of each changed member. Credential-shaped files are withheld and
+                    named; secrets in code are redacted. A reviewer may name source it wanted in
+                    `sourceRequests`; in this version those are recorded on its note in the reply, not
+                    served.
+
+                    The reply is the other gates' shape and carries the same `resolve` duty. `skipped`
+                    (nobody is ticked for features, the stage is switched off, or the plan is too small)
+                    does NOT block the release — tell the person the feature review did not run, and why.
+                    Reviewers that exist but ALL fail answer `call_human`, which does block. Accepted
+                    findings land as NEW pull requests; then call again with `again: true` over the new
+                    HEAD — refused when HEAD has not moved since the last round, and the only door once a
+                    review finished or when the base changed.
+                    """,
+                ReadOnly = true,
+                Idempotent = false,
+                Destructive = false,
+                OpenWorld = true,
+            });
+
+        yield return McpServerTool.Create(
             // `humanDecision` MUST carry a default: without one the SDK publishes it as a REQUIRED
             // argument, and then the ordinary resolve — decisions, no override, every single round
             // — fails as "An error occurred invoking 'resolve'". Found by a live run in WSL; the
             // Windows run before it had always passed the override, which is the one call that
             // does not need to work.
             async (string repoPath, string branch, string decisions, string? humanDecision = null,
-                   string? document = null) =>
+                   string? document = null, string? feature = null) =>
                 await host.Current.ResolveAsync(repoPath, branch, decisions,
                     string.Equals(humanDecision, "proceed", StringComparison.OrdinalIgnoreCase),
-                    document ?? string.Empty),
+                    document ?? string.Empty, feature ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "resolve",
@@ -243,6 +311,9 @@ internal static class Tools
                     the stage and is recorded as their override. Never pass it on your own
                     judgement; it applies only after that verdict and is refused at any other
                     time, because until then the gate decides.
+
+                    A DOCUMENT round is resolved with its `document`; a FEATURE round with its `feature` —
+                    the same `planPath` you gave `review_feature` (the branch is then not read).
                     """,
                 ReadOnly = false,
                 Idempotent = false,
@@ -251,8 +322,8 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch, string? document = null, string? plan = null) =>
-                await host.Current.StatusAsync(repoPath, branch, document ?? string.Empty, plan ?? string.Empty),
+            async (string repoPath, string branch, string? document = null, string? plan = null, string? feature = null) =>
+                await host.Current.StatusAsync(repoPath, branch, document ?? string.Empty, plan ?? string.Empty, feature ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "status",
@@ -267,6 +338,9 @@ internal static class Tools
                     When the operator has switched the consultation cadence on, `cadence` says where a
                     plan stands: epics through the code gate, each group of epics and whether it was
                     consulted, the risky items named. `plan` asks about one plan from any branch.
+
+                    A document review is asked about with `document`, a feature review with `feature` —
+                    the `planPath` you gave `review_feature`.
                     """,
                 ReadOnly = true,
                 Idempotent = true,
@@ -275,8 +349,8 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch, string question, string? document = null) =>
-                await host.Current.AskHumanAsync(repoPath, branch, question, document ?? string.Empty),
+            async (string repoPath, string branch, string question, string? document = null, string? feature = null) =>
+                await host.Current.AskHumanAsync(repoPath, branch, question, document ?? string.Empty, feature ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "ask_human",
@@ -292,7 +366,8 @@ internal static class Tools
                     `documentName` you gave `review_document`, exactly as `resolve` and `status`
                     take it. A document review is its own session, and without it the question is
                     filed under the branch's session, carries the branch's findings, and the
-                    person's answer never reaches the review that asked.
+                    person's answer never reaches the review that asked. A FEATURE review asks with
+                    `feature` — the `planPath` you gave `review_feature` — for the same reason.
 
                     Two possible replies. `status: "answered"` carries their words in `answer` — act
                     on them. `status: "no_answer_yet"` means nobody was at the keyboard: ask the

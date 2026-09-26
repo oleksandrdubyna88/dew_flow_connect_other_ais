@@ -39,7 +39,9 @@ internal sealed record VendorDto(
     /// <summary>For a `remote` row: the vendor id the TEAM SERVER knows, which is not this row's id.</summary>
     string? RemoteVendor = null,
     /// <summary>For an `api` row: the dialect its request is spelled in. Absent = the generic `openai`.</summary>
-    string? Dialect = null);
+    string? Dialect = null,
+    /// <summary>Whether this vendor reviews FEATURES. Absent is NO — see <c>ProviderSettings.Feature</c>.</summary>
+    bool? Feature = null);
 
 /// <summary>
 /// One entry of `COAI_CONSULTANTS`: what consults for one caller kind — a DEFINITION, or a legacy

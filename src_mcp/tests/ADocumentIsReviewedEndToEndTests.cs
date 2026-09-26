@@ -526,6 +526,31 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
             "the document round's own gating finding rides with the question");
     }
 
+    /// <summary>
+    /// Asking about a document that was never reviewed — a path with no file behind it, or a name — is
+    /// answered with the no-session sentence, never an exception.
+    /// </summary>
+    /// <remarks>
+    /// Found by S2.2b (D12): <c>DocumentReader.FollowLink</c> asked the file system to resolve a link at
+    /// a path that does not exist, and .NET answers that with <c>FileNotFoundException</c>, not with
+    /// null — so <c>status</c>, <c>resolve</c> and <c>ask_human</c> threw for any <c>document</c> that was
+    /// not a file on disk, and the caller got an SDK-level "An error occurred" instead of a sentence.
+    /// </remarks>
+    [Theory]
+    [InlineData("docs/never-reviewed.md")]
+    [InlineData("missing-dir/never-reviewed.md")]
+    public async Task AskingAboutADocumentThatIsNotThere_IsASentence_NotAnException(string document)
+    {
+        var service = Service();
+        await service.OpenAsync(_repo, "main");
+
+        var status = Parse(await service.StatusAsync(_repo, "main", document));
+        var resolve = Parse(await service.ResolveAsync(_repo, "main", "[]", document: document));
+
+        status.GetProperty("error").GetString().Should().Contain("no review of");
+        resolve.GetProperty("error").GetString().Should().Contain("no review of");
+    }
+
     /// <summary>And with no document named, the question is the BRANCH session's, exactly as before.</summary>
     [Fact]
     public async Task AskHumanWithNoDocument_StillFilesUnderTheBranchsSession()

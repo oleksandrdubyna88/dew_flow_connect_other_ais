@@ -281,11 +281,41 @@ public static partial class Redaction
         }
     }
 
-    /// <summary>The four passes, in the order the contract fixes, under one deadline.</summary>
+    /// <summary>
+    /// A FILE's text made fit to be served to a reviewer: the same passes as <see cref="SafeText"/>,
+    /// the layout kept, nothing cut.
+    /// </summary>
+    /// <remarks>
+    /// <para>The source resolver's one road for content (plan D15, narrowed by the operator on
+    /// 2026-09-26): a file NAME is refused only for a fixed shape, so the credential words have to
+    /// be applied where a credential actually is — inside the file. <see cref="SafeText"/> cannot
+    /// serve that: it drops every character under 32, tab and newline included, because a NOTICE is
+    /// one line. Here tab, LF and CR stay where they were, and the labelled pass therefore stops at
+    /// each line's end exactly as it does in a notice. No cut, because what bounds a served file is
+    /// the source budget rather than a field's limit — a cut here would hand the reviewer a file
+    /// ending mid-declaration with a suffix it cannot ask past.</para>
+    /// <para>Fails closed as <see cref="SafeText"/> does: a file whose redaction could not finish is
+    /// served as <see cref="Redacted"/>, never as it arrived.</para>
+    /// </remarks>
+    public static string SafeSource(string text) =>
+        WhenRedactionTimesOut(() => SecretsTaken(
+            new string([.. text.Where(IsSourceCharacter)]), System.Diagnostics.Stopwatch.StartNew()));
+
+    /// <summary>A character that may be served in source: printable, or the layout a file is made of — tab, LF, CR.</summary>
+    internal static bool IsSourceCharacter(char unit) => IsPrintable(unit) || unit is '\t' or '\n' or '\r';
+
+    /// <summary>The four passes, in the order the contract fixes, under one deadline — then the cut.</summary>
     private static string Passes(string value, int limit)
     {
         var clock = System.Diagnostics.Stopwatch.StartNew();
-        var printable = new string([.. value.Where(IsPrintable)]);
+        var named = SecretsTaken(new string([.. value.Where(IsPrintable)]), clock);
+
+        return named.Length <= limit ? named : named[..limit] + Truncated;
+    }
+
+    /// <summary>The redaction passes alone: a parameter, the three shapes, then a credential named and given.</summary>
+    private static string SecretsTaken(string printable, System.Diagnostics.Stopwatch clock)
+    {
         var withoutParameters = Parameter().Replace(printable, RedactParameter);
         StopIfOverdue(clock);
         var redacted = Secrets.Aggregate(withoutParameters, (text, secret) =>
@@ -295,9 +325,8 @@ public static partial class Redaction
             return secret.Pattern.Replace(text, secret.Replacement);
         });
         StopIfOverdue(clock);
-        var named = Labelled().Replace(redacted, RedactLabelled);
 
-        return named.Length <= limit ? named : named[..limit] + Truncated;
+        return Labelled().Replace(redacted, RedactLabelled);
     }
 
     /// <summary>Gives up between passes when the whole call has run out of time.</summary>

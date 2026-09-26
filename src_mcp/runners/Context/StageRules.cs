@@ -73,4 +73,34 @@ public static class StageRules
         "common/planning-docs.md",
         "common/coai-document-gate.md",
     ];
+
+    /// <summary>
+    /// The feature gate: what a WHOLE feature — every epic's code, read at once — is judged against.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>At the full <see cref="RuleFiles.DefaultBudgetBytes"/></b> (D18, the operator's decision of
+    /// 2026-09-26): the feature-pack trial measured rules at a median 43 % of a pack and suggested about
+    /// 24 KB; that was declined, because the reviewer should be given the rules the project actually runs
+    /// under. So the tier is a CODE review's, in <see cref="RuleOrder.TierRules"/>' order — the language
+    /// doctrines, security, testing, reuse, style, the knowledge base — followed by the rules a feature
+    /// breaks across epics rather than inside one: reliability (what grows without an owner), the scenario
+    /// harness a new flow owes, the plan's own lifecycle, and the two about contracts with another side.</para>
+    /// <para>Read from the repository's working tree, as the plan and document stages read theirs: the
+    /// feature review has no worktree, and its head is the checkout's HEAD.</para>
+    /// </remarks>
+    public static readonly ImmutableArray<string> Feature =
+    [
+        "csharp/doctrine.md",
+        "rust/doctrine.md",
+        "common/security.md",
+        "common/testing.md",
+        "common/reuse-first.md",
+        "common/coding-style.md",
+        "common/knowledge-base.md",
+        "common/reliability.md",
+        "common/scenario-tests.md",
+        "common/planning-docs.md",
+        "common/http-contracts.md",
+        "common/platform-limits.md",
+    ];
 }

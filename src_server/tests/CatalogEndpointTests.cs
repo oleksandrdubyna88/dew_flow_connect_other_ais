@@ -15,6 +15,14 @@ public sealed class CatalogEndpointTests
         [{ "id": "codex", "runtime": "codex", "models": ["gpt-5.6-luna"], "slots": ["a", "b"] }]
         """;
 
+    /// <summary>
+    /// The shipped roles a Team server RUNS: the plan and result stages. The feature stage's role
+    /// stays on the machine that asked in this version (D10 of the feature-review plan), so the
+    /// catalog must not advertise it — see <see cref="AcceptedRolesTests"/>.
+    /// </summary>
+    private static IEnumerable<string> ShippedHere =>
+        RoleCatalog.Builtin.Roles.Where(r => r.Stage is RoleStages.Plan or RoleStages.Result).Select(r => r.Id);
+
     [Fact]
     public async Task TheCatalogRefusesAnyoneWhoIsNotSignedIn()
     {
@@ -131,7 +139,8 @@ public sealed class CatalogEndpointTests
         var catalog = await server.ClientFor($"dev@{TeamServer.Domain}")
             .GetFromJsonAsync<CatalogDto>("/api/catalog");
 
-        catalog!.Roles.Should().BeEquivalentTo(RoleCatalog.Builtin.Roles.Select(r => r.Id));
+        catalog!.Roles.Should().BeEquivalentTo(ShippedHere);
+        catalog.Roles.Should().NotContain(RoleCatalog.FeatureRole, "a review this box does not run must not be advertised");
         catalog.AllowAnyRole.Should().BeFalse();
     }
 
@@ -197,7 +206,7 @@ public sealed class CatalogEndpointTests
         var catalog = await client.GetFromJsonAsync<CatalogDto>("/api/catalog");
 
         catalog!.Roles.Should().BeEquivalentTo(
-            RoleCatalog.Builtin.Roles.Select(r => r.Id).Concat(["Requirements", "Brief"]),
+            ShippedHere.Concat(["Requirements", "Brief"]),
             "the catalog is the whole accepted set, not a sample of it");
     }
 

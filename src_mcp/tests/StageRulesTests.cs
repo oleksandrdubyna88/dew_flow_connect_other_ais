@@ -132,7 +132,7 @@ public sealed class StageRulesTests : IDisposable
     {
         var corpus = RequireTheMount("the stage-tier resolution test");
 
-        foreach (var entry in StageRules.Plan.Concat(StageRules.Document).Distinct(StringComparer.Ordinal))
+        foreach (var entry in StageRules.Plan.Concat(StageRules.Document).Concat(StageRules.Feature).Distinct(StringComparer.Ordinal))
         {
             File.Exists(Path.Combine(corpus, entry.Replace('/', Path.DirectorySeparatorChar)))
                 .Should().BeTrue($"{entry} is named by a stage tier and must exist in the pinned corpus");

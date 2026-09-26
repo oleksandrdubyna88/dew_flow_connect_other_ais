@@ -76,7 +76,7 @@ public sealed class BuiltinRoleCatalogTests
     }
 
     [Fact]
-    public void TheCatalog_IsTodaysSevenRolesAndTwentyNinePrompts_InTodaysOrder()
+    public void TheCatalog_IsTodaysEightRolesAndThirtyPrompts_InTodaysOrder()
     {
         // The characterization of what `PromptCatalog.All` and `PanelConfig.AllRoles` were the day
         // the catalog became data. Ids are permanent — settings keys, session files and the rounds
@@ -91,7 +91,9 @@ public sealed class BuiltinRoleCatalogTests
             // Plan 4's two, APPENDED — the order is the order a round runs the roles and the order
             // the panel draws them, so inserting anywhere else would reshuffle five boxes a person
             // has learned the positions of.
-            "DocumentReview", "DocumentSummary");
+            "DocumentReview", "DocumentSummary",
+            // The feature stage's one, appended for the same reason (S2.1 of the feature-review plan).
+            "FeatureReview");
 
         // And the constants are those literals, so the rest of the file may keep reading them.
         (RoleCatalog.PlanRole, RoleCatalog.ConventionsRole, RoleCatalog.ArchitectureRole,
@@ -102,12 +104,14 @@ public sealed class BuiltinRoleCatalogTests
         // Twenty-five, not twenty-six: four roles of six lenses and the conventions role's one.
         // The plan said twenty-six until this assertion was watched failing, which is the whole
         // point of pinning a number instead of a shape. Twenty-nine since plan 4: the document
-        // role's three lenses and the summary role's one.
-        RoleCatalog.Builtin.Roles.Sum(r => r.Prompts.Count).Should().Be(29);
+        // role's three lenses and the summary role's one. Thirty since the feature stage: its one
+        // role has one prompt, because a whole-feature review is one question until a lens earns
+        // its place in a measurement.
+        RoleCatalog.Builtin.Roles.Sum(r => r.Prompts.Count).Should().Be(30);
         RoleCatalog.Builtin.Roles.Select(r => r.Prompts.Count).Should().Equal(
-            [6, 1, 6, 6, 6, 3, 1],
+            [6, 1, 6, 6, 6, 3, 1, 1],
             "six choices per section, and the conventions role has one — the shape the operator asked for; "
-            + "plan 4's document role has three lenses and its summary role one");
+            + "plan 4's document role has three lenses and its summary role one; the feature role one");
 
         // And each of the twenty-five by NAME. A prompt id is as permanent as a role id: it is the
         // file under `<dataDir>/prompts/`, the value stored in COAI_PROMPTS_PER_ROUND, and the
@@ -122,12 +126,14 @@ public sealed class BuiltinRoleCatalogTests
             "security-reliability", "sec-memory-leaks", "sec-attack", "sec-blast-radius", "sec-concurrency", "sec-supply-chain",
             "uxdx-performance", "perf-scale", "dx-ergonomics", "perf-first-run", "perf-wasted-work", "ux-undo",
             "document-review", "document-decisions", "document-reader", "document-summary",
+            "feature-review",
         ]);
 
         RoleCatalog.Builtin.ById(RoleCatalog.PlanRole)!.Stage.Should().Be(RoleStages.Plan);
-        RoleCatalog.Builtin.Roles.Where(r => r.Id != RoleCatalog.PlanRole)
+        RoleCatalog.Builtin.ById(RoleCatalog.FeatureRole)!.Stage.Should().Be(RoleStages.Feature);
+        RoleCatalog.Builtin.Roles.Where(r => r.Id != RoleCatalog.PlanRole && r.Id != RoleCatalog.FeatureRole)
             .Should().OnlyContain(r => r.Stage == RoleStages.Result,
-                "every shipped role but the plan one belongs to the result stage");
+                "every shipped role but the plan one and the feature one belongs to the result stage");
 
         // And the BUCKET each shipped role is in, which is what a round is now selected by. Pinned
         // as a list rather than as a predicate, because the mistake this guards is a role changing
@@ -137,7 +143,21 @@ public sealed class BuiltinRoleCatalogTests
             RoleBuckets.PlanCode,
             RoleBuckets.ResultCode, RoleBuckets.ResultCode, RoleBuckets.ResultCode, RoleBuckets.ResultCode,
             RoleBuckets.ResultDocument, RoleBuckets.ResultDocument,
+            RoleBuckets.FeatureCode,
         ]);
+    }
+
+    /// <summary>The Defaults dictionary — the third of the three sites that pick a default — hands the feature role its OWN instance.</summary>
+    [Fact]
+    public void TheShippedFeatureRole_TakesTheFeatureDefault_NotTheCodeOne()
+    {
+        new PanelConfig().Roles[RoleCatalog.FeatureRole].Should().BeSameAs(PanelConfig.FeatureDefault);
+        new PanelConfig().Roles[RoleCatalog.ArchitectureRole].Should().BeSameAs(PanelConfig.CodeDefault);
+        new PanelConfig().Roles[RoleCatalog.PlanRole].Should().BeSameAs(PanelConfig.PlanDefault);
+        new PanelConfig().For(RoleCatalog.FeatureRole).Should().BeSameAs(PanelConfig.FeatureDefault);
+        // And a role of a person's own at that stage, with no gate written for it: its stage's shipped one.
+        var seams = RoleComposition.Compose([new RoleEntry("Seams", Stage: RoleStages.Feature, Prompts: [new PromptEntry("seams-general")])]);
+        new PanelConfig { Catalog = seams }.For("Seams").Should().BeSameAs(PanelConfig.FeatureDefault);
     }
 
     [Fact]
@@ -274,6 +294,17 @@ public sealed class BuiltinRoleCatalogTests
             Loading(new SeedRole("Odd", "Odd", "sometime", true, [PromptFor("Odd")]))
                 .Should().Throw<InvalidOperationException>().WithMessage("*sometime*",
                     "a stage this build does not know puts the role in no round and says nothing");
+
+        /// <summary>The third stage is a stage: one shared list, read by the seed and by composition (S2.1).</summary>
+        [Fact]
+        public void WithAFeatureStage_IsAccepted()
+        {
+            var catalog = RoleCatalog.FromSeed(new RoleSeed([new SeedRole("Whole", "The whole", RoleStages.Feature, true, [PromptFor("Whole")])]));
+
+            catalog.Roles.Single().Bucket.Should().Be(RoleBuckets.FeatureCode);
+            RoleStages.All.Should().Equal([RoleStages.Plan, RoleStages.Result, RoleStages.Feature],
+                "the list both readers share, in the order a person would list the gates");
+        }
 
         [Fact]
         public void ThatIsWellFormed_LoadsAndMarksEverythingShipped()

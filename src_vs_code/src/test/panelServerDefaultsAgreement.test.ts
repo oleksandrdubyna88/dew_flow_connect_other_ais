@@ -44,9 +44,21 @@ function serverDefault(name: string): { readonly rounds: number; readonly thresh
   return { rounds: Number(m[1]), threshold: Number(m[2]) };
 }
 
+/** Which C# constant a panel bucket falls back to — the third arm since the feature stage (S2.1). */
+function defaultNameFor(stage: string): string {
+  switch (stage) {
+    case 'plan':
+      return 'PlanDefault';
+    case 'feature':
+      return 'FeatureDefault';
+    default:
+      return 'CodeDefault';
+  }
+}
+
 test('every role default in the panel is the number the server falls back to', () => {
   for (const role of ROLES) {
-    const server = serverDefault(role.stage === 'plan' ? 'PlanDefault' : 'CodeDefault');
+    const server = serverDefault(defaultNameFor(role.stage));
 
     assert.strictEqual(DEFAULTS.rounds[role.id], server.rounds,
       role.id + ': the panel shows ' + DEFAULTS.rounds[role.id] + ' rounds, the server would run ' + server.rounds);

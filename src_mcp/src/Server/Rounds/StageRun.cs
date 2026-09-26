@@ -84,4 +84,75 @@ internal sealed record StageRun(
     /// the right one.
     /// </remarks>
     public int RolesPerVendor { get; init; } = 1;
+
+    /// <summary>
+    /// Which PLAN's feature session this run is about: empty for everything that is not a feature
+    /// review, the plan's identity for one — the fourth segment of the session key.
+    /// </summary>
+    public string Feature { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The ref the round's commit is resolved from, when it is not the session's branch: a feature
+    /// session lives under a branch no git ref can spell, so its head is named here. Empty resolves
+    /// the session's own branch, as every other stage does.
+    /// </summary>
+    public string Head { get; init; } = string.Empty;
+
+    /// <summary>What the engine does when the roster comes back empty. Refuse, for every stage but one.</summary>
+    public NobodyPolicy WhenNobody { get; init; } = NobodyPolicy.Refuse;
+
+    /// <summary>Whether a session that is not there yet is created under the engine's own claim, and how.</summary>
+    public SessionRule Session { get; init; } = new SessionRule.MustExist();
+
+    /// <summary>
+    /// A reason this round is SKIPPED that the stage decided from its own inputs — empty when it is not.
+    /// </summary>
+    /// <remarks>
+    /// The feature stage's D17: a plan of fewer epics than <c>COAI_FEATURE_MIN_EPICS</c> is covered by
+    /// <c>review_code</c>, and a feature round for it is recorded as <c>skipped</c> and does not block.
+    /// The engine records it under the claim, AFTER <see cref="Begin"/> — a standing call_human is a
+    /// person's decision and no skip dissolves it — and before any work is built.
+    /// </remarks>
+    public string SkipBecause { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The resolved base a feature review is held to from this round on — empty for every other stage.
+    /// Saved with the round only (never by a skip, a refusal or a build that failed — the session is
+    /// created with none), so <c>again</c> against a new base moves it the moment that review actually
+    /// runs, and starts that review over (§4.3, <c>RoundMachine.FreshFeatureReview</c>).
+    /// </summary>
+    public string FeatureBase { get; init; } = string.Empty;
+}
+
+/// <summary>What a round with nobody to ask becomes.</summary>
+internal enum NobodyPolicy
+{
+    /// <summary>A refusal: a round with no reviewer would pass having reviewed nothing.</summary>
+    Refuse,
+
+    /// <summary>
+    /// A round recorded as <c>skipped</c> with its reason, leaving the session untouched — the
+    /// feature stage's answer (D1): optional per vendor, so nobody ticked is the ordinary state.
+    /// </summary>
+    RecordSkip,
+}
+
+/// <summary>
+/// Whether the engine may CREATE the session it runs on.
+/// </summary>
+/// <remarks>
+/// A closed union rather than a nullable factory, which is how every other two-state thing here is
+/// spelled. <see cref="MustExist"/> is every stage that predates the feature review: <c>open</c> made
+/// the session, and a run without one is refused. <see cref="CreateIfAbsent"/> is the feature
+/// stage's: it needs no <c>open</c>, and the session is made UNDER THE CLAIM — the document stage
+/// creates outside it and narrows the race by re-reading, so two concurrent first calls on one plan
+/// would be two creators (§4.3).
+/// </remarks>
+internal abstract record SessionRule
+{
+    public sealed record MustExist : SessionRule;
+
+    public sealed record CreateIfAbsent(Func<PersistedSession> Make) : SessionRule;
+
+    private SessionRule() { }
 }

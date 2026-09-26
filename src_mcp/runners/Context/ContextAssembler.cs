@@ -28,6 +28,38 @@ public static class DiffExclusions
         "**/*.min.css",
         "**/*.map",
     ];
+
+    /// <summary>Whether ONE path is what these globs exclude — the same table, asked for a file a reviewer requests by name.</summary>
+    /// <remarks>
+    /// The diff hands the globs to git as <c>:(exclude,glob)</c> pathspecs; the source resolver (plan
+    /// §4.9) has no git call to hand them to, so it asks here — one table, two readers, and a lock
+    /// file the diff hides is a lock file no reviewer is served. Matched the way git matches a glob
+    /// pathspec: <c>**/</c> is any number of directories or none, <c>/**</c> anything beneath, a single
+    /// <c>*</c> stays inside one path component; ordinal, as git is on a case-sensitive tree.
+    /// </remarks>
+    public static bool Excludes(string path) => WhichExcludes(path).Length > 0;
+
+    /// <summary>The first glob that excludes <paramref name="path"/> — for a refusal that names it — or empty.</summary>
+    public static string WhichExcludes(string path)
+    {
+        var slashed = path.Replace('\\', '/');
+
+        return Matchers.FirstOrDefault(one => one.Matcher.IsMatch(slashed)).Glob ?? string.Empty;
+    }
+
+    private static readonly (string Glob, System.Text.RegularExpressions.Regex Matcher)[] Matchers =
+    [
+        .. Default.Select(glob => (glob, new System.Text.RegularExpressions.Regex(
+            GlobToRegex(glob), System.Text.RegularExpressions.RegexOptions.CultureInvariant))),
+    ];
+
+    /// <summary>A pathspec glob as an anchored regular expression over a <c>/</c>-separated path.</summary>
+    internal static string GlobToRegex(string glob) =>
+        "^" + System.Text.RegularExpressions.Regex.Escape(glob)
+            .Replace(@"\*\*/", "(?:.*/)?", StringComparison.Ordinal)
+            .Replace(@"/\*\*", "(?:/.*)?", StringComparison.Ordinal)
+            .Replace(@"\*", "[^/]*", StringComparison.Ordinal)
+            .Replace(@"\?", "[^/]", StringComparison.Ordinal) + "$";
 }
 
 public sealed class ContextException(string operation, string detail)
@@ -357,12 +389,20 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
     /// and another session advancing it between two of them produces a review of two different
     /// snapshots, which nobody could reproduce afterwards from a log naming only the ref. Pinning it
     /// is the same lesson as the one this whole change is about. (codex, the code round, three times.)</para>
+    /// <para>Public since the feature review (plan §4.7): its outline builder compares <c>base..head</c>
+    /// against the same commit a code round would, through this one road rather than a second
+    /// merge-base of its own.</para>
     /// </remarks>
-    private async Task<(string Against, DiffBase Kind)> ComparisonBase(
-        string repoPath, string baseRef, string sha, CancellationToken ct)
+    /// <param name="timeout">
+    /// The deadline each process here runs under. Absent, the launcher's own default — what every code
+    /// round has always run it with; the feature outline builder passes its 60 s, so no git process of
+    /// that build stands outside the deadline it promises.
+    /// </param>
+    public async Task<(string Against, DiffBase Kind)> ComparisonBase(
+        string repoPath, string baseRef, string sha, CancellationToken ct, TimeSpan? timeout = null)
     {
         var found = await launcher.RunAsync(
-            new ProcessRequest("git", ["merge-base", baseRef, sha], repoPath), ct);
+            Bounded(new ProcessRequest("git", ["merge-base", baseRef, sha], repoPath), timeout), ct);
         // One commit per LINE where a criss-cross history has several, and the first is the one git
         // itself would pick. Interpolating two of them makes a range out of two commits and a
         // newline, which is not a range at all. (gemini, the plan round.)
@@ -380,13 +420,13 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
         // different sentences: one is a fact about the commits, the other is a clone somebody can
         // deepen. Asked only on the path that already failed, so an ordinary round pays nothing.
         var shallow = await launcher.RunAsync(
-            new ProcessRequest("git", ["rev-parse", "--is-shallow-repository"], repoPath), ct);
+            Bounded(new ProcessRequest("git", ["rev-parse", "--is-shallow-repository"], repoPath), timeout), ct);
         var truncated = shallow.ExitCode == 0
             && shallow.StdOut.Trim().Equals("true", StringComparison.OrdinalIgnoreCase);
         var kind = truncated ? DiffBase.ShallowHistory : DiffBase.NoCommonAncestor;
 
         var pinned = await launcher.RunAsync(
-            new ProcessRequest("git", ["rev-parse", $"{baseRef}^{{commit}}"], repoPath), ct);
+            Bounded(new ProcessRequest("git", ["rev-parse", $"{baseRef}^{{commit}}"], repoPath), timeout), ct);
         var commit = pinned.ExitCode == 0 ? pinned.StdOut.Trim() : string.Empty;
 
         return IsCommit(commit)
@@ -396,6 +436,10 @@ public sealed class ContextAssembler(IProcessLauncher launcher)
             // the one place a caller's own string would have reached a command line.
             : throw new ContextException("rev-parse", $"{baseRef} names no commit in this repository");
     }
+
+    /// <summary>The request under the caller's deadline when it named one; under the launcher's own otherwise.</summary>
+    private static ProcessRequest Bounded(ProcessRequest request, TimeSpan? timeout) =>
+        timeout is { } deadline ? request with { Timeout = deadline } : request;
 
     private async Task<long> BlobSize(string repoPath, string sha, string baseRef, string path, CancellationToken ct)
     {

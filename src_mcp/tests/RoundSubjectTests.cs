@@ -95,7 +95,16 @@ public sealed class RoundSubjectTests
     /// A stage this build has no phrase for is said AS ITSELF — a round written by a newer build
     /// is not "done".
     /// </summary>
+    /// <remarks>
+    /// The example was <c>FeatureReview</c> until S2.1 gave it a phrase; the fifth stage, whatever
+    /// it is called, is the case this guards.
+    /// </remarks>
     [Fact]
     public void AStageWithNoPhrase_IsSaidAsItself_NeverAsDone() =>
-        RoundSubject.StageName("FeatureReview").Should().Be("FeatureReview");
+        RoundSubject.StageName("ReleaseReview").Should().Be("ReleaseReview");
+
+    /// <summary>And the fourth stage has a phrase of its own, so a notice about it is not the raw enum.</summary>
+    [Fact]
+    public void TheFeatureStage_IsSaidAsAFeatureReview() =>
+        RoundSubject.StageName("FeatureReview").Should().Be("feature review");
 }

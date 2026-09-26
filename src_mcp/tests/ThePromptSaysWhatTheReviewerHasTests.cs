@@ -62,7 +62,7 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
     [Fact]
     public void InFastMode_TheReviewerIsToldThereIsNothingToLookAt()
     {
-        var said = ReviewerPrompt.WhatYouHave(hasCheckout: false);
+        var said = ReviewerPrompt.WhatYouHave(ReaderMaterial.Change);
 
         said.Should().Contain("no checkout");
         said.Should().Contain("no tool you can call",
@@ -73,16 +73,58 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
     [Fact]
     public void WithAWorktreeMounted_TheReviewerIsToldTheCheckoutIsThere()
     {
-        var said = ReviewerPrompt.WhatYouHave(hasCheckout: true);
+        var said = ReviewerPrompt.WhatYouHave(ReaderMaterial.Checkout);
 
         said.Should().Contain("READ-ONLY checkout");
         said.Should().NotContain("no tool you can call");
     }
 
     [Fact]
-    public void TheTwoModesDoNotSayTheSameThing()
+    public void TheThreeMaterialsDoNotSayTheSameThing()
     {
-        ReviewerPrompt.WhatYouHave(true).Should().NotBe(ReviewerPrompt.WhatYouHave(false));
+        Enum.GetValues<ReaderMaterial>().Select(ReviewerPrompt.WhatYouHave).Should().OnlyHaveUniqueItems(
+            "each is a different truth about what the reviewer holds");
+    }
+
+    /// <summary>
+    /// The feature reviewer's truth (S2.2b): an outline with the changed hunks, the marks it will meet, and
+    /// source it may ask for — worded to be TRUE while the loop that answers a request does not exist yet.
+    /// </summary>
+    [Fact]
+    public void AFeatureReviewer_IsToldItHasAnOutlineAndHunks_AndThatARequestIsRecordedNotServed()
+    {
+        var said = ReviewerPrompt.WhatYouHave(ReaderMaterial.Outline);
+
+        said.Should().Contain("no checkout").And.Contain("no tool you can call", "a feature reviewer has no checkout either");
+        said.Should().Contain("OUTLINE").And.Contain("CHANGED HUNKS", "the two halves of the pack are named");
+        said.Should().Contain("`*`", "the changed-member marker the outline carries is explained");
+        said.Should().Contain("[N more changed lines — ask for source]", "the truncation marker a capped hunk ends with is explained");
+        said.Should().Contain("What this context left out", "and where the cut material is named");
+        said.Should().Contain("`sourceRequests`", "the way to ask is named");
+        said.Should().Contain("RECORDED").And.Contain("NOT answered inside this review",
+            "the loop that serves a request is S3.2 — promising source would make a reviewer hold its findings back");
+        said.Should().NotContain("READ-ONLY checkout");
+    }
+
+    /// <summary>The marker the prompt quotes is the one the hunks really end with — read from the code that writes it.</summary>
+    [Fact]
+    public void TheTruncationMarkerThePromptQuotes_IsTheOneAHunkEndsWith()
+    {
+        var entries = System.Collections.Immutable.ImmutableArray.Create(
+            new Core.Outlining.OutlineEntry(0, "method", "Big", "void Big()", 1, 2000));
+        var file = new Core.Feature.OutlinedFile(
+            new Core.Feature.ChangedFile("src/Big.cs", string.Empty, Core.Feature.FileChange.Modified, 1500, 0, false),
+            Core.Outlining.SourceOutline.Of(Core.Outlining.OutlineLanguage.CSharp, 1000, entries),
+            [new Core.Feature.LineSpan(2, 1501)],
+            [.. Enumerable.Range(0, 1500).Select(i => new Core.Feature.DiffLine(0, '+', 2 + i, $"+    var line{i} = {i};"))]);
+
+        var unit = Core.Feature.MemberHunks.Units(file).Single();
+
+        unit.Truncated.Should().BeTrue("the fixture must be longer than the per-member cap");
+        var marker = System.Text.RegularExpressions.Regex.Match(unit.Text, @"\[\d+ more changed lines — ask for source\]").Value;
+        marker.Should().NotBeEmpty();
+        ReviewerPrompt.WhatYouHave(ReaderMaterial.Outline).Should().Contain(
+            System.Text.RegularExpressions.Regex.Replace(marker, @"\d+", "N"));
     }
 
     [Fact]
@@ -96,10 +138,12 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
             + File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"))
             + File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "ReviewerPrompt.cs"));
 
-        source.Should().Contain("{WhatYouHave(hasCheckout)}",
+        source.Should().Contain("{WhatYouHave(material)}",
             "every composed prompt carries it, including one a person overrode in the catalog");
-        source.Should().Contain("ComposePrompt(choice, context, hasCheckout)",
+        source.Should().Contain("ComposePrompt(choice, context, material, stageRow.Answers)",
             "the real mode reaches the prompt — a literal here would pass every other test in this file");
+        source.Should().Contain("var material = hasCheckout ? ReaderMaterial.Checkout : stageRow.Reads",
+            "and what a reviewer without a checkout holds is the STAGE's answer, not a constant");
         source.Should().Contain("var hasCheckout = readsCheckout && !fastCode",
             "the mode is TOLD, and a round that reads no checkout has none however it is configured");
         source.Should().NotContain("!isPlan",

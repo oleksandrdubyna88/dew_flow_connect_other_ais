@@ -39,8 +39,12 @@ const defaultOut = join(here, '..', 'src', 'builtinRoles.generated.ts');
 const seedPath = flag('seed', defaultSeed);
 const out = flag('out', defaultOut);
 
-/** The stages the seed may name. A third one is a deliberate change here, not a silent remapping. */
-const STAGES = ['plan', 'result'];
+/**
+ * The stages the seed may name. A new one is a deliberate change here, not a silent remapping —
+ * `feature` arrived with S2.1 of the feature-review plan, and `prompts.ts` maps it before this list
+ * admits it.
+ */
+const STAGES = ['plan', 'result', 'feature'];
 
 // A missing seed is the one failure a fresh or half-deleted checkout actually produces, and
 // readFileSync's ENOENT stack trace says the path without saying what it was for.
@@ -88,10 +92,10 @@ for (const r of roles) {
       throw new Error(`${seedPath}: a role has no ${field} — ${JSON.stringify(r).slice(0, 120)}`);
     }
   }
-  // A stage this build has no mapping for must STOP here. `prompts.ts` turns anything that is not
-  // `plan` into the panel's `code`, which is right for the two stages that exist and silently wrong
-  // for the document stage a later plan adds — the panel would draw it among the code roles and
-  // nothing would say so. (codex and gemini, this story's code round.)
+  // A stage this build has no mapping for must STOP here. `prompts.ts` maps each stage it knows to
+  // the panel's own word and would turn an unknown one into `code`, which is right for the stages
+  // that exist and silently wrong for the next one — the panel would draw it among the code roles
+  // and nothing would say so. (codex and gemini, this story's code round.)
   if (!STAGES.includes(r.stage)) {
     throw new Error(
       `${seedPath}: role '${r.id}' is of stage '${r.stage}', which this panel has no mapping for `

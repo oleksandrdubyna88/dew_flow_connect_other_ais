@@ -25,12 +25,16 @@ test('every shipped role keeps the tone the sidebar has always given it', () => 
   assert.equal(roleTone('Architecture', 'result'), 'arch');
   assert.equal(roleTone('SecurityReliability', 'result'), 'sec');
   assert.equal(roleTone('UxDxPerformance', 'result'), 'uxdx');
+  // The sixth, since the feature stage (S2.1 of the feature-review plan): a colour of its own, so the
+  // six programming roles stay six colours.
+  assert.equal(roleTone('FeatureReview', 'feature'), 'feature');
 });
 
 test('a role of your own is toned by its stage, which is what the sidebar does too', () => {
   // Not a colour of its own: matching the menu means matching it where it is arbitrary as well.
   assert.equal(roleTone('Requirements', 'plan'), 'plan');
   assert.equal(roleTone('Requirements', 'result'), 'arch');
+  assert.equal(roleTone('Seams', 'feature'), 'feature', 'a feature-stage row shares the feature role\'s edge');
 });
 
 test('a role the stage does not name still gets a tone rather than nothing', () => {

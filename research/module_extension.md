@@ -2521,6 +2521,23 @@ the latest instant is found in one pass, since `Math.max(...all)` threw `RangeEr
 history; each changed answer is painted as it LANDS rather than after the whole batch; and the test
 fixtures build a real `SessionFile` instead of casting to one.
 
+## The seed's fourth stage reaches the panel (2026-09-26, S2.1 of the feature-review plan)
+
+The minimum the shared seed forces on this half, and no more: the vendor tick, the tool and the log's
+rendering of a skipped round are epic 3's.
+
+| what | where |
+|---|---|
+| **`builtinRoles.generated.ts` regenerated** — eight roles, thirty prompts — and the generator's `STAGES` admits `feature`, after `prompts.ts` maps it: the panel's word for the seed's `feature` is `feature`, its own, never `code`. | `scripts/generate-builtin-roles.mjs`, `prompts.ts` (`panelWordFor`) |
+| **`FEATURE_CODE` and `FEATURE_DOCUMENT` are buckets**, and `bucketOf` answers by NAME per stage rather than a template string cast to the union — the cast compiled for any stage word and gave a misspelt or newer row a bucket no section draws; an unknown stage lands in the result bucket, where `stageOf` already sends a row that names none, until the server's own sentence arrives. | `roles.ts` |
+| **`enabledCodeRoles` is a bucket filter** (§9.8): "not the plan stage" read every programming role outside the plan stage as a code role, which counted the feature role into the fan-out sentence and the last-role-standing check of a round that never asks it. | `settingsShape.ts` |
+| **The defaults carry the feature role** — `FeatureReview: 1 / 5`, on — and `panelServerDefaultsAgreement` reads `PanelConfig.FeatureDefault` off the C# for it, as it reads `PlanDefault` and `CodeDefault`. Its switch IS the feature gate's switch; there is no second setting. | `settingsShape.ts`, `panelServerDefaultsAgreement.test.ts` |
+| **A fourth group in the Prompts section and a fourth tab on the roles page** (`feature`), because every shipped role must be drawn somewhere with its rounds, its threshold and its switch — and drawn among the code roles it would have been counted as one. The feature role is never "the last role standing": unticking it is the gate's switch, and a feature round with nobody in it is recorded as skipped rather than left open. A feature-stage row that is not a programming task gets the `plan:document` treatment — drawn, hinted, run by nothing. The manifest's three defaults (`coai.rounds`, `coai.thresholds`, `coai.roleEnabled`) carry the role too, so a revert in the settings editor restores what the code ships. | `panelView.ts`, `rolesPage.ts`, `package.json` |
+| **A tone of its own** — `feature`, red, the one charts colour the palette had left — so the six programming roles stay six colours in both views; a feature-stage row of a person's own takes the same edge, as a plan-stage row takes the plan's. | `roleTone.ts` |
+
+The stage `<select>` on the roles page still offers `plan` and `result` only; offering `feature` there is
+epic 3's, with the vendor card's fourth switch.
+
 ## The consultant rule is read from the mount (2026-09-25, epic 5 story 5.2)
 
 Story 5.2 of [PLAN_consult_on_a_cadence.md](PLAN_consult_on_a_cadence.md). The consultant half of

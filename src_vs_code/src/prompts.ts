@@ -53,12 +53,26 @@ export const ROLES: readonly { readonly id: string; readonly label: string; read
   // `stage` here is really the BUCKET, and has been since the day there were two kinds of round: it
   // answers "which group does this belong to", which is what every caller of it asks. It said
   // `'plan' : 'code'` until plan 4, so a document role came back as a code role — the panel's
-  // fan-out arithmetic and its switch list would both have counted it as one.
+  // fan-out arithmetic and its switch list would both have counted it as one. The feature stage
+  // (S2.1 of the feature-review plan) keeps its own word for the same reason: a feature role reads an
+  // outline in a round of its own, and `'code'` would have counted it into every code round's
+  // arithmetic.
   BUILTIN_ROLES.map((r) => ({
     id: r.id,
     label: r.name,
-    stage: r.stage === 'plan' ? 'plan' : (r.programmingTask ? 'code' : 'document'),
+    stage: panelWordFor(r.stage, r.programmingTask),
   }));
+
+/** The panel's word for a seed stage and kind: `plan` and `feature` are their own; `result` splits by kind. */
+function panelWordFor(stage: string, programmingTask: boolean): string {
+  switch (stage) {
+    case 'plan':
+    case 'feature':
+      return stage;
+    default:
+      return programmingTask ? 'code' : 'document';
+  }
+}
 
 /**
  * Every prompt of every role, role by role.

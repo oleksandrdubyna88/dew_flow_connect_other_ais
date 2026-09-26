@@ -58,6 +58,9 @@ public static class SchemaFile
         return file;
     }
 
+    /// <summary>The schema text of <paramref name="shape"/> — what a prompt quotes, byte-identical to the file <see cref="Ensure(string, SchemaShape)"/> writes.</summary>
+    public static string Text(SchemaShape shape) => Of(shape).Content;
+
 #pragma warning disable CS8524 // an unnamed (cast) value throws; a NAMED shape without an arm is CS8509
     private static (string Name, string Content) Of(SchemaShape shape) => shape switch
     {

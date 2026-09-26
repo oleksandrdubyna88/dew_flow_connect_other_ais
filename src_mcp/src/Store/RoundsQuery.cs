@@ -89,7 +89,14 @@ public sealed record LoggedRound(
     /// with no findings at all: <c>MAX()</c> over no rows is SQL <c>NULL</c>, which is not a string.
     /// (Code round, codex.)</para>
     /// </remarks>
-    string ResolvedUtc = "");
+    string ResolvedUtc = "",
+
+    /// <summary>
+    /// Why a SKIPPED round did not run, with a repeat count when consecutive identical skips
+    /// coalesced into this row — empty for every round that ran, and for every row a database from
+    /// before schema step 16 holds (S2.1 of the feature-review plan).
+    /// </summary>
+    string Note = "");
 
 
 /// <summary>
@@ -462,7 +469,11 @@ public static class RoundsQuery
         // without schema step 2 has no such column, and naming it would fail the whole rounds list —
         // which is the page, not a section of it. The consultations list can answer "none" for the
         // same skew; this one cannot answer anything. (Caught by story 4's own compatibility test.)
-        read.CommandText = HasColumn(db, "rounds", "consult_missed") ? SqlRoundsCounted : SqlRoundsPlain;
+        // Three shapes, asked of the schema in the order the steps arrived: a file with `note` (step 16)
+        // has `consult_missed` (step 4) as well, so the ladder is note → counter → neither.
+        read.CommandText = HasColumn(db, "rounds", "note") ? SqlRoundsNoted
+            : HasColumn(db, "rounds", "consult_missed") ? SqlRoundsCounted
+            : SqlRoundsPlain;
         read.Parameters.AddWithValue("$unbounded", before is null ? 1 : 0);
         read.Parameters.AddWithValue("$started", before?.StartedUtc ?? string.Empty);
         read.Parameters.AddWithValue("$id", before?.Id ?? 0L);
@@ -497,7 +508,10 @@ public static class RoundsQuery
                 // then selects the literal instead — either way it arrives under this name, and the
                 // reader answers the convention's own "not measured" rather than refusing the row.
                 NumberOr(rows, "consult_missed", -1),
-                Text(rows, "resolved_utc")));
+                Text(rows, "resolved_utc"),
+                // Selected as the literal '' by the two older query texts, so a database from before
+                // step 16 answers the one spelling of no note rather than failing the whole list.
+                Text(rows, "note")));
         }
 
         return rounds;
@@ -756,11 +770,26 @@ public static class RoundsQuery
     /// <para>They differ in ONE token, and a change to either must be made to both. That is the cost,
     /// and it is why the difference is on its own line in each.</para>
     /// </remarks>
+    /// <summary>The newest shape: the counter (step 4) and the note (step 16) both present.</summary>
+    private const string SqlRoundsNoted = """
+        SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
+               r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id) AS finding_count,
+               r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model,
+               r.consult_missed, r.note,
+               COALESCE((SELECT MAX(f.resolved_utc) FROM findings f WHERE f.round_id = r.id), '') AS resolved_utc
+        FROM rounds r JOIN sessions s ON s.id = r.session_id
+        WHERE $unbounded = 1
+           OR r.started_utc < $started
+           OR (r.started_utc = $started AND r.id < $id)
+        ORDER BY r.started_utc DESC, r.id DESC LIMIT $limit
+        """;
+
+    /// <summary>A file with the counter and no note: written by a build between steps 4 and 16.</summary>
     private const string SqlRoundsCounted = """
         SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
                r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id) AS finding_count,
                r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model,
-               r.consult_missed,
+               r.consult_missed, '' AS note,
                COALESCE((SELECT MAX(f.resolved_utc) FROM findings f WHERE f.round_id = r.id), '') AS resolved_utc
         FROM rounds r JOIN sessions s ON s.id = r.session_id
         WHERE $unbounded = 1
@@ -774,7 +803,7 @@ public static class RoundsQuery
         SELECT r.id, s.repo_path, s.branch, r.stage, r.number, r.started_utc, r.accepted, r.rejected,
                r.session_id, (SELECT COUNT(*) FROM findings f WHERE f.round_id = r.id) AS finding_count,
                r.caller_vendor, r.caller_client, r.caller_client_version, r.caller_model,
-               -1 AS consult_missed,
+               -1 AS consult_missed, '' AS note,
                COALESCE((SELECT MAX(f.resolved_utc) FROM findings f WHERE f.round_id = r.id), '') AS resolved_utc
         FROM rounds r JOIN sessions s ON s.id = r.session_id
         WHERE $unbounded = 1
@@ -835,7 +864,7 @@ public static class RoundsQuery
     /// a query with no string building in it needs no such argument. (SonarCloud, Major, on the pull
     /// request.)
     /// </remarks>
-    private static bool HasColumn(SqliteConnection db, string table, string column)
+    internal static bool HasColumn(SqliteConnection db, string table, string column)
     {
         using var ask = db.CreateCommand();
         ask.CommandText = "SELECT COUNT(*) FROM pragma_table_info($table) WHERE name = $column";

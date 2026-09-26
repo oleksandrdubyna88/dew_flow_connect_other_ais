@@ -620,8 +620,8 @@ test('each stage stands in its own frame, and no role appears in two', () => {
   const html = panelHtml(state(), 'n0nce');
   const groups = html.split('class="role-group"');
 
-  assert.equal(groups.length, 4, 'three frames: the plan stage, the code stage, the document stage');
-  const [, planFrame, codeFrame, documentFrame] = groups;
+  assert.equal(groups.length, 5, 'four frames: the plan stage, the code stage, the document stage, the feature stage');
+  const [, planFrame, codeFrame, documentFrame, featureFrame] = groups;
   assert.ok(planFrame!.includes('data-prompt="PlanCritique"'), 'the plan role is in the first frame');
   assert.ok(!planFrame!.includes('data-prompt="Architecture"'), 'and the code roles are not');
   for (const role of ['Architecture', 'SecurityReliability', 'UxDxPerformance']) {
@@ -632,6 +632,11 @@ test('each stage stands in its own frame, and no role appears in two', () => {
     assert.ok(documentFrame!.includes(`data-prompt="${role}"`), `${role} is in the document frame`);
     assert.ok(!codeFrame!.includes(`data-prompt="${role}"`), `${role} reviews no diff`);
   }
+  // The feature role reads an outline in a round of its own (S2.1 of the feature-review plan): drawn
+  // in its own frame, with its switch, and never among the code roles it would be counted with.
+  assert.ok(featureFrame!.includes('data-prompt="FeatureReview"'), 'the feature role is in the feature frame');
+  assert.ok(featureFrame!.includes('data-setting="roleEnabled" data-role="FeatureReview"'), 'and it has its switch');
+  assert.ok(!codeFrame!.includes('data-prompt="FeatureReview"'), 'FeatureReview reviews no diff');
 });
 
 test('each code role is wrapped in its own colour, and still says its name', () => {
