@@ -112,10 +112,9 @@ test('the legacy mount location is read with its siblings too', async t => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-snippet-legacy-mount-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
   const real = path.resolve(__dirname, '../../..', '.agents/conventions/common');
-  const files = new Map<string, string>();
-  for (const name of ['coai-review-gate.md', 'coai-document-gate.md', 'coai-caller-model.md', 'coai-consultant.md']) {
-    files.set(`.claude/rules/shared/common/${name}`, await fs.readFile(path.join(real, name), 'utf8'));
-  }
+  const rules = ['coai-review-gate.md', 'coai-document-gate.md', 'coai-caller-model.md', 'coai-consultant.md'];
+  const files = new Map<string, string>(await Promise.all(rules.map(async (name): Promise<[string, string]> =>
+    [`.claude/rules/shared/common/${name}`, await fs.readFile(path.join(real, name), 'utf8')])));
 
   assert.deepEqual(await readSnippetStatus(async (name) => files.get(name) ?? ''), { kind: 'current', current: ARTEFACT_VERSION });
 });
@@ -123,14 +122,14 @@ test('the legacy mount location is read with its siblings too', async t => {
 test('a missing half is never filled from ANOTHER mount', async t => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'coai-snippet-two-mounts-'));
   t.after(() => fs.rm(root, { recursive: true, force: true }));
-  const files = new Map<string, string>();
   const real = path.resolve(__dirname, '../../..', '.agents/conventions/common');
   const text = async (name: string): Promise<string> => fs.readFile(path.join(real, name), 'utf8');
   // The neutral mount carries only its gate rule; a legacy mount beside it carries the siblings.
-  files.set('.agents/conventions/common/coai-review-gate.md', await text('coai-review-gate.md'));
-  for (const name of ['coai-document-gate.md', 'coai-caller-model.md', 'coai-consultant.md']) {
-    files.set(`.claude/rules/shared/common/${name}`, await text(name));
-  }
+  const siblings = ['coai-document-gate.md', 'coai-caller-model.md', 'coai-consultant.md'];
+  const files = new Map<string, string>([
+    ['.agents/conventions/common/coai-review-gate.md', await text('coai-review-gate.md')],
+    ...await Promise.all(siblings.map(async (name): Promise<[string, string]> => [`.claude/rules/shared/common/${name}`, await text(name)])),
+  ]);
 
   const status = await readSnippetStatus(async (name) => files.get(name) ?? '');
 
