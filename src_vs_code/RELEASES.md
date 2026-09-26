@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.56.3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.56.2...extension-v0.56.3) (2026-09-26)
+
+
+### Bug Fixes
+
+* **chat:** the button says Re-ask only over an empty box, and Send once a question is typed ([#576](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/576)) ([936cd7f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/936cd7fdaf87f2bc2ba425bc34d7a5a1fc827de4))
+
 ## [0.56.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.56.1...extension-v0.56.2) (2026-09-26)
 
 
