@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.39.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.38.0...mcp-v0.39.0) (2026-09-26)
+
+
+### Features
+
+* **consult:** every surface says the consultation's kind ([261f08c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/261f08c1598b30302d59fdadeda79d2ea9b80931))
+* **panel:** a "?" on every consultant and cadence setting, and the docs name the kinds ([98c60e6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/98c60e624e33474ddcc6a830adc024ccdfee4321))
+* the feature review, epic 2 — review_feature, the hybrid pack, the gate's history ([726943b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/726943b57d6be506c9c69cf4ac38b69e58b75992))
+
+
+### Bug Fixes
+
+* **consult:** an idle consultation closes while the server runs, and every limit is pinned ([fcf5a56](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fcf5a561e2bb5194140fced32a6efe85750b5202))
+* **consult:** expiry decides under the lock too; the ? click is measured in a real browser ([8f3f259](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8f3f259e05d18d3a4715d79d7efa1afd9860883a))
+* **consult:** the sweep decides under the lock on a fresh read; a checkbox's ? sits outside its label ([231bfc6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/231bfc69eefe63d0df5a044c960e170fb196813b))
+* **server:** a repository reached through a link is its own top level; two Sonar findings ([119028c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/119028c48c000dedd627e884d7d0e0162d002f36))
+
 ## [0.38.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.37.0...mcp-v0.38.0) (2026-09-26)
 
 
