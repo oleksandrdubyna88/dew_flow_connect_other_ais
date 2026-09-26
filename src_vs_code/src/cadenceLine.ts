@@ -227,13 +227,16 @@ function wantsAttention(answer: CadenceAnswer): boolean {
   return answer.unreadable.length > 0 || (group !== undefined && !group.consulted) || answer.risk.some((r) => !r.consulted);
 }
 
-/** The lines, above the running rounds — nothing at all when there are none. */
+/**
+ * The lines, above the running rounds — nothing at all when there are none. The branch is labelled and set
+ * off by the sentence's own separator: bare, it read as the sentence's last word ("due epic-1").
+ */
 export function cadenceLinesHtml(lines: readonly CadenceLine[]): string {
   if (lines.length === 0) {
     return '';
   }
 
   return `<div class="cadence-lines">${lines.map((line) => `
-  <div class="${wantsAttention(line.answer) ? 'stale' : 'hint'}" title="${escapeHtml(line.repoPath)} · ${escapeHtml(line.branch)}">${escapeHtml(cadenceSaid(line.answer))} <span class="decided">${escapeHtml(line.branch)}</span></div>`).join('')}
+  <div class="${wantsAttention(line.answer) ? 'stale' : 'hint'}" title="${escapeHtml(line.repoPath)} · ${escapeHtml(line.branch)}">${escapeHtml(cadenceSaid(line.answer))} <span class="decided">· branch ${escapeHtml(line.branch)}</span></div>`).join('')}
 </div>`;
 }
