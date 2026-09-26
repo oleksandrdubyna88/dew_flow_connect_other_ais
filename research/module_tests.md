@@ -274,7 +274,7 @@ returns its path: the round then found nothing there and answered `{ }`. A facto
 back — `private static async Task<TempDir> Repository()` — and the caller writes `using var`.
 
 **And the suite's sweep window came down from a day to two hours**, because the cost of leftovers is
-not disk. `PanelService.BuildWork` walks the temp directory looking for its own scratch, and that walk
+not disk. `RosterBuilder.BuildWork` walks the temp directory looking for its own scratch, and that walk
 costs the number of directories in it. Measured 2026-09-13 after a day of runs: **81,986** `coai-*`
 directories, and `SubmissionOrderTests` — a hundred `BuildWork` calls in a loop — went from 8 seconds
 to over four minutes, which from outside is indistinguishable from a deadlock in whatever had just

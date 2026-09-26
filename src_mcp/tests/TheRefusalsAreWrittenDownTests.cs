@@ -286,7 +286,7 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
     [InlineData(typeof(Refusal), "Answer", "the one place a refusal becomes an answer")]
     [InlineData(typeof(PanelService), "Error", "the panel's own helper, in front of 25 refusals")]
     [InlineData(typeof(PanelService), "Refused", "the document wrapper that adds a log line")]
-    [InlineData(typeof(PanelService), "RunStageAsync", "the body of all three rounds")]
+    [InlineData(typeof(RoundEngine), "RunStageAsync", "the body of all three rounds")]
     [InlineData(typeof(ConsultationService), "Error", "the consultation helper, in front of 23")]
     public void EveryWrapperOnTheRefusalRoad_ForwardsItsOwnCaller(Type owner, string method, string why)
     {

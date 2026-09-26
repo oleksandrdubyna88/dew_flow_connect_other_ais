@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.RegularExpressions;
 using Xunit;
 using CoaiMcp.Core.Findings;
 using FluentAssertions;
@@ -56,4 +57,46 @@ public sealed class ArchitectureTests
         typeof(Normalizer.TreeSitterNormalizer).Assembly.GetReferencedAssemblies().Select(a => a.Name)
             .Should().Contain("TreeSitter", "and the one project that implements the seam does name it");
     }
+
+    /// <summary>
+    /// The round engine asks the MCP-facing service nothing: what it needs is handed to it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The rule <c>todo/PLAN_the_round_engine_leaves_the_panel_service.md</c> names: a moved member
+    /// that still reaches back into <c>PanelService</c> has not found its seam. Every unit the engine is
+    /// made of is held to it, not only <c>RoundEngine</c> itself — a back-reference in the roster or the
+    /// orders is the same road one hop away. The files are the ones under <c>Server/Rounds/</c>, found
+    /// rather than listed, so a unit added there tomorrow is held to it too.</para>
+    /// <para>Read from the CODE with comments and string contents removed, so a sentence that names the
+    /// service is not a reference. The companion below proves the scan can see the name at all.</para>
+    /// </remarks>
+    [Fact]
+    public void TheRoundEngine_DoesNotReferenceThePanelService()
+    {
+        foreach (var file in RoundEngineFiles())
+        {
+            NamesThePanelService.IsMatch(ProductionSources.CodeOf(file)).Should().BeFalse(
+                $"{file} must be handed what it needs rather than reach back into the service that owns the MCP surface");
+        }
+    }
+
+    [Fact]
+    public void TheEngineScan_FindsItsFiles_AndSeesTheNameWhereItIsWritten()
+    {
+        RoundEngineFiles().Should().Contain(RoundEngineFile,
+            "the scan found no engine files, so the prohibition above asserts nothing");
+        NamesThePanelService.IsMatch(ProductionSources.CodeOf(ThePanelServiceFile)).Should().BeTrue(
+            "the same pattern must match where the name IS written, or it could never fail");
+    }
+
+    private const string RoundEngineFile = "src_mcp/src/Server/Rounds/RoundEngine.cs";
+
+    private const string ThePanelServiceFile = "src_mcp/src/Server/PanelService.cs";
+
+    /// <summary>The name as a whole word, so <c>PanelServiceHost</c> is not it.</summary>
+    private static readonly Regex NamesThePanelService =
+        new(@"\bPanelService\b", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(2));
+
+    private static IReadOnlyList<string> RoundEngineFiles() =>
+        [.. ProductionSources.Files().Where(file => file.StartsWith("src_mcp/src/Server/Rounds/", StringComparison.Ordinal))];
 }

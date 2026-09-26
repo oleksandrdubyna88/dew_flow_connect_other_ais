@@ -115,7 +115,7 @@ public sealed class StagesTests
     public void TheCommands_ARoundOfThisStageIsGiven(Stage stage, CommandStage commands)
     {
         Stages.Of(stage).Commands.Should().Be(commands);
-        PanelService.CommandStageOf(stage).Should().Be(commands, "the panel service reads the row");
+        RoundCommands.CommandStageOf(stage).Should().Be(commands, "the panel service reads the row");
     }
 
     [Theory]

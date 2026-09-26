@@ -142,7 +142,7 @@ public sealed class TheLocalReviewerStandsDownTests
         var results = await Run(work);
 
         StoodDownRoles(results).Should().Equal([RoleCatalog.SecurityRole], "the premise: the second local row stood down");
-        CoaiMcp.Server.PanelService.SpentPrompts(work, results).Should().BeEquivalentTo(
+        CoaiMcp.Server.RoundEngine.SpentPrompts(work, results).Should().BeEquivalentTo(
             ["arch-lens", "codex-lens"], "a row that stood down was never asked, so its lens is still unspent");
     }
 
