@@ -2604,7 +2604,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     // Looked up FIRST: the pick names the consultation's kind, and a consultation gone from the log is
-    // said before anybody chooses an outcome for it (todo/PLAN_consult_limits_kinds_and_help.md, story 2).
+    // said before anybody chooses an outcome for it (research/PLAN_consult_limits_kinds_and_help.md, story 2).
     const found = (await this.roundsLog()).consultations.find((one) => one.id === id);
     const repo = found?.repoPath ?? '';
     if (found === undefined || repo.length === 0) {

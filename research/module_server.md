@@ -3860,7 +3860,7 @@ creating a file where there was none counts as a change.
 
 ### The consultant's limits hold while the server runs, and every surface says the kind (2026-09-26)
 
-Stories 1 and 2 of [PLAN_consult_limits_kinds_and_help.md](../todo/PLAN_consult_limits_kinds_and_help.md).
+Stories 1 and 2 of [PLAN_consult_limits_kinds_and_help.md](PLAN_consult_limits_kinds_and_help.md).
 The operator said "these limits must work", and one did not. The idle close ran only in the
 `PanelService` constructor, so a consultation idle past its budget read `open` on the sidebar and in
 `status` until the next start. A follow-up was refused on time; the record was not closed.
@@ -3886,6 +3886,7 @@ sequenceDiagram
 | What | Where |
 |---|---|
 | **The sweep runs every minute while serving**, on a token linked to the serve stop and cancelled in a `finally`, so it stops however serving ends. It always goes through `host.Current`, so a settings reload is swept by the service it built. A beat that throws is logged and the next one tries. | `Server/Consultation/ConsultationSweeper.cs`, `PanelService.SweepConsultations`, `Program.cs` serve path |
+| **Each record is decided under the repository's lock, on a fresh read.** A cheap look first, then the lock. A follow-up takes the same lock and re-reads the record before it marks it `asking`, so the sweep and a follow-up can no longer interleave into a stale close written over a running turn. (Found at the code round; pinned by `ASweepHoldingAStaleCopy_DoesNotCloseAConsultationThatHasSinceStartedATurn`, which is red when the decision uses the enumerated copy.) | `ConsultationStore.SweepOne`, `Swept` |
 | **What each limit applies to, now each pinned by a test broken by compiling code.** Turns per consultation: every kind, frozen into the record at open. Calls per session: stuck only; a follow-up is counted by the kind its record holds. Idle close: every kind, both the follow-up refusal and the record's close. | `ConsultLimitsScenarioTests` (the idle refusal; cadence and risk past the turn cap; cadence and risk follow-ups that spend no stuck budget; the running-server lapse), `ConsultationSweeperTests` (the real host, with a settings reload between two lapses; a throwing beat) |
 | **The kind on the server's own surfaces.** `status` lists each open consultation with `kind`, never empty, because a record from before the kinds reads `stuck`. Every consultation log line starts with it: `risk consultation … turn 1/5`, `… answered turn 1`, and the filesystem alert. | `ServerJsonContext.OpenConsultation.Kind`, `ConsultationService.OpenIn`, `ConsultationService` log lines |
 | **The `consult` tool description** says turns are capped for every kind and calls per session count only stuck consultations. | `Tools.cs` |

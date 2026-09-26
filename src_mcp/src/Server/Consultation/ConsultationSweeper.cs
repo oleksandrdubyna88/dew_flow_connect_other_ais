@@ -8,7 +8,7 @@ namespace CoaiMcp.Server;
 /// <c>asking</c>, and evicts the long finished. It ran only in the <see cref="PanelService"/> constructor,
 /// so "Close an idle consultation after, minutes" held for a follow-up (refused) but not for the record,
 /// which read <c>open</c> on the sidebar and in <c>status</c> until the next start
-/// (<c>todo/PLAN_consult_limits_kinds_and_help.md</c>, story 1).</para>
+/// (<c>research/PLAN_consult_limits_kinds_and_help.md</c>, story 1).</para>
 /// <para>Through <paramref name="current"/> on every beat, never a service captured at start, so a
 /// settings reload is swept by the service it built. A failed beat is logged and the next one tries
 /// again, as <c>RunLife.Beaten</c> does: one bad directory read must not end the sweeping for good.</para>

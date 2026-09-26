@@ -8,7 +8,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The consultant's three limits, each held for every kind it applies to, and the idle close happening
-/// while the server RUNS (<c>todo/PLAN_consult_limits_kinds_and_help.md</c>, story 1).
+/// while the server RUNS (<c>research/PLAN_consult_limits_kinds_and_help.md</c>, story 1).
 /// </summary>
 /// <remarks>
 /// <para>Turns per consultation and the idle close apply to every kind. Calls per session applies only to

@@ -2558,7 +2558,7 @@ the rule is its own case.
 
 ## The consultant's kinds on every card, and a "?" on every consultant setting (2026-09-26)
 
-Stories 2 and 3 of [PLAN_consult_limits_kinds_and_help.md](../todo/PLAN_consult_limits_kinds_and_help.md).
+Stories 2 and 3 of [PLAN_consult_limits_kinds_and_help.md](PLAN_consult_limits_kinds_and_help.md).
 
 | What | Where |
 |---|---|
@@ -2566,7 +2566,7 @@ Stories 2 and 3 of [PLAN_consult_limits_kinds_and_help.md](../todo/PLAN_consult_
 | **The log's *Consultations* table has a Kind column** beside *For*. For says what an ordered one covered, and a dash for a stuck one. | `roundsLog.ts` (`forCell`, `CONSULTATION_COLUMNS` = 12) |
 | **The sidebar card** has a kind line under who is asking whom. `parseConsultation` reads `kind`, `plan` and `epics` off the record file. | `consultations.ts` |
 | **The record-outcome pick names the consultation's kind** in its title, and looks it up FIRST, so one gone from the log is said before an outcome is chosen. | `panelProvider.ts` (`closeConsultation`), `consultKind.closeTitle` |
-| **Every Consultant and cadence setting has a `?`**: the switch, each caller's row, its endpoint and CLI path, the three caps, the prompt, and the three cadence numbers. Each has its own `HELP` entry, and the three caps say which kinds they apply to. The switch is now *Let an AI consult another vendor*, and its hint names the cadence. | `help.ts`, `consultantView.ts`, `cadenceSettings.ts`; the census `consultantHelp.test.ts` (every label in the two sections, named when bare) |
+| **Every Consultant and cadence setting has a `?`**: the switch, each caller's row, its endpoint and CLI path, the three caps, the prompt, and the three cadence numbers. Each has its own `HELP` entry, and the three caps say which kinds they apply to. The switch is now *Let an AI consult another vendor*, and its hint names the cadence. **A checkbox's `?` sits after its label**, because a click anywhere inside a label toggles its checkbox, and the census enforces it. | `help.ts`, `consultantView.ts`, `cadenceSettings.ts`; the census `consultantHelp.test.ts` (every label in the two sections, named when bare) |
 
 ## The Claude list is ASKED, not listed (2026-09-16, issue #301)
 
