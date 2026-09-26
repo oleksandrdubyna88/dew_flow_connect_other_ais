@@ -38,6 +38,7 @@ public sealed class TheFeatureStageRefusesBeforeItBuildsTests : IAsyncLifetime
     private string _data = string.Empty;
     private string _base = string.Empty;
     private string _head = string.Empty;
+    private string _links = string.Empty;
 
     public async ValueTask InitializeAsync()
     {
@@ -55,7 +56,13 @@ public sealed class TheFeatureStageRefusesBeforeItBuildsTests : IAsyncLifetime
 
     public ValueTask DisposeAsync()
     {
-        foreach (var dir in (string[])[_repo, _data])
+        // The link first, and never recursively, so no delete walks through it into the repository.
+        if (_links.Length > 0)
+        {
+            DirectoryLink.Remove(Path.Combine(_links, "repo"));
+        }
+
+        foreach (var dir in ((string[])[_repo, _data, _links]).Where(d => d.Length > 0))
         {
             try
             {
@@ -82,6 +89,16 @@ public sealed class TheFeatureStageRefusesBeforeItBuildsTests : IAsyncLifetime
     }
 
     private async Task Git(params string[] args) => await Run(args);
+
+    /// <summary>The repository, reached through a directory link made for this test.</summary>
+    private async Task<string> LinkedRepoAsync()
+    {
+        _links = Directory.CreateTempSubdirectory("coai-feature-refusals-link-").FullName;
+        var linked = Path.Combine(_links, "repo");
+        await DirectoryLink.MakeAsync(_launcher, linked, _repo);
+
+        return linked;
+    }
 
     private async Task<string> Rev(string rev) => (await Run("rev-parse", rev)).Trim();
 
@@ -208,6 +225,33 @@ public sealed class TheFeatureStageRefusesBeforeItBuildsTests : IAsyncLifetime
     [Fact]
     public async Task ASubdirectory_IsRefused_NamingTheTopLevel() =>
         (await Refusal(repo: Path.Combine(_repo, "src"))).Should().Contain("top level");
+
+    /// <summary>
+    /// A repository reached through a directory link IS its own top level — git answers the real path, the
+    /// caller holds the linked one, and they are one directory.
+    /// </summary>
+    /// <remarks>
+    /// Every macOS temp directory is this shape (<c>/var</c> is a link to <c>/private/var</c>), so the
+    /// comparison that only normalised spelling refused every repository there: "'/var/folders/…' is
+    /// inside a repository whose top level is '/private/var/folders/…'" — 23 tests on the macOS job. The
+    /// link is made here, so it fails on every platform, not only on the one runner that showed it.
+    /// </remarks>
+    [Fact]
+    public async Task ARepositoryReachedThroughALink_IsItsOwnTopLevel()
+    {
+        var linked = await LinkedRepoAsync();
+
+        var answer = JsonDocument.Parse(await Service().ReviewFeatureAsync(linked, PlanPath, _base, Epics, Lessons)).RootElement;
+
+        answer.TryGetProperty("error", out var error).Should().BeFalse($"a link to the top level is the top level: {error}");
+        answer.GetProperty("verdict").GetString().Should().Be("skipped", "nobody is ticked — the D1 skip, not a refusal");
+    }
+
+    /// <summary>And through the link, the refusal that follows the top-level check is the one about the plan.</summary>
+    [Fact]
+    public async Task AMissingPlan_ThroughALink_IsRefusedAsMissing() =>
+        (await Refusal(planPath: "todo/PLAN_missing.md", repo: await LinkedRepoAsync()))
+            .Should().Contain("there is no plan file").And.NotContain("top level");
 
     [Fact]
     public async Task NamingADocumentAndAFeature_IsRefused()

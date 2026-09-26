@@ -2042,7 +2042,11 @@ flowchart LR
   opens with the heading, whole. The heading is the plan's first `# ` line; none → rule (c) off, said.
   Chosen after reading the real subjects (plan §4.8, "Looked at 2026-09-26").
 - **Same repository** is decided through `SessionKey.For`'s own normalisation (separators, trailing
-  separator, case), not a second spelling of it. The feature session's own rounds are excluded by its
+  separator, case), not a second spelling of it — and, when the spellings differ, with every link
+  resolved (`WorktreePaths.Same`), each distinct recorded path once (`SameRepositoryAmong`). A
+  consultation records git's answer (the REAL path) while a session records its caller's spelling and
+  the review is asked with the caller's; on macOS, where `/var` is a link, every consultation had
+  dropped out of the history. The feature session's own rounds are excluded by its
   key: the gate already counts its rejections.
 - **Rejected findings only**, de-duplicated by `TextSimilarity.SameRemark` over the title within one
   file (a line moves between rounds, the disagreement does not); the newest reason is kept and the
@@ -2060,11 +2064,19 @@ flowchart LR
   git cannot date, a missing database or one that will not read each become ONE sentence
   (`Gate history unavailable: …`) and the round continues. An older database without the
   consultations table, `outcome` or `kind` is read through `RoundsQuery.HasColumn` (widened from
-  private to internal for this) with the column's own default.
+  private to internal for this) with the column's own default — in one of three CONSTANT query texts
+  chosen by that ladder (`kind` → `outcome` → neither; the steps are ordered, so a file with `kind` has
+  `outcome`), the shape `RoundsQuery`'s consultations page already has. The columns were first spliced
+  into one interpolated text; only constants ever were, but SonarCloud rated it S2077 and failed the
+  security gate, and a query that needs a paragraph to prove it safe costs more than lines that need none.
 
 Tests: `GateHistoryQueryTests` — real SQLite seeded through `RoundsDb`, a real temporary git repository
 (a squash merge, rebase timing, a range over the cap), T0 read back from git; all fifteen were observed
 red against stubs first, and the widening and the trunk rule were each deleted once and watched go red.
+Since the PR of epic 2: a round and a consultation recorded under the real path belong to the same
+repository asked through a directory link (red first: `Expected history.Rounds to contain a single
+item … but the collection is empty`), and a database stopped before `outcome` or before `kind` still
+yields its consultation with the missing column's meaning (a wrong ladder planted → red).
 
 ### The findings as a corpus (`--bugs-json`, 2026-09-15)
 
@@ -2728,7 +2740,10 @@ registration was never recognised as ours. `WorktreePaths.Same` resolves links c
 component, as far as the path exists, and both the list and the re-make compare through it. Found by
 the `mcp-v0.31.0` release build on `osx-arm64` — pull-request CI runs on Linux, where temp is not
 behind a link — and held on every platform by `AReviewRootBehindALinkTests`, which makes the link
-itself.
+itself. It is the product's ONE comparison of a path git answered with a path somebody spelled: the
+feature stage's top-level check and the gate history's repository match go through it as well, and
+`Same` answers `false` for a path this machine cannot resolve (a NUL, another operating system's
+record) rather than throwing `GetFullPath`'s argument validation at a yes-or-no question.
 
 **What removal will not do.** There is no mode, flag or method anywhere that removes more than one
 tree - the argument is a NAME and it must match a record we hold, so a separator, a `..`, a round
@@ -4902,7 +4917,11 @@ flowchart TD
 so a caller who sent nothing is told what the gate wants before a process starts. Then the
 repository's top level (`git rev-parse --show-toplevel`): every path below — the plan's identity, the
 outline's `head:path` names — is read from it, and a plan resolved against a subdirectory would be
-refused for the wrong reason. Then the plan: a credential-shaped NAME (`CredentialFiles`, the fixed D15
+refused for the wrong reason. Git answers the REAL path and the caller holds a spelling, so the two
+are compared with every link resolved (`WorktreePaths.Same`): a repository reached through a symlink
+or a Windows junction — and every repository under a macOS temp directory, where `/var` is a link to
+`/private/var` — is its own top level. Compared by spelling, the macOS CI job refused every one of
+them as *"inside a repository whose top level is '/private/var/…'"* (23 tests, the PR of epic 2). Then the plan: a credential-shaped NAME (`CredentialFiles`, the fixed D15
 shapes — `planPath: ".env.production"`) is refused before the disk is touched, because the plan is pasted
 whole into every reviewer's context and that file existed and read like a plan when the code review of
 2026-09-26 tried it; then its containment and existence, refused in the tool's own words (the document

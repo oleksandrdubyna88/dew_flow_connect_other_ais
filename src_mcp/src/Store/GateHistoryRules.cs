@@ -1,6 +1,7 @@
 using System.Text.RegularExpressions;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Git;
+using CoaiMcp.Runners.Worktrees;
 
 namespace CoaiMcp.Store;
 
@@ -9,7 +10,8 @@ namespace CoaiMcp.Store;
 /// each one evidence, none of them proof.
 /// </summary>
 /// <remarks>
-/// <para>Pure, so every rule is a unit test rather than a database. The query hands each row here and
+/// <para>Pure — but for the repository match, which follows links on disk when two spellings differ — so
+/// every rule is a unit test rather than a database. The query hands each row here and
 /// takes back an <see cref="Admission"/>; a row that gets <see cref="Admission.None"/> is counted as
 /// NOT attached when it falls after the base commit, and ignored when it falls before.</para>
 /// <para><b>The windows are not the same, on purpose.</b> Rule (a) holds from <c>T0</c>, the base
@@ -49,12 +51,28 @@ internal static partial class GateHistoryRules
     /// Whether two recorded paths are one repository — through the session key's own normalisation.
     /// </summary>
     /// <remarks>
-    /// <see cref="SessionKey.For"/> already decides what "the same repository" means for every session
+    /// <para><see cref="SessionKey.For"/> already decides what "the same repository" means for every session
     /// this gate keeps: separators unified, the trailing one dropped, case folded. A second spelling of
-    /// that rule here would be the second copy that drifts.
+    /// that rule here would be the second copy that drifts.</para>
+    /// <para><b>And links are followed when the spellings differ</b> (<see cref="WorktreePaths.Same"/>):
+    /// a consultation records git's answer — the REAL path — while a session records what its caller
+    /// typed and the review is asked with the caller's spelling. On macOS those always differ
+    /// (<c>/var</c> is a link to <c>/private/var</c>), and every consultation dropped out of the history.
+    /// The spelling is asked first, so the common case touches no disk.</para>
     /// </remarks>
     internal static bool SameRepository(string recorded, string asked) =>
-        SessionKey.For(recorded, string.Empty) == SessionKey.For(asked, string.Empty);
+        SessionKey.For(recorded, string.Empty) == SessionKey.For(asked, string.Empty)
+        || WorktreePaths.Same(recorded, asked);
+
+    /// <summary>
+    /// The recorded repository paths that are the one asked about — each distinct spelling resolved once.
+    /// </summary>
+    /// <remarks>
+    /// Resolving links walks the disk component by component, and a window holds many rows of a few
+    /// repositories; asking per distinct path keeps that cost to the number of repositories, not rows.
+    /// </remarks>
+    internal static IReadOnlySet<string> SameRepositoryAmong(IEnumerable<string> recorded, string asked) =>
+        recorded.Distinct(StringComparer.Ordinal).Where(path => SameRepository(path, asked)).ToHashSet(StringComparer.Ordinal);
 
     /// <summary>Every rule that admits this round, or <see cref="Admission.None"/>.</summary>
     internal static Admission Admit(CandidateRound row, GateHistoryWork work) =>

@@ -12,12 +12,35 @@ namespace CoaiMcp.Runners.Worktrees;
 /// <c>mcp-v0.31.0</c> release build on <c>osx-arm64</c>.</para>
 /// <para>A path that does not exist yet — a tree whose directory was deleted — resolves as far as it
 /// exists, with the rest appended: that is exactly the part git resolved when the tree was made.</para>
+/// <para><b>Not only worktrees: every place a path git ANSWERED meets a path somebody SPELLED.</b>
+/// <c>git rev-parse --show-toplevel</c> resolves links the same way, so the feature stage's top-level
+/// check (<c>FeatureRefs</c>) and the gate history's repository match (<c>GateHistoryRules</c>, where a
+/// consultation records git's answer and a review is asked with the caller's spelling) compare through
+/// here too. The pull request for epic 2 of the feature review found the first on the macOS job — 23
+/// tests refused a repository as being inside itself — and the second by sweeping for the same shape.</para>
 /// </remarks>
 public static class WorktreePaths
 {
     /// <summary>Whether two paths name the same place once links are resolved.</summary>
-    public static bool Same(string one, string other) =>
-        string.Equals(Key(one), Key(other), StringComparison.OrdinalIgnoreCase);
+    /// <remarks>
+    /// A predicate answers for every input it accepts: a path this machine cannot resolve at all — a NUL
+    /// in it, a record written by a server on another operating system — is not the place being asked
+    /// about, so it answers <c>false</c> rather than throwing <see cref="Path.GetFullPath(string)"/>'s
+    /// argument validation at a caller that asked a yes-or-no question.
+    /// </remarks>
+    public static bool Same(string one, string other)
+    {
+        try
+        {
+            return string.Equals(Key(one), Key(other), StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception e) when (e is ArgumentException or NotSupportedException or IOException or UnauthorizedAccessException)
+        {
+            // IOException covers PathTooLongException; UnauthorizedAccessException a component the
+            // process may not stat. Neither is a place this process could have been told about.
+            return false;
+        }
+    }
 
     /// <summary>The path with every existing link on it resolved, component by component.</summary>
     public static string Real(string path)

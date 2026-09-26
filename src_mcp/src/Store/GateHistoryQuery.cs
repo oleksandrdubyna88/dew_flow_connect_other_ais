@@ -94,8 +94,10 @@ public static class GateHistoryQuery
 
     private static GateHistory Read(SqliteConnection db, GateHistoryAsk ask, GateHistoryWork work)
     {
-        var inWindow = Rounds(db, work.WideSince)
-            .Where(r => r.SessionId != ask.ExcludeSessionId && GateHistoryRules.SameRepository(r.RepoPath, ask.RepoPath))
+        var rounds = Rounds(db, work.WideSince);
+        var ours = GateHistoryRules.SameRepositoryAmong(rounds.Select(r => r.RepoPath), ask.RepoPath);
+        var inWindow = rounds
+            .Where(r => r.SessionId != ask.ExcludeSessionId && ours.Contains(r.RepoPath))
             .Select(r => (Row: r, Admission: GateHistoryRules.Admit(r, work)))
             .ToList();
         var attached = Ordered(inWindow.Where(r => r.Admission != Admission.None).Select(r => Attached(r.Row, r.Admission)));
@@ -225,15 +227,20 @@ public static class GateHistoryQuery
         return found;
     }
 
-    private static List<HistoryConsultation> Consultations(SqliteConnection db, GateHistoryAsk ask, GateHistoryWork work) =>
-        [.. CandidateConsultations(db, work.WideSince)
-            .Where(c => GateHistoryRules.SameRepository(c.RepoPath, ask.RepoPath))
+    private static List<HistoryConsultation> Consultations(SqliteConnection db, GateHistoryAsk ask, GateHistoryWork work)
+    {
+        var candidates = CandidateConsultations(db, work.WideSince);
+        var ours = GateHistoryRules.SameRepositoryAmong(candidates.Select(c => c.RepoPath), ask.RepoPath);
+
+        return [.. candidates
+            .Where(c => ours.Contains(c.RepoPath))
             .Select(c => (Row: c, Admission: GateHistoryRules.Admit(c, work)))
             .Where(c => c.Admission != Admission.None)
             .Select(c => new HistoryConsultation(
                 c.Row.Kind, c.Row.Branch, c.Row.Status, c.Row.Outcome, c.Row.StartedUtc, c.Row.Problem, c.Row.Advice, c.Admission))
             .OrderBy(c => c.FromAnEpic ? 0 : 1)
             .ThenByDescending(c => c.StartedUtc, StringComparer.Ordinal)];
+    }
 
     /// <remarks>
     /// Asked of the schema first, as <see cref="RoundsQuery"/> asks: this read is read-only and cannot
@@ -248,12 +255,7 @@ public static class GateHistoryQuery
         }
 
         using var read = db.CreateCommand();
-        read.CommandText = $"""
-            SELECT repo_path, branch, head_sha, status, started_utc, problem, advice,
-                   {(RoundsQuery.HasColumn(db, "consultations", "outcome") ? "outcome" : "'' AS outcome")},
-                   {(RoundsQuery.HasColumn(db, "consultations", "kind") ? "kind" : "'stuck' AS kind")}
-            FROM consultations WHERE started_utc >= $since
-            """;
+        read.CommandText = ConsultationsShape(db);
         read.Parameters.AddWithValue("$since", since);
         using var rows = read.ExecuteReader();
         var found = new List<CandidateConsultation>();
@@ -267,6 +269,44 @@ public static class GateHistoryQuery
 
         return found;
     }
+
+    /// <summary>The newest shape this file has, asked rather than assumed — the steps are ordered, so one column each tells.</summary>
+    private static string ConsultationsShape(SqliteConnection db) =>
+        RoundsQuery.HasColumn(db, "consultations", "kind") ? SqlConsultationsKinded
+        : RoundsQuery.HasColumn(db, "consultations", "outcome") ? SqlConsultationsEnded
+        : SqlConsultationsPlain;
+
+    /// <summary>
+    /// The candidate consultations, in the three shapes a database can be in — written out, not composed.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three literals for the reason <see cref="RoundsQuery"/>'s consultations page has four: one
+    /// text with the optional columns spliced in reads as SQL built at runtime to every scanner and to a
+    /// person skimming — it was flagged as exactly that (SonarCloud S2077, on the pull request) although
+    /// only constants were ever interpolated — and a query that needs a paragraph to prove it is safe
+    /// costs more than the duplicated lines that need none.</para>
+    /// <para>Three rather than four, because the steps are ORDERED: <c>kind</c> (step 15) is appended
+    /// after <c>outcome</c> (step 9), so a file with <c>kind</c> has <c>outcome</c>. The missing columns
+    /// are substituted as what they mean — nobody recorded a verdict, and before the kinds every
+    /// consultation was an agent that was stuck. They differ only in those two tokens; a change to one
+    /// must be made to all three.</para>
+    /// </remarks>
+    private const string SqlConsultationsKinded = """
+        SELECT repo_path, branch, head_sha, status, started_utc, problem, advice, outcome, kind
+        FROM consultations WHERE started_utc >= $since
+        """;
+
+    /// <summary>The same read against a file written before a consultation could say what it was for.</summary>
+    private const string SqlConsultationsEnded = """
+        SELECT repo_path, branch, head_sha, status, started_utc, problem, advice, outcome, 'stuck' AS kind
+        FROM consultations WHERE started_utc >= $since
+        """;
+
+    /// <summary>And against one written before a consultation could be said to have ended at all.</summary>
+    private const string SqlConsultationsPlain = """
+        SELECT repo_path, branch, head_sha, status, started_utc, problem, advice, '' AS outcome, 'stuck' AS kind
+        FROM consultations WHERE started_utc >= $since
+        """;
 
     /// <summary>An instant as the store writes one (<c>"O"</c>, UTC), so text comparison orders it.</summary>
     private static string Stamp(DateTimeOffset at) => at.UtcDateTime.ToString("O", CultureInfo.InvariantCulture);

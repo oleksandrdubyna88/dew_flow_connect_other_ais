@@ -1,6 +1,7 @@
 using CoaiMcp.Core.Feature;
 using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Worktrees;
 
 namespace CoaiMcp.Server;
 
@@ -81,20 +82,22 @@ internal sealed class FeatureRefs(IProcessLauncher launcher)
         : string.Empty;
 
     /// <summary>Why <paramref name="repoPath"/> is not a repository's top level, or empty when it is — asked before the plan is read from it.</summary>
+    /// <remarks>
+    /// <b>Git answers the REAL path, the caller holds a spelling</b>, so the two are compared with every
+    /// link resolved (<see cref="WorktreePaths.Same"/>). On macOS they always differ: a repository under
+    /// <c>/var/folders/…</c> is <c>/private/var/folders/…</c> to git, because <c>/var</c> is a link, and a
+    /// comparison that only normalised spelling refused every such repository as being inside itself. The
+    /// same holds for a checkout reached through any symlink or a Windows junction.
+    /// </remarks>
     internal async Task<string> TopLevelProblemAsync(string repoPath, CancellationToken ct)
     {
         var top = Directory.Exists(repoPath) ? await GitAsync(repoPath, ["rev-parse", "--show-toplevel"], ct) : null;
 
         return top is null ? $"'{repoPath}' is not a directory on this machine"
             : top.ExitCode != 0 ? $"'{repoPath}' is not a git repository: {top.StdErr.Trim()}"
-            : SamePath(top.StdOut.Trim(), repoPath) ? string.Empty
+            : WorktreePaths.Same(top.StdOut.Trim(), repoPath) ? string.Empty
             : $"'{repoPath}' is inside a repository whose top level is '{top.StdOut.Trim()}' — pass the top level (git rev-parse --show-toplevel), which is what the review's paths are read from";
     }
-
-    private static bool SamePath(string a, string b) =>
-        string.Equals(Normalised(a), Normalised(b), Core.Rounds.DocumentId.Comparison);
-
-    private static string Normalised(string path) => Path.GetFullPath(path).Replace('\\', '/').TrimEnd('/');
 
     /// <summary>The full id of <paramref name="rev"/>'s commit, or empty when git cannot resolve one.</summary>
     private async Task<string> CommitAsync(string repoPath, string rev, CancellationToken ct)
