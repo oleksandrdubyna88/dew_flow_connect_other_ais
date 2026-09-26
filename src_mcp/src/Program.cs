@@ -1014,7 +1014,14 @@ internal static class Program
     }
 
     private static Runners.Worktrees.ReviewTreeKeeper Keeper() =>
-        new(new Runners.Worktrees.ReviewTreeRoot(new ProcessLauncher(), Runners.Worktrees.ReviewTreeRoot.Default));
+        new(new Runners.Worktrees.ReviewTreeRoot(new ProcessLauncher(), ReviewRoot()));
+
+    /// <summary>
+    /// Where the review trees are for this run — <c>COAI_REVIEW_ROOT</c> when it is absolute (issue #544),
+    /// else the machine-local default; an ignored value is said on stderr, never stdout, which is the answer.
+    /// </summary>
+    private static string ReviewRoot() =>
+        Runners.Worktrees.ReviewTreeRoot.DefaultIn(Environment.GetEnvironmentVariable, Note);
 
     /// <summary>The pair's repository checked out at its commit — or the answer that there is no such pair.</summary>
     private static async Task<Core.Collecting.ReviewTree> TreeAtOfAsync(long findingId, Store.ReviewPair? pair)
@@ -1032,7 +1039,7 @@ internal static class Program
         var trees = new Runners.Worktrees.ReviewWorktrees(
             launcher,
             new Runners.Collecting.GitHistory(launcher),
-            Runners.Worktrees.ReviewTreeRoot.Default);
+            ReviewRoot());
 
         return await trees.PrepareAsync(
             findingId, new Runners.Worktrees.TreePlace(pair.RepoPath, pair.HeadSha));

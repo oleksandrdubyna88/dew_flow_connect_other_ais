@@ -536,8 +536,12 @@ test('a seeded pair reads its real method back out of a real repository',
 /** The real spawn, against one data directory — what every live check of one mode does. */
 function runIn(data: string): (args: readonly string[]) => Promise<{ code: number; output: string }> {
   return async (args) => {
+    // The review trees' root too, inside the same temp directory the test removes: it is machine-local
+    // on purpose, so without this the real binary answered with THIS machine's trees (issue #544).
     const ran = spawnSync(server(), args, {
-      encoding: 'utf8', env: { ...process.env, COAI_DATA_DIR: data }, timeout: 60_000,
+      encoding: 'utf8',
+      env: { ...process.env, COAI_DATA_DIR: data, COAI_REVIEW_ROOT: path.join(data, 'review-worktrees') },
+      timeout: 60_000,
     });
 
     return { code: ran.status ?? 1, output: `${ran.stdout ?? ''}${ran.stderr ?? ''}` };
