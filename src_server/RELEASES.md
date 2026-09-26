@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.8.0...server-v0.9.0) (2026-09-26)
+
+
+### Features
+
+* the feature review, epic 2 — review_feature, the hybrid pack, the gate's history ([726943b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/726943b57d6be506c9c69cf4ac38b69e58b75992))
+
 ## [0.8.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.7.0...server-v0.8.0) (2026-09-25)
 
 
