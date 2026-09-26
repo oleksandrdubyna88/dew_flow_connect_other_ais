@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.56.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.55.0...extension-v0.56.0) (2026-09-26)
+
+
+### Features
+
+* **log:** a consultation says in the log what it was for — epic 4 story 4.2, the log half ([1fe661c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/1fe661c8e040deb23955f7c050e2fe13073a9fdf))
+* **panel:** the consultation cadence's four settings — epic 4 story 4.1 ([10dea44](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/10dea44242b507adf454266402866545bfaf8a35))
+* **sidebar:** Active rounds says where each recent plan's consultation cadence stands — epic 4 story 4.2 ([0e87167](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0e871674afa27aac9e13c855374b982ec704c897))
+* **snippet:** the consultant half is read from the conventions mount — epic 5 story 5.2 ([13ebd82](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/13ebd823a96cbf00b98222610498c3e1c2c87b21))
+
+
+### Bug Fixes
+
+* **log:** roundsDb.ts back under the 800-line ceiling after the rebase onto main ([b5887f4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b5887f48f6ed768265b39f5665f0345fb6754401))
+* **sidebar:** a probe a forget overtook asks for the render that fetches the fresh answer (PR [#556](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/556)) ([21094a6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/21094a6f0ece8c52b1e52e60c6d30e7368d1792d))
+* **sidebar:** epic 4's code round — a future stamp, a long history, a paint per answer ([de6bdb3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/de6bdb3fd7fdc9c7bedc5366eda0cc2e8efdcfa2))
+* **sidebar:** PR [#556](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/556)'s review — an in-flight answer never outlives a forget; the line is tested on the running page ([74205f4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/74205f448427b7b0496628d78f00163ad563d24d))
+
 ## [0.55.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.54.0...extension-v0.55.0) (2026-09-25)
 
 
