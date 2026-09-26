@@ -173,10 +173,10 @@ export const CONSULTANT_VERSION = 3;
  * the guard that tells you which numbers to move reads this rather than a hand-typed list.</p>
  */
 export const KNOWN_HALVES = [
-  { id: 'coai-snippet', name: 'the review gate', version: SNIPPET_VERSION, text: GATE_RULE, frozen: true },
-  { id: 'coai-document', name: 'the document gate', version: DOCUMENT_VERSION, text: DOCUMENT_RULE, frozen: false },
-  { id: 'coai-caller', name: 'the caller declaration', version: CALLER_VERSION, text: CALLER_RULE, frozen: false },
-  { id: 'coai-consultant', name: 'the consultant', version: CONSULTANT_VERSION, text: CONSULTANT_RULE, frozen: false },
+  { id: 'coai-snippet', name: 'the review gate', version: SNIPPET_VERSION, text: GATE_RULE, frozen: true, file: 'coai-review-gate.md' },
+  { id: 'coai-document', name: 'the document gate', version: DOCUMENT_VERSION, text: DOCUMENT_RULE, frozen: false, file: 'coai-document-gate.md' },
+  { id: 'coai-caller', name: 'the caller declaration', version: CALLER_VERSION, text: CALLER_RULE, frozen: false, file: 'coai-caller-model.md' },
+  { id: 'coai-consultant', name: 'the consultant', version: CONSULTANT_VERSION, text: CONSULTANT_RULE, frozen: false, file: 'coai-consultant.md' },
 ] as const;
 
 /** The ids this build reads, in the order the artefact carries them. */
@@ -257,8 +257,12 @@ const MOUNTED_RULE_FOLDERS: Readonly<Record<string, string>> = {
   '.claude/rules/shared/common/coai-review-gate.md': '.claude/rules/shared/common/',
 };
 
-/** The rule files beside a mounted gate rule that carry the other three halves. */
-export const MOUNTED_SIBLINGS: readonly string[] = ['coai-document-gate.md', 'coai-caller-model.md', 'coai-consultant.md'];
+/**
+ * The rule files beside a mounted gate rule that carry the other halves — DERIVED from
+ * {@link KNOWN_HALVES}, so a fifth half added there is looked for in a mount without a second list to
+ * keep in step (story 5.2's code round, gemini and codex).
+ */
+export const MOUNTED_SIBLINGS: readonly string[] = KNOWN_HALVES.filter((half) => half.id !== 'coai-snippet').map((half) => half.file);
 
 /**
  * The first applicable paste wins, using the same reader for the panel and copy command.

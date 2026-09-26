@@ -582,6 +582,17 @@ test('no half of the artefact is numbered from zero', () => {
  * wrong constant would compose a paste whose markers disagree with its bodies, and every other test
  * here would go on passing.</p>
  */
+test('every row names the mounted rule file that carries its marker', () => {
+  // `file` is what discovery reads beside a mounted gate rule, so a row pointing at the wrong file
+  // would report a mounting repository as missing a half it has.
+  for (const half of KNOWN_HALVES) {
+    const mounted = path.resolve(__dirname, '../../..', '.agents/conventions/common', half.file);
+    assert.ok(fs.existsSync(mounted), `${half.id}: ${half.file} is not in the mount`);
+    assert.deepEqual(halvesIn(fs.readFileSync(mounted, 'utf8')).map((one) => one.id), [half.id],
+      `${half.file} does not carry ${half.id}'s marker`);
+  }
+});
+
 test('every row of the table carries the rule its own marker names', () => {
   for (const half of KNOWN_HALVES) {
     const found = halvesIn(half.text);
