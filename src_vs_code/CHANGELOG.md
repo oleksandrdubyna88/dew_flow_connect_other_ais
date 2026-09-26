@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.57.0 · Server 0.39.0 — 2026-09-26
 
 **An idle consultation closes on time.** *Close an idle consultation after, minutes* held for a follow-up but not for the consultation itself, which went on reading *open* in the sidebar until coai-mcp next started. The server now checks every minute while it runs. Each of the three consultant limits has a test that fails without it, for every kind it applies to.
 
