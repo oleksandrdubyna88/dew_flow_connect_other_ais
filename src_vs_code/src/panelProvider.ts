@@ -99,7 +99,7 @@ import {
   settingsFrom,
   settingWrite,
 } from './settingsShape';
-import { snapsBackWhenRefused } from './refusedWrite';
+import { writePlain } from './refusedWrite';
 import {
   mirroredLines,
   NetworkingMode,
@@ -1713,27 +1713,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // order matters for the crash in between: cleared first, an extension host killed mid-write
         // leaves a provider with no model, which is a state the pair has a meaning for. Written
         // first, it would leave the NEW provider paired with the OLD provider's model. (codex.)
-        for (const stale of clearedByWriting(write.key)) {
-          await this.save(config, stale, '');
-        }
-        const saved = await this.save(config, write.key, write.value);
-        if (!saved && snapsBackWhenRefused(write.value)) {
-          await this.render();
-          return;
-        }
-        // Turning the per-side switch ON seeds this side with what it reads today, so nothing
-        // changes until something is edited. An empty overlay looks identical - until the first
-        // shared edit on another side silently changes this one, which is the surprise this feature
-        // exists to remove. Idempotent, so switching off and on again keeps what was configured.
-        if (write.key === 'perSideSettings' && write.value === true) {
-          await seedIfEmpty(
-            this.context.globalState,
-            thisSide(this.context.globalStorageUri),
-            (section) => config.get(section));
-        }
-        if (write.key === 'perSideSettings') {
-          await this.carryTeamLogins(write.value === true);
-        }
+        // A refused box snaps back and stops there — `writePlain` holds that order, and is run by its tests.
+        await writePlain(write.key, write.value, clearedByWriting(write.key), {
+          save: (key, value) => this.save(config, key, value),
+          repaint: () => this.render(),
+          follow: () => this.followPlain(config, write.key, write.value),
+        });
         return;
       }
       default: {
@@ -1852,6 +1837,23 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * catch is here rather than inside `saveSetting` — and why what it reports is
    * {@link reportRefusal}, which offers the reload instead of describing the failure.</p>
    */
+  /** What follows a plain write that stands. */
+  private async followPlain(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
+    // Turning the per-side switch ON seeds this side with what it reads today, so nothing
+    // changes until something is edited. An empty overlay looks identical - until the first
+    // shared edit on another side silently changes this one, which is the surprise this feature
+    // exists to remove. Idempotent, so switching off and on again keeps what was configured.
+    if (key === 'perSideSettings' && value === true) {
+      await seedIfEmpty(
+        this.context.globalState,
+        thisSide(this.context.globalStorageUri),
+        (section) => config.get(section));
+    }
+    if (key === 'perSideSettings') {
+      await this.carryTeamLogins(value === true);
+    }
+  }
+
   private async save(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<boolean> {
     // The per-side branch moved to `sideConfig.saveSetting` when the roles page needed it too. A
     // second copy of "which layer does this belong in" is how the roles page came to write a per-side

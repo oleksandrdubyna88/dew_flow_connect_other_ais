@@ -9258,6 +9258,10 @@ extension updated in place, the window had not registered the new key, VS Code r
 box stayed ticked, so the next morning's window read it as off. `PanelProvider.save` now answers whether it
 saved, and a refused plain write whose value is a boolean (`refusedWrite.snapsBackWhenRefused`) repaints the
 panel from what is stored; a text field or a select is not repainted, which would wipe what is being typed.
+The whole plain write is `refusedWrite.writePlain(key, value, cleared, steps)` — clear what the key
+invalidates, save the key, and on a refused box repaint and STOP (a per-side switch that never saved must not
+seed or carry), else run what follows (`PanelProvider.followPlain`). It takes its steps as arguments so the
+order is run in a test, not read from the host's text.
 
 ## CoAI: choose on every bug (2026-09-24, issue #487)
 

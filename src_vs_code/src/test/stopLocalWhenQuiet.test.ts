@@ -64,15 +64,50 @@ test('a refused CHECKBOX is repainted to what is stored; a refused text field is
   }
 });
 
-test('the panel repaints after a refused plain write that snaps back, and save says whether it saved', async () => {
-  // The host imports `vscode`, so its wiring is read — each link pinned whole, in its own place.
+/** Runs one plain write against fakes, answering `saved` for the key itself, and says what happened in order. */
+async function wrote(value: unknown, saved: boolean, cleared: readonly string[] = []): Promise<string[]> {
+  const { writePlain } = await import('../refusedWrite');
+  const happened: string[] = [];
+  await writePlain('stopLocalWhenQuiet', value, cleared, {
+    save: async (key, written) => {
+      happened.push(`save ${key}=${JSON.stringify(written)}`);
+      return key === 'stopLocalWhenQuiet' ? saved : true;
+    },
+    repaint: async () => { happened.push('repaint'); },
+    follow: async () => { happened.push('follow'); },
+  });
+
+  return happened;
+}
+
+test('a refused tick repaints the panel and goes no further', async () => {
+  // Run, not read: a regex over the host cannot see a missing `return`, and without one a refused
+  // per-side switch would still seed and carry for a setting that was never saved.
+  assert.deepEqual(await wrote(true, false), ['save stopLocalWhenQuiet=true', 'repaint'],
+    'a refused checkbox is not repainted, so the box keeps claiming a value that was never saved');
+});
+
+test('a tick that saved is not repainted, and what follows a write still runs', async () => {
+  assert.deepEqual(await wrote(true, true), ['save stopLocalWhenQuiet=true', 'follow']);
+});
+
+test('refused text is not repainted over — what was typed stays — and the write goes on as before', async () => {
+  assert.deepEqual(await wrote('typed text', false), ['save stopLocalWhenQuiet="typed text"', 'follow']);
+});
+
+test('a setting another one names is cleared BEFORE the one that invalidates it', async () => {
+  assert.deepEqual(await wrote(true, true, ['chatModelName']),
+    ['save chatModelName=""', 'save stopLocalWhenQuiet=true', 'follow']);
+});
+
+test('the host writes a plain setting through writePlain, and save says whether it saved', async () => {
+  // What remains read is only the wiring: that the host hands its plain writes to the function run above.
   const { readFileSync } = await import('node:fs');
   const { join } = await import('node:path');
   const host = readFileSync(join(process.cwd(), 'src', 'panelProvider.ts'), 'utf8');
 
-  assert.match(host,
-    /const saved = await this\.save\(config, write\.key, write\.value\);\s*if \(!saved && snapsBackWhenRefused\(write\.value\)\) \{\s*await this\.render\(\);\s*return;/,
-    'a refused checkbox is not repainted, so the box keeps claiming a value that was never saved');
+  assert.match(host, /await writePlain\(write\.key, write\.value, clearedByWriting\(write\.key\), \{/,
+    'the plain case no longer goes through writePlain, so nothing above is what runs');
   assert.match(host,
     /catch \(error: unknown\) \{\s*reportRefusal\(this\.context, key, error\);\s*return false;/,
     'save no longer says it failed, so no caller can act on a refusal');
