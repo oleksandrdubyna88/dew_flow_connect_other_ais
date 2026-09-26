@@ -26,6 +26,28 @@ export const HELP = {
     'How often split work comes back through this gate. ONE GATE PER EPIC: each epic on its own branch, starting from the previous epic’s commit, gets one plan round and one code round over its whole diff, and is committed as one commit — its stories are not gated one by one. ONE GATE FOR THE WHOLE TASK: the plan round you just passed is the only plan gate; everything is built on one branch, each epic committed as one commit, and one code round runs over the whole diff at the end. Either way nothing is gated per story: a gate session ends at its code round, so a round per story cost a new branch and two rounds for every story.',
   cadence:
     'When the consultant is asked although nobody is stuck. After a plan is split into epics, every group of epics — three by default — owes one consultation BEFORE its first code round: is this group right, where is it weak, what did it forget. From five epics the assistant is also asked which epics and stories carry the most risk, and each one it names gets a consultation of its own. OFF: no orders. REMIND: the order is in every review reply and nothing is refused. REQUIRE: the group’s first code round is refused until its consultation has been taken and closed with an outcome. A consultant that cannot be reached never jams the work: the round goes through, with the reason written on it.',
+  consultEnabled:
+    'Lets an AI working with this gate ask ANOTHER vendor’s model for a second opinion — a consultant that reads this checkout read-only, with the uncommitted change, and answers advice the AI must verify. Three kinds exist: STUCK, when the AI itself is not getting out; CADENCE, when the gate orders one for a group of epics; RISK, when it orders one for a piece the AI named as risky. Off switches off all three: the AI is told no consultant can be had, and a cadence set to Require stands its refusal down, with the reason written on the round.',
+  consultCaller:
+    'Which vendor answers when THIS kind of AI consults, and on which model. A different vendor from the caller is the point: a model cannot see its own blind spot. Empty model is the vendor’s own default. These are the consultant’s settings alone — a reviewer row of the same vendor shares only its name and its key in the vault.',
+  consultBaseUrl:
+    'The address of the vendor’s API, for a vendor this build talks to over HTTP rather than through its CLI. Empty uses the vendor’s own public endpoint.',
+  consultExecutablePath:
+    'Where the vendor’s command-line tool is. Empty looks it up on PATH, which is what you want unless it is installed somewhere PATH does not reach.',
+  consultTurns:
+    'How many question-and-answer turns one consultation may have — five unless you change it — for EVERY kind: stuck, cadence and risk alike. The last turn closes it; a follow-up after that is refused and a fresh problem statement opens a new one. It bounds a conversation that circles.',
+  consultCallsPerSession:
+    'How many STUCK consultations one assistant session may open in 24 hours — ten unless you change it. It exists because the failure it prevents is an AI calling the consultant forty times. Cadence and risk consultations are NOT counted: the gate orders them, and each group of epics or risky piece can have only one, which bounds them instead.',
+  consultIdleMinutes:
+    'A consultation nobody has come back to for this long is closed and its vendor conversation dropped — checked every minute while the server runs, for every kind. A later question is a new consultation with the whole budget. An ordered one that closed this way stops counting for its group until someone records how it ended.',
+  consultPrompt:
+    'The instructions the consultant receives ahead of the problem. Empty is the prompt this build ships with; what you type is written to the server’s prompt override and used from the next consultation. Restore default takes the override away.',
+  cadenceEvery:
+    'How many epics share ONE consultation — three unless you change it. The groups are counted from the plan’s own first epic, so a plan that continues another at epic 5 is grouped 5-7, 8-10; the gate names the group in its order, and the AI calls exactly what it names.',
+  cadenceRiskThreshold:
+    'From how many epics the AI is also asked which epics or stories carry the most risk — five unless you change it. Below it, the groups alone are consulted on.',
+  cadenceRiskMax:
+    'The most risky pieces one plan may name — three unless you change it. Each one named gets a consultation of its own before its epic’s code round, so this bounds how many ordered consultations a large plan can add.',
   stopLocalWhenQuiet:
     'When every cloud reviewer of a round has answered and they found at most one remark between them — any severity — the local reviewer finishes the launch it is on and starts no more. The round lists the local roles it did not start, with the reason, and the server log says the cloud found little and the local reviewer stood down. A cloud reviewer that failed keeps the local one running: its silence is not "found little". A round reads the switch when it STARTS, so turning it on or off takes effect from the next round. Off unless you turn it on.',
   splitWithFable:

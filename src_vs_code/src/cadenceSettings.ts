@@ -108,15 +108,15 @@ export function cadenceBlock(cadence: CadenceSettings): string {
   <div class="hint">After a plan is split, every group of epics owes one consultation — that the group is right, where it is weak, what it forgot. Remind puts the order in every review reply; Require also refuses the group’s first code round until it is taken.</div>
 </div>
 <div class="field inline">
-  <label for="cadenceEvery">One consultation per this many epics</label>
+  <label for="cadenceEvery">${help('cadenceEvery')}One consultation per this many epics</label>
   <input type="number" id="cadenceEvery" min="1" max="14" data-setting="cadenceEvery" value="${escapeHtml(String(cadence.every))}">
 </div>
 <div class="field inline">
-  <label for="cadenceRiskThreshold">Ask for the riskiest pieces from this many epics</label>
+  <label for="cadenceRiskThreshold">${help('cadenceRiskThreshold')}Ask for the riskiest pieces from this many epics</label>
   <input type="number" id="cadenceRiskThreshold" min="1" max="14" data-setting="cadenceRiskThreshold" value="${escapeHtml(String(cadence.riskThreshold))}">
 </div>
 <div class="field inline">
-  <label for="cadenceRiskMax">Riskiest pieces per plan, at most</label>
+  <label for="cadenceRiskMax">${help('cadenceRiskMax')}Riskiest pieces per plan, at most</label>
   <input type="number" id="cadenceRiskMax" min="1" max="14" data-setting="cadenceRiskMax" value="${escapeHtml(String(cadence.riskMax))}">
 </div>`;
 }

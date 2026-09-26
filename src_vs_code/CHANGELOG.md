@@ -6,6 +6,12 @@
 is what an empty box means; with a question in the box the press sends it, and the button now says
 *Send*. It used to stay *Re-ask* after the box was cleared with ✕ and a new question typed into it.
 
+**An idle consultation closes on time.** *Close an idle consultation after, minutes* held for a follow-up but not for the consultation itself, which went on reading *open* in the sidebar until coai-mcp next started. The server now checks every minute while it runs. Each of the three consultant limits has a test that fails without it, for every kind it applies to.
+
+**Every consultation says what kind it is** — `stuck`, `cadence` or `risk`. It shows on its sidebar card, in its own *Kind* column in *Consultations*, in the title of *How did this consultation end?*, in `status`, and in the server's log lines.
+
+**Every consultant setting has a `?`.** That covers the switch, each caller's vendor, endpoint and CLI path, the three caps, the prompt, and the three cadence numbers. The caps say which kinds they apply to: turns and the idle close apply to every consultation; calls per session counts only the stuck ones. The switch is now *Let an AI consult another vendor*, because it also switches off the consultations the cadence orders.
+
 ## Extension 0.56.2 — 2026-09-26
 
 **The consultation line names its branch as a branch.** The sidebar line under *Active rounds* ended with the bare branch name, so `…consultation for epics 4-6: due epic-1` read as one phrase; it now ends `· branch epic-1`.
