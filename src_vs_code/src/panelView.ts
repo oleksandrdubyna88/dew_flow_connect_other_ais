@@ -42,7 +42,7 @@ import { cadenceBlock } from './cadenceSettings';
 import { CadenceLine, cadenceLinesHtml } from './cadenceLine';
 import { allowedModelsFor, ModelChoice, modelsFor, modelsProvenance, RemoteProvenance, Runtime } from './models';
 import { CONVENTIONS_ROLE_SINCE, ROLE_SWITCH_SINCE, promptsFor, selectedFor } from './prompts';
-import { PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
+import { FEATURE_CODE, PLAN_CODE, RESULT_CODE, RESULT_DOCUMENT, bucketOf, composed, isActive, isBuiltIn, stageOf, type RoleRow } from './roles';
 import { CLIENT_TARGETS, clientTargetsLine } from './mcpBlock';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation, type StorageSource } from './dataDir';
 import { type WatchedDir } from './escalationDirs';
@@ -2036,7 +2036,10 @@ function promptsBody(state: PanelState): string {
     // The LAST role standing cannot be unticked. Refusing here, where the pointer is, beats
     // refusing at round time with an error about a review somebody already waited for — and the
     // server still refuses the all-off round, because a hand-written env block has no checkbox.
-    const last = switched && on && enabledCodeRoles(s).length === 1;
+    // Never for the feature role: unticking it IS the feature gate's switch (§4.2 of the
+    // feature-review plan), and a feature round with nobody in it is recorded as skipped rather
+    // than left open — there is no round that never resolves to protect a person from.
+    const last = switched && on && bucketOf(role) !== FEATURE_CODE && enabledCodeRoles(s).length === 1;
     // Switched off in the CATALOG, by the roles page. This tick writes `roleEnabled`, which is the
     // OTHER switch — so ticking it would post a setting, recompute `on` as still false, and spring
     // straight back with nothing said. A control that cannot do anything is worse than one that is
@@ -2078,6 +2081,10 @@ ${on ? pickers : ''}
   const plan = all.filter((r) => bucketOf(r) === PLAN_CODE).map(roleRow).join('\n');
   const code = all.filter((r) => bucketOf(r) === RESULT_CODE).map(roleRow).join('\n');
   const documents = all.filter((r) => bucketOf(r) === RESULT_DOCUMENT).map(roleRow).join('\n');
+  // The fourth stage's own group (S2.1 of the feature-review plan): its role has a round, a budget
+  // and a switch of its own, and drawing it among the code roles would count it into a fan-out it
+  // takes no part in. The stage's vendor tick and its tool are epic 3's; this is what the seed forces.
+  const features = all.filter((r) => bucketOf(r) === FEATURE_CODE).map(roleRow).join('\n');
 
   return `<div class="role-group">
   <div class="group-head">Plan stage</div>
@@ -2108,6 +2115,11 @@ ${code}
   <div class="group-head">Document stage</div>
   <div class="hint">What <code>review_document</code> runs: reviewers that read a DOCUMENT rather than a diff \u2014 a specification, a policy, a proposal. No checkout, no change, and no plan round before it. A document review is its own session, keyed by the document, so one branch holds as many of them as you like.</div>
 ${documents}
+</div>
+<div class="role-group">
+  <div class="group-head">Feature stage</div>
+  <div class="hint">What <code>review_feature</code> will run: a reviewer that reads a whole plan’s worth of code, OUTLINED, once every epic has landed — plan-to-code gaps across epics, the seams between them, the members that changed. Its tick is the feature gate’s switch: unticked, the gate records that it did not run and does not block. The tool and the vendor tick arrive with the next epic.</div>
+${features}
 </div>
 <div class="field">
   <button type="button" class="run" data-command="editRoles">Edit roles…</button>

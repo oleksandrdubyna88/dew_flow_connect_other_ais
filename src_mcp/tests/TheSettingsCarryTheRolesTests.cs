@@ -97,6 +97,10 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
             // role's stage is `result`.
             RoleCatalog.DocumentRole,
             RoleCatalog.DocumentSummaryRole,
+            // The feature stage's one, appended (S2.1 of the feature-review plan): its own default,
+            // the same numbers as a code role's, read through `ShippedDefault` rather than the
+            // plan-or-code question the fallback used to ask.
+            RoleCatalog.FeatureRole,
         ]);
 
         settings.Rounds.For(RoleCatalog.PlanRole).Should().Be(new RoleGate(1, 6));
@@ -106,6 +110,8 @@ public sealed class TheSettingsCarryTheRolesTests : IDisposable
         {
             settings.Rounds.For(role).Should().Be(new RoleGate(1, 5), $"{role} ran one round at five before this");
         }
+
+        settings.Rounds.For(RoleCatalog.FeatureRole).Should().Be(PanelConfig.FeatureDefault, "one round at five, as its own instance");
 
         settings.Rounds.RolesForRound(Stage.PlanReview, round: 1).Should().Equal([RoleCatalog.PlanRole]);
         settings.Rounds.RolesForRound(Stage.CodeReview, round: 1).Should().Equal([

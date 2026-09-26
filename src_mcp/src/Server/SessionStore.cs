@@ -109,6 +109,27 @@ public sealed record RoundRecord(
     /// <summary>What the cadence said about this round — "met", "stood down: &lt;reason&gt;", or empty.</summary>
     public string CadenceNote { get => field ?? string.Empty; init; } = string.Empty;
 
+    /// <summary>The verdict of a round that did not run because nobody could review it (D1).</summary>
+    public const string Skipped = "skipped";
+
+    /// <summary>Why a SKIPPED round did not run — empty for every round that ran.</summary>
+    public string Note { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
+    /// How many consecutive identical skips this row stands for; one for every round that ran, and
+    /// for a record written before the field existed.
+    /// </summary>
+    /// <remarks>
+    /// The one shape on the trail that could grow without an owner is a caller retrying with no
+    /// reviewer ticked, over and over — so consecutive skips for one reason update one row rather than
+    /// appending (§4.12 of the feature-review plan). Below one reads as one: a source-generated
+    /// deserializer hands an absent member over as zero.
+    /// </remarks>
+    public int Repeats { get => field < 1 ? 1 : field; init; } = 1;
+
+    /// <summary>The note as the log shows it: the reason, and <c>×N</c> when this row stands for N skips.</summary>
+    public string LoggedNote => Repeats > 1 ? $"{Note} ×{Repeats}" : Note;
+
     /// <summary>Per-reviewer progress — the live part of a running round.</summary>
     /// <remarks>Normalised on the way in, for the reason spelled out on PersistedSession.UsedPrompts.</remarks>
     public List<ReviewerState> ReviewerStates
@@ -201,6 +222,13 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
 
     /// <summary>The repository's common dir, as the cadence record is keyed — what <c>resolve</c> closes an epic under.</summary>
     public string CadenceRepoId { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
+    /// The resolved BASE of a feature session's first round — what a later call on the same plan is
+    /// compared with, so the same plan reviewed on a release branch or a backport is refused rather
+    /// than silently inheriting this review's rejections and budget (§4.3). Empty until recorded.
+    /// </summary>
+    public string FeatureBase { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>
     /// Which AI opened this session, and which model it declared. Never null.
@@ -321,16 +349,20 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     /// session files, findings and rounds and all, to learn three file names. A stat answers the
     /// question that was actually being asked. (gemini and the local reviewer, the code round.)
     /// </remarks>
-    public bool Exists(string repoPath, string branch, string document = "") =>
-        File.Exists(FileFor(repoPath, branch, document));
+    public bool Exists(string repoPath, string branch, string document = "", string feature = "") =>
+        File.Exists(FileFor(repoPath, branch, document, feature));
 
     /// <param name="document">
     /// Which DOCUMENT's session, or empty for the branch's own. Absent is the default, so every
     /// caller that predates plan 4 keeps loading exactly the session it always loaded.
     /// </param>
-    public PersistedSession? Load(string repoPath, string branch, string document = "")
+    /// <param name="feature">
+    /// Which PLAN's feature session, or empty for anything that is not a feature review — the same
+    /// rule one step on.
+    /// </param>
+    public PersistedSession? Load(string repoPath, string branch, string document = "", string feature = "")
     {
-        var file = FileFor(repoPath, branch, document);
+        var file = FileFor(repoPath, branch, document, feature);
         if (!File.Exists(file))
         {
             return null;
@@ -386,9 +418,11 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     private void Write(PersistedSession session)
     {
         Directory.CreateDirectory(SessionsDir);
-        // The document comes off the STATE rather than from a parameter: a session knows what it
-        // is about, and a save that had to be told would be a save that could be told wrong.
-        var file = FileFor(session.State.RepoPath, session.State.Branch, session.State.Document);
+        // The document — and the plan a feature session is of — come off the STATE rather than from
+        // a parameter: a session knows what it is about, and a save that had to be told would be a
+        // save that could be told wrong. It is also what lets the orphan sweep re-save a feature
+        // session under its own key without knowing what a feature session is.
+        var file = FileFor(session.State.RepoPath, session.State.Branch, session.State.Document, session.State.Feature);
         // A scratch name per WRITE, and that is a crash fix rather than a nicety. It used to be
         // `<session>.json.tmp` — one fixed path — and this machine runs several MCP clients at once,
         // each with a server of its own, sharing a data directory; a nine-reviewer round saves on
@@ -566,10 +600,10 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     /// Where one session lives. Internal so a test can plant a file written by an OLDER build — the
     /// compatibility this store owns cannot be checked without writing the old shape to disk.
     /// </summary>
-    internal string FileFor(string repoPath, string branch, string document = "")
+    internal string FileFor(string repoPath, string branch, string document = "", string feature = "")
     {
         // The session key is not a valid file name; hash it and keep a readable prefix.
-        var key = SessionKey.For(repoPath, branch, document);
+        var key = SessionKey.For(repoPath, branch, document, feature);
         var hash = Convert.ToHexStringLower(System.Security.Cryptography.SHA256.HashData(
             System.Text.Encoding.UTF8.GetBytes(key)))[..16];
         return Path.Combine(SessionsDir, $"session-{hash}.json");

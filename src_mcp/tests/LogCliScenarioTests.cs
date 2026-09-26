@@ -113,6 +113,40 @@ public sealed class LogCliScenarioTests : IDisposable
         log.Totals.Findings.Should().Be(1);
     }
 
+    /// <summary>The reason a round did not run rides on the list — S2.1 of the feature-review plan.</summary>
+    [Fact]
+    public void ASkippedRoundsReason_IsOnTheList()
+    {
+        var session = new SessionState("f1", "D:/repo", SessionKey.FeatureBranch, new PanelConfig())
+        {
+            Stage = Stage.FeatureReview,
+            Feature = "todo/PLAN_x.md",
+        };
+        var started = new DateTime(2026, 9, 26, 12, 0, 0, DateTimeKind.Utc);
+        using (var db = RoundsDb.Open(_data, _log)!)
+        {
+            db.RecordRound(
+                session,
+                new RoundRecord("FeatureReview", 1, RoundRecord.Skipped, 0, "no reviewer ran", started)
+                {
+                    StartedUtc = started,
+                    Subject = "PLAN_x.md",
+                    Note = "no vendor is ticked for the feature review",
+                    Repeats = 2,
+                },
+                []);
+        }
+
+        var (code, text) = Run("--log", "--paged");
+
+        code.Should().Be(0);
+        var log = JsonSerializer.Deserialize<LoggedLog>(text, ServerJsonContext.Default.LoggedLog)!;
+        var round = log.Rounds.Should().ContainSingle().Subject;
+        round.Stage.Should().Be("FeatureReview");
+        round.Note.Should().Be("no vendor is ticked for the feature review ×2");
+        text.Should().Contain("\"note\"", "the member is on the wire under that name");
+    }
+
     [Fact]
     public void TheUnpagedLogsDefault_IsStillThreeHundred_NotThePageSize()
     {

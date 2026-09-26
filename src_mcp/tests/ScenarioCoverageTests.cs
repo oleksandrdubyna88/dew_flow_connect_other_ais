@@ -35,6 +35,9 @@ public sealed class ScenarioCoverageTests
         ["review_code"] = "EndToEndTests + StageGateTests (refused before a plan proceeds)",
         ["review_document"] = "ADocumentIsReviewedEndToEndTests — a document role nobody compiled in "
             + "reads a real document through the public tool, and its summary comes back",
+        ["review_feature"] = "AFeatureIsReviewedEndToEndTests — a real repository, the fake CLI as the feature "
+            + "reviewer: the pack reaches its stdin, resolve(feature) closes it, again over a new head, the D17 and "
+            + "no-reviewer skips, all-failed calling a person, a credential file withheld",
         ["resolve"] = "EndToEndTests + RoundAuditTests (a decision is recorded for every finding)",
         ["status"] = "McpContractTests + CallerSessionsTests",
         ["consult"] = "ConsultScenarioTests — two turns over the fake CLI as codex: a thread opened, "

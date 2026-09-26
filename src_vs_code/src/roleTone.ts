@@ -15,10 +15,11 @@
 /**
  * Which tone wraps each role. The colour is never the only signal — the name is always written.
  *
- * <p>Five entries for the five roles this product ships. A role a person added is not in it, and
- * takes its stage's tone below — which means it shares a colour with a shipped role. That is
- * deliberate: matching the sidebar means matching it where it is arbitrary too, and the alternative
- * is two views disagreeing about the same row.</p>
+ * <p>Six entries for the six programming roles this product ships — the feature role took the one
+ * charts colour the palette had left (S2.1 of the feature-review plan). A role a person added is not
+ * in it, and takes its stage's tone below — which means it shares a colour with a shipped role. That
+ * is deliberate: matching the sidebar means matching it where it is arbitrary too, and the
+ * alternative is two views disagreeing about the same row.</p>
  */
 const ROLE_TONE: Readonly<Record<string, string>> = {
   PlanCritique: 'plan',
@@ -26,6 +27,7 @@ const ROLE_TONE: Readonly<Record<string, string>> = {
   Architecture: 'arch',
   SecurityReliability: 'sec',
   UxDxPerformance: 'uxdx',
+  FeatureReview: 'feature',
 };
 
 /**
@@ -40,7 +42,13 @@ export function roleTone(roleId: string, stage: string): string {
     return ROLE_TONE[roleId];
   }
 
-  return stage === 'plan' ? 'plan' : 'arch';
+  switch (stage) {
+    case 'plan':
+    case 'feature':
+      return stage;
+    default:
+      return 'arch';
+  }
 }
 
 /**
@@ -63,10 +71,15 @@ export const ROLE_TONE_CSS = `  /* The role palette, taken from the sibling prod
     --tone-limits: var(--vscode-charts-yellow, #d7ba7d);
     --tone-keys: var(--vscode-charts-red, #f14c4c);
     --tone-code: var(--vscode-widget-border, #454545);
+    /* The feature review takes red — the last charts colour the palette had left, and the last gate
+       before a release. The Keys section shares the hue; a role and a section header are two kinds
+       of thing, as the chat and the server sections already share green. */
+    --tone-feature: var(--vscode-charts-red, #f14c4c);
   }
   .role-plan { border-left-color: var(--tone-plan); }
   .role-arch { border-left-color: var(--tone-arch); }
   .role-sec { border-left-color: var(--tone-sec); }
   .role-uxdx { border-left-color: var(--tone-uxdx); }
   .role-conv { border-left-color: var(--tone-conv); }
-  .role-code { border-left-color: var(--tone-code); }`;
+  .role-code { border-left-color: var(--tone-code); }
+  .role-feature { border-left-color: var(--tone-feature); }`;

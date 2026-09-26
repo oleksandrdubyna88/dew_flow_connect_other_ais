@@ -7,11 +7,15 @@
     },
     {
       "file": "src_mcp/src/Server/PanelService.cs",
-      "refusals": 19
+      "refusals": 22
     },
     {
       "file": "src_mcp/src/Server/Rounds/RoundEngine.cs",
       "refusals": 10
+    },
+    {
+      "file": "src_mcp/src/Server/Stages/FeatureStage.cs",
+      "refusals": 0
     }
   ],
   "reviewerEndings": [

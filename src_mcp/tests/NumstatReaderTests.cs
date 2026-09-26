@@ -30,6 +30,17 @@ public sealed class NumstatReaderTests
     }
 
     [Fact]
+    public void TheCountedProjection_CarriesTheLineCounts_AndTheSameChanges()
+    {
+        const string numstat = "2\t1\tsrc/file.cs\0" + "-\t-\tsrc/logo.png\0" + "7\t3\t\0src/old.cs\0src/new.cs\0";
+
+        var counted = NumstatReader.ReadCounted(numstat).ToList();
+
+        counted.Select(c => (c.Change.Path, c.Added, c.Deleted)).Should().Equal(("src/file.cs", 2, 1), ("src/logo.png", 0, 0), ("src/new.cs", 7, 3));
+        counted.Select(c => c.Change).Should().Equal(NumstatReader.Read(numstat), "one parser, two projections");
+    }
+
+    [Fact]
     public void ABinaryChangeIsMarkedByItsMissingCounts()
     {
         var changes = NumstatReader.Read("-\t-\tsrc/logo.png\0").ToList();

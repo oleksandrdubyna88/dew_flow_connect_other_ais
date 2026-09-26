@@ -807,6 +807,18 @@ manual (`workflow_dispatch`), so a tag does not put new roles on the machine: an
 `/api/catalog` with its own list and `coai-mcp` excludes the document role by name, in that server's
 own words. The one-call check before expecting otherwise is in [deploy/README.md](../deploy/README.md).
 
+**And the seed's next role did NOT enter this way (2026-09-26, S2.1 of the feature-review plan).**
+The seed gained `FeatureReview`, a role of a third stage, `feature`, and D10 says the Team server
+takes no part in a feature review in this version. So `AcceptedRoles` now seeds the built-ins **by
+stage** — the plan and result stages, `StagesRunHere` — and keeps the rest as `RunElsewhere`, a set
+derived from the seed rather than listed, consulted in three places: `From` never seeds one,
+`Guard` refuses one named in `Coai:ExtraRoles` at boot (an operator has configured a review this box
+cannot run, which is the same class of mistake as a malformed id), and `Knows` refuses one BEFORE
+`AllowAny` is consulted — "any role" means any role this server could run, never a review it knows
+it cannot. The refusal names the stage and says where the feature gate runs. The client never sends
+one (`ProviderSettings.Serves` excludes remote rows from the feature stage), so this is the second
+line, not the first; `AcceptedRolesTests` pins all three, `AllowAny = true` included.
+
 ### The prompt is bounded here, not only by whoever sent it (2026-09-14)
 
 `AcceptedRoles`' own remarks state the rule — *a client is not a boundary; anything reaching the

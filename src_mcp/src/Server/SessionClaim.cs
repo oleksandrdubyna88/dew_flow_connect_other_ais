@@ -29,9 +29,9 @@ internal sealed class SessionClaim : IDisposable
     private SessionClaim(FileStream held) => _held = held;
 
     /// <summary>The file whose handle IS the claim — one per session identity, document included.</summary>
-    public static string FileFor(string dataDir, string repoPath, string branch, string document = "")
+    public static string FileFor(string dataDir, string repoPath, string branch, string document = "", string feature = "")
     {
-        var key = SessionKey.For(repoPath, branch, document);
+        var key = SessionKey.For(repoPath, branch, document, feature);
         var name = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(key)))[..16];
 
         return Path.Combine(dataDir, "claims", $"session-{name}.claim");
@@ -41,11 +41,11 @@ internal sealed class SessionClaim : IDisposable
     /// Takes the claim for this session, or answers null because another call holds it — the one
     /// legitimate "nothing" here, and the caller refuses on it.
     /// </summary>
-    public static SessionClaim? TryTake(string dataDir, string repoPath, string branch, string document = "")
+    public static SessionClaim? TryTake(string dataDir, string repoPath, string branch, string document = "", string feature = "")
     {
         try
         {
-            var file = FileFor(dataDir, repoPath, branch, document);
+            var file = FileFor(dataDir, repoPath, branch, document, feature);
             Directory.CreateDirectory(Path.GetDirectoryName(file)!);
 
             // OpenOrCreate, not Create: the file is a handle to hold, never content, and truncating

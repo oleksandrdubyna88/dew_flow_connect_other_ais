@@ -85,6 +85,7 @@ public static class RoundMachine
     {
         { AwaitingResolve: true } => new Transition.Refused(Unresolved),
         { IsDocumentSession: true } => new Transition.Refused(ThisIsADocumentSession),
+        { IsFeatureSession: true } => new Transition.Refused(ThisIsAFeatureSession),
         { Stage: not Stage.PlanReview } => new Transition.Refused(
             $"the plan stage is over for this session (stage: {s.Stage}); open a new session for a new plan"),
         // The budget was never enforced HERE, and that was the defect: it was read only at
@@ -115,6 +116,29 @@ public static class RoundMachine
         "this session is reviewing a branch, not a document — call review_plan and review_code for " +
         "it; review_document starts a session of its own, keyed by the document";
 
+    /// <summary>A feature session was asked for a plan, code or document round, or the other way round.</summary>
+    /// <remarks>Refused by name, for the reason <see cref="ThisIsADocumentSession"/> gives: one budget, one job.</remarks>
+    internal const string ThisIsAFeatureSession =
+        "this session is reviewing a whole feature, not a branch or a document — call review_feature for " +
+        "it; the branch's own gates are review_plan and review_code, and a document has review_document";
+
+    internal const string ThisIsNotAFeatureSession =
+        "this session is reviewing a branch or a document, not a feature — review_feature starts a session " +
+        "of its own, keyed by the plan's path, and needs no open";
+
+    /// <summary>
+    /// A plan's feature review is finished — and the way to run another is NAMED (D14).
+    /// </summary>
+    /// <remarks>
+    /// The same door as <see cref="CodeDone"/>: the fix pull requests move the head, and the review
+    /// runs again over it. Whether the head has MOVED is the stage's check, not this transition's —
+    /// it needs the commit, which a pure transition does not have.
+    /// </remarks>
+    internal const string FeatureDone =
+        "this plan's feature review is complete. To review it again — after the fix pull requests landed, or " +
+        "against a new head — call review_feature with again: true, which reopens the feature stage; the " +
+        "finished rounds stay on the record";
+
     /// <summary>
     /// A document's review is finished — and the way to start another is NAMED.
     /// </summary>
@@ -132,6 +156,7 @@ public static class RoundMachine
     public static Transition BeginCodeRound(SessionState s) => s switch
     {
         { IsDocumentSession: true } => new Transition.Refused(ThisIsADocumentSession),
+        { IsFeatureSession: true } => new Transition.Refused(ThisIsAFeatureSession),
         { HumanGate: true } => new Transition.Refused(GateHeld),
         { PlanProceeded: false } => new Transition.Refused(
             "no plan round has reached 'proceed' in this session — the plan gate comes first (review_plan)"),
@@ -190,11 +215,77 @@ public static class RoundMachine
     /// </remarks>
     public static Transition BeginDocumentRound(SessionState s) => s switch
     {
+        { IsFeatureSession: true } => new Transition.Refused(ThisIsAFeatureSession),
         { IsDocumentSession: false } => new Transition.Refused(ThisIsACodeSession),
         { HumanGate: true } => new Transition.Refused(GateHeld),
         { AwaitingResolve: true } => new Transition.Refused(Unresolved),
         { Stage: Stage.Done } => new Transition.Refused(DocumentDone),
         _ => new Transition.Moved(s),
+    };
+
+    /// <summary>
+    /// The feature gate (S2.1 of the feature-review plan). Every refusal the document gate has, in the
+    /// document gate's order — and, like it, no <c>PlanProceeded</c> check: the plan IS the input.
+    /// </summary>
+    /// <remarks>
+    /// The held gate is asked BEFORE the finished stage and before the roster is ever looked at, and
+    /// that order is kept on purpose by the engine too: a standing <c>call_human</c> from a round whose
+    /// reviewers all failed is a person's decision, and un-ticking every vendor must not dissolve it
+    /// into a <c>skipped</c> round (§4.4).
+    /// </remarks>
+    public static Transition BeginFeatureRound(SessionState s) => s switch
+    {
+        { IsFeatureSession: false } => new Transition.Refused(ThisIsNotAFeatureSession),
+        { HumanGate: true } => new Transition.Refused(GateHeld),
+        { AwaitingResolve: true } => new Transition.Refused(Unresolved),
+        { Stage: Stage.Done } => new Transition.Refused(FeatureDone),
+        _ => new Transition.Moved(s),
+    };
+
+    /// <summary>
+    /// The feature gate, asked AGAIN: a finished feature review is reopened for a fresh round — the
+    /// same shape as <see cref="BeginCodeRoundAgain"/>, with the same refusals still first.
+    /// </summary>
+    /// <remarks>
+    /// What is kept is what the review is OF and what it agreed on — the plan, the standing
+    /// rejections; what starts over is the stage's own count. That the head has moved, and that the
+    /// base is the one recorded, are the stage's checks (<see cref="FeatureBases"/>), because they need
+    /// commits a pure transition does not have — and a review asked again against ANOTHER base keeps
+    /// nothing it agreed on: <see cref="FreshFeatureReview"/>, which the engine applies once that
+    /// finding is made.
+    /// </remarks>
+    public static Transition BeginFeatureRoundAgain(SessionState s) => s switch
+    {
+        { Stage: Stage.Done, IsFeatureSession: true, HumanGate: false, AwaitingResolve: false } =>
+            new Transition.Moved(s with
+            {
+                Stage = Stage.FeatureReview,
+                RoundsRunThisStage = 0,
+                EscalationsUsed = 0,
+                AdvanceOnResolve = false,
+            }),
+        _ => BeginFeatureRound(s),
+    };
+
+    /// <summary>
+    /// A feature review started over against ANOTHER base (§4.3): the stage's own count, its escalations
+    /// and its standing rejections all start again, whatever the stage was — a rejection made in one
+    /// review must not discount a finding in a different one, and a round of the old budget is not a
+    /// round of the new.
+    /// </summary>
+    /// <remarks>
+    /// Not a transition of its own, on purpose: a held gate and an unresolved round are refused by
+    /// <see cref="BeginFeatureRoundAgain"/> first, and that the base IS another one is the stage's finding
+    /// (<see cref="FeatureBases.IsAnother"/>) — so the engine applies this to the state the begin moved to,
+    /// after both, and it never reaches a session that may not run a round.
+    /// </remarks>
+    public static SessionState FreshFeatureReview(SessionState s) => s with
+    {
+        Stage = Stage.FeatureReview,
+        RoundsRunThisStage = 0,
+        EscalationsUsed = 0,
+        AdvanceOnResolve = false,
+        Rejections = [],
     };
 
     public static Transition CompleteRound(SessionState s, GateResult gate, ReviewerSummary reviewers)

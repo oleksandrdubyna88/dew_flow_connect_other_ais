@@ -33,6 +33,7 @@ internal static class Schema
         Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
+        WhyARoundDidNotRun,
     ];
 
     internal const string Tables = """
@@ -456,5 +457,22 @@ internal static class Schema
         ALTER TABLE consultations ADD COLUMN kind  TEXT NOT NULL DEFAULT 'stuck';
         ALTER TABLE consultations ADD COLUMN plan  TEXT NOT NULL DEFAULT '';
         ALTER TABLE consultations ADD COLUMN epics TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>
+    /// Step 16: why a round did NOT run (S2.1 of the feature-review plan, §4.12 — which numbered it
+    /// 15 before the cadence took that step).
+    /// </summary>
+    /// <remarks>
+    /// <para>The feature stage is the one whose round may be SKIPPED rather than refused when nobody
+    /// serves it (D1): the row is written with verdict <c>skipped</c> and the reason here, with a
+    /// repeat count (<c>×N</c>) when consecutive identical skips coalesced into one row. Empty for
+    /// every round that ran, and for every row written before this step — the one spelling of no
+    /// note, which is what <c>--log</c> answers for a database that has no column at all.</para>
+    /// <para>Its own step, appended: a database that has run fifteen records fifteen, and widening
+    /// the fifteenth would leave it without this column while believing it had run every step.</para>
+    /// </remarks>
+    internal const string WhyARoundDidNotRun = """
+        ALTER TABLE rounds ADD COLUMN note TEXT NOT NULL DEFAULT '';
         """;
 }

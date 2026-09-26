@@ -517,7 +517,8 @@ public sealed class ThePairsThemselvesTests : IDisposable
 
         // Every column a step AFTER twelve added goes too, or the reopen re-runs a later step against a
         // column it already has: step 14 (issue #131) added two to `rounds`, step 15 (the consultation
-        // cadence) three more and three to `consultations`.
+        // cadence) three more and three to `consultations`, step 16 (the feature stage's skip reason)
+        // one more to `rounds`.
         Execute("""
             ALTER TABLE collect_pairs DROP COLUMN comment;
             ALTER TABLE collect_pairs DROP COLUMN comment_lost;
@@ -526,6 +527,7 @@ public sealed class ThePairsThemselvesTests : IDisposable
             ALTER TABLE rounds DROP COLUMN plan_key;
             ALTER TABLE rounds DROP COLUMN epic_number;
             ALTER TABLE rounds DROP COLUMN cadence_note;
+            ALTER TABLE rounds DROP COLUMN note;
             ALTER TABLE consultations DROP COLUMN kind;
             ALTER TABLE consultations DROP COLUMN plan;
             ALTER TABLE consultations DROP COLUMN epics;

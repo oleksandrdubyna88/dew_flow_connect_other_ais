@@ -36,10 +36,12 @@ open → review_plan → resolve → (revise, repeat) → proceed
 not discouraged — the honest limit of a design with no hooks: the server cannot make a model call
 it, but it can make a skipped stage impossible to fake.
 
-Nine tools, unprefixed (the client's `coai` id is the namespace): `providers`, `open`,
-`review_plan`, `review_code`, `review_document`, `resolve`, `status`, `ask_human` — and `consult`,
-which is the one that gates nothing: a stuck assistant asking another vendor's model about the LIVE
-working tree, uncommitted edits included, and getting an answer rather than a verdict.
+Eleven tools, unprefixed (the client's `coai` id is the namespace): `providers`, `open`,
+`review_plan`, `review_code`, `review_document`, `review_feature`, `resolve`, `status`, `ask_human` —
+and `consult` with `close_consult`, the pair that gates nothing: a stuck assistant asking another
+vendor's model about the LIVE working tree, uncommitted edits included, getting an answer rather than
+a verdict, and recording afterwards whether it helped. `review_feature` is the fourth gate, called
+once at the end of a plan of three or more epics over the whole feature; it needs no `open`.
 
 ## When it needs a person
 

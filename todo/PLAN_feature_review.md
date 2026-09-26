@@ -1,6 +1,8 @@
 # PLAN — the feature review: a fourth gate, run once a whole plan is built, before release
 
-> Status: **plan only, nothing implemented yet, 2026-09-25.** Scope: `src_mcp` (core, normalizer,
+> Status: **in progress, 2026-09-26.** Epic 1 merged (`d8c0bcaa`) except S1.2's live Grok/Qwen
+> measurement, which waits on the vault; epic 2 (S2.1–S2.3) built; epic 3 has S3.1 and S3.3a built,
+> S3.2 and the releases open. Scope: `src_mcp` (core, normalizer,
 > runners, server, store), `src_vs_code` (panel, roles, rounds log, help, snippet), `src_server`
 > (one exclusion only), `shared/`, `.agents/PROJECT.md`.
 >
@@ -45,8 +47,16 @@ The idea is diversity of eyes, not policing: different models notice different t
 | D12 | **Fix the defects found on the way** (§9). |
 | D13 | Session identity is the plan's **repository-relative path** (not its file name). |
 | D14 | An optional **`again: true`** reopens a finished feature review (refused when `head` has not moved). |
-| D15 | The source resolver **refuses credential-looking files** (`.env*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, `id_rsa*`/`id_ed25519*`/`id_ecdsa*`, and names in the existing `shared/credential-words.json`), with the reason, beyond D4's "any file". |
+| D15 | The source resolver **refuses credential-looking files** (`.env*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, `id_rsa*`/`id_ed25519*`/`id_ecdsa*`), with the reason, beyond D4's "any file". **Narrowed 2026-09-26 by the feature-pack trial:** the redaction words of `shared/credential-words.json` (`token`, `auth`, `credential`, `secret`) are NOT applied to FILE NAMES — on 21 real features they would have refused 9 ordinary code files (`providers/credentials.ts`, `Auth.cs`, `TokenIdentity.cs`, `tokens.rs`); the fixed file patterns above stay, and file CONTENT still passes the redaction pass. |
 | D16 | `RoundEngine` is extracted from `PanelService` — as its own plan, [PLAN_the_round_engine_leaves_the_panel_service.md](PLAN_the_round_engine_leaves_the_panel_service.md), built after this plan's Epic 1 and **before** its Epic 2 (§7.1), so the stage's hooks land in the extracted engine rather than growing a 3056-line file. |
+| D17 | **The feature gate is for plans of THREE or more epics** (operator, 2026-09-25, after the month's count: 222 plans shipped in 30 days, most of them one story). A smaller plan is covered by `review_code`; `review_feature` given fewer than 3 epics records a `skipped` round with that reason and does not block. The threshold is a setting, `COAI_FEATURE_MIN_EPICS`, default 3. |
+| D18 | **The rules stay at the full `RuleFiles` budget for this stage** (operator, 2026-09-26): the trial measured rules at a median 43 % of a pack and suggested ~24 KB; declined — the reviewer is given the rules the project actually runs under. |
+| D19 | **The role prompt directs attention to cross-epic seams and to changed members**, and asks for the source of a changed member it cannot judge from its signature; it carries a **severity calibration** paragraph (blocking = a broken contract, data loss or security; major = a real defect with a likely trigger; minor = real but unlikely or cosmetic; nit = style). The trial found 2 of 6 planted defects (1 of 3 cross-epic) and severity overstated in 21 % of findings. |
+| D20 | **Three follow-up turns** stay the default (§4.9), confirmed after the trial ran one. |
+| D21 | **Lessons and gate history stay in the pack**: the trial arm without them yielded 0.5 high-value findings per cell against 1.6 for the full pack. |
+| D22 | **CONFIRMED (2026-09-26): outline plus changed hunks** (a hybrid) replaces the pure outline. Measured in `research/RESULTS_feature_pack_trial.md` (added with Epic 2): on the 7 control tasks the hybrid (arm D) was ≥ the outline and ≥ the diff on every task and better on three — 2.00 high-value findings per cell against 0.68, overstatement 35 % against 50 %, for +39 % input; with the shipped protocol (arm F: hybrid + D19 + three follow-ups) it found 7 of 14 planted defects against 5 for the outline arms — 6 of the 9 whose line reached the pack as a hunk, 0 of the 4 whose member the hunk budget cut. So S2.2 builds the hybrid with a **per-member hunk cap** (one huge unit must not starve the rest: in the trial six units filled all the hunk room of one pack while 664 small ones were cut), `OmissionsReserveBytes` 12 KB (cs1 exceeded 8 KB), `OutlineBytes` 168 KB. |
+| D23 | **At most two rounds, and the second only when it is needed** (operator, 2026-09-26). Round 2 runs ONLY when round 1 had a reviewer failure (some or all reviewers failed), a `blocking`-severity finding came back, or the person explicitly asks for one. Otherwise the review is one round: the caller resolves every finding (accept and fix, or reject with a reason) and the accepted fixes land without a second review. A second round that still carries a `blocking` finding, or fails again, is `call_human`. Epic 2 ships one round (a gating finding → `call_human`); S3.4 builds this. |
+| D24 | **The feature gate's rule lives in `dew_flow_conventions`** as `common/coai-feature-gate.md` (operator, 2026-09-26): coai gates every family repository, so the rule is shared, like the review, document and consultant rules. It says how to work and **tracks nothing** — no check, CI step or count of whether the gate ran. It replaces D11 (2a)'s product-owned snippet half: the snippet takes its feature half from the conventions mount, as the consultant half does (S3.5). The conventions PR (#55) is promoted to `release` only once coai ships `review_feature`. |
 
 ## 3. What exists today (verified 2026-09-25 against `origin/main` 21aba62e)
 
@@ -167,6 +177,7 @@ pinned by literal.
 | No vendor ticked `feature` (incl. an old extension that never writes the field) | `Serves(FeatureReview)` → nobody eligible | **skipped** — "no vendor is ticked to review features" |
 | Vendors ticked, none can run (no key, no CLI, bad URL) | `CanRun` → empty; reason from `ExcludedFrom` | **skipped**, naming each |
 | Reviewers ran, **all failed** (timeout, 401, 429 exhausted, unparseable — on any turn) | `CompleteRound`, `Answered == 0` | **`call_human`** — blocks |
+| The plan has fewer than `COAI_FEATURE_MIN_EPICS` (default 3) epics (D17) | `FeatureInputs`, from the `epics` count — before any git or model work | **skipped** — "a plan of N epic(s) is covered by review_code; the feature gate runs for 3 or more" |
 | Some failed | normal path | proceed / revise / … with an honest summary |
 | A Team server vendor ticked | `Serves(FeatureReview) = Feature && !IsRemote` in v1 | not asked, named in `ExcludedFrom` |
 
@@ -206,7 +217,8 @@ review_feature(repoPath, planPath, baseRef, head, epics, lessons, again = false)
    left undone; which rejected gate finding you are least sure of. Capped at 32 KB. (Plan round,
    2026-09-25: "all arrays empty" and "none only with a reason" contradicted each other for one empty
    array.)
-2. **`epics`** — `[{title, summary, branch?, pr?}]`, 1–20 entries, ≤16 KB. `branch` is optional but
+2. **`epics`** — `[{title, summary, branch?, pr?}]`, 1–20 entries, ≤16 KB; fewer than
+   `COAI_FEATURE_MIN_EPICS` (default 3) is not a refusal but a recorded `skipped` round (D17). `branch` is optional but
    the tool description says it is what lets the history of a squash-merged epic be found.
 3. **`planPath`** — `DocumentReader.Read` (repo confinement, UTF-8, not binary).
 4. **`baseRef` / `head`** — `rev-parse --verify <ref>^{commit}` with the option-looking-ref guard
@@ -255,8 +267,10 @@ imply, release risks*). `ComposePrompt`'s `bool hasCheckout` becomes a three-val
   cases: Python `decorated_definition`, TS/JS `const f = () =>`, Rust `impl_item`, PHP's `php` grammar.
 - A file whose ERROR-node share exceeds 20 % is reported "unsupported (parse failed)" with its size.
 - `runners/Feature/FeatureOutlineBuilder.cs`: changed files from `base..head` (reusing
-  `ContextAssembler.ComparisonBase`, `NumstatReader`, `DiffExclusions`), each read at `head` with
-  `git show` (no worktree), hunks for the `*` marks from `git diff -U0 -M` through the existing
+  `ContextAssembler.ComparisonBase`, `NumstatReader`, `DiffExclusions`), all read at `head` through ONE
+  `git cat-file --batch` (no worktree; the trial measured `git show` per file 50–70× slower) and outlined
+  IN-PROCESS through `ISourceOutliner` — a per-file `--outline` process costs ~50 ms of start-up and
+  grammar load even for a one-line file, 93 % of a pack's local wall time, hunks for the `*` marks from `git diff -U0 -M` through the existing
   `DiffSplitter`.
 - `shared/kept-grammars.txt` gains `tree-sitter-tsx`, `-rust`, `-php`, `-python`; `KeptGrammarsTests`
   covers the union of both interfaces' languages.
@@ -269,7 +283,10 @@ of `baseSha`; `S` = `git rev-list baseSha..headSha` (≤5000, else this proof is
 `B` = `epics[].branch`. A round of this repository with `started_utc ≥ T0` belongs when **any** of:
 
 - (a) `rounds.head_sha ∈ S` — merged or rebased epics;
-- (b) `sessions.branch ∈ B` — **squash-merged** epics, whose SHAs are not in `main`;
+- (b) `sessions.branch ∈ B` — **squash-merged** epics, whose SHAs are not in `main` — with the window
+  widened to `T0 − 90 days` like rule (c): the trial found that as first written, 3 of the 5 real features
+  built through this gate attached NOTHING, because a rebase-merged epic is reviewed on its branch
+  before the base commit's committer time;
 - (c) a plan round whose `subject` matches the plan's **H1 heading** as `RoundSubject.From` would
   shorten it (`core/Rounds/RoundSubject.cs:29` — a subject is the file name only when a caller passed a
   path, and a shortened heading otherwise), or whose `plan_text` opens with that heading, with the
@@ -282,6 +299,25 @@ in the same range, and a heading match is a coincidence waiting to happen. The c
 **candidate** evidence, labelled with which rule admitted it. Before building (c), run
 `SELECT subject, substr(plan_text,1,120) FROM rounds WHERE stage='PlanReview' LIMIT 20` on a real
 database to see what subjects actually look like.
+
+**Looked at 2026-09-26, before (c) was written (S2.3).** The query above, read-only, against this
+machine's database (`%LOCALAPPDATA%\coai-mcp\coai.db` — the default data dir; no `COAI_DATA_DIR` is
+set): 907 rounds from 2026-09-05 to 2026-09-26, **434 of them `PlanReview`**. What they look like:
+
+- **359 of 434 plan texts open with a `#` line**, and **304 subjects end in `…`** — a heading shortened
+  to sixty characters by `RoundSubject.From`. The feature-review plan's own round (branch
+  `plan/feature-review`) reads `PLAN — the feature review: a fourth gate, run once a whole…`.
+- **A subject is not always the H1.** `RoundSubject.From` takes the first `#` line of ANY level within
+  twenty lines: a text opening `PLAN — epic 2, story 2: …` without a `#` got the subject
+  `The goal, and the exact property` (its first `##`); texts with no heading at all are subjected by
+  their first words (`GOAL — …`, `SCOPE — …`, and one `The coai MCP server is up and answered…`).
+- **Nine rounds are recorded on the branch `HEAD`** — a detached checkout, which nobody can name as an
+  epic's branch; it is excluded from rule (b) together with `main`/`master`.
+
+So rule (c) as built: the plan's first `# ` line is its heading; a plan round matches when its
+`subject` equals `RoundSubject.From("# " + heading)` (the shortened form a prefaced epic plan still gets)
+**or** the first non-empty line of its `plan_text` is that heading, whole. A plan with no `# ` line has
+nothing to match by — rule (c) is then off and the history says so.
 
 Consultations: same repository, `started_utc ≥ T0`, and `branch ∈ B` or `head_sha ∈ S`. Only
 **rejected** findings (`resolution = 'reject'`) with reasons are attached, de-duplicated with the
@@ -420,10 +456,10 @@ and the rest lives in dedicated classes (`FeatureSessions`, `FeatureOutlineBuild
 | vendor `feature` field | old server ignores it (verify no `UnmappedMemberHandling.Disallow`) | absent = false → skip "no vendor ticked" | phase 0 |
 | `runtime: "api"` | **dangerous**: an old server's `RuntimeOf` (`PanelSettings.cs:1087`) turns an unknown runtime into codex + baseUrl — silently the wrong vendor | never written | panel gate `API_RUNTIME_SINCE`: rows disabled against an older installed server with "needs coai-mcp ≥ X" — and SUPPRESSED from the written settings, which needs the installed version threaded into the writer: `envBlock(settings, vendors)` (`settingsShape.ts:459-463`) → `vendorsEnv` (`vendors.ts:413-419`) has no such input today; `sameVendors(vendors, DEFAULT_VENDORS)` (`:461`) must still emit the rest |
 | extension rollback | an old `vendorsFrom` rewrites `api` as codex on next save | — | release note; the old code cannot be fixed |
-| session file with `Stage: "FeatureReview"` | old sweep must skip it (`JsonException`, `SessionStore.cs:455-463`) | — | phase 0; fallback `sessions/feature/` |
-| database `user_version` | old binary as reader/migrator | — | against the released artefact |
-| `--log` verdict `skipped`, stage `FeatureReview`, `note` | old extension shows raw strings | — | phase 0 |
-| Team server `/api/catalog` | `FeatureReview` would enter `AcceptedRoles` on rebuild — which holds bare role ids, and whose `AllowAny` bypasses the catalog altogether (`src_server/src/Jobs/AcceptedRoles.cs:103`, `:178`) | — | `AcceptedRoles` filters the BUILT-INS by stage; tests with `AllowAny = true` and with `FeatureReview` named in `Coai:ExtraRoles`. The client never sends a feature role to a Team server (`Serves` excludes remote rows), so this is the second line, not the first |
+| session file with `Stage: "FeatureReview"` | old sweep must skip it (`JsonException`, `SessionStore.cs:455-463`) | — | **Measured 2026-09-26 (S2.1) against released coai-mcp 0.37.0**, `live-feature-schema-compat.mjs` leg 3: the released binary started over a data directory holding a feature session file with a round a dead process left running, exited on EOF, and left the file byte-identical — one session file, never a second; this build's sweep then marked the round `interrupted` and saved it back under its own key, feature and stage intact. No `sessions/feature/` fallback needed |
+| database `user_version` | old binary as reader/migrator | — | **Measured 2026-09-26 against 0.37.0**, legs 1 and 2: this build migrates a fresh directory to step **16** (not 15 — the cadence took 15 on 2026-09-25); the released binary answers `--log` over it, exit 0; the released binary's own database sits at `user_version` 14 and this build migrates it forward to 16 with `note` present, and the released binary still reads it afterwards. Forward only |
+| `--log` verdict `skipped`, stage `FeatureReview`, `note` | old extension shows raw strings | — | **Measured 2026-09-26 against 0.37.0**, leg 1: the released `--log` lists the skipped `FeatureReview` round under its raw stage name with no `note` member, exit 0; this build reads the note back (`… ×3`). The released EXTENSION's rendering of the raw strings is epic 3's row (`rounds.ts`, `roundsLog.ts`) |
+| Team server `/api/catalog` | `FeatureReview` would enter `AcceptedRoles` on rebuild — which holds bare role ids, and whose `AllowAny` bypasses the catalog altogether (`src_server/src/Jobs/AcceptedRoles.cs:103`, `:178`) | — | **Done in S2.1**: `AcceptedRoles` seeds the built-ins by stage (`StagesRunHere`) and keeps the rest as `RunElsewhere`, refused by name in `Knows` BEFORE `AllowAny`, in `Refusal` naming the stage, and in `Guard` at boot when named in `Coai:ExtraRoles`; `AcceptedRolesTests` pins all three, `AllowAny = true` included. The client never sends a feature role to a Team server (`Serves` excludes remote rows), so this is the second line, not the first |
 | api version gate | — | — | must **suppress `api` rows from the emitted `COAI_VENDORS`** for an older installed server, not merely disable them in the UI — the old server reads the settings file, not the panel |
 
 ### 4.14 The extension
@@ -440,6 +476,8 @@ and the rest lives in dedicated classes (`FeatureSessions`, `FeatureOutlineBuild
 - `rounds.ts` `stageName` covers Document and Feature review (unknown → raw); `roundsLog.ts` renders
   `skipped` as its own neutral state ("skipped — did not block") and shows `note`.
 - Help in all five languages in one commit.
+- The snippet and the tool description tell the caller to call `review_feature` ONLY for a plan of 3 or
+  more epics (D17), so the skip is a backstop, not the usual path.
 - Snippet half: `src_vs_code/src/featureRule.md` (`<!-- coai-feature v1 -->`), `FEATURE_VERSION = 1`, a
   `KNOWN_HALVES` row, `prepare-gate.mjs` emission, `ARTEFACT_VERSION` 11 → 12, the "(v12)" menu title.
 
@@ -630,7 +668,8 @@ with `prove-move.mjs`. Both plans' boundary text says this.
 Everything here is useful without the feature stage. Branch `feat/feature-review-e1` from `main` at
 this plan's merge commit.
 
-- [ ] **S1.1 — every `Stage` answers by name, and a round's number comes from the journal.**
+- [x] **S1.1 — every `Stage` answers by name, and a round's number comes from the journal.** *Shipped
+  in epic 1 (`d8c0bcaa`).*
   Goal: retire the four silent defaults and fix the three document-stage defects and the
   round-overwrite, so a fourth stage can be added without a `_ =>` swallowing it.
   - Deliverables: `core/Rounds/Stages.cs` (§4.1 descriptor, exhaustive, `PhraseOf` never "done");
@@ -656,7 +695,9 @@ this plan's merge commit.
   - Model: **Fable** — the descriptor is the architecture the stage hangs on; round numbering changes
     what a stored row means (data).
 
-- [ ] **S1.2 — the `api` runtime: Grok and Qwen review plans and code the day it ships.**
+- [ ] **S1.2 — the `api` runtime: Grok and Qwen review plans and code the day it ships.** *Part (i)
+  shipped in epic 1 (`d8c0bcaa`); (ii) and (iii) — the live measurement and the xai/qwen presets — wait
+  on the keys being in the vault.*
   Goal: an OpenAI-compatible HTTP reviewer with a vault key, whose dialects are measured, not documented.
   - Deliverables, in this order inside the story: **(i)** `LocalAsk.RequestBody` (`LocalAsk.cs:186`)
     pinned by a golden byte test, then refactored to `ChatRequest.Body(dialect, …)` reading
@@ -763,7 +804,20 @@ Branch `feat/feature-review-e2` from `main` after E1 and round-engine steps 1–
 §3–§4 is re-read against `RoundEngine.cs`, `StageRun.cs`, `RosterBuilder.cs` and `ReviewerPrompt.cs`
 before the first edit.
 
-- [ ] **S2.1 — the stage exists in the core, the engine and the store.**
+- [x] **S2.1 — the stage exists in the core, the engine and the store.** *Shipped 2026-09-26.*
+  Deviations from the deliverables below: schema step **16**, not 15 (the consultation cadence took 15
+  on 2026-09-25; the note is `Schema.WhyARoundDidNotRun`); `StageRun` gained `Feature`, `Head`,
+  `WhenNobody` and a closed `Session` union (`MustExist` | `CreateIfAbsent`) rather than a bare
+  factory, and the engine resolves the SHA from `Head` because a feature session's branch is
+  `:feature`; the skip's session state is saved as READ rather than as the begin moved it, so an
+  `again` that finds nobody to ask leaves the review finished; the three default sites go through one
+  `PanelConfig.ShippedDefault(stage)` with `FeatureDefault` as its own instance (pinned by reference);
+  `AcceptedRoles` derives `RunElsewhere` from the seed and refuses at boot, in `Knows` and in
+  `Refusal`; the extension took a fourth Prompts group and a fourth roles-page tab so the shipped role
+  is drawn somewhere with its switch — the stage `<select>` and the vendor tick stay epic 3's. The
+  released-half check is `npm run test:feature-compat`, recorded in §4.13 (drafts excluded: 0.38.0
+  was one with three of six platforms). Record: `module_core.md`, `module_server.md`,
+  `module_tests.md`, `module_extension.md`, `module_team_server.md`.
   Goal: `Stage.FeatureReview` can be begun, skipped or run through `RunStageAsync` with its own budget,
   role, session key and skip record — before any tool reaches it.
   - Deliverables: `Stage.FeatureReview` (appended last) and its `Stages` row; `RoleStages.Feature`,
@@ -802,26 +856,66 @@ before the first edit.
   - Acceptance: both suites green; the engine-level truth table (rows 1–3 and the human-gate row)
     pinned through the engine's internal test seam; the S0.4 rows for the session file (the old sweep
     skips it — `SessionStore.cs:455-463`), `user_version` 15 read by the released binary, and `--log`
-    with `note`/`skipped`/`FeatureReview` read by the released extension, written into §4.13.
+    with `note`/`skipped`/`FeatureReview` read by the released extension, written into §4.13 — run as
+    an explicit check (plan round E2): the released `coai-mcp` answering `--log` over a database migrated
+    to step 15 (ignoring `note`), and the new binary opening the released one's database (it migrates
+    FORWARD through `SqliteMigrator`; there is no downgrade — old → new is the supported direction,
+    stated in module_server.md).
   - Model: **Fable** — session identity and a schema step are data migration; skip-versus-block is
     the gate's integrity.
 
-- [ ] **S2.2 — `review_feature`, outline only (follow-ups = 0).**
+- [x] **S2.2 — `review_feature`, outline only (follow-ups = 0).** *Shipped 2026-09-26, in two halves:
+  S2.2a (the pack — inputs, the hybrid outline, the context) and S2.2b (the tool, the stage, the wiring).*
+  Deviations from the deliverables below, and what is still open:
+  - **The head is the checkout's HEAD**, not a `head` argument (D2 named one): resolved once to a full id
+    and handed to the engine as that id, so the commit the ref checks passed is the commit read. The tool
+    is `review_feature(repoPath, planPath, baseRef, epics, lessons, again?, callerModel?)`; `repoPath` must
+    be the repository's top level (refused otherwise, before the plan is read). `epics` keeps S2.2a's
+    shape `{title, summary, branch?, pr?}`.
+  - **A hunk reserve inside the outline budget** (the coordinator's decision, 2026-09-26):
+    `FeatureBudget.HunkReserveBytes` = 56 KB of the unchanged 168 KB. S2.2a measured that on the median
+    and larger features the outline alone filled the budget and no hunk fitted (the notices: 0), which
+    collapsed D22's hybrid back to the outline-only arm. The hunks are now placed first, smallest change
+    first with the per-member cap unchanged; the outline gets the remainder; an unused reserve flows back.
+    Measured on the S0.2 ranges, before → after: the consultant 105 → 76 files outlined, **41 → 278 hunks
+    shown**; `review_document` #230 unchanged (64 outlined, 149 hunks); the S8 notices 113 → 62 outlined,
+    **0 → 302 hunks**; every section ≤ 168 KB.
+  - **D15 applied to the pack, not only to the resolver**: a credential-shaped file is withheld by name
+    (`.env.production.ts` is TypeScript and was outlined before) and every file's content — the text its
+    signatures come from and each hunk line — passes `Redaction.SafeSource`.
+  - **Source requests are recorded, not served** (follow-ups = 0 by construction until S3.2): they ride on
+    the reviewer's `notes` in the reply (`SourceRequestNote`), and `WhatYouHave`'s third truth says so.
+  - **Structure**: `ReaderMaterial` is `Checkout | Change | Outline`, chosen from two new `StageDescriptor`
+    columns (`Answers`, `Reads`) rather than from a stage switch; the skip recording moved out of the
+    engine into `RoundSkips` (a second skip reason — D17's — joined it); the rules block moved out of
+    `PanelService` into `RulesText`; the D17 skip is `StageRun.SkipBecause`, recorded after `stage.Begin`.
+  - **D12**: `DocumentReader.FollowLink` threw `FileNotFoundException` for a path with nothing at it, so
+    `status`/`resolve`/`ask_human` with a never-reviewed `document` answered an SDK error; fixed RED first.
+  - **Open**: the live acceptance round on this repository (Grok and Qwen through `api` plus a CLI
+    reviewer) — it waits on the vault (S1.2's (ii)/(iii)); the scenario drives proceed → `resolve` →
+    `again`, not `revise`, because the shipped feature budget is ONE round and a gating finding in it is
+    `call_human` under the human policy; the feature session records its caller when it is created and is
+    not re-stamped by later calls, as `open` re-stamps a branch session.
   Goal: the eleventh tool runs a real round over plan + epics + lessons + outline, and is useful by itself.
   - Deliverables: `src/Server/Stages/FeatureStage.cs` (≤300 lines) + `FeatureInputs` (§4.5, no I/O
     before the refusals pass, each through `Refusal.Answer`); git refs (`rev-parse --verify <ref>^{commit}`
     with `GitHistory.IsCommitish`, the ancestor check, a non-empty reviewable range); `FeatureSessions`
     (identity through `DocumentReader.IdentityOf`, `DocumentReader.cs:132`; caller from the handshake);
     `runners/Feature/FeatureOutlineBuilder.cs` (base..head through `ContextAssembler.ComparisonBase`,
-    `NumstatReader`, `DiffExclusions`; `git show` at `headSha`; `*` marks through `DiffSplitter`;
-    deterministic cutting naming every dropped file); `FeatureContext` (§4.6 order; 4 KB reserved for
+    `NumstatReader`, `DiffExclusions`; files at `headSha` through ONE `git cat-file --batch`, outlined
+    in-process; BOUNDED before any content is read (plan round E2): sizes first through
+    `git cat-file --batch-check`, a file over the 1 MiB ceiling or binary named with its size and never
+    read, at most `MaxOutlinedFiles` read and the rest named, the git process run through the product's
+    `ProcessRunner` with a deadline and a whole-tree kill; `*` marks through `DiffSplitter`;
+    deterministic cutting naming every dropped file; the D22 hybrid if the trial's arm D confirms it); `FeatureContext` (§4.6 order; 4 KB reserved for
     "what this context left out"); `StageRules.Feature`; `ReaderMaterial` replacing `bool hasCheckout`
     in `ReviewerPrompt`, `WhatYouHave`'s third truth; the stage's `StageRun` (`RolesPerVendor`,
     `NeedsWorktree: false`, `WhenNobody: RecordSkip`, `Head`); `feature` on `resolve`/`status`/`ask_human`;
     `Tools.cs` (eleven tools) with D11's tool description; `ScenarioCoverageTests.Covered["review_feature"]`;
     `McpContractTests`; `shared/refusal-sites.json` re-recorded.
   - RED first: every empty shape of `lessons` refused with all four questions in the text; `epics`
-    bounds; a `planPath` outside the repository refused; base = head, base not an ancestor, an empty
+    bounds; a plan of 2 epics is a recorded `skipped` round that does not block and a plan of 3 runs
+    (D17), the threshold following `COAI_FEATURE_MIN_EPICS`; a `planPath` outside the repository refused; base = head, base not an ancestor, an empty
     range — each its own sentence; `FeatureOutlineBuilder` on a real temporary repository (A/M/D/R,
     binary named, unsupported with size, `*` marks, reads `head` not the dirty tree); the budget property
     test (never exceeded, the elision list always whole); **`AFeatureIsReviewedEndToEndTests`** over the
@@ -833,7 +927,7 @@ before the first edit.
     `research/module_tests.md` gains the flow row.
   - Model: **Opus** — the surface of a decided design; the two gate-integrity decisions were pinned in S2.1.
 
-- [ ] **S2.3 — the gate's history of this work.**
+- [x] **S2.3 — the gate's history of this work.** *Shipped 2026-09-26.*
   Goal: the reviewer sees what earlier rounds rejected and why, labelled as evidence, never as proof.
   - Deliverables: `GateHistoryQuery` (§4.8 rules a/b/c; `T0`; `rev-list` ≤5000 else switched off and
     said; `epics[].branch` ranked first, the rest labelled candidate by rule; consultations by branch or
@@ -853,9 +947,20 @@ before the first edit.
 
 Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 before this epic's `review_plan`.
 
-- [ ] **S3.1 — `SourceResolver`: git objects at `headSha`, nothing else, and never a credential.**
+- [x] **S3.1 — `SourceResolver`: git objects at `headSha`, nothing else, and never a credential.**
   Goal: a reviewer may ask for any file at `head` and gets exactly that — never the working tree, never
   a path outside the repository, never a credential-looking file, never more than the caps.
+  - **Built 2026-09-26** (`feat/feature-review-e3-s31`), with three deviations the trial bound it to:
+    the per-turn cap is **64 KB**, not 48 (48 refused more requests than anything else in the trial;
+    every cap is `core/Feature/SourceBudget.cs`); a symbol is resolved by its **qualified** name —
+    `Cart.Add`, `Point::fmt`, `App\Billing\Invoice::total`, a file-scoped namespace included
+    (`core/Feature/SymbolLookup.cs`), because that is how the trial's reviewers asked and were refused;
+    and D15 as narrowed by the operator — the credential WORDS are not applied to file names (they
+    refused `providers/credentials.ts`, `Auth.cs`, `tokens.rs` on real features), only the fixed shapes
+    are (`core/Feature/CredentialFiles.cs`), and the words run over served CONTENT through
+    `Redaction.SafeSource`. `RepoPaths.IsRelative` had already moved in S1.3. The interface S3.2 calls:
+    `new SourceResolver(git, outliner, repoPath, headSha).ServeAsync(requests, spent)` → `ServedTurn`
+    (`Served`, `Refused`, `Spent` for the next turn, `Render()` for the tail).
   - Deliverables: `RepoPaths.IsRelative` in core, moved from `GitHistory.IsRepoRelative`
     (`GitHistory.cs:91`; both callers re-pointed, one road); `runners/Feature/SourceResolver.cs`
     (`git show <sha>:<path>` only; one `git show` per file per round; `symbol` → outline lookup with up
@@ -890,6 +995,12 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
     `FAKECLI_STDOUT` in `src_mcp/tests_fakecli/Program.cs`). **C3 (CLI resume)** is built ONLY if S0.3
     measured turn 2 above 40 % of turn 1 — and then as its own follow-up plan, not a fourth story: the
     continuation is the seam it plugs into, and follow-ups = 0 keeps stateless resend shippable meanwhile.
+    **The trial measured it (2026-09-26): past the threshold.** Turn 2 cost 1.12× (Fable) and 1.21× (Codex)
+    the input of turn 1, and neither CLI reused the byte-identical prefix (Codex's cached count stayed flat
+    at 7 808 tokens across 140–395 KB prefixes). So before three follow-ups ship, E3 decides between C3
+    (vendor-side resume) and a cache-stable prefix per vendor, and measures the `api` runtime's caching
+    (xAI and DashScope advertise prefix caching; unmeasured) — the stateless resend stays correct, only
+    its price is in question.
   - RED first: turn N+1's prefix equals the base prompt byte for byte; stops on no request, on the
     cap, on the budget; a malformed turn-2 answer is repaired against turn 2's prompt; a source request
     with non-zero usage then a failed turn 2 keeps turn 1's cost (ledger AND round total); a
@@ -925,6 +1036,33 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
     deviations; `plan-lifecycle.mjs` and `pin-check.mjs` green.
   - Model: **Opus** — UI, translations and documentation of work already shaped.
 
+- [ ] **S3.4 — the second round, only when it is needed (D23).**
+  Goal: a feature review ends after one round unless round 1 failed, found something `blocking`, or the
+  person asked — and never runs a third.
+  - Deliverables: the feature stage's round budget 2, with round 2 admitted only by the machine
+    (`RoundMachine`) on one of the three grounds, recorded on the round; a round 1 with gating findings
+    none of them `blocking` closes the review on `resolve` (the accepted fixes land without a second
+    review); a round 1 in which reviewers failed (some or all) admits a retry; the person's request
+    arrives through `ask_human`'s answer (or the panel) and is recorded as theirs, never granted by the
+    caller; round 2 with a `blocking` finding or a failure → `call_human`. The `review_feature` tool
+    description and `feature-review.md` say this; the conventions rule (D24) already does.
+  - RED first: a non-blocking gating round closes on resolve and refuses `again` over the same base; a
+    `blocking` round admits round 2; a partly-failed round admits a retry; round 2 blocking → `call_human`;
+    a third round refused; the caller cannot claim the person's request.
+  - Model: **Fable** — round policy every feature review runs through.
+
+- [ ] **S3.5 — the snippet's feature half comes from conventions (D24).**
+  Goal: one text of the feature rule, owned by conventions, pasted and mounted alike.
+  - Deliverables: `prepare-gate.mjs` generates the feature half from the mounted
+    `common/coai-feature-gate.md` exactly as it does the consultant half; S3.3a's product-owned
+    `src_vs_code/src/featureRule.md` retired; a mounting repository is judged on all five halves again
+    (S3.3a's four-half exception removed); the conventions pin moved to the release carrying the rule,
+    `CONSULTANT_VERSION` 3 → 4 with it (the batched consultant sentence); `canonical-markers.test.mjs`
+    in conventions gains the feature marker once this build reads it.
+  - Order: only after coai's mcp release carrying `review_feature` is cut, the conventions PR promoted,
+    and the six-consumer pin cascade run.
+  - Model: **Opus**.
+
 ### 7.5 Dependencies and parallelism
 
 ```
@@ -932,7 +1070,7 @@ E1:  S1.1 ∥ S1.2 ∥ S1.3          all three touch Program.cs's args[0] switch
      └─ merge ─ round-engine steps 1–4 (their own PRs) ─┐
 E2:  S2.1 → { S2.2 ∥ S2.3 }      S2.3 builds against FeatureContext's section slot; S2.2 owns the tool
      └─ merge ─ round-engine 5–7 anywhere here, never beside S2.2 ─┐
-E3:  { S3.1 ∥ S3.3 } → S3.2 → the live DoD run → promotion (S3.3's last act)
+E3:  { S3.1 ∥ S3.3 } → S3.2 → S3.4 → the live DoD run → mcp release → conventions promoted → S3.5 → promotion
 ```
 
 - S1.2's long pole is S0.5: it needs `COAI_CREDS_KEY` configured and the `grok`/`qwen` entries in the
@@ -945,6 +1083,8 @@ E3:  { S3.1 ∥ S3.3 } → S3.2 → the live DoD run → promotion (S3.3's last 
 
 - C3 CLI resume — a follow-up plan if S0.3 demands it (§7.4).
 - Round-engine steps 5–7 — that plan's own pull requests.
+- `RoundEngine.cs` (838 lines after epic 2) and `PanelService.cs` (1760) over the 800-line rule — the tail
+  plan [PLAN_round_engine_and_panel_service_under_800_lines.md](PLAN_round_engine_and_panel_service_under_800_lines.md).
 - The releases after E3 — `mcp-v*`, `extension-v*` and `server-v*` (the Team server's `KnownRuntimes`
   and `AcceptedRoles` changed) — cut on `main` after the merge, one tag per push (`task-lifecycle.md` §3).
   Not a story because a release is not a diff the gate reviews; it IS on the Definition of Done.

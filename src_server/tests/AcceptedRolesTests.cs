@@ -27,16 +27,59 @@ public sealed class AcceptedRolesTests
 
     // ---------- the default is what happens today ----------
 
+    /// <summary>The shipped roles of the stages a Team server RUNS — plan and result; the feature stage stays on the machine that asked (D10).</summary>
+    private static IEnumerable<RoleDefinition> RunHere =>
+        RoleCatalog.Builtin.Roles.Where(r => r.Stage is RoleStages.Plan or RoleStages.Result);
+
     [Fact]
-    public void AServerNobodyConfiguredKnowsTheFiveItShipsWith()
+    public void AServerNobodyConfiguredKnowsTheRolesItShipsWith()
     {
-        foreach (var role in RoleCatalog.Builtin.Roles)
+        foreach (var role in RunHere)
         {
             Default.Knows(role.Id).Should().BeTrue(role.Id);
         }
 
-        Default.Names.Should().BeEquivalentTo(RoleCatalog.Builtin.Roles.Select(r => r.Id));
+        Default.Names.Should().BeEquivalentTo(RunHere.Select(r => r.Id));
         Default.Knows("Requirements").Should().BeFalse("nobody configured it");
+    }
+
+    // ---------- the feature stage is not run here, in this version (D10) ----------
+
+    /// <summary>
+    /// A built-in of a stage this server does not run is not seeded, not known, and not advertised —
+    /// otherwise it would enter the catalog on the next rebuild and a client would be told the box
+    /// runs a review it has no code for.
+    /// </summary>
+    [Fact]
+    public void TheFeatureRole_IsNotRunHere_AndSaysSo()
+    {
+        RoleCatalog.Builtin.ById(RoleCatalog.FeatureRole).Should().NotBeNull("the premise: the seed ships it");
+
+        Default.Knows(RoleCatalog.FeatureRole).Should().BeFalse();
+        Default.Names.Should().NotContain(RoleCatalog.FeatureRole, "the catalog endpoint must not advertise it");
+        Default.Refusal(RoleCatalog.FeatureRole).Should().Contain("feature").And.Contain("does not run");
+    }
+
+    /// <summary>`AllowAny` bypasses the CATALOG, never the stage: any well-formed id nobody knows, not a role this server knows it cannot run.</summary>
+    [Fact]
+    public void AllowAnyRole_StillRefusesTheFeatureRole()
+    {
+        var any = AcceptedRoles.From([], allowAny: true);
+
+        any.Knows(RoleCatalog.FeatureRole).Should().BeFalse();
+        any.Knows(RoleCatalog.FeatureRole.ToLowerInvariant()).Should().BeFalse("in any spelling");
+        any.Refusal(RoleCatalog.FeatureRole).Should().Contain("does not run");
+        any.Knows("Requirements").Should().BeTrue("the premise: anything else well-formed is accepted");
+    }
+
+    /// <summary>An operator naming it in `Coai:ExtraRoles` has configured a review this box cannot run — refused at boot, like every other unusable entry.</summary>
+    [Fact]
+    public void NamingTheFeatureRoleInExtraRoles_StopsTheServer()
+    {
+        var boom = () => AcceptedRoles.From([RoleCatalog.FeatureRole], allowAny: false);
+
+        boom.Should().Throw<InvalidOperationException>()
+            .WithMessage("*Coai:ExtraRoles*").And.Message.Should().Contain("feature");
     }
 
     [Fact]
@@ -210,8 +253,7 @@ public sealed class AcceptedRolesTests
         // One list. A message that built its own would drift from the gate that refuses.
         var roles = AcceptedRoles.From(["Requirements"], allowAny: false);
 
-        roles.Names.Should().BeEquivalentTo(
-            RoleCatalog.Builtin.Roles.Select(r => r.Id).Append("Requirements"));
+        roles.Names.Should().BeEquivalentTo(RunHere.Select(r => r.Id).Append("Requirements"));
     }
 
     // ---------- what a configured entry may NOT quietly change ----------

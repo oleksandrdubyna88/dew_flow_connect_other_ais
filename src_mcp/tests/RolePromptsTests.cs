@@ -46,6 +46,8 @@ public sealed class RolePromptsTests : IDisposable
         ["UxDxPerformance"] = "CODE ONLY: no browser",
         ["DocumentReview"] = "independent reviewer of a DOCUMENT",
         ["DocumentSummary"] = "Put the account in `notes`",
+        // The feature stage's one role (S2.1 of the feature-review plan): the whole, not a slice.
+        ["FeatureReview"] = "independent reviewer of a FEATURE",
     };
 
     public static TheoryData<string> ShippedRoles()

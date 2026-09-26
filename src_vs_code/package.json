@@ -476,7 +476,8 @@
             "SecurityReliability": 1,
             "UxDxPerformance": 1,
             "DocumentReview": 1,
-            "DocumentSummary": 1
+            "DocumentSummary": 1,
+            "FeatureReview": 1
           },
           "markdownDescription": "How many rounds each reviewer ROLE gets. Architecture may be worth two passes with different lenses while performance is worth one; a shared budget forces the cheapest role to pay for the most expensive. Edit it in the **ConnectOtherAIs** panel."
         },
@@ -488,9 +489,10 @@
             "SecurityReliability": true,
             "UxDxPerformance": true,
             "DocumentReview": true,
-            "DocumentSummary": true
+            "DocumentSummary": true,
+            "FeatureReview": true
           },
-          "markdownDescription": "Which CODE- and DOCUMENT-review roles take part. Unticking one means that role does not take part in the round at all — no reviewer is launched for it and its findings count towards nothing. Its rounds, threshold and prompts are kept and come back unchanged when it is ticked again. Plan review is not affected."
+          "markdownDescription": "Which CODE-, DOCUMENT- and FEATURE-review roles take part. Unticking one means that role does not take part in the round at all — no reviewer is launched for it and its findings count towards nothing. Its rounds, threshold and prompts are kept and come back unchanged when it is ticked again. Plan review is not affected. The feature role's tick is the feature gate's switch: unticked, a feature review is recorded as skipped and does not block."
         },
         "coai.thresholds": {
           "type": "object",
@@ -501,7 +503,8 @@
             "SecurityReliability": 5,
             "UxDxPerformance": 5,
             "DocumentReview": 5,
-            "DocumentSummary": 5
+            "DocumentSummary": 5,
+            "FeatureReview": 5
           },
           "markdownDescription": "How many blocking/major findings each ROLE may still have and pass. A finding is counted against the threshold of the role that raised it."
         },
@@ -1153,6 +1156,7 @@
     "test:fresh": "npm run compile && node scripts/live-fresh.mjs",
     "test:claude-models": "npm run compile && node scripts/live-claude-models.mjs",
     "test:close-compat": "node scripts/live-close-consult-compat.mjs",
+    "test:feature-compat": "node scripts/live-feature-schema-compat.mjs",
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",
     "measure:image": "npm run compile && node scripts/measure-image.mjs",
     "measure:append": "node scripts/measure-append.mjs",

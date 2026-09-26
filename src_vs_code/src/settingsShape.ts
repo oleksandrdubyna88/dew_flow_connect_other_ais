@@ -11,7 +11,7 @@
  */
 
 import { DEFAULT_VENDORS, Vendor, vendorsEnv } from './vendors';
-import { PLAN_STAGE, composed, isActive, rolesFrom, stageOf, type RoleRow } from './roles';
+import { RESULT_CODE, bucketOf, composed, isActive, rolesFrom, type RoleRow } from './roles';
 import {
   CALLER_KINDS,
   ConsultSettings,
@@ -232,14 +232,17 @@ export const DEFAULTS: CoaiSettings = {
   // fallback does: `ShippedFor` asks whether the role's STAGE is the plan stage, and a document
   // role's stage is `result`. A different number here would be a panel showing one budget while
   // the server ran another, which is the whole thing this object exists to prevent.
+  // The feature role takes `PanelConfig.FeatureDefault`, the server's own instance of the code numbers
+  // (S2.1); `panelServerDefaultsAgreement` reads that line of the C# rather than trusting this comment.
   rounds: { PlanCritique: 1, Conventions: 1, Architecture: 1, SecurityReliability: 1, UxDxPerformance: 1,
-    DocumentReview: 1, DocumentSummary: 1 },
+    DocumentReview: 1, DocumentSummary: 1, FeatureReview: 1 },
   thresholds: { PlanCritique: 6, Conventions: 5, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5,
-    DocumentReview: 5, DocumentSummary: 5 },
-  // Every code and document role on. These keys are also what the reader iterates, so this object
-  // is the list of roles that HAVE a switch — the plan role is absent from it deliberately.
+    DocumentReview: 5, DocumentSummary: 5, FeatureReview: 5 },
+  // Every code, document and feature role on. These keys are also what the reader iterates, so this
+  // object is the list of roles that HAVE a switch — the plan role is absent from it deliberately.
+  // The feature role's switch IS the feature gate's switch: there is no second setting (§4.2).
   roleEnabled: { Conventions: true, Architecture: true, SecurityReliability: true, UxDxPerformance: true,
-    DocumentReview: true, DocumentSummary: true },
+    DocumentReview: true, DocumentSummary: true, FeatureReview: true },
   bugzModel: '',
   bugzServer: '',
   onExhausted: 'human',
@@ -672,12 +675,10 @@ export function enabledCodeRoles(settings: CoaiSettings): readonly string[] {
   // from the shipped names alone both under-promises the fan-out and miscounts "the last role
   // standing" — telling somebody they cannot untick Architecture while a role of their own is still
   // running. Off by EITHER switch: `roleEnabled` is the sidebar's tick, `active` the catalog's, and
-  // the server reads both.
+  // the server reads both. By BUCKET, not "not the plan stage" (§9.8 of the feature-review plan): that
+  // filter took every programming role outside the plan stage for code — the feature role included.
   return composed(settings.roles)
-    .filter((role) => stageOf(role) !== PLAN_STAGE
-      && (role.programmingTask ?? true)
-      && isActive(role)
-      && roleIsOn(settings, role.id))
+    .filter((role) => bucketOf(role) === RESULT_CODE && isActive(role) && roleIsOn(settings, role.id))
     .map((role) => role.id);
 }
 

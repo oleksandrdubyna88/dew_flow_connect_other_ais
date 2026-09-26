@@ -93,4 +93,13 @@ export const BUILTIN_ROLES: readonly RoleDefinition[] = [
       { id: 'document-summary', label: 'Universal', purpose: "What the document actually says, in the reviewer's own words — the account you read instead of the document." },
     ],
   },
+  {
+    id: 'FeatureReview',
+    name: 'The feature',
+    stage: 'feature',
+    programmingTask: true,
+    prompts: [
+      { id: 'feature-review', label: 'Universal', purpose: 'The feature as a whole, once every epic is built: plan-to-code gaps across epics, the seams between them, the members that changed, and what the implementer learned the hard way.' },
+    ],
+  },
 ];

@@ -57,6 +57,8 @@ public sealed class StagesTests
         // Never asked for — a finished session runs no round — and answered rather than thrown
         // because `status` reads a finished session's budget through it.
         Stages.Of(Stage.Done).Bucket.Should().Be(RoleBuckets.PlanCode);
+        // The fourth stage's own bucket: a programming task at a stage of its own (S2.1).
+        Stages.Of(Stage.FeatureReview).Bucket.Should().Be(RoleBuckets.FeatureCode);
     }
 
     /// <summary>The one bridge to the string a role is persisted with still reads the table.</summary>
@@ -75,6 +77,7 @@ public sealed class StagesTests
     [InlineData(Stage.PlanReview, "plan review")]
     [InlineData(Stage.CodeReview, "code review")]
     [InlineData(Stage.DocumentReview, "document review")]
+    [InlineData(Stage.FeatureReview, "feature review")]
     [InlineData(Stage.Done, "done")]
     public void ThePhrase_IsHowAPersonSaysIt(Stage stage, string phrase)
     {
@@ -86,8 +89,12 @@ public sealed class StagesTests
     /// A persisted stage this build has no row for is said as ITSELF. It used to be "done", which
     /// is what a round written by a newer build would have been called.
     /// </summary>
+    /// <remarks>
+    /// The example was <c>FeatureReview</c> until S2.1 gave it a row; the fifth stage, whatever it
+    /// is called, is the case this guards.
+    /// </remarks>
     [Theory]
-    [InlineData("FeatureReview")]
+    [InlineData("ReleaseReview")]
     [InlineData("planreview")]
     [InlineData("")]
     public void APersistedStageWithNoRow_IsSaidAsItself_NeverAsDone(string persisted) =>
@@ -99,6 +106,7 @@ public sealed class StagesTests
     [InlineData(Stage.PlanReview, "plan")]
     [InlineData(Stage.CodeReview, "code")]
     [InlineData(Stage.DocumentReview, "document")]
+    [InlineData(Stage.FeatureReview, "feature")]
     // What the discard answered for it; a finished session is asked for no refusal.
     [InlineData(Stage.Done, "code")]
     public void TheKind_IsTheAdjectiveInARefusal(Stage stage, string kind)
@@ -111,6 +119,7 @@ public sealed class StagesTests
     [InlineData(Stage.PlanReview, CommandStage.Plan)]
     [InlineData(Stage.CodeReview, CommandStage.Code)]
     [InlineData(Stage.DocumentReview, CommandStage.Any)]
+    [InlineData(Stage.FeatureReview, CommandStage.Any)]
     [InlineData(Stage.Done, CommandStage.Any)]
     public void TheCommands_ARoundOfThisStageIsGiven(Stage stage, CommandStage commands)
     {
@@ -122,6 +131,7 @@ public sealed class StagesTests
     [InlineData(Stage.PlanReview, Stage.CodeReview)]
     [InlineData(Stage.CodeReview, Stage.Done)]
     [InlineData(Stage.DocumentReview, Stage.Done)]
+    [InlineData(Stage.FeatureReview, Stage.Done)]
     [InlineData(Stage.Done, Stage.Done)]
     public void WhereResolveMovesIt(Stage stage, Stage next) =>
         Stages.Of(stage).AdvancesTo.Should().Be(next);
@@ -131,6 +141,7 @@ public sealed class StagesTests
     [InlineData(Stage.PlanReview, Stage.CodeReview)]
     [InlineData(Stage.CodeReview, Stage.Done)]
     [InlineData(Stage.DocumentReview, Stage.Done)]
+    [InlineData(Stage.FeatureReview, Stage.Done)]
     public void Resolve_AdvancesToTheRowsNextStage(Stage stage, Stage next)
     {
         var awaiting = new SessionState("s1", "/repo", "main", PanelConfig.Uniform(3, 5))
@@ -140,6 +151,7 @@ public sealed class StagesTests
             AdvanceOnResolve = true,
             PlanProceeded = stage != Stage.PlanReview,
             Document = stage == Stage.DocumentReview ? "docs/spec.md" : string.Empty,
+            Feature = stage == Stage.FeatureReview ? "todo/PLAN_x.md" : string.Empty,
         };
 
         RoundMachine.Resolve(awaiting, []).Should().BeOfType<Transition.Moved>()
@@ -171,21 +183,37 @@ public sealed class StagesTests
         }
     }
 
-    /// <summary>What a `revise` verdict tells the caller — the same words for every stage that exists today.</summary>
+    /// <summary>What a `revise` verdict tells the caller — the same words for every stage whose fixes land on the branch.</summary>
     [Fact]
     public void TheReviseInstruction_IsWhatItHasAlwaysBeen()
     {
-        foreach (var stage in Enum.GetValues<Stage>())
+        foreach (var stage in Enum.GetValues<Stage>().Where(s => s != Stage.FeatureReview))
         {
             Stages.Of(stage).ReviseInstruction.Should().Be("fix the accepted ones, then run this review again");
         }
     }
 
+    /// <summary>
+    /// The feature stage is the one whose fixes land ELSEWHERE — as new pull requests, after the
+    /// epics have merged — so its `revise` says so and says what to run again with.
+    /// </summary>
+    [Fact]
+    public void TheFeatureStagesReviseInstruction_SendsTheFixesOutAsPullRequests() =>
+        Stages.Of(Stage.FeatureReview).ReviseInstruction.Should()
+            .Contain("pull request").And.Contain("head").And.NotBe(Stages.Of(Stage.CodeReview).ReviseInstruction);
+
+    [Fact]
+    public void TheFeatureStagesCompletedSentence_NamesTheFeatureStage() =>
+        Stages.Of(Stage.FeatureReview).CompletedSentence.Should()
+            .Contain("feature stage is complete").And.NotContain("code");
+
     [Theory]
     [InlineData(Stage.PlanReview, false)]
     [InlineData(Stage.CodeReview, true)]
     [InlineData(Stage.DocumentReview, false)]
+    // The head it reviewed, so a later `again` can be refused when the head has not moved (D14).
+    [InlineData(Stage.FeatureReview, true)]
     [InlineData(Stage.Done, false)]
-    public void OnlyACodeRound_RecordsTheCommitItReviewed(Stage stage, bool recordsSha) =>
+    public void ARoundOverACommit_RecordsTheCommitItReviewed(Stage stage, bool recordsSha) =>
         Stages.Of(stage).RecordsSha.Should().Be(recordsSha);
 }

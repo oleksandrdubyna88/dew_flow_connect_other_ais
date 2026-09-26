@@ -35,6 +35,9 @@ export interface PromptRow {
 export const PLAN_STAGE = 'plan';
 export const RESULT_STAGE = 'result';
 
+/** The feature stage: a whole plan's worth of code, outlined, once every epic landed (S2.1 of the feature-review plan). */
+export const FEATURE_STAGE = 'feature';
+
 /**
  * At most five ACTIVE roles per stage.
  *
@@ -329,7 +332,29 @@ export function isProgramming(row: RoleRow): boolean {
  * spelling of it here would be a second thing to keep level with the other half.</p>
  */
 export function bucketOf(row: RoleRow): RoleBucket {
-  return `${stageOf(row)}:${isProgramming(row) ? 'code' : 'document'}` as RoleBucket;
+  // By NAME, per stage, rather than a template string cast to the union: the cast compiled for any
+  // stage word at all and would have handed a feature row — or a misspelt one — a bucket no section
+  // draws and no count sees. A stage this build does not know composes into the result bucket, which
+  // is where `stageOf` already sends a row that names none; the server drops such a row with a
+  // sentence, so the panel only has to draw it somewhere until that sentence arrives.
+  const [code, document] = bucketsOfStage(stageOf(row));
+  return isProgramming(row) ? code : document;
+}
+
+/**
+ * A stage's two buckets, code first — the result stage's for a stage this build does not know.
+ *
+ * <p>A `Map`, not an object literal: the stage is a word read out of a person's settings, and an
+ * object would answer `constructor` or `toString` from its prototype. A function rather than a
+ * module constant because the bucket constants are declared below `bucketOf`, and a table built at
+ * load time above them would read them before they exist.</p>
+ */
+function bucketsOfStage(stage: string): readonly [RoleBucket, RoleBucket] {
+  const byStage = new Map<string, readonly [RoleBucket, RoleBucket]>([
+    [PLAN_STAGE, [PLAN_CODE, PLAN_DOCUMENT]],
+    [FEATURE_STAGE, [FEATURE_CODE, FEATURE_DOCUMENT]],
+  ]);
+  return byStage.get(stage) ?? [RESULT_CODE, RESULT_DOCUMENT];
 }
 
 export const PLAN_CODE = 'plan:code';
@@ -341,8 +366,14 @@ export const RESULT_DOCUMENT = 'result:document';
 /** And the one it deliberately did not: stored, composed, counted, run by nothing. */
 export const PLAN_DOCUMENT = 'plan:document';
 
+/** The bucket the feature stage runs (S2.1 of the feature-review plan): a programming task, because what it reads is code — outlined. */
+export const FEATURE_CODE = 'feature:code';
+
+/** And its document twin, which — like `plan:document` — nothing runs: stored, composed, counted. */
+export const FEATURE_DOCUMENT = 'feature:document';
+
 /**
- * The four buckets, as a TYPE.
+ * The six buckets, as a TYPE.
  *
  * <p>Not decoration. A bucket and a stage are both strings, so every call that used to pass
  * `RESULT_STAGE` to `activeCount` would have gone on compiling and started answering ZERO — a
@@ -351,7 +382,8 @@ export const PLAN_DOCUMENT = 'plan:document';
  * which is how they were all found.</p>
  */
 export type RoleBucket =
-  typeof PLAN_CODE | typeof PLAN_DOCUMENT | typeof RESULT_CODE | typeof RESULT_DOCUMENT;
+  typeof PLAN_CODE | typeof PLAN_DOCUMENT | typeof RESULT_CODE | typeof RESULT_DOCUMENT
+  | typeof FEATURE_CODE | typeof FEATURE_DOCUMENT;
 
 /** The bucket a row would be in AT another stage — what a move is checked against. */
 export function bucketAt(row: RoleRow, stage: string): RoleBucket {

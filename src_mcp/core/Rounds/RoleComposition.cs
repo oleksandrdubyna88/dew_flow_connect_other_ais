@@ -273,12 +273,12 @@ public static partial class RoleComposition
         // a fix and a hunt. (gemini, story A2's code round.)
         if (string.IsNullOrWhiteSpace(entry.Stage))
         {
-            return $"it names no stage — it is '{RoleStages.Plan}' or '{RoleStages.Result}'";
+            return $"it names no stage — it is {RoleStages.Spelled}";
         }
 
-        if (entry.Stage is not (RoleStages.Plan or RoleStages.Result))
+        if (!RoleStages.All.Contains(entry.Stage))
         {
-            return $"'{entry.Stage}' is not a stage — it is '{RoleStages.Plan}' or '{RoleStages.Result}'";
+            return $"'{entry.Stage}' is not a stage — it is {RoleStages.Spelled}";
         }
 
         return entry.Prompts is { Count: > 0 }

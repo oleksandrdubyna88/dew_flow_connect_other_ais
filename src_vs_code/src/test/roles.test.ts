@@ -3,6 +3,9 @@ import { test } from 'node:test';
 
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import {
+  FEATURE_CODE,
+  FEATURE_DOCUMENT,
+  FEATURE_STAGE,
   MAX_ACTIVE_PER_BUCKET,
   MAX_ROLE_ID_LENGTH,
   PLAN_CODE,
@@ -365,10 +368,47 @@ test('the count is per BUCKET, so five code roles do not block a document one', 
 test('a shipped document role is in the document bucket and no other', () => {
   assert.ok(activeCount([], RESULT_DOCUMENT) >= 1, 'the product ships document roles since plan 4');
   assert.strictEqual(
-    activeCount([], RESULT_CODE) + activeCount([], RESULT_DOCUMENT) + activeCount([], PLAN_CODE),
+    activeCount([], RESULT_CODE) + activeCount([], RESULT_DOCUMENT) + activeCount([], PLAN_CODE) + activeCount([], FEATURE_CODE),
     BUILTIN_ROLES.length,
     'every shipped role is in exactly one bucket',
   );
+});
+
+// ---------- the feature stage is a bucket of its own (S2.1 of the feature-review plan) ----------
+
+test('a shipped feature role is in the feature bucket, and in no code round', () => {
+  assert.strictEqual(activeCount([], FEATURE_CODE), 1, 'the product ships one feature role');
+  const feature = composed([]).find((r) => r.id === 'FeatureReview')!;
+
+  assert.strictEqual(bucketOf(feature), FEATURE_CODE);
+  assert.notStrictEqual(bucketOf(feature), RESULT_CODE, 'a feature role reads an outline, never a diff');
+});
+
+test('bucketOf answers every stage by name, and a feature row of either kind', () => {
+  assert.strictEqual(bucketOf({ id: 'Seams', stage: FEATURE_STAGE }), FEATURE_CODE,
+    'absent means a programming task, as the server defaults it');
+  assert.strictEqual(bucketOf({ id: 'Seams', stage: FEATURE_STAGE, programmingTask: false }), FEATURE_DOCUMENT,
+    'stored, composed, counted, run by nothing — like plan:document');
+  assert.strictEqual(bucketOf({ id: 'Perf', stage: RESULT_STAGE }), RESULT_CODE);
+  assert.strictEqual(bucketOf({ id: 'Brief', stage: PLAN_STAGE }), PLAN_CODE);
+});
+
+test('a stage this build does not know composes into the result bucket, never into a bucket nothing draws', () => {
+  // `bucketOf` was a template string cast to the union: `${stage}:code` compiled for ANY stage word,
+  // so a row whose stage was misspelt — or written by a newer extension — got a bucket no section
+  // draws and no count sees, and the row vanished from the page without a word. The server drops such
+  // a row with a sentence; the page has to draw it somewhere until that sentence arrives.
+  assert.strictEqual(bucketOf({ id: 'Odd', stage: 'sometime' }), RESULT_CODE);
+  assert.strictEqual(bucketOf({ id: 'Odd', stage: 'sometime', programmingTask: false }), RESULT_DOCUMENT);
+  assert.strictEqual(activeCount([{ id: 'Odd', stage: 'sometime', prompts: [{ id: 'odd-general' }] }], RESULT_CODE),
+    activeCount([], RESULT_CODE) + 1, 'and it is counted where it is drawn');
+});
+
+test('the feature bucket has its own five', () => {
+  const five = ['A', 'B', 'C', 'D', 'E'].map((id) => ({ id, stage: FEATURE_STAGE, prompts: [{ id: `${id.toLowerCase()}-general` }] }));
+
+  assert.strictEqual(activeCount(five, FEATURE_CODE), 6, 'the shipped one and five of a person\'s own');
+  assert.strictEqual(activeCount(five, RESULT_CODE), activeCount([], RESULT_CODE), 'and the code count is untouched');
 });
 
 test('a row that is not a programming task is in a document bucket', () => {

@@ -33,6 +33,13 @@ public sealed record NumstatChange(string Path, string RenamedFrom, bool IsBinar
     private static string Literal(string path) => $":(literal){path}";
 }
 
+/// <summary>A changed file with the line counts git gave it — 0 and 0 for a binary, which has none.</summary>
+/// <remarks>
+/// A projection of its own rather than two more members of <see cref="NumstatChange"/>: every existing
+/// reader compares changes by value, and a change is the same file whether or not its lines were counted.
+/// </remarks>
+public sealed record CountedChange(NumstatChange Change, int Added, int Deleted);
+
 /// <summary>
 /// Reads the machine-readable numstat, which is the only form of it whose third column is a PATH.
 /// </summary>
@@ -71,7 +78,17 @@ public static class NumstatReader
     /// </code>
     /// So an empty third column is not a malformed record — it is the announcement of one.
     /// </remarks>
-    public static IEnumerable<NumstatChange> Read(string numstat)
+    public static IEnumerable<NumstatChange> Read(string numstat) => ReadCounted(numstat).Select(c => c.Change);
+
+    /// <summary>
+    /// The same records, with the added and deleted line counts the first two columns carry.
+    /// </summary>
+    /// <remarks>
+    /// The feature review orders, reads and cuts files by the size of their change (plan §4.6), so it
+    /// needs the counts <see cref="Read"/> has always parsed past. One parser, two projections — never a
+    /// second reader of the same bytes.
+    /// </remarks>
+    public static IEnumerable<CountedChange> ReadCounted(string numstat)
     {
         // A WHILE over a cursor rather than a `for`, because a rename consumes THREE fields and an
         // ordinary record one: the step is part of what each record means, and a `for` whose body
@@ -81,7 +98,7 @@ public static class NumstatReader
         var at = 0;
         while (at < fields.Length)
         {
-            if (Counts(fields[at]) is not var (path, binary))
+            if (Counts(fields[at]) is not var (path, binary, added, deleted))
             {
                 at += 1;
 
@@ -90,13 +107,13 @@ public static class NumstatReader
 
             if (path.Length > 0)
             {
-                yield return new NumstatChange(path, string.Empty, binary);
+                yield return new CountedChange(new NumstatChange(path, string.Empty, binary), added, deleted);
                 at += 1;
 
                 continue;
             }
 
-            yield return Renamed(fields, at, binary);
+            yield return new CountedChange(Renamed(fields, at, binary), added, deleted);
             at += 3;
         }
     }
@@ -119,12 +136,16 @@ public static class NumstatReader
     /// <para>An empty field — the tail after the final NUL, or a blank git chose to emit — splits
     /// into one part and is answered with nothing, so the caller needs no separate check for it.</para>
     /// </remarks>
-    private static (string Path, bool IsBinary)? Counts(string field)
+    private static (string Path, bool IsBinary, int Added, int Deleted)? Counts(string field)
     {
         var columns = field.Split('\t', 3);
 
-        return columns.Length < 3 ? null : (columns[2], columns[0] == NoLineCounts);
+        return columns.Length < 3 ? null : (columns[2], columns[0] == NoLineCounts, Lines(columns[0]), Lines(columns[1]));
     }
+
+    /// <summary>A count column, or 0 for a binary's dash — a binary has no lines to count.</summary>
+    private static int Lines(string column) =>
+        int.TryParse(column, System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var n) ? n : 0;
 
     /// <summary>The rename whose two names follow the record that announced it.</summary>
     /// <remarks>

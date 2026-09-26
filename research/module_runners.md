@@ -45,7 +45,9 @@ sequenceDiagram
 | `WorktreeManager`, `WorktreeLease` | `Worktrees/WorktreeManager.cs` | one detached tree per round, `coai-wt-` prefix under OUR storage; prune-on-open; disposal = finally; never touches a human's worktree |
 | `SubmodulePopulator` | `Worktrees/SubmodulePopulator.cs` | fills the round tree's submodules from the PARENT checkout, not the remote — git populates none in a linked worktree, and in this family the project's rules ARE one; offline, pinned, never fatal, and refused when the source is reached through a reparse point |
 | `GitModules`, `SubmoduleMount` | `Git/GitModules.cs` | `.gitmodules` as (name, path); a file inside the repository under review, so absolute/traversing paths and names that could spell another config key drop the mount |
-| `DiffExclusions`, `ContextAssembler`, `CollectedDiff`, `DiffBase` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s`; every one of the three taken against the MERGE BASE, which the result names |
+| `DiffExclusions`, `ContextAssembler`, `CollectedDiff`, `DiffBase` | `Context/ContextAssembler.cs` | numstat → per-file diffs with `:(exclude,glob)` pathspecs; binary sizes via `cat-file -s`; every one of the three taken against the MERGE BASE, which the result names. `DiffExclusions.Excludes(path)` / `WhichExcludes` answer the same glob table for ONE path — the source resolver's question, since it has no git call to hand the pathspecs to |
+| `SourceResolver` | `Feature/SourceResolver.cs` | source on demand for a feature reviewer (plan §4.9, S3.1): git objects at the round's pinned head and nothing else, one read per file per round, every name check before any process, every byte through `Redaction.SafeSource`, every cap from `SourceBudget` — the section below |
+| `CommittedFile.ReadAtAsync` | `Collecting/CommittedFile.cs` | the read without the commit check, for a caller that pinned the commit itself; `ReadAsync` is this after checking |
 | `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted. **An adapter records on the invocation what it LAUNCHED** — `Model:` always, `Effort:` where it actually passed a reasoning flag (only `LocalRuntime` does) — which four of six adapters silently did not until 2026-09-12, issue #129; `EveryAdapterRecordsWhatItLaunchedTests` drives every adapter's own `Build` rather than a hand-made invocation, because the test it replaces built the value it asserted. `ReviewerSettings.Confined` ("handed everything in its prompt, may reach nothing else") makes `ClaudeRuntime` extend `--disallowedTools` to every tool that reaches past the prompt — flag re-read on claude 2.1.258; codex and antigravity take no new flag, their sandboxes are already the strongest each offers |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
 | `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit`, `ReviewerLaunch` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair **inside ONE deadline** (2026-09-08: the repair used to carry a whole second budget, so a reviewer could take twice its setting — measured at 668.8 s against ten minutes, reporting `ok`); SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired. **`LaunchAsync` is the public half**: launch → classify → the vendor's RAW answer + usage, with the parse left to the caller |
@@ -1195,3 +1197,183 @@ is 21k tokens before any review content, and it sends fields a hosted reasoning 
   or no key under the vendor. Teeth: with the redaction removed the stub's echoed `Authorization` reached
   stdout and two tests went red. **Not yet run against a real endpoint** — the vault was not configured on
   the build machine (`--providers` → `vaultNote: "no COAI_CREDS_KEY configured"`, 2026-09-25).
+
+## The feature outline is built from git objects, bounded before a byte is read (2026-09-26, PLAN_feature_review S2.2a)
+
+`FeatureOutlineBuilder` (`runners/Feature/FeatureOutlineBuilder.cs`) turns `base..head` into the
+`FeatureOutline` the feature reviewer is sent; what it shows and how it is cut is pure and lives in the
+core ([module_core.md](module_core.md), *The feature pack*). Nothing calls it yet — the tool, the session
+and the round are S2.2b.
+
+```mermaid
+sequenceDiagram
+  participant S as caller (S2.2b's stage)
+  participant F as FeatureOutlineBuilder
+  participant C as ContextAssembler
+  participant G as git (ProcessLauncher, 60 s, tree kill)
+  participant O as ISourceOutliner (in-process)
+  S->>F: BuildAsync(repo, baseRef, headSha, limits?)
+  F->>C: ComparisonBase(base, head) — the one merge-base road
+  F->>G: diff --numstat -z -M against..head (DiffExclusions)
+  F->>G: cat-file --batch-check — head:path AND base:path per file
+  Note over F: ReadPlan: deleted, binary, unsupported, over 1 MiB,<br/>past the file cap or the read ceiling → NAMED with size, never read
+  F->>G: ONE cat-file --batch — the chosen blob ids only
+  F->>O: Outline(language, text) per blob
+  F->>G: diff -U0 -M (the * marks), diff -U3 -M (the member hunks)
+  F->>F: OutlineComposer.Compose(outlined, OutlineBytes)
+  F-->>S: FeatureOutline(base, head, files, section, omissions)
+```
+
+| Type | File | Role |
+|---|---|---|
+| `FeatureOutlineBuilder`, `FeatureOutlineLimits` | `Feature/FeatureOutlineBuilder.cs` | the git half; `Shipped` limits by default, smaller ones in a test |
+| `ReadPlan` | `Feature/ReadPlan.cs` | pure: which files are read, decided from their sizes; every other file's reason |
+| `CatFile`, `GitObject`, `BlobText` | `Feature/CatFile.cs` | pure parses of `--batch-check` and `--batch` output |
+| `NumstatReader.ReadCounted`, `CountedChange` | `Context/NumstatReader.cs` | the same parser, projected WITH the line counts; `Read` is now the projection without them, so existing readers compare changes as before |
+| `ContextAssembler.ComparisonBase` | `Context/ContextAssembler.cs` | now public: the builder compares against the commit a code round would — under the builder's own deadline (an optional `timeout`; every other caller keeps the launcher's default) |
+
+- **Sizes first, content second.** One `cat-file --batch-check` asks two names per file — `head:path` and
+  `base:path` (the old name for a rename) — so the builder learns every size, whether a path is a blob or a
+  submodule, and A/D without a second diff: absent at head is a deletion, absent at the base an addition.
+  `ReadPlan` then names, in change-size order and without reading: a deletion; a path with a line break
+  (cat-file's input is one name per line); a submodule or other non-blob; a binary (numstat's dash); an
+  unsupported language; a file over `OutlineLimits.MaxInputBytes`; anything past `MaxOutlinedFiles` or
+  past `ReadCeilingBytes` (16 MiB — 2.5× the widest measured range's source, and about five outline
+  budgets of it). A file past the cap or ceiling is skipped, not a stop: a smaller file behind it may fit.
+- **One batch, parsed by the header it asked for.** The launcher returns stdout as UTF-8 text and git
+  declares sizes in BYTES; a valid UTF-8 blob re-encodes to exactly its size and ends where git's newline
+  is. A blob that is not UTF-8 no longer measures true, so `CatFile.ParseBatch` resyncs on the NEXT
+  expected `"<oid> blob <size>"` header and reports that blob not aligned — named "not valid UTF-8 text",
+  never mis-slicing the blobs after it. The batch's stdout ceiling is set from the chosen sizes, so it
+  cannot be cut short.
+- **Head, never the tree.** Every read is a git object at `headSha`; an uncommitted edit on top of head is
+  invisible (`TheOutlineIsOfTheHeadCommit_NotOfTheDirtyWorkingTree`, whose teeth were a mutation reading
+  the working tree: the dirty signature appeared).
+- **Every git process** runs through `ProcessLauncher` with `GitDeadline` (60 s; the whole batch read
+  measured 58–95 ms in S0.2), whose timeout kills the tree — the merge-base and the shallow-history
+  fallback of `ComparisonBase` included: until the code review of 2026-09-26 those two ran under the
+  launcher's ten-minute default, and the test that promised "every git process" filtered for `diff` and
+  `cat-file` and could not see them. A failed or timed-out git throws `ContextException` naming the
+  command; a diff cut at its 16 Mi-character ceiling drops the piece the cut landed in and says, in
+  `FeatureOmissions.Notes`, what that costs. **The cut piece is found by where the launcher's sentence
+  stands** — the LAST line of a cut stream, so only the last piece, and only when the launcher says the
+  stream was cut — never by the sentence appearing inside a piece: a changed line that quotes
+  `[coai: output truncated` (this builder's own source, the launcher's, a test of either) used to lose its
+  file's `*` marks and hunks silently, with nothing named as cut (the same code review). No diff line
+  begins with `[`, which is what makes the last-line reading exact. The diffs pass `--no-color
+  --no-ext-diff --no-textconv --src-prefix=a/ --dst-prefix=b/`, so a user's diff configuration cannot
+  change what `DiffSplitter` reads.
+- **Tests** (`FeatureOutlineBuilderTests`) run on a REAL temporary repository with the real
+  `TreeSitterOutliner` and a watching launcher (`WatchedLauncher`, shared with the end-to-end scenario):
+  A/M/D/R letters, the binary and the unsupported file named with their size at head, a 1 MiB+ file named
+  with its size and its blob id absent from the batch's stdin (the positive: an ordinary file's id
+  present), `*` on the changed method and not its sibling, the hunk under the method and not the class, a
+  changed line quoting the launcher's cut sentence keeping its marks and its hunk, the file cap, the
+  deadline on EVERY recorded git process (the fallback road too, on an orphan base), the same bytes twice,
+  and the budget property across six budgets (0 to 168 KB): never exceeded, every file outlined or named,
+  every cut hunk named by its file AND its outline span, omissions inside the reserve.
+
+## Source on demand — git objects at head, nothing else, never a credential (2026-09-26, PLAN_feature_review S3.1)
+
+`SourceResolver` (`runners/Feature/SourceResolver.cs`) is what a feature reviewer's `sourceRequests`
+(plan D4) are answered by. It is a **security boundary**: what it serves goes to another vendor's model,
+so every decision below is a refusal first and a service second. Built per round for the round's pinned
+`headSha`, shared by every reviewer of that round; the turn loop (S3.2) calls
+`ServeAsync(requests, spent)` once per turn and carries the returned `Spent` to the next.
+
+```mermaid
+flowchart TD
+  R[SourceRequest file · symbol · lines] --> N{index ≥ 8? head not a commit id?}
+  N -- yes --> X[refused, no process]
+  N -- no --> P{RepoPaths.WhyNotRelative / CredentialFiles / DiffExclusions.WhichExcludes}
+  P -- named --> X
+  P -- clean --> C{read once per file per round}
+  C --> G[git show head:path\nGitHistory.FileAtAsync — the one guarded road]
+  G -- not in commit / git failed --> X2[refused, naming the commit]
+  G -- text --> B{NUL in the first 8000 chars?}
+  B -- yes --> X3[refused: binary]
+  B -- no --> D[Redaction.SafeSource — layout kept, nothing cut]
+  D --> S{symbol? lines? neither?}
+  S -- symbol --> O[outline once per file → SymbolLookup.Find\nqualified names, ≤3 overloads, or the names the file declares]
+  S -- lines --> L[clamped to the file and to 400]
+  S -- neither --> W[whole file ≤16 KB, else its head + ask for lines]
+  O --> K{turn ≤ 64 KB · reviewer ≤ 128 KB}
+  L --> K
+  W --> K
+  K -- fits --> V[ServedSlice — fenced with path, lines, sha]
+  K -- over --> X4[not served: budget spent, naming what was dropped]
+```
+
+**What is decided before git is asked anything.** The ninth request of a turn, a head that is not a
+forty-hex commit id, a path that is not repository-relative (`RepoPaths` — the parser already refused
+these, and the resolver refuses them again on its own road), a credential-looking NAME
+(`CredentialFiles`, the fixed shapes only) and a lock file or build output (`DiffExclusions` — the same
+table the diff is taken with, answered for one path by a glob matcher over `/`-separated paths). A
+recording launcher in `ASourceRequestIsServedOrRefusedTests` asserts that none of these starts a
+process; `GitHistory.FileAtAsync` guards the path a second time, so the resolver's own check is what
+supplies the SENTENCE, not the only thing keeping the read inside the object database.
+
+**Never the working tree.** The read is `CommittedFile.ReadAtAsync` — `git show head:path` through the
+one launcher — so an edit not yet committed is not served, and a path through a committed symlink is
+a path git answers nothing for (measured: a `120000` tree entry written through the index, a directory
+of the same name created on disk beside it, and the file on disk never reached the reviewer). A
+non-zero `show` is told apart by `cat-file -e`: *not in the repository at `<sha>`* against *git could
+not read it just now; ask again next turn* — and only the second is forgotten by the cache, so a
+timeout does not become the round's answer for that file.
+
+**One read per file per round.** A `ConcurrentDictionary<path, Lazy<Task<CachedFile>>>`: two symbols
+of one file in one turn, and the whole file in the next, cost one `git show` (asserted by counting the
+launcher's `show` requests across two turns). The outline is computed lazily, once, over the REDACTED
+text — line counts are unchanged by redaction, and it means no unredacted copy is held for the round.
+
+**What the redaction costs.** File content goes through `Redaction.SafeSource` at the one place text
+enters the cache, so no slice can skip it: a vendor-key shape inside a served file arrives as
+`sk-[redacted]`, and a value assigned to an identifier the credential words recognise arrives as
+`[redacted]` — including when that value is code (`const credentials = load()` → `const credentials =
+[redacted]`). That is the operator's decision of 2026-09-26 (content through the existing pass, names
+only through the fixed shapes) and it is recorded here rather than softened.
+
+**The caps, and the sentence.** Every number is `SourceBudget`'s, and the trial changed one of them: 48
+KB a turn refused more requests than anything else, so a turn is **64 KB**; a reviewer's total stays
+128 KB, eight requests a turn, 400 lines a slice, 16 KB for a whole file. A slice that does not fit is
+refused whole rather than trimmed — *budget spent: a turn carries at most 64 KB and a reviewer 128 KB
+in all; dropped lines 1-400 of src/B.cs (36 KB)* — so the reviewer knows which of its requests it was
+about, which the trial's reviewers did not.
+
+**Teeth, watched on 2026-09-26** (twelve plants, two builds): the credential arm removed → git was
+asked for `.env` (*Expected launcher.Launched to be empty … found at least one item*); the cache
+bypassed → *Expected watching.Reads to be 1 … found 6*; `SafeSource` skipped → the key served whole;
+the request cap doubled → *contain 8 item(s), but found 9*; the byte caps quadrupled → the second 36 KB
+slice served; the line clamp removed → `(1, 500)` against `(1, 400)`; `**/` untranslated → every
+derived glob example red; the suffix match made case-sensitive → `CERTS/SERVER.PEM` served; layout
+dropped from `SafeSource` → the tab and newline gone; the qualified match reduced to bare names → every
+`Cart.Add` spelling empty; the file-scoped namespace not carried → `App\Billing\…` empty; the outermost
+fold removed → class `Cart` served twice; the git read replaced by a working-tree read → the
+uncommitted edit and the on-disk file behind the symlink served.
+
+## The pack withholds credential files and redacts content (2026-09-26, PLAN_feature_review S2.2b)
+
+The outline builder is the one place a file's text enters the feature pack, so the source resolver's
+two protections (S3.1) are applied there as well — the pack goes to the same third-party models.
+
+- **A credential-shaped name is withheld before it is read.** `ReadPlan`'s first reason is
+  `CredentialFiles.WhichPattern` (the fixed D15 shapes, never the credential words): the file is named
+  under "Files not outlined" with its size and `withheld — looks like a credential file (<shape>); never
+  read`, its blob id never reaches `cat-file --batch`, and so neither its outline nor its hunks exist.
+  Before this, `.env.production.ts` was outlined like any TypeScript file and a default argument
+  carrying a secret reached the reviewer (`ThePackWithholdsCredentialsTests`, red with the secret in the
+  pack).
+- **Content passes `Redaction.SafeSource`.** A blob's text is redacted BEFORE it is outlined, so a
+  secret in a default argument or an initialiser never reaches a signature; each placed hunk line is
+  redacted after its marker, so the `+`/`-`/` ` and the head line number are kept. The redaction keeps
+  every line break, so the outline's spans and the hunks' `@@ +N @@` are still the file's. A file whose
+  redaction gave up (it fails closed with `[redacted]` for the whole text) is named as withheld rather
+  than outlined as the placeholder.
+- **`StageRules.Feature`** (`runners/Context/StageRules.cs`) — the feature stage's rules tier, collected
+  at the full `RuleFiles.DefaultBudgetBytes` (D18): the code review's order (the language doctrines,
+  security, testing, reuse, style, the knowledge base) and then the rules a feature breaks ACROSS
+  epics — reliability, scenario tests, planning docs, HTTP contracts, platform limits.
+  `StageRulesTests.EveryTierEntry_ResolvesInThePinnedConventionsMount` covers the new tier.
+- **The composer's hunk reserve** (`FeatureBudget.HunkReserveBytes`, the core's half — see
+  [module_core.md](module_core.md)) changes what the builder's section holds on a wide range: the
+  consultant 41 → 278 hunks, the S8 notices 0 → 302, every section still under 168 KB.

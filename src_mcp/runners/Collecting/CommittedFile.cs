@@ -42,6 +42,21 @@ public static class CommittedFile
             return Reading.Not(RealMethodReason.CommitUnreachable);
         }
 
+        return await ReadAtAsync(git, repoPath, sha, path, ct);
+    }
+
+    /// <summary>
+    /// The file at a commit the caller already knows is there — one process on the happy path.
+    /// </summary>
+    /// <remarks>
+    /// The source resolver (plan §4.9) reads every file at ONE pinned head the round resolved itself,
+    /// so checking that commit again per file would be a process spent on a question already answered.
+    /// The reuse rule's first move — widen the existing thing — rather than a second copy of the read
+    /// and its discriminator; <see cref="ReadAsync"/> is this after its commit check.
+    /// </remarks>
+    public static async Task<Reading> ReadAtAsync(
+        GitHistory git, string repoPath, string sha, string path, CancellationToken ct = default)
+    {
         var file = await git.FileAtAsync(repoPath, sha, path, ct);
         if (!file.Ran)
         {

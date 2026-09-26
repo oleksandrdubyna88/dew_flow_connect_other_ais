@@ -84,6 +84,13 @@ public sealed record PanelConfig(
     public static readonly RoleGate CodeDefault = new(1, 5);
 
     /// <summary>
+    /// One attempt, at most five, for the feature stage — the same numbers as a code round, as its
+    /// OWN instance, so the three sites that pick a default can be told apart by which one they hand
+    /// back. Mirrored by the panel — see <see cref="PlanDefault"/>.
+    /// </summary>
+    public static readonly RoleGate FeatureDefault = new(1, 5);
+
+    /// <summary>
     /// The SHIPPED role names, in the order a round runs them — read from the seed, not retyped.
     /// </summary>
     /// <remarks>
@@ -117,7 +124,7 @@ public sealed record PanelConfig(
     public IReadOnlyDictionary<string, RoleGate> Roles { get; init; } = Roles ?? Defaults();
 
     private static Dictionary<string, RoleGate> Defaults() =>
-        AllRoles.ToDictionary(r => r, r => r == RoleCatalog.PlanRole ? PlanDefault : CodeDefault);
+        AllRoles.ToDictionary(r => r, r => ShippedDefault(RoleCatalog.Builtin.ById(r)?.Stage ?? RoleStages.Result));
 
     /// <summary>This role's numbers, falling back to its stage's default for an unknown name.</summary>
     /// <remarks>
@@ -129,7 +136,23 @@ public sealed record PanelConfig(
 
     /// <summary>The budget a role takes when nobody has written it one: its stage's shipped default.</summary>
     private RoleGate ShippedFor(string role) =>
-        Catalog.ById(role)?.Stage == RoleStages.Plan ? PlanDefault : CodeDefault;
+        ShippedDefault(Catalog.ById(role)?.Stage ?? RoleStages.Result);
+
+    /// <summary>
+    /// The shipped gate of a STAGE — the one road every site that picks a default goes through.
+    /// </summary>
+    /// <remarks>
+    /// Three sites picked one by asking "is it the plan role" and taking the code default otherwise,
+    /// which was right for two stages and would have handed the feature stage the code gate in
+    /// silence (§4.2 of the feature-review plan). A role the catalog does not know is asked for its
+    /// stage as <see cref="RoleStages.Result"/>, which is what a role a person just created is.
+    /// </remarks>
+    public static RoleGate ShippedDefault(string stage) => stage switch
+    {
+        RoleStages.Plan => PlanDefault,
+        RoleStages.Feature => FeatureDefault,
+        _ => CodeDefault,
+    };
 
     /// <summary>
     /// The roles of this stage that are switched ON, in the order a round runs them.
@@ -236,6 +259,18 @@ public enum Stage
     /// — the exact mistake <see cref="RoleGate"/> was introduced to undo.
     /// </remarks>
     DocumentReview,
+
+    /// <summary>
+    /// A whole FEATURE — a plan built across several epics — once every epic has landed and before
+    /// the release. Its own stage, appended last (S2.1 of the feature-review plan).
+    /// </summary>
+    /// <remarks>
+    /// The one stage whose round may be SKIPPED rather than refused when nobody serves it (D1): the
+    /// gate is optional per vendor, so "nobody ticked" is the ordinary state of a machine that never
+    /// asked for it, and the skip is recorded on the trail with its reason instead of blocking a
+    /// release on a review nobody configured.
+    /// </remarks>
+    FeatureReview,
 }
 
 /// <summary>A role the round decided not to ask for, and why.</summary>
@@ -382,6 +417,24 @@ public sealed record SessionState(
 
     /// <summary>Whether this session reviews a document rather than a branch.</summary>
     public bool IsDocumentSession => Document.Length > 0;
+
+    /// <summary>
+    /// Which PLAN this session reviews as a feature — its repository-relative path (D13) — empty for
+    /// every session that is not a feature review, which is all of them until <c>review_feature</c>.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as <see cref="Document"/>, for the same reasons: one field rather than a kind
+    /// beside it, and normalised where it is DECLARED so a file written before the field existed
+    /// reads back as not-a-feature-session rather than as a null.
+    /// </remarks>
+    public string Feature
+    {
+        get => field ?? string.Empty;
+        init => field = (value ?? string.Empty).Trim();
+    }
+
+    /// <summary>Whether this session reviews a whole feature rather than a branch or a document.</summary>
+    public bool IsFeatureSession => Feature.Length > 0;
 }
 
 /// <summary>The canonical identity of a session: same checkout + branch → same session, always.</summary>
@@ -396,11 +449,30 @@ public sealed record SessionState(
 /// </remarks>
 public static class SessionKey
 {
-    public static string For(string repoPath, string branch, string document = "")
+    /// <summary>
+    /// The branch segment of every feature session: a string git refuses as a ref name.
+    /// </summary>
+    /// <remarks>
+    /// A feature review is keyed by the PLAN and not by the branch it happens to be run on — the head
+    /// moves as fix pull requests land — so the branch segment is a constant. A colon is forbidden
+    /// anywhere in a git ref (<c>git check-ref-format</c>: it is the refspec separator), which is what
+    /// makes this collide with no branch anybody can have.
+    /// </remarks>
+    public const string FeatureBranch = ":feature";
+
+    /// <param name="feature">
+    /// The PLAN a feature review is of — its repository-relative path — or empty for every session
+    /// that is not one. Appended as a fourth segment, <c>#feature:&lt;key&gt;</c>, only when set, so
+    /// every key already on disk stays byte-identical; keyed the way a document is, because it is a
+    /// path in the same repository and folds on the same filesystem.
+    /// </param>
+    public static string For(string repoPath, string branch, string document = "", string feature = "")
     {
         var repoAndBranch = $"{repoPath.Replace('\\', '/').TrimEnd('/').ToLowerInvariant()}#{branch.Trim()}";
         var doc = DocumentId.KeyOf(document.Trim());
+        var withDocument = doc.Length == 0 ? repoAndBranch : $"{repoAndBranch}#{doc}";
+        var plan = DocumentId.KeyOf(feature.Trim());
 
-        return doc.Length == 0 ? repoAndBranch : $"{repoAndBranch}#{doc}";
+        return plan.Length == 0 ? withDocument : $"{withDocument}#feature:{plan}";
     }
 }

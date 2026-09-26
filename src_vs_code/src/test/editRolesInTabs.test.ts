@@ -128,11 +128,12 @@ test('pressing a tab switches the page AND tells the host, in that order of impo
     [{ type: 'tab', id: 'code' }],
     'pressing a tab told the host nothing, so the next repaint will undo it',
   );
-  assert.deepEqual(buttons.map((b) => b.className), ['tab', 'tab on', 'tab'],
+  // Four since the feature stage (S2.1 of the feature-review plan): the pressed one lit, the rest not.
+  assert.deepEqual(buttons.map((b) => b.className), ['tab', 'tab on', 'tab', 'tab'],
     'the strip does not show which tab is open');
-  assert.deepEqual(buttons.map((b) => b.attributes['aria-selected']), ['false', 'true', 'false'],
+  assert.deepEqual(buttons.map((b) => b.attributes['aria-selected']), ['false', 'true', 'false', 'false'],
     'a screen reader is still being told the tab that was open before the press');
-  assert.deepEqual(sections.map((s) => s.hidden), [true, false, true],
+  assert.deepEqual(sections.map((s) => s.hidden), [true, false, true, true],
     'the page did not switch what is on screen');
 });
 

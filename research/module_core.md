@@ -43,16 +43,23 @@ flowchart LR
 | `RepoPaths` | `RepoPaths.cs` | whether a path names something INSIDE a repository — lexical; moved here from `GitHistory` |
 | `ISourceOutliner`, `OutlineLanguage`, `SourceOutline`, `OutlineLimits` | `Outlining/ISourceOutliner.cs` | the seam of the body-free outline (seven languages); implemented in `CoaiMcp.Normalizer` |
 | `FeatureBudget` | `Feature/FeatureBudget.cs` | the feature review's byte budgets, each traced to a measurement (plan §6, S0.2) |
+| `SourceBudget` | `Feature/SourceBudget.cs` | every cap of source on demand in ONE place — 8 requests a turn, 64 KB a turn, 128 KB a reviewer, 400 lines a slice, 16 KB for a whole file, 3 overloads, 20 names in a refusal; the turn cap is the feature-pack trial's correction of the plan's 48 KB |
+| `SymbolLookup`, `SymbolMatch` | `Feature/SymbolLookup.cs` | a declaration by the name a reviewer WROTE — `Cart.Add`, `Point::fmt`, `App\Billing\Invoice::total`, a file-scoped namespace in front — against the outline's chains; overloads capped, a miss lists the file's names; pure |
+| `CredentialFiles` | `Feature/CredentialFiles.cs` | the fixed NAME shapes source on demand never serves (`.env*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, `id_rsa*`…) — and deliberately not the credential words, which refused `Auth.cs` and `tokens.rs` in the trial |
+| `ServedSlice`, `SourceRefusal`, `SourceSpend`, `ServedTurn`, `SourceFence` | `Feature/SourceSlice.cs` | what a turn of source on demand came to: slices fenced with path, lines and commit, refusals with their sentence, and the reviewer's spend carried to the next turn |
+| `Redaction.SafeSource` | `Notices/Redaction.cs` | the notice redaction's passes over a FILE — layout kept, nothing cut, fail closed — the one road served content takes |
 | `ReviewParser` | `Findings/ReviewParser.cs` | vendor JSON → review; unknown severity/category = per-entry rejection |
 | `GeminiPayload` | `Findings/GeminiPayload.cs` | `-o json` envelope → fence stripping → string-aware balanced `{…}` |
 | `FindingDedup` | `Gate/FindingDedup.cs` | cross-provider merge; severity disagreement resolves toward caution |
 | `GateRule`, `PriorRejection`, `GateResult` | `Gate/GateRule.cs` | the counting rule incl. the standing-rejection discount |
 | `TextSimilarity` | `Gate/TextSimilarity.cs` | token Jaccard ≥ 0.5 = "same remark" — deterministic, arguable-with |
 | `StuckFindings`, `EarlierDecision`, `Survivors` | `Gate/StuckFindings.cs` | how many of this round's findings the caller had already ACCEPTED — phase 2's instrument, calling nothing |
-| `SessionState`, `PanelConfig`, `SessionKey` | `Rounds/SessionState.cs` | immutable session; key = normalised repo path + branch |
-| `Stage`, `StageDescriptor`, `Stages` | `Rounds/SessionState.cs`, `Rounds/Stages.cs` | the stages, and the ONE table of what each answers by name — bucket, phrase, kind, commands, next stage, sentences, whether it records a commit |
+| `SessionState`, `PanelConfig`, `SessionKey` | `Rounds/SessionState.cs` | immutable session; key = normalised repo path + branch (+ a document, + a feature's plan) |
+| `Stage`, `StageDescriptor`, `Stages` | `Rounds/SessionState.cs`, `Rounds/Stages.cs` | the four stages, and the ONE table of what each answers by name — bucket, phrase, kind, commands, next stage, sentences, whether it records a commit |
 | `RoundMachine`, `RoundVerdict`, `Decision`, `Transition` | `Rounds/RoundMachine.cs` | ordering by refusal; the escalation ladder; resolve feeds rejections forward |
-| `RoleDefinition`, `RoleCatalog`, `RoleStages` | `Rounds/RoleCatalog.cs` | which roles exist and which prompt a round of one gets; `Builtin` is the embedded seed |
+| `FeatureBases` | `Rounds/FeatureBases.cs` | the base a feature review was opened against, held to on every later call of the same plan — a different base is refused naming BOTH SHAs, and `again` is the door |
+| `FeatureGate` | `Feature/FeatureGate.cs` | the feature gate's decisions that are numbers, as against `FeatureBudget`'s measurements: the three-epic floor (D17) |
+| `RoleDefinition`, `RoleCatalog`, `RoleStages` | `Rounds/RoleCatalog.cs` | which roles exist and which prompt a round of one gets; `Builtin` is the embedded seed; `RoleStages.All` is the one list of stages a role may belong to |
 | `CadenceMode`, `EpicGroup`, `CadenceRule` | `Cadence/CadenceRule.cs` | the consultation cadence's arithmetic: groups of `every` epics counted from the plan's OWN first epic, the risk question from `threshold` epics, nothing past `MostEpics` (14); the defaults 3 / 5 / 3 are the numbers the panel is tested to agree with |
 | `EpicRef` (`None` / `Some` / `Refused`), `CadenceState`, `ClosedEpic`, `RiskItem` | `Cadence/EpicRef.cs`, `Cadence/CadenceState.cs` | where the caller says it is (`plan` + `epic: "k/N"`) — a bad declaration is a sentence, never an exception; what one plan has recorded: the epics through the code gate and the risk answer |
 | `CadenceFacts`, `CadenceOrders`, `PlanOutline`, `PlanOutlineReader` | `Commands/CadenceOrders.cs`, `Commands/PlanOutline.cs` | the orders a round carries — the group due, the risky pieces due — from facts the server gathered; the plan's own Epic headings, which also size a split `Massive` (`PlanShape.ByEpics`) |
@@ -203,12 +210,16 @@ flowchart LR
 ## Tests
 
 `CoaiMcp.Tests`: ReviewParserTests, GeminiPayloadTests, FindingDedupTests, GateRuleTests,
-RoundMachineTests, ArchitectureTests, BuiltinRoleCatalogTests, StuckFindingsTests, StagesTests. Teeth
+RoundMachineTests, ArchitectureTests, BuiltinRoleCatalogTests, StuckFindingsTests, StagesTests,
+AFeatureSessionIsKeptApartTests. Teeth
 proven red for: the balanced-brace scan (naive first-to-last), the standing-rejection discount
 (disabled), the ladder order (reversed), the catalog loader (written before `RoleCatalog` existed,
 watched failing to compile, then watched failing on the prompt COUNT — the plan said 26 and the seed
-has 25, which is why the number is pinned rather than the shape), and the stage table (a `FeatureReview`
-member planted in the enum with no row: six tests red, in this module and the server's).
+has 25, which is why the number is pinned rather than the shape), the stage table (a `FeatureReview`
+member planted in the enum with no row: six tests red, in this module and the server's — first as the
+guard's own rehearsal, then for real on 2026-09-26 when the member was added ahead of its row), and the
+feature session's key (the fourth argument ignored: the feature key equalled the branch key, and one
+plan's session equalled another's).
 
 ## Every stage answers by name — `Stages` (2026-09-25)
 
@@ -225,6 +236,14 @@ these facts about a stage live:
 | `CompletedSentence` | `PanelService.Finish` (server) | what `resolve` says at that moment |
 | `ReviseInstruction` | `PanelService.AnswerFor` (server) | what a `revise` verdict tells the caller to do with accepted findings |
 | `RecordsSha` | the `Sha` write on the finished round (server) | whether the round keeps the commit it reviewed, for `again` |
+
+**The fourth row, 2026-09-26 (S2.1 of the feature-review plan).** `Stage.FeatureReview`, appended
+last: bucket `feature:code`, phrase *feature review*, kind `feature`, `CommandStage.Any`, advances to
+`Done`, and the first stage to write its OWN revise instruction — *fix the accepted ones as new pull
+requests, then run this review again with the new head* — because its fixes land elsewhere: the
+epics have merged. It `RecordsSha`, like the code stage, so a later `again` can be refused when the
+head has not moved (D14). Adding it was exactly the compile-time question the table was built to ask:
+the enum member alone turned six tests red across two suites, and the row turned them green.
 
 `Stages.Of(stage)` throws for a value outside the enum ("map it here"), and `StagesTests` walks
 `Enum.GetValues<Stage>()` so a member without a row is a red test rather than a silent default.
@@ -256,7 +275,14 @@ role is persisted with:
 | `PlanReview` | `plan:code` | the plan document |
 | `CodeReview` | `result:code` | the branch diff |
 | `DocumentReview` | `result:document` | a document |
-| *(none)* | `plan:document` | nothing yet — stored, composed, counted, run by no stage |
+| `FeatureReview` | `feature:code` | a whole plan's worth of code, OUTLINED, once every epic landed (the feature-review plan; the round itself is S2.2's) |
+| *(none)* | `plan:document`, `feature:document` | nothing yet — stored, composed, counted, run by no stage |
+
+`RoleStages.All` — `plan`, `result`, `feature` — is the one list a role's stage is checked against.
+The seed loader and a person's `COAI_ROLES` composition each spelled the pair by hand until the third
+stage arrived; a stage added to one and not the other would have been a shipped role the seed accepts
+and a person's row composition refuses, in the same build. `RoleStages.Spelled` is how a refusal lists
+them.
 
 A document role's own `RoleDefinition.Stage` stays the STRING `result` with
 `ProgrammingTask: false`, in the seed, in `COAI_ROLES`, in every session file. `Stage.DocumentReview`
@@ -270,6 +296,65 @@ site became a compile error rather than a silently empty list.
 The five-active limit has counted per bucket since plan 1 (`RoleComposition.MaxActivePerBucket`); the
 extension counted per STAGE until plan 4, which was invisible only because document roles ran in
 nothing.
+
+## The feature stage in the core (2026-09-26, S2.1 of the feature-review plan)
+
+What a feature review IS, before any tool runs one: a session of its own, a gate of its own, and the
+two rules a pure transition cannot decide — the head and the base — extracted so they are unit tests.
+
+```mermaid
+flowchart LR
+  key["SessionKey.For(repo, ':feature', '', plan)<br/>repo#:feature#feature:&lt;plan key&gt;"]
+  st["SessionState.Feature<br/>IsFeatureSession"]
+  begin["RoundMachine.BeginFeatureRound<br/>not a feature session · held gate · unresolved · done"]
+  again["BeginFeatureRoundAgain<br/>Done → FeatureReview, fresh budget"]
+  bases["FeatureBases.WhyNot(recorded, asked, again)<br/>a different base names both SHAs"]
+  gate["PanelConfig.ShippedDefault(stage)<br/>Plan · Code · Feature — one road for three sites"]
+  key --> st --> begin --> again
+  st -. "the stage, not the machine, resolves the SHAs" .-> bases
+  st --> gate
+```
+
+- **The session is keyed by the PLAN and lives under a branch no git ref can spell.** A feature
+  review's head moves as fix pull requests land, so the head cannot be part of the key; the plan's
+  repository-relative path is (D13), as the fourth segment `#feature:<key>`, appended only when set —
+  every key already on disk is byte-identical, pinned by literal. The branch segment is the constant
+  `SessionKey.FeatureBranch = ":feature"`: a colon is forbidden anywhere in a git ref, so it collides
+  with no branch anybody can have, and a document session on the same branch is a different key
+  because the document segment comes before the feature one. `SessionState.Feature` is the one
+  field that says which kind a session is, normalised where it is declared like `Document`, and
+  `IsFeatureSession` is derived from it.
+- **`BeginFeatureRound` has four refusals, in the document gate's order** — not a feature session,
+  a held human gate, an unresolved round, a finished review — and no `PlanProceeded` check: the plan
+  IS the input. The held gate is asked BEFORE the finished stage on purpose, and the engine keeps the
+  same order before its skip branch, so un-ticking every vendor cannot dissolve a person's decision.
+  `BeginFeatureRoundAgain` reopens a finished review with a fresh budget, the shape
+  `BeginCodeRoundAgain` has — against the SAME base; and the three other begins refuse a feature session
+  BY NAME (`ThisIsAFeatureSession`), as they refuse a document session — one budget, one job.
+- **Another base is a fresh review** (§4.3, from the code review of 2026-09-26).
+  `RoundMachine.FreshFeatureReview(state)` starts over the stage's count, its escalations AND its
+  standing `Rejections`, whatever the stage was: a rejection made in one review must not discount a
+  finding in a different one, and an open review reopened against another base ran as round 2 of a
+  budget that was not its own. It is a state function rather than a transition on purpose — a held gate
+  and an unresolved round are refused by `BeginFeatureRoundAgain` first, and that the base IS another
+  one is the stage's finding — so the engine applies it to the begun state, after both, with the round
+  that runs (`RoundEngine.HeldToBase`).
+- **The base is remembered and held to.** `FeatureBases.IsAnother(recorded, asked)` is the one
+  comparison — never true before a round recorded a base — and `FeatureBases.WhyNot(recorded, asked,
+  again)` is empty for the same base, for no recorded base, and for `again: true`; otherwise a sentence
+  naming BOTH SHAs and the door. A path alone cannot tell two release trains of one plan apart (the plan
+  round, 2026-09-25). The recorded value lives on `PersistedSession.FeatureBase` in the server, written
+  with the round that runs and never at creation; the stage resolves the SHAs and hands them in, because
+  a pure transition has no commits. D14 — `again` with the same base over the head the last round read
+  — is refused in every state, not only after `Done`.
+- **The third shipped default has its own instance.** `PanelConfig.FeatureDefault = (1, 5)` — the
+  same numbers as a code round, deliberately as its own object, so the three sites that pick a default
+  can be told apart by REFERENCE in a test. All three go through one road now,
+  `PanelConfig.ShippedDefault(stage)`: the `Defaults` dictionary, `ShippedFor` (a role with no gate
+  written for it), and the server's `GateFor`, which also reads the stage's own keys
+  (`COAI_MAX_ROUNDS_FEATURE` / `COAI_THRESHOLD_FEATURE`) rather than the `_CODE` pair in silence.
+- **`FeatureGate.DefaultMinEpics = 3`** (D17) is a decision, not a measurement, which is why it is not
+  in `FeatureBudget`. The server reads it as `COAI_FEATURE_MIN_EPICS`; S2.2's input check applies it.
 
 ## `IAstNormalizer` — a native parser that cannot spread (2026-09-15)
 
@@ -411,5 +496,151 @@ flowchart LR
   `NormalisedReview.SourceRequests` (empty, never null); a path that is absolute, drive-qualified or climbs
   out with `..` (`RepoPaths`, moved to the core from `GitHistory`), or a span that is no span, is a
   `RejectedEntry` in `RejectedSourceRequests` — never a crash, never a lost finding.
-- **`FeatureBudget`** holds only the budgets S0.2 could measure (plan, outline, collapse threshold,
-  omissions reserve, file cap), each traced to a row in the plan's §6.
+- **`FeatureBudget`** began with the budgets S0.2 could measure (plan, outline, collapse threshold,
+  omissions reserve, file cap), each traced to a row in the plan's §6; S2.2a added the rendered inputs'
+  budgets and the per-member hunk cap, and raised the omissions reserve — see the next section.
+
+## The feature pack — inputs, the hybrid outline, the context (2026-09-26, S2.2a)
+
+Story S2.2 of [PLAN_feature_review.md](../todo/PLAN_feature_review.md), its first half: everything the
+`review_feature` reviewer is SENT, built and tested without the tool, the session or the round (S2.2b).
+Pure, in `core/Feature/`; the git half is `FeatureOutlineBuilder` in the runners
+([module_runners.md](module_runners.md)).
+
+```mermaid
+flowchart LR
+  L[lessons JSON] --> FI[FeatureInputs.ParseLessons\nrefusal asks all four questions]
+  E[epics JSON] --> FE[FeatureInputs.ParseEpics\nCount is data, not a verdict]
+  B[FeatureOutlineBuilder\nrunners] --> OF[OutlinedFile\noutline + -U0 spans + -U3 lines]
+  OF --> OC[OutlineComposer\nmark * · collapse · drop]
+  OC --> MH[MemberHunks\ninnermost member · 8 KB cap ·\nsmallest change chosen first]
+  MH --> FO[FeatureOutline\nSection ≤ OutlineBytes]
+  OC --> OM[FeatureOmissions\nevery cut named]
+  FI --> FC[FeatureContext.Render]
+  FE --> FC
+  H[history — pre-rendered\nS2.3 fills it] --> FC
+  R[rules — pre-rendered\nat their own budget] --> FC
+  FO --> FC
+  OM --> OR[OmissionsRenderer\n≤ OmissionsReserveBytes\nshorter, never cut] --> FC
+```
+
+| Type | File | Role |
+|---|---|---|
+| `FeatureInputs`, `FeatureInput<T>` (`Accepted` / `Refused`), `FeatureLessons`, `FeatureEpics`, `FeatureEpic` | `Feature/FeatureInputs.cs` | the two hand-written arguments, parsed through `JsonDocument` (AOT, and an unknown key must be SEEN); every refusal a sentence |
+| `ChangedFile`, `FileChange`, `NotOutlined`, `LineSpan`, `DiffLine`, `OutlinedFile`, `CutHunk`, `CollapsedFile`, `FeatureOmissions`, `FeatureOutline` | `Feature/FeatureOutline.cs` | the data between the builder and the renderers; `ChangedFile.Ordered` is the ONE file order (largest change, then path) |
+| `DiffHunks` | `Feature/DiffHunks.cs` | one file's piece of a unified diff → head-side spans (`-U0`, for `*`) and placed lines (`-U3`, for hunks) |
+| `OutlineComposer`, `ComposedOutline` | `Feature/OutlineComposer.cs` | the outline section: marks, collapse, drop — and then `MemberHunks` in the room left |
+| `MemberHunks`, `MemberUnit`, `FittedHunks` | `Feature/MemberHunks.cs` | D22's hybrid: each changed member's hunk, capped, fitted, cut and named |
+| `OmissionsRenderer` | `Feature/OmissionsRenderer.cs` | "Files not outlined" + "What this context left out" inside the reserve |
+| `FeatureContext`, `FeatureContextInput` | `Feature/FeatureContext.cs` | the whole context in §4.6's order |
+
+- **`lessons` is refused, never guessed at.** `{pitfalls, blockers, findings}`, each array non-empty; an
+  unknown key, a missing or empty array, a non-string or blank entry, a bare "none" (a none-word followed
+  by fewer than `NoneReasonFloor` = 20 characters — "no blockers" is bare, "none — every epic merged
+  without a blocker" is an answer), fewer than `ReviewScope.Floor` characters in all, or more than 32 KB
+  each refuse — and EVERY refusal names the fault and asks all four questions of §4.5
+  (`FeatureInputs.LessonQuestions`). `epics` is `[{title, summary, branch?, pr?}]`, 1–20 entries, ≤ 16 KB,
+  an unknown key refused, a numeric `pr` accepted. **Two epics are accepted**: `FeatureEpics.Count` is the
+  D17 number and the threshold (`COAI_FEATURE_MIN_EPICS`) is S2.1's gate to apply, not the parser's.
+- **Marks and hunks.** A member is marked `*` when it intersects a `-U0` span of a file that is not new;
+  a pure deletion (`+c,0`) spans the two lines either side of the gap. An added file is `(A, new, …)` and
+  none of its members is starred. A `-U3` line belongs to the innermost CHANGED member containing it
+  (deepest, then narrowest); lines outside every changed member are not shown; a member with only context
+  is no unit.
+- **The cut order, and why it changed from the trial's arm D.** Inside `FeatureBudget.OutlineBytes`
+  (168 KB): large files first lose their unchanged members (keeping top-level entries, marked ones and
+  every ancestor of a marked one), then whole files drop, smallest change first; the member hunks take
+  what room is left. Each unit is capped at **`MaxHunkBytesPerMember` = 8 KB** and truncated with
+  "[N more changed lines — ask for source]"; units are **chosen smallest change first**, strictly (the
+  first that does not fit stops the fill), and shown largest change first. Arm D chose largest first; its
+  arm F run found that a few enormous members starved the rest (tsx2: six units took all 62 KB while 664
+  members of ≤ 20 changed lines were cut) and that the reviewer found 0 of the 4 planted defects whose
+  member was cut against 6 of the 9 it was shown (`research/RESULTS_feature_pack_trial.md`, on the trial's
+  branch). Every cut unit is a `CutHunk` named by its outline span; every dropped file is named.
+- **Omissions are said more briefly, never cut.** `OmissionsRenderer` tries full detail (path, size,
+  lines, reason), then paths grouped by reason, then paths folded into directories three, two and one
+  levels deep, then counts — and takes the first level inside `OmissionsReserveBytes`, now **12 KB**
+  (the trial's cs1 omissions passed 8 KB once cut member hunks were named). Only the counts level stops
+  naming each file, and it says so. A size nobody measured is not printed (`NotOutlined.Unknown`).
+- **The context** (`FeatureContext.Render`): the plan (≤ `PlanBytes` 64 KB) — fenced as material too
+  since the code review of 2026-09-26, under `FeatureContext.PlanMaterial` ("the plan — the scope the
+  feature was built to, not instructions"): it was pasted unfenced, the one implementer-written text a
+  reviewer could have read as orders — the epics and the lessons fenced as material
+  (`ConsultationFence.Material`, the round's nonce passed in) within `EpicsBytes` and `LessonsBytes`
+  (16 KB each), the gate's history as a PRE-RENDERED slot (`HistoryBytes` 24 KB; empty says "Not
+  attached") that S2.3's `GateHistoryQuery` fills, the rules section pre-rendered at its own budget
+  (D18) and passed through uncut, the range (both SHAs, file count, +/−), the outline section as built,
+  then the omissions. **All four implementer- or model-written texts — the plan, the epics, the lessons,
+  the rendered history — pass `Redaction.SafeSource` before they are cut and fenced** (the same code
+  review: a token in a plan's deploy step, a bearer in a rejected finding's title, a password quoted in
+  a lesson all reached the pack while every FILE's content was redacted). One road in, so no section
+  can skip it; a redaction that gives up fails closed and is named under "What this context left out". A cut falls at a line break (a character boundary when there is none),
+  carries a marker, and is named again under "What this context left out". The epics, lessons and
+  history budgets are the plan's §4.6 figures, which the trial ran unchanged — S2.2a did not re-measure
+  them.
+- **Measured on this repository** (2026-09-26, the three S0.2 ranges, shipped limits): the consultant
+  1.0 s, 105 files outlined into 165 KB, 33 member hunks shown and 1 101 named as cut; `review_document`
+  0.9 s, 64 files into 102 KB, 149 hunks shown, 197 cut; the S8 notices 1.2 s, 110 of 202 readable files
+  outlined (12 collapsed, 92 dropped by name) and NO room left for hunks. The hybrid only reaches a feature
+  whose outline leaves room under 168 KB — a fact for S2.2b's live round, not a defect of the cut.
+
+### The feature pack, once the tool reached it (2026-09-26, S2.2b)
+
+- **The hunks get a reserve inside the outline budget.** `FeatureBudget.HunkReserveBytes` = 56 KB, a
+  third of the unchanged 168 KB (the coordinator's decision for S2.2b). `OutlineComposer.Compose` now
+  places the member hunks FIRST — smallest change first, the 8 KB per-member cap unchanged — up to
+  `HunkReserveFor(budget)` (the same third of a smaller section), and cuts the outline to what they
+  leave (`MemberHunks.Reserved` counts exactly as `Fit` does, so every unit placed in the reserve fits
+  again beside the cut outline); a reserve the hunks did not need flows back to the outline, and room
+  the outline did not need flows on to further hunks. A file DROPPED from the outline keeps its hunks
+  as candidates: dropping goes smallest change first, which is where the small edits live. Measured on
+  the three S0.2 ranges, before → after: the consultant 105 → 76 files outlined (29 now elided by
+  name), **41 → 278 member hunks shown**; `review_document` #230 unchanged (64 outlined, 149 hunks —
+  its outline already left room); the S8 notices 113 → 62 outlined, **0 → 302 hunks shown**. Every
+  section stayed at or under 168 KB (171 955–172 000 bytes of 172 032). The earlier "measured" bullet
+  above is S2.2a's, from before the reserve.
+- **`ReaderMaterial`** (`core/Rounds/ReaderMaterial.cs`) — `Checkout`, `Change`, `Outline` — replaced the
+  `bool hasCheckout` the reviewer prompt was composed with, and `StageDescriptor` gained two columns
+  that say which a stage is: `Answers` (`SchemaShape.Finding` for four rows, `Feature` for the feature
+  review) and `Reads` (`Change`, or `Outline`). A mounted worktree still overrides `Reads` with
+  `Checkout`; that is a fact about the launch, not the stage. `SchemaFile.Text(shape)` is the schema
+  text a prompt quotes, byte-identical to the file `Ensure` writes.
+- **`SourceRequestNote`** (`core/Feature/SourceRequestNote.cs`) records a feature reviewer's
+  `sourceRequests` — and any the parser refused, with the reason — on that reviewer's `notes` in the
+  reply, which is what makes "a request is RECORDED" true before the S3.2 loop that answers one.
+- **The credential shapes reach the pack too** (D15): `ReadPlan` withholds a `CredentialFiles` match
+  before anything else is asked of it — `withheld — looks like a credential file (.env*); never read` —
+  so a `.env.production.ts`, which is TypeScript, is named and never read; every other file's text is
+  redacted before it is outlined and each hunk line after it is placed (the runners' half,
+  `FeatureOutlineBuilder`).
+
+### Source on demand — the pure half (2026-09-26, S3.1)
+
+The resolver that reads git lives in the runners ([module_runners.md](module_runners.md), *Source on
+demand*); what it decides WITH is here, so every rule is a test without a repository:
+
+- **`SourceBudget`** is the one place a cap lives. Two of its numbers are the feature-pack trial's
+  corrections rather than the plan's figures: a turn carries **64 KB** (48 KB refused more requests than
+  anything else on 21 real features) and a symbol is resolved by its **qualified** name (the trial's
+  reviewers asked `Type::member` and `Class.method` and were refused by a lookup that compared the whole
+  request against a bare entry name). Everything else is as §4.9 stated it.
+- **`SymbolLookup.Find`** gives every outline entry the chain of its containers' segments (by depth) and
+  matches a request whose segments appear IN ORDER along that chain and whose last segment is the entry's
+  own — so `Orders.Cart.Add`, `Shop.Cart.Add` and `Display::fmt` (the trait side of `impl Display for
+  Point`) all find their declaration and `Other.Add` finds nothing. A file-scoped namespace
+  (`namespace Shop.Orders;`, `namespace App\Billing;`) is a declaration nothing is nested under, so it
+  is carried forward as the scope of what follows it. Generic arguments and a parameter list are ignored;
+  exact case first, then case-insensitive; a match INSIDE another match (the constructor `Cart` in class
+  `Cart`) is not an overload, because the container's lines already carry it. Overloads beyond three are
+  counted, not served; a miss lists up to twenty of the file's names and how many there are.
+- **`CredentialFiles`** is D15 as the operator NARROWED it on 2026-09-26: the fixed shapes, matched on the
+  basename, case-insensitively, and NOT the words of `shared/credential-words.json` — applied to names
+  they refused nine ordinary code files (`providers/credentials.ts`, `Auth.cs`, `TokenIdentity.cs`,
+  `tokens.rs`). The words still run, over the file's CONTENT, through **`Redaction.SafeSource`**: the
+  notice redaction's four passes with tab, LF and CR kept and no cut — a file that ends mid-declaration
+  with `…(truncated)` is one the reviewer cannot ask past — failing closed exactly as `SafeText` does.
+  The cost, said plainly: an assignment to an identifier the words recognise (`const credentials = …`)
+  has its right-hand side replaced by `[redacted]` even when that side is code.
+- **`ServedTurn.Render()`** is what the turn loop (S3.2) pastes into the tail: each slice as
+  `### path lines a-b of n @ sha`, an optional `note:` line, and the text in a fence one backtick longer
+  than any run inside it; each refusal as `not served: path [symbol] — reason`.

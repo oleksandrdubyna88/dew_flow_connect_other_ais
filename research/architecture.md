@@ -97,6 +97,33 @@ and a round's number comes from the journal, so a later round no longer overwrit
 row in the log. See [module_core.md](module_core.md), [module_runners.md](module_runners.md),
 [module_server.md](module_server.md) and [module_extension.md](module_extension.md).
 
+**Epic 2, story 1 (2026-09-26): the fourth stage exists, and no tool reaches it yet.**
+`Stage.FeatureReview` has its row, its bucket (`feature:code`), its shipped role in the seed and its
+own session — keyed by the PLAN under the branch `:feature`, which no git ref can spell — and it is
+the first stage whose round with nobody to ask is RECORDED as `skipped` with its reason rather than
+refused (D1): the gate is opt-in per vendor, so nobody ticked is the ordinary state, and a skip does
+not block. Three things cross the containers here. The seed's new role does NOT enter the Team
+server's catalog: `AcceptedRoles` seeds the built-ins by stage and refuses the feature role by name,
+even under `AllowAny`, because the box runs no feature review in this version (D10). Schema step 16
+(`rounds.note`) is read by `--log` through the `pragma_table_info` ladder, and the released binary
+was measured over a migrated database rather than argued about (`module_server.md`, the plan's
+§4.13). And the panel took only what the seed forces — a fourth group, a fourth tab, the code roles
+counted by bucket; the tool, the vendor tick and the log's rendering of a skipped round are epic 3's.
+
+**Epic 2, story 2 (2026-09-26): `review_feature` — the eleventh tool reaches the fourth stage.** A
+caller at the end of a plan of three or more epics sends the plan's path, the base before the first
+epic, the epics and its own lessons; `FeatureStage` refuses what it can before any I/O, resolves the
+checkout's HEAD once, and runs ONE round through the same engine: the plan, the epics and lessons fenced
+as claims, the gate's history of the work, the rules at the full budget, and an outline of every changed
+file with the changed members' hunks — which now get a third of the 168 KB first, so a wide feature is no
+longer reviewed from its outline alone (the S8 notices: 0 → 302 hunks). Credential-shaped files are
+withheld from the pack and every file's content is redacted, as the source resolver already did. A plan
+of fewer epics, or nobody ticked, is a recorded skip that does not block; every reviewer failing still
+calls a person. `resolve`, `status` and `ask_human` find the review by its plan (`feature`). Nothing
+crosses a new container: no Team server, no extension surface (the vendor tick, the log's skipped row and
+the snippet are epic 3's). See [module_server.md](module_server.md), [module_core.md](module_core.md),
+[module_runners.md](module_runners.md) and [module_tests.md](module_tests.md).
+
 ## Three gates, not two (2026-09-13)
 
 The gate had two stages, both about code: `review_plan` over a plan document and `review_code` over a

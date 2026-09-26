@@ -2003,6 +2003,69 @@ apart. Tests: `ALogSplitByPeriodTests` (red first; red again with the period con
 `0000` against `started_utc`, matching nothing — so a malformed cursor answered with an EMPTY page
 instead of the first one, which is the opposite of treating it as absent.
 
+### The gate's history of a piece of work (`GateHistoryQuery`, 2026-09-26, feature review S2.3)
+
+The feature review ([PLAN_feature_review.md](../todo/PLAN_feature_review.md) §4.8) sends its reviewer
+what earlier rounds of the same work REJECTED, with the reasons, and the consultations the implementer
+asked for. There is no work id — sessions are repository+branch, epics live on their own branches, and
+a squash merge leaves an epic's commits reachable from nothing — so membership is argued, never proven,
+and the text says so on its first line.
+
+```mermaid
+flowchart LR
+    ask["GateHistoryAsk<br/>dataDir, repo, base, head,<br/>epic branches, plan text,<br/>session to exclude"] --> git["WorkRangeReader<br/>(runners/Git, IProcessLauncher, 30 s)<br/>T0 = committer time of base<br/>S = rev-list base..head, cap 5000"]
+    git --> q["GateHistoryQuery.Query<br/>coai.db, Mode=ReadOnly"]
+    q --> rules["GateHistoryRules<br/>(a) head_sha in S, from T0<br/>(b) branch in epics, trunk excluded, from T0-90d<br/>(c) plan round under the plan's heading, from T0-90d"]
+    rules --> text["GateHistoryText.Render<br/>counts sentence first, ≤ 24 KB,<br/>honest cut"]
+    text --> slot["FeatureContext §4.6 section 4<br/>(S2.2 — fenced as material)"]
+```
+
+- **Three files and a git helper.** `Store/GateHistoryModels.cs` (the ask, `Admission` flags, the
+  attached round, rejection and consultation, `GateHistory`), `Store/GateHistoryRules.cs` (the rules,
+  pure), `Store/GateHistoryQuery.cs` (git first, then SQL), `Store/GateHistoryText.cs` (the rendering),
+  and `runners/Git/WorkRangeReader.cs`. The one entry the stage calls is
+  `GateHistoryQuery.RenderAsync(ask, launcher, ct)` → a string for the context's history slot;
+  `ReadAsync` returns the structured `GateHistory` for anything that wants the counts.
+- **The windows differ on purpose.** Rule (a) holds from `T0`: a commit in `base..head` cannot have
+  been reviewed before the base existed. Rules (b) and (c) — and a consultation admitted by its branch —
+  hold from `T0 − 90 days`: a plan is reviewed before `main` reaches the base, and a rebase-merged epic
+  is reviewed on its branch before the base commit's committer time (as first written, rule (b)
+  attached nothing for 3 of the 5 real features the feature-pack trial ran). A consultation admitted by
+  its commit keeps rule (a)'s window. *(The plan's consultation sentence says `started_utc ≥ T0`; the
+  branch half was widened with rule (b), because it is rule (b).)*
+- **Trunk is never an epic branch.** `main`, `master` (also as `origin/…`, `refs/heads/…`,
+  `refs/remotes/x/…`) and a detached `HEAD` are dropped from the caller's `epics[].branch`, and the
+  history says which names were dropped. The trial's first version admitted every trunk round of the
+  window that way; the real database carries nine rounds on a branch recorded as `HEAD`.
+- **Rule (c)** matches a `PlanReview` round whose `subject` equals `RoundSubject.From("# " + heading)`
+  — the shortened form, which a plan PREFACED by an epic paragraph still gets — or whose `plan_text`
+  opens with the heading, whole. The heading is the plan's first `# ` line; none → rule (c) off, said.
+  Chosen after reading the real subjects (plan §4.8, "Looked at 2026-09-26").
+- **Same repository** is decided through `SessionKey.For`'s own normalisation (separators, trailing
+  separator, case), not a second spelling of it. The feature session's own rounds are excluded by its
+  key: the gate already counts its rejections.
+- **Rejected findings only**, de-duplicated by `TextSimilarity.SameRemark` over the title within one
+  file (a line moves between rounds, the disagreement does not); the newest reason is kept and the
+  repeat counted. Order: the epics' own branches first, then plan rounds before code, newest first;
+  everything not admitted by an epic branch is labelled `CANDIDATE` with the rule that admitted it.
+- **The counts sentence comes first and is never cut:** *"N rejections (M after removing repeats) from
+  R rounds (branches …; K rounds by a commit in base..head; plan round "…"), C consultations; NOT
+  attached: X rounds since the base commit with nothing tying them to this work."* Items follow until
+  the next would pass 24 KB (UTF-8 bytes, 256 held back); the cut stops there rather than skipping to
+  a smaller item, and a closing line counts the rejections and consultations not shown.
+- **Rule (a) is bounded.** `rev-list --max-count=5001`: past 5000 commits the list is NOT KNOWN — a
+  truncated list is never read as the range — rule (a) is off and the history says so.
+- **Nothing is written, nothing throws.** `Mode=ReadOnly`, a missing `coai.db` is never created, and
+  nothing is seeded into `session.Rejections`: the history is context, not a discount. A base commit
+  git cannot date, a missing database or one that will not read each become ONE sentence
+  (`Gate history unavailable: …`) and the round continues. An older database without the
+  consultations table, `outcome` or `kind` is read through `RoundsQuery.HasColumn` (widened from
+  private to internal for this) with the column's own default.
+
+Tests: `GateHistoryQueryTests` — real SQLite seeded through `RoundsDb`, a real temporary git repository
+(a squash merge, rebase timing, a range over the cap), T0 read back from git; all fifteen were observed
+red against stubs first, and the widening and the trunk rule were each deleted once and watched go red.
+
 ### The findings as a corpus (`--bugs-json`, 2026-09-15)
 
 `Store/BugsQuery` reads the same table as a **sibling** of `RoundsQuery`, not a method on it: that
@@ -4720,6 +4783,209 @@ sequence the two agree, which is why nothing already on disk changes; they part 
 counter is reset. An interrupted round keeps its number, so a retry after a crash is the next round
 and the row that says a round died stays beside it. No migration: the table's key was always
 `(session_id, stage, number)`, and the rows that were lost were lost before this.
+
+## The feature stage exists in the engine and the store (2026-09-26, S2.1 of the feature-review plan)
+
+The fourth stage's session, its skip path and its column — everything the engine and the store need
+before any tool reaches them (the tool is S2.2; the core's half is in
+[module_core.md](module_core.md), *The feature stage in the core*).
+
+```mermaid
+flowchart TD
+  claim["SessionClaim.TryTake(repo, ':feature', '', plan)"] --> load["SessionStore.Load(…, feature)"]
+  load -- "null, and the run says CreateIfAbsent" --> make["Created: the stage's own session, saved UNDER the claim"]
+  load --> begin["stage.Begin — BeginFeatureRound<br/>a held call_human refuses HERE, before the roster"]
+  make --> begin
+  begin --> sha["ResolveShaAsync(stage.Head)"]
+  sha --> number["RoundNumber.Next — under the claim"]
+  number --> work["MakeWork → RosterBuilder.BuildWork(FeatureReview)"]
+  work -- "empty · WhenNobody = Refuse" --> refuse["Error(NoReviewer)"]
+  work -- "empty · WhenNobody = RecordSkip" --> skip["RecordSkip: verdict skipped, note = SkipReasons.For(…)<br/>trail: coalesce with the previous identical skip, or append<br/>session STATE untouched · db: head_sha from RoundContext, note"]
+  work -- "reviewers" --> round["the round as before"]
+```
+
+**Three things `StageRun` gained, and every existing stage passes none of them.** `Feature` (the
+plan's identity — the fourth segment of the claim and of the session key), `Head` (the ref the
+round's commit resolves from, because a feature session lives under a branch no git ref can spell),
+and two policies: `WhenNobody`, `Refuse` for every stage that exists today and `RecordSkip` for the
+feature stage; and `Session`, a closed union — `MustExist`, which is what `open` has always
+guaranteed, or `CreateIfAbsent(make)`, which the engine runs UNDER THE CLAIM it has just taken. The
+document stage creates its session outside the claim and narrows the race by re-reading (§4.3 of the
+plan); two concurrent first calls on one plan here are one creator, and
+`TwoConcurrentFirstCalls_CreateOneSession` drives both through the engine and counts one file and one
+minted session.
+
+**The skip branch sits AFTER `stage.Begin`, and that order is a person's decision kept.** A round
+whose reviewers all failed still calls a human (the `Answered == 0` path is untouched); the next call
+with every vendor un-ticked meets the held gate first and is refused with the human-gate sentence,
+never recorded as skipped — otherwise switching the reviewers off would be a way around
+`call_human`. `WhenEveryReviewerFails_APersonIsCalled_AndSwitchingTheReviewersOffDoesNotSkipPastThem`
+holds it; deleting the feature begin's gate arm made it red with a `skipped` verdict where an error
+was expected.
+
+**What a skip writes.** `SkipReasons.For` decides the row of the truth table in order — the role
+switch, the vendor ticks, the ticked vendors that cannot run (`ExcludedFrom`, each named) — and the
+sentence is the record's `Note`, the log's `note` and the answer's `reviewers`; the answer's verdict
+is `skipped` and its instruction says it does NOT block. The record is numbered from the journal like
+every round, carries the head it would have read (`RoundRecord.Sha`, and `rounds.head_sha` from
+`RoundContext.HeadSha` — the column the log reads), and the session STATE is saved as it was READ,
+not as the begin moved it: no `AwaitingResolve`, no budget spent, not `Done`, and an `again` that
+finds nobody to ask leaves the review finished rather than half-reopened. **Consecutive skips for one
+reason are one row**: a skip whose reason equals the previous round's coalesces — `Repeats` counted
+up, `CompletedUtc` moved, the upsert on `(session_id, stage, number)` rewriting the row — and only a
+changed reason or a real round opens a new number (§4.12). Ten identical skips are one row saying
+`×10`; a different reason between two identical ones is three rows.
+
+**Schema step 16, `rounds.note`.** The plan numbered it 15; the consultation cadence took 15 on
+2026-09-25, so it is 16, appended (`Schema.WhyARoundDidNotRun`). `--log` reads it through the same
+`pragma_table_info` ladder the counter column has had since story 6 — note → counter → neither —
+selecting the literal `''` where the column is absent, so a database last written by an older
+release lists every round with an empty note rather than failing the page. `LoggedRound.Note` is the
+member; empty is the one spelling of no note.
+
+**The released half, measured** (`src_vs_code/scripts/live-feature-schema-compat.mjs`,
+`npm run test:feature-compat`; the outcome is in the plan's §4.13). Against **coai-mcp 0.37.0**,
+the newest PUBLISHED release on 2026-09-26 (0.38.0 was a draft carrying three of six platforms —
+the script excludes drafts for that reason): the released binary answers `--log` over a step-16
+database, exit 0, listing a `skipped` `FeatureReview` round under its raw stage name and with no
+`note` member; this build opens the released binary's own database (`user_version` 14), migrates it
+forward to 16 with the column present, and the released binary still reads it afterwards; and a
+session file with `"stage": "FeatureReview"` and a `feature` key is left byte-identical by the
+released binary's startup sweep, while this build's sweep marks its dead round interrupted and saves
+it back under its own key — one session file, never two. Old → new is the only supported direction;
+there is no downgrade.
+
+**`SessionStore`, `SessionClaim` and `Save`.** `Load`, `Exists` and `FileFor` take the optional
+`feature` argument after `document`, defaulted, so every caller that predates the stage loads exactly
+the session it always loaded; `Save` reads the feature off `State.Feature`, which is what lets the
+orphan sweep re-save a feature session under its own key without knowing what a feature session is.
+`PersistedSession.FeatureBase` records the resolved base of the review's first round for
+`FeatureBases` to hold later calls to; it is normalised where it is declared and empty on every file
+written before it.
+
+**The vendor's `feature` tick is parsed absent-is-false**, unlike the plan and code ticks: the gate
+is opt-in per vendor, and a settings file written before the stage existed ticked nobody. A Team
+server row never serves the stage in this version (`Serves(FeatureReview) = Feature && !IsRemote`,
+D10). The budget keys are the stage's own — `COAI_MAX_ROUNDS_FEATURE` / `COAI_THRESHOLD_FEATURE` —
+because `GateFor` used to spell `isPlan ? "PLAN" : "CODE"` and would have handed the feature stage the
+code keys in silence; `COAI_FEATURE_MIN_EPICS` (default 3, D17) is read here and applied by S2.2.
+
+## `review_feature` — the eleventh tool (2026-09-26, S2.2b of the feature-review plan)
+
+The stage S2.1 built, reached: `Tools.review_feature` → `PanelService.ReviewFeatureAsync` (a thin
+delegation) → `src/Server/Stages/FeatureStage.cs`, the stage's entry point, which refuses what it can
+before any I/O, resolves the refs, and hands the engine ONE `StageRun`. The pack itself is the core's
+and the runners' (`FeatureContext`, `FeatureOutlineBuilder`, `GateHistoryQuery` — S2.2a and S2.3).
+
+```mermaid
+flowchart TD
+  tool["review_feature(repoPath, planPath, baseRef, epics, lessons, again?, callerModel?)"] --> written["FeatureInputs: lessons, epics — pure, refused with the four questions"]
+  written --> top["FeatureRefs.TopLevelProblemAsync — a directory, a repository, its TOP level"]
+  top --> plan["FeaturePlan.Read — inside the repository, a file, UTF-8; identity = repo-relative path (D13)"]
+  plan --> d17{"epics &lt; COAI_FEATURE_MIN_EPICS?"}
+  d17 -- yes --> headonly["FeatureRefs: HEAD only"]
+  d17 -- no --> refs["FeatureRefs: HEAD; baseRef guarded, resolves, != HEAD, ancestor, reviewable range"]
+  headonly --> engine["RoundEngine.RunStageAsync(repo, ':feature', plan, StageRun)"]
+  refs --> engine
+  engine --> claim["claim · load or CreateIfAbsent (caller from the handshake; no base yet)"]
+  claim --> begin["BeginFeatureRound / BeginFeatureRoundAgain — a held call_human refuses here"]
+  begin --> before["RefuseBeforeBuilding: a different base without again · again with the same base over an unmoved head, in every state"]
+  before --> skip{"RoundSkips.BeforeBuilding?<br/>D17 too few epics · D1 nobody to ask, from the settings"}
+  skip -- yes --> recorded["RoundSkips.Record — skipped, does not block"]
+  skip -- no --> held["HeldToBase: the base saved with THIS round;<br/>another base than recorded → RoundMachine.FreshFeatureReview"]
+  held --> work["WorkAsync: outline+hunks · gate history · StageRules.Feature · FeatureContext.Render → BuildWork(FeatureReview)"]
+  work -- "roster empty for a reason only building finds" --> recorded
+  work -- reviewers --> round["the round: all failed → call_human; otherwise proceed / revise / …"]
+```
+
+**The order, and why the top level is asked before the plan.** `lessons` and `epics` first — pure,
+so a caller who sent nothing is told what the gate wants before a process starts. Then the
+repository's top level (`git rev-parse --show-toplevel`): every path below — the plan's identity, the
+outline's `head:path` names — is read from it, and a plan resolved against a subdirectory would be
+refused for the wrong reason. Then the plan: a credential-shaped NAME (`CredentialFiles`, the fixed D15
+shapes — `planPath: ".env.production"`) is refused before the disk is touched, because the plan is pasted
+whole into every reviewer's context and that file existed and read like a plan when the code review of
+2026-09-26 tried it; then its containment and existence, refused in the tool's own words (the document
+reader's sentences name `documentPath`/`documentText`, arguments this tool does not have); its other
+refusals are about the file and are reused. Then D17: fewer epics than
+`COAI_FEATURE_MIN_EPICS` is a recorded `skipped` round (`SkipReasons.TooFewEpics`), and the base is
+not even asked about. Then the refs: the head is the checkout's HEAD, resolved to a full id ONCE and
+passed to the engine as that id, so the commit the checks passed is the commit read; the base ref is
+refused before git sees it when it opens with `-` or carries whitespace, then must resolve, differ
+from HEAD, be an ancestor of HEAD, and leave something `DiffExclusions` does not hide — each its own
+sentence naming what to pass instead (`TheFeatureStageRefusesBeforeItBuildsTests`).
+
+**What the engine gained, and nothing else did.** Two `StageRun` fields: `SkipBecause`, a reason the
+stage decided from its inputs, recorded under the claim AFTER `stage.Begin` (a standing call_human
+still stands) and before anything is built; and `FeatureBase`, written onto the session with the
+round only — never by a skip or a refusal — so `again` against a new base moves it the moment that
+review actually runs. The skip recording moved out of the engine into `Rounds/RoundSkips.cs`
+(`NobodyFor` + `Record`): two reasons to skip now share one writer, and the engine, already past the
+file-size rule, shrank by fifty lines rather than growing by the second. `RefuseBeforeBuilding` holds
+§4.3 and D14 against the session AS READ UNDER THE CLAIM: `FeatureBases.WhyNot` (a different base
+without `again`, naming both SHAs) and `again` over the head the last real feature round already read
+("the head has not moved"). A skip row is not a round that read a head.
+
+**The code review of 2026-09-26 found the base, the skip and `again` each one step short of the
+sentences above, and the fixes are these** (every one RED first; the observations are in
+[module_tests.md](module_tests.md), *The feature gate after its code review*):
+
+- **The session is CREATED with no base.** `FeatureStage.NewSession` wrote `FeatureBase = baseSha`, so
+  a first call that was skipped (nobody ticked) or whose pack could not be built (a `cat-file` that
+  failed) — a call that reviewed nothing — pinned the base, and the next call naming another one was
+  refused "opened against base X". The base is written by the engine alone, with the round that runs
+  (`HeldToBase`); a skip saves the session as READ, and a failed build saves nothing.
+- **Another base is a fresh review, whatever the stage.** `BeginFeatureRoundAgain` kept the standing
+  `Rejections`, and when the review was OPEN (a `revise` resolved, a skip) it fell through to
+  `BeginFeatureRound` and kept the count too — so `again` against a new base discounted the new
+  review's findings by the old review's rejections, and ran as round 2 of a budget that was not its
+  own. Now `HeldToBase` applies `RoundMachine.FreshFeatureReview` when `FeatureBases.IsAnother(recorded,
+  asked)`: rejections, `RoundsRunThisStage` and `EscalationsUsed` start over. It sits AFTER
+  `stage.Begin`, so a round awaiting resolve and a standing call_human still refuse `again` with their
+  own sentences, whatever base it names.
+- **D14 holds in every state.** "The head has not moved" was asked only after `Done`; an open review
+  asked `again` over the head its last round read simply ran that round again. `WhyNotThisRound` asks
+  it whenever the base is the recorded one.
+- **The D1 skip is decided before the pack is built.** The engine called `MakeWork` — the outline's
+  git processes, up to 16 MiB of blob reads, the history query — and noticed the empty roster
+  afterwards. `RoundSkips.BeforeBuilding(stage)` now answers the stage's own reason (D17) or, for a
+  stage that records skips, rows 1–3 of §4.4 from the settings alone (the role switch, the vendor
+  ticks, the ticked vendors that cannot run — the same counts `NobodyFor` reads), and the engine
+  records the skip before `MakeWork`. A roster empty for a reason only building it can find (a role
+  nobody was asked, a per-role exclusion) is still `NobodyFor`'s, after the work exists — and a
+  builder that throws in that window is a failed round, as before. With nobody ticked, the watching
+  launcher of the end-to-end scenario now sees no `cat-file` and no `-U0`/`-U3` diff; a
+  `MakeWork` that throws still yields the recorded skip through the engine's seam.
+
+**The prompt is the stage's, from its row.** `StageDescriptor` gained `Answers` (the schema shape) and
+`Reads` (what a reviewer without a checkout holds), so `RosterBuilder` quotes `FindingSchema.FeatureJson`
+and hands its own schema file to a feature reviewer only, and `ReviewerPrompt.ComposePrompt` takes a
+three-valued `ReaderMaterial` instead of `bool hasCheckout` (plan §4.6). The feature truth names the
+outline and the changed hunks, the `*` marker, the `[N more changed lines — ask for source]` marker and
+"What this context left out", and says a `sourceRequests` entry is RECORDED and not answered inside
+this review — the loop that serves one is S3.2, and a reviewer promised source would hold findings
+back for a turn that never comes. The requests ARE recorded: `SourceRequestNote.With` appends them —
+and any the parser refused, with the reason — to that reviewer's `notes` in the reply.
+
+**`resolve`, `status` and `ask_human` take `feature`** — the same `planPath` — resolved through the
+same `DocumentReader.IdentityOf` the review was opened with, under the constant branch `:feature`
+(the `branch` argument is then not read); `document` and `feature` together are refused. `ask_human`
+files the question under the feature session's id, which is what lets `Escalations.DecisionFor` find
+the person's answer.
+
+**Rules at the full budget (D18).** `StageRules.Feature` is a code review's tier plus the rules a
+feature breaks across epics — reliability, the scenario harness, planning docs, the two contract
+rules — collected from the working tree at `RuleFiles.DefaultBudgetBytes`, and rendered through
+`RulesText.Section`: the rules block moved out of `PanelService` unchanged when the feature stage
+became its fourth caller, so the "criteria, not instructions" boundary sentence stays one sentence.
+
+**A defect found on the way (D12): `DocumentReader.FollowLink` threw for a path with nothing at it.**
+.NET answers `ResolveLinkTarget` on a missing entry with `FileNotFoundException`, not null, so
+`status`, `resolve` and `ask_human` with a `document` nobody reviewed — and `review_feature` with a
+missing plan — threw an SDK-level error instead of the no-session sentence. RED first:
+`AskingAboutADocumentThatIsNotThere_IsASentence_NotAnException` failed with
+`System.IO.FileNotFoundException : Could not find file '…\docs'`; a missing path now resolves to
+itself, and a dangling link, which can name no readable file, is keyed by where it stands.
 
 ## The consultant is not blamed for a sibling's git bookkeeping (2026-09-24, issue #376)
 

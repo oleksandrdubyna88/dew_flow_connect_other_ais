@@ -66,6 +66,8 @@ test('each role leads with its universal prompt', () => {
     'uxdx-performance': 6,
     'document-review': 3,
     'document-summary': 1,
+    // The feature stage's one role asks one question (S2.1 of the feature-review plan).
+    'feature-review': 1,
   }, 'a role leads with its universal prompt, and its lenses follow');
 });
 

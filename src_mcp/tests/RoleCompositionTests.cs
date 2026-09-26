@@ -100,6 +100,7 @@ public sealed class RoleCompositionTests
             // and neither kind is affected by what the other does with its five slots.
             ("DocumentReview", true, true, RoleStages.Result, false),
             ("DocumentSummary", true, true, RoleStages.Result, false),
+            ("FeatureReview", true, true, RoleStages.Feature, true),
             ("Requirements", true, false, RoleStages.Result, true),
             ("Risks", true, false, RoleStages.Result, true),
             ("Brief", true, false, RoleStages.Plan, true));
@@ -368,6 +369,22 @@ public sealed class RoleCompositionTests
 
         catalog.InBucket(RoleBuckets.PlanCode).Should().Equal(RoleCatalog.PlanRole, "Assumptions");
     }
+
+    /// <summary>A person's own feature-stage role composes into the feature round — one shared stage list (S2.1).</summary>
+    [Fact]
+    public void AFeatureStageCustomRole_JoinsTheFeatureRound()
+    {
+        var catalog = Composed(Custom("Seams", RoleStages.Feature, "seams-general"));
+
+        catalog.Dropped.Should().BeEmpty("'feature' is a stage this build knows");
+        catalog.InBucket(RoleBuckets.FeatureCode).Should().Equal(RoleCatalog.FeatureRole, "Seams");
+    }
+
+    /// <summary>And the refusal for a stage nobody has names all three that exist.</summary>
+    [Fact]
+    public void TheStageRefusal_NamesEveryStageThatExists() =>
+        Composed(Custom("Whenever", "sometime")).Dropped.Single()
+            .Should().Contain("'plan'").And.Contain("'result'").And.Contain("'feature'");
 
     /// <summary>
     /// A null INSIDE the list — the one shape that made composition break its own contract.

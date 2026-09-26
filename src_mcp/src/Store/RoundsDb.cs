@@ -773,12 +773,12 @@ public sealed class RoundsDb : IDisposable
                                 started_utc, completed_utc, tokens_in, tokens_out, cost_usd,
                                 plan_text, head_sha, base_ref, caller, agent_log,
                                 caller_vendor, caller_client, caller_client_version, caller_model,
-                                commands, plan_shape, plan_key, epic_number, cadence_note)
+                                commands, plan_shape, plan_key, epic_number, cadence_note, note)
             VALUES ($session, $stage, $number, $subject, $status, $verdict, $gating,
                     $started, $completed, $tokensIn, $tokensOut, $cost,
                     $plan, $sha, $baseRef, $caller, $agentLog,
                     $vendor, $client, $clientVersion, $model,
-                    $commands, $planShape, $planKey, $epicNumber, $cadenceNote)
+                    $commands, $planShape, $planKey, $epicNumber, $cadenceNote, $note)
             ON CONFLICT(session_id, stage, number) DO UPDATE SET
                 subject = excluded.subject, status = excluded.status, verdict = excluded.verdict,
                 gating = excluded.gating, completed_utc = excluded.completed_utc,
@@ -788,7 +788,8 @@ public sealed class RoundsDb : IDisposable
                 caller_vendor = excluded.caller_vendor, caller_client = excluded.caller_client,
                 caller_client_version = excluded.caller_client_version, caller_model = excluded.caller_model,
                 commands = excluded.commands, plan_shape = excluded.plan_shape,
-                plan_key = excluded.plan_key, epic_number = excluded.epic_number, cadence_note = excluded.cadence_note
+                plan_key = excluded.plan_key, epic_number = excluded.epic_number, cadence_note = excluded.cadence_note,
+                note = excluded.note
             RETURNING id
             """;
         BindRound(write, state.SessionId, round.Stage, round.Number);
@@ -833,6 +834,10 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$planKey", round.PlanKey);
         Bind(write, "$epicNumber", round.EpicNumber);
         Bind(write, "$cadenceNote", round.CadenceNote);
+        // Why a round did NOT run, with its repeat count — the skip reason of the feature stage (S2.1).
+        // The upsert on (session, stage, number) is what makes ten identical skips one row: the record
+        // keeps its number and this rewrites its count.
+        Bind(write, "$note", round.LoggedNote);
 
         return (long)(write.ExecuteScalar() ?? 0L);
     }

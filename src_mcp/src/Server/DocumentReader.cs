@@ -77,11 +77,25 @@ public static class DocumentReader
     /// <c>returnFinalTarget</c> walks a chain of links to its end, which is why one call is enough
     /// per entry. What it does NOT do is look at the entry's parents, which is the hole
     /// <see cref="Canonical"/> exists to close.
+    /// <para><b>A path with nothing at it is its own answer.</b> .NET does not return null for an entry
+    /// that does not exist: it throws <see cref="FileNotFoundException"/>. So every identity asked of a
+    /// document that was never on disk — <c>status</c>, <c>resolve</c> or <c>ask_human</c> with a
+    /// <c>document</c> path nobody reviewed, or a missing plan — threw instead of answering "no review of
+    /// it", and the caller read an SDK-level error. (Found by S2.2b, D12.)</para>
     /// </remarks>
-    public static string FollowLink(string path) =>
-        File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName
-        ?? Directory.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName
-        ?? path;
+    public static string FollowLink(string path)
+    {
+        try
+        {
+            return File.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName
+                ?? Directory.ResolveLinkTarget(path, returnFinalTarget: true)?.FullName
+                ?? path;
+        }
+        catch (Exception e) when (e is FileNotFoundException or DirectoryNotFoundException)
+        {
+            return path;
+        }
+    }
 
     /// <summary>
     /// The real path of <paramref name="path"/>, with EVERY component's links followed.
