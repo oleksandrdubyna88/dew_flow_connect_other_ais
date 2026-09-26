@@ -21,7 +21,9 @@ const insideTheLabel = (label: string): string => label.slice(0, label.indexOf('
 
 test('every consultant and cadence setting has a "?" that explains it', () => {
   const bare = LABELS.filter((label) => !label.includes('class="help"'))
-    .map((label) => /for="([^"]+)"/u.exec(label)?.[1] ?? label.replace(/<[^>]*>/gu, '').trim());
+    // Named by its `for`, or by the start of its markup — never by stripping tags, which CodeQL reads as a
+    // sanitizer that misses `<script` (js/incomplete-multi-character-sanitization).
+    .map((label) => /for="([^"]+)"/u.exec(label)?.[1] ?? label.slice(0, 80));
 
   assert.deepEqual(bare, [], `settings with no "?": ${bare.join(', ')}`);
 });
