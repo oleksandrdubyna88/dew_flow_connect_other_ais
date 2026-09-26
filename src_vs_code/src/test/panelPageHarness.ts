@@ -77,7 +77,21 @@ function attribute(attributes: string, name: string): string {
 function controlsOf(html: string): readonly Control[] {
   return [...html.matchAll(/<(input|select|textarea)\b([^>]*)>/g)]
     .filter(([, , attributes]) => attributes!.includes('data-setting="'))
-    .map(([, tag, attributes]) => controlFrom(tag!, attributes!));
+    .map((match) => withChoice(controlFrom(match[1]!, match[2]!), html, match.index));
+}
+
+/**
+ * A dropdown holds the option the page marked `selected`, as a DOM gives it — so a test can see which
+ * choice a page was DRAWN on (the follow-up to PR #561), rather than every select starting empty.
+ */
+function withChoice(control: Control, html: string, at: number): Control {
+  if (control.tagName !== 'SELECT') {
+    return control;
+  }
+  const body = html.slice(at, html.indexOf('</select>', at));
+  control.value = /<option\b[^>]*\bvalue="([^"]*)"[^>]*\sselected(?=[\s>])/.exec(body)?.[1] ?? '';
+
+  return control;
 }
 
 /** A panel state with nothing configured, one section open, and whatever a test changes laid over it. */

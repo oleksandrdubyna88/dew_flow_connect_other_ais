@@ -45,6 +45,7 @@ test('the vendor a caller is pointed at is written for THAT caller', () => {
 
   assert.deepEqual(lastWrite(page), {
     type: 'setting', key: 'consultVendor', value: 'claude', vendor: undefined, role: undefined, caller: 'gemini',
+    control: 'select',
   }, 'four rows share one setting name, so a write with no caller lands in whichever row the document holds first');
 });
 

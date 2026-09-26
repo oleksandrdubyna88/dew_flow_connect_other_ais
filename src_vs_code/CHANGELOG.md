@@ -4,6 +4,10 @@
 
 **The consultation line names its branch as a branch.** The sidebar line under *Active rounds* ended with the bare branch name, so `…consultation for epics 4-6: due epic-1` read as one phrase; it now ends `· branch epic-1`.
 
+**A dropdown that did not save no longer looks saved either.** When VS Code refuses a choice — a provider,
+a model, what happens when the rounds run out — the dropdown goes back to what is really stored, as a switch
+already does. What you type into a text box is still never reset.
+
 ## Extension 0.56.1 — 2026-09-26
 
 **A setting that did not save no longer looks saved.** When VS Code refuses a switch — typically right after

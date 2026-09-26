@@ -489,7 +489,10 @@ ${body}
                          vendor: el.dataset.vendor, role: el.dataset.role,
                          caller: el.dataset.caller,
                          // Only on a split-order model picker, so every other write keeps its shape.
-                         ...(el.dataset.commandModel ? { commandModel: el.dataset.commandModel } : {}) });
+                         ...(el.dataset.commandModel ? { commandModel: el.dataset.commandModel } : {}),
+                         // Only on a dropdown: its value is a string like typed text's, and a refused one
+                         // snaps back where typed text must not (the follow-up to PR #561).
+                         ...(el.tagName === 'SELECT' ? { control: 'select' } : {}) });
   };
   const reportFocus = (el, editing) => vscode.postMessage({
     type: 'focus',

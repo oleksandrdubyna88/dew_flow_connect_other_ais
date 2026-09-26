@@ -9262,6 +9262,17 @@ The whole plain write is `refusedWrite.writePlain(key, value, cleared, steps)` �
 invalidates, save the key, and on a refused box repaint and STOP (a per-side switch that never saved must not
 seed or carry), else run what follows (`PanelProvider.followPlain`). It takes its steps as arguments so the
 order is run in a test, not read from the host's text.
+**A refused dropdown snaps back too (2026-09-26, the follow-up).** A select posts a string, which the host
+could not tell from typed text — so the page now adds `control: 'select'` to a write from a `<select>` (and
+to nothing else), `settingMessageFrom` believes only that literal, and `settingWrite` carries it onto every
+kind of write. `refusedWrite.snapsBackWhenRefused(value, control)` is true for a boolean or a select, and
+`refusedWrite.saveOrSnapBack` is the one save every kind goes through — the plain case inside `writePlain`,
+the vendor, role, consultant and split-order cases through `PanelProvider.saveWrite` — so a refused vendor
+dialect, consultant vendor or split-order model goes back to what is stored as a box does. A text field or
+a number is still never repainted. The repaint is the same full `render()` every successful `coai` write
+already triggers (`extension.ts`, `onDidChangeConfiguration`). The routing itself moved to
+`settingRoute.ts` when `settingsShape.ts` passed 800 lines; `settingsShape` re-exports it, so no importer
+changed.
 
 ## CoAI: choose on every bug (2026-09-24, issue #487)
 
