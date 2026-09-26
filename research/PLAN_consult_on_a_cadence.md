@@ -24,8 +24,8 @@
 > `common/coai-consultant.md`, as one sentence folded into the NEXT conventions change rather than a
 > six-repo pin cascade of its own; `PanelSettings.cs` over the 800 ceiling is
 > [PLAN_panel_settings_is_too_big.md](../todo/PLAN_panel_settings_is_too_big.md), and `PanelService.cs` stays with
-> steps 5–7 of [PLAN_the_round_engine_leaves_the_panel_service.md](../todo/PLAN_the_round_engine_leaves_the_panel_service.md); the risk path (five epics or
-> more) and a second group were exercised by the scenario tests, not by the live check; a Claude Code
+> steps 5–7 of [PLAN_the_round_engine_leaves_the_panel_service.md](../todo/PLAN_the_round_engine_leaves_the_panel_service.md); the risk path and a second group,
+> once only in the scenario tests, were live-checked on 2026-09-26 by a second, six-epic run; a Claude Code
 > session whose tool list was cached before 0.38.0 still shows the old `consult`/`review_code` schemas until
 > `/mcp` reconnects — the new arguments pass through regardless. Scope: the gate's orders and refusals
 > (`src_mcp/core/Commands`, a new `src_mcp/core/Cadence`, `src_mcp/src/Server/PanelService.cs`,
@@ -61,6 +61,7 @@ machine (Windows `%LOCALAPPDATA%\coai-mcp\coai.db`, WSL `~/.local/share/coai-mcp
 | WSL, since 2026-09-07 | 176 | 390 | 3 — the last (a diagnostic probe) on 2026-09-22 |
 | of which `email-service`, 14 epics over two plans | 20 | 51 | **0** |
 | **Live check, `require`, 2026-09-26** — a 4-epic throwaway plan, released 0.38.0 | 1 | 2 run, 1 refused | **1** `cadence` (epics 1–3), closed `solved`; 0 `risk` (below 5 epics); 0 stood down |
+| **Second live check, `require`, 2026-09-26** — a 6-epic plan (one story each), the risk path | 6 | 12 run, 0 refused | **3**, as the arithmetic says: 2 `cadence` (epics 1–3, 4–6) and 1 `risk` (5/5.1), each closed `solved`; 0 stood down |
 
 Claude Code transcripts agree: from 2026-09-19 to 2026-09-25, 56 `review_plan` and 61 `review_code`
 calls on Windows and **zero** `consult`. Of the ~12 first turns that did happen, about five were a
@@ -82,6 +83,34 @@ with NO round in between, the same code round was let through (`proceed`, 9 revi
 accepted and fixed red-first, 12 rejected with reasons), and after `resolve` epic 1 read closed and group
 4 still owed. The one thing a person noticed on the way was the sidebar line's wording, fixed in the same
 promotion.
+
+**The second live check (2026-09-26): six epics and the risk path.** The operator asked for the risk path
+live, not only in the scenario tests. The test bed was a new throwaway plan: the simplest idea-sharing
+website, six epics of one story each (post, list, page, vote, persistence, input rules). Everything ran on
+the same released server, in `require`. The operator settled the count before the run: two groups plus
+ONE named risk makes three consultations. Naming the maximum would have made five.
+- **Epic 1's plan round carried both orders on its own.** One was *CONSULT BEFORE YOU BUILD… Epics 1-3*.
+  The other was *NAME THE RISKY EPICS AND STORIES*, since the plan has 6 epics; its cap was 2 items under
+  the panel's setting.
+- **The risk answer was passed once.** It went on epic 1's code round, as
+  `riskItems: [{"epic": 5, "story": "5.1", …}]`, and `--cadence` recorded `5/5.1` as named and owed.
+- **Each owed consultation was ordered at exactly the right round, and never again:**
+  - group 1–3 at epic 1;
+  - nothing at epics 2 and 3;
+  - group 4–6 at epic 4;
+  - the risk consultation `5/5.1` at epic 5;
+  - nothing at epic 6.
+- **No code round was refused, because each consultation was taken as ordered,** before its code round.
+  The first live check had already shown the refusal.
+- **All three consultations (codex `gpt-6-astra`) changed the plan, and each was verified before it did:**
+  - epics 1–3: a same-millisecond tie in "newest first", which a break-it run confirmed a timestamp sort
+    gets wrong;
+  - epics 4–6: out-of-order async writes, a Promise leaking into the handler, and saving the board
+    reversed;
+  - risk 5/5.1: the rename as the commit point, a directory fsync where the OS allows one (measured:
+    `EPERM` on win32, fine on Linux), and a sweep that never destroys recovery evidence.
+- **The end state:** `--cadence` read `epicsClosed [1-6]`, both groups consulted, and the risk item
+  consulted. A smoke test of the built board survived a hard kill with its idea and vote intact.
 
 ### Why — three causes, each verified
 
