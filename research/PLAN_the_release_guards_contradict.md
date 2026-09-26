@@ -1,17 +1,30 @@
 # PLAN — the two halves of the notes guard stop contradicting each other
 
-> Status: **plan only, nothing implemented yet, 2026-09-18; widened 2026-09-26.** Scope:
-> `.github/scripts/changelog-names-the-release.mjs`,
-> `src_vs_code/src/test/changelogNamesTheRelease.test.ts`, the release workflow's `mcp-draft`
-> job — and, since 2026-09-26, `release-please.yml`, `pr-title.yml` and two new scripts beside the
-> guard (see *2026-09-26: the recovery broke release-please* below).
+> Status: **IMPLEMENTED, 2026-09-26.** Way out A shipped: the release guard no longer demands the
+> release's own baseline row, so a release is cut in one order with no step expected to fail.
+> Alongside it, two things the plan did not have on 2026-09-18: `release-anchors.mjs`, which stops
+> release-please when a tag sits outside its package, and `docs-only-title.mjs`, the operator's
+> rule that Markdown alone never opens a release.
+>
+> **Deviations:**
+> - A missing tag PASSES the anchor check (the plan said it fails): it is the state of the very
+>   run that cuts it.
+> - The Markdown rule is per PACKAGE, not per pull request.
+> - It runs as a step of the already-required `pr · semantic title` job, not a job of its own.
+>
+> **Open tail:** the new order has not yet carried a real mcp release. The first one is its
+> test, and `release-anchors.mjs` will say so if it lands a tag outside `src_mcp/`. The
+> Markdown rule applies from its merge onward: `pull_request_target` runs main's workflow.
+> Scope: `.github/scripts/changelog-names-the-release.mjs`, `release-anchors.mjs`,
+> `docs-only-title.mjs`, `release.yml`, `release-please.yml`, `pr-title.yml`,
+> `release-please-config.json`.
 >
 > **Found while cutting `mcp-v0.29.0`**, the first release under the guard that
-> [PLAN_a_release_says_what_it_shipped.md](../research/PLAN_a_release_says_what_it_shipped.md)
+> [PLAN_a_release_says_what_it_shipped.md](PLAN_a_release_says_what_it_shipped.md)
 > shipped on 2026-09-17. Nothing is broken in either half on its own; together they leave no order
 > in which a release can be cut without one of them failing.
 >
-> Related: [module_tests.md](../research/module_tests.md).
+> Related: [module_tests.md](module_tests.md).
 
 ## The symptom, measured on the real scripts
 
@@ -136,13 +149,21 @@ rule has to be enforced where the type is chosen.
 2. **`release-anchors.mjs`**, a new script beside the guard. For every package in
    `release-please-config.json`, the tag `<component>-v<manifest version>` must exist and sit on a
    commit that touches a file under that package. When it does not, the script exits 1, naming the
-   tag, the commit and the files, and the repair: the ref back onto its release commit. It runs as
+   tag, the commit and the files, and the repair: the newest commit at or before the tag that touches
+   the package, whether its package tree is identical to the tag's, and the exact `gh api -X PATCH`
+   of the ref (a PATCH, not a delete — deleting the tag of a published release turns it into a
+   draft). It never moves a tag itself. A version whose tag has not been cut yet PASSES: that is the
+   state of the very run that cuts it. It runs as
    the first step of `release-please.yml`, with a full-history checkout carrying tags. So a moved tag
    or a rebase-merged release pull request stops the next run loudly, instead of it opening an empty
    release. A pure `anchorVerdict(lines)` holds the decision; the CLI only gathers the git facts.
-3. **`docs-only-title.mjs`**, a new script run by a new job in `pr-title.yml`. When every file a pull
-   request changes ends in `.md`, a title of a releasing type (`feat`, `fix`, `perf`, `revert`, any
-   `!`) is refused, with the repair: say it as `docs:`. The same holds per commit, for a commit whose
+3. **`docs-only-title.mjs`**, a new script run as a STEP of the required `pr · semantic title` job
+   (a job of its own would be advisory until branch protection named it). PER PACKAGE: a title of a
+   releasing type (`feat`, `fix`, `perf`, `revert`, any `!`) is refused when the pull request's files
+   under some package are all `.md` — which also catches a `feat:` for the extension carrying
+   `src_mcp/README.md`, since that commit lands on the mcp line too. Markdown outside every package
+   opens no release and is not refused. The repair: say it as `docs:`, or move the Markdown into its
+   own `docs:` commit. The same holds per commit, for a commit whose
    own files are all `.md`, because a rebase merge keeps each commit's message and release-please
    reads those. A pure `docsOnlyVerdict({ title, files, commits })` holds the decision; the job gets
    files and commits from the API with `pull-requests: read`, and never checks out the pull

@@ -1560,6 +1560,41 @@ running page's button reads *Re-ask · model* over an empty box, *Send* once a q
 Re-ask again after ✕. A host push while the box holds text keeps it *Send*, and names the pushed model
 once the box is emptied. Both cases were red first, the second with the real symptom (the push painted
 Re-ask over a typed question), and red again with the call from `paintBackdrop()` planted out.
+**Release anchors and the Markdown rule (2026-09-26, `research/PLAN_the_release_guards_contradict.md`).**
+`changelogNamesTheRelease.test.ts` now passes a release whose version the baseline does not name YET, as
+long as its note exists. That was red first, naming the missing row. It still refuses a release with
+neither row nor note, and the ratchet and phantom cases are unchanged. `releaseAnchors.test.ts` runs
+`release-anchors.mjs` on a throwaway git repository:
+- a tag on the release commit (only the package's `version.txt`) passes;
+- a tag moved onto a `.github`-only commit is refused, printing the release commit, "identical", and
+  the `PATCH` of the ref;
+- a tag on a rebase merge's trailing commit is refused;
+- an uncut tag passes;
+- an unreadable configuration is exit 2;
+- `release-please.yml` runs the check before the action, over a checkout with `fetch-depth: 0` and tags.
+
+The check was red with `touches()` planted to always answer yes. Run against this repository before its
+tags were refreshed, it named `mcp-v0.38.0` on `ad06b589` — the real 2026-09-26 break — and printed the
+exact repair that had been applied by hand.
+
+`docsOnlyTitle.test.ts` runs `docs-only-title.mjs` over facts files:
+- every releasing type over `src_mcp/README.md` is refused, and `docs:` passes;
+- code beside Markdown passes;
+- Markdown in one package riding on code for another is refused;
+- Markdown outside every package passes;
+- a Markdown-only `fix:` commit under a `docs:` title is refused;
+- malformed facts are exit 2;
+- `pr-title.yml` runs it with the title passed as data.
+
+It was red with `releases()` planted to always answer no. Run live with `--pr` against #568 (code)
+and #571 (`docs:` over CHANGELOG), both passed.
+
+The release order is now:
+1. release-please opens the release pull request;
+2. the CHANGELOG section goes onto it;
+3. SQUASH merge, then dispatch;
+4. the tag lands on the release commit and `mcp-draft` passes;
+5. the baseline row follows in its own pull request.
 
 **`ADeniedCommandIsAskedAgainTests` (issue #504)** — the follow-up of an auto-denied agy reviewer carries
 `--conversation <id>`, keeps `--mode plan` and the schema, and says commands are unavailable; no follow-up

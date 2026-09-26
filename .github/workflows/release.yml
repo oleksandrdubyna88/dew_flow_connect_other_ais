@@ -89,7 +89,9 @@ jobs:
 
       # BEFORE the draft, and it cannot run earlier than this: the step needs the checkout to read
       # CHANGELOG.md at all. A refusal here costs nothing — no draft exists, no asset has been
-      # uploaded, nothing is published — and the repair is to write the entry and push the tag again.
+      # uploaded, nothing is published. The entry belongs on the release pull request BEFORE it merges;
+      # if one is missed, write it in a commit that also touches `src_mcp/` and put the tag there — a
+      # tag outside the package breaks release-please's anchor (`release-anchors.mjs` says so).
       #
       # Why it exists, measured across all three heading shapes the file uses: 65 `mcp-v*` tags, 24
       # of them documented and 41 with nothing — and eight consecutive releases carrying custom
