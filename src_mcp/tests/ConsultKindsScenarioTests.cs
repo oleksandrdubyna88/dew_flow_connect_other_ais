@@ -17,10 +17,7 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class ConsultKindsScenarioTests : ConsultScenarioBase
 {
-    private const string Plan = "todo/PLAN_x.md";
-
-    private async Task<JsonElement> ConsultFor(PanelService service, string kind, string epics, string problem = "is this group right?", string id = "", string plan = Plan) =>
-        JsonDocument.Parse(await service.ConsultAsync(_repo, problem, "[]", id, kind, plan, epics, TestContext.Current.CancellationToken)).RootElement;
+    private const string Plan = OrderedPlan;
 
     private static string Id(JsonElement reply)
     {
