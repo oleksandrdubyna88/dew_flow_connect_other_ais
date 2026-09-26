@@ -1591,6 +1591,10 @@ exact repair that had been applied by hand.
 
 In `--pr` mode it asks for files only for commits of a releasing type, not one request per commit.
 
+Both scripts, and `branch-protection.mjs`, find `git` and `gh` through `.github/scripts/lib/resolved.mjs`,
+which the resolver moved into on 2026-09-26 from `branch-protection.mjs` unchanged. Its edge cases are still
+pinned by `branch-protection.mjs --selftest` (26/26), and both scripts' suites run through it.
+
 Since the operator's word the same day, pictures (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`) count as
 documentation too: Markdown and a screenshot alone are refused, a picture alone is refused, a picture beside
 code passes (red first on `assets/shot.png`). It was red with `releases()` planted to always answer no. Run live with `--pr` against #568 (code)
