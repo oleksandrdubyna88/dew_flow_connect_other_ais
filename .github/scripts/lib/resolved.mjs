@@ -3,7 +3,9 @@
 // Its own module since 2026-09-26: it lived inside `branch-protection.mjs`, and once the release
 // scripts (`release-anchors.mjs`, `docs-only-title.mjs`) needed it too, importing a PATH resolver from
 // a branch-protection script coupled two things that have nothing to do with each other. Nothing about
-// it changed in the move; `branch-protection.mjs --selftest` still holds its edge cases.
+// it changed in the move. Its edge cases are held by `branch-protection.mjs --selftest`, and the module on
+// its own by `pathResolver.test.ts` (dew_flow_connect_other_ais) and `tools/branch-protection-resolver.test.mjs`
+// (dew_flow_conventions), each on a PATH the test controls.
 
 import { accessSync, constants, existsSync, statSync } from 'node:fs';
 import path from 'node:path';

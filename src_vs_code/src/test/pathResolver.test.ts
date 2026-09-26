@@ -46,8 +46,15 @@ test('it answers the absolute path of a program on PATH', () => {
 });
 
 test('a program that is not on PATH is refused by name, never spawned', () => {
+  // The SAME fixture holds a real program, so the refusal is proved to come from looking in it rather
+  // than from a PATH that could not be read at all. (The gate's code round.)
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'resolver-'));
   try {
+    const present = path.join(dir, 'coai-probe' + (process.platform === 'win32' ? '.exe' : ''));
+    fs.writeFileSync(present, '');
+    fs.chmodSync(present, 0o755);
+    assert.equal(resolveOn(dir, 'coai-probe').said, present, 'the fixture itself could not be looked in');
+
     const { code, said } = resolveOn(dir, 'no-such-program-4f2b9c');
     assert.equal(code, 1);
     assert.equal(said, 'no-such-program-4f2b9c is not on PATH, so nothing that needs it can run');
