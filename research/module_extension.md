@@ -651,8 +651,12 @@ the same model chosen does what it has always done, which is nothing.
 **The gesture is invisible, so the button says it.** `send()` has always refused an empty box, which
 is what made the gesture free to take — and a feature whose only trigger is pressing Enter on nothing
 is a feature nobody discovers. The Send button reads *Re-ask · <model>* whenever there is something
-to re-ask, which is both the second way in and the only way to know the first exists. Text in the box
-is a question and is never swallowed by it.
+to re-ask AND the box is empty, which is both the second way in and the only way to know the first
+exists. Text in the box is a question and is never swallowed by it — and since 2026-09-26 the button
+says so: with text in the box it reads *Send*. It used to follow only the host, so after ✕ it turned
+into Re-ask and stayed Re-ask while a question was typed, naming the one thing its press would not do.
+`paintSend()` in the page decides it from both halves, and every change to the box reaches it, because
+they all end in `paintBackdrop()`, which calls it first; a host push calls it too.
 
 **It goes through `oneTurn`, and that is the point.** A re-ask is a turn: the lock, the turn number a
 stop can name, the transcript, the model recorded on the answer and the cap on a forgetful

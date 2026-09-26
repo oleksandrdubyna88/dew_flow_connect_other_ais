@@ -2152,6 +2152,37 @@ test('a box with something in it sends it, re-ask or no re-ask', () => {
   assert.deepStrictEqual(page.posted.filter((message) => message['command'] === 'reask'), []);
 });
 
+test('the button says Re-ask only while the box is empty — text in it is sent, so it says Send', () => {
+  // 2026-09-26, the operator: pressed ✕, the button turned into Re-ask, then typed a question — and
+  // the button went on saying Re-ask, while pressing it would SEND the typed text. The label is the
+  // only way to know what the press does, so it follows the box, not only the host.
+  const page = runChatPage({ reask: 'gemini-3.8-flash-medium' });
+  const button = page.seen['send'];
+  const box = page.seen['say'];
+
+  assert.equal(button.textContent, 'Re-ask · gemini-3.8-flash-medium', 'an empty box on offer is a re-ask');
+
+  box.value = 'ыавыва';
+  page.fire('say', 'input');
+  assert.equal(button.textContent, 'Send', 'text in the box is a question, and the button said Re-ask');
+
+  page.fire('clear', 'click');
+  assert.equal(button.textContent, 'Re-ask · gemini-3.8-flash-medium', 'an emptied box is a re-ask again');
+});
+
+test('a host push while the box holds text keeps the button a Send button', () => {
+  const page = runChatPage({ reask: 'Claude Opus' });
+  page.seen['say'].value = 'a question being typed';
+  page.fire('say', 'input');
+
+  page.deliver({ type: 'state', reask: 'Claude Opus' });
+  assert.equal(page.seen['send'].textContent, 'Send', 'the push painted Re-ask over a box with a question in it');
+
+  page.seen['say'].value = '';
+  page.fire('say', 'input');
+  assert.equal(page.seen['send'].textContent, 'Re-ask · Claude Opus', 'the pushed model is the one a re-ask names');
+});
+
 test('a re-ask leaves the composer open, like any other turn', () => {
   // It locked, and asserted that a second press could not re-ask twice. The lock is gone, so the
   // second press DOES post a second re-ask — and that is correct rather than a regression: two
