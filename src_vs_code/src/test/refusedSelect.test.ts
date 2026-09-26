@@ -113,8 +113,8 @@ test('the host saves every non-plain kind through saveOrSnapBack', async () => {
   const host = readFileSync(join(process.cwd(), 'src', 'panelProvider.ts'), 'utf8');
 
   for (const stored of ["'vendors'", 'write.key', "'consultants'", "'commandModels'"]) {
-    assert.match(host, new RegExp(`await this\\.saveWrite\\(config, ${stored.replace(/\./g, '\\.')}, `),
-      `a ${stored} write is saved without the snap-back`);
+    // A substring, not a RegExp built from text: nothing here needs a pattern (CodeQL, on the PR).
+    assert.ok(host.includes(`await this.saveWrite(config, ${stored}, `), `a ${stored} write is saved without the snap-back`);
   }
   assert.match(host, /await writePlain\(write\.key, write\.value, clearedByWriting\(write\.key\), \{[\s\S]*?\}, write\.control\);/,
     'the plain case no longer hands writePlain the control');
