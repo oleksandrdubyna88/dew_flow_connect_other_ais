@@ -13,8 +13,10 @@
 >   pictures count as documentation beside Markdown (`DOCUMENTATION` in `docs-only-title.mjs`).
 > - It runs as a step of the already-required `pr · semantic title` job, not a job of its own.
 >
-> **Open tail:** the new order has not yet carried a real mcp release. The first one is its
-> test, and `release-anchors.mjs` will say so if it lands a tag outside `src_mcp/`. The
+> **The open tail closed the same day:** `mcp 0.39.0` (#580) was the first real mcp release cut in the
+> new order. Its tag sits on the squash commit of the release pull request (`9a3374ca`, which touches
+> `src_mcp/version.txt`), `release.yml` ran once and succeeded, the release carries its twelve assets,
+> and no tag was moved. `release-anchors.mjs` reported every line anchored before and after it. The
 > Markdown rule applies from its merge onward: `pull_request_target` runs main's workflow.
 > Scope: `.github/scripts/changelog-names-the-release.mjs`, `release-anchors.mjs`,
 > `docs-only-title.mjs`, `release.yml`, `release-please.yml`, `pr-title.yml`,
