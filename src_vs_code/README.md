@@ -160,7 +160,9 @@ which is the state no diff and no review round can see.
 It gates nothing and blocks nothing; it comes back as an answer, not a verdict. Its cost is bounded
 by caps you set in the panel — turns per consultation, calls per session, and an idle time after
 which one is closed — because the failure mode of a tool an AI can call on its own judgement is
-calling it forty times.
+calling it forty times. The turns and the idle time bound every consultation; calls per session counts
+only the ones an AI opens because it is stuck. The idle close is checked every minute while the server
+runs.
 
 **It is also called when nobody is stuck.** After a plan is split into epics, every group of three
 owes one consultation before its first code round — is this group right, where is it weak, what did it
@@ -168,7 +170,12 @@ forget — and from five epics the assistant is asked which epics and stories ca
 of which gets one of its own. *Consultation cadence* in the same section sets the numbers and what the
 gate does: *Remind* puts the order in every review reply, *Require* also holds the group's code round
 until it is taken. *Active rounds* says where each plan stands — `epics closed 4/14 · consultation for
-epics 4-6: due`.
+epics 4-6: due · branch feat/x`. An ordered consultation spends none of the calls-per-session budget: the
+gate bounds it instead, one per group of epics or risky piece.
+
+**Every consultation says what kind it is** — `stuck`, `cadence` or `risk` — on its card in the sidebar,
+in the server's log, and in the *Kind* column of *Consultations* in **Show review rounds**, beside *For*:
+the epics or story and the plan an ordered one covered.
 
 ---
 
@@ -243,9 +250,10 @@ Everything in the sidebar, most of it folded away because it is configured once:
   typing into the box for you on purpose: no Claude Code command accepts arbitrary text, and the
   only alternative was a synthetic keystroke through the Windows API — one `Ctrl+V` is a better
   price than a mechanism that can fail silently on somebody else's machine.
-- **Consultant** — the same idea from the other end: `consult` lets a stuck AI ask another vendor's
-  model about your working tree as it stands, with its own caps on turns, calls per session and
-  idle time.
+- **Consultant** — the same idea from the other end: `consult` lets an AI ask another vendor's
+  model about your working tree as it stands — when it is stuck, or when the consultation cadence
+  orders one — with its own caps on turns, calls per session and idle time. Every setting in it has a
+  `?` that says what it does.
 - **Prompts per round** — which lens each role is asked through, and the full text of every prompt.
 - **The gate** — rounds and a passing threshold **per role**, each role with a tick box on its own
   heading, and what happens when the rounds run out.

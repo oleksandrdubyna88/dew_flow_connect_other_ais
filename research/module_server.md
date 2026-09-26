@@ -3858,6 +3858,38 @@ write time or length changed; `SettingsAreLiveTests` now states it as a requirem
 convenience — a switch ticked a second before a call governs that call, in both directions, and
 creating a file where there was none counts as a change.
 
+### The consultant's limits hold while the server runs, and every surface says the kind (2026-09-26)
+
+Stories 1 and 2 of [PLAN_consult_limits_kinds_and_help.md](../todo/PLAN_consult_limits_kinds_and_help.md).
+The operator said "these limits must work", and one did not. The idle close ran only in the
+`PanelService` constructor, so a consultation idle past its budget read `open` on the sidebar and in
+`status` until the next start. A follow-up was refused on time; the record was not closed.
+
+```mermaid
+sequenceDiagram
+    participant S as serve (Program.cs)
+    participant L as ConsultationSweeper
+    participant H as PanelServiceHost.Current
+    participant P as PanelService
+    participant C as ConsultationStore
+    S->>L: RunAsync(() => host.Current, 1 minute, serving token)
+    loop every minute until serving ends
+        L->>H: current service (a settings reload builds a new one)
+        H-->>L: PanelService
+        L->>P: SweepConsultations()
+        P->>C: Sweep(isAlive, now, ConsultIdle, Retention)
+        C-->>L: count (logged when > 0; a throwing beat is logged, the next one tries again)
+    end
+    S->>L: cancel on the way out (a client closing stdin sends no signal)
+```
+
+| What | Where |
+|---|---|
+| **The sweep runs every minute while serving**, on a token linked to the serve stop and cancelled in a `finally`, so it stops however serving ends. It always goes through `host.Current`, so a settings reload is swept by the service it built. A beat that throws is logged and the next one tries. | `Server/Consultation/ConsultationSweeper.cs`, `PanelService.SweepConsultations`, `Program.cs` serve path |
+| **What each limit applies to, now each pinned by a test broken by compiling code.** Turns per consultation: every kind, frozen into the record at open. Calls per session: stuck only; a follow-up is counted by the kind its record holds. Idle close: every kind, both the follow-up refusal and the record's close. | `ConsultLimitsScenarioTests` (the idle refusal; cadence and risk past the turn cap; cadence and risk follow-ups that spend no stuck budget; the running-server lapse), `ConsultationSweeperTests` (the real host, with a settings reload between two lapses; a throwing beat) |
+| **The kind on the server's own surfaces.** `status` lists each open consultation with `kind`, never empty, because a record from before the kinds reads `stuck`. Every consultation log line starts with it: `risk consultation … turn 1/5`, `… answered turn 1`, and the filesystem alert. | `ServerJsonContext.OpenConsultation.Kind`, `ConsultationService.OpenIn`, `ConsultationService` log lines |
+| **The `consult` tool description** says turns are capped for every kind and calls per session count only stuck consultations. | `Tools.cs` |
+
 ## The autonomy order is six instructions (2026-09-05)
 
 `COAI_AUTONOMOUS` used to hand back one sentence — work autonomously, batch the questions. The

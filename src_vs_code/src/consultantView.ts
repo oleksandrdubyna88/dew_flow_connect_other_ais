@@ -22,6 +22,7 @@ import {
 } from './consultSettings';
 import { ProbeResult, claudeNote } from './claudeModels';
 import { escapeHtml } from './escapeHtml';
+import { help } from './panelControls';
 import { LOOKING } from './lookingSpinner';
 import type { LocalEngine } from './localEngines';
 import { ModelChoice, Runtime, modelsFor } from './models';
@@ -179,22 +180,22 @@ export function consultantBody(consult: ConsultSettings, state: ConsultantViewSt
   const { refused } = consultableVendors();
 
   return `<div class="field">
-  <label for="consultEnabled"><input type="checkbox" id="consultEnabled" data-setting="consultEnabled"${consult.enabled ? ' checked' : ''}> Let a stuck AI consult another vendor</label>
-  <div class="hint">The AI calls <code>consult</code> itself when it is stuck. The consultant reads this checkout READ-ONLY, with the uncommitted change, and answers advice the AI must verify.</div>
+  <label for="consultEnabled"><input type="checkbox" id="consultEnabled" data-setting="consultEnabled"${consult.enabled ? ' checked' : ''}> ${help('consultEnabled')}Let an AI consult another vendor</label>
+  <div class="hint">The AI calls <code>consult</code> itself when it is stuck, and the gate orders one for a group of epics or a risky piece when the consultation cadence is on. The consultant reads this checkout READ-ONLY, with the uncommitted change, and answers advice the AI must verify.</div>
 </div>
 ${CALLER_KINDS.map((caller) => row(consultantRowView(caller, consult, state), callerColour(caller.id, state.palette))).join('\n')}
 <div class="hint">These are the CONSULTANT’s own settings. A vendor here shares its name — and so its key in the vault — with the reviewer row of the same name, and nothing else: change a reviewer's model or endpoint and the consultant stays where you put it.</div>
 ${refused.map(refusal).join('\n')}
 <div class="field inline">
-  <label for="consultTurns">Turns per consultation</label>
+  <label for="consultTurns">${help('consultTurns')}Turns per consultation</label>
   <input type="number" id="consultTurns" min="1" max="20" data-setting="consultTurns" value="${consult.turns}">
 </div>
 <div class="field inline">
-  <label for="consultCallsPerSession">Calls per session</label>
+  <label for="consultCallsPerSession">${help('consultCallsPerSession')}Calls per session</label>
   <input type="number" id="consultCallsPerSession" min="1" max="100" data-setting="consultCallsPerSession" value="${consult.callsPerSession}">
 </div>
 <div class="field inline">
-  <label for="consultIdleMinutes">Close an idle consultation after, minutes</label>
+  <label for="consultIdleMinutes">${help('consultIdleMinutes')}Close an idle consultation after, minutes</label>
   <input type="number" id="consultIdleMinutes" min="1" max="240" data-setting="consultIdleMinutes" value="${consult.idleMinutes}">
 </div>
 ${promptField(state.consultPrompt ?? '')}
@@ -406,7 +407,7 @@ function row(view: ConsultantRowView, colour: string): string {
   // the fallback belong in the stylesheet, the hue is computed per caller and cannot be named by a
   // class. CSP-legal — this page declares style-src 'unsafe-inline'.
   return `<div class="field consultant-row" data-caller="${caller}" style="border-left-color:${colour}">
-  <label for="consultVendor-${caller}">${escapeHtml(view.caller.label)} asks</label>
+  <label for="consultVendor-${caller}">${help('consultCaller')}${escapeHtml(view.caller.label)} asks</label>
   <select id="consultVendor-${caller}" data-setting="consultVendor" data-caller="${caller}">
 ${view.options.map((one) => option(one.value, one.label, view.selected, one.hint)).join('\n')}
   </select>
@@ -423,8 +424,8 @@ ${view.hints.map((hint) => `  <div class="hint">${escapeHtml(hint)}</div>`).join
 }
 
 /** One of the consultant's OWN settings, keyed by caller so the write path knows whose it is. */
-function field(caller: string, setting: string, label: string, value: string, placeholder: string): string {
-  return `  <label for="${setting}-${caller}">${escapeHtml(label)}</label>
+function field(caller: string, setting: 'consultBaseUrl' | 'consultExecutablePath', label: string, value: string, placeholder: string): string {
+  return `  <label for="${setting}-${caller}">${help(setting)}${escapeHtml(label)}</label>
   <input type="text" id="${setting}-${caller}" data-setting="${setting}" data-caller="${caller}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}">`;
 }
 
@@ -458,7 +459,7 @@ function refusal(entry: { id: string; label: string; why: string }): string {
  */
 function promptField(prompt: string): string {
   return `<div class="field">
-  <label for="consultPrompt">What the consultant is asked to do</label>
+  <label for="consultPrompt">${help('consultPrompt')}What the consultant is asked to do</label>
   <textarea id="consultPrompt" rows="6" data-setting="consultPrompt" data-file="consult.md" placeholder="The prompt this build ships with.">${escapeHtml(prompt)}</textarea>
   <div class="hint">Empty is the prompt this build ships with — the panel cannot show you those words, because they are compiled into the server. What you type here is written to its prompt override and read on the next consultation. <b>Emptying the box is the same as pressing Restore default</b>: there is no such thing as a prompt that says nothing.</div>
   <button type="button" class="link" data-command="restoreConsultPrompt">Restore default</button>

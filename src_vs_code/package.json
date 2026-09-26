@@ -927,7 +927,7 @@
         "coai.consultEnabled": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Whether the `consult` tool answers at all. Off refuses by NAME, so a stuck AI is told the feature is switched off rather than left to guess why nothing came back."
+          "markdownDescription": "Whether the `consult` tool answers at all — for all three kinds: a stuck AI asking on its own, and the cadence and risk consultations the gate orders. Off refuses by NAME, so the AI is told the feature is switched off rather than left to guess why nothing came back, and a consultation cadence on Require stands its refusal down with the reason on the round."
         },
         "coai.cadenceMode": {
           "type": "string",
