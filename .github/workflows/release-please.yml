@@ -65,6 +65,21 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      # THE ANCHORS FIRST (research/PLAN_the_release_guards_contradict.md, 2026-09-26). release-please
+      # counts each line's next release from the commit its tag sits on, and finds that commit among
+      # the commits touching the line's package. A tag moved onto a commit outside the package — the
+      # old recovery moved `mcp-v0.38.0` onto the baseline commit — made it open an empty `mcp 0.39.0`
+      # three times. So a broken anchor stops this run and prints the command that puts the tag back;
+      # nothing here moves a tag itself. Full history and the tags, or every line reads as "not cut yet".
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Every line's tag sits where release-please can find it
+        run: node .github/scripts/release-anchors.mjs
+
       # SAY WHAT IS MISSING, rather than letting the mint below fail on an empty input. Without this,
       # `create-github-app-token` answers an absent secret with a message about a MALFORMED PRIVATE
       # KEY — which reads like a broken secret rather than one that was never set, and sends whoever

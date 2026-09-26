@@ -205,14 +205,23 @@ test('a release that deletes an older note does not ship', () => {
   assert.match(said, /0\.28\.0/, 'and the refusal names the release whose note went missing');
 });
 
-test('a release absent from the baseline does not ship either', () => {
-  // The ratchet has to close behind each release or it protects only what it was born with: writing
-  // the entry and adding the version are one act, and the refusal says so.
+test('a release the baseline does not name YET ships, because the baseline follows the tag', () => {
+  // Way out A of research/PLAN_the_release_guards_contradict.md. Demanding the row here was one half of a
+  // deadlock — the phantom test refuses a row with no tag — and the recovery it forced moved the tag
+  // off the release commit, which is what made release-please open an empty mcp 0.39.0 three times on
+  // 2026-09-26. The NOTE is still demanded; the row lands after the tag, as it did for 0.28.0.
   const { code, said } = guard('mcp-v0.29.0',
-    entry('## Server 0.29.0 — 2026-09-18'), baselineOf('0.28.0'));
+    entry(['## Server 0.29.0 — 2026-09-18', 'What it does.', '## Server 0.28.0 — 2026-09-17'].join('\n\n')),
+    baselineOf('0.28.0'));
 
-  assert.equal(code, MISSING, '0.29.0 has an entry but nothing would notice it being deleted');
-  assert.match(said, /baseline/i, 'and the refusal names the file to add it to');
+  assert.equal(code, NAMED, `a release with its note was refused for a row that cannot exist before its tag: ${said}`);
+});
+
+test('a release the baseline does not name still needs its note', () => {
+  // The half of the guard that must survive way out A: without the row AND without the note is refused.
+  const { code } = guard('mcp-v0.29.0', entry('## Server 0.28.0 — 2026-09-17'), baselineOf('0.28.0'));
+
+  assert.equal(code, MISSING, 'way out A removed the guard instead of the deadlock');
 });
 
 /**

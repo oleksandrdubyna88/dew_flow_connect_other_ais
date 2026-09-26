@@ -22,9 +22,12 @@
 //
 // WHERE IT RUNS: the `mcp-draft` job, immediately after the checkout — as early as a step can read
 // this file, and before the draft release exists. A refusal there costs nothing: no draft, no
-// uploaded asset, nothing published. **The repair is to write the entry and push the tag again**;
-// this repository has burned a tag before (`mcp-v0.16.0`) and it is the supported move, because the
-// alternative is a published release whose notes never arrive.
+// uploaded asset, nothing published. **The entry goes onto the release pull request BEFORE it merges**
+// (research/PLAN_the_release_guards_contradict.md), so the tag release-please cuts is already green. If one
+// is missed anyway, the repair is to write the entry in a commit that ALSO touches `src_mcp/` and put
+// the tag there: the tag's commit is the anchor release-please counts the next release from, and one
+// that does not touch the package makes it open an empty release (2026-09-26, three times).
+// `release-anchors.mjs` refuses the next run until that holds.
 //
 // WHY NODE, when its three siblings in this folder are bash: they drive `gh`, and this one is a text
 // check over a file. A gate whose refusals cannot be exercised by a test is a gate nobody has seen
@@ -182,11 +185,12 @@ export function verdict(tag, read) {
       + `  Write a "## ${line.word} ${version} — <date>" section saying what this release does for `
       + 'a person.');
   }
-  if (!recorded.includes(version)) {
-    problems.push(`${version} is not in the baseline, so nothing would notice its note being `
-      + 'deleted later.\n'
-      + `  Add "${version}" to the "${line.word}" list in ${path.basename(DEFAULT_BASELINE)}.`);
-  }
+  // The release's OWN row is not demanded here (way out A, research/PLAN_the_release_guards_contradict.md).
+  // The phantom test refuses a row whose version has no tag, so demanding it before the tag left no
+  // order at all — and the recovery that deadlock forced moved the tag off the release commit, which
+  // is the anchor release-please counts the next release from: it opened an empty mcp 0.39.0 three
+  // times on 2026-09-26. The row follows the tag; the note is still demanded above, and every row
+  // already recorded is still held below.
 
   const lost = recorded.filter((v) => v !== version && !namesTheRelease(changelog, line.word, v));
   if (lost.length > 0) {
