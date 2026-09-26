@@ -238,7 +238,9 @@ public sealed class ConsultationStoreTests : IDisposable
         var ended = ConsultationStore.Stamp(DateTime.UtcNow.AddDays(-9));
         var stale = Record(ConsultationStatuses.Closed, updated: DateTime.UtcNow.AddDays(-9)) with
         {
-            Kind = "cadence", Outcome = ConsultationOutcomes.Lapsed, EndedUtc = ended,
+            Kind = "cadence",
+            Outcome = ConsultationOutcomes.Lapsed,
+            EndedUtc = ended,
         };
         _store.Write(stale with { Outcome = ConsultationOutcomes.Solved, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow) });
 
