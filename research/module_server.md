@@ -2519,6 +2519,17 @@ prefix back: *Expected Directory.Exists(made.Path) to be True ... but found Fals
 the parent's admin directory, so a tree belongs to one machine and one OS; the configured data dir is
 routinely a network share, where such a tree would be broken for every other machine that mounted it.
 
+**…and it can be pointed somewhere, for a test (2026-09-26, issue #544).** On Windows the default comes
+from the Known Folder API, which no environment variable redirects, so the extension's live contract test
+— the real binary over a temp `COAI_DATA_DIR`, expecting no trees — answered with the machine's OWN trees
+and failed on any machine that held one. `ReviewTreeRoot.DefaultIn(env, said)` answers
+`COAI_REVIEW_ROOT` when it is an absolute path (trimmed), else the machine-local default; a relative or
+blank value is ignored — it would mean whatever directory the process started in — and SAID on stderr
+through `Program.Note`, never stdout, which is the answer. `Program.ReviewRoot()` is what `--trees`,
+`--tree-at` and `--tree-remove` read. A root that does not exist is an ordinary state, as the default is
+on a fresh machine: listing answers no trees. The round-worktree root is a different root and is not
+affected. Tests: `TheReviewTreeRootCanBePointedTests` (red first; red again with the variable ignored).
+
 **The lock, and what it is worth.** The tree is created `--lock`ed with a reason, which makes
 `git worktree remove --force` fail — measured against real git 2.55: exit 128, *cannot remove a
 locked working tree* — and that is exactly the call `RemoveAsync` makes. It is a guard against ONE

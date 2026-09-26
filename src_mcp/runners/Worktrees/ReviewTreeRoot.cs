@@ -45,6 +45,37 @@ public sealed class ReviewTreeRoot(IProcessLauncher launcher, string path)
     /// </summary>
     public static string Default => MachineLocal("review-worktrees");
 
+    /// <summary>The variable that points the review trees somewhere else — issue #544.</summary>
+    public const string RootVariable = "COAI_REVIEW_ROOT";
+
+    /// <summary>
+    /// The review trees' root: <see cref="RootVariable"/> when it is an absolute path, else <see cref="Default"/>.
+    /// </summary>
+    /// <remarks>
+    /// Issue #544. The default is machine-local on purpose (above), and on Windows it comes from the Known
+    /// Folder API, which no environment variable redirects — so a test running the real binary over a temp
+    /// data directory still read the machine's OWN trees, and failed on any machine that held one. A
+    /// RELATIVE value is ignored rather than resolved: it would mean whatever directory the process
+    /// happened to start in, and the root must be where every later call finds the same trees. An ignored
+    /// value is <paramref name="said"/>, so nobody believes a root they set is in use.
+    /// </remarks>
+    public static string DefaultIn(Func<string, string?> env, Action<string> said)
+    {
+        var asked = env(RootVariable);
+        if (asked is null)
+        {
+            return Default;
+        }
+        var trimmed = asked.Trim();
+        if (trimmed.Length > 0 && System.IO.Path.IsPathFullyQualified(trimmed))
+        {
+            return trimmed;
+        }
+        said($"{RootVariable} is set but is not an absolute path, so it was ignored; the review trees are in {Default}.");
+
+        return Default;
+    }
+
     /// <summary>
     /// A machine-local directory of this product's, by leaf — the ONE resolution both kinds of tree
     /// use, so the review trees and the round trees can never disagree about where "local" is.
