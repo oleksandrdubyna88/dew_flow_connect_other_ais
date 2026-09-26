@@ -1530,6 +1530,9 @@ local rows stand down after a cloud of one remark; a stood-down row is not asked
 a failed cloud reviewer, the switch off and a round with no cloud reviewer each keep every local row running
 (red first; a plant that is never quiet turns the first two red). Extension: `stopLocalWhenQuiet.test.ts` (the
 default, the env key, the box RUN, the skew note) and `rounds.test.ts` (the reason beside the status).
+2026-09-26: the box says *"from the next round"*; `snapsBackWhenRefused` is true for a boolean alone; and
+`PanelProvider` is pinned — `save` returns false on a refusal and a refused boolean repaints (all three red
+first; red again with the repaint planted out).
 
 **`ADeniedCommandIsAskedAgainTests` (issue #504)** — the follow-up of an auto-denied agy reviewer carries
 `--conversation <id>`, keeps `--mode plan` and the schema, and says commands are unavailable; no follow-up

@@ -99,6 +99,7 @@ import {
   settingsFrom,
   settingWrite,
 } from './settingsShape';
+import { snapsBackWhenRefused } from './refusedWrite';
 import {
   mirroredLines,
   NetworkingMode,
@@ -1704,7 +1705,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         await this.save(config, 'commandModels', commandModelsAfter(current, write.commandModel, write.key, String(write.value ?? '')));
         return;
       }
-      case 'plain':
+      case 'plain': {
         // A setting that INVALIDATES another is cleared BEFORE it, not after. One case today, and it
         // is the chat pair: `chatModelName` names one of `chatModel`'s models, so choosing a
         // different provider leaves it holding the previous one's — a value the panel would strand
@@ -1715,7 +1716,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         for (const stale of clearedByWriting(write.key)) {
           await this.save(config, stale, '');
         }
-        await this.save(config, write.key, write.value);
+        const saved = await this.save(config, write.key, write.value);
+        if (!saved && snapsBackWhenRefused(write.value)) {
+          await this.render();
+          return;
+        }
         // Turning the per-side switch ON seeds this side with what it reads today, so nothing
         // changes until something is edited. An empty overlay looks identical - until the first
         // shared edit on another side silently changes this one, which is the surprise this feature
@@ -1730,6 +1735,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           await this.carryTeamLogins(write.value === true);
         }
         return;
+      }
       default: {
         // Every kind is handled, and the compiler is what says so.
         const unhandled: never = write;
@@ -1846,15 +1852,18 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * catch is here rather than inside `saveSetting` — and why what it reports is
    * {@link reportRefusal}, which offers the reload instead of describing the failure.</p>
    */
-  private async save(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
+  private async save(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<boolean> {
     // The per-side branch moved to `sideConfig.saveSetting` when the roles page needed it too. A
     // second copy of "which layer does this belong in" is how the roles page came to write a per-side
     // setting globally. The REPORT stayed with the callers, because only a caller knows whether a
     // notification or a banner is the right surface — this panel has no banner, so it is the toast.
     try {
       await saveSetting(this.context, config, key, value);
+
+      return true;
     } catch (error: unknown) {
       reportRefusal(this.context, key, error);
+      return false;
     }
   }
 

@@ -1334,6 +1334,7 @@ function gateBody(state: PanelState): string {
 </div>
 <div class="field">
   <label class="check"><input type="checkbox" data-setting="stopLocalWhenQuiet"${s.stopLocalWhenQuiet ? ' checked' : ''}> Stop the local reviewer when the cloud reviewers found almost nothing${help('stopLocalWhenQuiet')}</label>
+  <div class="hint">Takes effect from the next round — a round already running keeps the setting it started with.</div>
 ${stopLocalSkew(state)}
 </div>
 <div class="field">
