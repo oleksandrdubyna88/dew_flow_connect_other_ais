@@ -180,7 +180,7 @@ export function consultantBody(consult: ConsultSettings, state: ConsultantViewSt
   const { refused } = consultableVendors();
 
   return `<div class="field">
-  <label for="consultEnabled"><input type="checkbox" id="consultEnabled" data-setting="consultEnabled"${consult.enabled ? ' checked' : ''}> Let an AI consult another vendor</label>${help('consultEnabled')}
+  <div class="check-row"><label for="consultEnabled"><input type="checkbox" id="consultEnabled" data-setting="consultEnabled"${consult.enabled ? ' checked' : ''}> Let an AI consult another vendor</label>${help('consultEnabled')}</div>
   <div class="hint">The AI calls <code>consult</code> itself when it is stuck, and the gate orders one for a group of epics or a risky piece when the consultation cadence is on. The consultant reads this checkout READ-ONLY, with the uncommitted change, and answers advice the AI must verify.</div>
 </div>
 ${CALLER_KINDS.map((caller) => row(consultantRowView(caller, consult, state), callerColour(caller.id, state.palette))).join('\n')}

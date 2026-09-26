@@ -1296,7 +1296,8 @@ function stageBox(
 ): string {
   return `<span class="stages${enabled ? '' : ' off'}"><label class="check">`
     + `<input type="checkbox" data-setting="${kind}" data-vendor="${id}"${on ? ' checked' : ''}${enabled ? '' : ' disabled'}>`
-    + ` ${text}${tip}</label></span>`;
+    // The tip AFTER the label: a click inside a label activates its checkbox, so a "?" in it flipped the stage.
+    + ` ${text}</label>${tip}</span>`;
 }
 
 
@@ -1314,7 +1315,7 @@ function sideBody(state: PanelState): string {
   <div class="hint">One machine can hold several working environments — a local window, and each WSL
   distro or remote host. VS Code hands the same settings file to all of them, so this is what keeps
   them apart. Off, every window shares one set of settings, exactly as before.</div>
-  <label class="check"><input type="checkbox" data-setting="perSideSettings"${state.perSide ? ' checked' : ''}> Separate settings for each side${help('perSideSettings')}</label>
+  <div class="check-row"><label class="check"><input type="checkbox" data-setting="perSideSettings"${state.perSide ? ' checked' : ''}> Separate settings for each side</label>${help('perSideSettings')}</div>
   <div class="hint">This side is <b>${escapeHtml(here)}</b>. ${state.perSide
     ? 'It keeps its own vendors, models, proxies, CLI paths and vault key; your text size and help language stay shared.'
     : 'It shares its settings with every other side.'}</div>
@@ -1336,7 +1337,7 @@ function gateBody(state: PanelState): string {
   </select>
 </div>
 <div class="field">
-  <label class="check"><input type="checkbox" data-setting="stopLocalWhenQuiet"${s.stopLocalWhenQuiet ? ' checked' : ''}> Stop the local reviewer when the cloud reviewers found almost nothing${help('stopLocalWhenQuiet')}</label>
+  <div class="check-row"><label class="check"><input type="checkbox" data-setting="stopLocalWhenQuiet"${s.stopLocalWhenQuiet ? ' checked' : ''}> Stop the local reviewer when the cloud reviewers found almost nothing</label>${help('stopLocalWhenQuiet')}</div>
   <div class="hint">Takes effect from the next round — a round already running keeps the setting it started with.</div>
 ${stopLocalSkew(state)}
 </div>
@@ -1344,10 +1345,10 @@ ${stopLocalSkew(state)}
   <div class="hint">These three do not change what the gate DECIDES. They are orders it hands back to
   whichever AI called it — how the work is broken up, when you are interrupted, which model does the
   expensive half. All three are off unless you turn them on.</div>
-  <label class="check"><input type="checkbox" data-setting="autonomous"${s.autonomous ? ' checked' : ''}> Work autonomously${help('autonomous')}</label>
-  <label class="check"><input type="checkbox" data-setting="splitPlan"${s.splitPlan ? ' checked' : ''}> Split the plan into epics and stories${help('splitPlan')}</label>
+  <div class="check-row"><label class="check"><input type="checkbox" data-setting="autonomous"${s.autonomous ? ' checked' : ''}> Work autonomously</label>${help('autonomous')}</div>
+  <div class="check-row"><label class="check"><input type="checkbox" data-setting="splitPlan"${s.splitPlan ? ' checked' : ''}> Split the plan into epics and stories</label>${help('splitPlan')}</div>
 ${gatePerBlock(state)}
-  <label class="check"><input type="checkbox" data-setting="splitWithFable"${s.splitWithFable ? ' checked' : ''}> Split with the strongest model, and give it the risky stories${help('splitWithFable')}</label>
+  <div class="check-row"><label class="check"><input type="checkbox" data-setting="splitWithFable"${s.splitWithFable ? ' checked' : ''}> Split with the strongest model, and give it the risky stories</label>${help('splitWithFable')}</div>
 </div>
 ${commandModelsBlock(state)}
 <div class="field">
@@ -2742,6 +2743,11 @@ const CSS = `
   .phrases .run[data-said="1"] { background: transparent; color: var(--vscode-charts-green); font-weight: 600; }
   .field { margin: 8px 0; }
   .field > label { display: block; margin-bottom: 3px; }
+  /* A checkbox and its "?" on one line, the "?" OUTSIDE the label: a click inside a label activates its
+     checkbox, so a "?" in it flipped the setting when somebody only wanted to read what it does. */
+  .check-row { display: flex; align-items: center; gap: 2px; margin-bottom: 3px; }
+  .check-row > label { margin-bottom: 0; }
+  .check-row > .help { margin-left: 4px; }
   .inline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
   /* A two-position switch: Fast on the left, Full on the right, the chosen half lit. */
   .seg { display: flex; border: 1px solid var(--vscode-widget-border, #3c3c3c); border-radius: 4px; overflow: hidden; }
