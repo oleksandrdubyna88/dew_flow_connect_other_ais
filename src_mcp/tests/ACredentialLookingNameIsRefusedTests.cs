@@ -166,6 +166,40 @@ public sealed class ACredentialLookingNameIsRefusedTests
         DiffExclusions.WhichExcludes(path).Should().BeEmpty();
     }
 
+    /// <summary>Every exclusion matcher carries a match ceiling — derived from the table the product builds, never retyped.</summary>
+    [Fact]
+    public void EveryExclusionMatcher_HasAMatchCeiling()
+    {
+        DiffExclusions.Matchers.Select(m => m.Glob).Should().Equal(DiffExclusions.Default,
+            "one matcher per glob, so a scan of the matchers is a scan of the whole table");
+
+        DiffExclusions.Matchers.Should().OnlyContain(
+            m => m.Matcher.MatchTimeout != System.Text.RegularExpressions.Regex.InfiniteMatchTimeout,
+            "a backtracking pattern with no ceiling can be made to search for as long as a path is long");
+    }
+
+    /// <summary>
+    /// An exclusion match that times out FAILS CLOSED: the path is withheld, and the refusal names the glob.
+    /// </summary>
+    /// <remarks>
+    /// Reached through the matcher seam rather than by hoping a path finds the ceiling — a test that
+    /// needed a real timeout would be asserting a performance figure. The tempting shape is to treat a
+    /// match that gave up as "not excluded", and that is the one outcome that must never happen: these
+    /// globs decide what a reviewer is NOT shown.
+    /// </remarks>
+    [Fact]
+    public void AnExclusionMatchThatTimesOut_WithholdsThePath()
+    {
+        Func<string, bool> timesOut = _ => throw new System.Text.RegularExpressions.RegexMatchTimeoutException(
+            "a path shaped to make the engine search", "a glob", TimeSpan.Zero);
+        Func<string, bool> never = _ => false;
+
+        DiffExclusions.FirstExcluding("src/Cart.cs", [("**/never/**", never), ("**/slow/**", timesOut)])
+            .Should().Be("**/slow/**", "a match that could not finish does not know the path is safe to show");
+        DiffExclusions.FirstExcluding("src/Cart.cs", [("**/never/**", never)])
+            .Should().BeEmpty("the seam itself excludes nothing a matcher did not");
+    }
+
     // --------------------------------------------------------------------------------------------
     // File CONTENT goes through the notices redaction — layout kept, nothing cut, fail closed.
     // --------------------------------------------------------------------------------------------

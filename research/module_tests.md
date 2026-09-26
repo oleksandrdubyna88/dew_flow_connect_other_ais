@@ -2256,3 +2256,23 @@ passes, so a `revise` needs `RoleGate(2, 0)`.
 **What this does NOT prove.** The plant was one build with every old behaviour at once; a test that
 would have gone red only for a second, uncombined reason was not separated out. The redaction's
 fail-closed line ("could not be redacted in time") in the context has no test that makes a pass time out.
+
+## The feature gate on the macOS job, and two Sonar findings (2026-09-26)
+
+The PR of epic 2 went red on `macos-latest` (23 tests) because the top-level check compared git's
+answer — the REAL path, `/private/var/…` — with the caller's spelling, `/var/…`. The link is now made by
+the tests themselves (`DirectoryLink`, a junction on Windows with no privilege needed, a symbolic link
+elsewhere — extracted from `AReviewRootBehindALinkTests`, which now uses it too), so the defect is red on
+every platform.
+
+| Suite | What was added | Seen red as |
+|---|---|---|
+| `TheFeatureStageRefusesBeforeItBuildsTests` | A repository reached through a directory link is its own top level (a good call is a D1 skip), and through the link a missing plan gets the missing-plan sentence | `'…\coai-feature-refusals-link-…\repo' is inside a repository whose top level is 'C:/…/coai-feature-refusals-…'` — on Windows, through a junction; the same sentence again with the old spelling comparison planted back |
+| `GateHistoryQueryTests` | A round and a consultation recorded under the real path belong to the repository asked through a link; a database stopped before `outcome`, and one stopped before `kind`, still yields its consultation with each missing column's meaning (the S2077 fix is three constant query texts) | `Expected history.Rounds to contain a single item … but the collection is empty`; with a wrong ladder planted, `Expected read.Outcome to be "solved" … but ""` |
+| `ACredentialLookingNameIsRefusedTests` | Every exclusion matcher carries a match ceiling (derived from `DiffExclusions.Matchers`, checked equal to the glob table); a match that times out WITHHOLDS the path and names its glob, through the `FirstExcluding` seam | with the ceiling removed, `Expected DiffExclusions.Matchers to contain only items matching (… MatchTimeout != Regex.InfiniteMatchTimeout)` |
+
+**What this does NOT prove.** No macOS machine ran these here; the Windows junction is the same class
+(git resolves it as macOS resolves `/var`) and went red with the same sentence. The fail-closed test was
+written with its fix, and its revert (the `catch` answering `false`) and the gate-history link revert were
+not run — the session's permission policy refused both temporary plants; the link test's RED was
+observed before the fix instead. No input is shown actually reaching the 1000 ms ceiling.

@@ -40,17 +40,46 @@ public static class DiffExclusions
     public static bool Excludes(string path) => WhichExcludes(path).Length > 0;
 
     /// <summary>The first glob that excludes <paramref name="path"/> — for a refusal that names it — or empty.</summary>
-    public static string WhichExcludes(string path)
-    {
-        var slashed = path.Replace('\\', '/');
+    public static string WhichExcludes(string path) =>
+        FirstExcluding(path.Replace('\\', '/'), Matchers.Select(one => (one.Glob, (Func<string, bool>)one.Matcher.IsMatch)));
 
-        return Matchers.FirstOrDefault(one => one.Matcher.IsMatch(slashed)).Glob ?? string.Empty;
+    /// <summary>The first matcher that excludes <paramref name="slashed"/> — a match that could not finish counts as one.</summary>
+    internal static string FirstExcluding(string slashed, IEnumerable<(string Glob, Func<string, bool> Matches)> matchers) =>
+        matchers.FirstOrDefault(one => WhenMatchTimesOut(() => one.Matches(slashed))).Glob ?? string.Empty;
+
+    /// <summary>
+    /// FAIL CLOSED: a path whose exclusion match could not finish is treated as EXCLUDED.
+    /// </summary>
+    /// <remarks>
+    /// <para>These matchers decide what is withheld from a reviewer — a lock file the diff hides is a
+    /// lock file no reviewer is served. Each carries a match ceiling (<see cref="MatchTimeoutMs"/>,
+    /// SonarCloud S6444), and a path shaped to reach it must not be served because the matcher gave
+    /// up on it: a match that could not finish does not know the path is safe to show, and what
+    /// nobody can vouch for is withheld. The refusal then names the glob that timed out.</para>
+    /// <para>A method taking a thunk, as <c>Redaction.WhenRedactionTimesOut</c> is, so the branch can be
+    /// REACHED by a test: one that had to find an input which actually times out would be asserting a
+    /// performance figure, and would stop asserting anything the day the engine got faster.</para>
+    /// </remarks>
+    internal static bool WhenMatchTimesOut(Func<bool> match)
+    {
+        try
+        {
+            return match();
+        }
+        catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+        {
+            return true;
+        }
     }
 
-    private static readonly (string Glob, System.Text.RegularExpressions.Regex Matcher)[] Matchers =
+    /// <summary>How long one glob may search one path — the ceiling every bounded pattern in this product carries.</summary>
+    private const int MatchTimeoutMs = 1000;
+
+    internal static readonly (string Glob, System.Text.RegularExpressions.Regex Matcher)[] Matchers =
     [
         .. Default.Select(glob => (glob, new System.Text.RegularExpressions.Regex(
-            GlobToRegex(glob), System.Text.RegularExpressions.RegexOptions.CultureInvariant))),
+            GlobToRegex(glob), System.Text.RegularExpressions.RegexOptions.CultureInvariant,
+            TimeSpan.FromMilliseconds(MatchTimeoutMs)))),
     ];
 
     /// <summary>A pathspec glob as an anchored regular expression over a <c>/</c>-separated path.</summary>

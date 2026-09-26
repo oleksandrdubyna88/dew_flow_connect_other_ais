@@ -326,6 +326,87 @@ public sealed class GateHistoryQueryTests : IAsyncLifetime
         history.NotAttached.Should().Be(0, "a round of another repository is not a round of this one at all");
     }
 
+    /// <summary>
+    /// The same repository reached through a directory link is still this repository — a consultation
+    /// records git's REAL path, and a feature review may be asked through the linked one.
+    /// </summary>
+    /// <remarks>
+    /// On macOS those always differ: a checkout under <c>/var/folders/…</c> is <c>/private/var/folders/…</c>
+    /// to git, because <c>/var</c> is a link. A comparison that only normalises spelling therefore dropped
+    /// every consultation from the history of a review asked the other way round. The link is made here,
+    /// so the test fails on every platform rather than only on the one whose temp directory shows it.
+    /// </remarks>
+    [Fact]
+    public async Task RoundsAndConsultationsUnderTheRealPath_BelongToTheRepositoryReachedThroughALink()
+    {
+        var head = await CommitOnMainAsync("work");
+        SeedRound("here#feat/e1", EpicBranch, "CodeReview", 1, _t0.AddMinutes(1), Unreachable('9'), ("Here", "this repository"));
+        SeedConsultation("c1", EpicBranch, Unreachable('7'), _t0.AddMinutes(2), "Why does the handle stick?", "Because the pool holds it.");
+        var links = Directory.CreateTempSubdirectory("coai-history-link-").FullName;
+        var linked = Path.Combine(links, "repo");
+        try
+        {
+            await DirectoryLink.MakeAsync(_launcher, linked, _repo.Path);
+
+            var history = await GateHistoryQuery.ReadAsync(Ask(head, [EpicBranch]) with { RepoPath = linked }, _launcher);
+
+            history.Unavailable.Should().BeEmpty();
+            history.Rounds.Should().ContainSingle("the round's session recorded the real path of this same repository")
+                .Which.SessionId.Should().Be("here#feat/e1");
+            history.Consultations.Should().ContainSingle("the consultation recorded git's answer, the real path")
+                .Which.Problem.Should().Be("Why does the handle stick?");
+        }
+        finally
+        {
+            DirectoryLink.Remove(linked);
+            Directory.Delete(links, recursive: true);
+        }
+    }
+
+    /// <summary>
+    /// A database written before a consultation could end (<c>outcome</c>, step 9) or say what it was for
+    /// (<c>kind</c>, step 15) still gives the history its consultations — each missing column read as what
+    /// it means.
+    /// </summary>
+    /// <remarks>
+    /// The reader is read-only and cannot migrate. The step each case stops before is FOUND by asking
+    /// which step adds the column, never by counting — a literal index rots the moment anybody appends.
+    /// <c>outcome TEXT</c> rather than <c>outcome</c>, because <c>outcome_by</c> contains the shorter one.
+    /// </remarks>
+    [Theory]
+    [InlineData("ADD COLUMN outcome TEXT", "")]
+    [InlineData("ADD COLUMN kind", "solved")]
+    public async Task AConsultationFromAnOlderSchema_IsStillRead(string stopBefore, string outcome)
+    {
+        var head = await CommitOnMainAsync("work");
+        var adds = Array.FindIndex(Schema.Steps, step => step.Contains(stopBefore, StringComparison.Ordinal));
+        adds.Should().BeGreaterThan(0, "the step that adds the column is what this test stops before");
+        Directory.CreateDirectory(_dataDir);
+        using (var db = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={Path.Combine(_dataDir, RoundsDb.FileName)};Pooling=False"))
+        {
+            db.Open();
+            using var make = db.CreateCommand();
+            make.CommandText = string.Join(";\n", Schema.Steps[..adds]) + $"; PRAGMA user_version={adds}";
+            make.ExecuteNonQuery();
+
+            using var insert = db.CreateCommand();
+            insert.CommandText = outcome.Length == 0
+                ? "INSERT INTO consultations (id, repo_path, branch, head_sha, status, started_utc, problem, advice) VALUES ('old1', $repo, $branch, '', 'closed', $at, 'Old question', 'Old advice')"
+                : "INSERT INTO consultations (id, repo_path, branch, head_sha, status, started_utc, problem, advice, outcome) VALUES ('old1', $repo, $branch, '', 'closed', $at, 'Old question', 'Old advice', 'solved')";
+            insert.Parameters.AddWithValue("$repo", _repo.Path);
+            insert.Parameters.AddWithValue("$branch", EpicBranch);
+            insert.Parameters.AddWithValue("$at", _t0.AddMinutes(1).ToString("O", CultureInfo.InvariantCulture));
+            insert.ExecuteNonQuery();
+        }
+
+        var history = await GateHistoryQuery.ReadAsync(Ask(head, [EpicBranch]), _launcher);
+
+        history.Unavailable.Should().BeEmpty("an older file is still a file this reader can read");
+        var read = history.Consultations.Should().ContainSingle("the row is there and its branch is the epic's").Subject;
+        read.Outcome.Should().Be(outcome, "a row written before the column existed carries no verdict, and empty is not one");
+        read.Kind.Should().Be("stuck", "before the kinds every consultation was an agent that was stuck");
+    }
+
     // ----------------------------------------------------------------------------------------------
 
     private async Task<string> CommitOnMainAsync(string message)

@@ -37,7 +37,7 @@ public sealed class AReviewRootBehindALinkTests : IAsyncLifetime
         _repo = Temp("coai-repo-");
         _real = Temp("coai-review-root-");
         _linked = Path.Combine(Temp("coai-review-link-"), "root");
-        await Link(_linked, _real);
+        await DirectoryLink.MakeAsync(_launcher, _linked, _real);
         await Git(_repo, "init", "-b", "main");
         await File.WriteAllTextAsync(Path.Combine(_repo, "a.txt"), "v1");
         await Git(_repo, "add", ".");
@@ -50,10 +50,7 @@ public sealed class AReviewRootBehindALinkTests : IAsyncLifetime
     public ValueTask DisposeAsync()
     {
         Unlock(_real);
-        if (Directory.Exists(_linked))
-        {
-            Directory.Delete(_linked);
-        }
+        DirectoryLink.Remove(_linked);
 
         foreach (var temp in _temps)
         {
@@ -118,20 +115,6 @@ public sealed class AReviewRootBehindALinkTests : IAsyncLifetime
     private ReviewTreeKeeper Keeper() => new(new ReviewTreeRoot(_launcher, _linked));
 
     private ReviewWorktrees Trees() => new(_launcher, new GitHistory(_launcher), _linked);
-
-    private async Task Link(string link, string target)
-    {
-        if (OperatingSystem.IsWindows())
-        {
-            var made = await _launcher.RunAsync(
-                new ProcessRequest("cmd", ["/c", "mklink", "/J", link, target], Path.GetDirectoryName(link)!));
-            made.ExitCode.Should().Be(0, $"a junction is how this test reaches its root: {made.StdErr}");
-        }
-        else
-        {
-            Directory.CreateSymbolicLink(link, target);
-        }
-    }
 
     private Task<ProcessResult> Run(string cwd, params string[] args) =>
         _launcher.RunAsync(new ProcessRequest(
