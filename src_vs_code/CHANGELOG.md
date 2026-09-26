@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.56.1 — 2026-09-26
 
 **A setting that did not save no longer looks saved.** When VS Code refuses a switch — typically right after
 the extension updated and before the window was reloaded — the panel's box goes back to what is really stored
