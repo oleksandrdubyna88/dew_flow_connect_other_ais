@@ -12,6 +12,8 @@ is what an empty box means; with a question in the box the press sends it, and t
 
 **Every consultant setting has a `?`.** That covers the switch, each caller's vendor, endpoint and CLI path, the three caps, the prompt, and the three cadence numbers. The caps say which kinds they apply to: turns and the idle close apply to every consultation; calls per session counts only the stuck ones. The switch is now *Let an AI consult another vendor*, because it also switches off the consultations the cadence orders.
 
+**Reading a checkbox's help no longer flips it.** The `?` sat inside the checkbox's label, and a click anywhere inside a label toggles its box. So reading what *Work autonomously*, *Split the plan into epics and stories*, *Split with the strongest model…*, *Stop the local reviewer…*, *Separate settings for each side* or a reviewer's *reviews plans* / *reviews documents* does also switched it. The `?` now sits beside the label, on the same line.
+
 ## Extension 0.56.2 — 2026-09-26
 
 **The consultation line names its branch as a branch.** The sidebar line under *Active rounds* ended with the bare branch name, so `…consultation for epics 4-6: due epic-1` read as one phrase; it now ends `· branch epic-1`.
