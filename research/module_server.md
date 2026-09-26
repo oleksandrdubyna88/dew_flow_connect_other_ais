@@ -256,8 +256,11 @@ own permission system — and the plan says so.
 
 **The circuit breakers**: turns per consultation (`COAI_CONSULT_TURNS`, 5), consult calls per caller
 session (`COAI_CONSULT_CALLS_PER_SESSION`, 10), an idle close (`COAI_CONSULT_IDLE_MINUTES`, 15) that
-drops the vendor's handle so no zombie session is kept, and the per-turn deadline, which is the
-reviewer timeout rather than a second number to keep in step. The call counter **never fails open**:
+drops the vendor's handle so no zombie session is kept, and the per-turn deadline
+(`ConsultationDeadline`), derived from the reviewer timeout rather than a second number to keep in step:
+the launch's own budget plus a grace (a quarter of it, never below the launcher's drain), so the whole
+turn is bounded — the launch, both filesystem snapshots and the record write alike — not only the child
+the launcher already kills. The call counter **never fails open**:
 when its file cannot be written the cap is enforced in memory for this server's lifetime and the reply
 says so — the opposite of `CallerSessions`' split-order claim, because a repeated instruction is cheap
 and a runaway agent on a paid vendor is not.
@@ -336,6 +339,46 @@ finding survives two rounds?") is a cost question about consultations specifical
 chats would mix them with the person's own conversations. The Team server's wire vocabulary is
 unchanged: `UsageKinds.LocalOnly` names the difference, and `src_server`'s test now asserts
 *known == wire ∪ local-only* rather than an equality that stopped being true of this ledger.
+
+### A turn that never returns ends, and its record can be closed (2026-09-26)
+
+Observed live: a `risk` consultation on codex answered in three minutes, and the caller saw *An error
+occurred invoking 'consult'* the instant it was called. The record then sat at `asking` for over an
+hour, `close_consult` refused it as *still running a turn*, and no sweep would take it — because the
+`RunnerPid` on the record was the server's own, and the server was alive. The cadence gate (mode
+`require`) refuses the epic's code round until a consultation for the group closes, so one hung turn
+blocked the gate indefinitely.
+
+The cause was two gaps that `RunTurnAsync` left, and one wrong assumption the sweep made:
+
+- **The region after the launch was unguarded.** The turn wrote `asking`, then `await
+  executor.LaunchAsync`; the second filesystem snapshot, `Breach` and `Settle` ran OUTSIDE any
+  `try`. So when `ConsultationStore.Write` failed to save the answered record — an atomic replace
+  refused because the record file was momentarily held, the ordinary Windows case — the exception
+  flew up the stdio stack as a protocol error, and the record was left exactly at `asking`. Git
+  refusing the second snapshot did the same, and answered *"no consultant was launched"* about one
+  that had run. **Now the whole region from the launch through the settle is under one `try`**: every
+  exit settles the record and answers a SENTENCE, never an exception. A turn the vendor already
+  accepted (a handle on its stream) becomes `interrupted` and resumable, its turn uncounted, exactly
+  as a launch failure with a handle already did; one with no handle fails. The write is best-effort,
+  because the fault may itself be that the record cannot be written — which is why the sweep is the
+  other half.
+- **The turn had no deadline of its own.** Only the launcher bounded the child (at the reviewer
+  timeout); a wait the launcher does not own — a snapshot, the record write, a launch that ignores
+  its own timeout — could hang for ever. `ConsultationDeadline.For(reviewerTimeout)` now bounds the
+  WHOLE turn: the launch's budget plus a grace (a quarter of it, never below the launcher's drain),
+  so the launcher's own kill of a hung child still wins and that turn stays resumable, and this fires
+  only for what the launcher cannot end. A caller that CANCELS is told apart from the deadline by the
+  token's state, settles the record, and still surfaces as a cancellation (reliability.md).
+- **The sweep trusted the pid over the lock.** `SweepOne` kept any `asking` record whose `RunnerPid`
+  was alive — but a live turn is protected by the repository LOCK it holds from the first snapshot to
+  the last write, not by its pid, and the incident's record named its own live server. An `asking`
+  record is now a sweep candidate when its process is dead OR it has sat `asking` past the idle window
+  (which the turn's own deadline sits well inside); either way the lock, taken with a zero wait before
+  anything is written, is what confirms nobody is working. So a server-owned hung turn is swept — to
+  `interrupted` if it holds a handle, `failed` otherwise — and the incident's own record clears itself
+  the next time the fixed server sweeps (on startup, and on the per-minute beat), with no operator
+  action needed beyond running the fixed build.
 
 > **Provenance of the measurements below.** Subject `fe9f181` (story 2 as committed) · harness
 > [`scripts/live-consult-all.mjs`](../scripts/live-consult-all.mjs), driving the built

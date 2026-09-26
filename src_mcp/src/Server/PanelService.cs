@@ -129,12 +129,13 @@ public sealed class PanelService
             _log.Warning("swept {Count} round(s) abandoned by a dead process", swept);
         }
 
-        // The same sweep for consultations: one left `asking` by a dead server, one left open past
-        // its idle budget, one finished long ago. Same pid rule, same reason.
+        // The same sweep for consultations: one left `asking` by a dead server or past a turn's
+        // deadline, one left open past its idle budget, one finished long ago. The repository lock,
+        // not the pid, is what protects a live turn.
         var consultationsSwept = _consultations.Sweep(ProcessIsAlive);
         if (consultationsSwept > 0)
         {
-            _log.Warning("swept {Count} consultation(s): interrupted by a dead process, idle past their budget, or expired", consultationsSwept);
+            _log.Warning("swept {Count} consultation(s): interrupted by a dead process or a passed turn deadline, idle past their budget, or expired", consultationsSwept);
         }
 
         // And the LOG catches up with the records, because the projection is allowed to fail: a

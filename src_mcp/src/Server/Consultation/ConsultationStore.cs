@@ -86,13 +86,16 @@ public sealed partial class ConsultationStore(
 
     /// <summary>
     /// What a restarted server owes the records a previous one left: an <c>asking</c> record whose pid
-    /// is gone becomes <c>interrupted</c> when it holds a handle and <c>failed</c> otherwise; an open
-    /// record idle past its budget is closed and its handle dropped; a finished one past retention is
-    /// deleted. Returns how many records changed or went.
+    /// is gone — or that has sat <c>asking</c> past a turn's deadline, whatever its pid — becomes
+    /// <c>interrupted</c> when it holds a handle and <c>failed</c> otherwise; an open record idle past
+    /// its budget is closed and its handle dropped; a finished one past retention is deleted. Returns
+    /// how many records changed or went.
     /// </summary>
     /// <remarks>
-    /// The pid check is what keeps a SECOND server sharing this directory from killing the first
-    /// one's live consultation — the same rule <c>SessionStore.SweepOrphanedRounds</c> follows.
+    /// The repository LOCK, taken per record before anything is rewritten, is what keeps a SECOND server
+    /// sharing this directory from ending the first one's live consultation — the pid alone was never
+    /// enough, since a turn can leave its own live server's pid on a record it never settled (2026-09-26).
+    /// The same lock rule <c>SessionStore.SweepOrphanedRounds</c> follows.
     /// </remarks>
     public int Sweep(Func<int, bool> isAlive, DateTime nowUtc, TimeSpan idle, TimeSpan retention)
     {
@@ -222,11 +225,40 @@ public sealed partial class ConsultationStore(
             ? new SweepStep(SweepAction.Delete, record)
             : SweepStep.Keep(record);
 
-    /// <summary>A running record: orphaned when its process is dead, closed when it sat idle past its budget.</summary>
+    /// <summary>A running record: orphaned when its process is dead OR it sat asking past a turn's
+    /// deadline; an open one closed when it sat idle past its budget.</summary>
     private static SweepStep LiveStepOf(ConsultationRecord record, SweepRule rule) =>
         record.Status == ConsultationStatuses.Asking
-            ? (rule.IsAlive(record.RunnerPid) ? SweepStep.Keep(record) : new SweepStep(SweepAction.Rewrite, Orphaned(record, rule.NowUtc)))
+            ? AskingStepOf(record, rule)
             : (IdleFor(record, rule.NowUtc) > rule.Idle ? new SweepStep(SweepAction.Rewrite, Idled(record, rule.NowUtc, rule.Idle)) : SweepStep.Keep(record));
+
+    /// <summary>
+    /// An <c>asking</c> record's step: a candidate when its process is dead, or when it has sat
+    /// <c>asking</c> longer than a turn may run.
+    /// </summary>
+    /// <remarks>
+    /// <para>A genuinely running turn is protected by the repository's LOCK — held from the first
+    /// snapshot to the last write, and taken here with a zero wait before anything is rewritten — never
+    /// by its pid. The pid was not enough: a second server in another container reads a live process as
+    /// gone, and, worse, a turn can leave its OWN server's pid on a record it never settled while that
+    /// server runs on. Found live 2026-09-26 — the answer arrived, the record write failed, the turn
+    /// left <c>asking</c> naming this alive server, <c>close_consult</c> refused it as running, and the
+    /// pid rule kept it for ever while the cadence gate refused the epic's code round for want of a
+    /// consultation nobody could end.</para>
+    /// <para>So the pid is one signal and the turn's DEADLINE is the other: a turn is bounded, and an
+    /// <c>asking</c> record that has not advanced within the idle window — which the turn's own deadline
+    /// sits well inside — is one no turn is still running for. Either way the lock, not this, is what
+    /// confirms nobody is working before the record is touched, so a live turn whose lock is held is
+    /// left alone even when flagged here.</para>
+    /// </remarks>
+    private static SweepStep AskingStepOf(ConsultationRecord record, SweepRule rule)
+    {
+        var serverGone = !rule.IsAlive(record.RunnerPid);
+
+        return serverGone || IdleFor(record, rule.NowUtc) > rule.Idle
+            ? new SweepStep(SweepAction.Rewrite, Orphaned(record, rule.NowUtc, serverGone))
+            : SweepStep.Keep(record);
+    }
 
     private bool Applied(SweepStep step) => step.Action switch
     {
@@ -243,18 +275,23 @@ public sealed partial class ConsultationStore(
     }
 
     /// <summary>
-    /// A turn whose server died: <c>interrupted</c> when it can be resumed, <c>failed</c> when it cannot.
+    /// A turn nobody is running any more: <c>interrupted</c> when it can be resumed, <c>failed</c> when
+    /// it cannot — and the reason says which fact ended it, a dead server or a passed deadline.
     /// </summary>
     /// <remarks>
-    /// The HANDLE decides, and that is the whole distinction: the turn may have been accepted and
-    /// paid for, so a conversation the vendor can still be asked to continue is not a failure — it is
-    /// one nobody read the answer to. Extracted with <see cref="Idled"/> so the sweep above reads as
+    /// The HANDLE decides the status, and that is the whole distinction: the turn may have been accepted
+    /// and paid for, so a conversation the vendor can still be asked to continue is not a failure — it
+    /// is one nobody read the answer to. Extracted with <see cref="Idled"/> so the sweep above reads as
     /// the three states it walks. (CodeRabbit, on the pull request.)
     /// </remarks>
-    private static ConsultationRecord Orphaned(ConsultationRecord record, DateTime nowUtc) =>
-        record.Handle.Length > 0
-            ? record with { Status = ConsultationStatuses.Interrupted, Reason = Died, UpdatedUtc = Stamp(nowUtc) }
-            : record with { Status = ConsultationStatuses.Failed, Reason = Died, EndedUtc = Stamp(nowUtc), UpdatedUtc = Stamp(nowUtc) };
+    private static ConsultationRecord Orphaned(ConsultationRecord record, DateTime nowUtc, bool serverGone)
+    {
+        var reason = serverGone ? Died : PastDeadline;
+
+        return record.Handle.Length > 0
+            ? record with { Status = ConsultationStatuses.Interrupted, Reason = reason, UpdatedUtc = Stamp(nowUtc) }
+            : record with { Status = ConsultationStatuses.Failed, Reason = reason, EndedUtc = Stamp(nowUtc), UpdatedUtc = Stamp(nowUtc) };
+    }
 
     /// <summary>A conversation nobody came back to: closed, and its vendor handle dropped.</summary>
     private static ConsultationRecord Idled(ConsultationRecord record, DateTime nowUtc, TimeSpan idle) =>
@@ -270,6 +307,8 @@ public sealed partial class ConsultationStore(
         };
 
     private const string Died = "the server running this turn died before the answer was read";
+
+    private const string PastDeadline = "the turn ran past its deadline without settling — its server left the record behind";
 
     /// <summary>Whether a record is what the cadence gate counts: an ordered consultation closed with a verdict.</summary>
     internal static bool IsCadenceEvidence(ConsultationRecord record) =>

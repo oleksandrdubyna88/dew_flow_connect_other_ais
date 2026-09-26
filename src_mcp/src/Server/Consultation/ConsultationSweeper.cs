@@ -4,8 +4,8 @@ namespace CoaiMcp.Server;
 
 /// <summary>Runs the consultation sweep while the server serves, not only when it starts.</summary>
 /// <remarks>
-/// <para>The sweep closes a consultation idle past its budget, fails or resumes one a dead process left
-/// <c>asking</c>, and evicts the long finished. It ran only in the <see cref="PanelService"/> constructor,
+/// <para>The sweep closes a consultation idle past its budget, fails or resumes one a dead process — or a
+/// passed turn deadline — left <c>asking</c>, and evicts the long finished. It ran only in the <see cref="PanelService"/> constructor,
 /// so "Close an idle consultation after, minutes" held for a follow-up (refused) but not for the record,
 /// which read <c>open</c> on the sidebar and in <c>status</c> until the next start
 /// (<c>research/PLAN_consult_limits_kinds_and_help.md</c>, story 1).</para>
@@ -41,7 +41,7 @@ public static class ConsultationSweeper
             var swept = current().SweepConsultations();
             if (swept > 0)
             {
-                log.Information("swept {Count} consultation(s): idle past their budget, interrupted by a dead process, or expired", swept);
+                log.Information("swept {Count} consultation(s): idle past their budget, interrupted by a dead process or a passed turn deadline, or expired", swept);
             }
         }
         catch (Exception failure)

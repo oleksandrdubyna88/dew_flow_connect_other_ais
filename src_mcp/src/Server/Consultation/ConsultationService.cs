@@ -610,29 +610,78 @@ public sealed class ConsultationService(
         _store.Write(asking);
         log.Information("{Kind} consultation {Id}: turn {Turn}/{Cap} on {Vendor} in {Repo}", record.Kind, record.Id, record.Budget.Turn, record.MaxTurns, consultant.Row.Provider, repo);
 
+        // ONE deadline over everything after the record says `asking` — the launch, both snapshots and
+        // the record write alike. It is a BACKSTOP longer than the launcher's own child timeout, so an
+        // ordinary hung child is killed by the launcher (which yields the resumable `interrupted` path
+        // below) and this fires only for a wait the launcher does not bound: a snapshot, the settle
+        // write, or a launch that ignores its own timeout. Every exit from here on settles the record,
+        // so the turn can no longer leave it stuck at `asking`. (The 2026-09-26 incident: the answer
+        // arrived, the record write threw, and nothing after the launch was guarded — so the turn left
+        // `asking` naming its own live pid, `close_consult` refused it as running, and the pid sweep
+        // kept it for ever while the cadence gate refused the epic's code round.)
+        // The whole turn's deadline, derived from the launch's own budget the way a round's is
+        // (ConsultationDeadline / RoundBudget). Longer than the launch, so the launcher's own kill of a
+        // hung child wins and that turn stays resumable; this fires only for what the launcher does not
+        // bound.
+        var deadline = ConsultationDeadline.For(settings.ReviewerTimeout);
+        using var turn = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        turn.CancelAfter(deadline);
+
         var started = Stopwatch.StartNew();
-        ReviewerLaunch launched;
+        ReviewerLaunch? launched = null;
         try
         {
-            launched = await executor.LaunchAsync(launch, ct);
+            launched = await executor.LaunchAsync(launch, turn.Token);
+            var changes = FilesystemSnapshot.Compare(before, await _invariant.SnapshotAsync(repo, turn.Token));
+
+            return changes.Count > 0
+                ? Breach(asking, changes, consultant, launched, started.Elapsed)
+                : Settle(asking, consultant, launched, problem, nonce, started.Elapsed);
         }
-        catch (Exception e)
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            // A turn the vendor may already have ACCEPTED must not be closed as failed: with a handle
-            // on the record it stays resumable and the turn stays uncounted, which is the whole point
-            // of the interrupted state. Without one there is nothing to resume. The write is guarded
-            // so a second failure here cannot mask the first. (codex + gemini, code round.)
-            Quietly(() => _store.Write(asking.Handle.Length > 0
-                ? asking with { Status = ConsultationStatuses.Interrupted, Reason = Interrupted(e), UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow) }
-                : Ended(asking, ConsultationStatuses.Failed, Interrupted(e))));
+            // The CALLER withdrew the job — not a failure of the consultant, and told apart from our
+            // own deadline by the token's STATE, never the exception's type (reliability.md). Settle so
+            // the record cannot stick at `asking`, then let the cancellation fly as it always did.
+            Quietly(() => _store.Write(Ended(asking, ConsultationStatuses.Failed, Interrupted(new OperationCanceledException()))));
 
             throw;
         }
+        catch (Exception e) when (e is not OutOfMemoryException)
+        {
+            return AfterTheLaunch(asking, consultant, launched, started.Elapsed, deadline, e);
+        }
+    }
 
-        var changes = FilesystemSnapshot.Compare(before, await _invariant.SnapshotAsync(repo, ct));
-        return changes.Count > 0
-            ? Breach(asking, changes, consultant, launched, started.Elapsed)
-            : Settle(asking, consultant, launched, problem, nonce, started.Elapsed);
+    /// <summary>
+    /// The turn faulted after the record was marked <c>asking</c> — the deadline fired, a snapshot
+    /// threw, or the record write did. Settle the record and answer a sentence; never let it stick at
+    /// <c>asking</c>, and never throw a protocol error up the stdio stack.
+    /// </summary>
+    /// <remarks>
+    /// A turn the vendor may already have ACCEPTED stays resumable: the handle is read off whatever the
+    /// launch captured, and with one the record becomes <c>interrupted</c> and the turn is not counted,
+    /// exactly as a launch failure with a handle already did. The write is best-effort because the
+    /// fault may itself be that the record cannot be written — but a record left <c>asking</c> is now
+    /// swept once its deadline passes and its lock is free, so it can no longer stick for ever.
+    /// (2026-09-26.)
+    /// </remarks>
+    private string AfterTheLaunch(ConsultationRecord asking, Consultant consultant, ReviewerLaunch? launched, TimeSpan elapsed, TimeSpan deadlineBudget, Exception fault)
+    {
+        var deadline = fault is OperationCanceledException;
+        var handle = launched is { } completed ? HandleOf(consultant, completed, asking.Handle) : asking.Handle;
+        var reason = deadline
+            ? $"the turn ran past its {deadlineBudget.TotalMinutes:0.#}-minute deadline without an answer being recorded"
+            : $"the answer could not be recorded: {fault.Message}";
+
+        Quietly(() => _store.Write(handle.Length > 0
+            ? asking with { Status = ConsultationStatuses.Interrupted, Handle = handle, Reason = reason, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow) }
+            : Ended(asking, ConsultationStatuses.Failed, reason)));
+        Record(consultant, deadline ? "deadline" : "record-failed", elapsed, launched?.Usage ?? Usage.None);
+
+        return handle.Length > 0
+            ? Error($"the consultant ({consultant.Row.Provider}) accepted the turn but {reason}; the turn was NOT counted — call consult again with consultationId {asking.Id} and the consultant will pick the conversation up")
+            : Error($"the consultant ({consultant.Row.Provider}) {reason} — check `providers`, then start a new consultation");
     }
 
     /// <summary>The turn's prompt, composed from the RECORD alone.</summary>

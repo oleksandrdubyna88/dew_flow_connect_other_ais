@@ -63,7 +63,10 @@ public sealed record ProcessRequest(
     /// to. In the ordinary case the streams close with the child and this costs nothing; it is a
     /// bound on the pathological case, and the stream says so when it is what dropped the rest.
     /// </remarks>
-    public TimeSpan DrainGrace { get; init; } = TimeSpan.FromSeconds(5);
+    /// <summary>The default drain grace, as one named value a consultation turn's deadline can derive from.</summary>
+    public static readonly TimeSpan DefaultDrainGrace = TimeSpan.FromSeconds(5);
+
+    public TimeSpan DrainGrace { get; init; } = DefaultDrainGrace;
 
     /// <summary>
     /// A name to record this child under while it runs, or empty to track nothing.
