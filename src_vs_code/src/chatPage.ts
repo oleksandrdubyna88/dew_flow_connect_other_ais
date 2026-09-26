@@ -1470,6 +1470,21 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // Set by the host with every state, and read by send() below: an empty box means "ask the other
   // model the same thing" only while there IS another model to ask.
   var canReask = ${jsonForScript(state.reask.length > 0)};
+  // Who a re-ask would go to, from the host, beside whether there is one at all.
+  var reaskName = ${jsonForScript(state.reask)};
+  // THE BUTTON SAYS WHAT A PRESS WILL DO. A re-ask is what an EMPTY box means; text in the box is a
+  // question and is sent. The label followed only the host, so after ✕ it turned into Re-ask and
+  // stayed Re-ask while a question was typed into the box — a button naming the one thing its press
+  // would not do (the operator, 2026-09-26). So it follows the box as well, from every place the box
+  // changes: they all end in paintBackdrop(), which calls this first.
+  function paintSend() {
+    const button = document.getElementById('send');
+    if (!button) { return; }
+    const box = document.getElementById('say');
+    const empty = !box || box.value.trim().length === 0;
+    button.textContent = canReask && empty ? 'Re-ask · ' + reaskName : 'Send';
+  }
+  paintSend();
   function send() {
     const box = document.getElementById('say');
     if (!box || box.disabled) { return; }
@@ -1587,6 +1602,8 @@ function chatScript(state: ChatPageState, regions: Regions): string {
   // browser draws: coalesced here rather than run per event, because the work is a full rebuild of a
   // layer that can hold a whole captured passage. (gemini and local, the code round.)
   function paintBackdrop() {
+    // At once, not on the frame below: the label is read the moment a key lands.
+    paintSend();
     if (painting !== 0) { return; }
     const frame = typeof requestAnimationFrame === 'function'
       ? requestAnimationFrame
@@ -2346,8 +2363,8 @@ function chatScript(state: ChatPageState, regions: Regions): string {
     }
     if (typeof data.reask === 'string') {
       canReask = data.reask.length > 0;
-      const reaskButton = document.getElementById('send');
-      if (reaskButton) { reaskButton.textContent = canReask ? 'Re-ask · ' + data.reask : 'Send'; }
+      reaskName = data.reask;
+      paintSend();
     }
     // A stop is about the turn in flight. When nothing is in flight it is about nothing — and
     // holding on to the number would disable the same-numbered turn of the NEXT conversation, since

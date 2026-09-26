@@ -1555,6 +1555,12 @@ link whole: `saveWrite` passes `write.control` and a started repaint, `snapBack`
 an unhandled rejection (red without the catch); and a prompt pick goes through the write queue (red while it
 was `void this.choosePrompt(…)`).
 
+**The Re-ask label follows the box (2026-09-26, `chatPage.test.ts`).** With a re-ask on offer, the
+running page's button reads *Re-ask · model* over an empty box, *Send* once a question is typed, and
+Re-ask again after ✕. A host push while the box holds text keeps it *Send*, and names the pushed model
+once the box is emptied. Both cases were red first, the second with the real symptom (the push painted
+Re-ask over a typed question), and red again with the call from `paintBackdrop()` planted out.
+
 **`ADeniedCommandIsAskedAgainTests` (issue #504)** — the follow-up of an auto-denied agy reviewer carries
 `--conversation <id>`, keeps `--mode plan` and the schema, and says commands are unavailable; no follow-up
 without a denial or without a conversation id; the executor runs it INSTEAD of the fresh repair (red first:
