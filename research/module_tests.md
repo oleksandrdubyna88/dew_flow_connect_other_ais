@@ -1551,7 +1551,9 @@ appended while the queue was being waited for is waited for too; a failed write 
 last two replace regexes over the old in-class queue in `thePromptBoxRemembers.test.ts`, which now pins only
 that `render` waits on `this.writes` and the host enqueues there. `refusedSelect.test.ts` pins each wiring
 link whole: `saveWrite` passes `write.control` and a started repaint, `snapBack` clears the paint key, and
-`choosePrompt` reports and snaps back.
+`choosePrompt` reports and snaps back. Code round two: a repaint that fails after its write is said, never
+an unhandled rejection (red without the catch); and a prompt pick goes through the write queue (red while it
+was `void this.choosePrompt(…)`).
 
 **`ADeniedCommandIsAskedAgainTests` (issue #504)** — the follow-up of an auto-denied agy reviewer carries
 `--conversation <id>`, keeps `--mode plan` and the schema, and says commands are unavailable; no follow-up

@@ -75,7 +75,10 @@ export async function saveOrSnapBack(
  */
 export function afterTheWrite(repaint: () => Promise<void>): () => Promise<void> {
   return () => {
-    void repaint();
+    // Said, because nothing upstream can catch it: the write that started it has already returned.
+    repaint().catch((error: unknown) => {
+      console.error('ConnectOtherAIs: the panel could not be repainted after a refused write', error);
+    });
 
     return Promise.resolve();
   };

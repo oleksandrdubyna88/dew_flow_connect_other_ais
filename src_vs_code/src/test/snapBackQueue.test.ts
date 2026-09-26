@@ -70,6 +70,22 @@ test('a write appended while the queue was being waited for is waited for too', 
   assert.deepEqual(happened, ['appended write', 'settled'], 'the wait ended on a snapshot and missed the write after it');
 });
 
+test('a repaint that fails after the write is said, never an unhandled rejection', async () => {
+  // Started and not awaited, so nothing upstream can catch it — the queue has already moved on.
+  const said: unknown[] = [];
+  const original = console.error;
+  console.error = (...args: unknown[]) => { said.push(...args); };
+  try {
+    await afterTheWrite(async () => { throw new Error('the view went away'); })();
+    await new Promise((resolve) => setImmediate(resolve));
+  } finally {
+    console.error = original;
+  }
+
+  assert.ok(said.some((one) => one instanceof Error && one.message === 'the view went away'),
+    'a failed repaint vanished — or became an unhandled rejection the host may die of');
+});
+
 test('the queue still runs writes in order, and a failed one does not stop the rest', async () => {
   const queue = new WriteQueue();
   const happened: string[] = [];

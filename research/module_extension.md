@@ -9284,7 +9284,9 @@ test rather than read. (2) Even unfrozen, the repaint painted nothing: nothing s
 clears the paint key first, which rebuilds the page from what is stored. A paint withheld while a control
 has focus is not recorded, so the render after focus leaves still paints. The prompt-per-round pickers
 (`choosePrompt`, which writes outside the queue with a bare `config.update`) now say a refusal like every
-other write and snap back too; before, a refusal there was an unhandled rejection.
+other write and snap back too; before, a refusal there was an unhandled rejection. A prompt pick is now
+queued through `WriteQueue` like every other setting write, so it cannot race them, and its repaint is started
+the same way. A started repaint that fails is said (`console.error`), since nothing upstream can catch it.
 
 ## CoAI: choose on every bug (2026-09-24, issue #487)
 

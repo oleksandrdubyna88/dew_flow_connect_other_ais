@@ -128,6 +128,9 @@ test('the host saves every non-plain kind through saveOrSnapBack', async () => {
     'the plain case awaits its repaint inside the write queue, which is a wait on itself');
   assert.match(host, /private snapBack\(\): Promise<void> \{\s*this\.paintedKey = '';\s*return this\.render\(\);/,
     'the snap-back no longer clears the paint key, so the page is never rebuilt from what is stored');
-  assert.match(host, /catch \(error: unknown\) \{\s*\/\/[^\n]*\n\s*reportRefusal\(this\.context, 'promptsPerRound', error\);\s*await this\.snapBack\(\);/,
-    'a refused prompt pick is neither said nor put back');
+  assert.match(host, /catch \(error: unknown\) \{\s*\/\/[^\n]*\n\s*reportRefusal\(this\.context, 'promptsPerRound', error\);\s*await afterTheWrite\(\(\) => this\.snapBack\(\)\)\(\);/,
+    'a refused prompt pick is neither said nor put back — or its repaint is awaited inside the write queue');
+  // A prompt pick is a setting write like any other, so it is serialised with them (the gate's code round).
+  assert.match(host, /this\.enqueue\(\(\) => this\.choosePrompt\(role, round, String\(m\.value\)\)\)/,
+    'a prompt pick writes outside the write queue, so it can race the writes queued beside it');
 });

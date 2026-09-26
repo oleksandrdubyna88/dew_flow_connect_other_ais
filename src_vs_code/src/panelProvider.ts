@@ -403,7 +403,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
             ? [...new Set([...this.openSections, m.id])]
             : this.openSections.filter((s) => s !== m.id);
         } else if (m.type === 'prompt' && m.role !== undefined && m.round !== undefined) {
-          void this.choosePrompt(m.role, m.round, String(m.value));
+          // A setting write like any other, so it is serialised with them (the gate's code round).
+          const { role, round } = m;
+          this.enqueue(() => this.choosePrompt(role, round, String(m.value)));
         } else if (m.type === 'setting') {
           this.enqueue(() => this.write(settingMessageFrom(m)));
         } else if (m.type === 'focus') {
@@ -1512,10 +1514,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     } catch (error: unknown) {
       // A dropdown too, and not in the write queue: said like every other refusal, and put back.
       reportRefusal(this.context, 'promptsPerRound', error);
-      await this.snapBack();
+      await afterTheWrite(() => this.snapBack())();
       return;
     }
-    await this.render();
+    // Started, not awaited: this runs in the write queue, and a render waits for that queue.
+    await afterTheWrite(() => this.render())();
   }
 
   /**
