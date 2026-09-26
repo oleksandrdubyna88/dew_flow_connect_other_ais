@@ -1530,6 +1530,13 @@ local rows stand down after a cloud of one remark; a stood-down row is not asked
 a failed cloud reviewer, the switch off and a round with no cloud reviewer each keep every local row running
 (red first; a plant that is never quiet turns the first two red). Extension: `stopLocalWhenQuiet.test.ts` (the
 default, the env key, the box RUN, the skew note) and `rounds.test.ts` (the reason beside the status).
+2026-09-26: the box says *"from the next round"*; `snapsBackWhenRefused` is true for a boolean alone; and
+the plain write is RUN: `writePlain` against fake steps — a refused tick saves, repaints and stops; a saved
+tick and refused text go on to what follows; an invalidated key is cleared first (all red first against a
+stub; red again with the early `return` planted out). Read from the host is only the wiring: the plain case
+calls `writePlain`, and `save` returns false in its catch. The panel harness now reads a box's `checked` from the markup, as it
+already read `disabled`: every box used to start unticked there, so no test could tell a page drawn from the stored value
+from one that was not; *the panel draws the box from what is STORED* holds that (red with `checked` planted out of the box).
 
 **`ADeniedCommandIsAskedAgainTests` (issue #504)** — the follow-up of an auto-denied agy reviewer carries
 `--conversation <id>`, keeps `--mode plan` and the schema, and says commands are unavailable; no follow-up

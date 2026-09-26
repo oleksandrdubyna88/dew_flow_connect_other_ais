@@ -59,6 +59,9 @@ export function controlFrom(tag: string, attributes: string): Control {
   const control = new Control(tag.toUpperCase(), attribute(attributes, 'type'));
   control.value = attribute(attributes, 'value');
   control.disabled = /\sdisabled(?=[\s>]|$)/.test(attributes);
+  // What the page DREW, read like `disabled` — a box drawn ticked starts ticked. Without it every box began
+  // unticked here, and a test could not tell a page drawn from the stored value from one that was not.
+  control.checked = /\schecked(?=[\s>]|$)/.test(attributes);
   for (const [, name, value] of attributes.matchAll(/data-([a-zA-Z-]+)="([^"]*)"/g)) {
     control.dataset[camel(name!)] = value!;
   }

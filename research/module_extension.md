@@ -9251,6 +9251,17 @@ the "orders to the caller" block — it changes what the gate RUNS. `settingsSha
 (`OVERLAID_SETTINGS`), `COAI_STOP_LOCAL_WHEN_QUIET=true` only when on. `gateScope.stopLocalSkewNote` names a
 server older than `STOP_LOCAL_SINCE` (0.34.0) while the box is ticked. The round view (`rounds.reviewerRows`)
 shows a `stood down` row's reason beside its status. The help's *The gate* article says it in five languages.
+A round reads the switch when it STARTS (`PanelService` snapshots it into the round), so the box carries
+*"Takes effect from the next round"* beneath it and every help language says so (2026-09-26: the operator
+ticked it mid-round and the local reviewer went on, as coded). **A refused tick snaps back.** On 2026-09-25 the
+extension updated in place, the window had not registered the new key, VS Code refused both ticks — and the
+box stayed ticked, so the next morning's window read it as off. `PanelProvider.save` now answers whether it
+saved, and a refused plain write whose value is a boolean (`refusedWrite.snapsBackWhenRefused`) repaints the
+panel from what is stored; a text field or a select is not repainted, which would wipe what is being typed.
+The whole plain write is `refusedWrite.writePlain(key, value, cleared, steps)` — clear what the key
+invalidates, save the key, and on a refused box repaint and STOP (a per-side switch that never saved must not
+seed or carry), else run what follows (`PanelProvider.followPlain`). It takes its steps as arguments so the
+order is run in a test, not read from the host's text.
 
 ## CoAI: choose on every bug (2026-09-24, issue #487)
 

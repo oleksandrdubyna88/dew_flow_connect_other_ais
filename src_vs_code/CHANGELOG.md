@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+**A setting that did not save no longer looks saved.** When VS Code refuses a switch — typically right after
+the extension updated and before the window was reloaded — the panel's box goes back to what is really stored
+instead of staying ticked. *Stop the local reviewer when the cloud reviewers found almost nothing* now says it
+takes effect from the next round: a round already running keeps the setting it started with.
+
 ## Extension 0.56.0 · Server 0.38.0 — 2026-09-26
 
 **coai-mcp's review trees can be kept somewhere else.** `COAI_REVIEW_ROOT`, set to an absolute path, is
