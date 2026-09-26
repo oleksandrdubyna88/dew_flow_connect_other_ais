@@ -47,6 +47,20 @@ test('the same change said as docs: passes', () => {
   assert.equal(check('docs: a new page', ['src_mcp/README.md', 'src_vs_code/CHANGELOG.md']).code, FINE);
 });
 
+test('pictures count as documentation: Markdown and images alone are refused too', () => {
+  // The operator, 2026-09-26: a screenshot or a diagram beside a README is still documentation.
+  for (const picture of ['assets/shot.png', 'docs/flow.svg', 'a.JPG', 'b.jpeg', 'c.gif', 'd.webp']) {
+    const { code, said } = check('feat: the pictures', ['src_vs_code/README.md', `src_vs_code/${picture}`]);
+    assert.equal(code, REFUSED, `${picture} beside a README would open an extension release`);
+    assert.match(said, /src_vs_code/);
+  }
+  assert.equal(check('fix: only a picture', ['src_mcp/diagram.png']).code, REFUSED, 'a picture alone is documentation');
+});
+
+test('a picture beside code is code enough — the release stands', () => {
+  assert.equal(check('feat: the icon and its use', ['src_vs_code/media/icon.png', 'src_vs_code/src/panel.ts']).code, FINE);
+});
+
 test('a releasing title with code in the package passes, Markdown beside it or not', () => {
   assert.equal(check('feat: the thing', ['src_mcp/src/Thing.cs', 'src_mcp/README.md']).code, FINE);
 });

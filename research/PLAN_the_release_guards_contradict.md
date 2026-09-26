@@ -9,7 +9,8 @@
 > **Deviations:**
 > - A missing tag PASSES the anchor check (the plan said it fails): it is the state of the very
 >   run that cuts it.
-> - The Markdown rule is per PACKAGE, not per pull request.
+> - The Markdown rule is per PACKAGE, not per pull request — and, by the operator's word the same day,
+>   pictures count as documentation beside Markdown (`DOCUMENTATION` in `docs-only-title.mjs`).
 > - It runs as a step of the already-required `pr · semantic title` job, not a job of its own.
 >
 > **Open tail:** the new order has not yet carried a real mcp release. The first one is its

@@ -1591,7 +1591,9 @@ exact repair that had been applied by hand.
 
 In `--pr` mode it asks for files only for commits of a releasing type, not one request per commit.
 
-It was red with `releases()` planted to always answer no. Run live with `--pr` against #568 (code)
+Since the operator's word the same day, pictures (`.png`, `.jpg`, `.jpeg`, `.gif`, `.svg`, `.webp`) count as
+documentation too: Markdown and a screenshot alone are refused, a picture alone is refused, a picture beside
+code passes (red first on `assets/shot.png`). It was red with `releases()` planted to always answer no. Run live with `--pr` against #568 (code)
 and #571 (`docs:` over CHANGELOG), both passed.
 
 The release order is now:
