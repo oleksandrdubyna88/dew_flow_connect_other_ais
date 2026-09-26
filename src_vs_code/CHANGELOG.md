@@ -1,17 +1,10 @@
 # Changelog
 
-## Unreleased
+## Extension 0.56.0 · Server 0.38.0 — 2026-09-26
 
 **coai-mcp's review trees can be kept somewhere else.** `COAI_REVIEW_ROOT`, set to an absolute path, is
 where coai-mcp keeps the checkouts it makes for reviewing a pair; the test suite uses it so it never reads
 the trees on your machine (issue #544). Nothing changes when it is not set.
-
-## Extension 0.55.0 · Server 0.37.0 — 2026-09-25
-
-**Today, Week, Month, Year or All — on three more tabs.** On the Review rounds page, *Conversations*,
-*Consultations* and *What it keeps missing* now have the period switch *What each AI has used* has, plus
-**All**, opening on Today. *What it keeps missing* is counted by coai-mcp over the period and needs
-coai-mcp 0.37.0; an older one says so and shows all time.
 
 **The consultant is asked on a cadence, not only when an AI admits it is stuck.** After a plan is split into
 epics, every group of three owes one consultation before its first code round — is the group right, where is
@@ -29,6 +22,13 @@ is behind on halves it has.
 
 **Active rounds says where each plan stands** — `PLAN_x.md · epics closed 4/14 · consultation for epics 4-6:
 due` — and **the Consultations tab says what each one was for** in a new *For* column.
+
+## Extension 0.55.0 · Server 0.37.0 — 2026-09-25
+
+**Today, Week, Month, Year or All — on three more tabs.** On the Review rounds page, *Conversations*,
+*Consultations* and *What it keeps missing* now have the period switch *What each AI has used* has, plus
+**All**, opening on Today. *What it keeps missing* is counted by coai-mcp over the period and needs
+coai-mcp 0.37.0; an older one says so and shows all time.
 
 ## Extension 0.54.0 · Server 0.36.0 — 2026-09-25
 
