@@ -147,8 +147,11 @@ added. The paired plan's probe answers whether a non-login process in the distri
    *"not installed"*.
 3. **RED:** a missing binary names every place it checked. This replaces the `"not installed"` assertion at
    `KeyVaultTests.cs:101`; its guarantee (*a missing binary is named*) stays and gets sharper.
-4. **RED:** a found-but-unlaunchable binary (on POSIX a file without `+x`; on Windows a directory named `creds.exe`)
-   is reported as *could not be started*, never *not installed*.
+4. **RED:** a binary the locator **accepts** but the OS will not start is reported as *could not be started*, never
+   *not installed*. The fixture must pass the §4.2 `probe`: on POSIX an executable (`+x`) file holding junk bytes, which
+   `execve` refuses with `ENOEXEC`; on Windows a zero-byte `creds.exe`, which is *not a valid Win32 application*. A
+   file without `+x` would be skipped by rungs 2–3, or reported as *not executable* at rung 1, and could never reach
+   this outcome (PR #588 review). The *not executable* outcome has its own `CredsLocatorTests` row.
 5. `CredsLocator` + `CredsLocatorTests`: every rung, `isWindows` both ways on one runner (the lesson written into
    `ExecutableResolver.cs:48-51`), a `probe` that records every path asked (never `globalStorage`).
 6. `KeyVault.ForThisMachine(launcher, configuration)`; both call sites use it. Steps 1–4 go GREEN.
@@ -171,7 +174,7 @@ added. The paired plan's probe answers whether a non-login process in the distri
 | The environment beats `settings.json`, and `providers` names the winner | `KeyVaultTests` | new |
 | Found at the stable location when PATH has nothing | `KeyVaultTests` | yes |
 | A missing binary names every rung it checked | `KeyVaultTests` (replaces `:93-102`) | yes |
-| Found but unlaunchable → *could not be started* | `KeyVaultTests` | yes |
+| Found (passes the probe) but unlaunchable — junk `+x` file / zero-byte `creds.exe` → *could not be started* | `KeyVaultTests` | yes |
 | An explicit path that is absent or not executable stops there | `CredsLocatorTests` | new |
 | PATH beats the stable location; explicit beats both; a non-executable PATH entry is skipped | `CredsLocatorTests` | new |
 | Never probes `globalStorage` | `CredsLocatorTests` — a `probe` that records every path asked | new |
