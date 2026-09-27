@@ -28,9 +28,28 @@ namespace CoaiMcp.Core.Findings;
 /// filed them (xAI outside <c>completion_tokens</c>, the Alibaba route inside; measured 2026-09-26).
 /// Trailing and defaulted, like the two before it.
 /// </param>
-public sealed record Usage(long TokensIn, long TokensOut, double? CostUsd, long TokensCached = 0, bool NoPriceSet = false, long TokensReasoning = 0)
+/// <param name="NotCaptured">
+/// A launch that ENDED before the vendor could report what it consumed — killed on its deadline or by a
+/// cancellation (<c>ReviewerOutcome.TimedOut</c>), or an <c>api</c> call whose connection dropped or whose
+/// own deadline struck before an answer arrived (the shim's exit 69). Its tokens and its money are
+/// UNKNOWN, not zero: the request may well have been read and billed. What the ledger, the audit line,
+/// <c>status</c> and the rounds log then say is "usage not captured" (<see cref="CostText.UsageNotCaptured"/>),
+/// the same way an unpriced metered run says "no price set" — and a total that folds one in is a floor.
+/// Trailing and defaulted, so every existing construction and every line on disk keeps meaning what it meant.
+/// </param>
+public sealed record Usage(
+    long TokensIn,
+    long TokensOut,
+    double? CostUsd,
+    long TokensCached = 0,
+    bool NoPriceSet = false,
+    long TokensReasoning = 0,
+    bool NotCaptured = false)
 {
     public static readonly Usage None = new(0, 0, null);
+
+    /// <summary>What a launch that ended before the vendor reported anything consumed: unknown, never zero.</summary>
+    public static readonly Usage Unknown = new(0, 0, null, NotCaptured: true);
 
     public Usage Add(Usage other) => new(
         TokensIn + other.TokensIn,
@@ -38,7 +57,9 @@ public sealed record Usage(long TokensIn, long TokensOut, double? CostUsd, long 
         CostUsd is null && other.CostUsd is null ? null : (CostUsd ?? 0) + (other.CostUsd ?? 0),
         TokensCached + other.TokensCached,
         NoPriceSet || other.NoPriceSet,
-        TokensReasoning + other.TokensReasoning);
+        TokensReasoning + other.TokensReasoning,
+        // One unknown share makes the whole sum a floor, and the sum must say so.
+        NotCaptured || other.NotCaptured);
 }
 
 /// <summary>

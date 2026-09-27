@@ -702,6 +702,10 @@ non-finite rate becomes "no rate", and half a tier becomes none. The shim prices
 `no price set` when a metered reviewer had no rate, and the audit's reviewer and round lines write the figure
 or those words through `CostText.Of` — never `$0`. An older server ignores `key` and `price` (the reader skips
 members it does not know): the row reads the key under its own id and runs unpriced, as it did before.
+`RoundRecord.UsageNote` says `usage not captured` beside the tokens and the cost when a reviewer ended before
+its vendor reported usage — killed on its deadline, cancelled, or an `api` call whose connection dropped — so
+the total `status` returns is a floor rather than a claim, and the audit's lines say the same
+([module_runners.md](module_runners.md), 2026-09-27).
 
 **A chosen directory can be partitioned per SIDE (2026-09-13, issue #115).** `COAI_DATA_DIR` has
 always moved the data somewhere that survives a Windows reinstall; what was missing is an answer to

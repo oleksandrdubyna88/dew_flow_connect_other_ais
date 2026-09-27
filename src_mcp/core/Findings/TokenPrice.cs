@@ -70,6 +70,12 @@ public static class CostText
     public const string NoPriceSet = "no price set";
 
     /// <summary>
+    /// What a launch that ended before the vendor reported its usage says instead of a count — never
+    /// <c>0 tokens</c> and never <c>$0</c> (<see cref="Usage.NotCaptured"/>).
+    /// </summary>
+    public const string UsageNotCaptured = "usage not captured";
+
+    /// <summary>
     /// <c>", $0.0123"</c>; <c>", no price set"</c> when a metered run had no rate; or
     /// <paramref name="nothing"/> when nobody priced anything and nothing was metered.
     /// </summary>
@@ -80,4 +86,12 @@ public static class CostText
         (null, true) => $", {NoPriceSet}",
         _ => nothing,
     };
+
+    /// <summary>
+    /// <c>"; usage not captured"</c> and <paramref name="why"/> when a launch ended before its vendor
+    /// reported what it consumed (<see cref="Usage.NotCaptured"/>), or nothing — the count beside it is
+    /// then a floor, never the whole of it.
+    /// </summary>
+    public static string Uncaptured(bool notCaptured, string why = "") =>
+        notCaptured ? $"; {UsageNotCaptured}{why}" : string.Empty;
 }

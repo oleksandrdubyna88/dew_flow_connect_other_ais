@@ -105,7 +105,20 @@ public sealed record UsageEntry(
     /// that says whether a reasoning model's minutes went into thinking. Measured 2026-09-26, grok-4.7 spent
     /// 27,728 reasoning tokens on a 1,557-token answer. Trailing and defaulted like the rest.
     /// </remarks>
-    long TokensReasoning = 0);
+    long TokensReasoning = 0,
+
+    /// <summary>
+    /// <c>usage not captured</c> when the launch ended before the vendor reported what it consumed — or empty.
+    /// </summary>
+    /// <remarks>
+    /// A turn killed on its deadline or by a cancellation, or an <c>api</c> call whose connection dropped
+    /// (<see cref="Usage.NotCaptured"/>): <paramref name="TokensIn"/> and <paramref name="TokensOut"/> then
+    /// hold only what was counted before it — usually nothing — and this says that the rest is UNKNOWN,
+    /// not zero. Written as words beside <paramref name="CostNote"/>'s, for the same reason: a person
+    /// reads this file, and a bare zero says the run was free. Trailing and defaulted like the rest, so an
+    /// old line simply has none.
+    /// </remarks>
+    string UsageNote = "");
 
 /// <summary>
 /// The append-only record of what every reviewer has consumed.
@@ -184,7 +197,9 @@ public sealed class UsageLedger(string dataDir)
             outcome,
             TokensCached: usage.TokensCached,
             CostNote: usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty,
-            TokensReasoning: usage.TokensReasoning);
+            TokensReasoning: usage.TokensReasoning,
+            // Unknown, in words, when the launch ended before its vendor reported anything — never a bare zero.
+            UsageNote: usage.NotCaptured ? CostText.UsageNotCaptured : string.Empty);
 
     /// <summary>Records one job a Team server ran on somebody's behalf.</summary>
     /// <remarks>

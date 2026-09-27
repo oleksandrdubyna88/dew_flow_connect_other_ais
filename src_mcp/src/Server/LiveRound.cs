@@ -218,6 +218,8 @@ public sealed class LiveRound
                 TokensOut = usage.TokensOut,
                 CostUsd = usage.CostUsd,
                 CostNote = usage.NoPriceSet ? Core.Findings.CostText.NoPriceSet : string.Empty,
+                // A reviewer killed before its vendor reported usage leaves the total a floor, and it says so.
+                UsageNote = usage.NotCaptured ? Core.Findings.CostText.UsageNotCaptured : string.Empty,
             };
         }
     }

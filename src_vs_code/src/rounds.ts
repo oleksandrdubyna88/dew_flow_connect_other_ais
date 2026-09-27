@@ -60,6 +60,12 @@ export interface RoundRecord {
   /** Only vendors that price their own runs report this; absent is "unknown", never "free". */
   readonly costUsd?: number | null;
   /**
+   * `usage not captured` when a reviewer of this round ended before its vendor reported what it consumed —
+   * killed on its deadline, cancelled, or an `api` call whose connection dropped. The tokens and the cost
+   * beside it are then a FLOOR. Absent in files written before the server recorded it.
+   */
+  readonly usageNote?: string;
+  /**
    * Which AI ASKED for this round, and which model it declared. Absent in older rounds.
    *
    * <p>A copy the round took when it started, not a reference to the session's — because `open` is

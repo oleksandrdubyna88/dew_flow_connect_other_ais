@@ -1288,6 +1288,24 @@ key's vendor — so its cost is worked out here, from the rates the row carried.
   money). `UsageLedger` writes `costNote: "no price set"` beside `costUsd: null`; `RoundAudit` writes it
   through `CostText.Of`; `LiveRound` puts it on `RoundRecord.CostNote`, which `status` returns
   ([module_server.md](module_server.md#configuration-and-keys)).
+- **A call that ended before its vendor reported usage is "usage not captured", never 0 tokens or $0**
+  (2026-09-27, the plan round's accepted finding on the calibration branch). `Usage.NotCaptured` — the flag
+  beside `NoPriceSet`, OR-ed by `Usage.Add`, so a total that folds one in is a FLOOR and says so;
+  `Usage.Unknown` is the value. Two sources set it: `ReviewerOutcome.TimedOut` (a launch killed on its
+  deadline, or by a cancellation the launcher reports the same way) now carries `Usage = Usage.Unknown` —
+  `Usage.None` only for the turn `TurnLoop` never launched because the conversation's cap was spent — and
+  `ApiRuntime.ReadUsage` answers `Usage.Unknown` for an exit `ApiRuntime.EndedBeforeAnAnswerExit` (69 — a
+  dropped connection, an unreachable endpoint or the shim's own deadline; `AskApiMode.Unavailable` is that
+  constant) with no usage line. Every other lineless exit (65 never sent, 70/75/77 a refusal the vendor
+  answered with) stays zero. `UsageLedger` writes `usageNote: "usage not captured"` (`CostText.UsageNotCaptured`)
+  beside `costUsd: null` and whatever tokens were counted before the kill (a repair's malformed first
+  attempt); `LiveRound` puts it on `RoundRecord.UsageNote`, which `status` returns; `RoundAudit` appends
+  `; usage not captured` to the failed reviewer's line and `; usage not captured for a reviewer, so the total is
+  a floor` to the round's (`CostText.Uncaptured`). A connection refused before anything was sent also exits
+  69 and reads as unknown — the parent cannot tell it from a dropped one, and unknown is never false where
+  zero could be. Tests: `AUsageTheVendorNeverReportedIsUnknownTests` (the ledger line, a killed repair's
+  floor, exit 69 against 65 and 0, the REAL shim past a one-second deadline, `Usage.Add`, the round record,
+  `status`'s JSON, both audit lines).
 - **Tests.** `AnApiReviewerIsPricedAndKeyedTests` — the arithmetic (cached rate, the tier on both sides of
   200K, no cached rate, no price, the clamp), the price on the invocation and off argv, a failed call's raw
   line priced like an answered one's, and two turns through the REAL `coai-mcp --ask-api` binary with the
