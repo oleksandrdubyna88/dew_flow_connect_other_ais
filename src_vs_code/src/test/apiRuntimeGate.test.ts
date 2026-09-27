@@ -172,7 +172,9 @@ test('against an older server every control of the api card is switched off and 
 test('against a server that knows the runtime, or none the panel can version, the api card is live', () => {
   for (const server of [KNOWN(API_RUNTIME_SINCE), panelState('reviewers').server]) {
     const page = runPanel(panelState('reviewers', { vendors: [...DEFAULT_VENDORS, GROK], server }));
-    const grok = page.controls.filter((one) => one.dataset['vendor'] === 'grok');
+    // The feature box is left out, and only it: it has a version gate of its own (`FEATURE_SINCE`,
+    // story S3.3), later than this one, and `featureGate.test.ts` holds it to that gate.
+    const grok = page.controls.filter((one) => one.dataset['vendor'] === 'grok' && one.dataset['setting'] !== 'feature');
 
     assert.ok(grok.length >= 4);
     assert.ok(grok.every((one) => !one.disabled), server.kind);

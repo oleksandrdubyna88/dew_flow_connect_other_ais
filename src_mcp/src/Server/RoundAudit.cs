@@ -79,16 +79,25 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
 
             case ReviewerState.Done when progress.Outcome is ReviewerOutcome.Ok ok:
                 _log.Information(
-                    "reviewer {Provider}/{Role} answered in {Seconds:0.0}s: {Findings} finding(s), {TokensIn} in / {TokensOut} out tokens{Cost}{Repaired}{Evidence}",
+                    "reviewer {Provider}/{Role} answered in {Seconds:0.0}s{Turns}: {Findings} finding(s), {TokensIn} in / {TokensOut} out tokens{Cached}{Cost}{Repaired}{Evidence}{Source}",
                     progress.Provider, progress.Role, progress.Elapsed.TotalSeconds,
-                    ok.Review.Findings.Count(), ok.Usage.TokensIn, ok.Usage.TokensOut,
-                    ok.Usage.CostUsd is { } usd ? $", ${usd:0.0000}" : string.Empty,
+                    // Over how many turns, when it was more than one — the whole conversation's tokens
+                    // then, since the ledger has the per-turn lines (S3.2).
+                    ok.Turns > 1 ? $" over {ok.Turns} turns" : string.Empty,
+                    ok.Review.Findings.Count(), ok.TotalUsage.TokensIn, ok.TotalUsage.TokensOut,
+                    // The cached subset, named only when a vendor reported one: what D25's resent prefix
+                    // is measured by, and a zero here would read as "nothing was cached" for a vendor
+                    // that simply does not say.
+                    ok.TotalUsage.TokensCached > 0 ? $" ({ok.TotalUsage.TokensCached} cached)" : string.Empty,
+                    // A figure, or "no price set" for a metered api run whose row has no rate (S3.7) — never $0.
+                    CostText.Of(ok.TotalUsage.CostUsd, ok.TotalUsage.NoPriceSet),
                     ok.Repaired ? " (after one repair)" : string.Empty,
                     // Only ever present on a reviewer that found NOTHING, which is the one an
                     // operator reading a silent round is looking for. Named here rather than in the
                     // round's reply: every clean round would carry that sentence, and a sentence on
                     // every clean round is one nobody reads on the round that matters.
-                    ok.Evidence.Length > 0 ? $" (its answer was kept at '{ok.Evidence}')" : string.Empty);
+                    ok.Evidence.Length > 0 ? $" (its answer was kept at '{ok.Evidence}')" : string.Empty,
+                    ok.Served.Length > 0 ? $"; source: {ForALogLine(ok.Served)}" : string.Empty);
                 break;
 
             case ReviewerState.Failed when progress.Outcome is { } outcome:
@@ -116,7 +125,7 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
             "round {Round} {Stage} {Verdict}: {Gating} gating finding(s); {Reviewers}; {TokensIn} in / {TokensOut} out tokens{Cost} over {Seconds:0.0}s",
             number, stage, verdict, gatingCount, reviewers,
             record.TokensIn, record.TokensOut,
-            record.CostUsd is { } usd ? $", ${usd:0.0000}" : " (no cost reported)",
+            CostText.Of(record.CostUsd, record.CostNote.Length > 0, nothing: " (no cost reported)"),
             (record.CompletedUtc - record.StartedUtc).TotalSeconds);
     }
 

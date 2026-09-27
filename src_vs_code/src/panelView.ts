@@ -37,6 +37,7 @@ import { Consultation, consultationsBody } from './consultations';
 import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { apiRuntimeSkewNote, DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
+import { featureNote, reviewsFeatures } from './featureGate';
 import { help, segmentedRadio } from './panelControls';
 import { cadenceBlock } from './cadenceSettings';
 import { CadenceLine, cadenceLinesHtml } from './cadenceLine';
@@ -947,6 +948,9 @@ function reviewersBody(state: PanelState): string {
     reported: state.providers?.reported ?? {},
     // Per card, so the sentence names THIS row (`apiRuntimeOnServer` decides whether there is one).
     apiNote: apiRuntimeSkewNote(serverVersion, [v]),
+    // Per card too: a Team server row and an older server switch the feature box off for different
+    // reasons, and the card says which (`featureNote`, story S3.3).
+    featureNote: featureNote(v, serverVersion),
   })).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
@@ -1028,6 +1032,12 @@ interface CardContext {
    * (`vendorsEnv`), so the card and the file agree about what the old server will run.
    */
   readonly apiNote: string;
+  /**
+   * Why this card's "reviews features" box is off — a Team server row (D10), or an installed server
+   * older than `FEATURE_SINCE` — or empty when the box is live. The writer holds the same tick back
+   * (`vendorsEnv`), so the box and the file agree.
+   */
+  readonly featureNote: string;
 }
 
 /**
@@ -1136,11 +1146,11 @@ function priceFields(vendor: Vendor, id: string, local: boolean, remote: boolean
   // rather than two near-identical blocks — which is also what SonarCloud measured as duplication
   // on the pull request that moved the stage boxes onto them.
   const disabled = disabledAttr(off);
-  const rate = (which: 'in' | 'out', listed: number | undefined, typed: number, stage: string): string => `
+  const rate = (which: 'in' | 'out' | 'cached', listed: number | undefined, typed: number, stage: string): string => `
   <div class="field priced">
     ${labelled(`price-${which}-${id}`, `$ / 1M ${which}`, 'vendorPrice')}
     <input type="number" id="price-${which}-${id}" min="0" step="0.01"
-           data-setting="pricePerMillion${which === 'in' ? 'In' : 'Out'}" data-vendor="${id}"
+           data-setting="pricePerMillion${RATE_SETTING[which]}" data-vendor="${id}"
            value="${typed === 0 ? '' : typed}"
            placeholder="${ratePlaceholder(listed)}" title="${escapeHtml(local ? HELP.localPrice : rateNote(vendor.model, price))}"${disabled}>${stage}
   </div>`;
@@ -1148,12 +1158,30 @@ function priceFields(vendor: Vendor, id: string, local: boolean, remote: boolean
   return remote
     ? ''
     : rate('in', price?.inPerMillion, vendor.pricePerMillionIn, plan)
-      + rate('out', price?.outPerMillion, vendor.pricePerMillionOut, code);
+      + rate('out', price?.outPerMillion, vendor.pricePerMillionOut, code)
+      + cachedRate(vendor, price, rate);
 }
+
+/**
+ * An api row's third box: the cached-input rate (S3.7). That row is billed per token by its own vendor
+ * and the SERVER prices its turns, and a prefix-caching vendor charges cached input a fraction of the
+ * input rate — so only it takes one.
+ */
+function cachedRate(
+  vendor: Vendor,
+  price: ModelPrice | undefined,
+  rate: (which: 'cached', listed: number | undefined, typed: number, stage: string) => string,
+): string {
+  return vendor.runtime === 'api' ? rate('cached', price?.cachedPerMillion, vendor.pricePerMillionCached ?? 0, '') : '';
+}
+
+/** The `Vendor` field each rate box writes. */
+const RATE_SETTING: Readonly<Record<'in' | 'out' | 'cached', string>> = { in: 'In', out: 'Out', cached: 'Cached' };
 
 function vendorCard(vendor: Vendor, context: CardContext): string {
   const {
     codexModels, cli, price, localEngine, agyModels, allowedRemote, reported, colour, claudeProbe, askingClaude, apiNote,
+    featureNote: featureOff,
   } = context;
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
@@ -1184,8 +1212,10 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
   // The third one is drawn from the RULE rather than from the stored field, because the stored field
   // can be absent and an unticked box would then be lying about what the next round will do. See
   // `reviewsDocuments`, which `ProviderSettings.Serves` mirrors on the side that decides.
+  // The fourth rides beside it, on the same line: both are stages a card cannot hang on a price.
   const document = stageBox(
-    'document', id, reviewsDocuments(vendor), stageOn, 'reviews documents', help('vendorDocuments'));
+    'document', id, reviewsDocuments(vendor), stageOn, 'reviews documents', help('vendorDocuments'))
+    + featureBox(vendor, id, stageOn, featureOff);
   // An api row's "CLI" is coai-mcp itself, so a CLI path would only ever be filled in wrongly.
   const executable = runtimeFields(vendor, id, remote || api);
   const prices = priceFields(vendor, id, local, remote, price, plan, code, off);
@@ -1292,12 +1322,27 @@ function modelWords(runtime: Runtime): { title: string; empty: string } {
  * the plan round of issue #124.</p>
  */
 function stageBox(
-  kind: 'plan' | 'code' | 'document', id: string, on: boolean, enabled: boolean, text: string, tip = '',
+  kind: 'plan' | 'code' | 'document' | 'feature', id: string, on: boolean, enabled: boolean, text: string, tip = '',
 ): string {
   return `<span class="stages${enabled ? '' : ' off'}"><label class="check">`
     + `<input type="checkbox" data-setting="${kind}" data-vendor="${id}"${on ? ' checked' : ''}${enabled ? '' : ' disabled'}>`
     // The tip AFTER the label: a click inside a label activates its checkbox, so a "?" in it flipped the stage.
     + ` ${text}</label>${tip}</span>`;
+}
+
+/**
+ * The fourth stage box — `reviews features` (story S3.3 of `todo/PLAN_feature_review.md`) — and, when it
+ * is off for a reason of its own, that reason in words beside it.
+ *
+ * <p>Drawn from the RULE (`reviewsFeatures`), like the document box: a Team server row is never ticked
+ * whatever was stored, because the round would not ask it. Off, with the sentence, for a Team server
+ * (D10) and for an installed server older than `FEATURE_SINCE`; the vendor's own master switch still
+ * dims it the way it dims the other three.</p>
+ */
+function featureBox(vendor: Vendor, id: string, stageOn: boolean, note: string): string {
+  const box = stageBox('feature', id, reviewsFeatures(vendor), stageOn && note.length === 0, 'reviews features', help('vendorFeatures'));
+
+  return note.length === 0 ? box : `${box} <span class="hint feature-off">${escapeHtml(note)}</span>`;
 }
 
 

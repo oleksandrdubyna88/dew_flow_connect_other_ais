@@ -186,7 +186,9 @@ export class EscalationWatcher {
    * item, for a person who wants to say something the buttons do not cover.</p>
    */
   async answerCommand(escalation: Escalation): Promise<void> {
-    const choices = decisionChoices();
+    // The question's branch says which review is asking: a feature session's first choice is also the
+    // person's request for that review's second round, and its detail says so.
+    const choices = decisionChoices(escalation.branch);
     const picked = await vscode.window.showQuickPick(
       choices.map((c) => ({ label: c.label, detail: c.detail, choice: c })),
       {

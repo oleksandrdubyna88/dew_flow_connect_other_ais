@@ -339,6 +339,30 @@ public sealed class LiveRoundTests : IDisposable
         record.CostUsd.Should().BeApproximately(0.0489, 0.000001, "the priced vendor's spend is real money spent");
     }
 
+    /// <summary>
+    /// A reviewer's earlier turns (S3.2) are on the outcome's base, and the round's total reads them from
+    /// EVERY outcome — the answered conversation's, and the one whose turn 2 timed out.
+    /// </summary>
+    [Fact]
+    public void Finish_AddsEveryTurnOfAConversation_OnAnAnsweredAndOnAFailedReviewerAlike()
+    {
+        var store = new SessionStore(_dir);
+        var session = Session();
+        store.Save(session);
+        var work = new[] { Work("codex", RoleCatalog.FeatureRole), Work("grok", RoleCatalog.FeatureRole) };
+        var live = new LiveRound(store, session, 1, work, "", Noticing.None);
+        var turnOne = new TurnUsage(1, new Usage(1000, 50, null, TokensCached: 800), TimeSpan.FromSeconds(3));
+
+        var record = live.Finish("proceed", 0, "1 of 2 answered",
+        [
+            (work[0].Invocation, new ReviewerOutcome.Ok(Review(0), false, new Usage(1200, 40, null, TokensCached: 900)) { EarlierTurns = [turnOne] }),
+            (work[1].Invocation, new ReviewerOutcome.TimedOut { EarlierTurns = [turnOne] }),
+        ]);
+
+        record.TokensIn.Should().Be(1000 + 1200 + 1000, "turn 1 of the reviewer that timed out on turn 2 still cost what it cost");
+        record.TokensOut.Should().Be(50 + 40 + 50);
+    }
+
     [Fact]
     public void ARoundAbandonedByADeadProcess_IsSwept_NeverLeftRunningForever()
     {

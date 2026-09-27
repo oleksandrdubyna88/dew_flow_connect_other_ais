@@ -62,6 +62,7 @@ import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
 import { regionOr } from './logRegions';
+import { PRICE_BOOK } from './priceBook';
 import { ExistingFile, ServerSettingsSync, SyncOutcome } from './serverSettingsSync';
 import { lockIsStale } from './settingsLock';
 import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
@@ -229,7 +230,13 @@ export function activate(context: vscode.ExtensionContext): void {
       title: 'The bug could not be put into a chat.',
       detail: asText(reason),
     });
-  }));
+  }),
+  // New price tables → the settings file again, since an api row's price rides in it (S3.7).
+  () => {
+    if (mirroring !== undefined) {
+      mirrorSettings(mirroring);
+    }
+  });
   // The panel repaints whenever the watcher's state moves, so a question answered in the modal
   // disappears from the sidebar without anyone asking it to.
   watcher.onChanged = () => {
@@ -284,8 +291,19 @@ export function activate(context: vscode.ExtensionContext): void {
     // this side's binary, else the install record. It gates an `api` row out of the file of a
     // server too old to know the runtime (PLAN_feature_review.md §4.13).
     () => knownServerVersion(context.globalStorageUri, context.globalState),
+    // An api row's price crosses with the row (PLAN_feature_review.md S3.7): the window's shared book,
+    // asking the row's own provider first when its endpoint names one.
+    () => (vendor) => PRICE_BOOK.priceOf(vendor.model, vendor.baseUrl),
   );
   mirrorSettings(settingsSync);
+  // The lists are fetched here only when an api reviewer needs pricing — the one row whose cost the
+  // SERVER works out — and the file is written again once they land. Nobody else pays for a download.
+  if (readCoaiConfiguration(context).vendors.some((vendor) => vendor.enabled && vendor.runtime === 'api')) {
+    void PRICE_BOOK.refresh().then(
+      (fetched) => (fetched ? mirrorSettings(settingsSync) : undefined),
+      (reason: unknown) => console.error('ConnectOtherAIs: the price lists could not be fetched', reason),
+    );
+  }
   // Every deletion a crashed or reloaded window left half-done: step 2 again, idempotent, and then
   // it waits for the mirror like every other one. Nothing FINISHES here, because nothing has been
   // carried yet — `tellTheDeletions` is where that happens.

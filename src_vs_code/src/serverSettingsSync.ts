@@ -1,7 +1,7 @@
 import { updateAvailable } from './cliVersions';
 import { CoaiSettings } from './settingsShape';
 import { serverSettingsJson, writtenBy } from './serverSettingsFile';
-import { Vendor } from './vendors';
+import { RowPriceLookup, Vendor } from './vendors';
 
 /** Everything the sync needs from the editor, so the sync itself needs nothing from it. */
 export type ReadConfiguration = () => { settings: CoaiSettings; vendors: readonly Vendor[] };
@@ -142,6 +142,12 @@ export class ServerSettingsSync {
      * row may cross into the file (`vendorsEnv`); empty means unknown, which is not old.
      */
     private readonly installedServerVersion: () => string = () => '',
+    /**
+     * What an `api` row's model costs by the list, read at every sync: the price crosses to the server
+     * with the row (PLAN_feature_review.md S3.7), and the lists arrive after activation, so the lookup is
+     * asked when the file is written rather than captured when this was built. Nothing prices nothing.
+     */
+    private readonly priceOf: () => RowPriceLookup = () => () => undefined,
   ) {}
 
   /**
@@ -164,7 +170,7 @@ export class ServerSettingsSync {
    */
   async sync(): Promise<SyncOutcome> {
     const { settings, vendors } = this.read();
-    const json = serverSettingsJson(settings, vendors, this.version, this.installedServerVersion());
+    const json = serverSettingsJson(settings, vendors, this.version, this.installedServerVersion(), this.priceOf());
     if (json === this.lastWritten && !this.stoodDown) {
       return 'unchanged';
     }

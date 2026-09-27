@@ -87,6 +87,12 @@ export const HELP = {
     + 'until you turn it on, whatever the other two boxes say. On a reviewer that runs here it '
     + 'follows the plan box until you change either of those two, at which point it keeps what it '
     + 'had.',
+  vendorFeatures:
+    'Whether this reviewer is asked to review a whole FEATURE — once, at the end of a plan of three or '
+    + 'more epics, before the release, when every epic is built. Off unless you tick it: the gate reads '
+    + 'silence as no, so a configuration from before the feature gate sends nothing anywhere. It runs '
+    + 'from coai-mcp 0.39.0, and never on a Team server yet. A vendor that took no part in writing or '
+    + 'reviewing the work is the one worth ticking — different eyes notice different things.',
   vendorEnabled:
     'Whether this reviewer takes part. Switching one off keeps its settings — the next round simply runs without it.',
   vendorModel:

@@ -17,7 +17,7 @@ import { DEFAULT_PERIOD, LogPeriod, periodButtonsHtml } from './logPeriod';
 // Moved to a leaf so the sidebar's cadence line can use it without an import cycle; still exported here.
 export { repoNameOf };
 import { Vendor } from './vendors';
-import { calledBy, decideSecondsOf, MAX_PLAUSIBLE_SECONDS, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
+import { calledBy, decideSecondsOf, MAX_PLAUSIBLE_SECONDS, noteOf, reviewerLines, reviewerRows, RoundRecord, SessionFile, stageName } from './rounds';
 import { vendorPalette, VendorPalette } from './vendorColour';
 import {
   BlindSpot, countsByRound, DbConsultation, DbFinding, DbLog, DbTotals, decisionsByRound, EMPTY_LOG, EMPTY_TOTALS,
@@ -73,8 +73,17 @@ export interface LogRow {
   /**
    * `awaiting` is a finished round whose findings nobody has decided about yet — `done` is about the
    * REVIEWERS having answered, and whether the gate was closed is a different fact.
+   *
+   * <p>`skipped` is a round nobody could serve (D1 of `todo/PLAN_feature_review.md`): recorded with its
+   * reason, and it does NOT block. A neutral state of its own rather than `done`, which would read as a
+   * review that happened.</p>
    */
-  readonly status: 'running' | 'done' | 'interrupted' | 'awaiting';
+  readonly status: 'running' | 'done' | 'interrupted' | 'awaiting' | 'skipped';
+  /**
+   * Why a SKIPPED round did not run, with `×N` when one row stands for N skips — empty for every round
+   * that ran, and for every conversation (`noteOf`).
+   */
+  readonly note: string;
 
   /**
    * How the gate closed: accepted and rejected counts, or `null` for a round the database has never
@@ -113,6 +122,11 @@ export interface LogRow {
   readonly costIsEstimate: boolean;
   /** True when at least one reviewer's model had no listed price, so the total is a floor. */
   readonly costPartial: boolean;
+  /**
+   * `no price set` when there is no figure because a metered `api` reviewer's row carried no rate (S3.7)
+   * — said instead of the dash, which means "nobody knows" for a CLI that never reports money.
+   */
+  readonly costNote?: string;
   /** How many answered, in the server's own words ("7 of 9 reviewers answered"). */
   readonly answered: string;
   readonly vendors: readonly string[];
@@ -332,6 +346,7 @@ function chatRow(record: ChatTurnRecord, turn: number, priceOf: PriceOfModel): L
     number: turn,
     subject: record.title,
     status: record.outcome === 'answered' ? 'done' : 'interrupted',
+    note: '',
     decided: null,
     verdict: '',
     gating: 0,
@@ -457,6 +472,9 @@ function rowFrom(
   const foundCount = counts.get(key) ?? found.length;
   const decided = decidedBy.get(key) ?? null;
   const status = statusOf(round, foundCount, decided);
+  // A round nobody ran has nothing to find, so it is `loaded` with none from the start — opening it
+  // must not spawn a read for findings that were never going to exist.
+  const skipped = status === 'skipped';
   const states = round.reviewerStates ?? [];
   const rows = reviewerRows(round);
 
@@ -472,6 +490,7 @@ function rowFrom(
     number: round.number,
     subject: round.subject ?? '',
     status,
+    note: noteOf(round),
     decided,
     verdict: round.verdict,
     gating: round.gatingCount,
@@ -489,7 +508,7 @@ function rowFrom(
     reviewerColours: rows.map((r) => colour(r.provider)),
     found,
     foundCount,
-    foundState: foundState(known, whole, inline, found),
+    foundState: skipped ? 'loaded' : foundState(known, whole, inline, found),
     origin: known ? 'db' : 'session',
     dbKey: { sessionId: session.state.sessionId, stage: round.stage, number: round.number },
   };
@@ -547,6 +566,11 @@ function statusOf(
   if (round.status === 'interrupted') {
     return 'interrupted';
   }
+  // The verdict, not the reviewer states: a skip has none, and neither does a round from an older
+  // server — only the verdict tells "nobody could run" from "nobody recorded who ran".
+  if (round.verdict === 'skipped') {
+    return 'skipped';
+  }
 
   return decided !== null && decided.accepted < 0 && foundCount > 0 ? 'awaiting' : 'done';
 }
@@ -578,15 +602,16 @@ function costOf(
   priceOf: PriceOfModel,
   usage: readonly UsageEntry[],
   nowMs: number,
-): Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial'> {
+): Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial' | 'costNote'> {
   const billed = round.costUsd ?? null;
+  const lines = linesOf(round, usage, nowMs);
   let inUsd = 0;
   let outUsd = 0;
   let priced = 0;
   let unpriced = 0;
   let tokensIn = 0;
   let tokensOut = 0;
-  for (const line of linesOf(round, usage, nowMs)) {
+  for (const line of lines) {
     const price = priceOf(line.model, line.provider);
     if (price === undefined || line.tokensIn === undefined || line.tokensOut === undefined) {
       unpriced += 1;
@@ -606,8 +631,13 @@ function costOf(
     costTotalUsd: billed ?? (nothingPriced ? null : round4(inUsd + outUsd)),
     costIsEstimate: billed === null && !nothingPriced,
     costPartial: !nothingPriced && (unpriced > 0 || drifted(round, tokensIn + tokensOut)),
+    // The server's own words for a metered run it could not price — only where there is no figure.
+    ...(billed === null && nothingPriced && lines.some((line) => line.costNote === NO_PRICE_SET) ? { costNote: NO_PRICE_SET } : {}),
   };
 }
+
+/** What the server writes for a metered run whose row has no rate (`CostText.NoPriceSet`). */
+const NO_PRICE_SET = 'no price set';
 
 /**
  * The ledger lines that belong to this round: written while it ran, and of its own stage.
@@ -654,7 +684,9 @@ function secondsOf(round: RoundRecord, status: LogRow['status'], nowMs: number):
   if (status === 'running') {
     return Math.max(0, Math.round((nowMs - started) / 1000));
   }
-  if (status === 'interrupted') {
+  // A skip ran nothing, so it has no duration — and a coalesced one (`×N`) spans from the first skip to
+  // the last, which would read as a review that took that long.
+  if (status === 'interrupted' || status === 'skipped') {
     return null;
   }
   const completed = Date.parse(round.completedUtc);
@@ -711,25 +743,27 @@ export function money(value: number | null | undefined): string {
  */
 export function cost3(row: Costed, figure: Money): string {
   if (typeof row.costTotalUsd !== 'number') {
-    return '—';
+    // "no price set" for a metered api reviewer with no rate, never $0 and never a dash (S3.7). No backticks here:
+    // this function is embedded in the page by its source text, inside a template literal.
+    return row.costNote || '—';
   }
 
   return (row.costIsEstimate ? '~' : '')
     + figure(row.costInUsd) + ' / ' + figure(row.costOutUsd) + ' / ' + figure(row.costTotalUsd)
-    + (row.costPartial ? '+' : '');
+    + ['', '+'][Number(row.costPartial)];
 }
 
 /** The same thing in words, for the cell's tooltip — the column is narrow and the marks are one character. */
 export function costTitle(row: Costed, figure: Money): string {
   if (typeof row.costTotalUsd !== 'number') {
-    return 'No price is listed for these models, so this round has no cost figure.';
+    return row.costNote
+      ? 'An API reviewer in this round has no price set — give its row a rate per million tokens, or let the published list price it.'
+      : 'No price is listed for these models, so this round has no cost figure.';
   }
   const how = row.costIsEstimate
     ? 'Worked out from a public price list, not billed.'
     : 'Reported by the vendor.';
-  const part = row.costPartial
-    ? ' Some of it could not be priced, so the total is a floor.'
-    : '';
+  const part = ['', ' Some of it could not be priced, so the total is a floor.'][Number(row.costPartial)];
 
   return 'Input ' + figure(row.costInUsd) + ' + output ' + figure(row.costOutUsd)
     + ' = ' + figure(row.costTotalUsd) + '. ' + how + part;
@@ -739,7 +773,7 @@ export function costTitle(row: Costed, figure: Money): string {
 export type Money = (value: number | null | undefined) => string;
 
 /** Just the cost fields, because these three run in the page against plain row objects. */
-export type Costed = Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial'>;
+export type Costed = Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial' | 'costNote'>;
 
 /** Which view a row belongs to. The tabs are the two halves of this one predicate. */
 export type LogView = 'rounds' | 'conversations';
@@ -1354,6 +1388,7 @@ export function roundsLogHtml(
   .badge.interrupted { background: var(--vscode-charts-orange); color: var(--vscode-editor-background); }
   .badge.done { background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
   .badge.awaiting { background: var(--vscode-charts-purple); color: var(--vscode-editor-background); }
+  .badge.skipped { background: transparent; color: var(--vscode-descriptionForeground); border: 1px dashed var(--vscode-descriptionForeground); }
   .decided { margin-left: 6px; opacity: .85; white-space: nowrap; }
   /* The deciding time sits beside the reviewers' time and must not compete with it: the
      question people scan this column for is still how long the round took. */
@@ -1592,7 +1627,9 @@ export function roundsLogHtml(
   }
 
   function badge(status) {
-    var said = status === 'awaiting' ? 'awaiting decisions' : status;
+    // A skip says in the badge itself that it did not block: "skipped" alone reads like a stage the
+    // caller forgot, and the whole point of D1 is that it is recorded AND lets the release through.
+    var said = status === 'awaiting' ? 'awaiting decisions' : status === 'skipped' ? 'skipped — did not block' : status;
     return '<span class="badge ' + esc(status) + '">' + esc(said) + '</span>';
   }
   function decided(row) {
@@ -1609,6 +1646,12 @@ export function roundsLogHtml(
     // purpose: a session written by an older server has no reviewer detail, and one written by a
     // newer one against an older extension is the case this line exists for.
     var asked = askedByHtml(row.calledBy, esc);
+    // A skip has no reviewers because nobody COULD run — not because an older server wrote it — and
+    // nothing to have found. What it has is the server's reason, which is the one thing worth saying.
+    if (row.status === 'skipped') {
+      return asked + '<div class="reviewer skipnote">Nobody reviewed this round, and it did not block: '
+        + esc(row.note || 'the server recorded no reason') + '</div>';
+    }
     if (row.reviewers.length === 0) {
       return asked + '<div class="reviewer">This round recorded no reviewer detail — it was written by an older server.</div>';
     }

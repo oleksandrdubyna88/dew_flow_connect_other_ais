@@ -155,7 +155,10 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 + Number(model.Value, "cacheCreationInputTokens")
                 + Number(model.Value, "cacheReadInputTokens"),
                 Number(model.Value, "outputTokens"),
-                Cost(model.Value)));
+                Cost(model.Value),
+                // The part of the input that was a cache HIT — counted above as billed input, and named
+                // here as the cached subset a follow-up turn's resent prefix is measured by (D25).
+                Number(model.Value, "cacheReadInputTokens")));
         }
 
         return usage;

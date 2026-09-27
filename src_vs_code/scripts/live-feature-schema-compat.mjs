@@ -35,18 +35,12 @@
  * <b>2</b> the old binary could not be obtained, which is an environment answer rather than a
  * contract failure.</p>
  */
-import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { mkdtempSync, writeFileSync, mkdirSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
-
-const NETWORK_MS = 180_000;
-const LOCAL_MS = 60_000;
-
-const REPO = 'oleksandrdubyna88/dew_flow_connect_other_ais';
-const HERE = path.join(import.meta.dirname, '..', '..');
+import { flag, newServer, releasedServer, run } from './releasedHalves.mjs';
 
 const broken = [];
 const say = (ok, what, detail = '') => {
@@ -55,106 +49,6 @@ const say = (ok, what, detail = '') => {
     broken.push(what);
   }
 };
-
-const flag = (name, fallback) => {
-  const found = process.argv.find((a) => a.startsWith(`--${name}=`));
-
-  return found === undefined ? fallback : found.slice(name.length + 3);
-};
-
-/** A one-shot mode, or a serve that ends on EOF: stdout is the answer, the exit code is what happened. */
-function run(exe, args, dataDir) {
-  return new Promise((resolve) => {
-    const child = spawn(exe, args, { shell: false, env: { ...process.env, COAI_DATA_DIR: dataDir } });
-    let out = '';
-    let err = '';
-    const deadline = setTimeout(() => {
-      err += `\n(no answer within ${LOCAL_MS / 1000}s — killed)`;
-      child.kill('SIGKILL');
-    }, LOCAL_MS);
-    deadline.unref();
-    child.stdin.end();
-    child.stdout.on('data', (chunk) => { out += String(chunk); });
-    child.stderr.on('data', (chunk) => { err += String(chunk); });
-    child.on('error', (reason) => { clearTimeout(deadline); resolve({ code: -1, out, err: String(reason) }); });
-    child.on('close', (code) => { clearTimeout(deadline); resolve({ code: code ?? -1, out, err }); });
-  });
-}
-
-function newServer() {
-  const exe = process.platform === 'win32' ? 'coai-mcp.exe' : 'coai-mcp';
-  const built = path.join(HERE, 'src_mcp', 'src', 'bin', 'Debug', 'net10.0', exe);
-
-  return existsSync(built) ? built : '';
-}
-
-/** The released server, downloaded once — the newest, or the tag asked for. */
-function oldServer(into) {
-  if (process.env['COAI_OLD_SERVER'] !== undefined && existsSync(process.env['COAI_OLD_SERVER'])) {
-    return process.env['COAI_OLD_SERVER'];
-  }
-  let tag = flag('tag', '');
-  if (tag === '') {
-    // Published releases only: a DRAFT is somebody's release in progress, with no assets a person
-    // could have installed — measured 2026-09-26, when the newest tag was a draft carrying three of
-    // its six platforms.
-    const listed = spawnSync('gh', ['release', 'list', '--repo', REPO, '--limit', '40', '--exclude-drafts', '--json', 'tagName'], {
-      encoding: 'utf8', shell: false, timeout: NETWORK_MS,
-    });
-    if (listed.status !== 0) {
-      return '';
-    }
-    tag = JSON.parse(listed.stdout).map((one) => one.tagName).find((one) => one.startsWith('mcp-v')) ?? '';
-  }
-  if (tag === '') {
-    return '';
-  }
-  const asset = process.platform === 'win32'
-    ? `*win-${process.arch === 'arm64' ? 'arm64' : 'x64'}.zip`
-    : `*${process.platform === 'darwin' ? 'osx' : 'linux'}-${process.arch === 'arm64' ? 'arm64' : 'x64'}.tar.gz`;
-  const got = spawnSync('gh', ['release', 'download', tag, '--repo', REPO, '--pattern', asset, '--dir', into], {
-    encoding: 'utf8', shell: false, timeout: NETWORK_MS,
-  });
-  if (got.status !== 0) {
-    console.log(`could not download ${tag}: ${got.stderr}`);
-
-    return '';
-  }
-  const archive = readdirSync(into).find((one) => one.endsWith('.zip') || one.endsWith('.tar.gz'));
-  if (archive === undefined) {
-    return '';
-  }
-  const unpacked = path.join(into, 'old');
-  mkdirSync(unpacked, { recursive: true });
-  const opened = unpack(path.join(into, archive), unpacked);
-  if (opened.status !== 0) {
-    console.log(`could not unpack ${archive}: ${opened.stderr}`);
-
-    return '';
-  }
-  const exe = process.platform === 'win32' ? 'coai-mcp.exe' : 'coai-mcp';
-  const found = readdirSync(unpacked, { recursive: true }).find((one) => String(one).endsWith(exe));
-  console.log(`old: ${tag}`);
-
-  return found === undefined ? '' : path.join(unpacked, String(found));
-}
-
-/** bsdtar by its absolute path on Windows — `tar` is two different programs there (see live-close-consult-compat.mjs). */
-function unpack(archive, into) {
-  const bsdtar = process.platform === 'win32'
-    ? path.join(process.env['SystemRoot'] ?? 'C:\\Windows', 'System32', 'tar.exe')
-    : 'tar';
-  if (process.platform !== 'win32' || existsSync(bsdtar)) {
-    return spawnSync(bsdtar, ['-xf', archive, '-C', into], { encoding: 'utf8', timeout: NETWORK_MS });
-  }
-
-  return spawnSync(
-    'powershell',
-    ['-NoProfile', '-NonInteractive', '-Command',
-      `Expand-Archive -LiteralPath '${archive}' -DestinationPath '${into}' -Force`],
-    { encoding: 'utf8', timeout: NETWORK_MS },
-  );
-}
 
 const now = () => new Date().toISOString().replace('Z', '0000Z');
 
@@ -230,7 +124,7 @@ if (built.length === 0) {
   console.log('this checkout has no built server — run `dotnet build dew_flow_connect_other_ais.slnx -c Debug` first');
   process.exit(2);
 }
-const old = oldServer(work);
+const old = releasedServer(work, flag('tag', ''));
 if (old.length === 0) {
   console.log('the released server could not be obtained; nothing here is a contract result');
   process.exit(2);

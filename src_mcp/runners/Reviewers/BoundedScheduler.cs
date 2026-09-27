@@ -25,7 +25,15 @@ public sealed record ReviewerWork(
     ReviewerInvocation Invocation,
     ReviewerInvocation? Repair = null,
     string Prompt = "",
-    int? PromptBytes = null);
+    int? PromptBytes = null)
+{
+    /// <summary>
+    /// What happens after this launch answers: another turn, or nothing — <see cref="ReviewerContinuation.None"/>
+    /// for every stage but the feature review (S3.2). The scheduler holds the reviewer's slot across
+    /// every turn it hands back.
+    /// </summary>
+    public IReviewerContinuation Continue { get; init; } = ReviewerContinuation.None;
+}
 
 /// <summary>
 /// One reviewer crossing a line, reported the moment it happens.
@@ -381,11 +389,14 @@ public sealed class BoundedScheduler(
     }
 
     /// <summary>
-    /// The launch itself, once every slot is held — the same in both lanes.
+    /// The launch itself, once every slot is held — the same in both lanes: the reviewer's whole
+    /// CONVERSATION (<see cref="TurnLoop"/>), one turn for every reviewer but a feature reviewer that
+    /// asked for source, and one terminal outcome either way.
     /// </summary>
     /// <remarks>
     /// A reviewer cancelled while RUNNING is reported, not thrown: it once threw out of the fan-out,
     /// so <c>Task.WhenAll</c> faulted and the round reported none of its finished reviewers either.
+    /// A conversation cancelled on its second turn carries its first turn's usage out with it.
     /// </remarks>
     private async Task<(ReviewerInvocation, ReviewerOutcome)> LaunchAsync(
         ReviewerWork w,
@@ -395,15 +406,16 @@ public sealed class BoundedScheduler(
     {
         Report(onProgress, w.Invocation, "running");
         var watch = System.Diagnostics.Stopwatch.StartNew();
+        var loop = new TurnLoop((turn, token) => RunWithLadderAsync(turn, executor, onProgress, token), onProgress);
         try
         {
-            var outcome = await RunWithLadderAsync(w, executor, onProgress, ct);
-            Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed);
+            var outcome = await loop.RunAsync(w, ct);
+            Report(onProgress, w.Invocation, outcome is ReviewerOutcome.Ok ? "done" : "failed", outcome, watch.Elapsed, TurnLoop.Note(outcome));
             return (w.Invocation, outcome);
         }
         catch (OperationCanceledException)
         {
-            return Abandoned(onProgress, w.Invocation, watch.Elapsed, "was cancelled while it was running");
+            return Abandoned(onProgress, w.Invocation, watch.Elapsed, "was cancelled while it was running", loop.Earlier);
         }
     }
 
@@ -416,14 +428,19 @@ public sealed class BoundedScheduler(
     /// cancelled with five reviewers finished would have reported none of them. Raised twice in this
     /// change's code round, against two of the three waits.
     /// </remarks>
+    /// <param name="earlier">The turns that answered before the round ended — kept, so they are still billed.</param>
     private static (ReviewerInvocation, ReviewerOutcome) Abandoned(
         Action<ReviewerProgress>? onProgress,
         ReviewerInvocation invocation,
         TimeSpan elapsed,
-        string what = "was still queued")
+        string what = "was still queued",
+        IReadOnlyList<TurnUsage>? earlier = null)
     {
         var outcome = new ReviewerOutcome.NotStarted(
-            $"the round ended while this reviewer {what}, after {elapsed.TotalSeconds:F0}s");
+            $"the round ended while this reviewer {what}, after {elapsed.TotalSeconds:F0}s")
+        {
+            EarlierTurns = earlier ?? [],
+        };
         Report(onProgress, invocation, "failed", outcome, elapsed);
 
         return (invocation, outcome);
@@ -542,10 +559,14 @@ public sealed class BoundedScheduler(
             await Task.Delay(wait.Value, ct);
             attempts += 1;
             // What is LEFT of the deadline, never the whole of it again.
-            outcome = await executor.RunAsync(
+            var next = await executor.RunAsync(
                 RetryLadder.WithinRemaining(w.Invocation, watch.Elapsed, budget),
                 w.Repair is null ? null : RetryLadder.WithinRemaining(w.Repair, watch.Elapsed, budget),
                 ct);
+            // The step being left behind may have PAID: a first launch that completed and answered
+            // junk, whose repair was then the launch that was rate limited. Its cost rides forward on
+            // the next step's outcome, whatever that outcome is, or the ladder files it as free.
+            outcome = next with { EarlierLaunches = outcome.LastTurnUsage.Add(next.EarlierLaunches) };
         }
 
         return outcome is ReviewerOutcome.RateLimited hopeless

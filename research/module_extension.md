@@ -2523,8 +2523,8 @@ fixtures build a real `SessionFile` instead of casting to one.
 
 ## The seed's fourth stage reaches the panel (2026-09-26, S2.1 of the feature-review plan)
 
-The minimum the shared seed forces on this half, and no more: the vendor tick, the tool and the log's
-rendering of a skipped round are epic 3's.
+The minimum the shared seed forces on this half, and no more: the vendor tick and the log's rendering
+of a skipped round came with S3.3a (below); the tool is the server's (S2.2).
 
 | what | where |
 |---|---|
@@ -2535,8 +2535,60 @@ rendering of a skipped round are epic 3's.
 | **A fourth group in the Prompts section and a fourth tab on the roles page** (`feature`), because every shipped role must be drawn somewhere with its rounds, its threshold and its switch — and drawn among the code roles it would have been counted as one. The feature role is never "the last role standing": unticking it is the gate's switch, and a feature round with nobody in it is recorded as skipped rather than left open. A feature-stage row that is not a programming task gets the `plan:document` treatment — drawn, hinted, run by nothing. The manifest's three defaults (`coai.rounds`, `coai.thresholds`, `coai.roleEnabled`) carry the role too, so a revert in the settings editor restores what the code ships. | `panelView.ts`, `rolesPage.ts`, `package.json` |
 | **A tone of its own** — `feature`, red, the one charts colour the palette had left — so the six programming roles stay six colours in both views; a feature-stage row of a person's own takes the same edge, as a plan-stage row takes the plan's. | `roleTone.ts` |
 
-The stage `<select>` on the roles page still offers `plan` and `result` only; offering `feature` there is
-epic 3's, with the vendor card's fourth switch.
+The stage `<select>` on the roles page offered `plan` and `result` only until S3.3a (below), which added
+`feature`.
+
+## The feature gate on the person's side (2026-09-26, S3.3a of the feature-review plan)
+
+The first half of story S3.3 of [PLAN_feature_review.md](../todo/PLAN_feature_review.md): a person can
+tick a vendor for features, see a skipped round for what it is, read about both in the help, and paste a
+snippet that tells an AI when to call `review_feature`, and put a role of their own in the feature stage.
+The rest of S3.3 — the released halves measured, the other modules' docs, `architecture.md` (*Four gates,
+not three*) and the CHANGELOG — is the next section; the plan's promotion waits on S3.2, S3.4 and S3.5.
+
+| what | where |
+|---|---|
+| **`Vendor.feature?` — absent is NO.** The opposite reading from `plan`/`code`, because the server reads it that way (`ProviderSettings.Feature`): a configuration from before the stage sends no feature anywhere. Stored only when `true` (`featureField`); a Team-server row loses a stored `true` (D10 — `Serves(FeatureReview)` is `Feature && !IsRemote`, so the tick would be a box the round ignores). `reviewsFeatures(vendor)` is the one rule every reader uses. | `featureGate.ts`, `vendors.ts` |
+| **`FEATURE_SINCE = '0.39.0'`**, the next minor after `mcp-v0.38.0` — the newest tag on 2026-09-26, checked by ancestry not to contain S2.1's stage. `vendorsEnv(vendors, installedServerVersion)` writes `feature: true` only for a ticked, non-remote row AND a server not known to be older (`featureOnTheWire`); the row itself always crosses, so the vendor keeps reviewing plans and code. Unknown is not old, as for `API_RUNTIME_SINCE`. | `featureGate.ts`, `vendors.ts` |
+| **A change to a shipped row reaches the file.** `envBlock` wrote no `COAI_VENDORS` when the list matched the shipped rows by id/runtime/model/enabled/baseUrl — a hand-kept subset of fields — so ticking features, unticking *reviews plans* or *reviews code*, saying yes or no to *reviews documents*, or setting a CLI path on the default codex+antigravity reached nothing while the card showed the change (the server has no other road for the CLI path: the extension emits no `COAI_EXE_*`). The subset is gone: the list is written when its WIRE form (`vendorsEnv(vendors)`, compared without the version gate, so a difference only an older server cannot take still writes the list as before) differs from the shipped list's, then written version-gated. A field the wire gains is compared the day it is added; a price, which never crosses, never counts. | `settingsShape.ts`, `shippedVendorsDiffer.test.ts` |
+| **The roles page's Stage select offers `feature`** ("Feature review"), selected for a feature-stage row, which S2.1's feature tab already draws; the host's edit stores it (`restaged`, which the bucket limits already guard). | `rolesPage.ts`, `featureStageOnRolesPage.test.ts` |
+| **The card's fourth switch, "reviews features"**, on the document box's line (`featureBox`, drawn from the rule like the document box). Off, with the reason beside it, for a Team-server row ("Team servers do not run feature reviews yet.") and for an installed server older than `FEATURE_SINCE` (`featureNote`, per card through `CardContext.featureNote`); the vendor's master switch dims it like the other three. Tooltip `HELP.vendorFeatures`. | `panelView.ts`, `help.ts` |
+| **`stageName` is a table**: `DocumentReview` → "document review" (§9.5 — the log showed the raw enum), `FeatureReview` → "feature review", an unknown stage raw (a `Map`, so `constructor` reads as itself). | `rounds.ts` |
+| **A skipped round is its own neutral state.** `statusOf` answers `skipped` from the VERDICT (a skip has no reviewer states, and neither does an old server's round); the page draws `skipped — did not block` in a dashed, uncoloured badge; the row has no duration (a coalesced `×N` skip spans first to last skip, which would read as a long review); it is `loaded` with no findings from the start, so opening it spawns no read; opened, it shows the server's reason — `noteOf(round)`, the session file's `note` with `×N` from `repeats`, the same sentence `RoundRecord.LoggedNote` writes into `--log` — instead of "written by an older server". `LogRow.note` carries it. | `rounds.ts`, `roundsLog.ts` |
+| **Help in five languages**: *choose-reviewers* names the fourth box and 0.39.0, *teach-your-ai* says the paste teaches `review_feature` for plans of 3 or more epics, *recent-rounds* explains the skipped badge. | `helpContent.ts`, `helpRu.ts`, `helpUk.ts`, `helpDe.ts`, `helpEs.ts` |
+| **The snippet's fifth half, `coai-feature` v1 — product-owned.** `src_vs_code/src/featureRule.md` (marker `<!-- coai-feature v1 -->`, heading *Reviewing the whole FEATURE before release*): WHEN (once, at the end of a plan of THREE or more epics, after every epic is built, before the release — smaller plans are `review_code`'s), WHAT (`repoPath`, `planPath`, `baseRef` = the commit before the first epic, `head`, `epics` with their branches, `lessons` with three non-empty arrays and "none" with a reason), the verdicts (`skipped` does not block — tell the person; `revise` → fixes as NEW pull requests, then again with the new `head`; `call_human` stops the release; `again: true` after done), and `feature: <planPath>` on resolve/status/ask_human. `prepare-gate.mjs` emits it to `generated/featureRule.ts` exactly as the consultant half was emitted before it moved into the conventions (invalidate, verify marker+heading, write; a missing file fails naming itself). `KNOWN_HALVES` gains the row between the document gate and the caller, with a new `mounted` field (`false` only here); `FEATURE_VERSION` 1, `ARTEFACT_VERSION` 12 → 13, the menu title `(v13)`, `SNIPPET_BODY_SHA` re-pinned. | `featureRule.md`, `scripts/prepare-gate.mjs`, `claudeSnippet.ts`, `package.json`, `.gitignore` |
+| **A mount is judged on what a mount can carry.** No mount holds the product-owned half, so `readSnippetStatus` judges a selected MOUNT on the mounted halves only (`MOUNTABLE_HALVES`) and `MOUNTED_SIBLINGS` skips unmounted rows — otherwise every mounting repository would be told, for ever, that it lacks a half no mount can give it, with advice (paste the block over the mount) its own shared-rule check forbids. The instruction reaches such a repository through the `review_feature` tool description (D11). A real paste is still judged on every half. | `claudeSnippet.ts` |
+| **The panel harness reads `checked`** from the rendered markup, as a DOM does (and not from a data attribute that happens to say "checked"), with its own test. | `test/panelPageHarness.ts` |
+
+Tests: `featureGate.test.ts` (storage, the wire, the version gate, the defaults comparison, the card RUN),
+`featureStageNames.test.ts`, `featureSnippet.test.ts`, `featureHelp.test.ts`, two RUN tests in
+`bundledPage.test.ts` (the skipped badge; the opened row's reason, no "older server", no findings read),
+`prepareGate.test.mjs` (the emitted module executed, a foreign or missing source refused), and the snippet
+tests re-derived from the table's `mounted` rows.
+
+### The released halves, measured (2026-09-26, the rest of S3.3)
+
+The two seams S3.3a introduced — the vendor `feature` field and the snippet's feature half — were run
+against the RELEASED other half, the one a person may still have, by
+`scripts/live-feature-vendor-compat.mjs` (`npm run test:feature-vendor-compat`). It downloads the newest
+published `mcp-v*` and BUILDS the newest published `extension-v*` from its tag — the `.vsix` carries one
+minified bundle exporting `activate`, so `vendorsFrom` or `snippetStatus` of the released build cannot be
+called out of it; a `git clone --shared` of this checkout at the tag gives `prepare-gate.mjs` the real
+repository and pinned mount its resolver check needs, and the rounds-log page is bundled again from the
+released source, as its release job bundled it. The download, the build and the one-shot runner live in
+`scripts/releasedHalves.mjs`, which `live-feature-schema-compat.mjs` (S2.1) now imports rather than
+keeping its own copy.
+
+Outcome on 2026-09-26, released `coai-mcp` **0.38.0** and extension **0.56.3**, every assertion green:
+
+| seam | what was run | what happened |
+|---|---|---|
+| this extension's tick → the released server | `serverSettingsJson` with a ticked row and an unknown server version (the tick crosses — unknown is not old) into `settings.json`; the released `--providers`, the same list through `COAI_VENDORS` in the environment, and the released server's `providers` tool over MCP | all three list `codex, antigravity, codex-feature`, exit 0, and the answer is identical with and without the tick. A list the released server REFUSED would have come back as its defaults, `codex, antigravity` — checked by hand with a malformed list |
+| the version gate | the same writer told the server is 0.38.0 | the tick is held out and all three rows still cross |
+| a rollback to the released extension | its `vendorsFrom` over the rows this build stored, then its `serverSettingsJson` | every row kept, the tick dropped, nothing ticked written. **A rollback forgets the feature ticks on its next save** — the old code cannot change, so it is a release note, as the `api` rollback row was |
+| this server over what the released extension wrote | `review_feature` over MCP, a plan of three epics, the released extension's settings file | `skipped` — "no vendor is ticked for the feature review — tick it on a vendor's card in the panel to run it"; it does not block |
+| the released extension over what this server wrote | its `parseSession` over the session files, its `parseLog` over `--log --paged`, and its rounds-log page bundled and RUN against a stub DOM, the row opened | everything parsed and drawn without an error; the stage shows as the raw `FeatureReview` and the skip carries the **`done` badge** — the released page has no skipped state, which is what S3.3a added |
+| the snippet | each build's `snippetStatus` over the other's `claudeSnippet()`, and this build's `readSnippetStatus` through a `CLAUDE.md` | this build: `older`, behind on `coai-feature` alone, "copy v13"; the released build: `ahead`, newer on `coai-feature`, "Keep what you have" — so neither pastes over the other |
 
 ## The consultant rule is read from the mount (2026-09-25, epic 5 story 5.2)
 
@@ -9457,3 +9509,91 @@ curated gemini list. What shipped:
   lint errors in functions this change did not touch; the new code stays under the rule
   (`endpointField` / `priceFields` / `vendorCard` were brought DOWN by `disabledAttr`, `headButtons`,
   `modelWords`, `endpointPlaceholder`, `endpointHint`).
+
+## The vault's API keys are vendors in *Add a reviewer* (2026-09-26, PLAN_feature_review S3.6)
+
+The operator's words: list every provider that is available, plus one entry per key NAME in the vault's
+config entry, shown with a leading `!` because it is an API key — `!grok`, `!qwen`.
+
+```mermaid
+sequenceDiagram
+  participant P as Add a reviewer (panelProvider)
+  participant S as coai-mcp --providers
+  participant V as the vault (creds config)
+  participant E as the endpoint
+  P->>S: the cached answer, or a fresh probe
+  S->>V: read once — the values stay in the server
+  S-->>P: vaultKeyNames (names only), vaultRead, vaultNote
+  P->>P: vaultKeyItems → "!grok", "!qwen" after every other entry
+  P->>P: presetEndpoint(name), else ask for the base URL
+  P->>S: --probe-api --vendor <name> --endpoint <url> (no --model: the list only)
+  S->>E: GET /models with the key
+  S-->>P: models.ids (the report's allowlist)
+  P->>P: vaultKeyRow → runtime api, vaultKeyName <name>, next free id
+```
+
+- **Names only, twice over.** The server sends `vaultKeyNames` and nothing else from the vault
+  ([module_server.md](module_server.md#configuration-and-keys)); `parseProviderNotes` keeps only strings shaped
+  like a name (lower-cased, `[a-z0-9._-]`, ≤64), so a body that sent a map of names to values keeps nothing
+  from it. `ProviderNotes.vault` is three states — `read`, `unreadable`, `not-reported` (a server too old to
+  name its keys) — because one empty list would say all three.
+- **The pick** (`apiKeyVendors.ts`, pure). `vaultKeyItems` lists the names in the vault's order after the
+  catalogue and the Team servers. A key already used by a row is still listed — a second model on one key —
+  with the id the new row takes (`qwen-2`). No keys for a reason is ONE row saying it; picking it says the
+  reason as a notice (`vault-keys-not-listed`). A readable vault with no keys adds nothing.
+- **The row.** `vaultKeyRow(name, baseUrl, model, taken)` → `runtime: 'api'`, dialect `openai`, the id from
+  `freeVendorId(normaliseId(name))`, and `Vendor.vaultKeyName` = the name as the vault spells it (lower-cased),
+  written even when it equals the id. `vendorsFrom` keeps it only when said; `vendorsEnv` sends it as `key` on
+  an api row. It is called `vaultKeyName`, not `vaultKey`: `configTransfer.test.ts` refuses a manifest field
+  ending in *key* as secret-looking, and it is a name.
+- **The endpoint** comes from `API_KEY_PRESETS` — `grok` → `https://api.x.ai/v1`, `qwen` → the Token Plan
+  base URL `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` (Q5) — else an input box
+  validated by `badEndpoint`. **The model list is the endpoint's own `GET /models`**, asked through
+  `coai-mcp --probe-api` (`apiModelsProbe.ts`, `probeModels`): the probe's models call, in the process that
+  holds the key; without `--model` it stops after the list, so nothing is billed. A list the endpoint would not
+  give is a REASON (the probe's exit code in words — 78 is "the vault could not be read, or holds no key under
+  …"), and the model is then typed. Dismissing any box writes nothing.
+- **Tests.** `apiKeyVendors.test.ts`: no key value crosses; `!` entries only for names in the vault; a used
+  key still listed; an unreadable vault and an old server each said; `!qwen` writes an api row keyed `qwen`
+  that survives `vendorsFrom` and crosses as `key`; a second row `qwen-2`; the presets; the probe's ids, and a
+  refusal as a reason. RED first against stubs: `[]` for `['!grok', '!qwen']`, `''` for `https://api.x.ai/v1`.
+  NOT covered: the quick pick and the spawn behind it — an extension host.
+
+## What an API reviewer costs: the lookup widened, and the price crosses with the row (2026-09-26, PLAN_feature_review S3.7)
+
+An `api` reviewer's response carries tokens and no money, so the SERVER now prices its turns
+([module_runners.md](module_runners.md)) — from rates the row carries across. The panel's half:
+
+- **The existing lookup, widened — not a second table** (`modelPrices.ts`). (a) The cached rate is read:
+  OpenRouter `pricing.input_cache_read`, LiteLLM `cache_read_input_token_cost` → `ModelPrice.cachedPerMillion`,
+  present only when a list states it. (b) LiteLLM's long-context tier (`input_cost_per_token_above_<N>k_tokens`
+  and its two siblings, exactly that shape — `_priority` / `_batches` / `_flex` are other commercial rates) →
+  `ModelPrice.tier`. (c) **Route-aware**: `routeOf(baseUrl)` names the provider an endpoint bills as (`x.ai` →
+  `xai`, `*.aliyuncs.com` → `dashscope`, `z.ai` / `bigmodel.cn` → `zai`), `liteLlmTable` also keeps each plain
+  `provider/model` entry under that key, and `priceFor(model, or, lite, route)` asks `lite['<route>/<model>']`
+  first — OpenRouter's number is its own resale price (grok-4.7: 1.60 / 4.80 there, 2.00 / 0.50 / 6.00 at
+  xAI). A routed model its provider does not list falls back to the old order (glm-5.3 has no dashscope row).
+  (d) **§9.12**: `priceKey` no longer strips `-max` as an effort — `qwen3.8-max` became `qwen3.8`, which no
+  list prices. RED first: `'qwen3.8'` for `'qwen3.8-max'`; the xAI-routed grok read OpenRouter's 1.6.
+- **One price book** (`priceBook.ts`). The two tables used to be private fields of `PanelProvider`, refreshed
+  from its render; the settings file is written from activation, where no panel may exist. `PRICE_BOOK` holds
+  them now (fetched at most once a day, one fetch in flight shared — a caller arriving mid-fetch waits for it
+  rather than reading empty tables, which the test caught on its first run), the panel reads it, and
+  `PRICE_BOOK.priceOf(model, baseUrl)` is the routed question. The panel prices an api row's model on its
+  route for the card. Activation fetches only when an enabled api row exists, and rewrites the file when the
+  lists land; a panel refresh that fetched does the same (`pricesRefreshed`).
+- **The price on the wire** (`vendors.ts`). `wirePrice(v, looked)`: a TYPED rate wins field by field
+  (`pricePerMillionIn` / `Out` / the new optional `pricePerMillionCached`), the list fills the rest, and the
+  tier crosses only while nothing was typed — a person on their own terms is not doubled from somebody else's
+  threshold. No rate is no field, never zeroes. `vendorsEnv(vendors, version, priceOf)` adds `price` (and
+  `key`) to an **api row only**: a CLI on a subscription is not billed per token, and a price on its row would
+  turn the panel's estimate into money the ledger records as spent. Threaded `envBlock` → `serverSettingsJson`
+  → `ServerSettingsSync`'s `priceOf` supplier, read at every sync. An older server ignores both fields.
+- **The card** takes a third rate box on an api row — `$ / 1M cached` (`cachedRate`), placeholder from the list.
+- **The rounds log** says `no price set` where a metered reviewer had no rate: `UsageEntry.costNote` is read
+  off the ledger line, `costOf` carries it only when there is no figure, and `cost3` / `costTitle` show it —
+  never `$0`, and not the dash that means "nobody knows" for a CLI. RED first: `'—'` for `'no price set'`.
+- **Tests.** `modelPrices.test.ts` (the §9.12 key, qwen3.8-max's price with its cached rate, the xAI route with
+  its tier, the route map, the fallback), `apiPriceOnTheWire.test.ts` (all three rates and the tier, typed wins,
+  no price no field, api rows only, the cached rate saved, the settings file carrying it), `priceBook.test.ts`,
+  `roundsLogNoPriceSet.test.ts`. `notification-sites.json` 140 → 141 (the one new notice).

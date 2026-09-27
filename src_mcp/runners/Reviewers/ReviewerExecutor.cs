@@ -19,7 +19,53 @@ namespace CoaiMcp.Runners.Reviewers;
 /// </remarks>
 public abstract record ReviewerOutcome
 {
-    /// <param name="Usage">What the vendor said the run consumed. Zeroes mean it said nothing.</param>
+    /// <summary>
+    /// The turns of this reviewer's conversation BEFORE the one this outcome describes, each with what it
+    /// consumed — empty for the single-turn reviewer every stage but one runs (S3.2, plan §4.9).
+    /// </summary>
+    /// <remarks>
+    /// On the BASE, not on <see cref="Ok"/> alone, because the whole point is the failures: a turn-2
+    /// timeout, a cancellation during turn 2, an unparseable turn 3 each end the reviewer, and the money
+    /// turn 1 cost is real whatever came after. The ledger writes one line per entry here and the round
+    /// total adds them; <c>Usage</c> on an outcome that has one stays the LAST turn's alone.
+    /// </remarks>
+    public IReadOnlyList<TurnUsage> EarlierTurns { get; init; } = [];
+
+    /// <summary>What every earlier turn consumed, added up — <see cref="Usage.None"/> for a single turn.</summary>
+    public Usage EarlierUsage => EarlierTurns.Aggregate(Usage.None, (total, turn) => total.Add(turn.Usage));
+
+    /// <summary>
+    /// What THIS turn's earlier launches consumed before the ending this outcome describes: the first
+    /// attempt that completed, was billed, and answered something malformed — when the repair that
+    /// followed it then failed on its own launch instead of answering.
+    /// </summary>
+    /// <remarks>
+    /// <para>On the base, like <see cref="EarlierTurns"/>, because the outcomes that need it are the
+    /// FAILURES: a repair that timed out, exited non-zero, was rate limited or never started is returned
+    /// as its launch produced it, and until 2026-09-26 that returned it without the first attempt's
+    /// usage — a completed, billed process filed as free, on every stage and on every turn of the
+    /// feature reviewer's conversation. <see cref="Ok"/> and <see cref="Unparseable"/> fold both launches
+    /// into their own <c>Usage</c> already, so this stays <see cref="Usage.None"/> on them.</para>
+    /// <para>Also what the rate-limit ladder's EARLIER steps spent, folded forward by the scheduler: a
+    /// step whose repair was rate limited still paid for its malformed first launch.</para>
+    /// </remarks>
+    public Usage EarlierLaunches { get; init; } = Usage.None;
+
+    /// <summary>What the launch this outcome describes reported: an answer's, an unparseable one's; nothing for a run that never finished.</summary>
+    protected virtual Usage OwnUsage => Usage.None;
+
+    /// <summary>
+    /// What the outcome's own — last — turn consumed, every launch of it: the ledger's terminal line, and
+    /// the one place the question "what did this turn cost" is answered for every kind of outcome.
+    /// </summary>
+    public Usage LastTurnUsage => EarlierLaunches.Add(OwnUsage);
+
+    /// <summary>The whole conversation's usage: every earlier turn and the last, every launch of each.</summary>
+    public Usage TotalUsage => EarlierUsage.Add(LastTurnUsage);
+
+    /// <param name="Usage">What the vendor said the LAST turn consumed. Zeroes mean it said nothing.</param>
+    /// <param name="Turns">How many turns the conversation took — one for every reviewer but a feature reviewer that asked for source.</param>
+    /// <param name="Served">What the conversation served and refused, one line per follow-up turn, for the audit and the reviewer's note; empty for a single turn.</param>
     /// <param name="Evidence">
     /// Where this reviewer's raw answer was kept, or empty for the ordinary case where it was not.
     /// <para>Only a review with NO findings is kept. A reviewer that answers `{"findings": []}` has
@@ -31,10 +77,12 @@ public abstract record ReviewerOutcome
     /// sentence that needs it is the reviewer's own audit line — which is written by the caller,
     /// from the outcome, and is where somebody chasing a silent round is already reading.</para>
     /// </param>
-    public sealed record Ok(NormalisedReview Review, bool Repaired, Usage Usage, string Evidence = "")
+    public sealed record Ok(NormalisedReview Review, bool Repaired, Usage Usage, string Evidence = "", int Turns = 1, string Served = "")
         : ReviewerOutcome
     {
         public Ok(NormalisedReview Review, bool Repaired) : this(Review, Repaired, Usage.None) { }
+
+        protected override Usage OwnUsage => Usage;
     }
 
     /// <param name="FailureReason">
@@ -63,6 +111,8 @@ public abstract record ReviewerOutcome
     public sealed record Unparseable(string Reason, Usage Usage) : ReviewerOutcome
     {
         public Unparseable(string Reason) : this(Reason, Usage.None) { }
+
+        protected override Usage OwnUsage => Usage;
     }
 
     /// <summary>
@@ -501,27 +551,52 @@ public sealed class ReviewerExecutor(
         // shortened this repair on a retry, and overwriting that with the executor's own remainder
         // would hand it back time the ladder had taken away. Raised on the code round.
         var repairBudget = left < repair!.Request.Timeout ? left : repair.Request.Timeout;
-        var (repairOutcome, repaired, repairUsage, repairAnswer, repairEvidence) =
-            await RunOnceAsync(repair with { Request = repair.Request with { Timeout = repairBudget } }, ct);
-        return repairOutcome
-               ?? (repaired is { } fixedReview
-                   // Both launches are billed, so both are counted — a repaired reviewer that
-                   // reported only its second attempt would under-report every time.
-                   ? Answered(fixedReview, Repaired: true, usage.Add(repairUsage), repair, repairAnswer)
-                   // BOTH launches are kept, and the first one wins when the repair came back
-                   // empty: a vendor whose envelope broke leaves nothing to read, and the
-                   // evidence file was landing at zero bytes exactly when it was most needed.
-                   : new ReviewerOutcome.Unparseable(
-                       Because(
-                           // The complaint comes from whichever launch actually explained itself,
-                           // starting with the repair — its answer is the one being described. Picking
-                           // by SIZE was wrong and the gate said so: a first attempt that returned a
-                           // large malformed answer beats a repair that returned nothing plus a
-                           // permission refusal on stderr, and the refusal is the whole point.
-                           Said(repairAnswer ?? answer, FirstComplaint(repairEvidence, evidence)),
-                           "after one repair attempt",
-                           Keep(repair, Longer(evidence, repairEvidence))),
-                       usage.Add(repairUsage)));
+        var second = await RunOnceAsync(repair with { Request = repair.Request with { Timeout = repairBudget } }, ct);
+
+        return AfterTheRepair(repair, (usage, answer, evidence), second);
+    }
+
+    /// <summary>
+    /// The reviewer's outcome once its repair has run: the repair's answer, the repair's own failure, or
+    /// a second answer that would not parse either — and in every one of the three, BOTH launches billed.
+    /// </summary>
+    /// <remarks>
+    /// The first attempt is a process that ran to completion and reported what it consumed; only its
+    /// ANSWER was malformed. A repaired reviewer has counted it since 2026-09-01, and a second
+    /// unparseable answer since the same day — but a repair whose own launch failed (timed out, exited
+    /// non-zero, was rate limited, never started) was returned exactly as the launch produced it, and the
+    /// first attempt's usage went nowhere: not on the outcome, not in the ledger, not in the round total.
+    /// Found by the epic 3 risk consultation (159f0397). It rides on <see cref="ReviewerOutcome.EarlierLaunches"/>,
+    /// together with whatever the repair's own launch reported before it failed.
+    /// </remarks>
+    private ReviewerOutcome AfterTheRepair(
+        ReviewerInvocation repair,
+        (Usage Usage, string? Answer, string Evidence) first,
+        (ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence) second)
+    {
+        if (second.Outcome is { } failed)
+        {
+            return failed with { EarlierLaunches = first.Usage.Add(second.Usage) };
+        }
+
+        return second.Review is { } fixedReview
+            // Both launches are billed, so both are counted — a repaired reviewer that
+            // reported only its second attempt would under-report every time.
+            ? Answered(fixedReview, Repaired: true, first.Usage.Add(second.Usage), repair, second.Answer)
+            // BOTH launches are kept, and the first one wins when the repair came back
+            // empty: a vendor whose envelope broke leaves nothing to read, and the
+            // evidence file was landing at zero bytes exactly when it was most needed.
+            : new ReviewerOutcome.Unparseable(
+                Because(
+                    // The complaint comes from whichever launch actually explained itself,
+                    // starting with the repair — its answer is the one being described. Picking
+                    // by SIZE was wrong and the gate said so: a first attempt that returned a
+                    // large malformed answer beats a repair that returned nothing plus a
+                    // permission refusal on stderr, and the refusal is the whole point.
+                    Said(second.Answer ?? first.Answer, FirstComplaint(second.Evidence, first.Evidence)),
+                    "after one repair attempt",
+                    Keep(repair, Longer(first.Evidence, second.Evidence))),
+                first.Usage.Add(second.Usage));
     }
 
     /// <summary>

@@ -251,7 +251,13 @@ public sealed class PanelService
             statuses,
             _vaultReadUtc == default ? "never" : _vaultReadUtc.ToString("O"),
             _keys.Available ? $"{_keys.Keys.Count} vendor key(s) loaded" : _keys.Unavailability,
-                _settings.Unrecognised),
+                _settings.Unrecognised)
+        {
+            // NAMES only: `Keys` is the dictionary's key collection, which is the names; the values
+            // it maps to never leave this process (S3.6).
+            VaultKeyNames = [.. _keys.Keys.Keys.Order(StringComparer.Ordinal)],
+            VaultRead = _keys.Available,
+        },
             ServerJsonContext.Default.ProvidersAnswer);
     }
 
@@ -267,7 +273,7 @@ public sealed class PanelService
             provider.Enabled,
             provider.ExecutablePath,
             provider.Model,
-            _keys.Keys.ContainsKey(provider.Provider),
+            _keys.Keys.ContainsKey(provider.KeyName),
             ct,
             // A Team server vendor is asked over HTTP, and only this binary can ask: the token is
             // on this machine. Passed as a delegate so the probe itself stays a process probe.
@@ -287,7 +293,7 @@ public sealed class PanelService
     /// binaries, after two separate incidents where a second copy of it was the one that was wrong.
     /// </remarks>
     private (string Auth, string Note) AuthFor(ProviderSettings provider) =>
-        AuthOf(provider, _keys.Keys.ContainsKey(provider.Provider), HasServerToken(provider));
+        AuthOf(provider, _keys.Keys.ContainsKey(provider.KeyName), HasServerToken(provider));
 
     /// <param name="hasServerToken">
     /// Whether this machine has signed into the Team server this vendor points at. Only a
@@ -357,7 +363,7 @@ public sealed class PanelService
         RuntimeFor(provider) is null
             ? $"no adapter for a runtime called '{provider.Runtime}'"
             : RuntimeResolution.ExclusionReason(
-                provider.Identity(), _keys.Keys.ContainsKey(provider.Provider), HasServerToken(provider));
+                provider.Identity(), _keys.Keys.ContainsKey(provider.KeyName), HasServerToken(provider));
 
     // ---------- open / status ----------
 
@@ -1527,10 +1533,21 @@ public sealed class PanelService
     /// <para>None of the three advances a stage over open findings. A human override that means
     /// "ignore all this" would be an off switch on the gate, and it is deliberately not offered.
     /// <c>Discuss</c> leaves the session exactly where it is: the AI is meant to stop and talk.</para>
+    /// <para><b>Only while the gate is HELD, and only an answer to THIS hold</b> — the guards the engine's
+    /// own reader has, through the one rule (<see cref="CurrentAnswer"/>). Without the first, the newest
+    /// answered notice of the session was applied on EVERY later resolve, so one "keep going" reset the
+    /// round count for the life of the session: a feature review's second round resolved to a count of
+    /// zero, and D23's cap let a third round run. Without the second, an answer to an earlier hold was
+    /// spent on a later one's count (both found by S3.4's scenarios, 2026-09-26).</para>
     /// </remarks>
     private PersistedSession WithHumanDecision(PersistedSession session)
     {
-        var decision = _escalations.DecisionFor(session.State.SessionId);
+        if (!session.State.HumanGate)
+        {
+            return session;
+        }
+
+        var decision = CurrentAnswer.DecisionFor(session, _escalations);
         if (decision is not (HumanDecision.Continue or HumanDecision.Fix))
         {
             return session;
@@ -1557,7 +1574,15 @@ public sealed class PanelService
                 {
                     _cadence.Close(session, session.Rounds[^1].Verdict);
                 }
-                _store.Save(session with { State = moved.State, Pending = [] });
+                // A feature review's round-1 decisions are kept for its second round (D23): the reviewers
+                // that answered are not asked again, and what was decided about their findings rides on
+                // round 2's verdict. Empty for every other resolve.
+                _store.Save(session with
+                {
+                    State = moved.State,
+                    Pending = [],
+                    Carried = FeatureSecondRound.CarriedFrom(session.State, moved.State, judged),
+                });
                 // How the caller closed this gate: how many findings it took, which it argued with
                 // and why. The one thing this data is for — an accepted finding is something the
                 // caller had not seen and then agreed was worth having.
@@ -1618,6 +1643,10 @@ public sealed class PanelService
         var at = AddressOf(repoPath, branch, document, feature);
         var session = _store.Load(repoPath, at.Branch, at.Document, at.Feature);
         var id = Guid.NewGuid().ToString("N")[..12];
+        // A question asked while the gate is HELD is asked for that hold, and one asked on a feature session
+        // after its first round may be the person's request for the second: recorded on the session, so the
+        // person's answer counts by identity — as the hold's own notice does.
+        await RecordOnTheSessionAsync(session, at, repoPath, id, ct);
 
         // English, as the caller wrote it. There used to be a translator here, and a set of
         // buttons replaced the prose it existed for: the question is one fixed sentence and the
@@ -1658,6 +1687,71 @@ public sealed class PanelService
                 ServerJsonContext.Default.HumanAnswer),
         };
     }
+
+    /// <summary>
+    /// A question asked while the gate is held is one of the hold's, and one asked on a feature session
+    /// after its first round may be the person's request for the second: the person's answer to it counts
+    /// by id (<see cref="CurrentAnswer"/>), so it is recorded where <see cref="RoundMachine.RecordQuestion"/>
+    /// says it belongs. The session is re-read and saved under its claim — a <c>resolve</c> may be writing
+    /// the same file — and a claim that stays busy is logged and the question asked anyway: the hold's own
+    /// notice still answers a hold.
+    /// </summary>
+    private async Task RecordOnTheSessionAsync(PersistedSession? session, SessionAddress at, string repoPath, string id, CancellationToken ct)
+    {
+        if (session is null || ReferenceEquals(RoundMachine.RecordQuestion(session.State, id), session.State))
+        {
+            return;
+        }
+
+        for (var attempt = 0; attempt < HoldClaimAttempts; attempt++)
+        {
+            if (TryRecordOnTheSession(at, repoPath, id))
+            {
+                return;
+            }
+
+            await Task.Delay(HoldClaimWait, ct);
+        }
+
+        _log.Warning(
+            "the gate session for {Branch} stayed busy for {Seconds:0.0}s; question {Id} was not recorded on it — a hold's own notice still answers the hold",
+            at.Branch, HoldClaimAttempts * HoldClaimWait.TotalSeconds, id);
+    }
+
+    /// <summary>One attempt, under the claim: false only when another call holds it right now.</summary>
+    private bool TryRecordOnTheSession(SessionAddress at, string repoPath, string id)
+    {
+        using var claim = SessionClaim.TryTake(_settings.DataDir, repoPath, at.Branch, at.Document, at.Feature);
+        if (claim is null)
+        {
+            return false;
+        }
+
+        // Re-read under the claim: the copy loaded before it may predate a resolve that has just landed,
+        // and a hold released in between has nothing to record on.
+        if (_store.Load(repoPath, at.Branch, at.Document, at.Feature) is not { } current
+            || RoundMachine.RecordQuestion(current.State, id) is var recorded && ReferenceEquals(recorded, current.State))
+        {
+            return true;
+        }
+
+        try
+        {
+            _store.Save(current with { State = recorded });
+        }
+        catch (SessionStoreException e)
+        {
+            // The question still reaches the person; what is lost is the binding, and the log says so.
+            _log.Warning(e, "question {Id} could not be recorded on the session of {Branch}", id, at.Branch);
+        }
+
+        return true;
+    }
+
+    /// <summary>How long <c>ask_human</c> waits for a busy session before asking unrecorded: twenty tries, fifty milliseconds apart.</summary>
+    private const int HoldClaimAttempts = 20;
+
+    private static readonly TimeSpan HoldClaimWait = TimeSpan.FromMilliseconds(50);
 
     /// <summary>The person's answer, exactly as they gave it.</summary>
     /// <remarks>

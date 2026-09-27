@@ -80,6 +80,12 @@ fourth gate that reviews a whole FEATURE — changed three things that cross the
   answer (`--probe-api`, which prints an allowlist and redacts vendor text). It is a MACHINE-ONLY
   runtime, like `local`: `MachineOnlyRuntimes` is subtracted from what the Team server accepts, so a
   Team server never takes a key it has nowhere to keep.
+  *Since S3.6/S3.7 (2026-09-26):* a row may read a key filed under ANOTHER name (`key` on the wire, so
+  `qwen-2` reads `qwen`); `--providers` reports the vault's key NAMES (`vaultKeyNames`, `vaultRead` —
+  never a value), which the panel offers as `!name` reviewers; and an `api` row carries its price
+  (`price` on the wire, from the panel's lookup, a typed rate winning), which coai-mcp hands the shim as
+  `--price-*` flags so each turn is priced where its tokens are read — `costUsd` in the ledger, or
+  `no price set`, never $0. `KeyVault` also finds `creds` in the CredsForDevs extension's folder after PATH.
 - **The settings file now depends on the installed server's version.** An older coai-mcp turns a
   runtime it does not know into `codex` WITH the row's base URL — a Grok row would ride the Codex CLI
   against xAI's endpoint under its own name. So the extension threads the installed server version
@@ -108,7 +114,8 @@ even under `AllowAny`, because the box runs no feature review in this version (D
 (`rounds.note`) is read by `--log` through the `pragma_table_info` ladder, and the released binary
 was measured over a migrated database rather than argued about (`module_server.md`, the plan's
 §4.13). And the panel took only what the seed forces — a fourth group, a fourth tab, the code roles
-counted by bucket; the tool, the vendor tick and the log's rendering of a skipped round are epic 3's.
+counted by bucket; the tool (S2.2, below), the vendor tick and the log's rendering of a skipped round
+(S3.3, *Four gates, not three*) came later.
 
 **Epic 2, story 2 (2026-09-26): `review_feature` — the eleventh tool reaches the fourth stage.** A
 caller at the end of a plan of three or more epics sends the plan's path, the base before the first
@@ -121,8 +128,85 @@ withheld from the pack and every file's content is redacted, as the source resol
 of fewer epics, or nobody ticked, is a recorded skip that does not block; every reviewer failing still
 calls a person. `resolve`, `status` and `ask_human` find the review by its plan (`feature`). Nothing
 crosses a new container: no Team server, no extension surface (the vendor tick, the log's skipped row and
-the snippet are epic 3's). See [module_server.md](module_server.md), [module_core.md](module_core.md),
+the snippet came in S3.3 — *Four gates, not three*, below). See [module_server.md](module_server.md), [module_core.md](module_core.md),
 [module_runners.md](module_runners.md) and [module_tests.md](module_tests.md).
+
+**Epic 3, story 2 (2026-09-26): a feature reviewer that asks for source is served it and asked again.**
+One reviewer, one conversation, one terminal outcome: the scheduler holds the reviewer's slot across its
+turns and asks a continuation seam (`IReviewerContinuation`, `ReviewerWork.Continue`) after each answered
+turn whether there is a next one; the feature stage's continuation serves the `sourceRequests` through
+the round's ONE `SourceResolver` (S3.1, now wired) and hands back the next turn — the base prompt byte
+for byte with a tail appended (D25: previous findings compact, the requests, the served code fenced with
+its path, lines and commit, the refusals, FINAL on the last turn) and a repair composed from that turn's
+own prompt. Up to three follow-ups (`COAI_FEATURE_SOURCE_FOLLOWUPS`; 0 is single-turn, the requests
+recorded on the note), each turn under its own reviewer timeout and the conversation under
+`timeout × (1 + follow-ups)`, which is also what the round's deadline is derived from. Only the last
+turn's answer counts; a failed later turn is a failed reviewer; every turn's usage is kept on the
+outcome's base and written as one ledger line per turn, with the vendor's cached-token count so the
+first live run measures whether the resent prefix is cached. What crosses containers: the mcp binary's
+`--ask-api` line gained `tokensCached`, the ledger line gained `tokensCached` (trailing; the extension's
+reader coerces an absent number to zero), and the extension's help mirror of `feature-review.md` was
+regenerated. The tool description's source sentence changed; its round wording did not (S3.4).
+
+## Four gates, not three (2026-09-26)
+
+The fourth gate is `review_feature`, and it is the only one that looks at a WHOLE piece of work.
+Every other round sees a slice: a plan, one epic's diff, one document. A plan of three or more epics
+was therefore released having only ever been reviewed epic by epic, and nobody asked whether the
+seams between the epics held, or whether what shipped is what the plan asked for. The feature gate is
+called ONCE, at the very end — every epic built, their pull requests possibly merged already — and
+before the release. It is additional to the per-epic gates, never instead of them.
+
+```mermaid
+flowchart LR
+  plan["review_plan<br/>the plan, once"] --> code["review_code<br/>per epic, per branch"]
+  code -->|"the next epic"| code
+  code -->|"every epic built,<br/>plan of 3+ epics"| feature["review_feature<br/>the whole feature, once"]
+  feature -->|"proceed, or skipped"| release["release"]
+  feature -->|"call_human"| person["a person"]
+  document["review_document<br/>a document; beside the others"]
+```
+
+**Where it sits, and what it is not.** It is not a bigger code round: the reviewer is sent no
+checkout. It gets the plan, the implementer's epics and lessons (fenced as claims), the gate's own
+history of this work, the project's rules, and an OUTLINE of every changed file at HEAD — signatures,
+no bodies, changed members marked, with the changed members' hunks. Its session is keyed by the
+PLAN's repository-relative path under the branch `:feature`, so it needs no `open`, and the head it
+reviews moves as fix pull requests land. A plan of fewer epics, nobody ticked for features, or the
+stage switched off is a recorded `skipped` round that does NOT block; every reviewer failing still
+calls a person.
+
+What crosses the containers:
+
+- **`coai-mcp`** has `Stage.FeatureReview`, `FeatureStage` behind the eleventh tool, schema step 16
+  (`rounds.note`, which is where a skip's reason is written) and the feature finding schema, whose
+  `sourceRequests` a reviewer may fill — served from git at the pinned head in up to three follow-up turns (S3.2).
+  See [module_server.md](module_server.md), [module_core.md](module_core.md) and
+  [module_runners.md](module_runners.md).
+- **The settings file** carries one new field, `"feature": true` on a vendor row of `COAI_VENDORS`.
+  Absent is NO, unlike the plan and code ticks: the gate is opt-in per vendor, and a file written
+  before the stage existed ticks nobody.
+- **The extension** writes that field from a fourth switch on each vendor card, *reviews features*.
+  It holds the tick OUT of the file for an installed server older than `FEATURE_SINCE` (the row still
+  crosses, so the vendor keeps reviewing plans and code) and never writes it on a Team-server row. The
+  rounds log draws a skip as its own neutral state, *skipped — did not block*, with the reason; the
+  snippet gained a fifth half (`coai-feature` v1, artefact v13) that tells an AI when to call the tool.
+  See [module_extension.md](module_extension.md).
+- **The Team server runs no feature review** in this version (D10 of the plan). `AcceptedRoles`
+  refuses the feature role by name, even under `AllowAny`, and the client never sends one to a remote
+  row, so that refusal is the second line rather than the first.
+
+**Both halves were measured against the RELEASED other half**, because a person updates one half at a
+time (`.agents/PROJECT.md`). Against the released `coai-mcp` 0.38.0, which has no feature stage: it
+reads a vendor list carrying the tick whole — through the settings file, the client's env block and
+over MCP — and ignores the field. Against the released extension 0.56.3: it keeps every vendor row
+this build stored and drops the tick on its next save (so a rollback forgets the ticks; the old code
+cannot be changed), parses the session file and `--log` this server writes, and its rounds-log page,
+bundled and run, draws a skipped feature round under its raw stage name with the `done` badge. The
+snippet is read as behind on exactly the feature half by this build, and as NEWER by the released
+one, which says keep it. The checks are `src_vs_code/scripts/live-feature-schema-compat.mjs` and
+`live-feature-vendor-compat.mjs` ([module_tests.md](module_tests.md)); the rows, dated, are in the
+plan's §4.13 and §6.
 
 ## Three gates, not two (2026-09-13)
 

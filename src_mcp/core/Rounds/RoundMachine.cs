@@ -127,17 +127,45 @@ public static class RoundMachine
         "of its own, keyed by the plan's path, and needs no open";
 
     /// <summary>
-    /// A plan's feature review is finished — and the way to run another is NAMED (D14).
+    /// A plan's feature review is finished — and the ways to run another are NAMED (D14, D23).
     /// </summary>
     /// <remarks>
-    /// The same door as <see cref="CodeDone"/>: the fix pull requests move the head, and the review
-    /// runs again over it. Whether the head has MOVED is the stage's check, not this transition's —
-    /// it needs the commit, which a pure transition does not have.
+    /// The same door as <see cref="CodeDone"/>, narrowed by D23: <c>again</c> reopens the review for its
+    /// second round only on the person's request (the other two grounds keep a review OPEN, so it never
+    /// reaches this sentence), and never for a third; a NEW base is a fresh review. Whether the head has
+    /// MOVED is the stage's check, not this transition's — it needs the commit, which a pure transition
+    /// does not have.
     /// </remarks>
     internal const string FeatureDone =
-        "this plan's feature review is complete. To review it again — after the fix pull requests landed, or " +
-        "against a new head — call review_feature with again: true, which reopens the feature stage; the " +
-        "finished rounds stay on the record";
+        "this plan's feature review is complete. A second round runs only for a reviewer failure, a blocking " +
+        "finding, or when the person asks for one — never a third (D23). With the person's request, call " +
+        "review_feature with again: true, which reopens the feature stage for its second round; against a NEW " +
+        "base, again: true starts a fresh review. The finished rounds stay on the record";
+
+    /// <summary>D23's cap: a feature review has two rounds at most, whatever the stage's budget says above it.</summary>
+    public const int FeatureRoundCap = 2;
+
+    /// <summary>
+    /// Round 1 gave no ground for a second (D23) — and the one thing that can still give one is named.
+    /// </summary>
+    /// <remarks>
+    /// The refusal a caller meets after a non-blocking round closed the review and it asked <c>again</c>
+    /// over the same base. It names all three grounds, because the caller is missing every one of them,
+    /// and says how the third arrives: through the person's own surfaces, never through an argument.
+    /// </remarks>
+    internal static string NoGroundForASecondRound(SessionState s) =>
+        "this plan's feature review is one round unless a second is needed (D23), and round 1 gave no ground " +
+        "for one: no reviewer failure, no blocking finding, and the person has not asked. A second round runs " +
+        "only on one of those three. To ask the person, call ask_human with feature: \"" + s.Feature + "\" — their " +
+        "'Keep going — more rounds' (or 'Stop and act on the findings') is the request, and review_feature with " +
+        "again: true then runs round 2; no argument of yours can grant it. Against a NEW base, again: true starts " +
+        "a fresh review";
+
+    /// <summary>Both rounds have run — at most two, ever (D23).</summary>
+    internal static string TwoFeatureRoundsRun(SessionState s) =>
+        "this plan's feature review has run its two rounds — at most two, ever (D23) — so no further round runs " +
+        "against this base, whoever asks. A fresh review of \"" + s.Feature + "\" starts only against a NEW base: " +
+        "call review_feature with again: true and the new baseRef; the finished rounds stay on the record";
 
     /// <summary>
     /// A document's review is finished — and the way to start another is NAMED.
@@ -225,13 +253,19 @@ public static class RoundMachine
 
     /// <summary>
     /// The feature gate (S2.1 of the feature-review plan). Every refusal the document gate has, in the
-    /// document gate's order — and, like it, no <c>PlanProceeded</c> check: the plan IS the input.
+    /// document gate's order — and, like it, no <c>PlanProceeded</c> check: the plan IS the input. Then
+    /// D23's two: a review that has run both its rounds, and a second round no ground admits.
     /// </summary>
     /// <remarks>
-    /// The held gate is asked BEFORE the finished stage and before the roster is ever looked at, and
+    /// <para>The held gate is asked BEFORE the finished stage and before the roster is ever looked at, and
     /// that order is kept on purpose by the engine too: a standing <c>call_human</c> from a round whose
     /// reviewers all failed is a person's decision, and un-ticking every vendor must not dissolve it
-    /// into a <c>skipped</c> round (§4.4).
+    /// into a <c>skipped</c> round (§4.4).</para>
+    /// <para><b>The second round is admitted HERE and nowhere else</b> (S3.4): on the ground
+    /// <see cref="CompleteRound"/> recorded from round 1 — a reviewer failure, a blocking finding — or
+    /// the one <see cref="ApplyPersonsRequest"/> recorded from the person. Nothing a caller passes reaches
+    /// <see cref="SessionState.SecondRound"/>. A count of zero is round 1, which needs no ground: a new
+    /// review, a fresh review against another base, or the fresh set a person granted on a held gate.</para>
     /// </remarks>
     public static Transition BeginFeatureRound(SessionState s) => s switch
     {
@@ -239,45 +273,46 @@ public static class RoundMachine
         { HumanGate: true } => new Transition.Refused(GateHeld),
         { AwaitingResolve: true } => new Transition.Refused(Unresolved),
         { Stage: Stage.Done } => new Transition.Refused(FeatureDone),
+        { RoundsRunThisStage: >= FeatureRoundCap } => new Transition.Refused(TwoFeatureRoundsRun(s)),
+        { RoundsRunThisStage: >= 1, SecondRound: SecondRoundGround.None } => new Transition.Refused(NoGroundForASecondRound(s)),
         _ => new Transition.Moved(s),
     };
 
     /// <summary>
-    /// The feature gate, asked AGAIN: a finished feature review is reopened for a fresh round — the
-    /// same shape as <see cref="BeginCodeRoundAgain"/>, with the same refusals still first.
+    /// The feature gate, asked AGAIN: a finished feature review is reopened for its SECOND round — the
+    /// shape of <see cref="BeginCodeRoundAgain"/>, with the same refusals still first, and D23's after.
     /// </summary>
     /// <remarks>
-    /// What is kept is what the review is OF and what it agreed on — the plan, the standing
-    /// rejections; what starts over is the stage's own count. That the head has moved, and that the
-    /// base is the one recorded, are the stage's checks (<see cref="FeatureBases"/>), because they need
-    /// commits a pure transition does not have — and a review asked again against ANOTHER base keeps
-    /// nothing it agreed on: <see cref="FreshFeatureReview"/>, which the engine applies once that
-    /// finding is made.
+    /// <para>What is kept is what the review is OF and what it agreed on — the plan, the standing
+    /// rejections — AND its count: a finished review reopened over the same base is on its second round,
+    /// not on round one of a budget it never had (the earlier shape reset the count, and with it D23's cap).
+    /// So the reopened state meets <see cref="BeginFeatureRound"/>'s own admission: the person's ground
+    /// lets round 2 run, two rounds run refuse a third, and a review closed with no ground is refused
+    /// naming what would give one.</para>
+    /// <para>That the head has moved, and that the base is the one recorded, are the stage's checks
+    /// (<see cref="FeatureBases"/>), because they need commits a pure transition does not have — and a
+    /// review asked again against ANOTHER base keeps nothing it agreed on: <see cref="FreshFeatureReview"/>,
+    /// which the engine applies BEFORE this begin once that finding is made, so a fresh review arrives
+    /// here at round one.</para>
     /// </remarks>
     public static Transition BeginFeatureRoundAgain(SessionState s) => s switch
     {
         { Stage: Stage.Done, IsFeatureSession: true, HumanGate: false, AwaitingResolve: false } =>
-            new Transition.Moved(s with
-            {
-                Stage = Stage.FeatureReview,
-                RoundsRunThisStage = 0,
-                EscalationsUsed = 0,
-                AdvanceOnResolve = false,
-            }),
+            BeginFeatureRound(s with { Stage = Stage.FeatureReview, AdvanceOnResolve = false }),
         _ => BeginFeatureRound(s),
     };
 
     /// <summary>
-    /// A feature review started over against ANOTHER base (§4.3): the stage's own count, its escalations
-    /// and its standing rejections all start again, whatever the stage was — a rejection made in one
-    /// review must not discount a finding in a different one, and a round of the old budget is not a
-    /// round of the new.
+    /// A feature review started over against ANOTHER base (§4.3): the stage's own count, its escalations,
+    /// its standing rejections and its second-round ground all start again, whatever the stage was — a
+    /// rejection made in one review must not discount a finding in a different one, and a round of the
+    /// old budget is not a round of the new.
     /// </summary>
     /// <remarks>
-    /// Not a transition of its own, on purpose: a held gate and an unresolved round are refused by
-    /// <see cref="BeginFeatureRoundAgain"/> first, and that the base IS another one is the stage's finding
-    /// (<see cref="FeatureBases.IsAnother"/>) — so the engine applies this to the state the begin moved to,
-    /// after both, and it never reaches a session that may not run a round.
+    /// Not a transition of its own, on purpose: that the base IS another one is the stage's finding
+    /// (<see cref="FeatureBases.IsAnother"/>), so the engine applies this to the session it read, before
+    /// the begin — which then sees round one of a fresh review — and saves nothing unless the round runs.
+    /// A held gate and an unresolved round are still refused by the begin, fresh or not.
     /// </remarks>
     public static SessionState FreshFeatureReview(SessionState s) => s with
     {
@@ -286,10 +321,58 @@ public static class RoundMachine
         EscalationsUsed = 0,
         AdvanceOnResolve = false,
         Rejections = [],
+        SecondRound = SecondRoundGround.None,
+        RequestQuestions = [],
     };
+
+    /// <summary>
+    /// An <c>ask_human</c> question, recorded where its answer may later count: on the current hold
+    /// (<see cref="SessionState.HoldQuestions"/>), or — on a feature session with a round run and no hold —
+    /// as one whose answer may be the person's request for round 2 (<see cref="SessionState.RequestQuestions"/>).
+    /// Any other question is asked and not recorded: its answer decides nothing here.
+    /// </summary>
+    /// <remarks>
+    /// A question asked BEFORE the first round is not a request question: an answer to it given after
+    /// round 1 is about whatever it asked, and binding the request to it was the clock rule in a new coat.
+    /// </remarks>
+    public static SessionState RecordQuestion(SessionState s, string id) => s switch
+    {
+        { HumanGate: true } => s with { HoldQuestions = [.. s.HoldQuestions, id] },
+        { IsFeatureSession: true, RoundsRunThisStage: >= 1 } => s with { RequestQuestions = [.. s.RequestQuestions, id] },
+        _ => s,
+    };
+
+    /// <summary>
+    /// The person's request for a feature review's second round — D23's third ground, applied to the
+    /// state from a decision only a person's surface produces.
+    /// </summary>
+    /// <remarks>
+    /// <para><c>Continue</c> and <c>Fix</c> both say "run the review again", which for a feature review
+    /// that has run one round means its second and last. Recorded only where it can mean that: a feature
+    /// session, one round run, no ground yet, and no held gate — a held gate is answered by
+    /// <see cref="ApplyHumanDecision"/>, which grants a fresh SET, a different promise. Two rounds run is
+    /// refused by the begin whoever asks, so nothing is recorded for it.</para>
+    /// <para>WHICH answer is the request is the engine's check — it needs the answer files — and the rule is
+    /// identity: an answer to one of <see cref="SessionState.RequestQuestions"/>, the questions asked on this
+    /// session after round 1 (<see cref="RecordQuestion"/>). The questions are spent with the request: the
+    /// round they admitted runs, and nothing asked before it can admit another.</para>
+    /// </remarks>
+    public static SessionState ApplyPersonsRequest(SessionState s, HumanDecision decision) =>
+        decision is HumanDecision.Continue or HumanDecision.Fix
+        && s is { IsFeatureSession: true, HumanGate: false, RoundsRunThisStage: 1, SecondRound: SecondRoundGround.None }
+            ? s with { SecondRound = SecondRoundGround.PersonAsked, RequestQuestions = [] }
+            : s;
 
     public static Transition CompleteRound(SessionState s, GateResult gate, ReviewerSummary reviewers)
     {
+        // The feature stage has its own rule for what a round's outcome MEANS (D23): one round unless a
+        // second is needed, two at most. Everything the gate computed is the same; what changes is which
+        // verdict it becomes and what the state remembers about why.
+        if (s.Stage == Stage.FeatureReview)
+        {
+            return CompleteFeatureRound(s, gate, reviewers);
+        }
+
         var roundsRun = s.RoundsRunThisStage + 1;
 
         // The gate must not fail open. Found by the first real run (2026-08-31): every reviewer
@@ -333,6 +416,69 @@ public static class RoundMachine
     }
 
     /// <summary>
+    /// The feature stage's round, completed under D23: one round unless a second is needed, two at most.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Round 1.</b> No ground → the review closes on <c>resolve</c>: <c>proceed</c> at or under
+    /// the threshold, <c>good_enough</c> over it — the findings are decided, the accepted fixes land as
+    /// pull requests, and no second review reads them. A ground → <c>revise</c>, with the ground written
+    /// on the state for the begin to read; the operator's own budget still caps this (a budget of one runs
+    /// no second round, and D23 caps a bigger one at two).</para>
+    /// <para><b>Round 2.</b> No ground → closes on resolve as round 1 would. A ground — a blocking finding
+    /// still standing, a failure again — → <c>call_human</c>, the gate held: two rounds is the cap, and a
+    /// review that needs a third is a person's call.</para>
+    /// <para><b>The gate must not fail open here either.</b> Nobody answering is a reviewer failure
+    /// whatever the failure list says — a round of stood-down reviewers reviewed nothing — so it buys a
+    /// retry in round 1 and a person in round 2, never a <c>proceed</c> over an empty result.</para>
+    /// <para>A blocking finding outranks a failure as the ground: a fix wants every reviewer's eyes, while a
+    /// retry asks only the ones that failed.</para>
+    /// </remarks>
+    private static Transition CompleteFeatureRound(SessionState s, GateResult gate, ReviewerSummary reviewers)
+    {
+        var roundsRun = s.RoundsRunThisStage + 1;
+        var ground = GroundFor(gate, reviewers);
+        // The questions that may request a second round are the ones asked AFTER this one completed.
+        var next = s with { RoundsRunThisStage = roundsRun, AwaitingResolve = true, RequestQuestions = [] };
+
+        if (ground == SecondRoundGround.None)
+        {
+            return new Transition.Ok(
+                next with { AdvanceOnResolve = true, SecondRound = SecondRoundGround.None },
+                gate.Passed ? new RoundVerdict.Proceed(gate, reviewers) : new RoundVerdict.GoodEnough(gate, reviewers));
+        }
+
+        if (roundsRun < Math.Min(FeatureRoundCap, s.Config.For(s.Stage).MaxRounds))
+        {
+            return new Transition.Ok(next with { SecondRound = ground }, new RoundVerdict.Revise(gate, reviewers, 1));
+        }
+
+        return new Transition.Ok(
+            next with { HumanGate = true, SecondRound = SecondRoundGround.None },
+            new RoundVerdict.CallHuman(gate, reviewers, FeatureCallHumanReason(ground, gate, reviewers, roundsRun)));
+    }
+
+    /// <summary>Why a feature round needs another — or <see cref="SecondRoundGround.None"/>.</summary>
+    private static SecondRoundGround GroundFor(GateResult gate, ReviewerSummary reviewers) =>
+        gate.Gating.Any(f => f.Severity == Severity.Blocking) ? SecondRoundGround.BlockingFinding
+        : reviewers.Answered == 0 || reviewers.Failures.Length > 0 ? SecondRoundGround.ReviewerFailure
+        : SecondRoundGround.None;
+
+    private static string FeatureCallHumanReason(SecondRoundGround ground, GateResult gate, ReviewerSummary reviewers, int roundsRun)
+    {
+        // The second round is the ordinary case; the first is an operator whose feature budget is one.
+        var which = roundsRun == 1 ? "round 1, and the feature budget is one round" : "the second round";
+
+        return ground switch
+        {
+            SecondRoundGround.BlockingFinding =>
+                $"a blocking finding still stands after {which} — {gate.GatingCount} finding(s) gate, and a feature review has two rounds at most (D23)",
+            _ when reviewers.Answered == 0 =>
+                $"no reviewer answered in {which} — nothing was reviewed, and a feature review has two rounds at most (D23). {reviewers.Sentence}",
+            _ => $"{which} had a reviewer failure, and a feature review has two rounds at most (D23): {reviewers.Sentence}",
+        };
+    }
+
+    /// <summary>
     /// How many rounds the over-threshold roles have between them, at most.
     /// </summary>
     /// <remarks>
@@ -362,8 +508,12 @@ public static class RoundMachine
     /// </remarks>
     public static SessionState ApplyHumanDecision(SessionState s, HumanDecision decision) => decision switch
     {
+        // The feature stage's ground starts over with the set: what admitted the round that called the
+        // person has been spent, and the fresh set's own first round decides whether it needs a second.
+        // The hold's questions go with the hold: an answer to one of them, found later, must not release
+        // a hold raised after this one (the epic 3 risk consultation, 2026-09-26).
         HumanDecision.Continue or HumanDecision.Fix =>
-            s with { HumanGate = false, RoundsRunThisStage = 0 },
+            s with { HumanGate = false, RoundsRunThisStage = 0, SecondRound = SecondRoundGround.None, HoldQuestions = [], RequestQuestions = [] },
         _ => s,
     };
 
@@ -447,13 +597,18 @@ public static class RoundMachine
             AwaitingResolve = false,
             Rejections = rejections,
             HumanGate = s.HumanGate && !humanSaysProceed,
+            // The person's override releases the hold the way their decision does: its questions go with it.
+            HoldQuestions = humanSaysProceed ? [] : s.HoldQuestions,
         };
         if (s.AdvanceOnResolve || humanSaysProceed)
         {
             next = next with
             {
                 AdvanceOnResolve = false,
-                RoundsRunThisStage = 0,
+                // The feature stage KEEPS its count into Done: `again` reopens it for its second round or
+                // is refused a third (D23), and the machine can only tell which from the count. Every
+                // other stage starts the next one at zero, as it always did.
+                RoundsRunThisStage = s.Stage == Stage.FeatureReview ? s.RoundsRunThisStage : 0,
                 // Where this stage goes is the stage's own row: it was `PlanReview ? CodeReview :
                 // Done`, which is right for three stages and a silent answer for a fourth.
                 Stage = Stages.Of(s.Stage).AdvancesTo,

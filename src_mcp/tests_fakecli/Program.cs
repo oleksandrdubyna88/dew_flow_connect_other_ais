@@ -24,6 +24,10 @@
 // the console's code page and every Cyrillic character leaves as '?' — which is exactly how the
 // launcher's own missing StandardOutputEncoding was found.
 Console.OutputEncoding = System.Text.Encoding.UTF8;
+// And UTF-8 IN, before `Console.In` is first touched: the launcher writes the prompt BOM-less UTF-8
+// and every real vendor reads it as such. Decoded in the console code page instead, a recorded prompt
+// lost every em dash, so an assertion over a served tail (S3.2) had to stay ASCII to pass.
+Console.InputEncoding = new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: false);
 
 // A stand-in that dies unhandled destroys the evidence it exists to produce. Windows CI failed a
 // full loop twice with `exit -532462766` — 0xE0434352, "a managed exception escaped" — and all the
@@ -50,6 +54,18 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //   FAKECLI_SLEEP_MS     — answer only after this long (the probe's timeout arm)
 //   FAKECLI_SIDE_EFFECT  — write a file at this path: a vendor breaking its own read-only promise
 //   FAKECLI_RECORD_DIR   — write each launch's full argv into <guid>.argv there
+//
+// The TURN family (S3.2 of the feature-review plan) — a reviewer that is asked again with its source
+// served must answer differently the second time, and which turn a launch IS can only be read off
+// the prompt it was handed, because two reviewers of one round interleave on any counter:
+//   FAKECLI_TURN_MARKER    — a text with `{n}` in it ("## Turn {n} of"); the launch is turn n when its
+//                            prompt (stdin, or the file after `--prompt-file`) contains it with n
+//                            filled in, for the smallest such n from 2; else turn 1
+//   FAKECLI_REPAIR_MARKER  — a text; the launch is a REPAIR when its prompt contains it
+//   FAKECLI_TURN<n>_STDOUT / _OUTFILE_TEXT / _EXIT / _STDERR / _SLEEP_MS
+//                          — turn n's steering, each falling back to the un-numbered variable
+//   FAKECLI_TURN<n>_REPAIR_STDOUT / _OUTFILE_TEXT / _EXIT / _STDERR / _SLEEP_MS
+//                          — the same for turn n's repair launch, falling back to turn n's, then the bare one
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
 {
     // Raw stdin, byte for byte, before any decoder can tidy it up. This exists because a
@@ -64,26 +80,30 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
         return 0;
     }
 
+    // Read ONCE: the recorder and the turn family both want it, and stdin does not rewind.
+    var prompt = PromptOf(args);
+
     if (Environment.GetEnvironmentVariable("FAKECLI_RECORD_DIR") is { Length: > 0 } record)
     {
         // NUL-joined, because a recorded field may be multiline (the prompt on stdin) — lines
         // cannot reconstruct an argv, a character no argv contains can. The stdin text is
         // recorded as the LAST field, since that is where the prompt lives now.
-        var stdin = Console.IsInputRedirected ? Console.In.ReadToEnd() : string.Empty;
         File.WriteAllText(
             Path.Combine(record, $"{Guid.NewGuid():N}.argv"),
-            string.Join('\0', args.Append(stdin)));
+            string.Join('\0', args.Append(prompt.StdIn)));
     }
+
+    var steering = Steering.For(prompt.Text);
 
     // A vendor that takes its time. It exists for the health probe's timeout arm: a CLI that
     // never answers `--version` must be reported as silent rather than as whatever exit code the
     // kill produced, and that cannot be tested by a stand-in which always answers at once.
-    if (int.TryParse(Environment.GetEnvironmentVariable("FAKECLI_SLEEP_MS"), out var napMs) && napMs > 0)
+    if (int.TryParse(steering.Get("SLEEP_MS"), out var napMs) && napMs > 0)
     {
         Thread.Sleep(napMs);
     }
 
-    var stderrText = Environment.GetEnvironmentVariable("FAKECLI_STDERR");
+    var stderrText = steering.Get("STDERR");
     if (stderrText is { Length: > 0 })
     {
         Console.Error.WriteLine(stderrText);
@@ -98,12 +118,12 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
     // machine. A rooted path is the one thing that separates a destination from a format name.
     var outIndex = Array.IndexOf(args, "-o");
     if (outIndex >= 0 && outIndex + 1 < args.Length && Path.IsPathRooted(args[outIndex + 1]) &&
-        Environment.GetEnvironmentVariable("FAKECLI_OUTFILE_TEXT") is { Length: > 0 } fileText)
+        steering.Get("OUTFILE_TEXT") is { Length: > 0 } fileText)
     {
         File.WriteAllText(args[outIndex + 1], fileText);
     }
 
-    if (Environment.GetEnvironmentVariable("FAKECLI_STDOUT") is { Length: > 0 } stdoutText)
+    if (steering.Get("STDOUT") is { Length: > 0 } stdoutText)
     {
         Console.Out.Write(stdoutText);
     }
@@ -116,7 +136,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
         File.WriteAllText(sideEffect, "written by a CLI that promised to be read-only\n");
     }
 
-    return int.TryParse(Environment.GetEnvironmentVariable("FAKECLI_EXIT"), out var exit) ? exit : 0;
+    return int.TryParse(steering.Get("EXIT"), out var exit) ? exit : 0;
 }
 
 var args0 = args;
@@ -266,5 +286,59 @@ static int LinesIn(string path)
     catch (FileNotFoundException)
     {
         return 0;
+    }
+}
+
+/// <summary>
+/// The prompt this launch was handed — stdin, read whole, and the file after <c>--prompt-file</c> when
+/// the argv names one (the api shim's shape). The stdin half is kept apart because the recorder writes
+/// exactly what arrived on stdin, and a prompt read from a file did not.
+/// </summary>
+static (string StdIn, string Text) PromptOf(string[] args)
+{
+    var stdin = Console.IsInputRedirected ? Console.In.ReadToEnd() : string.Empty;
+    var at = Array.IndexOf(args, "--prompt-file");
+    var fromFile = at >= 0 && at + 1 < args.Length && File.Exists(args[at + 1]) ? File.ReadAllText(args[at + 1]) : string.Empty;
+
+    return (stdin, stdin.Length > 0 ? stdin : fromFile);
+}
+
+/// <summary>
+/// Which environment variables steer THIS launch: turn n's, its repair's, or the bare ones — read off
+/// the prompt, never off a counter, because two reviewers of one round interleave on any counter.
+/// </summary>
+sealed class Steering
+{
+    private readonly string[] _prefixes;
+
+    private Steering(string[] prefixes) => _prefixes = prefixes;
+
+    /// <summary>The first of the prefixes that names a value — most specific first.</summary>
+    public string? Get(string name) =>
+        _prefixes.Select(prefix => Environment.GetEnvironmentVariable(prefix + name)).FirstOrDefault(value => value is { Length: > 0 });
+
+    public static Steering For(string prompt)
+    {
+        var turn = TurnOf(prompt);
+        var repair = Environment.GetEnvironmentVariable("FAKECLI_REPAIR_MARKER") is { Length: > 0 } marker
+                     && prompt.Contains(marker, StringComparison.Ordinal);
+        // Turn 1 reads `FAKECLI_TURN1_*` too, so a test can script every turn the same way.
+        string[] prefixes = repair
+            ? [$"FAKECLI_TURN{turn}_REPAIR_", $"FAKECLI_TURN{turn}_", "FAKECLI_"]
+            : [$"FAKECLI_TURN{turn}_", "FAKECLI_"];
+
+        return new Steering(prefixes);
+    }
+
+    /// <summary>Turn n when the prompt carries the marker with n filled in, for the smallest n from 2 up to 16; else 1.</summary>
+    private static int TurnOf(string prompt)
+    {
+        if (Environment.GetEnvironmentVariable("FAKECLI_TURN_MARKER") is not { Length: > 0 } template)
+        {
+            return 1;
+        }
+
+        return Enumerable.Range(2, 15)
+            .FirstOrDefault(n => prompt.Contains(template.Replace("{n}", n.ToString(), StringComparison.Ordinal), StringComparison.Ordinal), 1);
     }
 }

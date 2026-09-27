@@ -242,10 +242,12 @@ public static partial class Redaction
     /// </summary>
     /// <remarks>
     /// <para>Control characters go first: they are not an attack anybody is expecting, they are how
-    /// a corrupted value produces a line no parser can read back. Then a parameter whose NAME reads
-    /// as a credential; then the three shapes recognisable on sight, in array order; then a credential
-    /// named and given in ordinary text — LAST, so that an <c>Authorization: Bearer …</c> has already
-    /// lost its value by the time this one sees the word. Then the cut, and the suffix after the cut.</para>
+    /// a corrupted value produces a line no parser can read back. Then a private-key block, whole
+    /// (<see cref="PrivateKeyBlocks"/> — the one shape that is not one line); then a parameter whose
+    /// NAME reads as a credential; then the three shapes recognisable on sight, in array order; then a
+    /// credential named and given in ordinary text — LAST, so that an <c>Authorization: Bearer …</c> has
+    /// already lost its value by the time this one sees the word. Then the cut, and the suffix after
+    /// the cut.</para>
     /// <para>Applied to EVERY string field of a record — the line iterates the record's entries
     /// rather than a list of names, so a field added next year is redacted without anybody
     /// remembering to add it.</para>
@@ -313,10 +315,21 @@ public static partial class Redaction
         return named.Length <= limit ? named : named[..limit] + Truncated;
     }
 
-    /// <summary>The redaction passes alone: a parameter, the three shapes, then a credential named and given.</summary>
+    /// <summary>
+    /// The redaction passes alone: a private-key block first, then a parameter, the three shapes, then a
+    /// credential named and given.
+    /// </summary>
+    /// <remarks>
+    /// The block goes FIRST, before any pattern reads a line of it: a key body is not one line, and the
+    /// labelled pass that found <c>"private_key": "-----BEGIN</c> took out the header's first word and left
+    /// the body (<see cref="PrivateKeyBlocks"/>). It is procedural rather than a sixth pattern, so it is not
+    /// on <see cref="Patterns"/>; it is under the same deadline as the rest.
+    /// </remarks>
     private static string SecretsTaken(string printable, System.Diagnostics.Stopwatch clock)
     {
-        var withoutParameters = Parameter().Replace(printable, RedactParameter);
+        var withoutBlocks = PrivateKeyBlocks.Redact(printable);
+        StopIfOverdue(clock);
+        var withoutParameters = Parameter().Replace(withoutBlocks, RedactParameter);
         StopIfOverdue(clock);
         var redacted = Secrets.Aggregate(withoutParameters, (text, secret) =>
         {

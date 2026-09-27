@@ -177,12 +177,15 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
     }
 
     /// <summary>What the person chose for this session, or <see cref="HumanDecision.None"/>.</summary>
-    public HumanDecision DecisionFor(string sessionId) =>
+    public HumanDecision DecisionFor(string sessionId) => DecisionOf(AnsweredFor(sessionId));
+
+    /// <summary>The button an answer carries, as the decision it is — one parser for every reader of the file.</summary>
+    internal static HumanDecision DecisionOf(EscalationAnswer? answer) =>
         // `?.Decision?` and not `?.Decision.`: a field absent from the JSON comes back NULL through
         // the source-generated deserializer whatever the property initializer says, so the
         // non-nullable declaration is a promise the wire does not keep. Found by the test for a
         // typed answer, which is the ordinary case.
-        AnsweredFor(sessionId)?.Decision?.Trim().ToLowerInvariant() switch
+        answer?.Decision?.Trim().ToLowerInvariant() switch
         {
             "continue" => HumanDecision.Continue,
             "fix" => HumanDecision.Fix,
@@ -192,6 +195,17 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
 
     /// <summary>Their own words, whether or not they pressed a button. Never discarded.</summary>
     public string AnswerTextFor(string sessionId) => AnsweredFor(sessionId)?.Answer ?? string.Empty;
+
+    /// <summary>
+    /// The newest answer a person gave this session, WHOLE — the button and when it was pressed.
+    /// </summary>
+    /// <remarks>
+    /// For the one reader that needs the time: a feature review's second round is admitted on the
+    /// person's request only when the request is newer than the round it would follow (D23), and
+    /// <see cref="DecisionFor"/> answers "what" without "when". The same file, read once, through the
+    /// same turn.
+    /// </remarks>
+    public EscalationAnswer? LatestAnswerFor(string sessionId) => AnsweredFor(sessionId);
 
     private EscalationQuestion? ReadQuestion(string path)
     {

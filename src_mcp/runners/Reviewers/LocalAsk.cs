@@ -295,6 +295,20 @@ public static class LocalAsk
         return new Usage(
             usage.TryGetProperty("prompt_tokens", out var input) && input.TryGetInt64(out var tin) ? tin : 0,
             usage.TryGetProperty("completion_tokens", out var output) && output.TryGetInt64(out var tout) ? tout : 0,
-            null);
+            null,
+            CachedTokens(usage));
     }
+
+    /// <summary>
+    /// The OpenAI-compatible cached subset — <c>prompt_tokens_details.cached_tokens</c> — or zero when
+    /// the endpoint did not say. A local engine never does; a hosted <c>api</c> vendor may, and that
+    /// number is what D25's follow-up turns are measured by.
+    /// </summary>
+    private static long CachedTokens(JsonElement usage) =>
+        usage.TryGetProperty("prompt_tokens_details", out var details)
+        && details.ValueKind == JsonValueKind.Object
+        && details.TryGetProperty("cached_tokens", out var cached)
+        && cached.TryGetInt64(out var count)
+            ? count
+            : 0;
 }

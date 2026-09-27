@@ -116,6 +116,17 @@ public sealed record RoundRecord(
     public string Note { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>
+    /// The D23 ground this round was admitted on — a <see cref="Core.Rounds.SecondRoundGround"/> by name for
+    /// a feature review's second round; empty for every first round and for every other stage.
+    /// </summary>
+    /// <remarks>
+    /// Written on the round rather than only on the state, because the state forgets the ground the
+    /// moment the round completes (it is then spent) and a reader of the trail — the person asking "why
+    /// did this run twice?" — needs it on the row that ran.
+    /// </remarks>
+    public string AdmittedBy { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
     /// How many consecutive identical skips this row stands for; one for every round that ran, and
     /// for a record written before the field existed.
     /// </summary>
@@ -174,7 +185,20 @@ public sealed record RoundRecord(
     public long TokensOut { get; init; }
 
     /// <summary>Only when a vendor priced its own run; null is "nobody told us", never "free".</summary>
+    /// <remarks>
+    /// Since S3.7 also the sum an <c>api</c> reviewer's rates worked out, turn by turn — that vendor bills
+    /// per token and its response carries none, so the row's price is the only way to know.
+    /// </remarks>
     public double? CostUsd { get; init; }
+
+    /// <summary>
+    /// <c>no price set</c> when a metered reviewer of this round had no rate, else empty (S3.7).
+    /// </summary>
+    /// <remarks>
+    /// What <c>status</c> and the audit line say instead of a figure — or beside one, when other reviewers
+    /// were priced and the total is therefore a floor. Never a zero: an unpriced run is not a free one.
+    /// </remarks>
+    public string CostNote { get; init; } = string.Empty;
 }
 
 /// <summary>What the store persists: the state machine's state plus the human-readable trail.</summary>
@@ -229,6 +253,21 @@ public sealed record PersistedSession(SessionState State, List<RoundRecord> Roun
     /// than silently inheriting this review's rejections and budget (§4.3). Empty until recorded.
     /// </summary>
     public string FeatureBase { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
+    /// The decisions a feature review's first round was resolved with, kept for its second: the answered
+    /// reviewers' findings ride on round 2's verdict as they were decided, never re-bought (D23, S3.4).
+    /// </summary>
+    /// <remarks>
+    /// Written by <c>resolve</c> when round 1 leaves the review open for a second round, read and cleared
+    /// by the engine with the round that runs. Normalised where it is declared, for the reason spelled out
+    /// on <see cref="UsedPrompts"/>.
+    /// </remarks>
+    public List<CarriedDecision> Carried
+    {
+        get => field ??= [];
+        init => field = value ?? [];
+    }
 
     /// <summary>
     /// Which AI opened this session, and which model it declared. Never null.

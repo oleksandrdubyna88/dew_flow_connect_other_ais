@@ -17,6 +17,12 @@ export interface UsageEntry {
   readonly tokensOut: number;
   readonly costUsd: number | null;
   readonly outcome: string;
+  /**
+   * `no price set` when the server ran a METERED reviewer — an `api` row, billed per token — whose row
+   * carried no rate (PLAN_feature_review.md S3.7); absent otherwise. It is what separates "unpriced" from
+   * a CLI that never reports money, which a null cost alone cannot.
+   */
+  readonly costNote?: string;
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -70,6 +76,7 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       tokensOut: number(parsed.tokensOut),
       costUsd: typeof parsed.costUsd === 'number' && Number.isFinite(parsed.costUsd) ? parsed.costUsd : null,
       outcome: typeof parsed.outcome === 'string' ? parsed.outcome : 'ok',
+      ...(typeof parsed.costNote === 'string' && parsed.costNote.length > 0 ? { costNote: parsed.costNote } : {}),
     };
   } catch {
     return undefined;

@@ -5,7 +5,9 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { consultantBody, gateBody, prepareGate, CONSULTANT_OUTPUT, CONSULTANT_SOURCE, OUTPUT } from '../../scripts/prepare-gate.mjs';
+import {
+  consultantBody, featureBody, gateBody, prepareGate, CONSULTANT_OUTPUT, CONSULTANT_SOURCE, FEATURE_OUTPUT, FEATURE_SOURCE, OUTPUT,
+} from '../../scripts/prepare-gate.mjs';
 
 test('only leading metadata is removed and a later delimiter remains in the gate body', () => {
   const body = '<!-- coai-snippet v5 -->\n## Multi-model review gate (ConnectOtherAIs)\n\nFirst.\n---\nSecond.\n';
@@ -59,12 +61,20 @@ test('the real pinned resolver rejects a dirty or wrong mount and leaves no stal
   fs.writeFileSync(path.join(root, 'CLAUDE.md'), '@AGENTS.md\n');
   fs.writeFileSync(path.join(root, '.agents/PROJECT.md'), '# Fixture project\n');
   // The consultant half is a MOUNTED rule since story 5.2 of research/PLAN_consult_on_a_cadence.md: the
-  // submodule above carries it, and the fixture needs nothing of this product's own.
+  // submodule above carries it. The FEATURE half is this product's own file (D11 of
+  // todo/PLAN_feature_review.md), so the fixture needs it too — the real one, which keeps the fixture
+  // honest about what the build reads.
+  fs.mkdirSync(path.dirname(path.join(root, FEATURE_SOURCE)), { recursive: true });
+  fs.copyFileSync(path.join(sourceRoot, FEATURE_SOURCE), path.join(root, FEATURE_SOURCE));
   git(root, 'add', 'AGENTS.md', 'CLAUDE.md', '.agents/PROJECT.md');
   commit(root);
   const output = path.join(root, OUTPUT);
   const consultantOutput = path.join(root, CONSULTANT_OUTPUT);
+  const featureOutput = path.join(root, FEATURE_OUTPUT);
   const body = prepareGate(root);
+  assert.equal(await exported(featureOutput, 'FEATURE_RULE'),
+    featureBody(fs.readFileSync(path.join(root, FEATURE_SOURCE), 'utf8')),
+    'the generated feature module exports the block');
   // EXECUTED, not string-matched: generated code that is only searched for a substring can be
   // syntactically broken and still pass, which is what the shared rule on generated code forbids.
   // Both files are ES modules whose TypeScript is also valid JavaScript, so importing a copy runs
@@ -78,6 +88,18 @@ test('the real pinned resolver rejects a dirty or wrong mount and leaves no stal
   assert.equal(fs.existsSync(output + '.tmp'), false);
   // Generated artifacts are ignored in the product; keep this fixture equivalent.
   fs.writeFileSync(path.join(root, '.gitignore'), 'src_vs_code/src/generated/\n');
+  // A feature source that is not ours by its marker fails the build rather than shipping text nobody
+  // can recognise as the block — and leaves no constant from the previous build behind.
+  const featureSource = path.join(root, FEATURE_SOURCE);
+  const ourBlock = fs.readFileSync(featureSource);
+  fs.writeFileSync(featureSource, '## Something else entirely\n');
+  assert.throws(() => prepareGate(root), /coai-feature/);
+  assert.equal(fs.existsSync(featureOutput), false, 'a refused feature half leaves no generated constant behind');
+  // A missing one fails naming the file, never a bare ENOENT on a path.
+  fs.rmSync(featureSource);
+  assert.throws(() => prepareGate(root), (error) => error instanceof Error && error.message.includes(FEATURE_SOURCE));
+  fs.writeFileSync(featureSource, ourBlock);
+  prepareGate(root);
   const rule = path.join(mount, 'common/coai-review-gate.md');
   const original = fs.readFileSync(rule);
   fs.appendFileSync(rule, '\nUnreviewed edit.\n');
@@ -173,4 +195,19 @@ test('a pinned mount without the consultant rule fails naming it', async t => {
   assert.throws(() => prepareGate(root), (error) => error instanceof Error
     && error.message.includes('.agents/conventions/common/coai-consultant.md') && /consultant/i.test(error.message));
   assert.equal(fs.existsSync(path.join(root, CONSULTANT_OUTPUT)), false, 'no consultant constant is left from a previous build');
+});
+
+/**
+ * The FEATURE half is this product's own file (D11 of todo/PLAN_feature_review.md), not a mounted
+ * rule: it says when to call one tool of one product, which the operator ruled is not shared material.
+ * So it carries no frontmatter to strip, and is held to its marker AND its heading the way the mounted
+ * halves are — a truncated or foreign file fails the build instead of shipping unrecognisable text.
+ */
+test('the feature half is taken verbatim, and refused without its marker or its heading', () => {
+  const body = '<!-- coai-feature v1 -->\n## Reviewing the whole FEATURE before release (ConnectOtherAIs)\n\nFirst.\n';
+
+  assert.equal(featureBody(body), body);
+  assert.equal(featureBody(body.replaceAll('\n', '\r\n')), body, 'a CRLF checkout emits the same bytes as an LF one');
+  assert.throws(() => featureBody('## Reviewing the whole FEATURE before release (ConnectOtherAIs)\n'), /coai-feature/);
+  assert.throws(() => featureBody('<!-- coai-feature v1 -->\n## Something else entirely\n'), /coai-feature/);
 });

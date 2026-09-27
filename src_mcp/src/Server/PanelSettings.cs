@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Context;
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.ServiceDefaults;
 
@@ -74,6 +75,18 @@ public sealed record ProviderSettings(string Provider)
     /// reason rather than run it with every vendor (§4.4, row 2).
     /// </remarks>
     public bool Feature { get; init; }
+
+    /// <summary>
+    /// The vault key this row reads, when it is not the row's own id — a second model on one key (S3.6).
+    /// Empty means the id, which is what every row written before this field meant.
+    /// </summary>
+    public string VaultKey { get; init; } = string.Empty;
+
+    /// <summary>The name this row's key is filed under in the vault: <see cref="VaultKey"/>, else the id. The ONE answer every lookup asks.</summary>
+    public string KeyName => VaultKey.Length > 0 ? VaultKey : Provider;
+
+    /// <summary>What this row charges per million tokens — read by the <c>api</c> runtime only (S3.7).</summary>
+    public TokenPrice Price { get; init; } = TokenPrice.None;
 
     /// <summary>Whether this vendor's reviews run somewhere other than this machine.</summary>
     /// <remarks>
@@ -414,6 +427,18 @@ public sealed record PanelSettings
     /// <c>review_code</c>; the feature stage records a <c>skipped</c> round for it and does not block.
     /// </summary>
     public int FeatureMinEpics { get; init; } = Core.Feature.FeatureGate.DefaultMinEpics;
+
+    /// <summary>
+    /// How many follow-up turns a feature reviewer gets for its source requests —
+    /// <c>COAI_FEATURE_SOURCE_FOLLOWUPS</c>, three by default (D20; plan §4.9, S3.2). Zero is single-turn:
+    /// the requests are recorded on the reviewer's note and no turn answers them — the rollback switch.
+    /// </summary>
+    /// <remarks>
+    /// Counted in FOLLOW-UPS, never in total turns, like every limit of the source loop. A value that is
+    /// not an integer in 0..<see cref="Core.Feature.SourceBudget.MaxFollowUps"/> is the default, and
+    /// <see cref="UnrecognisedSettings"/> says so at startup naming the value.
+    /// </remarks>
+    public int FeatureSourceFollowUps { get; init; } = Core.Feature.SourceBudget.DefaultFollowUps;
 
     /// <summary>
     /// What a CODE reviewer is launched in: <c>none</c> (the default) or <c>worktree</c>.
@@ -820,6 +845,9 @@ public sealed record PanelSettings
             CadenceRiskMax = IntVar(env, "COAI_CADENCE_RISK_MAX", Core.Cadence.CadenceRule.DefaultRiskMax),
             // `IntVar`: a plan of zero epics is not a plan, so zero falls back rather than meaning "always".
             FeatureMinEpics = IntVar(env, "COAI_FEATURE_MIN_EPICS", Core.Feature.FeatureGate.DefaultMinEpics),
+            // Zero is the meaningful value here — single-turn — and the ceiling is a decision, so neither
+            // IntVar nor CountVar reads it; `WhyFollowUps` names a value outside 0..3.
+            FeatureSourceFollowUps = FollowUpsOf(env(Key.FollowUps)),
             LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
             ? effort.Trim().ToLowerInvariant()
             : "none",
@@ -893,6 +921,8 @@ public sealed record PanelSettings
     {
         internal const string Backoff = "COAI_RETRY_BACKOFF";
 
+        internal const string FollowUps = "COAI_FEATURE_SOURCE_FOLLOWUPS";
+
         internal const string Exhausted = "COAI_ON_EXHAUSTED";
 
         internal const string Workspace = "COAI_CODE_WORKSPACE";
@@ -917,7 +947,26 @@ public sealed record PanelSettings
     /// </remarks>
     private static IReadOnlyList<UnrecognisedSetting> UnknownValues(
         Func<string, string?> env, RolesSetting roles) =>
-        [.. WhyBackoff(env), .. WhyExhausted(env), .. WhyWorkspace(env), .. WhyGatePer(env), .. WhyCadenceMode(env), .. WhyRoles(roles)];
+        [.. WhyBackoff(env), .. WhyExhausted(env), .. WhyWorkspace(env), .. WhyGatePer(env), .. WhyCadenceMode(env), .. WhyRoles(roles), .. WhyFollowUps(env)];
+
+    /// <summary>
+    /// <c>COAI_FEATURE_SOURCE_FOLLOWUPS</c> as a count of follow-up turns: an integer in
+    /// 0..<see cref="Core.Feature.SourceBudget.MaxFollowUps"/>, else the default — said by <see cref="WhyFollowUps"/>.
+    /// </summary>
+    private static int FollowUpsOf(string? value) =>
+        int.TryParse(value?.Trim(), out var count) && count >= 0 && count <= Core.Feature.SourceBudget.MaxFollowUps
+            ? count
+            : Core.Feature.SourceBudget.DefaultFollowUps;
+
+    private static IReadOnlyList<UnrecognisedSetting> WhyFollowUps(Func<string, string?> env) =>
+        env(Key.FollowUps) is { Length: > 0 } value
+        && !(int.TryParse(value.Trim(), out var count) && count >= 0 && count <= Core.Feature.SourceBudget.MaxFollowUps)
+            ? [new UnrecognisedSetting(
+                Key.FollowUps,
+                $"{Key.FollowUps} is '{value}', which this server cannot read as a count of follow-up turns — "
+              + $"a feature reviewer gets {Core.Feature.SourceBudget.DefaultFollowUps}, as it does by default. "
+              + $"The values are the integers 0 to {Core.Feature.SourceBudget.MaxFollowUps}; 0 switches the follow-ups off.")]
+            : [];
 
     private static IReadOnlyList<UnrecognisedSetting> WhyCadenceMode(Func<string, string?> env) =>
         env(Key.CadenceMode) is { Length: > 0 } mode && CadenceModeOf(mode) == Core.Cadence.CadenceMode.Remind
@@ -1107,6 +1156,10 @@ public sealed record PanelSettings
                         // Absent is NO, and only a written `true` is yes: the feature gate is opt-in
                         // per vendor, and a file written before the stage existed ticked nobody.
                         Feature = v.Feature == true,
+                        // Lower-cased like the id it stands in for: the vault's names are matched
+                        // case-insensitively (`KeyVault.Parse`), and a name is ours to normalise.
+                        VaultKey = v.Key?.Trim().ToLowerInvariant() ?? string.Empty,
+                        Price = PriceOf(v.Price),
                     })
                     // One id, one vendor — the extension already refuses a duplicate row, and a
                     // hand-edited settings file is how one reaches the server. The id is the
@@ -1118,6 +1171,27 @@ public sealed record PanelSettings
         {
             return [];
         }
+    }
+
+    /// <summary>A row's price from the wire — the one place a null, negative or non-finite rate becomes "no rate".</summary>
+    /// <remarks>
+    /// A tier with no threshold, or a threshold with no tier rates, is no tier: half of one would price a
+    /// long request at zero, or never switch at all.
+    /// </remarks>
+    private static TokenPrice PriceOf(PriceDto? price)
+    {
+        if (price is null)
+        {
+            return TokenPrice.None;
+        }
+
+        var rates = new TokenRates(TokenRates.Clean(price.In ?? 0), TokenRates.Clean(price.Cached ?? 0), TokenRates.Clean(price.Out ?? 0));
+        var tier = new TokenRates(TokenRates.Clean(price.TierIn ?? 0), TokenRates.Clean(price.TierCached ?? 0), TokenRates.Clean(price.TierOut ?? 0));
+        var from = price.TierFrom is { } t && t > 0 ? t : 0;
+
+        return !rates.IsSet
+            ? TokenPrice.None
+            : from > 0 && tier.IsSet ? new TokenPrice(rates, from, tier) : new TokenPrice(rates, 0, TokenRates.None);
     }
 
     /// <summary>What a caller's <c>document</c> field means, once absence has been given its name.</summary>
@@ -1368,5 +1442,5 @@ public sealed record PanelSettings
 public static class ProviderIdentity
 {
     public static Runners.Reviewers.VendorIdentity Identity(this ProviderSettings provider) =>
-        new(provider.Provider, provider.Runtime, provider.BaseUrl, provider.RemoteVendor);
+        new(provider.Provider, provider.Runtime, provider.BaseUrl, provider.RemoteVendor, provider.VaultKey);
 }

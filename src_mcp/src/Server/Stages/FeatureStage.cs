@@ -2,6 +2,7 @@ using System.Runtime.CompilerServices;
 using CoaiMcp.Core.Feature;
 using CoaiMcp.Core.Outlining;
 using CoaiMcp.Core.Rounds;
+using CoaiMcp.Runners.Collecting;
 using CoaiMcp.Runners.Context;
 using CoaiMcp.Runners.Feature;
 using CoaiMcp.Runners.Processes;
@@ -138,25 +139,42 @@ internal sealed class FeatureStage(
             RolesPerVendor = Math.Max(1, settings.Rounds.EnabledRolesOf(Stage.FeatureReview).Count),
             SkipBecause = skip,
             FeatureBase = range.Base,
+            // The source turns (S3.2): what the round's deadline is scaled by, and what `WorkAsync` gives
+            // each reviewer's conversation.
+            FollowUps = settings.FeatureSourceFollowUps,
             RefuseBeforeBuilding = (loaded, sha) => Task.FromResult(
                 skip.Length > 0 ? string.Empty : WhyNotThisRound(loaded, sha, range.Base, request.Again)),
         };
 
     /// <summary>
     /// Why this call may not run a round against the session as read under the claim — a different base
-    /// without <c>again</c>, or <c>again</c> with the SAME base over the head the last review already read
-    /// (D14) — or empty.
+    /// without <c>again</c>, or the SAME base over the head the last review already read (D14) — or empty.
     /// </summary>
     /// <remarks>
-    /// D14 holds in EVERY state, not only after <c>Done</c>: an open review whose last round read this head
-    /// has nothing new to read either, and reopening it would run the same round again. <c>again</c> with
-    /// a DIFFERENT base is a fresh review (§4.3), so the head it last read does not bind it; what that
-    /// review starts over is the engine's to apply with the round that runs.
+    /// <para>D14 holds in EVERY state, not only after <c>Done</c>: an open review whose last round read this
+    /// head has nothing new to read either, and reopening it would run the same round again. <c>again</c>
+    /// with a DIFFERENT base is a fresh review (§4.3), so the head it last read does not bind it; what that
+    /// review starts over is the engine's to apply with the round that runs.</para>
+    /// <para><b>Except for a retry and the person's request</b> (D23): a reviewer that failed is asked the
+    /// question it never answered, over the same head by design, and a person who wants a second look
+    /// wants it at what is there. A blocking finding's second round is the one that reads a FIX, so the
+    /// head must have moved for it — <b>whether or not <c>again</c> was passed</b>: the ground admits
+    /// round 2 to a plain call too, and until 2026-09-26 only <c>again: true</c> was held to this, so a
+    /// plain call after a blocking round 1 ran round 2 over the very head round 1 had read (found by
+    /// epic 3's code round).</para>
     /// </remarks>
     internal static string WhyNotThisRound(PersistedSession loaded, string head, string baseSha, bool again) =>
         FeatureBases.WhyNot(loaded.FeatureBase, baseSha, again) is { Length: > 0 } otherBase ? otherBase
-        : again && !FeatureBases.IsAnother(loaded.FeatureBase, baseSha) ? Unmoved(LastReviewed(loaded), head)
+        : FeatureBases.IsAnother(loaded.FeatureBase, baseSha) ? string.Empty
+        : MustReadANewHead(loaded.State, again) ? Unmoved(LastReviewed(loaded), head)
         : string.Empty;
+
+    /// <summary>A blocking finding's round 2 reads a fix, and <c>again</c> reopens nothing but a retry or the person's second look.</summary>
+    private static bool MustReadANewHead(SessionState state, bool again) =>
+        state.SecondRound == SecondRoundGround.BlockingFinding || (again && !ReadsTheSameHeadByDesign(state));
+
+    private static bool ReadsTheSameHeadByDesign(SessionState state) =>
+        state.SecondRound is SecondRoundGround.ReviewerFailure or SecondRoundGround.PersonAsked;
 
     /// <summary>The last feature round that actually ran — a skip read no head worth comparing with.</summary>
     private static RoundRecord? LastReviewed(PersistedSession session) =>
@@ -164,7 +182,7 @@ internal sealed class FeatureStage(
 
     private static string Unmoved(RoundRecord? last, string head) =>
         last is { Sha.Length: > 0 } reviewed && string.Equals(reviewed.Sha, head, StringComparison.OrdinalIgnoreCase)
-            ? $"the head has not moved since feature round {reviewed.Number} reviewed {head} — land the fix pull requests, then call review_feature with again: true over the new head"
+            ? $"the head has not moved since feature round {reviewed.Number} reviewed {head} — land the fix pull requests, then call review_feature over the new head (with again: true once the review is finished)"
             : string.Empty;
 
     /// <summary>
@@ -204,12 +222,21 @@ internal sealed class FeatureStage(
 
         var round = session.State.RoundsRunThisStage + 1;
 
+        // ONE resolver per round, for the pinned head, shared by every reviewer of it (S3.1): a file is
+        // read out of git once however many ask. The spend is each reviewer's own and rides on its
+        // conversation; a D23 round 2 builds a new resolver and so starts every allowance afresh. With
+        // the follow-ups switched off there is no conversation: the requests are recorded, not served.
+        var source = settings.FeatureSourceFollowUps > 0
+            ? new SourceTurns.On(new SourceResolver(new GitHistory(launcher), outliner, repoPath, sha), settings.FeatureSourceFollowUps)
+            : SourceTurns.None;
         var work = roster.BuildWork(
             settings.Rounds.RolesForRound(Stage.FeatureReview, round), workingDir, context, round,
-            stage: Stage.FeatureReview, readsCheckout: false, seed: PanelService.StableSeed(session.State.SessionId, round));
+            stage: Stage.FeatureReview, readsCheckout: false, seed: PanelService.StableSeed(session.State.SessionId, round),
+            source: source);
 
+        // A retry asks ONLY the reviewers that failed in round 1 (D23); every other round is the work as built.
         // The RESOLVED base, as the code stage records it: what the outline was actually compared against.
-        return work with { BaseRef = outline.BaseSha };
+        return FeatureSecondRound.OnlyTheFailed(work, session) with { BaseRef = outline.BaseSha };
     }
 
     /// <summary>What the reviewers were sent, in the same sentence shape the other stages log.</summary>

@@ -84,11 +84,17 @@ public sealed record PanelConfig(
     public static readonly RoleGate CodeDefault = new(1, 5);
 
     /// <summary>
-    /// One attempt, at most five, for the feature stage — the same numbers as a code round, as its
-    /// OWN instance, so the three sites that pick a default can be told apart by which one they hand
-    /// back. Mirrored by the panel — see <see cref="PlanDefault"/>.
+    /// Two rounds, at most five, for the feature stage — as its OWN instance, so the three sites that
+    /// pick a default can be told apart by which one they hand back. Mirrored by the panel — see
+    /// <see cref="PlanDefault"/>.
     /// </summary>
-    public static readonly RoleGate FeatureDefault = new(1, 5);
+    /// <remarks>
+    /// Two is a CAP, not a promise: the second round runs only when round 1 needed it — a reviewer
+    /// failure, a <c>blocking</c> finding, or the person asking — and <see cref="RoundMachine"/>
+    /// admits it on no other ground (D23 of the feature-review plan). A budget of one here means no
+    /// second round at all; a budget above two is still two.
+    /// </remarks>
+    public static readonly RoleGate FeatureDefault = new(2, 5);
 
     /// <summary>
     /// The SHIPPED role names, in the order a round runs them — read from the seed, not retyped.
@@ -393,7 +399,54 @@ public sealed record SessionState(
     /// </summary>
     public bool HumanGate { get; init; }
 
+    /// <summary>
+    /// The escalation ids raised FOR the current hold: the <c>call_human</c> notice the round that raised
+    /// it wrote, and every <c>ask_human</c> question asked while it stands. A person's answer releases the
+    /// hold only when it answers one of these — the hold is bound to its answer by IDENTITY, not by time.
+    /// </summary>
+    /// <remarks>
+    /// <para>Why identity. The rule before this was the round's clock: the newest answer counted when it
+    /// was given after the last round completed. So a question asked during an EARLIER hold, left
+    /// unanswered and answered now, released the CURRENT hold — the answer was newer than the round,
+    /// and nothing asked which question it answered (found by the epic 3 risk consultation, 2026-09-26).</para>
+    /// <para>Empty when no hold stands, and for a hold an older build raised without recording it — which
+    /// NO answer releases: there is no id to bind to, and the clock deciding instead was the bypass the
+    /// binding closed (the gate's findings #24/#30, 2026-09-26); the engine re-issues such a hold's notice
+    /// so the person answers a question this build records. Normalised where it is declared, for the
+    /// reason <see cref="Document"/> spells out: a file written before the field existed has no such
+    /// member, and the deserializer runs no initializer for an absent one.</para>
+    /// </remarks>
+    public IReadOnlyList<string> HoldQuestions
+    {
+        get => field ?? [];
+        init => field = value ?? [];
+    }
+
+    /// <summary>
+    /// The <c>ask_human</c> question ids asked on a FEATURE session after its first round, while no hold
+    /// stands — the questions whose answer can be the person's request for round 2 (D23's third ground).
+    /// </summary>
+    /// <remarks>
+    /// <para>The request is bound to its question by IDENTITY, as a hold is to its notice: the newest
+    /// <c>continue</c>/<c>fix</c> newer than round 1 was the rule before, and any question of the session
+    /// answered that way admitted round 2 — one asked before round 1, one an older build filed (the gate's
+    /// finding #27, 2026-09-26). Recorded by <c>RoundMachine.RecordQuestion</c> as each is asked, spent when
+    /// the request is applied, and reset with the count.</para>
+    /// <para>Normalised where it is declared, as <see cref="HoldQuestions"/> is and for the same reason.</para>
+    /// </remarks>
+    public IReadOnlyList<string> RequestQuestions
+    {
+        get => field ?? [];
+        init => field = value ?? [];
+    }
+
     public ImmutableArray<PriorRejection> Rejections { get; init; } = [];
+
+    /// <summary>
+    /// The ground a feature review's second round may run on (D23) — <see cref="SecondRoundGround.None"/>
+    /// for every other stage, and for a feature review whose first round gave none.
+    /// </summary>
+    public SecondRoundGround SecondRound { get; init; }
 
     /// <summary>
     /// Which DOCUMENT this session reviews — empty for a code session, which is all of them until

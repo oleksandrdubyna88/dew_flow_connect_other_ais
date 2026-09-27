@@ -80,7 +80,24 @@ public sealed record UsageEntry(
     /// existed was a review — there was nothing else to be — so an absent kind is READ as one rather
     /// than shown as unknown. That is the truth about those lines, not a convenience.</para>
     /// </remarks>
-    string Kind = "");
+    string Kind = "",
+
+    /// <summary>How many of <paramref name="TokensIn"/> the vendor served from its prompt cache — zero when it did not say.</summary>
+    /// <remarks>
+    /// One line per TURN of a feature reviewer's conversation (S3.2), and this is the number those
+    /// lines exist to record: the follow-up turns resend the base prompt byte for byte so a vendor can
+    /// cache it (D25), and whether one does is read from here. Trailing and defaulted, so an old line
+    /// simply has none; the extension's reader coerces an absent number to zero.
+    /// </remarks>
+    long TokensCached = 0,
+
+    /// <summary>Why a line that should have a cost has none — <c>no price set</c> — or empty.</summary>
+    /// <remarks>
+    /// A metered <c>api</c> run whose row carried no rate (S3.7): its money is UNKNOWN, and a null cost on
+    /// its own reads exactly like a CLI that never reports money. Written as words because a person reads
+    /// this file; never a zero, which would say the run was free. Trailing and defaulted like the rest.
+    /// </remarks>
+    string CostNote = "");
 
 /// <summary>
 /// The append-only record of what every reviewer has consumed.
@@ -112,21 +129,39 @@ public sealed class UsageLedger(string dataDir)
     public string Path => System.IO.Path.Combine(dataDir, "usage.jsonl");
 
     /// <summary>
-    /// Records one reviewer. Never throws: a spending record that can fail a review is worse than
-    /// one with a gap in it.
+    /// Records one reviewer — one line per TURN of its conversation, the last turn's from the outcome
+    /// itself. Never throws: a spending record that can fail a review is worse than one with a gap in it.
     /// </summary>
+    /// <remarks>
+    /// The earlier turns come off the outcome's base (<see cref="ReviewerOutcome.EarlierTurns"/>),
+    /// whatever the outcome is: a reviewer whose turn 2 timed out, was cancelled or came back unreadable
+    /// still cost what turn 1 cost, and a ledger that read only the terminal usage would file that turn
+    /// as free — the very under-report this method was first fixed for, one turn over.
+    /// </remarks>
     public void Record(ReviewerInvocation invocation, ReviewerOutcome outcome, string model, string stage, TimeSpan elapsed)
     {
-        // An unparseable run COMPLETED and reported what it consumed; only a process that never
-        // finished has nothing to declare. Reading usage from `Ok` alone made every failed
-        // reviewer look free, which is the opposite of what a spending record is for.
-        var usage = outcome switch
+        foreach (var turn in outcome.EarlierTurns)
         {
-            ReviewerOutcome.Ok ok => ok.Usage,
-            ReviewerOutcome.Unparseable bad => bad.Usage,
-            _ => Usage.None,
-        };
-        var entry = new UsageEntry(
+            Append(Entry(invocation, model, stage, turn.Elapsed, turn.Usage, "ok"));
+        }
+
+        // The last turn's own usage, EVERY launch of it — an unparseable answer's, and the malformed
+        // first attempt of a repair that then failed. Reading usage from `Ok` alone made every failed
+        // reviewer look free, which is the opposite of what a spending record is for; reading it from a
+        // switch here made a failed repair's first attempt free until 2026-09-26. One member answers
+        // it now, on the outcome, for this line and for the round total alike.
+        var usage = outcome.LastTurnUsage;
+        // The last turn's own seconds: the whole reviewer's less what the earlier turns took.
+        var last = elapsed - TimeSpan.FromTicks(outcome.EarlierTurns.Sum(turn => turn.Elapsed.Ticks));
+
+        Append(Entry(
+            invocation, model, stage, last < TimeSpan.Zero ? TimeSpan.Zero : last, usage,
+            outcome is ReviewerOutcome.Ok ? "ok" : ReviewerSummaryFactory.Describe(outcome)));
+    }
+
+    private static UsageEntry Entry(
+        ReviewerInvocation invocation, string model, string stage, TimeSpan elapsed, Usage usage, string outcome) =>
+        new(
             DateTime.UtcNow.ToString("O"),
             invocation.Provider,
             model,
@@ -136,10 +171,9 @@ public sealed class UsageLedger(string dataDir)
             usage.TokensIn,
             usage.TokensOut,
             usage.CostUsd,
-            outcome is ReviewerOutcome.Ok ? "ok" : ReviewerSummaryFactory.Describe(outcome));
-
-        Append(entry);
-    }
+            outcome,
+            TokensCached: usage.TokensCached,
+            CostNote: usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty);
 
     /// <summary>Records one job a Team server ran on somebody's behalf.</summary>
     /// <remarks>

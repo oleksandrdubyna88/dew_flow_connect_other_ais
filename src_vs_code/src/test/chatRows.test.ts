@@ -38,7 +38,7 @@ function reviewRow(over: Partial<LogRow> = {}): LogRow {
     key: 'r1', kind: 'review',
     startedUtc: '2026-09-09T19:00:00.000Z', completedUtc: '2026-09-09T19:02:00.000Z',
     repoPath: 'D:/repo', repoName: 'repo', branch: 'main', stage: 'code review', number: 1,
-    subject: 'SCOPE — the thing', status: 'done', decided: null, verdict: 'proceed', gating: 0,
+    subject: 'SCOPE — the thing', status: 'done', note: '', decided: null, verdict: 'proceed', gating: 0,
     findings: 2, seconds: 120, decideSeconds: null, tokensIn: 10, tokensOut: 5, costUsd: null, costInUsd: null,
     costOutUsd: null, costTotalUsd: null, costIsEstimate: false, costPartial: false,
     answered: 'all 3 reviewers answered', vendors: ['codex'], reviewers: ['codex/Architecture — done'],

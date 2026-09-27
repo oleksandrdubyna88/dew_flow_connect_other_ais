@@ -77,6 +77,25 @@ public sealed class HumanDecisionTests : IDisposable
         escalations.DecisionFor("mine").Should().Be(HumanDecision.None);
     }
 
+    /// <summary>
+    /// The whole answer, not only its button: the feature stage's second round asks WHEN the person
+    /// answered, because an answer older than the round it would admit was about something else (D23).
+    /// </summary>
+    [Fact]
+    public void TheNewestAnswer_IsReadableWhole_WithWhenItWasGiven()
+    {
+        var escalations = Escalations();
+        escalations.Notify(Question("q6", "s6"));
+        File.WriteAllText(escalations.AnswerPath("q6"), """{"id":"q6","answer":"once more","decision":"continue","answeredUtc":"2026-09-26T10:00:00.000Z"}""");
+
+        var answer = escalations.LatestAnswerFor("s6");
+
+        answer.Should().NotBeNull();
+        answer!.Decision.Should().Be("continue");
+        answer.AnsweredUtc.Should().Be("2026-09-26T10:00:00.000Z");
+        escalations.LatestAnswerFor("nobody").Should().BeNull();
+    }
+
     [Fact]
     public void FreeTextWithNoDecisionField_StaysAnAnswer_NotAnOverride()
     {

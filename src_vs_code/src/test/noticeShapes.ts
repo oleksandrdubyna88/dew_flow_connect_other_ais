@@ -44,6 +44,19 @@ function basic(user: string, secret: string): string {
   return `basic ${Buffer.from(`${user}:${secret}`).toString('base64')}`;
 }
 
+/**
+ * A PEM private-key block, ASSEMBLED rather than written down, for the same reason as `authority()`:
+ * the markers are what a scanner looks for. `breaks` is what separates its lines — a real newline in a
+ * file, the two characters `\n` on one line inside a service account's JSON — and an empty footer is
+ * a block cut short.
+ */
+function privateKey(kind: string, breaks: string, footer = true): string {
+  const head = `-----BEGIN ${kind}PRIVATE` + ` KEY-----`;
+  const tail = footer ? `-----END ${kind}PRIVATE` + ` KEY-----` : '';
+
+  return `${head}${breaks}MIIEvQIBADANBgEXAMPLEBODYLINEONE0123456789${breaks}EXAMPLEBODYLINETWOabcdefghij+/=${breaks}${tail}`;
+}
+
 /** Every secret shape the redactor knows, and several it must LEAVE ALONE. */
 const SHAPES: readonly string[] = [
   // The three SECRETS patterns.
@@ -79,6 +92,16 @@ const SHAPES: readonly string[] = [
   // Adjacency: two secrets in one string, and a secret twice over.
   'https://u:p@https://u:p@host',
   'token abcdefghij and sk-abcdefghij',
+  // A private-key BLOCK (2026-09-26): escaped on one line as a service account holds it, with real line
+  // breaks as a fixture holds it (a notice drops them, and the block is still a block), every variant,
+  // cut short of its footer, and a header standing alone in code, which is not a key.
+  `"private_key": "${privateKey('', '\\n')}"`,
+  privateKey('RSA ', '\n'),
+  privateKey('EC ', '\\n'),
+  privateKey('OPENSSH ', '\r\n'),
+  privateKey('ENCRYPTED ', '\\n'),
+  privateKey('', '\\n', false),
+  'const header = "-----BEGIN PRIVATE' + ' KEY-----"; return header.length;',
 ];
 
 /**

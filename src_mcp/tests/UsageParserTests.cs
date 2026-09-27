@@ -30,6 +30,21 @@ public sealed class UsageParserTests
         usage.CostUsd.Should().BeApproximately(0.048925, 0.000001, "claude prices its own run");
     }
 
+    /// <summary>The cached SUBSET is read for its own number (D25's measurement) and never added to the input.</summary>
+    [Fact]
+    public void TheCachedSubset_IsCountedOnItsOwn_AndNotAddedToTheInput()
+    {
+        var codex = UsageParser.Parse("""{"type":"turn.completed","usage":{"input_tokens":14000,"cached_input_tokens":7808,"output_tokens":300}}""");
+        var openAi = UsageParser.Parse("""{"usage":{"prompt_tokens":5000,"prompt_tokens_details":{"cached_tokens":4096},"completion_tokens":20}}""");
+
+        codex.TokensIn.Should().Be(14000, "codex's cached count is inside its input count");
+        codex.TokensCached.Should().Be(7808);
+        openAi.TokensIn.Should().Be(5000);
+        openAi.TokensCached.Should().Be(4096);
+        UsageParser.Parse(ClaudeEnvelope).TokensCached.Should().Be(0, "this claude run read nothing from its cache");
+        new Usage(10, 1, null, 4).Add(new Usage(20, 2, null, 6)).TokensCached.Should().Be(10);
+    }
+
     [Fact]
     public void Codex_StreamedEvents_CountedOnce_AndItsSubtotalsNotDoubleBilled()
     {

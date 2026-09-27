@@ -442,6 +442,61 @@ public sealed class ASourceRequestIsServedOrRefusedTests : IAsyncLifetime
         watching.Reads.Should().Be(1, "the file is read out of git once per round, whatever is asked of it");
     }
 
+    /// <summary>
+    /// A resolver failure on ONE request is that request's refusal (S3.2, the plan round's rule): a launcher
+    /// that throws serves the rest of the turn, and never "served, empty".
+    /// </summary>
+    [Fact]
+    public async Task ALauncherThatThrowsOnOneFile_RefusesThatRequest_AndServesTheRest()
+    {
+        var broken = new ThrowingShow(_launcher, "README.md");
+
+        var turn = await Resolver(broken).ServeAsync([Whole("README.md"), Symbol("src/Cart.cs", "Cart.Add")], SourceSpend.None);
+
+        turn.Refused.Should().ContainSingle().Which.Should().BeEquivalentTo(
+            new { File = "README.md", Reason = "git could not read it just now; ask again next turn" });
+        turn.Served.Should().ContainSingle().Which.File.Should().Be("src/Cart.cs", "the turn goes on with what can be served");
+    }
+
+    /// <summary>A read the resolver's own deadline ends is refused as TIMED OUT, and is forgotten so the next turn asks again.</summary>
+    [Fact]
+    public async Task AReadPastTheResolversDeadline_IsRefusedAsTimedOut_AndAskedAgainNextTurn()
+    {
+        var slow = new Watching(new SlowShow(_launcher, "README.md", TimeSpan.FromSeconds(3)));
+        var resolver = new SourceResolver(new GitHistory(slow), Outliner, _git.Path, _head, readDeadline: TimeSpan.FromMilliseconds(200));
+
+        var first = await resolver.ServeAsync([Whole("README.md")], SourceSpend.None);
+        var second = await resolver.ServeAsync([Whole("README.md")], first.Spent);
+
+        first.Served.Should().BeEmpty("never 'served, empty'");
+        first.Refused.Should().ContainSingle().Which.Reason.Should().StartWith("timed out");
+        second.Refused.Should().ContainSingle().Which.Reason.Should().StartWith("timed out");
+        slow.Reads.Should().Be(2, "a timed-out read is not kept for the round; the next turn asks git again");
+    }
+
+    /// <summary>The real launcher, with `git show` of one path throwing as a launcher does when git cannot be started.</summary>
+    private sealed class ThrowingShow(IProcessLauncher real, string path) : IProcessLauncher
+    {
+        public Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default) =>
+            request.Arguments.Count > 1 && request.Arguments[0] == "show" && request.Arguments[1].EndsWith(":" + path, StringComparison.Ordinal)
+                ? throw new IOException("the object store is locked")
+                : real.RunAsync(request, ct);
+    }
+
+    /// <summary>The real launcher, with `git show` of one path delayed past any deadline a test sets.</summary>
+    private sealed class SlowShow(IProcessLauncher real, string path, TimeSpan delay) : IProcessLauncher
+    {
+        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            if (request.Arguments.Count > 1 && request.Arguments[0] == "show" && request.Arguments[1].EndsWith(":" + path, StringComparison.Ordinal))
+            {
+                await Task.Delay(delay, ct);
+            }
+
+            return await real.RunAsync(request, ct);
+        }
+    }
+
     [Fact]
     public async Task AKeyShapedStringInsideServedContent_IsRedacted()
     {

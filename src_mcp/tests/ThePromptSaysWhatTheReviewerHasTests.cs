@@ -82,18 +82,19 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
     [Fact]
     public void TheThreeMaterialsDoNotSayTheSameThing()
     {
-        Enum.GetValues<ReaderMaterial>().Select(ReviewerPrompt.WhatYouHave).Should().OnlyHaveUniqueItems(
+        Enum.GetValues<ReaderMaterial>().Select(material => ReviewerPrompt.WhatYouHave(material)).Should().OnlyHaveUniqueItems(
             "each is a different truth about what the reviewer holds");
     }
 
     /// <summary>
     /// The feature reviewer's truth (S2.2b): an outline with the changed hunks, the marks it will meet, and
-    /// source it may ask for — worded to be TRUE while the loop that answers a request does not exist yet.
+    /// source it may ask for — and, with the follow-ups switched OFF, worded to be true of a round in which
+    /// nobody answers a request.
     /// </summary>
     [Fact]
-    public void AFeatureReviewer_IsToldItHasAnOutlineAndHunks_AndThatARequestIsRecordedNotServed()
+    public void AFeatureReviewer_IsToldItHasAnOutlineAndHunks_AndWithTheFollowUpsOff_ThatARequestIsRecordedNotServed()
     {
-        var said = ReviewerPrompt.WhatYouHave(ReaderMaterial.Outline);
+        var said = ReviewerPrompt.WhatYouHave(ReaderMaterial.Outline, followUps: 0);
 
         said.Should().Contain("no checkout").And.Contain("no tool you can call", "a feature reviewer has no checkout either");
         said.Should().Contain("OUTLINE").And.Contain("CHANGED HUNKS", "the two halves of the pack are named");
@@ -102,8 +103,27 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         said.Should().Contain("What this context left out", "and where the cut material is named");
         said.Should().Contain("`sourceRequests`", "the way to ask is named");
         said.Should().Contain("RECORDED").And.Contain("NOT answered inside this review",
-            "the loop that serves a request is S3.2 — promising source would make a reviewer hold its findings back");
+            "with COAI_FEATURE_SOURCE_FOLLOWUPS=0 nobody serves a request — promising source would make a reviewer hold its findings back");
+        said.Should().NotContain("ANSWERED");
         said.Should().NotContain("READ-ONLY checkout");
+    }
+
+    /// <summary>
+    /// With the turn loop on (S3.2, the default), the same truth says a request IS answered — in a
+    /// follow-up turn, up to the cap — and that only the last answer counts.
+    /// </summary>
+    [Theory]
+    [InlineData(3)]
+    [InlineData(1)]
+    public void AFeatureReviewer_WithFollowUpTurns_IsToldARequestIsAnsweredAndOnlyItsLastAnswerCounts(int followUps)
+    {
+        var said = ReviewerPrompt.WhatYouHave(ReaderMaterial.Outline, followUps);
+
+        said.Should().Contain("ANSWERED").And.Contain($"up to {followUps} follow-up turn");
+        said.Should().Contain("Only your LAST answer counts").And.Contain("answer again in full when the source arrives");
+        said.Should().Contain($"{Core.Feature.SourceBudget.RequestsPerTurn} requests a turn", "the caps the reviewer will meet are the resolver's own");
+        said.Should().NotContain("NOT answered inside this review", "the two sentences contradict, and a reviewer must never read both");
+        said.Should().StartWith(ReviewerPrompt.WhatYouHave(ReaderMaterial.Outline, followUps: 0)[..200], "the outline half is the same text under either switch");
     }
 
     /// <summary>The marker the prompt quotes is the one the hunks really end with — read from the code that writes it.</summary>
@@ -138,9 +158,9 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
             + File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"))
             + File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "ReviewerPrompt.cs"));
 
-        source.Should().Contain("{WhatYouHave(material)}",
+        source.Should().Contain("{WhatYouHave(material, followUps)}",
             "every composed prompt carries it, including one a person overrode in the catalog");
-        source.Should().Contain("ComposePrompt(choice, context, material, stageRow.Answers)",
+        source.Should().Contain("ComposePrompt(choice, context, material, stageRow.Answers, followUps)",
             "the real mode reaches the prompt — a literal here would pass every other test in this file");
         source.Should().Contain("var material = hasCheckout ? ReaderMaterial.Checkout : stageRow.Reads",
             "and what a reviewer without a checkout holds is the STAGE's answer, not a constant");
@@ -159,11 +179,16 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
         // to describe exactly one failure: "YOUR PREVIOUS ANSWER WAS NOT VALID JSON". A model that
         // returned NOTHING because a tool was refused was then told its JSON was malformed — advice
         // about a failure it did not have, which is why the retries died the same way as the runs.
-        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "PanelService.cs"))
-            + File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"));
+        // The paragraph lives in the runners since S3.2 (`RepairInstruction`), because a feature
+        // reviewer's follow-up turn composes its own repair from its own prompt; the roster is held to
+        // USING it rather than keeping a copy that would drift.
+        var paragraph = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "runners", "Reviewers", "RepairInstruction.cs"));
+        var roster = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"));
 
-        source.Should().Contain("DID NOT PRODUCE A USABLE ANSWER");
-        source.Should().Contain("refused", "the second failure shape has to be named to be answered");
+        paragraph.Should().Contain("DID NOT PRODUCE A USABLE ANSWER");
+        paragraph.Should().Contain("refused", "the second failure shape has to be named to be answered");
+        roster.Should().Contain("RepairInstruction.Text").And.NotContain("DID NOT PRODUCE", "one text, used, never copied");
+        RepairInstruction.Text.Should().StartWith("\n\n", "it is appended to a prompt that ends in the context");
     }
 
     /// <summary>

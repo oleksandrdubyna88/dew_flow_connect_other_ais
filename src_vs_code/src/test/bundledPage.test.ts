@@ -94,7 +94,7 @@ const LOG = {
 const PRICES = (model: string) =>
   model === 'gpt-5.6-sol' ? { inPerMillion: 2, outPerMillion: 10 } : undefined;
 
-function bundledPage(): { html: string; script: string } {
+function bundledPage(sessions: unknown[] = [SESSION], log: unknown = LOG): { html: string; script: string } {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-bundle-'));
   const entry = path.join(dir, 'entry.mjs');
   const out = path.join(dir, 'bundle.cjs');
@@ -124,7 +124,7 @@ function bundledPage(): { html: string; script: string } {
   // `cost3` is embedded by its source text and CALLED `money`, a module-level binding the minifier
   // had renamed to `R`. The page defines `money`, so nothing looked missing until a row asked for
   // its cost.
-  const html = module_.roundsLogHtml(module_.rowsFrom([SESSION], NOW, PRICES, [USED], LOG), [], 'n0nce');
+  const html = module_.roundsLogHtml(module_.rowsFrom(sessions, NOW, PRICES, [USED], log), [], 'n0nce');
   fs.rmSync(dir, { recursive: true, force: true });
 
   return { html, script: html.slice(html.indexOf('<script'), html.lastIndexOf('</script>')) };
@@ -220,12 +220,12 @@ function stub(): Stub {
 }
 
 /** The page, actually running, with every element it asks for and every message it sends. */
-function runningPage(): {
+function runningPage(sessions: unknown[] = [SESSION], log: unknown = LOG): {
   seen: Record<string, Stub>;
   sent: Array<Record<string, unknown>>;
   click: (event: unknown) => void;
 } {
-  const { script } = bundledPage();
+  const { script } = bundledPage(sessions, log);
   const body = script.slice(script.indexOf('>') + 1);
   const seen: Record<string, Stub> = {};
   const sent: Array<Record<string, unknown>> = [];
@@ -312,6 +312,62 @@ test('the shipped tick box selects the row, and does not open it', () => {
   const rounds = exports[0]?.['rounds'];
   assert.ok(Array.isArray(rounds) && rounds.length === 1);
   assert.equal((rounds[0] as { key?: string }).key, key);
+});
+
+/* ------------------------------------------------------------------------------------------------
+ * A SKIPPED round, run rather than matched (story S3.3 of todo/PLAN_feature_review.md).
+ *
+ * The feature gate records a round nobody could serve as `skipped` with its reason (D1), and that
+ * round does not block the release. Drawn as `done` it read as a review that happened; opened, it said
+ * "written by an older server", because a skip has no reviewers. Both are false. The assertions below
+ * are what went red with the `skipped` branches deleted from the page and from `statusOf`.
+ * --------------------------------------------------------------------------------------------- */
+
+const SKIPPED_SESSION = {
+  state: { sessionId: 's2', repoPath: 'D:/repo', branch: ':feature', stage: 'FeatureReview', awaitingResolve: false },
+  rounds: [{
+    stage: 'FeatureReview', number: 1, verdict: 'skipped', gatingCount: 0,
+    reviewers: 'no reviewer ran', status: 'done',
+    startedUtc: STARTED.toISOString(), completedUtc: STARTED.toISOString(),
+    subject: 'PLAN_feature_review', reviewerStates: [],
+    note: 'no vendor is ticked to review features', repeats: 3,
+  }],
+};
+
+/** The same round as the database has it: nobody decided anything, and nothing was found. */
+const SKIPPED_LOG = {
+  ...LOG,
+  rounds: [{
+    repoPath: 'D:/repo', branch: ':feature', stage: 'FeatureReview', number: 1,
+    startedUtc: STARTED.toISOString(), sessionId: 's2', accepted: -1, rejected: -1,
+    findings: [], cursor: `${STARTED.toISOString()}|1`, foundCount: 0,
+  }],
+};
+
+test('a skipped round is its own neutral state — "skipped — did not block" — never "done"', () => {
+  const page = runningPage([SKIPPED_SESSION], SKIPPED_LOG);
+  const rows = page.seen['rows']?.innerHTML ?? '';
+
+  assert.match(rows, /<tr/, 'the page rendered no rows at all');
+  assert.match(rows, /class="badge skipped"/, 'the skipped round is not drawn in a state of its own');
+  assert.match(rows, /skipped — did not block/, 'the badge does not say that the skip did not block the release');
+  assert.doesNotMatch(rows, /class="badge done"/, 'a round that never ran is drawn as one that did');
+  assert.match(rows, /feature review/, 'the stage is shown as the raw enum');
+});
+
+test('opening a skipped round shows WHY it was skipped, and asks for no findings', () => {
+  const page = runningPage([SKIPPED_SESSION], SKIPPED_LOG);
+  const key = firstRenderedKey(page.seen['rows']?.innerHTML ?? '');
+
+  page.click(clickInRow('tr[data-key]', 'data-key', key));
+
+  const rows = page.seen['rows']?.innerHTML ?? '';
+  assert.match(rows, /class="detail"/, 'the row did not open');
+  assert.match(rows, /no vendor is ticked to review features ×3/, 'the reason the server recorded is not on the page');
+  assert.doesNotMatch(rows, /written by an older server/,
+    'a skip has no reviewers because nobody could run, not because an older server wrote it');
+  assert.equal(page.sent.filter((message) => message['command'] === 'findings').length, 0,
+    'a round that never ran has no findings to fetch — opening it spawned a read anyway');
 });
 
 test('a function embedded by its source calls nothing the minifier can rename', () => {

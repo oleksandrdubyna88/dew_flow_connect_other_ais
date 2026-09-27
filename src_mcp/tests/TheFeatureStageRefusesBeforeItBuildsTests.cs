@@ -289,4 +289,45 @@ public sealed class TheFeatureStageRefusesBeforeItBuildsTests : IAsyncLifetime
             FeatureStage.WhyNotThisRound(loaded, _head, _base, again: true).Should().Contain("the head has not moved", $"in stage {stage}, the same base and the same head review nothing new");
         }
     }
+
+    /// <summary>A review with one round run — which read <see cref="_head"/> — admitted to its second on <paramref name="ground"/>.</summary>
+    private PersistedSession OpenOn(SecondRoundGround ground) =>
+        new(
+            new SessionState("s1", _repo, SessionKey.FeatureBranch, new PanelConfig()) { Feature = PlanPath, Stage = Stage.FeatureReview, RoundsRunThisStage = 1, SecondRound = ground },
+            [new RoundRecord(nameof(Stage.FeatureReview), 1, "revise", 0, "0 of 1", DateTime.UtcNow) { Sha = _head }])
+        {
+            FeatureBase = _base,
+        };
+
+    /// <summary>
+    /// D23's retry and the person's request read the SAME head by design: a reviewer that failed is asked
+    /// the question it never answered, and a person who wants a second look wants it at what is there.
+    /// </summary>
+    [Theory]
+    [InlineData(SecondRoundGround.ReviewerFailure, true)]
+    [InlineData(SecondRoundGround.ReviewerFailure, false)]
+    [InlineData(SecondRoundGround.PersonAsked, true)]
+    [InlineData(SecondRoundGround.PersonAsked, false)]
+    public void AnUnmovedHead_IsNotRefused_ForARetryOrThePersonsRequest_WithOrWithoutAgain(SecondRoundGround ground, bool again) =>
+        FeatureStage.WhyNotThisRound(OpenOn(ground), _head, _base, again).Should().BeEmpty($"a {ground} second round needs no new head");
+
+    /// <summary>
+    /// A blocking finding's second round is the one that reads a FIX, so the head must have moved for it —
+    /// whether or not the caller passes <c>again</c>. Until 2026-09-26 only <c>again: true</c> was held to
+    /// D14 here, so a plain <c>review_feature</c> after a blocking round 1 ran round 2 over the very head
+    /// round 1 had read, with no fix in it (found by epic 3's code round).
+    /// </summary>
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ABlockingSecondRound_OverTheUnmovedHead_IsRefused_WithOrWithoutAgain(bool again) =>
+        FeatureStage.WhyNotThisRound(OpenOn(SecondRoundGround.BlockingFinding), _head, _base, again)
+            .Should().Contain("the head has not moved", $"round 2 reads the fix, and again: {again} does not change what it would read");
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void ABlockingSecondRound_OverAMovedHead_Runs_WithOrWithoutAgain(bool again) =>
+        FeatureStage.WhyNotThisRound(OpenOn(SecondRoundGround.BlockingFinding), new string('b', 40), _base, again)
+            .Should().BeEmpty("the fix landed, and round 2 reads it");
 }

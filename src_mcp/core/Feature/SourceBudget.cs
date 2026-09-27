@@ -39,4 +39,20 @@ public static class SourceBudget
 
     /// <summary>How far into a file a NUL is looked for before the file is called binary — git's own heuristic window.</summary>
     public const int BinarySniffChars = 8000;
+
+    /// <summary>
+    /// Follow-up turns a feature reviewer gets by default — three (D20, confirmed after the trial ran one),
+    /// so at most four turns in all. <c>COAI_FEATURE_SOURCE_FOLLOWUPS</c> overrides it; 0 is single-turn.
+    /// </summary>
+    public const int DefaultFollowUps = 3;
+
+    /// <summary>The most follow-ups the switch may ask for; a value past it is the default, said out loud.</summary>
+    public const int MaxFollowUps = 3;
+
+    /// <summary>
+    /// How long one request's read of git may take before it is refused as timed out (S3.2, the plan
+    /// round's rule): a git lock or a slow <c>git show</c> is a refusal on THAT request — "not served:
+    /// path — timed out" — and the turn goes on with what was served. Never "served, empty".
+    /// </summary>
+    public static readonly TimeSpan ReadDeadline = TimeSpan.FromSeconds(30);
 }

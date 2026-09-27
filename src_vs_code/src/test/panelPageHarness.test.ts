@@ -24,3 +24,12 @@ test('a single-word data attribute and the value are read as before', () => {
   assert.equal(control.type, 'text');
   assert.equal(control.tagName, 'INPUT');
 });
+
+test('a checkbox starts as the page rendered it — and a data attribute naming "checked" does not tick it', () => {
+  // A DOM reads the boolean `checked` attribute; it does not read a substring of some other attribute.
+  // The harness must not be more permissive than that, or a box the page drew unticked reads as ticked.
+  assert.equal(controlFrom('input', ' type="checkbox" data-setting="feature" data-vendor="codex" checked').checked, true);
+  assert.equal(controlFrom('input', ' type="checkbox" data-setting="feature" data-vendor="codex" checked disabled').checked, true);
+  assert.equal(controlFrom('input', ' type="checkbox" data-setting="feature" data-vendor="codex"').checked, false);
+  assert.equal(controlFrom('input', ' type="checkbox" data-setting="checked" data-vendor="codex"').checked, false);
+});

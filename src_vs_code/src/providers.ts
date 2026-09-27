@@ -72,14 +72,29 @@ export interface ProvidersAnswer {
 export interface ProviderNotes {
   readonly unrecognised: readonly string[];
   readonly vaultNote: string;
+  /**
+   * The NAMES of the keys in the vault's config entry — never a value (PLAN_feature_review.md S3.6).
+   *
+   * <p>What "Add a reviewer" offers as `!name`. Only a string shaped like a name survives the parse:
+   * the server sends names and nothing else, and a body that sent anything else — a map of names to
+   * values, a value on its own — keeps nothing from it here.</p>
+   */
+  readonly vaultKeys: readonly string[];
+  /**
+   * Whether the vault was read: `read`, `unreadable` (and `vaultNote` says why), or `not-reported` by a
+   * server too old to name its keys — three answers an empty list alone would collapse into one.
+   */
+  readonly vault: VaultState;
 }
 
+export type VaultState = 'read' | 'unreadable' | 'not-reported';
+
 /** Two empties — what an unparseable body, or a build too old to send them, amounts to. */
-export const NO_NOTES: ProviderNotes = { unrecognised: [], vaultNote: '' };
+export const NO_NOTES: ProviderNotes = { unrecognised: [], vaultNote: '', vaultKeys: [], vault: 'not-reported' };
 
 export function parseProviderNotes(output: string): ProviderNotes {
   try {
-    const parsed = JSON.parse(output) as { unrecognised?: unknown; vaultNote?: unknown } | null;
+    const parsed = JSON.parse(output) as { unrecognised?: unknown; vaultNote?: unknown; vaultKeyNames?: unknown; vaultRead?: unknown } | null;
     if (parsed === null || typeof parsed !== 'object') {
       return NO_NOTES;
     }
@@ -88,10 +103,40 @@ export function parseProviderNotes(output: string): ProviderNotes {
     return {
       unrecognised: rows.filter((row): row is string => typeof row === 'string' && row.length > 0),
       vaultNote: typeof parsed.vaultNote === 'string' ? parsed.vaultNote : '',
+      vaultKeys: keyNamesFrom(parsed.vaultKeyNames),
+      vault: vaultStateOf(parsed.vaultKeyNames, parsed.vaultRead),
     };
   } catch {
     return NO_NOTES;
   }
+}
+
+/**
+ * A vault key NAME as a row can carry it: lower-case letters, digits, `.`, `_`, `-`, at most 64 — the
+ * shape `isUsableVendorId` gives a vendor id, minus the case. Anything else is dropped, never kept.
+ */
+const KEY_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/u;
+
+/** The names, lower-cased and de-duplicated in the server's order; a non-name is not a name. */
+function keyNamesFrom(value: unknown): readonly string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  const names = value
+    .filter((one): one is string => typeof one === 'string')
+    .map((one) => one.trim().toLowerCase())
+    .filter((one) => KEY_NAME.test(one));
+
+  return [...new Set(names)];
+}
+
+/** `read` / `unreadable` from a server that names its keys; `not-reported` from one that predates it. */
+function vaultStateOf(names: unknown, read: unknown): VaultState {
+  if (!Array.isArray(names)) {
+    return 'not-reported';
+  }
+
+  return read === true ? 'read' : 'unreadable';
 }
 
 /**

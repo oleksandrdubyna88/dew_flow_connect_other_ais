@@ -65,6 +65,29 @@ public sealed class LedgerAndEvidenceTests : IDisposable
         Lines().Should().OnlyContain(l => l.StartsWith('{') && l.EndsWith('}'));
     }
 
+    /// <summary>
+    /// One line per TURN (S3.2): a conversation's earlier turns come off the outcome's base, each with
+    /// its own tokens, cached count and seconds; the terminal line is the last turn's alone.
+    /// </summary>
+    [Fact]
+    public void AConversation_IsRecordedOneLinePerTurn_TheFailedLastTurnIncluded()
+    {
+        var ledger = new UsageLedger(_dir);
+        var earlier = new[]
+        {
+            new TurnUsage(1, new Usage(1000, 50, null, TokensCached: 0), TimeSpan.FromSeconds(3)),
+            new TurnUsage(2, new Usage(1100, 40, null, TokensCached: 950), TimeSpan.FromSeconds(4)),
+        };
+
+        ledger.Record(Invocation("codex"), new ReviewerOutcome.TimedOut { EarlierTurns = earlier }, "gpt-5", "FeatureReview", TimeSpan.FromSeconds(12));
+
+        var lines = Lines().Select(l => System.Text.Json.JsonSerializer.Deserialize(l, LedgerJsonContext.Default.UsageEntry)!).ToList();
+        lines.Should().HaveCount(3, "two turns that answered and the one that timed out");
+        lines[0].Should().BeEquivalentTo(new { TokensIn = 1000L, TokensOut = 50L, TokensCached = 0L, Seconds = 3.0, Outcome = "ok", Stage = "FeatureReview" });
+        lines[1].Should().BeEquivalentTo(new { TokensIn = 1100L, TokensCached = 950L, Seconds = 4.0, Outcome = "ok" });
+        lines[2].Should().BeEquivalentTo(new { TokensIn = 0L, Seconds = 5.0, Outcome = "timeout" }, "the last turn's own seconds: the reviewer's twelve less the seven its earlier turns took");
+    }
+
     [Fact]
     public void AFailedReviewer_IsRecordedWithWhatItActuallyConsumed()
     {

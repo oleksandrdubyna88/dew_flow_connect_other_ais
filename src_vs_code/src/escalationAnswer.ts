@@ -20,18 +20,32 @@ export interface DecisionChoice {
   readonly detail: string;
 }
 
+/** The branch segment every FEATURE session lives under — the server's `SessionKey.FeatureBranch`, a string no git ref can spell. */
+export const FEATURE_BRANCH = ':feature';
+
 /**
  * The three things that can happen after the rounds run out — and notably none of them is "ship it
  * with the findings open". A human override meaning "ignore all this" would be an off switch on the
  * gate, so it is deliberately not offered; all three keep the findings alive.
+ *
+ * <p>For a FEATURE review the first choice is also how a person asks for the review's second round
+ * (D23 of the feature-review plan): a feature review is one round unless a reviewer failed, a finding
+ * was `blocking`, or the person asks — and this button, on a question filed under the feature session,
+ * is the asking. The same road `humanDecision` takes, written only by this window or the phone; no
+ * argument the AI passes can claim it. So the detail says what it grants THERE: the second and last
+ * round, not a fresh set.</p>
+ *
+ * @param branch the session's branch as the question names it — `:feature` for a feature review.
  */
-export function decisionChoices(): readonly DecisionChoice[] {
+export function decisionChoices(branch = ''): readonly DecisionChoice[] {
+  const feature = branch === FEATURE_BRANCH;
   return [
     {
       decision: 'continue',
       label: 'Keep going — more rounds',
-      detail:
-        'The stage gets a fresh set of rounds and the review runs again with nothing changed. For when you think the reviewers are wrong, or you want another pass at the same thing.',
+      detail: feature
+        ? 'A feature review gets its second and last round (at most two, ever) and runs again with nothing changed — or, after a call_human, a fresh set of rounds. For when you think the reviewers are wrong, or you want another pass at the same thing.'
+        : 'The stage gets a fresh set of rounds and the review runs again with nothing changed. For when you think the reviewers are wrong, or you want another pass at the same thing.',
     },
     {
       decision: 'fix',

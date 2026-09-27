@@ -80,6 +80,9 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
                     ..(settings.ReasoningEffort.Trim().Length > 0
                         ? new[] { "--reasoning-effort", settings.ReasoningEffort.Trim() }
                         : []),
+                    // The row's price, when it has one (S3.7): the shim prices each turn itself. A price
+                    // is not a secret, so argv is fine for it — the key stays in the environment.
+                    ..settings.Price.AsFlags(),
                 ],
                 worktreePath)
             {
@@ -102,8 +105,10 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
 
     /// <summary>What the run consumed, from the shim's stdout line — the same shape the local shim prints.</summary>
     /// <remarks>
-    /// Money is null: the endpoint reports tokens and this build ships no price table. The panel's
-    /// per-vendor rates price them, marked with a tilde, exactly as codex's tokens are.
+    /// The money is the SHIM's: it prices the turn from the rates the row carried (S3.7), since the
+    /// endpoint reports tokens and nothing else. A line with no <c>costUsd</c> came from a row with no
+    /// price — a metered run whose cost is unknown — so it is marked <see cref="Usage.NoPriceSet"/>, and
+    /// every surface then says "no price set" rather than $0.
     /// </remarks>
     public Usage ReadUsage(ReviewerInvocation invocation, ProcessResult result)
     {
@@ -112,14 +117,20 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
             using var parsed = JsonDocument.Parse(result.StdOut);
             var root = parsed.RootElement;
 
+            var cost = root.TryGetProperty("costUsd", out var usd) && usd.ValueKind == JsonValueKind.Number && usd.TryGetDouble(out var dollars) ? dollars : (double?)null;
+
             return new Usage(
                 root.TryGetProperty("tokensIn", out var input) && input.TryGetInt64(out var tin) ? tin : 0,
                 root.TryGetProperty("tokensOut", out var output) && output.TryGetInt64(out var tout) ? tout : 0,
-                null);
+                cost,
+                // The cached subset, when the endpoint reported one (`prompt_tokens_details.cached_tokens`):
+                // what the first live multi-turn run measures prefix caching by (D25). Absent is zero.
+                root.TryGetProperty("tokensCached", out var cached) && cached.TryGetInt64(out var tcached) ? tcached : 0,
+                NoPriceSet: cost is null);
         }
         catch (JsonException)
         {
-            return new Usage(0, 0, null);
+            return new Usage(0, 0, null, NoPriceSet: true);
         }
     }
 }

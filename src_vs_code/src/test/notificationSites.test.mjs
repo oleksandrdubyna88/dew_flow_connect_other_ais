@@ -211,7 +211,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 141 → 140 on 2026-09-25, issue #538: a prompt button adopts text the person wrote as the material under its
 // question, so its "the box holds something you wrote — so it was left alone" notice
 // (`preset-instruction-left-alone`) can no longer happen and went with the branch that raised it. The model button's own notice of the same kind stays.
-const PLACES_THIS_SPEAKS = 140;
+// 140 → 141 on 2026-09-26, PLAN_feature_review S3.6: Add a reviewer lists the vault's API keys as `!name`, and
+// when it can list none it shows one row saying why; picking that row says the reason where a person reads it
+// (`vault-keys-not-listed`). One place, because it is one refusal.
+const PLACES_THIS_SPEAKS = 141;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

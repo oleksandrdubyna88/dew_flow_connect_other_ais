@@ -68,6 +68,16 @@ export interface RoundRecord {
    * session would relabel history; six findings across two vendors said so.</p>
    */
   readonly caller?: CallerDeclaration;
+  /**
+   * Why a SKIPPED round did not run — the server's reason, empty for every round that ran. Absent in
+   * files written before the feature stage (S2.1 of `todo/PLAN_feature_review.md`).
+   */
+  readonly note?: string;
+  /**
+   * How many consecutive identical skips this row stands for — the server coalesces them into one row
+   * (§4.12). Absent, or below two, reads as one.
+   */
+  readonly repeats?: number;
 }
 
 /**
@@ -264,9 +274,49 @@ export function decideSecondsOf(completedUtc: string, resolvedUtc: string): numb
   return seconds < 0 || seconds > MAX_DECIDING_SECONDS ? null : seconds;
 }
 
-/** `PlanReview` -> `plan review`: both renderers speak the way a person would say it. */
+/**
+ * A skipped round's note as the log shows it: the reason, and `×N` when one row stands for N skips.
+ *
+ * <p>The same sentence the server writes into `--log` (`RoundRecord.LoggedNote`, `SessionStore.cs`),
+ * built here from the session file's two fields rather than read from a third, so a file from a server
+ * that never wrote `loggedNote` still reads right. A blank or non-string reason is no reason — and
+ * "×4" of nothing is nothing.</p>
+ */
+export function noteOf(round: RoundRecord): string {
+  const note = usableString(round.note);
+  const repeats = repeatsOf(round.repeats);
+
+  return note.length === 0 || repeats < 2 ? note : `${note} ×${repeats}`;
+}
+
+/** How many skips one row stands for — anything that is not a whole number reads as one. */
+function repeatsOf(value: unknown): number {
+  return Number.isInteger(value) ? (value as number) : 1;
+}
+
+/**
+ * What each stage is called when a person says it — the server's own phrases (`Stages.cs`: "plan
+ * review", "code review", "document review", "feature review").
+ *
+ * <p>A table, not a chain of comparisons: the chain knew two stages, so a document round sat in the log
+ * as the raw enum `DocumentReview` beside rows reading "plan review" (§9.5 of the feature-review plan).</p>
+ */
+const STAGE_NAMES: ReadonlyMap<string, string> = new Map([
+  ['PlanReview', 'plan review'],
+  ['CodeReview', 'code review'],
+  ['DocumentReview', 'document review'],
+  ['FeatureReview', 'feature review'],
+]);
+
+/**
+ * `PlanReview` -> `plan review`: both renderers speak the way a person would say it. A stage this build
+ * has never heard of is shown exactly as it came — renaming it into a word that means something else
+ * would be worse than the raw name.
+ */
 export function stageName(stage: string): string {
-  return stage === 'PlanReview' ? 'plan review' : stage === 'CodeReview' ? 'code review' : stage;
+  // A Map, not an object literal: `stage` is text from a file, and `constructor` or `toString` must
+  // read as themselves rather than as a property every object inherits.
+  return STAGE_NAMES.get(stage) ?? stage;
 }
 
 /**
