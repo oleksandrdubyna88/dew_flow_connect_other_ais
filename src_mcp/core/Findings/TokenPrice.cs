@@ -52,48 +52,15 @@ public sealed record TokenPrice(TokenRates Rates, long TierFromTokens, TokenRate
         }
 
         var rates = TierFromTokens > 0 && Tier.IsSet && usage.TokensIn >= TierFromTokens ? Tier : Rates;
+        // The fresh input is never negative: a vendor reporting more cached tokens than prompt tokens
+        // (epic 3's code round, #5) has every prompt token priced at the cached rate and nothing refunded.
         var cached = Math.Clamp(usage.TokensCached, 0, Math.Max(usage.TokensIn, 0));
+        var fresh = Math.Max(0, usage.TokensIn - cached);
         var cachedRate = rates.Cached > 0 ? rates.Cached : rates.In;
-        var dollars = ((usage.TokensIn - cached) * rates.In + cached * cachedRate + usage.TokensOut * rates.Out) / 1_000_000d;
+        var dollars = (fresh * rates.In + cached * cachedRate + usage.TokensOut * rates.Out) / 1_000_000d;
 
         return Math.Round(dollars, 6);
     }
-
-    /// <summary>The argv flags that carry this price to <c>--ask-api</c> — none at all when there is no price.</summary>
-    /// <remarks>A price is not a secret, so it may ride on a command line; the key never does.</remarks>
-    public IReadOnlyList<string> AsFlags()
-    {
-        if (!IsSet)
-        {
-            return [];
-        }
-
-        var flags = new List<string> { "--price-in", Text(Rates.In), "--price-cached", Text(Rates.Cached), "--price-out", Text(Rates.Out) };
-        if (TierFromTokens > 0 && Tier.IsSet)
-        {
-            flags.AddRange(["--tier-from", TierFromTokens.ToString(CultureInfo.InvariantCulture),
-                "--tier-in", Text(Tier.In), "--tier-cached", Text(Tier.Cached), "--tier-out", Text(Tier.Out)]);
-        }
-
-        return flags;
-    }
-
-    /// <summary>The price the flags of <see cref="AsFlags"/> describe; <see cref="None"/> when they describe none.</summary>
-    public static TokenPrice FromFlags(IReadOnlyDictionary<string, string> flags)
-    {
-        var rates = new TokenRates(Number(flags, "--price-in"), Number(flags, "--price-cached"), Number(flags, "--price-out"));
-        var from = long.TryParse(flags.GetValueOrDefault("--tier-from", ""), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) && n > 0 ? n : 0;
-        var tier = new TokenRates(Number(flags, "--tier-in"), Number(flags, "--tier-cached"), Number(flags, "--tier-out"));
-
-        return rates.IsSet ? new TokenPrice(rates, from, from > 0 ? tier : TokenRates.None) : None;
-    }
-
-    private static double Number(IReadOnlyDictionary<string, string> flags, string name) =>
-        double.TryParse(flags.GetValueOrDefault(name, ""), NumberStyles.Float, CultureInfo.InvariantCulture, out var value)
-            ? TokenRates.Clean(value)
-            : 0;
-
-    private static string Text(double value) => value.ToString("0.######", CultureInfo.InvariantCulture);
 }
 
 /// <summary>How a cost is written where a person reads it: a figure, or why there is none.</summary>

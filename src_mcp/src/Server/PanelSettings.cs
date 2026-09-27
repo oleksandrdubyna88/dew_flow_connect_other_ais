@@ -88,6 +88,13 @@ public sealed record ProviderSettings(string Provider)
     /// <summary>What this row charges per million tokens — read by the <c>api</c> runtime only (S3.7).</summary>
     public TokenPrice Price { get; init; } = TokenPrice.None;
 
+    /// <summary>
+    /// For an <c>api</c> row: what a person set on THIS row over its module's calibrated defaults — an
+    /// effort, a thinking switch, a whole-review limit (<c>effort</c>, <c>thinking</c>, <c>reviewMinutes</c>).
+    /// Each unset by default; the module validates them before a launch (<see cref="Core.Api.IApiVendor.Refusal"/>).
+    /// </summary>
+    public Core.Api.ApiRowSettings Api { get; init; } = Core.Api.ApiRowSettings.None;
+
     /// <summary>Whether this vendor's reviews run somewhere other than this machine.</summary>
     /// <remarks>
     /// The same question <c>PanelService.Remote</c> asked privately, asked of the row instead: the
@@ -439,6 +446,36 @@ public sealed record PanelSettings
     /// <see cref="UnrecognisedSettings"/> says so at startup naming the value.
     /// </remarks>
     public int FeatureSourceFollowUps { get; init; } = Core.Feature.SourceBudget.DefaultFollowUps;
+
+    /// <summary>The default whole-review limit for an api reviewer on the feature stage, in minutes.</summary>
+    public const int DefaultFeatureApiReviewMinutes = 20;
+
+    /// <summary>
+    /// How long an api reviewer's WHOLE feature review may take — every turn of its conversation, launch
+    /// to final answer — <c>COAI_FEATURE_API_REVIEW_MINUTES</c>, twenty by default.
+    /// </summary>
+    /// <remarks>
+    /// The operator's requirement of 2026-09-27, measured first: at their default reasoning depth the
+    /// hosted models took 4–10 minutes a turn (grok-4.7 reached 20.2 and 25.7 minutes over three and four
+    /// turns; a Qwen3.8-max turn never ended in 105), and the derived cap of <c>timeout × (1 + follow-ups)</c>
+    /// — forty minutes at the defaults — bounded none of it. A positive whole number of minutes; anything
+    /// else is the default. Only the feature stage's api reviewers carry it (<c>RosterBuilder</c>); a CLI
+    /// reviewer and every other stage keep the derived cap.
+    /// </remarks>
+    public TimeSpan FeatureApiReview { get; init; } = TimeSpan.FromMinutes(DefaultFeatureApiReviewMinutes);
+
+    /// <summary>
+    /// What the environment said for EVERY api row — <c>COAI_LOCAL_REASONING_EFFORT</c>,
+    /// <c>COAI_LOCAL_MAX_TOKENS</c>, <c>COAI_FEATURE_API_REVIEW_MINUTES</c> — as the knob between a row's
+    /// own settings and its module's calibrated defaults (<see cref="Core.Api.ApiEffective"/>).
+    /// </summary>
+    /// <remarks>
+    /// These three were an api row's only settings before the vendor modules (2026-09-27), and every
+    /// calibration run set them explicitly, so a SET value keeps meaning exactly what it meant. Unset, they
+    /// no longer hand an api row the local engine's numbers (<see cref="LocalReasoningEffort"/>'s
+    /// <c>none</c>, <see cref="LocalMaxTokens"/>'s 8,192): the module's defaults apply instead.
+    /// </remarks>
+    public Core.Api.ApiOverrides ApiOverrides { get; init; } = Core.Api.ApiOverrides.None;
 
     /// <summary>
     /// What a CODE reviewer is launched in: <c>none</c> (the default) or <c>worktree</c>.
@@ -848,9 +885,17 @@ public sealed record PanelSettings
             // Zero is the meaningful value here — single-turn — and the ceiling is a decision, so neither
             // IntVar nor CountVar reads it; `WhyFollowUps` names a value outside 0..3.
             FeatureSourceFollowUps = FollowUpsOf(env(Key.FollowUps)),
+            // `IntVar`: a zero-minute review is not a review, so zero falls back rather than meaning "no cap".
+            FeatureApiReview = TimeSpan.FromMinutes(IntVar(env, "COAI_FEATURE_API_REVIEW_MINUTES", DefaultFeatureApiReviewMinutes)),
             LocalReasoningEffort = env("COAI_LOCAL_REASONING_EFFORT") is { Length: > 0 } effort
             ? effort.Trim().ToLowerInvariant()
             : "none",
+            // The same three variables, kept apart from the local engine's defaults: unset is UNSET here (empty,
+            // zero), so an api row falls to its module's calibrated default rather than to `none` and 8,192.
+            ApiOverrides = new Core.Api.ApiOverrides(
+                env("COAI_LOCAL_REASONING_EFFORT")?.Trim().ToLowerInvariant() ?? string.Empty,
+                IntVar(env, "COAI_LOCAL_MAX_TOKENS", 0),
+                IntVar(env, "COAI_FEATURE_API_REVIEW_MINUTES", 0)),
             CodeWorkspace = WorkspaceOf(env(Key.Workspace)),
             DealPlanLenses = Flag(env, "COAI_DEAL_PLAN") || Flag(env, "COAI_ROTATE_PROMPTS"),
             DealCodeLenses = Flag(env, "COAI_DEAL_CODE") || Flag(env, "COAI_ROTATE_PROMPTS"),
@@ -1160,6 +1205,7 @@ public sealed record PanelSettings
                         // case-insensitively (`KeyVault.Parse`), and a name is ours to normalise.
                         VaultKey = v.Key?.Trim().ToLowerInvariant() ?? string.Empty,
                         Price = PriceOf(v.Price),
+                        Api = ApiRowOf(v),
                     })
                     // One id, one vendor — the extension already refuses a duplicate row, and a
                     // hand-edited settings file is how one reaches the server. The id is the
@@ -1172,6 +1218,24 @@ public sealed record PanelSettings
             return [];
         }
     }
+
+    /// <summary>
+    /// A row's per-model settings from the wire — each absent field is UNSET (the module's default), never a
+    /// value this parser guessed: the effort lower-cased like every other name this side normalises, the
+    /// thinking switch named (<see cref="ThinkingSetting"/>) rather than carried on as a nullable, and a
+    /// zero or negative minute count unset rather than a zero-minute review.
+    /// </summary>
+    private static Core.Api.ApiRowSettings ApiRowOf(VendorDto v) => new(
+        v.Effort?.Trim().ToLowerInvariant() ?? string.Empty,
+        ThinkingOf(v.Thinking),
+        v.ReviewMinutes is { } minutes && minutes > 0 ? minutes : 0);
+
+    private static Core.Api.ThinkingSetting ThinkingOf(bool? thinking) => thinking switch
+    {
+        true => Core.Api.ThinkingSetting.On,
+        false => Core.Api.ThinkingSetting.Off,
+        null => Core.Api.ThinkingSetting.Default,
+    };
 
     /// <summary>A row's price from the wire — the one place a null, negative or non-finite rate becomes "no rate".</summary>
     /// <remarks>

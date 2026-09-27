@@ -97,7 +97,15 @@ public sealed record UsageEntry(
     /// its own reads exactly like a CLI that never reports money. Written as words because a person reads
     /// this file; never a zero, which would say the run was free. Trailing and defaulted like the rest.
     /// </remarks>
-    string CostNote = "");
+    string CostNote = "",
+
+    /// <summary>How many of <paramref name="TokensOut"/> the vendor reported as reasoning — zero when it did not say.</summary>
+    /// <remarks>
+    /// For the record, not the bill (the bill is <paramref name="TokensOut"/>, which holds them): the number
+    /// that says whether a reasoning model's minutes went into thinking. Measured 2026-09-26, grok-4.7 spent
+    /// 27,728 reasoning tokens on a 1,557-token answer. Trailing and defaulted like the rest.
+    /// </remarks>
+    long TokensReasoning = 0);
 
 /// <summary>
 /// The append-only record of what every reviewer has consumed.
@@ -149,7 +157,9 @@ public sealed class UsageLedger(string dataDir)
         // first attempt of a repair that then failed. Reading usage from `Ok` alone made every failed
         // reviewer look free, which is the opposite of what a spending record is for; reading it from a
         // switch here made a failed repair's first attempt free until 2026-09-26. One member answers
-        // it now, on the outcome, for this line and for the round total alike.
+        // it now, on the outcome, for this line and for the round total alike — a billed non-zero exit included
+        // (2026-09-26: a shim billed for a reasoning-only completion, refusing it at exit 70; `NonZeroExit`
+        // carries its usage and answers `OwnUsage` with it).
         var usage = outcome.LastTurnUsage;
         // The last turn's own seconds: the whole reviewer's less what the earlier turns took.
         var last = elapsed - TimeSpan.FromTicks(outcome.EarlierTurns.Sum(turn => turn.Elapsed.Ticks));
@@ -173,7 +183,8 @@ public sealed class UsageLedger(string dataDir)
             usage.CostUsd,
             outcome,
             TokensCached: usage.TokensCached,
-            CostNote: usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty);
+            CostNote: usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty,
+            TokensReasoning: usage.TokensReasoning);
 
     /// <summary>Records one job a Team server ran on somebody's behalf.</summary>
     /// <remarks>

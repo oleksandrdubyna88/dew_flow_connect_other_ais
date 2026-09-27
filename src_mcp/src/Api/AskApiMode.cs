@@ -62,9 +62,12 @@ internal static class AskApiMode
         var vendor = flags.GetValueOrDefault("--vendor", "api");
         var endpoint = flags.GetValueOrDefault("--endpoint", string.Empty);
         var key = env(ApiRuntime.KeyVariable) ?? string.Empty;
-        var dialect = ApiDialects.Named(flags.GetValueOrDefault("--dialect", ApiDialects.OpenAiName));
+        var model = flags.GetValueOrDefault("--model", string.Empty);
+        // The module, from the row's dialect (a module name, or the row it was written with) and the
+        // model — the registry is the one place a name becomes a type (ApiVendors).
+        var module = ApiVendors.Resolve(flags.GetValueOrDefault("--dialect", ApiDialects.OpenAiName), model);
 
-        if (Refusal(flags, vendor, endpoint, key, dialect) is { } refused)
+        if (Refusal(flags, vendor, endpoint, key, module) is { } refused)
         {
             note(refused);
 
@@ -78,15 +81,17 @@ internal static class AskApiMode
         var request = new Ask(
             vendor,
             LocalRuntime.OpenAiBaseOf(endpoint),
-            flags.GetValueOrDefault("--model", string.Empty),
-            dialect!,
+            model,
+            module!,
             flags.GetValueOrDefault("--prompt-file", string.Empty),
             flags.GetValueOrDefault("--schema-file", string.Empty),
             flags.GetValueOrDefault("--out", string.Empty),
             flags.GetValueOrDefault("--reasoning-effort", string.Empty),
             int.TryParse(flags.GetValueOrDefault("--max-tokens", ""), out var cap) && cap > 0 ? cap : 8192,
             deadline,
-            TokenPrice.FromFlags(flags));
+            flags.GetValueOrDefault("--conversation", string.Empty).Trim(),
+            // Absent is on: the switch is spelled only when a row turned thinking OFF on a module that has one.
+            ThinkingOn: !string.Equals(flags.GetValueOrDefault("--thinking", "on").Trim(), "off", StringComparison.OrdinalIgnoreCase));
 
         try
         {
@@ -107,7 +112,7 @@ internal static class AskApiMode
     /// round trip to be told 401 — and the sentence names the vault entry, which is the cure.
     /// </remarks>
     internal static string? Refusal(
-        IReadOnlyDictionary<string, string> flags, string vendor, string endpoint, string key, ApiDialect? dialect)
+        IReadOnlyDictionary<string, string> flags, string vendor, string endpoint, string key, IApiVendor? module)
     {
         if (flags.GetValueOrDefault("--prompt-file", "").Length == 0 || flags.GetValueOrDefault("--out", "").Length == 0)
         {
@@ -126,8 +131,9 @@ internal static class AskApiMode
                 + $"the vault entry under '{vendor}' is where it comes from, and the round puts it there";
         }
 
-        return dialect is null
-            ? $"{Mode}: no dialect '{flags.GetValueOrDefault("--dialect", "")}' — this build knows: {string.Join(", ", ApiDialects.Names)}"
+        return module is null
+            ? $"{Mode}: no dialect '{flags.GetValueOrDefault("--dialect", "")}' — this build knows the modules "
+                + $"{string.Join(", ", ApiVendors.Names)} and the rows {string.Join(", ", ApiDialects.Names)}"
             : null;
     }
 
@@ -144,6 +150,15 @@ internal static class AskApiMode
         // The key: a header on THIS request, from the environment, and nowhere else. Not a default
         // header on the client, so a redirect elsewhere cannot carry it along.
         message.Headers.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", key);
+        foreach (var (name, value) in ask.Vendor.Headers(ask.Conversation))
+        {
+            // What the module needs beyond the key — the conversation key in the header its row names,
+            // which routes every turn of one reviewer's conversation to the server holding its prompt
+            // cache (xAI, 2026-09-26 — without it, 1,152 cached tokens on each of three byte-identical
+            // 64 KB prefixes). Nothing, for a module whose cache takes no key.
+            message.Headers.TryAddWithoutValidation(name, value);
+        }
+
         message.Content = new StringContent(body, Encoding.UTF8, "application/json");
 
         // The body is STREAMED against a ceiling (BoundedBody), so the headers come back first — and the
@@ -176,8 +191,8 @@ internal static class AskApiMode
         var schema = await File.ReadAllTextAsync(ask.SchemaFile);
         try
         {
-            return ChatRequest.Body(
-                ask.Dialect, ask.Model, prompt, schema, LocalAsk.SeedFor(prompt), ask.ReasoningEffort, ask.MaxTokens);
+            return ask.Vendor.RequestBody(
+                new ApiTurn(ask.Model, prompt, schema, LocalAsk.SeedFor(prompt), ask.ReasoningEffort, ask.MaxTokens, ask.ThinkingOn));
         }
         catch (System.Text.Json.JsonException ex)
         {
@@ -192,119 +207,101 @@ internal static class AskApiMode
         Ask ask, HttpResponseMessage response, string text, Action<string> note, TextWriter output)
     {
         var status = (int)response.StatusCode;
-        switch (response.StatusCode)
+        // The module says what the status MEANS; this switch is on that meaning, never on a vendor.
+        switch (ask.Vendor.Classify(status, text))
         {
-            case HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden:
-            case HttpStatusCode.BadRequest when SaysTheKeyIsWrong(text):
+            case ApiOutcome.KeyRefused:
                 // The body is NOT quoted: a refusal from a gateway can echo the request, and a sentence
                 // about a bad key is complete without the vendor's wording of it.
-                note($"the API refused the key for vendor '{ask.Vendor}' (HTTP {status}) — check the vault entry "
-                     + $"under '{ask.Vendor}'; the response body is not shown");
+                note($"the API refused the key for vendor '{ask.Row}' (HTTP {status}) — check the vault entry "
+                     + $"under '{ask.Row}'; the response body is not shown");
 
                 return Refused;
 
-            case HttpStatusCode.TooManyRequests:
+            case ApiOutcome.RateLimited:
                 // The exact shape `RateLimit.Hit` reads: "HTTP 429" and "429 Too Many Requests" both
                 // match its status-code pattern, with a non-zero exit. The retry hint is the vendor's
                 // own Retry-After when it sent one, because that is the number the backoff wants.
-                note($"HTTP 429 Too Many Requests from {ask.Endpoint}{RetryAfter(response)}: {Quoted(text)}");
+                note($"HTTP {status} {ReasonPhrase(response)} from {ask.Endpoint}{RetryAfter(response)}: {Quoted(text)}");
 
                 return RateLimited;
 
-            case HttpStatusCode.ServiceUnavailable:
-                note($"HTTP 503 Service Unavailable from {ask.Endpoint}{RetryAfter(response)}: {Quoted(text)}");
+            case ApiOutcome.Failed:
+                note($"the API at {ask.Endpoint} answered HTTP {status}: {Quoted(text)}");
 
-                return RateLimited;
+                return Failed;
         }
 
-        if (!response.IsSuccessStatusCode)
+        var answer = ask.Vendor.ReadAnswer(text);
+        // The tokens go to stdout BEFORE the answer is judged: a 200 is a billed call whatever this shim
+        // decides about its content, and a failed call's cost has to cross the process boundary the same
+        // way an answered one's does (2026-09-26 — a reasoning-only answer at 16,382 output tokens was
+        // reported as free). The shape is the one `ApiRuntime.ReadUsage` reads — safe here and only here,
+        // because this mode never speaks the protocol. `tokensCached` rides along for the follow-up
+        // turns of a feature review (D25): the vendor's own cached-prefix count, zero when it reported none.
+        await output.WriteLineAsync(UsageLine(answer.Usage));
+        if (answer.Content is null)
         {
-            note($"the API at {ask.Endpoint} answered HTTP {status}: {Quoted(text)}");
+            note($"the API at {ask.Endpoint} returned no message content{Thinking(answer)}: {Quoted(text)}");
 
             return Failed;
         }
 
-        var (answer, usage) = LocalAsk.ReadResponse(text);
-        if (answer is null)
+        if (answer.WasCut)
         {
-            note($"the API at {ask.Endpoint} returned no message content: {Quoted(text)}");
+            // Not written to the out file: a fragment where the executor reads an answer is the defect
+            // this branch exists for — `{"findings":[]}` cut before its findings is a clean review nobody
+            // gave (the coordinator's acceptance case of 2026-09-26; measured on GLM-5.3 and Qwen3.8-max).
+            note($"the answer from {ask.Endpoint} was cut at the token limit ({ask.Vendor.Dialect.MaxTokensField} {ask.Vendor.Dialect.CeilingFor(ask.MaxTokens)}): "
+                 + $"{answer.Usage.TokensOut} tokens generated{Thinking(answer)}, {answer.Content.Length} characters of content arrived — "
+                 + "raise the ceiling or bound the reasoning; the fragment was not kept");
 
             return Failed;
         }
 
-        await File.WriteAllTextAsync(ask.OutFile, answer);
-        // The tokens on stdout, in the shape `ApiRuntime.ReadUsage` reads — safe here and only here,
-        // because this mode never speaks the protocol.
-        // `tokensCached` rides along for the follow-up turns of a feature review (D25): the vendor's
-        // own cached-prefix count, zero when it reported none.
-        await output.WriteLineAsync(UsageLine(usage, ask.Price));
+        await File.WriteAllTextAsync(ask.OutFile, answer.Content);
 
         return Ok;
     }
 
     /// <summary>
-    /// Whether a 400's ERROR field says the key is wrong — xAI's answer to a bad key (§9.11).
+    /// Whether a 400's ERROR field says the key is wrong — xAI's answer to a bad key (§9.11). The rule
+    /// itself lives with the modules (<see cref="ApiClassification"/>); this name stays for the tests
+    /// that have always asked here.
     /// </summary>
-    /// <remarks>
-    /// <para>Measured, not documented: S0.5's probe sent a key that was wrong on purpose on 2026-09-26 and
-    /// xAI answered <c>400</c> with <c>"error": "Incorrect API key provided: …"</c>, where OpenAI answers
-    /// 401. Read as a plain 400, a revoked Grok key was reported as a malformed request and never sent
-    /// anybody to the vault.</para>
-    /// <para><b>General, not xAI-only</b>, because the test is narrow enough to be safe everywhere: only
-    /// the body's own error field is read — <c>error</c> as a string, or <c>error.message</c> /
-    /// <c>error.code</c> — never the whole text. A 400 that echoes the request back in some other field
-    /// (and a review of this very file carries the phrase) stays a failed request.</para>
-    /// </remarks>
-    internal static bool SaysTheKeyIsWrong(string body)
+    internal static bool SaysTheKeyIsWrong(string body) => ApiClassification.SaysTheKeyIsWrong(body);
+
+    /// <summary>
+    /// The standard phrase of a temporary refusal — "Too Many Requests", "Service Unavailable", "Internal
+    /// Server Error" — spelled here rather than read off the response, because HTTP/2 carries no reason
+    /// phrase and the sentence is the one <c>RateLimit.Hit</c> reads (a 500 is retried on the vendor's
+    /// own transient phrase, which the quoted body carries).
+    /// </summary>
+    private static string ReasonPhrase(HttpResponseMessage response) => response.StatusCode switch
     {
-        try
-        {
-            using var document = System.Text.Json.JsonDocument.Parse(body);
-            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object
-                || !document.RootElement.TryGetProperty("error", out var error))
-            {
-                return false;
-            }
-
-            return ErrorTexts(error).Any(text => WrongKeyPhrases.Any(p => text.Contains(p, StringComparison.OrdinalIgnoreCase)));
-        }
-        catch (System.Text.Json.JsonException)
-        {
-            return false;
-        }
-    }
-
-    /// <summary>What a vendor says when the key itself is wrong — each read off a real answer or a vendor's error code.</summary>
-    private static readonly string[] WrongKeyPhrases = ["incorrect api key", "invalid api key", "invalid_api_key"];
-
-    /// <summary>The error field's own words: the string itself, or an object's message and code.</summary>
-    private static IEnumerable<string> ErrorTexts(System.Text.Json.JsonElement error) => error.ValueKind switch
-    {
-        System.Text.Json.JsonValueKind.String => [error.GetString() ?? string.Empty],
-        System.Text.Json.JsonValueKind.Object =>
-            ((string[])["message", "code"])
-                .Where(name => error.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String)
-                .Select(name => error.GetProperty(name).GetString() ?? string.Empty),
-        _ => [],
+        HttpStatusCode.TooManyRequests => "Too Many Requests",
+        HttpStatusCode.ServiceUnavailable => "Service Unavailable",
+        HttpStatusCode.BadGateway => "Bad Gateway",
+        HttpStatusCode.GatewayTimeout => "Gateway Timeout",
+        _ => "Internal Server Error",
     };
 
     /// <summary>
-    /// The one line on stdout: the tokens, and — when the row carried a price — what this turn cost.
+    /// The one line on stdout: the raw tokens the vendor reported, and no money.
     /// </summary>
     /// <remarks>
-    /// The cost is worked out HERE, per turn, because this is the only place that holds one request's
-    /// tokens and the row's rates together (S3.7): a long-context tier is decided by one request's
-    /// prompt, and a feature reviewer's conversation is several requests. No price, no <c>costUsd</c> —
-    /// <see cref="ApiRuntime.ReadUsage"/> reads its absence as "no price set", never as $0.
+    /// The cost is worked out in the PARENT (epic 3's code round, #23) — <see cref="ApiRuntime.ReadUsage"/>
+    /// prices this line from the row's <c>TokenPrice</c>, an answered call and a failed one alike — so no
+    /// rate rides on a command line and one arithmetic serves every launch. <c>tokensOut</c> is everything
+    /// generated (reasoning included, wherever the vendor filed it); <c>tokensReasoning</c> is the
+    /// reasoning share for the record.
     /// </remarks>
-    internal static string UsageLine(Usage usage, TokenPrice price)
-    {
-        var tokens = $"\"tokensIn\":{usage.TokensIn},\"tokensOut\":{usage.TokensOut},\"tokensCached\":{usage.TokensCached}";
+    internal static string UsageLine(Usage usage) =>
+        "{" + $"\"tokensIn\":{usage.TokensIn},\"tokensOut\":{usage.TokensOut},\"tokensCached\":{usage.TokensCached},\"tokensReasoning\":{usage.TokensReasoning}" + "}";
 
-        return price.CostOf(usage) is { } usd
-            ? "{" + tokens + ",\"costUsd\":" + usd.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture) + "}"
-            : "{" + tokens + "}";
-    }
+    /// <summary>" (N reasoning tokens)" when the vendor reported any — the number a person needs to size the ceiling.</summary>
+    private static string Thinking(ChatAnswer answer) =>
+        answer.ReasoningTokens > 0 ? $" ({answer.ReasoningTokens} reasoning tokens)" : string.Empty;
 
     /// <summary>" — try again in Ns" when the vendor said how long, or nothing.</summary>
     private static string RetryAfter(HttpResponseMessage response) =>
@@ -339,16 +336,21 @@ internal static class AskApiMode
         && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
     /// <summary>One request, fully described — everything but the key, which is never stored on a record.</summary>
+    /// <param name="Row">The vendor ROW's id — what names the vault entry in a refusal.</param>
+    /// <param name="Vendor">The module that spells the request, reads the answer and classifies a refusal.</param>
+    /// <param name="Conversation">The reviewer's conversation key for the module's cache-routing header; empty sends none.</param>
+    /// <param name="ThinkingOn">Whether the model thinks; off only on a module with a switch, and only when a row said so.</param>
     private sealed record Ask(
-        string Vendor,
+        string Row,
         string Endpoint,
         string Model,
-        ApiDialect Dialect,
+        IApiVendor Vendor,
         string PromptFile,
         string SchemaFile,
         string OutFile,
         string ReasoningEffort,
         int MaxTokens,
         TimeSpan Deadline,
-        TokenPrice Price);
+        string Conversation = "",
+        bool ThinkingOn = true);
 }

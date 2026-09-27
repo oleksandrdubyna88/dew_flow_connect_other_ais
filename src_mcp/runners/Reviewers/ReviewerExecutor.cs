@@ -98,7 +98,23 @@ public abstract record ReviewerOutcome
     /// stream, and the next adapter to implement this may read a file it named rather than stdout
     /// at all. Raised by gemini on the code round, twice from different angles.</para>
     /// </remarks>
-    public sealed record NonZeroExit(int ExitCode, string StdErrTail, string FailureReason = "") : ReviewerOutcome;
+    public sealed record NonZeroExit(int ExitCode, string StdErrTail, string FailureReason = "") : ReviewerOutcome
+    {
+        /// <summary>
+        /// What the failed launch consumed anyway — the third failure that costs money, beside an
+        /// unparseable answer and a failed later turn.
+        /// </summary>
+        /// <remarks>
+        /// Measured 2026-09-26: the api shim exits 70 on a reasoning-only completion (Qwen3.8-max: 53,092
+        /// prompt tokens, 16,382 reasoning tokens, no content) and on an answer cut at the token ceiling,
+        /// AFTER the vendor billed the call — and the launch answered <see cref="Usage.None"/> for every
+        /// non-zero exit without asking the adapter, so the money stopped at stdout. Read through the same
+        /// adapter route as an answered launch; a process that reported nothing is still <see cref="Usage.None"/>.
+        /// </remarks>
+        public Usage Usage { get; init; } = Usage.None;
+
+        protected override Usage OwnUsage => Usage;
+    }
 
     public sealed record TimedOut : ReviewerOutcome;
 
@@ -166,10 +182,14 @@ public static class RateLimit
     /// why a quota exhaustion was first misreported as a plain non-zero exit and never retried.</item>
     /// <item>Gemini answers <c>503 UNAVAILABLE</c> "This model is currently experiencing high
     /// demand" — transient by its own description, and so exactly what one retry is for.</item>
+    /// <item>xAI answers HTTP 500 <c>{"code":"internal","error":"Auth context expired."}</c> — measured
+    /// 2026-09-27 on 8 of 20 grok-4.7 feature reviews, mid-generation, with nothing on our side
+    /// correlating; the api shim reports it as a transient (exit 75) and this phrase is what lets the
+    /// ladder retry it, bounded by what is left of the turn's deadline inside the twenty-minute cap.</item>
     /// </list>
     /// </summary>
     private static readonly string[] Phrases =
-        ["rate limit", "usage limit", "quota", "unavailable", "high demand"];
+        ["rate limit", "usage limit", "quota", "unavailable", "high demand", "auth context expired"];
 
     /// <summary>
     /// The status codes, matched as CODES rather than as three digits anywhere in the output.
@@ -794,6 +814,14 @@ public sealed class ReviewerExecutor(
             return new ReviewerLaunch(new ReviewerOutcome.RateLimited(RateLimit.Reason(result)), null, Usage.None, string.Empty, result);
         }
 
+        // Both reads go through the vendor's own adapter: where the answer lands and how the run
+        // is billed are vendor knowledge, and keeping them here would have made every new vendor
+        // an edit to this class. The usage is read BEFORE the exit code is judged: a process that
+        // was billed and then refused its own answer (the api shim on a reasoning-only completion or
+        // a cut at the ceiling, 2026-09-26) reports its usage on stdout exactly like an answered one,
+        // and answering `Usage.None` for every non-zero exit is what left that money at stdout.
+        var usage = invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
+
         if (result.ExitCode != 0)
         {
             // The adapter is asked where ITS reasons live, the same way it is asked where its answer
@@ -802,17 +830,13 @@ public sealed class ReviewerExecutor(
             var reason = invocation.Adapter?.WhyItFailed(invocation, result) ?? string.Empty;
 
             return new ReviewerLaunch(
-                new ReviewerOutcome.NonZeroExit(result.ExitCode, TailOf(result.StdErr), reason),
+                new ReviewerOutcome.NonZeroExit(result.ExitCode, TailOf(result.StdErr), reason) { Usage = usage },
                 null,
-                Usage.None,
+                usage,
                 string.Empty,
                 result);
         }
 
-        // Both reads go through the vendor's own adapter: where the answer lands and how the run
-        // is billed are vendor knowledge, and keeping them here would have made every new vendor
-        // an edit to this class.
-        var usage = invocation.Adapter?.ReadUsage(invocation, result) ?? UsageParser.Parse(result.StdOut);
         var (answer, evidence) = Read(invocation, result);
 
         return new ReviewerLaunch(null, answer, usage, evidence, result);

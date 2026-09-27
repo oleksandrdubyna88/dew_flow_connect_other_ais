@@ -158,4 +158,23 @@ public sealed class TheFeatureStageIsServedTests
         var note = settings.UnrecognisedSettings.Should().ContainSingle(one => one.Key == "COAI_FEATURE_SOURCE_FOLLOWUPS").Subject;
         note.Sentence.Should().Contain($"'{value}'", "the person reads the value they typed").And.Contain("0 to 3");
     }
+
+    /// <summary>
+    /// The whole-review limit for an api reviewer on this stage — every turn of its conversation, launch
+    /// to final answer — is twenty minutes (the operator's requirement of 2026-09-27) unless a person sets
+    /// <c>COAI_FEATURE_API_REVIEW_MINUTES</c>; a value that is not a positive integer is the default.
+    /// </summary>
+    [Theory]
+    [InlineData(null, 20)]
+    [InlineData("", 20)]
+    [InlineData("25", 25)]
+    [InlineData(" 5 ", 5)]
+    [InlineData("0", 20)]
+    [InlineData("soon", 20)]
+    public void TheApiReviewCap_IsTwentyMinutes_UnlessAPersonSetIt(string? value, int expectedMinutes)
+    {
+        var settings = PanelSettings.FromEnvironment(name => name == "COAI_FEATURE_API_REVIEW_MINUTES" ? value : null);
+
+        settings.FeatureApiReview.Should().Be(TimeSpan.FromMinutes(expectedMinutes));
+    }
 }

@@ -57,13 +57,21 @@ public sealed class ADocumentFindingFitsTheWireTests
     /// Still NAMED, never dropped. Widening a list is how a list stops refusing anything, and the
     /// value of the refusal is that a caller can see what a vendor invented.
     /// </summary>
+    /// <remarks>
+    /// Since 2026-09-26 an answer whose EVERY finding was rejected is the whole answer refused
+    /// (<c>ReviewParserTests.EveryFindingRejected_IsMalformed_NotAnEmptyReview</c>): it used to parse to a
+    /// clean review with one rejection, which read as a `proceed`. The invented word is named all the
+    /// same — in the refusal — and beside a finding that survived it is named in the rejection list.
+    /// </remarks>
     [Fact]
     public void AnInventedCategory_IsStillRejectedByName()
     {
-        var review = Parsed(OneFinding("tone"));
+        ReviewParser.Parse(OneFinding("tone"), "codex").Should().BeOfType<ParseOutcome.Malformed>()
+            .Which.Reason.Should().Contain("unknown category 'tone'");
 
-        review.Findings.Should().BeEmpty();
-        review.Rejected.Should().ContainSingle().Which.Reason.Should().Contain("tone");
+        var beside = Parsed(OneFinding("tone").Replace("]}", ", {\"severity\": \"minor\", \"category\": \"clarity\", \"title\": \"t\", \"why\": \"w\", \"fix\": \"f\"}]}"));
+        beside.Findings.Should().ContainSingle();
+        beside.Rejected.Should().ContainSingle().Which.Reason.Should().Contain("tone");
     }
 
     /// <summary>The schema is what codex is handed; the enum is what this program holds.</summary>

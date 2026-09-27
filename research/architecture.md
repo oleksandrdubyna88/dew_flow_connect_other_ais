@@ -83,9 +83,16 @@ fourth gate that reviews a whole FEATURE — changed three things that cross the
   *Since S3.6/S3.7 (2026-09-26):* a row may read a key filed under ANOTHER name (`key` on the wire, so
   `qwen-2` reads `qwen`); `--providers` reports the vault's key NAMES (`vaultKeyNames`, `vaultRead` —
   never a value), which the panel offers as `!name` reviewers; and an `api` row carries its price
-  (`price` on the wire, from the panel's lookup, a typed rate winning), which coai-mcp hands the shim as
-  `--price-*` flags so each turn is priced where its tokens are read — `costUsd` in the ledger, or
-  `no price set`, never $0. `KeyVault` also finds `creds` in the CredsForDevs extension's folder after PATH.
+  (`price` on the wire, from the panel's lookup, a typed rate winning), which rides on the reviewer's
+  invocation so the PARENT prices each turn from the shim's raw token line — `costUsd` in the ledger, or
+  `no price set`, never $0 (it first travelled to the child as `--price-*` flags; epic 3's code round moved
+  the arithmetic up). `KeyVault` also finds `creds` in the CredsForDevs extension's folder after PATH.
+  *Since the reviewer-models measurement (2026-09-26, [RESULTS_feature_reviewer_models.md](RESULTS_feature_reviewer_models.md)):*
+  a dialect row also names a cache-routing header (`x-grok-conv-id` — each reviewer's conversation key
+  travels on every turn, and xAI then serves turn 2 from turn 1's cache), vendor fields no standard name
+  spells (`extraBody`), and a ceiling floor; the shim reads `finish_reason` and never hands the executor a
+  fragment; a billed call that failed keeps its tokens through executor and ledger; and xAI's reasoning
+  tokens are billed as the output they are.
 - **The settings file now depends on the installed server's version.** An older coai-mcp turns a
   runtime it does not know into `codex` WITH the row's base URL — a Grok row would ride the Codex CLI
   against xAI's endpoint under its own name. So the extension threads the installed server version

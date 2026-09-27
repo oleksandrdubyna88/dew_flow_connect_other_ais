@@ -80,9 +80,15 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
                     ..(settings.ReasoningEffort.Trim().Length > 0
                         ? new[] { "--reasoning-effort", settings.ReasoningEffort.Trim() }
                         : []),
-                    // The row's price, when it has one (S3.7): the shim prices each turn itself. A price
-                    // is not a secret, so argv is fine for it — the key stays in the environment.
-                    ..settings.Price.AsFlags(),
+                    // No price on the command line: the shim reports raw tokens and the PARENT prices them
+                    // (`ReadUsage`, from `ReviewerInvocation.Price`) — epic 3's code round, #23.
+                    // The conversation key the roster gave this reviewer, for a dialect that routes its
+                    // prompt cache by one (xAI, 2026-09-26). Opaque and not a secret; empty sends nothing.
+                    ..(settings.Conversation.Length > 0 ? new[] { "--conversation", settings.Conversation } : []),
+                    // The row's thinking switch, only when a person turned it OFF on a module that has one
+                    // (the roster refused it otherwise): absent means on, which is every calibrated default,
+                    // so every launch that predates the switch is spelled exactly as it was.
+                    ..(settings.ThinkingOn ? [] : new[] { "--thinking", "off" }),
                 ],
                 worktreePath)
             {
@@ -100,15 +106,26 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
             // limit. This is what keeps an api reviewer off the engine lane and out of EngineLease.
             SharedResource: string.Empty,
             Model: settings.Model,
-            Effort: settings.ReasoningEffort.Trim());
+            Effort: settings.ReasoningEffort.Trim())
+        {
+            // The row's price stays HERE, in the parent (epic 3's code round, #23): the shim reports raw
+            // tokens and `ReadUsage` prices them from this field — an answered call and a failed one alike.
+            Price = settings.Price,
+        };
     }
 
-    /// <summary>What the run consumed, from the shim's stdout line — the same shape the local shim prints.</summary>
+    /// <summary>
+    /// What the run consumed, from the shim's stdout line — raw tokens, priced here from the row's rates.
+    /// </summary>
     /// <remarks>
-    /// The money is the SHIM's: it prices the turn from the rates the row carried (S3.7), since the
-    /// endpoint reports tokens and nothing else. A line with no <c>costUsd</c> came from a row with no
-    /// price — a metered run whose cost is unknown — so it is marked <see cref="Usage.NoPriceSet"/>, and
-    /// every surface then says "no price set" rather than $0.
+    /// <para>The money is the PARENT's (S3.7, then #23 of epic 3's code round): the shim prints what the
+    /// endpoint reported — tokens in, out (reasoning included, wherever the vendor filed it), cached, and
+    /// the reasoning count for the record — and this method prices the turn from
+    /// <see cref="ReviewerInvocation.Price"/> with <see cref="TokenPrice.CostOf"/>: the cached rate on the
+    /// cached subset, the tier once THIS request's prompt reaches it. One arithmetic, in one process, for an
+    /// answered launch and a failed one alike.</para>
+    /// <para>A row with no price is a metered run whose money is unknown: <see cref="Usage.NoPriceSet"/>,
+    /// and every surface then says "no price set" rather than $0.</para>
     /// </remarks>
     public Usage ReadUsage(ReviewerInvocation invocation, ProcessResult result)
     {
@@ -116,21 +133,23 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
         {
             using var parsed = JsonDocument.Parse(result.StdOut);
             var root = parsed.RootElement;
-
-            var cost = root.TryGetProperty("costUsd", out var usd) && usd.ValueKind == JsonValueKind.Number && usd.TryGetDouble(out var dollars) ? dollars : (double?)null;
-
-            return new Usage(
-                root.TryGetProperty("tokensIn", out var input) && input.TryGetInt64(out var tin) ? tin : 0,
-                root.TryGetProperty("tokensOut", out var output) && output.TryGetInt64(out var tout) ? tout : 0,
-                cost,
+            var tokens = new Usage(
+                Count(root, "tokensIn"),
+                Count(root, "tokensOut"),
+                null,
                 // The cached subset, when the endpoint reported one (`prompt_tokens_details.cached_tokens`):
                 // what the first live multi-turn run measures prefix caching by (D25). Absent is zero.
-                root.TryGetProperty("tokensCached", out var cached) && cached.TryGetInt64(out var tcached) ? tcached : 0,
-                NoPriceSet: cost is null);
+                Count(root, "tokensCached"),
+                TokensReasoning: Count(root, "tokensReasoning"));
+
+            return tokens with { CostUsd = invocation.Price.CostOf(tokens), NoPriceSet = !invocation.Price.IsSet };
         }
         catch (JsonException)
         {
-            return new Usage(0, 0, null, NoPriceSet: true);
+            return new Usage(0, 0, null, NoPriceSet: !invocation.Price.IsSet);
         }
     }
+
+    private static long Count(JsonElement root, string name) =>
+        root.TryGetProperty(name, out var value) && value.TryGetInt64(out var count) ? count : 0;
 }

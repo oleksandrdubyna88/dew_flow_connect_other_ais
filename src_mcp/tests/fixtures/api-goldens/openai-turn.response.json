@@ -1,0 +1,1 @@
+{"id":"recorded-6","object":"chat.completion","created":1790500000,"model":"gpt-5","choices":[{"index":0,"message":{"role":"assistant","content":"{\"findings\":[],\"notes\":\"a whole review\",\"sourceRequests\":[]}"},"finish_reason":"stop"}],"usage":{"prompt_tokens":120,"completion_tokens":34,"total_tokens":154}}

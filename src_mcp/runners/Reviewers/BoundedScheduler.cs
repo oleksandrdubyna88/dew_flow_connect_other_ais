@@ -33,6 +33,20 @@ public sealed record ReviewerWork(
     /// every turn it hands back.
     /// </summary>
     public IReviewerContinuation Continue { get; init; } = ReviewerContinuation.None;
+
+    /// <summary>
+    /// A cap on the WHOLE conversation — every turn of it, launch to final answer — when the stage sets one;
+    /// null keeps the derived <c>timeout × (1 + follow-ups)</c>. Read by <see cref="TurnLoop"/> on the FIRST
+    /// work of a conversation; a shorter derived cap still wins.
+    /// </summary>
+    /// <remarks>
+    /// The operator's requirement of 2026-09-27: a feature reviewer's answer must arrive within twenty
+    /// minutes for the whole review. Measured before it: grok-4.7 at 4–10 minutes a turn reached 20.2 and
+    /// 25.7 minutes over three and four turns, and a Qwen3.8-max turn at its default thinking never ended
+    /// in 105. The derived cap (ten minutes × four) was forty, which the feature stage's api reviewers
+    /// now get only when the panel says so (<c>COAI_FEATURE_API_REVIEW_MINUTES</c>).
+    /// </remarks>
+    public TimeSpan? ConversationCap { get; init; }
 }
 
 /// <summary>

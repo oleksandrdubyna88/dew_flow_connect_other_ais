@@ -37,7 +37,10 @@ internal sealed class TurnLoop(
     /// <exception cref="OperationCanceledException">The round ended; <see cref="Earlier"/> holds what answered before it did.</exception>
     public async Task<ReviewerOutcome> RunAsync(ReviewerWork first, CancellationToken ct)
     {
-        var cap = first.Invocation.Request.Timeout * (1 + first.Continue.FollowUps);
+        // The derived cap, or the stage's own when it set a shorter one on the work (the feature stage's
+        // whole-review limit for an api reviewer, `ReviewerWork.ConversationCap`) — the lesser of the two.
+        var derived = first.Invocation.Request.Timeout * (1 + first.Continue.FollowUps);
+        var cap = first.ConversationCap is { } own && own < derived ? own : derived;
         var clock = Stopwatch.StartNew();
         var work = first;
         for (var turn = 1; ; turn++)

@@ -377,4 +377,22 @@ public sealed class LedgerAndEvidenceTests : IDisposable
         Directory.GetFiles(empty).Should().ContainSingle()
             .Which.Should().EndWith(".txt");
     }
+
+    /// <summary>
+    /// A non-zero exit that reported usage is written down with it — the third failure that costs money
+    /// (measured 2026-09-26: an api shim exiting 70 on a reasoning-only answer of 16,382 output tokens).
+    /// </summary>
+    [Fact]
+    public void AFailedProcess_ThatReportedUsage_IsRecordedWithIt()
+    {
+        new UsageLedger(_dir).Record(
+            Invocation("qwen38max"),
+            new ReviewerOutcome.NonZeroExit(70, "no message content: 16382 reasoning tokens") { Usage = new Usage(53_092, 16_382, 0.204472) },
+            "qwen3.8-max",
+            "FeatureReview",
+            TimeSpan.FromSeconds(312));
+
+        var line = Lines().Should().ContainSingle().Subject;
+        line.Should().Contain("\"tokensIn\":53092").And.Contain("\"tokensOut\":16382").And.Contain("\"costUsd\":0.204472").And.Contain("exit 70");
+    }
 }

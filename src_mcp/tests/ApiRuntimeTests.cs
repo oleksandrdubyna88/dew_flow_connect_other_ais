@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
@@ -116,6 +117,26 @@ public sealed class ApiRuntimeTests
         runtime.ReadUsage(invocation, new ProcessResult(0, "not json", "", false)).TokensIn.Should().Be(0);
     }
 
+    /// <summary>
+    /// The parent prices the raw line from the invocation's price (epic 3's code round, #23): the cached
+    /// rate on the cached subset, and "no price set" — never $0 — for a row without one.
+    /// </summary>
+    [Fact]
+    public void UsageIsPricedInTheParent_FromTheInvocationsPrice()
+    {
+        var runtime = new ApiRuntime("grok", "https://api.x.ai/v1");
+        var priced = Build(Settings() with { Price = new TokenPrice(new TokenRates(2.0, 0.5, 6.0), 0, TokenRates.None) });
+        var raw = new ProcessResult(0, "{\"tokensIn\":1000,\"tokensOut\":100,\"tokensCached\":400,\"tokensReasoning\":80}", "", false);
+
+        var usage = runtime.ReadUsage(priced, raw);
+
+        // 600 × 2.00 + 400 × 0.50 + 100 × 6.00 per million
+        usage.CostUsd.Should().BeApproximately(0.002, 1e-9);
+        usage.NoPriceSet.Should().BeFalse();
+        usage.TokensReasoning.Should().Be(80);
+        runtime.ReadUsage(Build(Settings()), raw).NoPriceSet.Should().BeTrue("an unpriced api row's money is unknown, not zero");
+    }
+
     [Fact]
     public void TheAnswerIsReadFromTheNamedFile()
     {
@@ -133,5 +154,28 @@ public sealed class ApiRuntimeTests
         ReviewerRuntimeSelector.RuntimeNames.Should().Contain("api");
         ReviewerRuntimeSelector.MachineOnlyRuntimes.Should().BeEquivalentTo(["local", "api"]);
         ReviewerRuntimeSelector.MachineOnlyRuntimes.Should().BeSubsetOf(ReviewerRuntimeSelector.RuntimeNames);
+    }
+
+    /// <summary>
+    /// The reviewer's conversation key rides on argv (it is not a secret) so the shim can put it in the
+    /// dialect's cache-routing header; a settings row with none sends nothing.
+    /// </summary>
+    [Fact]
+    public void TheConversationKey_TravelsOnArgv_WhenTheRosterSetOne()
+    {
+        Build(Settings() with { Conversation = "c0ffee0123456789abcdef01" }).Request.Arguments
+            .Should().ContainInOrder("--conversation", "c0ffee0123456789abcdef01");
+        Build(Settings()).Request.Arguments.Should().NotContain("--conversation");
+    }
+
+    [Fact]
+    public void AConversationKey_IsAFunctionOfTheReviewerAndItsBasePrompt_AndOfNothingElse()
+    {
+        var one = ConversationKey.Of("grok", "FeatureReview", "the base prompt");
+
+        one.Should().Be(ConversationKey.Of("grok", "FeatureReview", "the base prompt"), "every turn of one conversation must route alike");
+        one.Should().MatchRegex("^[0-9a-f]{32}$", "an opaque id: nothing of the prompt is readable from it");
+        one.Should().NotBe(ConversationKey.Of("grok", "FeatureReview", "another base prompt"), "another review is another cache");
+        one.Should().NotBe(ConversationKey.Of("qwen38max", "FeatureReview", "the base prompt"), "two vendors in one round are two conversations");
     }
 }

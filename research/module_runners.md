@@ -54,7 +54,7 @@ sequenceDiagram
 | `Usage`, `UsageParser` | `core/Findings/UsageParser.cs` | schema-less scan over any vendor envelope; MAX per key name then sum per category, so a streamed cumulative total is never summed with itself; money only when the vendor priced the run |
 | `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below; a launch is the reviewer's whole CONVERSATION (`ReviewerWork.Continue`, S3.2 — the section at the end), one terminal outcome either way |
 | `IReviewerContinuation`, `TurnDecision`, `ReviewerContinuation.None`, `TurnUsage` | `Reviewers/ReviewerContinuation.cs` | the seam a stage plugs a conversation into: after each answered turn, the next turn's whole work (launch AND repair) or a stop; `None` is every stage but one |
-| `TurnLoop` | `Reviewers/TurnLoop.cs` | the loop inside the held slot: the ladder per turn, each turn under its own deadline and the whole under `timeout × (1 + follow-ups)`, every answered turn's usage on the outcome's base |
+| `TurnLoop` | `Reviewers/TurnLoop.cs` | the loop inside the held slot: the ladder per turn, each turn under its own deadline and the whole under `timeout × (1 + follow-ups)` — or under `ReviewerWork.ConversationCap` when the stage set a shorter one (the feature stage's whole-review limit for an api reviewer, `COAI_FEATURE_API_REVIEW_MINUTES`, twenty minutes by default, 2026-09-27) — every answered turn's usage on the outcome's base |
 | `SourceTurns`, `SourceConversation` | `Feature/SourceConversation.cs` | the feature stage's continuation: serves the requests through the round's one resolver, renders the tail, stops on no request, the cap or the spent budget; immutable across turns |
 | `RepairInstruction` | `Reviewers/RepairInstruction.cs` | the repair launch's closing paragraph — one text, appended to whichever prompt the launch it repairs was given |
 | `VendorIdentity`, `RuntimeResolution` | `Reviewers/RuntimeResolution.cs` | the ONE answer to "what is this vendor": which runtime it drives, the adapter for it, and how it authenticates — asked by both binaries, after two incidents where a second copy of it was the one that was wrong |
@@ -1199,9 +1199,29 @@ is 21k tokens before any review content, and it sends fields a hosted reasoning 
   refuses it with a 400), where the effort travels and how it is translated. `LocalAsk.RequestBody` now
   delegates to `ChatRequest.Body(ApiDialects.Local, …)` and is **pinned byte for byte** by
   `LocalRequestBodyIsPinnedTests` — the golden was captured from the pre-refactor writer and the pin was
-  green before a line moved. Two rows ship: `local` (the measured Ollama body) and `openai` (generic:
-  no sampling fields, `max_completion_tokens`, unbounded strict schema, `none` → no effort field). `xai`
-  and `qwen` arrive only from `--probe-api` rows (§6 S0.5 of the plan), never from documentation.
+  green before a line moved. Rows ship only from measurement (§6 S0.5 of the plan; the reviewer-models
+  measurement of 2026-09-26, [RESULTS_feature_reviewer_models.md](RESULTS_feature_reviewer_models.md)),
+  never from documentation: `local` (the measured Ollama body), `openai` (generic: no sampling fields,
+  `max_completion_tokens`, unbounded strict schema, `none` → no effort field), `xai` (the probe answered
+  400 to `frequency_penalty` and 200 to strict `json_schema`, `seed`, `temperature` and every
+  `reasoning_effort`; `cacheKeyHeader: x-grok-conv-id`), and `dashscope` — named for the ENDPOINT family,
+  the Alibaba Model Studio compatible-mode host the Token Plan key answers on (the probe accepted every
+  field, but the raw answers showed the schema is not enforced there in thinking mode — a GLM-5.3 answer
+  without the required `fix` — so the row asks for `json_object` and the parser and the repair hold the
+  shape; `max_tokens` floored at 65,536 because on that route it bounds reasoning PLUS the answer; no
+  thinking switch, each model at its vendor's default depth; no cache header, the implicit cache is
+  content-addressed from a 1,024-token common prefix). Three fields came with that measurement, each
+  data on the row: **`cacheKeyHeader`** — the request header that routes a conversation to the server
+  holding its prompt cache (xAI stores cache entries per server; three turns of a byte-identical 64 KB
+  prefix cached 1,152 tokens each without it, 34,944 of 41,803 with it); **`extraBody`** — vendor fields
+  sent verbatim at the top level (the OpenAI SDK's `extra_body`: the Alibaba route's `enable_thinking` /
+  `thinking_budget`, which no standard field spells); **`maxTokensFloor`** — the least ceiling the family is
+  ever sent (`ApiDialect.CeilingFor` raises a configured ceiling below it: every api row inherits the LOCAL
+  engine's `COAI_LOCAL_MAX_TOKENS` of 8,192, and on the Alibaba route the ceiling bounds reasoning plus the
+  answer). The conversation key itself is `ConversationKey.Of(provider, role, base prompt)` — SHA-256, 32
+  hex — set by `RosterBuilder` on `ReviewerSettings.Conversation` once per reviewer, so every launch of one
+  conversation (its turns and their repairs) carries the same `--conversation` and the shim puts it in the
+  header the dialect names. `ApiDialectsTests` pins each row value by value.
 - **Resolution.** `RuntimeResolution.NameOf` answers `api` BEFORE the base-URL arm — an api row has a base
   URL by definition, and the arm means "ride the Codex CLI". `AuthOf` → `ApiAuthOf`: no key → `unavailable`
   naming the vault entry; no URL → `unavailable`; both → `vault key`. `VendorProbe`'s `api` arm contacts
@@ -1212,11 +1232,20 @@ is 21k tokens before any review content, and it sends fields a hosted reasoning 
   `"local"`).
 - **The shim's exit codes are the contract.** 0 answered; 65 refused before sending (missing arguments,
   no `COAI_API_KEY`, an unknown dialect, an unreadable schema — never 64, the mode is known); 69 unreachable
-  or out of time; 70 not a review; 75 on 429/503 with `HTTP 429 Too Many Requests from <endpoint> — try
+  or out of time; 70 not a review — an empty content (a reasoning-only completion, named with its
+  reasoning tokens), or one the vendor CUT at the ceiling: `finish_reason: "length"` is read
+  (`LocalAsk.ReadAnswer`, 2026-09-26) and the fragment is NOT written, whatever it holds — `{"findings":[]}`
+  cut before its findings is a clean review nobody gave — the sentence being "cut at the token limit
+  (max_completion_tokens N): T tokens generated (R reasoning tokens), C characters of content arrived";
+  75 on 429/503 with `HTTP 429 Too Many Requests from <endpoint> — try
   again in Ns: …`, the shape `RateLimit.Hit` reads off the TEXT with a non-zero exit (teeth: reworded to
   "answered 429" the matcher went `False`); 77 on 401/403 — "the API refused the key for vendor '<id>'",
   and the body is NOT quoted. Every other vendor text on stderr passes `Redaction.SafeText` and a
-  300-character cap first.
+  300-character cap first. **The usage line goes to stdout BEFORE the content is judged**, so a 200 the
+  shim then refuses is still a billed call the parent can price: `ReviewerExecutor.LaunchAsync` reads
+  usage through the adapter before it looks at the exit code, `NonZeroExit` carries it, and the ledger and
+  `LiveRound` count it (2026-09-26; a reasoning-only answer of 53,092 prompt tokens used to be recorded
+  as free, on turn 1 and on turn 2 alike).
 - **`--probe-api`** (`src/Api/ProbeApiMode.cs`) is the S0.5 instrument: it reads the vault exactly as
   `KeyVault.ReadAsync` does (`creds config`, the only child it starts), runs `GET /models` and then the
   matrix — `json_schema`, `json_object`, `temperature`, `seed`, `frequency_penalty`,
@@ -1225,38 +1254,47 @@ is 21k tokens before any review content, and it sends fields a hosted reasoning 
   status codes, model ids, the request field a refusal names (`KnownFields`), token and cached-token
   counts, `cost: null`; vendor text only redacted and capped. Exit 0 ran, 65 bad arguments, 78 no vault
   or no key under the vendor. Teeth: with the redaction removed the stub's echoed `Authorization` reached
-  stdout and two tests went red. **Not yet run against a real endpoint** — the vault was not configured on
-  the build machine (`--providers` → `vaultNote: "no COAI_CREDS_KEY configured"`, 2026-09-25).
+  stdout and two tests went red. Run against both real endpoints on 2026-09-26 (the vault reached through
+  the CredsForDevs extension's CLI, §9.10): the xAI and Alibaba rows of §6 S0.5 and the `xai` dialect are
+  written from what it answered.
 
-## An api turn is priced by the shim, from the row's rates (2026-09-26, PLAN_feature_review S3.7)
+## An api turn is priced in the parent, from the row's rates (2026-09-26, PLAN_feature_review S3.7; epic 3's code round #23, #5)
 
 An OpenAI-compatible response reports tokens and no money, and an `api` row is billed per token by its
 key's vendor — so its cost is worked out here, from the rates the row carried.
 
-- **The price rides with the row, then with the launch.** `ProviderSettings.Price` (a `TokenPrice`, core
-  `core/Findings/TokenPrice.cs`: in / cached / out per million, plus an optional long-context tier)
-  reaches `ReviewerSettings.Price` in `RosterBuilder`; `ApiRuntime.Build` appends `TokenPrice.AsFlags()` —
-  `--price-in --price-cached --price-out [--tier-from --tier-in --tier-cached --tier-out]` — and nothing at
-  all for an unpriced row. A price is not a secret, so argv is fine for it; the key stays in the
-  environment (`The_price_goes_to_the_shim_and_the_key_still_only_through_the_environment`).
-- **Per turn, in the shim.** `AskApiMode` reads the flags back (`TokenPrice.FromFlags`) and prints
-  `"costUsd"` beside the tokens (`AskApiMode.UsageLine`) — `(in − cached)·pIn + cached·pCached + out·pOut`,
-  at the tier's rates once THAT request's prompt reaches the threshold (xAI doubles every rate from 200K).
-  The shim is the one place holding one request's tokens and the rates together, which is why a feature
-  reviewer's conversation is priced turn by turn and never on its sum. A row with no cached rate prices
-  cached tokens at the input rate — the list did not say, and zero would under-report.
-- **No price is "no price set", never $0.** `ApiRuntime.ReadUsage` takes `costUsd` when the line has one and
-  otherwise marks `Usage.NoPriceSet` (a metered run whose money is unknown; false for every CLI, which was
-  never going to report money). `UsageLedger` writes `costNote: "no price set"` beside `costUsd: null`;
-  `RoundAudit` writes it through `CostText.Of`; `LiveRound` puts it on `RoundRecord.CostNote`, which
-  `status` returns ([module_server.md](module_server.md#configuration-and-keys)).
+- **The price rides with the row, then with the invocation — never with the command line.**
+  `ProviderSettings.Price` (a `TokenPrice`, core `core/Findings/TokenPrice.cs`: in / cached / out per
+  million, plus an optional long-context tier) reaches `ReviewerSettings.Price` in `RosterBuilder`, and
+  `ApiRuntime.Build` puts it on `ReviewerInvocation.Price`. It first shipped as `--price-*` flags the shim
+  read back and priced in the CHILD; epic 3's code round (#23) moved the arithmetic to the parent, so one
+  place prices an answered launch and a failed one alike and no rate travels on argv.
+- **The shim reports raw tokens.** `AskApiMode.UsageLine` prints `tokensIn`, `tokensOut` (everything
+  generated — reasoning included, wherever the vendor filed it: xAI reports it OUTSIDE `completion_tokens`
+  and bills it as output, so `LocalAsk.ReadUsage` takes `total_tokens − prompt_tokens` when that exceeds
+  the completion; the Alibaba route counts it inside), `tokensCached` and `tokensReasoning` (the reasoning
+  share, for the record — `Usage.TokensReasoning`, and a `tokensReasoning` column on the ledger line).
+  Measured 2026-09-26: grok-4.7's `completion 1,557 · reasoning 27,728` priced by the old rule at $0.047
+  against the vendor's own $0.213; with the rule the ledger's $0.6577 for a three-turn review equalled xAI's
+  `cost_in_usd_ticks` to the sixth decimal.
+- **Per turn, in `ApiRuntime.ReadUsage`.** `TokenPrice.CostOf(usage)` — `fresh·pIn + cached·pCached +
+  out·pOut`, at the tier's rates once THAT request's prompt reaches the threshold (xAI doubles every rate
+  from 200K); `cached` is clamped to the prompt and `fresh = max(0, in − cached)`, so a vendor reporting
+  more cached tokens than prompt tokens prices every prompt token at the cached rate and refunds nothing
+  (#5). A feature reviewer's conversation is priced turn by turn and never on its sum. A row with no cached
+  rate prices cached tokens at the input rate — the list did not say, and zero would under-report.
+- **No price is "no price set", never $0.** `ReadUsage` marks `Usage.NoPriceSet` when the invocation's price
+  is `None` (a metered run whose money is unknown; false for every CLI, which was never going to report
+  money). `UsageLedger` writes `costNote: "no price set"` beside `costUsd: null`; `RoundAudit` writes it
+  through `CostText.Of`; `LiveRound` puts it on `RoundRecord.CostNote`, which `status` returns
+  ([module_server.md](module_server.md#configuration-and-keys)).
 - **Tests.** `AnApiReviewerIsPricedAndKeyedTests` — the arithmetic (cached rate, the tier on both sides of
-  200K, no cached rate, no price), the flags round trip, and two turns through the REAL `coai-mcp --ask-api`
-  binary with the adapter's argv and environment: a priced row writes `costUsd` 0.17 to the ledger for
-  100 000 in / 60 000 cached / 10 000 out at xAI's 2.00 / 0.50 / 6.00; an unpriced row writes
-  `costUsd: null` and `costNote: "no price set"`. Teeth: with `..settings.Price.AsFlags()` removed from
-  `ApiRuntime.Build`, `Expected usage.CostUsd to approximate 0.17 … but it was <null>`, and the argv test
-  and the roster test went red with it.
+  200K, no cached rate, no price, the clamp), the price on the invocation and off argv, a failed call's raw
+  line priced like an answered one's, and two turns through the REAL `coai-mcp --ask-api` binary with the
+  adapter's argv and environment: a priced row writes `costUsd` 0.17 to the ledger for 100 000 in / 60 000
+  cached / 10 000 out at xAI's 2.00 / 0.50 / 6.00, with no `costUsd` on the shim's stdout; an unpriced row
+  writes `costUsd: null` and `costNote: "no price set"`. `ApiRuntimeTests.UsageIsPricedInTheParent_FromTheInvocationsPrice`
+  and `AskApiModeTests.ReasoningTokensReportedOutsideTheCompletion_AreBilledAsOutput` pin the two halves.
 
 ## A 400 that says the key is wrong is a key refusal (2026-09-26, PLAN_feature_review §9.11)
 
@@ -1271,6 +1309,139 @@ echoes the request back — and a review of this very file carries the phrase �
 (`A400_about_anything_else_stays_a_failed_request_even_when_it_quotes_the_phrase_elsewhere`). RED first:
 `Expected code to be 77 … but found 70`, stderr `answered HTTP 400: {… "Incorrect API key provided: Bearer
 [redacted] …}`.
+
+## Each API vendor is a module behind one interface (2026-09-27, the operator's architecture rule)
+
+The shim used to switch on a dialect row; now it asks a MODULE. `IApiVendor` (`core/Api/IApiVendor.cs`) owns
+everything that differs per vendor — the request it spells, the headers it needs, how its answer is read, what
+its refusals mean, what it can be told (its **capabilities**) and what calibration settled (its **defaults**) —
+and there is one class per vendor: `OpenAiCompatibleVendor` (generic, over any measured row),
+`XaiVendor`, `QwenVendor`, `DeepSeekVendor`, `GlmVendor`. **No branch on a vendor name lives anywhere
+else**: `ApiVendors.Resolve(dialectOrName, model)` is the ONE place a name becomes a type, and it accepts
+both a module name and the dialect row a settings file was written with before the modules existed —
+`dashscope` resolves to the module measured on that EXACT model (`qwen3.8-max`, `deepseek-v4-pro`, `glm-5.3`),
+so every calibrated row runs exactly as it did, and `dashscope` with any other model — a sibling included —
+runs generically on the same row with nothing declared. Exact and never a family prefix, the GLM
+consultation's catch: the vendor documents `glm-5.2` with a thinking switch and a `medium` level that
+`glm-5.3` has not, so a prefix match would have refused settings the sibling accepts. The same through the
+other entrance (the consultation's second turn): a row that NAMES a module with a model it was not measured
+on (`dialect: glm`, `model: glm-5.2`; `dialect: xai`, `model: grok-4.6`) is **set aside** to the generic module
+over the module's own row — the measured transport kept (xAI's routing header stays), nothing declared about
+the model — and `ApiVendors.SetAside` gives `providers` the sentence (`ApiRowReport.Note`), so the downgrade is
+never silent. Each module names its `MeasuredModel`; the generic module names none and speaks for any. A row that
+names a module and NO model is set aside the same way (the consultation's third turn): the endpoint then picks a
+model this build cannot name, and a module's declarations would be claims about a model nobody measured.
+
+```mermaid
+classDiagram
+    class IApiVendor {
+        <<interface>>
+        +Name
+        +Dialect : ApiDialect
+        +Capabilities : ApiCapabilities
+        +Defaults : ApiDefaults
+        +PriceRoute
+        +RequestBody(ApiTurn) string
+        +Headers(conversation) map
+        +ReadAnswer(response) ChatAnswer
+        +Classify(status, body) ApiOutcome
+        +Refusal(ApiRowSettings) string
+    }
+    class OpenAiCompatibleTransport {
+        row : ApiDialect
+        Body(turn) / Body(turn, spelledAs)
+        Headers(conversation)
+        Read → CompletionReader
+        Classify → ApiClassification
+    }
+    class DashScopeTransport {
+        <<static>>
+        Row, Shared, MaxTokens
+        WithThinkingOff()
+        WithEffortVerbatim()
+    }
+    class ApiVendors {
+        <<registry>>
+        Resolve(dialectOrName, model)
+        Names
+    }
+    IApiVendor <|.. OpenAiCompatibleVendor : openai / any row
+    IApiVendor <|.. XaiVendor : xai
+    IApiVendor <|.. QwenVendor : qwen
+    IApiVendor <|.. DeepSeekVendor : deepseek
+    IApiVendor <|.. GlmVendor : glm
+    OpenAiCompatibleVendor o-- OpenAiCompatibleTransport
+    XaiVendor o-- OpenAiCompatibleTransport
+    QwenVendor o-- DashScopeTransport
+    DeepSeekVendor o-- DashScopeTransport
+    GlmVendor o-- DashScopeTransport
+    DashScopeTransport o-- OpenAiCompatibleTransport : the dashscope row
+    ApiVendors ..> IApiVendor : the only name→type map
+```
+
+- **The rows stay data.** A module's `Dialect` is still a row of `shared/api-dialects.json` — what a vendor
+  ANSWERED to the probe, copied into a file the extension mirrors by name and a test on each side is held to.
+  The module owns what a JSON file cannot: the spelling of a thinking switch (`QwenVendor` sends the vendor's
+  `none` level verbatim, which the row's map would omit; `DeepSeekVendor` sends `enable_thinking: false` as a
+  top-level field; `GlmVendor` and `XaiVendor` have no switch and say so), its capabilities and its defaults.
+  The three Alibaba families compose ONE `DashScopeTransport` (the `dashscope` row through the one
+  `OpenAiCompatibleTransport`) — shared by composition, never by a branch.
+- **The reader and the classification are one each.** `CompletionReader` (moved from `LocalAsk.ReadAnswer`,
+  behaviour intact: reasoning outside `completion_tokens` on xAI is `total − prompt`; the cached subset; the
+  finish reason) and `ApiClassification` (401/403 and xAI's 400-with-*incorrect api key* → `KeyRefused`;
+  429/503 → `RateLimited`; 2xx → `Answered`; else `Failed`) are composed into every module; `AskApiMode`
+  switches on the OUTCOME the module returns, never on a vendor.
+- **Capabilities are data the panel renders** (`ApiCapabilities`): whether thinking has a switch, the effort
+  levels in the vendor's own names (xai `low medium high xhigh`; qwen `low medium xhigh` with `none` as the
+  off switch; deepseek `low medium high`; glm `low high max`; generic: nothing declared, everything sent
+  verbatim), and whether effort and a thinking budget exclude each other. **Defaults are what calibration
+  settled** (`ApiDefaults`: effort, thinking on, ceiling, follow-ups, the twenty-minute review) — qwen
+  `medium`, deepseek `high`, glm `high`, at the row's 65,536 floor; xai at the vendor's default until the
+  twenty-minute level is measured. Every value is cited on the module to the reference or the run.
+- **A row's own settings override the defaults, and the module validates them** (`ApiRowSettings`:
+  `effort`, `thinking`, `reviewMinutes` on the vendor row; `ApiEffective.Of(module, row, overrides)` = the
+  row over the environment (`ApiOverrides`: `COAI_LOCAL_REASONING_EFFORT`, `COAI_LOCAL_MAX_TOKENS`,
+  `COAI_FEATURE_API_REVIEW_MINUTES`, which every calibration run set explicitly and which keep meaning what
+  they meant when SET) over the module's default). `RosterBuilder` asks `ApiRowView.Of(row, overrides)`
+  before a launch: a refused row — an effort the vendor does not take, a thinking switch it does not have — is
+  EXCLUDED with the module's sentence (`qwen does not take reasoning effort 'ultra' — it accepts low, medium,
+  xhigh (and 'none' switches thinking off)`), never launched to be answered 400 after a round trip; an
+  accepted row's effective effort, ceiling and switch ride on `ReviewerSettings`, and `ApiRuntime` spells the
+  switch as `--thinking off` only when it is off. The whole-review cap is the effective `reviewMinutes`.
+- **`providers` reports the module's view per api row** (`ProviderStatus.Api` → `ApiRowReport`: module,
+  price route, capabilities, defaults, effective settings, refusal) — names and values only, never a key;
+  absent for every CLI row, whose JSON reads exactly as it did.
+- **Nothing measured changed.** `ApiVendorGoldensTests` pinned, BEFORE the modules, the exact request body
+  and headers of a sample turn per measured row (recorded goldens in `tests/fixtures/api-goldens`), the usage
+  line and exit code a recorded xAI / Alibaba answer is read into, and the classification of every refusal —
+  and passed unchanged after. The grok-4.7 and qwen3.8-max measurements of 2026-09-26/27 therefore stand.
+  `ApiVendorModulesTests` covers the registry, the capabilities, the refusals, the effective settings and
+  the two switch spellings; `AnApiRowIsSettableTests` the row's settings through the roster, the adapter, the
+  shim and `providers` (RED first: nine of eleven red before the wiring — no effort applied, no exclusion,
+  no `api` in `providers`).
+
+## A vendor's transient 500 is retried like a 429 (2026-09-27, PLAN_feature_review §9.29)
+
+Measured in phase 2 of the reviewer-models measurement: xAI answered 8 of 20 grok-4.7 reviews' calls with HTTP 500
+`{"code":"internal","error":"Auth context expired."}` — on first calls and later ones, 74–262 s into the generation,
+with the same conversation key, request body and concurrency as the calls that succeeded before and after it (the
+recorder's tap: the same key served three turns half an hour before a first-call failure on it; a key's first use
+failed once; the Alibaba models were 24 of 24 valid in the same window). A vendor-side transient with an `internal`
+code, and the product lost the review: `AskApiMode` reported every 500 as a failed request (exit 70, the body quoted)
+and `BoundedScheduler`'s ladder retries only what `RateLimit.Hit` recognises — 429/503 by status, or an OBSERVED phrase.
+
+- **The classification is the module's** (`ApiClassification.Of`): 429 and 503 always; any other 5xx only when its own
+  error field (`error` as a string, or `error.message` / `error.code` — the same narrow read as the wrong-key rule) carries
+  an observed transient phrase (`TransientPhrases`, today `auth context expired`) → `ApiOutcome.RateLimited` → the shim
+  exits **75** with `HTTP 500 Internal Server Error from <endpoint>: <body, redacted and capped>`. A 500 with any other
+  body stays a failed request (70), as before — nothing is retried on a guess.
+- **The ladder reads it** because `RateLimit.Phrases` gained the observed phrase: the retry is the existing one — 5 s,
+  30 s, 60 s, 120 s, jittered, within what is left of the launch's deadline — and it wraps EACH TURN's launch
+  (`TurnLoop` calls `RunWithLadderAsync` per turn), and `TurnLoop` trims every turn to what is left of the twenty-minute
+  conversation cap, so a retried later turn is bounded by the cap too.
+- RED first (`ApiVendorGoldensTests.A_transient_500_whose_body_says_the_auth_context_expired_is_retryable_and_any_other_500_is_not`
+  and three rows of `ARefusal_IsClassifiedTheSameWay_OnEveryRow`): `Expected transient to be 75 … but found 70` on every
+  row; green after; the plain-500 row still 70 and not `Hit`.
 
 ## The feature outline is built from git objects, bounded before a byte is read (2026-09-26, PLAN_feature_review S2.2a)
 

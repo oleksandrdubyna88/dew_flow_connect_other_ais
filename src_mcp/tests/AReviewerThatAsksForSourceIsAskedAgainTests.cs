@@ -260,7 +260,39 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
         var lines = File.ReadAllLines(ledger.Path);
         lines.Should().HaveCount(2, "one ledger line per turn");
         lines[0].Should().Contain("\"tokensIn\":1000").And.Contain("\"outcome\":\"ok\"");
-        lines[1].Should().Contain("\"tokensIn\":0").And.Contain("exit 1");
+        // The fake's default stdout (ten tokens in) is what this failed launch REPORTED, and since
+        // 2026-09-26 a failed launch keeps what it reported — see the next test for the whole claim.
+        lines[1].Should().Contain("\"tokensIn\":10").And.Contain("exit 1");
+    }
+
+    /// <summary>
+    /// A failed SECOND turn that the vendor billed keeps BOTH turns' spend: turn 1's on the base, its own
+    /// on the terminal outcome — and the ledger writes both.
+    /// </summary>
+    /// <remarks>
+    /// The first trial's reasoning-only answers arrived on turn 1 and on turn 2 alike (Qwen3.8-max,
+    /// 2026-09-26); with the failed turn's usage dropped at the launch, a two-turn reviewer that fell
+    /// over on its second call was written down at roughly half of what it cost.
+    /// </remarks>
+    [Fact]
+    public async Task AFailedSecondTurn_ThatWasBilled_KeepsBothTurnsSpend()
+    {
+        Turn(1, AsksForAdd, stdout: OneThousandIn);
+        Turn(2, Clean, stdout: """{"findings": [], "input_tokens": 1100, "output_tokens": 16382}""", exit: 70, stderr: "no message content: 16382 reasoning tokens");
+
+        var (outcome, _) = await RunAsync(Work(), ct: TestContext.Current.CancellationToken);
+
+        var failed = outcome.Should().BeOfType<ReviewerOutcome.NonZeroExit>().Subject;
+        failed.Usage.TokensIn.Should().Be(1100, "turn 2 was billed before the shim refused its answer");
+        failed.Usage.TokensOut.Should().Be(16382);
+        outcome.EarlierUsage.TokensIn.Should().Be(1000);
+
+        var ledger = new UsageLedger(_dir.At("ledger"));
+        ledger.Record(new ReviewerInvocation("codex", RoleCatalog.FeatureRole, new ProcessRequest("x", [], ".")), outcome, "m", "FeatureReview", TimeSpan.FromSeconds(4));
+        var lines = File.ReadAllLines(ledger.Path);
+        lines.Should().HaveCount(2);
+        lines[0].Should().Contain("\"tokensIn\":1000").And.Contain("\"outcome\":\"ok\"");
+        lines[1].Should().Contain("\"tokensIn\":1100").And.Contain("\"tokensOut\":16382").And.Contain("exit 70");
     }
 
     [Fact]
@@ -434,6 +466,26 @@ public sealed class AReviewerThatAsksForSourceIsAskedAgainTests : IAsyncLifetime
         outcome.Should().BeOfType<ReviewerOutcome.TimedOut>("a conversation past 700 ms × 2 is ended by the cap, as one failed reviewer");
         outcome.EarlierTurns.Should().NotBeEmpty("the turns that answered before the cap are kept").And.OnlyContain(t => t.Usage.TokensIn == 7);
         progress.Count(p => p.Outcome is not null).Should().Be(1, "one terminal outcome");
+    }
+
+    /// <summary>
+    /// A cap set on the WORK itself — the feature stage's whole-review limit for an api reviewer (the
+    /// operator's 20 minutes, 2026-09-27: every turn of one reviewer's conversation, launch to final
+    /// answer) — ends the conversation before the derived <c>timeout × (1 + follow-ups)</c> would.
+    /// </summary>
+    [Fact]
+    public async Task AConversationCapOnTheWork_EndsTheConversation_BeforeTheDerivedOneWould()
+    {
+        Environment.SetEnvironmentVariable("FAKECLI_STDOUT", """{"findings": [], "input_tokens": 7, "output_tokens": 1}""");
+        Environment.SetEnvironmentVariable("FAKECLI_SLEEP_MS", "300");
+        var turn = new ReviewerWork(FakeCliInvocations.Invoke("gemini", [], timeout: TimeSpan.FromSeconds(2)));
+        var work = turn with { Continue = new Endless(turn, followUps: 3), ConversationCap = TimeSpan.FromMilliseconds(900) };
+
+        var results = await new BoundedScheduler().RunAllAsync([work], _executor, TestContext.Current.CancellationToken);
+
+        var outcome = results.Single().Outcome;
+        outcome.Should().BeOfType<ReviewerOutcome.TimedOut>("the work's own 900 ms cap ended it; the derived 2 s × 4 never came into it");
+        outcome.EarlierTurns.Count.Should().BeInRange(1, 3, "at ~300 ms a turn, 900 ms allows two or three turns — never the twenty the derived cap would");
     }
 
     /// <summary>A continuation that always asks for another turn — the same launch again.</summary>

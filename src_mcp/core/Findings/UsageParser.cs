@@ -21,7 +21,14 @@ namespace CoaiMcp.Core.Findings;
 /// subscription, which was never going to report money in the first place. Trailing and defaulted, so
 /// every existing construction and every session on disk keeps meaning what it meant.
 /// </param>
-public sealed record Usage(long TokensIn, long TokensOut, double? CostUsd, long TokensCached = 0, bool NoPriceSet = false)
+/// <param name="TokensReasoning">
+/// How many of <paramref name="TokensOut"/> the vendor reported as reasoning
+/// (<c>completion_tokens_details.reasoning_tokens</c>), or zero when it did not say. For the record, never
+/// for the bill — the bill is <paramref name="TokensOut"/>, which already holds them wherever the vendor
+/// filed them (xAI outside <c>completion_tokens</c>, the Alibaba route inside; measured 2026-09-26).
+/// Trailing and defaulted, like the two before it.
+/// </param>
+public sealed record Usage(long TokensIn, long TokensOut, double? CostUsd, long TokensCached = 0, bool NoPriceSet = false, long TokensReasoning = 0)
 {
     public static readonly Usage None = new(0, 0, null);
 
@@ -30,7 +37,8 @@ public sealed record Usage(long TokensIn, long TokensOut, double? CostUsd, long 
         TokensOut + other.TokensOut,
         CostUsd is null && other.CostUsd is null ? null : (CostUsd ?? 0) + (other.CostUsd ?? 0),
         TokensCached + other.TokensCached,
-        NoPriceSet || other.NoPriceSet);
+        NoPriceSet || other.NoPriceSet,
+        TokensReasoning + other.TokensReasoning);
 }
 
 /// <summary>

@@ -79,13 +79,35 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
         CostText.Of(0.25, noPriceSet: false).Should().Be(", $0.2500");
     }
 
+    /// <summary>
+    /// A vendor reporting more cached tokens than prompt tokens never yields a negative fresh input (epic 3's
+    /// code round, #5): every prompt token is priced at the cached rate and nothing is refunded.
+    /// </summary>
     [Fact]
-    public void A_price_survives_the_command_line_it_rides_on()
+    public void Cached_above_the_input_is_clamped_never_a_negative_fresh_input()
     {
-        var flags = Program.Flags(["--ask-api", .. Grok.AsFlags()]);
+        // 1 000 in, 5 000 "cached", 0 out: 1 000 × 0.50 / 1M — not (1 000 − 5 000) × 2.00 + 5 000 × 0.50
+        Grok.CostOf(new Usage(1_000, 0, null, TokensCached: 5_000)).Should().BeApproximately(0.0005, 1e-9);
+        Grok.CostOf(new Usage(0, 0, null, TokensCached: 5_000)).Should().Be(0);
+    }
 
-        TokenPrice.FromFlags(flags).Should().Be(Grok);
-        TokenPrice.None.AsFlags().Should().BeEmpty("an unpriced row adds nothing to the command line");
+    /// <summary>
+    /// The cost is worked out in the PARENT (epic 3's code round, #23): the shim reports raw tokens, the
+    /// invocation carries the row's price, and <c>ApiRuntime.ReadUsage</c> prices the line — the same
+    /// arithmetic for an answered call and a failed one. No rate rides on the command line any more.
+    /// </summary>
+    [Fact]
+    public void A_price_rides_on_the_invocation_and_the_parent_prices_the_raw_tokens()
+    {
+        var invocation = Build(Grok);
+
+        invocation.Price.Should().Be(Grok);
+        invocation.Request.Arguments.Should().NotContain(a => a.StartsWith("--price-") || a.StartsWith("--tier-"));
+        var priced = new ApiRuntime("grok", _stub.Endpoint).ReadUsage(
+            invocation, new ProcessResult(70, "{\"tokensIn\":100000,\"tokensOut\":10000,\"tokensCached\":60000,\"tokensReasoning\":9000}", "", false));
+        priced.CostUsd.Should().BeApproximately(0.17, 1e-9, "a failed call's raw tokens are priced exactly like an answered one's");
+        priced.TokensReasoning.Should().Be(9000);
+        priced.NoPriceSet.Should().BeFalse();
     }
 
     // ---------- the turn, through the real shim ----------
@@ -107,6 +129,7 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
         line.GetProperty("costUsd").GetDouble().Should().BeApproximately(0.17, 1e-9);
         line.GetProperty("costNote").GetString().Should().BeEmpty();
         result.StdOut.Should().NotContain(Key);
+        result.StdOut.Should().NotContain("costUsd", "the shim reports raw tokens; the money is worked out in the parent (#23)");
     }
 
     [Fact]
@@ -127,12 +150,12 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
     }
 
     [Fact]
-    public void The_price_goes_to_the_shim_and_the_key_still_only_through_the_environment()
+    public void The_price_stays_in_the_parent_and_the_key_still_only_through_the_environment()
     {
         var invocation = Build(Grok);
 
-        invocation.Request.Arguments.Should().ContainInOrder("--price-in", "2", "--price-cached", "0.5", "--price-out", "6");
-        invocation.Request.Arguments.Should().ContainInOrder("--tier-from", "200000", "--tier-in", "4");
+        invocation.Request.Arguments.Should().NotContain(a => a.StartsWith("--price-") || a.StartsWith("--tier-"), "the shim is handed no rate");
+        invocation.Price.TierFromTokens.Should().Be(200_000, "the tier is the parent's to apply, per request");
         invocation.Request.Arguments.Should().NotContain(Key);
         invocation.Request.Environment[ApiRuntime.KeyVariable].Should().Be(Key);
     }
@@ -232,9 +255,62 @@ public sealed class AnApiReviewerIsPricedAndKeyedTests : IDisposable
         var work = service.Roster.BuildWork(
             [RoleCatalog.ArchitectureRole], scratch, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
 
-        var launch = work.Should().ContainSingle().Subject.Invocation.Request;
-        launch.Environment[ApiRuntime.KeyVariable].Should().Be(Key, "the row 'qwen-2' reads the key filed under 'qwen'");
-        launch.Arguments.Should().ContainInOrder("--price-in", "2", "--price-cached", "0.25", "--price-out", "6");
+        var reviewer = work.Should().ContainSingle().Subject.Invocation;
+        reviewer.Request.Environment[ApiRuntime.KeyVariable].Should().Be(Key, "the row 'qwen-2' reads the key filed under 'qwen'");
+        reviewer.Price.Should().Be(new TokenPrice(new TokenRates(2, 0.25, 6), 0, TokenRates.None), "the row's price rides on the invocation, for the parent to price the turn with");
+        reviewer.Request.Arguments.Should().NotContain(a => a.StartsWith("--price-"));
+    }
+
+    /// <summary>
+    /// One reviewer, one conversation key: the launch and its repair carry the same one (a repair is the same
+    /// conversation asked again), and another context is another key — so a vendor that routes its prompt
+    /// cache by the key (xAI, 2026-09-26: 1,152 cached tokens on every turn of a byte-identical prefix
+    /// without one) sees every turn of a review on the same server.
+    /// </summary>
+    [Fact]
+    public void A_round_gives_each_reviewer_one_conversation_key_for_every_launch_of_it()
+    {
+        var service = Service(new VaultKeys(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["qwen"] = Key }, string.Empty));
+        var scratch = Directory.CreateTempSubdirectory("coai-api-conv-").FullName;
+
+        var reviewer = service.Roster.BuildWork(
+            [RoleCatalog.ArchitectureRole], scratch, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers.Single();
+        var other = service.Roster.BuildWork(
+            [RoleCatalog.ArchitectureRole], scratch, "another ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers.Single();
+
+        var key = KeyOf(reviewer.Invocation.Request.Arguments);
+        key.Should().MatchRegex("^[0-9a-f]{32}$");
+        KeyOf(reviewer.Repair!.Request.Arguments).Should().Be(key, "the repair continues the same conversation");
+        KeyOf(other.Invocation.Request.Arguments).Should().NotBe(key, "another context is another conversation");
+    }
+
+    private static string KeyOf(IReadOnlyList<string> arguments)
+    {
+        var at = arguments.ToList().IndexOf("--conversation");
+
+        return at >= 0 ? arguments[at + 1] : string.Empty;
+    }
+
+    /// <summary>
+    /// A feature round caps an api reviewer's WHOLE conversation at the panel's <c>FeatureApiReview</c> (the
+    /// operator's 20 minutes, 2026-09-27 — launch to final answer, every turn); a code round's reviewer keeps
+    /// the derived <c>timeout × (1 + follow-ups)</c>, which is what the absence of a cap means.
+    /// </summary>
+    [Fact]
+    public void A_feature_round_caps_an_api_reviewers_whole_conversation_and_a_code_round_does_not()
+    {
+        var service = Service(new VaultKeys(
+            new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["qwen"] = Key }, string.Empty), ",\"feature\":true");
+        var scratch = Directory.CreateTempSubdirectory("coai-api-cap-").FullName;
+
+        var feature = service.Roster.BuildWork(
+            [RoleCatalog.FeatureRole], scratch, "ctx", round: 1, stage: Stage.FeatureReview, readsCheckout: false).Reviewers.Single();
+        var code = service.Roster.BuildWork(
+            [RoleCatalog.ArchitectureRole], scratch, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers.Single();
+
+        feature.ConversationCap.Should().Be(TimeSpan.FromMinutes(20), "the whole-review limit for an api reviewer on the feature stage, at the panel's default");
+        code.ConversationCap.Should().BeNull("a code round's reviewer keeps the derived cap");
     }
 
     private PanelService Service(VaultKeys keys, string rowTail = "") =>

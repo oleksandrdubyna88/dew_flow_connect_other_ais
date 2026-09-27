@@ -53,7 +53,8 @@ public sealed class AskApiModeTests : IDisposable
         return path;
     }
 
-    private Task<int> RunAsync(string? key = Key, string endpoint = "", string dialect = "openai", string schema = "", string vendor = "grok")
+    private Task<int> RunAsync(
+        string? key = Key, string endpoint = "", string dialect = "openai", string schema = "", string vendor = "grok", string conversation = "")
     {
         var args = new List<string>
         {
@@ -64,6 +65,10 @@ public sealed class AskApiModeTests : IDisposable
             "--out", Path.Combine(_dir, "answer.json"),
             "--timeout-seconds", "20", "--max-tokens", "4096",
         };
+        if (conversation.Length > 0)
+        {
+            args.AddRange(["--conversation", conversation]);
+        }
 
         return AskApiMode.RunAsync([.. args], _stderr.Add, _stdout, name => name == ApiRuntime.KeyVariable ? key : null);
     }
@@ -317,5 +322,126 @@ public sealed class AskApiModeTests : IDisposable
 
         quoted.Should().NotContain("\n").And.NotContain(Key).And.Contain("[redacted]");
         quoted.Length.Should().BeLessThan(AskApiMode.QuoteLimit + 20);
+    }
+
+    // ---------- measured on 2026-09-26 against the Alibaba route (GLM-5.3, Qwen3.8-max) and xAI (grok-4.7) ----------
+
+    /// <summary>
+    /// An answer the vendor CUT at the token ceiling is a failure even when what arrived still parses.
+    /// </summary>
+    /// <remarks>
+    /// Measured: at a 16,384 ceiling every GLM-5.3 call spent exactly 16,384 completion tokens and wrote
+    /// <c>{"</c>; at another cut the fragment can be <c>{"findings":[]}</c> with the real findings never
+    /// written — a clean review that was never given. <c>finish_reason: "length"</c> is the vendor saying
+    /// so, and the shim ignored it: non-empty content became exit 0. The sentence must say the cause, and
+    /// the tokens must still cross to stdout, because the cut call is billed like any other.
+    /// </remarks>
+    [Fact]
+    public async Task AnAnswerCutAtTheTokenLimit_IsAFailure_EvenWhenTheFragmentParses()
+    {
+        _stub.Answers = _ => new ApiEndpointStub.Answer(200, Completion("{\"findings\":[]}", finish: "length", prompt: 500, completion: 4096, reasoning: 4000));
+
+        var code = await RunAsync();
+
+        code.Should().Be(70, $"stderr said: {Stderr}");
+        Stderr.Should().Contain("cut at the token limit").And.Contain("4096").And.Contain("4000 reasoning").And.Contain("max_completion_tokens");
+        File.Exists(Path.Combine(_dir, "answer.json")).Should().BeFalse("a fragment must not be left where the executor reads an answer");
+        UsageOnStdout().TokensIn.Should().Be(500, "the cut call was billed, so its tokens travel to the ledger");
+        BothStreamsAreClean();
+    }
+
+    /// <summary>
+    /// A reasoning-only answer — <c>reasoning_content</c> and no <c>content</c>, how Qwen3.8-max failed the
+    /// first trial — is a failure that still declares what it consumed.
+    /// </summary>
+    [Fact]
+    public async Task AReasoningOnlyAnswer_Exits70_AndStillDeclaresItsTokensOnStdout()
+    {
+        _stub.Answers = _ => new ApiEndpointStub.Answer(200,
+            "{\"id\":\"cmpl-2\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"reasoning_content\":\"Let me think about this feature at length…\",\"content\":\"\"},"
+            + "\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":53092,\"completion_tokens\":16382,\"completion_tokens_details\":{\"reasoning_tokens\":16382}}}");
+
+        var code = await RunAsync();
+
+        code.Should().Be(70);
+        Stderr.Should().Contain("no message content").And.Contain("16382 reasoning");
+        var usage = UsageOnStdout();
+        usage.TokensIn.Should().Be(53092);
+        usage.TokensOut.Should().Be(16382);
+        usage.TokensReasoning.Should().Be(16382, "the reasoning share is reported for the record");
+        usage.CostUsd.Should().BeNull("the shim prints no money; an invocation without a price reads none");
+        _stdout.ToString().Should().Contain("\"tokensReasoning\":16382").And.NotContain("costUsd", "the parent prices the raw tokens (#23)");
+        BothStreamsAreClean();
+    }
+
+    /// <summary>
+    /// xAI reports reasoning tokens OUTSIDE <c>completion_tokens</c> and bills them as output: measured
+    /// 2026-09-26, grok-4.7 answered <c>prompt 19,681 · completion 1,557 · reasoning 27,728 · total 48,966</c>
+    /// and its own <c>cost_in_usd_ticks</c> priced all 29,285 as output. The Alibaba route puts reasoning
+    /// INSIDE <c>completion_tokens</c>. The one rule that reads both right: what the total says was
+    /// generated — <c>total_tokens − prompt_tokens</c> — when it exceeds <c>completion_tokens</c>.
+    /// </summary>
+    [Fact]
+    public async Task ReasoningTokensReportedOutsideTheCompletion_AreBilledAsOutput()
+    {
+        _stub.Answers = _ => new ApiEndpointStub.Answer(200,
+            "{\"id\":\"cmpl-3\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"findings\\\":[]}\"},\"finish_reason\":\"stop\"}],"
+            + "\"usage\":{\"prompt_tokens\":19681,\"completion_tokens\":1557,\"total_tokens\":48966,"
+            + "\"prompt_tokens_details\":{\"cached_tokens\":1152},\"completion_tokens_details\":{\"reasoning_tokens\":27728}}}");
+
+        var code = await RunAsync();
+
+        code.Should().Be(0, Stderr);
+        var usage = UsageOnStdout();
+        usage.TokensOut.Should().Be(29285, "1,557 answer tokens and 27,728 reasoning tokens were both generated and both billed");
+        usage.TokensIn.Should().Be(19681);
+        usage.TokensCached.Should().Be(1152);
+    }
+
+    // ---------- cache routing (xAI, measured 2026-09-26: 1,152 cached tokens on every turn of a byte-identical prefix) ----------
+
+    /// <summary>
+    /// A dialect that names a cache-routing header sends the reviewer's conversation key in it on every
+    /// turn — "routes requests with the same conversation ID to the same server. Since cache entries are
+    /// stored per-server, this maximizes your cache hit rate" (xAI's prompt-caching guide).
+    /// </summary>
+    [Fact]
+    public async Task TheXaiDialect_SendsTheConversationKey_InTheRoutingHeader()
+    {
+        await RunAsync(dialect: "xai", conversation: "c0ffee0123456789abcdef01");
+
+        _stub.Requests.Should().ContainSingle().Which.Header("x-grok-conv-id").Should().Be("c0ffee0123456789abcdef01");
+    }
+
+    [Fact]
+    public async Task WithoutAConversationKey_NoRoutingHeaderIsSent_EvenByTheXaiDialect()
+    {
+        await RunAsync(dialect: "xai");
+
+        _stub.Requests.Should().ContainSingle().Which.Header("x-grok-conv-id").Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task TheGenericDialect_SendsNoRoutingHeader_WhateverTheKey()
+    {
+        await RunAsync(dialect: "openai", conversation: "c0ffee0123456789abcdef01");
+
+        _stub.Requests.Should().ContainSingle().Which.Header("x-grok-conv-id").Should().BeEmpty(
+            "the generic row sends nothing a vendor is not documented to read");
+    }
+
+    private Usage UsageOnStdout() =>
+        new ApiRuntime("grok", _stub.Endpoint).ReadUsage(
+            new ReviewerInvocation("grok", "r", new ProcessRequest("x", [], ".")),
+            new ProcessResult(0, _stdout.ToString(), string.Empty, false));
+
+    /// <summary>A completion with the finish reason and the token details a reasoning vendor reports.</summary>
+    private static string Completion(string content, string finish, long prompt, long completion, long reasoning)
+    {
+        var escaped = content.Replace("\\", "\\\\").Replace("\"", "\\\"");
+
+        return "{\"id\":\"cmpl-9\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"" + escaped + "\"},"
+            + "\"finish_reason\":\"" + finish + "\"}],\"usage\":{\"prompt_tokens\":" + prompt + ",\"completion_tokens\":" + completion
+            + ",\"completion_tokens_details\":{\"reasoning_tokens\":" + reasoning + "}}}";
     }
 }
