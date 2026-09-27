@@ -67,6 +67,7 @@ import { LogPeriod } from './logPeriod';
 import { NO_NOTES, ProviderNotes, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
 import { presetEndpoint, VAULT_KEY_MARK, VaultKeyItem, vaultKeyItems, vaultKeyRow } from './apiKeyVendors';
+import { isApiSettingKey, resetTarget, withApiSetting, withoutApiSetting } from './apiSettings';
 import { modelsForKey } from './apiModelsProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
 import { readTreeAt } from './reviewTreeRead';
@@ -1660,6 +1661,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const config = vscode.workspace.getConfiguration('coai');
     switch (write.kind) {
       case 'vendor': {
+        if (isApiSettingKey(write.key)) {
+          await this.writeApiSetting(config, write);
+          return;
+        }
         // `pinnedDocument` FIRST, so the spread below can still override it: changing the document
         // box writes that box, and changing the PLAN box also records what the document switch was
         // silently meaning until now. Otherwise unticking `plan` on a local reviewer would take its
@@ -1825,6 +1830,39 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * One of an `api` row's per-model settings (S3.8), measured against what coai-mcp last REPORTED for the
+   * row: a value equal to the calibrated default is stored as nothing, so the row keeps following the next
+   * calibration, and a value the module does not take is not stored at all — the control snaps back to what
+   * is stored rather than keeping a choice nothing will honour.
+   */
+  private async writeApiSetting(config: vscode.WorkspaceConfiguration, write: Extract<SettingWrite, { kind: 'vendor' }>): Promise<void> {
+    if (!isApiSettingKey(write.key)) {
+      return;
+    }
+    const key = write.key;
+    const report = this.providersCache.reported[write.vendor]?.api;
+    const vendors = vendorsFrom(this.read(config)('vendors'));
+    const changed = vendors.map((v) => (v.id === write.vendor ? withApiSetting(v, key, write.value, report) : v));
+    if (changed.some((v) => v === undefined)) {
+      await this.snapBack();
+      return;
+    }
+    await this.saveWrite(config, 'vendors', changed, write);
+  }
+
+  /** "Reset to calibrated default" on an `api` card: the row's own value for ONE setting is taken away (S3.8). */
+  private async resetApiSetting(id: string | undefined): Promise<void> {
+    const target = resetTarget(id);
+    if (target === undefined) {
+      return;
+    }
+    const config = vscode.workspace.getConfiguration('coai');
+    const vendors = vendorsFrom(this.read(config)('vendors'));
+    const cleared = vendors.map((v) => (v.id === target.vendor ? withoutApiSetting(v, target.key) : v));
+    await this.saveWrite(config, 'vendors', cleared, { kind: 'vendor', key: target.key, value: undefined, vendor: target.vendor });
+  }
+
+  /**
    * Writes one setting, and SAYS SO when VS Code refuses.
    *
    * <p>Every write used to be a bare `await config.update(...)` reached through `void this.write(…)`,
@@ -1946,6 +1984,9 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         if (id !== undefined) {
           await this.customCommandModel(id);
         }
+        break;
+      case 'resetApiSetting':
+        await this.resetApiSetting(id);
         break;
       case 'installVendorCli':
         if (id !== undefined) {

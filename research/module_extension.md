@@ -9603,3 +9603,78 @@ An `api` reviewer's response carries tokens and no money, so the SERVER now pric
   its tier, the route map, the fallback), `apiPriceOnTheWire.test.ts` (all three rates and the tier, typed wins,
   no price no field, api rows only, the cached rate saved, the settings file carrying it), `priceBook.test.ts`,
   `roundsLogNoPriceSet.test.ts`. `notification-sites.json` 140 → 141 (the one new notice).
+
+## An api reviewer's own settings on its card (2026-09-27, PLAN_feature_review S3.8)
+
+The operator's words: per api model (row), thinking on/off where the vendor has a switch, the effort from a
+dropdown of THAT vendor's declared levels, and the maximum processing time — the calibrated values as the
+defaults, changeable later. The server half (the vendor modules, `providers` reporting `api` per row) is in
+[module_runners.md](module_runners.md), *Each API vendor is a module*; this is the panel's half.
+
+```mermaid
+sequenceDiagram
+  participant C as the api card (apiSettingsView)
+  participant H as panelProvider
+  participant S as coai-mcp --providers
+  participant F as settings.json (COAI_VENDORS)
+  H->>S: the cached answer, or a fresh probe
+  S-->>H: api per row: capabilities, defaults, effective, refusal, note
+  H->>C: ProviderHealth.api (apiReportFrom)
+  C->>C: thinking switch only if thinkingSwitchable; effort options = effortLevels; minutes box
+  C->>H: setting effort / thinking / reviewMinutes, or resetApiSetting vendor:setting
+  H->>H: withApiSetting against the report — the default stores nothing, a refused value snaps back
+  H->>F: vendorsEnv → the row's own values, api rows only, never to a server known older than 0.40.0
+  F-->>S: the next probe answers effective = the row's values
+```
+
+- **What the card offers is what the server reported** (`apiSettings.ts`, pure; `apiSettingsView.ts`, the
+  markup). `ProviderHealth.api` is `apiReportFrom` over the row's `api` member of `--providers`: module,
+  measured model, capabilities (`thinkingSwitchable`, `effortLevels` — trimmed, lower-cased, a non-word dropped —
+  and `thinkingOffLevel`), defaults, effective, refusal, note; a body without capabilities or defaults is no
+  report. The **effort dropdown's options are exactly `effortLevels`**, in the module's order, the default marked
+  `(calibrated default)` (plain `(default)` for the generic module, whose numbers nobody calibrated); a module
+  declaring none gets a sentence instead of a list. The **thinking** box exists only when the module has a switch
+  — otherwise "thinking cannot be switched off for this model"; it is drawn from the row's `thinking`, else from
+  an effort spelled as the off level (qwen's `none`), else the default. **max review time (minutes)** shows the
+  row's number or an empty box whose placeholder is the default. Each has its `?` (`HELP.apiThinking`,
+  `apiEffort`, `apiReviewMinutes`). Under them: what coai-mcp RUNS the row with (`effective`, said as the
+  server's, because the environment can outrank the row), then the server's own refusal and set-aside note.
+- **Reset** is one button per value the row set — `resetApiSetting`, id `<vendor>:<setting>` (`resetTarget`
+  splits on the last colon) — and nothing for a value it did not set. The host takes that one field off the row
+  (`withoutApiSetting`), so the default applies again and the next calibration reaches the row.
+- **A write** goes through `writeApiSetting` in the host: `withApiSetting(row, key, value, report)` stores
+  nothing for a value equal to the reported default (and for an emptied minutes box), refuses — `undefined`,
+  and the control snaps back — an effort the module does not declare, thinking off on a vendor without a switch,
+  and a limit outside 1–1440 minutes (`MAX_REVIEW_MINUTES`, the panel's cap; the server has none).
+- **Storage and the wire** (`vendors.ts`). `Vendor.effort?` / `thinking?` / `reviewMinutes?`, each kept by
+  `vendorsFrom` only when it is a value somebody could have meant (`storedApiSettings`). `vendorsEnv` sends them
+  on an **api row only** (`apiSettingsOnTheWire`) and **not to a server known to be older than
+  `API_SETTINGS_SINCE = '0.40.0'`** — the release after `mcp-v0.39.0`, checked by ancestry not to contain the
+  modules. Unknown is not old, as for `FEATURE_SINCE`.
+- **An older or silent server.** No report for the row hides all three controls with a sentence: a server that
+  answered without `api` is named with its version and the release that has the settings; a row nobody reported
+  (no probe answer yet, or a switched-off reviewer the file does not send) says it has not been reported.
+- **The released halves, measured 2026-09-27** (`scripts/live-api-settings-compat.mjs`,
+  `npm run test:api-settings-compat`, on `releasedHalves.mjs`), against coai-mcp **0.39.0** and extension
+  **0.57.0**, 16 of 16 green:
+
+| seam | what was run | what happened |
+|---|---|---|
+| this extension's settings → the released server | `serverSettingsJson` with two api rows carrying the fields, server version unknown; the released `--providers` over it and over the same rows without them | the fields cross; 0.39.0 lists `codex, antigravity, qwen, grok` and answers identically (the clock aside) with and without them, with no `api` on any row — which this build reads as "no report" |
+| the version gate | the same writer told the server is 0.39.0 | the three fields held back, all four rows cross |
+| a rollback to the released extension | its `vendorsFrom` and `serverSettingsJson` over the rows this build stored | every row kept, the three fields dropped — **a rollback forgets them on its next save**, a release note like the feature tick's |
+| this server over this extension's file | this build's `--providers`, read by this build's `parseProviders` | qwen's `effective` is the row's `xhigh` / thinking off / 35 minutes; `effortLevels` `low medium xhigh`, default `medium`; grok's `ultra` comes back as the module's refusal; a row setting nothing runs on the defaults |
+
+- **Tests.** `apiSettings.test.ts` (the report and its defensive parse, storage, the wire and the gate, the write
+  against the default, refusals, reset, the reset id), `apiSettingsCard.test.ts` (the panel RUN from reports this
+  branch's binary printed — `apiReportFixtures.ts` — the dropdown's options, the marked default, the switch
+  present and absent, the minutes box, the writes the page posts, a reset click, the refusal and the note on the
+  card, the hidden states), `apiSettingsHelp.test.ts` (the reviewers article in five languages names the three
+  controls, the reset and 0.40.0). RED first against stubs — 10 of 15 and 18 of 19 red on the real symptom
+  ("the qwen card has no effort dropdown", "the card does not say which coai-mcp has the settings"); with the
+  wire line or the card's block deleted, 3 and 18 go red. The panel harness gained a select's `options`, a box's
+  `placeholder`, and the `data-command` buttons its script binds (`click`), with its own tests, and now reads an
+  attribute by its whole name (it had read `data-placeholder` as `placeholder`). `npm run test:seam` has a
+  seventh leg: the row's three values reach the real binary and come back as `effective` — watched red with the
+  wire line removed. NOT covered: `writeApiSetting` / `resetApiSetting` in `panelProvider.ts` — thin wiring over
+  the tested pure functions; an extension host is the standing gap.

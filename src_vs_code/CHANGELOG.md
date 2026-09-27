@@ -51,8 +51,17 @@ reviewer got a key. It now looks there after PATH.
 **A wrong xAI key is reported as a wrong key.** xAI answers a bad key with HTTP 400, which read as a broken
 request; it now says the API refused the key and points at the vault entry.
 
-If you go back to an older extension, it keeps your reviewers but forgets their *reviews features* ticks the
-next time it saves them — tick them again after updating.
+**An API reviewer's thinking, effort and time limit are set on its card.** Once coai-mcp reports what the
+reviewer's model accepts, the card shows *thinking* — only where the vendor can switch reasoning off; otherwise
+it says it cannot — *effort*, a list of exactly the levels that vendor takes with the calibrated one marked, and
+*max review time (minutes)*. Each starts on what calibration settled for that model. Picking the default saves
+nothing, so the reviewer follows the next calibration; a value you change has its own *reset to calibrated
+default*. A setting coai-mcp refuses shows its reason on the card, and the card says what the reviewer will
+actually run with. This needs coai-mcp 0.40.0: an older one ignores these settings, so the card hides them and
+says so, and they are kept out of the settings it reads.
+
+If you go back to an older extension, it keeps your reviewers but forgets their *reviews features* ticks — and
+an API reviewer's thinking, effort and time limit — the next time it saves them; set them again after updating.
 
 ## Extension 0.57.0 · Server 0.39.0 — 2026-09-26
 

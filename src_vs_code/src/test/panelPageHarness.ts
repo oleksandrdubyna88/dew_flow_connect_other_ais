@@ -21,12 +21,20 @@ import { camel } from './rolesPageHarness';
 export class Control {
   readonly dataset: Record<string, string> = {};
   value = '';
+  /** What an empty box says it stands for, as the page drew it — a DOM's `placeholder`. */
+  placeholder = '';
   /** A checkbox's state, which the script reads instead of `value` (issue #485's switch). */
   checked = false;
   /** Whether the page rendered the control switched off — an `api` row against an older server (S1.2). */
   disabled = false;
   focused = false;
   selection: readonly [number, number] = [-1, -1];
+  /**
+   * A dropdown's choices as the page drew them — value and visible text, in document order — as a DOM's
+   * `options` gives them. Empty for every other control. So a test can ask what a person is OFFERED, not
+   * only what was selected (S3.8: the effort list is the module's and nothing else).
+   */
+  options: readonly { readonly value: string; readonly text: string }[] = [];
   private readonly handlers = new Map<string, (() => void)[]>();
 
   constructor(readonly tagName: string, readonly type: string) {}
@@ -58,6 +66,7 @@ export class Control {
 export function controlFrom(tag: string, attributes: string): Control {
   const control = new Control(tag.toUpperCase(), attribute(attributes, 'type'));
   control.value = attribute(attributes, 'value');
+  control.placeholder = attribute(attributes, 'placeholder');
   control.disabled = /\sdisabled(?=[\s>]|$)/.test(attributes);
   // What the page DREW, read like `disabled` — a box drawn ticked starts ticked. Without it every box began
   // unticked here, and a test could not tell a page drawn from the stored value from one that was not.
@@ -69,8 +78,13 @@ export function controlFrom(tag: string, attributes: string): Control {
   return control;
 }
 
+/**
+ * One attribute by its whole name, as a DOM reads it. A word boundary alone would also match the tail of a
+ * hyphenated name — `data-placeholder` read as `placeholder` — which makes the fake more permissive than
+ * the real thing; the name must start the attribute list or follow whitespace.
+ */
 function attribute(attributes: string, name: string): string {
-  return new RegExp(`\\b${name}="([^"]*)"`).exec(attributes)?.[1] ?? '';
+  return new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(attributes)?.[1] ?? '';
 }
 
 /** Every control the PAGE carries, in document order — never a hand-made list beside it. */
@@ -90,8 +104,20 @@ function withChoice(control: Control, html: string, at: number): Control {
   }
   const body = html.slice(at, html.indexOf('</select>', at));
   control.value = /<option\b[^>]*\bvalue="([^"]*)"[^>]*\sselected(?=[\s>])/.exec(body)?.[1] ?? '';
+  control.options = [...body.matchAll(/<option\b([^>]*)>([^<]*)<\/option>/g)]
+    .map(([, attributes, text]) => ({ value: attribute(attributes!, 'value'), text: text!.trim() }));
 
   return control;
+}
+
+/**
+ * Every `data-command` button the PAGE carries, in document order — what the script's `bindCommands`
+ * binds a click to. A button is not a `data-setting` control, so it is not in `controlsOf`.
+ */
+function commandsOf(html: string): readonly Control[] {
+  return [...html.matchAll(/<button\b([^>]*)>/g)]
+    .filter(([, attributes]) => attributes!.includes('data-command="'))
+    .map(([, attributes]) => controlFrom('button', attributes!));
 }
 
 /** A panel state with nothing configured, one section open, and whatever a test changes laid over it. */
@@ -132,6 +158,8 @@ function pageScript(html: string): string {
 export interface Page {
   readonly html: string;
   readonly controls: readonly Control[];
+  /** Every `data-command` button, bound by the page's own script — `fire('click')` is a person clicking it. */
+  readonly commands: readonly Control[];
   readonly posted: readonly Record<string, unknown>[];
   /** What a live region holds NOW — its rendered content until a delivered message replaces it. */
   readonly region: (id: string) => string;
@@ -185,13 +213,13 @@ function regionsOf(html: string): Map<string, Region> {
 export function runPanel(state: PanelState): Page {
   const html = panelHtml(state, 'test-nonce');
   const controls = controlsOf(html);
+  const commands = commandsOf(html);
   const posted: Record<string, unknown>[] = [];
   const regions = regionsOf(html);
   let listener: ((event: { data: unknown }) => void) | undefined;
   const fakeDocument = {
     addEventListener: () => undefined,
-    querySelectorAll: (selector: string): readonly Control[] =>
-      (selector === '[data-setting]' ? controls : []),
+    querySelectorAll: (selector: string): readonly Control[] => selected(selector, controls, commands),
     querySelector: (): null => null,
     // The live regions answer, so the script's live push can be watched landing — widened when the
     // cadence line joined Active rounds (PR #556, CodeRabbit). Every other id is absent, as before.
@@ -222,6 +250,7 @@ export function runPanel(state: PanelState): Page {
   return {
     html,
     controls,
+    commands,
     posted,
     region: (id) => regions.get(id)?.innerHTML ?? '',
     deliver: (data) => {
@@ -229,6 +258,25 @@ export function runPanel(state: PanelState): Page {
       listener({ data });
     },
   };
+}
+
+/**
+ * What the fake document answers for a selector: the setting controls, the command buttons, and nothing
+ * for any other selector — stricter than a DOM, never more permissive (`generated-code-tests.md` §3).
+ */
+function selected(selector: string, controls: readonly Control[], commands: readonly Control[]): readonly Control[] {
+  if (selector === '[data-setting]') {
+    return controls;
+  }
+
+  return selector === '[data-command]' ? commands : [];
+}
+
+/** The button for one command and id, clicked as a person clicks it — what the page then posted is in `posted`. */
+export function click(page: Page, command: string, id: string): void {
+  const button = page.commands.find((one) => one.dataset['command'] === command && one.dataset['id'] === id);
+  assert.ok(button !== undefined, `the page has no ${command} button for ${id}`);
+  button.fire('click');
 }
 
 /** Whatever the script last sent as a setting write. */
