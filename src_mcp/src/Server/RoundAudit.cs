@@ -104,9 +104,11 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
                 // A reviewer that did not review is the thing worth finding in a log later, so it
                 // is a warning even though the round survives it.
                 _log.Warning(
-                    "reviewer {Provider}/{Role} FAILED after {Seconds:0.0}s: {Reason}",
+                    "reviewer {Provider}/{Role} FAILED after {Seconds:0.0}s: {Reason}{Uncaptured}",
                     progress.Provider, progress.Role, progress.Elapsed.TotalSeconds,
-                    ReviewerSummaryFactory.Describe(outcome));
+                    ReviewerSummaryFactory.Describe(outcome),
+                    // A launch killed before its vendor reported anything: its usage is unknown, not zero.
+                    CostText.Uncaptured(outcome.TotalUsage.NotCaptured));
                 break;
 
             case ReviewerState.StoodDown:
@@ -122,10 +124,11 @@ public sealed class RoundAudit(Serilog.ILogger log, string stage, int number)
     public void Closing(string verdict, int gatingCount, string reviewers, RoundRecord record)
     {
         _log.Information(
-            "round {Round} {Stage} {Verdict}: {Gating} gating finding(s); {Reviewers}; {TokensIn} in / {TokensOut} out tokens{Cost} over {Seconds:0.0}s",
+            "round {Round} {Stage} {Verdict}: {Gating} gating finding(s); {Reviewers}; {TokensIn} in / {TokensOut} out tokens{Cost}{Uncaptured} over {Seconds:0.0}s",
             number, stage, verdict, gatingCount, reviewers,
             record.TokensIn, record.TokensOut,
             CostText.Of(record.CostUsd, record.CostNote.Length > 0, nothing: " (no cost reported)"),
+            CostText.Uncaptured(record.UsageNote.Length > 0, " for a reviewer, so the total is a floor"),
             (record.CompletedUtc - record.StartedUtc).TotalSeconds);
     }
 

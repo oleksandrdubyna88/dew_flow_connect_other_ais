@@ -127,6 +127,12 @@ export interface LogRow {
    * — said instead of the dash, which means "nobody knows" for a CLI that never reports money.
    */
   readonly costNote?: string;
+  /**
+   * `usage not captured` when a reviewer of this round ended before its vendor reported what it consumed
+   * (killed, cancelled, a dropped `api` connection) — the tokens and the cost are then a floor, and a
+   * round with nothing else counted shows no token numbers at all rather than a zero.
+   */
+  readonly usageNote?: string;
   /** How many answered, in the server's own words ("7 of 9 reviewers answered"). */
   readonly answered: string;
   readonly vendors: readonly string[];
@@ -497,8 +503,10 @@ function rowFrom(
     findings: states.length === 0 ? null : states.reduce((sum, s) => sum + s.findings, 0),
     seconds: secondsOf(round, status, nowMs),
     decideSeconds: decideSecondsOf(round.completedUtc, resolvedBy.get(key) ?? ''),
-    tokensIn: round.tokensIn ?? null,
-    tokensOut: round.tokensOut ?? null,
+    // Zero COUNTED beside a reviewer whose usage was never reported is not zero spent: no number then,
+    // the dash every other unknown on this row gets.
+    tokensIn: uncounted(round) ? null : round.tokensIn ?? null,
+    tokensOut: uncounted(round) ? null : round.tokensOut ?? null,
     costUsd: round.costUsd ?? null,
     ...cost,
     answered: round.reviewers,
@@ -602,9 +610,12 @@ function costOf(
   priceOf: PriceOfModel,
   usage: readonly UsageEntry[],
   nowMs: number,
-): Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial' | 'costNote'> {
+): Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial' | 'costNote' | 'usageNote'> {
   const billed = round.costUsd ?? null;
   const lines = linesOf(round, usage, nowMs);
+  // A line whose call ended before its vendor reported usage is UNKNOWN, never priced: its zero tokens
+  // times a listed rate is the `$0` this exists to stop. It leaves the figure a floor instead.
+  const uncaptured = round.usageNote === USAGE_NOT_CAPTURED || lines.some((line) => line.usageNote === USAGE_NOT_CAPTURED);
   let inUsd = 0;
   let outUsd = 0;
   let priced = 0;
@@ -613,7 +624,7 @@ function costOf(
   let tokensOut = 0;
   for (const line of lines) {
     const price = priceOf(line.model, line.provider);
-    if (price === undefined || line.tokensIn === undefined || line.tokensOut === undefined) {
+    if (price === undefined || line.tokensIn === undefined || line.tokensOut === undefined || line.usageNote === USAGE_NOT_CAPTURED) {
       unpriced += 1;
       continue;
     }
@@ -630,14 +641,32 @@ function costOf(
     costOutUsd: nothingPriced ? null : round4(outUsd),
     costTotalUsd: billed ?? (nothingPriced ? null : round4(inUsd + outUsd)),
     costIsEstimate: billed === null && !nothingPriced,
-    costPartial: !nothingPriced && (unpriced > 0 || drifted(round, tokensIn + tokensOut)),
-    // The server's own words for a metered run it could not price — only where there is no figure.
-    ...(billed === null && nothingPriced && lines.some((line) => line.costNote === NO_PRICE_SET) ? { costNote: NO_PRICE_SET } : {}),
+    costPartial: uncaptured || (!nothingPriced && (unpriced > 0 || drifted(round, tokensIn + tokensOut))),
+    // The server's own words for what it could not price — only where there is no figure.
+    ...(billed === null && nothingPriced ? noteOfNoFigure(lines, uncaptured) : {}),
+    ...(uncaptured ? { usageNote: USAGE_NOT_CAPTURED } : {}),
   };
+}
+
+/** Why a round has no figure, in the server's words: an unpriced metered row first, then an uncaptured usage. */
+function noteOfNoFigure(lines: readonly UsageEntry[], uncaptured: boolean): Pick<LogRow, 'costNote'> {
+  if (lines.some((line) => line.costNote === NO_PRICE_SET)) {
+    return { costNote: NO_PRICE_SET };
+  }
+
+  return uncaptured ? { costNote: USAGE_NOT_CAPTURED } : {};
+}
+
+/** Whether a round's zero tokens are a reviewer's unreported usage rather than a count. */
+function uncounted(round: RoundRecord): boolean {
+  return round.usageNote === USAGE_NOT_CAPTURED && !round.tokensIn && !round.tokensOut;
 }
 
 /** What the server writes for a metered run whose row has no rate (`CostText.NoPriceSet`). */
 const NO_PRICE_SET = 'no price set';
+
+/** What the server writes for a call that ended before its vendor reported usage (`CostText.UsageNotCaptured`). */
+const USAGE_NOT_CAPTURED = 'usage not captured';
 
 /**
  * The ledger lines that belong to this round: written while it ran, and of its own stage.
@@ -755,25 +784,33 @@ export function cost3(row: Costed, figure: Money): string {
 
 /** The same thing in words, for the cell's tooltip — the column is narrow and the marks are one character. */
 export function costTitle(row: Costed, figure: Money): string {
+  // The literal, not a constant: this function is embedded in the page by its source text. The choices
+  // below index an array rather than branch, as part always has, so the function stays inside the
+  // complexity limit.
+  const uncaptured = 'A reviewer in this round ended before its vendor reported its usage (killed on its deadline, cancelled, or its connection dropped)';
   if (typeof row.costTotalUsd !== 'number') {
-    return row.costNote
-      ? 'An API reviewer in this round has no price set — give its row a rate per million tokens, or let the published list price it.'
-      : 'No price is listed for these models, so this round has no cost figure.';
+    return [
+      row.costNote
+        ? 'An API reviewer in this round has no price set — give its row a rate per million tokens, or let the published list price it.'
+        : 'No price is listed for these models, so this round has no cost figure.',
+      uncaptured + ', so what it cost is unknown, not zero.',
+    ][Number(row.costNote === 'usage not captured')];
   }
   const how = row.costIsEstimate
     ? 'Worked out from a public price list, not billed.'
     : 'Reported by the vendor.';
   const part = ['', ' Some of it could not be priced, so the total is a floor.'][Number(row.costPartial)];
+  const unknown = ['', ' ' + uncaptured + ', and its share is not in this.'][Number(Boolean(row.usageNote))];
 
   return 'Input ' + figure(row.costInUsd) + ' + output ' + figure(row.costOutUsd)
-    + ' = ' + figure(row.costTotalUsd) + '. ' + how + part;
+    + ' = ' + figure(row.costTotalUsd) + '. ' + how + part + unknown;
 }
 
 /** How a figure is written. Passed IN, never reached for — see the remark on {@link money}. */
 export type Money = (value: number | null | undefined) => string;
 
 /** Just the cost fields, because these three run in the page against plain row objects. */
-export type Costed = Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial' | 'costNote'>;
+export type Costed = Pick<LogRow, 'costInUsd' | 'costOutUsd' | 'costTotalUsd' | 'costIsEstimate' | 'costPartial' | 'costNote' | 'usageNote'>;
 
 /** Which view a row belongs to. The tabs are the two halves of this one predicate. */
 export type LogView = 'rounds' | 'conversations';

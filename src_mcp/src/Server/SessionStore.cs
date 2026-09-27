@@ -199,6 +199,16 @@ public sealed record RoundRecord(
     /// were priced and the total is therefore a floor. Never a zero: an unpriced run is not a free one.
     /// </remarks>
     public string CostNote { get; init; } = string.Empty;
+
+    /// <summary>
+    /// <c>usage not captured</c> when a reviewer of this round ended before its vendor reported what it
+    /// consumed — killed on its deadline, cancelled, or an <c>api</c> call whose connection dropped — else empty.
+    /// </summary>
+    /// <remarks>
+    /// What <c>status</c>, the audit line and the rounds log say beside <see cref="TokensIn"/> and
+    /// <see cref="CostUsd"/>, which are then a FLOOR: the unknown share is not in them, and it is not zero.
+    /// </remarks>
+    public string UsageNote { get; init; } = string.Empty;
 }
 
 /// <summary>What the store persists: the state machine's state plus the human-readable trail.</summary>

@@ -31,6 +31,13 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
     /// <summary>The environment variable the shim reads its bearer key from. The ONE way a key reaches it.</summary>
     public const string KeyVariable = "COAI_API_KEY";
 
+    /// <summary>
+    /// The shim's exit for a call that ENDED before an answer arrived — the endpoint could not be reached,
+    /// the connection dropped, or the shim's own deadline struck (EX_UNAVAILABLE). Declared here, where it
+    /// is READ, and taken by <c>AskApiMode</c>, where it is written, so the two cannot drift.
+    /// </summary>
+    public const int EndedBeforeAnAnswerExit = 69;
+
     public string Provider => id;
 
     /// <summary>This binary, however it was started — see <see cref="LocalRuntime.SelfInvocation"/>.</summary>
@@ -126,6 +133,11 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
     /// answered launch and a failed one alike.</para>
     /// <para>A row with no price is a metered run whose money is unknown: <see cref="Usage.NoPriceSet"/>,
     /// and every surface then says "no price set" rather than $0.</para>
+    /// <para><b>A call that ended before an answer has no usage line, and its usage is UNKNOWN</b> — exit
+    /// <see cref="EndedBeforeAnAnswerExit"/>: a dropped connection or the shim's deadline, after the request
+    /// may already have been read and billed. <see cref="Usage.Unknown"/> then, never zero tokens priced at
+    /// $0. Every other exit without a line — a request the shim refused to send (65), a refusal the vendor
+    /// answered with (75, 77, a non-200 at 70) — consumed nothing a vendor reported, and stays zero.</para>
     /// </remarks>
     public Usage ReadUsage(ReviewerInvocation invocation, ProcessResult result)
     {
@@ -146,7 +158,7 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
         }
         catch (JsonException)
         {
-            return new Usage(0, 0, null, NoPriceSet: !invocation.Price.IsSet);
+            return (result.ExitCode == EndedBeforeAnAnswerExit ? Usage.Unknown : Usage.None) with { NoPriceSet = !invocation.Price.IsSet };
         }
     }
 

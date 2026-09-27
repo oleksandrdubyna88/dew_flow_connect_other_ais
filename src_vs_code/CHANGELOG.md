@@ -51,6 +51,11 @@ reviewer got a key. It now looks there after PATH.
 **A wrong xAI key is reported as a wrong key.** xAI answers a bad key with HTTP 400, which read as a broken
 request; it now says the API refused the key and points at the vault entry.
 
+**A reviewer stopped before its vendor answered is not shown as free.** A reviewer killed at its time limit,
+stopped with the round, whose connection to an API dropped, or whose API answer said nothing about its usage used to be written down as zero tokens — which
+the rounds log then priced as $0. It now says *usage not captured*: in the rounds log, where a round total
+that leaves such a reviewer out is marked as a floor, in coai-mcp's log and in `status`.
+
 **An API reviewer's thinking, effort and time limit are set on its card.** Once coai-mcp reports what the
 reviewer's model accepts, the card shows *thinking* — only where the vendor can switch reasoning off; otherwise
 it says it cannot — *effort*, a list of exactly the levels that vendor takes with the calibrated one marked, and

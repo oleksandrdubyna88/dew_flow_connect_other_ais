@@ -9599,6 +9599,12 @@ An `api` reviewer's response carries tokens and no money, so the SERVER now pric
 - **The rounds log** says `no price set` where a metered reviewer had no rate: `UsageEntry.costNote` is read
   off the ledger line, `costOf` carries it only when there is no figure, and `cost3` / `costTitle` show it —
   never `$0`, and not the dash that means "nobody knows" for a CLI. RED first: `'—'` for `'no price set'`.
+- **The rounds log says `usage not captured`** (2026-09-27) where a reviewer ended before its vendor reported
+  usage: `UsageEntry.usageNote` and `RoundRecord.usageNote` are read, `costOf` never prices such a line (its
+  zero tokens times a listed rate was the `$0.000` a killed grok turn showed), marks the figure a floor
+  (`costPartial`, the `+`), and says `usage not captured` in the cost cell when nothing else was priced; a
+  round whose zero tokens are that note shows no token numbers (`uncounted`); `costTitle` says why.
+  `roundsLogUsageNotCaptured.test.ts` — RED first: `'~$0.000 / $0.000 / $0.000'` for `'usage not captured'`.
 - **Tests.** `modelPrices.test.ts` (the §9.12 key, qwen3.8-max's price with its cached rate, the xAI route with
   its tier, the route map, the fallback), `apiPriceOnTheWire.test.ts` (all three rates and the tier, typed wins,
   no price no field, api rows only, the cached rate saved, the settings file carrying it), `priceBook.test.ts`,

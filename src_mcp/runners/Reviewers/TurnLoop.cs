@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Diagnostics;
+using CoaiMcp.Core.Findings;
 
 namespace CoaiMcp.Runners.Reviewers;
 
@@ -70,7 +71,8 @@ internal sealed class TurnLoop(
         var left = cap - clock.Elapsed;
         if (left <= TimeSpan.Zero)
         {
-            return (new ReviewerOutcome.TimedOut(), TimeSpan.Zero);
+            // Never launched, so it consumed nothing — the one TimedOut whose usage is known to be zero.
+            return (new ReviewerOutcome.TimedOut { Usage = Usage.None }, TimeSpan.Zero);
         }
 
         var started = clock.Elapsed;

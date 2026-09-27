@@ -35,7 +35,7 @@ internal static class AskApiMode
 {
     internal const int Ok = 0;
     internal const int BadRequest = 65; // EX_DATAERR — a known mode refusing its arguments; never 64
-    internal const int Unavailable = 69; // EX_UNAVAILABLE
+    internal const int Unavailable = ApiRuntime.EndedBeforeAnAnswerExit; // 69, EX_UNAVAILABLE — read as "usage not captured"
     internal const int Failed = 70; // EX_SOFTWARE
     internal const int RateLimited = 75; // EX_TEMPFAIL
     internal const int Refused = 77; // EX_NOPERM

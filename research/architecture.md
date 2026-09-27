@@ -87,6 +87,9 @@ fourth gate that reviews a whole FEATURE — changed three things that cross the
   invocation so the PARENT prices each turn from the shim's raw token line — `costUsd` in the ledger, or
   `no price set`, never $0 (it first travelled to the child as `--price-*` flags; epic 3's code round moved
   the arithmetic up). `KeyVault` also finds `creds` in the CredsForDevs extension's folder after PATH.
+  A call that ended before its vendor reported usage — killed, cancelled, a dropped `api` connection — is
+  `usage not captured` on the ledger line, the round record `status` returns, the audit and the rounds log,
+  never 0 tokens or $0 (`Usage.NotCaptured`, 2026-09-27).
   *Since the reviewer-models measurement (2026-09-26, [RESULTS_feature_reviewer_models.md](RESULTS_feature_reviewer_models.md)):*
   a dialect row also names a cache-routing header (`x-grok-conv-id` — each reviewer's conversation key
   travels on every turn, and xAI then serves turn 2 from turn 1's cache), vendor fields no standard name

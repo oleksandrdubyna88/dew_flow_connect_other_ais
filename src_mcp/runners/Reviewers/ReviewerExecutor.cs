@@ -116,7 +116,27 @@ public abstract record ReviewerOutcome
         protected override Usage OwnUsage => Usage;
     }
 
-    public sealed record TimedOut : ReviewerOutcome;
+    /// <summary>
+    /// The launch was killed — on the reviewer's own deadline, or by a cancellation the launcher reports
+    /// the same way (<c>ProcessResult.Cancelled</c>).
+    /// </summary>
+    public sealed record TimedOut : ReviewerOutcome
+    {
+        /// <summary>
+        /// What the killed launch consumed: <see cref="Usage.Unknown"/>, because a process killed before it
+        /// answered never reported its usage — and the vendor may well have read and billed the request.
+        /// </summary>
+        /// <remarks>
+        /// Unknown rather than zero is the plan round's accepted finding on the API-vendor calibration
+        /// branch: <see cref="Usage.None"/> here wrote a killed turn down as <c>0</c> tokens, which a priced
+        /// row then read as $0. <see cref="Usage.None"/> only for a turn that was never LAUNCHED — the
+        /// conversation's cap was already spent (<c>TurnLoop</c>) — which is the one TimedOut that
+        /// consumed nothing, as a fact.
+        /// </remarks>
+        public Usage Usage { get; init; } = Usage.Unknown;
+
+        protected override Usage OwnUsage => Usage;
+    }
 
     /// <param name="Usage">
     /// What the run consumed anyway. An unparseable answer is the one FAILURE whose process

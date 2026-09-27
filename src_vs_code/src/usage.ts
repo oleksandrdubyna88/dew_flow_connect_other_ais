@@ -23,6 +23,13 @@ export interface UsageEntry {
    * a CLI that never reports money, which a null cost alone cannot.
    */
   readonly costNote?: string;
+  /**
+   * `usage not captured` when the call ENDED before its vendor reported what it consumed — killed on its
+   * deadline, cancelled with the round, or an `api` call whose connection dropped; absent otherwise. Its
+   * `tokensIn`/`tokensOut` are then only what was counted before that, usually nothing — and the rest is
+   * UNKNOWN, which a zero priced from a list would render as `$0`.
+   */
+  readonly usageNote?: string;
 }
 
 export type Window = 'day' | 'week' | 'month' | 'year';
@@ -77,6 +84,7 @@ export function parseUsageLine(line: string): UsageEntry | undefined {
       costUsd: typeof parsed.costUsd === 'number' && Number.isFinite(parsed.costUsd) ? parsed.costUsd : null,
       outcome: typeof parsed.outcome === 'string' ? parsed.outcome : 'ok',
       ...(typeof parsed.costNote === 'string' && parsed.costNote.length > 0 ? { costNote: parsed.costNote } : {}),
+      ...(typeof parsed.usageNote === 'string' && parsed.usageNote.length > 0 ? { usageNote: parsed.usageNote } : {}),
     };
   } catch {
     return undefined;
