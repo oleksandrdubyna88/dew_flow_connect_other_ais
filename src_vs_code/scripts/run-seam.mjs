@@ -354,6 +354,41 @@ async function providersIn(extra) {
 
 await sideSeam();
 
+// The SEVENTH leg: an `api` row's per-model settings (S3.8). The panel writes `effort`, `thinking` and
+// `reviewMinutes` on the row only when they differ from the calibrated default, so a field the writer drops
+// is a setting nobody sees go missing: the server runs the default and both suites stay green. What
+// discriminates is the server's EFFECTIVE settings for the row — it can only answer the row's own values if
+// they reached it — read back through the extension's own providers parser, which is what the card draws from.
+async function apiSettingsSeam() {
+  const { parseProviders } = await import('../out/providers.js');
+  const dir = mkdtempSync(join(tmpdir(), 'coai-seam-api-'));
+  const qwen = {
+    id: 'qwen', runtime: 'api', model: 'qwen3.8-max', enabled: true, plan: true, code: true,
+    baseUrl: 'https://dashscope.example.invalid/compatible-mode/v1', executablePath: '',
+    pricePerMillionIn: 0, pricePerMillionOut: 0, dialect: 'dashscope', effort: 'xhigh', thinking: false, reviewMinutes: 35,
+  };
+  writeFileSync(join(dir, 'settings.json'), serverSettingsJson(DEFAULTS, vendorsFrom([qwen]), '9.9.9'), 'utf8');
+  try {
+    const answer = await providersIn({ COAI_DATA_DIR: dir, COAI_VENDORS: '', COAI_PROVIDERS: '', COAI_LOCAL_REASONING_EFFORT: '', COAI_FEATURE_API_REVIEW_MINUTES: '' });
+    const report = parseProviders(JSON.stringify(answer))?.['qwen']?.api;
+    if (report === undefined) {
+      fail(`the server reported no api settings for the row, or the extension could not read them: ${JSON.stringify(answer).slice(0, 400)}`);
+    }
+    const effective = JSON.stringify(report.effective);
+    if (effective !== JSON.stringify({ effort: 'xhigh', thinkingOn: false, reviewMinutes: 35 })) {
+      fail(`the row's settings did not cross the seam — the server runs it with ${effective}`);
+    }
+    if (!report.capabilities.effortLevels.includes('xhigh') || report.refusal.length > 0) {
+      fail(`the module refused what the panel offered: ${JSON.stringify(report)}`);
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
+
+await apiSettingsSeam();
+console.log('  ok  an api row\'s effort, thinking switch and review limit reach the server and come back as what it runs with');
+
 // The SIXTH leg: a real refusal over stdio, its secret taken out, read back by the extension.
 const refusal = await refusalSeam({ serverSession, resolvedFor, answerOf, fail, timeoutMs: TIMEOUT_MS });
 console.log('  ok  a side\'s settings are written and read at the same path, and the root is adopted');

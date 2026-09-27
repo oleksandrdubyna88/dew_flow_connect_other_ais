@@ -38,6 +38,7 @@ import { Escalation } from './escalations';
 import { HELP, HelpKey } from './help';
 import { apiRuntimeSkewNote, DEFAULT_API_DIALECT, dialectChoices } from './apiRuntime';
 import { featureNote, reviewsFeatures } from './featureGate';
+import { apiSettingsFields } from './apiSettingsView';
 import { help, segmentedRadio } from './panelControls';
 import { cadenceBlock } from './cadenceSettings';
 import { CadenceLine, cadenceLinesHtml } from './cadenceLine';
@@ -951,6 +952,8 @@ function reviewersBody(state: PanelState): string {
     // Per card too: a Team server row and an older server switch the feature box off for different
     // reasons, and the card says which (`featureNote`, story S3.3).
     featureNote: featureNote(v, serverVersion),
+    // An api card's per-model settings name the installed server when it is too old for them (S3.8).
+    serverVersion,
   })).join('\n')}
 <button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
 }
@@ -1038,6 +1041,8 @@ interface CardContext {
    * (`vendorsEnv`), so the box and the file agree.
    */
   readonly featureNote: string;
+  /** The installed `coai-mcp`'s version, or empty when absent or unknown — which is not old. */
+  readonly serverVersion: string;
 }
 
 /**
@@ -1181,7 +1186,7 @@ const RATE_SETTING: Readonly<Record<'in' | 'out' | 'cached', string>> = { in: 'I
 function vendorCard(vendor: Vendor, context: CardContext): string {
   const {
     codexModels, cli, price, localEngine, agyModels, allowedRemote, reported, colour, claudeProbe, askingClaude, apiNote,
-    featureNote: featureOff,
+    featureNote: featureOff, serverVersion,
   } = context;
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
@@ -1220,6 +1225,9 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
   const executable = runtimeFields(vendor, id, remote || api);
   const prices = priceFields(vendor, id, local, remote, price, plan, code, off);
   const dialect = api ? dialectField(vendor, id, off) : '';
+  // Thinking, effort and the review limit, from what coai-mcp reported for this row (S3.8); nothing for a
+  // CLI row or a switched-off card.
+  const perModel = apiSettingsFields(vendor, id, reported[vendor.id], serverVersion, off);
   const skew = off ? `<div class="stale">${escapeHtml(apiNote)}</div>` : '';
   // Keyed off whether the PRICE rows came back empty — not off `remote`, and not off whether any
   // runtime field was rendered. A card with nothing to hang the boxes on keeps the row: a Team
@@ -1252,7 +1260,7 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
       vendor.runtime, codexModels, localEngine, agyModels, allowedRemote, claudeProbe, askingClaude ?? false,
     ))}</div>
   </div>
-  ${skew}${stages}${endpoint}${dialect}${executable}${prices}${documentRow}
+  ${skew}${stages}${endpoint}${dialect}${perModel}${executable}${prices}${documentRow}
 </div>`;
 }
 
@@ -3054,6 +3062,9 @@ export const PANEL_COMMANDS = [
   // And by a split-order model picker (issue #117): "another model…" asks for a name. Its id is
   // `<caller kind>:<slot>` — eight pickers share the control.
   'customCommandModel',
+  // An api card's "reset to calibrated default" (S3.8): takes ONE of the row's own settings away, so the
+  // module's default applies again. Its id is `<vendor id>:<setting>` — three resets share the command.
+  'resetApiSetting',
   // Team servers. Each is a button in the section above, and the provider's switch is checked for
   // exhaustiveness — a command added here without a case is a COMPILE error, not a dead button.
   'addTeamServer',

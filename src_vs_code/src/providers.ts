@@ -15,11 +15,19 @@
  * <p>So the panel asks and displays. It does not decide.</p>
  */
 
-/** One vendor, as the server reports it. Only the fields a badge needs. */
+import { apiReportFrom, type ApiReport } from './apiSettings';
+
+/** One vendor, as the server reports it. Only the fields a badge — and an `api` card's settings — need. */
 export interface ProviderHealth {
   readonly provider: string;
   readonly auth: string;
   readonly note: string;
+  /**
+   * For an `api` row: its module's view — what the vendor can be told, what calibration settled, what the
+   * row runs with and why its own settings were refused (S3.8). Absent for a CLI row, and absent from a
+   * server that predates the vendor modules, which is how the card knows to hide the controls.
+   */
+  readonly api?: ApiReport | undefined;
 }
 
 /**
@@ -174,15 +182,23 @@ function oneProvider(row: unknown): ProviderHealth | undefined {
   if (typeof row !== 'object' || row === null) {
     return undefined;
   }
-  const { provider, auth, note } = row as Record<string, unknown>;
+  const { provider, auth, note, api } = row as Record<string, unknown>;
 
   return typeof provider === 'string' && provider.length > 0
     ? {
       provider,
       auth: typeof auth === 'string' ? auth : '',
       note: typeof note === 'string' ? note : '',
+      ...apiOf(api),
     }
     : undefined;
+}
+
+/** An `api` row's report when the server sent one the panel can read — nothing otherwise, never a half. */
+function apiOf(raw: unknown): { api?: ApiReport } {
+  const report = apiReportFrom(raw);
+
+  return report === undefined ? {} : { api: report };
 }
 
 /**

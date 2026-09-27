@@ -93,6 +93,12 @@ fourth gate that reviews a whole FEATURE — changed three things that cross the
   spells (`extraBody`), and a ceiling floor; the shim reads `finish_reason` and never hands the executor a
   fragment; a billed call that failed keeps its tokens through executor and ledger; and xAI's reasoning
   tokens are billed as the output they are.
+  *Since S3.8 (2026-09-27):* each vendor is a module behind `IApiVendor` that declares what it can be told
+  and what calibration settled; `--providers` reports it per `api` row (`api`: capabilities, defaults,
+  effective, refusal, note), the panel draws the row's thinking switch, effort dropdown and review limit
+  from that report alone, and the row carries `effort` / `thinking` / `reviewMinutes` on the wire only when
+  they differ from the default — held back for a server known to be older than 0.40.0, which ignores them
+  ([module_extension.md](module_extension.md), *An api reviewer's own settings on its card*).
 - **The settings file now depends on the installed server's version.** An older coai-mcp turns a
   runtime it does not know into `codex` WITH the row's base URL — a Grok row would ride the Codex CLI
   against xAI's endpoint under its own name. So the extension threads the installed server version

@@ -1,4 +1,5 @@
 import { apiRuntimeOnServer, DEFAULT_API_DIALECT } from './apiRuntime';
+import { apiSettingsOnTheWire, storedApiSettings } from './apiSettings';
 import { featureOnServer, reviewsFeatures } from './featureGate';
 import { ModelPrice } from './modelPrices';
 import { Runtime, RUNTIMES } from './models';
@@ -122,6 +123,15 @@ export interface Vendor {
    * (PLAN_feature_review.md §4.10) — never typed from documentation.</p>
    */
   readonly dialect?: string | undefined;
+  /**
+   * For an `api` row: what a person set over the module's calibrated defaults (S3.8) — a reasoning effort in
+   * the vendor's own spelling, the thinking switch, and the whole-review limit in minutes. Each absent means
+   * the default, which is the point: a value equal to the default is never stored, so the row keeps
+   * following the next calibration. `coai-mcp` reads the same three names off the row and validates them.
+   */
+  readonly effort?: string | undefined;
+  readonly thinking?: boolean | undefined;
+  readonly reviewMinutes?: number | undefined;
 }
 
 /** The model an Antigravity row starts on: flash at high effort, the CLI's own active model. */
@@ -358,6 +368,8 @@ export function vendorsFrom(value: unknown): Vendor[] {
       // Both only when said, like `dialect`: `coai.vendors` is JSON a person reads (S3.6, S3.7).
       ...(rate(v['pricePerMillionCached']) > 0 ? { pricePerMillionCached: rate(v['pricePerMillionCached']) } : {}),
       ...keyField(v),
+      // An api row's per-model settings (S3.8), each only when SAID, like the fields above.
+      ...storedApiSettings(v),
     }))
     .filter((v) => v.id.length > 0)
     .map(migrateRetired);
@@ -645,6 +657,8 @@ export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = 
         ...saidOnTheWire(v),
         ...featureOnTheWire(v, installedServerVersion),
         ...apiOnTheWire(v, priceOf),
+        // The three per-model settings (S3.8): an api row's own, and never to a server known to predate them.
+        ...apiSettingsOnTheWire(v, installedServerVersion),
       })),
   );
 }

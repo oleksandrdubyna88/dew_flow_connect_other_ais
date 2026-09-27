@@ -7,7 +7,7 @@
 > and the vendor MODULES (one class per vendor behind `IApiVendor`, the server half of S3.8) with them;
 > epic 2 (S2.1–S2.3) built; epic 3 has S3.1, S3.2, S3.3 (all but the
 > promotion), S3.4, S3.6 and S3.7 built with §9.10–12 fixed, and §9.16–22 (epic 3's code round, 2026-09-27) fixed;
-> S3.5, S3.8's extension half and the releases open. Scope: `src_mcp` (core, normalizer,
+> S3.8's extension half built 2026-09-27 (`feat/feature-review-s38-settings-ui`); S3.5 and the releases open. Scope: `src_mcp` (core, normalizer,
 > runners, server, store), `src_vs_code` (panel, roles, rounds log, help, snippet), `src_server`
 > (one exclusion only), `shared/`, `.agents/PROJECT.md`.
 >
@@ -1323,7 +1323,7 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
     cached rate; a request over the tier threshold uses the tier rate; no price → "no price set".
   - Model: **Opus**.
 
-- [ ] **S3.8 — per-model settings in the UI (operator, 2026-09-27). Plan only for the extension half; the server half is built.**
+- [x] **S3.8 — per-model settings in the UI (operator, 2026-09-27). Both halves built.**
   Goal: per `api` row in the panel, a person sets what the vendor can be told — **thinking on/off** where the
   vendor has a switch, the **reasoning effort** from a dropdown of THAT vendor's own levels, and the **maximum
   processing time** (the whole-review limit) — each defaulting to what calibration settled for the model, with a
@@ -1344,7 +1344,28 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
     consultation's catch, glm-5.2 documenting a switch and a level glm-5.3 has not) — values and names only, never
     a key. RED first (`AnApiRowIsSettableTests`: nine of eleven red before the wiring). Goldens
     (`ApiVendorGoldensTests`) pinned the measured rows' wire behaviour before the refactor and passed unchanged after.
-  - **Open — the extension half** (a separate agent, after this branch merges): on each `api` row of the
+  - **Built 2026-09-27 (the extension half, `feat/feature-review-s38-settings-ui`)** —
+    [module_extension.md](../research/module_extension.md), *An api reviewer's own settings on its card*.
+    `apiSettings.ts` (the report's parse, the row's three fields, the wire, the write) and `apiSettingsView.ts`
+    (the block on the card), read off `ProviderHealth.api`. Deviations from the text below: (1) **one reset per
+    value the row set**, drawn only while it sets one — the `resetApiSetting` command, id `<vendor>:<setting>` —
+    rather than one reset for the block; (2) a module that declares **no** levels (the generic one) gets no
+    dropdown but a sentence, and its minutes field stays; (3) "equal to the default" is decided by the HOST
+    against the last `providers` report (`withApiSetting`), and a value the module does not take — an undeclared
+    effort, thinking off without a switch, a limit outside 1–1440 minutes (the panel's cap; the server has none)
+    — is refused and the control snaps back; (4) **`API_SETTINGS_SINCE = '0.40.0'`**: the writer holds the three
+    fields back for a server KNOWN to be older, the FEATURE_SINCE precedent, while the card hides its controls by
+    the report's ABSENCE (with a sentence naming the release), never by a version guess; (5) the card also says
+    what coai-mcp RUNS the row with (`effective` — the environment can outrank the row); (6) qwen's `none` stored
+    as an effort draws the thinking switch off. **§4.13 rows, measured 2026-09-27** by
+    `scripts/live-api-settings-compat.mjs` against released coai-mcp **0.39.0** and extension **0.57.0**, 16 of
+    16: 0.39.0 answers `--providers` identically (the clock aside) with and without the three fields and reports no `api`;
+    held back for a known 0.39.0 with every row crossing; a rollback to 0.57.0 keeps every row and drops the three
+    fields (a release note — its next save forgets them); this server returns the row's values as `effective`, an
+    undeclared effort as its refusal. `npm run test:seam` gained the leg (watched red with the wire line removed).
+    NOT covered: the host's write and reset in `panelProvider.ts` (thin wiring over the tested pure functions —
+    an extension host is the standing gap).
+  - **The extension half as planned** (a separate agent, after this branch merges): on each `api` row of the
     vendors card, (a) a thinking toggle shown only when `capabilities.thinkingSwitchable`; (b) an effort dropdown
     whose options are exactly `capabilities.effortLevels` (never a list typed in the extension), with the off
     level shown as the toggle rather than as an option; (c) a "max review time (minutes)" field; each control
