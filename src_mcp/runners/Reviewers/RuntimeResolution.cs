@@ -14,9 +14,18 @@ namespace CoaiMcp.Runners.Reviewers;
 /// is <c>&lt;server&gt;-&lt;vendor&gt;</c> so two servers offering the same vendor do not collide.
 /// Empty falls back to <paramref name="Provider"/>, which is also what every non-remote vendor uses.
 /// </param>
+/// <param name="KeyName">
+/// The name this vendor's key is filed under in the vault, when it is not <paramref name="Provider"/> —
+/// a second model on one key (PLAN_feature_review.md S3.6). Here because the auth answer is the one
+/// that NAMES it: a row keyed to <c>qwen</c> whose key is missing must send a person to <c>qwen</c>,
+/// not to its own id. Empty falls back to the id, as every row written before it did.
+/// </param>
 public readonly record struct VendorIdentity(
-    string Provider, string Runtime, string BaseUrl, string RemoteVendor = "")
+    string Provider, string Runtime, string BaseUrl, string RemoteVendor = "", string KeyName = "")
 {
+    /// <summary>The vault name this vendor's key is looked for under — coalesced for the record-struct reason <see cref="VendorOnServer"/> gives.</summary>
+    public string VaultName => string.IsNullOrWhiteSpace(KeyName) ? Provider ?? string.Empty : KeyName.Trim();
+
     /// <summary>
     /// The recorded name with its edges removed — the only form worth asking a question about.
     /// </summary>
@@ -155,7 +164,7 @@ public static class RuntimeResolution
             : NameOf(vendor) == "local"
                 ? ("own auth", "a local engine needs no key — it is reached over HTTP on this machine")
                 : vendor.BaseUrl.Length > 0 || vendor.Provider is "deepseek"
-                    ? ("unavailable", $"needs a key under '{vendor.Provider}' and the vault holds none — see the creds config entry")
+                    ? ("unavailable", $"needs a key under '{vendor.VaultName}' and the vault holds none — see the creds config entry")
                     : ("own auth", "the CLI's own sign-in is used");
 
     /// <summary>
@@ -204,7 +213,7 @@ public static class RuntimeResolution
     /// </remarks>
     private static (string Auth, string Note) ApiAuthOf(VendorIdentity vendor, bool hasVaultKey) =>
         !hasVaultKey
-            ? ("unavailable", $"needs a key under '{vendor.Provider}' in the vault and it holds none — see the creds config entry")
+            ? ("unavailable", $"needs a key under '{vendor.VaultName}' in the vault and it holds none — see the creds config entry")
             : vendor.BaseUrl.Length == 0
                 ? ("unavailable", $"'{vendor.Provider}' has no base URL — an api vendor needs the OpenAI-compatible endpoint it is reached at")
                 : ("vault key", "");

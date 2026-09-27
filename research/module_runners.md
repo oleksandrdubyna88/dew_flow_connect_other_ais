@@ -50,9 +50,13 @@ sequenceDiagram
 | `CommittedFile.ReadAtAsync` | `Collecting/CommittedFile.cs` | the read without the commit check, for a caller that pinned the commit itself; `ReadAsync` is this after checking |
 | `IReviewerRuntime`: `CodexRuntime`, `DeepseekRuntime`, `GeminiRuntime`, `ClaudeRuntime`, `AntigravityRuntime`, `CustomCodexRuntime` | `Reviewers/ReviewerRuntime.cs`, `ClaudeRuntime.cs`, `CustomRuntime.cs` | THE vendor adapter: `Build` (argv, pure) + `ReadAnswer` + `ReadUsage`, the last two with working defaults. Flags verified against codex 0.147.0 / gemini 0.55.1 / claude 2.1.197 / agy 1.1.22; keys ride env, never argv; DeepSeek = Codex config-shifted. **An adapter records on the invocation what it LAUNCHED** — `Model:` always, `Effort:` where it actually passed a reasoning flag (only `LocalRuntime` does) — which four of six adapters silently did not until 2026-09-12, issue #129; `EveryAdapterRecordsWhatItLaunchedTests` drives every adapter's own `Build` rather than a hand-made invocation, because the test it replaces built the value it asserted. `ReviewerSettings.Confined` ("handed everything in its prompt, may reach nothing else") makes `ClaudeRuntime` extend `--disallowedTools` to every tool that reaches past the prompt — flag re-read on claude 2.1.258; codex and antigravity take no new flag, their sandboxes are already the strongest each offers |
 | `ReviewerRuntimeSelector` | same | unknown provider refuses naming the catalog |
-| `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit`, `ReviewerLaunch` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair **inside ONE deadline** (2026-09-08: the repair used to carry a whole second budget, so a reviewer could take twice its setting — measured at 668.8 s against ten minutes, reporting `ok`); SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired. **`LaunchAsync` is the public half**: launch → classify → the vendor's RAW answer + usage, with the parse left to the caller |
+| `ReviewerOutcome` (closed), `ReviewerExecutor`, `RateLimit`, `ReviewerLaunch` | `Reviewers/ReviewerExecutor.cs` | one launch + one repair **inside ONE deadline** (2026-09-08: the repair used to carry a whole second budget, so a reviewer could take twice its setting — measured at 668.8 s against ten minutes, reporting `ok`); SIX named outcomes incl. NotStarted; `Ok` carries the run's `Usage`, both launches counted when repaired — and a repair whose OWN launch fails carries the malformed first attempt's usage on the failure's `EarlierLaunches` (2026-09-26, the section *A failed repair still counts the malformed attempt*); `LastTurnUsage` and `TotalUsage` on the BASE are the one answer to what a turn and a conversation cost, for the ledger and the round total alike. **`LaunchAsync` is the public half**: launch → classify → the vendor's RAW answer + usage, with the parse left to the caller |
 | `Usage`, `UsageParser` | `core/Findings/UsageParser.cs` | schema-less scan over any vendor envelope; MAX per key name then sum per category, so a streamed cumulative total is never summed with itself; money only when the vendor priced the run |
-| `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below |
+| `BoundedScheduler`, `ReviewerWork`, `ReviewerSummaryFactory` | `Reviewers/BoundedScheduler.cs` | global + per-provider semaphores; a rate limit climbs the ladder below; a launch is the reviewer's whole CONVERSATION (`ReviewerWork.Continue`, S3.2 — the section at the end), one terminal outcome either way |
+| `IReviewerContinuation`, `TurnDecision`, `ReviewerContinuation.None`, `TurnUsage` | `Reviewers/ReviewerContinuation.cs` | the seam a stage plugs a conversation into: after each answered turn, the next turn's whole work (launch AND repair) or a stop; `None` is every stage but one |
+| `TurnLoop` | `Reviewers/TurnLoop.cs` | the loop inside the held slot: the ladder per turn, each turn under its own deadline and the whole under `timeout × (1 + follow-ups)`, every answered turn's usage on the outcome's base |
+| `SourceTurns`, `SourceConversation` | `Feature/SourceConversation.cs` | the feature stage's continuation: serves the requests through the round's one resolver, renders the tail, stops on no request, the cap or the spent budget; immutable across turns |
+| `RepairInstruction` | `Reviewers/RepairInstruction.cs` | the repair launch's closing paragraph — one text, appended to whichever prompt the launch it repairs was given |
 | `VendorIdentity`, `RuntimeResolution` | `Reviewers/RuntimeResolution.cs` | the ONE answer to "what is this vendor": which runtime it drives, the adapter for it, and how it authenticates — asked by both binaries, after two incidents where a second copy of it was the one that was wrong |
 | `VendorHealth`, `VendorProbe` | `Reviewers/VendorProbe.cs` | the `--version` health probe behind `providers` and the Team server's catalog; a retired runtime is answered BEFORE the probe, a local engine instead of it, and a CLI that never answers says so rather than reporting the kill's exit code |
 | `RemoteRuntime` | `Reviewers/RemoteRuntime.cs` | the adapter for a vendor whose reviews run on a **Team server**: builds `--ask-remote` against THIS binary (the `LocalRuntime` shim shape), carries no `SharedResource` because the server owns the queue, and holds the cancel-an-abandoned-job half (`Claim` / `ReadClaimAsync` / `CancelAbandonedAsync`) |
@@ -1100,6 +1104,31 @@ a fresh launch — met the same denial.
 repair; its answer is parsed like any repair's. On the real CLI the continued conversation answered with the
 schema's JSON in turn 2. A Team-server reviewer is not covered — its conversation lives on the server (#515).
 
+## A failed repair still counts the malformed attempt (2026-09-26)
+
+Found by the epic 3 risk consultation (159f0397) and verified against the code. `RunAsync` returned the
+repair's terminal outcome — `TimedOut`, `NonZeroExit`, `RateLimited`, `NotStarted` — exactly as the launch
+produced it, and the FIRST attempt's usage went nowhere: a process that ran to completion and reported what it
+consumed, whose only fault was an answer that would not parse, was filed as free on the outcome, in the ledger
+and in the round's total. A repaired reviewer had counted both launches since 2026-09-01 and a second
+unparseable answer since the same day; the repair that failed on its own launch was the third ending and the
+one nobody had billed. Every stage repairs the same way, and the turn loop repairs each turn the same way, so
+a turn whose repair timed out lost that turn's first attempt too.
+
+`ReviewerOutcome` carries **`EarlierLaunches`** on the base (`Usage`, `None` by default): what this turn's
+earlier launches consumed before the ending the outcome describes. `RunAsync`'s tail is `AfterTheRepair`, and
+its failure arm returns `failed with { EarlierLaunches = first.Usage.Add(second.Usage) }` — the first
+attempt's, plus whatever the repair's own launch reported before it failed. **`LastTurnUsage`** on the base is
+`EarlierLaunches + OwnUsage` (the latter a protected virtual: `Ok`'s and `Unparseable`'s `Usage`, nothing for a
+run that never finished) and **`TotalUsage`** is `EarlierUsage + LastTurnUsage`; both moved off `Ok` and
+replaced the two switches that used to answer the same question in `UsageLedger.Record` and
+`LiveRound.Finish` — one member, so the next ending cannot be missed by one of them. The rate-limit ladder
+carries it forward too: a step whose repair was rate limited is left behind with its malformed first launch
+on `LastTurnUsage`, and the next step's outcome takes it onto its own `EarlierLaunches`, so a reviewer that
+climbed three steps and was refused three times reports three attempts' worth. What is NOT covered: a
+cancellation that lands during the repair — the launcher throws, there is no outcome to carry it on, and the
+scheduler's abandoned `NotStarted` keeps only the earlier TURNS.
+
 ## The local reviewer stands down after a quiet cloud (2026-09-24, issue #485)
 
 Behind `COAI_STOP_LOCAL_WHEN_QUIET` (off by default). `BoundedScheduler.RunAllAsync(..., StandDown? standDown)`:
@@ -1150,7 +1179,8 @@ executor looks. Not `CustomCodexRuntime`, for the reason the local runtime is no
 is 21k tokens before any review content, and it sends fields a hosted reasoning model refuses.
 
 - **The key travels in the child's ENVIRONMENT and nowhere else.** `ApiRuntime.Build` puts
-  `ReviewerSettings.ApiKey` (composed by `PanelService` from the vault under the row's id) into
+  `ReviewerSettings.ApiKey` (composed by `RosterBuilder` from the vault under the row's KEY NAME —
+  `ProviderSettings.KeyName`, its id unless the row names another, S3.6) into
   `ProcessRequest.Environment["COAI_API_KEY"]`; argv carries the vendor, the endpoint (`OpenAiBaseOf`),
   the model, the dialect, the prompt/schema/answer files, the derived deadline (`ShimDeadlineSeconds`),
   the token ceiling and the effort — never the key. `ApiRuntimeTests` asserts no argv element carries it;
@@ -1197,6 +1227,50 @@ is 21k tokens before any review content, and it sends fields a hosted reasoning 
   or no key under the vendor. Teeth: with the redaction removed the stub's echoed `Authorization` reached
   stdout and two tests went red. **Not yet run against a real endpoint** — the vault was not configured on
   the build machine (`--providers` → `vaultNote: "no COAI_CREDS_KEY configured"`, 2026-09-25).
+
+## An api turn is priced by the shim, from the row's rates (2026-09-26, PLAN_feature_review S3.7)
+
+An OpenAI-compatible response reports tokens and no money, and an `api` row is billed per token by its
+key's vendor — so its cost is worked out here, from the rates the row carried.
+
+- **The price rides with the row, then with the launch.** `ProviderSettings.Price` (a `TokenPrice`, core
+  `core/Findings/TokenPrice.cs`: in / cached / out per million, plus an optional long-context tier)
+  reaches `ReviewerSettings.Price` in `RosterBuilder`; `ApiRuntime.Build` appends `TokenPrice.AsFlags()` —
+  `--price-in --price-cached --price-out [--tier-from --tier-in --tier-cached --tier-out]` — and nothing at
+  all for an unpriced row. A price is not a secret, so argv is fine for it; the key stays in the
+  environment (`The_price_goes_to_the_shim_and_the_key_still_only_through_the_environment`).
+- **Per turn, in the shim.** `AskApiMode` reads the flags back (`TokenPrice.FromFlags`) and prints
+  `"costUsd"` beside the tokens (`AskApiMode.UsageLine`) — `(in − cached)·pIn + cached·pCached + out·pOut`,
+  at the tier's rates once THAT request's prompt reaches the threshold (xAI doubles every rate from 200K).
+  The shim is the one place holding one request's tokens and the rates together, which is why a feature
+  reviewer's conversation is priced turn by turn and never on its sum. A row with no cached rate prices
+  cached tokens at the input rate — the list did not say, and zero would under-report.
+- **No price is "no price set", never $0.** `ApiRuntime.ReadUsage` takes `costUsd` when the line has one and
+  otherwise marks `Usage.NoPriceSet` (a metered run whose money is unknown; false for every CLI, which was
+  never going to report money). `UsageLedger` writes `costNote: "no price set"` beside `costUsd: null`;
+  `RoundAudit` writes it through `CostText.Of`; `LiveRound` puts it on `RoundRecord.CostNote`, which
+  `status` returns ([module_server.md](module_server.md#configuration-and-keys)).
+- **Tests.** `AnApiReviewerIsPricedAndKeyedTests` — the arithmetic (cached rate, the tier on both sides of
+  200K, no cached rate, no price), the flags round trip, and two turns through the REAL `coai-mcp --ask-api`
+  binary with the adapter's argv and environment: a priced row writes `costUsd` 0.17 to the ledger for
+  100 000 in / 60 000 cached / 10 000 out at xAI's 2.00 / 0.50 / 6.00; an unpriced row writes
+  `costUsd: null` and `costNote: "no price set"`. Teeth: with `..settings.Price.AsFlags()` removed from
+  `ApiRuntime.Build`, `Expected usage.CostUsd to approximate 0.17 … but it was <null>`, and the argv test
+  and the roster test went red with it.
+
+## A 400 that says the key is wrong is a key refusal (2026-09-26, PLAN_feature_review §9.11)
+
+xAI answers a wrong key with **400**, not 401 — `{"code":"Client specified an invalid argument","error":
+"Incorrect API key provided: …"}`, observed by the S0.5 probe's `wrong_key` case — so `AskApiMode` reported
+a revoked Grok key as a malformed request (exit 70, the body quoted). `AskApiMode.SaysTheKeyIsWrong` now
+sends a 400 down the 401/403 arm — exit **77**, "the API refused the key for vendor '<id>'", the body NOT
+quoted — when the body's own ERROR field (`error` as a string, or `error.message` / `error.code`) says
+*incorrect api key*, *invalid api key* or `invalid_api_key`. General rather than xAI-only because the test is
+narrow enough to be safe for every dialect: the phrase is never searched in the whole body, so a 400 that
+echoes the request back — and a review of this very file carries the phrase — stays a failed request
+(`A400_about_anything_else_stays_a_failed_request_even_when_it_quotes_the_phrase_elsewhere`). RED first:
+`Expected code to be 77 … but found 70`, stderr `answered HTTP 400: {… "Incorrect API key provided: Bearer
+[redacted] …}`.
 
 ## The feature outline is built from git objects, bounded before a byte is read (2026-09-26, PLAN_feature_review S2.2a)
 
@@ -1365,11 +1439,21 @@ two protections (S3.1) are applied there as well — the pack goes to the same t
   carrying a secret reached the reviewer (`ThePackWithholdsCredentialsTests`, red with the secret in the
   pack).
 - **Content passes `Redaction.SafeSource`.** A blob's text is redacted BEFORE it is outlined, so a
-  secret in a default argument or an initialiser never reaches a signature; each placed hunk line is
-  redacted after its marker, so the `+`/`-`/` ` and the head line number are kept. The redaction keeps
+  secret in a default argument or an initialiser never reaches a signature; the placed hunk lines are
+  redacted after their markers, so the `+`/`-`/` ` and the head line number are kept. The redaction keeps
   every line break, so the outline's spans and the hunks' `@@ +N @@` are still the file's. A file whose
   redaction gave up (it fails closed with `[redacted]` for the whole text) is named as withheld rather
   than outlined as the placeholder.
+  **The hunk lines go through it TOGETHER, and then against the file's own redaction**
+  (`FeatureOutlineBuilder.SafeHunks`, 2026-09-27, epic 3's code round): a private-key block spans lines
+  and its body lines carry no header of their own, so redacted one line at a time a hunk showing a whole
+  block lost only the header's first word — and a three-line hunk in the MIDDLE of a nine-line body shows
+  no marker at all, nothing a pass over the hunk can see. The file's redaction knows where the block is: a
+  hunk line standing at a head line the file's redaction withheld whole is withheld here too, in the file's
+  own placeholder (a deleted line sits at the head line that follows it and takes that line's fate). No
+  pass crosses a line break, so the count comes back as it went; a redaction that could not finish
+  withholds every hunk line rather than serving any.
+  (`APrivateKeyBlockIsNeverServedTests.AHunkInsideAKeyBody_WithNoMarkerInView_IsWithheldFromThePack`.)
 - **`StageRules.Feature`** (`runners/Context/StageRules.cs`) — the feature stage's rules tier, collected
   at the full `RuleFiles.DefaultBudgetBytes` (D18): the code review's order (the language doctrines,
   security, testing, reuse, style, the knowledge base) and then the rules a feature breaks ACROSS
@@ -1378,3 +1462,91 @@ two protections (S3.1) are applied there as well — the pack goes to the same t
 - **The composer's hunk reserve** (`FeatureBudget.HunkReserveBytes`, the core's half — see
   [module_core.md](module_core.md)) changes what the builder's section holds on a wide range: the
   consultant 41 → 278 hunks, the S8 notices 0 → 302, every section still under 168 KB.
+
+## One reviewer, one conversation, one terminal outcome — the turn loop (2026-09-26, PLAN_feature_review S3.2)
+
+A feature reviewer that asks for source is served it and asked again, inside the slot it already holds.
+The scheduler owns the LOOP and knows nothing about source or prompts; the stage owns what a turn IS.
+
+```mermaid
+sequenceDiagram
+  participant B as BoundedScheduler (slot held)
+  participant L as TurnLoop
+  participant E as ReviewerExecutor (ladder per turn)
+  participant C as IReviewerContinuation
+  participant R as SourceResolver (one per round)
+  B->>L: RunAsync(work) — cap = timeout × (1 + FollowUps)
+  loop turn k
+    L->>E: RunWithLadderAsync(work bounded by min(own timeout, cap left))
+    E-->>L: Ok | TimedOut | NonZeroExit | …
+    alt not Ok
+      L-->>B: outcome with EarlierTurns — one terminal failure
+    else Ok
+      L->>L: EarlierTurns += (k, usage, elapsed) — before anything else can fail
+      L->>C: AfterAsync(k, ok)
+      C->>R: ServeAsync(requests, spent)
+      R-->>C: ServedTurn (served, refused, spent)
+      C-->>L: Next(work: base + tail, its repair, a new continuation) | Stop(why)
+      alt Stop
+        L-->>B: Ok with Turns, Served, EarlierTurns (the last turn taken back off)
+      else Next
+        L->>B: progress "running" — "turn k answered; asking turn k+1 — served …"
+      end
+    end
+  end
+```
+
+- **`IReviewerContinuation`** (`Reviewers/ReviewerContinuation.cs`) is the seam: `FollowUps`, and
+  `AfterAsync(turn, ok, ct)` → `TurnDecision.Next(work, note)` or `Stop(why)`. `ReviewerWork.Continue`
+  defaults to `ReviewerContinuation.None` (a single turn — every stage but the feature review, and the
+  feature review under `COAI_FEATURE_SOURCE_FOLLOWUPS=0`). It answers a whole `ReviewerWork` — launch AND
+  repair — because the repair of turn N must be composed from turn N's own prompt. Nothing about it needs
+  the scheduler: a caller holding no slot could ask the same question after each launch, which is the
+  shape the plan-round consultation asked about, and the reason the loop is its own class.
+- **`TurnLoop`** (`Reviewers/TurnLoop.cs`) runs inside `LaunchAsync`, so the slot is held for every
+  turn, the rate-limit ladder runs per turn (a 429 on turn 2 retries turn 2), the per-provider peak never
+  rises for a second turn, and the stand-down count — which reads the ONE `Outcome`-carrying progress
+  report — moves once. Each turn runs under its own deadline (the invocation's, set by the roster to the
+  reviewer timeout) and the conversation under `timeout × (1 + FollowUps)`; a turn that times out or a
+  cap that is reached is one terminal `TimedOut`: every turn's usage on it, the earlier turns' findings
+  discarded (a failed later turn is a failed reviewer — standing on findings made while waiting for
+  source could give a false proceed), the slot released by the scheduler's `finally`. No new outcome
+  subtype: `ReviewerNotices.ByType` and its census are untouched.
+- **Usage survives a failed later turn.** `ReviewerOutcome.EarlierTurns` (`IReadOnlyList<TurnUsage>`,
+  on the BASE) carries every answered turn out on whatever ends the reviewer — a timeout, an exit, an
+  unparseable answer, the round's cancellation (the scheduler's catch reads `loop.Earlier`). An answered
+  turn is added BEFORE the continuation serves anything, so a cancellation while serving keeps it —
+  and what is added is the turn's `LastTurnUsage`, every launch of it, not `Usage` (the answering
+  launch's alone): a turn whose first launch answered junk and whose repair was rate limited carries
+  that billed first launch forward on the ladder's retry as `EarlierLaunches`, and recording `Usage`
+  dropped it from the turn's ledger line and the round total whenever the turn CONTINUED (found by
+  epic 3's code round, 2026-09-27; `AContinuingTurnsEarlierLaunches_AreOnItsLedgerLine_AndInTheRoundTotal_Once`,
+  red with `1000L` where 1700 was owed). `Ok`
+  gained `Turns`, `Served` (one line per follow-up: `turn 2: served src/Shop.cs Sell (17-21 of 22); not
+  served …`); its `Usage` stays the LAST turn's. `TotalUsage` lives on the BASE since 2026-09-26, beside
+  `LastTurnUsage` and `EarlierLaunches` (a failed repair's malformed first attempt — *A failed repair still
+  counts the malformed attempt* above). `UsageLedger.Record` writes one line per turn from these — the
+  terminal line with the last turn's own seconds and `LastTurnUsage` — and `LiveRound.Finish` adds each
+  reviewer's `TotalUsage` into the round's total. The reviewer's note on the round record reads `N turns; source: …` when
+  there was more than one turn, and is what it always was otherwise.
+- **`SourceConversation`** (`Feature/SourceConversation.cs`) is the feature stage's continuation:
+  immutable across turns (each `Next` carries a NEW instance with the spend, every slice served so far,
+  and whether the tail said FINAL — two reviewers of one round share the resolver and never a spend).
+  It stops on no request (valid or refused), after a FINAL turn (the cap: `turn ≥ 1 + FollowUps`), and
+  marks the next turn FINAL when `ServedTurn.Exhausted` — the budget. The tail is `TurnTail.Render`
+  ([module_core.md](module_core.md)); `buildTurn(tail)` is the roster's composer, `base + tail` for the
+  launch and `repairBase + tail + RepairInstruction.Text` for the repair, so the base is byte-identical
+  across turns (D25) and the repair is that turn's. `SourceTurns` (`Off` | `On(resolver, followUps)`) is
+  how the stage hands it in. **`RepairInstruction.Text`** moved out of the roster for this: one text,
+  used by both composers.
+- **A resolver failure is a refusal, never an exception out of the turn.** `SourceResolver` reads each
+  file under its own `ReadDeadline` (30 s; a constructor argument for tests): a read the deadline ends is
+  `not served: path — timed out: git did not answer within 30 s; ask again next turn`, a launcher that
+  throws is `git could not read it just now; ask again next turn`, and both are transient — not kept in
+  the round's cache, so the next turn asks git again. The round's own cancellation still propagates. A
+  slice refused for the REVIEWER's cap carries `OverReviewerCap`, which is what makes the budget a stop.
+- **Cached tokens per turn.** `ApiRuntime.ReadUsage` reads `tokensCached` off the shim's line,
+  `LocalAsk.ReadResponse` reads `prompt_tokens_details.cached_tokens` for it, `ClaudeRuntime` names
+  `cacheReadInputTokens` as the cached subset beside counting it as billed input, `UsageParser` reads
+  codex's `cached_input_tokens`; `RoundAudit`'s answered line says `over N turns`, `(N cached)` and
+  `source: …`. That number, per turn, is what decides whether C3 gets its own plan (D25).

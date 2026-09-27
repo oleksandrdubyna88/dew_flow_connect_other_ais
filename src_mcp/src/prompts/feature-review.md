@@ -8,7 +8,10 @@ pitfalls, blockers and findings, the gate's history of this work (what earlier r
 why), the project's written rules, and an OUTLINE of every file the feature changed — real names and
 signatures with their line numbers at head, no bodies, and the members that changed marked. You are
 not given the code. Ask for it: a member you cannot judge from its signature is one you request by
-name, through `sourceRequests`, and nothing you would have to guess about should be guessed.
+name, through `sourceRequests`, and nothing you would have to guess about should be guessed. What you
+ask for is served in a follow-up turn, up to the cap the section "What you have" states, read from the
+commit under review; a request that cannot be served says why. Each turn's answer is COMPLETE on its
+own — only your last one counts — so every finding you still stand by is repeated in it.
 
 Review the feature as a WHOLE, in this order:
 
@@ -43,6 +46,12 @@ A defect you find plausible but cannot show a trigger for is `minor`, not `major
 category does not raise the severity of a finding whose consequence is small; and a seam you SUSPECT
 but have not confirmed against the source is a request for that source, not a finding. Three real
 findings beat twelve padded ones, and an empty findings list is a valid answer.
+
+Severity also decides how many times this feature is read. A feature review has at most two rounds,
+and the second runs only when round 1 had a reviewer failure, a `blocking` finding came back, or the
+person asks for one; otherwise the implementer decides every finding, lands the accepted fixes, and no
+second review reads them. So `blocking` is the one severity that buys a second look at the fix —
+reserve it for what must not ship — and a `major` is acted on without one.
 
 Do NOT report: what an earlier round already rejected with a reason you cannot refute (the history
 says which); a convention the project never wrote down; a preference about how you would have split

@@ -227,6 +227,44 @@ public sealed class AskApiModeTests : IDisposable
     }
 
     [Fact]
+    public async Task A400_that_says_the_key_is_wrong_is_the_same_refusal_as_a_401()
+    {
+        // xAI's own answer to a wrong key, measured by S0.5's probe (`wrong_key`) on 2026-09-26: a 400,
+        // not a 401 — so a revoked Grok key read as "the request was malformed" (§9.11).
+        _stub.Answers = seen => new ApiEndpointStub.Answer(
+            400, "{\"code\":\"Client specified an invalid argument\",\"error\":\"Incorrect API key provided: "
+                 + seen.Authorization + ". You can obtain an API key from https://console.x.ai.\"}");
+
+        var code = await RunAsync();
+
+        code.Should().Be(77, $"stderr said: {Stderr}");
+        Stderr.Should().Contain("refused the key for vendor 'grok'").And.Contain("HTTP 400");
+        Stderr.Should().NotContain("Incorrect API key", "a key refusal's body is not quoted, whatever its status");
+        BothStreamsAreClean();
+    }
+
+    [Fact]
+    public async Task An_OpenAI_shaped_invalid_key_code_on_a_400_is_a_refusal_too()
+    {
+        _stub.Answers = _ => new ApiEndpointStub.Answer(
+            400, "{\"error\":{\"message\":\"Invalid API key.\",\"code\":\"invalid_api_key\"}}");
+
+        (await RunAsync()).Should().Be(77);
+    }
+
+    [Fact]
+    public async Task A400_about_anything_else_stays_a_failed_request_even_when_it_quotes_the_phrase_elsewhere()
+    {
+        // The phrase is read off the ERROR field only: a vendor that echoes the prompt back in some
+        // other field — and a review of this very file carries the phrase — must not become a key refusal.
+        _stub.Answers = _ => new ApiEndpointStub.Answer(
+            400, "{\"error\":{\"message\":\"Argument not supported: frequency_penalty\"},\"echo\":\"Incorrect API key provided\"}");
+
+        (await RunAsync()).Should().Be(70);
+        Stderr.Should().Contain("HTTP 400");
+    }
+
+    [Fact]
     public async Task A403_IsTheSameRefusal()
     {
         _stub.Answers = _ => new ApiEndpointStub.Answer(403, "forbidden");

@@ -199,13 +199,14 @@ public sealed class LiveRound
         // Failures that still burned tokens count towards the round's total: an unparseable
         // answer is a completed run whose usage the vendor reported. Counting only `Ok` made a
         // round with two fallen reviewers report roughly half of what it actually cost.
+        //
+        // And the EARLIER TURNS of a conversation (S3.2), read off every outcome's base: a reviewer whose
+        // turn 2 timed out still spent what turn 1 cost, and reading only the terminal usage would file
+        // that turn as free — the same under-report, one turn over. And the earlier LAUNCHES of the last
+        // turn: a repair that failed on its own launch still paid for the malformed attempt before it
+        // (2026-09-26). `TotalUsage` is the one member that adds all of it, shared with the ledger.
         var usage = results
-            .Select(r => r.Outcome switch
-            {
-                ReviewerOutcome.Ok ok => ok.Usage,
-                ReviewerOutcome.Unparseable bad => bad.Usage,
-                _ => Core.Findings.Usage.None,
-            })
+            .Select(r => r.Outcome.TotalUsage)
             .Aggregate(Core.Findings.Usage.None, (total, one) => total.Add(one));
 
         lock (_gate)
@@ -216,6 +217,7 @@ public sealed class LiveRound
                 TokensIn = usage.TokensIn,
                 TokensOut = usage.TokensOut,
                 CostUsd = usage.CostUsd,
+                CostNote = usage.NoPriceSet ? Core.Findings.CostText.NoPriceSet : string.Empty,
             };
         }
     }

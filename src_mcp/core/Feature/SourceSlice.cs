@@ -51,7 +51,12 @@ public sealed record ServedSlice(
 
 /// <summary>One request that was not served, and the sentence that says why.</summary>
 /// <param name="Symbol">The symbol asked for, when one was; empty otherwise.</param>
-public sealed record SourceRefusal(string File, string Symbol, string Reason)
+/// <param name="OverReviewerCap">
+/// Whether what was asked for would have taken the reviewer past its allowance for the WHOLE
+/// conversation (<see cref="SourceBudget.ReviewerBytes"/>) — as against the turn's own cap, which a
+/// smaller request next turn can still fit under. It is what tells the turn loop the budget is spent.
+/// </param>
+public sealed record SourceRefusal(string File, string Symbol, string Reason, bool OverReviewerCap = false)
 {
     /// <summary>The line the reviewer reads: <c>not served: path [symbol] — reason</c>.</summary>
     public string Render() =>
@@ -76,6 +81,14 @@ public sealed record ServedTurn(
 {
     public bool IsEmpty => Served.IsEmpty && Refused.IsEmpty;
 
+    /// <summary>
+    /// Whether the reviewer's allowance for the conversation is spent — the turn loop's "stops on the
+    /// budget": the bytes reached <see cref="SourceBudget.ReviewerBytes"/>, or a request was refused for
+    /// that cap. A refusal for the TURN's cap alone is not this; a smaller request next turn still fits.
+    /// </summary>
+    public bool Exhausted =>
+        Spent.Bytes >= SourceBudget.ReviewerBytes || Refused.Any(refusal => refusal.OverReviewerCap);
+
     /// <summary>Every served slice fenced with its path, lines and commit, then every refusal on a line of its own.</summary>
     public string Render()
     {
@@ -91,6 +104,23 @@ public sealed record ServedTurn(
         }
 
         return text.ToString();
+    }
+
+    /// <summary>
+    /// One line for the audit: what was served, by file and symbol or lines, and what was not, by file and reason.
+    /// </summary>
+    public string Summary()
+    {
+        var served = Served.Select(slice =>
+            $"{slice.File}{(slice.Symbol.Length > 0 ? $" {slice.Symbol}" : string.Empty)} ({slice.StartLine}-{slice.EndLine} of {slice.TotalLines})");
+        var refused = Refused.Select(refusal =>
+            $"{refusal.File}{(refusal.Symbol.Length > 0 ? $" {refusal.Symbol}" : string.Empty)} — {refusal.Reason}");
+
+        return string.Join("; ", new[]
+        {
+            Served.IsEmpty ? string.Empty : $"served {string.Join(", ", served)}",
+            Refused.IsEmpty ? string.Empty : $"not served {string.Join(", ", refused)}",
+        }.Where(part => part.Length > 0));
     }
 }
 

@@ -567,7 +567,7 @@ internal static class Program
         var launcher = new Runners.Processes.ProcessLauncher();
         // The same read `ServeAsync` does, so a vendor whose key is in the vault is reported as
         // runnable here too — otherwise this mode would badge half a configuration as unavailable.
-        var keys = await new Server.KeyVault(launcher)
+        var keys = await Server.KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable)
             .ReadAsync(Environment.GetEnvironmentVariable(Server.KeyVault.KeyVariable));
         var service = new Server.PanelService(
             settings, keys, DateTime.UtcNow, launcher, Serilog.Core.Logger.None, Server.Noticing.None);
@@ -1837,7 +1837,7 @@ internal static class Program
                 settings.DataDir,
                 message => log.Warning("process tracking: {Detail}", message));
             var launcher = new ProcessLauncher(tracking);
-            var keys = await new KeyVault(launcher).ReadAsync(Environment.GetEnvironmentVariable(KeyVault.KeyVariable));
+            var keys = await KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable).ReadAsync(Environment.GetEnvironmentVariable(KeyVault.KeyVariable));
             var vaultReadUtc = keys.Available ? DateTime.UtcNow : default;
             log.Information("starting: {Providers} enabled, vault: {Vault}",
                 string.Join(",", settings.Providers.Where(p => p.Enabled).Select(p => p.Provider)),

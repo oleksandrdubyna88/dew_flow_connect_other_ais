@@ -122,7 +122,7 @@ public sealed class AFeatureRoundIsSkippedNotRefusedTests : IAsyncLifetime
             {
                 Providers = providers,
                 Rounds = new PanelConfig(
-                    PanelConfig.AllRoles.ToDictionary(r => r, r => new RoleGate(1, 5, Enabled: r != RoleCatalog.FeatureRole || featureRoleOn)),
+                    PanelConfig.AllRoles.ToDictionary(r => r, r => new RoleGate(2, 5, Enabled: r != RoleCatalog.FeatureRole || featureRoleOn)),
                     StagePolicy.Human),
                 DataDir = _data,
                 ReviewerTimeout = TimeSpan.FromSeconds(30),
@@ -312,14 +312,18 @@ public sealed class AFeatureRoundIsSkippedNotRefusedTests : IAsyncLifetime
         RowsOf().Select(r => r.Number).Should().Equal([1, 2, 3]);
     }
 
-    // ---------- the human-gate row: all failed → a person; un-ticking everyone is not a way past ----------
+    // ---------- the human-gate row: all failed twice → a person; un-ticking everyone is not a way past ----------
 
     [Fact]
-    public async Task WhenEveryReviewerFails_APersonIsCalled_AndSwitchingTheReviewersOffDoesNotSkipPastThem()
+    public async Task WhenEveryReviewerFailsTwice_APersonIsCalled_AndSwitchingTheReviewersOffDoesNotSkipPastThem()
     {
         Script(Clean, exit: 1, stderr: "429 Too Many Requests");
-        var called = Parse(await RunAsync(Service(featureRoleOn: true, Ticked())));
-        called.GetProperty("verdict").GetString().Should().Be("call_human", $"all failed blocks: {called}");
+        var service = Service(featureRoleOn: true, Ticked());
+        var retry = Parse(await RunAsync(service));
+        retry.GetProperty("verdict").GetString().Should().Be("revise", $"the first failure buys a retry (D23): {retry}");
+        await service.ResolveAsync(_repo, SessionKey.FeatureBranch, "[]", feature: Plan);
+        var called = Parse(await RunAsync(service));
+        called.GetProperty("verdict").GetString().Should().Be("call_human", $"all failed twice blocks: {called}");
         FeatureSession()!.State.HumanGate.Should().BeTrue();
 
         // Now nobody serves the stage. `stage.Begin` runs BEFORE the skip branch, on purpose: a standing

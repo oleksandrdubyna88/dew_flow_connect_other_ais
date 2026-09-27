@@ -1,4 +1,6 @@
 import { apiRuntimeOnServer, DEFAULT_API_DIALECT } from './apiRuntime';
+import { featureOnServer, reviewsFeatures } from './featureGate';
+import { ModelPrice } from './modelPrices';
 import { Runtime, RUNTIMES } from './models';
 
 /** Every CLI shape this build can drive. Kept beside the parser that has to recognise them. */
@@ -42,6 +44,17 @@ export interface Vendor {
    * migration reading rather than somewhere a person sits unawares. See {@link pinnedDocument}.</p>
    */
   readonly document?: boolean | undefined;
+  /**
+   * Whether this vendor reviews a whole FEATURE at the end of a plan — and absent is NO.
+   *
+   * <p><b>Optional, and read the opposite way from `plan` and `code`.</b> Those fold silence to yes,
+   * because that is what a configuration written before them meant. This one cannot: the feature gate
+   * is opt-in per vendor (D6 of `todo/PLAN_feature_review.md`) and the server reads absent as no
+   * (`ProviderSettings.Feature`), so a settings file from before the stage must not start sending whole
+   * features anywhere. Stored only when `true`; a Team server row never carries it (D10). See
+   * {@link reviewsFeatures}.</p>
+   */
+  readonly feature?: boolean | undefined;
   /** OpenAI-compatible endpoint, for a vendor riding the Codex runtime. Empty = the CLI's own. */
   readonly baseUrl: string;
   /**
@@ -87,6 +100,18 @@ export interface Vendor {
    */
   readonly pricePerMillionIn: number;
   readonly pricePerMillionOut: number;
+  /**
+   * For an `api` row: what CACHED input costs per million (S3.7). Absent or zero is "not set", and then
+   * the looked-up cached rate applies — or, failing that, the input rate.
+   */
+  readonly pricePerMillionCached?: number | undefined;
+  /**
+   * For an `api` row: the NAME of the vault key it reads, when that is not the row's id (S3.6) — a
+   * second model on one key is `qwen-2` reading `qwen`. Written for every row made from a `!name`
+   * entry, so the row says which key it is; absent means the id, as every older row does. A name,
+   * never a value: this file is settings a person reads.
+   */
+  readonly vaultKeyName?: string | undefined;
   /**
    * For an `api` row: which row of `shared/api-dialects.json` spells its request. Absent means the
    * generic `openai` one — `coai-mcp` decides, not this side.
@@ -295,6 +320,7 @@ export function vendorsFrom(value: unknown): Vendor[] {
       // Written only when it IS said — `coai.vendors` is JSON a person reads, and the difference
       // between "absent" and "false" is load-bearing here in a way it is not for the two above.
       ...(typeof v['document'] === 'boolean' ? { document: v['document'] } : {}),
+      ...featureField(v),
       baseUrl: typeof v['baseUrl'] === 'string' ? v['baseUrl'].trim() : '',
       // Only written when there IS one, so a codex row is byte-identical to what it always was —
       // `coai.vendors` is JSON a person reads and edits, and a `"remoteVendor": ""` on every row
@@ -303,6 +329,9 @@ export function vendorsFrom(value: unknown): Vendor[] {
       executablePath: typeof v['executablePath'] === 'string' ? v['executablePath'].trim() : '',
       pricePerMillionIn: rate(v['pricePerMillionIn']),
       pricePerMillionOut: rate(v['pricePerMillionOut']),
+      // Both only when said, like `dialect`: `coai.vendors` is JSON a person reads (S3.6, S3.7).
+      ...(rate(v['pricePerMillionCached']) > 0 ? { pricePerMillionCached: rate(v['pricePerMillionCached']) } : {}),
+      ...keyField(v),
     }))
     .filter((v) => v.id.length > 0)
     .map(migrateRetired);
@@ -363,6 +392,26 @@ function migrateRetired(vendor: Vendor): Vendor {
   return vendor.runtime === 'gemini' && vendor.baseUrl.length === 0
     ? { ...vendor, runtime: 'antigravity', model: ANTIGRAVITY_DEFAULT_MODEL }
     : vendor;
+}
+
+/**
+ * The feature tick as it may be stored: `true` on a row that can honour it, and nothing otherwise.
+ *
+ * <p>Absent rather than `false`, because absent is already the server's NO and `coai.vendors` is JSON a
+ * person reads. A Team server row loses a stored `true` here — forced false, with the card saying
+ * "Team servers do not run feature reviews yet" — because the round would ignore it (D10), and a tick
+ * the round ignores is a box that lies. Read off the RAW row, whose `runtime` is `remote` exactly when
+ * the parsed one is: an unknown runtime becomes codex, and the retirement moves gemini, never remote.</p>
+ */
+function featureField(v: Record<string, unknown>): { feature?: true } {
+  return reviewsFeatures({ runtime: String(v['runtime']), feature: v['feature'] === true }) ? { feature: true } : {};
+}
+
+/** The vault key's name, lower-cased like the vault's own matching — only when a row said one. */
+function keyField(v: Record<string, unknown>): { vaultKeyName?: string } {
+  const vaultKeyName = saidText(v['vaultKeyName'], 'lower');
+
+  return vaultKeyName === undefined ? {} : { vaultKeyName };
 }
 
 /** One id, one vendor: two rows with the same name would fight over the same key and env. */
@@ -481,7 +530,76 @@ export function reviewerPickItems(offered: readonly OfferedPreset[]): readonly R
  * cannot carry a runtime and a base URL, and inventing a second encoding for them would be a
  * format nobody could read in a config file.
  */
-export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = ''): string {
+/** An `api` row's price as it crosses to the server — dollars per million, plus an optional tier. */
+export interface WirePrice {
+  readonly in: number;
+  readonly cached: number;
+  readonly out: number;
+  readonly tierFrom?: number;
+  readonly tierIn?: number;
+  readonly tierCached?: number;
+  readonly tierOut?: number;
+}
+
+/**
+ * What an `api` row charges, as the server is to price it (PLAN_feature_review.md S3.7) — or nothing.
+ *
+ * <p><b>A typed rate wins, field by field</b>, over the looked-up one — the rule the card and the
+ * spending tab already follow. The long-context tier comes only from the list, and only while nothing
+ * was typed: a person who typed a rate is on their own terms, and doubling it from somebody else's
+ * threshold would be arithmetic on a price they never agreed to.</p>
+ *
+ * <p>No rate at all is `undefined`, never zeroes: the server then says "no price set", which is true,
+ * where a zero would say the run was free.</p>
+ */
+export function wirePrice(v: Vendor, looked: ModelPrice | undefined): WirePrice | undefined {
+  const listed: Listed = looked ?? UNLISTED;
+  const typed = typedRates(v);
+  const rates = {
+    in: typedOr(typed.in, listed.inPerMillion),
+    cached: typedOr(typed.cached, listed.cachedPerMillion),
+    out: typedOr(typed.out, listed.outPerMillion),
+  };
+  if (rates.in === 0 && rates.out === 0) {
+    return undefined;
+  }
+
+  return { ...rates, ...tierOnTheWire(typed, listed) };
+}
+
+/** The rates a list can give — the part of a `ModelPrice` that prices anything. */
+type Listed = Pick<ModelPrice, 'inPerMillion' | 'outPerMillion' | 'cachedPerMillion' | 'tier'>;
+
+/** No list answered: every rate unknown. */
+const UNLISTED: Listed = { inPerMillion: 0, outPerMillion: 0 };
+
+/** The three rates the person typed on the row; 0 is "not typed". */
+function typedRates(v: Vendor): { readonly in: number; readonly cached: number; readonly out: number } {
+  return { in: v.pricePerMillionIn, cached: v.pricePerMillionCached ?? 0, out: v.pricePerMillionOut };
+}
+
+/** A typed rate when there is one, else the looked-up one, else 0 — "not known", never free. */
+function typedOr(typed: number, looked: number | undefined): number {
+  return typed > 0 ? typed : (looked ?? 0);
+}
+
+/** The list's long-context tier as the wire spells it — only while no rate was typed; otherwise nothing. */
+function tierOnTheWire(typed: ReturnType<typeof typedRates>, listed: Listed): Partial<WirePrice> {
+  const tier = anyTyped(typed) ? undefined : listed.tier;
+
+  return tier === undefined
+    ? {}
+    : { tierFrom: tier.fromTokens, tierIn: tier.inPerMillion, tierCached: tier.cachedPerMillion, tierOut: tier.outPerMillion };
+}
+
+function anyTyped(typed: ReturnType<typeof typedRates>): boolean {
+  return typed.in > 0 || typed.cached > 0 || typed.out > 0;
+}
+
+/** What a row's model costs by the list, when the panel has looked — the writer's seam to the lookup. */
+export type RowPriceLookup = (v: Vendor) => ModelPrice | undefined;
+
+export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = '', priceOf: RowPriceLookup = () => undefined): string {
   return JSON.stringify(
     vendors
       .filter((v) => v.enabled)
@@ -499,8 +617,44 @@ export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = 
         baseUrl: v.baseUrl,
         executablePath: v.executablePath,
         ...saidOnTheWire(v),
+        ...featureOnTheWire(v, installedServerVersion),
+        ...apiOnTheWire(v, priceOf),
       })),
   );
+}
+
+/**
+ * What only an `api` row carries: the vault key's name when it said one (S3.6), and its price (S3.7).
+ *
+ * <p>Nothing for any other runtime. A CLI on a subscription is not billed per token, so a price on its
+ * row would turn the panel's list-price estimate into a figure the ledger records as spent. A server
+ * older than these fields ignores both — the JSON reader skips members it does not know — so the row
+ * still runs there, reading the key under its own id and unpriced, which is what it did before.</p>
+ */
+function apiOnTheWire(v: Vendor, priceOf: RowPriceLookup): { key?: string; price?: WirePrice } {
+  if (v.runtime !== 'api') {
+    return {};
+  }
+  const key = saidText(v.vaultKeyName, 'lower');
+  const price = wirePrice(v, priceOf(v));
+
+  return {
+    ...(key === undefined ? {} : { key }),
+    ...(price === undefined ? {} : { price }),
+  };
+}
+
+/**
+ * The feature tick as the wire wants it: `feature: true`, or nothing.
+ *
+ * <p>Only a TRUE crosses — absent is the server's no, so a `false` would be noise in a block a person
+ * reads. Never for a Team server row (D10), and never to a server known to be older than
+ * `FEATURE_SINCE`: that one has no feature stage, and a tick in its file would claim something it
+ * cannot do while the card says the box is off. The ROW still crosses either way — the vendor keeps
+ * reviewing plans and code. Unknown is not old (`featureOnServer`).</p>
+ */
+function featureOnTheWire(v: Vendor, installedServerVersion: string): { feature?: true } {
+  return reviewsFeatures(v) && featureOnServer(installedServerVersion) ? { feature: true } : {};
 }
 
 /**

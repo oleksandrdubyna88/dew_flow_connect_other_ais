@@ -5,14 +5,32 @@ namespace CoaiMcp.Core.Findings;
 /// <summary>What one reviewer run consumed. Zeroes mean "the CLI did not say", never "free".</summary>
 /// <param name="CostUsd">Only when the CLI itself reported money (claude does); estimating prices
 /// for vendors that do not would mean shipping a price table that is wrong within a month.</param>
-public sealed record Usage(long TokensIn, long TokensOut, double? CostUsd)
+/// <param name="TokensCached">
+/// How many of <paramref name="TokensIn"/> the vendor said it served from its prompt cache — a SUBSET
+/// of the input count, never added to it, and zero when the vendor did not say.
+/// <para>Recorded per turn of a feature reviewer's conversation (plan D25, S3.2): the follow-up turns
+/// resend the base prompt byte for byte so a vendor that caches a prefix can reuse it, and whether one
+/// does is what the first live run measures — from this number, not from a belief about the vendor.
+/// Trailing and defaulted, so every existing construction and every session already on disk keeps
+/// meaning what it meant.</para>
+/// </param>
+/// <param name="NoPriceSet">
+/// A METERED run — an <c>api</c> reviewer, billed per token by its key's vendor — whose row carried no
+/// rate, so its money is unknown rather than nothing (PLAN_feature_review.md S3.7). What the rounds log,
+/// the audit line and <c>status</c> then say is "no price set", never <c>$0</c>. False for a CLI on a
+/// subscription, which was never going to report money in the first place. Trailing and defaulted, so
+/// every existing construction and every session on disk keeps meaning what it meant.
+/// </param>
+public sealed record Usage(long TokensIn, long TokensOut, double? CostUsd, long TokensCached = 0, bool NoPriceSet = false)
 {
     public static readonly Usage None = new(0, 0, null);
 
     public Usage Add(Usage other) => new(
         TokensIn + other.TokensIn,
         TokensOut + other.TokensOut,
-        CostUsd is null && other.CostUsd is null ? null : (CostUsd ?? 0) + (other.CostUsd ?? 0));
+        CostUsd is null && other.CostUsd is null ? null : (CostUsd ?? 0) + (other.CostUsd ?? 0),
+        TokensCached + other.TokensCached,
+        NoPriceSet || other.NoPriceSet);
 }
 
 /// <summary>
@@ -38,6 +56,12 @@ public static class UsageParser
         ["input_tokens", "prompt_tokens", "prompttokencount", "cache_creation_input_tokens", "cache_read_input_tokens"];
     private static readonly string[] OutputKeys = ["output_tokens", "completion_tokens", "candidatestokencount"];
     private static readonly string[] CostKeys = ["total_cost_usd", "cost_usd", "costusd"];
+
+    // The cached SUBSET, read for its own number and never added to the input: codex's
+    // `cached_input_tokens`, the OpenAI-compatible `prompt_tokens_details.cached_tokens`, and
+    // claude's `cache_read_input_tokens` — which IS counted as input above, because claude bills it
+    // beside `input_tokens`, and is counted here again as the part that was a cache hit.
+    private static readonly string[] CachedKeys = ["cached_input_tokens", "cached_tokens", "cache_read_input_tokens"];
     private static readonly string[] ScopedInput = ["prompt", "input"];
     private static readonly string[] ScopedOutput = ["candidates", "output", "completion", "thoughts"];
     private static readonly string[] Scopes = ["tokens", "usage"];
@@ -56,7 +80,11 @@ public static class UsageParser
             chunk.Dispose();
         }
 
-        return new Usage(SumOf(maxima, InputKeys, ScopedInput), SumOf(maxima, OutputKeys, ScopedOutput), cost);
+        return new Usage(
+            SumOf(maxima, InputKeys, ScopedInput),
+            SumOf(maxima, OutputKeys, ScopedOutput),
+            cost,
+            SumOf(maxima, CachedKeys, []));
     }
 
     private static long SumOf(Dictionary<string, long> maxima, string[] keys, string[] scoped) =>
@@ -135,7 +163,7 @@ public static class UsageParser
     private static void Classify(string key, string parent, JsonElement value, Dictionary<string, long> maxima, ref double? cost)
     {
         var scoped = Scopes.Contains(parent);
-        if (InputKeys.Contains(key) || OutputKeys.Contains(key))
+        if (InputKeys.Contains(key) || OutputKeys.Contains(key) || CachedKeys.Contains(key))
         {
             Record(maxima, key, value);
         }

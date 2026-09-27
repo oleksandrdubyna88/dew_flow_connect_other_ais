@@ -48,6 +48,7 @@ flowchart LR
 | `CredentialFiles` | `Feature/CredentialFiles.cs` | the fixed NAME shapes source on demand never serves (`.env*`, `*.pem`, `*.key`, `*.pfx`, `*.p12`, `id_rsa*`…) — and deliberately not the credential words, which refused `Auth.cs` and `tokens.rs` in the trial |
 | `ServedSlice`, `SourceRefusal`, `SourceSpend`, `ServedTurn`, `SourceFence` | `Feature/SourceSlice.cs` | what a turn of source on demand came to: slices fenced with path, lines and commit, refusals with their sentence, and the reviewer's spend carried to the next turn |
 | `Redaction.SafeSource` | `Notices/Redaction.cs` | the notice redaction's passes over a FILE — layout kept, nothing cut, fail closed — the one road served content takes |
+| `PrivateKeyBlocks` | `Notices/PrivateKeyBlocks.cs` | the pass every `Redaction` call runs FIRST (2026-09-27, epic 3's code round): a PEM private-key block taken out header to footer — every variant (`RSA`, `EC`, `DSA`, `OPENSSH`, `ENCRYPTED`, `PGP … BLOCK`, plain), across real line breaks and JSON-escaped `\n`, each line inside it one `[redacted]` after its indentation so a served file's line count survives, a header with no footer losing the run of key-looking text after it. Procedural and linear — `IndexOf` from the furthest point known to hold no footer — because a body-between-markers PATTERN searches `headers × bound` against text made of footerless headers; the contract is `src_vs_code/src/privateKeyBlocks.ts`, byte for byte, held by `run-parity.mjs` over seven key shapes crossed with every wrap. The five one-line patterns had no name for a key body: a committed `service-account.json` was served with only its `-----BEGIN` taken out by the labelled pass, and the body followed the reviewer into every later turn's "served in earlier turns" (`APrivateKeyBlockIsNeverServedTests`, `privateKeyBlocks.test.ts`) |
 | `ReviewParser` | `Findings/ReviewParser.cs` | vendor JSON → review; unknown severity/category = per-entry rejection |
 | `GeminiPayload` | `Findings/GeminiPayload.cs` | `-o json` envelope → fence stripping → string-aware balanced `{…}` |
 | `FindingDedup` | `Gate/FindingDedup.cs` | cross-provider merge; severity disagreement resolves toward caution |
@@ -58,6 +59,7 @@ flowchart LR
 | `Stage`, `StageDescriptor`, `Stages` | `Rounds/SessionState.cs`, `Rounds/Stages.cs` | the four stages, and the ONE table of what each answers by name — bucket, phrase, kind, commands, next stage, sentences, whether it records a commit |
 | `RoundMachine`, `RoundVerdict`, `Decision`, `Transition` | `Rounds/RoundMachine.cs` | ordering by refusal; the escalation ladder; resolve feeds rejections forward |
 | `FeatureBases` | `Rounds/FeatureBases.cs` | the base a feature review was opened against, held to on every later call of the same plan — a different base is refused naming BOTH SHAs, and `again` is the door |
+| `SecondRoundGround` | `Rounds/SecondRoundGround.cs` | why a feature review's second round may run (D23): a reviewer failure, a blocking finding, the person's request — `None` until round 1 gave one; on `SessionState.SecondRound`, read by `BeginFeatureRound` alone |
 | `FeatureGate` | `Feature/FeatureGate.cs` | the feature gate's decisions that are numbers, as against `FeatureBudget`'s measurements: the three-epic floor (D17) |
 | `RoleDefinition`, `RoleCatalog`, `RoleStages` | `Rounds/RoleCatalog.cs` | which roles exist and which prompt a round of one gets; `Builtin` is the embedded seed; `RoleStages.All` is the one list of stages a role may belong to |
 | `CadenceMode`, `EpicGroup`, `CadenceRule` | `Cadence/CadenceRule.cs` | the consultation cadence's arithmetic: groups of `every` epics counted from the plan's OWN first epic, the risk question from `threshold` epics, nothing past `MostEpics` (14); the defaults 3 / 5 / 3 are the numbers the panel is tested to agree with |
@@ -306,8 +308,8 @@ two rules a pure transition cannot decide — the head and the base — extracte
 flowchart LR
   key["SessionKey.For(repo, ':feature', '', plan)<br/>repo#:feature#feature:&lt;plan key&gt;"]
   st["SessionState.Feature<br/>IsFeatureSession"]
-  begin["RoundMachine.BeginFeatureRound<br/>not a feature session · held gate · unresolved · done"]
-  again["BeginFeatureRoundAgain<br/>Done → FeatureReview, fresh budget"]
+  begin["RoundMachine.BeginFeatureRound<br/>not a feature session · held gate · unresolved · done<br/>two rounds run · round 2 with no ground (D23)"]
+  again["BeginFeatureRoundAgain<br/>Done → FeatureReview, the count kept: its second round, or refused"]
   bases["FeatureBases.WhyNot(recorded, asked, again)<br/>a different base names both SHAs"]
   gate["PanelConfig.ShippedDefault(stage)<br/>Plan · Code · Feature — one road for three sites"]
   key --> st --> begin --> again
@@ -324,21 +326,26 @@ flowchart LR
   because the document segment comes before the feature one. `SessionState.Feature` is the one
   field that says which kind a session is, normalised where it is declared like `Document`, and
   `IsFeatureSession` is derived from it.
-- **`BeginFeatureRound` has four refusals, in the document gate's order** — not a feature session,
-  a held human gate, an unresolved round, a finished review — and no `PlanProceeded` check: the plan
-  IS the input. The held gate is asked BEFORE the finished stage on purpose, and the engine keeps the
-  same order before its skip branch, so un-ticking every vendor cannot dissolve a person's decision.
-  `BeginFeatureRoundAgain` reopens a finished review with a fresh budget, the shape
-  `BeginCodeRoundAgain` has — against the SAME base; and the three other begins refuse a feature session
-  BY NAME (`ThisIsAFeatureSession`), as they refuse a document session — one budget, one job.
+- **`BeginFeatureRound` has six refusals, in the document gate's order and then D23's** — not a feature
+  session, a held human gate, an unresolved round, a finished review, two rounds already run, and a
+  second round no ground admits — and no `PlanProceeded` check: the plan IS the input. The held gate is
+  asked BEFORE the finished stage on purpose, and the engine keeps the same order before its skip branch,
+  so un-ticking every vendor cannot dissolve a person's decision. `BeginFeatureRoundAgain` reopens a
+  finished review for its SECOND round with the count KEPT (S3.4 — it used to reset the count, which
+  handed a finished review a whole new budget over the same base), so the reopened state meets the same
+  admission: the person's ground runs round 2, two rounds run refuse a third, no ground is refused naming
+  the three. The three other begins refuse a feature session BY NAME (`ThisIsAFeatureSession`), as they
+  refuse a document session — one budget, one job.
 - **Another base is a fresh review** (§4.3, from the code review of 2026-09-26).
-  `RoundMachine.FreshFeatureReview(state)` starts over the stage's count, its escalations AND its
-  standing `Rejections`, whatever the stage was: a rejection made in one review must not discount a
-  finding in a different one, and an open review reopened against another base ran as round 2 of a
-  budget that was not its own. It is a state function rather than a transition on purpose — a held gate
-  and an unresolved round are refused by `BeginFeatureRoundAgain` first, and that the base IS another
-  one is the stage's finding — so the engine applies it to the begun state, after both, with the round
-  that runs (`RoundEngine.HeldToBase`).
+  `RoundMachine.FreshFeatureReview(state)` starts over the stage's count, its escalations, its
+  standing `Rejections` AND its second-round ground, whatever the stage was: a rejection made in one
+  review must not discount a finding in a different one, and an open review reopened against another
+  base ran as round 2 of a budget that was not its own. It is a state function rather than a transition
+  on purpose — that the base IS another one is the stage's finding — and since S3.4 the engine applies
+  it to the session it READ, before the begin (`RoundEngine.HeldToBase`), so a fresh review arrives at
+  `BeginFeatureRound` as round one and D23's count arms never mistake it for a third; a held gate and an
+  unresolved round are still refused by the begin, fresh or not, and nothing is saved unless the round
+  runs.
 - **The base is remembered and held to.** `FeatureBases.IsAnother(recorded, asked)` is the one
   comparison — never true before a round recorded a base — and `FeatureBases.WhyNot(recorded, asked,
   again)` is empty for the same base, for no recorded base, and for `again: true`; otherwise a sentence
@@ -347,14 +354,74 @@ flowchart LR
   with the round that runs and never at creation; the stage resolves the SHAs and hands them in, because
   a pure transition has no commits. D14 — `again` with the same base over the head the last round read
   — is refused in every state, not only after `Done`.
-- **The third shipped default has its own instance.** `PanelConfig.FeatureDefault = (1, 5)` — the
-  same numbers as a code round, deliberately as its own object, so the three sites that pick a default
-  can be told apart by REFERENCE in a test. All three go through one road now,
+- **The third shipped default has its own instance.** `PanelConfig.FeatureDefault = (2, 5)` — two
+  rounds since S3.4, as a CAP the machine applies rather than a promise (the section below), and
+  deliberately its own object, so the three sites that pick a default can be told apart by REFERENCE
+  in a test. All three go through one road now,
   `PanelConfig.ShippedDefault(stage)`: the `Defaults` dictionary, `ShippedFor` (a role with no gate
   written for it), and the server's `GateFor`, which also reads the stage's own keys
   (`COAI_MAX_ROUNDS_FEATURE` / `COAI_THRESHOLD_FEATURE`) rather than the `_CODE` pair in silence.
 - **`FeatureGate.DefaultMinEpics = 3`** (D17) is a decision, not a measurement, which is why it is not
   in `FeatureBudget`. The server reads it as `COAI_FEATURE_MIN_EPICS`; S2.2's input check applies it.
+
+### The second round, only when it is needed (2026-09-26, S3.4 of the feature-review plan — D23)
+
+A feature review is one round unless it needs another, and "needs" is exactly three things. The machine
+decides all of it; the server only shapes the round it admitted.
+
+```mermaid
+flowchart TD
+  r1["CompleteRound, stage FeatureReview → CompleteFeatureRound"] --> ground{"GroundFor(gate, reviewers)"}
+  ground -- "a blocking finding (outranks a failure)" --> blocking["SecondRound = BlockingFinding"]
+  ground -- "a failure: Answered == 0, or any Failures" --> failure["SecondRound = ReviewerFailure"]
+  ground -- "none" --> close["proceed (gate passed) / good_enough (over it)<br/>AdvanceOnResolve — the review closes on resolve"]
+  blocking --> which{"round 1, and min(2, budget) allows?"}
+  failure --> which
+  which -- yes --> revise["revise, 1 round left — the ground on the state"]
+  which -- no --> human["call_human, the gate held<br/>a blocking finding still standing · a failure again · nobody answered again"]
+  person["ApplyPersonsRequest(state, Continue|Fix)<br/>feature · no gate · one round run · no ground yet"] --> asked["SecondRound = PersonAsked"]
+  revise --> begin["BeginFeatureRound: round 2 admitted on the ground, and on nothing else"]
+  asked --> begin
+  begin -- "two rounds run" --> third["refused: at most two, ever"]
+```
+
+- **`SecondRoundGround`** (`Rounds/SecondRoundGround.cs`) is the ground, on `SessionState.SecondRound`,
+  serialised by name — `None` until round 1 gave one, and `None` again the moment the round it admitted
+  completes, because completing it spends it. `ReviewerFailure` and `BlockingFinding` are written by
+  `CompleteRound`; `PersonAsked` only by `ApplyPersonsRequest`, from a `HumanDecision` — the same
+  `Continue`/`Fix` a held gate is answered with — and never from an argument.
+- **`CompleteRound` routes the feature stage to `CompleteFeatureRound`.** Everything the gate computed
+  stays; what changes is which verdict it becomes. No ground closes the review on `resolve` however
+  many findings gate (`good_enough` over the threshold, `proceed` at or under it): the findings are
+  decided, the accepted fixes land as pull requests, and no second review reads them. A ground in round
+  1 is `revise` with one round left — capped by the operator's own budget, so `COAI_MAX_ROUNDS_FEATURE=1`
+  runs no retry and a bigger number is still two. A ground in round 2 is `call_human` with the gate
+  held. Nobody answering is a failure whatever the failure list says, so the gate does not fail open
+  over a round of stood-down reviewers either — it buys a retry, then a person.
+- **`Resolve` keeps the feature stage's count into `Done`.** Every other stage starts the next at zero;
+  a finished feature review has to remember whether it ran one round or two, because `again` reopens
+  it for its second or is refused a third, and the machine can only tell which from the count.
+- **A person's fresh set starts the ground over** (`ApplyHumanDecision`): what admitted the round that
+  called them has been spent, and the fresh set's own first round decides whether it needs a second.
+  `ApplyPersonsRequest` records nothing on a held gate for that reason — a fresh set is a different
+  promise — and nothing after two rounds, which the begin refuses whoever asks. WHICH answer is the
+  request is the engine's check (`PersonsRequest`, in the server), and the rule is identity.
+- **The request is bound to a question asked FOR it** (2026-09-27, the gate's finding #27 on epic 3's
+  code round). `SessionState.RequestQuestions` holds the `ask_human` question ids asked on a feature
+  session after its first round while no hold stands, written by `RoundMachine.RecordQuestion(state, id)`
+  — the one function that says where a question's answer may later count: on the current hold
+  (`HoldQuestions`) when the gate is held, as a request question when the session is a feature session
+  with a round run, nowhere otherwise (a question asked BEFORE round 1 is about whatever it asked, and
+  binding the request to it was the clock rule in a new coat). `ApplyPersonsRequest` spends the list
+  with the request; `CompleteFeatureRound` empties it (the questions that may request round 2 are the
+  ones asked after round 1 completed), and so do `FreshFeatureReview` and a person's fresh set. Before
+  this the newest `continue`/`fix` NEWER than round 1 was the request, so any question of the session
+  answered that way admitted round 2 — one asked while the review was still skipped, one an older build
+  filed. Normalised where declared, as `HoldQuestions` is.
+- **The sentences name the door.** `FeatureDone` says a second round runs only on the three grounds and
+  never a third; `NoGroundForASecondRound(state)` names all three and how the third arrives — `ask_human`
+  with `feature`, the person's "Keep going" — and that no argument grants it; `TwoFeatureRoundsRun(state)`
+  says the only fresh start is a new base.
 
 ## `IAstNormalizer` — a native parser that cannot spread (2026-09-15)
 
@@ -605,9 +672,10 @@ flowchart LR
   review) and `Reads` (`Change`, or `Outline`). A mounted worktree still overrides `Reads` with
   `Checkout`; that is a fact about the launch, not the stage. `SchemaFile.Text(shape)` is the schema
   text a prompt quotes, byte-identical to the file `Ensure` writes.
-- **`SourceRequestNote`** (`core/Feature/SourceRequestNote.cs`) records a feature reviewer's
-  `sourceRequests` — and any the parser refused, with the reason — on that reviewer's `notes` in the
-  reply, which is what makes "a request is RECORDED" true before the S3.2 loop that answers one.
+- **`SourceRequestNote`** (`core/Feature/SourceRequestNote.cs`) records what a feature reviewer's LAST
+  answer asked for — and any request the parser refused, with the reason — on that reviewer's `notes` in
+  the reply: the requests no turn was left to serve (S3.2), or every request when the follow-ups are
+  switched off. Its `Line` is shared with the turn tail below.
 - **The credential shapes reach the pack too** (D15): `ReadPlan` withholds a `CredentialFiles` match
   before anything else is asked of it — `withheld — looks like a credential file (.env*); never read` —
   so a `.env.production.ts`, which is TypeScript, is named and never read; every other file's text is
@@ -644,3 +712,35 @@ demand*); what it decides WITH is here, so every rule is a test without a reposi
 - **`ServedTurn.Render()`** is what the turn loop (S3.2) pastes into the tail: each slice as
   `### path lines a-b of n @ sha`, an optional `note:` line, and the text in a fence one backtick longer
   than any run inside it; each refusal as `not served: path [symbol] — reason`.
+
+### The turn tail, and what the loop decides with (2026-09-26, S3.2)
+
+The runners' loop (`TurnLoop`, `SourceConversation` — [module_runners.md](module_runners.md), *One
+reviewer, one conversation*) is thin on purpose; what it decides with is here, pure:
+
+- **`TurnTail.Render(TurnTailInput)`** (`core/Feature/TurnTail.cs`) is the ONLY text that changes between
+  turns. The base prompt is resent byte for byte (D25) and the tail is appended after its own `\n\n`, in
+  the plan's order: `## Turn k of N` (the one place the turn count is said — the fake CLI reads its turn
+  off it), the reviewer's previous findings compact (`[major/reliability] src/Shop.cs:17 — title`, one
+  line each, `none` when there were none), what it asked for (`SourceRequestNote.Line`, and each request
+  the parser refused with its reason), the source served in EARLIER turns (every slice, so a reviewer
+  three turns in still holds what it read — the reviewer's allowance bounds the whole of it), this
+  turn's `ServedTurn.Render()` (`nothing` when nothing was), then `OnlyThisTurnCounts` — the findings
+  above are not carried over; repeat what still stands — and either `AskAgain` or, on the last turn,
+  `Final` (`sourceRequests` will be ignored).
+- **`SourceRefusal.OverReviewerCap`** says WHICH cap refused a slice: the reviewer's whole allowance
+  (128 KB), or the turn's alone (64 KB) — a smaller request next turn still fits under the second.
+  **`ServedTurn.Exhausted`** is the loop's "stops on the budget": the spend reached `ReviewerBytes`, or a
+  request was refused for it; the turn told so is the conversation's last. **`ServedTurn.Summary()`** is
+  the one-line audit form (`served src/Shop.cs Sell (17-21 of 22); not served config/.env — looks like a
+  credential file (.env*)`) the reviewer's note and the audit line carry.
+- **`SourceBudget.DefaultFollowUps = 3`** (D20) and **`MaxFollowUps = 3`** — `COAI_FEATURE_SOURCE_FOLLOWUPS`
+  is read against them by the server; **`ReadDeadline`** (30 s) bounds one file's read of git before the
+  resolver refuses it as timed out.
+- **`Usage.TokensCached`** (`core/Findings/UsageParser.cs`): the cached SUBSET of the input, a fourth
+  positional field, trailing and defaulted so every construction and every session on disk keeps its
+  meaning; `Add` sums it. `UsageParser` reads codex's `cached_input_tokens`, the OpenAI-compatible
+  `prompt_tokens_details.cached_tokens` and claude's `cache_read_input_tokens` into it — for their own
+  number, never added to the input (codex's is inside its input count; claude's is billed beside it and
+  counted as input already). It is what D25's resent prefix is measured by, per turn, in the ledger and
+  on the audit line.

@@ -218,7 +218,7 @@
       },
       {
         "command": "coai.copyClaudeSnippet",
-        "title": "Copy the CLAUDE.md snippet (v12)",
+        "title": "Copy the CLAUDE.md snippet (v13)",
         "category": "ConnectOtherAIs"
       },
       {
@@ -448,6 +448,15 @@
                 "type": "string",
                 "description": "For an api reviewer: how its request is spelled (a row of shared/api-dialects.json). Absent means the generic openai dialect."
               },
+              "vaultKeyName": {
+                "type": "string",
+                "description": "For an api reviewer: the NAME of the vault key it reads, when that is not its id (a second model on one key). Absent means the id. Never a key value."
+              },
+              "pricePerMillionCached": {
+                "type": "number",
+                "minimum": 0,
+                "description": "For an api reviewer: dollars per million CACHED input tokens. Absent or 0 uses the published list price, else the input rate."
+              },
               "remoteVendor": {
                 "type": "string",
                 "description": "For a Team server reviewer: the vendor id THAT SERVER knows it by, which is not this row's id."
@@ -477,7 +486,7 @@
             "UxDxPerformance": 1,
             "DocumentReview": 1,
             "DocumentSummary": 1,
-            "FeatureReview": 1
+            "FeatureReview": 2
           },
           "markdownDescription": "How many rounds each reviewer ROLE gets. Architecture may be worth two passes with different lenses while performance is worth one; a shared budget forces the cheapest role to pay for the most expensive. Edit it in the **ConnectOtherAIs** panel."
         },
@@ -1157,6 +1166,7 @@
     "test:claude-models": "npm run compile && node scripts/live-claude-models.mjs",
     "test:close-compat": "node scripts/live-close-consult-compat.mjs",
     "test:feature-compat": "node scripts/live-feature-schema-compat.mjs",
+    "test:feature-vendor-compat": "npm run compile && node scripts/live-feature-vendor-compat.mjs",
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",
     "measure:image": "npm run compile && node scripts/measure-image.mjs",
     "measure:append": "node scripts/measure-append.mjs",

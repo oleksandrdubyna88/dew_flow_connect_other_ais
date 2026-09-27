@@ -34,6 +34,16 @@ public sealed record ReviewerSettings(string Provider)
     /// </remarks>
     public string Dialect { get; init; } = string.Empty;
 
+    /// <summary>
+    /// For an <c>api</c> vendor only: what its row charges per million tokens (PLAN_feature_review.md S3.7).
+    /// </summary>
+    /// <remarks>
+    /// Launch data like the dialect: <see cref="ApiRuntime"/> hands it to <c>--ask-api</c>, which prices each
+    /// turn, because an OpenAI-compatible response reports tokens and no money. Every other runtime ignores
+    /// it — a CLI on a subscription is not billed per token, and its list-price estimate stays the panel's.
+    /// </remarks>
+    public TokenPrice Price { get; init; } = TokenPrice.None;
+
     /// <summary>Where this machine keeps its own state — sessions, tokens, the rounds log.</summary>
     /// <remarks>
     /// Only <see cref="RemoteRuntime"/> uses it, to find the Team server token file. It is a

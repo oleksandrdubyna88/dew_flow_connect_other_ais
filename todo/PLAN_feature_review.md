@@ -1,12 +1,13 @@
 # PLAN — the feature review: a fourth gate, run once a whole plan is built, before release
 
 > Status: **in progress, 2026-09-26.** Epic 1 merged (`d8c0bcaa`) except S1.2's live Grok/Qwen
-> measurement, which waits on the vault; epic 2 (S2.1–S2.3) built; epic 3 has S3.1 and S3.3a built,
-> S3.2 and the releases open. Scope: `src_mcp` (core, normalizer,
+> measurement, which waits on the vault; epic 2 (S2.1–S2.3) built; epic 3 has S3.1, S3.2, S3.3 (all but the
+> promotion), S3.4, S3.6 and S3.7 built with §9.10–12 fixed, and §9.16–22 (epic 3's code round, 2026-09-27) fixed;
+> S3.5 and the releases open. Scope: `src_mcp` (core, normalizer,
 > runners, server, store), `src_vs_code` (panel, roles, rounds log, help, snippet), `src_server`
 > (one exclusion only), `shared/`, `.agents/PROJECT.md`.
 >
-> Related docs: [architecture.md](../research/architecture.md) ("Three gates, not two"),
+> Related docs: [architecture.md](../research/architecture.md) ("Four gates, not three"; "Three gates, not two"),
 > [PLAN_review_document.md](../research/PLAN_review_document.md) (the precedent for adding a stage),
 > [PLAN_consultant.md](../research/PLAN_consultant.md) (multi-turn conversations with a vendor),
 > [PLAN_local_models.md](../research/PLAN_local_models.md) (the `--ask-local` HTTP shim this reuses),
@@ -57,6 +58,8 @@ The idea is diversity of eyes, not policing: different models notice different t
 | D22 | **CONFIRMED (2026-09-26): outline plus changed hunks** (a hybrid) replaces the pure outline. Measured in `research/RESULTS_feature_pack_trial.md` (added with Epic 2): on the 7 control tasks the hybrid (arm D) was ≥ the outline and ≥ the diff on every task and better on three — 2.00 high-value findings per cell against 0.68, overstatement 35 % against 50 %, for +39 % input; with the shipped protocol (arm F: hybrid + D19 + three follow-ups) it found 7 of 14 planted defects against 5 for the outline arms — 6 of the 9 whose line reached the pack as a hunk, 0 of the 4 whose member the hunk budget cut. So S2.2 builds the hybrid with a **per-member hunk cap** (one huge unit must not starve the rest: in the trial six units filled all the hunk room of one pack while 664 small ones were cut), `OmissionsReserveBytes` 12 KB (cs1 exceeded 8 KB), `OutlineBytes` 168 KB. |
 | D23 | **At most two rounds, and the second only when it is needed** (operator, 2026-09-26). Round 2 runs ONLY when round 1 had a reviewer failure (some or all reviewers failed), a `blocking`-severity finding came back, or the person explicitly asks for one. Otherwise the review is one round: the caller resolves every finding (accept and fix, or reject with a reason) and the accepted fixes land without a second review. A second round that still carries a `blocking` finding, or fails again, is `call_human`. Epic 2 ships one round (a gating finding → `call_human`); S3.4 builds this. |
 | D24 | **The feature gate's rule lives in `dew_flow_conventions`** as `common/coai-feature-gate.md` (operator, 2026-09-26): coai gates every family repository, so the rule is shared, like the review, document and consultant rules. It says how to work and **tracks nothing** — no check, CI step or count of whether the gate ran. It replaces D11 (2a)'s product-owned snippet half: the snippet takes its feature half from the conventions mount, as the consultant half does (S3.5). The conventions PR (#55) is promoted to `release` only once coai ships `review_feature`. |
+| D25 | **Follow-up turns resend a cache-stable prefix; C3 (CLI resume) is not built now** (operator, 2026-09-26). The trial measured turn 2 at 1.12× (Fable) and 1.21× (Codex) turn 1's input, with no reuse by either CLI; the `api` vendors advertise prefix caching and are unmeasured. S3.2 keeps the base prompt byte-identical across turns and records cached tokens per turn; C3 gets its own plan only if the first live `api` run shows no caching. |
+| D26 | **Epic 3 may merge; no mcp release carries it until the API path is proven** (epic 1–3 consultation 742d52a8, closed `solved`, 2026-09-26). It is opt-in (nothing runs unless a vendor is ticked for features) and every suite is green, including the existing stages, which now all run through `TurnLoop`. But the release is held on BOTH (a) the vendor-calibration PR's acceptance cases — a `finish_reason: length` answer that parses is a failure and the D23 retry ground, not a clean pass; a failed call's billed usage crosses the shim → executor → ledger on turn 1 and turn 2; per-vendor token limits and reasoning switches; the xAI cache key — AND (b) a live product-path run recording Grok, Qwen and a CLI reviewer with a served follow-up and per-turn usage and cache counts. A live run alone would not exercise the billed-failure paths. |
 
 ## 3. What exists today (verified 2026-09-25 against `origin/main` 21aba62e)
 
@@ -453,12 +456,12 @@ and the rest lives in dedicated classes (`FeatureSessions`, `FeatureOutlineBuild
 
 | Seam | New → old | Old → new | Measure |
 |---|---|---|---|
-| vendor `feature` field | old server ignores it (verify no `UnmappedMemberHandling.Disallow`) | absent = false → skip "no vendor ticked" | phase 0 |
+| vendor `feature` field | old server ignores it (verify no `UnmappedMemberHandling.Disallow`) | absent = false → skip "no vendor ticked" | **Measured 2026-09-26 (S3.3) against released coai-mcp 0.38.0 and extension 0.56.3**, `live-feature-vendor-compat.mjs` (§6, *S0.4 results for epic 3*): 0.38.0 has no `Feature` on `VendorDto` and no `Disallow` anywhere; handed a `COAI_VENDORS` carrying the tick — settings file, env block, MCP `providers` — it lists every row, identical to the list without it. Old → new: the released extension's settings reach this build as nobody ticked, and `review_feature` records `skipped` with "no vendor is ticked for the feature review" |
 | `runtime: "api"` | **dangerous**: an old server's `RuntimeOf` (`PanelSettings.cs:1087`) turns an unknown runtime into codex + baseUrl — silently the wrong vendor | never written | panel gate `API_RUNTIME_SINCE`: rows disabled against an older installed server with "needs coai-mcp ≥ X" — and SUPPRESSED from the written settings, which needs the installed version threaded into the writer: `envBlock(settings, vendors)` (`settingsShape.ts:459-463`) → `vendorsEnv` (`vendors.ts:413-419`) has no such input today; `sameVendors(vendors, DEFAULT_VENDORS)` (`:461`) must still emit the rest |
-| extension rollback | an old `vendorsFrom` rewrites `api` as codex on next save | — | release note; the old code cannot be fixed |
+| extension rollback | an old `vendorsFrom` rewrites `api` as codex on next save — and drops the `feature` tick (**measured 2026-09-26 against 0.56.3**: every row kept, the tick gone, nothing ticked written) | — | release note; the old code cannot be fixed. The feature half of the note is in `src_vs_code/CHANGELOG.md` (*Unreleased*) |
 | session file with `Stage: "FeatureReview"` | old sweep must skip it (`JsonException`, `SessionStore.cs:455-463`) | — | **Measured 2026-09-26 (S2.1) against released coai-mcp 0.37.0**, `live-feature-schema-compat.mjs` leg 3: the released binary started over a data directory holding a feature session file with a round a dead process left running, exited on EOF, and left the file byte-identical — one session file, never a second; this build's sweep then marked the round `interrupted` and saved it back under its own key, feature and stage intact. No `sessions/feature/` fallback needed |
-| database `user_version` | old binary as reader/migrator | — | **Measured 2026-09-26 against 0.37.0**, legs 1 and 2: this build migrates a fresh directory to step **16** (not 15 — the cadence took 15 on 2026-09-25); the released binary answers `--log` over it, exit 0; the released binary's own database sits at `user_version` 14 and this build migrates it forward to 16 with `note` present, and the released binary still reads it afterwards. Forward only |
-| `--log` verdict `skipped`, stage `FeatureReview`, `note` | old extension shows raw strings | — | **Measured 2026-09-26 against 0.37.0**, leg 1: the released `--log` lists the skipped `FeatureReview` round under its raw stage name with no `note` member, exit 0; this build reads the note back (`… ×3`). The released EXTENSION's rendering of the raw strings is epic 3's row (`rounds.ts`, `roundsLog.ts`) |
+| database `user_version` | old binary as reader/migrator | — | **Measured 2026-09-26 against 0.37.0**, legs 1 and 2: this build migrates a fresh directory to step **16** (not 15 — the cadence took 15 on 2026-09-25); the released binary answers `--log` over it, exit 0; the released binary's own database sits at `user_version` 14 and this build migrates it forward to 16 with `note` present, and the released binary still reads it afterwards. Forward only. Re-run 2026-09-26 against 0.38.0 (published after these rows): all three legs green, its own database at `user_version` 15 |
+| `--log` verdict `skipped`, stage `FeatureReview`, `note` | old extension shows raw strings | — | **Measured 2026-09-26 against 0.37.0**, leg 1: the released `--log` lists the skipped `FeatureReview` round under its raw stage name with no `note` member, exit 0; this build reads the note back (`… ×3`). Re-run against 0.38.0 the same day: the same. **The released EXTENSION, measured 2026-09-26 (S3.3) against 0.56.3**: its `parseSession` and `parseLog` read what this server wrote, and its rounds-log page — bundled and RUN — draws the skipped round under the raw `FeatureReview` with the `done` badge and opens it; no error. This build draws `skipped — did not block` (S3.3a) |
 | Team server `/api/catalog` | `FeatureReview` would enter `AcceptedRoles` on rebuild — which holds bare role ids, and whose `AllowAny` bypasses the catalog altogether (`src_server/src/Jobs/AcceptedRoles.cs:103`, `:178`) | — | **Done in S2.1**: `AcceptedRoles` seeds the built-ins by stage (`StagesRunHere`) and keeps the rest as `RunElsewhere`, refused by name in `Knows` BEFORE `AllowAny`, in `Refusal` naming the stage, and in `Guard` at boot when named in `Coai:ExtraRoles`; `AcceptedRolesTests` pins all three, `AllowAny = true` included. The client never sends a feature role to a Team server (`Serves` excludes remote rows), so this is the second line, not the first |
 | api version gate | — | — | must **suppress `api` rows from the emitted `COAI_VENDORS`** for an older installed server, not merely disable them in the UI — the old server reads the settings file, not the panel |
 
@@ -609,6 +612,36 @@ Epics (16 KB), lessons (16 KB) and history (24 KB) are **not** in `FeatureBudget
 until Epic 2, and a constant nobody measured would be the guess this rule forbids. With the plan's figures
 for those three the whole context is ≈ 64 + 168 + 8 + 56 + rules ≈ 296 KB, past the ≈256 KB precedent —
 Epic 2 either measures and accepts that or takes it back out of the outline.
+
+#### S0.4 results for epic 3 — measured 2026-09-26 in S3.3 (the vendor `feature` field, the snippet)
+
+Against the newest PUBLISHED halves that day: **coai-mcp 0.38.0** (downloaded, `gh release download`) and
+the **extension 0.56.3** (built from its tag — its `.vsix` exports only `activate`). Harness
+`src_vs_code/scripts/live-feature-vendor-compat.mjs` (`npm run test:feature-vendor-compat`), run on
+win-x64 from branch `feat/feature-review-e3-s33b`; the new side is this checkout's Debug `coai-mcp` and
+compiled extension. Exit 0: 29 assertions, all green. S2.1's `live-feature-schema-compat.mjs` was re-run
+the same day against 0.38.0 (the 0.37.0 rows in §4.13 predate its publication): 19 of 19 green, the
+released database at `user_version` 15.
+
+| Row | What was run | Result |
+|---|---|---|
+| new extension → released server: the tick in the settings file | the new `serverSettingsJson` with `codex, antigravity` and a third row `codex-feature` ticked, server version unknown (the tick crosses) → `settings.json`; released `coai-mcp --providers` | exit 0; lists `codex, antigravity, codex-feature` — the list was read, not refused into the defaults |
+| the same, as a control | the same list with the tick removed | the released answer is identical — the field changes nothing there |
+| the same, through the client's env block | the new `envBlock(...).COAI_VENDORS` as the `COAI_VENDORS` variable | exit 0; the same three |
+| the same, served | the released server over stdio, MCP `providers` tool | the same three; exit 0 on EOF |
+| teeth of the above | by hand: a malformed `COAI_VENDORS` to the released server | `codex, antigravity` — a refused list reads as the defaults, which the check fails on |
+| the version gate | the new writer told the server is 0.38.0 | the tick held out, all three rows written |
+| extension rollback | released `vendorsFrom` over the rows the new build stored, then released `serverSettingsJson` | every row kept, the tick dropped, no tick written — **a rollback forgets the ticks on its next save** (a release-note row: the old code cannot change) |
+| old → new: absent is no | new `coai-mcp`, `review_feature` over MCP on a fixture repository (a plan of three epics, a real base), with the released extension's settings file | `skipped` — "no vendor is ticked for the feature review — tick it on a vendor's card in the panel to run it"; does not block |
+| released extension ← new server: session file | released `parseSession` over the session file the new server wrote | parsed; the `FeatureReview` round with verdict `skipped` |
+| released extension ← new server: `--log` | released `parseLog` over the new `--log --paged` | parsed, the skipped feature round listed |
+| released extension ← new server: the rounds-log page | released `roundsLog.ts` bundled with esbuild (minified, as shipped), `rowsFrom` + `roundsLogHtml`, the page script RUN against a stub DOM, the row opened | no throw, no self-reported error; the round drawn under the raw `FeatureReview` with the **`done` badge** (the released page has no skipped state — S3.3a's); the row opens |
+| snippet: new extension ← older paste | new `snippetStatus` over the released `claudeSnippet()`; new `readSnippetStatus` over a `CLAUDE.md` holding it | `older`, behind on `coai-feature` alone, current 13; the note names "the feature gate" and v13 |
+| snippet: released extension ← newer paste | released `snippetStatus` over the new `claudeSnippet()` | `ahead`, newer on `coai-feature`, current 12; the copy message says "Keep what you have" |
+
+No D12 defect: every row held. Not measured: a released extension facing a feature round WITH findings
+(no reviewer ran — the only feature round was a skip), the released vendor card drawn in VS Code, and a
+Team server (it runs no feature review, D10).
 
 ## 7. Build order — three epics, nine stories, the coai gate once per epic
 
@@ -978,9 +1011,30 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
   - Model: **Fable** — it serves repository contents to third-party models; path confinement and
     credential refusal are the security boundary.
 
-- [ ] **S3.2 — the turn loop: one reviewer, one conversation, one terminal outcome.**
+- [x] **S3.2 — the turn loop: one reviewer, one conversation, one terminal outcome.**
   Goal: a reviewer that asks for source gets it and answers again — caching-friendly resends, honest
   usage, and a rollback switch.
+  - **Built 2026-09-26** (`feat/feature-review-e3`), as stated, with these deviations recorded: the loop
+    is its own class beside the scheduler (`runners/Reviewers/TurnLoop.cs`, called from
+    `BoundedScheduler.LaunchAsync`) rather than lines inside it, and `RepairInstruction.Text` moved out
+    of the roster so the follow-up turn's repair uses the same text; `EarlierTurns` is a LIST of per-turn
+    usages (`TurnUsage`) rather than one summed usage, because "one ledger entry per turn" needs each
+    turn's own numbers — `EarlierUsage` is the sum, and `Ok.Usage` stays the last turn's; the ledger
+    line and `Usage` gained a trailing `TokensCached`, read from codex's `cached_input_tokens`, claude's
+    `cacheReadInputTokens`, the OpenAI-compatible `prompt_tokens_details.cached_tokens` and the
+    `--ask-api` shim's new `tokensCached`; "stops on the budget" is `ServedTurn.Exhausted` — the spend
+    reached 128 KB or a request was refused for the REVIEWER's cap (`SourceRefusal.OverReviewerCap`) —
+    which makes the NEXT turn FINAL rather than ending the conversation without telling the reviewer;
+    the tail repeats the source served in earlier turns before this turn's, so a reviewer three turns in
+    still holds what it read; a valid-but-refused and a parser-rejected request both continue the
+    conversation (the refusal is the answer); a reviewer whose LAST turn still asked gets those requests
+    on its note under a heading that says no turn was left; the fake CLI's turn family reads the turn
+    off the prompt's `## Turn {n} of` heading (never a counter) and decodes stdin as UTF-8. Observed and
+    left as is: the launcher reports a caller's cancellation mid-launch as `TimedOut`+`Cancelled` and
+    the executor names it `TimedOut`, so a conversation cancelled DURING a turn ends as a timeout and one
+    cancelled BETWEEN turns as "cancelled while it was running" — the cost is kept either way. The
+    acceptance's live run is still owed: no real vendor answered a second turn here, and whether any
+    vendor's cache reuses the resent prefix is what the per-turn `tokensCached` records for it.
   - Deliverables: `IReviewerContinuation` + `ReviewerWork.Continue` (`BoundedScheduler.cs:24`; `None`
     everywhere else); the loop inside `BoundedScheduler.LaunchAsync` (`:390`) around `RunWithLadderAsync`
     — the slot held for every turn, the ladder per turn, exactly one terminal outcome (the stand-down
@@ -1000,7 +1054,11 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
     at 7 808 tokens across 140–395 KB prefixes). So before three follow-ups ship, E3 decides between C3
     (vendor-side resume) and a cache-stable prefix per vendor, and measures the `api` runtime's caching
     (xAI and DashScope advertise prefix caching; unmeasured) — the stateless resend stays correct, only
-    its price is in question.
+    its price is in question. **Decided (D25): a cache-stable prefix, not C3.** The loop resends the base
+    prompt byte for byte with the turns appended — the shape OpenAI-compatible APIs cache on their own —
+    and the `api` runtime's cached-token counts are recorded per turn so the first live run measures it.
+    C3 becomes its own follow-up plan only if that measurement shows the `api` vendors do not cache
+    either.
   - RED first: turn N+1's prefix equals the base prompt byte for byte; stops on no request, on the
     cap, on the budget; a malformed turn-2 answer is repaired against turn 2's prompt; a source request
     with non-zero usage then a failed turn 2 keeps turn 1's cost (ledger AND round total); a
@@ -1010,7 +1068,27 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
   - Acceptance: **the DoD's live run** — `review_feature` on this repository against Grok and Qwen
     through `api` and one CLI reviewer, with a source request served, cost recorded; the suite green in
     both configurations (the change touches concurrency).
-  - Model: **Fable** — the scheduler's outcome, usage and slot accounting is architecture every stage runs through.
+  - **From E3's plan round (2026-09-26), accepted:**
+    - **Time:** each turn runs under its own `reviewerTimeout`; the scaled deadline
+      (`× (1 + follow-ups)`) is only the cap on the whole conversation. A turn that times out, or a
+      conversation that reaches the cap, is ONE terminal outcome — a failed reviewer. The usage of every
+      turn so far is kept, earlier turns' findings are discarded, and the slot is released. That exact
+      sequence is a RED test.
+    - **Repair:** "the repair rebuilt per turn" means the repair PROMPT is composed from that turn's own
+      prompt, not turn 1's. Nothing is persisted. A repair that itself fails or times out is a failed
+      turn, and so a failed reviewer — never a silent fallback.
+    - **Resolver failure:** a `SourceResolver` failure or timeout on a request (a git lock, a slow
+      `git show`) is a refusal on that request (`not served: <path> — timed out`); the turn goes on with
+      whatever was served. It is never "served, empty".
+    - **The switch:** `COAI_FEATURE_SOURCE_FOLLOWUPS` absent → 3; a value that is not an integer in 0..3
+      → 3 with a startup note naming it; 0 → single-turn. A RED test for absent, invalid and 0.
+    - **Spend lifetime:** the resolver spend (64 KB/turn, 128 KB/reviewer) is per reviewer per ROUND. A
+      D23 round 2 starts each reviewer's allowance afresh, bounded by the two-round cap.
+    - **Live acceptance when the keys are missing:** the operator provisions the Grok and Qwen keys in
+      the coai vault (bought 2026-09-25). Until they are there, the live run uses the CLI reviewers
+      (Codex) on this repository with a source request served. The release notes say the `api`
+      vendors' multi-turn caching is unmeasured, and the `api` leg runs the day the keys land (S1.2
+      (ii)/(iii)). The release is NOT held for it.
 
 - [ ] **S3.3 — the extension, the docs, the promotion.**
   Goal: a person can tick a vendor for features, see a skipped round for what it is, read the help,
@@ -1035,10 +1113,84 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
   - Acceptance: `npm test` green; `test:seam` and `test:parity` green; the plan promoted with its
     deviations; `plan-lifecycle.mjs` and `pin-check.mjs` green.
   - Model: **Opus** — UI, translations and documentation of work already shaped.
+  - **Progress — S3.3a done 2026-09-26** (branch `feat/feature-review-e3-s33`, one commit): `vendors.ts`
+    `feature?` (absent = false, stored only when true, a Team-server row forced false —
+    `featureGate.ts` `reviewsFeatures`/`featureNote`); the card's fourth switch **reviews features**, off
+    with its sentence for a Team-server row and for an older server; `FEATURE_SINCE = '0.39.0'` (the next
+    minor after `mcp-v0.38.0`, which does not contain S2.1), the tick held out of `COAI_VENDORS` for an
+    older server while the row still crosses; `stageName` for `DocumentReview` (§9.5, RED first) and
+    `FeatureReview`; the rounds log's neutral **skipped — did not block** state with the reason (`×N`) on
+    the opened row, no duration and no findings read (the page RUN); help ×5 (reviewers, snippet,
+    rounds log); the snippet half `featureRule.md` v1, emitted by `prepare-gate.mjs`, a `KNOWN_HALVES`
+    row with a new `mounted: false`. Deviations: **`ARTEFACT_VERSION` 12 → 13 and "(v13)"**, not 11 → 12 —
+    the consultant move had already taken 12 (2026-09-25); **a mounting repository is not judged on the
+    product-owned half** (no mount can carry it; the instruction reaches it through the tool description
+    — `readSnippetStatus` judges a mount on `MOUNTABLE_HALVES`); **`envBlock` decides "same as the
+    shipped vendors" on the WIRE form** — the old field subset dropped `COAI_VENDORS` for a feature tick,
+    an unticked plan or code box, a said document box and a CLI path on the shipped codex+antigravity
+    pair (each found RED, D12; second commit); the roles page's Stage select offers `feature` (second
+    commit). `test:seam` and `test:parity` green 2026-09-26. **What remains of S3.3:** the S0.4 rows for
+    the `feature` field and the snippet against the released halves; the docs of `module_core|server|runners|tests.md`,
+    `architecture.md` ("Four gates, not three") and `src_vs_code/CHANGELOG.md`; the tool description of
+    `review_feature` agreeing with the snippet once S2.2b exists; this plan's DoD and its promotion.
+  - **Progress — S3.3b done 2026-09-26** (branch `feat/feature-review-e3-s33b`, one commit): **the S0.4
+    rows** — §6 *S0.4 results for epic 3*, and the §4.13 rows for the `feature` field, the rollback and the
+    released extension's rendering — measured against the newest PUBLISHED halves, coai-mcp **0.38.0**
+    and extension **0.56.3**, by the new `src_vs_code/scripts/live-feature-vendor-compat.mjs`
+    (`npm run test:feature-vendor-compat`): 29 assertions green, and S2.1's script re-run against 0.38.0,
+    19 of 19. **No D12 defect**: every row held, so no product code changed. Deviations: **the released
+    extension is BUILT from its tag, not installed from the `.vsix`** — the bundle exports only
+    `activate`, so its `vendorsFrom`/`parseSession`/`snippetStatus` cannot be called; a `git clone
+    --shared` at the tag gives `prepare-gate.mjs` the repository its resolver check needs, and the
+    rounds-log page is bundled again from the released source; **the downloader moved into
+    `scripts/releasedHalves.mjs`**, which S2.1's script now imports (reuse-first: a second copy of "published
+    releases only" is a second place to forget it) — `live-close-consult-compat.mjs` keeps its own older
+    copy, untouched. **Docs:** `architecture.md` *Four gates, not three* (what the feature gate is, where it
+    sits, what crosses each container, the released halves) and the two epic-2 sentences that called the
+    tick and the skipped row "epic 3's"; `module_extension.md` (the released-halves table; two stale
+    sentences); `module_server.md` (the 0.38.0 re-run; what an older server does with the tick);
+    `module_tests.md` (the S3.3 suites and the script, its teeth, what it does not prove). `module_core.md`
+    and `module_runners.md` said nothing about S3.3a's surfaces — searched for the tick, the snippet, the
+    skipped row, `stageName`, "epic 3" — and are unchanged. **CHANGELOG:** a `## Unreleased` section — no
+    version is invented; the heading of the release that ships it replaces it, and
+    `changelog-names-the-release.mjs` / `changelog-section.mjs` were run over the file (0.38.0 still
+    documented, 0.56.3 and 0.56.2 still slice alone). **What remains of S3.3:** the `review_feature` tool
+    description agreeing with the snippet (with S3.2/S3.4, which own that text), this plan's DoD, and the
+    promotion after S3.2, S3.4 and S3.5.
 
-- [ ] **S3.4 — the second round, only when it is needed (D23).**
+- [x] **S3.4 — the second round, only when it is needed (D23).**
   Goal: a feature review ends after one round unless round 1 failed, found something `blocking`, or the
   person asked — and never runs a third.
+  - **Built 2026-09-26** (`feat/feature-review-e3`), as stated, with these deviations recorded. The
+    ground is a value on the state, `SessionState.SecondRound` (`SecondRoundGround`: `None`,
+    `ReviewerFailure`, `BlockingFinding`, `PersonAsked`), written by `RoundMachine.CompleteRound` for the
+    first two and by `RoundMachine.ApplyPersonsRequest` for the third, and read by `BeginFeatureRound`
+    alone; the round that ran on it records it as `RoundRecord.AdmittedBy`. **The verdict names were not
+    widened**: a non-blocking round 1 answers `proceed` at or under the threshold and `good_enough` over it
+    (both close on `resolve`), a ground answers `revise` with one round left, and round 2 on a ground
+    answers `call_human` — the closed union stays closed, and every feature instruction says D23 in its
+    case's words (`FeatureSecondRound.Apply`). **A round in which every reviewer failed is a retry first**
+    (some OR all, as D23 says) and `call_human` on the second failure — which narrows §4.4's "all failed →
+    call_human" row to the second round; the un-tick guard holds on that held gate. **`Resolve` keeps the
+    feature stage's count into `Done`**, so `again` reopens a finished review for its second round (count
+    kept) or is refused a third — `BeginFeatureRoundAgain` no longer resets the count; a new base is the
+    only fresh start (`FreshFeatureReview`, which the engine now applies BEFORE the begin, on the session
+    as read). **The person's request is the escalation answer** — `continue`/`fix` on a question filed
+    under the feature session, the road `humanDecision` takes — applied by `PersonsRequest.Apply` only
+    when the answer is NEWER than the last feature round (a "keep going" spent on a held gate must not
+    reopen the review its fresh set then closed); no new decision value and no new file shape — the panel's
+    "Keep going — more rounds" gained a feature-specific detail (`decisionChoices(branch)`). **The retry and
+    the person's request are exempt from D14's unmoved-head refusal** (they read the same head by design); a
+    blocking finding's second round is not. **A retry with none of the failed reviewers still configured
+    asks everyone**, so an edited roster cannot turn it into a `proceed` over nobody. `carried` is a new
+    field on the answer (`CarriedDecision`: finding, action, reason), kept on `PersistedSession.Carried`
+    between the two calls. A budget of one (`COAI_MAX_ROUNDS_FEATURE=1`) runs no second round; D23 caps,
+    it never adds. **One D12 defect on the way:** `PanelService.WithHumanDecision` applied the newest
+    answered notice on every `resolve`, gate held or not — one "keep going" reset the count for the life
+    of the session and let a third feature round run; it now applies only while the gate is held. The
+    conventions rule's sentence "`call_human` … is also what comes back when every ticked reviewer failed"
+    is true of the second failure; sharpening it to say so is the conventions PR's, not this repository's.
+    The tool description and `feature-review.md` state D23 in the rule's own words.
   - Deliverables: the feature stage's round budget 2, with round 2 admitted only by the machine
     (`RoundMachine`) on one of the three grounds, recorded on the round; a round 1 with gating findings
     none of them `blocking` closes the review on `resolve` (the accepted fixes land without a second
@@ -1049,7 +1201,15 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
   - RED first: a non-blocking gating round closes on resolve and refuses `again` over the same base; a
     `blocking` round admits round 2; a partly-failed round admits a retry; round 2 blocking → `call_human`;
     a third round refused; the caller cannot claim the person's request.
-  - Model: **Fable** — round policy every feature review runs through.
+  - **From E3's plan round (2026-09-26), accepted:**
+    - **A retry reruns only the failed reviewers.** When round 1 partly failed, round 2 asks ONLY the
+      reviewers that failed; the answered reviewers' findings are carried into the verdict as they were
+      resolved, not re-bought. When every reviewer failed, round 2 asks all of them.
+    - **The person's request has a provenance the caller cannot forge.** It is a field written only by
+      the person's surfaces — the Ask Inbox / `ask_human` answer path and the panel, the same road
+      `humanDecision` already takes — and recorded on the session as the person's. No `review_feature`
+      or `resolve` argument can set it; `again: true` alone never admits a round 2 on this ground. RED
+      test: a caller passing every argument it has cannot open round 2 without the person's field.
 
 - [ ] **S3.5 — the snippet's feature half comes from conventions (D24).**
   Goal: one text of the feature rule, owned by conventions, pasted and mounted alike.
@@ -1061,6 +1221,61 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
     in conventions gains the feature marker once this build reads it.
   - Order: only after coai's mcp release carrying `review_feature` is cut, the conventions PR promoted,
     and the six-consumer pin cascade run.
+  - Model: **Opus**.
+
+- [x] **S3.6 — the vault's keys are vendors in the picker (operator, 2026-09-26).**
+  - **Built 2026-09-26** (`feat/feature-review-e3-s36`). Deviations: the row names its key in a field of its
+    own — `Vendor.vaultKeyName` in the panel, `key` on the wire, `ProviderSettings.VaultKey` / `KeyName` in the
+    server — because the vault is keyed by row id and a second model on one key (`qwen-2`) needs to read `qwen`;
+    `KeyName` is now the one answer every vault lookup asks (auth, exclusion, roster, `--probe-api`, the "needs a
+    key under" sentence). `providers` also says `vaultRead`, so an empty list is told apart from an unreadable
+    vault, and a server too old to name its keys is its own state. The presets are extension data
+    (`apiKeyVendors.ts` `API_KEY_PRESETS`), not `shared/api-presets.json`: the server never needs them. The
+    dialect stays `openai` — no `xai`/`qwen` dialect row is measured yet (S1.2's live half).
+  Goal: "Add a reviewer" offers everything available today, PLUS one entry per key name found in the
+  vault's config entry, shown with a leading `!` (it is an API key, not a CLI) — `!grok`, `!qwen`.
+  - Deliverables: the server reports the vault's key NAMES (never values) on `providers` / `--providers`;
+    the extension's picker lists them after the CLI vendors as `!<name>`; choosing one creates an `api`
+    row named after the key, asks for the model from the endpoint's own `GET /models` (the probe's list),
+    and fills the endpoint from the preset when the name has one (`grok` → `https://api.x.ai/v1`, `qwen`
+    → the Token Plan base URL), else asks for the base URL. A key already used by a row is still listed
+    (a second model on one key). A vault that cannot be read lists nothing and says why.
+  - RED first: no key value ever crosses to the extension; the `!` entries appear only for names in the
+    vault; a chosen `!qwen` writes a row whose key is `qwen`; the model list comes from the endpoint.
+  - Model: **Opus**.
+
+- [x] **S3.7 — what an API reviewer cost, in the log (operator, 2026-09-26).**
+  - **Built 2026-09-26** (`feat/feature-review-e3-s36`). Deviations: the cost is computed by the `--ask-api`
+    shim per TURN (the row's rates ride to it as `--price-*` flags) and read back as `Usage.CostUsd`, not by the
+    ledger — the shim is the one place holding one request's tokens and the rates, the tier is a per-request
+    threshold, and computing it there is what makes the ledger, the audit line, the round record and `status`
+    all carry the same number. The price crosses on `api` rows only — a CLI on a subscription is not billed per
+    token and its list-price estimate stays the panel's. A typed rate wins field by field; the list's tier
+    crosses only while nothing was typed. "No price set" is `Usage.NoPriceSet` → the ledger's `costNote`,
+    `RoundRecord.CostNote`, `CostText.Of` in the audit, and the rounds log's Cost cell. The two price tables
+    moved from `PanelProvider` to a shared `priceBook.ts`, because the settings file is written from activation
+    where no panel exists. Not built: pricing a CLI reviewer server-side; persisting `CostNote` in the rounds
+    database (the log reads it off the ledger line).
+  Goal: every reviewer line records tokens in, tokens out, cached tokens, seconds AND cost — for an
+  `api` vendor too, whose responses carry no price.
+  - Deliverables: the vendor row carries its price per million tokens — input, **cached input**, output
+    (today only in/out, and extension-side only) — and it crosses to the server with the row (a price is
+    not a secret); the ledger computes `cost = (in − cached)·pIn + cached·pCached + out·pOut` when the
+    runtime reported none, with a vendor's long-context tier (xAI doubles every rate from 200K prompt
+    tokens) as an optional second rate; the rounds log, the audit line and `status` show it; a row with
+    no price says "no price set", never $0. **The prices come from the lookup that already exists** —
+    `src_vs_code/src/modelPrices.ts` (OpenRouter, then LiteLLM), the one codex and antigravity use —
+    widened, not a second table: (a) the **cached** rate is read too (OpenRouter `input_cache_read`,
+    LiteLLM `cache_read_input_token_cost`); (b) the lookup is **route-aware**: a row whose endpoint names
+    its provider asks LiteLLM's `<provider>/<model>` first (`xai/`, `dashscope/`, `zai/`), because
+    OpenRouter's number is OpenRouter's resale price, not the vendor's (grok-4.7: OpenRouter 1.60 / 4.80,
+    xAI 2.00 / 0.50 / 6.00); (c) `priceKey` stops treating `-max` as an effort — it strips it from
+    `qwen3.8-max`, which then finds no price at all (a defect, §9.12). Measured 2026-09-26 for our routes:
+    `xai/grok-4.7` 2.00 / 0.50 / 6.00; `dashscope/qwen3.8-max` 2.00 / 0.25 / 6.00;
+    `dashscope/deepseek-v4-pro` 2.40 / 0.20 / 4.80; glm-5.3 has no dashscope row (`zai/glm-5.3`
+    1.40 / 0.26 / 4.40 is the nearest). A typed rate still wins over a looked-up one.
+  - RED first: an `api` turn with tokens and a priced row writes a cost; cached tokens are priced at the
+    cached rate; a request over the tier threshold uses the tier rate; no price → "no price set".
   - Model: **Opus**.
 
 ### 7.5 Dependencies and parallelism
@@ -1158,6 +1373,117 @@ xUnit v3 through the MTP executables (never `dotnet test`); extension pages test
 9. Stale text: `normalizer/CoaiMcp.Normalizer.csproj:9-11` says it is not referenced by `CoaiMcp.csproj`
    (it is, `:35`); `TreeSitterNormalizer.cs:60-67` says TS and TSX share one grammar file (the package
    ships a separate `tree-sitter-tsx`); `Tools.cs:7` says nine tools (there are ten).
+10. **FIXED 2026-09-26 (S3.6's branch)** — `KeyVault.ForThisMachine` looks in the CredsForDevs extension's
+    global storage (every OS's VS Code layout, stable and Insiders) after PATH; chosen over the extension passing
+    a path because three modes read the vault from any MCP client. RED: "the `creds` CLI is not installed on
+    this machine". **The vault is unreachable where it is actually installed** (found 2026-09-26 by S0.5's probe):
+    `KeyVault` runs `creds` from PATH, but the CredsForDevs extension ships its CLI at
+    `%APPDATA%\Code\User\globalStorage\remsoftdev.creds-for-devs\bin\creds.exe`, and the folder on PATH
+    (`%LOCALAPPDATA%\Programs\creds`) holds only `creds-mcp.exe` — so the server VS Code launches answers
+    "the `creds` CLI is not installed" and no `api` vendor gets a key. Fix: look in the CredsForDevs
+    extension's bin after PATH (or let the extension pass the path), RED first.
+11. **FIXED 2026-09-26 (S3.6's branch)** — generally, not xAI-only: a 400 whose ERROR field says the key is
+    wrong exits 77; the phrase is never searched in the whole body. RED: exit 70, body quoted.
+    **xAI answers a wrong key with 400, not 401** ("Incorrect API key provided", S0.5 probe,
+    2026-09-26): `AskApiMode` maps only 401/403 to the auth exit 77, so a revoked Grok key reads as a bad
+    request. The `xai` dialect must recognise it by its text, RED first.
+12. **FIXED 2026-09-26 (S3.7)** — `-max` left the effort list. RED: `'qwen3.8'` for `'qwen3.8-max'`.
+    **`priceKey` strips `-max` as a reasoning effort** (`src_vs_code/src/modelPrices.ts`, the suffix list
+    `high|medium|low|thinking|xhigh|max|ultra`): `qwen3.8-max` becomes `qwen3.8`, which no list prices,
+    so the panel shows no price for a model both lists carry. Found 2026-09-26; fix in S3.7, RED first.
+13. **FIXED 2026-09-26** — found by the epic 3 risk consultation 159f0397, verified against the code. RED:
+    `Expected lines[0].TokensIn to be 1000L … but found 0L` (the ledger line and the round total; the
+    turn loop's terminal line `"tokensIn":0` where 700 was owed). **A failed repair loses the billed usage
+    of the malformed attempt.** `ReviewerExecutor.RunAsync` returned the repair's own terminal outcome —
+    timeout, non-zero exit, rate limit, not started — as the launch produced it, and the first attempt's
+    usage (a completed, billed process whose answer was malformed) went nowhere: not on the outcome, not
+    in the ledger, not in the round total; every stage, and the S3.2 turn loop for a turn whose repair
+    timed out. Fix: `ReviewerOutcome.EarlierLaunches` on the base, `LastTurnUsage`/`TotalUsage` as the
+    one member the ledger and `LiveRound.Finish` read, `AfterTheRepair`'s failure arm carrying
+    `first.Usage.Add(second.Usage)`, and the rate-limit ladder carrying each abandoned step's cost
+    forward. `AFailedRepairStillCountsTheMalformedAttemptTests`, and the turn-loop case in
+    `AReviewerThatAsksForSourceIsAskedAgainTests`.
+14. **FIXED 2026-09-26** — found by the epic 3 risk consultation 159f0397, verified against the code. RED:
+    `Expected sentence "all 1 reviewers answered" to contain "grok/FeatureReview was not asked: failed in
+    round 1 and is no longer enabled"`. **The D23 retry silently drops a failed reviewer that is no longer
+    on the roster.** `FeatureSecondRound.OnlyTheFailed` kept the failed reviewers still enabled and named
+    the ROSTER's rest as not asked, so with codex and grok failed and grok switched off the retry asked
+    codex and grok's failure vanished from the round. Switching it off is the person's decision, so it does
+    not block; it is now named in `NotAsked` with the reason, which the reply's `reviewers` line and the
+    audit line render; the "no failed reviewer left → everyone" rule stands and names the gone as well.
+    `ARetryNamesTheFailedReviewerThatIsGoneTests`.
+15. **FIXED 2026-09-26** — found by the epic 3 risk consultation 159f0397, verified against the code. RED:
+    `Expected … to be HumanDecision.None because q1 was asked for hold one; answering it after hold two
+    began is not a decision on hold two, but found HumanDecision.Continue`, and end to end a round ran
+    where `GateHeld` was owed. **A person's answer was bound to its hold by TIME, not identity** — an old
+    question, asked during an earlier hold and left unanswered, answered now, released the CURRENT hold
+    (its answer was newer than the round; §9's D12 fix had added the clock, not the binding). Fix: a hold
+    records the questions raised for it on the session (`SessionState.HoldQuestions` — the `call_human`
+    notice's id, built before the engine's save and written after; every `ask_human` question asked while
+    the hold stands, saved under the session's claim), `CurrentAnswer` accepts only an answer to one of them
+    and releases the list with the hold; the clock stays for a session that records none — an older build's
+    hold, or the feature stage's second-round request with no hold at all — which is the fail-safe reading
+    and its stated residual. `TheAnswerBelongsToTheCurrentHoldTests`, the two-hold scenario in
+    `AFeatureIsReviewedEndToEndTests`, `ASessionFromAnOlderBuildStillRunsTests`. (The residual was
+    closed by §9.21, 2026-09-27.)
+16. **FIXED 2026-09-27** — found by epic 3's code round. **SECURITY: a private-key body inside an ordinary
+    file reached the vendor.** Every redaction pattern is a one-line shape and a PEM body is base64 on lines
+    of its own, so a committed `service-account.json` (a name D15 does not refuse) was served with only its
+    `-----BEGIN` taken out by the labelled pass, and the body followed the reviewer into every later turn's
+    "served in earlier turns"; the pack's hunks and outline, and a notice quoting a key, had the same gap.
+    RED: `Did not expect safe "{ … "private_key": "[redacted] PRIVATE KEY-----\nMIIEvQKEYBODYLINE01…" to
+    contain "KEYBODYLINE"`, the same over the served tail, the pack (a hunk in the middle of a body shows
+    no marker) and `SafeText`. Fix: `PrivateKeyBlocks.Redact`, the pass `SecretsTaken` runs FIRST — header
+    to footer, every variant, real newlines and escaped `\n`, one placeholder per line so the line count
+    survives, a footerless header losing the key-looking run after it, linear by construction rather than a
+    pattern (a body-between-markers regex searches `headers × bound`); the hunks redacted TOGETHER and
+    aligned to the file's own redaction (`FeatureOutlineBuilder.SafeHunks`); the same pass ported to the
+    extension (`privateKeyBlocks.ts`, `safeText`) and the parity corpus given seven key shapes, because
+    `notifications.ts` is the contract byte for byte. `APrivateKeyBlockIsNeverServedTests` (17),
+    `privateKeyBlocks.test.ts` (16).
+17. **FIXED 2026-09-27** — found by epic 3's code round. **`TurnLoop` lost a non-final turn's earlier
+    launches.** `AfterAsync` recorded `answered.Usage` — the answering launch's alone — so a turn whose
+    malformed first launch rode forward on the ladder's retry as `EarlierLaunches` lost it from the turn's
+    ledger line and the round total whenever the turn CONTINUED. RED: `Expected first.Usage.TokensIn to be
+    1700L … but found 1000L`. Fix: `answered.LastTurnUsage`.
+    `AContinuingTurnsEarlierLaunches_AreOnItsLedgerLine_AndInTheRoundTotal_Once` — a malformed launch, a
+    rate-limited repair, the retry that asks for source, a clean turn 2: 1700 on turn 1's line, 1710 in
+    the round total, each launch once.
+18. **FIXED 2026-09-27** — found by epic 3's code round. **D14 was skipped for a blocking round 2 without
+    `again`.** `WhyNotThisRound` gated the unmoved-head refusal on `again`, so a plain `review_feature`
+    after a blocking round 1 ran round 2 over the head round 1 had read. RED: `Expected
+    WhyNotThisRound(…, again: False) "" to contain "the head has not moved"`, and end to end a round 2 ran
+    where a refusal was owed. Fix: `MustReadANewHead` — refused whenever the ground is `BlockingFinding`,
+    with or without `again`; a retry and the person's request read the same head by design either way.
+19. **FIXED 2026-09-27** — the gate's #25 (blocking). **The review gate was bypassed by switching reviewers
+    off.** After a round-1 failure (`revise`, `SecondRound = ReviewerFailure`, gate not held) unticking every
+    feature reviewer — or passing fewer epics than the D17 line — met `RoundSkips.BeforeBuilding` and recorded
+    a `skipped` round that "did not block". RED: `Expected unticked.TryGetProperty("verdict") to be False
+    because not a skip: skipped, but found True`. Fix: both skip sites go through `RoundEngine.SkippedOrOwed`;
+    an admitted second round with nobody to run it is refused with
+    `FeatureSecondRound.NobodyForAnAdmittedRound` (the ground, the reason, that it BLOCKS, the two doors),
+    nothing recorded, the ground standing. The D1/D17 skip stays for round 1.
+20. **FIXED 2026-09-27** — the gate's #27. **The person's second-round request needed identity.**
+    `PersonsRequest` accepted any `continue`/`fix` newer than round 1, so an unrelated `ask_human` answer —
+    a question asked while the review was still skipped, one an older build filed — admitted round 2. RED:
+    `Expected PersonsRequest.Apply(closed, …) to refer to closed` (it applied), and end to end a round 2 ran
+    on a question asked before round 1. Fix: `SessionState.RequestQuestions` — the `ask_human` question ids
+    asked on the feature session after its first round while no hold stands, recorded by
+    `RoundMachine.RecordQuestion` (the one place that says where a question's answer may count: the hold,
+    the request, nowhere), spent with the request, emptied when a round completes and with the count;
+    `CurrentAnswer.ForRequest` accepts only an answer to one of them (the clock kept as a fail-safe).
+21. **FIXED 2026-09-27** — the gate's #24/#30. **Stale approval on a held gate with no recorded question
+    id.** §9.15's residual — the clock for a session an older build held — was the bypass in a smaller coat:
+    an old question answered late released such a hold. RED: `Expected CurrentAnswer.DecisionFor(Held(…))
+    to be HumanDecision.None … but found HumanDecision.Continue`, and end to end the hold released. Fix:
+    `CurrentAnswer.For` answers only from the hold's own questions — a hold with none recorded is released
+    by NO answer — and the engine re-issues its notice through the normal road
+    (`RoundEngine.WithTheHoldReissued` → `HoldNotice`, saved on the session before it is written), so the
+    person answers a question this build can bind; the begin still refuses `GateHeld`.
+22. **FIXED 2026-09-27** — the gate's guideline. `FeatureSecondRound.Instruction` returned `string?` with
+    `null` meaning "keep the engine's"; it answers `string.Empty` and `Apply` reads its `Length` (doctrine
+    §4). RED: `Expected … ReadState to be NullabilityState.NotNull … but found NullabilityState.Nullable`
+    (`NoInstructionOfTheSecondRound_IsNullable`, a scan of every string-valued method of the class).
 
 ## 10. Open questions for the operator
 

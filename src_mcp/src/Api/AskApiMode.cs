@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Net;
 using System.Text;
 using CoaiMcp.Core.Api;
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Notices;
 using CoaiMcp.Runners.Reviewers;
 
@@ -24,7 +25,8 @@ namespace CoaiMcp.Api;
 /// means "this binary has never heard of that mode"; 69 the endpoint could not be reached or did not
 /// answer in time; 70 it answered with something that is not a review; 75 a 429 or a 503, with a
 /// sentence <see cref="RateLimit.Hit"/> recognises — that matcher reads the TEXT with a non-zero
-/// exit, never the code alone; 77 a 401 or a 403, naming the vendor and NOT echoing the body.</para>
+/// exit, never the code alone; 77 a 401 or a 403 — or a 400 whose error says the key is wrong, which is
+/// how xAI refuses one (§9.11) — naming the vendor and NOT echoing the body.</para>
 /// <para><b>No vendor text reaches stderr unredacted.</b> A refusal body can echo the request's
 /// headers back — some gateways do — so everything quoted from a response goes through
 /// <see cref="Redaction.SafeText"/> and a length cap first, and the 401/403 body is not quoted at all.</para>
@@ -83,7 +85,8 @@ internal static class AskApiMode
             flags.GetValueOrDefault("--out", string.Empty),
             flags.GetValueOrDefault("--reasoning-effort", string.Empty),
             int.TryParse(flags.GetValueOrDefault("--max-tokens", ""), out var cap) && cap > 0 ? cap : 8192,
-            deadline);
+            deadline,
+            TokenPrice.FromFlags(flags));
 
         try
         {
@@ -192,6 +195,7 @@ internal static class AskApiMode
         switch (response.StatusCode)
         {
             case HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden:
+            case HttpStatusCode.BadRequest when SaysTheKeyIsWrong(text):
                 // The body is NOT quoted: a refusal from a gateway can echo the request, and a sentence
                 // about a bad key is complete without the vendor's wording of it.
                 note($"the API refused the key for vendor '{ask.Vendor}' (HTTP {status}) — check the vault entry "
@@ -231,9 +235,75 @@ internal static class AskApiMode
         await File.WriteAllTextAsync(ask.OutFile, answer);
         // The tokens on stdout, in the shape `ApiRuntime.ReadUsage` reads — safe here and only here,
         // because this mode never speaks the protocol.
-        await output.WriteLineAsync($"{{\"tokensIn\":{usage.TokensIn},\"tokensOut\":{usage.TokensOut}}}");
+        // `tokensCached` rides along for the follow-up turns of a feature review (D25): the vendor's
+        // own cached-prefix count, zero when it reported none.
+        await output.WriteLineAsync(UsageLine(usage, ask.Price));
 
         return Ok;
+    }
+
+    /// <summary>
+    /// Whether a 400's ERROR field says the key is wrong — xAI's answer to a bad key (§9.11).
+    /// </summary>
+    /// <remarks>
+    /// <para>Measured, not documented: S0.5's probe sent a key that was wrong on purpose on 2026-09-26 and
+    /// xAI answered <c>400</c> with <c>"error": "Incorrect API key provided: …"</c>, where OpenAI answers
+    /// 401. Read as a plain 400, a revoked Grok key was reported as a malformed request and never sent
+    /// anybody to the vault.</para>
+    /// <para><b>General, not xAI-only</b>, because the test is narrow enough to be safe everywhere: only
+    /// the body's own error field is read — <c>error</c> as a string, or <c>error.message</c> /
+    /// <c>error.code</c> — never the whole text. A 400 that echoes the request back in some other field
+    /// (and a review of this very file carries the phrase) stays a failed request.</para>
+    /// </remarks>
+    internal static bool SaysTheKeyIsWrong(string body)
+    {
+        try
+        {
+            using var document = System.Text.Json.JsonDocument.Parse(body);
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object
+                || !document.RootElement.TryGetProperty("error", out var error))
+            {
+                return false;
+            }
+
+            return ErrorTexts(error).Any(text => WrongKeyPhrases.Any(p => text.Contains(p, StringComparison.OrdinalIgnoreCase)));
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
+    /// <summary>What a vendor says when the key itself is wrong — each read off a real answer or a vendor's error code.</summary>
+    private static readonly string[] WrongKeyPhrases = ["incorrect api key", "invalid api key", "invalid_api_key"];
+
+    /// <summary>The error field's own words: the string itself, or an object's message and code.</summary>
+    private static IEnumerable<string> ErrorTexts(System.Text.Json.JsonElement error) => error.ValueKind switch
+    {
+        System.Text.Json.JsonValueKind.String => [error.GetString() ?? string.Empty],
+        System.Text.Json.JsonValueKind.Object =>
+            ((string[])["message", "code"])
+                .Where(name => error.TryGetProperty(name, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String)
+                .Select(name => error.GetProperty(name).GetString() ?? string.Empty),
+        _ => [],
+    };
+
+    /// <summary>
+    /// The one line on stdout: the tokens, and — when the row carried a price — what this turn cost.
+    /// </summary>
+    /// <remarks>
+    /// The cost is worked out HERE, per turn, because this is the only place that holds one request's
+    /// tokens and the row's rates together (S3.7): a long-context tier is decided by one request's
+    /// prompt, and a feature reviewer's conversation is several requests. No price, no <c>costUsd</c> —
+    /// <see cref="ApiRuntime.ReadUsage"/> reads its absence as "no price set", never as $0.
+    /// </remarks>
+    internal static string UsageLine(Usage usage, TokenPrice price)
+    {
+        var tokens = $"\"tokensIn\":{usage.TokensIn},\"tokensOut\":{usage.TokensOut},\"tokensCached\":{usage.TokensCached}";
+
+        return price.CostOf(usage) is { } usd
+            ? "{" + tokens + ",\"costUsd\":" + usd.ToString("0.######", System.Globalization.CultureInfo.InvariantCulture) + "}"
+            : "{" + tokens + "}";
     }
 
     /// <summary>" — try again in Ns" when the vendor said how long, or nothing.</summary>
@@ -279,5 +349,6 @@ internal static class AskApiMode
         string OutFile,
         string ReasoningEffort,
         int MaxTokens,
-        TimeSpan Deadline);
+        TimeSpan Deadline,
+        TokenPrice Price);
 }

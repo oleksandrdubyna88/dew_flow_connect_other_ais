@@ -165,26 +165,38 @@ public sealed class AFeatureSessionIsKeptApartTests
 
     // ---------- again ----------
 
+    /// <summary>
+    /// D23: <c>again</c> reopens a finished review for its SECOND round, on the person's ground, keeping
+    /// the count — a fresh budget is what a NEW base gets (<c>FreshFeatureReview</c>), never the same one.
+    /// </summary>
     [Fact]
-    public void Again_ReopensAFinishedFeatureReview_WithAFreshBudget()
+    public void Again_ReopensAFinishedFeatureReview_ForItsSecondRound_KeepingTheCount()
     {
-        var finished = Feature(Stage.Done) with { RoundsRunThisStage = 2, EscalationsUsed = 1, AdvanceOnResolve = true };
+        var finished = Feature(Stage.Done) with { RoundsRunThisStage = 1, AdvanceOnResolve = true, SecondRound = SecondRoundGround.PersonAsked };
 
         var reopened = RoundMachine.BeginFeatureRoundAgain(finished)
             .Should().BeOfType<Transition.Moved>().Subject.State;
 
         reopened.Stage.Should().Be(Stage.FeatureReview);
-        reopened.RoundsRunThisStage.Should().Be(0, "round one of a fresh budget, not a round past an exhausted one");
-        reopened.EscalationsUsed.Should().Be(0);
+        reopened.RoundsRunThisStage.Should().Be(1, "round two of the same review, not round one of a fresh budget");
         reopened.AdvanceOnResolve.Should().BeFalse();
         reopened.Feature.Should().Be(Plan, "what the review is OF is kept");
         reopened.Rejections.Should().BeEquivalentTo(finished.Rejections, "and so are the standing rejections");
     }
 
     [Fact]
+    public void Again_OnAFinishedReviewOfTwoRounds_IsRefused()
+    {
+        var finished = Feature(Stage.Done) with { RoundsRunThisStage = 2, SecondRound = SecondRoundGround.BlockingFinding };
+
+        RoundMachine.BeginFeatureRoundAgain(finished).Should().BeOfType<Transition.Refused>()
+            .Which.Sentence.Should().Contain("two rounds", "D23: at most two, and a new base is the only fresh start");
+    }
+
+    [Fact]
     public void Again_OnAnUnfinishedFeatureSession_IsSimplyBegun()
     {
-        var open = Feature() with { RoundsRunThisStage = 1 };
+        var open = Feature() with { RoundsRunThisStage = 1, SecondRound = SecondRoundGround.BlockingFinding };
 
         RoundMachine.BeginFeatureRoundAgain(open)
             .Should().BeOfType<Transition.Moved>()

@@ -53,6 +53,23 @@ public sealed class ASessionFromAnOlderBuildStillRunsTests
         session.UsedPrompts.Should().BeEmpty();
     }
 
+    /// <summary>
+    /// The hold's questions (2026-09-26) and the request questions are the same shape: a session written
+    /// before the field existed has no member, and it reads back as "no question recorded" — a hold no
+    /// answer releases until its notice is re-issued, a request nothing admits — never as a null the first
+    /// reader would fall over.
+    /// </summary>
+    [Fact]
+    public void ASessionWrittenBeforeTheQuestionsWereRecorded_HasNoneRatherThanNull()
+    {
+        var session = JsonSerializer.Deserialize(
+            BeforeUsedPromptsExisted, ServerJsonContext.Default.PersistedSession)!;
+
+        session.State.HoldQuestions.Should().NotBeNull().And.BeEmpty();
+        session.State.HoldQuestions.Count.Should().Be(0, "the readers count them before they bind an answer");
+        session.State.RequestQuestions.Should().NotBeNull().And.BeEmpty();
+    }
+
     [Fact]
     public void AndTheLineThatKilledIt_Runs()
     {

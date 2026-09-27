@@ -1,4 +1,5 @@
 import { namesACredential } from './credentialWords';
+import { redactPrivateKeyBlocks } from './privateKeyBlocks';
 
 /**
  * One thing coai told a person, as it is written down.
@@ -232,7 +233,11 @@ function isPrintable(character: string): boolean {
 export function safeText(value: string, limit: number): string {
   const printable = [...value].filter(isPrintable).join('');
 
-  const withoutParameters = printable.replace(
+  // A private-key block FIRST, before any pattern reads a line of it: a key body is not one line, and
+  // the labelled pass alone took out `"private_key": "-----BEGIN` and left the body (2026-09-26).
+  const withoutBlocks = redactPrivateKeyBlocks(printable, REDACTED);
+
+  const withoutParameters = withoutBlocks.replace(
     PARAMETER,
     (whole: string, lead: string, name: string) =>
       (namesACredential(name) ? `${lead}${name}=${REDACTED}` : whole),

@@ -26,7 +26,26 @@ public sealed record ProvidersAnswer(
     /// server writes a policy this server has never heard of, falls back correctly, and looks like a
     /// setting that was never applied.
     /// </remarks>
-    IReadOnlyList<string> Unrecognised);
+    IReadOnlyList<string> Unrecognised)
+{
+    /// <summary>
+    /// The NAMES of the keys the vault's config entry holds — never a value (PLAN_feature_review.md S3.6).
+    /// </summary>
+    /// <remarks>
+    /// What the panel's "Add a reviewer" offers as <c>!name</c> entries: a key somebody put in the vault is
+    /// a vendor they can review with. Empty when the vault could not be read, and <see cref="VaultNote"/>
+    /// then says why. Names are the entry's own property names, which a person chose and which say
+    /// nothing a value would; the values stay in this process and nowhere else. Sorted, so two probes
+    /// of one vault answer byte for byte alike.
+    /// </remarks>
+    public IReadOnlyList<string> VaultKeyNames { get; init; } = [];
+
+    /// <summary>
+    /// Whether the vault was read at all — so an empty <see cref="VaultKeyNames"/> can be told apart:
+    /// a readable vault holding no keys, or one that could not be read (and <see cref="VaultNote"/> says why).
+    /// </summary>
+    public bool VaultRead { get; init; }
+}
 
 /// <summary>
 /// A consultation this repository has open, as `status` reports it.
@@ -169,7 +188,13 @@ public sealed record ReviewAnswer(
     /// has no text", naming the file to write (issue #467). Null when there is nothing to say, like
     /// <see cref="Notes"/>: an empty list in every reply teaches a reader to stop seeing the field.
     /// </summary>
-    IReadOnlyList<string>? CommandsSkipped = null);
+    IReadOnlyList<string>? CommandsSkipped = null,
+    /// <summary>
+    /// A feature review's round-1 findings and what was decided about them, on its second round's verdict
+    /// (D23): decided already, carried as they were resolved, not to be decided again. Null on every other
+    /// round, for the reason <see cref="Notes"/> gives.
+    /// </summary>
+    IReadOnlyList<CarriedDecision>? Carried = null);
 
 /// <summary>One reviewer's prose, with its name on it.</summary>
 public sealed record ReviewerNote(string Provider, string Role, string Notes);

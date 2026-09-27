@@ -99,7 +99,7 @@ internal static class ProbeApiMode
             return BadRequest;
         }
 
-        var keys = await new KeyVault(launcher).ReadAsync(env(KeyVault.KeyVariable));
+        var keys = await KeyVault.ForThisMachine(launcher, env).ReadAsync(env(KeyVault.KeyVariable));
         if (!keys.Available)
         {
             note($"the vault could not be read: {keys.Unavailability}");
@@ -107,9 +107,12 @@ internal static class ProbeApiMode
             return NoVault;
         }
 
-        if (keys.Keys.GetValueOrDefault(vendor, string.Empty) is not { Length: > 0 } key)
+        // The row's key name when the row names one (S3.6), else the vendor as typed — which is also how the
+        // panel asks for a key's models before any row exists for it.
+        var keyName = row?.KeyName ?? vendor;
+        if (keys.Keys.GetValueOrDefault(keyName, string.Empty) is not { Length: > 0 } key)
         {
-            note($"the vault holds no key under '{vendor}' — add one to the creds config entry under that name");
+            note($"the vault holds no key under '{keyName}' — add one to the creds config entry under that name");
 
             return NoVault;
         }

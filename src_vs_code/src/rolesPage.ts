@@ -357,6 +357,7 @@ function roleBlock(rows: readonly RoleRow[], role: RoleRow, texts: Readonly<Reco
       <select data-field="stage"${shipped ? ' disabled' : ''}>
         <option value="${PLAN_STAGE}"${stage === PLAN_STAGE ? ' selected' : ''}>Plan review</option>
         <option value="${RESULT_STAGE}"${stage === RESULT_STAGE ? ' selected' : ''}>Code review</option>
+        <option value="${FEATURE_STAGE}"${stage === FEATURE_STAGE ? ' selected' : ''}>Feature review</option>
       </select>
     </label>
     <label class="flag"><input type="checkbox" data-field="programmingTask"${role.programmingTask ?? true ? ' checked' : ''}${shipped ? ' disabled' : ''}> A programming task</label>

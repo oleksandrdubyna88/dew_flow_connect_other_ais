@@ -122,6 +122,19 @@ internal sealed record StageRun(
     /// runs, and starts that review over (§4.3, <c>RoundMachine.FreshFeatureReview</c>).
     /// </summary>
     public string FeatureBase { get; init; } = string.Empty;
+
+    /// <summary>
+    /// How many follow-up turns ONE reviewer of this run may take after its first (S3.2) — zero for every
+    /// stage but the feature review, where it is <c>COAI_FEATURE_SOURCE_FOLLOWUPS</c>.
+    /// </summary>
+    /// <remarks>
+    /// Told, like everything else here, because the engine derives the ROUND's deadline from it: a
+    /// reviewer's conversation may take <c>reviewerTimeout × (1 + follow-ups)</c>, and that is what
+    /// <see cref="Core.Rounds.RoundBudget.For"/> is handed as the per-reviewer duration — not
+    /// <c>roles × turns</c> as the reviewer count, which buys nothing when the turns fit in one wave
+    /// (plan §4.9). An explicit round-timeout override is kept as it is.
+    /// </remarks>
+    public int FollowUps { get; init; }
 }
 
 /// <summary>What a round with nobody to ask becomes.</summary>

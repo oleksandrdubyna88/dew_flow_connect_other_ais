@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { answerJson, DecisionChoice, decisionChoices } from '../escalationAnswer';
+import { answerJson, DecisionChoice, decisionChoices, FEATURE_BRANCH } from '../escalationAnswer';
 
 /**
  * "Proceed anyway, or fix the findings and review again?" has two answers.
@@ -40,6 +40,23 @@ test('each choice says what it will cause, not just what it is called', () => {
   assert.match(carryOn!.detail, /fresh set of rounds/i, 'continuing must say what it grants');
   assert.match(fix!.detail, /findings[\s\S]*again/i, 'the fix branch must say the review runs again');
   assert.match(discuss!.detail, /nothing advances/i, 'and stopping must say that it stops');
+});
+
+test('on a feature review the first choice is the request for its second and last round, and says so', () => {
+  // D23 (S3.4 of the feature-review plan): a feature review is one round unless a reviewer failed, a
+  // finding was blocking, or the PERSON asks — and this button, on a question filed under the feature
+  // session, is the asking. The same three decisions, the same file: only the promise in the detail
+  // changes, because "a fresh set of rounds" is not what a feature review grants.
+  const feature = decisionChoices(FEATURE_BRANCH);
+  const plain = decisionChoices('feature/x');
+
+  assert.deepEqual(feature.map((c: DecisionChoice) => c.decision), plain.map((c: DecisionChoice) => c.decision),
+    'the same road: no fourth decision, no new file shape');
+  assert.match(feature[0]!.detail, /second and last round/i, 'a feature review is told what "keep going" buys it');
+  assert.match(feature[0]!.detail, /at most two/i);
+  assert.doesNotMatch(plain[0]!.detail, /second and last/i, 'a branch review keeps its own promise');
+  assert.equal(feature[1]!.detail, plain[1]!.detail, 'the other two choices do not change');
+  assert.equal(feature[2]!.detail, plain[2]!.detail);
 });
 
 test('the written answer carries the decision, so the server can act on it', () => {

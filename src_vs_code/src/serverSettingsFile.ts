@@ -1,5 +1,5 @@
 import { CoaiSettings, envBlock } from './settingsShape';
-import { Vendor } from './vendors';
+import { RowPriceLookup, Vendor } from './vendors';
 
 /** The key that records which build wrote the file. Read by the next writer, ignored by the server. */
 export const WRITTEN_BY = 'COAI_WRITTEN_BY';
@@ -95,14 +95,19 @@ export function serverSettingsJson(
   writtenBy = '',
   /** The `coai-mcp` on this side, when known — `envBlock` keeps an `api` row out of the file of an older one. */
   installedServerVersion = '',
+  /** What an `api` row's model costs by the list — its price crosses with the row (S3.7). */
+  priceOf: RowPriceLookup = () => undefined,
 ): string {
-  const block = envBlock(settings, vendors, installedServerVersion);
-
   return JSON.stringify(
-    writtenBy.length === 0 ? block : { ...block, [WRITTEN_BY]: writtenBy },
+    stamped(envBlock(settings, vendors, installedServerVersion, priceOf), writtenBy),
     null,
     2,
   );
+}
+
+/** The block with the writer's stamp on it — or as it is, when this build has no version to stamp. */
+function stamped(block: Record<string, string>, writtenBy: string): Record<string, string> {
+  return writtenBy.length === 0 ? block : { ...block, [WRITTEN_BY]: writtenBy };
 }
 
 /**

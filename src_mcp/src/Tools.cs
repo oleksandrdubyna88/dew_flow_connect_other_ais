@@ -267,16 +267,27 @@ internal static class Tools
                     of every changed file at HEAD (signatures, no bodies, changed members marked `*`) with
                     the changed hunks of each changed member. Credential-shaped files are withheld and
                     named; secrets in code are redacted. A reviewer may name source it wanted in
-                    `sourceRequests`; in this version those are recorded on its note in the reply, not
-                    served.
+                    `sourceRequests`; it is served from the commit under review in follow-up turns
+                    (`COAI_FEATURE_SOURCE_FOLLOWUPS`, default 3; 0 records the requests on its note in
+                    the reply instead), and only the reviewer's last answer counts.
 
                     The reply is the other gates' shape and carries the same `resolve` duty. `skipped`
                     (nobody is ticked for features, the stage is switched off, or the plan is too small)
                     does NOT block the release — tell the person the feature review did not run, and why.
-                    Reviewers that exist but ALL fail answer `call_human`, which does block. Accepted
-                    findings land as NEW pull requests; then call again with `again: true` over the new
-                    HEAD — refused when HEAD has not moved since the last round, and the only door once a
-                    review finished or when the base changed.
+
+                    At most two rounds, ever — and the second only when it is needed. `proceed` and
+                    `good_enough` close the review on `resolve`: decide every finding (accept, or reject
+                    with a reason), land the accepted fixes as NEW pull requests, and no second review reads
+                    them. `revise` means a second round runs, and it runs ONLY when round 1 had a reviewer
+                    failure (a retry asks only the reviewers that failed, over the same HEAD, and carries
+                    the answered reviewers' decided findings under `carried`), a `blocking` finding came
+                    back (fix it, then call again with `again: true` over the new HEAD), or the person asks
+                    for one — through `ask_human` with `feature`, answered on their panel or phone with
+                    "Keep going — more rounds"; no argument of yours can grant it, `again: true` included.
+                    A second round that still carries a `blocking` finding, or fails again, is `call_human`,
+                    which does block; so is a round in which every reviewer failed twice. A third round is
+                    never run. `again: true` is refused when nothing moved and when no ground admits a
+                    round; against a NEW `baseRef` it starts a fresh review of the same plan.
                     """,
                 ReadOnly = true,
                 Idempotent = false,

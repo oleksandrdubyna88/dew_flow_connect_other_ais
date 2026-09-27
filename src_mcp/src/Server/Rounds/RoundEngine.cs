@@ -77,6 +77,9 @@ internal sealed class RoundEngine(
     /// simply works — no restart, no re-open, nothing to poll.</para>
     /// <para><c>Continue</c> and <c>Fix</c> grant a fresh set of rounds; <c>Discuss</c> and a typed
     /// answer with no button pressed leave the gate held, which is what both of them mean.</para>
+    /// <para><b>Only an answer to THIS hold</b> (<see cref="CurrentAnswer"/>): the newest answered
+    /// question is walked to past an unanswered notice, so an answer to an earlier hold opened a later
+    /// one on its own until the reader asked when the answer was given (D12, 2026-09-26).</para>
     /// </remarks>
     private PersistedSession ApplyAnyHumanDecision(PersistedSession session)
     {
@@ -85,7 +88,12 @@ internal sealed class RoundEngine(
             return session;
         }
 
-        var decision = _escalations.DecisionFor(session.State.SessionId);
+        if (session.State.HoldQuestions.Count == 0)
+        {
+            return WithTheHoldReissued(session);
+        }
+
+        var decision = CurrentAnswer.DecisionFor(session, _escalations);
         var opened = RoundMachine.ApplyHumanDecision(session.State, decision);
         if (ReferenceEquals(opened, session.State) || opened.HumanGate)
         {
@@ -99,6 +107,34 @@ internal sealed class RoundEngine(
         var next = session with { State = opened };
         _store.Save(next);
         return next;
+    }
+
+    /// <summary>
+    /// A held gate that records no question — a hold an older build raised — is released by NO answer:
+    /// the notice is re-issued through the same road a round's <c>call_human</c> takes, its id recorded on
+    /// the session under the claim, so the person answers a question this build can bind.
+    /// </summary>
+    /// <remarks>
+    /// The clock used to decide here as the residual for exactly this session, and it was the bypass in a
+    /// smaller coat: an old question answered late released the hold (the gate's findings #24/#30,
+    /// 2026-09-26). Saved before it is written, as the round's notice is, so the hold is recorded with the
+    /// question that releases it; the begin that follows still refuses with <c>GateHeld</c>, which is the
+    /// caller's instruction to ask the person.
+    /// </remarks>
+    private PersistedSession WithTheHoldReissued(PersistedSession session)
+    {
+        var notice = HoldNotice(
+            session,
+            "the earlier notice could not be matched to an answer, so it is asked again",
+            [.. session.Pending.Where(f => f.IsGating)]);
+        var recorded = session with { State = session.State with { HoldQuestions = [notice.Id] } };
+        _store.Save(recorded);
+        _escalations.Notify(notice);
+        _log.Information(
+            "the {Stage} gate of session {SessionId} is held with no question recorded for it; its notice was re-issued as {Id}",
+            session.State.Stage, session.State.SessionId, notice.Id);
+
+        return recorded;
     }
 
     /// <summary>
@@ -199,8 +235,18 @@ internal sealed class RoundEngine(
         }
 
         session = ApplyAnyHumanDecision(session);
+        // And the person's request for a feature review's second round (D23), read from the same road —
+        // the answer file — and from nothing a caller passes. Nothing is saved for it here.
+        session = PersonsRequest.Apply(session, _escalations, _log);
         // The session as read under the claim, BEFORE a begin moves it — what a refusal compares with.
         var loaded = session;
+
+        // The base a feature review is held to from here on — ANOTHER base than the recorded one is a
+        // different review, reached only through `again` (the stage refuses it otherwise, below): its
+        // count, its standing rejections and its second-round ground start over, whatever the stage was.
+        // Applied BEFORE the begin, so a fresh review arrives at it as round one of its own; saved only
+        // with the round that runs — never by a skip or a refusal (§4.3), which save `loaded` or nothing.
+        session = HeldToBase(session, stage.FeatureBase);
 
         switch (stage.Begin(session.State))
         {
@@ -227,7 +273,11 @@ internal sealed class RoundEngine(
         // can only be smaller — a vendor that serves the other stage, a repository with no rules —
         // so basing the budget on the configured shape is the generous direction, which is the one
         // to be wrong in.
-        var budget = RoundDeadlineFor(ConfiguredReviewers(stage.Stage, stage.RolesPerVendor));
+        // The PER-REVIEWER duration is what the follow-up turns scale (S3.2): a feature reviewer's
+        // conversation may take `reviewerTimeout × (1 + follow-ups)`, and that is what the derivation is
+        // handed — not `roles × turns` as the reviewer count, which buys nothing when the turns fit in one
+        // wave (plan §4.9). Every other stage's follow-ups are zero, so nothing changes for it by a second.
+        var budget = RoundDeadlineFor(ConfiguredReviewers(stage.Stage, stage.RolesPerVendor), _settings.ReviewerTimeout * (1 + stage.FollowUps));
         using var clock = new CancellationTokenSource(budget);
         using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
 
@@ -270,14 +320,8 @@ internal sealed class RoundEngine(
             // reads, the history query — would be built and thrown away.
             if (_skips.BeforeBuilding(stage) is { Length: > 0 } skipped)
             {
-                return _skips.Record(stage.Stage, loaded, number, sha, planText, skipped);
+                return SkippedOrOwed(stage, loaded, number, sha, planText, skipped, from);
             }
-
-            // The base a feature review is held to from here on — saved with the round, never by a skip
-            // or a refusal (§4.3). ANOTHER base than the recorded one is a different review, reached only
-            // through `again` (the stage refused it otherwise, above): its count and its standing
-            // rejections start over, whatever the stage was.
-            session = HeldToBase(session, stage.FeatureBase);
 
             // The plan and epic this round is FOR go on the session BEFORE the live round first writes it,
             // so even a round a crash interrupts carries its epic (the epic-1-3 consultation, point 2).
@@ -320,7 +364,7 @@ internal sealed class RoundEngine(
                 // somebody to check a configuration that is perfectly correct. (codex, the code
                 // round, twice.)
                 return stage.WhenNobody == NobodyPolicy.RecordSkip
-                    ? _skips.Record(stage.Stage, loaded, number, sha, planText, _skips.NobodyFor(stage.Stage, roundWork))
+                    ? SkippedOrOwed(stage, loaded, number, sha, planText, _skips.NobodyFor(stage.Stage, roundWork), from)
                     : Error(_noReviewerRefusal(session.State.Stage, roundWork), from);
             }
 
@@ -394,6 +438,13 @@ internal sealed class RoundEngine(
             }
 
             var answer = AnswerFor(stage.Stage, completed.Verdict, gate, summary, merged, reviews, StageGate(session).Threshold);
+            // A feature round says the D23 rule in its own case's words, and a second round carries round 1's
+            // decisions — as they were made, never to be made again.
+            if (stage.Stage == Stage.FeatureReview)
+            {
+                answer = FeatureSecondRound.Apply(
+                    answer, completed.Verdict, summary, completed.State, FeatureSecondRound.IsSecondRound(session.State) ? session.Carried : []);
+            }
             // And, on a document round whose work reached a Team server, where the document went.
             // Appended to the reviewer line rather than given a field of its own: it is a fact about
             // THIS round's reviewers, and it has to be read by an AI that was not told to look for a
@@ -412,6 +463,9 @@ internal sealed class RoundEngine(
                 Sha = Stages.Of(stage.Stage).RecordsSha ? sha : string.Empty,
                 // What the consultation cadence said about this round: met, or stood down and why.
                 CadenceNote = stage.Cadence.Call.Note,
+                // The D23 ground a feature review's second round was admitted on — read from the state this
+                // round BEGAN from, because completing it is what spends the ground.
+                AdmittedBy = FeatureSecondRound.AdmittedBy(session.State),
             };
             // The operator's own switches, read for THIS call: the settings file is stamped and
             // reloaded per tool call, so a box ticked a second ago governs this round.
@@ -497,9 +551,14 @@ internal sealed class RoundEngine(
             // findings, numbered, and told to resolve them — while `resolve` reads the pending list
             // from a file that was never written, so the round sat at `running` with nothing to
             // decide on. An answer whose findings cannot be resolved is not an answer.
+            // The notice a `call_human` verdict puts in front of the person, minted BEFORE the save so the
+            // hold is recorded with the question that releases it: an answer counts for this hold only
+            // when it answers this notice, or an `ask_human` question asked while the hold stands
+            // (`CurrentAnswer`). A round that ended any other way ended whatever hold stood.
+            var notice = NoticeIfAPersonMustDecide(completed.Verdict, session, merged);
             _store.Save(session with
             {
-                State = completed.State,
+                State = completed.State with { HoldQuestions = notice is null ? [] : [notice.Id] },
                 Rounds = [.. session.Rounds, record],
                 Pending = [.. merged],
                 // The lenses this round spent, so the next one asks the ones nobody has yet.
@@ -509,6 +568,9 @@ internal sealed class RoundEngine(
                 // and a reviewer handed a bare diff answers a different question than the one the
                 // gate exists to ask.
                 PlanText = planText,
+                // Round 1's decisions were carried into this round's verdict, or there were none: either
+                // way a completed round leaves nothing to carry.
+                Carried = [],
             });
             audit.Closing(answer.Verdict, gate.GatingCount, summary.Sentence, record);
             audit.Findings(merged);
@@ -548,7 +610,12 @@ internal sealed class RoundEngine(
                     audit.Stuck(stuck.Sentence);
                 }
             });
-            NotifyIfAPersonMustDecide(completed.Verdict, session, merged);
+            if (notice is not null)
+            {
+                _escalations.Notify(notice);
+                _log.Information("a person was asked to decide: {Reason}", ((RoundVerdict.CallHuman)completed.Verdict).Reason);
+            }
+
             return JsonSerializer.Serialize(answer, ServerJsonContext.Default.ReviewAnswer);
         }
         catch (SessionStoreException e)
@@ -581,20 +648,31 @@ internal sealed class RoundEngine(
     private StageGate StageGate(PersistedSession session) => _settings.Rounds.For(session.State.Stage);
 
     /// <summary>
+    /// A round nobody can run: the recorded, non-blocking skip (D1, D17) — unless the round is a feature
+    /// review's ADMITTED second round, which is owed and is refused as the block it is, recording nothing.
+    /// </summary>
+    /// <remarks>
+    /// Both skip sites go through here, so the door cannot be closed at one and left open at the other.
+    /// Until 2026-09-26 unticking every feature reviewer between the rounds — or passing fewer epics than the
+    /// D17 line — turned the retry a reviewer failure had admitted into a <c>skipped</c> row that "did not
+    /// block" (the gate's finding #25, found by epic 3's code round). The ground stands: a reviewer runs the
+    /// round, or a person decides.
+    /// </remarks>
+    private string SkippedOrOwed(StageRun stage, PersistedSession loaded, int number, string sha, string planText, string reason, string from) =>
+        FeatureSecondRound.IsSecondRound(loaded.State)
+            ? Error(FeatureSecondRound.NobodyForAnAdmittedRound(loaded.State, reason), from)
+            : _skips.Record(stage.Stage, loaded, number, sha, planText, reason);
+
+    /// <summary>
     /// The session held to a feature base: the base recorded — and, when it is another base than the one
-    /// recorded, a fresh review (<see cref="RoundMachine.FreshFeatureReview"/>). Unchanged for every stage
-    /// that names no base.
+    /// recorded, a fresh review (<see cref="RoundMachine.FreshFeatureReview"/>), its carried decisions
+    /// dropped with the rest. Unchanged for every stage that names no base.
     /// </summary>
     private static PersistedSession HeldToBase(PersistedSession session, string featureBase) =>
-        featureBase.Length == 0
-            ? session
-            : session with
-            {
-                FeatureBase = featureBase,
-                State = FeatureBases.IsAnother(session.FeatureBase, featureBase)
-                    ? RoundMachine.FreshFeatureReview(session.State)
-                    : session.State,
-            };
+        featureBase.Length == 0 ? session
+        : FeatureBases.IsAnother(session.FeatureBase, featureBase)
+            ? session with { FeatureBase = featureBase, State = RoundMachine.FreshFeatureReview(session.State), Carried = [] }
+            : session with { FeatureBase = featureBase };
 
     /// <summary>
     /// The session a stage makes for itself, saved under the claim the caller holds — or nothing, for
@@ -674,28 +752,30 @@ internal sealed class RoundEngine(
     /// a chat window while the panel stayed empty all day. That is what happened. The notice is
     /// the same shape as any escalation, so it shows up where a person is already looking and can
     /// be answered there; it does not block, because the round has already returned.
+    /// <para>BUILT before the session is saved and WRITTEN after: its id is recorded on the session as the
+    /// hold's question (<c>SessionState.HoldQuestions</c>), so the person's answer is bound to this hold
+    /// by identity rather than by the clock — the clock let a question asked for an earlier hold, answered
+    /// late, release this one (the epic 3 risk consultation, 2026-09-26). Null for every other verdict.</para>
     /// </remarks>
-    private void NotifyIfAPersonMustDecide(RoundVerdict verdict, PersistedSession session, ImmutableArray<Finding> merged)
-    {
-        if (verdict is not RoundVerdict.CallHuman human)
-        {
-            return;
-        }
+    private static EscalationQuestion? NoticeIfAPersonMustDecide(RoundVerdict verdict, PersistedSession session, ImmutableArray<Finding> merged) =>
+        verdict is not RoundVerdict.CallHuman human
+            ? null
+            : HoldNotice(session, human.Reason, [.. merged.Where(f => f.IsGating)]);
 
-        _escalations.Notify(new EscalationQuestion(
+    /// <summary>The one shape a hold's notice has — minted for a <c>call_human</c> verdict, and again for a hold no question binds.</summary>
+    private static EscalationQuestion HoldNotice(PersistedSession session, string reason, IReadOnlyList<Finding> gating) =>
+        new(
             Guid.NewGuid().ToString("N")[..12],
             session.State.SessionId,
             session.State.RepoPath,
             session.State.Branch,
-            $"The {RoundSubject.StageName(session.State.Stage.ToString())} gate needs your decision: {human.Reason}. " +
+            $"The {RoundSubject.StageName(session.State.Stage.ToString())} gate needs your decision: {reason}. " +
             "Proceed anyway, or fix the findings and review again?",
             string.Empty,
             "en",
             string.Empty,
-            [.. merged.Where(f => f.IsGating)],
-            DateTime.UtcNow.ToString("O")));
-        _log.Information("a person was asked to decide: {Reason}", human.Reason);
-    }
+            [.. gating],
+            DateTime.UtcNow.ToString("O"));
 
     /// <summary>
     /// How long this round may take: what was configured, or what its shape earns.
@@ -730,7 +810,9 @@ internal sealed class RoundEngine(
     private int ConfiguredReviewers(Stage stage, int rolesPerVendor) =>
         _settings.Providers.Count(p => p.Serves(stage)) * rolesPerVendor;
 
-    private TimeSpan RoundDeadlineFor(int reviewers)
+    /// <param name="reviewers">How many reviewers the stage is configured to run.</param>
+    /// <param name="perReviewer">What ONE reviewer may take — its timeout, times its turns (S3.2).</param>
+    private TimeSpan RoundDeadlineFor(int reviewers, TimeSpan perReviewer)
     {
         // `Expressible` on the explicit path too: a `CancellationTokenSource` takes an int of
         // milliseconds and refuses anything past about 24.8 days, so 80,000 minutes would have
@@ -738,18 +820,18 @@ internal sealed class RoundEngine(
         // it is no deadline at all. Raised on the code round.
         var whole = RoundBudget.Expressible(_settings.RoundTimeout > TimeSpan.Zero
             ? _settings.RoundTimeout
-            : RoundBudget.For(_settings.ReviewerTimeout, reviewers, _settings.GlobalConcurrency));
+            : RoundBudget.For(perReviewer, reviewers, _settings.GlobalConcurrency));
 
         // An explicit setting below one reviewer's own deadline cannot be honoured without
         // cancelling a reviewer that has not finished its FIRST attempt. Said out loud rather than
         // silently obeyed: a person who set five minutes against a ten-minute reviewer has made a
         // configuration mistake, and the round that follows would look like a bug in the gate.
-        if (whole < _settings.ReviewerTimeout)
+        if (whole < perReviewer)
         {
             _log.Warning(
                 "the round limit of {Limit:0} minute(s) is shorter than one reviewer's own "
                 + "{Reviewer:0} — reviewers will be cancelled before they can finish",
-                whole.TotalMinutes, _settings.ReviewerTimeout.TotalMinutes);
+                whole.TotalMinutes, perReviewer.TotalMinutes);
         }
 
         // NOT floored at a reviewer's own deadline. The first draft floored everything, which

@@ -26,7 +26,7 @@ function row(over: Partial<LogRow> = {}): ExportableRow {
     key: 'k1', kind: 'review', calledBy: 'claude-code 7.3.1 · claude-opus-5',
     startedUtc: '2026-09-05T07:41:00.000Z', completedUtc: '2026-09-05T07:43:10.000Z',
     repoPath: 'D:/repo', repoName: 'repo', branch: 'main', stage: 'code review', number: 1,
-    subject: 'SCOPE', status: 'done', decided: null, verdict: 'proceed', gating: 1,
+    subject: 'SCOPE', status: 'done', note: '', decided: null, verdict: 'proceed', gating: 1,
     findings: 1, seconds: 130, decideSeconds: null, tokensIn: null, tokensOut: null,
     costUsd: null, costInUsd: null, costOutUsd: null, costTotalUsd: null,
     costIsEstimate: false, costPartial: false,

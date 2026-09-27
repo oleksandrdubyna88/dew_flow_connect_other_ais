@@ -1,5 +1,59 @@
 # Changelog
 
+## Unreleased
+
+**A fourth review: the whole feature, once, before it is released.** When a plan of three or more epics
+is finished, the AI can now ask for a review of all of it together — whether what shipped is what the plan
+asked for, and whether the epics fit where they meet — instead of the feature only ever having been
+reviewed one epic at a time. Each reviewer's card has a fourth switch, *reviews features*, and it starts
+**off**: nobody reviews a feature until you tick them. The switch is off, with the reason beside it, on a
+Team-server reviewer (Team servers do not run feature reviews yet) and when the coai-mcp you have installed
+is too old for it — the card says which version it needs. Your tick is kept out of the settings such a
+server reads, while the reviewer goes on reviewing plans and code.
+
+**A feature review that did not run says so.** On the Review rounds page a round coai-mcp skipped — nobody
+ticked, the stage switched off, or a plan too small — is shown as *skipped — did not block*, and opening it
+shows why. It no longer looks like a review that happened. Document and feature reviews are named in words
+rather than as `DocumentReview` and `FeatureReview`.
+
+**The CLAUDE.md snippet is v13 — copy it again.** It has a fifth half that tells the AI when to ask for the
+feature review, what to send, and that a skipped one does not block the release. A repository that only
+mounts the shared rules is not told it lacks this half — the review tool's own description carries it
+there. An extension older than this one reads a v13 copy as newer and tells you to keep it.
+
+**A change to one of the two reviewers the extension ships with now reaches coai-mcp.** While Codex and
+Antigravity were your only reviewers, unticking *reviews plans* or *reviews code*, answering *reviews
+documents*, or setting a CLI path on either of them showed on the card and never reached the server, which
+went on with the defaults. It does now.
+
+**Your own role can be put in the feature stage** from the roles page's *Stage* list. Help explains all of
+it in the five languages.
+
+**The API keys in your vault are reviewers you can add.** *Add a reviewer* now lists, after everything else,
+one entry per key name in coai's vault entry, marked with a `!` because it is an API key — `!grok`, `!qwen`.
+Choosing one adds an API reviewer that uses that key: the endpoint is filled in for `grok` (xAI) and `qwen`
+(the Model Studio Token Plan) and asked for otherwise, and the models come from the endpoint's own list. A
+key already in use is still offered, so one key can review with two models. The key itself never reaches
+the extension — only its name. When the vault cannot be read, the list says why instead of showing nothing.
+
+**What an API reviewer cost is in the log.** An API reviewer's row carries its price per million tokens —
+input, cached input and output — and coai-mcp works out what each reviewer cost, cached tokens at the cached
+rate and xAI's long-context rate past 200K tokens. The rounds log, the server's log and `status` show it; a
+row with no price says *no price set*, never $0. The prices come from the same public lists the panel already
+used, now asking the vendor's own list first when the reviewer talks to that vendor directly (xAI's price for
+Grok on api.x.ai, not a reseller's), reading cached rates, and finding `qwen3.8-max`, which used to show no
+price at all. A rate you type still wins. The card of an API reviewer has a third box for the cached rate.
+
+**coai-mcp finds the vault where CredsForDevs installs it.** The CredsForDevs extension keeps its `creds` CLI
+in its own folder rather than on PATH, so coai-mcp reported "the creds CLI is not installed" and no API
+reviewer got a key. It now looks there after PATH.
+
+**A wrong xAI key is reported as a wrong key.** xAI answers a bad key with HTTP 400, which read as a broken
+request; it now says the API refused the key and points at the vault entry.
+
+If you go back to an older extension, it keeps your reviewers but forgets their *reviews features* ticks the
+next time it saves them — tick them again after updating.
+
 ## Extension 0.57.0 · Server 0.39.0 — 2026-09-26
 
 **An idle consultation closes on time.** *Close an idle consultation after, minutes* held for a follow-up but not for the consultation itself, which went on reading *open* in the sidebar until coai-mcp next started. The server now checks every minute while it runs. Each of the three consultant limits has a test that fails without it, for every kind it applies to.

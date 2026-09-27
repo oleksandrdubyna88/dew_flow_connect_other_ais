@@ -124,4 +124,38 @@ public sealed class TheFeatureStageIsServedTests
     public void TheMinimumEpics_IsThree_UnlessAPersonSetIt(string? value, int expected) =>
         PanelSettings.FromEnvironment(name => name == "COAI_FEATURE_MIN_EPICS" ? value : null)
             .FeatureMinEpics.Should().Be(expected);
+
+    // ---------- S3.2: the source follow-ups switch ----------
+
+    /// <summary>Absent → 3 (D20); an integer in 0..3 is taken as it is, 0 meaning single-turn.</summary>
+    [Theory]
+    [InlineData(null, 3)]
+    [InlineData("3", 3)]
+    [InlineData("2", 2)]
+    [InlineData("1", 1)]
+    [InlineData("0", 0)]
+    [InlineData(" 1 ", 1)]
+    public void TheSourceFollowUps_AreThree_UnlessAPersonSetThemWithinTheRange(string? value, int expected)
+    {
+        var settings = PanelSettings.FromEnvironment(name => name == "COAI_FEATURE_SOURCE_FOLLOWUPS" ? value : null);
+
+        settings.FeatureSourceFollowUps.Should().Be(expected);
+        settings.UnrecognisedSettings.Should().NotContain(one => one.Key == "COAI_FEATURE_SOURCE_FOLLOWUPS",
+            "a value this build can read is not a mismatch — and absent is not a value");
+    }
+
+    /// <summary>A value that is not an integer in 0..3 is the default, and the startup note names it.</summary>
+    [Theory]
+    [InlineData("4")]
+    [InlineData("-1")]
+    [InlineData("many")]
+    [InlineData("1.5")]
+    public void AFollowUpsValueOutsideTheRange_IsTheDefault_AndIsSaidOutLoudNamingIt(string value)
+    {
+        var settings = PanelSettings.FromEnvironment(name => name == "COAI_FEATURE_SOURCE_FOLLOWUPS" ? value : null);
+
+        settings.FeatureSourceFollowUps.Should().Be(Core.Feature.SourceBudget.DefaultFollowUps);
+        var note = settings.UnrecognisedSettings.Should().ContainSingle(one => one.Key == "COAI_FEATURE_SOURCE_FOLLOWUPS").Subject;
+        note.Sentence.Should().Contain($"'{value}'", "the person reads the value they typed").And.Contain("0 to 3");
+    }
 }

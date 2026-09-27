@@ -19,8 +19,12 @@ internal sealed partial class ReviewerPrompt(RolePrompts prompts)
     /// The schema it answers in, quoted from the same text the schema FILE holds: a feature reviewer is
     /// offered <c>sourceRequests</c>, and no other reviewer is offered a field nobody would serve.
     /// </param>
-    internal string ComposePrompt(PromptChoice choice, string context, ReaderMaterial material, SchemaShape answers) =>
-        $"{WithoutTheStaleClaim(_prompts.ForChoice(choice))}\n\n{WhatYouHave(material)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{SchemaFile.Text(answers)}\n\n{context}";
+    /// <param name="followUps">
+    /// How many follow-up turns a request for source buys this reviewer (S3.2) — zero for every reviewer
+    /// but a feature reviewer with the switch on, and what the outline truth says about its requests.
+    /// </param>
+    internal string ComposePrompt(PromptChoice choice, string context, ReaderMaterial material, SchemaShape answers, int followUps = 0) =>
+        $"{WithoutTheStaleClaim(_prompts.ForChoice(choice))}\n\n{WhatYouHave(material, followUps)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{SchemaFile.Text(answers)}\n\n{context}";
 
     /// <summary>
     /// What the reviewer actually has — said once, by the only code that knows which it is.
@@ -76,8 +80,11 @@ internal sealed partial class ReviewerPrompt(RolePrompts prompts)
         RegexOptions.IgnoreCase | RegexOptions.Multiline)]
     private static partial Regex StaleClaim();
 
+    /// <summary>The sentence for each truth, for a reviewer with no follow-up turn — every reviewer but a feature reviewer with the switch on.</summary>
+    internal static string WhatYouHave(ReaderMaterial material) => WhatYouHave(material, followUps: 0);
+
     /// <summary>The sentence for each truth — exhaustive, so a fourth material is a compile error here rather than a silent default.</summary>
-    internal static string WhatYouHave(ReaderMaterial material) => material switch
+    internal static string WhatYouHave(ReaderMaterial material, int followUps) => material switch
     {
         ReaderMaterial.Checkout => "## What you have\n\nA READ-ONLY checkout of the repository in your working "
             + "directory, and the material below. Review the change, not the codebase.",
@@ -87,25 +94,26 @@ internal sealed partial class ReviewerPrompt(RolePrompts prompts)
             + "or read a file. Answer from what is here.\n\nThat is deliberate: a reviewer "
             + "given the change alone finds more of what matters than one sent exploring a "
             + "repository.",
-        ReaderMaterial.Outline => OutlineTruth,
+        ReaderMaterial.Outline => OutlineTruth + (followUps > 0 ? RequestsAreServed(followUps) : RequestsAreRecorded),
         _ => throw new ArgumentOutOfRangeException(nameof(material), material, "a reader material with no sentence — say what the reviewer holds"),
     };
 
     /// <summary>
     /// The feature reviewer's truth (plan §4.6): an outline with the changed hunks, no files — and source
-    /// it may ask for, which THIS version records rather than answers.
+    /// it may ask for.
     /// </summary>
     /// <remarks>
     /// <para>Every mark it explains is one the context really carries: the <c>*</c> of
     /// <c>OutlineComposer</c>, the truncation marker of <c>MemberHunks</c>, the "What this context left out"
     /// section of <c>OmissionsRenderer</c>.</para>
-    /// <para><b>Worded to be true before the turn loop exists.</b> The feature schema offers
-    /// <c>sourceRequests</c> (S1.3), and the loop that serves them is S3.2; until it ships, a request is
-    /// parsed, recorded on the reviewer's note and handed back to the caller, and nobody answers it inside
-    /// the round. Saying "you will be sent the source" would make a reviewer hold a finding back waiting
-    /// for a turn that never comes — so the sentence says what happens, and asks for the findings now.
-    /// It agrees with <c>feature-review.md</c>, which asks for source by name and says a seam suspected but
-    /// unconfirmed is a request rather than a finding.</para>
+    /// <para><b>What a request buys is said by the switch, not by the version.</b> With follow-up turns
+    /// (S3.2, the default), a request is answered in the next turn and only the LAST answer counts — so
+    /// the reviewer is told to ask, and told that its findings are asked for again with the source in
+    /// hand. With <c>COAI_FEATURE_SOURCE_FOLLOWUPS=0</c> nobody answers a request inside the round, and
+    /// saying "you will be sent the source" would make a reviewer hold a finding back for a turn that
+    /// never comes — so that sentence says what happens, and asks for the findings now. Both agree with
+    /// <c>feature-review.md</c>, which asks for source by name and says a seam suspected but unconfirmed is
+    /// a request rather than a finding.</para>
     /// </remarks>
     private static readonly string OutlineTruth =
         "## What you have\n\nThe material below and NOTHING else. There is no checkout in your working directory "
@@ -118,7 +126,19 @@ internal sealed partial class ReviewerPrompt(RolePrompts prompts)
         + "\"[N more changed lines — ask for source]\". Files and hunks the budget could not hold are named under "
         + "\"What this context left out\".\n\n"
         + "Where a signature or a truncated hunk is not enough to judge, ask for the source in `sourceRequests` — the "
-        + "file, a symbol or a line span, and why. In this version a request is RECORDED with your answer and handed "
-        + "to the implementer; it is NOT answered inside this review. So put every finding you can stand behind from "
-        + "what is here into `findings` now, and put what you would need to confirm a suspicion into `sourceRequests`.";
+        + "file, a symbol or a line span, and why. ";
+
+    private const string RequestsAreRecorded =
+        "In this round a request is RECORDED with your answer and handed to the implementer; it is NOT answered "
+        + "inside this review. So put every finding you can stand behind from what is here into `findings` now, and "
+        + "put what you would need to confirm a suspicion into `sourceRequests`.";
+
+    /// <summary>What a request buys with the turn loop on: the next turn, up to the cap, and only the last answer counts.</summary>
+    private static string RequestsAreServed(int followUps) =>
+        $"A request is ANSWERED: the source arrives in a follow-up turn appended below this material — up to {followUps} "
+        + $"follow-up turn{(followUps == 1 ? string.Empty : "s")} — read from the commit under review, at most "
+        + $"{Core.Feature.SourceBudget.RequestsPerTurn} requests a turn and {Core.Feature.SourceBudget.TurnBytes / 1024} KB "
+        + $"a turn ({Core.Feature.SourceBudget.ReviewerBytes / 1024} KB in all); a request that cannot be served says why. "
+        + "Only your LAST answer counts, so put every finding you can already stand behind into `findings` now, "
+        + "put what you need to confirm a suspicion into `sourceRequests`, and answer again in full when the source arrives.";
 }

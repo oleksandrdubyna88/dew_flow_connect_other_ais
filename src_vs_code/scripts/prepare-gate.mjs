@@ -43,6 +43,35 @@ export const OUTPUT = 'src_vs_code/src/generated/gateRule.ts';
 export const CONSULTANT_SOURCE = '.agents/conventions/common/coai-consultant.md';
 export const CONSULTANT_OUTPUT = 'src_vs_code/src/generated/consultantRule.ts';
 
+/**
+ * The FEATURE half, which is THIS product's own file and not a shared rule (D11 of
+ * todo/PLAN_feature_review.md).
+ *
+ * <p>It says when to call one tool of one product — `review_feature`, at the end of a plan of three or
+ * more epics — which is the ruling the consultant half lived under until 2026-09-25: specific material
+ * belongs to the project that owns it. So it is read from this repository, the way the consultant
+ * was, and held to its marker and heading the way the mounted halves are.</p>
+ *
+ * <p>Generated rather than written as a TypeScript literal for the reason that cost this repository
+ * three broken builds: a backtick inside a template literal ends it, and this text is full of code
+ * spans. Prose stays prose; the generator turns it into a JSON string.</p>
+ */
+export const FEATURE_SOURCE = 'src_vs_code/src/featureRule.md';
+export const FEATURE_OUTPUT = 'src_vs_code/src/generated/featureRule.ts';
+
+/** The feature half's marker and heading, so a truncated or foreign file fails the build. */
+const FEATURE_MARKER = /^<!-- coai-feature v\d+ -->\n## Reviewing the whole FEATURE before release/;
+
+/** The feature block, verbatim. Ours, so there is no frontmatter to strip — only line endings to settle. */
+export function featureBody(source) {
+  const text = source.replaceAll('\r\n', '\n');
+  if (!FEATURE_MARKER.test(text)) {
+    throw new Error(`${FEATURE_SOURCE}: missing the coai-feature marker or its heading`);
+  }
+
+  return text;
+}
+
 /** The marker this file is recognised by, so a truncated or wrong file fails the build. */
 const CONSULTANT_MARKER = /^<!-- coai-consultant v\d+ -->\n## When you are stuck, ask another vendor/;
 
@@ -170,7 +199,33 @@ export function prepareGate(repo) {
     fs.renameSync(consultantTemporary, consultantFile);
   } finally { removeOutput(consultantTemporary); }
 
+  prepareFeature(repo);
+
   return body;
+}
+
+/**
+ * The feature half, from this repository's own file — invalidate, verify, then write, so a build never
+ * compiles against a constant the previous one left behind.
+ */
+function prepareFeature(repo) {
+  const featureFile = path.join(repo, FEATURE_OUTPUT);
+  const featureTemporary = featureFile + '.tmp';
+  removeOutput(featureFile);
+  removeOutput(featureTemporary);
+  const featureSource = path.join(repo, FEATURE_SOURCE);
+  if (!fs.existsSync(featureSource)) {
+    // Named, because this is a file somebody could move without knowing what reads it — and the
+    // message it would otherwise produce is a bare ENOENT on a path.
+    throw new Error(`${FEATURE_SOURCE} is missing. It is the feature half of the pasted snippet, `
+      + 'kept as markdown in this repository; restore it from git rather than editing the generated constant.');
+  }
+  const feature = featureBody(boundedSource(featureSource));
+  try {
+    fs.writeFileSync(featureTemporary, `// Generated from ${FEATURE_SOURCE}; do not edit.\n`
+      + 'export const FEATURE_RULE = ' + JSON.stringify(feature) + ';\n', { flag: 'wx' });
+    fs.renameSync(featureTemporary, featureFile);
+  } finally { removeOutput(featureTemporary); }
 }
 
 const here = fileURLToPath(import.meta.url);

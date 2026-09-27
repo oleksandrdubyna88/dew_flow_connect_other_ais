@@ -41,7 +41,32 @@ internal sealed record VendorDto(
     /// <summary>For an `api` row: the dialect its request is spelled in. Absent = the generic `openai`.</summary>
     string? Dialect = null,
     /// <summary>Whether this vendor reviews FEATURES. Absent is NO — see <c>ProviderSettings.Feature</c>.</summary>
-    bool? Feature = null);
+    bool? Feature = null,
+    /// <summary>
+    /// For an `api` row: the NAME of the vault key it uses, when that is not the row's id — a second
+    /// model on one key (S3.6). Absent is the row's own id, as it has always been. A name, never a value.
+    /// </summary>
+    string? Key = null,
+    /// <summary>For an `api` row: what it charges per million tokens (S3.7). Absent is no price.</summary>
+    PriceDto? Price = null);
+
+/// <summary>
+/// One vendor row's price on the wire — dollars per million tokens (PLAN_feature_review.md S3.7).
+/// </summary>
+/// <remarks>
+/// Every field NULLABLE, for the doctrine's reason (<see cref="ConsultantDto"/>): an omitted field arrives
+/// null whatever a declaration says. <c>PanelSettings.PriceOf</c> is the one place a null, a negative or a
+/// non-finite number becomes "no rate". The tier is optional: <c>TierFrom</c> is the prompt-token count
+/// from which the tier's rates apply (xAI: 200 000), absent for a vendor with one rate.
+/// </remarks>
+internal sealed record PriceDto(
+    double? In = null,
+    double? Cached = null,
+    double? Out = null,
+    long? TierFrom = null,
+    double? TierIn = null,
+    double? TierCached = null,
+    double? TierOut = null);
 
 /// <summary>
 /// One entry of `COAI_CONSULTANTS`: what consults for one caller kind — a DEFINITION, or a legacy

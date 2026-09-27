@@ -64,8 +64,10 @@ import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog } from './roundsDb';
 import { LogPeriod } from './logPeriod';
-import { NO_NOTES, ProvidersAnswer } from './providers';
+import { NO_NOTES, ProviderNotes, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
+import { presetEndpoint, VAULT_KEY_MARK, VaultKeyItem, vaultKeyItems, vaultKeyRow } from './apiKeyVendors';
+import { modelsForKey } from './apiModelsProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
@@ -80,16 +82,8 @@ import { BugzReviewPanel } from './bugzReviewPanel';
 import { BugChat } from './reviewChoose';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
-import {
-  fetchTable,
-  LITELLM_PRICES,
-  liteLlmTable,
-  ModelPrice,
-  OPENROUTER_MODELS,
-  openRouterTable,
-  PriceTable,
-  priceFor,
-} from './modelPrices';
+import { ModelPrice, PriceTable, priceFor } from './modelPrices';
+import { PRICE_BOOK } from './priceBook';
 import {
   ConfigReader,
   roleRecordUpdate,
@@ -316,10 +310,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private localEngines: Record<string, LocalEngine> = {};
   private localProbedEndpoints: Record<string, string> = {};
   private localCheckedAt: Record<string, number> = {};
-  /** The two public price lists, and when they were last fetched. */
-  private openRouterPrices: PriceTable = {};
-  private liteLlmPrices: PriceTable = {};
-  private pricesCheckedAt = 0;
   /**
    * When a control in the page gained focus, and which one. 0 means none has it.
    *
@@ -363,6 +353,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
      * above, and a build without it simply does nothing on a press.
      */
     private readonly chooseInChat?: (chat: BugChat) => Promise<void>,
+    /**
+     * Told when the shared price book fetched new tables — the extension rewrites the settings file
+     * then, because an `api` row's price crosses to the server in it (S3.7). Optional like the two above.
+     */
+    private readonly pricesRefreshed?: () => void,
   ) {
     // BUILT HERE rather than beside its declaration: a field initialiser runs before the constructor
     // parameters are assigned, so `this.dataDir` is undefined at that point and `tsc` says so
@@ -438,7 +433,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   async modelPrice(): Promise<PriceOfModel> {
     await this.refreshPriceTables();
-    const [open, lite] = [this.openRouterPrices, this.liteLlmPrices];
+    const [open, lite] = [PRICE_BOOK.openRouter, PRICE_BOOK.liteLlm];
     // What the OPERATOR typed, per vendor, wins over any list — through the same priceOf the
     // spending tab uses rather than a second copy of the rule. It is the only thing that can price
     // a local engine at all: no public list has ever heard of one, so its rounds read as a floor
@@ -1155,22 +1150,20 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * always showed, with dashes where the prices would be — which is exactly what it showed before
    * this existed.</p>
    */
-  /** The two public lists, fetched at most once a day and kept in memory. */
+  /**
+   * The two public lists, fetched at most once a day — the window's shared book (`priceBook.ts`), so the
+   * settings file an `api` row's price crosses in reads the same tables. A fetch that brought new tables
+   * is passed on, so that file is rewritten with the prices it could not carry before.
+   */
   private async refreshPriceTables(): Promise<void> {
-    const A_DAY = 24 * 60 * 60 * 1000;
-    if (Date.now() - this.pricesCheckedAt > A_DAY) {
-      this.pricesCheckedAt = Date.now();
-      [this.openRouterPrices, this.liteLlmPrices] = await Promise.all([
-        fetchTable(OPENROUTER_MODELS, openRouterTable),
-        fetchTable(LITELLM_PRICES, liteLlmTable),
-      ]);
+    if (await PRICE_BOOK.refresh()) {
+      this.pricesRefreshed?.();
     }
   }
 
   private async modelPrices(vendors: readonly Vendor[]): Promise<Record<string, ModelPrice>> {
     await this.refreshPriceTables();
 
-    const prices: Record<string, ModelPrice> = {};
     // THE MODELS OF BOTH HALVES OF THE PAGE. A reviewer row selects one; a chat is switched between
     // model PRESETS, which select their own - and this map used to hold only the first kind, so a
     // chat card read "no rate set for this model" for a model the published table prices perfectly
@@ -1178,17 +1171,21 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // (CodeRabbit, PR #209.)
     const presets = chatModelPresetsFrom(vscode.workspace.getConfiguration('coai').get('chatModelPresets'));
     const wanted = [...vendors.map((one) => one.model), ...presets.map((one) => one.model)];
-    for (const model of wanted) {
-      if (model.length === 0) {
-        continue; // "the CLI's default" — we do not know which model that is, so we do not guess
-      }
-      const price = priceFor(model, this.openRouterPrices, this.liteLlmPrices);
-      if (price !== undefined) {
-        prices[model] = price;
-      }
-    }
+    // An empty model is "the CLI's default" — we do not know which model that is, so the book does not
+    // guess and answers nothing for it.
+    const priced = (model: string, baseUrl = ''): (readonly [string, ModelPrice])[] => {
+      const price = PRICE_BOOK.priceOf(model, baseUrl);
 
-    return prices;
+      return price === undefined ? [] : [[model, price]];
+    };
+
+    return {
+      ...Object.fromEntries(wanted.flatMap((model) => priced(model))),
+      // An `api` row is billed by the endpoint it names, so ITS model is priced on that route (S3.7b) —
+      // xAI's own rate for grok on api.x.ai, not OpenRouter's resale price. Spread last, so the routed
+      // price is the one its card shows.
+      ...Object.fromEntries(vendors.filter((one) => one.runtime === 'api').flatMap((one) => priced(one.model, one.baseUrl))),
+    };
   }
 
   /**
@@ -3448,6 +3445,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const teamServers = this.teamServers(config0).filter(
       (s) => this.context.globalState.get<TokenFact>(tokenFactKey(s.id, side)) !== undefined,
     );
+    // The vault's API keys, by NAME, after everything else (S3.6): `!grok`, `!qwen`. From the server's
+    // last `--providers` answer — the panel reads that every ten seconds while it is open — or asked
+    // now when there is none, because a pick opened before the first probe landed must not read as
+    // an empty vault.
+    const vaultItems = vaultKeyItems(...(await this.vaultKeysNow()), this.vendorsHere());
     const picked = await vscode.window.showQuickPick(
       [
         ...items.map((p) => ({
@@ -3456,6 +3458,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           description: p.description,
           offered: p.offered,
           server: undefined,
+          vault: undefined,
         })),
         ...teamServers.map((s) => ({
           label: `Team server ${s.name}`,
@@ -3463,6 +3466,15 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           description: '',
           offered: undefined,
           server: s,
+          vault: undefined,
+        })),
+        ...vaultItems.map((v) => ({
+          label: v.label,
+          detail: v.detail,
+          description: v.description,
+          offered: undefined,
+          server: undefined,
+          vault: v,
         })),
       ],
       {
@@ -3484,6 +3496,12 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       if (fromServer !== undefined) {
         await this.saveVendor(fromServer);
       }
+
+      return;
+    }
+
+    if (picked.vault !== undefined) {
+      await (picked.vault.keyName.length === 0 ? this.sayNoVaultKeys(picked.vault) : this.addFromVault(picked.vault));
 
       return;
     }
@@ -3511,6 +3529,95 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
 
     await this.saveVendor(vendor);
+  }
+
+  /**
+   * The providers answer's vault facts and whether it answered — the cached one when there is one,
+   * otherwise asked now (the same probe, with its own cap).
+   */
+  private async vaultKeysNow(): Promise<[ProviderNotes, boolean]> {
+    const executable = this.serverExecutable();
+    const known = this.cachedProvidersFor(executable) ?? await readProviders(executable);
+
+    return [known.notes, known.answered];
+  }
+
+  /** This side's `coai-mcp`, or empty when none is installed. */
+  private serverExecutable(): string {
+    return serverPath(this.context.globalStorageUri)?.fsPath ?? '';
+  }
+
+  /** The last providers answer when it is from THIS binary and it answered — otherwise nothing. */
+  private cachedProvidersFor(executable: string): ProvidersAnswer | undefined {
+    return executable === this.providersFrom && this.providersCache.answered ? this.providersCache : undefined;
+  }
+
+  /**
+   * A `!name` entry chosen: an `api` row that reads the key filed under that name (S3.6).
+   *
+   * <p>The endpoint comes from the name's preset when it has one, and is asked for otherwise; the model
+   * list is the endpoint's own `GET /models`, asked through `coai-mcp --probe-api` — the server holds the
+   * key, this side never does. A list the endpoint would not give is said, and the model is then typed.
+   * Dismissing any box writes nothing.</p>
+   */
+  private async addFromVault(item: VaultKeyItem): Promise<void> {
+    const baseUrl = presetEndpoint(item.keyName) || await this.askVaultEndpoint(item.keyName);
+    const model = baseUrl.length === 0 ? undefined : await this.pickVaultModel(item.keyName, baseUrl);
+    if (model === undefined) {
+      return; // dismissed at a box — nothing is written
+    }
+    const taken = new Set(this.vendorsHere().map((vendor) => vendor.id));
+    await this.saveVendor(vaultKeyRow(item.keyName, baseUrl, model, taken));
+  }
+
+  /** The explanatory row picked: the reason no keys were listed, said where a person reads it. */
+  private async sayNoVaultKeys(item: VaultKeyItem): Promise<void> {
+    await notify({
+      as: 'warning',
+      class: 'refusal',
+      source: 'reviewers',
+      code: 'vault-keys-not-listed',
+      title: 'No API keys could be listed from the vault.',
+      detail: item.detail,
+    });
+  }
+
+  /** The base URL for a key whose name has no preset — empty when the box is dismissed. */
+  private async askVaultEndpoint(keyName: string): Promise<string> {
+    const typed = await vscode.window.showInputBox({
+      title: `Add a reviewer: ${VAULT_KEY_MARK}${keyName}`,
+      prompt: `The OpenAI-compatible base URL the key “${keyName}” is for`,
+      placeHolder: 'https://api.example.com/v1',
+      validateInput: (text) => badEndpoint(text),
+    });
+
+    return (typed ?? '').trim();
+  }
+
+  /** The model for a vault key's row: picked from the endpoint's list, or typed when it gave none. */
+  private async pickVaultModel(keyName: string, baseUrl: string): Promise<string | undefined> {
+    const listed = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Asking ${baseUrl} which models “${keyName}” can call…` },
+      () => modelsForKey(this.serverExecutable(), keyName, baseUrl),
+    );
+
+    return listed.ids.length > 0
+      ? vscode.window.showQuickPick([...listed.ids], {
+        title: `Add a reviewer: ${VAULT_KEY_MARK}${keyName}`,
+        placeHolder: 'Which model should review? — the endpoint’s own list',
+      })
+      : this.typeVaultModel(keyName, listed.reason);
+  }
+
+  /** A model id typed by hand, when the endpoint would not list its models — with the reason it would not. */
+  private async typeVaultModel(keyName: string, reason: string): Promise<string | undefined> {
+    const typed = await vscode.window.showInputBox({
+      title: `Add a reviewer: ${VAULT_KEY_MARK}${keyName}`,
+      prompt: `The endpoint did not list its models (${reason}). Type the model id exactly as the endpoint names it.`,
+      validateInput: (text) => (text.trim().length === 0 ? 'A model id is needed' : undefined),
+    });
+
+    return typed?.trim();
   }
 
   /**

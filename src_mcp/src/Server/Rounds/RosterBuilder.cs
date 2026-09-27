@@ -119,8 +119,12 @@ internal sealed class RosterBuilder(
         bool readsCheckout,
         int seed = 0,
         IReadOnlyList<string>? planPrompts = null,
-        bool deal = false)
+        bool deal = false,
+        // The feature stage's source turns (S3.2): the round's one resolver and the follow-up cap. Absent
+        // — every other stage, and the feature stage with the follow-ups switched off — is a single turn.
+        Runners.Feature.SourceTurns? source = null)
     {
+        var turns = source ?? Runners.Feature.SourceTurns.None;
         // The CATALOG's spelling, and nothing else, from here on. `RolesForRound` already answers
         // with catalog ids, so this changes nothing today — it is the boundary the Team server has
         // at its endpoint and the local path did not: a caller that schedules `architecture` would
@@ -290,9 +294,12 @@ internal sealed class RosterBuilder(
             {
                 ExecutablePath = provider.ExecutablePath,
                 Model = provider.Model,
-                ApiKey = _keys.Keys.GetValueOrDefault(provider.Provider, string.Empty),
+                // By the row's KEY NAME — its id unless it names another (S3.6: a second model on one key).
+                ApiKey = _keys.Keys.GetValueOrDefault(provider.KeyName, string.Empty),
                 // Only ApiRuntime reads it: which row of shared/api-dialects.json spells the request.
                 Dialect = provider.Dialect,
+                // Only ApiRuntime reads it too: the shim prices each turn from it (S3.7).
+                Price = provider.Price,
                 Timeout = _settings.ReviewerTimeout,
                 ReasoningEffort = _settings.LocalReasoningEffort,
                 MaxTokens = _settings.LocalMaxTokens,
@@ -302,7 +309,8 @@ internal sealed class RosterBuilder(
                 // config.toml is switched off from the next round on.
                 McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
             };
-            var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers);
+            var followUps = turns is Runners.Feature.SourceTurns.On on ? on.FollowUps : 0;
+            var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers, followUps);
             // The repair is composed WITHOUT a checkout always — the stage's own no-checkout material —
             // because the repair launch always runs in repairDir, an empty temp directory, whatever the
             // review was given (see above).
@@ -312,19 +320,23 @@ internal sealed class RosterBuilder(
             // that change's own code round — which diagnosed it the other way round, as a repair that
             // should promise the tree. The code says otherwise: the repair never has one.
             //
-            // The paragraph itself is built before anybody knows which way the first attempt failed,
-            // so it covers both. Its second sentence exists because a refused tool produces NO answer
-            // at all, and telling that model its JSON was malformed describes a failure it never had.
-            var repairPrompt = _reviewerPrompt.ComposePrompt(choice, context, stageRow.Reads, stageRow.Answers) +
-                "\n\nYOUR PREVIOUS ATTEMPT DID NOT PRODUCE A USABLE ANSWER."
-                + " If it returned text that was not the schema's JSON: return ONLY the JSON object — no fences, no prose."
-                + " If it returned nothing because a command or a file read was refused: there are no tools here"
-                + " and none are needed — answer from the text above.";
-            work.Add(new ReviewerWork(
-                runtime.Build(role, prompt, launchDir, schemaFile, outputDir, settings),
-                runtime.Build(role, repairPrompt, repairDir, schemaFile, outputDir, settings),
+            // The paragraph itself (`RepairInstruction`) is built before anybody knows which way the
+            // first attempt failed, so it covers both.
+            var repairBase = _reviewerPrompt.ComposePrompt(choice, context, stageRow.Reads, stageRow.Answers, followUps);
+            // One composer for every turn (S3.2): turn 1 is the base with an empty tail, and a follow-up
+            // is the SAME base byte for byte with its tail appended — the launch and the repair alike, so
+            // the repair of turn N is composed from turn N's own prompt (plan §4.9).
+            ReviewerWork Turn(string tail) => new(
+                runtime.Build(role, prompt + tail, launchDir, schemaFile, outputDir, settings),
+                runtime.Build(role, repairBase + tail + RepairInstruction.Text, repairDir, schemaFile, outputDir, settings),
                 choice.Id,
-                System.Text.Encoding.UTF8.GetByteCount(prompt)));
+                System.Text.Encoding.UTF8.GetByteCount(prompt + tail));
+            work.Add(Turn(string.Empty) with
+            {
+                Continue = turns is Runners.Feature.SourceTurns.On conversation && stage == Stage.FeatureReview
+                    ? new Runners.Feature.SourceConversation(conversation, Turn)
+                    : ReviewerContinuation.None,
+            });
         }
     }
 

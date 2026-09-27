@@ -15,7 +15,7 @@
 | `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
-| `ask_human` | `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
+| `ask_human` | `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it; while the gate is HELD the question's id is recorded on the hold (`SessionState.HoldQuestions`, under the session's claim, 2026-09-26) so the person's answer to it is the hold's, and on a feature session after its first round it is recorded as a request question (`SessionState.RequestQuestions`, 2026-09-27) so the person's answer to it — and to nothing else — can be the second-round request | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
 | `consult` | `ConsultationService` — another vendor's model over the LIVE working tree | eleven ways, each a sentence naming its cure — see below |
 | `close_consult` | `CloseAsync` — how a consultation ENDED, recorded by whoever knows | not your consultation; a word outside the closed set; `lapsed`, which is the server's own; a consultation that FAILED and produced no advice; a different verdict over one already recorded |
 
@@ -540,7 +540,7 @@ moved the engine into `src_mcp/src/Server/Rounds/`, as proved moves with no beha
 
 | Unit | What it owns |
 |---|---|
-| `RoundEngine` | `RunStageAsync` — claim, human decision, deadline, Team-server role probe, sha, refusal-before-building (where the consultation cadence is prepared), the cadence plan and epic onto the session, lease, work, schedule, dedup, gate, verdict, the cadence note on the record and its facts in the orders, save, project, notify — plus the round deadline (`RoundDeadlineFor`, `ConfiguredReviewers`, `WhatEndedIt`), `AnswerFor`, `WhereTheDocumentWent`, `NotifyIfAPersonMustDecide`, `SpentPrompts`, `WhatTheCallerWasDoing` and its own `Error`, which reaches the one refusal boundary exactly as the service's does |
+| `RoundEngine` | `RunStageAsync` — claim, human decision, deadline, Team-server role probe, sha, refusal-before-building (where the consultation cadence is prepared), the cadence plan and epic onto the session, lease, work, schedule, dedup, gate, verdict, the cadence note on the record and its facts in the orders, save, project, notify — plus the round deadline (`RoundDeadlineFor`, `ConfiguredReviewers`, `WhatEndedIt`), `AnswerFor`, `WhereTheDocumentWent`, `NoticeIfAPersonMustDecide` (the `call_human` notice, BUILT before the save so its id is recorded as the hold's question, WRITTEN after), `SpentPrompts`, `WhatTheCallerWasDoing` and its own `Error`, which reaches the one refusal boundary exactly as the service's does |
 | `RoundCommands` | the orders a round carries: `MayProceed`, `CallerFor`, the words a person wrote for the orders (`CommandTextsNow`), their own commands (`CustomOrdersFor`), `CommandStageOf`. A unit of its own so the engine stays under the 800-line ceiling. `PanelService` constructs it and hands it to the engine, because the consultation cadence's check before a code round (`CadenceBeforeTheCode`) reads the same order texts |
 | `RosterBuilder` | `BuildWork` and everything only it uses: the deal (`Items`, `Lens`, `Assemble`, `Everyone`, `Hand`), who may carry a role (`CanCarry`, `WhyNotCarried`, `Carriers`), `RolesWithRulesInMind`/`RolesNotAsked`, `LocalRowsFirst`, `ChoiceFor` |
 | `ReviewerPrompt` | `ComposePrompt`, `WithoutTheStaleClaim` (the one `[GeneratedRegex]`, so `PanelService` is no longer `partial`), `WhatYouHave` |
@@ -666,6 +666,42 @@ Environment until the extension arrives: `COAI_PROVIDERS`, `COAI_MODEL_*`, `COAI
 `COAI_CREDS_KEY` — the CredsForDevs config-entry key. `KeyVault` runs `creds config <key>` once at
 startup; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in
 `providers`, never crashes, never partial applies, never logged values.
+
+**`creds` is looked for where CredsForDevs installs it, after PATH (2026-09-26, PLAN_feature_review §9.10).**
+The CredsForDevs extension downloads its CLI into its own global storage —
+`<editor data>/User/globalStorage/remsoftdev.creds-for-devs/bin/creds[.exe]` — and the folder it adds to PATH
+holds only `creds-mcp.exe`; measured by S0.5's probe, a server VS Code started answered "the `creds` CLI is not
+installed" on a machine where it was. `KeyVault.ForThisMachine(launcher, env)` is now the one production road
+(serve, `--providers`, `--probe-api`): PATH's `creds` first, then each `CredsCli.Present(...)` path —
+`%APPDATA%\Code[ - Insiders]\User\globalStorage\…` on Windows, `~/Library/Application Support/Code[ - Insiders]/…`
+on macOS, `$XDG_CONFIG_HOME` (else `~/.config`)`/Code[ - Insiders]/…` on Linux — and only a CLI that could not
+be STARTED moves on to the next; one that started and refused has answered. Nowhere at all names where it
+looked. Chosen over the coai extension passing a path because the server is started by whatever MCP client the
+person uses and three modes read the vault; a path from the extension would reach only its own launches, and
+only once both halves had shipped. What it does not reach: CredsForDevs is a UI extension, so a server inside
+WSL or on a remote host does not find a Windows `creds.exe` there. `new KeyVault(launcher, exe)` — what the
+tests use — takes no fallbacks unless given them, so no test can read this machine's real vault.
+`TheVaultIsFoundWhereCredsForDevsInstallsItTests`; RED first: `Expected keys.Unavailability to be empty … but
+found "the `creds` CLI is not installed on this machine"`.
+
+**The vault's key NAMES are on `providers` (2026-09-26, S3.6).** `ProvidersAnswer.VaultKeyNames` lists the
+config entry's property names, sorted — never a value; `VaultRead` says whether the vault was read at all, so an
+empty list reads as "holds none" or "could not be read (and `vaultNote` says why)". The panel's *Add a
+reviewer* offers each as `!name`. A row may read a key filed under another name: `VendorDto.Key` →
+`ProviderSettings.VaultKey`, and `ProviderSettings.KeyName` (the key name, else the id) is the ONE answer
+every lookup asks — the probe's auth, `ExcludedFrom`'s reason, `RosterBuilder`'s `ApiKey`, `--probe-api` —
+and `VendorIdentity.VaultName` names it in the "needs a key under '…'" sentence. So `qwen-2` reads `qwen`: a
+second model on one key. `AnApiReviewerIsPricedAndKeyedTests`; teeth: back on the row id, the second row went
+`unavailable` and the roster launched it with no `COAI_API_KEY`.
+
+**An `api` row carries its price, and a round says what it cost (2026-09-26, S3.7).** `VendorDto.Price` (a
+`PriceDto` of nullable numbers: `in`, `cached`, `out`, optional `tierFrom` / `tierIn` / `tierCached` /
+`tierOut`) → `ProviderSettings.Price`, through `PanelSettings.PriceOf` — the one place a null, negative or
+non-finite rate becomes "no rate", and half a tier becomes none. The shim prices each turn
+([module_runners.md](module_runners.md)); `RoundRecord.CostUsd` sums it, `RoundRecord.CostNote` says
+`no price set` when a metered reviewer had no rate, and the audit's reviewer and round lines write the figure
+or those words through `CostText.Of` — never `$0`. An older server ignores `key` and `price` (the reader skips
+members it does not know): the row reads the key under its own id and runs unpriced, as it did before.
 
 **A chosen directory can be partitioned per SIDE (2026-09-13, issue #115).** `COAI_DATA_DIR` has
 always moved the data somewhere that survives a Windows reinstall; what was missing is an answer to
@@ -3137,9 +3173,12 @@ works only because no code round carries `PlanCritique`.
 which then decides whether to pass it on. It did not, twice in one day, and the operator watched a
 panel that said *No ConnectOtherAIs review is waiting on an answer* while a gate sat blocked.
 
-`PanelService.NotifyIfAPersonMustDecide` now writes an escalation file for that verdict, in the
+`RoundEngine.NoticeIfAPersonMustDecide` now builds an escalation file for that verdict, in the
 same shape `ask_human` uses, so the panel shows and answers it identically. It does not block: the
-round is already over.
+round is already over. Since 2026-09-26 the notice is built BEFORE the session is saved and written
+after it, because its id is what the save records as the hold's question (`SessionState.HoldQuestions`)
+— the person's answer is bound to the hold by that id (*And the answer applies only to the hold it
+answered* below).
 
 **`Escalations.Notify` creates the directory first.** It did not, and its `catch (IOException)`
 swallows `DirectoryNotFoundException` along with everything else — so on a machine where nobody had
@@ -3354,6 +3393,45 @@ decision so a resumed conversation LEARNS of it rather than being told.
 
 **None of the three advances a stage over open findings.** A human override meaning "ignore all
 this" would be an off switch on the gate, and it is deliberately not offered.
+
+**And the answer applies only to the hold it answered (2026-09-26, D12 found by S3.4).**
+`AnsweredFor` returns the newest ANSWERED question and walks past the unanswered ones, so a
+`call_human` notice nobody has answered yet was skipped and the "keep going" a person gave on an
+EARLIER hold was found instead — and both readers that act on it, the engine before a round and
+`resolve`, applied it: an answer to hold one opened hold two by itself. `CurrentAnswer` is the one rule
+now, for those two and for the feature stage's second-round request: the answer counts only when it
+was given AFTER the last round that ran completed (`RoundRecord.CompletedUtc`, which is when a hold
+begins and before its notice is written); a skipped row is not a round, no round means no hold, an
+unreadable time is not newer than anything. `status` still reports the newest answer as the person's
+words, unfiltered — it informs, it opens nothing.
+
+**And the hold is bound to its answer by IDENTITY, not by time (2026-09-26, found by the epic 3 risk
+consultation 159f0397).** The clock was not enough: a question asked during an EARLIER hold, left
+unanswered and answered now, is newer than the current hold's round, and it released the current hold.
+A hold now records the questions raised FOR it on the session — `SessionState.HoldQuestions`: the
+`call_human` notice's id, written by the engine's save of the round that raised the hold
+(`NoticeIfAPersonMustDecide` builds the notice before the save and `Escalations.Notify` writes it
+after), and every `ask_human` question asked while the hold stands (`PanelService.RecordOnTheHoldAsync`,
+which re-reads and saves the session under its claim, retrying a busy claim for up to a second and then
+asking unrecorded with a warning — the hold's own notice still answers it). `CurrentAnswer.For` takes
+the newest answer to one of THOSE questions (`Escalations.ReadAnswer` by id) when any is recorded; the
+list is released with the hold (`RoundMachine.ApplyHumanDecision`, and `Resolve` on `humanSaysProceed`)
+and a round that ends any other way clears it. **The clock decides nothing any more (2026-09-27, the
+gate's findings #24/#30 on epic 3's code round).** It stayed as the residual for a session that recorded
+no question — a hold an older build raised before the field existed — and that residual was the bypass
+in a smaller coat: an old question answered late released such a hold. Now `CurrentAnswer.For` answers
+only from the hold's own questions, so a hold with none recorded is released by NO answer; the engine
+re-issues its notice instead (`RoundEngine.WithTheHoldReissued`, from `ApplyAnyHumanDecision`, under
+the claim): the same notice shape a `call_human` verdict mints (`HoldNotice`), saved on the session as
+the hold's question BEFORE it is written, with a reason that says the earlier notice could not be
+matched to an answer. The begin that follows still refuses with `GateHeld`; the person answers the
+re-issued notice — or an `ask_human` question asked under the hold, which records itself the same way —
+and that releases it. The feature stage's second-round request has its own list and its own reader
+(`RequestQuestions`, `CurrentAnswer.ForRequest` — *The second round, only when it is needed* below);
+the one clock left is a fail-safe on it, not a route. `RecordOnTheHoldAsync` became
+`RecordOnTheSessionAsync`, which asks `RoundMachine.RecordQuestion` where an `ask_human` question
+belongs. Sessions written before either field read them back as empty, never null
+(`ASessionFromAnOlderBuildStillRunsTests`).
 
 ### The gate is per ROLE, and the prompts can be dealt (2026-09-01)
 
@@ -4907,12 +4985,12 @@ plan); two concurrent first calls on one plan here are one creator, and
 minted session.
 
 **The skip branch sits AFTER `stage.Begin`, and that order is a person's decision kept.** A round
-whose reviewers all failed still calls a human (the `Answered == 0` path is untouched); the next call
-with every vendor un-ticked meets the held gate first and is refused with the human-gate sentence,
-never recorded as skipped — otherwise switching the reviewers off would be a way around
-`call_human`. `WhenEveryReviewerFails_APersonIsCalled_AndSwitchingTheReviewersOffDoesNotSkipPastThem`
-holds it; deleting the feature begin's gate arm made it red with a `skipped` verdict where an error
-was expected.
+whose reviewers all failed still calls a human — since S3.4 on the SECOND failure, the first buying a
+retry (D23; the section *The second round, only when it is needed* below); the next call with every
+vendor un-ticked meets the held gate first and is refused with the human-gate sentence, never recorded
+as skipped — otherwise switching the reviewers off would be a way around `call_human`.
+`WhenEveryReviewerFailsTwice_APersonIsCalled_AndSwitchingTheReviewersOffDoesNotSkipPastThem` holds it;
+deleting the feature begin's gate arm made it red with a `skipped` verdict where an error was expected.
 
 **What a skip writes.** `SkipReasons.For` decides the row of the truth table in order — the role
 switch, the vendor ticks, the ticked vendors that cannot run (`ExcludedFrom`, each named) — and the
@@ -4944,7 +5022,10 @@ forward to 16 with the column present, and the released binary still reads it af
 session file with `"stage": "FeatureReview"` and a `feature` key is left byte-identical by the
 released binary's startup sweep, while this build's sweep marks its dead round interrupted and saves
 it back under its own key — one session file, never two. Old → new is the only supported direction;
-there is no downgrade.
+there is no downgrade. **Re-run on 2026-09-26 against 0.38.0**, published by then, through the
+shared `scripts/releasedHalves.mjs` downloader: the same nineteen assertions green, with the released
+binary's own database at `user_version` **15** (the cadence step 0.38.0 carries) and migrated forward
+to 16.
 
 **`SessionStore`, `SessionClaim` and `Save`.** `Load`, `Exists` and `FileFor` take the optional
 `feature` argument after `document`, defaulted, so every caller that predates the stage loads exactly
@@ -4960,6 +5041,17 @@ server row never serves the stage in this version (`Serves(FeatureReview) = Feat
 D10). The budget keys are the stage's own — `COAI_MAX_ROUNDS_FEATURE` / `COAI_THRESHOLD_FEATURE` —
 because `GateFor` used to spell `isPlan ? "PLAN" : "CODE"` and would have handed the feature stage the
 code keys in silence; `COAI_FEATURE_MIN_EPICS` (default 3, D17) is read here and applied by S2.2.
+
+**What an older server does with the tick — measured, not assumed** (S3.3,
+`src_vs_code/scripts/live-feature-vendor-compat.mjs`; the table is in
+[module_extension.md](module_extension.md)). The released 0.38.0 has no `Feature` member on `VendorDto`
+and no `UnmappedMemberHandling.Disallow` anywhere, so an unknown member is skipped: given a
+`COAI_VENDORS` whose third row carries `"feature": true`, its `--providers`, its env-block read and its
+`providers` tool all list the three rows, identical to the same list without the tick. The panel keeps
+the tick out of the file for a server it KNOWS is older anyway (`FEATURE_SINCE`), so the case measured is
+the one it cannot see — a server it could not version. And the other direction closes the loop: a vendor
+list written by the released extension, which never writes the field, reaches this build as nobody
+ticked, and `review_feature` records it as `skipped` with "no vendor is ticked for the feature review".
 
 ## `review_feature` — the eleventh tool (2026-09-26, S2.2b of the feature-review plan)
 
@@ -4979,14 +5071,15 @@ flowchart TD
   headonly --> engine["RoundEngine.RunStageAsync(repo, ':feature', plan, StageRun)"]
   refs --> engine
   engine --> claim["claim · load or CreateIfAbsent (caller from the handshake; no base yet)"]
-  claim --> begin["BeginFeatureRound / BeginFeatureRoundAgain — a held call_human refuses here"]
-  begin --> before["RefuseBeforeBuilding: a different base without again · again with the same base over an unmoved head, in every state"]
+  claim --> person["PersonsRequest.Apply — the person's answer, newer than the last round, → SecondRound = PersonAsked (D23)"]
+  person --> held["HeldToBase: the base this round will save;<br/>another base than recorded → RoundMachine.FreshFeatureReview (round one again)"]
+  held --> begin["BeginFeatureRound / BeginFeatureRoundAgain — a held call_human refuses here;<br/>then D23: two rounds run · a second round with no ground"]
+  begin --> before["RefuseBeforeBuilding: a different base without again · again with the same base over an unmoved head — except a retry and the person's request, which read the same head by design"]
   before --> skip{"RoundSkips.BeforeBuilding?<br/>D17 too few epics · D1 nobody to ask, from the settings"}
-  skip -- yes --> recorded["RoundSkips.Record — skipped, does not block"]
-  skip -- no --> held["HeldToBase: the base saved with THIS round;<br/>another base than recorded → RoundMachine.FreshFeatureReview"]
-  held --> work["WorkAsync: outline+hunks · gate history · StageRules.Feature · FeatureContext.Render → BuildWork(FeatureReview)"]
+  skip -- yes --> recorded["RoundSkips.Record — skipped, does not block; saves the session as READ, base unpinned"]
+  skip -- no --> work["WorkAsync: outline+hunks · gate history · StageRules.Feature · FeatureContext.Render → BuildWork(FeatureReview) → FeatureSecondRound.OnlyTheFailed on a retry"]
   work -- "roster empty for a reason only building finds" --> recorded
-  work -- reviewers --> round["the round: all failed → call_human; otherwise proceed / revise / …"]
+  work -- reviewers --> round["the round: CompleteFeatureRound — proceed / good_enough close on resolve; revise on a ground in round 1; call_human on a ground in round 2"]
 ```
 
 **The order, and why the top level is asked before the plan.** `lessons` and `epics` first — pure,
@@ -5057,10 +5150,14 @@ sentences above, and the fixes are these** (every one RED first; the observation
 and hands its own schema file to a feature reviewer only, and `ReviewerPrompt.ComposePrompt` takes a
 three-valued `ReaderMaterial` instead of `bool hasCheckout` (plan §4.6). The feature truth names the
 outline and the changed hunks, the `*` marker, the `[N more changed lines — ask for source]` marker and
-"What this context left out", and says a `sourceRequests` entry is RECORDED and not answered inside
-this review — the loop that serves one is S3.2, and a reviewer promised source would hold findings
-back for a turn that never comes. The requests ARE recorded: `SourceRequestNote.With` appends them —
-and any the parser refused, with the reason — to that reviewer's `notes` in the reply.
+"What this context left out", and says what a `sourceRequests` entry buys — which, since S3.2, the
+SWITCH decides (`ReviewerPrompt.WhatYouHave(material, followUps)`): with follow-up turns, that a request
+is ANSWERED in the next turn and only the last answer counts; with `COAI_FEATURE_SOURCE_FOLLOWUPS=0`,
+that it is RECORDED and not answered inside this review, because a reviewer promised source would hold
+findings back for a turn that never comes. What the LAST turn asked for is still recorded:
+`SourceRequestNote.With` appends it — and any request the parser refused, with the reason — to that
+reviewer's `notes` in the reply, under a heading that says no turn was left for it. The loop itself is
+the section *A feature reviewer's source turns* below.
 
 **`resolve`, `status` and `ask_human` take `feature`** — the same `planPath` — resolved through the
 same `DocumentReader.IdentityOf` the review was opened with, under the constant branch `:feature`
@@ -5196,3 +5293,174 @@ drain is not promised; Ctrl+C and Ctrl+Break are held.
 A cancelled `RunAsync` — or the disposed transport under a read — returns 0 with "stopped by a signal"
 (`Ended`), never recorded as a crash. SIGKILL cannot be caught, and a run killed that way
 is still, correctly, an unclean exit.
+
+## A feature reviewer's source turns — the server's half of the loop (2026-09-26, S3.2 of the feature-review plan)
+
+The loop lives in the runners ([module_runners.md](module_runners.md), *One reviewer, one conversation*);
+what the server decides is the switch, the deadline, the composition and the record.
+
+```mermaid
+flowchart TD
+  env["COAI_FEATURE_SOURCE_FOLLOWUPS<br/>absent → 3 · 0..3 as is · else 3 + UnrecognisedSetting naming it"] --> settings["PanelSettings.FeatureSourceFollowUps"]
+  settings --> run["StageRun.FollowUps (feature stage only; 0 elsewhere)"]
+  run --> deadline["RoundEngine: RoundBudget.For(reviewerTimeout × (1 + FollowUps), reviewers, concurrency)<br/>an explicit COAI_ROUND_TIMEOUT_MINUTES kept as it is"]
+  settings --> stage["FeatureStage.WorkAsync: ONE SourceResolver per round for the pinned head<br/>SourceTurns.On(resolver, followUps) — or SourceTurns.None at 0"]
+  stage --> roster["RosterBuilder.Add: Turn(tail) = base + tail (launch) · repairBase + tail + RepairInstruction.Text (repair)<br/>Continue = SourceConversation(turns, Turn) for the feature stage, None otherwise"]
+  roster --> truth["ReviewerPrompt.WhatYouHave(Outline, followUps): ANSWERED up to N follow-ups, only the LAST answer counts — or RECORDED at 0"]
+  roster --> engine["the engine's callback: UsageLedger.Record — one line per turn; LiveRound.Finish — every turn in the total;<br/>RoundAudit: 'answered in 12.3s over 2 turns … (N cached) … source: …'"]
+  engine --> record["the round record: reviewers.note = 'N turns; source: …'; the reply's notes carry what the LAST turn still asked for"]
+```
+
+- **The switch** is parsed on its own (`FollowUpsOf`): zero is meaningful (single-turn — the rollback),
+  the ceiling is `SourceBudget.MaxFollowUps`, and a value outside 0..3 is the default said out loud by
+  `WhyFollowUps` — an `UnrecognisedSetting` keyed `COAI_FEATURE_SOURCE_FOLLOWUPS`, so the startup notice
+  names the value the person typed. Neither `IntVar` nor `CountVar` fits: one refuses zero, neither has a
+  ceiling.
+- **The deadline scales the per-reviewer duration, never the reviewer count** (plan §4.9): `StageRun`
+  is TOLD `FollowUps`, and `RoundDeadlineFor(reviewers, perReviewer)` hands `RoundBudget.For` the
+  conversation's length — four turns of ten minutes are forty minutes for the wave they sit in. The
+  warning about an explicit round limit shorter than one reviewer's own compares against the same
+  number. Every other stage passes zero follow-ups, so its budget is what it was.
+- **One resolver per round** is built in `FeatureStage.WorkAsync` for the head the round resolved and
+  handed to the roster as `SourceTurns.On`; the spend is each reviewer's own and rides on its
+  `SourceConversation`, so a D23 round 2 — a new `WorkAsync` — starts every allowance afresh. At zero
+  follow-ups no resolver is built and the requests are recorded, not served.
+- **The composition is one local function per reviewer** (`Turn(tail)`): the base prompt is composed
+  ONCE and every turn is `base + tail` — which is what makes the prefix byte-identical (D25) — and the
+  repair of any turn is the no-checkout base with the same tail and `RepairInstruction.Text`, so a
+  malformed turn-2 answer is repaired against turn 2's own question. `PromptBytes` counts the whole
+  turn.
+- **The truth in the prompt says what the switch buys.** With follow-ups the outline truth says a
+  request is ANSWERED in the next turn, names the resolver's caps, and says only the last answer counts;
+  at zero it says RECORDED and not answered — the sentence S2.2b wrote, now conditional. Both agree with
+  `feature-review.md`, which gained the same two sentences (and the extension's `helpPrompts.ts` mirror
+  was regenerated from it).
+- **The record.** The engine's callback and `LiveRound.Finish` read `EarlierTurns` off every outcome —
+  one ledger line per turn, every turn in the round's total — and the reviewer's row on the round record
+  carries `N turns; source: turn 2: served …` as its note when there was more than one turn. The reply's
+  `notes` for a feature reviewer carry the LAST turn's prose and, under a heading that says no turn was
+  left for it, whatever that turn still asked for. The `review_feature` tool description's one sentence
+  about `sourceRequests` says they are served in follow-up turns; its round wording is S3.4's.
+
+## The second round, only when it is needed — the server's half (2026-09-26, S3.4 of the feature-review plan)
+
+The rule is the machine's ([module_core.md](module_core.md), *The second round, only when it is needed*):
+a feature review has two rounds at most, and the second runs only for a reviewer failure, a `blocking`
+finding, or the person's request. What the server owns is the three things a pure transition cannot —
+where the person's request comes FROM, which reviewers a retry asks, and what a second round carries.
+
+```mermaid
+flowchart TD
+  answer["escalations/&lt;id&gt;.answer.json<br/>written by the panel (escalationWatcher) or the phone — never by a tool"] --> latest["CurrentAnswer.ForRequest(session)<br/>the newest answer to one of SessionState.RequestQuestions — the ask_human questions asked on this session after round 1"]
+  latest --> req["PersonsRequest.Apply(session)<br/>feature · gate not held · an answer to a question asked FOR round 2, newer than the last round that ran"]
+  req --> machine["RoundMachine.ApplyPersonsRequest → SecondRound = PersonAsked"]
+  machine --> begin["stage.Begin — admitted on the ground"]
+  begin --> retry{"FeatureSecondRound.OnlyTheFailed<br/>ReviewerFailure?"}
+  retry -- "yes: the (provider, role) pairs the last round recorded as failed" --> some["only those reviewers; the rest NotAsked: 'answered in round 1 … carried'"]
+  retry -- "none left to retry" --> all["everyone — the gate must not fail open on an edited roster"]
+  retry -- no --> all
+  all --> done["CompleteFeatureRound → FeatureSecondRound.Apply(answer):<br/>the D23 sentence for this case · carried = round 1's decisions on a second round"]
+  some --> done
+  done --> record["RoundRecord.AdmittedBy = the ground this round ran on<br/>session.Carried cleared"]
+  resolve["resolve on round 1 that stays open → PersistedSession.Carried = the decisions (CarriedDecision)"] -.-> done
+```
+
+- **The provenance road exists, and no tool argument reaches it.** The person's request is D23's third
+  ground, and it arrives ONLY as an escalation answer with `decision: continue` or `fix` — the file the
+  panel's quick pick (`escalationWatcher.answerCommand` → `answerJson`) and the phone write beside a
+  question, the same road `humanDecision` has always travelled. `ask_human` writes the QUESTION and waits;
+  `resolve`'s `humanDecision: "proceed"` is read by `RoundMachine.Resolve` and touches no ground;
+  `review_feature`'s `again` is a begin's choice and nothing more. `PersonsRequest.Apply` reads the answer
+  through `CurrentAnswer.ForRequest` before the begin: the newest answer to one of the session's
+  `RequestQuestions` — the `ask_human` questions asked on the feature session AFTER round 1, recorded by
+  `ask_human` itself (`RoundMachine.RecordQuestion`) — and newer than the last round that ran, which is the
+  one clock kept, as a fail-safe. **Bound by identity since 2026-09-27** (the gate's finding #27 on epic 3's
+  code round): the rule before was the newest `continue`/`fix` newer than round 1, so ANY question of the
+  session answered that way admitted round 2 — one asked while the review was still skipped, one an older
+  build filed. Nothing is saved for it; the request rides with the round that runs, and spends the list.
+  `TheCallerCannotClaimThePersonsRequest_AndThePersonsAnswerAdmitsRoundTwo` passes the caller every argument
+  it has — `again: true`, `humanDecision: proceed`, a question it asked itself — and is refused each time;
+  the answer file written as the panel writes it admits round 2, whose record says `AdmittedBy: PersonAsked`;
+  `AQuestionAskedBeforeRoundOne_AnsweredAfterIt_IsNotThePersonsRequest_AndOneAskedAfterItIs` is the
+  identity half.
+- **An ADMITTED second round is owed, and nobody to run it is a block, not a skip** (2026-09-27, the
+  gate's finding #25). Round 1's skip rows are D1's ordinary state — nobody ticked, nothing owed, the trail
+  says so and does not block. Unticking every feature reviewer between the rounds, or passing fewer epics
+  than the D17 line, used to turn the retry a reviewer failure had admitted into a `skipped` row that "did
+  not block" — the gate bypassed by a settings edit. Both skip sites of the engine now go through
+  `RoundEngine.SkippedOrOwed`: for a session on a second-round ground (`FeatureSecondRound.IsSecondRound`)
+  the answer is a refusal, `FeatureSecondRound.NobodyForAnAdmittedRound` — the ground in words, the skip's
+  own reason, that it BLOCKS, and the two doors (tick a vendor, or `ask_human`) — and nothing is recorded;
+  the ground stands until a reviewer runs the round or a person decides
+  (`AnAdmittedSecondRound_WithNobodyLeftToReview_IsNotSkipped_ItBlocks`).
+- **D14 for a blocking second round does not depend on `again`** (2026-09-27, epic 3's code round).
+  `FeatureStage.WhyNotThisRound` refuses the unmoved head whenever the loaded state's ground is
+  `BlockingFinding` — `MustReadANewHead` — whether or not `again` was passed: the ground admits round 2 to
+  a plain call too, and only `again: true` was held to the refusal, so a plain `review_feature` after a
+  blocking round 1 ran round 2 over the very head round 1 had read, with no fix in it. The retry and the
+  person's request still read the same head by design, with or without `again`
+  (`ABlockingSecondRound_OverTheUnmovedHead_IsRefused_WithOrWithoutAgain`, and end to end
+  `ABlockingRoundOne_ThenAPlainCallOverTheUnmovedHead_IsRefused_AndOverTheFix_RunsRoundTwo`).
+- **`FeatureSecondRound.Instruction` answers `string.Empty`, never null** (doctrine §4; the gate's
+  guideline finding), read by length at `Apply`; `NoInstructionOfTheSecondRound_IsNullable` scans every
+  string-valued method of the class for a nullable return.
+- **The panel's control is the button it already had.** "Keep going — more rounds" on a question filed
+  under a feature session (`branch === ':feature'`, the server's `SessionKey.FeatureBranch`) is the person's
+  request; `decisionChoices(branch)` gives that choice a detail that says what it grants THERE — the second
+  and last round, or a fresh set after a `call_human` — and nothing else about the modal or the file moved
+  (`humanDecision.test.ts`). No fourth decision, no new file shape.
+- **A retry asks only the reviewers that failed.** `FeatureSecondRound.OnlyTheFailed` keeps the
+  `(provider, role)` pairs the last feature round's `ReviewerStates` recorded as `failed` and names the rest
+  as not asked, with the reason; when none of the failed is still configured it asks everyone, because a
+  roster edited between the rounds must not turn the retry into a `proceed` over nobody. A failed reviewer
+  that is no longer on the roster — switched off between the rounds — is named in `NotAsked` too, with
+  *failed in round 1 and is no longer enabled, so it was not retried* (2026-09-26, the epic 3 risk
+  consultation 159f0397: it used to be in neither list, so the failure dissolved without a word in the
+  reply's `reviewers` line or the audit line, which both render that sentence); switching it off is the
+  person's decision, so nothing blocks on it. A blocking finding
+  outranks a failure as the ground, so the fix's round asks everyone. The retry reads the SAME head by
+  design, and so does the person's second look: `FeatureStage.WhyNotThisRound` exempts those two grounds
+  from D14's unmoved-head refusal, and keeps it for a blocking finding, whose second round is what reads
+  the fix.
+- **What a second round carries.** `resolve` on a round 1 that leaves the review open keeps the decisions
+  on `PersistedSession.Carried` (`CarriedDecision`: the finding, `accept`/`reject`, the reason); the engine
+  puts them on the second round's answer under `carried`, says in the instruction that they are not to be
+  decided again, and clears them with the round. The instruction of every feature verdict says the D23 rule
+  in that case's words (`FeatureSecondRound.Apply`): a `proceed` or `good_enough` says the review closes on
+  resolve and what alone would buy a second round; a `revise` says which ground admitted the second — the
+  blocking finding wants `again: true` over the new head, the retry wants no new head and asks only the
+  failed. The round's record carries the ground it ran on (`RoundRecord.AdmittedBy`), because the state
+  forgets it the moment the round completes.
+- **The engine moved one thing and gained four lines.** `HeldToBase` now runs BEFORE `stage.Begin`, on
+  the session as read, so a review against another base is fresh (round one) before the begin's count
+  arms look at it; `loaded` is captured before it, so a skip or a refusal still saves the session with the
+  base unpinned. The rest is one call to `PersonsRequest.Apply`, one to `FeatureSecondRound.Apply`, the
+  `AdmittedBy` write and `Carried = []` on the save. The engine is still over the file-size rule
+  (`todo/PLAN_round_engine_and_panel_service_under_800_lines.md`).
+- **Two defects found on the way (D12).** `PanelService.WithHumanDecision` applied the session's newest
+  answered notice on EVERY `resolve`, whether or not a gate was held — so one "keep going" reset the round
+  count for the life of the session, and a feature review's second round resolved to a count of zero,
+  which let a third round run. The scenario above found it (a `proceed` where a "two rounds" refusal was
+  owed); it now applies only while `HumanGate` is held, the guard the engine's own reader has always had.
+  And both held-gate readers — the engine's `ApplyAnyHumanDecision` and that `resolve` reader — took the
+  newest answered question with no clock, so an answer to an EARLIER hold opened a later one whose own
+  notice was still unanswered. The clock this story wrote for the person's request is now the one rule
+  for all three readers, `CurrentAnswer` (*A `call_human` answer reaches the machine* above):
+  `PersonsRequest.Apply` lost its private copy of it.
+- **Three more, found by the epic 3 risk consultation 159f0397 (2026-09-26, §9.13–15 of the plan).** A
+  repair that failed on its own launch lost the billed usage of the malformed attempt (runners, *A failed
+  repair still counts the malformed attempt*); the D23 retry dropped a failed reviewer that had been
+  switched off since round 1 without a word (the bullet above — it is now named as not asked, with the
+  reason); and the person's answer was bound to its hold by TIME, so an old question answered late released
+  the current hold (*And the hold is bound to its answer by IDENTITY* above — `SessionState.HoldQuestions`).
+- **The shipped budget is `FeatureDefault = (2, 5)`**, mirrored by the panel (`settingsShape.ts`,
+  `package.json`, `panelServerDefaultsAgreement`), and `RolesForRound` therefore schedules the feature
+  role in round 2. It is a cap: `COAI_MAX_ROUNDS_FEATURE=1` runs no second round and a failure in round 1
+  is then a person's call; a bigger number is still two.
+- **What the tool description and the prompt say.** `review_feature`'s description states D23 in the
+  conventions rule's words — a second round runs ONLY for a reviewer failure, a `blocking` finding or the
+  person's request; at most two rounds, ever — and adds what the rule leaves to the tool: the retry needs
+  no new head and asks only the failed, the person's request comes through `ask_human`'s answer and no
+  argument can grant it, `carried`. `feature-review.md` tells the reviewer that `blocking` is the one
+  severity that buys a second look at the fix, so the severity calibration (D19) and D23 pull the same way;
+  `helpPrompts.ts` was regenerated from it.

@@ -25,9 +25,18 @@ public sealed record VaultKeys(IReadOnlyDictionary<string, string> Keys, string 
 /// <para>Read once: rotation takes effect when the MCP client restarts the server, and
 /// <c>providers</c> reports when the read happened.</para>
 /// </remarks>
-public sealed class KeyVault(IProcessLauncher launcher, string executable = "creds")
+public sealed class KeyVault(IProcessLauncher launcher, string executable = CredsCli.OnPath, IReadOnlyList<string>? fallbacks = null)
 {
     public const string KeyVariable = "COAI_CREDS_KEY";
+
+    private readonly IReadOnlyList<string> _fallbacks = fallbacks ?? [];
+
+    /// <summary>
+    /// The vault as this machine has it: <c>creds</c> from PATH, then the CLI the CredsForDevs
+    /// extension installed (§9.10). The production road — every mode that reads the vault builds it here.
+    /// </summary>
+    public static KeyVault ForThisMachine(IProcessLauncher launcher, Func<string, string?> env) =>
+        new(launcher, CredsCli.OnPath, CredsCli.Present(env, CredsCli.ThisOs, File.Exists));
 
     public async Task<VaultKeys> ReadAsync(string? configKey, CancellationToken ct = default)
     {
@@ -36,19 +45,9 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = "cre
             return VaultKeys.None($"no {KeyVariable} configured — keyless vendors still work on their own auth");
         }
 
-        ProcessResult result;
-        try
+        if (await RunFirstInstalledAsync(configKey, ct) is not { } result)
         {
-            result = await launcher.RunAsync(
-                new ProcessRequest(executable, ["config", configKey], Environment.CurrentDirectory)
-                {
-                    Timeout = TimeSpan.FromSeconds(30),
-                },
-                ct);
-        }
-        catch (System.ComponentModel.Win32Exception)
-        {
-            return VaultKeys.None("the `creds` CLI is not installed on this machine");
+            return VaultKeys.None(NotInstalled());
         }
 
         if (result.TimedOut)
@@ -63,6 +62,42 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = "cre
 
         return Parse(result.StdOut);
     }
+
+    /// <summary>
+    /// <c>creds config &lt;key&gt;</c> through the first CLI that exists: PATH's, then each fallback in
+    /// order — or null when none could be started at all.
+    /// </summary>
+    /// <remarks>
+    /// Only "could not be started" moves on to the next place. A CLI that started and refused, timed out
+    /// or printed junk has answered, and that answer is the vault's — asking a second copy would turn one
+    /// refusal into two reads of a person's vault.
+    /// </remarks>
+    private async Task<ProcessResult?> RunFirstInstalledAsync(string configKey, CancellationToken ct)
+    {
+        foreach (var candidate in (string[])[executable, .. _fallbacks])
+        {
+            try
+            {
+                return await launcher.RunAsync(
+                    new ProcessRequest(candidate, ["config", configKey], Environment.CurrentDirectory)
+                    {
+                        Timeout = TimeSpan.FromSeconds(30),
+                    },
+                    ct);
+            }
+            catch (System.ComponentModel.Win32Exception)
+            {
+                // Not there, or not startable: the next place is asked.
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>The sentence for a CLI found nowhere, naming where it was looked for.</summary>
+    private string NotInstalled() =>
+        "the `creds` CLI is not installed on this machine — looked on PATH and in the CredsForDevs extension's folder"
+        + (_fallbacks.Count == 0 ? " (not present)" : $" ({string.Join(", ", _fallbacks)})");
 
     internal static VaultKeys Parse(string json)
     {

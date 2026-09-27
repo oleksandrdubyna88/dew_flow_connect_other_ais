@@ -35,10 +35,17 @@ namespace CoaiMcp.Runners.Feature;
 /// dropped: the feature-pack trial's reviewers met "budget spent" without being told which of their
 /// requests it was about.</para>
 /// </remarks>
-public sealed class SourceResolver(GitHistory git, ISourceOutliner outliner, string repoPath, string headSha)
+/// <param name="readDeadline">
+/// How long one file's read of git may take before it is refused as timed out — <see cref="SourceBudget.ReadDeadline"/>
+/// unless a test shortens it.
+/// </param>
+public sealed class SourceResolver(GitHistory git, ISourceOutliner outliner, string repoPath, string headSha, TimeSpan? readDeadline = null)
 {
+    private readonly TimeSpan _readDeadline = readDeadline ?? SourceBudget.ReadDeadline;
+
     /// <summary>One file as the round holds it: refused with a sentence, or its redacted text, its lines, and its outline on demand.</summary>
-    private sealed record CachedFile(string Refusal, string Text, ImmutableArray<string> Lines, Lazy<SourceOutline> Outline)
+    /// <param name="Transient">A refusal git may not repeat — a timeout, a failed process — so the round must not keep it.</param>
+    private sealed record CachedFile(string Refusal, string Text, ImmutableArray<string> Lines, Lazy<SourceOutline> Outline, bool Transient = false)
     {
         public bool IsRefused => Refusal.Length > 0;
     }
@@ -50,6 +57,9 @@ public sealed class SourceResolver(GitHistory git, ISourceOutliner outliner, str
     private readonly record struct Ledger(int Reviewer, int Turn);
 
     private const string GitFailedSentence = "git could not read it just now; ask again next turn";
+
+    /// <summary>The collector's vocabulary has no word for OUR deadline ending a read; this is it, mapped to a sentence below.</summary>
+    private const string TimedOutReason = "read_timed_out";
 
     private static readonly Lazy<SourceOutline> NoOutline =
         new(() => SourceOutline.UnsupportedLanguage(OutlineLanguage.Unsupported, 0));
@@ -133,7 +143,7 @@ public sealed class SourceResolver(GitHistory git, ISourceOutliner outliner, str
     private void ForgetUnlessRead(string path, Lazy<Task<CachedFile>> entry)
     {
         var task = entry.Value;
-        var kept = task.IsCompletedSuccessfully && task.Result.Refusal != GitFailedSentence;
+        var kept = task.IsCompletedSuccessfully && !task.Result.Transient;
         if (!kept)
         {
             _files.TryRemove(new KeyValuePair<string, Lazy<Task<CachedFile>>>(path, entry));
@@ -143,10 +153,10 @@ public sealed class SourceResolver(GitHistory git, ISourceOutliner outliner, str
     /// <summary>The ONE place a file's text enters: git, the binary check, then redaction — nothing served can skip it.</summary>
     private async Task<CachedFile> ReadUncachedAsync(string path, CancellationToken ct)
     {
-        var reading = await CommittedFile.ReadAtAsync(git, repoPath, headSha, path, ct);
+        var reading = await ReadWithinDeadlineAsync(path, ct);
         if (reading.Reason.Length > 0)
         {
-            return Refused(ReasonFor(reading.Reason));
+            return Refused(ReasonFor(reading.Reason), transient: reading.Reason is TimedOutReason or RealMethodReason.GitFailed);
         }
 
         if (IsBinary(reading.Text))
@@ -160,12 +170,46 @@ public sealed class SourceResolver(GitHistory git, ISourceOutliner outliner, str
             string.Empty, text, LinesOf(text), new Lazy<SourceOutline>(() => outliner.Outline(OutlineLanguages.Of(path), text)));
     }
 
-    private static CachedFile Refused(string reason) => new(reason, string.Empty, [], NoOutline);
+    /// <summary>
+    /// The git read under the resolver's own deadline — and a read git could not make is a REFUSAL of
+    /// that request, never an exception out of the turn (S3.2, the plan round's rule): a git lock, a
+    /// slow <c>git show</c>, a launcher that could not start the process each become "not served:
+    /// path — …", and the turn goes on with what was served. The round's own cancellation still
+    /// propagates: a round that ended is not a request that failed.
+    /// </summary>
+    private async Task<Reading> ReadWithinDeadlineAsync(string path, CancellationToken ct)
+    {
+        using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        deadline.CancelAfter(_readDeadline);
+        try
+        {
+            var reading = await CommittedFile.ReadAtAsync(git, repoPath, headSha, path, deadline.Token);
+
+            // A launcher that answers `Cancelled` rather than throwing still names OUR deadline, not git.
+            return deadline.IsCancellationRequested && !ct.IsCancellationRequested ? Reading.Not(TimedOutReason) : reading;
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            return Reading.Not(TimedOutReason);
+        }
+        catch (Exception e) when (e is not OperationCanceledException and not OutOfMemoryException)
+        {
+            // Deliberately broad: this is the edge where a request either serves or refuses, and a
+            // process that could not start (Win32Exception), a pipe that broke (IOException) or a
+            // refused handle (UnauthorizedAccessException) are all the same fact to the reviewer —
+            // git could not read it just now. The sentence is ours, never the exception's, because
+            // what is said here goes to another vendor's model.
+            return Reading.Not(RealMethodReason.GitFailed);
+        }
+    }
+
+    private static CachedFile Refused(string reason, bool transient = false) => new(reason, string.Empty, [], NoOutline, transient);
 
     private string ReasonFor(string reason) => reason switch
     {
         RealMethodReason.FileNotInCommit => $"not in the repository at {headSha}",
         RealMethodReason.CommitUnreachable => $"the commit {headSha} is not in the repository",
+        TimedOutReason => $"timed out: git did not answer within {_readDeadline.TotalSeconds:0.#} s; ask again next turn",
         _ => GitFailedSentence,
     };
 
@@ -298,7 +342,11 @@ public sealed class SourceResolver(GitHistory git, ISourceOutliner outliner, str
         var bytes = slice.Bytes;
         if (ledger.Turn + bytes > SourceBudget.TurnBytes || ledger.Reviewer + bytes > SourceBudget.ReviewerBytes)
         {
-            refused.Add(new SourceRefusal(slice.File, slice.Symbol, BudgetSpent(slice, bytes)));
+            // Which cap it was is what the turn loop asks (S3.2): over the REVIEWER's allowance the
+            // conversation's budget is spent and the next turn is its last; over the turn's alone a
+            // smaller request next turn still fits.
+            refused.Add(new SourceRefusal(
+                slice.File, slice.Symbol, BudgetSpent(slice, bytes), OverReviewerCap: ledger.Reviewer + bytes > SourceBudget.ReviewerBytes));
 
             return ledger;
         }

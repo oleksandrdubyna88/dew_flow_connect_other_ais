@@ -124,10 +124,12 @@ public sealed class FeatureOutlineBuilder(IProcessLauncher launcher, ISourceOutl
                 continue;
             }
 
-            var outline = Outline(file.Path, blobs[file.Path], plan.Sizes[file.Path]);
+            var blob = blobs[file.Path];
+            var safe = blob.Aligned ? Redaction.SafeSource(blob.Text) : string.Empty;
+            var outline = Outline(file.Path, blob, plan.Sizes[file.Path], safe);
             if (outline.IsOutlined)
             {
-                outlined.Add(new OutlinedFile(file, outline, DiffHunks.ChangedSpans(Piece(marks, file.Path)), Safe(DiffHunks.Placed(Piece(hunks, file.Path)))));
+                outlined.Add(new OutlinedFile(file, outline, DiffHunks.ChangedSpans(Piece(marks, file.Path)), SafeHunks(DiffHunks.Placed(Piece(hunks, file.Path)), safe)));
             }
             else
             {
@@ -148,10 +150,10 @@ public sealed class FeatureOutlineBuilder(IProcessLauncher launcher, ISourceOutl
     /// text (it fails closed); that file is withheld with its reason rather than outlined as the
     /// placeholder, which would parse as nothing and be misreported as a parse failure.
     /// </remarks>
-    private SourceOutline Outline(string path, BlobText blob, long bytes)
+    /// <param name="safe">The blob's text through <see cref="Redaction.SafeSource"/> — empty when its bytes were not UTF-8.</param>
+    private SourceOutline Outline(string path, BlobText blob, long bytes, string safe)
     {
         var language = outliner.LanguageOf(path);
-        var safe = blob.Aligned ? Redaction.SafeSource(blob.Text) : string.Empty;
 
         return !blob.Aligned ? new SourceOutline(language, OutlineStatus.ParseFailed, "not valid UTF-8 text; not outlined", bytes, [])
             : safe == Redaction.Redacted && blob.Text != Redaction.Redacted
@@ -159,9 +161,52 @@ public sealed class FeatureOutlineBuilder(IProcessLauncher launcher, ISourceOutl
             : outliner.Outline(language, safe);
     }
 
-    /// <summary>Each changed line's text through the redaction, its marker and its place kept.</summary>
-    private static IReadOnlyList<DiffLine> Safe(IReadOnlyList<DiffLine> lines) =>
-        [.. lines.Select(line => line with { Text = line.Text[..1] + Redaction.SafeSource(line.Text[1..]) })];
+    /// <summary>
+    /// The hunk lines through the redaction, their markers and places kept — TOGETHER, and then against the
+    /// file's own redaction.
+    /// </summary>
+    /// <remarks>
+    /// <para>Together, because a private-key block spans lines and its body lines carry no header of their
+    /// own: redacted one at a time, a hunk showing a whole block lost only the header's first word. No pass
+    /// crosses a line break, so the count comes back as it went — and a redaction that could not finish
+    /// (one placeholder for the lot) withholds every line rather than serving any.</para>
+    /// <para>Against the file, because a three-line hunk in the MIDDLE of a body shows no marker at all —
+    /// nothing a pass over the hunk can see. The file's redaction knows where the block is: a hunk line
+    /// standing at a head line the file's redaction withheld whole is withheld here too, in the file's own
+    /// placeholder. A deleted line sits at the head line that follows it, so it takes that line's fate,
+    /// which for a line inside a block is the right one.</para>
+    /// </remarks>
+    /// <param name="safeFile">The whole blob at head through the same redaction — what a line number is compared against.</param>
+    internal static IReadOnlyList<DiffLine> SafeHunks(IReadOnlyList<DiffLine> lines, string safeFile)
+    {
+        if (lines.Count == 0)
+        {
+            return lines;
+        }
+
+        var together = Redaction.SafeSource(string.Join('\n', lines.Select(line => line.Text[1..]))).Split('\n');
+        if (together.Length != lines.Count)
+        {
+            return [.. lines.Select(line => line with { Text = line.Text[..1] + Redaction.Redacted })];
+        }
+
+        var fileLines = safeFile.Split('\n');
+
+        return [.. lines.Select((line, i) => line with { Text = line.Text[..1] + (WithheldAt(fileLines, line.NewLine) ?? together[i]) })];
+    }
+
+    /// <summary>The file's own placeholder line at a 1-based head line the block pass withheld whole — or null for any other line.</summary>
+    private static string? WithheldAt(string[] fileLines, int line)
+    {
+        if (line < 1 || line > fileLines.Length)
+        {
+            return null;
+        }
+
+        var text = fileLines[line - 1].TrimEnd('\r');
+
+        return text.TrimStart(' ', '\t') == Redaction.Redacted ? text : null;
+    }
 
     private static string Piece(IReadOnlyDictionary<string, string> pieces, string path) =>
         pieces.TryGetValue(path, out var piece) ? piece : string.Empty;

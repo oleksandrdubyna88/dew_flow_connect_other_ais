@@ -10,7 +10,7 @@
  * configuration crosses over, regenerated whenever the person copies it again.</p>
  */
 
-import { DEFAULT_VENDORS, Vendor, vendorsEnv } from './vendors';
+import { DEFAULT_VENDORS, RowPriceLookup, Vendor, vendorsEnv } from './vendors';
 import { RESULT_CODE, bucketOf, composed, isActive, rolesFrom, type RoleRow } from './roles';
 import {
   CALLER_KINDS,
@@ -232,10 +232,11 @@ export const DEFAULTS: CoaiSettings = {
   // fallback does: `ShippedFor` asks whether the role's STAGE is the plan stage, and a document
   // role's stage is `result`. A different number here would be a panel showing one budget while
   // the server ran another, which is the whole thing this object exists to prevent.
-  // The feature role takes `PanelConfig.FeatureDefault`, the server's own instance of the code numbers
-  // (S2.1); `panelServerDefaultsAgreement` reads that line of the C# rather than trusting this comment.
+  // The feature role takes `PanelConfig.FeatureDefault` — two rounds since S3.4, a CAP rather than a
+  // promise: the server runs the second only for a reviewer failure, a blocking finding or the person's
+  // request (D23). `panelServerDefaultsAgreement` reads that line of the C# rather than trusting this comment.
   rounds: { PlanCritique: 1, Conventions: 1, Architecture: 1, SecurityReliability: 1, UxDxPerformance: 1,
-    DocumentReview: 1, DocumentSummary: 1, FeatureReview: 1 },
+    DocumentReview: 1, DocumentSummary: 1, FeatureReview: 2 },
   thresholds: { PlanCritique: 6, Conventions: 5, Architecture: 5, SecurityReliability: 5, UxDxPerformance: 5,
     DocumentReview: 5, DocumentSummary: 5, FeatureReview: 5 },
   // Every code, document and feature role on. These keys are also what the reader iterates, so this
@@ -406,10 +407,18 @@ export function envBlock(
    * here, so this stays pure.
    */
   installedServerVersion = '',
+  /** An `api` row's list price, so it can cross with the row (S3.7). Absent prices nothing. */
+  priceOf: RowPriceLookup = () => undefined,
 ): Record<string, string> {
   const env: Record<string, string> = {};
-  if (!sameVendors(vendors, DEFAULT_VENDORS)) {
-    env['COAI_VENDORS'] = vendorsEnv(vendors, installedServerVersion);
+  // "Differs from the shipped list" is asked of what CROSSES — both lists as the server would read
+  // them — not of a hand-kept subset of fields. The subset missed the plan / code / document boxes, the
+  // CLI path and (until S3.3a) the feature tick, so a change to a shipped row never reached the server.
+  // One road: a field the wire gains is compared the day it is added; a price, which never crosses, never counts.
+  // Compared as CONFIGURED (no version gate), then written as the installed server may read it — so a list
+  // whose only difference an older server cannot take (an api row, a feature tick) is still written, as before.
+  if (vendorsEnv(vendors) !== vendorsEnv(DEFAULT_VENDORS)) {
+    env['COAI_VENDORS'] = vendorsEnv(vendors, installedServerVersion, priceOf);
   }
   if (Object.keys(settings.promptsPerRound).length > 0) {
     env['COAI_PROMPTS_PER_ROUND'] = JSON.stringify(settings.promptsPerRound);
@@ -607,23 +616,6 @@ function asOnExhausted(value: unknown): OnExhausted {
     : DEFAULTS.onExhausted;
 }
 
-/** Whether the reviewers are still exactly the shipped pair, unchanged. */
-function sameVendors(a: readonly Vendor[], b: readonly Vendor[]): boolean {
-  return (
-    a.length === b.length &&
-    a.every((v, i) => {
-      const other = b[i];
-      return (
-        other !== undefined &&
-        v.id === other.id &&
-        v.runtime === other.runtime &&
-        v.model === other.model &&
-        v.enabled === other.enabled &&
-        v.baseUrl === other.baseUrl
-      );
-    })
-  );
-}
 
 /**
  * The stored per-round prompt map, kept only where it is actually a map of string arrays.
