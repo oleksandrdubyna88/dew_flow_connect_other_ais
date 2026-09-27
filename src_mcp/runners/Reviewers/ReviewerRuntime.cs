@@ -44,6 +44,25 @@ public sealed record ReviewerSettings(string Provider)
     /// </remarks>
     public TokenPrice Price { get; init; } = TokenPrice.None;
 
+    /// <summary>
+    /// The key every launch of ONE reviewer's conversation carries — its turns and their repairs — for a
+    /// vendor that routes its prompt cache by it (<see cref="Core.Api.ApiDialect.CacheKeyHeader"/>). Empty
+    /// sends nothing.
+    /// </summary>
+    /// <remarks>
+    /// Set by the roster from the reviewer's BASE prompt (<see cref="ConversationKey"/>), never from a
+    /// turn's whole prompt: the tail changes every turn and the key must not. Only <see cref="ApiRuntime"/>
+    /// reads it; it is opaque and not a secret, so it rides on argv.
+    /// </remarks>
+    public string Conversation { get; init; } = string.Empty;
+
+    /// <summary>
+    /// For an <c>api</c> vendor only: whether the model thinks. On by default — every calibrated default —
+    /// and off only when a row said so on a module whose vendor documents a switch (the roster validates
+    /// that through <see cref="Core.Api.IApiVendor.Refusal"/> before the launch).
+    /// </summary>
+    public bool ThinkingOn { get; init; } = true;
+
     /// <summary>Where this machine keeps its own state — sessions, tokens, the rounds log.</summary>
     /// <remarks>
     /// Only <see cref="RemoteRuntime"/> uses it, to find the Team server token file. It is a
@@ -130,6 +149,19 @@ public sealed record ReviewerInvocation(
     /// the round orders its rows by it, so the two cannot drift (code round, gemini).
     /// </summary>
     public bool IsOnEngine => SharedResource.Length > 0;
+
+    /// <summary>
+    /// What the row this launch belongs to charges per million tokens — <see cref="TokenPrice.None"/> for
+    /// every CLI on a subscription and for an unpriced api row.
+    /// </summary>
+    /// <remarks>
+    /// The price stays in the PARENT (epic 3's code round, finding #23): the api shim reports raw usage —
+    /// tokens in, out, cached, reasoning — and <see cref="ApiRuntime.ReadUsage"/> prices it here from this
+    /// field, so a failed call's usage is priced by the same arithmetic as an answered one's and no rate ever
+    /// travels on a command line. It used to ride to the child as <c>--price-*</c> flags and come back as a
+    /// <c>costUsd</c> the child had worked out.
+    /// </remarks>
+    public TokenPrice Price { get; init; } = TokenPrice.None;
 }
 
 /// <summary>

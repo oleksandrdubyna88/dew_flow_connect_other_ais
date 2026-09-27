@@ -59,6 +59,18 @@ public static class ReviewParser
             }
         }
 
+        // Every finding rejected is not a clean review — it is an answer that was not in the schema,
+        // which is what the repair exists for. Measured 2026-09-26: the Alibaba route does not enforce a
+        // strict json_schema, and an answer whose every entry carried an invented severity parsed to a
+        // Success with an empty list and N rejections — a `proceed` nobody gave. One survivor is still a
+        // review (its rejections are named beside it); zero survivors of several is the whole answer refused.
+        if (findings.Count == 0 && rejected.Count > 0)
+        {
+            return new ParseOutcome.Malformed(
+                $"every one of the {rejected.Count} finding(s) was rejected in normalisation: "
+                + string.Join("; ", rejected.Select(r => $"#{r.Index} {r.Reason}")));
+        }
+
         var requests = ImmutableArray.CreateBuilder<SourceRequest>();
         var refusedRequests = ImmutableArray.CreateBuilder<RejectedEntry>();
         ReadRequests(raw.SourceRequests, requests, refusedRequests);

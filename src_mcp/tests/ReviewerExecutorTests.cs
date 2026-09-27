@@ -272,6 +272,28 @@ public sealed class ReviewerExecutorTests : IDisposable
                 "the explanation was in the SHORTER transcript, which is what Longer() dropped");
     }
 
+    /// <summary>
+    /// A process that exited non-zero AFTER the vendor billed it keeps what it consumed on its outcome.
+    /// </summary>
+    /// <remarks>
+    /// Measured 2026-09-26: a reasoning-only Qwen3.8-max answer (16,382 completion tokens, no content)
+    /// left the api shim at exit 70, and the launch returned <c>Usage.None</c> for every non-zero exit
+    /// before it asked the adapter — so 53,092 prompt tokens and $0.20 crossed to stdout and stopped
+    /// there. The usage is read by the same adapter route as an answered launch; a process that reported
+    /// nothing is still <c>Usage.None</c>.
+    /// </remarks>
+    [Fact]
+    public async Task ANonZeroExit_KeepsTheUsageTheVendorReported()
+    {
+        var outcome = await _executor.RunAsync(
+            FakeCliInvocations.Invoke("codex", ["emit-exit", "{\"input_tokens\": 53092, \"output_tokens\": 16382}", "70"]),
+            ct: TestContext.Current.CancellationToken);
+
+        var exit = outcome.Should().BeOfType<ReviewerOutcome.NonZeroExit>().Subject;
+        exit.ExitCode.Should().Be(70);
+        exit.Usage.TokensIn.Should().Be(53092, "the vendor billed the call whatever the shim decided afterwards");
+        exit.Usage.TokensOut.Should().Be(16382);
+    }
 }
 
 /// <summary>

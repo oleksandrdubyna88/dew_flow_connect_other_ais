@@ -122,4 +122,44 @@ public sealed class ReviewParserTests
             FindingSchema.Json.Should().Contain($"\"{field}\"");
         }
     }
+
+    /// <summary>
+    /// Findings that were ALL rejected in normalisation are not a clean review — they are an answer that
+    /// was not in the schema, which is what the repair exists for.
+    /// </summary>
+    /// <remarks>
+    /// The Alibaba route does not enforce a strict <c>json_schema</c> (measured 2026-09-26: GLM-5.3
+    /// answered without the required <c>fix</c> field). A reviewer that returns three findings with an
+    /// invented severity, or none with a title, used to parse to <c>Success</c> with an empty findings
+    /// list and three rejections — a <c>proceed</c> nobody gave. One surviving finding is still a review;
+    /// zero survivors out of several is the whole answer refused, by name.
+    /// </remarks>
+    [Fact]
+    public void EveryFindingRejected_IsMalformed_NotAnEmptyReview()
+    {
+        var outcome = ReviewParser.Parse(
+            """
+            {"findings": [{"severity": "critical", "category": "security", "title": "t1", "why": "w", "fix": "f"},
+                          {"severity": "critical", "category": "security", "title": "t2", "why": "w", "fix": "f"}]}
+            """,
+            "glm53");
+
+        outcome.Should().BeOfType<ParseOutcome.Malformed>()
+            .Which.Reason.Should().Contain("2 finding(s)").And.Contain("unknown severity 'critical'");
+    }
+
+    [Fact]
+    public void OneSurvivorAmongRejections_IsStillAReview()
+    {
+        var outcome = ReviewParser.Parse(
+            """
+            {"findings": [{"severity": "critical", "category": "security", "title": "t1", "why": "w", "fix": "f"},
+                          {"severity": "major", "category": "security", "title": "t2", "why": "w", "fix": "f"}]}
+            """,
+            "glm53");
+
+        var review = outcome.Should().BeOfType<ParseOutcome.Success>().Subject.Review;
+        review.Findings.Should().ContainSingle();
+        review.Rejected.Should().ContainSingle();
+    }
 }

@@ -2109,10 +2109,14 @@ internal static class Program
         Takes no arguments; an MCP client starts it and speaks JSON-RPC over stdio.
         `--version` prints the version this binary was stamped with, and nothing else.
         `--ask-api --vendor <id> --endpoint <base> --model <id> --dialect <name> --prompt-file <p>
-        --schema-file <s> --out <answer> [--timeout-seconds n] [--max-tokens n] [--reasoning-effort e]`
-        sends one review to a hosted OpenAI-compatible API; the key is COAI_API_KEY in the
-        environment, never an argument. Exits 0 answered, 65 refused before sending, 69 unreachable,
-        70 not a review, 75 rate-limited (429/503), 77 the key was refused (401/403).
+        --schema-file <s> --out <answer> [--timeout-seconds n] [--max-tokens n] [--reasoning-effort e]
+        [--conversation <key>] [--thinking off]` sends one review to a hosted OpenAI-compatible API
+        through the vendor MODULE the dialect and model resolve to (openai, xai, qwen, deepseek, glm);
+        the key is COAI_API_KEY in the environment, never an argument; the conversation key goes into
+        the module's cache-routing header when it names one; `--thinking off` is spelled the way that
+        vendor documents it, on a module that has a switch. Exits 0 answered, 65 refused before
+        sending, 69 unreachable, 70 not a review (an empty answer, or one cut at the token limit —
+        the tokens are still printed), 75 rate-limited (429/503), 77 the key was refused (401/403).
         `--probe-api --vendor <id> [--model <id>] [--endpoint <base>] [--dialect <name>]
         [--timeout-seconds 60]` reads the vault (COAI_CREDS_KEY), lists GET /models and runs the
         request matrix a dialect is written from; prints status codes, model ids, refused fields and

@@ -542,7 +542,7 @@ moved the engine into `src_mcp/src/Server/Rounds/`, as proved moves with no beha
 |---|---|
 | `RoundEngine` | `RunStageAsync` — claim, human decision, deadline, Team-server role probe, sha, refusal-before-building (where the consultation cadence is prepared), the cadence plan and epic onto the session, lease, work, schedule, dedup, gate, verdict, the cadence note on the record and its facts in the orders, save, project, notify — plus the round deadline (`RoundDeadlineFor`, `ConfiguredReviewers`, `WhatEndedIt`), `AnswerFor`, `WhereTheDocumentWent`, `NoticeIfAPersonMustDecide` (the `call_human` notice, BUILT before the save so its id is recorded as the hold's question, WRITTEN after), `SpentPrompts`, `WhatTheCallerWasDoing` and its own `Error`, which reaches the one refusal boundary exactly as the service's does |
 | `RoundCommands` | the orders a round carries: `MayProceed`, `CallerFor`, the words a person wrote for the orders (`CommandTextsNow`), their own commands (`CustomOrdersFor`), `CommandStageOf`. A unit of its own so the engine stays under the 800-line ceiling. `PanelService` constructs it and hands it to the engine, because the consultation cadence's check before a code round (`CadenceBeforeTheCode`) reads the same order texts |
-| `RosterBuilder` | `BuildWork` and everything only it uses: the deal (`Items`, `Lens`, `Assemble`, `Everyone`, `Hand`), who may carry a role (`CanCarry`, `WhyNotCarried`, `Carriers`), `RolesWithRulesInMind`/`RolesNotAsked`, `LocalRowsFirst`, `ChoiceFor` |
+| `RosterBuilder` | `BuildWork` and everything only it uses: the deal (`Items`, `Lens`, `Assemble`, `Everyone`, `Hand`), who may carry a role (`CanCarry`, `WhyNotCarried`, `Carriers`), `RolesWithRulesInMind`/`RolesNotAsked`, `LocalRowsFirst`, `ChoiceFor`; since 2026-09-26 it also gives each reviewer ONE conversation key (`ConversationKey.Of(provider, role, base prompt)` on `ReviewerSettings.Conversation`) that every launch of that reviewer — its turns and their repairs — carries, so a vendor that routes its prompt cache by a conversation id (xAI's `x-grok-conv-id`) serves turn 2 from turn 1's cache; and the row's `TokenPrice` rides on the invocation, for the parent to price each turn ([module_runners.md](module_runners.md), *An api turn is priced in the parent*) |
 | `ReviewerPrompt` | `ComposePrompt`, `WithoutTheStaleClaim` (the one `[GeneratedRegex]`, so `PanelService` is no longer `partial`), `WhatYouHave` |
 | `StageRun`, `RoundWork`, `ExcludedRole` | the records a stage hands the engine and the roster hands back |
 
@@ -5321,6 +5321,18 @@ flowchart TD
   conversation's length — four turns of ten minutes are forty minutes for the wave they sit in. The
   warning about an explicit round limit shorter than one reviewer's own compares against the same
   number. Every other stage passes zero follow-ups, so its budget is what it was.
+- **An api reviewer's WHOLE review is capped** (2026-09-27, the operator's requirement measured by the
+  reviewer-models run: at their default reasoning depth the hosted models took 4–10 minutes a turn, and
+  one Qwen3.8-max turn never ended in 105): `PanelSettings.FeatureApiReview` —
+  `COAI_FEATURE_API_REVIEW_MINUTES`, twenty by default, a positive whole number of minutes or the default
+  (`IntVar`, so zero falls back rather than meaning "no cap") — is set by `RosterBuilder` on the
+  `ReviewerWork.ConversationCap` of every api reviewer of a feature round, and `TurnLoop` ends the
+  conversation at the lesser of it and the derived `timeout × (1 + follow-ups)`: one terminal `TimedOut`,
+  every answered turn's usage kept. A CLI reviewer and every other stage carry no cap and keep the derived
+  one. Tests: `TheFeatureStageIsServedTests.TheApiReviewCap_IsTwentyMinutes_UnlessAPersonSetIt`,
+  `AnApiReviewerIsPricedAndKeyedTests.A_feature_round_caps_an_api_reviewers_whole_conversation_and_a_code_round_does_not`,
+  `AReviewerThatAsksForSourceIsAskedAgainTests.AConversationCapOnTheWork_EndsTheConversation_BeforeTheDerivedOneWould`
+  (RED first: 21 turns where the cap allows three; 20 m for a person's 25; a null cap on the feature round).
 - **One resolver per round** is built in `FeatureStage.WorkAsync` for the head the round resolved and
   handed to the roster as `SourceTurns.On`; the spend is each reviewer's own and rides on its
   `SourceConversation`, so a D23 round 2 — a new `WorkAsync` — starts every allowance afresh. At zero
@@ -5464,3 +5476,39 @@ flowchart TD
   argument can grant it, `carried`. `feature-review.md` tells the reviewer that `blocking` is the one
   severity that buys a second look at the fix, so the severity calibration (D19) and D23 pull the same way;
   `helpPrompts.ts` was regenerated from it.
+
+## An api row's own settings, validated by its module before the launch (2026-09-27, S3.8's server half)
+
+The vendor modules ([module_runners.md](module_runners.md), *Each API vendor is a module*) gave the server one
+question to ask per `api` row and one place to ask it: `ApiRowView.Of(row, overrides)` (`Server/ApiRowView.cs`)
+resolves the module (`ApiVendors.Resolve(dialect, model)`), computes what the row will run with
+(`ApiEffective.Of`: the row over the environment over the module's calibrated default) and asks the module
+whether the row's own settings can be sent at all (`IApiVendor.Refusal`).
+
+- **The row carries three more fields** — `effort`, `thinking`, `reviewMinutes` (`VendorDto` → `ProviderSettings.Api`,
+  an `ApiRowSettings`): the effort lower-cased like every name this side normalises, the thinking switch NAMED
+  (`ThinkingSetting.Default | On | Off`, the doctrine of `DocumentReviews` — a nullable at the wire, a value one line
+  past it), a zero or negative minute count unset rather than a zero-minute review. Absent is unset, and unset
+  means the module's default: a settings file written before the fields runs exactly as it did.
+- **The environment sits between the row and the default** (`PanelSettings.ApiOverrides`, from
+  `COAI_LOCAL_REASONING_EFFORT`, `COAI_LOCAL_MAX_TOKENS`, `COAI_FEATURE_API_REVIEW_MINUTES`) — the three settings an
+  api row had before the modules, which every calibration run set explicitly and which keep meaning what they
+  meant when SET. Unset, they no longer hand an api row the local engine's `none` and 8,192: the module's
+  calibrated defaults apply (`LocalReasoningEffort` and `LocalMaxTokens` still serve the local rows).
+- **`RosterBuilder` excludes a refused row with the module's sentence** — an effort the vendor does not take
+  (`qwen does not take reasoning effort 'ultra' — it accepts low, medium, xhigh (and 'none' switches thinking
+  off)`), a thinking switch the vendor does not have (`xai has no thinking switch — …`) — the way a role a Team
+  server cannot carry is excluded: before any request is sent to be answered 400 after a round trip, and said in
+  the round's skip reasons. An accepted row's effective effort, ceiling and switch ride on `ReviewerSettings`
+  (`ReasoningEffort`, `MaxTokens`, `ThinkingOn`); the feature stage's whole-review cap is the effective
+  `reviewMinutes` rather than the panel-wide `FeatureApiReview` alone.
+- **`providers` / `--providers` report the module's view per api row** (`ProviderStatus.Api` → `ApiRowReport`:
+  `module`, `measuredModel`, `priceRoute`, `capabilities`, `defaults`, `effective`, `refusal`, `note`) so the
+  panel can render a dropdown from the module's declared levels, a thinking toggle only where there is a switch,
+  and a "reset to calibrated default" — values and names only, never a key; the property is absent for every
+  CLI row. `note` is the one sentence a downgrade gets: a row that named a module for a model it was not
+  measured on (`dialect: glm`, `model: glm-5.2`) runs on the generic module over the module's row, and the note
+  says which model the module was measured on and that nothing is declared for this one.
+- Tests: `AnApiRowIsSettableTests` (RED first — nine of eleven red before the wiring: no effort applied, no
+  exclusion, no `api` in `providers`), `ApiVendorModulesTests`, and the goldens of `ApiVendorGoldensTests` that
+  hold every measured row's wire behaviour unchanged.

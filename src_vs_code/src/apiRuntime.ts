@@ -38,7 +38,7 @@ export const API_RUNTIME_SINCE = '0.37.0';
  * server side only, because the request is spelled there. `apiRuntime.test.ts` holds this list to
  * the file, as `CredentialWords` and `command-models.json` are held on both sides.
  */
-export const API_DIALECTS = ['local', 'openai'] as const;
+export const API_DIALECTS = ['local', 'openai', 'xai', 'dashscope'] as const;
 
 export type ApiDialect = (typeof API_DIALECTS)[number];
 

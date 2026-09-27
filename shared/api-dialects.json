@@ -1,5 +1,5 @@
 {
-  "$comment": "How one OpenAI-compatible completion request is spelled for each endpoint family. Read by coai-mcp (embedded in CoaiMcp.Core, ChatRequest.Body) and mirrored by the extension's API_DIALECTS (apiDialects.ts); a test on each side is held to this file. `local` is the body the local reviewer has sent since 2026-09-02, pinned byte for byte by LocalRequestBodyIsPinnedTests — every value in it was measured against a real engine. `openai` is the generic hosted dialect: it sends nothing a reasoning model is documented to refuse. A vendor dialect (xai, qwen) is added ONLY from rows measured through `coai-mcp --probe-api` (PLAN_feature_review.md §6 S0.5), never from documentation; the `--probe-api` matrix exists to write those rows. Fields: temperature — a number to send, or null to omit; seed — whether to send the per-prompt seed; frequencyPenalty — a number or null; maxTokensField — the name of the ceiling field, or empty to send none; responseFormat — `json_schema` (the schema is DEMANDED) or `json_object`; strict — the json_schema strict flag; boundedSchema — whether the finding schema's free-text fields get maxLength/maxItems bounds (local engines honour them through grammar-constrained decoding; OpenAI's strict mode rejects maxLength with a 400); reasoningEffortField — the field the effort travels in, or empty to send none; reasoningEffortMap — a value translated before it is sent, an empty translation meaning the field is omitted; a value not in the map is sent verbatim. `engine` is never sent by any dialect: it is the panel's word for 'let the endpoint decide'.",
+  "$comment": "How one OpenAI-compatible completion request is spelled for each endpoint family. Read by coai-mcp (embedded in CoaiMcp.Core, ChatRequest.Body) and mirrored by the extension's API_DIALECTS (apiRuntime.ts); a test on each side is held to this file. `local` is the body the local reviewer has sent since 2026-09-02, pinned byte for byte by LocalRequestBodyIsPinnedTests — every value in it was measured against a real engine. `openai` is the generic hosted dialect: it sends nothing a reasoning model is documented to refuse. A vendor dialect is added ONLY from rows measured through `coai-mcp --probe-api` and a live review (PLAN_feature_review.md §6 S0.5, RESULTS_feature_reviewer_models.md), never from documentation. `xai` (2026-09-26): the probe answered 400 to frequency_penalty ('does not support parameter frequencyPenalty') and 200 to json_schema strict, seed, temperature and every reasoning_effort value; the first product-path review cached 1,152 tokens on each of three turns with a byte-identical prefix — xAI stores cache entries per server and routes a conversation to its server by the `x-grok-conv-id` header, so the row names it. `dashscope` (2026-09-26, the Alibaba Model Studio compatible-mode endpoint, its Token Plan host included): the probe accepted every field, but the raw answers showed the schema is not enforced there (a GLM-5.3 answer without the required `fix`; the vendor's guide limits json_schema to the Qwen3.7/3.8 families and says it does not take effect in thinking mode), so the row asks for json_object and the parser and repair hold the shape; the ceiling bounds reasoning PLUS the answer (completion_tokens includes reasoning_tokens — at 16,384 every GLM-5.3 call spent all of it thinking), so the row floors it at 65,536 — in the field the vendor documents as the total, max_completion_tokens: measured 2026-09-27 on qwen3.8-max with a 64-token ceiling, max_tokens let 2,344 reasoning tokens through (it bounds the answer only there) while max_completion_tokens cut at 64 with finish_reason length; no thinking switch — each model runs at the vendor's default depth, and the implicit cache is content-addressed (a 1,024-token common prefix, no key). Fields: temperature — a number to send, or null to omit; seed — whether to send the per-prompt seed; frequencyPenalty — a number or null; maxTokensField — the name of the ceiling field, or empty to send none; responseFormat — `json_schema` (the schema is DEMANDED) or `json_object`; strict — the json_schema strict flag; boundedSchema — whether the finding schema's free-text fields get maxLength/maxItems bounds (local engines honour them through grammar-constrained decoding; OpenAI's strict mode rejects maxLength with a 400); reasoningEffortField — the field the effort travels in, or empty to send none; reasoningEffortMap — a value translated before it is sent, an empty translation meaning the field is omitted; a value not in the map is sent verbatim; cacheKeyHeader — the request header that routes a conversation to the server holding its prompt cache, or empty to send none; extraBody — vendor-specific top-level request fields sent verbatim (the OpenAI SDK's extra_body), an empty object for none; maxTokensFloor — the least ceiling this family is ever sent (a configured ceiling below it is raised to it; on the Alibaba route the ceiling bounds reasoning plus the answer), 0 for none. `engine` is never sent by any dialect: it is the panel's word for 'let the endpoint decide'.",
   "dialects": {
     "local": {
       "temperature": 0,
@@ -10,7 +10,10 @@
       "strict": true,
       "boundedSchema": true,
       "reasoningEffortField": "reasoning_effort",
-      "reasoningEffortMap": {}
+      "reasoningEffortMap": {},
+      "cacheKeyHeader": "",
+      "extraBody": {},
+      "maxTokensFloor": 0
     },
     "openai": {
       "temperature": null,
@@ -21,7 +24,38 @@
       "strict": true,
       "boundedSchema": false,
       "reasoningEffortField": "reasoning_effort",
-      "reasoningEffortMap": { "none": "" }
+      "reasoningEffortMap": { "none": "" },
+      "cacheKeyHeader": "",
+      "extraBody": {},
+      "maxTokensFloor": 0
+    },
+    "xai": {
+      "temperature": null,
+      "seed": false,
+      "frequencyPenalty": null,
+      "maxTokensField": "max_completion_tokens",
+      "responseFormat": "json_schema",
+      "strict": true,
+      "boundedSchema": false,
+      "reasoningEffortField": "reasoning_effort",
+      "reasoningEffortMap": { "none": "" },
+      "cacheKeyHeader": "x-grok-conv-id",
+      "extraBody": {},
+      "maxTokensFloor": 0
+    },
+    "dashscope": {
+      "temperature": null,
+      "seed": false,
+      "frequencyPenalty": null,
+      "maxTokensField": "max_completion_tokens",
+      "responseFormat": "json_object",
+      "strict": false,
+      "boundedSchema": false,
+      "reasoningEffortField": "reasoning_effort",
+      "reasoningEffortMap": { "none": "" },
+      "cacheKeyHeader": "",
+      "extraBody": {},
+      "maxTokensFloor": 65536
     }
   }
 }

@@ -281,8 +281,21 @@ public sealed class PanelService
                 _remote.RunAsync(vendor, enabled, _settings.DataDir, token));
 
         return new ProviderStatus(
-            provider.Provider, health.Enabled, health.CliFound, health.Version, health.Auth, health.Note);
+            provider.Provider, health.Enabled, health.CliFound, health.Version, health.Auth, health.Note)
+        {
+            Api = ApiReportOf(provider),
+        };
     }
+
+    /// <summary>
+    /// The module's view of an <c>api</c> row for the panel — its capabilities, its calibrated defaults, what
+    /// the row will run with, and the refusal if its own settings cannot be sent — or null for every other
+    /// runtime, whose JSON then reads exactly as it did before the modules.
+    /// </summary>
+    private ApiRowReport? ApiReportOf(ProviderSettings provider) =>
+        string.Equals(provider.Runtime, "api", StringComparison.OrdinalIgnoreCase)
+            ? ApiRowView.Of(provider, _settings.ApiOverrides).Report()
+            : null;
 
     /// <summary>
     /// How a vendor authenticates, and therefore whether it may review at all.

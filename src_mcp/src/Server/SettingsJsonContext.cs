@@ -48,7 +48,13 @@ internal sealed record VendorDto(
     /// </summary>
     string? Key = null,
     /// <summary>For an `api` row: what it charges per million tokens (S3.7). Absent is no price.</summary>
-    PriceDto? Price = null);
+    PriceDto? Price = null,
+    /// <summary>For an `api` row: the reasoning effort a person set, in the vendor's spelling. Absent is the module's default.</summary>
+    string? Effort = null,
+    /// <summary>For an `api` row: the thinking switch a person set. Absent is the module's default (on).</summary>
+    bool? Thinking = null,
+    /// <summary>For an `api` row: the whole-review limit a person set, in minutes. Absent is the module's default.</summary>
+    int? ReviewMinutes = null);
 
 /// <summary>
 /// One vendor row's price on the wire — dollars per million tokens (PLAN_feature_review.md S3.7).

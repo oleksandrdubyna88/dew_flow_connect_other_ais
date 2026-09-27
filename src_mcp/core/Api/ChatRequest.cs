@@ -59,7 +59,9 @@ public static class ChatRequest
             WriteSampling(json, dialect, seed);
             if (maxTokens > 0 && dialect.MaxTokensField.Length > 0)
             {
-                json.WriteNumber(dialect.MaxTokensField, maxTokens);
+                // Raised to the row's floor: a ceiling that bounds reasoning too is not one a local
+                // engine's 8,192 can serve (ApiDialect.MaxTokensFloor, measured 2026-09-26).
+                json.WriteNumber(dialect.MaxTokensField, dialect.CeilingFor(maxTokens));
             }
 
             var effort = dialect.EffortToSend(reasoningEffort);
@@ -68,6 +70,7 @@ public static class ChatRequest
                 json.WriteString(dialect.ReasoningEffortField, effort);
             }
 
+            WriteExtraBody(json, dialect);
             json.WriteStartArray("messages");
             json.WriteStartObject();
             json.WriteString("role", "user");
@@ -80,6 +83,20 @@ public static class ChatRequest
         }
 
         return Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    /// <summary>
+    /// The dialect's vendor-specific fields, verbatim, at the top level of the body — what the OpenAI SDK
+    /// calls <c>extra_body</c>: DashScope's <c>enable_thinking</c> / <c>thinking_budget</c>, measured on the
+    /// Alibaba route on 2026-09-26. Nothing for a row with none.
+    /// </summary>
+    private static void WriteExtraBody(Utf8JsonWriter json, ApiDialect dialect)
+    {
+        foreach (var field in dialect.ExtraBody)
+        {
+            json.WritePropertyName(field.Key);
+            field.Value.WriteTo(json);
+        }
     }
 
     /// <summary>The three sampling fields, each only when the dialect sends it.</summary>

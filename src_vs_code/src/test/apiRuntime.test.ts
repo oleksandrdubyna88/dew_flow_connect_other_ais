@@ -53,13 +53,27 @@ test('api is neither a chat partner nor a consultant', () => {
   assert.ok(!(CONSULTING_RUNTIMES as readonly string[]).includes('api'), 'coai-mcp refuses an api consultant by name in v1');
 });
 
-test('the catalogue offers ONE generic api preset, and no vendor-specific one until it is measured', () => {
+test('the catalogue offers the generic api preset and the two MEASURED vendor presets, each with its dialect', () => {
+  // S1.2 part (iii): a vendor preset arrives only with a dialect row measured on the wire
+  // (shared/api-dialects.json, RESULTS_feature_reviewer_models.md, 2026-09-26) — xAI and the Alibaba
+  // Model Studio compatible-mode endpoint landed that day; the generic entry stays for any other /v1.
   const api = VENDOR_PRESETS.filter((preset) => preset.runtime === API);
 
-  assert.equal(api.length, 1, 'the xAI and Qwen presets arrive with their MEASURED dialects (part iii), never before');
-  assert.equal(api[0]!.id, 'api');
-  assert.equal(api[0]!.baseUrl, '', 'the endpoint is the person’s to fill in');
-  assert.match(api[0]!.label, /API/u);
+  assert.deepEqual(api.map((preset) => preset.id), ['api', 'grok', 'qwen']);
+  const [generic, xai, dashscope] = api as [typeof api[0], typeof api[0], typeof api[0]];
+  assert.equal(generic.baseUrl, '', 'the endpoint is the person’s to fill in');
+  assert.match(generic.label, /API/u);
+  assert.equal(xai.baseUrl, 'https://api.x.ai/v1');
+  assert.equal(xai.dialect, 'xai');
+  assert.equal(xai.model, 'grok-4.7', 'the MAX model the key offered on 2026-09-26 (GET /models)');
+  assert.equal(dashscope.baseUrl, 'https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1',
+    'the Token Plan host, not the general dashscope-intl one — Q5 of the plan; data a person can change');
+  assert.equal(dashscope.dialect, 'dashscope');
+  assert.equal(dashscope.model, 'qwen3.8-max');
+  for (const preset of [xai, dashscope]) {
+    assert.ok(preset.plan && preset.code, `${preset.id} reviews plans and code like every preset`);
+    assert.equal(preset.executablePath, '', 'no CLI in between');
+  }
 });
 
 test('an api row’s model list is what the person typed — the endpoint is not asked from here', () => {

@@ -10,6 +10,35 @@ public sealed record ProviderStatus(
     bool CliFound,
     string Version,
     string Auth,
+    string Note)
+{
+    /// <summary>
+    /// For an <c>api</c> row: its module and what the panel renders from it — capabilities, calibrated
+    /// defaults, the settings this row will actually run with, and the refusal if its own settings cannot
+    /// be sent. Names and values only, never a key. Absent for every other runtime, so a row the panel
+    /// wrote before the modules existed reads exactly as it did.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ApiRowReport? Api { get; init; }
+}
+
+/// <summary>An api row through its module's eyes (the operator's per-model settings, 2026-09-27).</summary>
+/// <param name="Module">The module the row resolved to — <c>xai</c>, <c>qwen</c>, <c>deepseek</c>, <c>glm</c>, or a row's name for the generic module over it.</param>
+/// <param name="MeasuredModel">The one model the module was measured on; empty for the generic module.</param>
+/// <param name="PriceRoute">The price list the row's model is looked up under.</param>
+/// <param name="Capabilities">What the vendor can be told — the dropdown's contents.</param>
+/// <param name="Defaults">What calibration settled — what "reset to calibrated default" restores.</param>
+/// <param name="Effective">What this row runs with: its own settings over the environment over the defaults.</param>
+/// <param name="Refusal">Why the row's own settings cannot be sent, or empty.</param>
+/// <param name="Note">Why the row's named module was set aside for its model, or empty — a downgrade said out loud.</param>
+public sealed record ApiRowReport(
+    string Module,
+    string MeasuredModel,
+    string PriceRoute,
+    Core.Api.ApiCapabilities Capabilities,
+    Core.Api.ApiDefaults Defaults,
+    Core.Api.ApiEffective Effective,
+    string Refusal,
     string Note);
 
 /// <summary>The providers answer, with when the vault was read (rotation lands on restart).</summary>

@@ -1,9 +1,13 @@
 # PLAN — the feature review: a fourth gate, run once a whole plan is built, before release
 
-> Status: **in progress, 2026-09-26.** Epic 1 merged (`d8c0bcaa`) except S1.2's live Grok/Qwen
-> measurement, which waits on the vault; epic 2 (S2.1–S2.3) built; epic 3 has S3.1, S3.2, S3.3 (all but the
+> Status: **in progress, 2026-09-27.** Epic 1 merged (`d8c0bcaa`); S1.2 (ii)/(iii) — the live xAI/Alibaba
+> measurement, the `xai` and `dashscope` dialects and the two presets — landed 2026-09-26/27 from the reviewer-models
+> measurement ([RESULTS_feature_reviewer_models.md](../research/RESULTS_feature_reviewer_models.md), with §9.23–29;
+> complete 2026-09-27 — grok-4.7 and glm-5.3 recommended as feature reviewers),
+> and the vendor MODULES (one class per vendor behind `IApiVendor`, the server half of S3.8) with them;
+> epic 2 (S2.1–S2.3) built; epic 3 has S3.1, S3.2, S3.3 (all but the
 > promotion), S3.4, S3.6 and S3.7 built with §9.10–12 fixed, and §9.16–22 (epic 3's code round, 2026-09-27) fixed;
-> S3.5 and the releases open. Scope: `src_mcp` (core, normalizer,
+> S3.5, S3.8's extension half and the releases open. Scope: `src_mcp` (core, normalizer,
 > runners, server, store), `src_vs_code` (panel, roles, rounds log, help, snippet), `src_server`
 > (one exclusion only), `shared/`, `.agents/PROJECT.md`.
 >
@@ -643,6 +647,23 @@ No D12 defect: every row held. Not measured: a released extension facing a featu
 (no reviewer ran — the only feature round was a skip), the released vendor card drawn in VS Code, and a
 Team server (it runs no feature review, D10).
 
+#### S0.5 results — measured 2026-09-26 (the probe through the vault, then live feature reviews on the product path)
+
+The vault reached through the CredsForDevs extension's CLI (§9.10); `coai-mcp --probe-api --vendor grok` and
+`--vendor qwen` against the real endpoints, then `review_feature` over MCP stdio with one `api` row per run, a
+recording pass-through in front of the vendor so every raw answer is on disk. The full record is
+[RESULTS_feature_reviewer_models.md](../research/RESULTS_feature_reviewer_models.md); the rows that ARE the
+dialects:
+
+| Vendor | Endpoint | Model ids the key can call (`GET /models`) | Refused fields (verbatim) | Strict `json_schema` | Effort values | Wrong key | Turn-2 cache | One review-sized call |
+|---|---|---|---|---|---|---|---|---|
+| xAI (`xai`) | `https://api.x.ai/v1` | 13 ids, among them `grok-4.7`, `grok-4.6`, `grok-4.5`, `grok-4.3`, `grok-4.20-0309-reasoning` | `frequency_penalty` → 400 `{"code":"invalid-argument","error":"Model grok-4.7 does not support parameter frequencyPenalty."}`; `temperature`, `seed` accepted (200) | holds (200; every live answer parsed) | `low`, `medium`, `high` all 200 | 400 (not 401) `"Incorrect API key provided. You can obtain an API key from https://console.x.ai."` (§9.11) | **without a routing key 1,152 tokens on every turn; with `x-grok-conv-id` 34,944 of 41,803** — the header is the row's `cacheKeyHeader` | a 35K-token feature review turn: 366–514 s, 17–36K reasoning tokens reported OUTSIDE `completion_tokens` and billed as output (`cost_in_usd_ticks`), $0.13–0.21 |
+| Alibaba Model Studio, Token Plan (`qwen` row, DashScope compatible mode) | `https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1` | 15 ids, among them `qwen3.8-max`, `qwen3.8-flash`, `qwen3.7-max`, `deepseek-v4-pro`, `deepseek-v4.1-flash`, `glm-5.3`, `glm-5.2` | none refused: `frequency_penalty`, `temperature`, `seed`, every `reasoning_effort` answered 200 | accepted (200) but **not enforced** — a live GLM-5.3 answer lacked the required `fix` field (§9.16) | `low`, `medium`, `high` 200 | 401 `{"error":{"message":"Invalid API-key provided. …","code":"invalid_api_key"}}` | the probe's second turn cached 0 (a 948-token prompt, under the cache minimum); live: repairs 99–100 %, follow-ups ~90 % (first trial) — measured again in the calibration rows | the ceiling bounds reasoning PLUS the answer (`completion_tokens` includes `reasoning_tokens`): at 16,384 every GLM-5.3 call spent all of it thinking; the calibration rows below say what the row sends |
+
+The live calibration of each Alibaba model (qwen3.8-max, deepseek-v4-pro, glm-5.3) — thinking switch, budget,
+floor — is recorded per iteration in the results document and written into `shared/api-dialects.json` from
+those rows only.
+
 ## 7. Build order — three epics, nine stories, the coai gate once per epic
 
 > Operator's order (2026-09-25), which outranks the defaults: 2–3 epics of 2–3 logically complete
@@ -792,6 +813,30 @@ this plan's merge commit.
     and the same for `qwen`, copy the report's rows into §6, and only then write the `xai`/`qwen` rows of
     `shared/api-dialects.json` and the two presets. The S0.4 rows for `runtime: "api"` against released
     `mcp-v0.35.0` / `extension-v0.53.1` are also still to be measured.
+  - **Status 2026-09-27: (ii) and (iii) DONE** — by the reviewer-models measurement
+    ([RESULTS_feature_reviewer_models.md](../research/RESULTS_feature_reviewer_models.md)): the probe ran against both
+    endpoints through the vault (§6 S0.5 rows), and the dialects were written from those rows AND from live feature
+    reviews on the product path — `xai` (the routing header, the answer-only ceiling, reasoning billed as output) and
+    `dashscope` rather than `qwen`, named for the ENDPOINT family as the file's own rule says (json_object because the
+    schema is not enforced there in thinking mode, `max_tokens` floored at 65,536 because it bounds reasoning plus the
+    answer, vendor-default thinking); the two presets (`grok` at `https://api.x.ai/v1`, dialect `xai`, model `grok-4.7`;
+    `qwen` at the Token Plan host, dialect `dashscope`, model `qwen3.8-max`) in `vendors.ts`, pinned by
+    `apiRuntime.test.ts`. Deviations: the vendor row is per endpoint family, not per vendor name; the presets carry no
+    price (the panel's lookup prices the model, S3.7); the S0.4 rows for `runtime: "api"` against the released halves
+    are still to be measured. The measurement's own defects are §9.23–28. **The operator's 20-minute limit
+    (2026-09-27)** — an api reviewer's WHOLE feature review, every turn, launch to final answer — is
+    `COAI_FEATURE_API_REVIEW_MINUTES` (`PanelSettings.FeatureApiReview`, twenty by default), set by `RosterBuilder` on
+    `ReviewerWork.ConversationCap` for the feature stage's api reviewers and enforced by `TurnLoop` as the lesser of it
+    and the derived `timeout × (1 + follow-ups)`; RED first (21 turns where the cap allows three, 20 m for a person's 25,
+    a null cap on the feature round), then GREEN.
+  - **Status 2026-09-27 (evening): the measurement is COMPLETE** — phase 1 (19 calibration iterations, one consultation
+    per model) and phase 2 (7 seeded tasks × 3 repeats × 4 models = 84 reviews on the product path, plus 8 grok re-runs
+    after xAI's transient 500s, §9.29), all 340 findings assessed blind under the strict rubric with a 20-finding hand
+    check. Recommendation, from quality, cost, time against the 20-minute cap, reliability and cache behaviour together:
+    **tick grok-4.7 and glm-5.3 as feature reviewers**; qwen3.8-max (most findings refuted) and deepseek-v4-pro (fast but
+    none of the harder seeds) are not recommended — see the results document's *Recommendation*. Still open under S1.2
+    (why the box stays unticked): the S0.4 rows for `runtime: "api"` against the released halves, and the acceptance's
+    `review_plan` round on this repository with the two api reviewers.
 
 - [x] **S1.3 — the outline for seven languages, `--outline`, and the feature finding schema.**
   Goal: a body-free AST outline of any supported file, measured for budget, and the schema the feature
@@ -1278,6 +1323,41 @@ Branch `feat/feature-review-e3` from E2's commit. S0.3's rows must be in §6 bef
     cached rate; a request over the tier threshold uses the tier rate; no price → "no price set".
   - Model: **Opus**.
 
+- [ ] **S3.8 — per-model settings in the UI (operator, 2026-09-27). Plan only for the extension half; the server half is built.**
+  Goal: per `api` row in the panel, a person sets what the vendor can be told — **thinking on/off** where the
+  vendor has a switch, the **reasoning effort** from a dropdown of THAT vendor's own levels, and the **maximum
+  processing time** (the whole-review limit) — each defaulting to what calibration settled for the model, with a
+  "reset to calibrated default".
+  - **Built 2026-09-27 (the server half, on the reviewer-models branch, with the vendor modules).** Each vendor is
+    a module behind `IApiVendor` (`core/Api/*Vendor.cs`; `ApiVendors.Resolve` the one name→type map;
+    [module_runners.md](../research/module_runners.md), *Each API vendor is a module*). The module declares its
+    **capabilities** as data (`ApiCapabilities`: `thinkingSwitchable`, `effortLevels` in the vendor's names —
+    xai `low medium high xhigh`; qwen `low medium xhigh` with `none` as the off switch; deepseek `low medium
+    high`; glm `low high max` — and `effortExcludesThinkingBudget`) and its **calibrated defaults**
+    (`ApiDefaults`: effort, thinking on, ceiling, follow-ups, the 20-minute review). The row's own settings
+    (`effort`, `thinking`, `reviewMinutes` in `coai.vendors`, read by `PanelSettings.ParseVendors` into
+    `ProviderSettings.Api`) override the module's defaults when set (`ApiEffective.Of`: row over environment over
+    default); the module **validates** them (`IApiVendor.Refusal`) and `RosterBuilder` keeps a refused row out of
+    the round with the sentence. `providers` / `--providers` report `api` per row: module, the one model it was
+    measured on, price route, capabilities, defaults, effective settings, refusal, and a note when the row's named
+    module was set aside for a model it was not measured on (a module speaks only for its measured model — the GLM
+    consultation's catch, glm-5.2 documenting a switch and a level glm-5.3 has not) — values and names only, never
+    a key. RED first (`AnApiRowIsSettableTests`: nine of eleven red before the wiring). Goldens
+    (`ApiVendorGoldensTests`) pinned the measured rows' wire behaviour before the refactor and passed unchanged after.
+  - **Open — the extension half** (a separate agent, after this branch merges): on each `api` row of the
+    vendors card, (a) a thinking toggle shown only when `capabilities.thinkingSwitchable`; (b) an effort dropdown
+    whose options are exactly `capabilities.effortLevels` (never a list typed in the extension), with the off
+    level shown as the toggle rather than as an option; (c) a "max review time (minutes)" field; each control
+    showing the module's default when the row sets nothing and a "reset to calibrated default" that clears the
+    row's value; the row writes `effort` / `thinking` / `reviewMinutes` only when set. The card reads
+    `providers.api` (module, measuredModel, capabilities, defaults, effective, refusal, note) and shows the refusal
+    sentence and the set-aside note inline. S0.4 rows: an old server ignores the three fields (verify
+    `UnmappedMemberHandling`); an old extension never writes them and ignores `api` on `providers`.
+  - RED first (extension): the dropdown lists the module's levels and nothing else; the toggle is absent for a
+    module without a switch; reset clears the row's value and the field shows the default; the refusal sentence
+    from `providers` is rendered on the row.
+  - Model: **Opus**.
+
 ### 7.5 Dependencies and parallelism
 
 ```
@@ -1485,6 +1565,57 @@ xUnit v3 through the MTP executables (never `dotnet test`); extension pages test
     §4). RED: `Expected … ReadState to be NullabilityState.NotNull … but found NullabilityState.Nullable`
     (`NoInstructionOfTheSecondRound_IsNullable`, a scan of every string-valued method of the class).
 
+Found by the reviewer-models measurement ([RESULTS_feature_reviewer_models.md](../research/RESULTS_feature_reviewer_models.md),
+phase 1, 2026-09-26). Each seen RED with the real symptom, then GREEN, then red again with the behaviour reverted and the API kept:
+
+23. **FIXED 2026-09-26** — the api shim never read `finish_reason`. A completion the vendor cut at the token
+    ceiling (`finish_reason: "length"`) was taken for the answer when any content arrived — `{"` and
+    `{"findings":[]}` alike — and reported as "returned no message content" when none did, hiding the 16,382
+    reasoning tokens that explained it (GLM-5.3, Qwen3.8-max). `LocalAsk.ReadAnswer` reads the finish reason and
+    `reasoning_tokens`; `--ask-api` exits 70 with "cut at the token limit (…): T tokens generated (R reasoning
+    tokens), C characters of content arrived" and does not write the fragment. RED: exit 0 on a cut fragment.
+24. **FIXED 2026-09-26** — a failed api call's cost stopped at stdout: `--ask-api` printed no usage on exit 70
+    and `ReviewerExecutor.LaunchAsync` answered `Usage.None` for every non-zero exit before asking the adapter,
+    so a reasoning-only answer (53,092 prompt tokens, $0.20) was written down as free, on turn 1 and turn 2
+    alike. The usage line goes out before the content is judged; the launch reads usage through the adapter
+    first; `NonZeroExit` carries it; the ledger and `LiveRound` count it. RED: `TokensIn 0` shim → executor →
+    ledger, through the real binary.
+25. **FIXED 2026-09-26** — xAI's reasoning tokens were not billed: xAI reports them OUTSIDE
+    `completion_tokens` (grok-4.7: prompt 19,681 · completion 1,557 · reasoning 27,728 · total 48,966) and
+    prices them as output; the ledger put the call at $0.047 against the vendor's own $0.213
+    (`cost_in_usd_ticks`). Output = `total_tokens − prompt_tokens` when that exceeds `completion_tokens`; the
+    Alibaba route, which counts reasoning inside the completion, is unchanged. RED: `TokensOut 1557`.
+26. **FIXED 2026-09-26** — an answer whose EVERY finding was rejected in normalisation parsed to a clean
+    review (a `proceed` nobody gave); the Alibaba route does not enforce a strict `json_schema`, so an
+    invented severity on each entry is a real shape. `ReviewParser` answers `Malformed` naming every
+    rejection — the repair's job; one survivor is still a review. RED: `Success` for two `critical` findings.
+27. **FIXED 2026-09-26** — no cache routing for xAI: every follow-up turn resends a byte-identical prefix (D25)
+    and xAI cached 1,152 tokens of it on every turn — its cache entries are per server, and a conversation
+    reaches its server only through the `x-grok-conv-id` header, which nothing sent. `ApiDialect.CacheKeyHeader`
+    (the `xai` row), `ConversationKey.Of(provider, role, base prompt)` set by `RosterBuilder` on every launch of
+    one reviewer (turns and repairs), `--conversation` on the shim's argv, the header on the request. RED: no
+    header seen by the stub, no `--conversation` on argv, an empty key from the roster.
+28. **FIXED 2026-09-26** — every api row inherited the LOCAL engine's token ceiling (`COAI_LOCAL_MAX_TOKENS`,
+    8,192), and no dialect could name what its family needs or send a vendor field no standard name spells.
+    On the Alibaba route the ceiling bounds reasoning PLUS the answer, so 8,192 (and the first trial's
+    16,384) cut every GLM-5.3 and Qwen3.8-max answer before a character of it was written.
+    `ApiDialect.MaxTokensFloor` (`CeilingFor` raises a configured ceiling below it) and `ApiDialect.ExtraBody`
+    (DashScope's `enable_thinking` / `thinking_budget`, verbatim at the top level), both data in
+    `shared/api-dialects.json`. RED: `max_tokens 8192` sent against a 32,768 floor; no vendor field in the body.
+
+29. **FIXED 2026-09-27** — a vendor's transient 500 was a lost review. Phase 2 of the reviewer-models measurement: xAI
+    answered 8 of 20 grok-4.7 reviews' calls with HTTP 500 `{"code":"internal","error":"Auth context expired."}`,
+    mid-generation, with nothing on our side correlating (the tap records rule out the conversation key, the request
+    shape and our concurrency). `AskApiMode` reported any 500 as a failed request (exit 70) and the ladder retries only
+    429/503 or an observed phrase. RED (`ApiVendorGoldensTests`): expected 75, found 70, on every row. Fix:
+    `ApiClassification` treats a 5xx whose own error field says "auth context expired" as a transient, `RateLimit.Phrases`
+    gains the observed phrase, and the ladder retries the turn inside the 20-minute cap; any other 500 stays failed.
+
+Observed, not fixed (follow-ups): `SourceResolver` cannot resolve a member of a JavaScript object literal
+(`claudeAdapter.encode` — the outline lists only the top-level `claudeAdapter`), so a reviewer asking for it
+by name is refused; the server reads `COAI_CREDS_KEY` from the process environment only, while every other
+setting is layered from `settings.json`.
+
 ## 10. Open questions for the operator
 
 All four were answered on 2026-09-25 and are now D13–D16. The two asked after them are answered too:
@@ -1515,7 +1646,9 @@ All four were answered on 2026-09-25 and are now D13–D16. The two asked after 
 - [ ] Every §9 defect has a test that was seen RED with the real symptom, then GREEN.
 - [ ] `review_feature` runs end to end on this repository against **Grok and Qwen through `api`** and
       one CLI reviewer, with a source request served.
-- [ ] The `xai` and `qwen` dialects each trace to an S0.5 row with the verbatim vendor answer.
+- [x] The `xai` and `qwen` dialects each trace to an S0.5 row with the verbatim vendor answer. *(2026-09-27: `xai` and
+      `dashscope` — the Alibaba row is named for its endpoint family — each trace to a §6 S0.5 row and to the calibration
+      iterations of [RESULTS_feature_reviewer_models.md](../research/RESULTS_feature_reviewer_models.md).)*
 - [ ] The skip truth table (§4.4) is a test, row by row; "all failed" blocks.
 - [ ] No argv element and no log line ever contains an API key (a test scans both).
 - [ ] Every row of §4.13 was measured against the previous RELEASED other half.

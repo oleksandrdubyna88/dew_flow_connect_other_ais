@@ -9472,8 +9472,14 @@ curated gemini list. What shipped:
 
 - **The row.** `Vendor.dialect?` (absent = the generic `openai`; kept only when SAID and lower-cased, like
   `remoteVendor`); ONE preset, `API_PRESET` (`id: 'api'`, `runtime: 'api'`, an empty endpoint the card asks
-  for) — and a marked place in `VENDOR_PRESETS` where the xAI and Qwen presets go, with their dialect rows,
-  once `coai-mcp --probe-api` has measured them (part iii). `vendorsFrom` round-trips both fields
+  for) — and, since 2026-09-27 (part iii, from the reviewer-models measurement,
+  [RESULTS_feature_reviewer_models.md](RESULTS_feature_reviewer_models.md)), the two MEASURED presets beside
+  it in `VENDOR_PRESETS`: `grok` (`https://api.x.ai/v1`, dialect `xai`, model `grok-4.7`) and `qwen` (the
+  Model Studio compatible-mode Token Plan host, dialect `dashscope`, model `qwen3.8-max` — a base URL a
+  person changes for another region or plan), each id the vault entry its key is filed under, no price
+  (the panel's lookup prices the model). `API_DIALECTS` mirrors the file's four rows (`local`, `openai`,
+  `xai`, `dashscope`); `apiRuntime.test.ts` pins the three api presets by id, base URL, dialect and model,
+  and went red with the two removed. `vendorsFrom` round-trips both fields
   (`namedFields`); `vendorsEnv` emits `dialect` only when said (`saidOnTheWire`). `package.json` lists `api`
   in both runtime enums (`coai.vendors`, `coai.consultants` — the consultant reader accepts every runtime
   and refuses by name at ask time) and describes `dialect`.

@@ -248,67 +248,18 @@ public static class LocalAsk
     /// </remarks>
     public static (string? Answer, Usage Usage) ReadResponse(string response)
     {
-        try
-        {
-            using var parsed = JsonDocument.Parse(response);
-            var root = parsed.RootElement;
-            // Valid JSON is not the same as an answer. `[]`, `42`, `null` and a bare string all
-            // parse, and `TryGetProperty` on a root that is not an object THROWS
-            // `InvalidOperationException` — which the `catch` below, written for `JsonException`,
-            // does not catch. An engine answering an array took the round down with it.
-            if (root.ValueKind != JsonValueKind.Object)
-            {
-                return (null, new Usage(0, 0, null));
-            }
+        var answer = ReadAnswer(response);
 
-            var usage = ReadUsage(root);
-
-            if (!root.TryGetProperty("choices", out var choices)
-                || choices.ValueKind != JsonValueKind.Array
-                || choices.GetArrayLength() == 0)
-            {
-                return (null, usage);
-            }
-
-            var content = choices[0].TryGetProperty("message", out var message)
-                          && message.TryGetProperty("content", out var text)
-                          && text.ValueKind == JsonValueKind.String
-                ? text.GetString()
-                : null;
-
-            return (content is { Length: > 0 } ? content : null, usage);
-        }
-        catch (JsonException)
-        {
-            return (null, new Usage(0, 0, null));
-        }
-    }
-
-    private static Usage ReadUsage(JsonElement root)
-    {
-        if (!root.TryGetProperty("usage", out var usage) || usage.ValueKind != JsonValueKind.Object)
-        {
-            return new Usage(0, 0, null);
-        }
-
-        // Money is null on purpose: a local run has no bill, and 0 would read as free.
-        return new Usage(
-            usage.TryGetProperty("prompt_tokens", out var input) && input.TryGetInt64(out var tin) ? tin : 0,
-            usage.TryGetProperty("completion_tokens", out var output) && output.TryGetInt64(out var tout) ? tout : 0,
-            null,
-            CachedTokens(usage));
+        return (answer.Content, answer.Usage);
     }
 
     /// <summary>
-    /// The OpenAI-compatible cached subset — <c>prompt_tokens_details.cached_tokens</c> — or zero when
-    /// the endpoint did not say. A local engine never does; a hosted <c>api</c> vendor may, and that
-    /// number is what D25's follow-up turns are measured by.
+    /// The whole of what a completion said about itself: the content, the usage, how the vendor said it
+    /// stopped, and how much of the generation was reasoning — <see cref="CompletionReader"/>, the one
+    /// reader the local engine and every hosted vendor module share (its history is recorded there).
     /// </summary>
-    private static long CachedTokens(JsonElement usage) =>
-        usage.TryGetProperty("prompt_tokens_details", out var details)
-        && details.ValueKind == JsonValueKind.Object
-        && details.TryGetProperty("cached_tokens", out var cached)
-        && cached.TryGetInt64(out var count)
-            ? count
-            : 0;
+    public static ChatAnswer ReadAnswer(string response) => CompletionReader.Read(response);
+
+    /// <summary>The vendor's finish reason for a generation its own ceiling cut short.</summary>
+    public const string CutAtTheCeiling = CompletionReader.CutAtTheCeiling;
 }

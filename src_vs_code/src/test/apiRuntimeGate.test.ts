@@ -59,7 +59,7 @@ test('the dialect names mirror shared/api-dialects.json, and only the hosted one
   const shared = JSON.parse(readFileSync(repo('shared', 'api-dialects.json'), 'utf8')) as { dialects: Record<string, unknown> };
 
   assert.deepEqual([...API_DIALECTS], Object.keys(shared.dialects), 'a row added on one side is unknown to the other');
-  assert.deepEqual([...dialectChoices()], ['openai'], 'the local body is the local reviewer’s; a hosted row never gets it');
+  assert.deepEqual([...dialectChoices()], ['openai', 'xai', 'dashscope'], 'the local body is the local reviewer’s; a hosted row never gets it');
   assert.equal(DEFAULT_API_DIALECT, 'openai');
 });
 

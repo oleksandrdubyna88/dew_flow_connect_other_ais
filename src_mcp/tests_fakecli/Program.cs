@@ -172,6 +172,13 @@ switch (args0)
         Console.Error.WriteLine(text);
         return int.Parse(code);
 
+    // Says something on STDOUT — a usage line, typically — and exits non-zero: the shape of a shim that
+    // was billed for a call and then refused its answer (a reasoning-only completion, a cut at the
+    // token ceiling), whose cost must still cross the process boundary.
+    case ["emit-exit", var text, var code]:
+        Console.Out.Write(text);
+        return int.Parse(code);
+
     case ["sleep", var ms]:
         Thread.Sleep(int.Parse(ms));
         return 0;

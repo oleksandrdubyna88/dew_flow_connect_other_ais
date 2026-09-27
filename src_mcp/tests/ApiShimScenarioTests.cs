@@ -101,4 +101,52 @@ public sealed class ApiShimScenarioTests : IDisposable
         result.ExitCode.Should().Be(77, result.StdErr);
         result.StdErr.Should().Contain("vendor 'grok'").And.NotContain("bad key");
     }
+
+    /// <summary>
+    /// The cost of a FAILED call crosses the process boundary: shim → executor → ledger, with the tokens
+    /// and the price on every step. A reasoning-only answer (the shape Qwen3.8-max produced 3 times on
+    /// 2026-09-26: <c>reasoning_content</c>, no <c>content</c>, 16,382 completion tokens) is a failed
+    /// reviewer AND a billed one.
+    /// </summary>
+    [Fact]
+    public async Task AReasoningOnlyAnswer_IsAFailedReviewer_WhoseTokensAndCostReachTheLedger()
+    {
+        _stub.Answers = _ => new ApiEndpointStub.Answer(200,
+            "{\"id\":\"cmpl-r\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"reasoning_content\":\"thinking, at length\",\"content\":\"\"},"
+            + "\"finish_reason\":\"length\"}],\"usage\":{\"prompt_tokens\":53092,\"completion_tokens\":16382,\"completion_tokens_details\":{\"reasoning_tokens\":16382}}}");
+        var schema = Path.Combine(_dir, "schema.json");
+        await File.WriteAllTextAsync(schema, FindingSchema.Json, TestContext.Current.CancellationToken);
+        var runtime = new ApiRuntime("qwen38max", _stub.Endpoint);
+        var built = runtime.Build(
+            RoleCatalog.FeatureRole, "review this", _dir, schema, _dir,
+            new ReviewerSettings("qwen38max")
+            {
+                Model = "qwen3.8-max",
+                ApiKey = Key,
+                Timeout = TimeSpan.FromMinutes(2),
+                Price = new TokenPrice(new TokenRates(2.0, 0.25, 6.0), 0, TokenRates.None),
+            });
+        // The real binary, the adapter's own argv and environment (the dotnet-host prefix aside, as above).
+        var invocation = built with
+        {
+            Request = new ProcessRequest(ServerBinary.Path, [.. built.Request.Arguments.SkipWhile(a => a != "--ask-api")], _dir)
+            {
+                Environment = built.Request.Environment,
+                Timeout = TimeSpan.FromMinutes(2),
+            },
+        };
+
+        var outcome = await new ReviewerExecutor(new ProcessLauncher()).RunAsync(invocation, ct: TestContext.Current.CancellationToken);
+
+        var failed = outcome.Should().BeOfType<ReviewerOutcome.NonZeroExit>("a reasoning-only answer is no review").Subject;
+        failed.ExitCode.Should().Be(70);
+        failed.Usage.TokensIn.Should().Be(53092);
+        failed.Usage.TokensOut.Should().Be(16382);
+        failed.Usage.CostUsd.Should().BeApproximately(53092 * 2.0 / 1e6 + 16382 * 6.0 / 1e6, 0.000001, "priced by the shim from the row's rates");
+
+        var ledger = new UsageLedger(_dir);
+        ledger.Record(invocation, outcome, "qwen3.8-max", "FeatureReview", TimeSpan.FromSeconds(300));
+        var line = File.ReadAllLines(ledger.Path).Should().ContainSingle().Subject;
+        line.Should().Contain("\"tokensIn\":53092").And.Contain("\"tokensOut\":16382").And.Contain("\"costUsd\":0.204").And.Contain("exit 70");
+    }
 }

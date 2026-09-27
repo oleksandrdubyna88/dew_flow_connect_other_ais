@@ -30,6 +30,19 @@ namespace CoaiMcp.Core.Api;
 /// <param name="ReasoningEffortField">Where the effort travels, or empty to send none.</param>
 /// <param name="ReasoningEffortMap">A translation applied before the effort is sent; an empty
 /// translation omits the field. A value not in the map is sent verbatim.</param>
+/// <param name="CacheKeyHeader">The request header that routes a conversation to the server holding its
+/// prompt cache — xAI's <c>x-grok-conv-id</c> — or empty to send none. Measured 2026-09-26: three turns of
+/// a byte-identical 64 KB prefix cached 1,152 tokens each without it; the vendor's guide says the header
+/// is what makes a hit likely, because "cache entries are stored per-server".</param>
+/// <param name="ExtraBody">Vendor-specific top-level request fields, sent verbatim — what the OpenAI SDK
+/// calls <c>extra_body</c>: the Alibaba route's <c>enable_thinking</c> and <c>thinking_budget</c>, which
+/// no standard field spells and without which a reasoning model there thinks until the token ceiling
+/// (measured 2026-09-26: GLM-5.3 and Qwen3.8-max spent every one of 16,384 completion tokens on
+/// reasoning). Empty for a row that needs none.</param>
+/// <param name="MaxTokensFloor">The least ceiling this endpoint family is ever sent, or 0 for none. A
+/// configured ceiling below it is raised to it: on the Alibaba route the ceiling bounds reasoning PLUS
+/// the answer, and the panel's 8,192 — a LOCAL engine's number, which every api row inherits — cut every
+/// GLM-5.3 and Qwen3.8-max answer of the first trial before a character of it was written.</param>
 public sealed record ApiDialect(
     string Name,
     double? Temperature,
@@ -40,8 +53,17 @@ public sealed record ApiDialect(
     bool Strict,
     bool BoundedSchema,
     string ReasoningEffortField,
-    IReadOnlyDictionary<string, string> ReasoningEffortMap)
+    IReadOnlyDictionary<string, string> ReasoningEffortMap,
+    string CacheKeyHeader = "",
+    IReadOnlyDictionary<string, JsonElement>? ExtraBody = null,
+    int MaxTokensFloor = 0)
 {
+    /// <summary>The vendor-specific fields, never null: an absent map is an empty one.</summary>
+    public IReadOnlyDictionary<string, JsonElement> ExtraBody { get; init; } = ExtraBody ?? new Dictionary<string, JsonElement>();
+
+    /// <summary>The ceiling actually sent for a configured one: the configured value, raised to the row's floor.</summary>
+    public int CeilingFor(int configured) => Math.Max(configured, MaxTokensFloor);
+
     /// <summary>The panel's word for "send nothing about effort": the endpoint's own default applies.</summary>
     public const string EngineDecides = "engine";
 
@@ -86,7 +108,34 @@ public sealed record ApiDialect(
             RequiredBool(row, name, "strict"),
             RequiredBool(row, name, "boundedSchema"),
             RequiredString(row, name, "reasoningEffortField"),
-            Map(row, name, "reasoningEffortMap"));
+            Map(row, name, "reasoningEffortMap"),
+            RequiredString(row, name, "cacheKeyHeader"),
+            Fields(row, name, "extraBody"),
+            Count(row, name, "maxTokensFloor"));
+    }
+
+    /// <summary>A non-negative whole number; anything else is refused by name.</summary>
+    private static int Count(JsonElement row, string name, string field) =>
+        Field(row, name, field) is { ValueKind: JsonValueKind.Number } number && number.TryGetInt32(out var value) && value >= 0
+            ? value
+            : throw new JsonException($"dialect '{name}': '{field}' must be a whole number of zero or more");
+
+    /// <summary>An object of vendor fields, each kept as the JSON it was written as — a bool, a number, a string, an object.</summary>
+    private static IReadOnlyDictionary<string, JsonElement> Fields(JsonElement row, string name, string field)
+    {
+        var element = Field(row, name, field);
+        if (element.ValueKind != JsonValueKind.Object)
+        {
+            throw new JsonException($"dialect '{name}': '{field}' must be an object");
+        }
+
+        var map = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+        foreach (var entry in element.EnumerateObject())
+        {
+            map[entry.Name] = entry.Value.Clone();
+        }
+
+        return map;
     }
 
     private static double? OptionalNumber(JsonElement row, string name, string field) =>

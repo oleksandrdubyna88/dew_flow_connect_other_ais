@@ -18,7 +18,12 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 internal sealed class ApiEndpointStub : IDisposable
 {
-    internal sealed record Seen(string Method, string Path, string Authorization, string Body);
+    /// <param name="Headers">Every request header, case-insensitively — what a cache-routing header test reads.</param>
+    internal sealed record Seen(string Method, string Path, string Authorization, string Body, IReadOnlyDictionary<string, string>? Headers = null)
+    {
+        /// <summary>The request header by name, or empty.</summary>
+        public string Header(string name) => Headers is not null && Headers.TryGetValue(name, out var value) ? value : string.Empty;
+    }
 
     internal sealed record Answer(int Status, string Body, IReadOnlyDictionary<string, string>? Headers = null);
 
@@ -109,11 +114,21 @@ internal sealed class ApiEndpointStub : IDisposable
             body = await reader.ReadToEndAsync();
         }
 
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in context.Request.Headers.AllKeys)
+        {
+            if (name is not null)
+            {
+                headers[name] = context.Request.Headers[name] ?? string.Empty;
+            }
+        }
+
         var seen = new Seen(
             context.Request.HttpMethod,
             context.Request.Url!.AbsolutePath,
             context.Request.Headers["Authorization"] ?? string.Empty,
-            body);
+            body,
+            headers);
         lock (_seen)
         {
             _seen.Add(seen);

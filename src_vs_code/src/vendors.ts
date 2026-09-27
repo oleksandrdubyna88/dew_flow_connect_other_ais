@@ -271,12 +271,38 @@ export const VENDOR_PRESETS: readonly (Vendor & { label: string; hint: string })
     pricePerMillionOut: 0,
   },
   API_PRESET,
-  // ---- the measured vendor presets go HERE (PLAN_feature_review.md §4.10, S1.2 part iii) ----
-  // xAI (Grok): https://api.x.ai/v1, dialect `xai`; Qwen (DashScope): the operator's regional
-  // endpoint, dialect `qwen`. Each arrives together with its dialect row in shared/api-dialects.json,
-  // written FROM `coai-mcp --probe-api` rows — model ids from GET /models, refused fields from the
-  // vendor's own answers — never from documentation. Until then the generic preset above is the
-  // only api entry, and `apiRuntime.test.ts` pins that.
+  // ---- the measured vendor presets (PLAN_feature_review.md §4.10, S1.2 part iii) ----
+  // Each arrived on 2026-09-26 together with its dialect row in shared/api-dialects.json, written FROM
+  // `coai-mcp --probe-api` rows and live feature reviews (RESULTS_feature_reviewer_models.md): the model
+  // id is the MAX model the key offered on GET /models, the base URL the endpoint the rows were measured
+  // on. The Alibaba row's host is the Token Plan one of the plan's Q5 — data a person can change; the
+  // key goes in the vault entry under the row's id. `apiRuntime.test.ts` pins both.
+  {
+    label: 'xAI (Grok)',
+    hint: 'Grok, reached directly at api.x.ai with the key from the vault entry "grok". Dialect xai: no sampling fields, strict schema, the conversation key in x-grok-conv-id so follow-up turns hit the prompt cache.',
+    id: 'grok',
+    runtime: 'api',
+    model: 'grok-4.7',
+    enabled: true, plan: true, code: true,
+    baseUrl: 'https://api.x.ai/v1',
+    executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
+    dialect: 'xai',
+  },
+  {
+    label: 'Alibaba Model Studio (Qwen, DeepSeek, GLM)',
+    hint: 'The Model Studio compatible-mode endpoint — this row is a Token Plan host; change the base URL for another region or plan. Key from the vault entry "qwen". Dialect dashscope: json_object, the token ceiling floored at 65,536 because it bounds reasoning plus the answer, the model’s own default thinking.',
+    id: 'qwen',
+    runtime: 'api',
+    model: 'qwen3.8-max',
+    enabled: true, plan: true, code: true,
+    baseUrl: 'https://token-plan.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1',
+    executablePath: '',
+    pricePerMillionIn: 0,
+    pricePerMillionOut: 0,
+    dialect: 'dashscope',
+  },
   {
     label: 'Another OpenAI-compatible endpoint',
     hint: 'Give it a name and a base URL; the key goes in the vault entry under that name.',

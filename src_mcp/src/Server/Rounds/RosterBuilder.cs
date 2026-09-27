@@ -290,27 +290,23 @@ internal sealed class RosterBuilder(
                 return;
             }
 
-            var settings = new ReviewerSettings(provider.Provider)
+            // An api row through its module (ApiRowView): the settings it will run with — its own over the
+            // environment over the module's calibrated defaults — or the module's refusal of its own
+            // settings, said here before any request is sent to be answered 400 after a round trip.
+            var api = runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi;
+            if (api.Refusal.Length > 0)
             {
-                ExecutablePath = provider.ExecutablePath,
-                Model = provider.Model,
-                // By the row's KEY NAME — its id unless it names another (S3.6: a second model on one key).
-                ApiKey = _keys.Keys.GetValueOrDefault(provider.KeyName, string.Empty),
-                // Only ApiRuntime reads it: which row of shared/api-dialects.json spells the request.
-                Dialect = provider.Dialect,
-                // Only ApiRuntime reads it too: the shim prices each turn from it (S3.7).
-                Price = provider.Price,
-                Timeout = _settings.ReviewerTimeout,
-                ReasoningEffort = _settings.LocalReasoningEffort,
-                MaxTokens = _settings.LocalMaxTokens,
-                // Only RemoteRuntime uses it, to find this machine's token for its Team server.
-                DataDir = _settings.DataDir,
-                // A reviewer starts no MCP server (issue #514); read per round, so a server added to
-                // config.toml is switched off from the next round on.
-                McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
-            };
+                Exclude(provider.Provider, role, api.Refusal);
+                return;
+            }
+
+            var settings = SettingsFor(provider, runtime, api);
             var followUps = turns is Runners.Feature.SourceTurns.On on ? on.FollowUps : 0;
             var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers, followUps);
+            // One key for every launch of THIS reviewer — its turns and their repairs — from the base prompt
+            // every one of them shares (ConversationKey): what a vendor that routes its prompt cache by a
+            // conversation id (xAI's x-grok-conv-id, 2026-09-26) needs to serve turn 2 from turn 1's cache.
+            settings = settings with { Conversation = ConversationKey.Of(provider.Provider, role, prompt) };
             // The repair is composed WITHOUT a checkout always — the stage's own no-checkout material —
             // because the repair launch always runs in repairDir, an empty temp directory, whatever the
             // review was given (see above).
@@ -336,8 +332,58 @@ internal sealed class RosterBuilder(
                 Continue = turns is Runners.Feature.SourceTurns.On conversation && stage == Stage.FeatureReview
                     ? new Runners.Feature.SourceConversation(conversation, Turn)
                     : ReviewerContinuation.None,
+                // The whole-review limit (the operator's twenty minutes, 2026-09-27): an api reviewer's
+                // conversation on the feature stage, every turn of it — the row's own minutes, else the
+                // environment's, else the module's calibrated default. A CLI reviewer and every other stage
+                // keep the derived cap — null here — because the limit was measured on hosted models.
+                ConversationCap = stage == Stage.FeatureReview && runtime is ApiRuntime
+                    ? TimeSpan.FromMinutes(api.Effective.ReviewMinutes)
+                    : null,
             });
         }
+    }
+
+    /// <summary>A CLI row seen through no module: the generic defaults, which nothing below reads for it.</summary>
+    private static readonly ApiRowView NotApi = new(
+        Core.Api.OpenAiCompatibleVendor.Generic,
+        Core.Api.ApiEffective.Of(Core.Api.OpenAiCompatibleVendor.Generic, Core.Api.ApiRowSettings.None, Core.Api.ApiOverrides.None),
+        string.Empty);
+
+    /// <summary>
+    /// One reviewer's launch settings. An api row's effort, ceiling and thinking switch come from its
+    /// module's view (the row over the environment over the calibrated default); a CLI row's from the
+    /// panel's local-engine settings, as they always have.
+    /// </summary>
+    private ReviewerSettings SettingsFor(ProviderSettings provider, IReviewerRuntime runtime, ApiRowView api)
+    {
+        var settings = new ReviewerSettings(provider.Provider)
+        {
+            ExecutablePath = provider.ExecutablePath,
+            Model = provider.Model,
+            // By the row's KEY NAME — its id unless it names another (S3.6: a second model on one key).
+            ApiKey = _keys.Keys.GetValueOrDefault(provider.KeyName, string.Empty),
+            // Only ApiRuntime reads it: the module name, or the row of shared/api-dialects.json it was written with.
+            Dialect = provider.Dialect,
+            // Only ApiRuntime reads it too: the parent prices each turn from it (S3.7).
+            Price = provider.Price,
+            Timeout = _settings.ReviewerTimeout,
+            ReasoningEffort = _settings.LocalReasoningEffort,
+            MaxTokens = _settings.LocalMaxTokens,
+            // Only RemoteRuntime uses it, to find this machine's token for its Team server.
+            DataDir = _settings.DataDir,
+            // A reviewer starts no MCP server (issue #514); read per round, so a server added to
+            // config.toml is switched off from the next round on.
+            McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
+        };
+
+        return runtime is ApiRuntime
+            ? settings with
+            {
+                ReasoningEffort = api.Effective.Effort,
+                MaxTokens = api.Effective.MaxTokens,
+                ThinkingOn = api.Effective.ThinkingOn,
+            }
+            : settings;
     }
 
     /// <summary>
