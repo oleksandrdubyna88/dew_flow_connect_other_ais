@@ -7,7 +7,7 @@
 >
 > Related docs: [module_extension.md](module_extension.md),
 > [module_tests.md](module_tests.md), [architecture.md](architecture.md).
-> Boundaries with four open plans are in § *Boundaries*, and written into each of them too.
+> Boundaries with five open plans — four siblings and the plan S5 was extracted into — are in § *Boundaries*, and written into each of them too.
 
 ## The goal, as the operator asked it (2026-09-28)
 
@@ -103,7 +103,7 @@ The operator's instruction, verbatim in intent:
 | F1 | **A probe that lands after the first paint never reaches the screen.** `staticKey` (`panelView.ts:3136-3196`) omits `providers`, `cliStatus`, `claudeProbe`/`askingClaude`, `agyModels`, `modelPrices`, `snippetStatus`, `enginesByEndpoint`, `latestTeamServerVersion`, `perSide`. `refreshProviders` calls `render()` when the verdict changes (`panelProvider.ts:886`), the key is unchanged, only live regions are posted — the *cannot review* badge waits until something unrelated repaints. | **RED, observed 2026-09-28**: `src/test/aProbeThatLandsRepaints.test.ts` — the fixture's html differs, `staticKey` does not (*"the verdict landed in the state and the key did not move"*). | S1 |
 | F2 | **A re-resolved sidebar can be blank.** `resolveWebviewView` never resets `paintedKey`; if the new view resolves with an unchanged state, `render()` skips the html write and posts live regions into an empty document. | **RED, observed 2026-09-28** with the reset taken out: `surfaceSlot.test.ts` — *"the new document is empty, so a patch would land in nothing"*. | S2 |
 | F3 | **A late disposal of an old view clears the LIVE view's edit hold** (`panelProvider.ts:391-394` calls `forgetEditing()` unconditionally; only the handle release is ownership-checked). | **RED, observed 2026-09-28** with the ownership check taken out: `surfaceSlot.test.ts` — *"the caret of the page still open was forgotten"*. | S2 |
-| F4 | `render()` reads the whole `usage.jsonl` (`readUsage`) on every render and the sidebar draws none of it; `usageWindow`/`usageScope` are in `staticKey` and drawn nowhere in the panel. | Read. | S1 (the key), S5 (the read) |
+| F4 | `render()` reads the whole `usage.jsonl` (`readUsage`) on every render and the sidebar draws none of it; `usageWindow`/`usageScope` are in `staticKey` and drawn nowhere in the panel. | Read. | S1 (the key); the read went with S5 to [PLAN_the_sidebar_pays_only_for_what_it_shows.md](../todo/PLAN_the_sidebar_pays_only_for_what_it_shows.md) — **not fixed here** |
 | F5 | Already-stale text: help says "the **Server** section" (`helpContent.ts:98`, `:100`) and "**Language**" (`:431`); `ContractVersion.cs:91`, `RemoteAsk.cs:160`, `:200`, `PanelSettings.cs:1068` say "Server section" — it has been *MCP server* since 2026-09-07. `research/architecture.md:275` describes a Server-section block removed the same day. | Read. | S4 |
 | F6 | The status line of `PLAN_the_panel_provider_is_too_big.md` says *nothing implemented yet* while clusters 1, 10 and 11 shipped (#400, #403, #404). | `git log` | corrected in this plan's own commit, with the boundary row |
 | F7 | **A guard that guards nothing.** `test/theLogRefusesToOpen.test.ts:201` slices from `indexOf('const live = this.view;')`, a line that no longer exists (it is `const live = this.held.view;`, `panelProvider.ts:1002`): `indexOf` is −1, the slice is the file's last character, and both assertions pass whatever `render()` does. | Read 2026-09-28. | S2 — replaced by run tests of the slot's paint. My own code review then found the SAME shape in a new guard (`bothPagesWriteThroughOneQueue.test.ts` sliced from an `indexOf` it never checked); it now fails when its anchor is missing |
@@ -226,7 +226,8 @@ Each story is its own commit with a green suite, in this order:
 ### S3 — The Settings tab (D1–D8) · Opus
 
 - The page script leaves `panelView.ts` into `panelScript.ts` as its own commit, a pure move proved by
-  `scripts/prove-move.mjs`.
+  `scripts/prove-move.mjs`. **Not built** — a shared `pageDocument` made the move unnecessary, so
+  `panelScript.ts` does not exist and `prove-move.mjs` did not run; see *Progress and deviations*.
 - `tabKeys.ts` (step 1 of `PLAN_the_tabs_announce_themselves.md` §B) and the opt-in `roving` flag on
   `tabStrip` (absent = every existing page byte-identical).
 - `settingsPainted`, `paneScript`, the Settings CSS (a wrapping strip, a readable `max-width`, the dead
@@ -356,7 +357,7 @@ No file, table, cache or process is added; the extracted S5 can only remove work
 |---|---|---|---|
 | [PLAN_the_panel_provider_is_too_big.md](../todo/PLAN_the_panel_provider_is_too_big.md) | the view lifecycle it leaves in `PanelProvider` — `render`, `resolveWebviewView`, the dispatcher, the `write`/`run` signatures, the edit hold, `snapBack`. Not a move, so not proved by `prove-move.mjs`. | every one of its eleven clusters | independent; whichever lands second rebases and re-proves |
 | [PLAN_two_files_outgrew_the_rule.md](../todo/PLAN_two_files_outgrew_the_rule.md) | the section registry (`PANEL_SECTIONS`, in `panelView.ts`), the layouts (`panelSurface.ts`), the Settings page, and replacing `staticKey` (its planned `panelRepaint.ts` shrinks) | the file sizes, the CSS, the help constant, the command symbols, the region builders — and **the page script**, which this plan did not move after all (`pageDocument` is shared instead), so `panelScript.ts` is that plan's again | this first — landed 2026-09-28 |
-| [PLAN_the_tabs_announce_themselves.md](../todo/PLAN_the_tabs_announce_themselves.md) | its step 1: `tabKeys.ts`, and the `roving` option on `tabStrip` | converting the roles page, the rounds log and the window filter | this first; that plan then consumes `tabKeys.ts` |
+| [PLAN_the_tabs_announce_themselves.md](../todo/PLAN_the_tabs_announce_themselves.md) | its step 1: `tabKeys.ts`, and the `roving` option on `tabStrip` | converting the roles page, the rounds log and the window filter | this first — step 1 landed 2026-09-28; that plan's steps 2–4 need nothing more from this one |
 | [PLAN_panel_probing_state.md](../todo/PLAN_panel_probing_state.md) | the definition of the paint key | *render never awaits a probe*; its spinner tests need live slots | any gating the extracted plan calls for waits for its step 2 |
 | [PLAN_the_sidebar_pays_only_for_what_it_shows.md](../todo/PLAN_the_sidebar_pays_only_for_what_it_shows.md) | S1–S4: the two surfaces, one state built whole | S5 entire: the measurement, `readUsage` leaving the render, any gating by held surface | this first — landed 2026-09-28 |
 
@@ -370,11 +371,14 @@ No file, table, cache or process is added; the extracted S5 can only remove work
 - [x] Running consultations are still in the sidebar.
 - [x] F1, F2, F3, F8, F9 and F10 each have a test that was observed RED before its fix and GREEN after — F2 could be, with the reset taken out.
 - [x] No sentence in any surface, language, README, manifest or server message names a section where it
-      no longer is (swept by searching for every moved section's name, method stated in the PR).
+      no longer is **in the source** (swept by searching for every moved section's name, method stated in the PR).
+      The released binaries follow their releases: coai-mcp's with the open item below, coai-server's one
+      sentence with that server's next release.
 - [x] `panelProvider.ts` and `panelView.ts` are both smaller than on 2026-09-28 (4 014 → 3 989 and 3 196 → 3 188); every new module < 400 lines (the largest, `surfaceSlot.ts`, is 190).
 - [x] `research/module_extension.md`, `research/module_tests.md` and `research/architecture.md` describe
       the two surfaces; the Mermaid renders.
-- [x] The boundary rows exist in all four sibling plans.
+- [x] The boundary rows exist in all five plans in the table — the four siblings and the extracted S5 plan.
 - [x] One `review_code` round over the whole committed diff; its verdict and reviewer count are in the PR.
+- [ ] **Open:** coai-server's reworded sentence ships with that server's next release — no release of its own.
 - [ ] **Open:** extension and coai-mcp released after the merge (S4 changes both) — each with the
       operator's go-ahead, since both publish.
