@@ -382,6 +382,35 @@ assuming the newest. The other direction — the older BINARY reading a database
 migrated — is checked against the real released artefact rather than argued, because a migration is
 one-way and getting it wrong strands a person until they update.
 
+## The panel is two surfaces: the sidebar and a Settings tab (2026-09-28)
+
+The sidebar `coai.panel` shows what is happening now — the open question, **Notifications**, **Active
+rounds** (running rounds and the consultations being had), **Phrases**, **Bugz** — and everything
+configured once moved into a **Settings** editor tab, opened by a `$(gear)` beside the help button
+(`coai.openSettings`): Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor
+keys, Team servers, This side, MCP server. Plan: [../todo/PLAN_settings_page.md](../todo/PLAN_settings_page.md).
+
+```mermaid
+flowchart LR
+  P["PanelProvider<br/>one state, one write queue"] --> S["SurfaceSlot sidebar<br/>WebviewView coai.panel"]
+  P --> T["SurfaceSlot settings<br/>WebviewPanel coaiSettings"]
+  R["PANEL_SECTIONS<br/>id · title · surface · body"] --> P
+  S -->|setting · command · focus| P
+  T -->|setting · command · focus · tab| P
+```
+
+**Nothing crosses a container that did not before**, and that is the point worth stating at this level:
+both webviews are painted by the SAME provider from the same state and write through the same queue, so
+the server sees the same settings file, the same `env` block and the same one-shot spawns whichever
+surface a person edited. The one thing that crossed was WORDING: coai-mcp and coai-server messages that
+sent a person to "the panel's Team servers section" now say **ConnectOtherAIs > Team servers** (and
+> Consultant, > MCP server) — plain ASCII on purpose: a real child's stderr carried a `→` as nothing at
+all, the same console path that already turns an em dash into `-`. That is deliberate phrasing rather than a new name, because the two halves
+ship on their own clocks: a new server paired with an extension that still draws a sidebar section, and
+an old server paired with one that draws a tab, both send the person somewhere that exists. The stale
+*Server* section those messages named has been called *MCP server* since 2026-09-07, and the old
+*Server-section Team-server block* the module-map row above describes was removed the same day.
+
 ## The extension gained two arrows of its own (2026-09-09)
 
 Until the chat, every vendor was reached through `coai-mcp`: the extension configured reviewers and

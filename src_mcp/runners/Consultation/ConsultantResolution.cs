@@ -49,5 +49,5 @@ public static class ConsultantResolution
         $"the vendor '{vendor.Provider}' runs on '{RuntimeResolution.NameOf(vendor)}'"
         + (vendor.BaseUrl.Length > 0 ? " with a custom endpoint" : string.Empty)
         + $", which cannot hold a consultation in this build — consultants run on: {string.Join(", ", Consulting)}. "
-        + "Pick one of those in the Consultant section of the ConnectOtherAIs panel.";
+        + "Pick one of those in ConnectOtherAIs > Consultant.";
 }

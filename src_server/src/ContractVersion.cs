@@ -88,7 +88,7 @@ public static class ContractVersion
             return new Decision(
                 Verdict.TooOld,
                 claimed,
-                $"this server speaks contract {Current} and no longer serves {claimed}; update coai-mcp — the panel's Server section has the button");
+                $"this server speaks contract {Current} and no longer serves {claimed}; update coai-mcp — ConnectOtherAIs > MCP server has the button");
         }
         return new Decision(Verdict.Serve, claimed, "compatible");
     }

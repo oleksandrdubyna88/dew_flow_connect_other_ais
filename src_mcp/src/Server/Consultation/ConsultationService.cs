@@ -279,14 +279,14 @@ public sealed class ConsultationService(
     /// <summary>The sentence for a feature a person switched off — one copy, for the tool and the cadence gate.</summary>
     private const string SwitchedOff =
         "consulting another vendor is switched off in this installation "
-        + "(COAI_CONSULT_ENABLED) — the Consultant section of the ConnectOtherAIs panel turns it "
+        + "(COAI_CONSULT_ENABLED) — ConnectOtherAIs > Consultant turns it "
         + "back on. Nothing was sent anywhere; carry on with the person instead";
 
     /// <summary>The sentence for a routing setting that does not parse — one copy, for the tool and the gate.</summary>
     private const string RoutingUnreadable =
         "the consultant routing (COAI_CONSULTANTS) could not be read, so this installation "
         + "does not know which vendor you chose — and it will not pick one for you. Fix the "
-        + "Consultant section of the ConnectOtherAIs panel. Nothing was sent anywhere";
+        + "settings in ConnectOtherAIs > Consultant. Nothing was sent anywhere";
 
     /// <summary>
     /// Whether a NEW consultation could be had by THIS caller right now, and the sentence the tool would

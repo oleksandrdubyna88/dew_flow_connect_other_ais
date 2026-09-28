@@ -256,7 +256,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
         var (exit, _, stderr, _) = await RunAsync(TimeSpan.FromMinutes(2));
 
         exit.Should().Be(RemoteAsk.NotSignedIn);
-        stderr.Should().Contain("Team servers section");
+        stderr.Should().Contain("ConnectOtherAIs > Team servers");
         lock (_paths)
         {
             _paths.Should().BeEmpty();
