@@ -65,5 +65,5 @@ export function featureNote(vendor: FeatureRow, installedServerVersion: string):
   return featureOnServer(installedServerVersion)
     ? ''
     : `The coai-mcp you have installed (${installedServerVersion}) has no feature review; it runs from ${FEATURE_SINCE} `
-      + '— update it in the MCP server section below.';
+      + '— update it in the MCP server tab.';
 }

@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { panelHtml, staticKey, type PanelState } from '../panelView';
+import { staticKey, type PanelState } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
@@ -150,7 +151,7 @@ function run(controls: Readonly<Record<string, readonly Control[]>>, over: Parti
   readonly html: string;
 } {
   const posted: Posted[] = [];
-  const html = panelHtml(state(over), 'test-nonce');
+  const html = everyPageHtml(state(over), 'test-nonce');
   const matching = (selector: string): readonly Control[] =>
     Object.entries(controls).find(([key]) => selector.includes(key))?.[1] ?? [];
 
@@ -196,7 +197,7 @@ test('choosing a ranking model posts it as a setting', () => {
   // The control is built from what the SECTION really renders, not from a hand-written fixture.
   // Handing the script a control the test invented would pass with no picker on the page at all —
   // which is how the first version of this test passed while the picker was wired to nothing.
-  const markup = panelHtml(state({ bugz: corpus(RUN) }), 'test-nonce');
+  const markup = everyPageHtml(state({ bugz: corpus(RUN) }), 'test-nonce');
   const section = markup.slice(markup.indexOf('data-section="bugz"'));
   const setting = /<select[^>]*\sdata-setting="([^"]+)"/.exec(section.slice(0, section.indexOf('</details>')));
 

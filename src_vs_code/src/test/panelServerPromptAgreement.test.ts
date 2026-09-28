@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import fs from 'node:fs';
 import path from 'node:path';
 import { CONVENTIONS_ID, CONVENTIONS_ROLE_SINCE, PROMPTS, ROLES, selectedFor, universalFor } from '../prompts';
-import { panelHtml, PanelState } from '../panelView';
+import { PanelState } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 import { SNIPPET_VERSION } from '../claudeSnippet';
@@ -134,7 +135,7 @@ test('an unset round shows what the server runs, for every role and every round'
  */
 test('a panel ahead of its server says so, instead of showing a round the server will not run', () => {
   const withServer = (server: PanelState['server']): string =>
-    panelHtml({ ...baseState(), server }, 'n0nce');
+    everyPageHtml({ ...baseState(), server }, 'n0nce');
 
   const behind = withServer({ kind: 'known', version: '0.18.7', remembered: true, updateOffered: true });
   assert.ok(behind.includes('does not'), 'an older server is named');

@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
-import { PANEL_COMMANDS, PanelState, staticKey } from '../panelView';
-import { everyPanelPage } from './panelPages';
+import { PANEL_COMMANDS, PanelState } from '../panelView';
+import { everyPanelPage, paintKeys } from './panelPages';
 
 /**
  * What has to repaint, and what must not.
@@ -52,14 +52,14 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
  */
 test('choosing a spending window does not reload the panel, which no longer draws the chart', () => {
   assert.equal(
-    staticKey(state({ usageWindow: 'month' })),
-    staticKey(state()),
+    paintKeys(state({ usageWindow: 'month' })),
+    paintKeys(state()),
     'a key that moved here would reload the sidebar for a chart it does not show',
   );
 });
 
 test('a newly published server version repaints the Server section', () => {
-  assert.notEqual(staticKey(state({ latestServerVersion: '0.7.0' })), staticKey(state()));
+  assert.notEqual(paintKeys(state({ latestServerVersion: '0.7.0' })), paintKeys(state()));
 });
 
 /**
@@ -85,8 +85,8 @@ test('choosing a different data directory repaints the section that says so', ()
   const elsewhere = { ...here, directory: '/mnt/nas/coai', side: '', env: { COAI_DATA_DIR: '/mnt/nas/coai' } };
 
   assert.notEqual(
-    staticKey(state({ storage: here })),
-    staticKey(state({ storage: elsewhere })),
+    paintKeys(state({ storage: here })),
+    paintKeys(state({ storage: elsewhere })),
     'the directory changed and the panel would paint the same HTML — which a person reads as a '
     + 'button that did nothing',
   );

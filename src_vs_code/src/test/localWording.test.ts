@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { LocalEngine, OLLAMA_PROBE, openAiBaseOf } from '../localEngines';
-import { panelHtml } from '../panelView';
+
 import { DEFAULTS } from '../settingsShape';
 import { LOCAL_PRESET, Vendor, VENDOR_PRESETS } from '../vendors';
+import { everyPageHtml } from './panelPages';
 
 /**
  * A local reviewer has no CLI, no key and no bill, and the panel must not tell it that it has.
@@ -23,7 +24,7 @@ const ENGINE: LocalEngine = {
 };
 
 function html(vendors: readonly Vendor[]): string {
-  return panelHtml({
+  return everyPageHtml({
     settings: DEFAULTS, vendors, codexModels: [], agyModels: [],
     localEngines: Object.fromEntries(vendors.filter((v) => v.runtime === 'local').map((v) => [v.id, ENGINE])),
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },

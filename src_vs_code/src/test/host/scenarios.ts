@@ -263,6 +263,34 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
+    // The gear, pressed for real (todo/PLAN_settings_page.md, S3). Twice without waiting, because "one tab
+    // per window" is a claim about the SECOND press; then closed and pressed again, because a host that
+    // kept a disposed panel would reveal nothing. What is on the tab is the page tests' business — a host
+    // cannot read a webview's DOM — so this asserts only what the host owns: how many tabs, and which.
+    name: 'the gear opens ONE Settings tab, however often it is pressed, and opens it again once closed',
+    run: async (): Promise<void> => {
+      const settingsTabs = (): vscode.Tab[] => vscode.window.tabGroups.all
+        .flatMap((group) => group.tabs)
+        .filter((one) => one.input instanceof vscode.TabInputWebview && one.input.viewType.endsWith('coaiSettings'));
+
+      const first = vscode.commands.executeCommand('coai.openSettings');
+      const second = vscode.commands.executeCommand('coai.openSettings', 'gate');
+      await Promise.all([first, second]);
+      // The tab model follows a created panel asynchronously, so the tab is WAITED for — and then given a
+      // moment in which a second one could land, because "exactly one" is a claim about that moment too.
+      await until(() => settingsTabs().length > 0, 'the gear opened no Settings tab at all');
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      assert.equal(settingsTabs().length, 1, 'a second press opened a second Settings tab');
+      assert.equal(settingsTabs()[0]?.label, 'ConnectOtherAIs — Settings');
+
+      await vscode.window.tabGroups.close(settingsTabs());
+      await until(() => settingsTabs().length === 0, 'the Settings tab did not close');
+      await vscode.commands.executeCommand('coai.openSettings', { not: 'a tab' });
+      await until(() => settingsTabs().length === 1, 'after closing, the gear opened nothing: the host kept a disposed panel');
+      await vscode.window.tabGroups.close(settingsTabs());
+    },
+  },
+  {
     // The guard, wired. `answerCopy.test.ts` proves it refuses; this proves the refusal is what the
     // real press reaches. A hook that called the decision and then copied anyway would pass every
     // test in that file.

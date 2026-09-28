@@ -207,6 +207,12 @@
         }
       },
       {
+        "command": "coai.openSettings",
+        "title": "Settings",
+        "category": "ConnectOtherAIs",
+        "icon": "$(gear)"
+      },
+      {
         "command": "coai.installServer",
         "title": "Install the MCP server…",
         "category": "ConnectOtherAIs"
@@ -369,7 +375,7 @@
           "type": "array",
           "default": [],
           "scope": "application",
-          "markdownDescription": "Team servers — one company subscription per vendor, running the CLIs on one machine. Add them in the **ConnectOtherAIs** panel; signing in uses your work Microsoft account and the token is kept in a file only you can read, never here.",
+          "markdownDescription": "Team servers — one company subscription per vendor, running the CLIs on one machine. Add them in **ConnectOtherAIs: Settings** → *Team servers*; signing in uses your work Microsoft account and the token is kept in a file only you can read, never here.",
           "items": {
             "type": "object",
             "required": [
@@ -420,7 +426,7 @@
               "pricePerMillionOut": 0
             }
           ],
-          "markdownDescription": "The reviewers. Edit them in the **ConnectOtherAIs** panel — add a vendor, remove one, or point it at another model. `runtime` is which CLI shape it uses (`codex` or `gemini`); `baseUrl` makes it an OpenAI-compatible endpoint driven through the Codex CLI.",
+          "markdownDescription": "The reviewers. Edit them in **ConnectOtherAIs: Settings** → *Reviewers* — add a vendor, remove one, or point it at another model. `runtime` is which CLI shape it uses (`codex` or `gemini`); `baseUrl` makes it an OpenAI-compatible endpoint driven through the Codex CLI.",
           "items": {
             "type": "object",
             "required": [
@@ -488,7 +494,7 @@
             "DocumentSummary": 1,
             "FeatureReview": 2
           },
-          "markdownDescription": "How many rounds each reviewer ROLE gets. Architecture may be worth two passes with different lenses while performance is worth one; a shared budget forces the cheapest role to pay for the most expensive. Edit it in the **ConnectOtherAIs** panel."
+          "markdownDescription": "How many rounds each reviewer ROLE gets. Architecture may be worth two passes with different lenses while performance is worth one; a shared budget forces the cheapest role to pay for the most expensive. Edit it in **ConnectOtherAIs: Settings** → *Prompts per round*."
         },
         "coai.roleEnabled": {
           "type": "object",
@@ -632,7 +638,7 @@
         "coai.commandModels": {
           "type": "object",
           "default": {},
-          "markdownDescription": "The two models the split order names, per kind of calling assistant — `claude`, `codex`, `gemini`, `other` — as `{ \"strongest\": \"…\", \"implementation\": \"…\" }`. A blank field keeps the shipped name: Fable and Opus for Claude Code, and for the others no model at all (the order then says \"the strongest model your client offers\"). Edited in the panel's *The gate* section.",
+          "markdownDescription": "The two models the split order names, per kind of calling assistant — `claude`, `codex`, `gemini`, `other` — as `{ \"strongest\": \"…\", \"implementation\": \"…\" }`. A blank field keeps the shipped name: Fable and Opus for Claude Code, and for the others no model at all (the order then says \"the strongest model your client offers\"). Edited in **ConnectOtherAIs: Settings** → *The gate*.",
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -769,7 +775,7 @@
         "coai.roles": {
           "type": "array",
           "default": [],
-          "markdownDescription": "The review roles you have added or edited, as the server reads them. Edit these in the panel (*Prompts per round* → **Edit roles…**) rather than here: the page generates the ids, keeps them unique, and writes each prompt’s TEXT to a file beside your other coai data. A role you add needs `coai-mcp` **0.19.0** or later — an older one never reads this key, so the role would show in the panel and run in no round.",
+          "markdownDescription": "The review roles you have added or edited, as the server reads them. Edit these in **ConnectOtherAIs: Settings** (*Prompts per round* → **Edit roles…**) rather than here: the page generates the ids, keeps them unique, and writes each prompt’s TEXT to a file beside your other coai data. A role you add needs `coai-mcp` **0.19.0** or later — an older one never reads this key, so the role would show in the panel and run in no round.",
           "items": {
             "type": "object",
             "required": [
@@ -782,7 +788,7 @@
               },
               "name": {
                 "type": "string",
-                "description": "What the panel shows. Any language."
+                "description": "What ConnectOtherAIs shows for this role. Any language."
               },
               "stage": {
                 "type": "string",
@@ -830,7 +836,7 @@
         "coai.commands": {
           "type": "array",
           "default": [],
-          "markdownDescription": "The gate commands you have added, as the server reads them. Edit these in the panel (*The gate* → **Edit commands…**) rather than here: the page makes the ids and writes each command's TEXT to a file beside your other coai data. A command is handed to the calling AI after the built-in orders, in the rounds its stage names. Needs `coai-mcp` **0.33.0** or later.",
+          "markdownDescription": "The gate commands you have added, as the server reads them. Edit these in **ConnectOtherAIs: Settings** (*The gate* → **Edit commands…**) rather than here: the page makes the ids and writes each command's TEXT to a file beside your other coai data. A command is handed to the calling AI after the built-in orders, in the rounds its stage names. Needs `coai-mcp` **0.33.0** or later.",
           "items": {
             "type": "object",
             "required": [
@@ -878,7 +884,7 @@
               "model": ""
             }
           },
-          "markdownDescription": "Who a stuck AI asks, by the kind of AI that is stuck. Edit it in the **Consultant** section of the panel. The shipped pairs never send a caller to itself — a model cannot see its own blind spot — but the same vendor is allowed as a deliberate choice, which is how you put a stronger model of your own assistant behind a weaker one.",
+          "markdownDescription": "Who a stuck AI asks, by the kind of AI that is stuck. Edit it in **ConnectOtherAIs: Settings** → *Consultant*. The shipped pairs never send a caller to itself — a model cannot see its own blind spot — but the same vendor is allowed as a deliberate choice, which is how you put a stronger model of your own assistant behind a weaker one.",
           "additionalProperties": {
             "type": "object",
             "properties": {
@@ -999,6 +1005,11 @@
           "group": "navigation@0"
         },
         {
+          "command": "coai.openSettings",
+          "when": "view == coai.panel",
+          "group": "navigation@1"
+        },
+        {
           "command": "coai.answerQuestion",
           "when": "view == coai.panel && !coai.hasQuestions",
           "group": "navigation@0"
@@ -1011,7 +1022,7 @@
         {
           "command": "coai.showRounds",
           "when": "view == coai.panel",
-          "group": "navigation@1"
+          "group": "navigation@2"
         },
         {
           "command": "coai.installServer",

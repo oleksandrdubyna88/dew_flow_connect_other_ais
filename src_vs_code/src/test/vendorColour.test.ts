@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { UNNAMED_VENDOR_COLOUR, VENDOR_COLOUR_IDS, VENDOR_PALETTE, vendorPalette } from '../vendorColour';
-import { panelHtml, PanelState } from '../panelView';
+import { PanelState } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { RoundRecord, SessionFile } from '../rounds';
 import { DEFAULTS } from '../settingsShape';
 import { SNIPPET_VERSION } from '../claudeSnippet';
@@ -262,7 +263,7 @@ function state(vendors: readonly Vendor[] = []): PanelState {
 }
 
 test('the vendor word is coloured and the rest of the row is not', () => {
-  const html = panelHtml(state(), 'n0nce', Date.now());
+  const html = everyPageHtml(state(), 'n0nce', Date.now());
 
   assert.ok(
     html.includes(`<span class="who" style="color:${vendorPalette([])('codex')}">codex</span>/PlanCritique`),
@@ -273,7 +274,7 @@ test('the vendor word is coloured and the rest of the row is not', () => {
 test('the round card colours a reviewer as the configured list decided', () => {
   // The panel's rounds and the panel's cards read ONE list, so the running round agrees with the
   // reviewer card above it rather than with a list it inferred from the session file.
-  const html = panelHtml(state(REPORTED.map((id) => vendor(id))), 'n0nce', Date.now());
+  const html = everyPageHtml(state(REPORTED.map((id) => vendor(id))), 'n0nce', Date.now());
   const colour = vendorPalette(REPORTED);
 
   assert.ok(
@@ -289,7 +290,7 @@ test('the round card colours a reviewer as the configured list decided', () => {
 test('a vendor name from a session file is still escaped', () => {
   // The name comes out of JSON somebody else wrote. A colour is no reason to stop escaping it, and
   // a name carrying a quote must not be able to close the style attribute it sits beside.
-  const html = panelHtml(state(REPORTED.map((id) => vendor(id))), 'n0nce', Date.now());
+  const html = everyPageHtml(state(REPORTED.map((id) => vendor(id))), 'n0nce', Date.now());
 
   assert.ok(!html.includes('<script>'), 'a tag-shaped vendor name never reaches the page as markup');
   assert.ok(!html.includes('<img src=x'), 'nor does an attribute-breaking one');

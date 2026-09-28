@@ -200,7 +200,7 @@ export function commandModelsSkewNote(installedServerVersion: string, models: Co
 
   return `The coai-mcp you have installed (${installedServerVersion}) does not read these models: it names Fable `
     + `and Opus to every caller, whatever the pickers say. Update it to ${COMMAND_MODELS_SINCE} or later — the MCP `
-    + 'server section below.';
+    + 'server tab.';
 }
 
 function samePair(one: ModelPair, other: ModelPair): boolean {

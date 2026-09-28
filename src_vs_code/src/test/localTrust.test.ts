@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { isLoopback, LocalEngine, OLLAMA_PROBE, openAiBaseOf, remoteWarning } from '../localEngines';
-import { panelHtml } from '../panelView';
+
 import { DEFAULTS } from '../settingsShape';
 import { LOCAL_PRESET, Vendor } from '../vendors';
+import { everyPageHtml } from './panelPages';
 
 /**
  * An endpoint somebody typed can be anywhere, and a review prompt is their source code.
@@ -26,7 +27,7 @@ const LOCAL: LocalEngine = {
 };
 
 function html(vendor: Vendor): string {
-  return panelHtml({
+  return everyPageHtml({
     settings: DEFAULTS, vendors: [vendor], codexModels: [], agyModels: [], localEngines: { [vendor.id]: LOCAL },
     server: { kind: 'absent', version: '', remembered: false, updateOffered: false },
     side: '',

@@ -80,7 +80,7 @@ export function apiRuntimeSkewNote(installedServerVersion: string, vendors: read
 
   return `The coai-mcp you have installed (${installedServerVersion}) does not know the api runtime: it would run `
     + `${names} through the Codex CLI against ${its} endpoint. ${kept} kept out of the settings file until you `
-    + `update it to ${API_RUNTIME_SINCE} or later — the MCP server section below.`;
+    + `update it to ${API_RUNTIME_SINCE} or later — the MCP server tab.`;
 }
 
 /** The two words that change with the count, so the sentence above reads as one sentence. */

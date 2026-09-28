@@ -1,7 +1,8 @@
 import * as assert from 'node:assert';
 import { test } from 'node:test';
 import { DEFAULTS } from '../settingsShape';
-import { PanelState, panelHtml } from '../panelView';
+import { PanelState } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import {
   documentSetting, pinnedDocument, reviewsDocuments, Vendor, vendorsEnv, vendorsFrom,
 } from '../vendors';
@@ -122,7 +123,7 @@ test('the switch reaches coai-mcp whenever it was said, in either direction', ()
 });
 
 function page(vendors: readonly Vendor[]): string {
-  return panelHtml({
+  return everyPageHtml({
     settings: DEFAULTS,
     vendors,
     codexModels: [], agyModels: [],

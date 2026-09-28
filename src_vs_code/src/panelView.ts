@@ -12,7 +12,8 @@ import { ChatDoorRecord } from './chatDoors';
 import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendRows';
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
-import { liveRegion, type SectionSpec, sidebarBody, sidebarKey } from './panelSurface';
+import { liveRegion, type SectionSpec, sectionsOn, settingsBody, sidebarBody, sidebarKey } from './panelSurface';
+import { SETTINGS_CSS, settingsScript } from './settingsPage';
 import { executableFor } from './vendorTerminal';
 import { LOOKING, LOOKING_CSS } from './lookingSpinner';
 import type { Phrase } from './phrases';
@@ -382,25 +383,30 @@ function focusLiteral(focus: PanelFocus | undefined): string {
  * proves which sections a person has open.</p>
  */
 export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
-  { id: 'reviewers', title: 'Reviewers', surface: 'sidebar', body: (state) => reviewersBody(state) },
-  { id: 'chat', title: 'Chat other AIs', surface: 'sidebar', body: (state) => chatBody(state.chat ?? DEFAULT_CHAT, state) },
+  // The SIDEBAR: what is happening now, and the two tools a person reaches for while it happens — in the
+  // order the operator named them (`todo/PLAN_settings_page.md`, D1).
+  { id: 'notifications', title: 'Notifications', surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
+  // A consultation being had is present tense exactly as a round is, so its cards stay here, under the
+  // rounds, when the Consultant's settings move to the Settings tab (D2).
+  { id: 'rounds', title: 'Active rounds', surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) + liveRegion('consultations', live) },
   { id: 'phrases', title: 'Phrases', surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },
+  { id: 'bugz', title: 'Bugz', surface: 'sidebar', body: (state) => bugzSection(state) },
+  // The SETTINGS tab: what is configured once, one tab each, in the order the sidebar used to hold them.
+  { id: 'reviewers', title: 'Reviewers', surface: 'settings', body: (state) => reviewersBody(state) },
+  { id: 'chat', title: 'Chat other AIs', surface: 'settings', body: (state) => chatBody(state.chat ?? DEFAULT_CHAT, state) },
   // After the chat, because the two are one idea seen from opposite ends: there a PERSON asks
   // another vendor about a passage, here an AI asks one about the tree it is stuck in.
-  { id: 'consultant', title: 'Consultant', surface: 'sidebar', body: (state, live) => liveRegion('consultations', live) + consultantSection(state) },
-  { id: 'bugz', title: 'Bugz', surface: 'sidebar', body: (state) => bugzSection(state) },
-  { id: 'prompts', title: 'Prompts per round', surface: 'sidebar', body: (state) => promptsBody(state) },
-  { id: 'gate', title: 'The gate', surface: 'sidebar', body: (state) => gateBody(state) },
-  { id: 'limits', title: 'Limits', surface: 'sidebar', body: (state) => limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length) },
-  { id: 'keys', title: 'Vendor keys', surface: 'sidebar', body: (state) => keysBody(state) },
-  { id: 'teamServers', title: 'Team servers', surface: 'sidebar', body: (state) => teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '') },
-  { id: 'side', title: 'This side', surface: 'sidebar', body: (state) => sideBody(state) },
-  { id: 'server', title: 'MCP server', surface: 'sidebar', body: (state) => serverBody(state) },
-  { id: 'rounds', title: 'Active rounds', surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
-  { id: 'notifications', title: 'Notifications', surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
+  { id: 'consultant', title: 'Consultant', surface: 'settings', body: (state) => consultantSection(state) },
+  { id: 'prompts', title: 'Prompts per round', surface: 'settings', body: (state) => promptsBody(state) },
+  { id: 'gate', title: 'The gate', surface: 'settings', body: (state) => gateBody(state) },
+  { id: 'limits', title: 'Limits', surface: 'settings', body: (state) => limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length) },
+  { id: 'keys', title: 'Vendor keys', surface: 'settings', body: (state) => keysBody(state) },
+  { id: 'teamServers', title: 'Team servers', surface: 'settings', body: (state) => teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '') },
+  { id: 'side', title: 'This side', surface: 'settings', body: (state) => sideBody(state) },
+  { id: 'server', title: 'MCP server', surface: 'settings', body: (state) => serverBody(state) },
 ];
 
-/** The Consultant section below its live region: the skew notes, who each caller asks, and when. */
+/** The Consultant tab: the skew notes, who each caller asks, and when. Its running consultations are in Active rounds. */
 function consultantSection(state: PanelState): string {
   return consultantSkew(state)
     + vaultKeySplit(state)
@@ -452,15 +458,32 @@ function bugzSection(state: PanelState): string {
 
 export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date.now()): string {
   const open = state.openSections.length === 0 ? OPEN_BY_DEFAULT : state.openSections;
-  const body = sidebarBody(PANEL_SECTIONS, state, open, liveRegions(state, nowMs));
 
+  return pageDocument(sidebarBody(PANEL_SECTIONS, state, open, liveRegions(state, nowMs)), nonce, state.focus, NO_EXTRA);
+}
+
+/** What a page adds to the shared document: its own rules and its own script, after the shared ones. */
+export interface PageExtra {
+  readonly css: string;
+  readonly script: string;
+}
+
+const NO_EXTRA: PageExtra = { css: '', script: '' };
+
+/**
+ * The document every panel page is: one CSP, one stylesheet, one script — the sidebar's, and the
+ * Settings tab's, which draws the same sections with the same controls and therefore needs exactly the
+ * same `data-setting` / `data-command` / focus wiring (`todo/PLAN_settings_page.md`). A page adds to it
+ * through {@link PageExtra}; it never gets a copy of it.
+ */
+export function pageDocument(body: string, nonce: string, focus: PanelFocus | undefined, extra: PageExtra): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta http-equiv="Content-Security-Policy"
       content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
-<style>${CSS}</style>
+<style>${CSS}${extra.css}</style>
 </head>
 <body>
 ${body}
@@ -599,7 +622,7 @@ ${body}
   // names it, and the caret comes back to the end of what is in it — the end rather than where it
   // was, because a caret position per keystroke is a message per keystroke, and this happens only
   // after half a minute of focus that never moved.
-  const focusOn = ${focusLiteral(state.focus)};
+  const focusOn = ${focusLiteral(focus)};
   if (focusOn !== null) {
     for (const back of document.querySelectorAll('[data-setting]')) {
       if (idOf(back) !== focusOn.id) {
@@ -710,6 +733,7 @@ ${body}
       bindCommands(notifications);
     }
   });
+${extra.script}
 </script>
 </body>
 </html>`;
@@ -1648,7 +1672,7 @@ function serverBody(state: PanelState): string {
   // for one thing describes that thing.
   return `${installed}${stale}${probe}
 ${published}
-<div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu is pasted once, when you first set it up.</div>
+<div class="hint">Changes here are saved for the server straight away; it reads them when your MCP client next starts it. The config block in the ⋯ menu of the ConnectOtherAIs sidebar is pasted once, when you first set it up.</div>
 <button class="link" data-command="checkForUpdate">Check again</button>
 ${storageBlock(state.storage)}`;
 }
@@ -1776,7 +1800,7 @@ function pointAServerHere(storage: DataLocation): string {
     return '<div class="hint">This is the default directory, so a server needs no configuration to find it — any client entry without a <code>COAI_DATA_DIR</code> reads the same place.</div>';
   }
 
-  return `<div class="hint">To point a server here, add these to the <code>env</code> of its entry — the rest of the block, with the path to the binary, is what <b>Install the MCP server…</b> in the ⋯ menu puts on your clipboard:</div>
+  return `<div class="hint">To point a server here, add these to the <code>env</code> of its entry — the rest of the block, with the path to the binary, is what <b>Install the MCP server…</b> in the ⋯ menu of the ConnectOtherAIs sidebar puts on your clipboard:</div>
 <pre class="paste">${escapeHtml(JSON.stringify({ env: storage.env }, null, 2))}</pre>
 <div class="hint">It goes in ${escapeHtml(clientTargetsLine(CLIENT_TARGETS))}</div>`;
 }
@@ -1941,7 +1965,7 @@ function conventionsSkew(server: ServerStatus): string {
   return `  <div class="stale">The coai-mcp you have installed (${escapeHtml(server.version)}) does not `
     + `know <b>Conventions</b> is a role, so it will not run it — your code rounds are three code `
     + `roles, not four. Update it to ${escapeHtml(CONVENTIONS_ROLE_SINCE)} or later — the `
-    + `<b>MCP server</b> section below.</div>`;
+    + `<b>MCP server</b> tab.</div>`;
 }
 
 /**
@@ -1962,7 +1986,7 @@ function roleSwitchSkew(server: ServerStatus, settings: CoaiSettings): string {
   return `  <div class="stale">The coai-mcp you have installed (${escapeHtml(server.version)}) does not `
     + `know a role can be switched off, so it will run ${escapeHtml(off.join(', '))} anyway — `
     + `whatever these boxes say. Update it to ${escapeHtml(ROLE_SWITCH_SINCE)} or later — the `
-    + `<b>MCP server</b> section below.</div>`;
+    + `<b>MCP server</b> tab.</div>`;
 }
 
 /**
@@ -1983,8 +2007,7 @@ function customRolesSkew(server: ServerStatus, settings: CoaiSettings): string {
 
   return `  <div class="stale">The coai-mcp you have installed (${escapeHtml(server.version)}) does not `
     + `read roles you added, so ${escapeHtml(own.join(', '))} will not run — whatever these boxes `
-    + `say. Update it to ${escapeHtml(CUSTOM_ROLES_SINCE)} or later — the <b>MCP server</b> section `
-    + `below.</div>`;
+    + `say. Update it to ${escapeHtml(CUSTOM_ROLES_SINCE)} or later — the <b>MCP server</b> tab.</div>`;
 }
 
 /**
@@ -2980,14 +3003,6 @@ const CSS = `
   .role.off .name { opacity: .7; }
 
 ${ROLE_TONE_CSS}
-  .tabs { display: flex; gap: 4px; margin: 0 0 8px; }
-  .tab { flex: 1; padding: 3px 6px; font: inherit; color: var(--vscode-foreground);
-         background: var(--vscode-editorWidget-background); border: 1px solid var(--vscode-widget-border);
-         border-radius: 3px; cursor: pointer; }
-  .tab:hover { background: var(--vscode-toolbar-hoverBackground); }
-  .tab.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground);
-            border-color: var(--vscode-button-background); }
-  .tab.on:hover { background: var(--vscode-button-hoverBackground); }
   /* The spending card. It was called .usage, which the rounds section had already claimed for its
      own line - so opacity .7 from a rule written for something else dimmed every card, and the
      .hint inside it to .7 x .65. Nothing was broken; the whole section just read as disabled.
@@ -3148,4 +3163,24 @@ export function isPanelCommand(value: string | undefined): value is PanelCommand
  */
 export function staticKey(state: PanelState): string {
   return sidebarKey(PANEL_SECTIONS, state);
+}
+
+/** The sections the Settings tab draws, in order — its tabs. */
+export function settingsSections(): readonly SectionSpec<PanelState>[] {
+  return sectionsOn(PANEL_SECTIONS, 'settings');
+}
+
+/**
+ * The Settings tab: the sections that are configured once, one tab each, with the SAME builders, the same
+ * controls and the same script as the sidebar that used to hold them (`todo/PLAN_settings_page.md`).
+ *
+ * @param heldTab the tab the host holds; it reaches the page's script, never the markup (D6)
+ */
+export function settingsHtml(state: PanelState, nonce: string, heldTab: string): string {
+  return pageDocument(settingsBody(settingsSections(), state), nonce, state.focus, { css: SETTINGS_CSS, script: settingsScript(heldTab) });
+}
+
+/** What the Settings tab paints on — its body as drawn, which holds no live region and no held tab. */
+export function settingsKey(state: PanelState): string {
+  return settingsBody(settingsSections(), state);
 }

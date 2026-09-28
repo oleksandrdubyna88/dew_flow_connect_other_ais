@@ -54,7 +54,7 @@ function withheld(health: ProviderHealth | undefined, serverVersion: string): st
       + 'it has not reported this row (a reviewer that is switched off is not sent to it).'
     : `The coai-mcp you have installed${installed} does not report what this model accepts, so its thinking, effort `
       + `and review time limit cannot be set here. They arrive with coai-mcp ${API_SETTINGS_SINCE} — update it in the `
-      + 'MCP server section below.';
+      + 'MCP server tab.';
 
   return `\n  <div class="field api-settings"><div class="hint">${escapeHtml(sentence)}</div></div>`;
 }

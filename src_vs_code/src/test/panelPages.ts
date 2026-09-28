@@ -1,4 +1,4 @@
-import { panelHtml, type PanelState } from '../panelView';
+import { panelHtml, type PanelState, settingsHtml, settingsKey, staticKey } from '../panelView';
 import { SURFACE_IDS, type SurfaceId } from '../panelSurface';
 
 /**
@@ -9,11 +9,44 @@ import { SURFACE_IDS, type SurfaceId } from '../panelSurface';
  * derived from `SURFACE_IDS`, and {@link pageOf} switches over the surface exhaustively — a surface
  * added without a page here is a compile error, not a page nobody scans.</p>
  */
-export function pageOf(surface: SurfaceId, state: PanelState): string {
+export function pageOf(surface: SurfaceId, state: PanelState, nonce = 'n0nce', nowMs?: number): string {
   switch (surface) {
     case 'sidebar':
-      return panelHtml(state, 'n0nce');
+      return panelHtml(state, nonce, nowMs);
+    case 'settings':
+      return settingsHtml(state, nonce, '');
   }
+}
+
+/**
+ * Every page, joined — what a test reads when it makes a claim about the panel's markup as a whole.
+ *
+ * <p>A strict SUPERSET of what `panelHtml` returned while every section was in the sidebar, which is why
+ * the tests that used it were moved onto this when ten sections moved to the Settings tab: a positive
+ * assertion still finds what it looks for, and a negative one still scans everything that is drawn, so
+ * neither can go vacuous for the section that left (`todo/PLAN_settings_page.md`, M3).</p>
+ */
+export function everyPageHtml(state: PanelState, nonce = 'n0nce', nowMs?: number): string {
+  return SURFACE_IDS.map((surface) => pageOf(surface, state, nonce, nowMs)).join('\n');
+}
+
+/** One surface's paint key, switched exhaustively like {@link pageOf}. */
+export function keyOf(surface: SurfaceId, state: PanelState): string {
+  switch (surface) {
+    case 'sidebar':
+      return staticKey(state);
+    case 'settings':
+      return settingsKey(state);
+  }
+}
+
+/**
+ * Every surface's paint key at once: it moves when ANY page would draw something different, and stays
+ * put only when none would — which is the claim a key test makes now that a probe's answer can be drawn
+ * on the Settings tab rather than the sidebar.
+ */
+export function paintKeys(state: PanelState): string {
+  return SURFACE_IDS.map((surface) => `${surface}:${keyOf(surface, state)}`).join(' | ');
 }
 
 export function everyPanelPage(state: PanelState): readonly { readonly surface: SurfaceId; readonly html: string }[] {

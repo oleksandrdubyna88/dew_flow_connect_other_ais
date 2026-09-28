@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { UsageEntry } from '../usage';
 import { roundsLogHtml, usageTabHtml } from '../roundsLog';
-import { escapeHtml, PANEL_SECTIONS, panelHtml, PanelState } from '../panelView';
+import { escapeHtml, PANEL_SECTIONS, PanelState } from '../panelView';
+import { everyPageHtml, sectionHtml } from './panelPages';
 import { DEFAULTS, settingsFrom } from '../settingsShape';
 import { CONSULTANT_DEFINITION_SINCE } from '../consultSettings';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation } from '../dataDir';
@@ -42,7 +43,6 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   ...over,
 });
 
-
 /**
  * The section is named for one thing and describes that thing.
  *
@@ -54,29 +54,24 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
 test('the MCP server section is titled for coai-mcp and describes nothing else', () => {
   // TWO servers, because a reintroduction that only rendered the second would pass a
   // single-server fixture while every person with two saw it.
-  const html = panelHtml(
-    state({
-      teamServers: [
-        { server: { id: 'rs', name: 'RemSoftDev', url: 'https://coai.remsoft.dev' }, email: 'a@remsoft.dev', problem: '', stale: false },
-        { server: { id: 'st', name: 'Staging', url: 'https://coai.staging.dev' }, email: 'b@remsoft.dev', problem: '', stale: false },
-      ],
-      latestServerVersion: '0.18.7',
-    }),
-    'n0nce',
-  );
+  const fixture = state({
+    teamServers: [
+      { server: { id: 'rs', name: 'RemSoftDev', url: 'https://coai.remsoft.dev' }, email: 'a@remsoft.dev', problem: '', stale: false },
+      { server: { id: 'st', name: 'Staging', url: 'https://coai.staging.dev' }, email: 'b@remsoft.dev', problem: '', stale: false },
+    ],
+    latestServerVersion: '0.18.7',
+  });
+  const html = everyPageHtml(fixture, 'n0nce');
 
-  assert.ok(html.includes('<summary>MCP server</summary>'), 'the section says what it is about');
-  assert.ok(!html.includes('<summary>Server</summary>'), 'and no longer says it vaguely');
+  // A tab of the Settings page since 2026-09-28 (`todo/PLAN_settings_page.md`), named as the section was.
+  assert.match(html, /data-tab="server"[^>]*>MCP server<\/button>/, 'the section says what it is about');
+  assert.ok(!html.includes('>Server</button>') && !html.includes('<summary>Server</summary>'), 'and no longer says it vaguely');
 
   // The SECTION's own markup, not the whole panel: the address and the account are supposed to be
-  // elsewhere in this document — under Team servers, which is the point. `rounds` is the section
-  // after this one; the bounds are asserted because a slice from a `-1` reads to the end of the
-  // document and would pass by accident. (It did: this test bounded on a `usage` section that
-  // `panelHtml` does not render, and was green only because Team servers happens to come first.)
-  const from = html.indexOf('data-section="server"');
-  const to = html.indexOf('data-section="rounds"');
-  assert.ok(from > 0 && to > from, 'the MCP server section is bounded by the one after it');
-  const mcp = html.slice(from, to);
+  // elsewhere — under Team servers, which is the point. `sectionHtml` throws for a section no page
+  // draws, where a slice from a `-1` would read to the end of the document and pass by accident. (It
+  // did once: this test bounded on a `usage` section that was no longer rendered.)
+  const mcp = sectionHtml(fixture, 'server');
 
   // Not just the `ts-here-` id prefix the old block used: a reintroduction under a different id or
   // class would slip past that, and what must not come back is the CONTENT.
@@ -94,7 +89,7 @@ test('the MCP server section is titled for coai-mcp and describes nothing else',
 test('each role shows its own rounds, its own threshold and its own prompts', () => {
   // The Gate and the Prompts sections described one thing between them: how many times this role
   // asks, how much it may still find, and what it asks each time. One box per role now.
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
 
   for (const role of ['PlanCritique', 'Architecture', 'SecurityReliability', 'UxDxPerformance']) {
     // `data-role`, not `data-vendor`. These two assertions read `data-vendor` until 2026-09-01 and
@@ -113,7 +108,7 @@ test('each role shows its own rounds, its own threshold and its own prompts', ()
 });
 
 test('both deal switches are offered, and off is the default', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
 
   assert.ok(html.includes('data-setting="dealPlanLenses"'));
   assert.ok(html.includes('data-setting="dealCodeLenses"'));
@@ -125,7 +120,7 @@ test('the code stage offers Fast and Full, and Fast is the lit one', () => {
   // model find MORE useful defects — 4→8, 6→10, 6→7 — at a half to a third of the input tokens,
   // and three real defects appeared that no run with a checkout had reached. The switch exists so
   // a review that genuinely needs the surrounding code can still ask for it.
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
 
   assert.ok(html.includes('data-setting="codeWorkspace" value="none"'), 'no Fast position');
   assert.ok(html.includes('data-setting="codeWorkspace" value="worktree"'), 'no Full position');
@@ -134,7 +129,7 @@ test('the code stage offers Fast and Full, and Fast is the lit one', () => {
 });
 
 test('choosing Full lights the right half, and only that half', () => {
-  const html = panelHtml(state({ settings: { ...DEFAULTS, codeWorkspace: 'worktree' } }), 'n0nce');
+  const html = everyPageHtml(state({ settings: { ...DEFAULTS, codeWorkspace: 'worktree' } }), 'n0nce');
 
   assert.match(html, /class="on"[^>]*><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="worktree"/);
   assert.match(html, /class=""[^>]*><input type="radio" name="codeWorkspace" data-setting="codeWorkspace" value="none"/,
@@ -144,14 +139,14 @@ test('choosing Full lights the right half, and only that half', () => {
 test('the questions are English, so there is no language to choose', () => {
   // The escalation is three buttons; there is no prose left to translate, and a subprocess per
   // escalation that can time out or answer in the wrong language earned nothing.
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
 
   assert.ok(!html.includes('data-setting="reviewers"'));
   assert.ok(!html.includes('data-setting="translator.provider"'));
 });
 
 test('each reviewer gets a switch, a model field and a way out', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
   for (const id of ['codex', 'antigravity']) {
     assert.ok(html.includes(`data-setting="enabled" data-vendor="${id}"`), `${id} can be switched off`);
     assert.ok(html.includes(`data-setting="model" data-vendor="${id}"`), `${id} takes a model`);
@@ -161,7 +156,7 @@ test('each reviewer gets a switch, a model field and a way out', () => {
 });
 
 test('a disabled reviewer is shown unchecked', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({ vendors: [{ id: 'codex', runtime: 'codex', model: '', enabled: false, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n0nce',
   );
@@ -171,7 +166,7 @@ test('a disabled reviewer is shown unchecked', () => {
 });
 
 test("codex offers the CLI's own cached models; antigravity offers what agy lists", () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
   assert.ok(html.includes('value="gpt-5.6-sol"'), 'discovered from ~/.codex/models_cache.json');
   assert.ok(html.includes('models the Codex CLI has cached'));
   assert.ok(html.includes('value="gemini-3.7-flash-high"'));
@@ -184,14 +179,14 @@ test("codex offers the CLI's own cached models; antigravity offers what agy list
 });
 
 test('the picker is a SELECT with every model visible, never a filtering datalist', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
   assert.ok(!html.includes('<datalist'), 'a datalist filters by the current value and reads as empty');
   assert.ok(html.includes('another model…'), 'the list is a convenience, never a limit');
   assert.ok(html.includes("the CLI's default"), 'and empty is a first-class choice');
 });
 
 test('a model the person typed stays in its own list', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({ vendors: [{ id: 'codex', runtime: 'codex', model: 'something-new', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n0nce',
   );
@@ -200,36 +195,36 @@ test('a model the person typed stays in its own list', () => {
 });
 
 test('a custom endpoint is editable; a first-party vendor shows no URL field', () => {
-  const custom = panelHtml(
+  const custom = everyPageHtml(
     state({ vendors: [{ id: 'mistral', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: 'https://api.mistral.ai/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n0nce',
   );
   assert.ok(custom.includes('data-setting="baseUrl" data-vendor="mistral"'));
-  assert.ok(!panelHtml(state(), 'n0nce').includes('data-setting="baseUrl"'));
+  assert.ok(!everyPageHtml(state(), 'n0nce').includes('data-setting="baseUrl"'));
 });
 
 test('nothing can force the view to scroll sideways', () => {
-  const css = panelHtml(state(), 'n0nce').split('</style>')[0] ?? '';
+  const css = everyPageHtml(state(), 'n0nce').split('</style>')[0] ?? '';
   assert.ok(css.includes('box-sizing: border-box'), 'a 100% field plus padding is wider than its parent');
   assert.ok(css.includes('overflow-x: hidden'));
   assert.ok(!css.includes('white-space: nowrap;\n    width'), 'no fixed widths that a narrow sidebar cannot honour');
 });
 
 test('the server actions moved to the title menu, and the panel says so', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
   assert.ok(!html.includes('data-command="install"'), 'commands belong in the view menu, not as buttons');
   assert.ok(html.includes('⋯ menu'), 'and the panel points at where they went');
 });
 
 test('the script runs only under the given nonce', () => {
-  const html = panelHtml(state(), 'abc123');
+  const html = everyPageHtml(state(), 'abc123');
   assert.ok(html.includes("script-src 'nonce-abc123'"));
   assert.ok(html.includes('<script nonce="abc123">'));
   assert.ok(!html.includes('<script>'), 'a bare script tag would be blocked, and hides the mistake');
 });
 
 test('colours come from the theme, never from us', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
   assert.ok(html.includes('var(--vscode-foreground)'));
   assert.ok(html.includes('var(--vscode-button-background)'));
   // A hex is allowed in exactly one place: the fallback of a theme token, `var(--x, #hex)`. The
@@ -242,8 +237,8 @@ test('colours come from the theme, never from us', () => {
 });
 
 test('the panel says whether the server is installed, and which version', () => {
-  assert.ok(panelHtml(state(), 'n').includes('not installed yet'));
-  const installed = panelHtml(state({ server: { kind: 'known', version: '0.4.0', remembered: false, updateOffered: false } }), 'n');
+  assert.ok(everyPageHtml(state(), 'n').includes('not installed yet'));
+  const installed = everyPageHtml(state({ server: { kind: 'known', version: '0.4.0', remembered: false, updateOffered: false } }), 'n');
   assert.ok(installed.includes('coai-mcp 0.4.0 is installed'));
 });
 
@@ -252,7 +247,7 @@ test('every setting appears once, so two controls cannot disagree about it', () 
   // different — one filled, one hollow. That is not a rendering artefact but what a browser does
   // with two radio groups sharing a `name`: it treats them as ONE group, so selecting in the first
   // clears the second. The blocks were byte-identical copy-paste.
-  const html = panelHtml(state(), 'n');
+  const html = everyPageHtml(state(), 'n');
   const groups = [...html.matchAll(/role="radiogroup" aria-label="([^"]+)"/g)].map((m) => m[1]!);
   const seen = new Set<string>();
   for (const label of groups) {
@@ -276,11 +271,11 @@ test('every setting appears once, so two controls cannot disagree about it', () 
 });
 
 test('with no question waiting there is no waiting section at all', () => {
-  assert.ok(!panelHtml(state(), 'n').includes('waiting on you'));
+  assert.ok(!everyPageHtml(state(), 'n').includes('waiting on you'));
 });
 
 test('an open question is shown with its findings and an answer button', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({
       questions: [
         {
@@ -305,7 +300,7 @@ test('an open question is shown with its findings and an answer button', () => {
 });
 
 test('an untranslated question says why, rather than pretending', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({
       questions: [
         {
@@ -326,7 +321,7 @@ test('an untranslated question says why, rather than pretending', () => {
 });
 
 test('a question written by someone else cannot inject markup', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({
       questions: [
         {
@@ -347,8 +342,8 @@ test('a question written by someone else cannot inject markup', () => {
 });
 
 test('the sidebar lists what is running; a finished round belongs to the log', () => {
-  assert.ok(panelHtml(state(), 'n').includes('Nothing is running'));
-  const html = panelHtml(
+  assert.ok(everyPageHtml(state(), 'n').includes('Nothing is running'));
+  const html = everyPageHtml(
     state({
       sessions: [
         {
@@ -372,7 +367,7 @@ test('escapeHtml handles the four characters that matter', () => {
 });
 
 test('every setting carries a "?" that explains it', () => {
-  const html = panelHtml(state(), 'n');
+  const html = everyPageHtml(state(), 'n');
   const markers = html.match(/class="help"/g) ?? [];
   assert.ok(markers.length >= 10, `every labelled setting explains itself, found ${markers.length}`);
   // "Per vendor" is the one that provoked this: the label alone says nothing.
@@ -380,11 +375,11 @@ test('every setting carries a "?" that explains it', () => {
 });
 
 test('the keys section answers "do I need this?" before showing the field', () => {
-  const noKeys = panelHtml(state(), 'n');
+  const noKeys = everyPageHtml(state(), 'n');
   assert.ok(noKeys.includes('Nothing to fill in yet'), 'codex and gemini sign in through their own CLIs');
   assert.ok(noKeys.includes('not needed yet'));
 
-  const needsKeys = panelHtml(
+  const needsKeys = everyPageHtml(
     state({
       vendors: [
         { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
@@ -399,7 +394,7 @@ test('the keys section answers "do I need this?" before showing the field', () =
 });
 
 test('a disabled vendor with an endpoint does not demand a key', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({ vendors: [{ id: 'deepseek', runtime: 'codex', model: '', enabled: false, plan: true, code: true, baseUrl: 'https://x/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n',
   );
@@ -407,12 +402,12 @@ test('a disabled vendor with an endpoint does not demand a key', () => {
 });
 
 test('the server line is body text, not a footnote', () => {
-  const css = panelHtml(state(), 'n').split('</style>')[0] ?? '';
+  const css = everyPageHtml(state(), 'n').split('</style>')[0] ?? '';
   assert.ok(!/\.status \{[^}]*font-size/.test(css), 'it states a fact and reads at the same size as one');
 });
 
 test('claude is offered as a reviewer preset', () => {
-  const claude = panelHtml(
+  const claude = everyPageHtml(
     state({ vendors: [{ id: 'claude', runtime: 'claude', model: 'haiku', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n',
   );
@@ -426,7 +421,7 @@ test('claude is offered as a reviewer preset', () => {
 
 test('what changes is open; what is set once is folded away', () => {
   // The fixture opens everything, so this asks the renderer for the real defaults.
-  const html = panelHtml(state({ openSections: [] }), 'n');
+  const html = everyPageHtml(state({ openSections: [] }), 'n');
   // Any id at all, `teamServers` included: a scan for `[a-z]+` could not see a camel-case section open.
   const openSections = [...html.matchAll(/data-section="([a-zA-Z]+)" open/g)].map((m) => m[1]);
   assert.deepEqual(openSections, [], "the panel opens as a list of headings, not a wall");
@@ -440,13 +435,14 @@ test('what changes is open; what is set once is folded away', () => {
 });
 
 test('a section the person opened stays open through a repaint', () => {
-  const html = panelHtml(state({ openSections: ['limits'] }), 'n');
-  assert.ok(html.includes('data-section="limits" open'));
+  // Sidebar sections: the only ones that open and close since the rest became Settings tabs.
+  const html = everyPageHtml(state({ openSections: ['bugz'] }), 'n');
+  assert.ok(html.includes('data-section="bugz" open'));
   assert.ok(!html.includes('data-section="rounds" open'), 'their choice is the whole set');
 });
 
 test('a waiting question is never collapsible', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({
       questions: [
         { id: 'q1', sessionId: 's', repoPath: 'r', branch: 'b', question: 'Ship?', openFindings: [], askedUtc: 'now' },
@@ -463,17 +459,17 @@ test('a waiting question is never collapsible', () => {
 });
 
 test('the accordion reports its own toggles, so the open set survives', () => {
-  assert.ok(panelHtml(state(), 'n').includes("type: 'section'"));
+  assert.ok(everyPageHtml(state(), 'n').includes("type: 'section'"));
 });
 
 test('nothing sits against the edge of the view', () => {
-  const css = panelHtml(state(), 'n').split('</style>')[0] ?? '';
+  const css = everyPageHtml(state(), 'n').split('</style>')[0] ?? '';
   const body = css.match(/body \{[^}]*\}/)?.[0] ?? '';
   assert.ok(/padding: 4px 14px 20px 12px/.test(body), 'air down both sides, wider on the scrollbar side');
 });
 
 test('the disclosure arrow is a drawn chevron, not a punctuation mark', () => {
-  const css = panelHtml(state(), 'n').split('</style>')[0] ?? '';
+  const css = everyPageHtml(state(), 'n').split('</style>')[0] ?? '';
   assert.ok(css.includes('border-right: 1.5px solid currentColor'), 'drawn, so it scales with the text');
   assert.ok(!css.includes('203A'), 'a glyph rendered a third of the size nobody can hit');
   assert.ok(css.includes('rotate(45deg)'), 'and it turns when the section opens');
@@ -482,7 +478,7 @@ test('the disclosure arrow is a drawn chevron, not a punctuation mark', () => {
 test('every vendor has a green run button next to remove', () => {
   // The operator asked for a play triangle between the name and remove: it opens that vendor's
   // own CLI, which is where an account is checked and a signed-out CLI is signed in.
-  const html = panelHtml(state(), 'n');
+  const html = everyPageHtml(state(), 'n');
   assert.ok(html.includes('data-command="runVendor" data-id="codex"'));
   assert.ok(html.includes('▶'));
   assert.ok(html.includes('var(--vscode-charts-green)'), 'green from the theme, not a hex of ours');
@@ -496,13 +492,13 @@ test('every vendor has a green run button next to remove', () => {
 test('the live regions are addressable, so an update need not reload the panel', () => {
   // The dropdowns closing after two seconds was a full webview reload on every watcher tick.
   // Patching these two containers is what replaced it.
-  const html = panelHtml(state(), 'n');
+  const html = everyPageHtml(state(), 'n');
   assert.ok(html.includes('id="live-questions"'));
   assert.ok(html.includes('id="live-rounds"'));
 });
 
 test('a running round shows its status, its reviewers and what it has cost', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({
       sessions: [
         {
@@ -560,7 +556,7 @@ test('a running round shows its status, its reviewers and what it has cost', () 
  * "the card is coloured" and break the only thing that was asked for.</p>
  */
 test('a reviewer card wears the colour that vendor has in the rounds list', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
 
   for (const vendor of DEFAULT_VENDORS) {
     assert.ok(
@@ -588,13 +584,13 @@ test('the status line under a reviewer is indented by a real amount', () => {
   // Asserted by VALUE, not by the mere presence of the property: a rule setting `margin-left: 0`
   // would satisfy "there is a margin-left" while the two lines read as one. Raised on the plan
   // round of #132.
-  const css = panelHtml(state(), 'n0nce').split('</style>')[0] ?? '';
+  const css = everyPageHtml(state(), 'n0nce').split('</style>')[0] ?? '';
 
   assert.match(css, /\.reviewer \.said \{[^}]*margin-left:\s*16px/, 'the second line is indented from the row');
 });
 
 test('no two sections define the same class, because the loser is dimmed in silence', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
   const css = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
   const selectors = [...css.matchAll(/(?:^|\n)\s*([.#][^\s{][^{\r\n]*?)\s*\{/g)].map((m) => m[1]!.trim());
 
@@ -621,7 +617,7 @@ test('a spending row shows the vendor and its cost apart, not run together', () 
 // ---------- the prompts section: a frame per BUCKET — plan, code, document ----------
 
 test('each stage stands in its own frame, and no role appears in two', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
   const groups = html.split('class="role-group"');
 
   assert.equal(groups.length, 5, 'four frames: the plan stage, the code stage, the document stage, the feature stage');
@@ -644,7 +640,7 @@ test('each stage stands in its own frame, and no role appears in two', () => {
 });
 
 test('each code role is wrapped in its own colour, and still says its name', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
   for (const [role, tone] of [
     ['Architecture', 'arch'],
     ['SecurityReliability', 'sec'],
@@ -660,7 +656,7 @@ test('each code role is wrapped in its own colour, and still says its name', () 
 });
 
 test('the role colours come from the theme with a fallback, never a bare hex', () => {
-  const css = panelHtml(state(), 'n0nce').split('</style>')[0] ?? '';
+  const css = everyPageHtml(state(), 'n0nce').split('</style>')[0] ?? '';
   for (const [tone, fallback] of [
     ['arch', '#569cd6'],
     ['sec', '#ce9178'],
@@ -672,9 +668,8 @@ test('the role colours come from the theme with a fallback, never a bare hex', (
   }
 });
 
-
 test('the number of rounds each stage shows follows that stage’s own budget', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({ settings: { ...DEFAULTS, rounds: { ...DEFAULTS.rounds, PlanCritique: 2, Architecture: 4, SecurityReliability: 4, UxDxPerformance: 4 } } }),
     'n0nce',
   );
@@ -684,7 +679,7 @@ test('the number of rounds each stage shows follows that stage’s own budget', 
 });
 
 test('code round 1 is the conventions pass, and says so', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
   assert.match(html, /Round 1[\s\S]{0,400}?Conventions/, 'the first code round defaults to the rules check');
   assert.ok(html.includes('written down'), 'and the section says what that pass judges against');
 });
@@ -694,7 +689,7 @@ test('the code stage states its own arithmetic, in the numbers actually configur
   // times. It does not: six is the number of REVIEWERS in a round — vendors × roles — each run
   // once. The panel showing 3 roles × 2 round-pickers is what looks like six runs, so the sentence
   // has to do the multiplication out loud.
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({
       vendors: [
         { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
@@ -713,7 +708,7 @@ test('the code stage states its own arithmetic, in the numbers actually configur
 });
 
 test('a disabled vendor is not counted in the arithmetic', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({
       vendors: [
         { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
@@ -729,7 +724,7 @@ test('a disabled vendor is not counted in the arithmetic', () => {
 test('the panel names the side it is about to keep settings for', () => {
   // Somebody with a Windows window and two WSL distros is about to keep three sets of settings, and
   // the only way to be sure which one is being edited is to read it off the panel doing the editing.
-  const page = panelHtml(state({ side: 'WSL: Ubuntu-24.04', perSide: true }), 'nonce');
+  const page = everyPageHtml(state({ side: 'WSL: Ubuntu-24.04', perSide: true }), 'nonce');
 
   assert.match(page, /Separate settings for each side/);
   assert.match(page, /This side is <b>WSL: Ubuntu-24\.04<\/b>/);
@@ -738,7 +733,7 @@ test('the panel names the side it is about to keep settings for', () => {
 });
 
 test('with the switch off the panel says the settings are shared, and does not tick the box', () => {
-  const page = panelHtml(state({ side: '', perSide: false }), 'nonce');
+  const page = everyPageHtml(state({ side: '', perSide: false }), 'nonce');
 
   assert.match(page, /This side is <b>this machine<\/b>/, 'a local window has one side and no word for it');
   assert.match(page, /shares its settings with every other side/);
@@ -748,7 +743,7 @@ test('with the switch off the panel says the settings are shared, and does not t
 test('every reviewer row offers the two stages, ticked unless narrowed', () => {
   // The setting the measurement asked for: local was 19 % useful on a plan and 3 % on code, so
   // "on for the plan, off for the code" has to be expressible without editing JSON.
-  const html = panelHtml(state({
+  const html = everyPageHtml(state({
     vendors: [
       { id: 'codex', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
       { id: 'local', runtime: 'local', model: 'qwen', enabled: true, plan: true, code: false, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 },
@@ -768,7 +763,7 @@ test('a vendor that is off leaves its stage boxes readable but inert', () => {
   // The review gate's point: leaving them live while the master switch is off invites somebody to
   // tick one and expect it to mean something. Visible, so the state can be read; disabled, so it
   // cannot be contradicted.
-  const html = panelHtml(state({
+  const html = everyPageHtml(state({
     vendors: [{ id: 'codex', runtime: 'codex', model: '', enabled: false, plan: true, code: false, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }],
   }), 'n0nce');
 
@@ -790,7 +785,7 @@ test('a vendor that is off leaves its stage boxes readable but inert', () => {
  * controls from every remote reviewer.</p>
  */
 function card(over: Partial<Vendor>): string {
-  const html = panelHtml(state({
+  const html = everyPageHtml(state({
     vendors: [{ id: 'v1', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0, ...over }],
   }), 'n0nce');
   const from = html.indexOf('<div class="vendor"');
@@ -898,7 +893,7 @@ test('the CLI path is a field of its own, and the stage boxes belong to the pric
  */
 test('the round limit\'s note is a line under its row, in every state it can be in', () => {
   const limits = (over: Partial<PanelState['settings']>): string => {
-    const html = panelHtml(state({ settings: { ...DEFAULTS, ...over }, openSections: ['limits'] }), 'n0nce');
+    const html = everyPageHtml(state({ settings: { ...DEFAULTS, ...over }, openSections: ['limits'] }), 'n0nce');
     const from = html.indexOf('data-section="limits"');
     const to = html.indexOf('data-section="keys"');
     assert.ok(from > 0 && to > from, 'the limits section is bounded — a -1 would read to the end of the document');
@@ -932,7 +927,7 @@ test('every limits row holds exactly a label and an input, so none can crowd its
   // The structural property behind the row above, asserted for all five rather than one. Raised on
   // the plan round: a test that names the round limit would not notice the next row to grow a third
   // item, and the alignment is a property of the SET of rows.
-  const html = panelHtml(state({ openSections: ['limits'] }), 'n0nce');
+  const html = everyPageHtml(state({ openSections: ['limits'] }), 'n0nce');
   const section = html.slice(html.indexOf('data-section="limits"'), html.indexOf('data-section="keys"'));
   const rows = [...section.matchAll(/<div class="field inline">((?:(?!<\/div>)[\s\S])*)<\/div>/g)].map((m) => m[1]!);
 
@@ -953,7 +948,7 @@ test('every limits row holds exactly a label and an input, so none can crowd its
  */
 test('the round limit says what it works out to, and warns when it cannot be met', () => {
   const withSettings = (over: Partial<PanelState['settings']>): string =>
-    panelHtml(state({ settings: { ...DEFAULTS, ...over }, openSections: ['limits'] }), 'n0nce');
+    everyPageHtml(state({ settings: { ...DEFAULTS, ...over }, openSections: ['limits'] }), 'n0nce');
 
   // Asserted as a SHAPE rather than against a vendor count: how many vendors ship enabled is a
   // default that moves, and a test that hard-codes it fails for a reason that has nothing to do
@@ -973,7 +968,7 @@ test('the round limit says what it works out to, and warns when it cannot be met
   // A vendor that reviews plans only is not a code reviewer, and dealing sends each lens to ONE
   // vendor rather than to all of them — two ways the naive "every enabled vendor, every role" count
   // is too big. Both raised on the code round.
-  const planOnly = panelHtml(
+  const planOnly = everyPageHtml(
     state({
       settings: { ...DEFAULTS, roundTimeoutMinutes: 0, reviewerTimeoutMinutes: 10, maxConcurrency: 3 },
       vendors: DEFAULT_VENDORS.map((v) => ({ ...v, enabled: true, code: false })),
@@ -1015,7 +1010,7 @@ test('the round limit says what it works out to, and warns when it cannot be met
  * the last one.</p>
  */
 test('every code role box carries a switch, and the plan role does not', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
 
   for (const role of ['Conventions', 'Architecture', 'SecurityReliability', 'UxDxPerformance']) {
     assert.ok(
@@ -1030,7 +1025,7 @@ test('every code role box carries a switch, and the plan role does not', () => {
 });
 
 test('a role switched off dims its box and disables the controls that no longer apply', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({ settings: { ...DEFAULTS, roleEnabled: { ...DEFAULTS.roleEnabled, Architecture: false } } }),
     'n0nce',
   );
@@ -1050,7 +1045,7 @@ test('the last role standing cannot be unticked', () => {
     ...DEFAULTS,
     roleEnabled: { Conventions: false, Architecture: true, SecurityReliability: false, UxDxPerformance: false },
   };
-  const html = panelHtml(state({ settings: onlyOne }), 'n0nce');
+  const html = everyPageHtml(state({ settings: onlyOne }), 'n0nce');
 
   assert.match(
     html,
@@ -1071,8 +1066,8 @@ test('the last role standing cannot be unticked', () => {
 });
 
 test('the fan-out sentence counts the roles that will actually run', () => {
-  const all = panelHtml(state(), 'n0nce');
-  const two = panelHtml(
+  const all = everyPageHtml(state(), 'n0nce');
+  const two = everyPageHtml(
     state({
       settings: {
         ...DEFAULTS,
@@ -1095,15 +1090,15 @@ test('an older server that would run the role anyway is called out', () => {
   // The failure this warns about is backwards: the box says off and the reviewer runs. A person
   // would only discover it by reading the reviewer list of a round they already paid for.
   const off = { ...DEFAULTS, roleEnabled: { ...DEFAULTS.roleEnabled, Architecture: false } };
-  const old = panelHtml(
+  const old = everyPageHtml(
     state({ settings: off, server: { kind: 'known', version: '0.18.12', remembered: true, updateOffered: false } }),
     'n0nce',
   );
-  const current = panelHtml(
+  const current = everyPageHtml(
     state({ settings: off, server: { kind: 'known', version: '0.18.13', remembered: true, updateOffered: false } }),
     'n0nce',
   );
-  const nothingOff = panelHtml(
+  const nothingOff = everyPageHtml(
     state({ server: { kind: 'known', version: '0.18.12', remembered: true, updateOffered: false } }),
     'n0nce',
   );
@@ -1137,9 +1132,9 @@ test('an older server that would consult through the reviewer row anyway is call
   const parts = CONSULTANT_DEFINITION_SINCE.split('.').map(Number);
   const older = [...parts.slice(0, -1), parts[parts.length - 1]! - 1].join('.');
 
-  const old = panelHtml(state({ settings: defined, server: known(older) }), 'n0nce');
-  const current = panelHtml(state({ settings: defined, server: known(CONSULTANT_DEFINITION_SINCE) }), 'n0nce');
-  const nothingDefined = panelHtml(state({ server: known(older) }), 'n0nce');
+  const old = everyPageHtml(state({ settings: defined, server: known(older) }), 'n0nce');
+  const current = everyPageHtml(state({ settings: defined, server: known(CONSULTANT_DEFINITION_SINCE) }), 'n0nce');
+  const nothingDefined = everyPageHtml(state({ server: known(older) }), 'n0nce');
 
   const section = consultantSection(old);
   assert.match(section, /does not read a consultant[\s\S]*Claude Code/);
@@ -1170,7 +1165,7 @@ test('a role a person added is drawn in Prompts per round, under their own name'
     roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
               prompts: [{ id: 'requirements-general', label: 'General', purpose: 'Whether it is met.' }] }],
   };
-  const prompts = promptsSection(panelHtml(state({ settings }), 'n0nce'));
+  const prompts = promptsSection(everyPageHtml(state({ settings }), 'n0nce'));
 
   assert.ok(prompts.includes('Requirements we wrote'), 'the name they gave it');
   assert.ok(prompts.includes('data-role="Requirements"'), 'with its own rounds and threshold');
@@ -1182,7 +1177,7 @@ test('a role switched off in the catalog is drawn as off, whatever the section�
   // which the roles page writes. The server reads BOTH, so a box that showed a role as on because
   // only the other switch was off would be a box that disagrees with the round.
   const settings = { ...DEFAULTS, roles: [{ id: 'Architecture', active: false }] };
-  const prompts = promptsSection(panelHtml(state({ settings }), 'n0nce'));
+  const prompts = promptsSection(everyPageHtml(state({ settings }), 'n0nce'));
   const at = prompts.indexOf('data-role="Architecture"');
   const box = prompts.slice(Math.max(prompts.lastIndexOf('<div class="role', at), 0), at);
 
@@ -1198,7 +1193,7 @@ test('a document role is drawn in the DOCUMENT frame, with a budget and a switch
     roles: [{ id: 'Brief', name: 'The brief', stage: 'result', programmingTask: false,
               prompts: [{ id: 'brief-general' }] }],
   };
-  const groups = panelHtml(state({ settings }), 'n0nce').split('class="role-group"');
+  const groups = everyPageHtml(state({ settings }), 'n0nce').split('class="role-group"');
 
   assert.ok(groups[3]!.includes('The brief'), 'in the document frame');
   assert.ok(!groups[2]!.includes('The brief'), 'and not among the roles that read a diff');
@@ -1207,7 +1202,7 @@ test('a document role is drawn in the DOCUMENT frame, with a budget and a switch
 });
 
 test('the Prompts section offers the way into the roles page', () => {
-  assert.ok(promptsSection(panelHtml(state(), 'n0nce')).includes('data-command="editRoles"'));
+  assert.ok(promptsSection(everyPageHtml(state(), 'n0nce')).includes('data-command="editRoles"'));
 });
 
 test('a server too old to read a person’s roles says so, where the roles are drawn', () => {
@@ -1219,7 +1214,7 @@ test('a server too old to read a person’s roles says so, where the roles are d
               prompts: [{ id: 'requirements-general' }] }],
   };
   const withServer = (version: string): string =>
-    promptsSection(panelHtml(state({
+    promptsSection(everyPageHtml(state({
       settings,
       server: { kind: 'known', version, remembered: true, updateOffered: false },
     }), 'n0nce'));
@@ -1233,7 +1228,7 @@ test('a server too old to read a person’s roles says so, where the roles are d
 test('and says nothing at all when the person has added no role of their own', () => {
   // Everybody who upgrades is in this state. A warning about a feature nobody is using is a warning
   // that teaches people to ignore the next one.
-  const older = promptsSection(panelHtml(state({
+  const older = promptsSection(everyPageHtml(state({
     server: { kind: 'known', version: '0.18.17', remembered: true, updateOffered: false },
   }), 'n0nce'));
 
@@ -1250,7 +1245,7 @@ test('and says nothing at all when the person has added no role of their own', (
  */
 test('a role switched off in the catalog has no tick to fight with', () => {
   const settings = { ...DEFAULTS, roles: [{ id: 'Architecture', active: false }] };
-  const prompts = promptsSection(panelHtml(state({ settings }), 'n0nce'));
+  const prompts = promptsSection(everyPageHtml(state({ settings }), 'n0nce'));
   const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
   const tag = box.slice(0, box.indexOf('>'));
 
@@ -1259,7 +1254,7 @@ test('a role switched off in the catalog has no tick to fight with', () => {
 });
 
 test('a role active in the catalog keeps a tick that works', () => {
-  const prompts = promptsSection(panelHtml(state(), 'n0nce'));
+  const prompts = promptsSection(everyPageHtml(state(), 'n0nce'));
   const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
 
   assert.ok(!box.slice(0, box.indexOf('>')).includes('disabled'));
@@ -1276,7 +1271,7 @@ test('the last role standing counts the roles a person added', () => {
     roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
               prompts: [{ id: 'requirements-general', label: 'General' }] }],
   };
-  const prompts = promptsSection(panelHtml(state({ settings }), 'n0nce'));
+  const prompts = promptsSection(everyPageHtml(state({ settings }), 'n0nce'));
   const box = prompts.slice(prompts.indexOf('id="role-Architecture"'));
 
   assert.ok(!box.slice(0, box.indexOf('>')).includes('disabled'),
@@ -1289,7 +1284,7 @@ test('the fan-out sentence counts a role a person added', () => {
     roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
               prompts: [{ id: 'requirements-general', label: 'General' }] }],
   };
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({
       settings,
       vendors: [
@@ -1310,7 +1305,7 @@ test('a role a Team server will not run says so in the Prompts section', () => {
     roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
               prompts: [{ id: 'requirements-general', label: 'General' }] }],
   };
-  const prompts = promptsSection(panelHtml(state({
+  const prompts = promptsSection(everyPageHtml(state({
     settings,
     teamServers: [serverRunning(['Architecture'])],
   }), 'n0nce'));
@@ -1325,7 +1320,7 @@ test('a role every Team server runs says nothing', () => {
     roles: [{ id: 'Requirements', name: 'Requirements we wrote', stage: 'result',
               prompts: [{ id: 'requirements-general', label: 'General' }] }],
   };
-  const prompts = promptsSection(panelHtml(state({
+  const prompts = promptsSection(everyPageHtml(state({
     settings,
     teamServers: [serverRunning(['Requirements'])],
   }), 'n0nce'));
@@ -1341,7 +1336,7 @@ test('no Team servers at all is silent about every role', () => {
               prompts: [{ id: 'requirements-general', label: 'General' }] }],
   };
 
-  const prompts = promptsSection(panelHtml(state({ settings }), 'n0nce'));
+  const prompts = promptsSection(everyPageHtml(state({ settings }), 'n0nce'));
 
   assert.ok(!prompts.includes('could not be asked'));
   assert.ok(!prompts.includes('older than the setting'));
@@ -1369,7 +1364,7 @@ test('a STALE catalog is not an answer about roles', () => {
               prompts: [{ id: 'requirements-general', label: 'General' }] }],
   };
   const stale = { ...serverRunning(['Requirements']), stale: true };
-  const prompts = promptsSection(panelHtml(state({ settings, teamServers: [stale] }), 'n0nce'));
+  const prompts = promptsSection(everyPageHtml(state({ settings, teamServers: [stale] }), 'n0nce'));
 
   assert.match(prompts, /could not be asked/,
     'the cached answer said it runs Requirements; what is true is that nobody could ask');
@@ -1395,7 +1390,7 @@ const where = (over: Partial<DataLocation> = {}): DataLocation => ({
 });
 
 test('the section says which directory THIS WINDOW reads, and names the side', () => {
-  const html = panelHtml(state({ storage: where() }), 'n');
+  const html = everyPageHtml(state({ storage: where() }), 'n');
 
   assert.match(html, /Where this window keeps its data/);
   assert.ok(html.includes('/srv/coai/windows'), 'the resolved directory, not the raw variable');
@@ -1407,7 +1402,7 @@ test('another installation’s directories are named, and a refused one says why
   // questions and throws nothing, which is indistinguishable from an installation that has asked
   // nothing — the exact silence this feature exists to end, one level up. A typo has to be visible
   // somewhere, and the panel is the only somewhere there is. (codex and gemini, the plan round.)
-  const html = panelHtml(state({
+  const html = everyPageHtml(state({
     storage: where({
       alsoWatched: [
         { asked: '/srv/coai/windows', path: '/srv/coai/windows', refusal: '' },
@@ -1426,13 +1421,13 @@ test('another installation’s directories are named, and a refused one says why
 test('with only its own directory there is nothing extra to say', () => {
   // The default installation, which is most of them: a heading promising other installations when
   // there are none is furniture.
-  const html = panelHtml(state({ storage: where({ alsoWatched: [{ asked: '/srv/coai/windows', path: '/srv/coai/windows', refusal: '' }] }) }), 'n');
+  const html = everyPageHtml(state({ storage: where({ alsoWatched: [{ asked: '/srv/coai/windows', path: '/srv/coai/windows', refusal: '' }] }) }), 'n');
 
   assert.ok(!html.includes('Questions from another installation'), 'an empty list was introduced anyway');
 });
 
 test('with no side named it says so plainly, rather than showing an empty one', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({ storage: where({ directory: '/srv/coai', side: '', env: { COAI_DATA_DIR: '/srv/coai' } }) }),
     'n');
 
@@ -1449,7 +1444,7 @@ test('with no side named it says so plainly, rather than showing an empty one', 
  * on the code round.</p>
  */
 test('a side set with no directory is reported as doing nothing, not as the side in use', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({
       storage: where({
         directory: '/home/me/.local/share/coai-mcp',
@@ -1474,7 +1469,7 @@ test('a side set with no directory is reported as doing nothing, not as the side
  * length of a side that had never been applied to it.</p>
  */
 test('the variables to paste are the ones that were set, not a path taken apart', () => {
-  const html = panelHtml(state({ storage: where() }), 'n');
+  const html = everyPageHtml(state({ storage: where() }), 'n');
 
   assert.ok(html.includes('&quot;COAI_DATA_DIR&quot;: &quot;/srv/coai&quot;'), 'the root, verbatim');
   assert.ok(html.includes('&quot;COAI_DATA_SIDE&quot;: &quot;windows&quot;'));
@@ -1489,7 +1484,7 @@ test('the variables to paste are the ones that were set, not a path taken apart'
  * nothing, because it looks finished.</p>
  */
 test('the block offered is the env fragment, with no placeholder pretending to be a path', () => {
-  const html = panelHtml(state({ storage: where() }), 'n');
+  const html = everyPageHtml(state({ storage: where() }), 'n');
 
   // The block this section renders, and nothing else on the page — a page-wide search would be
   // answered by the install flow's own block, which is a different thing that legitimately has a
@@ -1504,7 +1499,7 @@ test('the block offered is the env fragment, with no placeholder pretending to b
 });
 
 test('the default directory offers no variables at all, because it needs none', () => {
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({ storage: where({ directory: '/home/me/.local/share/coai-mcp', side: '', env: {} }) }),
     'n');
 
@@ -1517,7 +1512,7 @@ test("the server's own notes are rendered where a person sees them", () => {
     'There is a coai.db directly in /srv/coai, from the layout before this directory was shared.',
     '/srv/coai/windows is not there yet, so this side starts with no history.',
   ];
-  const html = panelHtml(state({ storage: where({ notes }) }), 'n');
+  const html = everyPageHtml(state({ storage: where({ notes }) }), 'n');
 
   for (const note of notes) {
     assert.ok(html.includes(escapeHtml(note)), note);
@@ -1534,7 +1529,7 @@ test("the server's own notes are rendered where a person sees them", () => {
  * page renders FROM them rather than a second copy of them.</p>
  */
 test('it names what to move and what to leave behind', () => {
-  const html = panelHtml(state({ storage: where() }), 'n');
+  const html = everyPageHtml(state({ storage: where() }), 'n');
 
   for (const name of DATA_TO_MOVE) {
     assert.ok(html.includes(`<code>${name}</code>`), `it must name ${name} as something to move`);
@@ -1553,7 +1548,7 @@ test('it names what to move and what to leave behind', () => {
  * "check your history" step can notice.</p>
  */
 test('it says the destination must not already hold a database', () => {
-  const html = panelHtml(state({ storage: where() }), 'n');
+  const html = everyPageHtml(state({ storage: where() }), 'n');
 
   assert.match(html, /Only into an empty one/);
   assert.match(html, /destroys that history/);
@@ -1561,7 +1556,7 @@ test('it says the destination must not already hold a database', () => {
 
 test('a refused side is a sentence on the page, not a section that vanished', () => {
   const refusal = "COAI_DATA_SIDE='wsl/node1' is not a usable directory name, so the server refuses to start.";
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({ storage: where({ directory: '', side: 'wsl/node1', refusal, notes: [], env: {} }) }),
     'n');
 
@@ -1571,7 +1566,7 @@ test('a refused side is a sentence on the page, not a section that vanished', ()
 
 test('a fixture that carries no storage renders no section at all', () => {
   // The established convention for an optional field here: absent means a test that does not care.
-  assert.ok(!panelHtml(state(), 'n').includes('Where this window keeps its data'));
+  assert.ok(!everyPageHtml(state(), 'n').includes('Where this window keeps its data'));
 });
 
 // ---------- changing it, and saying where the answer came from (issue #115) ----------
@@ -1585,8 +1580,8 @@ test('the section says which layer answered, so nobody has to deduce it', () => 
   // The panel and the server CAN read different directories, and the product has always known it.
   // Saying "this came from a setting on this side" is what turns "why is my history missing" from a
   // deduction into a sentence.
-  const fromSetting = panelHtml(state({ storage: where({ source: 'this side' }) }), 'n');
-  const fromEnvironment = panelHtml(state({ storage: where({ source: 'environment' }) }), 'n');
+  const fromSetting = everyPageHtml(state({ storage: where({ source: 'this side' }) }), 'n');
+  const fromEnvironment = everyPageHtml(state({ storage: where({ source: 'environment' }) }), 'n');
 
   assert.match(fromSetting, /this side/u);
   assert.match(fromEnvironment, /COAI_DATA_DIR/u);
@@ -1596,7 +1591,7 @@ test('the section says which layer answered, so nobody has to deduce it', () => 
 test('a directory inherited from the shared setting says that it was', () => {
   // The case worth naming on its own: the value was set on the OTHER side of this machine, where
   // the same NAS has a different mount path, and it may well not exist here.
-  const html = panelHtml(state({ storage: where({ source: 'shared setting' }) }), 'n');
+  const html = everyPageHtml(state({ storage: where({ source: 'shared setting' }) }), 'n');
 
   assert.match(html, /set for every side of this machine/u);
 });
@@ -1604,7 +1599,7 @@ test('a directory inherited from the shared setting says that it was', () => {
 test('the list of what to move is a list, not a sentence sixteen items long', () => {
   // It was four items in a comma sentence, and it is sixteen now. The same prose would be a
   // paragraph nobody finishes, in a sidebar whose width is somebody else's choice.
-  const html = panelHtml(state({ storage: where() }), 'n');
+  const html = everyPageHtml(state({ storage: where() }), 'n');
   const at = html.indexOf('Moving to another folder');
   // Never an unchecked `slice(indexOf(...))`: a heading that has been reworded gives -1, which
   // slices the LAST CHARACTER of the page and then fails complaining about a missing entry rather
@@ -1630,7 +1625,7 @@ test('the list of what to move is a list, not a sentence sixteen items long', ()
  * THAT go red".)</p>
  */
 test('a consultant row wears the same colour as the reviewer card of the same name', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
 
   // codex is the id that is BOTH a configured reviewer in this fixture and a caller kind, so it is
   // the one where "the same colour in two sections" is a claim about one page rather than about two

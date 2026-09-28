@@ -390,7 +390,7 @@ export function tooOldFor(serverVersion: string, rows: readonly RoleRow[]): stri
 
   return `<div class="stale">The coai-mcp you have installed (${escapeHtml(serverVersion)}) does not read `
     + `roles at all, so nothing on this page will run. Update it to ${escapeHtml(CUSTOM_ROLES_SINCE)} `
-    + `or later — the <b>MCP server</b> section of the panel.</div>`;
+    + `or later — the <b>MCP server</b> tab of ConnectOtherAIs Settings.</div>`;
 }
 
 /**

@@ -4113,6 +4113,7 @@ panel with no Team servers has.
 | `coai.copyClaudeSnippet` | The CLAUDE.md text teaching a target repo's main AI the tool order |
 | `coai.showRounds` | Writes `<dataDir>/rounds.md` from the server's own session files and opens it — a REAL file, so closing it never asks to save, and it is rewritten in place while a round runs |
 | `coai.editPhrases` | Opens the **Phrases** tab: the sentences a person keeps, one button each in the panel. Add, rename, rewrite, remove; saved a moment after the last keystroke |
+| `coai.openSettings` | The `$(gear)` beside help in the panel's title bar (`navigation@1`; the rounds list moved to `@2`), and *ConnectOtherAIs: Settings* in the palette: opens ONE **Settings** editor tab per window, or reveals it. An argument that names a tab opens it on that tab; anything else — the title bar and the palette pass nothing — changes nothing |
 
 ## How settings reach the server
 
@@ -4183,6 +4184,9 @@ flowchart LR
 | `settledWrites.ts` | one write at a time, and a typed field waits to settle — extracted out of `rolesPanel.ts` when the phrases tab needed the same two rules |
 | `settingRefused.ts` | why a `coai.*` write was refused, in words, pure: VS Code's own reason verbatim, and the ONE recognised refusal — `declaresSetting` separating a stale window (reload cures it) from a key this build never declared (it does not) |
 | `panelView.ts` | the sidebar's HTML, pure: the section registry `PANEL_SECTIONS`, vendor cards with the green run button, the live regions (`live-questions`, `live-rounds`, `live-consultations`, `live-notifications`) |
+| `settingsPanel.ts` | the thin `vscode` host of the Settings tab: create or reveal the one panel, a loading page until the first paint, and the held tab (a module variable, as `rolesPanel.ts` holds its own). The provider attaches it as its second surface |
+| `settingsPage.ts` | pure: what the Settings tab adds to the panel's shared document — its CSS (a wrapping strip, `[hidden]` that wins, a readable width), its script (open the held tab, switch on a press or `showTab`, tell the host), `nextSettingsTab` and the loading page |
+| `tabKeys.ts` | pure: the keyboard half of a tab strip as a page-script fragment — Left/Right wrap, Home/End, focus moved and the tab CLICKED, so the page's own click handler stays the one place a tab is selected. Step 1 of `PLAN_the_tabs_announce_themselves.md`; the Settings tab is its first consumer |
 | `surfaceSlot.ts` | pure: one webview the panel paints — its held view, its painted key, its edit hold — and `anyHeld`; the provider paints a list of these |
 | `panelSurface.ts` | pure: how a list of sections becomes a page body and its paint KEY — the body with every live region blank and every section closed; which surface a section is drawn on (`SURFACE_IDS`) |
 | `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |
@@ -4275,6 +4279,54 @@ every chain of AWAITED or RETURNED calls from each method the dispatcher enqueue
 line, on any that reaches `render`; it found exactly that one site before the fix. The source blanker
 it needs moved out of `panelsAreSearchable.test.ts` into `test/blankedSource.ts`, so the two scans share
 one.
+
+### The Settings tab (2026-09-28)
+
+The sidebar keeps what is happening now — the open question, **Notifications**, **Active rounds** (the
+running rounds and, since this change, the running consultation cards), **Phrases**, **Bugz** — and the
+ten sections configured once are tabs of one **ConnectOtherAIs — Settings** editor tab. Which section is
+where is one field on the registry entry (`surface` in `PANEL_SECTIONS`); a section's body is the same
+builder on either page, so a control stores exactly what it stored before, on the same layer.
+
+```mermaid
+flowchart TB
+  G["$(gear) coai.openSettings"] --> H[settingsPanel.ts: create or reveal, hold the tab]
+  H --> A[PanelProvider.attachSettings]
+  A --> SL[SurfaceSlot: settingsTab]
+  SL -->|paint key: settingsKey — the panes as drawn| K{changed?}
+  K -->|yes| D["settingsHtml: pageDocument(panes, SETTINGS_CSS, settingsScript(heldTab))"]
+  K -->|no| L[live message — ignored, the tab holds no live region]
+  D --> W[webview: tab strip + ten panes]
+  W -->|tab press / arrow key| M["{type:'tab'}"] --> H
+  H -->|showTab| W
+```
+
+- **One document, extended rather than copied.** `pageDocument(body, nonce, focus, extra)` is the panel's
+  CSP, stylesheet and script; the Settings tab passes its own CSS and script (`settingsPage.ts`) and gets
+  every `data-setting` / `data-command` / focus binding the sidebar has.
+- **The held tab is never in the markup.** Panes are drawn tab-neutral — every pane `hidden`, no tab
+  chosen — and the page's script opens the held tab from a literal beside the caret's. The markup IS the
+  paint key, so a tab drawn into it would reload the page a few seconds after every press. A press posts
+  `{type:'tab'}`; the host holds it and answers `showTab`, which a page already showing it ignores and a
+  page repainted mid-press uses to catch up.
+- **A pane is a `<section role="tabpanel">` with `data-section`**, so every reader of a section by that
+  attribute finds it on either page, and without the `section` class or an `open` attribute, so the
+  accordion's binding and the open-sections scan never mistake it for a disclosure. The strip is the
+  shared `tabStrip` with its new opt-in `roving` `tabindex`, neutral in colour (D5: two pages of tabs that
+  looked different would be two products); the panel's dead segmented `.tabs` rules, which would have
+  turned it into ten stacked bars, are gone.
+- **No serializer**: after a window reload the tab does not come back by itself, as with every other page
+  here but the chat tab.
+
+**What the tests hold, and how the move was proved not to hollow them out.** `settingsPage.test.ts` runs
+the page: the held tab opens alone, a press shows exactly its pane and tells the host, `showTab` selects
+without an echo, the arrow keys wrap, Home/End go to the ends, an unowned key is left alone, and the ARIA
+wiring points both ways; two mutations of the script turned six of its nine red. `bundledPage.test.ts`
+runs the MINIFIED page. A real-editor scenario presses the gear twice at once and finds one tab, and
+presses it again after closing. Twenty-six test files that read the panel through `panelHtml` moved to
+`everyPageHtml` (every page joined, a strict superset of what `panelHtml` returned), and the move was
+checked mechanically: with the ten moved sections' bodies blanked, 195 tests failed at the commit before
+the move and the SAME 195 failed after it — no test that read a moved section went quietly green.
 
 ## Every page can be searched (2026-09-09)
 

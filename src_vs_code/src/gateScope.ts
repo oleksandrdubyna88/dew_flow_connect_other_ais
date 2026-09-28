@@ -31,7 +31,7 @@ export function gatePerSkewNote(installedServerVersion: string, splitPlan: boole
 
   return `The coai-mcp you have installed (${installedServerVersion}) still orders a gate round after EVERY `
     + `story, whichever you choose here — a new branch and two rounds for each one. Update it to ${GATE_PER_SINCE} `
-    + 'or later — the MCP server section below.';
+    + 'or later — the MCP server tab.';
 }
 
 /**
@@ -47,5 +47,5 @@ export function stopLocalSkewNote(installedServerVersion: string, on: boolean): 
   }
 
   return `The coai-mcp you have installed (${installedServerVersion}) does not read this switch: the local reviewer `
-    + `still runs every round. Update it to ${STOP_LOCAL_SINCE} or later — the MCP server section below.`;
+    + `still runs every round. Update it to ${STOP_LOCAL_SINCE} or later — the MCP server tab.`;
 }

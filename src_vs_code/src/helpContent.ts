@@ -436,6 +436,22 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     },
   },
 
+  {
+    id: 'the-settings-tab',
+    en: {
+      title: "The panel and the Settings tab",
+      whatItIs:
+        "The sidebar is what is happening now: any question waiting on you, then **Notifications**, **Active rounds** — the rounds and the consultations running this minute — **Phrases** and **Bugz**. Everything you configure once is in the **Settings** tab, which the gear beside the help button in the panel title bar opens: one tab each for Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor keys, Team servers, This side and MCP server.",
+      why:
+        "Fourteen folded sections in one narrow column meant scrolling past ten things you set up once to reach the four you come back for. The tabs hold the same controls as the sections did, with the same effect — only where they are drawn changed — so a choice made in a tab is stored exactly as the same choice made in the sidebar was.",
+      setup:
+        "Nothing to set up. **ConnectOtherAIs: Settings** in the command palette opens the same tab. There is one per window: pressing the gear again brings it back rather than opening a second, and it opens on the tab you last had.",
+      usage:
+        "Click a tab, or use the keyboard: Left and Right move along the strip and wrap at its ends, Home and End go to the first and the last, and Tab leaves the strip. Every change is saved as you make it, as it was in the sidebar, and a new answer — a CLI version, a model list, a price — is shown as soon as it arrives. Ctrl+F searches the tab you are on.",
+      whatCanGoWrong:
+        "The gear shows while the panel is hovered or focused, like every title-bar button in VS Code; the command palette entry is always there. After a window reload the Settings tab does not come back by itself — press the gear again. A consultation that is running is in the sidebar under **Active rounds**, not in the Consultant tab: the sidebar is where what is happening now is shown, and the Consultant tab is where you decide who is asked.",
+    },
+  },
   // ---------- machinery you cannot see from the panel ----------
   {
     id: 'the-protocol',

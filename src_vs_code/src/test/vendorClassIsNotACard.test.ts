@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { panelHtml, PanelState } from '../panelView';
+import { PanelState } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { RoundRecord, SessionFile } from '../rounds';
@@ -75,7 +76,7 @@ function rulesFor(css: string, className: string): string[] {
 }
 
 test('the vendor word wears no box from anybody else’s class', () => {
-  const html = panelHtml(state(), 'n0nce', Date.now());
+  const html = everyPageHtml(state(), 'n0nce', Date.now());
   const css = html.split('</style>')[0] ?? '';
 
   const row = /<span class="([\w-]+)" style="color:[^"]*">codex<\/span>/.exec(html);
@@ -95,7 +96,7 @@ test('the vendor word wears no box from anybody else’s class', () => {
 test('the class it uses is not the reviewer settings card', () => {
   // Named explicitly as well as checked generally, because this is the collision that happened and
   // the general check would pass again if `.vendor` ever lost its border for an unrelated reason.
-  const html = panelHtml(state(), 'n0nce', Date.now());
+  const html = everyPageHtml(state(), 'n0nce', Date.now());
 
   assert.ok(
     !/<span class="vendor" /.test(html),

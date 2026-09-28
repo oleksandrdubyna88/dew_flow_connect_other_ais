@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LocalEngine, noEngine, OLLAMA_PROBE, openAiBaseOf } from '../localEngines';
 import { modelsFor, modelsProvenance } from '../models';
-import { panelHtml } from '../panelView';
+
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { LOCAL_PRESET, Vendor, VENDOR_PRESETS } from '../vendors';
+import { everyPageHtml } from './panelPages';
 
 /**
  * A local engine is a third reviewer in the panel, named `local`, listing the models this machine
@@ -33,7 +34,7 @@ function localVendor(over: Partial<Vendor> = {}): Vendor {
 }
 
 function html(vendors: readonly Vendor[], engine: LocalEngine): string {
-  return panelHtml({
+  return everyPageHtml({
     settings: DEFAULTS,
     vendors,
     codexModels: [], agyModels: [],

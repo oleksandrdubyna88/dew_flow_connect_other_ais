@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { panelHtml, type PanelState } from '../panelView';
+import { type PanelState } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
@@ -109,7 +110,7 @@ function controlsInTheStorageSection(html: string): Map<string, Button> {
 /** Run the panel's own script over the section's own controls, and collect what it posts. */
 function run(): { posted: unknown[]; press(command: string): void } {
   const posted: unknown[] = [];
-  const html = panelHtml(state(), 'test-nonce');
+  const html = everyPageHtml(state(), 'test-nonce');
   const controls = controlsInTheStorageSection(html);
   const fakeDocument = {
     addEventListener: () => undefined,

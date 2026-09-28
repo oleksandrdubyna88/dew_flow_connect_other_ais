@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { NO_NOTES, type ProviderHealth } from '../providers';
-import { panelHtml, type PanelState, staticKey } from '../panelView';
+import { type PanelState } from '../panelView';
+import { everyPageHtml, paintKeys } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
 import type { Vendor } from '../vendors';
 
@@ -93,8 +94,8 @@ for (const [what, over] of DRAWN) {
     const before = state();
     const after = state(over);
 
-    assert.notEqual(panelHtml(after, 'n', 0), panelHtml(before, 'n', 0), `the fixture must change what is drawn: ${what}`);
-    assert.notEqual(staticKey(after), staticKey(before), `${what}: it landed in the state and the key did not move, so it never reaches the screen`);
+    assert.notEqual(everyPageHtml(after, 'n', 0), everyPageHtml(before, 'n', 0), `the fixture must change what is drawn: ${what}`);
+    assert.notEqual(paintKeys(after), paintKeys(before), `${what}: it landed in the state and the key did not move, so it never reaches the screen`);
   });
 }
 
@@ -105,13 +106,13 @@ const NOT_A_REPAINT: ReadonlyArray<readonly [string, Partial<PanelState>]> = [
   }],
   // F10: the page opened it itself, so a key that moved with it reloaded the webview to show what was
   // already on screen, a few seconds later, dropping the scroll position and any open dropdown.
-  ['the person opens a section', { openSections: ['reviewers'] }],
+  ['the person opens a section', { openSections: ['bugz'] }],
   ['the page reports where the caret is', { focus: { id: 'model|codex||', start: 2, end: 2 } }],
 ];
 
 for (const [what, over] of NOT_A_REPAINT) {
   test(`the paint key stays put when ${what}`, () => {
-    assert.equal(staticKey(state(over)), staticKey(state()), `${what}: that would reload the whole webview on the next tick`);
+    assert.equal(paintKeys(state(over)), paintKeys(state()), `${what}: that would reload the whole webview on the next tick`);
   });
 }
 
@@ -123,11 +124,11 @@ test('the same answer built in another order is the same paint key', () => {
   const reversed: Record<string, ProviderHealth> = Object.fromEntries(Object.entries(two).reverse());
 
   assert.equal(
-    staticKey(state({ providers: { reported: reversed, asked: true, answered: true, notes: NO_NOTES } })),
-    staticKey(state({ providers: { reported: two, asked: true, answered: true, notes: NO_NOTES } })),
+    paintKeys(state({ providers: { reported: reversed, asked: true, answered: true, notes: NO_NOTES } })),
+    paintKeys(state({ providers: { reported: two, asked: true, answered: true, notes: NO_NOTES } })),
   );
 });
 
 test('a section the person opened is still drawn open by a repaint made for another reason', () => {
-  assert.match(panelHtml(state({ openSections: ['reviewers'] }), 'n', 0), /data-section="reviewers" open/);
+  assert.match(everyPageHtml(state({ openSections: ['bugz'] }), 'n', 0), /data-section="bugz" open/);
 });
