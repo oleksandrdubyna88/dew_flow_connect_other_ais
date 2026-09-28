@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { UsageEntry } from '../usage';
 import { roundsLogHtml, usageTabHtml } from '../roundsLog';
-import { escapeHtml, panelHtml, PanelState } from '../panelView';
+import { escapeHtml, PANEL_SECTIONS, panelHtml, PanelState } from '../panelView';
 import { DEFAULTS, settingsFrom } from '../settingsShape';
 import { CONSULTANT_DEFINITION_SINCE } from '../consultSettings';
 import { DATA_TO_LEAVE, DATA_TO_MOVE, type DataLocation } from '../dataDir';
@@ -427,9 +427,13 @@ test('claude is offered as a reviewer preset', () => {
 test('what changes is open; what is set once is folded away', () => {
   // The fixture opens everything, so this asks the renderer for the real defaults.
   const html = panelHtml(state({ openSections: [] }), 'n');
-  const openSections = [...html.matchAll(/data-section="([a-z]+)" open/g)].map((m) => m[1]);
+  // Any id at all, `teamServers` included: a scan for `[a-z]+` could not see a camel-case section open.
+  const openSections = [...html.matchAll(/data-section="([a-zA-Z]+)" open/g)].map((m) => m[1]);
   assert.deepEqual(openSections, [], "the panel opens as a list of headings, not a wall");
-  for (const folded of ['reviewers', 'prompts', 'gate', 'limits', 'keys', 'server', 'rounds']) {
+  // Every sidebar section, from the registry: a hand-typed list here stops covering the next section.
+  const sidebar = PANEL_SECTIONS.filter((section) => section.surface === 'sidebar').map((section) => section.id);
+  assert.ok(sidebar.length > 0, 'no sidebar section was found, so this proves nothing');
+  for (const folded of sidebar) {
     assert.ok(html.includes(`data-section="${folded}"`), `${folded} is present`);
     assert.ok(!html.includes(`data-section="${folded}" open`), `${folded} starts folded`);
   }

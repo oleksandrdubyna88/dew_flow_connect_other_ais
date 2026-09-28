@@ -12,6 +12,7 @@ import { ChatDoorRecord } from './chatDoors';
 import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendRows';
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
+import { liveRegion, type SectionSpec, sidebarBody, sidebarKey } from './panelSurface';
 import { executableFor } from './vendorTerminal';
 import { LOOKING, LOOKING_CSS } from './lookingSpinner';
 import type { Phrase } from './phrases';
@@ -369,72 +370,89 @@ function focusLiteral(focus: PanelFocus | undefined): string {
     .replace(/</g, '\\u003c');
 }
 
+/**
+ * Every section of the panel, as data: its id, its heading, the webview it is drawn on, and its body.
+ *
+ * <p>One declaration for the page AND its paint key (`panelSurface.ts`), so the two cannot disagree
+ * about what the page shows. A body is handed the live regions to embed; they are blank when a key is
+ * being built, which is what keeps a moving round or a waiting question from reloading the webview.</p>
+ *
+ * <p>`notifications` is lowercase because `panelView.test.ts` scans the rendered html with
+ * /data-section="([a-z]\+)" open/, and a capital letter would make a section invisible to the test that
+ * proves which sections a person has open.</p>
+ */
+export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
+  { id: 'reviewers', title: 'Reviewers', surface: 'sidebar', body: (state) => reviewersBody(state) },
+  { id: 'chat', title: 'Chat other AIs', surface: 'sidebar', body: (state) => chatBody(state.chat ?? DEFAULT_CHAT, state) },
+  { id: 'phrases', title: 'Phrases', surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },
+  // After the chat, because the two are one idea seen from opposite ends: there a PERSON asks
+  // another vendor about a passage, here an AI asks one about the tree it is stuck in.
+  { id: 'consultant', title: 'Consultant', surface: 'sidebar', body: (state, live) => liveRegion('consultations', live) + consultantSection(state) },
+  { id: 'bugz', title: 'Bugz', surface: 'sidebar', body: (state) => bugzSection(state) },
+  { id: 'prompts', title: 'Prompts per round', surface: 'sidebar', body: (state) => promptsBody(state) },
+  { id: 'gate', title: 'The gate', surface: 'sidebar', body: (state) => gateBody(state) },
+  { id: 'limits', title: 'Limits', surface: 'sidebar', body: (state) => limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length) },
+  { id: 'keys', title: 'Vendor keys', surface: 'sidebar', body: (state) => keysBody(state) },
+  { id: 'teamServers', title: 'Team servers', surface: 'sidebar', body: (state) => teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '') },
+  { id: 'side', title: 'This side', surface: 'sidebar', body: (state) => sideBody(state) },
+  { id: 'server', title: 'MCP server', surface: 'sidebar', body: (state) => serverBody(state) },
+  { id: 'rounds', title: 'Active rounds', surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
+  { id: 'notifications', title: 'Notifications', surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
+];
+
+/** The Consultant section below its live region: the skew notes, who each caller asks, and when. */
+function consultantSection(state: PanelState): string {
+  return consultantSkew(state)
+    + vaultKeySplit(state)
+    // No `vendors`, since story C5: the section picks from the CATALOGUE, and a consultant that
+    // borrowed a reviewer row is the defect this plan ended. The rows still reach the PANEL — the
+    // skew note above reads them, because what an older server does with a definition is decided
+    // through them.
+    + consultantBody(state.settings.consult, {
+      codexModels: state.codexModels,
+      agyModels: state.agyModels,
+      claudeProbe: state.claudeProbe,
+      askingClaude: state.askingClaude,
+      // The engines, so a LOCAL consultant has a dropdown that asked one. It used to pass
+      // nothing, and a saved model was then labelled gone by something that had never looked.
+      // Keyed by endpoint: the reviewer-row map next to it is keyed by vendor id and could never
+      // answer a row that holds no reviewer.
+      enginesByEndpoint: state.enginesByEndpoint,
+      consultPrompt: state.consultPrompt,
+      // The REVIEWERS' palette, built from the same canonical list `reviewersBody` uses, so a
+      // caller wears the colour its vendor has on its card and in a running round. Passed even
+      // when no reviewer is configured: the anchored ids answer regardless, which is what an
+      // anchor is for.
+      palette: vendorPalette(state.vendors.map((v) => v.id)),
+    })
+    // WHEN the consultant is asked without anybody being stuck, under WHO is asked
+    // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
+    + cadenceBlock(state.settings.cadence);
+}
+
+/** The Bugz section: the corpus, the ranking picker and the ingest server. */
+function bugzSection(state: PanelState): string {
+  return bugzBody({
+    corpus: state.bugz ?? EMPTY_CORPUS,
+    // Only the engines that run on THIS machine, because the ranking pass reads findings that
+    // are not anonymised. The collector refuses anything else anyway — this is so the picker
+    // cannot offer what it will refuse.
+    models: Object.entries(state.localEngines)
+      .flatMap(([id, engine]) => engine.models.map((m) => ({
+        id: `${id}/${m.id}`,
+        label: `${m.id} — ${id}`,
+      })))
+      .filter((m) => mayRank(m.id)),
+    // From CONFIGURATION, which is where the picker writes. They were read from panel fields
+    // for one commit, and nothing assigned those fields — so choosing a model did nothing.
+    model: state.settings.bugzModel,
+    server: state.settings.bugzServer,
+  });
+}
+
 export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date.now()): string {
   const open = state.openSections.length === 0 ? OPEN_BY_DEFAULT : state.openSections;
-  const body = [
-    `<div id="live-questions">${questionsSection(state.questions)}</div>`,
-    section('reviewers', 'Reviewers', open, reviewersBody(state)),
-    section('chat', 'Chat other AIs', open, chatBody(state.chat ?? DEFAULT_CHAT, state)),
-    section('phrases', 'Phrases', open, phrasesBody(state.phrases ?? [])),
-    // After the chat, because the two are one idea seen from opposite ends: there a PERSON asks
-    // another vendor about a passage, here an AI asks one about the tree it is stuck in.
-    section('consultant', 'Consultant', open,
-      `<div id="live-consultations">${consultationsBody(state.consultations ?? [], nowMs)}</div>`
-      + consultantSkew(state)
-      + vaultKeySplit(state)
-      // No `vendors`, since story C5: the section picks from the CATALOGUE, and a consultant that
-      // borrowed a reviewer row is the defect this plan ended. The rows still reach the PANEL — the
-      // skew note above reads them, because what an older server does with a definition is decided
-      // through them.
-      + consultantBody(state.settings.consult, {
-        codexModels: state.codexModels,
-        agyModels: state.agyModels,
-        claudeProbe: state.claudeProbe,
-        askingClaude: state.askingClaude,
-        // The engines, so a LOCAL consultant has a dropdown that asked one. It used to pass
-        // nothing, and a saved model was then labelled gone by something that had never looked.
-        // Keyed by endpoint: the reviewer-row map next to it is keyed by vendor id and could never
-        // answer a row that holds no reviewer.
-        enginesByEndpoint: state.enginesByEndpoint,
-        consultPrompt: state.consultPrompt,
-        // The REVIEWERS' palette, built from the same canonical list `reviewersBody` uses, so a
-        // caller wears the colour its vendor has on its card and in a running round. Passed even
-        // when no reviewer is configured: the anchored ids answer regardless, which is what an
-        // anchor is for.
-        palette: vendorPalette(state.vendors.map((v) => v.id)),
-      })
-      // WHEN the consultant is asked without anybody being stuck, under WHO is asked
-      // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
-      + cadenceBlock(state.settings.cadence)),
-    section('bugz', 'Bugz', open, bugzBody({
-      corpus: state.bugz ?? EMPTY_CORPUS,
-      // Only the engines that run on THIS machine, because the ranking pass reads findings that
-      // are not anonymised. The collector refuses anything else anyway — this is so the picker
-      // cannot offer what it will refuse.
-      models: Object.entries(state.localEngines)
-        .flatMap(([id, engine]) => engine.models.map((m) => ({
-          id: `${id}/${m.id}`,
-          label: `${m.id} — ${id}`,
-        })))
-        .filter((m) => mayRank(m.id)),
-      // From CONFIGURATION, which is where the picker writes. They were read from panel fields
-      // for one commit, and nothing assigned those fields — so choosing a model did nothing.
-      model: state.settings.bugzModel,
-      server: state.settings.bugzServer,
-    })),
-    section('prompts', 'Prompts per round', open, promptsBody(state)),
-    section('gate', 'The gate', open, gateBody(state)),
-    section('limits', 'Limits', open, limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length)),
-    section('keys', 'Vendor keys', open, keysBody(state)),
-    section('teamServers', 'Team servers', open, teamServersBody(state.teamServers ?? [], state.latestTeamServerVersion ?? '')),
-    section('side', 'This side', open, sideBody(state)),
-    section('server', 'MCP server', open, serverBody(state)),
-    section('rounds', 'Active rounds', open, `<div id="live-rounds">${activeRounds(state, nowMs)}</div>`),
-    // `notifications`, lowercase, because `panelView.test.ts` scans the rendered html with
-    // /data-section="([a-z]\+)" open/ and a capital letter would make this section invisible to
-    // the test that proves which sections a person has open.
-    section('notifications', 'Notifications', open, `<div id="live-notifications">${notificationsBody(state)}</div>`),
-  ].join('\n');
+  const body = sidebarBody(PANEL_SECTIONS, state, open, liveRegions(state, nowMs));
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -854,13 +872,6 @@ function phrasesBody(phrases: readonly Phrase[]): string {
   ${list}
   <button type="button" class="run" data-command="editPhrases">Edit phrases…</button>
 </div>`;
-}
-
-function section(id: string, title: string, open: readonly string[], body: string): string {
-  return `<details class="section sec-${id}" data-section="${id}"${open.includes(id) ? ' open' : ''}>
-  <summary>${escapeHtml(title)}</summary>
-${body}
-</details>`;
 }
 
 /**
@@ -3009,18 +3020,6 @@ ${LOOKING_CSS}
 `;
 
 /**
- * What the panel paints on: a key over the state that a REPAINT would change.
- *
- * <p>A repaint reloads the webview, which closes any dropdown that was open, so it is reserved
- * for the person's own doing. Everything that moves by itself travels through
- * {@link liveRegions} instead.</p>
- *
- * <p><b>Anything left out of this key is a control that can never change.</b> The spending
- * window was: clicking Today, Month or Year recorded the choice, produced an identical key, and
- * repainted nothing — so the section sat on Week for good, and the buttons read as broken
- * because they were.</p>
- */
-/**
  * Every command a control in this panel can post.
  *
  * <p>It exists because the Update button did nothing for a day. The markup emitted
@@ -3133,64 +3132,20 @@ export function isPanelCommand(value: string | undefined): value is PanelCommand
   return value !== undefined && (PANEL_COMMANDS as readonly string[]).includes(value);
 }
 
+/**
+ * What the panel paints on: the markup a REPAINT would draw, with the live regions blank.
+ *
+ * <p>A repaint reloads the webview, which closes any dropdown that was open, so it happens only when
+ * what is drawn changed. Everything that moves by itself travels through {@link liveRegions} instead.</p>
+ *
+ * <p><b>It used to be a list of state fields</b>, and anything left out of that list was a control
+ * that could never change: the spending window sat on Week for good, the local model list was frozen,
+ * the Bugz button did not move — each fixed by adding a field — and on 2026-09-28 ten more drawn fields
+ * were found missing, among them the server's *cannot review* verdict and the CLI update button, which
+ * therefore reached the screen only when something unrelated repainted (`todo/PLAN_settings_page.md`,
+ * F1). Built from the markup, the key cannot miss a field. See `panelSurface.ts` for what it leaves out
+ * on purpose.</p>
+ */
 export function staticKey(state: PanelState): string {
-  return JSON.stringify([
-    state.settings,
-    state.vendors,
-    state.codexModels,
-    // The local model list belongs here for the same reason every other list does: it CHANGES —
-    // somebody starts Ollama, pulls a model, presses the reprobe button. Left out, the picker was
-    // frozen for the life of the panel while the probe underneath it worked perfectly.
-    state.localEngines,
-    // The Bugz section, or the Collect button is frozen for the life of the panel while the run
-    // underneath it progresses perfectly — the same defect the two entries above were each added
-    // for. This is the ONLY way a persisted run state reaches the screen, and it is the whole
-    // reason the section holds no free-text control.
-    state.bugz,
-    state.server,
-    state.side,
-    // Rare, and both are a person's doing or an answer they asked for.
-    state.latestServerVersion,
-    state.usageWindow,
-    state.openSections,
-    // The Team-server rows, their slot lines and the usage scope reach the screen by being HERE.
-    // Left out, the section would be frozen for the life of the panel while the fetch underneath it
-    // worked perfectly — which is exactly what happened to the local model list.
-    state.teamServers,
-    state.usageScope,
-    // The chat settings, and this field REVERSES a rule that was measured and asserted while the
-    // section held a textarea: a chat setting had to be unable to repaint the panel, or saving the
-    // prompt box as it was typed would have rebuilt the page under a focused control per keystroke.
-    // There is no free-text control in the section any more — the prompt is a picker — and every
-    // remaining one is a `<select>`, which posts `change` with its dropdown already closed. What the
-    // exclusion now costs is the pair: choosing a provider must re-fill the model select beside it,
-    // and choosing a preset in the other tab must reach this list, and neither can happen in a
-    // section the paint decision cannot see.
-    state.chat,
-    // The consultant's prompt is a FILE, and the page has to notice when it changes underneath the
-    // textarea: "Restore default" deletes the override and repaints, and with this key missing the
-    // markup was identical so the box went on showing the text that had just been deleted. An
-    // external edit of `prompts/consult.md` did the same nothing.
-    //
-    // It is a free-text control, which the paragraph above says must not drive a repaint per
-    // keystroke — and it does not: the focus HOLD is what makes this safe. A textarea saves on a
-    // debounced `input` and `focusin` holds the paint until focus leaves it, so the rebuild lands
-    // when the person has finished typing rather than under their caret. (CodeRabbit, on the pull
-    // request.)
-    state.consultPrompt,
-    // The phrases, or the section is frozen for the life of the panel while the tab underneath it
-    // works perfectly — which is the bug the two entries above this one were each added for.
-    //
-    // What is hashed is what the section RENDERS — the id, the label and the tooltip — rather than
-    // every phrase's full text. The two differ by everything past the tooltip's limit, and a person
-    // with fifty long phrases would otherwise have all of it serialised on every render of the whole
-    // panel, including renders nothing to do with phrases. A rename and a rewrite both still repaint,
-    // because both change what is drawn. (Code round, gemini and codex, one finding each.)
-    state.phrases?.map((phrase) => [phrase.id, phrase.name, hoverFor(phrase)]),
-    // Where the data lives, which now has a button under it. It was out of this key while it was
-    // static text, and that was harmless for exactly as long as nothing in it could change — each
-    // of the four entries above is a control that was frozen for the life of a panel by this same
-    // omission, and "the directory I just chose is still showing the old one" is the fifth.
-    state.storage,
-  ]);
+  return sidebarKey(PANEL_SECTIONS, state);
 }
