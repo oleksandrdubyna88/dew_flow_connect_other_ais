@@ -54,9 +54,9 @@ public sealed class GlmVendor : IApiVendor
 
     public IReadOnlyDictionary<string, string> Headers(string conversation) => DashScopeTransport.Shared.Headers(conversation);
 
-    public ChatAnswer ReadAnswer(string response) => DashScopeTransport.Shared.Read(response);
+    public ChatAnswer ReadAnswer(string response) => OpenAiCompatibleTransport.Read(response);
 
-    public ApiOutcome Classify(int status, string body) => DashScopeTransport.Shared.Classify(status, body);
+    public ApiOutcome Classify(int status, string body) => OpenAiCompatibleTransport.Classify(status, body);
 
     public string Refusal(ApiRowSettings row) => VendorRefusal.Of(this, row);
 }

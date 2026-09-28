@@ -50,13 +50,13 @@ public sealed class QwenVendor : IApiVendor
     public string RequestBody(ApiTurn turn) =>
         turn.ThinkingOn && !string.Equals(turn.Effort.Trim(), Off, StringComparison.OrdinalIgnoreCase)
             ? DashScopeTransport.Shared.Body(turn)
-            : DashScopeTransport.Shared.Body(turn with { Effort = Off }, DashScopeTransport.WithEffortVerbatim());
+            : OpenAiCompatibleTransport.Body(turn with { Effort = Off }, DashScopeTransport.WithEffortVerbatim());
 
     public IReadOnlyDictionary<string, string> Headers(string conversation) => DashScopeTransport.Shared.Headers(conversation);
 
-    public ChatAnswer ReadAnswer(string response) => DashScopeTransport.Shared.Read(response);
+    public ChatAnswer ReadAnswer(string response) => OpenAiCompatibleTransport.Read(response);
 
-    public ApiOutcome Classify(int status, string body) => DashScopeTransport.Shared.Classify(status, body);
+    public ApiOutcome Classify(int status, string body) => OpenAiCompatibleTransport.Classify(status, body);
 
     /// <summary>The levels, or <c>none</c> — which is the thinking switch spelled as an effort, and is accepted as one.</summary>
     public string Refusal(ApiRowSettings row) =>

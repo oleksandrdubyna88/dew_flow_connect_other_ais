@@ -55,9 +55,9 @@ public sealed class XaiVendor : IApiVendor
 
     public IReadOnlyDictionary<string, string> Headers(string conversation) => _transport.Headers(conversation);
 
-    public ChatAnswer ReadAnswer(string response) => _transport.Read(response);
+    public ChatAnswer ReadAnswer(string response) => OpenAiCompatibleTransport.Read(response);
 
-    public ApiOutcome Classify(int status, string body) => _transport.Classify(status, body);
+    public ApiOutcome Classify(int status, string body) => OpenAiCompatibleTransport.Classify(status, body);
 
     public string Refusal(ApiRowSettings row) => VendorRefusal.Of(this, row);
 }

@@ -121,7 +121,7 @@ public sealed record ApiDialect(
             : throw new JsonException($"dialect '{name}': '{field}' must be a whole number of zero or more");
 
     /// <summary>An object of vendor fields, each kept as the JSON it was written as — a bool, a number, a string, an object.</summary>
-    private static IReadOnlyDictionary<string, JsonElement> Fields(JsonElement row, string name, string field)
+    private static Dictionary<string, JsonElement> Fields(JsonElement row, string name, string field)
     {
         var element = Field(row, name, field);
         if (element.ValueKind != JsonValueKind.Object)

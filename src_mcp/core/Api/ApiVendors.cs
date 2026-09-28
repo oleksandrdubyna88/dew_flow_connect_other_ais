@@ -1,3 +1,4 @@
+using System.Collections.Frozen;
 namespace CoaiMcp.Core.Api;
 
 /// <summary>
@@ -34,10 +35,10 @@ public static class ApiVendors
     };
 
     /// <summary>The calibrated modules of the shared Alibaba row, by the ONE model each was measured on — read off the modules, never a second list.</summary>
-    private static readonly IReadOnlyDictionary<string, IApiVendor> MeasuredOnTheAlibabaRow =
+    private static readonly FrozenDictionary<string, IApiVendor> MeasuredOnTheAlibabaRow =
         Modules.Values
             .Where(m => m.MeasuredModel.Length > 0 && string.Equals(m.Dialect.Name, DashScopeTransport.RowName, StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(m => m.MeasuredModel, m => m, StringComparer.OrdinalIgnoreCase);
+            .ToFrozenDictionary(m => m.MeasuredModel, m => m, StringComparer.OrdinalIgnoreCase);
 
     /// <summary>Every module name, in registry order — what the panel may offer and the shim says it knows.</summary>
     public static IReadOnlyList<string> Names => [.. Modules.Keys];
@@ -55,10 +56,12 @@ public static class ApiVendors
     public static IApiVendor? Resolve(string dialectOrName, string model)
     {
         var name = NameOf(dialectOrName);
+        if (Modules.TryGetValue(name, out var module))
+        {
+            return ForModel(module, model);
+        }
 
-        return Modules.TryGetValue(name, out var module) ? ForModel(module, model)
-            : string.Equals(name, DashScopeTransport.RowName, StringComparison.OrdinalIgnoreCase) ? MeasuredModel(model)
-            : Generic(name);
+        return string.Equals(name, DashScopeTransport.RowName, StringComparison.OrdinalIgnoreCase) ? MeasuredModel(model) : Generic(name);
     }
 
     /// <summary>
@@ -68,10 +71,13 @@ public static class ApiVendors
     public static string SetAside(string dialectOrName, string model) =>
         Modules.TryGetValue(NameOf(dialectOrName), out var module) && Mismatch(module, model)
             ? $"the '{module.Name}' module was measured on {module.MeasuredModel} and declares that model's levels and defaults — "
-              + (model.Trim().Length > 0 ? $"'{model.Trim()}'" : "a row that names no model (the endpoint picks one)")
+              + ModelPhrase(model)
               + $" runs on the same '{module.Dialect.Name}' row with nothing declared (any effort sent verbatim, no thinking switch); "
               + $"name {module.MeasuredModel}, or a module measured on the model, for calibrated settings"
             : string.Empty;
+
+    private static string ModelPhrase(string model) =>
+        model.Trim().Length > 0 ? $"'{model.Trim()}'" : "a row that names no model (the endpoint picks one)";
 
     private static string NameOf(string dialectOrName) =>
         dialectOrName.Trim().Length > 0 ? dialectOrName.Trim() : ApiDialects.OpenAiName;
@@ -92,6 +98,6 @@ public static class ApiVendors
     private static IApiVendor MeasuredModel(string model) =>
         MeasuredOnTheAlibabaRow.TryGetValue(model.Trim(), out var measured) ? measured : new OpenAiCompatibleVendor(DashScopeTransport.Row);
 
-    private static IApiVendor? Generic(string row) =>
+    private static OpenAiCompatibleVendor? Generic(string row) =>
         ApiDialects.Named(row) is { } dialect ? new OpenAiCompatibleVendor(dialect) : null;
 }

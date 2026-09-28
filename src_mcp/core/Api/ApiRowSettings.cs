@@ -104,11 +104,13 @@ public sealed record ApiEffective(string Effort, bool ThinkingOn, int MaxTokens,
         _ => effort,
     };
 
-    private static EnvironmentEffort Classify(IApiVendor vendor, string effort) =>
-        effort.Length == 0 ? EnvironmentEffort.Unset
-        : vendor.Dialect.EffortToSend(effort).Length == 0 ? EnvironmentEffort.SendsNothing
-        : vendor.Capabilities.Accepts(effort) ? EnvironmentEffort.Declared
-        : EnvironmentEffort.Unlisted;
+    private static EnvironmentEffort Classify(IApiVendor vendor, string effort) => effort switch
+    {
+        { Length: 0 } => EnvironmentEffort.Unset,
+        _ when vendor.Dialect.EffortToSend(effort).Length == 0 => EnvironmentEffort.SendsNothing,
+        _ when vendor.Capabilities.Accepts(effort) => EnvironmentEffort.Declared,
+        _ => EnvironmentEffort.Unlisted,
+    };
 
     private static bool ThinkingOf(IApiVendor vendor, ThinkingSetting thinking) =>
         thinking == ThinkingSetting.Default ? vendor.Defaults.ThinkingOn : thinking == ThinkingSetting.On;

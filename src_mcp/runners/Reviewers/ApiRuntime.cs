@@ -38,6 +38,9 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
     /// </summary>
     public const int EndedBeforeAnAnswerExit = 69;
 
+    /// <summary>The shim's spelling of a row's thinking switch turned off.</summary>
+    private static readonly string[] ThinkingOff = ["--thinking", "off"];
+
     public string Provider => id;
 
     /// <summary>This binary, however it was started — see <see cref="LocalRuntime.SelfInvocation"/>.</summary>
@@ -95,7 +98,7 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
                     // The row's thinking switch, only when a person turned it OFF on a module that has one
                     // (the roster refused it otherwise): absent means on, which is every calibrated default,
                     // so every launch that predates the switch is spelled exactly as it was.
-                    ..(settings.ThinkingOn ? [] : new[] { "--thinking", "off" }),
+                    ..(settings.ThinkingOn ? [] : ThinkingOff),
                 ],
                 worktreePath)
             {

@@ -19,7 +19,7 @@ public sealed class OpenAiCompatibleTransport(ApiDialect dialect)
     public string Body(ApiTurn turn) => Body(turn, dialect);
 
     /// <summary>The body for a turn from a variant of the row — how a module spells a switch the row has no field for.</summary>
-    public string Body(ApiTurn turn, ApiDialect spelledAs) =>
+    public static string Body(ApiTurn turn, ApiDialect spelledAs) =>
         ChatRequest.Body(spelledAs, turn.Model, turn.Prompt, turn.SchemaJson, turn.Seed, turn.Effort, turn.MaxTokens);
 
     /// <summary>
@@ -32,7 +32,9 @@ public sealed class OpenAiCompatibleTransport(ApiDialect dialect)
             ? new Dictionary<string, string>(StringComparer.Ordinal) { [dialect.CacheKeyHeader] = conversation }
             : new Dictionary<string, string>(StringComparer.Ordinal);
 
-    public ChatAnswer Read(string response) => CompletionReader.Read(response);
+    /// <summary>The one completion reader — static, because it is the same for every row.</summary>
+    public static ChatAnswer Read(string response) => CompletionReader.Read(response);
 
-    public ApiOutcome Classify(int status, string body) => ApiClassification.Of(status, body);
+    /// <summary>The one classification of a status and body — static, because it is the same for every row.</summary>
+    public static ApiOutcome Classify(int status, string body) => ApiClassification.Of(status, body);
 }

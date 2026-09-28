@@ -38,9 +38,9 @@ public sealed class OpenAiCompatibleVendor(ApiDialect dialect) : IApiVendor
 
     public IReadOnlyDictionary<string, string> Headers(string conversation) => _transport.Headers(conversation);
 
-    public ChatAnswer ReadAnswer(string response) => _transport.Read(response);
+    public ChatAnswer ReadAnswer(string response) => OpenAiCompatibleTransport.Read(response);
 
-    public ApiOutcome Classify(int status, string body) => _transport.Classify(status, body);
+    public ApiOutcome Classify(int status, string body) => OpenAiCompatibleTransport.Classify(status, body);
 
     /// <summary>Any effort goes to the wire; only a thinking switch is refused, because there is none to spell.</summary>
     public string Refusal(ApiRowSettings row) => VendorRefusal.Of(this, row);
@@ -50,10 +50,12 @@ public sealed class OpenAiCompatibleVendor(ApiDialect dialect) : IApiVendor
 public static class VendorRefusal
 {
     /// <summary>Why the row's settings cannot be sent to this module, or empty.</summary>
-    public static string Of(IApiVendor vendor, ApiRowSettings row) =>
-        !vendor.Capabilities.Accepts(row.Effort) ? UnknownEffort(vendor, row.Effort)
-        : row.Thinking == ThinkingSetting.Off && !vendor.Capabilities.ThinkingSwitchable ? NoSwitch(vendor)
-        : string.Empty;
+    public static string Of(IApiVendor vendor, ApiRowSettings row) => row switch
+    {
+        _ when !vendor.Capabilities.Accepts(row.Effort) => UnknownEffort(vendor, row.Effort),
+        { Thinking: ThinkingSetting.Off } when !vendor.Capabilities.ThinkingSwitchable => NoSwitch(vendor),
+        _ => string.Empty,
+    };
 
     private static string UnknownEffort(IApiVendor vendor, string effort) =>
         $"{vendor.Name} does not take reasoning effort '{effort.Trim()}' — it accepts {string.Join(", ", vendor.Capabilities.EffortLevels)}"
