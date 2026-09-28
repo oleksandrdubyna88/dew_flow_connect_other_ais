@@ -2,6 +2,9 @@
 
 ## [0.40.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.0...mcp-v0.40.1) (2026-09-28)
 
+> Never shipped — both Windows builds passed their tests and then ran out of the 15-minute build limit (now
+> 30) before uploading. 0.40.2 carries the same code.
+
 
 ### Miscellaneous Chores
 
