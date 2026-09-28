@@ -1,9 +1,11 @@
 # Changelog
 
-## Extension 0.58.0 · Server 0.40.1 — 2026-09-28
+## Extension 0.58.0 · Server 0.40.2 — 2026-09-28
 
-*Server 0.40.0 was tagged and never shipped: its release was cut before this note had landed, and the
-release guard stopped it with nothing built or published. 0.40.1 carries exactly the same code.*
+*Server 0.40.0 and 0.40.1 were tagged and never shipped, and 0.40.2 carries exactly the same code. 0.40.0's
+release was cut before this note had landed, so the release guard stopped it with nothing built. 0.40.1's
+two Windows builds passed their tests and then ran out of the build's 15-minute limit, now 30, before they
+could upload.*
 
 **A fourth review: the whole feature, once, before it is released.** When a plan of three or more epics
 is finished, the AI can now ask for a review of all of it together — whether what shipped is what the plan
