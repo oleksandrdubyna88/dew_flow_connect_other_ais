@@ -2,6 +2,9 @@
 
 ## [0.40.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.39.0...mcp-v0.40.0) (2026-09-28)
 
+> Never shipped — the tag was cut before its changelog note, and the release guard refused it with nothing
+> built. 0.40.1 carries the same code.
+
 
 ### Features
 
