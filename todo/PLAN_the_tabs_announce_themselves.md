@@ -136,6 +136,19 @@ Both plans touch `src_vs_code/src/roundsLog.ts`, so the division is named here a
 **Disjoint**: one plan is about the control that switches views, the other about the controls beside
 it. They share a file and no function; whichever lands second rebases without conflict.
 
+## The boundary with the Settings-page plan (MANDATORY, both sides)
+
+Reciprocal of the *Boundaries* table in [PLAN_settings_page.md](PLAN_settings_page.md), whose new
+Settings tab is a third tablist.
+
+| Item | Which plan builds it | The other plan's part | Order |
+|---|---|---|---|
+| Step 1 of the build order below — `tabKeys.ts` and its tests — plus an opt-in `roving` flag on `tabStrip` (absent = every existing page byte-identical) | the Settings-page plan (story S3), to the design in § *What ships* B | this plan consumes it unchanged | Settings-page plan first |
+| Steps 2–4: the roles page, the rounds log's strip, the window filter | **this plan** | none | after |
+
+**Disjoint** beyond that: the Settings page is the first CONSUMER of `tabKeys.ts`, not a rewrite of
+either page this plan converts.
+
 ## Build order
 
 1. `tabKeys.ts` + its tests. Nothing consumes it yet.
