@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { usageTabHtml } from '../roundsLog';
 import { CliStatus } from '../cliVersions';
-import { panelHtml, PANEL_COMMANDS } from '../panelView';
+import { PANEL_COMMANDS } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { RoundRecord, SessionFile } from '../rounds';
 import { DEFAULTS } from '../settingsShape';
 import { UsageEntry } from '../usage';
@@ -65,7 +66,7 @@ function html(over: {
   usage?: readonly UsageEntry[];
   cliStatus?: Record<string, CliStatus>;
 } = {}): string {
-  return panelHtml({
+  return everyPageHtml({
     settings: DEFAULTS,
     vendors: DEFAULT_VENDORS,
     codexModels: [], agyModels: [],

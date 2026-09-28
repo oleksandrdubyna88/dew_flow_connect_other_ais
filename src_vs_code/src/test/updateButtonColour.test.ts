@@ -1,10 +1,11 @@
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { panelHtml } from '../panelView';
+
 import { versionProbeCandidates } from '../cliVersions';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
+import { everyPageHtml } from './panelPages';
 
 /**
  * Green means "there is something to update" and nothing else means green.
@@ -23,7 +24,7 @@ import { DEFAULT_VENDORS } from '../vendors';
  */
 
 function css(): string {
-  return panelHtml({
+  return everyPageHtml({
     settings: DEFAULTS,
     vendors: DEFAULT_VENDORS,
     codexModels: [], agyModels: [],

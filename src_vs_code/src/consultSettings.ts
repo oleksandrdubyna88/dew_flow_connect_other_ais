@@ -475,7 +475,7 @@ export function consultantSkewNote(
     + `endpoint or CLI path. The consultant for ${listed(affected)} will run through the reviewer row with the same `
     + 'vendor id instead — that row’s runtime, endpoint and CLI path, with the model chosen here — and one whose '
     + `id names no reviewer row is refused as not configured, whatever this section shows. Update it to `
-    + `${CONSULTANT_DEFINITION_SINCE} or later — the MCP server section below.`;
+    + `${CONSULTANT_DEFINITION_SINCE} or later — the MCP server tab.`;
 }
 
 /**

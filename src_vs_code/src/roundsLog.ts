@@ -1068,7 +1068,7 @@ export function consultationsHtml(
 ): string {
   if (log.consultations.length === 0) {
     return '<div class="empty">No consultations yet. One happens when an AI calls <code>consult</code> — stuck, or because the cadence asked for one —'
-      + ' the <b>Consultant</b> section of the panel says who it asks.</div>';
+      + ' the <b>Consultant</b> tab of ConnectOtherAIs Settings says who it asks.</div>';
   }
 
   const rows = log.consultations.map((one) => `<tr data-started="${startedMsOf(one.startedUtc)}">

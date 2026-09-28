@@ -8,6 +8,14 @@ import { HelpBody } from './helpContent';
  * that is missing here falls back to the English body, visibly — see `bodyFor`.</p>
  */
 export const ES: Readonly<Record<string, HelpBody>> = {
+  "the-settings-tab": {
+    title: "El panel y la pestaña Settings",
+    whatItIs: "La barra lateral es lo que está pasando ahora: una pregunta que espera su respuesta, y luego **Notifications**, **Active rounds** — las rondas y las consultas en curso en este minuto —, **Phrases** y **Bugz**. Todo lo que se configura una vez está en la pestaña **Settings**, que abre el engranaje junto al botón de ayuda en la barra de título del panel: una pestaña para Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor keys, Team servers, This side y MCP server.",
+    why: "Catorce secciones plegadas en una columna estrecha obligaban a pasar por diez cosas configuradas una vez para llegar a las cuatro por las que se vuelve. Las pestañas tienen los mismos controles que tenían las secciones, con el mismo efecto — solo cambió dónde se dibujan —, así que una elección hecha en una pestaña se guarda exactamente como se guardaba la misma elección en la barra lateral.",
+    setup: "No hay nada que configurar. **ConnectOtherAIs: Settings** en la paleta de comandos abre la misma pestaña. Hay una por ventana: pulsar de nuevo el engranaje la trae de vuelta en lugar de abrir otra, y se abre en la pestaña en la que estuvo por última vez.",
+    usage: "Pulse una pestaña o use el teclado: Izquierda y Derecha recorren la franja y al llegar a un extremo pasan al otro, Inicio y Fin van a la primera y a la última, y Tab sale de la franja. Cada cambio se guarda al hacerlo, como en la barra lateral, y una respuesta nueva — una versión de CLI, una lista de modelos, un precio — se muestra en cuanto llega. Ctrl+F busca en la pestaña en la que está.",
+    whatCanGoWrong: "El engranaje se ve mientras el puntero está sobre el panel o este tiene el foco, como cualquier botón de la barra de título de VS Code; la entrada de la paleta de comandos está siempre. Tras recargar la ventana, la pestaña Settings no vuelve sola: pulse otra vez el engranaje. Una consulta en curso aparece en la barra lateral bajo **Active rounds**, no en la pestaña Consultant: la barra lateral muestra lo que pasa ahora, y en la pestaña Consultant se decide a quién se pregunta.",
+  },
   "phrases": {
     title: "Phrases: las frases que deja de reescribir",
     whatItIs: "Una lista de frases que usted guarda, como botones en la sección **Phrases** del panel. Pulse una y pasa al portapapeles; la pega donde iba a escribirla, normalmente en el cuadro de Claude Code. La lista se edita en una pestaña propia: **ConnectOtherAIs: Edit phrases**.",

@@ -1,4 +1,5 @@
 import { escapeHtml } from './escapeHtml';
+import { tabStrip } from './tabStrip';
 
 /**
  * Which webview a section is drawn on, and how a page of sections becomes markup and a paint key.
@@ -29,7 +30,7 @@ export const BLANK_REGIONS: Regions = { questions: '', rounds: '', consultations
  * <p>A test that checks "every control on the panel" by rendering ONE page goes vacuous rather than
  * red the day a section moves to another page, so those tests walk this list instead of naming a page.</p>
  */
-export const SURFACE_IDS = ['sidebar'] as const;
+export const SURFACE_IDS = ['sidebar', 'settings'] as const;
 export type SurfaceId = (typeof SURFACE_IDS)[number];
 
 /** One section of a page: what it is called, where it is drawn, and its body. */
@@ -86,4 +87,33 @@ export function sidebarBody<S>(
  */
 export function sidebarKey<S>(specs: readonly SectionSpec<S>[], state: S): string {
   return sidebarBody(specs, state, [], BLANK_REGIONS);
+}
+
+/** The names the Settings page wires its strip and panes with: `tab-<id>` controls `pane-<id>`. */
+const SETTINGS_STRIP = { tab: 'tab-', panel: 'pane-', label: 'Settings', strip: 'settings', roving: true } as const;
+
+/**
+ * The Settings page's body: a strip with one tab per section, and one pane per tab.
+ *
+ * <p><b>Drawn tab-neutral</b> — no tab chosen, every pane hidden — and the page's own script opens the
+ * tab the host holds, which reaches it as a script literal beside the caret (`todo/PLAN_settings_page.md`,
+ * D6). A pane drawn as selected would put the held tab into the markup, the markup is the paint key, and
+ * every tab press would then reload the whole page a few seconds later: the defect the key's own rule
+ * exists to stop.</p>
+ *
+ * <p>Each pane keeps `data-section`, so everything that reads a section by that attribute finds it on
+ * this page as on the sidebar, and lacks the `section` class and an `open` attribute, so neither the
+ * accordion's toggle binding nor the open-sections scan ever mistakes a pane for a disclosure.
+ * `data-pane` is what the page's script selects panes by.</p>
+ *
+ * @param specs the sections to draw, in order — the caller chooses them, so a test can pass its own
+ */
+export function settingsBody<S>(specs: readonly SectionSpec<S>[], state: S): string {
+  const tabs = specs.map((spec) => ({ key: spec.id, label: spec.title }));
+  const panes = specs.map((spec) => `<section id="pane-${spec.id}" class="pane sec-${spec.id}" role="tabpanel" `
+    + `aria-labelledby="tab-${spec.id}" tabindex="0" data-section="${spec.id}" data-pane="${spec.id}" hidden>
+${spec.body(state, BLANK_REGIONS)}
+</section>`);
+
+  return [`<main class="settings">`, tabStrip(tabs, '', SETTINGS_STRIP), ...panes, '</main>'].join('\n');
 }

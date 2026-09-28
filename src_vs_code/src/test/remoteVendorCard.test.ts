@@ -1,7 +1,8 @@
 import * as assert from 'node:assert';
 import { test } from 'node:test';
 import { DEFAULTS } from '../settingsShape';
-import { PanelState, panelHtml } from '../panelView';
+import { PanelState } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { Vendor } from '../vendors';
 import { TeamServerState } from '../teamServerView';
 
@@ -43,7 +44,7 @@ const TEAM: TeamServerState = {
 };
 
 function page(over: Partial<PanelState> = {}): string {
-  return panelHtml({
+  return everyPageHtml({
     settings: DEFAULTS,
     vendors: [ROW],
     codexModels: [], agyModels: [],

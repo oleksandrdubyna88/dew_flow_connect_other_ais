@@ -30,6 +30,14 @@ export class Node {
   readonly attributes: Record<string, string>;
   hidden: boolean;
   parent: Node | undefined;
+  /** Whether the page moved focus here — the arrow keys of a tab strip must. */
+  focused: boolean;
+  /**
+   * What a click on this node does: dispatch through the document's listeners, as a browser's
+   * `element.click()` bubbles to a delegated handler. Wired by {@link runPageHtml} for the nodes it is
+   * handed; a node nobody wired has no click, which fails loudly rather than doing nothing.
+   */
+  dispatchClick: ((node: Node) => void) | undefined;
 
   constructor(dataset: Record<string, string> = {}, tagName = 'INPUT') {
     this.dataset = dataset;
@@ -40,6 +48,17 @@ export class Node {
     this.className = '';
     this.attributes = {};
     this.hidden = false;
+    this.focused = false;
+    this.dispatchClick = undefined;
+  }
+
+  focus(): void {
+    this.focused = true;
+  }
+
+  click(): void {
+    assert.ok(this.dispatchClick !== undefined, 'this node was clicked but is not in the running page');
+    this.dispatchClick(this);
   }
 
   /** The chain upwards, matching `[data-x]` and `[data-x="y"]` — the only two shapes the page uses. */
@@ -86,10 +105,18 @@ export function pageScript(html: string): string {
   return html.slice(start, end);
 }
 
-/** What the running page offers a test: what it has posted, and a way to press something. */
+/** An event as the page's handlers receive it, with the one thing a test reads back. */
+export interface FiredEvent {
+  readonly defaultPrevented: boolean;
+}
+
+/** What the running page offers a test: what it has posted, a way to press something, and the host's voice. */
 export interface Page {
   readonly posted: readonly Record<string, unknown>[];
-  fire(kind: string, target: Node): void;
+  /** An event at `target`, carrying `extra` (a key, say) — returned so a test can see `preventDefault`. */
+  fire(kind: string, target: Node, extra?: Readonly<Record<string, unknown>>): FiredEvent;
+  /** A message from the host, delivered to every `window` message listener, as `postMessage` does. */
+  message(data: unknown): void;
 }
 
 /**
@@ -117,10 +144,25 @@ export function runPageHtml(
   inDocument: Readonly<Record<string, readonly Node[]>> = {},
 ): Page {
   const posted: Record<string, unknown>[] = [];
-  const listeners = new Map<string, ((event: { target: Node }) => void)[]>();
-  const add = (kind: string, handler: (event: { target: Node }) => void): void => {
+  const listeners = new Map<string, ((event: unknown) => void)[]>();
+  const heard: ((event: { data: unknown }) => void)[] = [];
+  const add = (kind: string, handler: (event: unknown) => void): void => {
     listeners.set(kind, [...(listeners.get(kind) ?? []), handler]);
   };
+  const fire = (kind: string, target: Node, extra: Readonly<Record<string, unknown>> = {}): FiredEvent => {
+    let prevented = false;
+    const event = { ...extra, target, preventDefault: (): void => { prevented = true; } };
+    for (const handler of listeners.get(kind) ?? []) {
+      handler(event);
+    }
+
+    return { defaultPrevented: prevented };
+  };
+  for (const nodes of Object.values(inDocument)) {
+    for (const node of nodes) {
+      node.dispatchClick = (clicked) => { fire('click', clicked); };
+    }
+  }
   const fakeDocument = {
     addEventListener: add,
     querySelectorAll: (selector: string): readonly Node[] => inDocument[selector] ?? [],
@@ -135,16 +177,24 @@ export function runPageHtml(
   body(
     () => ({ postMessage: (message: Record<string, unknown>) => { posted.push(message); } }),
     fakeDocument,
-    { addEventListener: add },
+    {
+      addEventListener: (kind: string, handler: (event: unknown) => void): void => {
+        if (kind === 'message') {
+          heard.push(handler);
+        }
+        add(kind, handler);
+      },
+    },
     (fn: () => void): number => { fn(); return 0; },
     (): void => undefined,
   );
 
   return {
     posted,
-    fire: (kind, target) => {
-      for (const handler of listeners.get(kind) ?? []) {
-        handler({ target });
+    fire,
+    message: (data) => {
+      for (const handler of heard) {
+        handler({ data });
       }
     },
   };

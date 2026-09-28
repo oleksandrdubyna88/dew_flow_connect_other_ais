@@ -8,6 +8,14 @@ import { HelpBody } from './helpContent';
  * that is missing here falls back to the English body, visibly — see `bodyFor`.</p>
  */
 export const DE: Readonly<Record<string, HelpBody>> = {
+  "the-settings-tab": {
+    title: "Das Panel und der Settings-Tab",
+    whatItIs: "Die Seitenleiste zeigt, was gerade passiert: eine Frage, die auf Ihre Antwort wartet, dann **Notifications**, **Active rounds** — die Runden und Konsultationen, die in dieser Minute laufen —, **Phrases** und **Bugz**. Alles, was Sie einmal einrichten, liegt im Tab **Settings**, den das Zahnrad neben der Hilfe-Schaltfläche in der Titelleiste des Panels öffnet: je ein Tab für Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor keys, Team servers, This side und MCP server.",
+    why: "Vierzehn eingeklappte Abschnitte in einer schmalen Spalte hießen: an zehn einmal eingerichteten Dingen vorbeiscrollen, um die vier zu erreichen, für die man wiederkommt. Die Tabs enthalten dieselben Bedienelemente wie die Abschnitte, mit derselben Wirkung — geändert hat sich nur, wo sie gezeichnet werden —, eine Wahl im Tab wird also genau so gespeichert wie dieselbe Wahl in der Seitenleiste.",
+    setup: "Nichts einzurichten. **ConnectOtherAIs: Settings** in der Befehlspalette öffnet denselben Tab. Es gibt einen pro Fenster: ein erneuter Klick auf das Zahnrad holt ihn zurück, statt einen zweiten zu öffnen, und er öffnet sich auf dem Tab, auf dem Sie zuletzt waren.",
+    usage: "Klicken Sie auf einen Tab oder nutzen Sie die Tastatur: Links und Rechts wandern die Leiste entlang und springen an den Enden auf die andere Seite, Pos1 und Ende gehen zum ersten und letzten Tab, Tab verlässt die Leiste. Jede Änderung wird sofort gespeichert, wie in der Seitenleiste, und eine neue Antwort — eine CLI-Version, eine Modellliste, ein Preis — erscheint, sobald sie eintrifft. Strg+F durchsucht den Tab, auf dem Sie sind.",
+    whatCanGoWrong: "Das Zahnrad erscheint, solange der Mauszeiger über dem Panel ist oder es den Fokus hat, wie jede Titelleisten-Schaltfläche in VS Code; der Eintrag in der Befehlspalette ist immer da. Nach einem Neuladen des Fensters kommt der Settings-Tab nicht von selbst zurück — klicken Sie erneut auf das Zahnrad. Eine laufende Konsultation steht in der Seitenleiste unter **Active rounds**, nicht im Consultant-Tab: Die Seitenleiste zeigt, was gerade passiert, und im Consultant-Tab entscheiden Sie, wer gefragt wird.",
+  },
   "phrases": {
     title: "Phrases: die Sätze, die Sie nicht mehr abtippen",
     whatItIs: "Eine Liste von Sätzen, die Sie aufbewahren — als Schaltflächen im Abschnitt **Phrases** des Panels. Eine davon drücken, und sie liegt in der Zwischenablage; eingefügt wird sie dort, wo Sie sie sonst getippt hätten, meist im Eingabefeld von Claude Code. Bearbeitet wird die Liste in einem eigenen Tab: **ConnectOtherAIs: Edit phrases**.",

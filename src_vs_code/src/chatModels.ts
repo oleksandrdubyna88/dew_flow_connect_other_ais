@@ -361,14 +361,14 @@ export function resolveChatPick(
         ok: false,
         refusal: list.providers.length === 0
           ? 'There is no saved model to send this to yet — add one with Edit chat presets.'
-          : 'No saved model is chosen — pick one in the panel, or add one with Edit chat presets.',
+          : 'No saved model is chosen — pick one in Settings → Chat other AIs, or add one with Edit chat presets.',
       };
     }
 
     return {
       ok: false,
       refusal: disabled !== undefined
-        ? `${providerId} is switched off in the panel — turn it back on to send a chat to it`
+        ? `${providerId} is switched off in Settings → Reviewers — turn it back on to send a chat to it`
         : `${providerId} is not a model this conversation can be sent to any more`,
     };
   }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 
-import { panelHtml, type PanelFocus, type PanelState } from '../panelView';
+import { panelHtml, type PanelFocus, type PanelState, settingsHtml, settingsSections } from '../panelView';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
@@ -209,14 +209,28 @@ function regionsOf(html: string): Map<string, Region> {
   }));
 }
 
-/** Render the panel, parse its controls, and run its own script over them. */
+/**
+ * The page that holds the section a fixture opens: the Settings tab, opened on that section, when the
+ * section moved there (`todo/PLAN_settings_page.md`) — the sidebar otherwise.
+ */
+function pageHolding(state: PanelState): string {
+  const opened = state.openSections[0] ?? '';
+
+  return settingsSections().some((section) => section.id === opened)
+    ? settingsHtml(state, 'test-nonce', opened)
+    : panelHtml(state, 'test-nonce');
+}
+
+/** Render the page holding the fixture's section, parse its controls, and run its own script over them. */
 export function runPanel(state: PanelState): Page {
-  const html = panelHtml(state, 'test-nonce');
+  const html = pageHolding(state);
   const controls = controlsOf(html);
   const commands = commandsOf(html);
   const posted: Record<string, unknown>[] = [];
   const regions = regionsOf(html);
-  let listener: ((event: { data: unknown }) => void) | undefined;
+  // EVERY message listener: the Settings page adds its own (the tab it is told to show) after the shared
+  // script's, and keeping only the last one would hand a live push to the listener that ignores it.
+  const listeners: ((event: { data: unknown }) => void)[] = [];
   const fakeDocument = {
     addEventListener: () => undefined,
     querySelectorAll: (selector: string): readonly Control[] => selected(selector, controls, commands),
@@ -239,7 +253,7 @@ export function runPanel(state: PanelState): Page {
     {
       addEventListener: (kind: string, handler: (event: { data: unknown }) => void): void => {
         if (kind === 'message') {
-          listener = handler;
+          listeners.push(handler);
         }
       },
     },
@@ -254,8 +268,10 @@ export function runPanel(state: PanelState): Page {
     posted,
     region: (id) => regions.get(id)?.innerHTML ?? '',
     deliver: (data) => {
-      assert.ok(listener !== undefined, 'the panel registers no message listener, so a live push drives nothing');
-      listener({ data });
+      assert.ok(listeners.length > 0, 'the panel registers no message listener, so a live push drives nothing');
+      for (const listener of listeners) {
+        listener({ data });
+      }
     },
   };
 }

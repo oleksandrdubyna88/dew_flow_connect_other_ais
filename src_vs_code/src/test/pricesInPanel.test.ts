@@ -1,11 +1,12 @@
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { panelHtml } from '../panelView';
+
 import { ModelPrice } from '../modelPrices';
 import { DEFAULTS } from '../settingsShape';
 import { totalsByVendor, UsageEntry } from '../usage';
 import { Vendor } from '../vendors';
+import { everyPageHtml } from './panelPages';
 
 /**
  * A looked-up price is a DEFAULT, and a typed one is a fact.
@@ -27,7 +28,7 @@ function vendor(over: Partial<Vendor> = {}): Vendor {
 }
 
 function html(v: Vendor, prices: Record<string, ModelPrice>): string {
-  return panelHtml({
+  return everyPageHtml({
     settings: DEFAULTS, vendors: [v], codexModels: [], agyModels: [], localEngines: {}, server: { kind: 'absent', version: '', remembered: false, updateOffered: false }, side: '', perSide: false,
     latestServerVersion: '', questions: [], sessions: [], openSections: [], usage: [],
     usageWindow: 'week', cliStatus: {}, modelPrices: prices,

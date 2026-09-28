@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { panelHtml, type PanelState } from '../panelView';
+import { type PanelState } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { phrasesFrom } from '../phrases';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
@@ -97,7 +98,7 @@ function run(buttons: readonly Button[], phrases: readonly Phrase[] = PHRASES): 
     body: { style: { fontSize: '' } },
     documentElement: { style: { setProperty: () => undefined } },
   };
-  const script = pageScript(panelHtml(state(phrases), 'test-nonce'));
+  const script = pageScript(everyPageHtml(state(phrases), 'test-nonce'));
    
   // its text once passed over a syntax error that made every control in the panel dead.
   const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', script);
@@ -220,7 +221,7 @@ function renderedPhraseButton(html: string): Element {
 const IN_THE_ROW: readonly Element[] = [{ tag: 'div', classes: ['phrases'], attrs: {} }];
 
 test('the word Copied is painted green by a rule that matches the button the script marks', () => {
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
 
   // (a) The attribute the rule keys on — OBSERVED, by running the panel's own script.
   const ship = new Button('a', 'Ship it');
@@ -263,7 +264,7 @@ test('the word Copied is painted green by a rule that matches the button the scr
 });
 
 test('the acknowledgement stands on the panel ground, in the theme green, with no colour of ours', () => {
-  const rule = stylesheet(panelHtml(state(), 'n0nce'))
+  const rule = stylesheet(everyPageHtml(state(), 'n0nce'))
     .find((one) => one.selector === '.phrases .run[data-said="1"]');
   assert.ok(rule, 'the acknowledgement rule is gone');
   assert.ok(!/#[0-9a-f]{3,8}\b/i.test(rule.body), `a colour of ours instead of the theme: ${rule.body}`);
@@ -282,7 +283,7 @@ test('the acknowledgement stands on the panel ground, in the theme green, with n
 test('the looking mark is one rule in the panel stylesheet, and it turns', () => {
   // A STRUCTURAL assertion, which is the kind this page allows: the stylesheet is parsed as data and
   // the rule is looked up, rather than the page's text being searched for a string.
-  const rules = stylesheet(panelHtml(state(), 'n0nce'));
+  const rules = stylesheet(everyPageHtml(state(), 'n0nce'));
   const looking = rules.filter((one) => one.selector === '.looking');
 
   assert.equal(looking.length, 1,
@@ -297,7 +298,7 @@ test('the stylesheet is still one parsable whole, at-rules and all', () => {
   // `stylesheet` asserts every byte was consumed, so this fails rather than silently skipping if the
   // spinner's nested @keyframes-inside-@media confuses the parser — which is the shape that carries
   // the reduced-motion preference without defining .looking a second time.
-  const rules = stylesheet(panelHtml(state(), 'n0nce'));
+  const rules = stylesheet(everyPageHtml(state(), 'n0nce'));
 
   assert.ok(rules.length > 50, `the stylesheet parsed to ${rules.length} rules, which is not this page`);
   assert.equal(rules.filter((one) => one.selector.includes('@')).length, 0, 'an at-rule leaked out as a selector');

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { PANEL_COMMANDS, VSCODE_COMMAND_FOR, panelHtml, staticKey, type PanelState } from '../panelView';
+import { PANEL_COMMANDS, VSCODE_COMMAND_FOR, staticKey, type PanelState } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULT_VENDORS } from '../vendors';
 import type { Phrase } from '../phrases';
@@ -52,7 +53,7 @@ function phrasesSection(html: string): string {
 }
 
 test('every phrase is a button, labelled with its name', () => {
-  const section = phrasesSection(panelHtml(state(), 'NONCE'));
+  const section = phrasesSection(everyPageHtml(state(), 'NONCE'));
 
   assert.match(section, /data-command="copyPhrase"[^>]*data-id="a"/, 'the first phrase has no button');
   assert.match(section, /data-command="copyPhrase"[^>]*data-id="b"/, 'the second phrase has no button');
@@ -60,7 +61,7 @@ test('every phrase is a button, labelled with its name', () => {
 });
 
 test('a button carries the id and never the words', () => {
-  const section = phrasesSection(panelHtml(state(), 'NONCE'));
+  const section = phrasesSection(everyPageHtml(state(), 'NONCE'));
 
   assert.ok(!section.includes('make a pr, accept it, deploy'.slice(0, 12) + '"'),
     'the phrase itself was written into the button, so it now exists in two places that can disagree');
@@ -72,7 +73,7 @@ test('hovering a phrase shows more than its first line, so two of them can be to
     { id: 'a', name: 'Deploy', text: 'ship it\nto staging' },
     { id: 'b', name: 'Deploy', text: 'ship it\nto production' },
   ]);
-  const section = phrasesSection(panelHtml(state(twins), 'NONCE'));
+  const section = phrasesSection(everyPageHtml(state(twins), 'NONCE'));
 
   assert.match(section, /to staging/, 'the tooltip stops at the first line, so two phrases look identical');
   assert.match(section, /to production/, 'the second phrase cannot be told from the first');
@@ -80,7 +81,7 @@ test('hovering a phrase shows more than its first line, so two of them can be to
 
 test('a phrase containing markup is shown as text in the panel too', () => {
   const nasty = phrasesFrom([{ id: 'x', name: '<img src=x onerror=alert(1)>', text: '"><script>alert(2)</script>' }]);
-  const section = phrasesSection(panelHtml(state(nasty), 'NONCE'));
+  const section = phrasesSection(everyPageHtml(state(nasty), 'NONCE'));
 
   assert.ok(!section.includes('<img src=x'), 'a phrase name was written into the panel as markup');
   assert.ok(!section.includes('<script>alert(2)'), 'a phrase body was written into the panel as markup');
@@ -88,7 +89,7 @@ test('a phrase containing markup is shown as text in the panel too', () => {
 });
 
 test('an empty list says what the section is for, and still offers the way in', () => {
-  const section = phrasesSection(panelHtml(state([]), 'NONCE'));
+  const section = phrasesSection(everyPageHtml(state([]), 'NONCE'));
 
   assert.match(section, /No phrases yet/, 'an empty section renders blank, which reads as broken');
   assert.match(section, /data-command="editPhrases"/, 'an empty section offers no way to make the first phrase');
@@ -96,7 +97,7 @@ test('an empty list says what the section is for, and still offers the way in', 
 
 test('the section is a way into the tab that edits the list', () => {
   // The presets tab shipped reachable only from the command palette. Twice guarded there; once here.
-  const section = phrasesSection(panelHtml(state(), 'NONCE'));
+  const section = phrasesSection(everyPageHtml(state(), 'NONCE'));
 
   assert.match(section, /data-command="editPhrases"/, 'there is no way into the phrases tab');
 });
@@ -126,7 +127,7 @@ test('editing a phrase repaints a panel that is already open', () => {
 });
 
 test('the button says Copied only when the host says the write landed', () => {
-  const page = panelHtml(state(), 'NONCE');
+  const page = everyPageHtml(state(), 'NONCE');
 
   assert.match(page, /message\?\.type === 'copied'/, 'the page never hears that a copy landed');
   assert.match(page, /'Copied'/, 'no button ever confirms itself');
@@ -141,7 +142,7 @@ test('a phrase is the same colour on its button as in the editor', () => {
   // allocator exists to prevent and the lesson from the Consultant change immediately before this
   // one. (gemini, the plan round.)
   const page = phrasesHtml({ rows: PHRASES.map((p) => ({ id: p.id, name: p.name, text: p.text })), uiScale: 1 }, 'NONCE');
-  const panel = panelHtml(state(), 'n0nce');
+  const panel = everyPageHtml(state(), 'n0nce');
 
   for (const phrase of PHRASES) {
     const inEditor = new RegExp(`data-id="${phrase.id}" style="border-left-color:([^"]+)"`).exec(page);
@@ -160,8 +161,8 @@ test('a phrase keeps its colour when the two surfaces are one phrase apart', () 
   const shared = PHRASES[0]!;
   const withExtra = [...PHRASES, ...phrasesFrom([{ id: 'c', name: 'Later', text: 'and again' }])];
 
-  const small = panelHtml(state(PHRASES), 'n0nce');
-  const large = panelHtml(state(withExtra), 'n0nce');
+  const small = everyPageHtml(state(PHRASES), 'n0nce');
+  const large = everyPageHtml(state(withExtra), 'n0nce');
 
   const colourIn = (html: string): string => {
     const found = new RegExp(`data-command="copyPhrase" data-id="${shared.id}"[^>]*style="border-left-color:([^"]+)"`).exec(html);
@@ -174,7 +175,7 @@ test('a phrase keeps its colour when the two surfaces are one phrase apart', () 
 });
 
 test('a phrase button is a frame with an edge, not a bare button', () => {
-  const css = panelHtml(state(), 'n0nce').split('<style>')[1]!.split('</style>')[0]!.replace(/\s+/gu, ' ');
+  const css = everyPageHtml(state(), 'n0nce').split('<style>')[1]!.split('</style>')[0]!.replace(/\s+/gu, ' ');
   const rule = css.split('.phrases .run {')[1]?.split('}')[0] ?? '';
 
   assert.ok(rule.length > 0, 'the .phrases .run rule is gone');

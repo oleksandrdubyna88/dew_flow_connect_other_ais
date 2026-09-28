@@ -85,7 +85,7 @@ function keyItem(keyName: string, vendors: readonly Vendor[], taken: ReadonlySet
 /** The one row a pick shows when it can list no keys, carrying the reason in words. */
 function noKeysItem(notes: VaultNotes): VaultKeyItem {
   const why = notes.vault === 'not-reported'
-    ? 'the installed coai-mcp did not name them — update it (the MCP server section) to list the vault’s API keys here'
+    ? 'the installed coai-mcp did not name them — update it (the MCP server tab) to list the vault’s API keys here'
     : `the vault could not be read: ${notes.vaultNote.length > 0 ? notes.vaultNote : 'no reason was given'}`;
 
   return { label: 'No API keys from the vault', detail: why, description: '', keyName: '' };

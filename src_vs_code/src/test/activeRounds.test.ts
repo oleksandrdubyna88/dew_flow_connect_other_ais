@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { liveRegions, panelHtml, PanelState, roundsBody, statusMark } from '../panelView';
+import { liveRegions, PanelState, roundsBody, statusMark } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { panelState, runPanel } from './panelPageHarness';
 import { RoundRecord, SessionFile } from '../rounds';
 import { DEFAULTS } from '../settingsShape';
@@ -186,7 +187,7 @@ test('each mark wears the colour its status means, from a theme variable', () =>
   // The exact mapping, not "some charts variable": an implementation that painted done red and
   // failed green would pass a test that only looked for the prefix, and would ship inverted status
   // indicators under a green suite. (codex and gemini, the plan round.)
-  const css = panelHtml(state([]), 'n0nce', NOW).split('<style>')[1]!.split('</style>')[0]!;
+  const css = everyPageHtml(state([]), 'n0nce', NOW).split('<style>')[1]!.split('</style>')[0]!;
 
   const expected: readonly (readonly [string, string])[] = [
     ['mark-done', 'green'],
@@ -271,7 +272,7 @@ test('two running rounds are both shown, newest first', () => {
 });
 
 test('there is nothing to open: no card is a disclosure and the page never reports a toggle', () => {
-  const html = panelHtml(state([session([round()])]), 'n', NOW);
+  const html = everyPageHtml(state([session([round()])]), 'n', NOW);
 
   assert.ok(!html.includes('<details class="round"'), 'a running round is a block, not a disclosure');
   assert.ok(!html.includes("type: 'round'"), 'the toggle listener that fed the loop is gone');
@@ -289,7 +290,7 @@ test('the card head is three lines, so a narrow sidebar never cuts the branch of
 });
 
 test('the section is called what it shows', () => {
-  const html = panelHtml(state([]), 'n', NOW);
+  const html = everyPageHtml(state([]), 'n', NOW);
 
   assert.ok(html.includes('Active rounds'));
   assert.ok(!html.includes('Recent rounds'));
@@ -298,7 +299,7 @@ test('the section is called what it shows', () => {
 test('a live patch that carries the same HTML as last time does not touch the DOM', () => {
   // Replacing identical markup is not free: it recreates every element and drops scroll position,
   // and nothing changed is the common case on a five-second tick.
-  const script = panelHtml(state([]), 'n', NOW).split('</style>')[1] ?? '';
+  const script = everyPageHtml(state([]), 'n', NOW).split('</style>')[1] ?? '';
 
   assert.match(script, /message\.rounds !== lastRounds/, 'the rounds region is compared before it is replaced');
   assert.match(script, /message\.questions !== lastQuestions/);

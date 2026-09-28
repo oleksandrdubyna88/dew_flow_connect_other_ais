@@ -409,11 +409,11 @@ export function snippetNote(status: SnippetStatus): string {
   switch (status.kind) {
     case 'older':
       return `The CLAUDE.md snippet in this workspace is missing or behind on: ${names(status.behind)}. `
-        + `The ⋯ menu hands out v${status.current} — copy it again and replace the old block; what `
+        + `The ⋯ menu of the ConnectOtherAIs sidebar hands out v${status.current} — copy it again and replace the old block; what `
         + 'changed is what the AI reading it is told to do.';
     case 'unversioned':
       return 'The CLAUDE.md snippet in this workspace predates versioning, so it is at least one '
-        + 'revision behind. Copy it again from the ⋯ menu and replace the old block.';
+        + 'revision behind. Copy it again from the ⋯ menu of the ConnectOtherAIs sidebar and replace the old block.';
     case 'ahead':
       return `This workspace's snippet is newer than this build on: ${names(status.newer)}. `
         + `This extension hands out v${status.current} — somebody updated the repository from a newer `

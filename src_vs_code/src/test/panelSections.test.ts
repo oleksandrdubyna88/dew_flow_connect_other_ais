@@ -67,7 +67,9 @@ test('every live region is on exactly one page, exactly once', () => {
 
 test('reading a section that no page draws is a failure, not an empty string', () => {
   assert.throws(() => sectionHtml(state(), 'noSuchSection'), /no page draws a section "noSuchSection"/);
-  // And the positive half, so the helper is known to find what exists.
-  assert.match(sectionHtml(state(), 'limits'), /^<details class="section sec-limits" data-section="limits"/);
-  assert.match(sectionHtml(state(), 'limits'), /<\/details>$/);
+  // And the positive half on both pages, so the helper is known to find what exists wherever it is.
+  assert.match(sectionHtml(state(), 'bugz'), /^<details class="section sec-bugz" data-section="bugz"/);
+  assert.match(sectionHtml(state(), 'bugz'), /<\/details>$/);
+  assert.match(sectionHtml(state(), 'limits'), /^<section id="pane-limits" class="pane sec-limits" role="tabpanel"/);
+  assert.match(sectionHtml(state(), 'limits'), /<\/section>$/);
 });

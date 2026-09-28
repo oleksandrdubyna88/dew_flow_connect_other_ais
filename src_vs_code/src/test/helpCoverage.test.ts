@@ -101,6 +101,9 @@ const ALIAS: Record<string, string> = {
   'coai.answerQuestion': 'answer it in the panel',
   'coai.answerQuestionWaiting': 'the title-bar icon turns green',
   'coai.showRounds': 'show review rounds',
+  // Its title is one word that every article uses, so the title alone would pass whether or not the gear
+  // was ever explained — the phrase is the article's own.
+  'coai.openSettings': 'the gear beside the help button',
   // The panel section and the page are both called *Notifications*; nothing in the product says
   // "show notifications" to a person, and an article written to satisfy this test rather than to
   // be read is the thing an alias exists to avoid.

@@ -1206,3 +1206,40 @@ test('the review page bundles without dragging the host into it', () => {
   assert.match(open, /<span class="ln" data-ln="2" aria-hidden="true"><\/span>/u, 'the bundled page numbers an open row\'s lines');
   assert.match(open, /\.ln::before\s*\{\s*content:\s*attr\(data-ln\)/u, 'and ships the rule that draws them');
 });
+
+test('the Settings tab bundles without the host, and the shipped page switches a tab on a press', async () => {
+  const bundle = bundleOf('panelView.ts', 'settingsHtml, settingsSections');
+
+  assert.doesNotMatch(bundle, /require\("vscode"\)/u, 'the Settings page imports the vscode API, which a webview does not have');
+  const shim = { exports: {} as Record<string, unknown> };
+  new Function('module', 'exports', bundle)(shim, shim.exports);
+  const shipped = shim.exports as {
+    settingsHtml?: (state: unknown, nonce: string, tab: string) => string;
+    settingsSections?: () => readonly { id: string }[];
+  };
+  assert.equal(typeof shipped.settingsHtml, 'function', 'the bundle exports no Settings page to render');
+
+  // The state the page is drawn from, from the compiled modules: the bundle is under test, not the fixture.
+  const { DEFAULTS } = await import('../settingsShape');
+  const { DEFAULT_VENDORS } = await import('../vendors');
+  const { Node, runPageHtml } = await import('./rolesPageHarness');
+  const html = shipped.settingsHtml!({
+    settings: DEFAULTS, vendors: DEFAULT_VENDORS, codexModels: [], agyModels: [], localEngines: {},
+    server: { kind: 'absent', version: '', remembered: false, updateOffered: false }, side: '', perSide: false,
+    questions: [], sessions: [], openSections: [], usage: [], usageWindow: 'week', latestServerVersion: '',
+    cliStatus: {}, modelPrices: {}, snippetStatus: { kind: 'absent', current: 0 },
+  }, 'n', 'limits');
+
+  const ids = shipped.settingsSections!().map((section) => section.id);
+  assert.ok(ids.length >= 2, 'a Settings page with fewer than two tabs proves nothing about switching');
+  const tabs = ids.map((id) => new Node({ tab: id }, 'BUTTON'));
+  const panes = ids.map((id) => new Node({ pane: id, section: id }, 'SECTION'));
+  const page = runPageHtml(html, { '[data-tab]': tabs, '[data-pane]': panes });
+
+  assert.deepEqual(panes.filter((pane) => !pane.hidden).map((pane) => pane.dataset['pane']), ['limits'],
+    'the shipped page does not open on the tab the host holds');
+  page.fire('click', tabs[0]!);
+  assert.deepEqual(panes.filter((pane) => !pane.hidden).map((pane) => pane.dataset['pane']), [ids[0]]);
+  assert.deepEqual(page.posted.filter((m) => m['type'] === 'tab'), [{ type: 'tab', id: ids[0] }],
+    'the shipped page switches without telling the host, so the next repaint throws the choice away');
+});

@@ -254,7 +254,7 @@ export const NO_REMOTE_CATALOG: RemoteProvenance = { models: [], named: '', cata
  * longer lists it. Accepted findings, this story's plan and code rounds.</p>
  */
 const CATALOG_NOT_HERE: Readonly<Record<Exclude<CatalogState, 'here'>, string>> = {
-  waiting: "this Team server's catalog has not arrived — the Team servers section says why.",
+  waiting: "this Team server's catalog has not arrived — the Team servers tab of Settings says why.",
   'no-server': 'no Team server on this side matches this reviewer — add it under Team servers, or remove the row.',
 };
 

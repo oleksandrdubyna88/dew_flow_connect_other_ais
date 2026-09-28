@@ -49,6 +49,7 @@ import { EscalationWatcher } from './escalationWatcher';
 import { ConsultationWatcher } from './consultationWatcher';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
+import { openSettings } from './settingsPanel';
 import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
 import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from './roundsExport';
@@ -511,6 +512,10 @@ export function activate(context: vscode.ExtensionContext): void {
       await panel.render();
     }),
     vscode.commands.registerCommand('coai.help', showHelp),
+    // The gear in the panel's title bar: everything configured once, in an editor tab of its own, painted by
+    // the same provider as the sidebar (todo/PLAN_settings_page.md). The argument, when there is one, is a
+    // tab id; the title bar and the palette pass none, and anything that is not a tab changes nothing.
+    vscode.commands.registerCommand('coai.openSettings', (tab?: unknown) => { openSettings(panel, tab); }),
     // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
     // apart by what VS Code hands it, because only one of them can copy the selection itself.

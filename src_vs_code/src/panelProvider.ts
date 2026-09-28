@@ -13,6 +13,7 @@ import { chatForgetKey, rememberedChat } from './chatSpendRows';
 import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
 import { anyHeld, SurfaceSlot } from './surfaceSlot';
+import { chooseSettingsTab, heldSettingsTab, type SettingsHost } from './settingsPanel';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
 import { EscalationWatcher } from './escalationWatcher';
@@ -24,6 +25,8 @@ import {
   liveRegions,
   OPEN_BY_DEFAULT,
   panelHtml,
+  settingsHtml,
+  settingsKey,
   staticKey,
   VSCODE_COMMAND_FOR,
   type ChatLedgers,
@@ -223,7 +226,7 @@ interface PanelMessage {
   readonly end?: number;
 }
 
-export class PanelProvider implements vscode.WebviewViewProvider {
+export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   public static readonly viewType = 'coai.panel';
 
   /**
@@ -239,8 +242,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    */
   private readonly sidebar = new SurfaceSlot<vscode.WebviewView>();
 
+  /**
+   * The Settings editor tab (`settingsPanel.ts`): the sections configured once, drawn by the same
+   * builders from the same state, and written through the same queue (`todo/PLAN_settings_page.md`).
+   */
+  private readonly settingsTab = new SurfaceSlot<vscode.WebviewPanel>();
+
   /** Every webview this panel paints. A render builds one state and paints each of them. */
-  private readonly slots: readonly SurfaceSlot[] = [this.sidebar];
+  private readonly slots: readonly SurfaceSlot[] = [this.sidebar, this.settingsTab];
 
   /**
    * What this machine knows about the Claude CLI's models, and how it finds out again.
@@ -668,7 +677,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // Every sentence, on the record, bounded by DETAIL_LIMIT at the serialiser rather than by a
       // number chosen here — so the ledger keeps what the toast has no room for.
       detail: said.join('\n'),
-      cure: 'The server is running without those settings. Fix them in the panel and reload the window.',
+      cure: 'The server is running without those settings. Fix them in ConnectOtherAIs Settings and reload the window.',
     });
   }
 
@@ -877,6 +886,19 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /** The Settings tab was opened: it is painted like the sidebar, and heard like it. */
+  attachSettings(panel: vscode.WebviewPanel): void {
+    this.settingsTab.attach(panel);
+    panel.onDidDispose(() => { this.settingsTab.detach(panel); });
+    panel.webview.onDidReceiveMessage((m: PanelMessage) => { this.receive(this.settingsTab, m); });
+    void this.render();
+  }
+
+  /** The command asked for a tab of a Settings page already open: the page is told, and nothing repaints. */
+  showSettingsTab(tab: string): void {
+    this.settingsTab.post({ type: 'showTab', id: tab });
+  }
+
   /**
    * What a page asked for, and WHICH page asked — bound when the listener was attached, never sent by
    * the page, so it cannot be claimed. A reply (`copied`, a snap-back) goes to that page alone.
@@ -898,7 +920,22 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       }
     } else if (m.type === 'command') {
       void this.run(m.command, m.id, from);
+    } else if (m.type === 'tab') {
+      // Held by the host, never drawn into the markup (D6), and answered with the tab now held: a page
+      // that was repainted while the press was on its way shows the tab the person chose, and a page
+      // that already shows it re-selects it, which changes nothing.
+      from.post({ type: 'showTab', id: chooseSettingsTab(m.id) });
     }
+  }
+
+  /** What a slot paints on, and the page it paints — the page built only if the key says it is due. */
+  private pageFor(slot: SurfaceSlot, state: PanelState): { key: string; html: () => string } {
+    const withCaret = (): PanelState => ({ ...state, focus: slot.focus() });
+    if (slot === this.settingsTab) {
+      return { key: settingsKey(state), html: () => settingsHtml(withCaret(), this.nonce, heldSettingsTab()) };
+    }
+
+    return { key: staticKey(state), html: () => panelHtml(withCaret(), this.nonce) };
   }
 
   /** Re-read everything and repaint: the configuration, the sessions, the ledger and the probes. */
@@ -1015,10 +1052,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // write with it — which is how `поясни` was lost, five times a minute, to probes and version
     // checks nobody asked for. Each slot decides for its own page, with its own caret: a caret
     // recorded on one page is never put back into another.
-    const key = staticKey(state);
     const live = { type: 'live', ...liveRegions(state) };
     for (const slot of this.slots) {
-      if (slot.paint(key, () => panelHtml({ ...state, focus: slot.focus() }, this.nonce)) === 'patch') {
+      const page = this.pageFor(slot, state);
+      if (slot.paint(page.key, page.html) === 'patch') {
         slot.post(live);
       }
     }
@@ -1584,7 +1621,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
           source: 'modelDiscovery',
           code: 'discovered-models-not-stored',
           title: 'ConnectOtherAIs could not store the discovered model lists, so a chat may open on the model'
-            + ' its reviewer row is set to rather than the one chosen in the panel.',
+            + ' its reviewer row is set to rather than the one chosen in Settings.',
           detail: asText(error),
         });
       }

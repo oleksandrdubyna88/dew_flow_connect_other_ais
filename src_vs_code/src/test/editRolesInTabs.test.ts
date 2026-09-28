@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { DEFAULTS } from '../settingsShape';
 import { SNIPPET_VERSION } from '../claudeSnippet';
-import { panelHtml, type PanelState } from '../panelView';
+import { type PanelState } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { CUSTOM_ROLES_SINCE, DEFAULT_ROLE_TAB, ROLE_TABS, nextTab, roleEdit, rolesHtml, type RolesPageState } from '../rolesPage';
 import { PLAN_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
 import { Node, runRolesPage } from './rolesPageHarness';
@@ -248,7 +249,7 @@ test('the same role is the same colour in the panel and on the page it is edited
   // The whole of part three, and the only assertion that can see the defect: a test of the palette
   // module alone stays green while either renderer keeps a private copy of the map — which is
   // exactly today's state, one file further on.
-  const inPanel = panelHtml(panel(), 'n0nce');
+  const inPanel = everyPageHtml(panel(), 'n0nce');
   const inPage = rolesHtml(state(), 'n0nce');
 
   // From the catalog, not a list retyped here: a role added to BUILTIN_ROLES would otherwise be
@@ -278,7 +279,7 @@ test('the roles those tones name are actually different colours from one another
 test('a role of your own takes its colour from its stage, in both views', () => {
   const planSide: RoleRow = { id: 'Assumptions', name: 'Assumptions', stage: PLAN_STAGE, active: true, prompts: [] };
   const inPage = rolesHtml(state({ rows: [mine, planSide] }), 'n0nce');
-  const inPanel = panelHtml(panel({ settings: { ...DEFAULTS, roles: [mine, planSide] } }), 'n0nce');
+  const inPanel = everyPageHtml(panel({ settings: { ...DEFAULTS, roles: [mine, planSide] } }), 'n0nce');
 
   assert.equal(toneInPage(inPage, 'Assumptions'), toneInPanel(inPanel, 'Assumptions'));
   assert.equal(toneInPage(inPage, 'Requirements'), toneInPanel(inPanel, 'Requirements'));

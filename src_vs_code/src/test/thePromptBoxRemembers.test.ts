@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { PanelState, REPAINT_HOLD_MS, panelHtml, staticKey, withholdsRepaint } from '../panelView';
+import { PanelState, REPAINT_HOLD_MS, withholdsRepaint } from '../panelView';
+import { everyPageHtml, paintKeys } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 import { SNIPPET_VERSION } from '../claudeSnippet';
@@ -181,7 +182,7 @@ function run(elements: readonly FakeElement[], over: Partial<PanelState> = {}): 
     timers.delete(id);
   };
 
-  const script = pageScript(panelHtml(state(over), 'test-nonce'));
+  const script = pageScript(everyPageHtml(state(over), 'test-nonce'));
    
   // its text is what the code round refused.
   const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', script);
@@ -350,14 +351,14 @@ test('an ordinary paint takes nobody’s focus', () => {
 });
 
 test('a focus name that is not a setting name never reaches the page', () => {
-  const hostile = panelHtml(
+  const hostile = everyPageHtml(
     state({ focus: { id: '</script><script>alert(1)', start: 0, end: 0 } }), 'test-nonce');
 
   assert.ok(!hostile.includes('alert(1)'), 'a value echoed from the webview was written into its own script');
   assert.match(hostile, /const focusOn = null;/, 'the id was escaped rather than refused');
 
   // And a caret that is not two ordered whole numbers is coerced rather than carried.
-  const silly = panelHtml(
+  const silly = everyPageHtml(
     state({ focus: { id: 'chatPrompt|||', start: -5, end: Number.NaN } }), 'test-nonce');
 
   assert.match(silly, /const focusOn = \{"id":"chatPrompt\|\|\|","start":0,"end":0\};/);
@@ -373,14 +374,14 @@ test('a chat setting repaints the panel now, because there is no longer a box to
   // has to re-fill the models beside it — which a section the paint decision cannot see never does.
   const chosen: ChatSettings = { ...chat, model: 'antigravity' };
 
-  assert.notEqual(staticKey(state({ chat: chosen })), staticKey(state()),
+  assert.notEqual(paintKeys(state({ chat: chosen })), paintKeys(state()),
     'choosing a provider does not move the repaint key, so the model select beside it never re-fills');
 });
 
 test('the free-text hazard the old rule guarded is gone with the box, not merely overruled', () => {
   // The rule above is only safe while the section has nothing a person types INTO. This asserts
   // that, so re-introducing a textarea here fails with this sentence rather than by flickering.
-  const body = panelHtml(state(), 'n0nce');
+  const body = everyPageHtml(state(), 'n0nce');
   // Ends at whatever section comes NEXT rather than at a named one: the consultant was inserted
   // between the chat and the prompts, and a hard-coded end would have quietly swallowed it — this
   // assertion would then have been failing about somebody else's controls.
@@ -407,12 +408,12 @@ test('the host never renders from a configuration it has not finished writing', 
   const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
 
   const awaits = source.indexOf('await this.writes.settled();');
-  const paints = source.indexOf('const key = staticKey(state);');
+  const paints = source.indexOf('const page = this.pageFor(slot, state);');
   assert.ok(awaits > 0 && paints > awaits, 'render must await the write queue before it decides what to paint');
 
   // Whether a control is being edited is decided per page by `SurfaceSlot.paint`, which is RUN in
   // `surfaceSlot.test.ts`; what is read here is only that every page's paint goes through it.
-  assert.match(source, /slot\.paint\(key, /,
+  assert.match(source, /slot\.paint\(page\.key, page\.html\)/,
     'the paint no longer consults whether a control is being edited');
   // That a rejected write does not poison the queue is RUN in `snapBackQueue.test.ts`, on `WriteQueue`.
   assert.match(source, /private enqueue\(work: \(\) => Promise<void>\): void \{\s*this\.writes\.enqueue\(work\);/,
