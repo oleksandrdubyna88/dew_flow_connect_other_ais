@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.0...mcp-v0.40.1) (2026-09-28)
+
+
+### Miscellaneous Chores
+
+* **mcp:** mcp-v0.40.0 never shipped, 0.40.1 carries the same code ([#599](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/599)) ([cc85282](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/cc8528238ff3d4c4b3a9bde695b68d09abf2a42e))
+
 ## [0.40.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.39.0...mcp-v0.40.0) (2026-09-28)
 
 > Never shipped — the tag was cut before its changelog note, and the release guard refused it with nothing
