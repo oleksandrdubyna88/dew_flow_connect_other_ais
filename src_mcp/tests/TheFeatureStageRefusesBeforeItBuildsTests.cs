@@ -222,6 +222,56 @@ public sealed class TheFeatureStageRefusesBeforeItBuildsTests : IAsyncLifetime
         (await Refusal(baseRef: head)).Should().Contain("nothing reviewable changed").And.Contain("web/package-lock.json");
     }
 
+    /// <summary>
+    /// A <c>head</c> the checkout does not hold is refused naming BOTH commits (§9.30): the head reviewed is
+    /// the checkout's HEAD, so a caller naming another commit is on the wrong checkout, and a clean review of
+    /// the tree it happens to be on is the one answer it must not get.
+    /// </summary>
+    [Fact]
+    public async Task AHeadOtherThanTheCheckoutsHead_IsRefused_NamingBothCommits() =>
+        (await HeadRefusal(_base)).Should().Contain(_base, "the commit the caller named")
+            .And.Contain(_head, "the commit the checkout holds, which is what would have been reviewed")
+            .And.Contain("check out");
+
+    /// <summary>The skip path too: a plan under the D17 line records a skip at HEAD, and a wrong head is still refused before it.</summary>
+    [Fact]
+    public async Task AHeadOtherThanTheCheckoutsHead_IsRefused_EvenWhenTheRoundWouldBeSkipped() =>
+        (await HeadRefusal(_base, epics: """[{"title": "One", "summary": "The only epic."}]"""))
+            .Should().Contain(_base).And.Contain(_head);
+
+    [Fact]
+    public async Task AHeadThatDoesNotResolve_IsRefused_NamingTheCheckoutsHead() =>
+        (await HeadRefusal("no-such-branch")).Should().Contain("'no-such-branch' does not resolve to a commit").And.Contain(_head);
+
+    [Fact]
+    public async Task AnOptionLookingHead_IsRefusedBeforeGitSeesIt() =>
+        (await HeadRefusal("--output=x")).Should().Contain("head '--output=x' starts with '-'");
+
+    /// <summary>Every spelling of the checkout's own head proceeds — a full id, an abbreviation, the branch, <c>HEAD</c> — and so does none.</summary>
+    [Theory]
+    [InlineData("full")]
+    [InlineData("short")]
+    [InlineData("main")]
+    [InlineData("HEAD")]
+    [InlineData("")]
+    public async Task AHeadThatIsTheCheckoutsHead_IsNotRefused(string spelling)
+    {
+        var head = spelling switch { "full" => _head, "short" => _head[..10], _ => spelling };
+
+        var answer = JsonDocument.Parse(await Service().ReviewFeatureAsync(_repo, PlanPath, _base, Epics, Lessons, head: head)).RootElement;
+
+        answer.TryGetProperty("error", out var error).Should().BeFalse($"'{head}' is the checkout's head: {error}");
+        answer.GetProperty("verdict").GetString().Should().Be("skipped", "nobody is ticked — the D1 skip, not a refusal");
+    }
+
+    private async Task<string> HeadRefusal(string head, string epics = Epics)
+    {
+        var answer = JsonDocument.Parse(await Service().ReviewFeatureAsync(_repo, PlanPath, _base, epics, Lessons, head: head)).RootElement;
+        answer.TryGetProperty("error", out var error).Should().BeTrue($"a head of '{head}' must be refused: {answer}");
+
+        return error.GetString()!;
+    }
+
     [Fact]
     public async Task ASubdirectory_IsRefused_NamingTheTopLevel() =>
         (await Refusal(repo: Path.Combine(_repo, "src"))).Should().Contain("top level");

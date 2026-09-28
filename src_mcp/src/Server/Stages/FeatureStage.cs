@@ -15,7 +15,14 @@ namespace CoaiMcp.Server;
 /// <param name="Lessons">The <c>lessons</c> argument, JSON as the caller wrote it.</param>
 /// <param name="Caller">Who is asking — the MCP handshake plus the model the caller declared.</param>
 internal sealed record FeatureRequest(
-    string RepoPath, string PlanPath, string BaseRef, string Epics, string Lessons, bool Again, CallerDeclaration Caller);
+    string RepoPath, string PlanPath, string BaseRef, string Epics, string Lessons, bool Again, CallerDeclaration Caller)
+{
+    /// <summary>
+    /// The <c>head</c> the caller named, or empty when it named none. Never what is reviewed — that is the
+    /// checkout's HEAD — only what the caller BELIEVES it is, held to it (§9.30).
+    /// </summary>
+    public string Head { get; init; } = string.Empty;
+}
 
 /// <summary>The two JSON arguments the caller wrote by hand, parsed and accepted — no I/O yet.</summary>
 internal sealed record FeatureWritten(FeatureEpics Epics, FeatureLessons Lessons);
@@ -96,7 +103,7 @@ internal sealed class FeatureStage(
             ? SkipReasons.TooFewEpics(call.Epics.Count, settings.FeatureMinEpics)
             : string.Empty;
 
-        return await new FeatureRefs(launcher).ResolveAsync(request.RepoPath, request.BaseRef, skip.Length > 0, ct) switch
+        return await new FeatureRefs(launcher).ResolveAsync(request.RepoPath, request.BaseRef, request.Head, skip.Length > 0, ct) switch
         {
             FeatureInput<FeatureRange>.Accepted { Value: var range } =>
                 await engine.RunStageAsync(request.RepoPath, SessionKey.FeatureBranch, call.Plan.Text, Run(request, call, range, skip, ct), ct),

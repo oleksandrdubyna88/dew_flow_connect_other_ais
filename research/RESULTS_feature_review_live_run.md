@@ -80,6 +80,8 @@ second round. 7 findings: 3 major, 3 minor, 1 nit. Each was read against the cod
 
 ### Accepted — real defects, NOT fixed in this run
 
+> *Since fixed:* 1 and 2 on 2026-09-28 — [PLAN_feature_review.md](../todo/PLAN_feature_review.md) §9.30 and §9.31. 3 is §9.32, still open. The text below is the run's record as it stood.
+
 1. **The `coai-feature` snippet half tells the caller to pass a `head` the tool does not declare** (`src_vs_code/src/featureRule.md`,
    "What to pass" and the `revise` / `again` bullets). The SDK drops the undeclared argument silently, so the call succeeds
    and reviews the checkout's current HEAD, whatever `head` named. Fix: say the reviewed commit is the checkout's HEAD — check out the

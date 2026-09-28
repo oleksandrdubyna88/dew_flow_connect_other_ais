@@ -7,7 +7,7 @@ namespace CoaiMcp.Runners.Feature;
 /// <summary>What <c>git cat-file --batch-check</c> said about one object name.</summary>
 /// <param name="Oid">The object id, or empty when the name resolved to nothing.</param>
 /// <param name="Type"><c>blob</c>, <c>commit</c> (a submodule), <c>tree</c> — or empty when missing.</param>
-/// <param name="Size">Its size in bytes, or -1 when missing.</param>
+/// <param name="Size">Its size in bytes, or -1 when missing — and for a submodule, whose commit is not in this repository.</param>
 public sealed record GitObject(string Oid, string Type, long Size)
 {
     public static readonly GitObject Missing = new(string.Empty, string.Empty, -1);
@@ -55,17 +55,41 @@ public static class CatFile
     }
 
     /// <summary>
-    /// A found object is exactly three fields: a hex id, a type, a size. Anything else — <c>missing</c>,
-    /// <c>ambiguous</c> — echoes the name that was asked, which may contain spaces, and is not an object.
+    /// A found object is three fields: a hex id, a type, a size — or, for a SUBMODULE, two: a hex id and the
+    /// word <c>submodule</c>. Anything else — <c>missing</c>, <c>ambiguous</c> — echoes the name that was
+    /// asked, which may contain spaces, and is not an object.
     /// </summary>
+    /// <remarks>
+    /// <b>The gitlink's two fields are git's own shape</b> (<c>&lt;oid&gt; submodule</c>, read off a real
+    /// repository): the commit a submodule entry names lives in ANOTHER repository, so git has no type or
+    /// size of its own to print. Until §9.31 only three fields were an object, so every submodule read as
+    /// missing and the pack named a live one "deleted at head". It is a commit here, of unknown size, and
+    /// <see cref="ReadPlan"/> names it and never reads it.
+    /// </remarks>
     private static GitObject Object(string line)
     {
         var parts = line.Split(' ');
 
-        return parts.Length == 3 && IsHex(parts[0]) && long.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var size)
+        return parts.Length switch
+        {
+            2 => ASubmodule(parts),
+            3 => AnObject(parts),
+            _ => GitObject.Missing,
+        };
+    }
+
+    /// <summary><c>&lt;oid&gt; submodule</c> — a commit of another repository, so of no size known here.</summary>
+    private static GitObject ASubmodule(string[] parts) =>
+        IsHex(parts[0]) && parts[1] == Gitlink ? new GitObject(parts[0], "commit", -1) : GitObject.Missing;
+
+    /// <summary><c>&lt;oid&gt; &lt;type&gt; &lt;size&gt;</c>.</summary>
+    private static GitObject AnObject(string[] parts) =>
+        IsHex(parts[0]) && long.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var size)
             ? new GitObject(parts[0], parts[1], size)
             : GitObject.Missing;
-    }
+
+    /// <summary>What <c>--batch-check</c> prints in place of a type and a size for a gitlink.</summary>
+    private const string Gitlink = "submodule";
 
     /// <summary>Reads <c>--batch</c> output for exactly the blobs asked for, in that order.</summary>
     /// <exception cref="ContextException">When an expected header is not where it must be.</exception>

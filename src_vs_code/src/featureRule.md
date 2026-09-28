@@ -1,4 +1,4 @@
-<!-- coai-feature v1 -->
+<!-- coai-feature v2 -->
 ## Reviewing the whole FEATURE before release (ConnectOtherAIs)
 
 `mcp__coai__review_feature` is the gate's fourth stage. The plan round reviews a plan before it is
@@ -13,13 +13,17 @@ is built — their pull requests may already be merged — and before the releas
 for a plan of one or two epics: that work is covered by `mcp__coai__review_code`, and the server
 records a smaller plan as `skipped` rather than reviewing it.
 
+**Where to call it from.** Run it from the checkout that holds the finished feature — the head reviewed
+is that checkout's HEAD, and only committed work is read. When the epics are merged, that means a
+checkout of the merged branch, pulled. No argument chooses another head: `head` is optional and only
+checks you are where you think you are, so one naming any other commit is refused rather than reviewed.
+
 **What to pass.** It needs no `open` — it keeps its own session, keyed by the plan.
 
 - `repoPath` — this checkout's own top level (`git rev-parse --show-toplevel`).
 - `planPath` — the plan document's path, relative to the repository. It is the session's identity:
   pass the same path every time for the same plan.
 - `baseRef` — the commit BEFORE the first epic, so the range covers all of the work and nothing older.
-- `head` — the branch or commit that holds all of it, `origin/main` included when the epics are merged.
 - `epics` — a JSON list, one entry per epic: `title`, `summary`, and its `branch` and `pr` when you have
   them. The `branch` is what lets the gate find the history of an epic that was squash-merged.
 - `lessons` — a JSON object with `pitfalls`, `blockers` and `findings`, each non-empty: what went wrong
@@ -34,12 +38,13 @@ records a smaller plan as `skipped` rather than reviewing it.
   gate switched off, or a plan under three epics. Tell the person the feature review did not run, and
   the reason the reply gives, then carry on.
 - `revise` — resolve every finding, then land each fix as NEW pull requests, never by rewriting merged
-  epics, and call `mcp__coai__review_feature` again with the new `head`.
+  epics, and call `mcp__coai__review_feature` again from the checkout once it holds them: its HEAD is
+  what the next round reads.
 - `proceed`, `good_enough` or `continue_anyway` — the feature gate is done; your summary says what you
   took and what you declined.
 - `call_human` stops the release. Surface the open findings and call `mcp__coai__ask_human`; only the
   person's answer moves it on.
-- A finished feature review is reopened only with `again: true` and a `head` that has moved.
+- A finished feature review is reopened only with `again: true`, once the checkout's HEAD has moved.
 
 **Resolving and re-orienting.** `mcp__coai__resolve` takes a decision for EVERY finding exactly as at
 the other gates, and — because this session is keyed by the plan rather than the branch — it needs

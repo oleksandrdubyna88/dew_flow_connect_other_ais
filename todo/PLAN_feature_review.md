@@ -211,8 +211,12 @@ Three things the skip path must get right (consultant, 2026-09-25, each verified
 ### 4.5 Inputs and refusals (no I/O before they pass)
 
 ```
-review_feature(repoPath, planPath, baseRef, head, epics, lessons, again = false)
+review_feature(repoPath, planPath, baseRef, epics, lessons, again = false, callerModel?, head?)
 ```
+
+*As built (S2.2b, and §9.30 on 2026-09-28):* the head reviewed is the checkout's HEAD, never an argument —
+D2 named a `head`, and the coordinator's shape dropped it. `head` came back as an OPTIONAL check only: a
+value that does not resolve to the checkout's HEAD is refused naming both commits.
 
 1. **`lessons`** — `{"pitfalls":[…],"blockers":[…],"findings":[…]}`. **Each of the three arrays must
    be non-empty**; "nothing here" is written as an entry that says so and why (`"none — every epic
@@ -229,9 +233,9 @@ review_feature(repoPath, planPath, baseRef, head, epics, lessons, again = false)
    `COAI_FEATURE_MIN_EPICS` (default 3) is not a refusal but a recorded `skipped` round (D17). `branch` is optional but
    the tool description says it is what lets the history of a squash-merged epic be found.
 3. **`planPath`** — `DocumentReader.Read` (repo confinement, UTF-8, not binary).
-4. **`baseRef` / `head`** — `rev-parse --verify <ref>^{commit}` with the option-looking-ref guard
-   (`GitHistory.IsCommitish`); refused unless `baseRef` is an ancestor of `head`, or when they are equal,
-   or when the range changes no reviewable file.
+4. **`baseRef` / HEAD** — `rev-parse --verify <ref>^{commit}` with the option-looking-ref guard
+   (`GitHistory.IsCommitish`); refused unless `baseRef` is an ancestor of the checkout's HEAD, or when
+   they are equal, or when the range changes no reviewable file. A given `head` must be that HEAD (§9.30).
 
 Every refusal goes through `Refusal.Answer`; `shared/refusal-sites.json` is re-recorded.
 
@@ -502,10 +506,10 @@ sequenceDiagram
   participant S as BoundedScheduler
   participant V as Reviewer (api / CLI)
   participant SR as SourceResolver
-  AI->>T: repoPath, planPath, baseRef, head, epics, lessons
+  AI->>T: repoPath, planPath, baseRef, epics, lessons (head? only checked against HEAD)
   T->>F: ReviewFeatureAsync
   F->>F: FeatureInputs.Parse (refusals, no I/O)
-  F->>F: plan via DocumentReader; rev-parse base/head; is-ancestor
+  F->>F: plan via DocumentReader; rev-parse base and the checkout's HEAD; is-ancestor
   F->>F: FeatureSessions.OpenOrContinue (repo#:feature#feature:plan)
   F->>R: StageRun{BeginFeatureRound, Feature, Head, WhenNobody=RecordSkip, Turns}
   R->>O: outline of base..head at headSha, budget
@@ -525,7 +529,7 @@ sequenceDiagram
     R->>R: dedup, GateRule, CompleteRound (Answered==0 -> call_human)
     R-->>AI: proceed / revise / good_enough / call_human
   end
-  AI->>T: resolve(..., feature=planPath); fixes as new PRs; review_feature(head=new)
+  AI->>T: resolve(..., feature=planPath); fixes as new PRs; review_feature from the checkout at the new HEAD
 ```
 
 ## 6. Phase 0 — measure before building (no product code)
@@ -1633,15 +1637,32 @@ phase 1, 2026-09-26). Each seen RED with the real symptom, then GREEN, then red 
     `ApiClassification` treats a 5xx whose own error field says "auth context expired" as a transient, `RateLimit.Phrases`
     gains the observed phrase, and the ladder retries the turn inside the 20-minute cap; any other 500 stays failed.
 
-Found by the live run ([RESULTS_feature_review_live_run.md](../research/RESULTS_feature_review_live_run.md), 2026-09-28) — accepted,
-**open, not fixed yet** (RED first when they are):
+Found by the live run ([RESULTS_feature_review_live_run.md](../research/RESULTS_feature_review_live_run.md), 2026-09-28) — accepted;
+§9.30 and §9.31 fixed 2026-09-28, §9.32 still open:
 
-30. **The `coai-feature` snippet half names a `head` argument the tool does not take** (`src_vs_code/src/featureRule.md`):
+30. **FIXED 2026-09-28** — both halves. (a) `featureRule.md` is `coai-feature` **v2**: it says, in the conventions
+    feature-gate rule's words, to run the review from the checkout that holds the finished feature — the head reviewed
+    is that checkout's HEAD, only committed work is read — lists no `head` to pass, and says a later round reads the
+    checkout (`FEATURE_VERSION` 2, `ARTEFACT_VERSION` 14, the menu `(v14)`, `SNIPPET_BODY_SHA` re-pinned). RED on the v1
+    text: `featureSnippet.test.ts` — "where the caller must be". (b) `review_feature` declares an OPTIONAL `head`: absent,
+    nothing changes; given, it is guarded like `baseRef` and must resolve to the checkout's HEAD (any spelling git
+    resolves) or the call is refused naming both commits — checked before the D17 skip (`FeatureRefs.HeadRefProblemAsync`).
+    RED over the wire (`McpContractTests`): a `head` naming the base answered `"verdict": "skipped"` — the argument
+    silently dropped — and in-process, with the argument plumbed and no check, four refusals answered `skipped`. No new
+    refusal site: the sentence leaves through `FeatureStage.Refused` like every ref refusal, so
+    `shared/refusal-sites.json` is unchanged. §4.5's signature and §5's diagram are corrected with it.
+    *The defect as found:* **the `coai-feature` snippet half named a `head` argument the tool did not take** (`src_vs_code/src/featureRule.md`):
     "What to pass" lists `head` (`origin/main` included) and `revise` / `again` say to call again "with the new `head`", but
     S2.2 made the head the checkout's HEAD. The SDK (ModelContextProtocol 2.2.0) ignores the undeclared argument without an
     error, so a caller following the snippet on another checkout gets a successful review of the wrong tree. §4.5's
     signature and §5's diagram carry the same stale `head`; S3.5's conventions text must not inherit it.
-31. **A submodule in the range is reported as "deleted at head".** `git cat-file --batch-check` answers a gitlink with two
+31. **FIXED 2026-09-28** — `CatFile` reads git's two-field gitlink answer (`<oid> submodule`, and only that shape) as a
+    `commit` of unknown size, so a moved pin is `M`, an added submodule `A`, a removed one still `D`, and the pack names
+    the first two *a submodule at commit `<oid>`; not read* — the way it names a binary or an oversized file — with its
+    commit never sent to `cat-file --batch`. RED on a real repository with three real submodules
+    (`ASubmoduleInTheRangeIsNamedNotDeletedTests`): `Expected outline.Files to be equal to M … but found D`, and `A … but
+    found D`; `CatFileTests`: `Expected objects[0].Exists to be True … but found False`.
+    *The defect as found:* **a submodule in the range was reported as "deleted at head".** `git cat-file --batch-check` answers a gitlink with two
     fields (`<oid> submodule`); `CatFile.Object` accepts only three, so the object reads as missing and
     `FeatureOutlineBuilder.Changed` classifies the path `Deleted` — the live pack listed `.agents/conventions` so, and
     `ReadPlan`'s "a submodule at head" reason is unreachable for a gitlink.

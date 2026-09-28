@@ -39,7 +39,7 @@ import { FEATURE_RULE } from './generated/featureRule';
 export const SNIPPET_VERSION = 5;
 
 /** The snippet body's hash, so the version above cannot silently stop meaning anything. */
-export const SNIPPET_BODY_SHA = '2bda84d59a00e572';
+export const SNIPPET_BODY_SHA = '9b34f5549e806f60';
 
 /**
  * The revision of the ARTEFACT — the composed text that actually goes on the clipboard.
@@ -64,7 +64,7 @@ export const SNIPPET_BODY_SHA = '2bda84d59a00e572';
  * A DERIVED number was tried first and refused on the plan round; the guard reproduces that refuted
  * design, and `research/PLAN_the_menu_names_the_clipboards_version.md` records why.</p>
  */
-export const ARTEFACT_VERSION = 13;
+export const ARTEFACT_VERSION = 14;
 
 /**
  * Where a repository is allowed to keep the block, in the order a reader should believe them.
@@ -168,7 +168,7 @@ export const CONSULTANT_VERSION = 3;
  * <p>Not cosmetic: a copy pasted before it carries no feature marker, and the AI obeying it never calls
  * `review_feature` — the whole feature is then released having only ever been reviewed in slices.</p>
  */
-export const FEATURE_VERSION = 1;
+export const FEATURE_VERSION = 2;
 
 /**
  * The halves the artefact is made of: the one place that knows which they are, in what order, and
