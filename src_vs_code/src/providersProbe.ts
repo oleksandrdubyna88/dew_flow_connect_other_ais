@@ -22,10 +22,10 @@ const CAP_MS = 8_000;
  * Ask the server, and say whether it answered.
  *
  * <p>Three outcomes, and the third is the one worth having. **No binary** — nothing was asked, and
- * the Server section already says the server is absent, so nothing more is said. **Asked and it
+ * the MCP server tab already says the server is absent, so nothing more is said. **Asked and it
  * failed** — a non-zero exit (a build too old for the flag exits 64 saying so), a timeout, or a body
  * whose shape moved: nothing is known about any reviewer, no card may claim otherwise, and the
- * Server section says the check itself could not be made. **Answered** — the map, which the cards
+ * MCP server tab says the check itself could not be made. **Answered** — the map, which the cards
  * read.</p>
  *
  * <p><b>An empty answer is answered.</b> What decides `answered` is whether a providers ARRAY was

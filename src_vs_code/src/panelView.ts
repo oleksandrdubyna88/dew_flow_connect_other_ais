@@ -1603,7 +1603,7 @@ ${field}`;
 }
 
 /**
- * The one sentence at the top of the Server section, for the side this panel is running on.
+ * The one sentence at the top of the MCP server tab, for the side this panel is running on.
  *
  * <p><b>It names the side whenever there is one</b>, because a machine with a Windows window and a
  * WSL window has two servers and used to be described by one sentence that belonged to whichever

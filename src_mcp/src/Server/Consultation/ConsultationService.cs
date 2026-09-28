@@ -351,7 +351,7 @@ public sealed class ConsultationService(
         // FIRST, before the shape of the call is examined at all: somebody who switched the feature
         // off is owed the sentence saying so, not a complaint about an empty argument. And it is a
         // named refusal rather than a tool that disappears from the list — a caller that cannot see
-        // the tool cannot be told why it is not there. (The panel's Consultant section writes it.)
+        // the tool cannot be told why it is not there. (The Consultant tab of the Settings editor tab writes it.)
         if (!settings.ConsultEnabled)
         {
             return Error(SwitchedOff);

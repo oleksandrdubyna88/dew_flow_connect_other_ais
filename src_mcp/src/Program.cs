@@ -1858,7 +1858,7 @@ internal static class Program
             StartupNotices.Record(settings, storage, noticing, log);
 
             // The file the panel writes is re-read per call, so a vendor or a threshold changed
-            // in the sidebar reaches the NEXT round without restarting the MCP client.
+            // in the Settings tab reaches the NEXT round without restarting the MCP client.
             // ONE composition, handed to the host, which holds it and gives it to every service it
             // builds — the rebuild on a settings change included. A defaulted parameter anywhere on
             // that road is the trap the plan round named: production takes the quiet path while
