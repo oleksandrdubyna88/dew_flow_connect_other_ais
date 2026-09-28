@@ -81,7 +81,7 @@ function elementWith(html: string, attribute: string): string | undefined {
   if (tag === undefined) {
     return undefined;
   }
-  const pattern = new RegExp(`<${tag}\\b|</${tag}>`, 'g');
+  const pattern = new RegExp(String.raw`<${tag}\b|</${tag}>`, 'g');
   pattern.lastIndex = start;
   let depth = 0;
   for (let match = pattern.exec(html); match !== null; match = pattern.exec(html)) {
