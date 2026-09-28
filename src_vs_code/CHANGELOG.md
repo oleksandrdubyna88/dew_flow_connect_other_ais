@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## Extension 0.58.0 · Server 0.40.0 — 2026-09-28
 
 **A fourth review: the whole feature, once, before it is released.** When a plan of three or more epics
 is finished, the AI can now ask for a review of all of it together — whether what shipped is what the plan
