@@ -7,7 +7,8 @@
 // The grouping is READ from src/prompts.ts rather than repeated here: that file is already the
 // panel's mirror of the server catalog, so taking the order from it means a lens added in one
 // place cannot end up ordered differently in the other. The only thing this script decides is
-// that the conventions pass stands alone, because it belongs to all three code roles at once.
+// that the conventions prompt stands alone, because Conventions is a code role of its own with one
+// prompt and no lenses.
 //
 //   node scripts/generate-help-prompts.mjs
 import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
@@ -43,7 +44,7 @@ const catalog = SEED.flatMap((r) =>
 );
 
 // Conventions is left out because it is not a group of lenses: its one prompt is printed on its own
-// below, under a heading that says it applies to all three code roles.
+// below, under a heading that says it is a code role of its own.
 const ROLE_LABELS = Object.fromEntries(
   SEED.filter((r) => r.id !== 'Conventions').map((r) => [r.id, r.name]),
 );
@@ -61,7 +62,7 @@ for (const [role, label] of Object.entries(ROLE_LABELS)) {
     .map((c) => c.id);
   groups.push({ role: label, ids });
   if (role === 'PlanCritique') {
-    groups.push({ role: 'Conventions (all three code roles, round 1)', ids: ['conventions'] });
+    groups.push({ role: 'Conventions (a code role of its own)', ids: ['conventions'] });
   }
 }
 
@@ -98,8 +99,8 @@ ${texts}
 };
 
 /**
- * How the page groups them. The conventions pass stands on its own: it is not a lens on one role's
- * question, it is a different question that all three code roles ask in round 1.
+ * How the page groups them. Conventions stands on its own: it is a code role of its own with ONE
+ * question and no lenses, not a lens on another role's question.
  */
 export const PROMPT_GROUPS: readonly { readonly role: string; readonly ids: readonly string[] }[] = [
 ${groups.map((g) => `  { role: ${JSON.stringify(g.role)}, ids: [${g.ids.map((i) => `'${i}'`).join(', ')}] },`).join('\n')}

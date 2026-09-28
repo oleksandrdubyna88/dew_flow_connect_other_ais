@@ -119,7 +119,7 @@ export const HELP = {
     'Which model on this machine reviews. The list is what the engine reports right now, with its parameter size, quantisation and disk size — not a list shipped with this extension, because what is installed is a fact about your machine. Empty means whatever the engine answers with when asked for no model in particular. A review needs room: the prompt, the plan or the diff and the schema all go in one request, so a small context window is refused by the engine rather than answered badly.',
 
   localPrice:
-    'Left here for accounting, and normally left empty: a model on your own hardware has no token bill. What it costs is electricity and the card being busy, neither of which this panel can see. Fill these in only if you want the spending chart to price local runs anyway — at a rate you invent.',
+    'Left here for accounting, and normally left empty: a model on your own hardware has no token bill. What it costs is electricity and the card being busy, neither of which this panel can see. Fill these in only if you want *What each AI has used*, in Show review rounds, to price local runs anyway — at a rate you invent.',
 
   reprobeLocal:
     'Ask the engine again what it has. A successful probe is cached for a minute so the panel is not listing models on every repaint — which means a model you just pulled, or an engine you just started, is not there yet. This is the button for that. It was left out of the first version as "a CLI’s button", and the gate reviewing this feature pointed out that a cache with no way to clear it is a stale list with no way out.',
@@ -144,7 +144,7 @@ export const HELP = {
   lastRole:
     'The only role still ticked. A code round with nobody in it is not an empty round — the server counts a round no reviewer answered as unresolved, so it would sit open and the next review would be refused for the wrong reason. Tick another role first, then this one can go.',
   dormantRole:
-    'Switched off on the roles page, which is a different switch from this one. Two reach every role: this tick, which is about this side’s settings, and the role’s own Active, which is about the catalog every side shares — and the server reads both, so a role needs both to run. This box would write only the first and the role would stay off, so it is inert until the roles page switches the role back on. Edit roles… is at the foot of this section.',
+    'Switched off on the roles page, which is a different switch from this one. Two reach every role: this tick, which is about this side’s settings, and the role’s own Active, which is about the catalog every side shares — and the server reads both, so a role needs both to run. This box would write only the first and the role would stay off, so it is inert until the roles page switches the role back on. Edit roles… is at the foot of this tab.',
   maxRounds:
     'How many times THIS ROLE may be asked before the policy below takes over. Each role has its own count, because they are not worth the same number of passes: architecture may deserve two with different lenses while performance deserves one, and a shared budget makes the cheapest role pay for the most expensive. A round runs the roles that still have a count left — all of them, not only the ones that gated, because the next round reads a REVISED diff and a role that was clean on the old one can find something in the fix. When a role’s count is spent it simply stops being asked, and the stage keeps going for the roles that have not.',
   gateThreshold:
@@ -163,7 +163,7 @@ export const HELP = {
   roundTimeout:
     'How long a WHOLE round may take before the reviewers still running are cancelled and the round is gated on whatever answered. Leave it at 0 and it is worked out from the round itself: vendors x roles reviewers through the machine cap above, each wave allowed one reviewer timeout. At the defaults that is four waves, forty minutes. Lower it and you are cutting into reviewers that have not finished; their findings are lost, and the verdict is made without them.',
   escalationMinutes:
-    'How long a question waits for your answer before the AI is told to ask you in the chat instead. The question stays open in this panel either way — nothing is decided by your silence.',
+    'How long a question waits for your answer before the AI is told to ask you in the chat instead. The question stays open in the ConnectOtherAIs sidebar either way — nothing is decided by your silence.',
 
   credsKey:
     'The CredsForDevs config-entry key that unlocks the vendor API keys. It is a pass to one vault entry — revocable, and useless while VS Code is closed — not a secret itself. Vendors whose CLI is signed in need no key at all.',

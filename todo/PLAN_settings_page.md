@@ -1,6 +1,6 @@
 # PLAN — the sidebar keeps what is happening now; everything you configure opens in a Settings tab
 
-> Status: **plan only, nothing implemented yet, 2026-09-28.** Scope: `src_vs_code` (the sidebar
+> Status: **in progress, 2026-09-28 — S1, S2 and S3 built on `feat/settings-page-e1`; S4 (sentences, the help audit) and S5 (the measurement) under way; nothing merged.** Scope: `src_vs_code` (the sidebar
 > `coai.panel`, a new `Settings` editor tab, `package.json`, the help in five languages, the READMEs),
 > the user-facing strings in `src_mcp` and `src_server` that send a person to a sidebar section, and
 > `research/module_extension.md` / `research/architecture.md`.
@@ -301,6 +301,18 @@ Each story is its own commit with a green suite, in this order:
 Before the code round, and before any release: `npm run typecheck`, `npm test`, `npm run lint`, `npm run test:host`, the whole C# suite (S4 touches it), and
 the family checks (`plan-lifecycle.mjs`, `pin-check.mjs`). A clean `tsc` is read before any suite number
 is reported.
+
+## Progress and deviations (recorded as it happens)
+
+| Story | State | What shipped differently |
+|---|---|---|
+| S1 | built, `a9944d55` | as planned; F10 (open sections in the key) found by its own RED table |
+| S2 | built, `18337949` | the slot module is `surfaceSlot.ts` (the plan said `panelSurfaces.ts` + `editHold.ts`: one module was enough); the message parser stayed a typed interface in the provider rather than `panelMessages.ts`, because every field is still checked where it is read. F9's guard follows awaited and returned calls, and found only the one site |
+| S3 | built, `1649a9bf` | **the page script did not move** to `panelScript.ts`: a shared `pageDocument(body, nonce, focus, extra)` gives the Settings tab the same script without a 245-line move, which stays with `PLAN_two_files_outgrew_the_rule.md`. The extension's own sentences (S4's first half) landed with it, because they sit in the files the move touched. The test-conversion proof ran as a mutation: the same 195 tests fail with the moved bodies blanked, before and after |
+| S4 | under way | the servers' wording is **ConnectOtherAIs > Team servers** (> Consultant, > MCP server), true of either extension — ASCII, because `RemoteShimScenarioTests` watched a real child's stderr deliver `→` as nothing |
+| S5 | **extracted** to [PLAN_the_sidebar_pays_only_for_what_it_shows.md](PLAN_the_sidebar_pays_only_for_what_it_shows.md) | its deliverable is a MEASUREMENT — an idle hour per arm, counted — and a cost model computed from the cache windows is not one; the follow-up carries that model, labelled as computed, as its starting point |
+
+The gate's commands asked for the split and the architecture story on Fable; Fable was unavailable (account limit, 2026-09-28), so both ran on Opus.
 
 ## What my own review added (Opus, run beside the plan round, 2026-09-28)
 
