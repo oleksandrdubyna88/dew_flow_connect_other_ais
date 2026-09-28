@@ -124,6 +124,33 @@ public sealed class AUsageTheVendorNeverReportedIsUnknownTests : IDisposable
         line.GetProperty("costUsd").ValueKind.Should().Be(JsonValueKind.Null);
     }
 
+    /// <summary>
+    /// A 200 whose body carries no <c>usage</c> object — a gateway that drops it — is unknown usage, never a known
+    /// zero the row's price turns into $0 (the code round's own review, on the calibration branch).
+    /// </summary>
+    [Fact]
+    public async Task An_answer_that_carries_no_usage_is_unknown_never_priced_at_zero()
+    {
+        _stub.Answers = _ => new ApiEndpointStub.Answer(
+            200, "{\"id\":\"c\",\"choices\":[{\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"findings\\\":[]}\"},\"finish_reason\":\"stop\"}]}");
+
+        var invocation = Build(Grok);
+        var result = await new ProcessLauncher().RunAsync(
+            new ProcessRequest(ServerBinary.Path, [.. invocation.Request.Arguments.SkipWhile(a => a != "--ask-api")], _dir)
+            {
+                Environment = invocation.Request.Environment,
+                Timeout = TimeSpan.FromMinutes(1),
+            },
+            TestContext.Current.CancellationToken);
+        var usage = new ApiRuntime("grok", _stub.Endpoint).ReadUsage(invocation, result);
+
+        result.ExitCode.Should().Be(0, $"stderr said: {result.StdErr}");
+        Core.Api.CompletionReader.Read("{\"choices\":[{\"message\":{\"content\":\"x\"}}]}").Usage.NotCaptured
+            .Should().BeTrue("the reader saw no usage object");
+        usage.NotCaptured.Should().BeTrue("the vendor answered without saying what the call consumed");
+        usage.CostUsd.Should().BeNull("a priced row must not work an unreported usage out as $0");
+    }
+
     // ---------- the round: status and the audit line ----------
 
     [Fact]

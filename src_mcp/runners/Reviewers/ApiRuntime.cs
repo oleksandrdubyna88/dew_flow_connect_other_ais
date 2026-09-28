@@ -152,9 +152,11 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
                 // The cached subset, when the endpoint reported one (`prompt_tokens_details.cached_tokens`):
                 // what the first live multi-turn run measures prefix caching by (D25). Absent is zero.
                 Count(root, "tokensCached"),
-                TokensReasoning: Count(root, "tokensReasoning"));
+                TokensReasoning: Count(root, "tokensReasoning"),
+                // The shim's word that the vendor's answer carried no usage at all: unknown, and never priced.
+                NotCaptured: root.TryGetProperty("notCaptured", out var unknown) && unknown.ValueKind == JsonValueKind.True);
 
-            return tokens with { CostUsd = invocation.Price.CostOf(tokens), NoPriceSet = !invocation.Price.IsSet };
+            return tokens with { CostUsd = tokens.NotCaptured ? null : invocation.Price.CostOf(tokens), NoPriceSet = !invocation.Price.IsSet };
         }
         catch (JsonException)
         {

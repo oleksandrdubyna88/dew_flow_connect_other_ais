@@ -52,18 +52,70 @@ public sealed record ApiOverrides(string Effort = "", int MaxTokens = 0, int Rev
 /// <param name="MaxTokens">The configured ceiling (the row's floor may raise what is sent).</param>
 /// <param name="FollowUps">Source follow-up turns after the first.</param>
 /// <param name="ReviewMinutes">The whole-review limit in minutes.</param>
+/// <remarks>
+/// <para><b>The environment's effort keeps the meaning it had before the modules</b> (the calibration branch's
+/// code round). It is ONE value for every api row: a word the row's dialect makes nothing of (<c>none</c> on
+/// every dialect row, <c>engine</c>) sends no effort — the vendor's own depth, thinking on — rather than
+/// becoming qwen's thinking-off switch, which is a row's to throw. Any other word is SENT, as every calibration
+/// run sent it (qwen's calibration ran <c>high</c>, a word its module does not declare); when it is not one of
+/// the module's declared levels <see cref="Unlisted"/> says so, so a refusal that follows has its cause named on
+/// the card. The row's own effort is validated by the module instead (<see cref="IApiVendor.Refusal"/>), because
+/// a person chose it for this row from the module's own list.</para>
+/// <para><b><see cref="ThinkingOn"/> says what the wire does</b>: an effort that is the module's thinking-off
+/// level (a row's own <c>none</c> on qwen) reports thinking off.</para>
+/// </remarks>
 public sealed record ApiEffective(string Effort, bool ThinkingOn, int MaxTokens, int FollowUps, int ReviewMinutes)
 {
-    /// <summary>Row over environment over module default, field by field.</summary>
-    public static ApiEffective Of(IApiVendor vendor, ApiRowSettings row, ApiOverrides overrides) => new(
-        First(row.Effort, overrides.Effort, vendor.Defaults.Effort),
-        row.Thinking == ThinkingSetting.Default ? vendor.Defaults.ThinkingOn : row.Thinking == ThinkingSetting.On,
-        First(overrides.MaxTokens, vendor.Defaults.MaxTokens),
-        vendor.Defaults.FollowUps,
-        First(row.ReviewMinutes, overrides.ReviewMinutes, vendor.Defaults.ReviewMinutes));
+    /// <summary>The variable the environment's effort comes from — named in the sentence that sets it aside.</summary>
+    public const string EffortVariable = "COAI_LOCAL_REASONING_EFFORT";
 
-    private static string First(params string[] candidates) =>
-        candidates.FirstOrDefault(c => c.Trim().Length > 0)?.Trim() ?? string.Empty;
+    /// <summary>Row over environment over module default, field by field.</summary>
+    public static ApiEffective Of(IApiVendor vendor, ApiRowSettings row, ApiOverrides overrides)
+    {
+        var effort = row.Effort.Trim().Length > 0 ? row.Effort.Trim() : FromEnvironment(vendor, overrides.Effort.Trim());
+
+        return new(
+            effort,
+            ThinkingOf(vendor, row.Thinking) && !IsThinkingOff(vendor, effort),
+            First(overrides.MaxTokens, vendor.Defaults.MaxTokens),
+            vendor.Defaults.FollowUps,
+            First(row.ReviewMinutes, overrides.ReviewMinutes, vendor.Defaults.ReviewMinutes));
+    }
+
+    /// <summary>What the environment's effort is, for this row, when it is sent without being one of the module's levels — or empty.</summary>
+    public static string Unlisted(IApiVendor vendor, ApiRowSettings row, ApiOverrides overrides) =>
+        row.Effort.Trim().Length == 0 && Classify(vendor, overrides.Effort.Trim()) == EnvironmentEffort.Unlisted
+            ? $"{EffortVariable}='{overrides.Effort.Trim()}' is sent to {vendor.Name}, which declares only "
+              + $"{string.Join(", ", vendor.Capabilities.EffortLevels)} — the environment outranks the calibrated '{vendor.Defaults.Effort}'"
+            : string.Empty;
+
+    private enum EnvironmentEffort
+    {
+        Unset,
+        SendsNothing,
+        Declared,
+        Unlisted,
+    }
+
+    private static string FromEnvironment(IApiVendor vendor, string effort) => Classify(vendor, effort) switch
+    {
+        EnvironmentEffort.Unset => vendor.Defaults.Effort,
+        EnvironmentEffort.SendsNothing => ApiDialect.EngineDecides,
+        _ => effort,
+    };
+
+    private static EnvironmentEffort Classify(IApiVendor vendor, string effort) =>
+        effort.Length == 0 ? EnvironmentEffort.Unset
+        : vendor.Dialect.EffortToSend(effort).Length == 0 ? EnvironmentEffort.SendsNothing
+        : vendor.Capabilities.Accepts(effort) ? EnvironmentEffort.Declared
+        : EnvironmentEffort.Unlisted;
+
+    private static bool ThinkingOf(IApiVendor vendor, ThinkingSetting thinking) =>
+        thinking == ThinkingSetting.Default ? vendor.Defaults.ThinkingOn : thinking == ThinkingSetting.On;
+
+    private static bool IsThinkingOff(IApiVendor vendor, string effort) =>
+        vendor.Capabilities.ThinkingOffLevel.Length > 0
+        && string.Equals(effort, vendor.Capabilities.ThinkingOffLevel, StringComparison.OrdinalIgnoreCase);
 
     private static int First(params int[] candidates) =>
         candidates.FirstOrDefault(c => c > 0);
