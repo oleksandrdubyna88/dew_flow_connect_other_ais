@@ -427,7 +427,7 @@ export interface ServerFacts {
 }
 
 /**
- * What the Server section states, from what is actually on this side's disk.
+ * What the MCP server tab states, from what is actually on this side's disk.
  *
  * <p><b>Ordering, and why it is this way round.</b> The binary's own answer wins, because it is the
  * only source that cannot belong to another machine. The record is consulted ONLY when the file is

@@ -663,7 +663,7 @@ export function activate(context: vscode.ExtensionContext): void {
         }),
     }),
     // Both doors repaint. The panel's own button used to be the only path that did — it awaits
-    // the command and then renders — so an update started from THIS menu left the Server section
+    // the command and then renders — so an update started from THIS menu left the MCP server tab
     // showing the version it had replaced, which is the very symptom the button was fixed for.
     vscode.commands.registerCommand('coai.installServer', async () => {
       await installServer(context);

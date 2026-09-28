@@ -50,13 +50,13 @@ export type Availability = 'fine' | 'unavailable' | 'unknown';
  *
  * <p>`answered: false` is not "everything is fine" and it is not "this reviewer is broken" — it is
  * that the installed binary was asked and could not say. The CARD stays silent about a reviewer it
- * knows nothing about, and the Server section says the check itself failed. Four reviewers on this
+ * knows nothing about, and the MCP server tab says the check itself failed. Four reviewers on this
  * epic's plan round raised the same point: silence about a failed CHECK is the class of defect this
  * whole plan is about.</p>
  */
 export interface ProvidersAnswer {
   readonly reported: Record<string, ProviderHealth>;
-  /** A binary existed and was run. False means nothing was asked — which the Server section says. */
+  /** A binary existed and was run. False means nothing was asked — which the MCP server tab says. */
   readonly asked: boolean;
   readonly answered: boolean;
   /** What the server said ABOUT ITSELF, which used to be dropped on the floor. */

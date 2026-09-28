@@ -3808,7 +3808,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    *
    * <p>The panel repaints on every keystroke in a settings field; asking GitHub each time would
    * spend the anonymous rate limit in a minute and then answer nothing at all. "Check again" in
-   * the Server section clears the clock for a person who wants an answer now.</p>
+   * the MCP server tab clears the clock for a person who wants an answer now.</p>
    */
   private async publishedVersion(): Promise<string> {
     const halfAnHour = 30 * 60 * 1000;
