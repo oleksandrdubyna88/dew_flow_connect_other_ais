@@ -59,17 +59,26 @@ internal sealed class FeatureRefs(IProcessLauncher launcher)
     /// an error — so a caller naming another commit on another checkout got a clean review of the tree it
     /// was on (found by the D26 live run, §9.30). Declared now, and held to the one commit it may name.
     /// </remarks>
-    private async Task<string> HeadRefProblemAsync(string repoPath, string headRef, string head, CancellationToken ct) =>
-        headRef.Length == 0 ? string.Empty
-        : RefShapeProblem("head", headRef) is { Length: > 0 } shape ? shape
-        : NotTheCheckoutsHead(repoPath, headRef, await CommitAsync(repoPath, headRef, ct), head);
+    private async Task<string> HeadRefProblemAsync(string repoPath, string headRef, string head, CancellationToken ct)
+    {
+        if (headRef.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var shape = RefShapeProblem("head", headRef);
+
+        return shape.Length > 0 ? shape : NotTheCheckoutsHead(repoPath, headRef, await CommitAsync(repoPath, headRef, ct), head);
+    }
 
     /// <summary>The sentence for a <c>head</c> that resolved to <paramref name="named"/> (empty: to nothing), or empty when it is the checkout's.</summary>
     private static string NotTheCheckoutsHead(string repoPath, string headRef, string named, string head) =>
-        named.Length == 0
-            ? $"head '{headRef}' does not resolve to a commit in '{repoPath}' — the head reviewed is this checkout's HEAD ({head}); check out the commit that holds the feature and run the review from that checkout, or omit head"
-        : string.Equals(named, head, StringComparison.OrdinalIgnoreCase) ? string.Empty
-        : $"head '{headRef}' is commit {named}, but this checkout's HEAD is {head} — the head reviewed is always the checkout's HEAD, never an argument; check out {named} (or run the review from the checkout that holds it) and call again, or omit head";
+        (named.Length == 0, string.Equals(named, head, StringComparison.OrdinalIgnoreCase)) switch
+        {
+            (true, _) => $"head '{headRef}' does not resolve to a commit in '{repoPath}' — the head reviewed is this checkout's HEAD ({head}); check out the commit that holds the feature and run the review from that checkout, or omit head",
+            (false, true) => string.Empty,
+            (false, false) => $"head '{headRef}' is commit {named}, but this checkout's HEAD is {head} — the head reviewed is always the checkout's HEAD, never an argument; check out {named} (or run the review from the checkout that holds it) and call again, or omit head",
+        };
 
     private async Task<FeatureInput<FeatureRange>> WithBaseAsync(string repoPath, string baseRef, string head, CancellationToken ct)
     {
@@ -115,10 +124,12 @@ internal sealed class FeatureRefs(IProcessLauncher launcher)
     /// carries whitespace or a control character (never a ref anyone meant) — or empty when it can. One guard
     /// for both refs the tool takes, <paramref name="argument"/> naming which.
     /// </summary>
-    private static string RefShapeProblem(string argument, string value) =>
-        value.StartsWith('-') ? $"{argument} '{value}' starts with '-', which git would read as an option — pass a commit, a tag or a branch"
-        : value.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)) ? $"{argument} '{value}' contains whitespace or a control character — pass a commit, a tag or a branch"
-        : string.Empty;
+    private static string RefShapeProblem(string argument, string value) => value switch
+    {
+        _ when value.StartsWith('-') => $"{argument} '{value}' starts with '-', which git would read as an option — pass a commit, a tag or a branch",
+        _ when value.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)) => $"{argument} '{value}' contains whitespace or a control character — pass a commit, a tag or a branch",
+        _ => string.Empty,
+    };
 
     /// <summary>Why <paramref name="repoPath"/> is not a repository's top level, or empty when it is — asked before the plan is read from it.</summary>
     /// <remarks>
