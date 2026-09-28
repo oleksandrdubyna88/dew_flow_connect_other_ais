@@ -2187,14 +2187,14 @@ ${plan}
 ${roleSwitchSkew(state.server, s)}
   <div class="field">
     <label class="check"><input type="checkbox" data-setting="dealCodeLenses"${s.dealCodeLenses ? ' checked' : ''}> Deal the roles across vendors</label>
-    <div class="hint">Off: each of the three roles is asked of every vendor. On: the three roles are dealt out, one vendor each.</div>
+    <div class="hint">Off: every code role is asked of every vendor. On: the roles are dealt out across the vendors, each asked of one.</div>
   </div>
   <div class="field">
     ${labelled('codeWorkspace', 'What a reviewer gets', 'codeWorkspace')}
     ${segmentedRadio('codeWorkspace', s.codeWorkspace, 'What a reviewer gets', [['none', 'Fast — diffs only'], ['worktree', 'Full — with the code']])}
     <div class="hint">Fast sends the diff, the plan and this project’s rules — and nothing to explore. Measured on one commit: every hosted model found MORE that way, at a half to a third of the tokens. Full also hands them the checkout, for a review that needs the surrounding code.</div>
   </div>
-  <div class="hint"><b>Architecture</b> round 1 defaults to <b>Conventions</b>: it judges the diff against the rules this project has written down \u2014 <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> \u2014 and nothing else. The other two roles spend their round on their own subject; pick <b>Conventions</b> for them if you want the rules read again. Anything you pick wins.</div>
+  <div class="hint"><b>Conventions</b> is a code role of its own, with one prompt: it judges the diff against the rules this project has written down \u2014 <code>CLAUDE.md</code>, <code>AGENTS.md</code>, <code>GEMINI.md</code>, <code>.claude/rules</code> \u2014 and nothing else, and it is skipped in a repository that wrote none. The other code roles spend every round on their own subject; a round you have not picked asks that role\u2019s universal question.</div>
 ${conventionsSkew(state.server)}
 ${customRolesSkew(state.server, s)}
 ${code}
@@ -2206,7 +2206,7 @@ ${documents}
 </div>
 <div class="role-group">
   <div class="group-head">Feature stage</div>
-  <div class="hint">What <code>review_feature</code> will run: a reviewer that reads a whole plan’s worth of code, OUTLINED, once every epic has landed — plan-to-code gaps across epics, the seams between them, the members that changed. Its tick is the feature gate’s switch: unticked, the gate records that it did not run and does not block. The tool and the vendor tick arrive with the next epic.</div>
+  <div class="hint">What <code>review_feature</code> runs: a reviewer that reads a whole plan’s worth of code, OUTLINED, once every epic has landed — plan-to-code gaps across epics, the seams between them, the members that changed. Its tick is the feature gate’s switch: unticked, the gate records that it did not run and does not block. Which vendors review a feature is each reviewer card’s <b>reviews features</b> box.</div>
 ${features}
 </div>
 <div class="field">

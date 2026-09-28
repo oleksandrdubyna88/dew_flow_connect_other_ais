@@ -158,7 +158,7 @@ to ask another vendor's model about the working tree **as it stands** — uncomm
 which is the state no diff and no review round can see.
 
 It gates nothing and blocks nothing; it comes back as an answer, not a verdict. Its cost is bounded
-by caps you set in the panel — turns per consultation, calls per session, and an idle time after
+by caps you set in **Settings** → *Consultant* — turns per consultation, calls per session, and an idle time after
 which one is closed — because the failure mode of a tool an AI can call on its own judgement is
 calling it forty times. The turns and the idle time bound every consultation; calls per session counts
 only the calls an AI makes because it is stuck — its first question and every follow-up alike. The idle close is checked every minute while the server
@@ -167,7 +167,7 @@ runs.
 **It is also called when nobody is stuck.** After a plan is split into epics, every group of three
 owes one consultation before its first code round — is this group right, where is it weak, what did it
 forget — and from five epics the assistant is asked which epics and stories carry the most risk, each
-of which gets one of its own. *Consultation cadence* in the same section sets the numbers and what the
+of which gets one of its own. *Consultation cadence* in the same tab sets the numbers and what the
 gate does: *Remind* puts the order in every review reply, *Require* also holds the group's code round
 until it is taken. *Active rounds* says where each plan stands — `epics closed 4/14 · consultation for
 epics 4-6: due · branch feat/x`. An ordered consultation spends none of the calls-per-session budget: the
@@ -183,7 +183,7 @@ the epics or story and the plan an ordered one covered.
 ## A company box, if you have one
 
 A **Team server** reviews for everybody without anybody installing a CLI. Add it under *Team
-servers*, press **Sign in**, and its reviewers appear beside your local ones; your plan and your
+servers* in **Settings**, press **Sign in**, and its reviewers appear beside your local ones; your plan and your
 diffs are sent to that machine over HTTPS, behind your own sign-in, and what it is authenticated as
 is shown on the row.
 
@@ -196,7 +196,7 @@ decides whether it leaves your machine, and it says so rather than meaning it si
 
 ## The log, and taking it with you
 
-Finished rounds go to **Show review rounds** on the panel's `⋯` menu: a table of everything that has
+Finished rounds go to **Show review rounds**, the list icon in the panel's title bar: a table of everything that has
 ever run, sorted, filtered and searchable, holding your chat conversations as well as your review
 rounds. The **Took** column now reports two figures — how long the reviewers ran, and how long the
 *deciding* took, from the round finishing to its last decision, which is the half that actually takes
@@ -221,8 +221,8 @@ Nothing in it can execute when a spreadsheet opens it, either.
    published binary into this extension's own storage — never onto your `PATH` — verifies its
    checksum, and puts the client configuration on your clipboard.
 2. **Paste that configuration** into your MCP client (`~/.claude.json`, a project's `.mcp.json`, or
-   `.vscode/mcp.json`) and restart it. This is a **one-time paste**: everything you change in the
-   panel afterwards is saved for the server itself.
+   `.vscode/mcp.json`) and restart it. This is a **one-time paste**: everything you change in
+   **Settings** afterwards is saved for the server itself.
 3. **Teach your AI when to call it.** `⋯` → *Copy the CLAUDE.md snippet*, and paste it into the
    `CLAUDE.md` of the repository you want reviewed. The server can refuse an out-of-order call, but
    it cannot make a model call it — that snippet is what does.
@@ -231,13 +231,31 @@ Then work as usual. Your AI opens a session, submits its plan, and the gate does
 
 ---
 
-## The panel
+## The panel and the Settings tab
 
-Everything in the sidebar, most of it folded away because it is configured once:
+**The sidebar is what is happening now.** Under any question waiting on you:
+
+- **Notifications** — how many messages are new since you last looked, and the page that keeps every
+  one of them after its toast has gone.
+- **Active rounds** — what is running right now, whole: the stage, the branch, and every reviewer
+  the round launched, and under them any consultation being had. Finished rounds live in the log —
+  **Show review rounds**, the list icon in the title bar — which sorts, filters, and **exports to CSV**,
+  one round or a selection of them.
+- **Phrases** — the sentences you stopped wanting to retype, one button each. Press one and it is
+  on the clipboard; paste it where you were about to type it, usually the Claude Code box. Edit
+  them in a tab of their own (**Edit phrases**) that saves as you type. It copies rather than
+  typing into the box for you on purpose: no Claude Code command accepts arbitrary text, and the
+  only alternative was a synthetic keystroke through the Windows API — one `Ctrl+V` is a better
+  price than a mechanism that can fail silently on somebody else's machine.
+- **Bugz** — the corpus of defects your gate found and fixed: collect it, review it, send it.
+
+**Everything you configure once is in the Settings tab** — the gear beside the help button in the
+panel's title bar, or **ConnectOtherAIs: Settings** in the command palette. One tab per window, one
+tab of it per part, and the same controls as always:
 
 - **Reviewers** — add a vendor, remove one, switch one off, choose its model. Codex's models come
   from the CLI's own cache, so the list is what this machine can actually reach today; Gemini's and
-  Claude's are curated, and the panel says which is which rather than passing curation off as
+  Claude's are curated, and the tab says which is which rather than passing curation off as
   discovery. Any model can be typed in regardless. **Add a reviewer** offers the whole catalogue
   whether or not you already have one of each: pick a vendor you already have and it adds a second
   row under the next free name — `claude-2` beside `claude`, which is how you run one on haiku for
@@ -245,12 +263,6 @@ Everything in the sidebar, most of it folded away because it is configured once:
   will be. The filter box searches what each entry SAYS, not only its name.
 - **Chat other AIs** — ask a second model about a passage without leaving VS Code, and find that
   conversation again afterwards.
-- **Phrases** — the sentences you stopped wanting to retype, one button each. Press one and it is
-  on the clipboard; paste it where you were about to type it, usually the Claude Code box. Edit
-  them in a tab of their own (**Edit phrases**) that saves as you type. It copies rather than
-  typing into the box for you on purpose: no Claude Code command accepts arbitrary text, and the
-  only alternative was a synthetic keystroke through the Windows API — one `Ctrl+V` is a better
-  price than a mechanism that can fail silently on somebody else's machine.
 - **Consultant** — the same idea from the other end: `consult` lets an AI ask another vendor's
   model about your working tree as it stands — when it is stuck, or when the consultation cadence
   orders one — with its own caps on turns, calls per session and idle time. Every setting in it has a
@@ -266,9 +278,8 @@ Everything in the sidebar, most of it folded away because it is configured once:
 - **This side** — a local window, or each WSL distro and remote host, can keep its own settings and
   its own data directory.
 - **MCP server** — install or update it, and see where this window keeps its data.
-- **Active rounds** — what is running right now, whole: the stage, the branch, and every reviewer
-  the round launched. Finished rounds live in the log — **Show review rounds** on the ⋯ menu —
-  which sorts, filters, and now **exports to CSV**, one round or a selection of them.
+
+The arrow keys move along the tabs, Home and End go to the ends, and Ctrl+F searches the tab you are on.
 
 Every setting carries a **?** that explains what it does and why it exists.
 
