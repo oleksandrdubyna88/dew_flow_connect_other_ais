@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.40.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.39.0...mcp-v0.40.0) (2026-09-28)
+
+
+### Features
+
+* **api:** each API vendor calibrated and a module of its own — the measured dialects, the 20-minute cap, per-model settings ([6c7571f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/6c7571f36e96d2a9fb074164a58025aa001df3c5))
+* the feature review, epic 3 — source on demand, the second round only when needed, the person's side ([9cb01a2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9cb01a2bf17fa5ca72cc59050427bf989bdf96e3))
+
+
+### Bug Fixes
+
+* **api:** a call that ends before the vendor reports usage is "usage not captured", never 0 tokens or $0 ([95a38a4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/95a38a4ab79b5ce7a4b26f5a078234b813712dc5))
+* **api:** the code round — a malformed completion keeps its usage, an unreported usage is unknown, the environment's effort keeps its meaning ([60f5c15](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/60f5c1548e66c43d82f75a660ff81e7300123a21))
+* **consult:** a turn that never returns ends, and its record can be closed ([e757d67](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e757d672a7369c125903b678e887491293e4614d))
+* **feature:** the head reviewed is the checkout's, and a submodule is not a deletion (§9.30, §9.31) ([#596](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/596)) ([d936653](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d936653983f1fe9277b71e11365d5ddb18fe5fdb))
+
 ## [0.39.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.38.0...mcp-v0.39.0) (2026-09-26)
 
 
