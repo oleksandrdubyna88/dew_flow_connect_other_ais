@@ -58,13 +58,14 @@ export class Node {
    * page had not shown yet, and a fake that accepted that focus would have passed the test for it.
    */
   focus(): void {
-    // eslint-disable-next-line @typescript-eslint/no-this-alias -- walking up the chain from here IS the operation
-    for (let at: Node | undefined = this; at !== undefined; at = at.parent) {
-      if (at.hidden) {
-        return;
-      }
+    if (this.rendered()) {
+      this.focused = true;
     }
-    this.focused = true;
+  }
+
+  /** Neither this node nor any ancestor is hidden. */
+  private rendered(): boolean {
+    return !this.hidden && (this.parent?.rendered() ?? true);
   }
 
   /** Listeners a page binds to one element; recorded so a page that binds them can run, never fired. */
