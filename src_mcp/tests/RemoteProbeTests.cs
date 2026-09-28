@@ -67,7 +67,7 @@ public sealed class RemoteProbeTests : IDisposable
         var health = await probe.RunAsync(Vendor, enabled: true, _dataDir);
 
         health.Auth.Should().Be("unavailable");
-        health.Note.Should().Contain("Team servers section");
+        health.Note.Should().Contain("ConnectOtherAIs > Team servers");
         handler.Requests.Should().Be(0, "whether this machine signed in is a question about a file");
     }
 

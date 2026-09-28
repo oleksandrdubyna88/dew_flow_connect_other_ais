@@ -126,7 +126,7 @@ public sealed class RemotePollDecisionTests
         var refusal = AskRemote.Refusal("https://s", "codex", "p", "o", token: "")!.Value;
 
         refusal.Exit.Should().Be(RemoteAsk.NotSignedIn);
-        refusal.Message.Should().Contain("Team servers section");
+        refusal.Message.Should().Contain("ConnectOtherAIs > Team servers");
     }
 
     [Fact]

@@ -512,7 +512,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
 
         var refusal = Refusal(await Consult(Service(enabled: false), "The parser returns 3 where 4 is expected."));
 
-        refusal.Should().Contain("switched off").And.Contain("COAI_CONSULT_ENABLED").And.Contain("Consultant section");
+        refusal.Should().Contain("switched off").And.Contain("COAI_CONSULT_ENABLED").And.Contain("ConnectOtherAIs > Consultant");
         Refusal(await Consult(Service(enabled: false), "   ")).Should().Contain("switched off",
             "an off feature answers for being off, not for the shape of a call nobody is going to make");
         // The tree is DIRTY here on purpose — the uncommitted change is what a consultation sends —
@@ -580,7 +580,7 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
             .And.Contain("remsoftdev-codex")
             .And.Contain("'remote'")
             .And.Contain(string.Join(", ", ConsultantResolution.Consulting), "the allowlist is named so the cure is on screen")
-            .And.Contain("Consultant section");
+            .And.Contain("ConnectOtherAIs > Consultant");
         new ConsultationStore(_data).All().Should().BeEmpty("nothing was built, so nothing was recorded");
         (await Status()).Should().Be(before, "a refusal touches nothing in the checkout");
     }

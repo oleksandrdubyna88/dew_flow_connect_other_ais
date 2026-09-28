@@ -1066,8 +1066,8 @@ public sealed record PanelSettings
             ? [new UnrecognisedSetting(
                 Key.Exhausted,
                 $"{Key.Exhausted} is '{policy}', which this server does not know — it is asking a "
-              + "person instead. The panel is probably newer than this server: update it in the "
-              + "panel's Server section.")]
+              + "person instead. The panel is probably newer than this server: update it in "
+              + "ConnectOtherAIs > MCP server.")]
             : [];
 
     private static IReadOnlyList<UnrecognisedSetting> WhyWorkspace(Func<string, string?> env) =>

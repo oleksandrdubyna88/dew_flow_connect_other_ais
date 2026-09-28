@@ -112,7 +112,7 @@ public sealed class RemoteProbe(HttpClient http, Func<DateTime>? utcNow = null)
         (server.Length == 0, enabled, token.Length == 0) switch
         {
             (true, _, _) => new VendorHealth(enabled, false, "", "unavailable",
-                "this Team server vendor has no server URL — set one in the panel's Team servers section"),
+                "this Team server vendor has no server URL — set one in ConnectOtherAIs > Team servers"),
             (false, false, _) => new VendorHealth(false, false, "", "unavailable", "disabled in settings"),
             (false, true, true) => new VendorHealth(enabled, false, "", "unavailable",
                 RemoteAsk.NotSignedInMessage(server)),

@@ -70,7 +70,7 @@ public abstract record ResolvedConsultant
 /// </remarks>
 public static class ConsultantResolver
 {
-    private const string Section = "the Consultant section of the ConnectOtherAIs panel (COAI_CONSULTANTS)";
+    private const string Section = "ConnectOtherAIs > Consultant (COAI_CONSULTANTS)";
 
     /// <summary>What <paramref name="choice"/> means for a NEW consultation by a <paramref name="callerKind"/> caller.</summary>
     public static ResolvedConsultant Resolve(ConsultantChoice choice, string callerKind, IReadOnlyList<ProviderSettings> rows) =>

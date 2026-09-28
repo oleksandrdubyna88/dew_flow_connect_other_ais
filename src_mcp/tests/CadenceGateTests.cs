@@ -277,8 +277,11 @@ public sealed class ConsultPreflightTests : IDisposable
     }
 
     [Fact]
+    // One deliberate change since the extraction (2026-09-28, todo/PLAN_settings_page.md, D9): the sentence names
+    // the place as "ConnectOtherAIs > Consultant", which an extension that draws it as a sidebar section and one
+    // that draws it as a Settings tab both satisfy. Everything else is still byte for byte.
     public void TheSwitchedOffSentence_IsByteForByteWhatItWasBeforeTheExtraction() =>
         Service(enabled: false).ConsultPreflight().Reason.Should().Be(
-            "consulting another vendor is switched off in this installation (COAI_CONSULT_ENABLED) — the Consultant "
-            + "section of the ConnectOtherAIs panel turns it back on. Nothing was sent anywhere; carry on with the person instead");
+            "consulting another vendor is switched off in this installation (COAI_CONSULT_ENABLED) — "
+            + "ConnectOtherAIs > Consultant turns it back on. Nothing was sent anywhere; carry on with the person instead");
 }
