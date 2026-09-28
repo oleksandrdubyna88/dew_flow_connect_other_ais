@@ -4183,6 +4183,7 @@ flowchart LR
 | `settledWrites.ts` | one write at a time, and a typed field waits to settle — extracted out of `rolesPanel.ts` when the phrases tab needed the same two rules |
 | `settingRefused.ts` | why a `coai.*` write was refused, in words, pure: VS Code's own reason verbatim, and the ONE recognised refusal — `declaresSetting` separating a stale window (reload cures it) from a key this build never declared (it does not) |
 | `panelView.ts` | the sidebar's HTML, pure: the section registry `PANEL_SECTIONS`, vendor cards with the green run button, the live regions (`live-questions`, `live-rounds`, `live-consultations`, `live-notifications`) |
+| `surfaceSlot.ts` | pure: one webview the panel paints — its held view, its painted key, its edit hold — and `anyHeld`; the provider paints a list of these |
 | `panelSurface.ts` | pure: how a list of sections becomes a page body and its paint KEY — the body with every live region blank and every section closed; which surface a section is drawn on (`SURFACE_IDS`) |
 | `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |
 | `vendorTerminal.ts` | pure: which CLI a vendor is, its own usage command (`/usage`, `/status`, `/stats`), and the provider overrides a custom endpoint needs |
@@ -4247,6 +4248,33 @@ validated IS the question a person is waiting to answer, so dropping it because 
 leaves the round gated with nothing on screen — a crash traded for a hang, which is worse, because a
 crash at least says that something happened. `id` and `question` remain the only two that decide
 whether a question can be shown; the rest is metadata, and metadata is rendered, not adjudicated.
+
+### One provider, several surfaces (2026-09-28)
+
+`PanelProvider` now paints a LIST of webviews, each a `SurfaceSlot` (`surfaceSlot.ts`, no `vscode`
+import): the held view, what was last painted into it, and its edit hold. Today the list holds the
+sidebar alone; the Settings tab of [../todo/PLAN_settings_page.md](../todo/PLAN_settings_page.md) is
+its second entry. A render builds ONE state and lets each slot decide for itself — paint, patch, or
+nothing because its view is gone — with that page's own caret, so a caret recorded on one page is
+never put back into another. A message is received with the slot it came from bound at attach time,
+so a `copied` confirmation and a snap-back after a refused write go to that page alone, and the page
+cannot claim to be another.
+
+Moving the three fields into the slot closed two defects the single fields carried: a view VS Code
+created again was matched against the painted key of the view it replaced and could be posted live
+regions into an empty document (`attach` forgets the key — F2), and a late disposal of a replaced
+view cleared the LIVE view's edit hold (`detach` is ownership-checked — F3). Both are run in
+`surfaceSlot.test.ts`, each proved to go red when its fix is taken out. The Claude probe is asked
+"is any page still watching" instead of being handed the sidebar's handle (F8), so a probe the
+Settings tab asked for is not cancelled because the sidebar is hidden.
+
+**And a queued write that awaited its own repaint (F9).** A refused setting on an `api` reviewer's
+card did `await this.snapBack()` inside the write queue, which `render()` waits for — the #561 freeze,
+at the one site `afterTheWrite` had not reached. `aQueuedWriteNeverWaitsOnItself.test.ts` now follows
+every chain of AWAITED or RETURNED calls from each method the dispatcher enqueues and fails, naming the
+line, on any that reaches `render`; it found exactly that one site before the fix. The source blanker
+it needs moved out of `panelsAreSearchable.test.ts` into `test/blankedSource.ts`, so the two scans share
+one.
 
 ## Every page can be searched (2026-09-09)
 
