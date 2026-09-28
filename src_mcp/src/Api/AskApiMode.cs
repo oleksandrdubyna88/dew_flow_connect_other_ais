@@ -297,7 +297,9 @@ internal static class AskApiMode
     /// reasoning share for the record.
     /// </remarks>
     internal static string UsageLine(Usage usage) =>
-        "{" + $"\"tokensIn\":{usage.TokensIn},\"tokensOut\":{usage.TokensOut},\"tokensCached\":{usage.TokensCached},\"tokensReasoning\":{usage.TokensReasoning}" + "}";
+        "{" + $"\"tokensIn\":{usage.TokensIn},\"tokensOut\":{usage.TokensOut},\"tokensCached\":{usage.TokensCached},\"tokensReasoning\":{usage.TokensReasoning}"
+        // The vendor answered and said nothing about what the call consumed: the parent records it as unknown.
+        + (usage.NotCaptured ? ",\"notCaptured\":true" : string.Empty) + "}";
 
     /// <summary>" (N reasoning tokens)" when the vendor reported any — the number a person needs to size the ceiling.</summary>
     private static string Thinking(ChatAnswer answer) =>

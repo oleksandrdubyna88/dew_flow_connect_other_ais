@@ -208,6 +208,56 @@ public sealed class AnApiRowIsSettableTests : IDisposable
         api.GetProperty("refusal").GetString().Should().BeEmpty();
     }
 
+    // ---------- the environment's effort is held to the module (the calibration branch's code round) ----------
+
+    private const string GlmRow =
+        "{\"id\":\"glm\",\"runtime\":\"api\",\"model\":\"glm-5.3\",\"baseUrl\":\"https://api.example/v1\",\"dialect\":\"dashscope\",\"key\":\"qwen\",\"feature\":true{TAIL}}";
+
+    /// <summary>
+    /// <c>COAI_LOCAL_REASONING_EFFORT=none</c> meant "send no effort" on every dialect row before the modules
+    /// (each maps <c>none</c> to an omitted field) — the calibration harness ran qwen that way — and on the qwen
+    /// module <c>none</c> is the thinking-OFF switch. A blanket environment value must not throw a row's
+    /// thinking switch: it keeps its old meaning, the vendor's own default depth with thinking on.
+    /// </summary>
+    [Fact]
+    public void An_environment_none_sends_no_effort_and_never_switches_qwens_thinking_off()
+    {
+        var reviewer = FeatureReviewer(Service(string.Empty, new ApiOverrides("none")));
+
+        reviewer.Invocation.Request.Arguments.Should().NotContain("none", "none on qwen is the thinking-off switch");
+        reviewer.Invocation.Request.Arguments.Should().NotContain("--thinking");
+    }
+
+    /// <summary>
+    /// An environment effort the module does not declare is still SENT — every calibration run relied on that
+    /// (qwen's ran <c>high</c>) — but the report names it, so a vendor's refusal that follows has its cause on
+    /// the card rather than only in a failed round.
+    /// </summary>
+    [Fact]
+    public async Task An_environment_effort_the_module_does_not_declare_is_sent_and_named_in_the_report()
+    {
+        var service = Service(string.Empty, new ApiOverrides("medium"), row: GlmRow);
+
+        FeatureReviewer(service).Invocation.Request.Arguments.Should().ContainInOrder("--reasoning-effort", "medium");
+
+        var api = JsonDocument.Parse(await service.ProvidersAsync(TestContext.Current.CancellationToken)).RootElement
+            .GetProperty("providers").EnumerateArray().Single().GetProperty("api");
+        api.GetProperty("refusal").GetString().Should().BeEmpty("the environment is the operator's knob, not the row's setting");
+        api.GetProperty("note").GetString().Should().Contain("COAI_LOCAL_REASONING_EFFORT").And.Contain("medium");
+        FeatureReviewer(Service(string.Empty, new ApiOverrides("high"), row: GlmRow)).Invocation.Request.Arguments
+            .Should().ContainInOrder("--reasoning-effort", "high");
+    }
+
+    /// <summary>A row's own <c>none</c> on qwen IS the thinking switch — and the report says thinking is off, as the wire does.</summary>
+    [Fact]
+    public async Task A_rows_own_none_on_qwen_is_reported_as_thinking_off()
+    {
+        var api = JsonDocument.Parse(await Service(",\"effort\":\"none\"").ProvidersAsync(TestContext.Current.CancellationToken)).RootElement
+            .GetProperty("providers").EnumerateArray().Single().GetProperty("api");
+
+        api.GetProperty("effective").GetProperty("thinkingOn").GetBoolean().Should().BeFalse("the wire sends qwen's thinking-off level");
+    }
+
     // ---------- helpers ----------
 
     private const string QwenRow =

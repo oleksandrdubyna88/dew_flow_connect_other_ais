@@ -1306,6 +1306,15 @@ key's vendor — so its cost is worked out here, from the rates the row carried.
   zero could be. Tests: `AUsageTheVendorNeverReportedIsUnknownTests` (the ledger line, a killed repair's
   floor, exit 69 against 65 and 0, the REAL shim past a one-second deadline, `Usage.Add`, the round record,
   `status`'s JSON, both audit lines).
+  *And a 200 that carries no `usage` object* (the code round's own review): `CompletionReader` reads it as
+  `Usage.Unknown` (so does `ChatAnswer.Nothing`), the shim's usage line then carries `"notCaptured":true`, and
+  `ReadUsage` records it unknown and never prices it — a gateway that drops `usage` is not a $0 call.
+- **A malformed completion never throws out of the reader** (the calibration branch's code round, codex).
+  `CompletionReader` reads a choice only when it is an object, a message only when it is an object, and a count
+  only when it is a number — `TryGetProperty` / `TryGetInt64` on anything else throw `InvalidOperationException`,
+  which the `JsonException` catch did not see, and the shim died before printing the usage of a billed call.
+  `AMalformedCompletionStillReportsItsUsageTests` (`choices: [null]`, a scalar choice, a string message, a string
+  count, and the REAL shim answering 70 with its usage line).
 - **Tests.** `AnApiReviewerIsPricedAndKeyedTests` — the arithmetic (cached rate, the tier on both sides of
   200K, no cached rate, no price, the clamp), the price on the invocation and off argv, a failed call's raw
   line priced like an answered one's, and two turns through the REAL `coai-mcp --ask-api` binary with the
@@ -1426,6 +1435,12 @@ classDiagram
   xhigh (and 'none' switches thinking off)`), never launched to be answered 400 after a round trip; an
   accepted row's effective effort, ceiling and switch ride on `ReviewerSettings`, and `ApiRuntime` spells the
   switch as `--thinking off` only when it is off. The whole-review cap is the effective `reviewMinutes`.
+  *The environment's effort keeps its old meaning* (the calibration branch's code round, 2026-09-28): a word the
+  row's dialect makes nothing of (`none` on every dialect row, `engine`) sends NO effort — the vendor's own
+  depth, thinking on — rather than becoming qwen's thinking-off switch (the calibration harness ran qwen with
+  `COAI_LOCAL_REASONING_EFFORT=none`); any other word is sent as every calibration run sent it, and when it is
+  not one of the module's declared levels `ApiEffective.Unlisted` puts a sentence on the report's `note`.
+  `effective.thinkingOn` says what the wire does: a row's own `none` on qwen reports thinking off.
 - **`providers` reports the module's view per api row** (`ProviderStatus.Api` → `ApiRowReport`: module,
   price route, capabilities, defaults, effective settings, refusal) — names and values only, never a key;
   absent for every CLI row, whose JSON reads exactly as it did.

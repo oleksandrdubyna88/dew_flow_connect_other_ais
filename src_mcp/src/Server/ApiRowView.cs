@@ -11,7 +11,8 @@ namespace CoaiMcp.Server;
 /// A row whose dialect this build does not know resolves to the generic module HERE so its settings
 /// can still be reported; the shim then refuses the unknown dialect with 65 at launch, as it always has.
 /// </remarks>
-/// <param name="Note">Why the row's named module was set aside for its model (<see cref="ApiVendors.SetAside"/>), or empty.</param>
+/// <param name="Note">Why the row's named module was set aside for its model (<see cref="ApiVendors.SetAside"/>), and why the
+/// environment's effort is sent without being one of the module's levels (<see cref="ApiEffective.Unlisted"/>) — or empty.</param>
 internal sealed record ApiRowView(IApiVendor Module, ApiEffective Effective, string Refusal, string Note = "")
 {
     public static ApiRowView Of(ProviderSettings provider, ApiOverrides overrides)
@@ -22,7 +23,9 @@ internal sealed record ApiRowView(IApiVendor Module, ApiEffective Effective, str
             module,
             ApiEffective.Of(module, provider.Api, overrides),
             module.Refusal(provider.Api),
-            ApiVendors.SetAside(provider.Dialect, provider.Model));
+            string.Join("; ", ((string[])[
+                ApiVendors.SetAside(provider.Dialect, provider.Model),
+                ApiEffective.Unlisted(module, provider.Api, overrides)]).Where(note => note.Length > 0)));
     }
 
     /// <summary>What <c>providers</c> prints for the row: names and values, never a key.</summary>

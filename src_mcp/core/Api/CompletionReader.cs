@@ -12,7 +12,8 @@ namespace CoaiMcp.Core.Api;
 /// <param name="ReasoningTokens"><c>completion_tokens_details.reasoning_tokens</c>, or zero when unreported.</param>
 public sealed record ChatAnswer(string? Content, Usage Usage, string FinishReason, long ReasoningTokens)
 {
-    public static readonly ChatAnswer Nothing = new(null, new Usage(0, 0, null), string.Empty, 0);
+    /// <summary>Text that is not a completion: no content, and a usage nobody reported — unknown, not zero.</summary>
+    public static readonly ChatAnswer Nothing = new(null, Usage.Unknown, string.Empty, 0);
 
     /// <summary>Whether the vendor cut this generation at its token ceiling — a fragment, whatever it holds.</summary>
     public bool WasCut => string.Equals(FinishReason, CompletionReader.CutAtTheCeiling, StringComparison.OrdinalIgnoreCase);
@@ -74,14 +75,25 @@ public static class CompletionReader
             : new ChatAnswer(null, usage, string.Empty, usage.TokensReasoning);
     }
 
+    /// <summary>
+    /// The first choice when it is an OBJECT, or null — a <c>null</c>, a number or a string there is no choice.
+    /// </summary>
+    /// <remarks>
+    /// Every read below is guarded by the value's KIND, not only its presence: <c>TryGetProperty</c> on a
+    /// non-object and <c>TryGetInt64</c> on a non-number THROW <see cref="InvalidOperationException"/>, which
+    /// the <c>JsonException</c> catch does not see — and a throw here killed the shim before it printed the
+    /// usage of a call the vendor had billed (the calibration branch's code round, codex).
+    /// </remarks>
     private static JsonElement? FirstChoice(JsonElement root) =>
         root.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Array && choices.GetArrayLength() > 0
+            && choices[0].ValueKind == JsonValueKind.Object
             ? choices[0]
             : null;
 
-    /// <summary>The message content, or null when there is none — an empty string is none.</summary>
+    /// <summary>The message content, or null when there is none — an empty string is none, and so is a message that is not an object.</summary>
     private static string? ContentOf(JsonElement choice) =>
         choice.TryGetProperty("message", out var message)
+        && message.ValueKind == JsonValueKind.Object
         && message.TryGetProperty("content", out var text)
         && text.ValueKind == JsonValueKind.String
         && text.GetString() is { Length: > 0 } content
@@ -95,9 +107,10 @@ public static class CompletionReader
 
     private static Usage ReadUsage(JsonElement root)
     {
+        // No usage object is a usage the vendor did not REPORT — unknown, never a zero a price turns into $0.
         if (!root.TryGetProperty("usage", out var usage) || usage.ValueKind != JsonValueKind.Object)
         {
-            return new Usage(0, 0, null);
+            return Usage.Unknown;
         }
 
         var prompt = Count(usage, "prompt_tokens");
@@ -132,8 +145,9 @@ public static class CompletionReader
     private static long Detail(JsonElement usage, string details, string field) =>
         usage.TryGetProperty(details, out var inner) && inner.ValueKind == JsonValueKind.Object ? Count(inner, field) : 0;
 
+    /// <summary>A count the vendor reported as a NUMBER, or zero — a string there is no count.</summary>
     private static long Count(JsonElement element, string field) =>
-        element.TryGetProperty(field, out var value) && value.TryGetInt64(out var count) ? count : 0;
+        element.TryGetProperty(field, out var value) && value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var count) ? count : 0;
 }
 
 /// <summary>
