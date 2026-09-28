@@ -199,3 +199,41 @@ rule has to be enforced where the type is chosen.
 It will not change what goes IN the notes, or who writes them. And it does not touch the
 `extension-v` and `server-v` lines, which are unguarded by a decision recorded in the guard's own
 header — that is a policy question about those lines, not this one.
+
+## 2026-09-28: two mcp tags burned in one release, and what each one taught
+
+Extension 0.58.0 and coai-mcp **0.40.2** shipped on 2026-09-28, both with the same code as the release first
+cut. Along the way two mcp tags were cut and neither shipped. Each one exposed a rule this record did not state.
+
+**`mcp-v0.40.0`: the heading was on the wrong release pull request.** The joint heading
+`## Extension 0.58.0 · Server 0.40.0` was committed to the EXTENSION release pull request (#598), copying the
+0.57.0/0.39.0 release, where the extension pull request happened to merge first. This time the mcp pull request (#597)
+merged first. The tag is cut from the mcp pull request's own squash commit (`6c4563a5`), and that commit had no heading,
+so `changelog-names-the-release.mjs` refused the release before any draft was built. Nothing was published; an empty
+draft remains. The tag was not moved (see the section above).
+**Rule:** the heading goes on the MCP release pull request, the guarded line, whichever pull request merges first.
+
+**`Release-As` reaches every package the commit touches.** The burn commit (#599, `Release-As: 0.40.1`) edited
+`src_mcp/RELEASES.md` AND `src_vs_code/CHANGELOG.md`. The hand-written changelog sits under the extension's folder, so
+release-please also proposed **extension 0.40.1**, a downgrade from 0.58.0. It was closed unmerged (#601) and came
+straight back on the next dispatch (#602). #602 is left open with a do-not-merge comment, because closing it only brings
+it back. The next real extension release needs its own `Release-As` above 0.58.0 on a `src_vs_code` commit.
+**Rule:** a `Release-As` commit touches only its package's directory. Its changelog edit goes in a SEPARATE
+pull request, because a squash merge folds the commits of one pull request into one commit. That is how 0.40.2 was cut:
+#604 for the heading, #605 for `src_mcp` alone.
+
+**`mcp-v0.40.1`: the Windows legs outgrew their limit.** Both Windows legs of `mcp-binaries` passed build-and-test and
+were then cancelled by the job's 15-minute `timeout-minutes` while publishing or packaging. win-arm64 was 7 seconds short.
+A re-run failed the same way, because a tag always runs the workflow as it was at the tag.
+
+| mcp release | win-x64 | win-arm64 | slowest other leg |
+|---|---|---|---|
+| 0.38.0 | 10.8 min | 9.9 min | 8.9 min (osx-arm64) |
+| 0.39.0 | 12.1 min | 12.6 min | 10.6 min (osx-arm64) |
+| 0.40.1 (limit 15) | cancelled at ~15, twice | cancelled at ~15, twice | 13.6 min (osx-arm64) |
+| 0.40.2 (limit 30, #603) | 15.4 min | 16.9 min | 16.7 min (osx-arm64) |
+
+The legs build AND run the whole mcp suite (6 235 tests). The limit is now 30 minutes; at the current growth it lasts a
+while, not forever.
+**Rule:** when a leg's duration passes about two thirds of its limit, raise the limit in an ordinary `ci:` pull request.
+Doing it during a release costs a tag.
