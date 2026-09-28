@@ -1494,7 +1494,7 @@ sequenceDiagram
   F->>C: ComparisonBase(base, head) — the one merge-base road
   F->>G: diff --numstat -z -M against..head (DiffExclusions)
   F->>G: cat-file --batch-check — head:path AND base:path per file
-  Note over F: ReadPlan: deleted, a submodule (at its commit), binary, unsupported, over 1 MiB,<br/>past the file cap or the read ceiling → NAMED with size, never read
+  Note over F: ReadPlan: deleted, binary, unsupported, over 1 MiB,<br/>past the file cap or the read ceiling → NAMED with size, never read;<br/>a submodule → NAMED with its commit id (no size known here), never read
   F->>G: ONE cat-file --batch — the chosen blob ids only
   F->>O: Outline(language, text) per blob
   F->>G: diff -U0 -M (the * marks), diff -U3 -M (the member hunks)
