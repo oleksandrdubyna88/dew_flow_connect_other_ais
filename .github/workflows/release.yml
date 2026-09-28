@@ -214,7 +214,10 @@ jobs:
           - rid: osx-x64
             runner: macos-latest
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 15
+    # 30, not 15: the Windows legs build AND run the whole mcp suite, and it grew past the old ceiling —
+    # 10 min (0.38.0), 12.5 min (0.39.0), then both Windows legs of mcp-v0.40.1 were cancelled at 15 with
+    # the other four platforms uploaded. A timeout is not a test failure; it only ever strands a draft.
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
