@@ -298,11 +298,10 @@ function isBlank(value: unknown): boolean {
  * The row and the setting a reset button names — `<vendor id>:<setting>`, the `customCommandModel` shape —
  * or nothing, when the id names no setting of the three. The LAST colon splits, so no vendor id is cut.
  */
-export function resetTarget(id: string | undefined): { vendor: string; key: ApiSettingKey } | undefined {
-  const named = id ?? '';
-  const at = named.lastIndexOf(':');
+export function resetTarget(id = ''): { vendor: string; key: ApiSettingKey } | undefined {
+  const at = id.lastIndexOf(':');
 
-  return at > 0 ? targetOf(named.slice(0, at), named.slice(at + 1)) : undefined;
+  return at > 0 ? targetOf(id.slice(0, at), id.slice(at + 1)) : undefined;
 }
 
 function targetOf(vendor: string, key: string): { vendor: string; key: ApiSettingKey } | undefined {

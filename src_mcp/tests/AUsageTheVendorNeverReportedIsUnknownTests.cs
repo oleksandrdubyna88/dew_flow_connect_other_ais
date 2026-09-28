@@ -33,9 +33,14 @@ public sealed class AUsageTheVendorNeverReportedIsUnknownTests : IDisposable
     private readonly ApiEndpointStub _stub = ApiEndpointStub.Start();
     private readonly string _dir = Directory.CreateTempSubdirectory("coai-usage-unknown-").FullName;
 
+    /// <summary>Holds the stub's answer past the shim's deadline; released on dispose, so the stub's thread never outlives the test.</summary>
+    private readonly ManualResetEventSlim _hold = new(initialState: false);
+
     public void Dispose()
     {
+        _hold.Set();
         _stub.Dispose();
+        _hold.Dispose();
         try
         {
             Directory.Delete(_dir, recursive: true);
@@ -103,7 +108,7 @@ public sealed class AUsageTheVendorNeverReportedIsUnknownTests : IDisposable
     {
         _stub.Answers = _ =>
         {
-            Thread.Sleep(TimeSpan.FromSeconds(3));
+            _hold.Wait(TimeSpan.FromSeconds(3));
             return new ApiEndpointStub.Answer(200, ApiEndpointStub.Completion("{\"findings\":[]}", 900, 40));
         };
 

@@ -1843,7 +1843,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const report = this.providersCache.reported[write.vendor]?.api;
     const vendors = vendorsFrom(this.read(config)('vendors'));
     const changed = vendors.map((v) => (v.id === write.vendor ? withApiSetting(v, key, write.value, report) : v));
-    if (changed.some((v) => v === undefined)) {
+    if (changed.includes(undefined)) {
       await this.snapBack();
       return;
     }

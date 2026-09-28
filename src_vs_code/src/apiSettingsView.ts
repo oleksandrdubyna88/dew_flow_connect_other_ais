@@ -26,12 +26,13 @@ function defaultWord(report: ApiReport): string {
 }
 
 /**
- * The block for one card — or nothing, for a row that is not `api` and for a card switched off because the
- * installed server does not know the runtime (that card already says why, and none of its controls work).
- * `id` is the row's id, already escaped by the card.
+ * The block for one card — or nothing, for a row that is not `api`. A card switched off because the installed
+ * server does not know the runtime asks for no block at all (that card already says why, and none of its
+ * controls work) — the caller decides that, so this function has one job. `id` is the row's id, already
+ * escaped by the card.
  */
-export function apiSettingsFields(row: Row, id: string, health: ProviderHealth | undefined, serverVersion: string, off: boolean): string {
-  return row.runtime === 'api' && !off ? forApiRow(row, id, health, serverVersion) : '';
+export function apiSettingsFields(row: Row, id: string, health: ProviderHealth | undefined, serverVersion: string): string {
+  return row.runtime === 'api' ? forApiRow(row, id, health, serverVersion) : '';
 }
 
 /** The controls from the server's report, or — with no report — the sentence saying why there are none. */
@@ -97,8 +98,9 @@ function effortControl(row: Row, id: string, report: ApiReport): string {
       + `the endpoint decides${sentVerbatim(row)}</span>${help('apiEffort')}${reset(row, id, 'effort', report)}</div>`;
   }
   const chosen = row.effort !== undefined && levels.includes(row.effort) ? row.effort : report.defaults.effort;
+  const marked = ' (' + defaultWord(report) + ')';
   const option = (level: string): string =>
-    `<option value="${escapeHtml(level)}"${level === chosen ? ' selected' : ''}>${escapeHtml(level)}${level === report.defaults.effort ? ` (${defaultWord(report)})` : ''}</option>`;
+    `<option value="${escapeHtml(level)}"${level === chosen ? ' selected' : ''}>${escapeHtml(level)}${level === report.defaults.effort ? marked : ''}</option>`;
 
   return `<label for="effort-${id}">${help('apiEffort')}effort</label>${reset(row, id, 'effort', report)}
     <select id="effort-${id}" data-setting="effort" data-vendor="${id}">

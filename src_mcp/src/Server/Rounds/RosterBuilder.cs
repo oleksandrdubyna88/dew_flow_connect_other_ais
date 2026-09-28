@@ -300,13 +300,13 @@ internal sealed class RosterBuilder(
                 return;
             }
 
-            var settings = SettingsFor(provider, runtime, api);
+            var launch = SettingsFor(provider, runtime, api);
             var followUps = turns is Runners.Feature.SourceTurns.On on ? on.FollowUps : 0;
             var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers, followUps);
             // One key for every launch of THIS reviewer — its turns and their repairs — from the base prompt
             // every one of them shares (ConversationKey): what a vendor that routes its prompt cache by a
             // conversation id (xAI's x-grok-conv-id, 2026-09-26) needs to serve turn 2 from turn 1's cache.
-            settings = settings with { Conversation = ConversationKey.Of(provider.Provider, role, prompt) };
+            launch = launch with { Conversation = ConversationKey.Of(provider.Provider, role, prompt) };
             // The repair is composed WITHOUT a checkout always — the stage's own no-checkout material —
             // because the repair launch always runs in repairDir, an empty temp directory, whatever the
             // review was given (see above).
@@ -323,8 +323,8 @@ internal sealed class RosterBuilder(
             // is the SAME base byte for byte with its tail appended — the launch and the repair alike, so
             // the repair of turn N is composed from turn N's own prompt (plan §4.9).
             ReviewerWork Turn(string tail) => new(
-                runtime.Build(role, prompt + tail, launchDir, schemaFile, outputDir, settings),
-                runtime.Build(role, repairBase + tail + RepairInstruction.Text, repairDir, schemaFile, outputDir, settings),
+                runtime.Build(role, prompt + tail, launchDir, schemaFile, outputDir, launch),
+                runtime.Build(role, repairBase + tail + RepairInstruction.Text, repairDir, schemaFile, outputDir, launch),
                 choice.Id,
                 System.Text.Encoding.UTF8.GetByteCount(prompt + tail));
             work.Add(Turn(string.Empty) with

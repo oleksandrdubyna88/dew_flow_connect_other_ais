@@ -182,11 +182,13 @@ public static class ApiClassification
     /// </remarks>
     private static readonly string[] TransientPhrases = ["auth context expired"];
 
-    public static ApiOutcome Of(int status, string body) =>
-        IsKeyRefused(status, body) ? ApiOutcome.KeyRefused
-        : IsTransient(status, body) ? ApiOutcome.RateLimited
-        : status is >= 200 and <= 299 ? ApiOutcome.Answered
-        : ApiOutcome.Failed;
+    public static ApiOutcome Of(int status, string body) => status switch
+    {
+        _ when IsKeyRefused(status, body) => ApiOutcome.KeyRefused,
+        _ when IsTransient(status, body) => ApiOutcome.RateLimited,
+        >= 200 and <= 299 => ApiOutcome.Answered,
+        _ => ApiOutcome.Failed,
+    };
 
     private static bool IsKeyRefused(int status, string body) =>
         status is 401 or 403 || (status == 400 && SaysTheKeyIsWrong(body));

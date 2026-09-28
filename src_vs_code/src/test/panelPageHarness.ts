@@ -84,7 +84,7 @@ export function controlFrom(tag: string, attributes: string): Control {
  * the real thing; the name must start the attribute list or follow whitespace.
  */
 function attribute(attributes: string, name: string): string {
-  return new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(attributes)?.[1] ?? '';
+  return new RegExp(String.raw`(?:^|\s)${name}="([^"]*)"`).exec(attributes)?.[1] ?? '';
 }
 
 /** Every control the PAGE carries, in document order — never a hand-made list beside it. */

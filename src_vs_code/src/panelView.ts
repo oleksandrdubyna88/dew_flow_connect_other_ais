@@ -1227,7 +1227,7 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
   const dialect = api ? dialectField(vendor, id, off) : '';
   // Thinking, effort and the review limit, from what coai-mcp reported for this row (S3.8); nothing for a
   // CLI row or a switched-off card.
-  const perModel = apiSettingsFields(vendor, id, reported[vendor.id], serverVersion, off);
+  const perModel = off ? '' : apiSettingsFields(vendor, id, reported[vendor.id], serverVersion);
   const skew = off ? `<div class="stale">${escapeHtml(apiNote)}</div>` : '';
   // Keyed off whether the PRICE rows came back empty — not off `remote`, and not off whether any
   // runtime field was rendered. A card with nothing to hang the boxes on keeps the row: a Team
