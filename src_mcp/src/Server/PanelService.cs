@@ -1402,6 +1402,12 @@ public sealed class PanelService
     /// needs no <c>open</c>: the session is keyed by the plan and made under the engine's own claim, and
     /// the caller is recorded from this call's handshake as <c>open</c> would record it.
     /// </remarks>
+    /// <param name="head">
+    /// Optional, and never a choice of what is reviewed: the head reviewed is the checkout's HEAD. When a
+    /// caller names one, it must resolve to that commit or the call is refused naming both — so a caller
+    /// on the wrong checkout is told, rather than handed a clean review of the wrong tree (§9.30). Empty
+    /// is the old call, unchanged.
+    /// </param>
     public Task<string> ReviewFeatureAsync(
         string repoPath,
         string planPath,
@@ -1412,10 +1418,14 @@ public sealed class PanelService
         string callerModel = "",
         string client = "",
         string clientVersion = "",
+        string head = "",
         CancellationToken ct = default) =>
         _feature.ReviewAsync(
             new FeatureRequest(repoPath, planPath, baseRef, epics, lessons, again,
-                CallerDeclaration.From(CallerIdentity.Current(), client, clientVersion, callerModel)),
+                CallerDeclaration.From(CallerIdentity.Current(), client, clientVersion, callerModel))
+            {
+                Head = head,
+            },
             ct);
 
     // ---------- resolve ----------

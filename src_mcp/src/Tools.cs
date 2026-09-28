@@ -218,15 +218,18 @@ internal static class Tools
 
         yield return McpServerTool.Create(
             // `McpServer` is injected, as for `open`: the feature session needs no `open`, so the caller is
-            // recorded from THIS call's handshake. `again` and `callerModel` carry C# defaults — the
-            // `resolve` lesson: without one the SDK publishes an argument as REQUIRED.
+            // recorded from THIS call's handshake. `again`, `callerModel` and `head` carry C# defaults — the
+            // `resolve` lesson: without one the SDK publishes an argument as REQUIRED. `head` is DECLARED so
+            // it can be refused: undeclared, the SDK dropped it without an error, and a caller naming another
+            // commit got a clean review of whatever this checkout held (§9.30 of the feature-review plan).
             async (McpServer server, string repoPath, string planPath, string baseRef, string epics, string lessons,
-                   bool again = false, string? callerModel = null) =>
+                   bool again = false, string? callerModel = null, string? head = null) =>
                 await host.Current.ReviewFeatureAsync(
                     repoPath, planPath, baseRef, epics, lessons, again,
                     callerModel ?? string.Empty,
                     server.ClientInfo?.Name ?? string.Empty,
-                    server.ClientInfo?.Version ?? string.Empty),
+                    server.ClientInfo?.Version ?? string.Empty,
+                    head ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "review_feature",
@@ -251,6 +254,10 @@ internal static class Tools
                     `baseRef` — the commit BEFORE the first epic (a SHA, a tag, or a branch still pointing
                     at it). Refused unless it resolves, differs from HEAD, is an ancestor of HEAD, and
                     something reviewable changed between them.
+                    `head` — OPTIONAL, and never a choice of what is reviewed: that is always the checkout's
+                    HEAD. Pass it only to have the gate check you are on the right checkout; a value that does
+                    not resolve to the checkout's HEAD commit is refused naming both commits. Omit it and
+                    nothing changes.
                     `epics` — a JSON array of 1–20 entries, `{"title", "summary", "branch"?, "pr"?}`. Give
                     each epic's `branch` where it had one: it is what lets the gate's history of a
                     squash-merged epic be found.

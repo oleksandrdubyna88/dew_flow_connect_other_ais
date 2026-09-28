@@ -24,13 +24,14 @@ function featureHalf(): (typeof KNOWN_HALVES)[number] {
   return half;
 }
 
-test('the feature half is a row of the table, at v1, and travels in the paste', () => {
+test('the feature half is a row of the table, at v2, and travels in the paste', () => {
   const half = featureHalf();
 
-  assert.equal(half.version, 1);
+  // v2: the half stopped telling callers to pass a `head` the tool did not declare (§9.30).
+  assert.equal(half.version, 2);
   assert.ok(HALF_IDS.includes(FEATURE_ID));
-  assert.ok(claudeSnippet().includes('<!-- coai-feature v1 -->'));
-  assert.equal(ARTEFACT_VERSION, 13, 'the clipboard changed, so the artefact moved one — from the 12 the consultant move left');
+  assert.ok(claudeSnippet().includes('<!-- coai-feature v2 -->'));
+  assert.equal(ARTEFACT_VERSION, 14, 'the clipboard changed, so the artefact moved one — from the 13 the feature half arrived at');
 });
 
 test('the half is this product’s own file, byte for byte — never a copy in a mount', () => {
@@ -53,10 +54,10 @@ test('it says WHEN — only at the end of a plan of three or more epics, before 
   assert.match(text, /covered by `mcp__coai__review_code`/, 'a smaller plan is the code gate’s, and the paste must say so');
 });
 
-test('it says WHAT to pass — the plan’s path, the base before the first epic, the head, the epics, the lessons', () => {
+test('it says WHAT to pass — the plan’s path, the base before the first epic, the epics, the lessons', () => {
   const text = featureHalf().text;
 
-  for (const argument of ['`planPath`', '`baseRef`', '`head`', '`epics`', '`lessons`', '`repoPath`']) {
+  for (const argument of ['`planPath`', '`baseRef`', '`epics`', '`lessons`', '`repoPath`']) {
     assert.ok(text.includes(argument), `the paste never names ${argument}`);
   }
   assert.match(text, /commit BEFORE the first epic/, 'baseRef is the commit before the first epic, not a branch point guessed later');
@@ -74,8 +75,28 @@ test('it says what each verdict means — and that a skip does NOT block', () =>
   assert.match(text, /`call_human` stops the release/);
   assert.match(text, /mcp__coai__ask_human/);
   assert.match(text, /NEW pull requests/, 'fixes land as new pull requests, not by rewriting merged epics');
-  assert.match(text, /new `head`/, 'the next round is asked about the new head');
   assert.match(text, /`again: true`/, 'a finished feature review is reopened only with again');
+});
+
+/**
+ * §9.30 of `todo/PLAN_feature_review.md`, found by the D26 live run: this half told the caller to pass a
+ * `head` — `origin/main` included — and to call again "with the new `head`", while the tool declared no
+ * such argument. The SDK drops an undeclared argument without an error, so a caller following the paste
+ * from another checkout got a clean review of the WRONG tree. The head reviewed is the checkout's HEAD, as
+ * the conventions' feature-gate rule says; the paste must say that, and never offer `head` as a choice.
+ */
+test('it never offers `head` as a choice — the head reviewed is the checkout’s HEAD, so run it from the checkout that holds the feature', () => {
+  const text = featureHalf().text;
+
+  // `\s+` between words: prose wraps wherever it wraps, and a test pinned to one line break would go red
+  // on a re-flow that changed no word.
+  assert.match(text, /run\s+it\s+from\s+the\s+checkout\s+that\s+holds\s+the\s+finished\s+feature/i, 'where the caller must be');
+  assert.match(text, /the\s+head\s+reviewed\s+is\s+that\s+checkout's\s+HEAD/, 'what is reviewed, in the conventions rule’s words');
+  assert.match(text, /only\s+committed\s+work\s+is\s+read/);
+  assert.doesNotMatch(text, /^- `head` —/m, '`head` is not a thing to pass: it chooses nothing');
+  assert.doesNotMatch(text, /origin\/main/, 'naming a ref to review is the instruction that reviewed the wrong tree');
+  assert.doesNotMatch(text, /new\s+`head`/, 'a later round reads the checkout, not an argument');
+  assert.match(text, /naming\s+any\s+other\s+commit\s+is\s+refused/, 'the optional `head` is only a check, and it refuses a mismatch');
 });
 
 test('it says how to resolve and re-orient — `feature` is the plan’s path on resolve, status and ask_human', () => {

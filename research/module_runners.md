@@ -1494,7 +1494,7 @@ sequenceDiagram
   F->>C: ComparisonBase(base, head) — the one merge-base road
   F->>G: diff --numstat -z -M against..head (DiffExclusions)
   F->>G: cat-file --batch-check — head:path AND base:path per file
-  Note over F: ReadPlan: deleted, binary, unsupported, over 1 MiB,<br/>past the file cap or the read ceiling → NAMED with size, never read
+  Note over F: ReadPlan: deleted, binary, unsupported, over 1 MiB,<br/>past the file cap or the read ceiling → NAMED with size, never read;<br/>a submodule → NAMED with its commit id (no size known here), never read
   F->>G: ONE cat-file --batch — the chosen blob ids only
   F->>O: Outline(language, text) per blob
   F->>G: diff -U0 -M (the * marks), diff -U3 -M (the member hunks)
@@ -1506,7 +1506,7 @@ sequenceDiagram
 |---|---|---|
 | `FeatureOutlineBuilder`, `FeatureOutlineLimits` | `Feature/FeatureOutlineBuilder.cs` | the git half; `Shipped` limits by default, smaller ones in a test |
 | `ReadPlan` | `Feature/ReadPlan.cs` | pure: which files are read, decided from their sizes; every other file's reason |
-| `CatFile`, `GitObject`, `BlobText` | `Feature/CatFile.cs` | pure parses of `--batch-check` and `--batch` output |
+| `CatFile`, `GitObject`, `BlobText` | `Feature/CatFile.cs` | pure parses of `--batch-check` and `--batch` output; a found object is three fields, a SUBMODULE git's two (`<oid> submodule`) — a `commit` of unknown size |
 | `NumstatReader.ReadCounted`, `CountedChange` | `Context/NumstatReader.cs` | the same parser, projected WITH the line counts; `Read` is now the projection without them, so existing readers compare changes as before |
 | `ContextAssembler.ComparisonBase` | `Context/ContextAssembler.cs` | now public: the builder compares against the commit a code round would — under the builder's own deadline (an optional `timeout`; every other caller keeps the launcher's default) |
 
@@ -1514,10 +1514,21 @@ sequenceDiagram
   `base:path` (the old name for a rename) — so the builder learns every size, whether a path is a blob or a
   submodule, and A/D without a second diff: absent at head is a deletion, absent at the base an addition.
   `ReadPlan` then names, in change-size order and without reading: a deletion; a path with a line break
-  (cat-file's input is one name per line); a submodule or other non-blob; a binary (numstat's dash); an
+  (cat-file's input is one name per line); a submodule (named *a submodule at commit `<oid>`; not read*) or
+  other non-blob; a binary (numstat's dash); an
   unsupported language; a file over `OutlineLimits.MaxInputBytes`; anything past `MaxOutlinedFiles` or
   past `ReadCeilingBytes` (16 MiB — 2.5× the widest measured range's source, and about five outline
   budgets of it). A file past the cap or ceiling is skipped, not a stop: a smaller file behind it may fit.
+- **A submodule is a submodule at a commit, never a deletion** (§9.31 of the feature-review plan, found by
+  the D26 live run). `--batch-check` answers a gitlink with TWO fields, `<oid> submodule` — the commit lives
+  in another repository, so git prints no type or size — and `CatFile` used to take only three, so every
+  submodule read as missing at head and `Changed` classified it `Deleted`: the live pack told its reviewers
+  coai had deleted `.agents/conventions`, and `ReadPlan`'s submodule reason was unreachable. The two-field
+  shape (and only it: a hex id and exactly the word `submodule`) is a `commit` of size -1, so a moved pin is
+  `M`, an added submodule `A`, a removed one still `D`, and the first two are named *a submodule at commit
+  `<oid>`; not read* — like a binary or an oversized file, what it is, where it stands, that it was not read.
+  Its commit never reaches `cat-file --batch` (`ASubmoduleInTheRangeIsNamedNotDeletedTests`, three real
+  submodules on a real repository: RED `Expected outline.Files to be equal to M … but found D`).
 - **One batch, parsed by the header it asked for.** The launcher returns stdout as UTF-8 text and git
   declares sizes in BYTES; a valid UTF-8 blob re-encodes to exactly its size and ends where git's newline
   is. A blob that is not UTF-8 no longer measures true, so `CatFile.ParseBatch` resyncs on the NEXT

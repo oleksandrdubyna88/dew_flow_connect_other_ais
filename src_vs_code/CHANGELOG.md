@@ -16,10 +16,20 @@ ticked, the stage switched off, or a plan too small — is shown as *skipped —
 shows why. It no longer looks like a review that happened. Document and feature reviews are named in words
 rather than as `DocumentReview` and `FeatureReview`.
 
-**The CLAUDE.md snippet is v13 — copy it again.** It has a fifth half that tells the AI when to ask for the
+**The CLAUDE.md snippet is v14 — copy it again.** It has a fifth half that tells the AI when to ask for the
 feature review, what to send, and that a skipped one does not block the release. A repository that only
 mounts the shared rules is not told it lacks this half — the review tool's own description carries it
-there. An extension older than this one reads a v13 copy as newer and tells you to keep it.
+there. An extension older than this one reads a v14 copy as newer and tells you to keep it.
+
+**The feature half says where to run the review from, and no longer tells the AI to name a head.** The
+review always reads the commit the checkout is on. A development build of this half (v13) told the AI to
+pass a `head` — `origin/main` included — which the tool did not take, so a review started from a checkout
+of something else came back clean for the wrong code. The half now says to run it from the checkout that
+holds the finished feature, and coai-mcp refuses a `head` that is not that checkout's, naming both commits.
+
+**A submodule the feature moved is no longer reported as deleted.** The feature review's outline named a
+submodule changed in the range as "deleted at head", so reviewers were told a repository had deleted, say,
+its own shared rules. It now names it as a submodule at the commit it points to, and does not read it.
 
 **A change to one of the two reviewers the extension ships with now reaches coai-mcp.** While Codex and
 Antigravity were your only reviewers, unticking *reviews plans* or *reviews code*, answering *reviews

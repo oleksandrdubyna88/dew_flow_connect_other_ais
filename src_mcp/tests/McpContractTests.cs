@@ -448,6 +448,155 @@ public sealed class McpContractTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// A `head` that is not the checkout's HEAD is REFUSED over the wire, naming both commits — and one that
+    /// is, proceeds.
+    /// </summary>
+    /// <remarks>
+    /// <para>Over the WIRE, because that is where the defect lived (§9.30 of the feature-review plan): the
+    /// snippet told callers to pass `head`, the tool declared none, and the SDK drops an undeclared argument
+    /// without an error — so a caller naming another commit got a clean review of whatever the checkout
+    /// held. No in-process test can see an argument the SDK threw away before the service was called.</para>
+    /// <para>Two epics, below the D17 line, so the call is a recorded `skipped` and no reviewer can launch
+    /// whatever this machine's vendors are: the head is checked before that skip, which is the point.</para>
+    /// </remarks>
+    [Fact]
+    public async Task AHeadThatIsNotTheCheckoutsHead_IsRefusedOverTheWire_AndTheCheckoutsOwnHeadProceeds()
+    {
+        var (repo, baseSha, headSha) = await AFeatureRepository();
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"contract-test","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var other = await FeatureAnswer(server, FeatureCall(repo, baseSha, head: baseSha));
+            other.TryGetProperty("error", out var sentence).Should().BeTrue(
+                $"a head other than the checkout's must be refused, not reviewed as the checkout: {other}");
+            sentence.GetString().Should().Contain(baseSha, "the refusal names the commit the caller named")
+                .And.Contain(headSha, "and the commit the checkout actually holds");
+
+            var same = await FeatureAnswer(server, FeatureCall(repo, baseSha, head: headSha, id: 3));
+            same.TryGetProperty("error", out var refused).Should().BeFalse($"the checkout's own head proceeds: {refused}");
+            same.GetProperty("verdict").GetString().Should().Be("skipped", "two epics are under the D17 line");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>`head` is declared, and OPTIONAL — every client that never sent one keeps calling as it did.</summary>
+    [Fact]
+    public async Task ReviewFeature_DeclaresHead_AsAnOptionalArgument()
+    {
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"contract-test","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var tools = await RoundTrip(server, """{"jsonrpc":"2.0","id":2,"method":"tools/list"}""");
+            var schema = tools.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray()
+                .Single(t => t.GetProperty("name").GetString() == "review_feature")
+                .GetProperty("inputSchema");
+
+            schema.GetProperty("properties").TryGetProperty("head", out _).Should().BeTrue(
+                "an undeclared argument is dropped by the SDK without an error, which is how a wrong head went unnoticed");
+            schema.GetProperty("required").EnumerateArray().Select(r => r.GetString())
+                .Should().NotContain("head", "a call without it keeps its old meaning — the checkout's HEAD");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>The parsed answer of one `review_feature` call.</summary>
+    private static async Task<JsonElement> FeatureAnswer(Process server, string call)
+    {
+        var answer = await RoundTrip(server, call, timeoutSeconds: 60);
+        answer.RootElement.TryGetProperty("result", out var result)
+            .Should().BeTrue($"the call must be answered by the tool, not by the SDK: {answer.RootElement}");
+
+        return JsonDocument.Parse(result.GetProperty("content")[0].GetProperty("text").GetString()!).RootElement;
+    }
+
+    /// <summary>A `tools/call` for `review_feature` over two epics, with the head the caller names.</summary>
+    private static string FeatureCall(string repo, string baseSha, string head, int id = 2)
+    {
+        var arguments = new Dictionary<string, string>
+        {
+            ["repoPath"] = repo,
+            ["planPath"] = "todo/PLAN_x.md",
+            ["baseRef"] = baseSha,
+            ["head"] = head,
+            ["epics"] = """[{"title": "One", "summary": "The first epic."}, {"title": "Two", "summary": "The second epic."}]""",
+            ["lessons"] = """
+                {"pitfalls": ["The parser read a trailing comma as an empty entry until epic 2 fixed the tokenizer."],
+                 "blockers": ["none — nothing blocked; the one open question was the flag name and it was settled in review."],
+                 "findings": ["Epic 2 relies on the tokenizer fix from epic 1; a reviewer of the whole should check the seam."]}
+                """,
+        };
+
+        return JsonSerializer.Serialize(new Dictionary<string, object>
+        {
+            ["jsonrpc"] = "2.0",
+            ["id"] = id,
+            ["method"] = "tools/call",
+            ["params"] = new Dictionary<string, object> { ["name"] = "review_feature", ["arguments"] = arguments },
+        });
+    }
+
+    /// <summary>A checkout with a plan and two commits — the base, and the head the checkout holds.</summary>
+    private async Task<(string Repo, string Base, string Head)> AFeatureRepository()
+    {
+        var repo = Directory.CreateTempSubdirectory("coai-contract-feature-").FullName;
+        _repos.Add(repo);
+        Directory.CreateDirectory(Path.Combine(repo, "todo"));
+        await File.WriteAllTextAsync(Path.Combine(repo, "todo", "PLAN_x.md"), "# PLAN — x\n\nTwo epics.\n");
+        await File.WriteAllTextAsync(Path.Combine(repo, "app.cs"), "v1\n");
+        await GitIn(repo, "init", "-b", "main");
+        await GitIn(repo, "add", ".");
+        await GitIn(repo, "commit", "-m", "base");
+        var baseSha = (await GitIn(repo, "rev-parse", "HEAD")).Trim();
+        await File.WriteAllTextAsync(Path.Combine(repo, "app.cs"), "v2\n");
+        await GitIn(repo, "commit", "-am", "the feature");
+        var headSha = (await GitIn(repo, "rev-parse", "HEAD")).Trim();
+
+        return (repo.Replace('\\', '/'), baseSha, headSha);
+    }
+
+    private static async Task<string> GitIn(string repo, params string[] args)
+    {
+        var start = new ProcessStartInfo("git")
+        {
+            WorkingDirectory = repo,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false,
+        };
+        foreach (var argument in (string[])["-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false", .. args])
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using var git = Process.Start(start)!;
+        var output = await git.StandardOutput.ReadToEndAsync();
+        await git.WaitForExitAsync();
+        git.ExitCode.Should().Be(0, $"git {string.Join(' ', args)}: {await git.StandardError.ReadToEndAsync()}");
+
+        return output;
+    }
+
     /// <summary>A `tools/call` for `open`, with the model the caller declares — or none at all.</summary>
     /// <remarks>
     /// Composed rather than written as a raw literal: the JSON ends in `}}}`, which a `$$"""` cannot

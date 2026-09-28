@@ -5066,12 +5066,12 @@ and the runners' (`FeatureContext`, `FeatureOutlineBuilder`, `GateHistoryQuery` 
 
 ```mermaid
 flowchart TD
-  tool["review_feature(repoPath, planPath, baseRef, epics, lessons, again?, callerModel?)"] --> written["FeatureInputs: lessons, epics — pure, refused with the four questions"]
+  tool["review_feature(repoPath, planPath, baseRef, epics, lessons, again?, callerModel?, head?)"] --> written["FeatureInputs: lessons, epics — pure, refused with the four questions"]
   written --> top["FeatureRefs.TopLevelProblemAsync — a directory, a repository, its TOP level"]
   top --> plan["FeaturePlan.Read — inside the repository, a file, UTF-8; identity = repo-relative path (D13)"]
   plan --> d17{"epics &lt; COAI_FEATURE_MIN_EPICS?"}
-  d17 -- yes --> headonly["FeatureRefs: HEAD only"]
-  d17 -- no --> refs["FeatureRefs: HEAD; baseRef guarded, resolves, != HEAD, ancestor, reviewable range"]
+  d17 -- yes --> headonly["FeatureRefs: HEAD only (and a given head held to it)"]
+  d17 -- no --> refs["FeatureRefs: HEAD; a given head held to it; baseRef guarded, resolves, != HEAD, ancestor, reviewable range"]
   headonly --> engine["RoundEngine.RunStageAsync(repo, ':feature', plan, StageRun)"]
   refs --> engine
   engine --> claim["claim · load or CreateIfAbsent (caller from the handshake; no base yet)"]
@@ -5102,7 +5102,17 @@ reader's sentences name `documentPath`/`documentText`, arguments this tool does 
 refusals are about the file and are reused. Then D17: fewer epics than
 `COAI_FEATURE_MIN_EPICS` is a recorded `skipped` round (`SkipReasons.TooFewEpics`), and the base is
 not even asked about. Then the refs: the head is the checkout's HEAD, resolved to a full id ONCE and
-passed to the engine as that id, so the commit the checks passed is the commit read; the base ref is
+passed to the engine as that id, so the commit the checks passed is the commit read. **An optional `head`
+is held to it and chooses nothing** (§9.30 of the feature-review plan, 2026-09-28): the tool declared no
+`head` while the product's own snippet told callers to pass one, and the SDK drops an undeclared argument
+without an error, so the D26 live run showed that a caller naming another commit on another checkout got a
+clean review of the tree it was on. Declared now, a given `head` is guarded like the base (no leading `-`,
+no whitespace), must resolve, and must BE the checkout's HEAD in whatever spelling git resolves — a full
+id, an abbreviation, a branch, `HEAD` — or the call is refused naming both commits and the door (check it
+out, or omit `head`). It is checked BEFORE the D17 skip, so a wrong checkout is told even when the round
+would have been skipped; absent, the call is exactly the old one (`TheFeatureStageRefusesBeforeItBuildsTests`,
+and over the wire `McpContractTests.AHeadThatIsNotTheCheckoutsHead_IsRefusedOverTheWire_…` — RED: the call
+answered `skipped`, the head silently dropped). The base ref is
 refused before git sees it when it opens with `-` or carries whitespace, then must resolve, differ
 from HEAD, be an ancestor of HEAD, and leave something `DiffExclusions` does not hide — each its own
 sentence naming what to pass instead (`TheFeatureStageRefusesBeforeItBuildsTests`).

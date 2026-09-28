@@ -67,7 +67,9 @@ public sealed record ReadPlan(
             { Change: FileChange.Deleted } => "deleted at head",
             _ when !askable => "a path with a line break cannot be read through git cat-file; not read",
             _ when !head.Exists => "missing at head; not read",
-            _ when !head.IsBlob => head.Type == "commit" ? "a submodule at head; not read" : $"not a file at head ({head.Type}); not read",
+            // A submodule is named like a binary or an oversized file: what it is, where it stands, and that
+            // it was not read — its commit lives in another repository (§9.31).
+            _ when !head.IsBlob => head.Type == "commit" ? $"a submodule at commit {head.Oid}; not read" : $"not a file at head ({head.Type}); not read",
             { IsBinary: true } => "binary; not read",
             _ when language == OutlineLanguage.Unsupported => "unsupported (language); not read",
             _ when head.Size > OutlineLimits.MaxInputBytes => $"unsupported (too large): over the {OutlineLimits.MaxInputBytes}-byte ceiling; not read",

@@ -32,13 +32,53 @@ internal sealed class FeatureRefs(IProcessLauncher launcher)
     /// The range, or the sentence refusing it. With <paramref name="skipping"/> only the head is needed —
     /// a skipped round records the head it would have read — so the base is not asked about at all.
     /// </summary>
-    public async Task<FeatureInput<FeatureRange>> ResolveAsync(string repoPath, string baseRef, bool skipping, CancellationToken ct)
+    /// <param name="headRef">
+    /// The <c>head</c> the caller named, or empty. It never chooses what is read; when given it must be
+    /// the checkout's HEAD, and it is held to that BEFORE the skip, so a caller on the wrong checkout is
+    /// told whatever the round would have been (§9.30).
+    /// </param>
+    public async Task<FeatureInput<FeatureRange>> ResolveAsync(string repoPath, string baseRef, string headRef, bool skipping, CancellationToken ct)
     {
         var head = await CommitAsync(repoPath, "HEAD", ct);
-        return head.Length == 0 ? Refused($"'{repoPath}' has no commit at HEAD — a feature review reads a committed head")
+        var notTheHead = head.Length == 0
+            ? $"'{repoPath}' has no commit at HEAD — a feature review reads a committed head"
+            : await HeadRefProblemAsync(repoPath, headRef.Trim(), head, ct);
+
+        return notTheHead.Length > 0 ? Refused(notTheHead)
             : skipping ? new FeatureInput<FeatureRange>.Accepted(new FeatureRange(string.Empty, head))
             : await WithBaseAsync(repoPath, baseRef.Trim(), head, ct);
     }
+
+    /// <summary>
+    /// Why the caller's <c>head</c> is not the checkout's HEAD — or empty when it named none, or named that
+    /// very commit in any spelling git resolves (a full id, an abbreviation, a branch, <c>HEAD</c>).
+    /// </summary>
+    /// <remarks>
+    /// <b>An explicit refusal, not a silent default.</b> Until 2026-09-28 the tool declared no <c>head</c>,
+    /// the product's own snippet told callers to pass one, and the SDK drops an undeclared argument without
+    /// an error — so a caller naming another commit on another checkout got a clean review of the tree it
+    /// was on (found by the D26 live run, §9.30). Declared now, and held to the one commit it may name.
+    /// </remarks>
+    private async Task<string> HeadRefProblemAsync(string repoPath, string headRef, string head, CancellationToken ct)
+    {
+        if (headRef.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var shape = RefShapeProblem("head", headRef);
+
+        return shape.Length > 0 ? shape : NotTheCheckoutsHead(repoPath, headRef, await CommitAsync(repoPath, headRef, ct), head);
+    }
+
+    /// <summary>The sentence for a <c>head</c> that resolved to <paramref name="named"/> (empty: to nothing), or empty when it is the checkout's.</summary>
+    private static string NotTheCheckoutsHead(string repoPath, string headRef, string named, string head) =>
+        (named.Length == 0, string.Equals(named, head, StringComparison.OrdinalIgnoreCase)) switch
+        {
+            (true, _) => $"head '{headRef}' does not resolve to a commit in '{repoPath}' — the head reviewed is this checkout's HEAD ({head}); check out the commit that holds the feature and run the review from that checkout, or omit head",
+            (false, true) => string.Empty,
+            (false, false) => $"head '{headRef}' is commit {named}, but this checkout's HEAD is {head} — the head reviewed is always the checkout's HEAD, never an argument; check out {named} (or run the review from the checkout that holds it) and call again, or omit head",
+        };
 
     private async Task<FeatureInput<FeatureRange>> WithBaseAsync(string repoPath, string baseRef, string head, CancellationToken ct)
     {
@@ -77,9 +117,19 @@ internal sealed class FeatureRefs(IProcessLauncher launcher)
     /// <summary>Why <paramref name="baseRef"/> cannot be put to git, or empty when it can.</summary>
     internal static string BaseRefProblem(string baseRef) =>
         baseRef.Length == 0 ? "baseRef was not given — pass the commit before the first epic (the plan's merge base with main before epic 1)"
-        : baseRef.StartsWith('-') ? $"baseRef '{baseRef}' starts with '-', which git would read as an option — pass a commit, a tag or a branch"
-        : baseRef.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)) ? $"baseRef '{baseRef}' contains whitespace or a control character — pass a commit, a tag or a branch"
-        : string.Empty;
+        : RefShapeProblem("baseRef", baseRef);
+
+    /// <summary>
+    /// Why a ref the caller wrote cannot be put to git — it opens with <c>-</c> (git would read an option) or
+    /// carries whitespace or a control character (never a ref anyone meant) — or empty when it can. One guard
+    /// for both refs the tool takes, <paramref name="argument"/> naming which.
+    /// </summary>
+    private static string RefShapeProblem(string argument, string value) => value switch
+    {
+        _ when value.StartsWith('-') => $"{argument} '{value}' starts with '-', which git would read as an option — pass a commit, a tag or a branch",
+        _ when value.Any(c => char.IsWhiteSpace(c) || char.IsControl(c)) => $"{argument} '{value}' contains whitespace or a control character — pass a commit, a tag or a branch",
+        _ => string.Empty,
+    };
 
     /// <summary>Why <paramref name="repoPath"/> is not a repository's top level, or empty when it is — asked before the plan is read from it.</summary>
     /// <remarks>

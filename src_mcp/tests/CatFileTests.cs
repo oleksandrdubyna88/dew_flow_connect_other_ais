@@ -24,8 +24,36 @@ public sealed class CatFileTests
 
         objects[0].Should().Be(new GitObject(OidA, "blob", 12));
         objects[1].Exists.Should().BeFalse();
-        objects[2].IsBlob.Should().BeFalse("a submodule is a commit, not a file");
+        objects[2].IsBlob.Should().BeFalse("a commit object is not a file (a SUBMODULE is answered in another shape — below)");
     }
+
+    /// <summary>
+    /// A submodule — a gitlink — EXISTS: git answers it with two fields, <c>&lt;oid&gt; submodule</c>, and no
+    /// size, because the commit it names is not in this repository (§9.31).
+    /// </summary>
+    /// <remarks>
+    /// The shape is git's, read off a real repository (git 2.55, <c>printf 'HEAD:mod\n' | git cat-file
+    /// --batch-check</c>), not guessed: the fixture above guessed <c>&lt;oid&gt; commit 0</c> for a submodule,
+    /// which git never prints, and the parser that accepted only three fields read the real answer as
+    /// missing — so the D26 live run's pack named <c>.agents/conventions</c> "deleted at head".
+    /// </remarks>
+    [Fact]
+    public void BatchCheck_ReadsASubmodulesTwoFieldAnswer_AsACommitThatExists()
+    {
+        var objects = CatFile.ParseCheck($"{OidA} submodule\n{OidB} blob 3\n", 2);
+
+        objects[0].Exists.Should().BeTrue("a submodule at head is not a deletion");
+        objects[0].Should().Be(new GitObject(OidA, "commit", -1), "the gitlink names a commit, of no size this repository knows");
+        objects[0].IsBlob.Should().BeFalse("and it is never read as a file");
+        objects[1].Should().Be(new GitObject(OidB, "blob", 3), "the line after it is still read in its place");
+    }
+
+    [Theory]
+    [InlineData("abc123:src/submodule missing", "a missing name ending in the word")]
+    [InlineData("not-an-oid submodule", "a first field that is not an object id")]
+    [InlineData("1111111111111111111111111111111111111111 submodules", "any other second field")]
+    public void BatchCheck_TakesOnlyTheRealGitlinkShape_ForASubmodule(string line, string why) =>
+        CatFile.ParseCheck(line + "\n", 1)[0].Exists.Should().BeFalse(why);
 
     [Fact]
     public void BatchCheck_ThatAnsweredTheWrongNumberOfLines_IsRefused() =>
