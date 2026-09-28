@@ -103,15 +103,15 @@ is seconds rather than milliseconds — but neither needs the other to land firs
 
 ## The boundary with the Settings-page plan (MANDATORY, both sides)
 
-Reciprocal of the *Boundaries* table in [PLAN_settings_page.md](PLAN_settings_page.md).
+Reciprocal of the *Boundaries* table in [PLAN_settings_page.md](../research/PLAN_settings_page.md).
 
 | Item | Which plan builds it | The other plan's part | Order |
 |---|---|---|---|
 | The definition of the paint key: `staticKey`'s hand-kept list becomes the drawn static markup, live regions blanked | the Settings-page plan (story S1) | step 1 below changes shape: a progress mark drawn OUTSIDE a live region is then a repaint by construction, so "patch, not repaint" means putting the mark inside a live region | Settings-page plan first |
-| *render never awaits a probe* (step 2 below) | **this plan** | any per-surface probe gating that the Settings-page plan's measurement (story S5) calls for waits for it, so a Settings tab opens without waiting on cold probes | this plan before that gating |
+| *render never awaits a probe* (step 2 below) | **this plan** | any per-surface probe gating that [PLAN_the_sidebar_pays_only_for_what_it_shows.md](PLAN_the_sidebar_pays_only_for_what_it_shows.md) calls for (it was the Settings-page plan's S5, extracted 2026-09-28) waits for it, so a Settings tab opens without waiting on cold probes | this plan before that gating |
 
 Most of the probes this plan covers draw into sections that move to the Settings tab (Reviewers, MCP
-server), so its "Server section" wording means the MCP server TAB once its story S3 lands.
+server), so its "Server section" wording means the MCP server TAB, since that plan's story S3 landed (2026-09-28).
 
 ## Build order
 

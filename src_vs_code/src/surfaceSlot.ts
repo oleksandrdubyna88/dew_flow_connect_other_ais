@@ -7,7 +7,7 @@ import { isDisposedRejection, ViewHandle } from './viewHandle';
  * whether somebody is typing in it.
  *
  * <p>These were single fields on `PanelProvider` while there was one webview, and two defects lived in
- * them (`todo/PLAN_settings_page.md`):</p>
+ * them (`research/PLAN_settings_page.md`):</p>
  * <ul>
  *   <li><b>F2</b> — the painted key survived a new view. VS Code re-creates a view it disposed on hide,
  *       and a view resolved again with an unchanged state matched the old key, skipped the html write
@@ -164,4 +164,27 @@ function written(view: SurfaceView, html: () => string): boolean {
 /** Whether ANY of the slots holds a view — what a probe asks before spending anything on a page. */
 export function anyHeld(slots: readonly SurfaceSlot[]): boolean {
   return slots.some((slot) => slot.view !== undefined);
+}
+
+/**
+ * Paints every slot that holds a view, and posts the live regions to the ones that only need a patch.
+ *
+ * <p>A slot with no view is skipped BEFORE its page is asked for: the paint key is the page's markup, and
+ * building it for a Settings tab nobody opened — on every five-second tick, in every window — was cost with
+ * nothing to show for it (code round, codex, and our own bug review).</p>
+ */
+export function paintEach(
+  slots: readonly SurfaceSlot[],
+  pageFor: (slot: SurfaceSlot) => { key: string; html: () => string },
+  live: unknown,
+): void {
+  for (const slot of slots) {
+    if (slot.view === undefined) {
+      continue;
+    }
+    const page = pageFor(slot);
+    if (slot.paint(page.key, page.html) === 'patch') {
+      slot.post(live);
+    }
+  }
 }

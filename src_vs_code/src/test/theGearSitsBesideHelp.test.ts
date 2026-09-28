@@ -5,7 +5,7 @@ import { test } from 'node:test';
 
 /**
  * The gear that opens the Settings tab sits immediately after the help button in the panel's title bar
- * (`todo/PLAN_settings_page.md`, D8).
+ * (`research/PLAN_settings_page.md`, D8).
  *
  * <p>VS Code orders a view's title-bar items by the number after `navigation@`, and by TITLE where two
  * share one — so the three entries at `@0` come out *Answer the open question…* then *Help*, and nothing

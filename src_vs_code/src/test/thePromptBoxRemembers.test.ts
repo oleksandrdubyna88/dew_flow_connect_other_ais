@@ -408,12 +408,12 @@ test('the host never renders from a configuration it has not finished writing', 
   const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
 
   const awaits = source.indexOf('await this.writes.settled();');
-  const paints = source.indexOf('const page = this.pageFor(slot, state);');
+  const paints = source.indexOf('paintEach(this.slots, (slot) => this.pageFor(slot, state), live);');
   assert.ok(awaits > 0 && paints > awaits, 'render must await the write queue before it decides what to paint');
 
-  // Whether a control is being edited is decided per page by `SurfaceSlot.paint`, which is RUN in
-  // `surfaceSlot.test.ts`; what is read here is only that every page's paint goes through it.
-  assert.match(source, /slot\.paint\(page\.key, page\.html\)/,
+  // Whether a control is being edited is decided per page by `SurfaceSlot.paint`, reached through
+  // `paintEach` — both RUN in `surfaceSlot.test.ts`; what is read here is only that the render uses it.
+  assert.match(source, /paintEach\(this\.slots, \(slot\) => this\.pageFor\(slot, state\), live\)/,
     'the paint no longer consults whether a control is being edited');
   // That a rejected write does not poison the queue is RUN in `snapBackQueue.test.ts`, on `WriteQueue`.
   assert.match(source, /private enqueue\(work: \(\) => Promise<void>\): void \{\s*this\.writes\.enqueue\(work\);/,

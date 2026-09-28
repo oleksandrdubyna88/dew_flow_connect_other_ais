@@ -41,10 +41,10 @@ import { escapeHtml } from './escapeHtml';
  * would have moved a strip on a page this story does not touch. Widening beats moving here: the
  * shape is shared, the spacing stays each page's own.</p>
  *
- * <p><b>The other two strips are NOT this design and are left alone.</b> `panelView`'s is a
- * segmented control (`flex: 1`, button backgrounds) and `notificationsPageStyle`'s wraps; they are
- * different designs rather than drifted copies, and converting them would be a visual change to two
- * more pages under cover of a refactor.</p>
+ * <p><b>`notificationsPageStyle`'s strip is NOT this design and is left alone:</b> it wraps, which makes
+ * it a different design rather than a drifted copy, and converting it would be a visual change to one
+ * more page under cover of a refactor. (`panelView` had a segmented strip too; it went when the
+ * sidebar's tabs did, and the Settings tab draws this one.)</p>
  */
 export function tabCss(margin: string): string {
   return [

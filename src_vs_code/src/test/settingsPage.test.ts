@@ -8,7 +8,7 @@ import { DEFAULT_VENDORS } from '../vendors';
 import { Node, runPageHtml } from './rolesPageHarness';
 
 /**
- * The Settings tab, RUN: its strip, its panes, its keys (`todo/PLAN_settings_page.md`, S3).
+ * The Settings tab, RUN: its strip, its panes, its keys (`research/PLAN_settings_page.md`, S3).
  *
  * <p>The page is the panel's own document with the Settings page's script appended, so what is run
  * here is the real script — the shared half binds nothing in this fixture, and the tab half is what
@@ -45,11 +45,30 @@ interface Running {
 }
 
 /** The page's script over one tab node and one pane node per registry section, in one strip. */
-function run(heldTab: string): Running {
+/**
+ * The strip's tabs and the panes, read OUT OF the page's own markup — so a tab or a pane that lost the
+ * attribute the script selects by is a page these tests cannot run, rather than one they run anyway on
+ * nodes typed by hand. Each pane keeps the `hidden` it was drawn with.
+ */
+function nodesOf(html: string): { tabs: Node[]; panes: Node[] } {
   const strip = new Node({ strip: 'settings' }, 'DIV');
-  const tabs = IDS.map((id) => new Node({ tab: id }, 'BUTTON').under(strip));
-  const panes = IDS.map((id) => new Node({ pane: id, section: id }, 'SECTION'));
-  const page = runPageHtml(settingsHtml(state(), 'test-nonce', heldTab), {
+  const tabs = [...html.matchAll(/<button type="button" role="tab"[^>]* data-tab="([^"]+)"/g)]
+    .map((found) => new Node({ tab: found[1]! }, 'BUTTON').under(strip));
+  const panes = [...html.matchAll(/<section [^>]*data-pane="([^"]+)"[^>]*>/g)].map((found) => {
+    const pane = new Node({ pane: found[1]!, section: found[1]! }, 'SECTION');
+    pane.hidden = / hidden>$/.test(found[0]);
+    return pane;
+  });
+  assert.equal(tabs.length, IDS.length, 'the markup does not draw a tab per section');
+  assert.equal(panes.length, IDS.length, 'the markup does not draw a pane per section');
+
+  return { tabs, panes };
+}
+
+function run(heldTab: string): Running {
+  const html = settingsHtml(state(), 'test-nonce', heldTab);
+  const { tabs, panes } = nodesOf(html);
+  const page = runPageHtml(html, {
     '[data-tab]': tabs,
     '[data-pane]': panes,
   });
@@ -149,7 +168,6 @@ test('the markup chooses no tab — the held tab is the script\'s, so a press ca
   const body = html.slice(html.indexOf('<body>'), html.indexOf('<script'));
 
   assert.doesNotMatch(body, /aria-selected="true"|class="tab on"/, 'a tab drawn as chosen puts the held tab into the key');
-  assert.match(html, /const shownTab = "gate";/);
 });
 
 test('a requested tab is held only when the page has it', () => {
@@ -157,4 +175,24 @@ test('a requested tab is held only when the page has it', () => {
   assert.equal(nextSettingsTab('gate', 'noSuchTab', IDS), 'gate', 'a stale id moved the page');
   assert.equal(nextSettingsTab('gate', undefined, IDS), 'gate', 'the title bar passes nothing');
   assert.equal(nextSettingsTab('gate', { fsPath: '/x' }, IDS), 'gate', 'a URI is not a tab');
+});
+
+test('a repaint under a control someone is typing in puts the caret back, in the tab it is in', () => {
+  // The panel's shared script restores the caret; on this page every pane is drawn hidden until the
+  // page's own script opens the held tab — so the order of the two is the whole defect. Restored first,
+  // the control is in a pane that is not rendered, a browser refuses the focus, and the next keystrokes
+  // go nowhere. The shim refuses it the same way (rolesPageHarness `Node.focus`).
+  const html = settingsHtml({ ...state(), focus: { id: 'model|codex||', start: 1, end: 1 } }, 'n', 'reviewers');
+  const { tabs, panes } = nodesOf(html);
+  assert.ok(panes.every((pane) => pane.hidden), 'the page is drawn with every pane hidden, which is the case this is about');
+  const reviewers = panes[IDS.indexOf('reviewers')]!;
+  const box = new Node({ setting: 'model', vendor: 'codex' }, 'INPUT').under(reviewers);
+  runPageHtml(html, {
+    '[data-tab]': tabs,
+    '[data-pane]': panes,
+    '[data-setting]': [box],
+  });
+
+  assert.equal(reviewers.hidden, false, 'the held tab was not opened');
+  assert.equal(box.focused, true, 'the caret was put back before its pane was shown, so the control never got it');
 });

@@ -52,8 +52,26 @@ export class Node {
     this.dispatchClick = undefined;
   }
 
+  /**
+   * Focus, refused under a hidden ancestor — as a browser refuses it for an element that is not rendered.
+   * Stricter than a permissive fake on purpose: the Settings page once restored a caret into a pane the
+   * page had not shown yet, and a fake that accepted that focus would have passed the test for it.
+   */
   focus(): void {
+    // eslint-disable-next-line @typescript-eslint/no-this-alias -- walking up the chain from here IS the operation
+    for (let at: Node | undefined = this; at !== undefined; at = at.parent) {
+      if (at.hidden) {
+        return;
+      }
+    }
     this.focused = true;
+  }
+
+  /** Listeners a page binds to one element; recorded so a page that binds them can run, never fired. */
+  readonly listeners: string[] = [];
+
+  addEventListener(kind: string): void {
+    this.listeners.push(kind);
   }
 
   click(): void {

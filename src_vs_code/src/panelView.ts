@@ -319,9 +319,9 @@ export const REPAINT_HOLD_MS = 30_000;
 /**
  * Whether a repaint must wait, because a control is being edited and the hold has not run out.
  *
- * <p>Pure, and beside {@link staticKey} on purpose: which of the two update paths runs is the one
- * decision this panel makes that no test can reach through `vscode`, so both halves of it live
- * where a test can call them.</p>
+ * <p>Pure, and outside `vscode` on purpose: it is half of the one decision every surface makes — repaint,
+ * or patch the live regions — and `SurfaceSlot.paint` (`surfaceSlot.ts`) makes it with this and the
+ * paint key, where a test can call both.</p>
  *
  * @param editingSince when a control gained focus, or 0 when none has it
  */
@@ -377,14 +377,10 @@ function focusLiteral(focus: PanelFocus | undefined): string {
  * <p>One declaration for the page AND its paint key (`panelSurface.ts`), so the two cannot disagree
  * about what the page shows. A body is handed the live regions to embed; they are blank when a key is
  * being built, which is what keeps a moving round or a waiting question from reloading the webview.</p>
- *
- * <p>`notifications` is lowercase because `panelView.test.ts` scans the rendered html with
- * /data-section="([a-z]\+)" open/, and a capital letter would make a section invisible to the test that
- * proves which sections a person has open.</p>
  */
 export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // The SIDEBAR: what is happening now, and the two tools a person reaches for while it happens — in the
-  // order the operator named them (`todo/PLAN_settings_page.md`, D1).
+  // order the operator named them (`research/PLAN_settings_page.md`, D1).
   { id: 'notifications', title: 'Notifications', surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
   // A consultation being had is present tense exactly as a round is, so its cards stay here, under the
   // rounds, when the Consultant's settings move to the Settings tab (D2).
@@ -462,7 +458,11 @@ export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date
   return pageDocument(sidebarBody(PANEL_SECTIONS, state, open, liveRegions(state, nowMs)), nonce, state.focus, NO_EXTRA);
 }
 
-/** What a page adds to the shared document: its own rules and its own script, after the shared ones. */
+/**
+ * What a page adds to the shared document: its own rules after the shared ones, and its own script BEFORE
+ * the shared wiring — so a page that decides what is visible (the Settings tab's held tab) has decided it
+ * by the time the shared script puts a caret back.
+ */
 export interface PageExtra {
   readonly css: string;
   readonly script: string;
@@ -473,7 +473,7 @@ const NO_EXTRA: PageExtra = { css: '', script: '' };
 /**
  * The document every panel page is: one CSP, one stylesheet, one script — the sidebar's, and the
  * Settings tab's, which draws the same sections with the same controls and therefore needs exactly the
- * same `data-setting` / `data-command` / focus wiring (`todo/PLAN_settings_page.md`). A page adds to it
+ * same `data-setting` / `data-command` / focus wiring (`research/PLAN_settings_page.md`). A page adds to it
  * through {@link PageExtra}; it never gets a copy of it.
  */
 export function pageDocument(body: string, nonce: string, focus: PanelFocus | undefined, extra: PageExtra): string {
@@ -489,6 +489,9 @@ export function pageDocument(body: string, nonce: string, focus: PanelFocus | un
 ${body}
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
+  // The page's OWN script first — before the caret is put back below. The Settings tab opens its held
+  // tab here, and a caret restored into a pane that is not shown yet is a focus the browser refuses.
+${extra.script}
 
   // What names ONE control. A role-keyed control and a vendor-keyed one can share a setting name,
   // so a name alone would refocus whichever of them the document holds first.
@@ -733,7 +736,6 @@ ${body}
       bindCommands(notifications);
     }
   });
-${extra.script}
 </script>
 </body>
 </html>`;
@@ -3157,7 +3159,7 @@ export function isPanelCommand(value: string | undefined): value is PanelCommand
  * that could never change: the spending window sat on Week for good, the local model list was frozen,
  * the Bugz button did not move — each fixed by adding a field — and on 2026-09-28 ten more drawn fields
  * were found missing, among them the server's *cannot review* verdict and the CLI update button, which
- * therefore reached the screen only when something unrelated repainted (`todo/PLAN_settings_page.md`,
+ * therefore reached the screen only when something unrelated repainted (`research/PLAN_settings_page.md`,
  * F1). Built from the markup, the key cannot miss a field. See `panelSurface.ts` for what it leaves out
  * on purpose.</p>
  */
@@ -3172,7 +3174,7 @@ export function settingsSections(): readonly SectionSpec<PanelState>[] {
 
 /**
  * The Settings tab: the sections that are configured once, one tab each, with the SAME builders, the same
- * controls and the same script as the sidebar that used to hold them (`todo/PLAN_settings_page.md`).
+ * controls and the same script as the sidebar that used to hold them (`research/PLAN_settings_page.md`).
  *
  * @param heldTab the tab the host holds; it reaches the page's script, never the markup (D6)
  */

@@ -13,7 +13,7 @@ import { blanked } from './blankedSource';
  * reloaded. That froze the panel from PR #561 on and was fixed with `afterTheWrite`, which STARTS the
  * repaint instead of awaiting it. On 2026-09-28 the same shape was found at one more site the fix never
  * reached — a refused setting on an `api` reviewer's card (`writeApiSetting`, plan F9) — by a
- * consultation, not by a test (`todo/PLAN_settings_page.md`).</p>
+ * consultation, not by a test (`research/PLAN_settings_page.md`).</p>
  *
  * <p>So the guard follows CALL CHAINS, because a scan of `write()` alone would have missed that very
  * site: it starts at every method the dispatcher hands to `enqueue`, follows every call that method
@@ -87,6 +87,13 @@ test('no write the panel queues waits for a repaint, however many calls down', (
   const found = queuedWaitsOnRender(fs.readFileSync(PROVIDER, 'utf8'));
 
   assert.deepEqual(found, [], `a queued write awaits render() and so waits on itself: ${found.join('; ')}`);
+});
+
+test('the scan still reads the provider’s own methods, so its walk is not a walk through nothing', () => {
+  const names = methods(blanked(fs.readFileSync(PROVIDER, 'utf8'))).map((m) => m.name);
+  for (const known of ['write', 'choosePrompt', 'writeApiSetting', 'snapBack', 'render', 'saveWrite']) {
+    assert.ok(names.includes(known), `the method scan no longer finds ${known}, so a chain through it would be invisible`);
+  }
 });
 
 test('the scan still finds the writes the panel queues', () => {

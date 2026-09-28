@@ -263,7 +263,7 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
-    // The gear, pressed for real (todo/PLAN_settings_page.md, S3). Twice without waiting, because "one tab
+    // The gear, pressed for real (research/PLAN_settings_page.md, S3). Twice without waiting, because "one tab
     // per window" is a claim about the SECOND press; then closed and pressed again, because a host that
     // kept a disposed panel would reveal nothing. What is on the tab is the page tests' business — a host
     // cannot read a webview's DOM — so this asserts only what the host owns: how many tabs, and which.

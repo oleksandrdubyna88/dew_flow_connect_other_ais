@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { REPAINT_HOLD_MS } from '../panelView';
-import { anyHeld, SurfaceSlot, type SurfaceView } from '../surfaceSlot';
+import { anyHeld, paintEach, SurfaceSlot, type SurfaceView } from '../surfaceSlot';
 
 /**
  * What belongs to ONE webview the panel paints: the held view, what was painted into it, and whether
- * somebody is typing in it (`surfaceSlot.ts`, `todo/PLAN_settings_page.md` F2, F3, F8).
+ * somebody is typing in it (`surfaceSlot.ts`, `research/PLAN_settings_page.md` F2, F3, F8).
  */
 
 interface FakeView extends SurfaceView {
@@ -174,4 +174,28 @@ test('any held surface counts, not only the sidebar — so a probe for the other
   assert.equal(anyHeld([sidebar, other]), false);
   other.attach(fakeView());
   assert.equal(anyHeld([sidebar, other]), true, 'the sidebar is closed, the other page is open, and a probe it needs was cancelled');
+});
+
+test('a page nobody has open is not even built — its key is its markup, and markup costs', () => {
+  const open = new SurfaceSlot<FakeView>();
+  const closed = new SurfaceSlot<FakeView>();
+  const view = fakeView();
+  open.attach(view);
+  const asked: SurfaceSlot[] = [];
+
+  paintEach([open, closed], (slot) => { asked.push(slot); return { key: 'k', html: () => 'x' }; }, { type: 'live' });
+
+  assert.deepEqual(asked, [open], 'the closed page was built for nothing');
+  assert.deepEqual(view.writes, ['x']);
+});
+
+test('a page whose markup did not move is patched with the live regions, and a painted one is not', () => {
+  const slot = new SurfaceSlot<FakeView>();
+  const view = fakeView();
+  slot.attach(view);
+
+  paintEach([slot], () => ({ key: 'k', html: () => 'x' }), { type: 'live' });
+  assert.deepEqual(view.posted, [], 'a page just painted was also patched');
+  paintEach([slot], () => ({ key: 'k', html: () => 'x' }), { type: 'live' });
+  assert.deepEqual(view.posted, [{ type: 'live' }]);
 });

@@ -15,7 +15,7 @@ import type { Vendor } from '../vendors';
  * paint KEY changed. The key used to be a hand-kept list of fields, and a field the page drew but the
  * list did not name was a badge that arrived in the state and never on the screen: the render ran,
  * found the key it had painted last time, and posted only the live regions
- * (`todo/PLAN_settings_page.md`, F1).</p>
+ * (`research/PLAN_settings_page.md`, F1).</p>
  *
  * <p>So the guarantee is stated from the person's side, both ways round: whatever the page would draw
  * differently, the key differs for — and whatever only a LIVE region or the page itself changes, the

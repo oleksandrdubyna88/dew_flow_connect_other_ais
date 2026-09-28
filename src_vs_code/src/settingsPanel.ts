@@ -2,12 +2,13 @@ import * as vscode from 'vscode';
 
 import { settingsSections } from './panelView';
 import { nextSettingsTab, SETTINGS_LOADING } from './settingsPage';
+import { openedFrom } from './tabStrip';
 
 /**
  * The Settings editor tab — a thin host. Everything it SHOWS is the panel's (`panelProvider.ts` paints
  * it as a second surface beside the sidebar, from the same state and through the same write path); what
  * is left here is only what a host must do: create the tab or bring it back, and hold which tab of it is
- * open (`todo/PLAN_settings_page.md`).
+ * open (`research/PLAN_settings_page.md`).
  */
 
 /** What the panel offers this host — its own surface to attach, and a way to move the open tab. */
@@ -29,9 +30,9 @@ function tabIds(): readonly string[] {
   return settingsSections().map((section) => section.id);
 }
 
-/** The tab the page should show — always one that exists. */
+/** The tab the page should show — always one that exists: the strip's own fallback, not a second copy of it. */
 export function heldSettingsTab(): string {
-  return tab.length > 0 ? tab : (tabIds()[0] ?? '');
+  return openedFrom(tabIds().map((key) => ({ key, label: key })), tab);
 }
 
 /** A tab was chosen, on the page or by the command's argument; anything unknown changes nothing. */
@@ -73,9 +74,4 @@ export function openSettings(host: SettingsHost, requested?: unknown): void {
     }
   });
   host.attachSettings(opened);
-}
-
-/** Whether this window has its Settings tab open — for the real-editor scenario. */
-export function settingsOpen(): boolean {
-  return panel !== undefined;
 }

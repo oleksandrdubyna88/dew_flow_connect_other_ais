@@ -44,7 +44,7 @@ import { writeFileAtomically } from './atomicFile';
  * reviewer to check by hand; these names make them byte-identical.</p>
  *
  * <p><b>`watched` replaced the panel's view handle on 2026-09-28</b>, when the panel came to paint more
- * than one webview (`todo/PLAN_settings_page.md`, F8). The handle was the SIDEBAR's, so a probe asked for
+ * than one webview (`research/PLAN_settings_page.md`, F8). The handle was the SIDEBAR's, so a probe asked for
  * by a Settings tab with the sidebar hidden would have cancelled itself before it answered. What the probe
  * needs to know is whether ANY page is still there to read it, and that is what it is asked.</p>
  */

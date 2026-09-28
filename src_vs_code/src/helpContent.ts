@@ -490,7 +490,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       whatItIs:
         'The yellow ? in the panel title bar opens this help. The index lists every article with its first line; the box at the top searches all of them; the select changes language; the ± buttons change the text size, and the pair beside them the text tone — brighter, or dimmer and warmer.',
       why:
-        'A Settings tab with dozens of controls needs somewhere to say what each of them does, and a tooltip is not that place. Text size is here because eyesight is not a preference to be argued with — five steps either way is about ×1.6 up or down.',
+        'A Settings tab with dozens of controls needs somewhere to say at length what each of them does: the small ? beside a control holds one sentence, and these pages hold the reasons behind it. Text size is here because eyesight is not a preference to be argued with — five steps either way is about ×1.6 up or down.',
       setup:
         'Nothing to set up. The language switch writes `coai.helpLanguage`, which scopes it to these pages only — it is not the language another AI answers a chat in, which is **Answer in**, in Settings → Chat other AIs. The ± buttons write `coai.uiScale` and `coai.textTone`; zero on the tone is the colour your theme already uses, so an untouched control changes nothing. Both are real settings, so both sync to your other machines.',
       usage:
@@ -570,13 +570,13 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'Under the hood: how a setting reaches the server',
       whatItIs:
-        'The panel writes your settings into a file in the server\'s own data directory, and the server re-reads that file whenever it changes.',
+        'What you set in the Settings tab is written into a file in the server\'s own data directory, and the server re-reads that file whenever it changes.',
       why:
         'Settings used to reach the server only inside the pasted config block, which made every change to a threshold a chore: copy the block, find the client config, paste, restart. And then they applied only at startup — a gap invisible from both ends, because the panel saves instantly and says so.',
       setup:
-        'Nothing to set up. A change in the panel is in effect for the NEXT round; there is no restart and nothing to re-paste.',
+        'Nothing to set up. A change in the Settings tab is in effect for the NEXT round; there is no restart and nothing to re-paste.',
       usage:
-        'A variable set in your assistant\'s own config still outranks the file — a variable there is more specific than a file any window may rewrite.\n\nThe panel writes only what DIFFERS from the defaults, so returning a setting to its default removes it from the file rather than pinning it.\n\nSeparate settings for each side: one machine can hold several working environments - a local window and one or more WSL distros - and VS Code hands the SAME settings file to all of them. Turn on **Separate settings for each side**, in Settings → This side, and each side keeps its own values, seeded from what it had at that moment, so nothing changes until you edit something. For one person working for two companies on one machine that is a different proxy, a different CLI path and a different vault key per side. Your text size and help language stay shared, because they belong to you rather than to the work.',
+        'A variable set in your assistant\'s own config still outranks the file — a variable there is more specific than a file any window may rewrite.\n\nOnly what DIFFERS from the defaults is written, so returning a setting to its default removes it from the file rather than pinning it.\n\nSeparate settings for each side: one machine can hold several working environments - a local window and one or more WSL distros - and VS Code hands the SAME settings file to all of them. Turn on **Separate settings for each side**, in Settings → This side, and each side keeps its own values, seeded from what it had at that moment, so nothing changes until you edit something. For one person working for two companies on one machine that is a different proxy, a different CLI path and a different vault key per side. Your text size and help language stay shared, because they belong to you rather than to the work.',
       whatCanGoWrong:
         'A half-written file leaves the last good configuration in place. A torn read that produced an empty vendor list would fail every reviewer and then report a panel that agreed with itself.',
     },

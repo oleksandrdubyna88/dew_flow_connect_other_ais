@@ -513,7 +513,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('coai.help', showHelp),
     // The gear in the panel's title bar: everything configured once, in an editor tab of its own, painted by
-    // the same provider as the sidebar (todo/PLAN_settings_page.md). The argument, when there is one, is a
+    // the same provider as the sidebar (research/PLAN_settings_page.md). The argument, when there is one, is a
     // tab id; the title bar and the palette pass none, and anything that is not a tab changes nothing.
     vscode.commands.registerCommand('coai.openSettings', (tab?: unknown) => { openSettings(panel, tab); }),
     // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
