@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { panelHtml, PanelState } from '../panelView';
+import { PanelState } from '../panelView';
+import { everyPanelPage } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULT_VENDORS } from '../vendors';
@@ -59,11 +60,13 @@ test('every global control the panel renders is a declared setting', () => {
   ) as { contributes: { configuration: { properties: Record<string, unknown> } } };
   const declared = new Set(Object.keys(manifest.contributes.configuration.properties));
 
-  const missing = [...new Set(
-    controls(panelHtml(state(), 'n0nce'))
-      .filter((c) => !c.scoped)
-      .map((c) => c.setting),
-  )].filter((setting) => !declared.has(`coai.${setting}`));
+  // EVERY page, not the sidebar alone: a control that moves to another page must stay in this scan.
+  const global = everyPanelPage(state())
+    .flatMap((page) => controls(page.html))
+    .filter((c) => !c.scoped)
+    .map((c) => c.setting);
+  assert.ok(global.length > 0, 'no global control was found, so this proves nothing');
+  const missing = [...new Set(global)].filter((setting) => !declared.has(`coai.${setting}`));
 
   assert.deepEqual(
     missing,

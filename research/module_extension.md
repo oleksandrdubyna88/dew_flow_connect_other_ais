@@ -4182,7 +4182,8 @@ flowchart LR
 | `phrasesPanel.ts` | the thin host: read the setting, write it through `saveSetting`, repaint, and post a failed save to the page rather than redrawing over it |
 | `settledWrites.ts` | one write at a time, and a typed field waits to settle — extracted out of `rolesPanel.ts` when the phrases tab needed the same two rules |
 | `settingRefused.ts` | why a `coai.*` write was refused, in words, pure: VS Code's own reason verbatim, and the ONE recognised refusal — `declaresSetting` separating a stale window (reload cures it) from a key this build never declared (it does not) |
-| `panelView.ts` | the sidebar's HTML, pure: sections, vendor cards with the green run button, the two live regions (`live-questions`, `live-rounds`) |
+| `panelView.ts` | the sidebar's HTML, pure: the section registry `PANEL_SECTIONS`, vendor cards with the green run button, the live regions (`live-questions`, `live-rounds`, `live-consultations`, `live-notifications`) |
+| `panelSurface.ts` | pure: how a list of sections becomes a page body and its paint KEY — the body with every live region blank and every section closed; which surface a section is drawn on (`SURFACE_IDS`) |
 | `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |
 | `vendorTerminal.ts` | pure: which CLI a vendor is, its own usage command (`/usage`, `/status`, `/stats`), and the provider overrides a custom endpoint needs |
 | `escalations.ts` | pure: parse a question, the answer file's shape, status-bar text, prompt-once, modal body, the open-questions section |
@@ -5472,6 +5473,26 @@ repainted nothing — the section sat on Week for good and the buttons read as b
 were. `usageWindow` and `latestServerVersion` are now in the key; the spending ROWS are a live
 region, so they advance mid-round without closing a dropdown. The window tabs deliberately sit
 OUTSIDE that region: a button inside a patched region loses its click listener on the next tick.
+
+### The key is the markup, not a list of fields (2026-09-28)
+
+**Superseding the field list above.** `staticKey` is now the panel's body as drawn, with every live
+region blank and every section closed (`panelSurface.ts`, `sidebarKey`), built from the same section
+registry the page is (`PANEL_SECTIONS` in `panelView.ts`: id, title, surface, body). The list had
+drifted exactly the way the paragraph above warns: on 2026-09-28 ten drawn fields were missing from it
+— the server's *cannot review* verdict, the CLI update button, the Claude and Antigravity model lists,
+the price tables, the snippet status, the per-side switch among them — so a probe that answered after
+the first paint landed in the state and waited for something unrelated to repaint.
+`aProbeThatLandsRepaints.test.ts` holds it both ways round: every probe's answer moves the key, and a
+question, a caret, an opened section or the same answer built in another order does not.
+
+Two things the list had that the markup does not, both on purpose: `usageWindow`/`usageScope`, which
+the panel stopped drawing when the spending chart moved to the rounds log, and `openSections`. A
+toggle is made BY the page, so a key that moved with it reloaded the webview a few seconds later to
+show what was already on screen, dropping the scroll position and any open dropdown; a repaint made
+for another reason still draws the person's open sections. The key is built on every render (a string
+over the panel's own builders, no I/O); the page with its live regions filled is built only when the
+key moved. Plan: [../todo/PLAN_settings_page.md](../todo/PLAN_settings_page.md), F1 and F10.
 
 ### A third answer beside repaint and patch: WITHHOLD (2026-09-09)
 
