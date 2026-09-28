@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.1...mcp-v0.40.2) (2026-09-28)
+
+
+### Miscellaneous Chores
+
+* **mcp:** mcp-v0.40.1 never shipped, 0.40.2 carries the same code ([#605](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/605)) ([c4286fa](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/c4286faaa0ab6395f0a5075b3e126314558619f1))
+
 ## [0.40.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.0...mcp-v0.40.1) (2026-09-28)
 
 > Never shipped — both Windows builds passed their tests and then ran out of the 15-minute build limit (now
