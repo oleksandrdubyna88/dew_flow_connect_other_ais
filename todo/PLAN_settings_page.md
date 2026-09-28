@@ -91,9 +91,9 @@ The operator's instruction, verbatim in intent:
 | D3 | **One provider, several surfaces** — the sidebar view and the Settings panel are two webviews painted from ONE `PanelState`, ONE page script, ONE dispatcher, ONE write queue. | The alternative, a second provider, is a second copy of every probe and every write path — the defect `reuse-first.md` exists for. |
 | D4 | The paint key becomes **the static markup itself** (live regions blanked, script and focus excluded), per surface. | Fixes F1 by construction: a hand-kept field list cannot miss a field that is not a list. Per-surface keys also mean an edit in Settings no longer reloads the sidebar (closing its dropdowns) unless the sidebar's own markup changed. |
 | D5 | The Settings tab strip is the product's neutral strip (`tabStrip.ts`), **without** the section heading colours. | `rolesPage.ts:586-588`: two pages with tabs that look different would be two products. The sidebar keeps its `.sec-*` tones. |
-| D6 | The active tab is held by the HOST (a module variable, as `rolesPanel.ts:33-46`), switched instantly by the page, never in the paint key; the host re-sends it (`showTab`) only if a repaint raced the click. | A repaint replaces the document; a page-only tab would be lost on every structural edit. A stored setting is not worth a key. |
+| D6 | The active tab is held by the HOST (a module variable, as `rolesPanel.ts:33-46`), switched instantly by the page, and kept OUT of the markup: panes are drawn tab-neutral and the held tab reaches the page as a script literal beside the caret's (`focusLiteral`), so a tab press can never move the markup key (own review M1 — a pane drawn selected would have made every press a full reload on the next tick). The host posts `showTab` after every html write, unconditionally, rather than trying to detect a race it cannot see. | A repaint replaces the document; a page-only tab would be lost on every structural edit. A stored setting is not worth a key. |
 | D7 | **No `WebviewPanelSerializer`**: after a window reload the Settings tab does not come back by itself. | Every non-chat page here behaves this way; the one serializer (`extension.ts:651`) is guarded by `theTabWearsAnIcon.test.ts` to go through the chat builder. A restorable Settings tab is a separate, small follow-up if wanted. |
-| D8 | The gear is `navigation@1`, the rounds list moves to `navigation@2`. | Three entries share `navigation@0` today and VS Code does not order ties; an explicit slot puts the gear immediately after help. |
+| D8 | The gear is `navigation@1`, the rounds list moves to `navigation@2`. | VS Code orders by the number and then by TITLE, so the three entries sharing `@0` come out *Answer the open question…* then *Help*; `@1` puts the gear straight after help and `@2` keeps the rounds list after it. A manifest test pins the order, since nothing did. |
 | D9 | coai-mcp and coai-server messages are rewritten **version-neutrally** ("the Team servers settings of the ConnectOtherAIs extension"), not "the Settings tab". | The server ships on its own clock; a new server paired with an old extension must still send the person somewhere that exists. |
 
 ## Found on the way — to fix inside this plan
@@ -109,6 +109,7 @@ The operator's instruction, verbatim in intent:
 | F7 | **A guard that guards nothing.** `test/theLogRefusesToOpen.test.ts:201` slices from `indexOf('const live = this.view;')`, a line that no longer exists (it is `const live = this.held.view;`, `panelProvider.ts:1002`): `indexOf` is −1, the slice is the file's last character, and both assertions pass whatever `render()` does. | Read 2026-09-28. | S2 — replaced by a run test of the surface's paint, which is where that rule now lives |
 | F8 | **The Claude probe cancels itself when the SIDEBAR is closed** — `claudeProbeCache.ts:181`, `:189` ask `this.held.view === undefined` of the sidebar's handle. With a second surface, a person on the Settings tab's Consultant or Reviewers dropdowns would never get an answer while the sidebar is hidden. | Read. | S2 — the cache is given "is ANY surface held" |
 | F9 | **A refused API setting freezes every later write in the panel.** `writeApiSetting` (`panelProvider.ts:1846-1847`) runs INSIDE the write queue and does `await this.snapBack()` directly; `snapBack` renders, `render()` awaits `writes.settled()` (`:906`), and `WriteQueue.settled` (`writeQueue.ts:22-29`) awaits the chain that holds this very write — the PR #561 freeze, fixed everywhere else by `afterTheWrite` and missed at this one site. Swept by shape over every method reachable from `write()` and `choosePrompt()`: the only unwrapped site. | Found by the cadence consultation (480323ac, codex), confirmed by reading 2026-09-28. | S2 |
+| F10 | **Opening a section reloads the whole sidebar a few seconds later.** `openSections` was in `staticKey`, so a toggle the PAGE had already drawn changed the key and the next tick reassigned `webview.html` — the same page, with the scroll position and any open dropdown gone. | **RED, observed 2026-09-28** in the S1 table (*"the person opens a section: that would reload the whole webview on the next tick"*). | S1 |
 
 Not fixed here, named for the operator: `notificationsRows.ts` still has its own tab strip and the
 rounds log's strip lacks ARIA (both owned by `PLAN_the_tabs_announce_themselves.md`); dead segmented
@@ -301,6 +302,18 @@ Before the code round, and before any release: `npm run typecheck`, `npm test`, 
 the family checks (`plan-lifecycle.mjs`, `pin-check.mjs`). A clean `tsc` is read before any suite number
 is reported.
 
+## What my own review added (Opus, run beside the plan round, 2026-09-28)
+
+Folded into the stories above; recorded here so the round's findings and these are not confused.
+
+| # | Finding | Where it lands |
+|---|---|---|
+| M1 | The held tab drawn into the panes would move the markup key on every press. | D6, S3 |
+| M2 | Two CI ratchets bind the shape: the lint-suppression ratchet (`.github/scripts/suppressions-only-shrink.mjs`: a NEW file × rule pair is refused, so a moved 245-line script inside a function is refused) and the import-cycle ratchet (`importCycles.test.mjs`). So the script moves as a MODULE-LEVEL constant with `SAVE_AFTER_MS`, `COPIED_FOR_MS`, `CUSTOM_ENDPOINT` and `focusLiteral` moving with it, the caret and the tab emitted as separate literals; imports run `panelView → panelSurface` and never back; `panelMessageFrom` is table-driven. | S2, S3 |
+| M3 | 29 test files make ~177 direct `panelHtml(` calls and 14 of them slice sections; a slice from `indexOf(...) = -1` is an empty string every negative assertion passes against. `sectionHtml(state, id)` (`test/panelPages.ts`) throws for a section no page draws; every section-slicing test moves to it BEFORE the flip, and the flip is followed by a break-it run (blank a moved body, watch its tests go red). | S1 (the helper), S3 (the conversion) |
+| M4 | More sentences point where things will not be: "the ⋯ menu" in the MCP server section (`panelView.ts` — the ⋯ menu is the SIDEBAR's title menu) and `package.json` descriptions that say only "the panel" (the ones at `:372`, `:423`, `:491`, `:772`, `:833` on 2026-09-28). The sweep adds `panel` and `⋯` to its patterns. | S4 |
+| minor | Test the Settings layout against a FIXTURE section list, so it is testable before the flip; the host scenario asserts the host-held tab id and one tab with the label, not DOM selection it cannot see; panes carry `id`, `aria-labelledby`, `tabindex="0"` and `[hidden]{display:none!important}`; zoom and text tone are NOT added (not "as is"); the render guard becomes "any surface held", with discovery, notifications and Team-server refresh once per render; the Settings tab gets placeholder html at creation so a cold window does not show blank; coai-server's one sentence waits for the next server release (recorded, not a release of its own); no new `notify()` site; `openedFrom` validates the tab argument. | S2, S3, S4 |
+
 ## Questions for the operator (the plan proceeds on the answer in brackets)
 
 1. Sidebar order — the order you named (Notifications, Active rounds, Phrases, Bugz), or today's
@@ -337,7 +350,7 @@ No file, table, cache or process is added; S5 can only remove work.
       existing tests pass against the Settings surface unchanged in what they assert.
 - [ ] The tab strip passes the keyboard tests; a tab press never repaints.
 - [ ] Running consultations are still in the sidebar.
-- [ ] F1, F2, F3, F8 and F9 each have a test that was observed RED before its fix and GREEN after (or, for F2, the record of why it could not be made red).
+- [ ] F1, F2, F3, F8, F9 and F10 each have a test that was observed RED before its fix and GREEN after (or, for F2, the record of why it could not be made red).
 - [ ] No sentence in any surface, language, README, manifest or server message names a section where it
       no longer is (swept by searching for every moved section's name, method stated in the PR).
 - [ ] `panelProvider.ts` and `panelView.ts` are both smaller than on 2026-09-28; every new module < 400 lines.
