@@ -24,7 +24,7 @@ export function pageOf(surface: SurfaceId, state: PanelState, nonce = 'n0nce', n
  * <p>A strict SUPERSET of what `panelHtml` returned while every section was in the sidebar, which is why
  * the tests that used it were moved onto this when ten sections moved to the Settings tab: a positive
  * assertion still finds what it looks for, and a negative one still scans everything that is drawn, so
- * neither can go vacuous for the section that left (`todo/PLAN_settings_page.md`, M3).</p>
+ * neither can go vacuous for the section that left (`research/PLAN_settings_page.md`, M3).</p>
  */
 export function everyPageHtml(state: PanelState, nonce = 'n0nce', nowMs?: number): string {
   return SURFACE_IDS.map((surface) => pageOf(surface, state, nonce, nowMs)).join('\n');

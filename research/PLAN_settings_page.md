@@ -1,12 +1,12 @@
 # PLAN — the sidebar keeps what is happening now; everything you configure opens in a Settings tab
 
-> Status: **in progress, 2026-09-28 — S1, S2 and S3 built on `feat/settings-page-e1`; S4 (sentences, the help audit) and S5 (the measurement) under way; nothing merged.** Scope: `src_vs_code` (the sidebar
+> Status: **IMPLEMENTED, 2026-09-28 — S1, S2, S3 and S4 shipped on `feat/settings-page-e1`, in one pull request under one code round. S5 was NOT built here: it was extracted to [PLAN_the_sidebar_pays_only_for_what_it_shows.md](../todo/PLAN_the_sidebar_pays_only_for_what_it_shows.md). Still open after the merge: the extension and coai-mcp releases, which publish and so wait for the operator; coai-server's one reworded sentence waits for that server's next release.** What shipped differently is in *Progress and deviations*. Scope: `src_vs_code` (the sidebar
 > `coai.panel`, a new `Settings` editor tab, `package.json`, the help in five languages, the READMEs),
 > the user-facing strings in `src_mcp` and `src_server` that send a person to a sidebar section, and
 > `research/module_extension.md` / `research/architecture.md`.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [module_tests.md](../research/module_tests.md), [architecture.md](../research/architecture.md).
+> Related docs: [module_extension.md](module_extension.md),
+> [module_tests.md](module_tests.md), [architecture.md](architecture.md).
 > Boundaries with four open plans are in § *Boundaries*, and written into each of them too.
 
 ## The goal, as the operator asked it (2026-09-28)
@@ -101,14 +101,14 @@ The operator's instruction, verbatim in intent:
 | # | Defect | Evidence | Where it is fixed |
 |---|---|---|---|
 | F1 | **A probe that lands after the first paint never reaches the screen.** `staticKey` (`panelView.ts:3136-3196`) omits `providers`, `cliStatus`, `claudeProbe`/`askingClaude`, `agyModels`, `modelPrices`, `snippetStatus`, `enginesByEndpoint`, `latestTeamServerVersion`, `perSide`. `refreshProviders` calls `render()` when the verdict changes (`panelProvider.ts:886`), the key is unchanged, only live regions are posted — the *cannot review* badge waits until something unrelated repaints. | **RED, observed 2026-09-28**: `src/test/aProbeThatLandsRepaints.test.ts` — the fixture's html differs, `staticKey` does not (*"the verdict landed in the state and the key did not move"*). | S1 |
-| F2 | **A re-resolved sidebar can be blank.** `resolveWebviewView` never resets `paintedKey`; if the new view resolves with an unchanged state, `render()` skips the html write and posts live regions into an empty document. | Read, not yet observed — `viewHandle.ts:8-13` says VS Code re-creates a hidden view. S2 writes the RED test first; if it cannot be made red, this row records that and the slot design keeps the reset anyway. | S2 |
-| F3 | **A late disposal of an old view clears the LIVE view's edit hold** (`panelProvider.ts:391-394` calls `forgetEditing()` unconditionally; only the handle release is ownership-checked). | Read. RED test first in S2. | S2 |
+| F2 | **A re-resolved sidebar can be blank.** `resolveWebviewView` never resets `paintedKey`; if the new view resolves with an unchanged state, `render()` skips the html write and posts live regions into an empty document. | **RED, observed 2026-09-28** with the reset taken out: `surfaceSlot.test.ts` — *"the new document is empty, so a patch would land in nothing"*. | S2 |
+| F3 | **A late disposal of an old view clears the LIVE view's edit hold** (`panelProvider.ts:391-394` calls `forgetEditing()` unconditionally; only the handle release is ownership-checked). | **RED, observed 2026-09-28** with the ownership check taken out: `surfaceSlot.test.ts` — *"the caret of the page still open was forgotten"*. | S2 |
 | F4 | `render()` reads the whole `usage.jsonl` (`readUsage`) on every render and the sidebar draws none of it; `usageWindow`/`usageScope` are in `staticKey` and drawn nowhere in the panel. | Read. | S1 (the key), S5 (the read) |
 | F5 | Already-stale text: help says "the **Server** section" (`helpContent.ts:98`, `:100`) and "**Language**" (`:431`); `ContractVersion.cs:91`, `RemoteAsk.cs:160`, `:200`, `PanelSettings.cs:1068` say "Server section" — it has been *MCP server* since 2026-09-07. `research/architecture.md:275` describes a Server-section block removed the same day. | Read. | S4 |
 | F6 | The status line of `PLAN_the_panel_provider_is_too_big.md` says *nothing implemented yet* while clusters 1, 10 and 11 shipped (#400, #403, #404). | `git log` | corrected in this plan's own commit, with the boundary row |
-| F7 | **A guard that guards nothing.** `test/theLogRefusesToOpen.test.ts:201` slices from `indexOf('const live = this.view;')`, a line that no longer exists (it is `const live = this.held.view;`, `panelProvider.ts:1002`): `indexOf` is −1, the slice is the file's last character, and both assertions pass whatever `render()` does. | Read 2026-09-28. | S2 — replaced by a run test of the surface's paint, which is where that rule now lives |
-| F8 | **The Claude probe cancels itself when the SIDEBAR is closed** — `claudeProbeCache.ts:181`, `:189` ask `this.held.view === undefined` of the sidebar's handle. With a second surface, a person on the Settings tab's Consultant or Reviewers dropdowns would never get an answer while the sidebar is hidden. | Read. | S2 — the cache is given "is ANY surface held" |
-| F9 | **A refused API setting freezes every later write in the panel.** `writeApiSetting` (`panelProvider.ts:1846-1847`) runs INSIDE the write queue and does `await this.snapBack()` directly; `snapBack` renders, `render()` awaits `writes.settled()` (`:906`), and `WriteQueue.settled` (`writeQueue.ts:22-29`) awaits the chain that holds this very write — the PR #561 freeze, fixed everywhere else by `afterTheWrite` and missed at this one site. Swept by shape over every method reachable from `write()` and `choosePrompt()`: the only unwrapped site. | Found by the cadence consultation (480323ac, codex), confirmed by reading 2026-09-28. | S2 |
+| F7 | **A guard that guards nothing.** `test/theLogRefusesToOpen.test.ts:201` slices from `indexOf('const live = this.view;')`, a line that no longer exists (it is `const live = this.held.view;`, `panelProvider.ts:1002`): `indexOf` is −1, the slice is the file's last character, and both assertions pass whatever `render()` does. | Read 2026-09-28. | S2 — replaced by run tests of the slot's paint. My own code review then found the SAME shape in a new guard (`bothPagesWriteThroughOneQueue.test.ts` sliced from an `indexOf` it never checked); it now fails when its anchor is missing |
+| F8 | **The Claude probe cancels itself when the SIDEBAR is closed** — `claudeProbeCache.ts:181`, `:189` ask `this.held.view === undefined` of the sidebar's handle. With a second surface, a person on the Settings tab's Consultant or Reviewers dropdowns would never get an answer while the sidebar is hidden. | Read. Fixed by `watched: () => anyHeld(this.slots)`: `anyHeld` is run in `surfaceSlot.test.ts`, and the provider line is pinned (the provider imports `vscode`); the pin **observed RED 2026-09-28** with the line reverted to the sidebar's handle — *"the Claude probe is told something other than whether any page is watching"*. | S2 |
+| F9 | **A refused API setting freezes every later write in the panel.** `writeApiSetting` (`panelProvider.ts:1846-1847`) runs INSIDE the write queue and does `await this.snapBack()` directly; `snapBack` renders, `render()` awaits `writes.settled()` (`:906`), and `WriteQueue.settled` (`writeQueue.ts:22-29`) awaits the chain that holds this very write — the PR #561 freeze, fixed everywhere else by `afterTheWrite` and missed at this one site. Swept by shape over every method reachable from `write()` and `choosePrompt()`: the only unwrapped site. | Found by the cadence consultation (480323ac, codex), confirmed by reading 2026-09-28; the call-chain guard **observed RED** first, naming *write → writeApiSetting → snapBack → render*. | S2 |
 | F10 | **Opening a section reloads the whole sidebar a few seconds later.** `openSections` was in `staticKey`, so a toggle the PAGE had already drawn changed the key and the next tick reassigned `webview.html` — the same page, with the scroll position and any open dropdown gone. | **RED, observed 2026-09-28** in the S1 table (*"the person opens a section: that would reload the whole webview on the next tick"*). | S1 |
 
 Not fixed here, named for the operator: `notificationsRows.ts` still has its own tab strip and the
@@ -277,6 +277,9 @@ Each story is its own commit with a green suite, in this order:
 
 ### S5 — What the sidebar pays for (measure, then decide) · Opus
 
+> **Not built here — extracted** to [PLAN_the_sidebar_pays_only_for_what_it_shows.md](../todo/PLAN_the_sidebar_pays_only_for_what_it_shows.md)
+> on 2026-09-28, with the cost model below as its starting point. Kept as it was written, for the record.
+
 - Per-probe time and spawn/network counts over an idle hour, sidebar only and with Settings open,
   written to `research/` — the measurement IS the deliverable.
 - **If the probes only the Settings tab draws are material**, the gating is extracted into a follow-up
@@ -296,7 +299,7 @@ Each story is its own commit with a green suite, in this order:
 | S2 | slot attach-after-paint writes html (F2); late detach keeps the live hold (F3); the Claude probe runs with only a non-sidebar surface held (F8); a refused API setting does not freeze the queue, and the call-chain guard (F9); `paintSurfaces` with fakes; `panelMessageFrom` table; a second surface's `setting` uses the same queue | a blank sidebar; a lost caret; a frozen panel; `copied` on the wrong page |
 | S3 | `prove-move.mjs` for the script; `tabKeysScript` run in the DOM shim; the Settings page run (panes, ARIA relationships, `showTab`, same `setting` shape, caret); the minified bundle; the four sidebar sections in D1's order; moved sections' tests against the Settings surface; the real-editor scenario | a tab that shows two panes; a tab press that reloads the page; two Settings tabs; a section on both pages or on neither |
 | S4 | `helpCoverage.test.ts` with the gear ALIAS; every language carries the changed articles; the C# tests reworded; the sweep's hit list | a help page or a server message that still says "in the panel" |
-| S5 | the measurement, recorded | — |
+| S5 | extracted — the tests are the follow-up plan's | — |
 
 Before the code round, and before any release: `npm run typecheck`, `npm test`, `npm run lint`, `npm run test:host`, the whole C# suite (S4 touches it), and
 the family checks (`plan-lifecycle.mjs`, `pin-check.mjs`). A clean `tsc` is read before any suite number
@@ -307,10 +310,10 @@ is reported.
 | Story | State | What shipped differently |
 |---|---|---|
 | S1 | built, `a9944d55` | as planned; F10 (open sections in the key) found by its own RED table |
-| S2 | built, `18337949` | the slot module is `surfaceSlot.ts` (the plan said `panelSurfaces.ts` + `editHold.ts`: one module was enough); the message parser stayed a typed interface in the provider rather than `panelMessages.ts`, because every field is still checked where it is read. F9's guard follows awaited and returned calls, and found only the one site |
-| S3 | built, `1649a9bf` | **the page script did not move** to `panelScript.ts`: a shared `pageDocument(body, nonce, focus, extra)` gives the Settings tab the same script without a 245-line move, which stays with `PLAN_two_files_outgrew_the_rule.md`. The extension's own sentences (S4's first half) landed with it, because they sit in the files the move touched. The test-conversion proof ran as a mutation: the same 195 tests fail with the moved bodies blanked, before and after |
-| S4 | under way | the servers' wording is **ConnectOtherAIs > Team servers** (> Consultant, > MCP server), true of either extension — ASCII, because `RemoteShimScenarioTests` watched a real child's stderr deliver `→` as nothing |
-| S5 | **extracted** to [PLAN_the_sidebar_pays_only_for_what_it_shows.md](PLAN_the_sidebar_pays_only_for_what_it_shows.md) | its deliverable is a MEASUREMENT — an idle hour per arm, counted — and a cost model computed from the cache windows is not one; the follow-up carries that model, labelled as computed, as its starting point |
+| S2 | built, `18337949` | the slot module is `surfaceSlot.ts` (the plan said `panelSurfaces.ts` + `editHold.ts`: one module was enough); the message parser stayed a typed interface in the provider rather than `panelMessages.ts`, because every field is still checked where it is read. F9's guard follows awaited and returned calls, and found only the one site. The render's pins in `thePromptBoxRemembers.test.ts` stayed STRUCTURAL rather than becoming run tests of `paintSurfaces`: the per-slot loop is `paintEach` (`surfaceSlot.ts`), run by its own tests, and the pins hold only that `render()` settles the queue first and then calls it |
+| S3 | built, `1649a9bf` | **the page script did not move** to `panelScript.ts`: a shared `pageDocument(body, nonce, focus, extra)` gives the Settings tab the same script without a 245-line move, which stays with `PLAN_two_files_outgrew_the_rule.md`. The extension's own sentences (S4's first half) landed with it, because they sit in the files the move touched. The test-conversion proof ran as a mutation: the same 195 tests fail with the moved bodies blanked, before and after. D6 as built: the page opens on the held tab from its own script literal, and the host posts `showTab` only in answer to a press or to the command's argument. The real-editor scenario asserts one tab and the host-held id — not which pane the page shows, which it cannot see; the page's own run tests do |
+| S4 | built, `c1e452bf` (servers) and `cb4fd3e5` (the help, audited against the UI in all five languages: four new articles, 21 misplaced sentences, 19 stale facts) | the servers' wording is **ConnectOtherAIs > Team servers** (> Consultant, > MCP server), true of either extension — ASCII, because `RemoteShimScenarioTests` watched a real child's stderr deliver `→` as nothing |
+| S5 | **extracted** to [PLAN_the_sidebar_pays_only_for_what_it_shows.md](../todo/PLAN_the_sidebar_pays_only_for_what_it_shows.md) | its deliverable is a MEASUREMENT — an idle hour per arm, counted — and a cost model computed from the cache windows is not one; the follow-up carries that model, labelled as computed, as its starting point |
 
 The gate's commands asked for the split and the architecture story on Fable; Fable was unavailable (account limit, 2026-09-28), so both ran on Opus.
 
@@ -324,6 +327,8 @@ Folded into the stories above; recorded here so the round's findings and these a
 | M2 | Two CI ratchets bind the shape: the lint-suppression ratchet (`.github/scripts/suppressions-only-shrink.mjs`: a NEW file × rule pair is refused, so a moved 245-line script inside a function is refused) and the import-cycle ratchet (`importCycles.test.mjs`). So the script moves as a MODULE-LEVEL constant with `SAVE_AFTER_MS`, `COPIED_FOR_MS`, `CUSTOM_ENDPOINT` and `focusLiteral` moving with it, the caret and the tab emitted as separate literals; imports run `panelView → panelSurface` and never back; `panelMessageFrom` is table-driven. | S2, S3 |
 | M3 | 29 test files make ~177 direct `panelHtml(` calls and 14 of them slice sections; a slice from `indexOf(...) = -1` is an empty string every negative assertion passes against. `sectionHtml(state, id)` (`test/panelPages.ts`) throws for a section no page draws; every section-slicing test moves to it BEFORE the flip, and the flip is followed by a break-it run (blank a moved body, watch its tests go red). | S1 (the helper), S3 (the conversion) |
 | M4 | More sentences point where things will not be: "the ⋯ menu" in the MCP server section (`panelView.ts` — the ⋯ menu is the SIDEBAR's title menu) and `package.json` descriptions that say only "the panel" (the ones at `:372`, `:423`, `:491`, `:772`, `:833` on 2026-09-28). The sweep adds `panel` and `⋯` to its patterns. | S4 |
+| M5 | *(code review)* **The caret went back before its pane was shown.** The page restored the caret, THEN its own script un-hid the held pane — and a browser does not focus a control under a hidden ancestor, so a repaint while typing on a Settings tab lost the caret. `pageDocument` now runs the page's own script straight after `acquireVsCodeApi()`, and the DOM shim refuses `focus()` under a hidden ancestor as a browser does. **RED, observed**: *"the caret was put back before its pane was shown"*. | S3 |
+| M6 | *(code review)* The page tests typed their tabs and panes by hand, so a pane that lost `data-pane` would still have passed; they are parsed out of the rendered markup now. `heldSettingsTab` carried a second copy of `openedFrom`'s fallback and uses it instead; `settingsOpen()` had no caller and is gone. | S3 |
 | minor | Test the Settings layout against a FIXTURE section list, so it is testable before the flip; the host scenario asserts the host-held tab id and one tab with the label, not DOM selection it cannot see; panes carry `id`, `aria-labelledby`, `tabindex="0"` and `[hidden]{display:none!important}`; zoom and text tone are NOT added (not "as is"); the render guard becomes "any surface held", with discovery, notifications and Team-server refresh once per render; the Settings tab gets placeholder html at creation so a cold window does not show blank; coai-server's one sentence waits for the next server release (recorded, not a release of its own); no new `notify()` site; `openedFrom` validates the tab argument. | S2, S3, S4 |
 
 ## Questions for the operator (the plan proceeds on the answer in brackets)
@@ -343,32 +348,33 @@ Folded into the stories above; recorded here so the round's findings and these a
 ## Growth surfaces
 
 None that grows. One module variable (the open tab) and one `WebviewPanel` per window, disposed on close.
-No file, table, cache or process is added; S5 can only remove work.
+No file, table, cache or process is added; the extracted S5 can only remove work.
 
 ## Boundaries
 
 | Plan | This plan owns | That plan keeps | Order |
 |---|---|---|---|
-| [PLAN_the_panel_provider_is_too_big.md](PLAN_the_panel_provider_is_too_big.md) | the view lifecycle it leaves in `PanelProvider` — `render`, `resolveWebviewView`, the dispatcher, the `write`/`run` signatures, the edit hold, `snapBack`. Not a move, so not proved by `prove-move.mjs`. | every one of its eleven clusters | independent; whichever lands second rebases and re-proves |
-| [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md) | `panelScript.ts`, the section registry, the Settings page, and replacing `staticKey` (its planned `panelRepaint.ts` shrinks) | the file sizes, the CSS, the help constant, the command symbols, the region builders | this first — it moves code that one would otherwise have to move twice |
-| [PLAN_the_tabs_announce_themselves.md](PLAN_the_tabs_announce_themselves.md) | its step 1: `tabKeys.ts`, and the `roving` option on `tabStrip` | converting the roles page, the rounds log and the window filter | this first; that plan then consumes `tabKeys.ts` |
-| [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md) | the definition of the paint key | *render never awaits a probe*; its spinner tests need live slots | any gating S5 calls for waits for its step 2 |
+| [PLAN_the_panel_provider_is_too_big.md](../todo/PLAN_the_panel_provider_is_too_big.md) | the view lifecycle it leaves in `PanelProvider` — `render`, `resolveWebviewView`, the dispatcher, the `write`/`run` signatures, the edit hold, `snapBack`. Not a move, so not proved by `prove-move.mjs`. | every one of its eleven clusters | independent; whichever lands second rebases and re-proves |
+| [PLAN_two_files_outgrew_the_rule.md](../todo/PLAN_two_files_outgrew_the_rule.md) | the section registry (`PANEL_SECTIONS`, in `panelView.ts`), the layouts (`panelSurface.ts`), the Settings page, and replacing `staticKey` (its planned `panelRepaint.ts` shrinks) | the file sizes, the CSS, the help constant, the command symbols, the region builders — and **the page script**, which this plan did not move after all (`pageDocument` is shared instead), so `panelScript.ts` is that plan's again | this first — landed 2026-09-28 |
+| [PLAN_the_tabs_announce_themselves.md](../todo/PLAN_the_tabs_announce_themselves.md) | its step 1: `tabKeys.ts`, and the `roving` option on `tabStrip` | converting the roles page, the rounds log and the window filter | this first; that plan then consumes `tabKeys.ts` |
+| [PLAN_panel_probing_state.md](../todo/PLAN_panel_probing_state.md) | the definition of the paint key | *render never awaits a probe*; its spinner tests need live slots | any gating the extracted plan calls for waits for its step 2 |
+| [PLAN_the_sidebar_pays_only_for_what_it_shows.md](../todo/PLAN_the_sidebar_pays_only_for_what_it_shows.md) | S1–S4: the two surfaces, one state built whole | S5 entire: the measurement, `readUsage` leaving the render, any gating by held surface | this first — landed 2026-09-28 |
 
 ## Definition of Done
 
-- [ ] The sidebar is the questions block plus Notifications, Active rounds, Phrases, Bugz — nothing else.
-- [ ] The gear opens one Settings tab per window, with the ten tabs, reachable from the palette and by tab id.
-- [ ] Every moved control stores exactly what it stored before, on the same layer — the moved sections'
+- [x] The sidebar is the questions block plus Notifications, Active rounds, Phrases, Bugz — nothing else.
+- [x] The gear opens one Settings tab per window, with the ten tabs, reachable from the palette and by tab id.
+- [x] Every moved control stores exactly what it stored before, on the same layer — the moved sections'
       existing tests pass against the Settings surface unchanged in what they assert.
-- [ ] The tab strip passes the keyboard tests; a tab press never repaints.
-- [ ] Running consultations are still in the sidebar.
-- [ ] F1, F2, F3, F8, F9 and F10 each have a test that was observed RED before its fix and GREEN after (or, for F2, the record of why it could not be made red).
-- [ ] No sentence in any surface, language, README, manifest or server message names a section where it
+- [x] The tab strip passes the keyboard tests; a tab press never repaints.
+- [x] Running consultations are still in the sidebar.
+- [x] F1, F2, F3, F8, F9 and F10 each have a test that was observed RED before its fix and GREEN after — F2 could be, with the reset taken out.
+- [x] No sentence in any surface, language, README, manifest or server message names a section where it
       no longer is (swept by searching for every moved section's name, method stated in the PR).
-- [ ] `panelProvider.ts` and `panelView.ts` are both smaller than on 2026-09-28; every new module < 400 lines.
-- [ ] `research/module_extension.md`, `research/module_tests.md` and `research/architecture.md` describe
+- [x] `panelProvider.ts` and `panelView.ts` are both smaller than on 2026-09-28 (4 014 → 3 989 and 3 196 → 3 188); every new module < 400 lines (the largest, `surfaceSlot.ts`, is 190).
+- [x] `research/module_extension.md`, `research/module_tests.md` and `research/architecture.md` describe
       the two surfaces; the Mermaid renders.
-- [ ] The boundary rows exist in all four sibling plans.
-- [ ] One `review_code` round over the whole committed diff; its verdict and reviewer count are in the PR.
-- [ ] Extension and coai-mcp released after the merge (S4 changes both) — each with the
+- [x] The boundary rows exist in all four sibling plans.
+- [x] One `review_code` round over the whole committed diff; its verdict and reviewer count are in the PR.
+- [ ] **Open:** extension and coai-mcp released after the merge (S4 changes both) — each with the
       operator's go-ahead, since both publish.

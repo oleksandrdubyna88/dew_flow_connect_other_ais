@@ -179,4 +179,4 @@ test('every webview this extension holds is released when it is disposed', () =>
 // view was re-read after the awaits. Both rules moved into `SurfaceSlot.paint` (`surfaceSlot.ts`), where they
 // are RUN — 'the key is recorded only after the write succeeded' and 'disposing the view it holds lets go' in
 // `surfaceSlot.test.ts`. The second had also stopped guarding anything: it sliced from a line that no longer
-// existed, so it asserted over one character (`todo/PLAN_settings_page.md`, F7).
+// existed, so it asserted over one character (`research/PLAN_settings_page.md`, F7).

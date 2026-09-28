@@ -4170,7 +4170,7 @@ flowchart LR
 |---|---|
 | `settingsShape.ts` | config → validated `CoaiSettings`; `envBlock`; the defaults pinned to the master plan's table |
 | `consultantWrite.ts` | what an edit in the *Consultant* section STORES — the vendor picker, the three per-caller fields, and a custom endpoint's name and URL with the one-name-one-vault-key check. The write half of `consultSettings.ts`, lifted out of `settingsShape.ts` on 2026-09-15 when that file passed the 800-line rule |
-| `coaiInstall.ts` | pure install decisions: RID (macOS honestly absent), asset/entry names, version compare, the per-side state key (`installedKey`), the side's label, and `serverStatus` — what the Server section states |
+| `coaiInstall.ts` | pure install decisions: RID (macOS honestly absent), asset/entry names, version compare, the per-side state key (`installedKey`), the side's label, and `serverStatus` — what the MCP server tab states |
 | `installer.ts` | the impure half: fetch, sha256, `tar`, chmod, and `serverOnThisSide` — `stat` every call, the `--version` probe cached against `mtime`+`size` |
 | `versionProbe.ts` | one `askVersion`, 8-second cap, stdout only — used for the vendor CLIs and for the server binary |
 | `mcpBlock.ts` | the `mcpServers` block (server id `coai`), client targets, install message |
@@ -4256,9 +4256,8 @@ whether a question can be shown; the rest is metadata, and metadata is rendered,
 ### One provider, several surfaces (2026-09-28)
 
 `PanelProvider` now paints a LIST of webviews, each a `SurfaceSlot` (`surfaceSlot.ts`, no `vscode`
-import): the held view, what was last painted into it, and its edit hold. Today the list holds the
-sidebar alone; the Settings tab of [../todo/PLAN_settings_page.md](../todo/PLAN_settings_page.md) is
-its second entry. A render builds ONE state and lets each slot decide for itself — paint, patch, or
+import): the held view, what was last painted into it, and its edit hold. The list holds the sidebar
+and the Settings tab of [PLAN_settings_page.md](PLAN_settings_page.md), and `paintEach` walks it. A render builds ONE state and lets each slot decide for itself — paint, patch, or
 nothing because its view is gone — with that page's own caret, so a caret recorded on one page is
 never put back into another. A message is received with the slot it came from bound at attach time,
 so a `copied` confirmation and a snap-back after a refused write go to that page alone, and the page
@@ -5572,7 +5571,7 @@ toggle is made BY the page, so a key that moved with it reloaded the webview a f
 show what was already on screen, dropping the scroll position and any open dropdown; a repaint made
 for another reason still draws the person's open sections. The key is built on every render (a string
 over the panel's own builders, no I/O); the page with its live regions filled is built only when the
-key moved. Plan: [../todo/PLAN_settings_page.md](../todo/PLAN_settings_page.md), F1 and F10.
+key moved. Plan: [PLAN_settings_page.md](PLAN_settings_page.md), F1 and F10.
 
 ### A third answer beside repaint and patch: WITHHOLD (2026-09-09)
 

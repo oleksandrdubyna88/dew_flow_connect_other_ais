@@ -63,7 +63,7 @@ test('the MCP server section is titled for coai-mcp and describes nothing else',
   });
   const html = everyPageHtml(fixture, 'n0nce');
 
-  // A tab of the Settings page since 2026-09-28 (`todo/PLAN_settings_page.md`), named as the section was.
+  // A tab of the Settings page since 2026-09-28 (`research/PLAN_settings_page.md`), named as the section was.
   assert.match(html, /data-tab="server"[^>]*>MCP server<\/button>/, 'the section says what it is about');
   assert.ok(!html.includes('>Server</button>') && !html.includes('<summary>Server</summary>'), 'and no longer says it vaguely');
 

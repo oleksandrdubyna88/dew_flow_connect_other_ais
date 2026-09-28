@@ -4,7 +4,7 @@
 > (`render()` and the probes it starts), `panelView.ts` (the section registry), and a measurement written
 > to `research/`.
 >
-> Extracted from [PLAN_settings_page.md](PLAN_settings_page.md), whose story S5 this was. That plan moved
+> Extracted from [PLAN_settings_page.md](../research/PLAN_settings_page.md), whose story S5 this was. That plan moved
 > ten sections out of the sidebar into a Settings tab and deliberately left the COST of a render unchanged:
 > one state, built whole, whichever surfaces are open. This plan is the part that needs a real measurement
 > before anything is gated, so it was not built on a guess.
@@ -37,8 +37,8 @@ it is the thing the measurement below exists to replace:
 | Snippet status, storage probes, consultant prompt file | every render | file reads | Settings (MCP server, Consultant) |
 | `usage.jsonl` (`readUsage`) | every render | the whole file | **nothing in either page** — the spending chart is the rounds log's |
 
-The two every-five-second PROCESS spawns are the providers verdict (Settings only) and the Bugz corpus
-(the sidebar's own). The every-render whole-file read of `usage.jsonl` serves nothing either page draws.
+The two PROCESS spawns that repeat within seconds are the providers verdict (Settings only, 10 s) and the
+Bugz corpus (the sidebar's own, 5 s). The every-render whole-file read of `usage.jsonl` serves nothing either page draws.
 
 ## Build order
 
@@ -58,6 +58,15 @@ The two every-five-second PROCESS spawns are the providers verdict (Settings onl
 4. **A Settings tab that opens without waiting on cold probes** needs step 2 of
    [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md) (render never awaits a probe); until then it
    shows its loading page while the state is gathered.
+
+## Boundaries (MANDATORY, both sides)
+
+| Plan | This plan owns | That plan keeps | Order |
+|---|---|---|---|
+| [PLAN_settings_page.md](../research/PLAN_settings_page.md) (implemented) | its S5 entire: the measurement, `readUsage` leaving the render, any gating by held surface | S1–S4: the two surfaces, painted from one state built whole | that one first — landed 2026-09-28 |
+| [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md) | which probes a render starts, per held surface | *render never awaits a probe* (its step 2), and what a person sees while a probe runs | its step 2 before any gating here (step 4 below) |
+
+**Disjoint** otherwise: this plan changes how much a render gathers, never what either page draws.
 
 ## Test plan
 

@@ -47,7 +47,7 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
  * <p>This test used to assert the opposite, and it was right while the spending chart was a section
  * of the panel: a click on Today, Month or Year that produced the same key repainted nothing. The chart
  * moved to the rounds log's second tab on 2026-09-05, and the key is now built from what the PANEL draws
- * (`todo/PLAN_settings_page.md`, F1) — so a window change must no longer reload the sidebar, whose
+ * (`research/PLAN_settings_page.md`, F1) — so a window change must no longer reload the sidebar, whose
  * markup it does not touch. The chart's own repaint is the rounds log's.</p>
  */
 test('choosing a spending window does not reload the panel, which no longer draws the chart', () => {

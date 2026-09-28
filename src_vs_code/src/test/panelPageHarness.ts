@@ -7,7 +7,8 @@ import { DEFAULT_VENDORS } from '../vendors';
 import { camel } from './rolesPageHarness';
 
 /**
- * The sidebar panel, RUN — its own script over its own markup, for a test of any section's controls.
+ * The panel's pages, RUN — their own script over their own markup, for a test of any section's controls,
+ * on the sidebar or in the Settings tab.
  *
  * <p>Extracted from `consultantSectionScript.test.ts` when the gate section gained controls of its own
  * (issue #117): a second copy of this harness beside the first is the duplication `reuse-first.md`
@@ -211,7 +212,7 @@ function regionsOf(html: string): Map<string, Region> {
 
 /**
  * The page that holds the section a fixture opens: the Settings tab, opened on that section, when the
- * section moved there (`todo/PLAN_settings_page.md`) — the sidebar otherwise.
+ * section moved there (`research/PLAN_settings_page.md`) — the sidebar otherwise.
  */
 function pageHolding(state: PanelState): string {
   const opened = state.openSections[0] ?? '';

@@ -277,7 +277,7 @@ public sealed class ConsultPreflightTests : IDisposable
     }
 
     [Fact]
-    // One deliberate change since the extraction (2026-09-28, todo/PLAN_settings_page.md, D9): the sentence names
+    // One deliberate change since the extraction (2026-09-28, research/PLAN_settings_page.md, D9): the sentence names
     // the place as "ConnectOtherAIs > Consultant", which an extension that draws it as a sidebar section and one
     // that draws it as a Settings tab both satisfy. Everything else is still byte for byte.
     public void TheSwitchedOffSentence_IsByteForByteWhatItWasBeforeTheExtraction() =>

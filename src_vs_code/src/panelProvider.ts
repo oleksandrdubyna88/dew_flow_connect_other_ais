@@ -12,7 +12,7 @@ import { phrasesFrom, type Phrase } from './phrases';
 import { chatForgetKey, rememberedChat } from './chatSpendRows';
 import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
-import { anyHeld, SurfaceSlot } from './surfaceSlot';
+import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
 import { chooseSettingsTab, heldSettingsTab, type SettingsHost } from './settingsPanel';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
@@ -177,7 +177,8 @@ import {
 } from './vendorTerminal';
 
 /**
- * The sidebar panel: reviewers, language, the gate, the limits, and what is waiting on you.
+ * The panel: what is happening now in the sidebar, and what is configured once in the Settings tab —
+ * two surfaces painted from one state, through one dispatcher and one write queue (`surfaceSlot.ts`).
  *
  * <p>The markup is next door in `panelView.ts`, pure and tested. This half is the wiring — reading
  * VS Code configuration, writing it back, and re-rendering when anything changes. The server's own
@@ -238,13 +239,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * 2026-09-08 a person who opened the rounds log to answer a question the gate had asked them
    * got `Webview is disposed` — the escalation watcher had gone on painting into it every five
    * seconds. Its painted key and its edit hold live in the slot too, beside the view they belong to
-   * (`todo/PLAN_settings_page.md`, F2 and F3).</p>
+   * (`research/PLAN_settings_page.md`, F2 and F3).</p>
    */
   private readonly sidebar = new SurfaceSlot<vscode.WebviewView>();
 
   /**
    * The Settings editor tab (`settingsPanel.ts`): the sections configured once, drawn by the same
-   * builders from the same state, and written through the same queue (`todo/PLAN_settings_page.md`).
+   * builders from the same state, and written through the same queue (`research/PLAN_settings_page.md`).
    */
   private readonly settingsTab = new SurfaceSlot<vscode.WebviewPanel>();
 
@@ -415,9 +416,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
      // added a second listener every time the view was disposed and resolved again.
     void this.render();
   }
-
-
-
 
   /**
    * What a MODEL costs per million tokens, for the log page's Cost column.
@@ -1013,7 +1011,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // one reader in two.
       chat: chatSettingsFrom((key: string) => config.get(key)),
       // Straight from the configuration for the same reason, and read HERE rather than inside the
-      // section so that `staticKey` can see it change.
+      // section, so the markup the paint key is built from changes with it.
       phrases: this.phrases(),
     };
 
@@ -1053,12 +1051,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // checks nobody asked for. Each slot decides for its own page, with its own caret: a caret
     // recorded on one page is never put back into another.
     const live = { type: 'live', ...liveRegions(state) };
-    for (const slot of this.slots) {
-      const page = this.pageFor(slot, state);
-      if (slot.paint(page.key, page.html) === 'patch') {
-        slot.post(live);
-      }
-    }
+    paintEach(this.slots, (slot) => this.pageFor(slot, state), live);
 
     // Never awaited: the section draws from what is already known, and this repaints when it
     // lands. A render that waited on a Team server would be a panel that hangs when one is slow.

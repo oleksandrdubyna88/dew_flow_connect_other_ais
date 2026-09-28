@@ -7,7 +7,7 @@ import { jsonForScript } from './webviewHtml';
  *
  * <p>Everything else on the page — every control, every write, the caret put back after a repaint — is
  * the panel's own script, shared rather than copied (`pageDocument` in `panelView.ts`), because the tabs
- * hold the very sections the sidebar used to (`todo/PLAN_settings_page.md`).</p>
+ * hold the very sections the sidebar used to (`research/PLAN_settings_page.md`).</p>
  */
 
 /**

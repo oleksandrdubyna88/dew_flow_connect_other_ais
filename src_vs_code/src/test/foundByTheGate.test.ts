@@ -2,8 +2,8 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { discoverEngine, LocalEngine, noEngine } from '../localEngines';
-import { PanelState, staticKey } from '../panelView';
-import { everyPageHtml } from './panelPages';
+import { PanelState } from '../panelView';
+import { everyPageHtml, paintKeys } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 
@@ -55,15 +55,15 @@ test('a reprobe that finds different models repaints the panel', () => {
   // defect class `liveRepaint.test.ts` was written for, in the one field added after it.
   //
   // RED: Expected the key to change when the model list did, but both were identical.
-  const before = staticKey(state({ localEngines: {} }));
-  const after = staticKey(state({ localEngines: { local: engine() } }));
+  const before = paintKeys(state({ localEngines: {} }));
+  const after = paintKeys(state({ localEngines: { local: engine() } }));
 
   assert.notEqual(before, after, 'a new model list must repaint, or the picker is frozen');
 });
 
 test('an engine that went away also repaints', () => {
-  const up = staticKey(state({ localEngines: { local: engine() } }));
-  const down = staticKey(state({ localEngines: { local: noEngine('connection refused') } }));
+  const up = paintKeys(state({ localEngines: { local: engine() } }));
+  const down = paintKeys(state({ localEngines: { local: noEngine('connection refused') } }));
 
   assert.notEqual(up, down);
 });

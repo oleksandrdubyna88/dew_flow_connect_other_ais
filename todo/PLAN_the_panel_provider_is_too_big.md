@@ -195,15 +195,15 @@ Per extraction, and none of it is optional:
   `chatStoreFile.ts` (1 019), `dataCommands.ts` (808). One split at a time.
 - **It does not redesign the panel.** The clusters above are the ones already in the file; finding a
   better architecture is a different plan and must not ride along inside a move. That plan now exists:
-  [PLAN_settings_page.md](PLAN_settings_page.md) — see the boundary below.
+  [PLAN_settings_page.md](../research/PLAN_settings_page.md) — see the boundary below.
 
 ## The boundary with the Settings-page plan (MANDATORY, both sides)
 
-Reciprocal of the *Boundaries* table in [PLAN_settings_page.md](PLAN_settings_page.md).
+Reciprocal of the *Boundaries* table in [PLAN_settings_page.md](../research/PLAN_settings_page.md).
 
 | Item | Built by | The other plan's part |
 |---|---|---|
-| The view lifecycle this plan leaves in the class — `resolveWebviewView`, `render`, the message dispatcher, the `write`/`run` signatures, the edit hold, `snapBack` | the Settings-page plan (story S2: one provider, several surfaces) | none — this plan never extracts them |
+| The view lifecycle this plan leaves in the class — `resolveWebviewView`, `render`, the message dispatcher, the `write`/`run` signatures, the edit hold, `snapBack` | the Settings-page plan (story S2: one provider, several surfaces) — shipped 2026-09-28 | none — this plan never extracts them |
 | Its eight open clusters (1, 10 and 11 already shipped) | this plan | the Settings-page plan adds a `from` surface parameter to `write`/`run` call chains and nothing else inside a cluster |
 
 Disjoint otherwise. **Order:** independent; whichever lands second rebases and re-runs its own proof

@@ -8,7 +8,7 @@ import { tabStrip } from './tabStrip';
  * builders live there and are private, and a registry module that needed them would be an import cycle.
  * `panelView.ts` declares its sections as data of this shape; this module owns what is done with them.</p>
  *
- * <p><b>The paint key is the markup itself</b> (`todo/PLAN_settings_page.md`, F1). It used to be a list of
+ * <p><b>The paint key is the markup itself</b> (`research/PLAN_settings_page.md`, F1). It used to be a list of
  * state fields kept beside the markup by hand, and ten fields the page draws were missing from it — so a
  * probe that answered after the first paint changed the state, left the key where it was, and never
  * reached the screen. A key made of what is DRAWN cannot miss a field, because it is not a list. What it
@@ -35,7 +35,7 @@ export type SurfaceId = (typeof SURFACE_IDS)[number];
 
 /** One section of a page: what it is called, where it is drawn, and its body. */
 export interface SectionSpec<S> {
-  /** `[a-z]` letters (one historical camel-case id aside): `panelView.test.ts` scans `data-section="([a-z]+)" open`. */
+  /** Letters only: it is an id fragment (`pane-<id>`, `tab-<id>`) and the `data-section` value the tests scan with `[a-zA-Z]+`. */
   readonly id: string;
   readonly title: string;
   readonly surface: SurfaceId;
@@ -96,7 +96,7 @@ const SETTINGS_STRIP = { tab: 'tab-', panel: 'pane-', label: 'Settings', strip: 
  * The Settings page's body: a strip with one tab per section, and one pane per tab.
  *
  * <p><b>Drawn tab-neutral</b> — no tab chosen, every pane hidden — and the page's own script opens the
- * tab the host holds, which reaches it as a script literal beside the caret (`todo/PLAN_settings_page.md`,
+ * tab the host holds, which reaches it as a script literal beside the caret (`research/PLAN_settings_page.md`,
  * D6). A pane drawn as selected would put the held tab into the markup, the markup is the paint key, and
  * every tab press would then reload the whole page a few seconds later: the defect the key's own rule
  * exists to stop.</p>
@@ -110,8 +110,8 @@ const SETTINGS_STRIP = { tab: 'tab-', panel: 'pane-', label: 'Settings', strip: 
  */
 export function settingsBody<S>(specs: readonly SectionSpec<S>[], state: S): string {
   const tabs = specs.map((spec) => ({ key: spec.id, label: spec.title }));
-  const panes = specs.map((spec) => `<section id="pane-${spec.id}" class="pane sec-${spec.id}" role="tabpanel" `
-    + `aria-labelledby="tab-${spec.id}" tabindex="0" data-section="${spec.id}" data-pane="${spec.id}" hidden>
+  const panes = specs.map((spec) => `<section id="${SETTINGS_STRIP.panel}${spec.id}" class="pane sec-${spec.id}" role="tabpanel" `
+    + `aria-labelledby="${SETTINGS_STRIP.tab}${spec.id}" tabindex="0" data-section="${spec.id}" data-pane="${spec.id}" hidden>
 ${spec.body(state, BLANK_REGIONS)}
 </section>`);
 
