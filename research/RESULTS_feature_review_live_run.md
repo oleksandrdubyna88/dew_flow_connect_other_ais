@@ -71,7 +71,7 @@ second round. 7 findings: 3 major, 3 minor, 1 nit. Each was read against the cod
 | # | severity | by | finding | decision |
 |---|---|---|---|---|
 | 0 | major | codex | `review_feature` takes no `head`, though D2 named one | **rejected** — a recorded deviation: S2.2 says "the head is the checkout's HEAD, not a `head` argument (D2 named one)", and the tool description says so |
-| 1 | major | grok | the product-owned caller instruction (`src_vs_code/src/featureRule.md`, the snippet's `coai-feature` half) tells the caller to pass `head` — `origin/main` included — and to call again "with the new `head`" after `revise` | **accepted** — true: no such argument exists, so a caller following the snippet on a checkout that is not the feature's reviews the wrong tree |
+| 1 | major | grok | the product-owned caller instruction (`src_vs_code/src/featureRule.md`, the snippet's `coai-feature` half) tells the caller to pass `head` — `origin/main` included — and to call again "with the new `head`" after `revise` | **accepted** — true: the tool declares no `head`, and the MCP SDK (ModelContextProtocol 2.2.0) ignores an undeclared argument without an error (checked on `status` with an extra `head`), so the call SUCCEEDS over the checkout's current HEAD — a caller following the snippet on a checkout that is not the feature's gets a clean review of the wrong tree |
 | 2 | major | glm | the same missing `head`, with the squash-merged partial-review scenario | **rejected** — the same recorded deviation (in the plan section glm was not served); the text that leads callers into the scenario is #1 |
 | 3 | minor | glm | `TurnLoop.Within` bounds a turn's launch and its repair each to the remaining cap, so a turn could take twice it | **rejected, refuted** — `ReviewerExecutor.RunAsync` gives the repair only what the first launch left of the already-bounded timeout, and the rate-limit ladder does the same (`WithinRemaining`) |
 | 4 | minor | glm | a turn serves 64 KB of source where §4.9 says 48 KB, unrecorded | **rejected** — recorded beside the constant (`SourceBudget` remarks, the pack trial) and in the plan's S3.1 entry ("64 KB, not 48") |
@@ -80,8 +80,9 @@ second round. 7 findings: 3 major, 3 minor, 1 nit. Each was read against the cod
 
 ### Accepted — real defects, NOT fixed in this run
 
-1. **The `coai-feature` snippet half names a `head` argument the tool does not take** (`src_vs_code/src/featureRule.md`,
-   "What to pass" and the `revise` / `again` bullets). Fix: say the reviewed commit is the checkout's HEAD — check out the
+1. **The `coai-feature` snippet half tells the caller to pass a `head` the tool does not declare** (`src_vs_code/src/featureRule.md`,
+   "What to pass" and the `revise` / `again` bullets). The SDK drops the undeclared argument silently, so the call succeeds
+   and reviews the checkout's current HEAD, whatever `head` named. Fix: say the reviewed commit is the checkout's HEAD — check out the
    commit that holds the feature first — and that a later call needs a moved checkout. The plan's §4.5 signature and §5
    sequence diagram carry the same stale `head` and should be corrected with it. (D24 moves this half to the conventions
    mount in S3.5; the text there must not inherit it.)

@@ -1638,7 +1638,8 @@ Found by the live run ([RESULTS_feature_review_live_run.md](../research/RESULTS_
 
 30. **The `coai-feature` snippet half names a `head` argument the tool does not take** (`src_vs_code/src/featureRule.md`):
     "What to pass" lists `head` (`origin/main` included) and `revise` / `again` say to call again "with the new `head`", but
-    S2.2 made the head the checkout's HEAD. A caller following the snippet on another checkout reviews the wrong tree. §4.5's
+    S2.2 made the head the checkout's HEAD. The SDK (ModelContextProtocol 2.2.0) ignores the undeclared argument without an
+    error, so a caller following the snippet on another checkout gets a successful review of the wrong tree. §4.5's
     signature and §5's diagram carry the same stale `head`; S3.5's conventions text must not inherit it.
 31. **A submodule in the range is reported as "deleted at head".** `git cat-file --batch-check` answers a gitlink with two
     fields (`<oid> submodule`); `CatFile.Object` accepts only three, so the object reads as missing and
