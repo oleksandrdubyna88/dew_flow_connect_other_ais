@@ -12,7 +12,7 @@ import { phrasesFrom, type Phrase } from './phrases';
 import { chatForgetKey, rememberedChat } from './chatSpendRows';
 import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
-import { ViewHandle, isDisposedRejection } from './viewHandle';
+import { anyHeld, SurfaceSlot } from './surfaceSlot';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
 import { EscalationWatcher } from './escalationWatcher';
@@ -25,7 +25,6 @@ import {
   OPEN_BY_DEFAULT,
   panelHtml,
   staticKey,
-  withholdsRepaint,
   VSCODE_COMMAND_FOR,
   type ChatLedgers,
 } from './panelView';
@@ -206,20 +205,42 @@ function onRuntime(one: ResolvedConsultant | undefined, runtime: string): boolea
 }
 
 
+/** What a panel page posts. Loose on purpose: every field is checked where it is read. */
+interface PanelMessage {
+  readonly type: string;
+  readonly key?: string;
+  readonly value?: unknown;
+  readonly vendor?: string;
+  readonly command?: string;
+  readonly id?: string;
+  readonly open?: boolean;
+  readonly role?: string;
+  readonly caller?: string;
+  readonly commandModel?: string;
+  readonly round?: number;
+  readonly editing?: boolean;
+  readonly start?: number;
+  readonly end?: number;
+}
+
 export class PanelProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'coai.panel';
 
   /**
-   * The live view, held through a handle that knows about disposal.
+   * The sidebar, as one of the webviews this panel paints (`surfaceSlot.ts`).
    *
    * <p>It used to be a bare `vscode.WebviewView?` assigned in `resolveWebviewView` and never
    * cleared, while both sibling panels (`helpPanel`, `roundsLogPanel`) subscribed to
    * `onDidDispose` and nulled theirs. VS Code disposes a view when it is HIDDEN, so on
    * 2026-09-08 a person who opened the rounds log to answer a question the gate had asked them
    * got `Webview is disposed` — the escalation watcher had gone on painting into it every five
-   * seconds.</p>
+   * seconds. Its painted key and its edit hold live in the slot too, beside the view they belong to
+   * (`todo/PLAN_settings_page.md`, F2 and F3).</p>
    */
-  private readonly held = new ViewHandle<vscode.WebviewView>();
+  private readonly sidebar = new SurfaceSlot<vscode.WebviewView>();
+
+  /** Every webview this panel paints. A render builds one state and paints each of them. */
+  private readonly slots: readonly SurfaceSlot[] = [this.sidebar];
 
   /**
    * What this machine knows about the Claude CLI's models, and how it finds out again.
@@ -252,8 +273,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   /** Engines probed for CONSULTANT endpoints, keyed by the endpoint the row stores. */
   private consultEngines: Record<string, LocalEngine> = {};
   private consultEngineAt: Record<string, number> = {};
-  /** What the last repaint was drawn from, so only a real change to the controls repaints. */
-  private paintedKey = '';
   /** One nonce per panel instance: the CSP admits our one script, and a repaint reuses it. */
   private readonly nonce = nonce();
   /** Which sections the person has open — kept HERE because the panel repaints on every
@@ -311,20 +330,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   private localEngines: Record<string, LocalEngine> = {};
   private localProbedEndpoints: Record<string, string> = {};
   private localCheckedAt: Record<string, number> = {};
-  /**
-   * When a control in the page gained focus, and which one. 0 means none has it.
-   *
-   * <p>What `withholdsRepaint` reads. The page reports both edges, and a transition between two
-   * controls reports neither — the focusout of the one being left arrives before the focusin of the
-   * one being entered.</p>
-   */
   /** The discovery payload last written, so an unchanged one is not written again. */
   private discoveryWritten = '';
   /** Whether the failure below has already been said. Once a session, never once a render. */
   private discoveryWarned = false;
-  private editingSince = 0;
-  private editingId = '';
-  private editingCaret: readonly [number, number] = [0, 0];
   /**
    * Every write, in the order the page asked for it.
    *
@@ -368,7 +377,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     this.claudeProbes = new ClaudeProbeCache({
       dataDir,
       render: () => this.render(),
-      held: this.held,
+      watched: () => anyHeld(this.slots),
     });
     this.cadenceProbes = new CadenceProbes({
       executable: () => serverPath(this.context.globalStorageUri)?.fsPath ?? '',
@@ -382,36 +391,13 @@ export class PanelProvider implements vscode.WebviewViewProvider {
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
-    this.held.hold(view);
-    // A new document, so nothing in it is focused yet — whatever the last one left behind.
-    this.forgetEditing();
-    // Only ever clears the handle when THIS view is still the one held: VS Code re-creates a hidden
-    // view when it is shown again, so a late callback from a replaced view would otherwise blank
-    // the live one and stop the sidebar updating until something else resolved it.
-    view.onDidDispose(() => {
-      this.held.release(view);
-      this.forgetEditing();
-    });
+    // A new document: nothing in it is painted or focused yet, whatever the last one left behind. The
+    // slot lets go of a view only when it is still the one held: VS Code re-creates a hidden view when
+    // it is shown again, so a late callback from a replaced view must not blank the live one.
+    this.sidebar.attach(view);
+    view.onDidDispose(() => { this.sidebar.detach(view); });
     view.webview.options = { enableScripts: true };
-    view.webview.onDidReceiveMessage(
-      (m: { type: string; key?: string; value?: unknown; vendor?: string; command?: string; id?: string; open?: boolean; role?: string; caller?: string; commandModel?: string; round?: number; editing?: boolean; start?: number; end?: number }) => {
-        if (m.type === 'section' && m.id !== undefined) {
-          this.openSections = m.open === true
-            ? [...new Set([...this.openSections, m.id])]
-            : this.openSections.filter((s) => s !== m.id);
-        } else if (m.type === 'prompt' && m.role !== undefined && m.round !== undefined) {
-          // A setting write like any other, so it is serialised with them (the gate's code round).
-          const { role, round } = m;
-          this.enqueue(() => this.choosePrompt(role, round, String(m.value)));
-        } else if (m.type === 'setting') {
-          this.enqueue(() => this.write(settingMessageFrom(m)));
-        } else if (m.type === 'focus') {
-          this.editing(m.editing === true, m.id ?? '', Number(m.start), Number(m.end));
-        } else if (m.type === 'command') {
-          void this.run(m.command, m.id);
-        }
-      },
-    );
+    view.webview.onDidReceiveMessage((m: PanelMessage) => { this.receive(this.sidebar, m); });
 
     // The configuration listener used to be registered HERE, and that was the defect: VS Code
      // resolves a webview view lazily, so in a window where nobody opened this panel there was
@@ -891,9 +877,33 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
   }
 
+  /**
+   * What a page asked for, and WHICH page asked — bound when the listener was attached, never sent by
+   * the page, so it cannot be claimed. A reply (`copied`, a snap-back) goes to that page alone.
+   */
+  private receive(from: SurfaceSlot, m: PanelMessage): void {
+    if (m.type === 'section' && m.id !== undefined) {
+      this.openSections = m.open === true
+        ? [...new Set([...this.openSections, m.id])]
+        : this.openSections.filter((s) => s !== m.id);
+    } else if (m.type === 'prompt' && m.role !== undefined && m.round !== undefined) {
+      // A setting write like any other, so it is serialised with them (the gate's code round).
+      const { role, round } = m;
+      this.enqueue(() => this.choosePrompt(role, round, String(m.value), from));
+    } else if (m.type === 'setting') {
+      this.enqueue(() => this.write(settingMessageFrom(m), from));
+    } else if (m.type === 'focus') {
+      if (from.edited(m.editing === true, m.id ?? '', Number(m.start), Number(m.end))) {
+        void this.render();
+      }
+    } else if (m.type === 'command') {
+      void this.run(m.command, m.id, from);
+    }
+  }
+
   /** Re-read everything and repaint: the configuration, the sessions, the ledger and the probes. */
   async render(): Promise<void> {
-    if (this.held.view === undefined) {
+    if (!anyHeld(this.slots)) {
       return;
     }
     // Never render from a configuration this panel has not finished writing. Blur fires `change`
@@ -968,12 +978,6 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       // Straight from the configuration for the same reason, and read HERE rather than inside the
       // section so that `staticKey` can see it change.
       phrases: this.phrases(),
-      // Only while something IS focused — and by the time a paint gets past the hold below, that
-      // means the hold ran out under it. An ordinary paint carries nothing and steals nobody's
-      // focus.
-      focus: this.editingSince > 0
-        ? { id: this.editingId, start: this.editingCaret[0], end: this.editingCaret[1] }
-        : undefined,
     };
 
     // What this panel DISCOVERED, left where the chat command can read it. Three of the four model
@@ -994,13 +998,10 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // So a change to the CONTROLS repaints (rare, and always the person's own doing), while the
     // live regions — the round in flight, a question waiting on an answer — are posted as HTML
     // and patched into place, touching nothing else.
-    // Re-read AFTER the awaits above, and never through `this.held.view` again below. The check at the
-    // top of this method proves nothing by the time we get here: every `await` is a place the event
-    // loop can run `onDidDispose`, and `this.held.view` then becomes undefined — so `this.held.view.webview`
-    // throws a TypeError, which is NOT the disposal error and would be rethrown. Raised on the code
-    // round, by two reviewers, on both write paths.
-    const live = this.held.view;
-    if (live === undefined) {
+    // Re-read AFTER the awaits above: every `await` is a place the event loop can run `onDidDispose`,
+    // so the check at the top of this method proves nothing by the time we get here. Each slot answers
+    // for its own view from here on, disposal included.
+    if (!anyHeld(this.slots)) {
       return;
     }
 
@@ -1009,46 +1010,22 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // the answer lands and only if the answer changed, which is what stops the loop.
     this.lookAtNotifications();
 
-    const key = staticKey(state);
     // A third answer, between the two: WITHHOLD. Assigning the html rebuilds the document, and a
     // document rebuilt under a focused control takes the caret and anything typed since the last
     // write with it — which is how `поясни` was lost, five times a minute, to probes and version
-    // checks nobody asked for. The key is deliberately NOT recorded while a paint is withheld, so
-    // the next render after focus leaves paints what this one could not.
-    if (key !== this.paintedKey && !withholdsRepaint(this.editingSince, Date.now())) {
-      // Guarded as well as null-checked, because disposal can still land between the line above and
-      // this one — and recorded only AFTER the paint succeeded. Setting it first was a defect of
-      // its own: a disposal here left `paintedKey` claiming this state was painted, so the view VS
-      // Code creates when the sidebar is shown again matched the key, skipped the html write
-      // entirely, and posted live regions into an empty document — a blank sidebar with no controls
-      // and no way back. Found by gemini on the code round, twice.
-      try {
-        live.webview.html = panelHtml(state, this.nonce);
-      } catch (error) {
-        if (!isDisposedRejection(error)) {
-          throw error;
-        }
-
-        return;
+    // checks nobody asked for. Each slot decides for its own page, with its own caret: a caret
+    // recorded on one page is never put back into another.
+    const key = staticKey(state);
+    const live = { type: 'live', ...liveRegions(state) };
+    for (const slot of this.slots) {
+      if (slot.paint(key, () => panelHtml({ ...state, focus: slot.focus() }, this.nonce)) === 'patch') {
+        slot.post(live);
       }
-      this.paintedKey = key;
-      void this.refreshTeamServers();
-
-      return;
     }
 
     // Never awaited: the section draws from what is already known, and this repaints when it
     // lands. A render that waited on a Team server would be a panel that hangs when one is slow.
     void this.refreshTeamServers();
-
-    // The disposal is expected and dropped; anything else keeps its reporter, because a LIVE view
-    // refusing a message — a payload that cannot be cloned, a host channel that fell over — leaves
-    // a stale sidebar and has nothing else to say so.
-    live.webview.postMessage({ type: 'live', ...liveRegions(state) }).then(undefined, (error: unknown) => {
-      if (!isDisposedRejection(error)) {
-        console.error('ConnectOtherAIs: the panel could not be updated', error);
-      }
-    });
   }
 
   /**
@@ -1496,7 +1473,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * later change to that default would never reach them again. Both halves read an empty entry
    * as "not chosen".</p>
    */
-  private async choosePrompt(role: string, round: number, id: string): Promise<void> {
+  private async choosePrompt(role: string, round: number, id: string, from: SurfaceSlot): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
     const settings = settingsFrom((section) => config.get(section));
     const rounds = [...(settings.promptsPerRound[role] ?? [])];
@@ -1513,7 +1490,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     } catch (error: unknown) {
       // A dropdown too, and not in the write queue: said like every other refusal, and put back.
       reportRefusal(this.context, 'promptsPerRound', error);
-      await afterTheWrite(() => this.snapBack())();
+      await afterTheWrite(() => this.snapBack(from))();
       return;
     }
     // Started, not awaited: this runs in the write queue, and a render waits for that queue.
@@ -1614,38 +1591,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     }
   }
 
-  private editing(editing: boolean, id: string, start: number, end: number): void {
-    if (editing) {
-      // Only the FIRST focus of a session starts the clock. Tabbing from one control to the next
-      // must not renew it: a cap a focus change renews is a cap with no bound, which is the same
-      // defect as a cap a keystroke renews. The id and the caret are refreshed every time, because
-      // the paint that eventually lands must find the control the person is in NOW.
-      if (this.editingSince === 0) {
-        this.editingSince = Date.now();
-      }
-      this.editingId = id;
-      this.editingCaret = [start, end];
-
-      return;
-    }
-    this.forgetEditing();
-    void this.render();
-  }
-
-  /**
-   * Nothing is being edited.
-   *
-   * <p>Also on DISPOSAL, and that is not tidiness: closing the sidebar mid-sentence fires no
-   * `focusout`, so a view resolved again within the cap would refuse to paint and would refocus a
-   * control from a page that no longer exists.</p>
-   */
-  private forgetEditing(): void {
-    this.editingSince = 0;
-    this.editingId = '';
-    this.editingCaret = [0, 0];
-  }
-
-  private async write(message: SettingMessage): Promise<void> {
+  private async write(message: SettingMessage, from: SurfaceSlot): Promise<void> {
     const write = settingWrite(message);
     if (write === undefined) {
       return;
@@ -1662,7 +1608,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     switch (write.kind) {
       case 'vendor': {
         if (isApiSettingKey(write.key)) {
-          await this.writeApiSetting(config, write);
+          await this.writeApiSetting(config, write, from);
           return;
         }
         // `pinnedDocument` FIRST, so the spread below can still override it: changing the document
@@ -1675,14 +1621,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
             ? { ...v, ...pinnedDocument(v, write.key), [write.key]: write.value }
             : v,
         );
-        await this.saveWrite(config, 'vendors', vendors, write);
+        await this.saveWrite(config, 'vendors', vendors, write, from);
         return;
       }
       case 'role': {
         // A record, merged rather than replaced: writing one role's number must not drop the other
         // three, and the stored object is what every other role reads on the next repaint.
         const current = config.get<Record<string, unknown>>(write.key) ?? {};
-        await this.saveWrite(config, write.key, roleRecordUpdate(current, write.role, write.value), write);
+        await this.saveWrite(config, write.key, roleRecordUpdate(current, write.role, write.value), write, from);
         return;
       }
       case 'caller': {
@@ -1700,7 +1646,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // be worked out from the rows this side can see — the same reader, on the same config, as the
         // line above.
         const rows = vendorsFrom(this.read(config)('vendors'));
-        await this.saveWrite(config, 'consultants', consultantRecordUpdate(current, write.caller, write.key, write.value, rows), write);
+        await this.saveWrite(config, 'consultants', consultantRecordUpdate(current, write.caller, write.key, write.value, rows), write, from);
         return;
       }
       case 'commandModel': {
@@ -1709,7 +1655,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // the overlaid settings. A cleared box removes the field, which is how a person gets the
         // shipped model back (issue #117).
         const current = this.read(config)('commandModels');
-        await this.saveWrite(config, 'commandModels', commandModelsAfter(current, write.commandModel, write.key, String(write.value ?? '')), write);
+        await this.saveWrite(config, 'commandModels', commandModelsAfter(current, write.commandModel, write.key, String(write.value ?? '')), write, from);
         return;
       }
       case 'plain': {
@@ -1723,7 +1669,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         // A refused box or dropdown snaps back and stops there — `writePlain` holds that order, run by its tests.
         await writePlain(write.key, write.value, clearedByWriting(write.key), {
           save: (key, value) => this.save(config, key, value),
-          repaint: afterTheWrite(() => this.snapBack()),
+          repaint: afterTheWrite(() => this.snapBack(from)),
           follow: () => this.followPlain(config, write.key, write.value),
         }, write.control);
         return;
@@ -1835,7 +1781,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * calibration, and a value the module does not take is not stored at all — the control snaps back to what
    * is stored rather than keeping a choice nothing will honour.
    */
-  private async writeApiSetting(config: vscode.WorkspaceConfiguration, write: Extract<SettingWrite, { kind: 'vendor' }>): Promise<void> {
+  private async writeApiSetting(config: vscode.WorkspaceConfiguration, write: Extract<SettingWrite, { kind: 'vendor' }>, from: SurfaceSlot): Promise<void> {
     if (!isApiSettingKey(write.key)) {
       return;
     }
@@ -1844,14 +1790,16 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const vendors = vendorsFrom(this.read(config)('vendors'));
     const changed = vendors.map((v) => (v.id === write.vendor ? withApiSetting(v, key, write.value, report) : v));
     if (changed.includes(undefined)) {
-      await this.snapBack();
+      // STARTED, never awaited: this runs inside the write queue, and the repaint waits for that queue —
+      // awaited here it was a wait on itself that froze every later write (plan F9, the #561 shape).
+      await afterTheWrite(() => this.snapBack(from))();
       return;
     }
-    await this.saveWrite(config, 'vendors', changed, write);
+    await this.saveWrite(config, 'vendors', changed, write, from);
   }
 
   /** "Reset to calibrated default" on an `api` card: the row's own value for ONE setting is taken away (S3.8). */
-  private async resetApiSetting(id: string | undefined): Promise<void> {
+  private async resetApiSetting(id: string | undefined, from: SurfaceSlot): Promise<void> {
     const target = resetTarget(id);
     if (target === undefined) {
       return;
@@ -1859,7 +1807,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     const config = vscode.workspace.getConfiguration('coai');
     const vendors = vendorsFrom(this.read(config)('vendors'));
     const cleared = vendors.map((v) => (v.id === target.vendor ? withoutApiSetting(v, target.key) : v));
-    await this.saveWrite(config, 'vendors', cleared, { kind: 'vendor', key: target.key, value: undefined, vendor: target.vendor });
+    await this.saveWrite(config, 'vendors', cleared, { kind: 'vendor', key: target.key, value: undefined, vendor: target.vendor }, from);
   }
 
   /**
@@ -1878,8 +1826,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * {@link reportRefusal}, which offers the reload instead of describing the failure.</p>
    */
   /** One composite setting's save, snapping a refused box or dropdown back — `saveOrSnapBack` decides. */
-  private async saveWrite(config: vscode.WorkspaceConfiguration, key: string, stored: unknown, write: SettingWrite): Promise<void> {
-    await saveOrSnapBack(() => this.save(config, key, stored), afterTheWrite(() => this.snapBack()), write.value, write.control);
+  private async saveWrite(config: vscode.WorkspaceConfiguration, key: string, stored: unknown, write: SettingWrite, from: SurfaceSlot): Promise<void> {
+    await saveOrSnapBack(() => this.save(config, key, stored), afterTheWrite(() => this.snapBack(from)), write.value, write.control);
   }
 
   /**
@@ -1890,8 +1838,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * choice — which is how PR #561's snap-back painted nothing. A paint withheld while a control has focus
    * is not recorded, so the render after focus leaves still paints.</p>
    */
-  private snapBack(): Promise<void> {
-    this.paintedKey = '';
+  private snapBack(from: SurfaceSlot): Promise<void> {
+    from.forceRepaint();
 
     return this.render();
   }
@@ -1932,7 +1880,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * One control's click. Unknown names are ignored; KNOWN ones must all be handled, and the
    * compiler is what enforces that — see {@link PANEL_COMMANDS}.
    */
-  private async run(command: string | undefined, id: string | undefined): Promise<void> {
+  private async run(command: string | undefined, id: string | undefined, from: SurfaceSlot): Promise<void> {
     if (!isPanelCommand(command)) {
       return;
     }
@@ -1972,7 +1920,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         break;
       case 'customModel':
         if (id !== undefined) {
-          await this.customModel(id);
+          await this.customModel(id, from);
         }
         break;
       case 'customConsultant':
@@ -1982,11 +1930,11 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         break;
       case 'customCommandModel':
         if (id !== undefined) {
-          await this.customCommandModel(id);
+          await this.customCommandModel(id, from);
         }
         break;
       case 'resetApiSetting':
-        await this.resetApiSetting(id);
+        await this.resetApiSetting(id, from);
         break;
       case 'installVendorCli':
         if (id !== undefined) {
@@ -2067,7 +2015,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.moveDataDirectory);
         break;
       case 'copyPhrase':
-        await this.copyPhrase(id);
+        await this.copyPhrase(id, from);
         break;
       case 'addTeamServer':
         await this.addTeamServer();
@@ -2305,7 +2253,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * "another model…" from a picker: the list is a convenience, never a limit. `__translator__`
    * routes to the translator's model; anything else names a vendor.
    */
-  private async customModel(id: string): Promise<void> {
+  private async customModel(id: string, from: SurfaceSlot): Promise<void> {
     const model = await vscode.window.showInputBox({
       title: `Model for ${id}`,
       prompt: "The exact model id the CLI should be given. Empty keeps the CLI's default.",
@@ -2315,14 +2263,14 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return; // dismissed — the picker snaps back to the saved value on re-render
     }
 
-    await this.write({ key: 'model', value: model.trim(), vendor: id });
+    await this.write({ key: 'model', value: model.trim(), vendor: id }, from);
   }
 
   /**
    * "another model…" in a split-order model picker (issue #117): ask for the name, then write it
    * through the same route the picker itself uses. `id` is `<caller kind>:<slot>`.
    */
-  private async customCommandModel(id: string): Promise<void> {
+  private async customCommandModel(id: string, from: SurfaceSlot): Promise<void> {
     const target = commandModelTarget(id);
     if (target === undefined) {
       return;
@@ -2336,7 +2284,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
       return; // dismissed — the picker snaps back to the saved value on re-render
     }
 
-    await this.write({ key: target.slot, value: model.trim(), commandModel: target.kind });
+    await this.write({ key: target.slot, value: model.trim(), commandModel: target.kind }, from);
   }
 
   /** A preset, or a name and an endpoint typed in — the list is not meant to stay at two. */
@@ -2483,7 +2431,7 @@ export class PanelProvider implements vscode.WebviewViewProvider {
    * held by something else, and the person would paste whatever was there before. (Plan round,
    * gemini, Blocking.)</p>
    */
-  private async copyPhrase(id: string | undefined): Promise<void> {
+  private async copyPhrase(id: string | undefined, from: SurfaceSlot): Promise<void> {
     const report = await this.copier.copy(this.phrases(), id);
     if (!report.copied || id === undefined) {
       return;
@@ -2491,11 +2439,8 @@ export class PanelProvider implements vscode.WebviewViewProvider {
     // A disposed view is expected and dropped; anything else keeps its reporter, exactly as the live
     // region's post does. Swallowing every rejection would hide a webview that had stopped accepting
     // messages, and the button would then never confirm with nothing anywhere saying why.
-    this.held.view?.webview.postMessage({ type: 'copied', id }).then(undefined, (error: unknown) => {
-      if (!isDisposedRejection(error)) {
-        console.error('ConnectOtherAIs: the panel could not be told that a phrase was copied', error);
-      }
-    });
+    // To the page that asked: the button that was pressed is on it.
+    from.post({ type: 'copied', id }, 'the panel could not be told that a phrase was copied');
   }
 
   /**

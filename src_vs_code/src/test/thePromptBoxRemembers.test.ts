@@ -410,7 +410,9 @@ test('the host never renders from a configuration it has not finished writing', 
   const paints = source.indexOf('const key = staticKey(state);');
   assert.ok(awaits > 0 && paints > awaits, 'render must await the write queue before it decides what to paint');
 
-  assert.match(source, /if \(key !== this\.paintedKey && !withholdsRepaint\(this\.editingSince, Date\.now\(\)\)\)/,
+  // Whether a control is being edited is decided per page by `SurfaceSlot.paint`, which is RUN in
+  // `surfaceSlot.test.ts`; what is read here is only that every page's paint goes through it.
+  assert.match(source, /slot\.paint\(key, /,
     'the paint no longer consults whether a control is being edited');
   // That a rejected write does not poison the queue is RUN in `snapBackQueue.test.ts`, on `WriteQueue`.
   assert.match(source, /private enqueue\(work: \(\) => Promise<void>\): void \{\s*this\.writes\.enqueue\(work\);/,
@@ -436,9 +438,10 @@ test('leaving a box the pause already saved does not write it a second time', ()
 test('the hold is not renewed by moving between controls, and disposal forgets it', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
 
-  assert.match(source, /if \(this\.editingSince === 0\) \{\s*\n\s*this\.editingSince = Date\.now\(\);/,
-    'every focus restarts the clock again, so tabbing between controls withholds a paint forever');
-  assert.match(source, /onDidDispose\(\(\) => \{[\s\S]{0,120}this\.forgetEditing\(\);/,
+  // Both halves moved into `SurfaceSlot` and are RUN in `surfaceSlot.test.ts`: 'moving between controls does
+  // not renew the hold' and 'disposing the view it holds lets go of it and of its edit hold'. Read here only:
+  // the sidebar's disposal reaches its slot.
+  assert.match(source, /onDidDispose\(\(\) => \{ this\.sidebar\.detach\(view\); \}\)/,
     'a sidebar closed mid-sentence leaves the host believing a control is still being edited');
   // The wait itself moved into `WriteQueue` and is RUN in `snapBackQueue.test.ts` — a write appended while
   // it waited is waited for too. What stays read here is only that render is the one that waits.
