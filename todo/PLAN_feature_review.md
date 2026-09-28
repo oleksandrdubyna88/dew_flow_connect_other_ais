@@ -1,6 +1,7 @@
 # PLAN — the feature review: a fourth gate, run once a whole plan is built, before release
 
-> Status: **in progress, 2026-09-27.** Epic 1 merged (`d8c0bcaa`); S1.2 (ii)/(iii) — the live xAI/Alibaba
+> Status: **in progress, 2026-09-28.** D26's live acceptance run done 2026-09-28 (`proceed`, 3 findings accepted and open —
+> §9, *Found by the live run*; [RESULTS_feature_review_live_run.md](../research/RESULTS_feature_review_live_run.md)). Epic 1 merged (`d8c0bcaa`); S1.2 (ii)/(iii) — the live xAI/Alibaba
 > measurement, the `xai` and `dashscope` dialects and the two presets — landed 2026-09-26/27 from the reviewer-models
 > measurement ([RESULTS_feature_reviewer_models.md](../research/RESULTS_feature_reviewer_models.md), with §9.23–29;
 > complete 2026-09-27 — grok-4.7 and glm-5.3 recommended as feature reviewers),
@@ -63,7 +64,7 @@ The idea is diversity of eyes, not policing: different models notice different t
 | D23 | **At most two rounds, and the second only when it is needed** (operator, 2026-09-26). Round 2 runs ONLY when round 1 had a reviewer failure (some or all reviewers failed), a `blocking`-severity finding came back, or the person explicitly asks for one. Otherwise the review is one round: the caller resolves every finding (accept and fix, or reject with a reason) and the accepted fixes land without a second review. A second round that still carries a `blocking` finding, or fails again, is `call_human`. Epic 2 ships one round (a gating finding → `call_human`); S3.4 builds this. |
 | D24 | **The feature gate's rule lives in `dew_flow_conventions`** as `common/coai-feature-gate.md` (operator, 2026-09-26): coai gates every family repository, so the rule is shared, like the review, document and consultant rules. It says how to work and **tracks nothing** — no check, CI step or count of whether the gate ran. It replaces D11 (2a)'s product-owned snippet half: the snippet takes its feature half from the conventions mount, as the consultant half does (S3.5). The conventions PR (#55) is promoted to `release` only once coai ships `review_feature`. |
 | D25 | **Follow-up turns resend a cache-stable prefix; C3 (CLI resume) is not built now** (operator, 2026-09-26). The trial measured turn 2 at 1.12× (Fable) and 1.21× (Codex) turn 1's input, with no reuse by either CLI; the `api` vendors advertise prefix caching and are unmeasured. S3.2 keeps the base prompt byte-identical across turns and records cached tokens per turn; C3 gets its own plan only if the first live `api` run shows no caching. |
-| D26 | **Epic 3 may merge; no mcp release carries it until the API path is proven** (epic 1–3 consultation 742d52a8, closed `solved`, 2026-09-26). It is opt-in (nothing runs unless a vendor is ticked for features) and every suite is green, including the existing stages, which now all run through `TurnLoop`. But the release is held on BOTH (a) the vendor-calibration PR's acceptance cases — a `finish_reason: length` answer that parses is a failure and the D23 retry ground, not a clean pass; a failed call's billed usage crosses the shim → executor → ledger on turn 1 and turn 2; per-vendor token limits and reasoning switches; the xAI cache key — AND (b) a live product-path run recording Grok, Qwen and a CLI reviewer with a served follow-up and per-turn usage and cache counts. A live run alone would not exercise the billed-failure paths. |
+| D26 | **Epic 3 may merge; no mcp release carries it until the API path is proven** (epic 1–3 consultation 742d52a8, closed `solved`, 2026-09-26). It is opt-in (nothing runs unless a vendor is ticked for features) and every suite is green, including the existing stages, which now all run through `TurnLoop`. But the release is held on BOTH (a) the vendor-calibration PR's acceptance cases — a `finish_reason: length` answer that parses is a failure and the D23 retry ground, not a clean pass; a failed call's billed usage crosses the shim → executor → ledger on turn 1 and turn 2; per-vendor token limits and reasoning switches; the xAI cache key — AND (b) a live product-path run recording Grok, Qwen and a CLI reviewer with a served follow-up and per-turn usage and cache counts. A live run alone would not exercise the billed-failure paths. **(a) met by #594 (§9.23–29); (b) met 2026-09-28** — the live run: grok-4.7, glm-5.3 on the Qwen key and Codex CLI, four turns each with source served, per-turn usage and cache counts on the ledger, `proceed` in 11.5 minutes for $1.23 ([RESULTS_feature_review_live_run.md](../research/RESULTS_feature_review_live_run.md)). D26 no longer holds the release. |
 
 ## 3. What exists today (verified 2026-09-25 against `origin/main` 21aba62e)
 
@@ -1632,6 +1633,20 @@ phase 1, 2026-09-26). Each seen RED with the real symptom, then GREEN, then red 
     `ApiClassification` treats a 5xx whose own error field says "auth context expired" as a transient, `RateLimit.Phrases`
     gains the observed phrase, and the ladder retries the turn inside the 20-minute cap; any other 500 stays failed.
 
+Found by the live run ([RESULTS_feature_review_live_run.md](../research/RESULTS_feature_review_live_run.md), 2026-09-28) — accepted,
+**open, not fixed yet** (RED first when they are):
+
+30. **The `coai-feature` snippet half names a `head` argument the tool does not take** (`src_vs_code/src/featureRule.md`):
+    "What to pass" lists `head` (`origin/main` included) and `revise` / `again` say to call again "with the new `head`", but
+    S2.2 made the head the checkout's HEAD. The SDK (ModelContextProtocol 2.2.0) ignores the undeclared argument without an
+    error, so a caller following the snippet on another checkout gets a successful review of the wrong tree. §4.5's
+    signature and §5's diagram carry the same stale `head`; S3.5's conventions text must not inherit it.
+31. **A submodule in the range is reported as "deleted at head".** `git cat-file --batch-check` answers a gitlink with two
+    fields (`<oid> submodule`); `CatFile.Object` accepts only three, so the object reads as missing and
+    `FeatureOutlineBuilder.Changed` classifies the path `Deleted` — the live pack listed `.agents/conventions` so, and
+    `ReadPlan`'s "a submodule at head" reason is unreachable for a gitlink.
+32. **`src_mcp/src/Server/Rounds/RoundEngine.cs` is 920 lines**, over the shared coding style's 800-line cap.
+
 Observed, not fixed (follow-ups): `SourceResolver` cannot resolve a member of a JavaScript object literal
 (`claudeAdapter.encode` — the outline lists only the top-level `claudeAdapter`), so a reviewer asking for it
 by name is refused; the server reads `COAI_CREDS_KEY` from the process environment only, while every other
@@ -1665,8 +1680,9 @@ All four were answered on 2026-09-25 and are now D13–D16. The two asked after 
 
 - [ ] Phase 0 results recorded in this plan, and every budget constant traced to a measurement.
 - [ ] Every §9 defect has a test that was seen RED with the real symptom, then GREEN.
-- [ ] `review_feature` runs end to end on this repository against **Grok and Qwen through `api`** and
-      one CLI reviewer, with a source request served.
+- [x] `review_feature` runs end to end on this repository against **Grok and Qwen through `api`** and
+      one CLI reviewer, with a source request served. *(2026-09-28: grok-4.7, glm-5.3 on the Qwen key, Codex CLI —
+      [RESULTS_feature_review_live_run.md](../research/RESULTS_feature_review_live_run.md).)*
 - [x] The `xai` and `qwen` dialects each trace to an S0.5 row with the verbatim vendor answer. *(2026-09-27: `xai` and
       `dashscope` — the Alibaba row is named for its endpoint family — each trace to a §6 S0.5 row and to the calibration
       iterations of [RESULTS_feature_reviewer_models.md](../research/RESULTS_feature_reviewer_models.md).)*
