@@ -195,7 +195,22 @@ diverge from them rather than imitate them.
 
 - **It changes no behaviour.** Not one sentence of markup, not one comparison, not one default.
 - **It does not split `roundsLog.ts`'s page into two pages**, or `panelView.ts`'s panel into two
-  panels. The product is untouched; only where the source lives changes.
+  panels. The product is untouched; only where the source lives changes. Splitting the panel into a
+  sidebar and a Settings tab is [PLAN_settings_page.md](PLAN_settings_page.md) — see the boundary below.
+
+## The boundary with the Settings-page plan (MANDATORY, both sides)
+
+Reciprocal of the *Boundaries* table in [PLAN_settings_page.md](PLAN_settings_page.md).
+
+| Item | Built by | This plan's part |
+|---|---|---|
+| The page script out of `panelView.ts` (`panelScript.ts`) | the Settings-page plan, story S3, proved by `prove-move.mjs` | none — it leaves the cut list here |
+| The section registry and the two layouts (`panelSurface.ts`) | the Settings-page plan, story S1 | moves the registry out of `panelView.ts` once the section builders it needs are their own modules |
+| `staticKey` | REPLACED by the Settings-page plan (story S1: the key is the drawn markup) | `panelRepaint.ts` shrinks to `withholdsRepaint` and its neighbours; the key cannot move without the page builder |
+| `panelStyle.ts`, `panelHelp.ts`, `panelCommands.ts`, `panelRegions.ts`, the rounds-log cuts | this plan | the Settings-page plan adds the Settings CSS and deletes the dead segmented `.tabs` rules — re-measure the CSS before cutting |
+
+**Order:** the Settings-page plan's S1–S3 first — it moves code this plan would otherwise move twice.
+Every range here is stale after it and is re-measured, which this plan already requires.
 - **It does not rewrite the neighbouring code it moves.** `reuse-first.md` is explicit that
   rewriting code you were not asked to change turns a small diff into one nobody can review. A
   badly-written function moves as it is, and is named in the summary if it should be redone.

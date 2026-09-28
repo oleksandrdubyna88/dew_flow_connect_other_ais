@@ -1,6 +1,7 @@
 # PLAN — `panelProvider.ts` is 4 022 lines against a ceiling of 800
 
-> Status: **plan only, nothing implemented yet, 2026-09-18.** Scope: `src_vs_code/src/panelProvider.ts`
+> Status: **in progress — clusters 1, 10 and 11 shipped 2026-09-18 (#400, #403, #404); the other eight
+> are open (corrected 2026-09-28, the line still said nothing was implemented).** Scope: `src_vs_code/src/panelProvider.ts`
 > and the modules extracted from it. No behaviour change anywhere in the series — that is the
 > constraint, not an aspiration.
 >
@@ -193,4 +194,18 @@ Per extraction, and none of it is optional:
   `chatPage.ts` (2 350), `roundsLog.ts` (2 032), `extension.ts` (1 370), `claudeSessions.ts` (1 188),
   `chatStoreFile.ts` (1 019), `dataCommands.ts` (808). One split at a time.
 - **It does not redesign the panel.** The clusters above are the ones already in the file; finding a
-  better architecture is a different plan and must not ride along inside a move.
+  better architecture is a different plan and must not ride along inside a move. That plan now exists:
+  [PLAN_settings_page.md](PLAN_settings_page.md) — see the boundary below.
+
+## The boundary with the Settings-page plan (MANDATORY, both sides)
+
+Reciprocal of the *Boundaries* table in [PLAN_settings_page.md](PLAN_settings_page.md).
+
+| Item | Built by | The other plan's part |
+|---|---|---|
+| The view lifecycle this plan leaves in the class — `resolveWebviewView`, `render`, the message dispatcher, the `write`/`run` signatures, the edit hold, `snapBack` | the Settings-page plan (story S2: one provider, several surfaces) | none — this plan never extracts them |
+| Its eight open clusters (1, 10 and 11 already shipped) | this plan | the Settings-page plan adds a `from` surface parameter to `write`/`run` call chains and nothing else inside a cluster |
+
+Disjoint otherwise. **Order:** independent; whichever lands second rebases and re-runs its own proof
+(`prove-move.mjs` here, the suite there). The surfaces change is a design change, not a move, so it is
+never bundled into one of this plan's extraction pull requests.
