@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import type { CadenceLine } from '../cadenceLine';
 import { panelHtml } from '../panelView';
 import { stylesheet } from './cssRules';
 import { panelState } from './panelPageHarness';
@@ -57,17 +58,17 @@ for (const id of ['consultations', 'cadence']) {
   });
 }
 
-const LINE = [{
+const LINE: readonly CadenceLine[] = [{
   repoPath: 'D:/repo', branch: 'feat/epic-4',
   answer: {
     plan: 'todo/PLAN_x.md', mode: 'remind', epics: 14, epicsClosed: [1, 2, 3, 4],
     groups: [{ range: '1-3', consulted: true }, { range: '4-6', consulted: false }],
     risk: [], riskAnswered: true, unreadable: '',
   },
-}] as const;
+}];
 
 test('a cadence line is drawn under Consultation cadence, and no longer under Active gates', () => {
-  const html = panelHtml(panelState('', { cadence: LINE as never }), 'n');
+  const html = panelHtml(panelState('', { cadence: LINE }), 'n');
 
   assert.ok(sectionOf(html, 'cadence').includes('PLAN_x.md · epics closed 4/14'), 'the line is not in its own section');
   assert.ok(!sectionOf(html, 'rounds').includes('PLAN_x.md'), 'the line is still drawn with the running rounds');
