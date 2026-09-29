@@ -2,7 +2,8 @@ import { COMMAND_MODELS_SINCE } from './commandModels';
 import { SHIPPED_COMMANDS, fileIdOf, hasText, shippedTextOf, type CommandRow, type CommandStageName, type ShippedCommand } from './commands';
 import type { RowCommand } from './commandsEdit';
 import { compareVersions } from './coaiInstall';
-import { TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle, textOf } from './textControls';
+import { FORM_FIELDS_CSS, FORM_HEAD_CSS, formCardCss, formFrameCss } from './formPageStyle';
+import { textControlsHtml, textControlsScript, textOf } from './textControls';
 import { escapeHtml } from './webviewHtml';
 
 /**
@@ -113,7 +114,7 @@ function customBlock(row: CommandRow, texts: Readonly<Record<string, string>>): 
 <input type="text" data-field="title" aria-label="Title" value="${escapeHtml(row.title)}">
 <select data-field="stage" aria-label="Rounds">${STAGE_NAMES.map((stage) => stageOption(stage, row.stage)).join('')}</select>
 <label><input type="checkbox" data-field="enabled"${row.enabled ? ' checked' : ''}> On</label>
-<button type="button" data-remove>Remove</button>
+<button type="button" class="remove" data-remove>Remove</button>
 </div>
 <textarea data-text="${escapeHtml(fileId)}" aria-label="What it tells the AI" rows="3">${escapeHtml(texts[fileId] ?? '')}</textarea>
 </section>`;
@@ -152,15 +153,22 @@ function placeholderNote(one: ShippedCommand): string {
 }
 
 function styles(size: number, tone: number): string {
+  // The Chat presets look (formPageStyle.ts), the operator's ask of 2026-09-29: this page had drifted
+  // furthest, with the browser's white fields and no column. Its own rules come AFTER the fields.
   return `<style>
-${TEXT_CONTROLS_CSS}
-body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 0 16px 24px; ${textControlsStyle(size, tone)} }
-header { display: flex; align-items: baseline; gap: 12px; }
+${formFrameCss(size, tone)}
+${formCardCss('.command')}
+  .command { border-left-color: var(--vscode-textLink-foreground); }
+  .command h3 { font-size: 1em; margin: 0 0 6px; }
+${FORM_HEAD_CSS}
+${FORM_FIELDS_CSS}
 .lead, .note { color: var(--vscode-descriptionForeground); }
 .stale { border-left: 3px solid var(--vscode-editorWarning-foreground); padding: 4px 8px; margin: 8px 0; }
-.command { border-top: 1px solid var(--vscode-panel-border); padding: 8px 0; }
-.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-textarea { width: 100%; box-sizing: border-box; font-family: var(--vscode-editor-font-family); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.row input[type="text"] { flex: 1 1 12rem; min-width: 0; }
+/* After the fields, whose font: inherit would reset it: a command is read as the AI will read it. */
+textarea { font-family: var(--vscode-editor-font-family); }
+.command > button { margin-top: 6px; }
 .marker { margin: 4px 0; }
 .badge { font-size: 0.8em; color: var(--vscode-textLink-foreground); }
 </style>`;

@@ -1,6 +1,7 @@
 import { ChatProvider } from './chatModels';
 import { ModelPreset, PromptPreset } from './chatPresets';
-import { TEXT_CONTROLS_CSS, textControlFrom, textControlsHtml, textControlsScript, textControlsStyle, textOf } from './textControls';
+import { FORM_FIELDS_CSS, FORM_HEAD_CSS, formCardCss, formFrameCss } from './formPageStyle';
+import { textControlFrom, textControlsHtml, textControlsScript, textOf } from './textControls';
 import { escapeHtml } from './webviewHtml';
 
 /**
@@ -195,24 +196,13 @@ function modelRow(preset: ModelPreset, providers: readonly ChatProvider[]): stri
 }
 
 function styles(uiScale: number, textTone: number): string {
-  return `  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 16px 24px; max-width: 900px; margin: 0 auto; ${textControlsStyle(uiScale, textTone)} }
-  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
-  h1 { font-size: 1.2em; margin: 0; }
-  h2 { font-size: 1em; margin: 24px 0 4px; }
-  .lead { opacity: .8; margin: 0 0 12px; }
-  .preset { border: 1px solid var(--vscode-panel-border); border-left-width: 3px; border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
+  return `${formFrameCss(uiScale, textTone)}
+${formCardCss('.preset')}
   .preset.prompt-row { border-left-color: var(--vscode-textLink-foreground); }
-  .head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
-  .head input[type="text"] { flex: 1 1 12rem; min-width: 0; }
-  input, select, textarea { font: inherit; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 3px; padding: 4px 6px; }
-  /* The box a person READS a prompt in. It also grows with its content where the engine can do it;
-     the rows attribute is the floor for every engine that cannot. */
-  textarea { width: 100%; box-sizing: border-box; field-sizing: content; max-height: 60vh; }
+${FORM_HEAD_CSS}
+${FORM_FIELDS_CSS}
   .main { display: inline-flex; align-items: center; gap: 4px; opacity: .85; }
-  .refused { font-size: .9em; opacity: .8; margin: 0 0 10px; }
-  button { font: inherit; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; border-radius: 3px; padding: 4px 12px; cursor: pointer; }
-  button.remove { color: var(--vscode-foreground); background: none; border: 1px solid var(--vscode-panel-border); }
-${TEXT_CONTROLS_CSS}`;
+  .refused { font-size: .9em; opacity: .8; margin: 0 0 10px; }`;
 }
 
 function script(nonce: string): string {
