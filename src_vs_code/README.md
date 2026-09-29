@@ -169,7 +169,7 @@ owes one consultation before its first code round — is this group right, where
 forget — and from five epics the assistant is asked which epics and stories carry the most risk, each
 of which gets one of its own. *Consultation cadence* in the same tab sets the numbers and what the
 gate does: *Remind* puts the order in every review reply, *Require* also holds the group's code round
-until it is taken. *Consultation cadence* says where each plan stands — `epics closed 4/14 · consultation for
+until it is taken. The sidebar's *Consultation cadence* section says where each plan stands — `epics closed 4/14 · consultation for
 epics 4-6: due · branch feat/x`. An ordered consultation spends none of the calls-per-session budget: the
 gate bounds it instead — one open or answered consultation per group of epics or risky piece, and
 another only after one failed or lapsed without a verdict.
