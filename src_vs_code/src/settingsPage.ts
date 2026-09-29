@@ -32,6 +32,10 @@ ${tabCss('0 0 12px')}
   /* The shared sheet draws every button full width with a top margin — right for the sidebar's actions,
      wrong for four small buttons in a row. */
   .zoomCtl button, .toneCtl button { width: auto; margin: 0; }
+  /* The MCP server tab, twice the size: there is room for it here, and it is the tab people read rather
+     than set. zoom, not font-size: 2em — every note in it is sized in rem, which a parent's font-size does
+     not reach, so 2em would have doubled only the unsized text and left the small print as it was. */
+  .settings .pane.sec-server { zoom: 2; }
 ${TEXT_CONTROLS_CSS}
 `;
 

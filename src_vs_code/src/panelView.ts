@@ -2713,6 +2713,11 @@ const CSS = `
      wider than its parent, and the whole view gains a horizontal scrollbar. */
   *, *::before, *::after { box-sizing: border-box; }
   :root { color-scheme: light dark; }
+  /* The ROOT carries the text size, and the small print below is measured from it in rem — 13 of them
+     to the old pixel, so at the theme's default 13px every line is exactly the size it was. The Settings
+     tab roots it in its size control instead, which is how the notes follow that control: rem is measured
+     from the root alone, so no nested size compounds (todo/PLAN_every_page_reads_alike.md, D5). */
+  html { font-size: var(--vscode-font-size); }
   body {
     font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);
     color: var(--vscode-foreground); background: transparent;
@@ -2721,14 +2726,14 @@ const CSS = `
     margin: 0; padding: 4px 14px 20px 12px; overflow-x: hidden;
   }
   h2 {
-    font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .75;
+    font-size: calc(11rem / 13); text-transform: uppercase; letter-spacing: .06em; opacity: .75;
     margin: 10px 0 6px; font-weight: 600;
   }
   .section { border-top: 1px solid var(--vscode-panel-border); padding: 0 0 8px; }
   .section > summary {
     /* .9 rather than .75: coloured text at .75 on a dark ground is muddy, and the colour is
        doing the separating now. */
-    font-size: 11px; text-transform: uppercase; letter-spacing: .06em; opacity: .9;
+    font-size: calc(11rem / 13); text-transform: uppercase; letter-spacing: .06em; opacity: .9;
     font-weight: 600; padding: 10px 0 6px; cursor: pointer; list-style: none;
     display: flex; align-items: center; gap: 6px; user-select: none;
   }
@@ -2756,9 +2761,9 @@ const CSS = `
      number on the first line and send the stage box to the next one, because a price separated from
      its label reads as belonging to neither. */
   .vendor .priced { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-  .vendor .priced > label { flex: 1 1 6rem; min-width: 0; margin-bottom: 0; }
+  .vendor .priced > label { flex: 1 1 calc(96rem / 13); min-width: 0; margin-bottom: 0; }
   .vendor .priced > input[type="number"] { flex: 0 0 64px; width: 64px; }
-  .vendor .priced > .stages { flex: 1 1 8rem; min-width: 0; }
+  .vendor .priced > .stages { flex: 1 1 calc(128rem / 13); min-width: 0; }
   /* A vendor that is off everywhere: the boxes stay visible, so their state is readable, and go
      inert, so nobody ticks one expecting it to mean something. The gate said the contradiction was
      the defect - not the boxes themselves. */
@@ -2845,15 +2850,15 @@ const CSS = `
   /* A two-position switch: Fast on the left, Full on the right, the chosen half lit. */
   .seg { display: flex; border: 1px solid var(--vscode-widget-border, #3c3c3c); border-radius: 4px; overflow: hidden; }
   .seg label { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
-               padding: 4px 8px; cursor: pointer; font-size: 12px; }
+               padding: 4px 8px; cursor: pointer; font-size: calc(12rem / 13); }
   .seg label.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
   .seg input { margin: 0; }
   .inline > label { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
   .inline > input[type="number"] { flex: 0 0 64px; width: 64px; }
-  .hint { opacity: .65; font-size: 11px; margin: 3px 0 0; line-height: 1.45; }
+  .hint { opacity: .65; font-size: calc(11rem / 13); margin: 3px 0 0; line-height: 1.45; }
   /* Sixteen names, in a sidebar whose width is somebody else's choice: two columns where there is
      room, one where there is not, and never a reason to scroll sideways. */
-  .inventory { opacity: .65; font-size: 11px; margin: 3px 0 0; padding-left: 16px;
+  .inventory { opacity: .65; font-size: calc(11rem / 13); margin: 3px 0 0; padding-left: 16px;
     columns: 2; column-gap: 12px; overflow-wrap: anywhere; }
   .inventory li { break-inside: avoid; }
   input[type="text"], input[type="url"], input[type="number"], select, textarea {
@@ -2874,12 +2879,12 @@ const CSS = `
   button.add { margin-top: 10px; padding: 7px 10px; font-weight: 600; }
   button.link {
     background: none; color: var(--vscode-textLink-foreground); padding: 0; width: auto;
-    margin: 0; text-decoration: underline; font-size: 11px;
+    margin: 0; text-decoration: underline; font-size: calc(11rem / 13);
   }
   button.link:hover { background: none; color: var(--vscode-textLink-activeForeground); }
   .help {
-    display: inline-block; width: 14px; height: 14px; line-height: 14px; margin-right: 6px;
-    text-align: center; border-radius: 50%; font-size: 10px; font-weight: 700; cursor: help;
+    display: inline-block; width: calc(14rem / 13); height: calc(14rem / 13); line-height: calc(14rem / 13); margin-right: 6px;
+    text-align: center; border-radius: 50%; font-size: calc(10rem / 13); font-weight: 700; cursor: help;
     background: var(--vscode-badge-background); color: var(--vscode-badge-foreground);
     opacity: .8; flex: 0 0 auto;
   }
@@ -2900,10 +2905,10 @@ const CSS = `
   /* The play button sits between the name and remove, centred in the gap they leave. */
   /* The install button sits beside ▶ and is deliberately quieter: it is the thing you press
      once, on a machine that does not have the CLI yet. */
-  .vendor .head .get { font-size: 11px; }
+  .vendor .head .get { font-size: calc(11rem / 13); }
   .vendor .head .run {
     flex: 0 0 auto; width: auto; margin: 0 auto; padding: 1px 8px; line-height: 1.2;
-    background: none; color: var(--vscode-charts-green); font-size: 13px;
+    background: none; color: var(--vscode-charts-green); font-size: calc(13rem / 13);
     border: 1px solid transparent; border-radius: 3px;
   }
   .vendor .head .run:hover {
@@ -2918,7 +2923,7 @@ const CSS = `
      earlier they lost: .run:hover paints a green border, hovering is how a tooltip gets read, and every
      up-to-date button therefore turned green the moment anybody looked at it. Reported against
      0.20.0 within the hour. */
-  .vendor .head .upd { font-size: 12px; color: var(--vscode-descriptionForeground); }
+  .vendor .head .upd { font-size: calc(12rem / 13); color: var(--vscode-descriptionForeground); }
   .vendor .head .upd:hover { border-color: var(--vscode-descriptionForeground); background: none; }
   .vendor .head .upd.has-update { color: var(--vscode-charts-green); font-weight: 600; }
   .vendor .head .upd.has-update:hover {
@@ -2929,13 +2934,13 @@ const CSS = `
     background: var(--vscode-inputValidation-warningBackground);
     padding: 8px 10px; margin: 8px 0; border-radius: 0 3px 3px 0;
   }
-  .question .meta { opacity: .7; font-size: 11px; margin-top: 4px; }
-  .finding { font-size: 11px; opacity: .85; margin: 3px 0 0 8px; }
+  .question .meta { opacity: .7; font-size: calc(11rem / 13); margin-top: 4px; }
+  .finding { font-size: calc(11rem / 13); opacity: .85; margin: 3px 0 0 8px; }
   .verdict {
-    font-family: var(--vscode-editor-font-family); font-size: 11px; margin: 2px 0;
+    font-family: var(--vscode-editor-font-family); font-size: calc(11rem / 13); margin: 2px 0;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .usage { font-size: 11px; opacity: .7; margin: 0 0 4px; }
+  .usage { font-size: calc(11rem / 13); opacity: .7; margin: 0 0 4px; }
   /* Three days of rounds is a list of unknown length inside a sidebar section, so it scrolls in
      place rather than pushing every section below it off the bottom of the panel. */
   /* Twice what it was. A sidebar is usually far taller than 320px, so five rounds filled the list
@@ -2953,7 +2958,7 @@ const CSS = `
   /* A model id is one unbreakable 30-character token and the sidebar is narrow: without this it
      does not wrap, it overflows. Raised on the code round — splitting the status onto its own line
      fixed where the status goes, not what a long identity line does. */
-  .reviewer { font-size: 11px; opacity: .85; margin: 1px 0 1px 8px; overflow-wrap: anywhere; }
+  .reviewer { font-size: calc(11rem / 13); opacity: .85; margin: 1px 0 1px 8px; overflow-wrap: anywhere; }
   /* What a reviewer is DOING, under what it IS. Indented from the row's own 8px, so the status sits
      about five spaces in from the card edge and a long model id no longer decides where the line
      breaks. A margin rather than spaces: this is not a monospace surface. */
@@ -2970,7 +2975,7 @@ const CSS = `
   .reviewer .said .mark-running { color: var(--vscode-charts-blue); }
   .reviewer .said .mark-queued { color: var(--vscode-charts-yellow); }
   .reviewer .said .mark-failed { color: var(--vscode-charts-red); }
-  .badge { padding: 0 5px; border-radius: 8px; font-size: 10px; font-weight: 600; }
+  .badge { padding: 0 5px; border-radius: 8px; font-size: calc(10rem / 13); font-weight: 600; }
   .badge.running { background: var(--vscode-charts-green); color: var(--vscode-editor-background); }
   /* The editor's own error colour, so it reads as a problem in every theme rather than in one. */
   .badge.cannot-run {
@@ -2994,9 +2999,9 @@ const CSS = `
   .model-pairs-head { font-weight: 600; margin: 4px 0 2px; }
   .model-pair { margin: 6px 0 8px; }
   .model-pair-boxes { display: flex; gap: 6px; }
-  .model-pair-boxes label { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; font-size: 11px; opacity: .9; }
+  .model-pair-boxes label { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; font-size: calc(11rem / 13); opacity: .9; }
   .model-pair-boxes select { width: 100%; box-sizing: border-box; }
-  .group-head { font-size: 11px; font-weight: 600; opacity: .8; margin: 0 0 6px; }
+  .group-head { font-size: calc(11rem / 13); font-weight: 600; opacity: .8; margin: 0 0 6px; }
   /* A left edge rather than a filled box: it marks the role at a glance without turning the
      settings panel into four coloured slabs, and it survives a light theme unchanged. */
   .role { border: 1px solid var(--vscode-widget-border); border-left: 3px solid var(--tone-plan);
@@ -3017,18 +3022,18 @@ ${ROLE_TONE_CSS}
   .spend .head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
   .spend .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
   /* The money is the quiet half of the row: a dash where a vendor does not price its own runs. */
-  .spend .cost { font-size: 11px; opacity: .75; flex: 0 0 auto; }
-  .spend .forget { flex: 0 0 auto; padding: 0 2px; font-size: 11px; opacity: .55; }
+  .spend .cost { font-size: calc(11rem / 13); opacity: .75; flex: 0 0 auto; }
+  .spend .forget { flex: 0 0 auto; padding: 0 2px; font-size: calc(11rem / 13); opacity: .55; }
   /* A stale pasted snippet is worth noticing and not worth alarming about: the gate still
      works, the AI reading it is just being told an older story. */
   .stale {
     border-left: 3px solid var(--tone-limits); padding: 6px 8px; margin: 6px 0;
-    font-size: 11px; background: var(--vscode-textBlockQuote-background);
+    font-size: calc(11rem / 13); background: var(--vscode-textBlockQuote-background);
   }
   .spend .forget:hover { opacity: 1; color: var(--tone-keys); }
   /* The tokens are what the section is FOR, so they are read at full strength; the durations
      underneath stay a .hint, because they are context rather than the answer. */
-  .spend .figures { font-size: 11px; margin: 3px 0 0; line-height: 1.45; }
+  .spend .figures { font-size: calc(11rem / 13); margin: 3px 0 0; line-height: 1.45; }
   .bar { height: 6px; background: var(--vscode-editorWidget-background); border-radius: 3px;
          overflow: hidden; margin: 4px 0 2px; }
   .bar span { display: block; height: 100%; background: var(--vscode-button-background); }
