@@ -19,8 +19,9 @@ has the room.
 Gate commands' boxes are drawn in the theme's colours instead of white, with each command in a card of
 its own.
 
-**Active rounds is two sections.** The sidebar shows **Active gates** — the rounds running now, and
-where each plan's gate stands — and below it **Active consultations**, the consultations being had.
+**Active rounds is three sections.** The sidebar shows **Active gates** — the rounds running now —,
+**Active consultations** — the consultations being had — and **Consultation cadence**, a line per plan
+saying how many of its epics are closed and whether the consultation it owes was taken.
 
 **Review roles opens at the text size you chose.** It opened at the theme's size and caught up only when
 the size was pushed to it afterwards.

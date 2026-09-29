@@ -129,10 +129,10 @@ code --install-extension remsoftdev.connect-other-ais
 
 ![The Settings tab: one tab for each thing you set up once, with the text size and tone beside its title](assets/the-settings-tab.png)
 
-The sidebar keeps only what is happening now: the gates running, the consultations being had, your
-phrases and the bug corpus.
+The sidebar keeps only what is happening now: the gates running, the consultations being had, where each
+plan's consultation cadence stands, your phrases and the bug corpus.
 
-![The sidebar: Notifications, Active gates, Active consultations, Phrases and Bugz](assets/the-sidebar.png)
+![The sidebar: Notifications, Active gates, Active consultations, Consultation cadence, Phrases and Bugz](assets/the-sidebar.png)
 
 ![The gate: what happens when the rounds run out, and the three orders it hands back](assets/the-gate-and-its-orders.png)
 

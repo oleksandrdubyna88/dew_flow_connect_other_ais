@@ -17,12 +17,12 @@ import { tabStrip } from './tabStrip';
  */
 
 /** The regions a live message patches in place. Everything else on a page is a control. */
-export const LIVE_REGION_IDS = ['questions', 'rounds', 'consultations', 'notifications'] as const;
+export const LIVE_REGION_IDS = ['questions', 'rounds', 'consultations', 'cadence', 'notifications'] as const;
 export type LiveRegionId = (typeof LIVE_REGION_IDS)[number];
 export type Regions = Readonly<Record<LiveRegionId, string>>;
 
 /** Every region empty — what a paint key is built with, so a live change can never move the key. */
-export const BLANK_REGIONS: Regions = { questions: '', rounds: '', consultations: '', notifications: '' };
+export const BLANK_REGIONS: Regions = { questions: '', rounds: '', consultations: '', cadence: '', notifications: '' };
 
 /**
  * The webviews a section can be drawn on — the list every page-wide test iterates.
