@@ -67,6 +67,37 @@ const THEME = {
 
 const NONCE = 'render';
 
+/** Something happening, for the sidebar's picture: one round running, one consultation being had, three phrases. */
+function DEMO_SIDEBAR() {
+  const minutesAgo = (n) => new Date(Date.now() - n * 60_000).toISOString();
+  const round = {
+    stage: 'CodeReview', number: 1, verdict: '', gatingCount: 0, reviewers: '3 of 4 reviewers answered', status: 'running',
+    startedUtc: minutesAgo(4), completedUtc: '', subject: 'SCOPE — the sidebar keeps what is happening now',
+    reviewerStates: [
+      { provider: 'codex', role: 'Architecture', status: 'done', findings: 2, note: '', seconds: 71 },
+      { provider: 'codex', role: 'Conventions', status: 'done', findings: 0, note: '', seconds: 64 },
+      { provider: 'antigravity', role: 'SecurityReliability', status: 'done', findings: 1, note: '', seconds: 88 },
+      { provider: 'antigravity', role: 'UxDxPerformance', status: 'running', findings: 0, note: '' },
+    ],
+  };
+  const consultation = {
+    id: 'c1', callerKind: 'claude', repoPath: 'D:/work/app', branch: 'feat/settings-page', vendor: 'codex', model: 'gpt-6-luna',
+    status: 'asking', startedUtc: minutesAgo(2), updatedUtc: minutesAgo(1), maxTurns: 3, alert: '', reason: 'why the key never moves',
+    kind: 'stuck', plan: '', epics: '',
+    turns: [{ utc: minutesAgo(2), problem: 'why the key never moves', advice: '', seconds: 40, tokensIn: 12000, tokensOut: 800, costUsd: null }],
+  };
+
+  return {
+    sessions: [{ state: { sessionId: 's1', repoPath: 'D:/work/app', branch: 'feat/settings-page', stage: 'CodeReview', awaitingResolve: false }, rounds: [round] }],
+    consultations: [consultation],
+    phrases: [
+      { id: 'p1', name: 'Explain', text: 'Explain, and what do you think about it?' },
+      { id: 'p2', name: 'Your thoughts?', text: 'What would you advise here?' },
+      { id: 'p3', name: 'Translate', text: 'Translate, as close to the meaning as you can.' },
+    ],
+  };
+}
+
 /** The page's html, with the theme and a stubbed editor API in front of its own script. */
 function dressed(html) {
   const tokens = Object.entries(THEME).map(([name, value]) => `--vscode-${name}: ${value};`).join(' ');
@@ -83,7 +114,7 @@ function page(name, size) {
   switch (which) {
     case 'sidebar': {
       const open = ['notifications', 'rounds', 'consultations', 'phrases', 'bugz'];
-      return from('panelView.js').panelHtml({ ...panelState(''), ...text, openSections: open }, NONCE);
+      return from('panelView.js').panelHtml({ ...panelState(''), ...text, ...DEMO_SIDEBAR(), openSections: open }, NONCE);
     }
     case 'settings':
       return from('panelView.js').settingsHtml({ ...panelState(''), ...text }, NONCE, tab ?? 'reviewers');

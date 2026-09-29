@@ -488,7 +488,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'This page: search, language, and text size',
       whatItIs:
-        'The yellow ? in the panel title bar opens this help. The index lists every article with its first line; the box at the top searches all of them; the select changes language; the ± buttons change the text size, and the pair beside them the text tone — brighter, or dimmer and warmer.',
+        'The yellow ? in the panel title bar opens this help. The index lists every article with its first line; the box at the top searches all of them; the select changes language; the ± buttons change the text size, and the pair beside them the text tone — brighter, or dimmer and warmer. Every ConnectOtherAIs page carries the same two pairs beside its title, and a press on any of them changes every page that is open.',
       why:
         'A Settings tab with dozens of controls needs somewhere to say at length what each of them does: the small ? beside a control holds one sentence, and these pages hold the reasons behind it. Text size is here because eyesight is not a preference to be argued with — five steps either way is about ×1.6 up or down.',
       setup:
@@ -511,7 +511,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       setup:
         "Nothing to set up. **ConnectOtherAIs: Settings** in the command palette opens the same tab. There is one per window: pressing the gear again brings it back rather than opening a second, and it opens on the tab you last had in this window.",
       usage:
-        "Click a tab, or use the keyboard: Left and Right move along the strip and wrap at its ends, Home and End go to the first and the last, and Tab leaves the strip. Every change is saved as you make it, as it was in the sidebar, and a new answer — a CLI version, a model list, a price — is shown as soon as it arrives. Ctrl+F searches the tab you are on.\n\n**A small ? beside a setting says what it means** when you hover it: what the setting does and why it exists, in a sentence you can act on. These pages say the same things at length; the ? is for the moment you are looking at the control.",
+        "Click a tab, or use the keyboard: Left and Right move along the strip and wrap at its ends, Home and End go to the first and the last, and Tab leaves the strip. Every change is saved as you make it, as it was in the sidebar, and a new answer — a CLI version, a model list, a price — is shown as soon as it arrives. Ctrl+F searches the tab you are on. The two ± pairs beside the title change the text size and its tone here as on every other page, and the MCP server tab is drawn at twice the size, since it is read more than it is set.\n\n**A small ? beside a setting says what it means** when you hover it: what the setting does and why it exists, in a sentence you can act on. These pages say the same things at length; the ? is for the moment you are looking at the control.",
       whatCanGoWrong:
         "The gear shows while the panel is hovered or focused, like every title-bar button in VS Code; the command palette entry is always there. After a window reload the Settings tab does not come back by itself — press the gear again, and it opens on its first tab, because which tab you had is remembered only for as long as the window lives. A consultation that is running is in the sidebar under **Active consultations**, not in the Consultant tab: the sidebar is where what is happening now is shown, and the Consultant tab is where you decide who is asked.",
     },

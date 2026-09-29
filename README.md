@@ -127,6 +127,13 @@ code --install-extension remsoftdev.connect-other-ais
 4. **Pick your reviewers** in the Settings tab — the gear in the panel's title bar — and set what happens
    when the rounds run out.
 
+![The Settings tab: one tab for each thing you set up once, with the text size and tone beside its title](assets/the-settings-tab.png)
+
+The sidebar keeps only what is happening now: the gates running, the consultations being had, your
+phrases and the bug corpus.
+
+![The sidebar: Notifications, Active gates, Active consultations, Phrases and Bugz](assets/the-sidebar.png)
+
 ![The gate: what happens when the rounds run out, and the three orders it hands back](assets/the-gate-and-its-orders.png)
 
 Everything has a `?` beside it, and the help is a page of its own — in English, Russian, Ukrainian,

@@ -4188,6 +4188,9 @@ flowchart LR
 | `settingsPage.ts` | pure: what the Settings tab adds to the panel's shared document — its CSS (a wrapping strip, `[hidden]` that wins, a readable width), its script (open the held tab, switch on a press or `showTab`, tell the host), `nextSettingsTab` and the loading page |
 | `tabKeys.ts` | pure: the keyboard half of a tab strip as a page-script fragment — Left/Right wrap, Home/End, focus moved and the tab CLICKED, so the page's own click handler stays the one place a tab is selected. Step 1 of `PLAN_the_tabs_announce_themselves.md`; the Settings tab is its first consumer |
 | `surfaceSlot.ts` | pure: one webview the panel paints — its held view, its painted key, its edit hold — and `anyHeld`; the provider paints a list of these |
+| `textControls.ts` | pure: the text-size and text-tone controls as ONE unit — their markup, CSS, script (with the page's own handle name), `textControlFrom` (one step of one control, clamped), `isTextControl`, `textOf` |
+| `textControlsHost.ts` | the host half: `pushTextControlsTo` (both settings, one disposable), `applyTextControl`, and `appliedTextControl` for the hosts whose pages post raw messages |
+| `formPageStyle.ts` | pure: the form pages' look, written once — the 900px column, the header and headings, a card, the head row, the themed fields — taken by Chat presets, Phrases, Gate commands and (the column only) Review roles |
 | `panelSurface.ts` | pure: how a list of sections becomes a page body and its paint KEY — the body with every live region blank and every section closed; which surface a section is drawn on (`SURFACE_IDS`) |
 | `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |
 | `vendorTerminal.ts` | pure: which CLI a vendor is, its own usage command (`/usage`, `/status`, `/stats`), and the provider overrides a custom endpoint needs |
@@ -4436,6 +4439,50 @@ BESIDE it. That was the whole shape of the step: the store is filled for a versi
 reads it, so the cut-over that empties the memento runs against a store that has already been correct
 for a while rather than one created in the same commit. It is the only step in this feature that can
 destroy a person's history, and it is the one that follows.
+
+### Every page reads alike (2026-09-29)
+
+Asked by the operator after the Settings tab shipped (`todo/PLAN_every_page_reads_alike.md`).
+
+**The two text controls are one unit, on every page.** Of the eleven pages, three carried the size and
+the tone, three the size only, and five — the Settings tab among them — neither, because every page wired
+the controls' twelve pieces by hand. `textControls.ts` (page) and `textControlsHost.ts` (host) are the
+unit now; the eight pages that lacked a control take it, and Chat, Help and Review bugs keep the wiring
+they already had. Every render path carries both values, because a host PUSHES a setting once and the
+four pages that redraw (Gate commands, Notifications, Review rounds, Who holds a key) would otherwise lose
+it on their next draw. The Settings tab draws the controls in a header OUTSIDE its paint key, so a press
+never reloads it. `everyPageHasBothTextControls.test.ts` RUNS each page's own script in the shared shim.
+
+```mermaid
+flowchart LR
+  press["a press on a page<br/>(zoom / tone, ±1)"] --> parse["textControlFrom<br/>one clamped step"]
+  parse --> apply["applyTextControl<br/>coai.uiScale / coai.textTone"]
+  apply --> config[("the setting<br/>(global, synced)")]
+  config --> push["pushTextControlsTo<br/>every open page"]
+  push --> page["the page's script<br/>body size and tone; the Settings tab its root too"]
+  config -. the next draw .-> html["each builder draws<br/>in the current values"]
+```
+
+**The Settings tab's small print is measured from the root.** The shared stylesheet sized it in pixels
+(22 font sizes), which a size control cannot reach; it is `calc(<n>rem / 13)` now, with
+`html { font-size: var(--vscode-font-size) }` in the sidebar — so at the default 13px every line is the
+size it was — and the control's value on the Settings tab. `rem`, not `em`, because `em` compounds
+through nested sizes. The MCP server pane is `zoom: 2`: twice the size, as asked, and `zoom` reaches the
+`rem`-sized notes where a parent's `font-size` would not.
+
+**Gate commands and Review roles sit in Chat presets' column.** `formPageStyle.ts` is that page's look,
+written once; Gate commands takes it whole (it had the browser's white fields and no column), Review roles
+the 900px column. A live defect went on the way: Review roles wrote its size loose at the top of its
+stylesheet, which a browser reads with the next rule as one invalid selector — the page opened at the
+theme's size with an unstyled control.
+
+**The sidebar's Active rounds is two sections.** *Active gates* (id `rounds`: the running rounds and each
+plan's cadence line) and *Active consultations* (id `consultations`, in the Consultant section's hue).
+Open sections are held in memory by id, so the new one needed no migration.
+
+**How a page is looked at.** `scripts/render-page.mjs` renders a page's real html and its own script with
+demo state and a Dark Modern token set in headless Chromium (`browserLayout.mjs`'s `screenshot`); the
+README's pictures of the sidebar and the Settings tab are made with it.
 
 ### Where it lives, and what a conversation is on disk
 
