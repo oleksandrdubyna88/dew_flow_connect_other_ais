@@ -1,5 +1,39 @@
 # Changelog
 
+## Extension 0.59.0 · Server 0.40.3 — 2026-09-29
+
+**Settings have a tab of their own.** The sidebar now shows only what is happening now: a question waiting
+on you, **Notifications**, **Active rounds** (the rounds and the consultations running this minute),
+**Phrases** and **Bugz**. Everything you set up once is in a **Settings** editor tab. Open it with the gear
+beside the help button in the panel's title bar, or with **ConnectOtherAIs: Settings** in the command
+palette. It has one tab each
+for Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor keys, Team servers,
+This side and MCP server, with exactly the controls those sections had, saved exactly where they were saved
+before. There is one Settings tab per window, so pressing the gear again brings it back, and until the
+window is reloaded it reopens on the tab you last had. The tabs answer the keyboard: Left and Right move along the strip and Home and End go
+to its ends. Like every title-bar button in VS Code, the gear shows while the panel is hovered or focused.
+
+**An answer the panel was waiting for now appears when it arrives.** The server's *cannot review* verdict,
+a CLI update, a model list or a price that came in after the panel was first drawn stayed off the screen
+until something unrelated redrew it. It is shown as soon as it lands.
+
+**Opening a section no longer reloads the sidebar a few seconds later.** That reload used to drop the
+scroll position and close any dropdown you had open.
+
+**A refused setting on an API reviewer's card no longer freezes the panel.** After one, every later change
+in the panel waited until the window was reloaded.
+
+**Two smaller fixes.** The sidebar could come back blank after VS Code re-created it, and a late clean-up
+of a replaced view could lose the caret in the box you were typing in.
+
+**The help is current again, in all five languages.** Every article was checked against what the extension
+shows. There are four new ones (Team servers, the rounds log, the review bugs page and who holds a key) and
+one for the Settings tab, and every sentence that sent you to a section that moved now names its tab.
+
+**coai-mcp's messages name the place they send you.** They say `ConnectOtherAIs > Team servers`,
+`> Consultant` or `> MCP server` instead of "the panel's … section", which is true of this extension and of
+an older one. The old wording "the Server section" had been wrong since that section became MCP server.
+
 ## Extension 0.58.0 · Server 0.40.2 — 2026-09-28
 
 *Server 0.40.0 and 0.40.1 were tagged and never shipped, and 0.40.2 carries exactly the same code. 0.40.0's
