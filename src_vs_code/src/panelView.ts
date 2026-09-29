@@ -13,7 +13,8 @@ import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendR
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
 import { liveRegion, type SectionSpec, sectionsOn, settingsBody, sidebarBody, sidebarKey } from './panelSurface';
-import { SETTINGS_CSS, settingsScript } from './settingsPage';
+import { SETTINGS_CSS, settingsHead, settingsScript, settingsTextCss } from './settingsPage';
+import { textOf } from './textControls';
 import { executableFor } from './vendorTerminal';
 import { LOOKING, LOOKING_CSS } from './lookingSpinner';
 import type { Phrase } from './phrases';
@@ -170,6 +171,9 @@ export interface PanelState {
   readonly sessions: readonly SessionFile[];
   /** Which collapsible sections are open. Empty falls back to {@link OPEN_BY_DEFAULT}. */
   readonly openSections: readonly string[];
+  /** The Settings tab's text size and tone; absent is the theme's own, as on the help page. */
+  readonly uiScale?: number;
+  readonly textTone?: number;
   /**
    * Which ROUNDS are expanded, by {@link roundKey}.
    *
@@ -3179,7 +3183,13 @@ export function settingsSections(): readonly SectionSpec<PanelState>[] {
  * @param heldTab the tab the host holds; it reaches the page's script, never the markup (D6)
  */
 export function settingsHtml(state: PanelState, nonce: string, heldTab: string): string {
-  return pageDocument(settingsBody(settingsSections(), state), nonce, state.focus, { css: SETTINGS_CSS, script: settingsScript(heldTab) });
+  const { size, tone } = textOf(state);
+  // The header is drawn OUTSIDE settingsBody, which is the paint key: the two values it shows move by the
+  // host's push, never by a repaint.
+  return pageDocument(settingsHead(size, tone) + settingsBody(settingsSections(), state), nonce, state.focus, {
+    css: SETTINGS_CSS + settingsTextCss(size, tone),
+    script: settingsScript(heldTab),
+  });
 }
 
 /** What the Settings tab paints on — its body as drawn, which holds no live region and no held tab. */

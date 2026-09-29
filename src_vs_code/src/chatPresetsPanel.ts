@@ -16,7 +16,10 @@ import {
   unreadableModels,
 } from './chatPresets';
 import { PresetCommand, chatPresetsHtml, editRepaints, editedRows, presetEdit } from './chatPresetsPage';
-import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
+import { isTextControl } from './textControls';
+import { applyTextControl, pushTextControlsTo } from './textControlsHost';
+import { currentTextTone } from './textToneHost';
+import { currentUiScale } from './uiScaleHost';
 import { CHAT_RUNTIMES } from './cliChatLaunch';
 import { allowedModelsFor, modelsFor } from './models';
 import { teamServersFrom } from './teamServers';
@@ -109,8 +112,8 @@ function promptRowsToWrite(): Record<string, unknown>[] {
 }
 
 async function apply(command: PresetCommand): Promise<boolean> {
-  if (command.kind === 'zoom') {
-    await applyZoomDelta(command.delta);
+  if (isTextControl(command)) {
+    await applyTextControl(command);
 
     return false;
   }
@@ -169,6 +172,7 @@ function render(): void {
       providers: providers(),
       unreadable: unreadableModels(config().get(MODELS_KEY)),
       uiScale: currentUiScale(),
+      textTone: currentTextTone(),
     },
     crypto.randomBytes(16).toString('hex'),
   );
@@ -216,7 +220,7 @@ function openPanel(): void {
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [], enableFindWidget: true },
   );
-  const scale = pushUiScaleTo(panel.webview);
+  const scale = pushTextControlsTo(panel.webview);
   panel.webview.onDidReceiveMessage((message: unknown) => {
     void apply(presetEdit(message)).then((again) => {
       if (again) {

@@ -244,6 +244,10 @@ function shimFor(html: string): {
       if (selector === '[data-section]:not([hidden]) th') {
         return heads;
       }
+      // The text controls: known, and pressed by the page census (everyPageHasBothTextControls), not here.
+      if (selector === 'button[data-zoom]' || selector === 'button[data-tone]') {
+        return [];
+      }
       throw new Error(`the shim does not understand querySelectorAll(${selector})`);
     },
   };

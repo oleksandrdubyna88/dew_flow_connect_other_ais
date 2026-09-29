@@ -5,7 +5,10 @@ import { rowsAfter, rowsOf, viewOf } from './phrasesEdit';
 import { phraseEdit, phraseRepaints, phrasesHtml, type PhraseCommand } from './phrasesPage';
 import { settledWrites } from './settledWrites';
 import { refusalFor, reportRefusal, saveSetting } from './sideConfig';
-import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
+import { isTextControl } from './textControls';
+import { applyTextControl, pushTextControlsTo } from './textControlsHost';
+import { currentTextTone } from './textToneHost';
+import { currentUiScale } from './uiScaleHost';
 
 /**
  * The phrases tab: one webview, reused while open.
@@ -58,8 +61,8 @@ function stored(): ReturnType<typeof rowsOf> {
 }
 
 async function apply(command: PhraseCommand): Promise<boolean> {
-  if (command.kind === 'zoom') {
-    await applyZoomDelta(command.delta);
+  if (isTextControl(command)) {
+    await applyTextControl(command);
 
     return false;
   }
@@ -81,7 +84,7 @@ function render(): void {
     return;
   }
   panel.webview.html = phrasesHtml(
-    { rows: viewOf(stored()), uiScale: currentUiScale() },
+    { rows: viewOf(stored()), uiScale: currentUiScale(), textTone: currentTextTone() },
     randomBytes(16).toString('hex'),
   );
 }
@@ -170,7 +173,7 @@ export function openPhrases(extension: vscode.ExtensionContext): void {
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [], enableFindWidget: true },
   );
-  const scale = pushUiScaleTo(panel.webview);
+  const scale = pushTextControlsTo(panel.webview);
   panel.webview.onDidReceiveMessage((message: unknown) => { writes.queue(phraseEdit(message)); });
   panel.onDidDispose(() => {
     scale.dispose();

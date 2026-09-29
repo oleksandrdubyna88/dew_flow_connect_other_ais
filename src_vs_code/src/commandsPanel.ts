@@ -11,6 +11,9 @@ import { serverOnThisSide } from './installer';
 import { notify, notifyAndAsk } from './notify';
 import { promptFile, promptsDir } from './rolesPrompts';
 import { settledWrites } from './settledWrites';
+import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
+import { currentTextTone } from './textToneHost';
+import { currentUiScale } from './uiScaleHost';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 
 /**
@@ -57,8 +60,16 @@ export function openCommands(extension: vscode.ExtensionContext): void {
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [], enableFindWidget: true },
   );
-  panel.webview.onDidReceiveMessage((message: unknown) => { writes.queue(commandEdit(message)); });
+  const text = pushTextControlsTo(panel.webview);
+  panel.webview.onDidReceiveMessage((message: unknown) => {
+    // A press on a text control is a setting of the person's, not an edit of the commands: it never
+    // enters the write queue.
+    if (!appliedTextControl(message, 'gate commands page')) {
+      writes.queue(commandEdit(message));
+    }
+  });
   panel.onDidDispose(() => {
+    text.dispose();
     panel = undefined;
     // Whatever is still settling is somebody's typing; closing the tab must not lose it.
     void writes.flush();
@@ -81,7 +92,7 @@ async function render(): Promise<void> {
     return;
   }
   const html = commandsHtml(
-    { rows: rows(), texts: await texts(), serverVersion, perSide: config().get('perSideSettings') === true },
+    { rows: rows(), texts: await texts(), serverVersion, perSide: config().get('perSideSettings') === true, uiScale: currentUiScale(), textTone: currentTextTone() },
     randomBytes(16).toString('hex'),
   );
   // Re-checked: `await texts()` is a suspension point, and the tab can close across it.

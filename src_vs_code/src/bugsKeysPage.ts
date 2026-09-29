@@ -1,5 +1,6 @@
 import { KeyRow } from './bugsAdminApi';
 import { Pending } from './bugsAdminKey';
+import { PLAIN_TEXT, TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle, type TextSettings } from './textControls';
 
 /**
  * The Users tab: every contributor key, what it has sent, and the one button that ends it.
@@ -157,7 +158,7 @@ export function safe(text: string): string {
 }
 
 /** The whole page. */
-export function usersPageHtml(users: Users, nonce: string): string {
+export function usersPageHtml(users: Users, nonce: string, text: TextSettings = PLAIN_TEXT): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -167,13 +168,16 @@ export function usersPageHtml(users: Users, nonce: string): string {
 <style>
   *, *::before, *::after { box-sizing: border-box; }
   :root { color-scheme: light dark; }
+  /* Sizes in em of the 13px base the pixels were written against, so the size control reaches every
+     line; none of them sits inside another sized element, so none compounds. */
   body {
-    font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);
+    font-family: var(--vscode-font-family);
     color: var(--vscode-foreground); background: var(--vscode-editor-background);
-    margin: 0; padding: 12px 16px;
+    margin: 0; padding: 12px 16px; ${textControlsStyle(text.size, text.tone)}
   }
-  h1 { font-size: 15px; margin: 0 0 4px; }
-  .hint { opacity: .7; font-size: 12px; margin: 0 0 12px; }
+  header { display: flex; align-items: baseline; gap: 12px; margin: 0 0 4px; }
+  h1 { font-size: calc(15em / 13); margin: 0; }
+  .hint { opacity: .7; font-size: calc(12em / 13); margin: 0 0 12px; }
   .bar { display: flex; gap: 8px; align-items: center; margin: 0 0 10px; flex-wrap: wrap; }
   button {
     background: var(--vscode-button-background); color: var(--vscode-button-foreground);
@@ -184,12 +188,12 @@ export function usersPageHtml(users: Users, nonce: string): string {
   button.quiet { background: none; color: var(--vscode-textLink-foreground); text-decoration: underline; }
   button.danger { background: var(--vscode-inputValidation-errorBorder); }
   table { width: 100%; border-collapse: collapse; }
-  th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .06em;
+  th { text-align: left; font-size: calc(11em / 13); text-transform: uppercase; letter-spacing: .06em;
        opacity: .7; padding: 4px 8px; border-bottom: 1px solid var(--vscode-panel-border); }
   td { vertical-align: top; padding: 8px; border-bottom: 1px solid var(--vscode-panel-border); }
-  td.id { font-family: var(--vscode-editor-font-family); font-size: 11px; opacity: .8; }
+  td.id { font-family: var(--vscode-editor-font-family); font-size: calc(11em / 13); opacity: .8; }
   .note { font-weight: 600; }
-  .state { font-size: 11px; opacity: .6; }
+  .state { font-size: calc(11em / 13); opacity: .6; }
   .revoked { opacity: .55; }
   .said { padding: 8px 10px; margin: 0 0 10px; border-left: 2px solid var(--vscode-textLink-foreground); }
   .trouble { border-left-color: var(--vscode-inputValidation-errorBorder); }
@@ -199,14 +203,15 @@ export function usersPageHtml(users: Users, nonce: string): string {
   }
   .pending code {
     display: block; margin: 6px 0; padding: 6px 8px; word-break: break-all;
-    font-family: var(--vscode-editor-font-family); font-size: 11px;
+    font-family: var(--vscode-editor-font-family); font-size: calc(11em / 13);
     background: var(--vscode-textCodeBlock-background);
   }
   .empty { opacity: .7; padding: 24px 0; }
+${TEXT_CONTROLS_CSS}
 </style>
 </head>
 <body>
-<h1>Who holds a key</h1>
+<header><h1>Who holds a key</h1>${textControlsHtml(text.size, text.tone)}</header>
 <p class="hint">
   A key is shown ONCE, when it is issued, and cannot be read back afterwards &mdash; this list holds
   no key and no hash. Administrators are not listed here at all: their credentials come from the
@@ -219,6 +224,7 @@ ${face(users.view, users.busy === true)}
 <script nonce="${nonce}">
 (function () {
   var vscode = acquireVsCodeApi();
+  ${textControlsScript()}
 
   function post(type, extra) {
     var message = { type: type };

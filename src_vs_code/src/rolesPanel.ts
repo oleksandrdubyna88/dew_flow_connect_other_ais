@@ -13,7 +13,10 @@ import { settledWrites } from './settledWrites';
 import { serverOnThisSide } from './installer';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 import { roleDeletions, whenDeletionsChange } from './roleDeletionsHost';
-import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
+import { isTextControl } from './textControls';
+import { applyTextControl, pushTextControlsTo } from './textControlsHost';
+import { currentTextTone } from './textToneHost';
+import { currentUiScale } from './uiScaleHost';
 
 /**
  * The tab that edits review roles — a thin host over pure modules, the arrangement this extension
@@ -136,7 +139,7 @@ export function openRoles(extension: vscode.ExtensionContext): void {
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [], enableFindWidget: true },
   );
-  const scale = pushUiScaleTo(panel.webview);
+  const scale = pushTextControlsTo(panel.webview);
   // A deletion that becomes stranded while this page is OPEN has to appear on it. Nothing else
   // redraws in that sequence: the failure is recorded in a file, and the stranding boundary is
   // ten seconds after that. `inMs` says when to come back, so the page waits rather than polls.
@@ -232,6 +235,7 @@ async function render(): Promise<void> {
       perSide: config().get('perSideSettings') === true,
       tab,
       uiScale: currentUiScale(),
+      textTone: currentTextTone(),
       stranded: await roleDeletions(side()).stranded(),
     },
     nonce(),
@@ -307,8 +311,8 @@ async function apply(command: RolesCommand): Promise<boolean> {
   if (command.kind === 'ignore') {
     return false;
   }
-  if (command.kind === 'zoom') {
-    await applyZoomDelta(command.delta);
+  if (isTextControl(command)) {
+    await applyTextControl(command);
 
     return false;
   }

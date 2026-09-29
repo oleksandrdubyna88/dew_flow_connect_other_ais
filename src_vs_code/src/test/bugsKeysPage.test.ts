@@ -102,8 +102,11 @@ function run(users: Users): Page {
   };
 
    
-  const body = new Function('acquireVsCodeApi', 'document', pageScript(html));
-  body(() => ({ postMessage: (m: Posted) => posted.push(m) }), document);
+  // The text controls listen for the host's pushes on window; delivering those is the page census's job
+  // (everyPageHasBothTextControls), so here a listener is accepted and never fired.
+  const window = { addEventListener: (): void => undefined };
+  const body = new Function('acquireVsCodeApi', 'document', 'window', pageScript(html));
+  body(() => ({ postMessage: (m: Posted) => posted.push(m) }), document, window);
 
   assert.ok(onClick !== undefined, 'the page never attached a click listener');
 
