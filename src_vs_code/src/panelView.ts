@@ -387,7 +387,7 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // order the operator named them (`research/PLAN_settings_page.md`, D1).
   { id: 'notifications', title: 'Notifications', surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
   // The gates and the consultations each in a section of its own, where Active rounds was — the operator's
-  // ask of 2026-09-29 (`todo/PLAN_every_page_reads_alike.md`, S4). The gates keep the id `rounds`, and the
+  // ask of 2026-09-29 (`research/PLAN_every_page_reads_alike.md`, S4). The gates keep the id `rounds`, and the
   // cadence lines stay with them: they say where each plan's gate stands. A consultation being had is present
   // tense exactly as a round is, so it stays in the sidebar (`research/PLAN_settings_page.md`, D2).
   { id: 'rounds', title: 'Active gates', surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
@@ -2719,7 +2719,7 @@ const CSS = `
   /* The ROOT carries the text size, and the small print below is measured from it in rem — 13 of them
      to the old pixel, so at the theme's default 13px every line is exactly the size it was. The Settings
      tab roots it in its size control instead, which is how the notes follow that control: rem is measured
-     from the root alone, so no nested size compounds (todo/PLAN_every_page_reads_alike.md, D5). */
+     from the root alone, so no nested size compounds (research/PLAN_every_page_reads_alike.md, D5). */
   html { font-size: var(--vscode-font-size); }
   body {
     font-family: var(--vscode-font-family); font-size: var(--vscode-font-size);

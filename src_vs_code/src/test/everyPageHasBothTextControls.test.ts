@@ -16,7 +16,7 @@ import { Node, runPageHtml, type Page } from './rolesPageHarness';
 
 /**
  * Every ConnectOtherAIs page carries BOTH text controls — the size and the tone — and RUNS them: a press
- * posts, and what the host pushes lands on the page (`todo/PLAN_every_page_reads_alike.md`, S1).
+ * posts, and what the host pushes lands on the page (`research/PLAN_every_page_reads_alike.md`, S1).
  *
  * <p>Asked for by the operator on 2026-09-29: "we have them; you forgot to apply them". Three pages had
  * both, three had the size only, and five — the Settings tab among them — had neither, and nothing

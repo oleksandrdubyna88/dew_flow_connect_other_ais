@@ -204,7 +204,7 @@ test('what the three are painted with is the one primary rule, and nothing later
     'button:hover:not(:disabled)', 'button.secondary:hover:not(:disabled)',
     'button:disabled, button.secondary:disabled',
     // The text controls' own two: a min-width and a padding, no colour, and they match only the buttons
-    // inside the size and tone controls (todo/PLAN_every_page_reads_alike.md).
+    // inside the size and tone controls (research/PLAN_every_page_reads_alike.md).
     '.zoomCtl button', '.toneCtl button',
   ]);
   const selectors = [...css.matchAll(/(?:^|\n)\s*([^\s{][^{\r\n]*?)\s*\{/g)].map((m) => m[1]!.trim());

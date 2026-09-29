@@ -7,7 +7,7 @@ import { stylesheet } from './cssRules';
 /**
  * The Review roles page draws in its own text size from the first paint, and styles its size control.
  *
- * <p>Found while planning `todo/PLAN_every_page_reads_alike.md`: the page wrote its size — a bare
+ * <p>Found while planning `research/PLAN_every_page_reads_alike.md`: the page wrote its size — a bare
  * `font-size: 13px;` — at the top level of its stylesheet, outside any rule. A browser reads that and the
  * rule after it as ONE invalid selector and drops both, so the page opened at the theme's size with an
  * unstyled control, and only the host's later push corrected the size. Read through the parsed sheet,

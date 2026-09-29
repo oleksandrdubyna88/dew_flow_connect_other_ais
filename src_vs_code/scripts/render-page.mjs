@@ -6,7 +6,7 @@
  * <p>Why: the page tests run each page's script in a DOM shim, and a shim has no layout. A column that runs
  * to the window's edge, a note that did not grow, two buttons drawn as bars — only a browser shows them. It
  * is also how the README's screenshots are made, since no running editor can be captured from here
- * (`todo/PLAN_every_page_reads_alike.md`, D7). Not part of `npm test`: CI has no browser.</p>
+ * (`research/PLAN_every_page_reads_alike.md`, D7). Not part of `npm test`: CI has no browser.</p>
  *
  * <p>The page's styles read VS Code's theme variables, which exist only inside the editor, so a Dark
  * Modern token set is supplied; `acquireVsCodeApi` is stubbed so the page's own script runs (the Settings

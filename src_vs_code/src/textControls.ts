@@ -6,7 +6,7 @@ import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl'
  *
  * <p><b>Why it exists.</b> The two controls shipped as four page pieces and two host pieces each, and every
  * page wired all twelve by hand. Three pages got both; three got the size only; five got neither, the
- * Settings tab among them (`todo/PLAN_every_page_reads_alike.md`). A page now takes this unit and cannot
+ * Settings tab among them (`research/PLAN_every_page_reads_alike.md`). A page now takes this unit and cannot
  * take half of it. The pieces it composes are unchanged, so the three pages that were already complete
  * keep their own wiring and render the same controls.</p>
  */

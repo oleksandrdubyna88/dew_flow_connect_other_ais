@@ -14,7 +14,7 @@ import { stylesheet } from './cssRules';
 import { panelState } from './panelPageHarness';
 
 /**
- * What the code review beside the gate found the first cut of `todo/PLAN_every_page_reads_alike.md` still
+ * What the code review beside the gate found the first cut of `research/PLAN_every_page_reads_alike.md` still
  * missing: parsers nobody asked about the tone, pages that pinned the size on a variant with no script,
  * boxes that did not grow, and hosts that sent a press through their own write queue.
  */

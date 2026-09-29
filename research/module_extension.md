@@ -4442,7 +4442,7 @@ destroy a person's history, and it is the one that follows.
 
 ### Every page reads alike (2026-09-29)
 
-Asked by the operator after the Settings tab shipped (`todo/PLAN_every_page_reads_alike.md`).
+Asked by the operator after the Settings tab shipped (`research/PLAN_every_page_reads_alike.md`).
 
 **The two text controls are one unit, on every page.** Of the eleven pages, three carried the size and
 the tone, three the size only, and five — the Settings tab among them — neither, because every page wired

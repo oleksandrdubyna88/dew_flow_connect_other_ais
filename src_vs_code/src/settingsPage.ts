@@ -42,7 +42,7 @@ ${TEXT_CONTROLS_CSS}
 /**
  * The Settings tab's size and tone, for the page's stylesheet — the ROOT as well as the body, because the
  * shared sheet sizes its small print in `rem`, which is measured from the root alone
- * (`todo/PLAN_every_page_reads_alike.md`, D5). In the stylesheet rather than the markup, so neither value
+ * (`research/PLAN_every_page_reads_alike.md`, D5). In the stylesheet rather than the markup, so neither value
  * is in the paint key and a press never reloads the tab.
  */
 export function settingsTextCss(size: number, tone: number): string {

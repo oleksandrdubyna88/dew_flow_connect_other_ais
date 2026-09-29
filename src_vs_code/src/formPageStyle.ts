@@ -6,7 +6,7 @@ import { TEXT_CONTROLS_CSS, textControlsStyle } from './textControls';
  * <p>It was Chat presets' own stylesheet, and Phrases carried a near copy of it. The operator asked on
  * 2026-09-29 for Review roles to sit in the same column and for Gate commands to look the same, and a third
  * and fourth copy is the drift `reuse-first.md` names: Gate commands was already the page that had drifted,
- * with the browser's white fields and no column at all (`todo/PLAN_every_page_reads_alike.md`, S3). Each
+ * with the browser's white fields and no column at all (`research/PLAN_every_page_reads_alike.md`, S3). Each
  * piece is named so a page takes what it needs and keeps its own rules after them.</p>
  */
 

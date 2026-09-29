@@ -18,7 +18,7 @@ import { Node, runPageHtml } from './rolesPageHarness';
 
 /**
  * The shared text-controls unit, and what the pages that took it must keep
- * (`todo/PLAN_every_page_reads_alike.md`, S1). The census itself is `everyPageHasBothTextControls.test.ts`.
+ * (`research/PLAN_every_page_reads_alike.md`, S1). The census itself is `everyPageHasBothTextControls.test.ts`.
  */
 
 test('a press is read as one step of one control, and anything else is not a press', () => {

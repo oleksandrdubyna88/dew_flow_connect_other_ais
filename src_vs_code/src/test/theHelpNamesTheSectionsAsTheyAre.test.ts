@@ -5,7 +5,7 @@ import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 
 /**
  * The help calls the sidebar's sections what they are called now, in every language
- * (`todo/PLAN_every_page_reads_alike.md`, S4): **Active rounds** became **Active gates** and **Active
+ * (`research/PLAN_every_page_reads_alike.md`, S4): **Active rounds** became **Active gates** and **Active
  * consultations** on 2026-09-29. A test that only forbade the old name would pass on a translation that
  * simply deleted the sentences, so each language must also NAME both new sections — in English, as every
  * UI name is in every translation here.

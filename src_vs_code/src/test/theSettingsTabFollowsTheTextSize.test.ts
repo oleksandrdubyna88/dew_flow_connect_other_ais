@@ -7,7 +7,7 @@ import { panelState } from './panelPageHarness';
 
 /**
  * The Settings tab's text follows its size control — every line of it — and its MCP server tab is drawn
- * twice as large (`todo/PLAN_every_page_reads_alike.md`, S2).
+ * twice as large (`research/PLAN_every_page_reads_alike.md`, S2).
  *
  * <p>The tab is drawn from the sidebar's stylesheet, and that sheet sized its small print in PIXELS: 11px
  * notes, 10px badges. A size control scales the root and what is measured from it; it cannot reach a pixel,
