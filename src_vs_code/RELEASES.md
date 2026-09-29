@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.59.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.58.0...extension-v0.59.0) (2026-09-29)
+
+
+### Features
+
+* **extension:** the gear opens a Settings tab; the sidebar keeps what is happening now (S3) ([57b6889](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/57b6889e469387bd3e404834157cff5c115e4bc3))
+
+
+### Bug Fixes
+
+* **extension:** the code round's fixes; the Settings-page plan is promoted ([e91b207](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e91b2078d8863e3d9592cc60d8fe41dbbe5d31d8))
+* **extension:** the panel's paint key is what it draws, so a late probe reaches the screen (S1) ([5e5c55d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/5e5c55dafeec6dfed18ab158026fda7aab9515ce))
+
+
+### Documentation
+
+* **changelog:** Extension 0.59.0 · Server 0.40.3 ([a4def27](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a4def2724a85a3b2bb07cea12411a800380ec1b6))
+
+
+### Miscellaneous Chores
+
+* **mcp:** mcp-v0.40.0 never shipped, 0.40.1 carries the same code ([#599](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/599)) ([cc85282](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/cc8528238ff3d4c4b3a9bde695b68d09abf2a42e))
+
 ## [0.58.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.57.0...extension-v0.58.0) (2026-09-28)
 
 
