@@ -251,6 +251,7 @@ No setting, file, cache or process.
 | [PLAN_the_sidebar_pays_only_for_what_it_shows.md](../todo/PLAN_the_sidebar_pays_only_for_what_it_shows.md) | the section registry's split of *rounds* into two entries | what a render gathers per surface | independent; that plan reads the registry as it finds it |
 | [PLAN_two_files_outgrew_the_rule.md](../todo/PLAN_two_files_outgrew_the_rule.md) | the shared stylesheet's sizes (a value change inside the CSS constant) | moving the CSS out of `panelView.ts` | this first; that move then re-measures |
 | [PLAN_the_page_tests_run_the_page.md](../todo/PLAN_the_page_tests_run_the_page.md) | the NEW census and the shim widenings it needs | converting the existing source-text assertions to run tests | independent; the widened shim is there for it to use |
+| [PLAN_the_cadence_has_its_own_section.md](../todo/PLAN_the_cadence_has_its_own_section.md) | the split into Active gates and Active consultations | moving the cadence lines out of Active gates into a section of their own (the operator, 2026-09-29) | this first |
 | [PLAN_the_panel_provider_is_too_big.md](../todo/PLAN_the_panel_provider_is_too_big.md) | two `zoom`/`tone` branches in `PanelProvider.receive` | every extraction cluster | independent; whichever lands second rebases |
 
 Disjoint otherwise.
