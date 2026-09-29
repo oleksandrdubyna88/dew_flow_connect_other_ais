@@ -22,8 +22,11 @@ const NEXT_FAILURE = /, (?=[\w.-]+\/[A-Za-z]+: )/;
 /** One failure: `provider/Role: what it said`. */
 const ONE_FAILURE = /^([\w.-]+)\/([A-Za-z]+): ([\s\S]*)$/;
 
-/** A vendor's raw error body, `{"type":"error","message":"…"}`, possibly cut short by the server. */
-const ERROR_BODY = /\{"type":"[^"]*","message":"([^"]*)"?\}?/;
+/**
+ * A vendor's raw error body, `{"type":"error","message":"…"}`, possibly cut short by the server. The message
+ * may hold escaped quotes (`\"`), so it is read up to an UNescaped quote or the end, then unescaped.
+ */
+const ERROR_BODY = /\{"type":"[^"]*","message":"((?:[^"\\]|\\.)*)"?\}?/;
 
 export function questionHtml(text: string): string {
   const round = text.endsWith(ASK) ? FAILED_ROUND.exec(text.slice(0, -ASK.length).trim()) : null;
@@ -49,5 +52,5 @@ function failureHtml(failure: string): string {
 
 /** What a reviewer said, with a vendor's JSON error body replaced by its message. */
 function readable(said: string): string {
-  return said.replace(ERROR_BODY, (_body, message: string) => message);
+  return said.replace(ERROR_BODY, (_body, message: string) => message.replace(/\\(.)/g, '$1'));
 }
