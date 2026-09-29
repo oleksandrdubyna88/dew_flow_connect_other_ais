@@ -112,6 +112,55 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
     }
 
     /// <summary>
+    /// The failure the CLI reports in its own envelope, on stdout, where <c>--output-format json</c> puts it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Measured 2026-09-29.</b> The benchmark lost 44 Fable reviewer cells to
+    /// <c>exit 1 (the CLI said nothing on stderr)</c> while the envelope said <i>"You've hit your monthly spend limit"</i>
+    /// (HTTP 429); an old CLI refusing a newer model says so the same way (HTTP 400). Both envelopes carry
+    /// <c>"subtype":"success"</c> beside <c>"is_error":true</c>, so <c>is_error</c> decides, never <c>subtype</c>.</para>
+    /// <para>A reason only when the root is an object whose <c>is_error</c> is the boolean <c>true</c> and whose
+    /// <c>result</c> is a non-blank string — so a successful review's own text can never be read as its failure. The
+    /// sentence is collapsed to one line (the round summary is one line) and gets <c>(HTTP n)</c> when
+    /// <c>api_error_status</c> is an integer. Anything else is not a reason and never an exception: this runs on the path
+    /// of a reviewer that has already failed, and <c>GetString</c>/<c>TryGetProperty</c> throw
+    /// <c>InvalidOperationException</c>, not <c>JsonException</c>, on the wrong kind (the codex adapter's lesson).</para>
+    /// </remarks>
+    public string WhyItFailed(ReviewerInvocation invocation, ProcessResult result)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(result.StdOut.Trim());
+            return FailureSentence(document.RootElement);
+        }
+        catch (Exception ex) when (ex is JsonException or InvalidOperationException)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>The envelope's <c>result</c> when the envelope says it failed; empty otherwise.</summary>
+    private static string FailureSentence(JsonElement root) =>
+        SaysItFailed(root) && root.TryGetProperty("result", out var reason) && reason.ValueKind == JsonValueKind.String
+            ? WithStatus(OneLine(reason.GetString() ?? string.Empty), root)
+            : string.Empty;
+
+    /// <summary><c>is_error</c> as the boolean <c>true</c> — never <c>subtype</c>, which says "success" beside the error.</summary>
+    private static bool SaysItFailed(JsonElement root) =>
+        root.ValueKind == JsonValueKind.Object && root.TryGetProperty("is_error", out var isError) && isError.ValueKind == JsonValueKind.True;
+
+    private static string OneLine(string text) =>
+        string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+    private static string WithStatus(string sentence, JsonElement root) =>
+        sentence.Length == 0 ? string.Empty : sentence + HttpStatus(root);
+
+    private static string HttpStatus(JsonElement root) =>
+        root.TryGetProperty("api_error_status", out var status) && status.ValueKind == JsonValueKind.Number && status.TryGetInt32(out var code)
+            ? $" (HTTP {code})"
+            : string.Empty;
+
+    /// <summary>
     /// Claude reports the same run TWICE and the two disagree — this reads the right one.
     /// </summary>
     /// <remarks>

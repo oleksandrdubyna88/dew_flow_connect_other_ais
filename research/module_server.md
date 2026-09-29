@@ -905,6 +905,24 @@ wrong kind, so a complete line of `{"type":123}`, or a `turn.failed` whose `erro
 would have escaped a `JsonException` catch and taken down the code path that exists to explain a
 failure. Three reviewers across two vendors found it, and reverting the guard reproduces it.
 
+**Claude, the second adapter to implement it (2026-09-29).** The same defect, one vendor over: a Claude CLI reviewer
+failed as `exit 1 (the CLI said nothing on stderr)`. The benchmark lost 44 Fable 5.1 cells that way in one day, while the
+CLI's `--output-format json` envelope, on stdout, said *"You've hit your monthly spend limit"* (HTTP 429). An old CLI
+refusing a newer model says so the same way (*"… does not support this model; version 2.1.280 or newer is required"*,
+HTTP 400). `ClaudeRuntime.WhyItFailed` reads that ONE envelope.
+
+- **What counts as a reason:** only a root object whose `is_error` is the boolean `true` and whose `result` is a
+  non-blank string. Both measured envelopes say `"subtype":"success"` beside the error, so `subtype` is never read. A
+  successful review's own text cannot become its failure.
+- **How it reads:** the sentence is collapsed to one line (the round line is one line), and `(HTTP n)` is appended when
+  `api_error_status` is an integer.
+- **Every other shape** is not a reason, and never throws: no JSON, a torn object, `is_error` as a string, `result` of
+  another kind.
+- **Precedence** is `Because`'s, unchanged. The old CLI also writes a `[claude-code:unrecognized_model] {…}` tag to
+  stderr, which announces nothing, so the envelope's sentence is what the round line says.
+
+The tests are `AClaudeReasonInItsEnvelopeTests`, over both captured envelopes, end to end through `ReviewerExecutor`.
+
 ## A local reviewer is told not to think (2026-09-02)
 
 `PanelSettings.LocalReasoningEffort` — `COAI_LOCAL_REASONING_EFFORT`, default `none` — rides
