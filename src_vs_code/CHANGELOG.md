@@ -1,5 +1,10 @@
 # Changelog
 
+## Extension 0.60.1 — 2026-09-29
+
+**The MCP server tab is one and a half times the size, not twice.** At twice the size it read far larger
+than the tabs beside it; it is now halfway between them and the size 0.60.0 gave it.
+
 ## Extension 0.60.0 — 2026-09-29
 
 **Every page now has the text size and the text brightness.** The two ± pairs beside a page's title — one
