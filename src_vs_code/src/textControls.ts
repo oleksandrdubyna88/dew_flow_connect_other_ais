@@ -92,7 +92,9 @@ function controlKind(type: unknown): TextControl['kind'] | undefined {
   return type === 'zoom' || type === 'tone' ? type : undefined;
 }
 
-/** One step in one direction; anything that is not a finite number is not a press. */
+/** One step in one direction; anything that is not a finite number, or rounds to no step, is not a press. */
 function oneStep(delta: unknown): number | undefined {
-  return typeof delta === 'number' && Number.isFinite(delta) ? Math.max(-1, Math.min(1, Math.trunc(delta))) : undefined;
+  const step = typeof delta === 'number' && Number.isFinite(delta) ? Math.max(-1, Math.min(1, Math.trunc(delta))) : 0;
+
+  return step === 0 ? undefined : step;
 }
