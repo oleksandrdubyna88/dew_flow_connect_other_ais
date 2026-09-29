@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.60.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.59.0...extension-v0.60.0) (2026-09-29)
+
+
+### Features
+
+* **extension:** a review waiting on you reads as a list ([8583cf1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8583cf1fdf80253e3990f5ae9ea7bc5b80c8e917))
+* **extension:** every page carries the text size AND tone controls (S1) ([1169125](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/11691250cbb6c1dd06ebb1bcc45bc2b32a98c1ef))
+* **extension:** Gate commands and Review roles take the Chat presets column and look (S3) ([6324ed6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/6324ed609d49aa092dd4157985ad1fa807cbab31))
+* **extension:** the consultation cadence has a sidebar section of its own ([d3ba30b](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d3ba30bac8134790a47f19403afadcb1b0626ee9))
+* **extension:** the Settings tab's text all follows its size control; the MCP server tab is twice the size (S2) ([6d93681](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/6d9368135dbec76e264e8e001494459f626b1ad0))
+* **extension:** the sidebar's Active rounds is two sections - Active gates and Active consultations (S4) ([ad148f7](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ad148f711bf8b21d7670e86983c0edee832f91de))
+
+
+### Bug Fixes
+
+* **extension:** a step of nothing is not a press ([b502082](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b5020821ef518bc64f6b1b92df7f42f38e2fb4e7))
+* **extension:** the empty cadence section says a true thing; stale wording follows the new section ([3df0aed](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/3df0aed9b92cca11a7f533f1062e91fd75bb4ba1))
+* **extension:** the question card decodes a vendor's JSON message and keeps an odd list plain ([de969ee](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/de969ee46c4382f27ebe462f7e9ad3e64229ee00))
+* **extension:** the question card reads an escaped vendor message whole, and is tested on the running page ([b4dedfb](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b4dedfb1108d815f6b4da11d1124284ccb8ee5b9))
+* **extension:** two quick presses on a text control are two steps ([710cd88](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/710cd88b0815c7569ec2ffd95741ab9a295500a2))
+* **extension:** what the code review found the first cut still missing ([348ff90](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/348ff90e2699808aa3631c7b0df5ed19aa326f66))
+
 ## [0.59.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.58.0...extension-v0.59.0) (2026-09-29)
 
 
