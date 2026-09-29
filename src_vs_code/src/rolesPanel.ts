@@ -14,7 +14,7 @@ import { serverOnThisSide } from './installer';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 import { roleDeletions, whenDeletionsChange } from './roleDeletionsHost';
 import { isTextControl } from './textControls';
-import { applyTextControl, pushTextControlsTo } from './textControlsHost';
+import { applyTextControl, appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
 
@@ -154,7 +154,12 @@ export function openRoles(extension: vscode.ExtensionContext): void {
     // is a no-op once it has.
     setTimeout(redrawSoon, inMs).unref?.();
   });
-  panel.webview.onDidReceiveMessage((message: unknown) => { queue(roleEdit(message)); });
+  panel.webview.onDidReceiveMessage((message: unknown) => {
+    // A text press is the person's setting, not an edit of the roles, and never waits behind one.
+    if (!appliedTextControl(message, 'roles page')) {
+      queue(roleEdit(message));
+    }
+  });
   panel.onDidDispose(() => {
     scale.dispose();
     deletionsChanged.dispose();
@@ -234,9 +239,10 @@ async function render(): Promise<void> {
       serverVersion,
       perSide: config().get('perSideSettings') === true,
       tab,
+      stranded: await roleDeletions(side()).stranded(),
+      // After the awaits: a press made while they ran is the one this page must be drawn in.
       uiScale: currentUiScale(),
       textTone: currentTextTone(),
-      stranded: await roleDeletions(side()).stranded(),
     },
     nonce(),
   );

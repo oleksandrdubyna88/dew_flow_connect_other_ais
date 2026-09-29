@@ -77,6 +77,9 @@ export function measured(browser, prefix, pages) {
  */
 export function screenshot(browser, prefix, { html, width, height, out }) {
   const dir = mkdtempSync(join(tmpdir(), prefix));
+  // The old picture goes first: a browser that fails leaves no file, and an old one left in its place
+  // would read as a success.
+  rmSync(out, { force: true });
   try {
     const file = join(dir, 'page.html');
     writeFileSync(file, html, 'utf8');
@@ -85,7 +88,7 @@ export function screenshot(browser, prefix, { html, width, height, out }) {
       `--screenshot=${out}`, pathToFileURL(file).href,
     ], { encoding: 'utf8', timeout: 60_000 });
 
-    return { ok: existsSync(out), said: (run.stderr ?? '').slice(0, 200) };
+    return { ok: run.status === 0 && existsSync(out), said: (run.stderr ?? '').slice(0, 200) };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

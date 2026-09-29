@@ -2765,7 +2765,7 @@ const CSS = `
      its label reads as belonging to neither. */
   .vendor .priced { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .vendor .priced > label { flex: 1 1 calc(96rem / 13); min-width: 0; margin-bottom: 0; }
-  .vendor .priced > input[type="number"] { flex: 0 0 64px; width: 64px; }
+  .vendor .priced > input[type="number"] { flex: 0 0 calc(64rem / 13); width: calc(64rem / 13); }
   .vendor .priced > .stages { flex: 1 1 calc(128rem / 13); min-width: 0; }
   /* A vendor that is off everywhere: the boxes stay visible, so their state is readable, and go
      inert, so nobody ticks one expecting it to mean something. The gate said the contradiction was
@@ -2859,7 +2859,7 @@ const CSS = `
   .seg label.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
   .seg input { margin: 0; }
   .inline > label { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
-  .inline > input[type="number"] { flex: 0 0 64px; width: 64px; }
+  .inline > input[type="number"] { flex: 0 0 calc(64rem / 13); width: calc(64rem / 13); }
   .hint { opacity: .65; font-size: calc(11rem / 13); margin: 3px 0 0; line-height: 1.45; }
   /* Sixteen names, in a sidebar whose width is somebody else's choice: two columns where there is
      room, one where there is not, and never a reason to scroll sideways. */

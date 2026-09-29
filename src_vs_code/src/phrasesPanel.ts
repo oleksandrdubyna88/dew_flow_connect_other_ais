@@ -6,7 +6,7 @@ import { phraseEdit, phraseRepaints, phrasesHtml, type PhraseCommand } from './p
 import { settledWrites } from './settledWrites';
 import { refusalFor, reportRefusal, saveSetting } from './sideConfig';
 import { isTextControl } from './textControls';
-import { applyTextControl, pushTextControlsTo } from './textControlsHost';
+import { applyTextControl, appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
 
@@ -174,7 +174,13 @@ export function openPhrases(extension: vscode.ExtensionContext): void {
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [], enableFindWidget: true },
   );
   const scale = pushTextControlsTo(panel.webview);
-  panel.webview.onDidReceiveMessage((message: unknown) => { writes.queue(phraseEdit(message)); });
+  panel.webview.onDidReceiveMessage((message: unknown) => {
+    // A text press is the person's setting, not an edit: in the queue it would flush a half-typed phrase,
+    // and a failed save of it would read as "your text was not saved".
+    if (!appliedTextControl(message, 'phrases page')) {
+      writes.queue(phraseEdit(message));
+    }
+  });
   panel.onDidDispose(() => {
     scale.dispose();
     panel = undefined;

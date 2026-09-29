@@ -226,6 +226,8 @@ function openPanel(): void {
       if (again) {
         render();
       }
+    }).catch((error: unknown) => {
+      console.error('[coai] chat presets page: a change could not be saved', error);
     });
   });
   panel.onDidDispose(() => {

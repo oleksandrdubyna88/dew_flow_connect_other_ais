@@ -1337,7 +1337,7 @@ test('an emptied prompt box removes the override rather than writing a prompt th
 // ---------- each row is a framed group in its client's own colour (issue #291) ----------
 //
 // REVIEWERS draws one bordered card per vendor with a 3px left edge in that vendor's colour, and
-// the same colour follows it into Active rounds and the rounds log. CONSULTANT drew four flat
+// the same colour follows it into Active gates and the rounds log. CONSULTANT drew four flat
 // `.field` blocks: no frame, nothing grouping a caller's controls, no colour. `.consultant-row`
 // existed as a data hook with no CSS rule anywhere.
 //

@@ -129,7 +129,7 @@ export class NotificationsPanel {
       this.panel = panel;
       // Something to read WHILE the disk is read. Without it a slow share shows a window with
       // nothing in it, which is indistinguishable from one that failed. (codex, the S5 code round.)
-      panel.webview.html = waitingPageHtml(coaiDataDir(), randomBytes(16).toString('base64'));
+      panel.webview.html = waitingPageHtml(coaiDataDir(), randomBytes(16).toString('base64'), { size: currentUiScale(), tone: currentTextTone() });
       const text = pushTextControlsTo(panel.webview);
       panel.onDidDispose(() => {
         text.dispose();
