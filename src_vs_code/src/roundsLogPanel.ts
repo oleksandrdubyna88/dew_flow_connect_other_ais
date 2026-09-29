@@ -141,8 +141,8 @@ export class RoundsLogPanel {
     );
     this.panel = panel;
     panel.webview.html = roundsLogHtml(
-      rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml, totals, consultationsHtml,
-      { size: currentUiScale(), tone: currentTextTone() });
+      rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml, totals,
+      { consultations: consultationsHtml, text: { size: currentUiScale(), tone: currentTextTone() } });
     this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml };
     this.rebuilt();
 

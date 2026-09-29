@@ -1326,8 +1326,7 @@ export function roundsLogHtml(
   usageHtml = '',
   spotsHtml = '',
   totals: DbTotals = EMPTY_TOTALS,
-  consultationsHtmlText = '',
-  text: TextSettings = PLAIN_TEXT,
+  { consultations: consultationsHtmlText = '', text = PLAIN_TEXT }: { readonly consultations?: string; readonly text?: TextSettings } = {},
 ): string {
   const headers = COLUMNS
     .map((c) => (c.sortable === false

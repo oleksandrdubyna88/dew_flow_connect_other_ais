@@ -67,7 +67,7 @@ function bodyRule(html: string): string {
 const REDRAWN: readonly (readonly [string, (size: number, tone: number) => string])[] = [
   ['Gate commands', (size, tone) => commandsHtml({ rows: [], texts: {}, serverVersion: '', perSide: false, uiScale: size, textTone: tone }, 'n')],
   ['Notifications', (size, tone) => notificationsPageHtml({ rows: [], dataDir: 'd', older: false, loaded: 0, generation: 1, uiScale: size, textTone: tone }, 'n')],
-  ['Review rounds', (size, tone) => roundsLogHtml([], [], 'n', '', '', undefined, '', { size, tone })],
+  ['Review rounds', (size, tone) => roundsLogHtml([], [], 'n', '', '', undefined, { text: { size, tone } })],
   ['Who holds a key', (size, tone) => usersPageHtml({ view: { kind: 'no-key', said: '' } }, 'n', { size, tone })],
 ];
 

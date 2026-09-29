@@ -15,6 +15,21 @@ export class WriteQueue {
   }
 
   /**
+   * Appends one write and hands back ITS outcome — for a caller that must report its own failure. The queue
+   * still runs the next write after a failed one, exactly as {@link enqueue} does.
+   *
+   * <p>Why it exists: a text-control press reads the setting, adds a step and writes it back. Started one
+   * after another without waiting, two quick presses both read the same value and one of them is lost
+   * (CodeRabbit on PR #615).</p>
+   */
+  run(work: () => Promise<void>): Promise<void> {
+    const outcome = this.queued.then(work, work);
+    this.queued = outcome.catch(() => undefined);
+
+    return outcome;
+  }
+
+  /**
    * Resolves once the queue is STABLE: a write appended while this waited is waited for too, because it
    * would otherwise be read a moment too late. Bounded — under continuous typing the queue never settles,
    * and a render that waits for silence is a render that never happens.

@@ -717,7 +717,7 @@ const DEAD: Element = { tag: 'button', classes: ['secondary'], attrs: { disabled
 const ON_THE_PAGE: readonly Element[] = [{ tag: 'div', classes: ['pager'], attrs: {} }];
 
 function sheet(): Rule[] {
-  return stylesheet(roundsLogHtml([], [], 'n0nce', '', '', TOTALS, ''));
+  return stylesheet(roundsLogHtml([], [], 'n0nce', '', '', TOTALS));
 }
 
 test('a pager button that cannot be pressed does not look pressable', () => {
