@@ -292,7 +292,9 @@ test('the card head is three lines, so a narrow sidebar never cuts the branch of
 test('the section is called what it shows', () => {
   const html = everyPageHtml(state([]), 'n', NOW);
 
-  assert.ok(html.includes('Active rounds'));
+  // Active rounds until 2026-09-29, when the consultations got a section of their own beside it.
+  assert.ok(html.includes('<summary>Active gates</summary>'));
+  assert.ok(!html.includes('Active rounds'));
   assert.ok(!html.includes('Recent rounds'));
 });
 

@@ -402,7 +402,7 @@ roles. The comment was reworded. A comment in this stylesheet is not a private n
 ### Each Consultant row is a framed group in its client's own colour (2026-09-15)
 
 **REVIEWERS** draws one bordered card per vendor with a 3px left edge in that vendor's colour, and
-the same colour follows it into *Active rounds* and the rounds log — a vendor can be walked from its
+the same colour follows it into *Active gates* and the rounds log — a vendor can be walked from its
 settings to its running round without reading. **CONSULTANT** drew four flat `.field` blocks: no
 frame, nothing grouping a caller's controls, no colour. `.consultant-row` existed as a *data* hook
 with no CSS rule anywhere in the panel (issue #291).
@@ -2504,7 +2504,7 @@ was for. The server half is `module_server.md`, *epic 4*.
 |---|---|
 | **Four settings** in the *Consultant* section, under who is asked: the mode (Off / Remind / Require, a segmented control) and three counts. Read the way the server reads them — a mode matched without case, anything else `remind`; a count a positive whole number the server can hold, or the default — and crossing as `COAI_CADENCE_*` only when they differ. Declared in `package.json`, kept per side, described in the consultant article in all five languages. | `cadenceSettings.ts`, `settingsShape.ts` (`CoaiSettings.cadence`), `panelView.ts` |
 | **The defaults are the server's**: `cadenceSettings.test.ts` reads `CadenceRule.cs` for every number, the enum for the modes, and `PanelSettings.cs` for the keys and the mode's fallback. | `src/test/cadenceSettings.test.ts` |
-| **The line in *Active rounds***: `PLAN_x.md · epics closed 4/14 · consultation for epics 4-6: due · branch epic-1` — the branch labelled and set off with the sentence's own separator (bare, it read as the sentence's last word, "due epic-1" — the operator, from the plan's live check, 2026-09-26); the current group is the one holding the first epic not yet closed; `taken` once consulted; in `require`, `due — the code round waits for it`; the risky pieces counted when named; a whole plan closed says so; an unreadable record is said and nothing else. Marked `stale` when it asks something of the reader. | `cadenceLine.ts` (`cadenceSaid`, `cadenceLinesHtml`) |
+| **The line in *Active gates*** (*Active rounds* until 2026-09-29): `PLAN_x.md · epics closed 4/14 · consultation for epics 4-6: due · branch epic-1` — the branch labelled and set off with the sentence's own separator (bare, it read as the sentence's last word, "due epic-1" — the operator, from the plan's live check, 2026-09-26); the current group is the one holding the first epic not yet closed; `taken` once consulted; in `require`, `due — the code round waits for it`; the risky pieces counted when named; a whole plan closed says so; an unreadable record is said and nothing else. Marked `stale` when it asks something of the reader. | `cadenceLine.ts` (`cadenceSaid`, `cadenceLinesHtml`) |
 | **One body for the first paint and the live push** (`activeRounds`), in the `#live-rounds` region rather than a new one, so the two cannot disagree about whether the line is there. | `panelView.ts` |
 | **The probes are bounded** (the risk consultation for story 4.2, point 3): only sessions that moved in the last day and hold a plan; one `--cadence` at a time; a 30 s TTL; never awaited by a render; a repaint only when an answer CHANGED, which with the TTL is what stops the loop; the last answer kept on a timeout, a 65 or a body that is not an answer, and the 65 logged once; a 64 ends probing for the window's life; no probing at all while the cadence is off. The consultation watcher resets the TTL; an outcome recorded on a LAPSED consultation, which the watcher does not see, is picked up by the TTL. | `cadenceProbe.ts`, `panelProvider.ts`, `extension.ts` |
 | **The log's *For* column**: `stuck`, `cadence · epics 4-6`, `risk · story 7.2`, the plan by its file name with the path on hover; a kind this build does not know is shown as written. `DbConsultation.kind` defaults to `stuck` at the boundary — before the kinds, that was every consultation. | `roundsLog.ts` (`forCell`), `roundsDb.ts` |
@@ -4281,8 +4281,9 @@ one.
 
 ### The Settings tab (2026-09-28)
 
-The sidebar keeps what is happening now — the open question, **Notifications**, **Active rounds** (the
-running rounds and, since this change, the running consultation cards), **Phrases**, **Bugz** — and the
+The sidebar keeps what is happening now — the open question, **Notifications**, **Active gates** (the
+running rounds), **Active consultations** (the running consultation cards; one section with the rounds
+until 2026-09-29), **Phrases**, **Bugz** — and the
 ten sections configured once are tabs of one **ConnectOtherAIs — Settings** editor tab. Which section is
 where is one field on the registry entry (`surface` in `PANEL_SECTIONS`); a section's body is the same
 builder on either page, so a control stores exactly what it stored before, on the same layer.
