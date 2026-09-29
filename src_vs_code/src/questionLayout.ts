@@ -24,7 +24,8 @@ const ONE_FAILURE = /^([\w.-]+)\/([A-Za-z]+): ([\s\S]*)$/;
 
 /**
  * A vendor's raw error body, `{"type":"error","message":"…"}`, possibly cut short by the server. The message
- * may hold escaped quotes (`\"`), so it is read up to an UNescaped quote or the end, then unescaped.
+ * may hold escaped quotes (`\"`), so it is read up to an UNescaped quote or the end, then decoded as the JSON
+ * string it is — `\n` a line break, `\u00e9` an é.
  */
 const ERROR_BODY = /\{"type":"[^"]*","message":"((?:[^"\\]|\\.)*)"?\}?/;
 
@@ -33,24 +34,32 @@ export function questionHtml(text: string): string {
   if (round === null) {
     return escapeHtml(text);
   }
-  const failures = round[3]!.split(NEXT_FAILURE).map(failureHtml).join('');
+  const failures = round[3]!.split(NEXT_FAILURE).map((failure) => ONE_FAILURE.exec(failure));
+  // Every entry must be `provider/Role: …`, or the sentence is not the one this lays out.
+  if (failures.some((parts) => parts === null)) {
+    return escapeHtml(text);
+  }
 
   return `<div class="lead">${escapeHtml(`${round[1]}${round[2]}.`)}</div>`
-    + `<ul class="failures">${failures}</ul>`
+    + `<ul class="failures">${failures.map((parts) => failureHtml(parts!)).join('')}</ul>`
     + `<div class="ask">${escapeHtml(ASK)}</div>`;
 }
 
 /** One failed reviewer's line: who, in which role, and what it said. */
-function failureHtml(failure: string): string {
-  const parts = ONE_FAILURE.exec(failure);
-  if (parts === null) {
-    return `<li class="failed">${escapeHtml(failure)}</li>`;
-  }
-
+function failureHtml(parts: RegExpExecArray): string {
   return `<li class="failed"><b>${escapeHtml(parts[1]!)}</b> · ${escapeHtml(parts[2]!)} — ${escapeHtml(readable(parts[3]!))}</li>`;
 }
 
 /** What a reviewer said, with a vendor's JSON error body replaced by its message. */
 function readable(said: string): string {
-  return said.replace(ERROR_BODY, (_body, message: string) => message.replace(/\\(.)/g, '$1'));
+  return said.replace(ERROR_BODY, (_body, message: string) => jsonString(message));
+}
+
+/** A JSON string's body, decoded; a body the server cut mid-escape falls back to dropping the backslashes. */
+function jsonString(body: string): string {
+  try {
+    return JSON.parse(`"${body}"`) as string;
+  } catch {
+    return body.replace(/\\(.)/g, '$1');
+  }
 }

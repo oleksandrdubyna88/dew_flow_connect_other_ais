@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import { questionHtml } from '../questionLayout';
 import { liveRegions } from '../panelView';
 import { panelState, runPanel } from './panelPageHarness';
+import { textOf } from './renderedText';
 
 /**
  * A round nobody could answer reaches the sidebar's "A review is waiting on you" card as one run-on sentence,
@@ -21,7 +22,7 @@ const FAILED_ROUND = 'The plan review gate needs your decision: no reviewer answ
 
 /** The text of each element with `class`, in order, tags stripped. */
 function texts(html: string, cls: string): readonly string[] {
-  return [...html.matchAll(new RegExp(`<(\\w+) class="${cls}">([\\s\\S]*?)</\\1>`, 'g'))].map((found) => found[2]!.replace(/<[^>]+>/g, ''));
+  return [...html.matchAll(new RegExp(`<(\\w+) class="${cls}">([\\s\\S]*?)</\\1>`, 'g'))].map((found) => textOf(found[2]!));
 }
 
 test('a failed round reads as the lead, one line per reviewer that failed, and the question on its own', () => {
@@ -51,6 +52,20 @@ test('a vendor message with escaped quotes is shown whole, not cut at the first 
   assert.ok(!codex.includes('\\'), `an escape is still on screen: ${codex}`);
 });
 
+test('a vendor message keeps what its JSON escapes stand for: a line break stays a break, not a letter n', () => {
+  const broken = FAILED_ROUND.replace('You’ve hit your usage limit.', 'Timed out\\nTry again, \\u00e9t\\u00e9.');
+  const codex = texts(questionHtml(broken), 'failed')[2]!;
+
+  assert.match(codex, /Timed out\nTry again, été\./, `the escapes were read as letters: ${codex}`);
+});
+
+test('a failure list with an entry that is not provider/Role is drawn as the plain sentence', () => {
+  const odd = 'The plan review gate needs your decision: 1 of 2 reviewers answered; failed: n/a. '
+    + 'Proceed anyway, or fix the findings and review again?';
+
+  assert.equal(questionHtml(odd), odd);
+});
+
 test('the card in the running sidebar shows the laid-out question, and a live push keeps it laid out', () => {
   // RUN (.agents/PROJECT.md): the sidebar's own page, with the question in its live region.
   const question = { id: 'q1', sessionId: 's1', repoPath: 'D:/r', branch: 'feat/x', question: FAILED_ROUND, openFindings: [], askedUtc: '2026-09-29T00:00:00Z' };
@@ -61,9 +76,11 @@ test('the card in the running sidebar shows the laid-out question, and a live pu
   assert.equal(texts(card, 'failed').length, 3, `the rendered card is not laid out: ${card}`);
   assert.deepEqual(texts(card, 'ask'), ['Proceed anyway, or fix the findings and review again?']);
 
-  const later = { ...question, id: 'q2' };
+  const later = { ...question, id: 'q2', question: FAILED_ROUND.replace('The engine is up;', 'The engine is up; changed:') };
   page.deliver({ type: 'live', ...liveRegions(panelState('', { questions: [later] })) });
-  assert.equal(texts(page.region('live-questions'), 'failed').length, 3, 'a live push drew the question as a run-on block');
+  const pushed = texts(page.region('live-questions'), 'failed');
+  assert.equal(pushed.length, 3, 'a live push drew the question as a run-on block');
+  assert.match(pushed[0]!, /The engine is up; changed:/, 'the live push never reached the card');
 });
 
 test('any other question is drawn exactly as it was', () => {
