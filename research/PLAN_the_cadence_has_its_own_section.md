@@ -1,6 +1,6 @@
 # PLAN — the consultation cadence has a sidebar section of its own
 
-> Status: **IMPLEMENTED, 2026-09-29 — both stories shipped in PR #616 (`feat/cadence-own-section`). The coai plan round reached proceed after the operator's "act on the findings" (no reviewer could answer the first attempt); the code rounds reached good_enough 8/8 (story 1) and proceed 8/8 (story 2). Still open after the merge: the extension release (0.60.0), which publishes and so waits for the operator.** What shipped differently is in § *What shipped differently*. Scope: `src_vs_code` — the sidebar's section
+> Status: **IMPLEMENTED, 2026-09-29 — both stories shipped in PR #616 (`feat/cadence-own-section`). The coai plan round reached proceed after the operator's "act on the findings" (no reviewer could answer the first attempt); the code rounds reached good_enough 8/8 (story 1) and proceed 8/8 (story 2). The extension was released as `extension-v0.60.0` on 2026-09-29 (release PR #618), on the operator's go-ahead.** What shipped differently is in § *What shipped differently*. Scope: `src_vs_code` — the sidebar's section
 > registry and live regions (`panelView.ts`, `panelSurface.ts`), the page script's live patch, the help in
 > five languages, the READMEs, the 0.60.0 changelog section.
 >
@@ -116,4 +116,4 @@ None.
 - [x] A cadence line still updates live.
 - [x] A failed round's question card reads as a lead, a line per failed reviewer, and the question.
 - [x] Help ×5, READMEs, module doc, changelog say so.
-- [ ] One plan round and one code round; released with 0.60.0, on the operator's go-ahead. — the rounds ran; **the release is the open tail.**
+- [x] One plan round and one code round; released as `extension-v0.60.0` on 2026-09-29 (release PR #618), on the operator's go-ahead.

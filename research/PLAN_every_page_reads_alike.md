@@ -1,6 +1,6 @@
 # PLAN — every page reads alike: the text controls everywhere, one column, and the gates apart from the consultations
 
-> Status: **IMPLEMENTED, 2026-09-29 — S1 to S5 shipped on `feat/pages-read-alike` in one pull request, under one plan round and one code round, plus the fixes my own code review found after it. Still open after the merge: the extension release (0.60.0), which publishes and so waits for the operator.** What shipped differently is in § *What shipped differently*. Scope: `src_vs_code` — the pages' text
+> Status: **IMPLEMENTED, 2026-09-29 — S1 to S5 shipped on `feat/pages-read-alike` in one pull request, under one plan round and one code round, plus the fixes my own code review found after it. The extension was released as `extension-v0.60.0` on 2026-09-29 (release PR #618), on the operator's go-ahead.** What shipped differently is in § *What shipped differently*. Scope: `src_vs_code` — the pages' text
 > controls, the Settings tab's typography, the Gate commands and Review roles frames, the sidebar's
 > Active rounds section, the help in five languages, the READMEs and their screenshots.
 >
@@ -267,4 +267,4 @@ Disjoint otherwise.
 - [x] The README shows the sidebar and the Settings tab as they are now.
 - [x] `research/module_extension.md` describes the text-controls unit and the frame module.
 - [x] One plan round and one code round; verdicts in the PR.
-- [ ] **Open:** extension released after the merge — with the operator's go-ahead.
+- [x] Extension released as `extension-v0.60.0` on 2026-09-29 (release PR #618), on the operator's go-ahead.
