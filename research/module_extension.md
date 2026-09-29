@@ -4469,8 +4469,9 @@ flowchart LR
 (22 font sizes), which a size control cannot reach; it is `calc(<n>rem / 13)` now, with
 `html { font-size: var(--vscode-font-size) }` in the sidebar — so at the default 13px every line is the
 size it was — and the control's value on the Settings tab. `rem`, not `em`, because `em` compounds
-through nested sizes. The MCP server pane is `zoom: 2`: twice the size, as asked, and `zoom` reaches the
-`rem`-sized notes where a parent's `font-size` would not.
+through nested sizes. The MCP server pane is `zoom: 1.5`: one and a half times the size (`zoom: 2` in 0.60.0 read far larger
+than the tabs beside it, and the operator asked for the middle), and `zoom` reaches the `rem`-sized notes
+where a parent's `font-size` would not.
 
 **Gate commands and Review roles sit in Chat presets' column.** `formPageStyle.ts` is that page's look,
 written once; Gate commands takes it whole (it had the browser's white fields and no column), Review roles

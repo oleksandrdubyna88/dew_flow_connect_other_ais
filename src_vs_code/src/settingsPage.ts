@@ -32,10 +32,11 @@ ${tabCss('0 0 12px')}
   /* The shared sheet draws every button full width with a top margin — right for the sidebar's actions,
      wrong for four small buttons in a row. */
   .zoomCtl button, .toneCtl button { width: auto; margin: 0; }
-  /* The MCP server tab, twice the size: there is room for it here, and it is the tab people read rather
-     than set. zoom, not font-size: 2em — every note in it is sized in rem, which a parent's font-size does
-     not reach, so 2em would have doubled only the unsized text and left the small print as it was. */
-  .settings .pane.sec-server { zoom: 2; }
+  /* The MCP server tab, one and a half times the size: it is the tab people read rather than set. Twice
+     the size read far larger than the tabs beside it, so the operator asked for the middle (2026-09-29).
+     zoom, not font-size: 1.5em — every note in it is sized in rem, which a parent's font-size does not
+     reach, so an em size would have grown only the unsized text and left the small print as it was. */
+  .settings .pane.sec-server { zoom: 1.5; }
 ${TEXT_CONTROLS_CSS}
 `;
 

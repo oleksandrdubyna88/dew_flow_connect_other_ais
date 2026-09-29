@@ -39,11 +39,12 @@ test('the sidebar roots its text in the theme\'s size, so the rem units read exa
   assert.match(declared(SHEET, 'html'), /font-size:\s*var\(--vscode-font-size\)/);
 });
 
-test('the MCP server tab is drawn twice as large — every length in it, the rem-sized notes included', () => {
+test('the MCP server tab is drawn one and a half times as large — every length in it, the rem-sized notes included', () => {
   const rules = stylesheet(settingsHtml(panelState(''), 'n', 'server'));
   const pane = rules.filter((rule) => /\.sec-server\b/.test(rule.selector)).map((rule) => rule.body).join(' ');
 
-  // zoom, not font-size: 2em. A parent's font-size does not reach anything measured in rem, which is how
-  // the notes are sized now — so 2em would have doubled only the unsized text and left the small print.
-  assert.match(pane, /zoom:\s*2\b/, `the MCP server pane is not drawn at twice the size: ${pane}`);
+  // zoom, not font-size: 1.5em. A parent's font-size does not reach anything measured in rem, which is how
+  // the notes are sized now — so an em size would have grown only the unsized text and left the small print.
+  // 1.5, not 2: at twice the size the tab read far larger than the tabs beside it (the operator, 2026-09-29).
+  assert.match(pane, /zoom:\s*1\.5\b/, `the MCP server pane is not drawn at one and a half times the size: ${pane}`);
 });
