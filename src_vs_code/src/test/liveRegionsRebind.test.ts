@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { panelHtml, type PanelState } from '../panelView';
+import { LIVE_REGION_IDS } from '../panelSurface';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
@@ -9,7 +10,7 @@ import type { DataLocation } from '../dataDir';
 /**
  * A click must post ONE message, however long the panel has been open.
  *
- * <p>The panel patches four live regions on a five-second tick, and the controls inside a patched
+ * <p>The panel patches its live regions on a five-second tick, and the controls inside a patched
  * region have to be bound again because the markup they lived in was replaced. Binding them on
  * every tick instead — which is what the code did — adds a listener each time without removing the
  * one before it: `addEventListener` adds, it does not replace. After a minute a single press on
@@ -139,8 +140,9 @@ interface Running {
 function run(): Running {
   const posted: unknown[] = [];
   const html = panelHtml(state(), 'test-nonce');
+  // Every region the panel declares — read from the declaration, so a new one is patched here too.
   const regions = new Map<string, Region>(
-    ['live-questions', 'live-rounds', 'live-consultations', 'live-notifications']
+    LIVE_REGION_IDS.map((id) => `live-${id}`)
       .map((id) => [id, new Region('')] as const),
   );
   let heard: ((event: { data: unknown }) => void) | undefined;
@@ -233,11 +235,13 @@ test('every live region is patched, and one that changed is bound while the othe
     questions: '<button data-command="answer" data-id="q2"></button>',
     rounds: '<i>a round</i>',
     consultations: '<i>a consultation</i>',
+    cadence: '<i>a cadence line</i>',
     notifications: ONE_BUTTON,
   });
 
   assert.equal((page.regions.get('live-rounds') as Region).innerHTML, '<i>a round</i>');
   assert.equal((page.regions.get('live-consultations') as Region).innerHTML, '<i>a consultation</i>');
+  assert.equal((page.regions.get('live-cadence') as Region).innerHTML, '<i>a cadence line</i>');
   (page.regions.get('live-notifications') as Region).only().click();
   (page.regions.get('live-questions') as Region).only().click();
 

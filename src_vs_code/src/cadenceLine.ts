@@ -228,7 +228,8 @@ function wantsAttention(answer: CadenceAnswer): boolean {
 }
 
 /**
- * The lines, above the running rounds — nothing at all when there are none. The branch is labelled and set
+ * The lines, in the sidebar's Consultation cadence section — nothing at all when there are none (the section
+ * then says why). The branch is labelled and set
  * off by the sentence's own separator: bare, it read as the sentence's last word ("due epic-1").
  */
 export function cadenceLinesHtml(lines: readonly CadenceLine[]): string {

@@ -1,6 +1,6 @@
 # PLAN — the consultation cadence has a sidebar section of its own
 
-> Status: **plan only, nothing implemented yet, 2026-09-29.** Scope: `src_vs_code` — the sidebar's section
+> Status: **in progress, 2026-09-29 — built on `feat/cadence-own-section` and reviewed by my own code review; the coai gate had no reviewer that could answer (codex out of credits, gemini signed out, the local model past its deadline), so the rounds wait for the operator's decision.** Scope: `src_vs_code` — the sidebar's section
 > registry and live regions (`panelView.ts`, `panelSurface.ts`), the page script's live patch, the help in
 > five languages, the READMEs, the 0.60.0 changelog section.
 >

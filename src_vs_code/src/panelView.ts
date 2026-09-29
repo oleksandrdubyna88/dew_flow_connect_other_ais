@@ -97,8 +97,9 @@ export interface PanelState {
   /**
    * The Team servers this machine knows, with whatever their catalogs last said.
    *
-   * <p>It is IN {@link staticKey} rather than a live region: `liveRegions` returns exactly two
-   * (`questions` and `rounds`), so everything else reaches the screen by the repaint. A section that
+   * <p>It is IN {@link staticKey} rather than a live region: `liveRegions` returns only the regions in
+   * `LIVE_REGION_IDS` (questions, rounds, consultations, cadence, notifications), so everything else reaches the
+   * screen by the repaint. A section that
    * was patched instead would be a section that stops updating the day somebody reorders the DOM.</p>
    */
   /**
@@ -674,15 +675,15 @@ ${extra.script}
   }
   bindCommands(document);
 
-  // Live updates arrive as HTML for the two regions that change on their own — the round in
-  // flight, and any open escalation. Patching them leaves every other control ALONE,
+  // Live updates arrive as HTML for the regions that change on their own — the questions, the rounds in
+  // flight, the consultations, the cadence lines and the notifications (LIVE_REGION_IDS). Patching them leaves every other control ALONE,
   // which is the whole point: assigning the panel's html reloads the webview, and a reload
   // closes any open dropdown. This is what stopped the pickers snapping shut mid-choice.
   // What each region showed last. Identical markup is not re-applied: replacing it recreates
   // every element and drops the scroll position, and "nothing changed" is the common case on a
   // five-second tick.
   // SEEDED from what the page was rendered with, not empty. Starting empty made the first live
-  // message replace all three regions even when its HTML was identical to what was already there —
+  // message replace every region even when its HTML was identical to what was already there —
   // one guaranteed DOM rebuild per paint, which is the exact cost this comparison exists to avoid.
   // (CodeRabbit, on the pull request.)
   // ONE loop over the regions the host declares, written into the script as a literal — it was four
@@ -2680,7 +2681,9 @@ function cadenceBody(state: PanelState): string {
 
   return state.settings.cadence.mode === 'off'
     ? '<div class="empty">The consultation cadence is off. It is switched on in <b>Settings → Consultant</b>.</div>'
-    : '<div class="empty">No plan is being followed yet: a plan appears here once a gate round names it.</div>';
+    // True of every way the list comes back empty with the cadence on: no round named a plan in the last day,
+    // the installed server is too old for the mode or not installed, or its first answer is still out.
+    : '<div class="empty">No plan\'s cadence has been read yet: a line appears here once a gate round in the last day names a plan and the server answers for it.</div>';
 }
 
 /**

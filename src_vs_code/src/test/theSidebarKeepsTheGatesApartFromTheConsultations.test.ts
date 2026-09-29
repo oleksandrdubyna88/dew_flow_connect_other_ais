@@ -80,5 +80,9 @@ test('an empty Consultation cadence says why: the cadence is off, or no round ha
 
   assert.match(sectionOf(off, 'cadence'), /The consultation cadence is off/, 'an empty section with the cadence off says nothing');
   assert.match(sectionOf(off, 'cadence'), /Settings → Consultant/, 'and does not say where it is switched on');
-  assert.match(sectionOf(on, 'cadence'), /No plan is being followed yet/, 'an empty section with the cadence on says nothing');
+  // True in every case the probe answers nothing, not only 'no plan named yet': a server too old for the mode,
+  // none installed, a first probe still out, a plan quiet for a day — each leaves the list empty too.
+  assert.match(sectionOf(on, 'cadence'), /No plan's cadence has been read yet/, 'an empty section with the cadence on says nothing');
+  assert.match(sectionOf(on, 'cadence'), /in the last day/, 'it promises a line where the probe would never draw one');
+  assert.match(sectionOf(on, 'cadence'), /the server answers for it/, 'it does not say the server has to answer');
 });
