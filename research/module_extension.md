@@ -4190,6 +4190,7 @@ flowchart LR
 | `surfaceSlot.ts` | pure: one webview the panel paints — its held view, its painted key, its edit hold — and `anyHeld`; the provider paints a list of these |
 | `textControls.ts` | pure: the text-size and text-tone controls as ONE unit — their markup, CSS, script (with the page's own handle name), `textControlFrom` (one step of one control, clamped), `isTextControl`, `textOf` |
 | `textControlsHost.ts` | the host half: `pushTextControlsTo` (both settings, one disposable), `applyTextControl`, and `appliedTextControl` for the hosts whose pages post raw messages |
+| `questionLayout.ts` | pure: the sidebar's *A review is waiting on you* card for a round nobody could review — the server's sentence laid out as the lead, a line per failed reviewer (a vendor's JSON error body as its message) and the question; any other question drawn exactly as the server wrote it |
 | `formPageStyle.ts` | pure: the form pages' look, written once — the 900px column, the header and headings, a card, the head row, the themed fields — taken by Chat presets, Phrases, Gate commands and (the column only) Review roles |
 | `panelSurface.ts` | pure: how a list of sections becomes a page body and its paint KEY — the body with every live region blank and every section closed; which surface a section is drawn on (`SURFACE_IDS`) |
 | `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |

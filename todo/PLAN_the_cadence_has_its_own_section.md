@@ -50,6 +50,24 @@ round; its line numbers are that branch's.
    new section's name; the Settings-tab article's list of sections; the cadence article's "the sidebar says".
    The READMEs; `research/module_extension.md`; the changelog.
 
+## Story 2 — the question card reads as a list (the operator, 2026-09-29)
+
+The operator, of the sidebar's *A review is waiting on you* card after a round nobody could answer: the
+message is right and should stay, but make it pleasanter to read. Today the card is one run-on string —
+`The plan review gate needs your decision: no reviewer answered — nothing was reviewed. 0 of 3 reviewers
+answered; failed: local/PlanCritique: exit 69: …, gemini/PlanCritique: exit 1: …, codex/PlanCritique: rate
+limited (after 1 attempt): {"type":"error","message":"You've hit your usage limit…`, then the question —
+drawn as one `<div>` (`questionsSection`, `panelView.ts`).
+
+| # | Decision | Why |
+|---|---|---|
+| D7 | The EXTENSION lays the text out; the server's sentence is untouched. | The sentence is `ReviewerSummary.Sentence` (`src_mcp/core/Rounds/SessionState.cs`), which the round log, every gate reply and byte-for-byte tests also read; a layout is a display concern, and a server change would need a server release for what only the card shows. |
+| D8 | Three parts: the lead ("…needs your decision: no reviewer answered — nothing was reviewed."), one line per failed reviewer (**provider** · Role — what it said), the question on its own line. A raw vendor error body (`{"type":"error","message":"…"}`) is shown as its message. | Each reviewer's failure has a different cure; one line each is what makes it scannable. |
+| D9 | Any question that does not have this shape is drawn exactly as today. | The card shows every escalation, not only a failed round's. |
+
+Build: a pure `questionLayout.ts` (`questionHtml(text)`), RED first on the operator's own text, used by
+`questionsSection`; CSS for the list; the help's sentence about the card if it describes it.
+
 ## Test plan
 
 | Test | What it would see if the behaviour were deleted |
@@ -59,6 +77,7 @@ round; its line numbers are that branch's.
 | a live push patches the new region, RUN; an identical push does not | a line that never updates without a reload |
 | the existing live-patch tests, unchanged | a region the loop forgot |
 | help, all five languages, names Consultation cadence | a sentence sending a person to the gates for the lines |
+| the operator's question laid out: lead, three failure lines, the question last; a vendor's JSON body as its message; any other question unchanged; everything escaped | the run-on string back |
 
 ## Growth surfaces
 
@@ -76,5 +95,6 @@ None.
 - [ ] The sidebar shows Consultation cadence as its own section, and Active gates holds only the rounds.
 - [ ] The section says why it is empty.
 - [ ] A cadence line still updates live.
+- [ ] A failed round's question card reads as a lead, a line per failed reviewer, and the question.
 - [ ] Help ×5, READMEs, module doc, changelog say so.
 - [ ] One plan round and one code round; released with 0.60.0, on the operator's go-ahead.

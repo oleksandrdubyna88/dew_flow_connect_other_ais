@@ -13,6 +13,7 @@ import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendR
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
 import { jsonForScript } from './webviewHtml';
+import { questionHtml } from './questionLayout';
 import { LIVE_REGION_IDS, liveRegion, type SectionSpec, sectionsOn, settingsBody, sidebarBody, sidebarKey } from './panelSurface';
 import { SETTINGS_CSS, settingsHead, settingsScript, settingsTextCss } from './settingsPage';
 import { textOf } from './textControls';
@@ -1842,7 +1843,7 @@ function questionsSection(questions: readonly Escalation[]): string {
         )
         .join('\n      ');
       return `<div class="question">
-      <div>${escapeHtml(q.question)}</div>
+      <div class="said">${questionHtml(q.question)}</div>
       ${findings}
       <div class="meta">${escapeHtml(q.branch)}${q.translationNote ? ` · shown untranslated: ${escapeHtml(q.translationNote)}` : ''}</div>
       <button data-command="answer" data-id="${escapeHtml(q.id)}">Answer…</button>
@@ -2944,6 +2945,10 @@ const CSS = `
     background: var(--vscode-inputValidation-warningBackground);
     padding: 8px 10px; margin: 8px 0; border-radius: 0 3px 3px 0;
   }
+  /* A failed round's question, laid out (questionLayout.ts): the lead, a line per reviewer, the question. */
+  .question .failures { margin: 6px 0; padding-left: 16px; }
+  .question .failed { margin: 3px 0; overflow-wrap: anywhere; }
+  .question .ask { margin-top: 6px; font-weight: 600; }
   .question .meta { opacity: .7; font-size: calc(11rem / 13); margin-top: 4px; }
   .finding { font-size: calc(11rem / 13); opacity: .85; margin: 3px 0 0 8px; }
   .verdict {
