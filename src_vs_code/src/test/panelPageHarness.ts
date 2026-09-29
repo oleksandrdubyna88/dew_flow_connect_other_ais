@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import { panelHtml, type PanelFocus, type PanelState, settingsHtml, settingsSections } from '../panelView';
 import { SNIPPET_VERSION } from '../claudeSnippet';
+import { LIVE_REGION_IDS } from '../panelSurface';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 import { camel } from './rolesPageHarness';
@@ -166,14 +167,28 @@ export interface Page {
   readonly region: (id: string) => string;
   /** Hand the page's own message listener what the host posts, as `webview.postMessage` does. */
   readonly deliver: (data: Record<string, unknown>) => void;
+  /** How many times the page REPLACED a live region's content — an identical push must replace nothing. */
+  readonly regionWrites: (id: string) => number;
 }
 
-/** The regions the host's live push replaces, by id. */
-const LIVE_REGIONS: readonly string[] = ['live-questions', 'live-rounds', 'live-consultations', 'live-notifications'];
+/** The regions the host's live push replaces, by id — read from the declaration, so a new region cannot be missed here. */
+const LIVE_REGIONS: readonly string[] = LIVE_REGION_IDS.map((id) => `live-${id}`);
 
 /** A live region as the script meets it: content it can read and replace, and no controls of its own. */
 class Region {
-  constructor(public innerHTML: string) {}
+  /** How many times the page assigned its content. */
+  writes = 0;
+
+  constructor(private content: string) {}
+
+  get innerHTML(): string {
+    return this.content;
+  }
+
+  set innerHTML(value: string) {
+    this.content = value;
+    this.writes += 1;
+  }
 
   querySelectorAll(): readonly Control[] {
     return [];
@@ -268,6 +283,7 @@ export function runPanel(state: PanelState): Page {
     commands,
     posted,
     region: (id) => regions.get(id)?.innerHTML ?? '',
+    regionWrites: (id) => regions.get(id)?.writes ?? 0,
     deliver: (data) => {
       assert.ok(listeners.length > 0, 'the panel registers no message listener, so a live push drives nothing');
       for (const listener of listeners) {

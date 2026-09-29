@@ -169,7 +169,7 @@ owes one consultation before its first code round — is this group right, where
 forget — and from five epics the assistant is asked which epics and stories carry the most risk, each
 of which gets one of its own. *Consultation cadence* in the same tab sets the numbers and what the
 gate does: *Remind* puts the order in every review reply, *Require* also holds the group's code round
-until it is taken. *Active gates* says where each plan stands — `epics closed 4/14 · consultation for
+until it is taken. *Consultation cadence* says where each plan stands — `epics closed 4/14 · consultation for
 epics 4-6: due · branch feat/x`. An ordered consultation spends none of the calls-per-session budget: the
 gate bounds it instead — one open or answered consultation per group of epics or risky piece, and
 another only after one failed or lapsed without a verdict.
@@ -238,11 +238,13 @@ Then work as usual. Your AI opens a session, submits its plan, and the gate does
 - **Notifications** — how many messages are new since you last looked, and the page that keeps every
   one of them after its toast has gone.
 - **Active gates** — what is running right now, whole: the stage, the branch, and every reviewer
-  the round launched, and a line per plan saying where its gate stands. Finished rounds live in the log —
+  the round launched. Finished rounds live in the log —
   **Show review rounds**, the list icon in the title bar — which sorts, filters, and **exports to CSV**,
   one round or a selection of them.
 - **Active consultations** — every consultation being had: who is asking whom, on which model, which
   turn it is on. Finished ones are in the same log.
+- **Consultation cadence** — a line per plan the cadence follows: how many of its epics are closed,
+  whether the consultation a group of epics owes was taken, and the risky pieces consulted on.
 - **Phrases** — the sentences you stopped wanting to retype, one button each. Press one and it is
   on the clipboard; paste it where you were about to type it, usually the Claude Code box. Edit
   them in a tab of their own (**Edit phrases**) that saves as you type. It copies rather than

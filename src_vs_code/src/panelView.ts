@@ -12,7 +12,8 @@ import { ChatDoorRecord } from './chatDoors';
 import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendRows';
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
-import { liveRegion, type SectionSpec, sectionsOn, settingsBody, sidebarBody, sidebarKey } from './panelSurface';
+import { jsonForScript } from './webviewHtml';
+import { LIVE_REGION_IDS, liveRegion, type SectionSpec, sectionsOn, settingsBody, sidebarBody, sidebarKey } from './panelSurface';
 import { SETTINGS_CSS, settingsHead, settingsScript, settingsTextCss } from './settingsPage';
 import { textOf } from './textControls';
 import { executableFor } from './vendorTerminal';
@@ -392,6 +393,10 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // tense exactly as a round is, so it stays in the sidebar (`research/PLAN_settings_page.md`, D2).
   { id: 'rounds', title: 'Active gates', surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
   { id: 'consultations', title: 'Active consultations', surface: 'sidebar', body: (_state, live) => liveRegion('consultations', live) },
+  // The cadence lines, out of Active gates into a section of their own — the operator, 2026-09-29, who read
+  // them as consultations (`todo/PLAN_the_cadence_has_its_own_section.md`). Beside the consultations, because
+  // each line says which consultation a plan owes.
+  { id: 'cadence', title: 'Consultation cadence', surface: 'sidebar', body: (_state, live) => liveRegion('cadence', live) },
   { id: 'phrases', title: 'Phrases', surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },
   { id: 'bugz', title: 'Bugz', surface: 'sidebar', body: (state) => bugzSection(state) },
   // The SETTINGS tab: what is configured once, one tab each, in the order the sidebar used to hold them.
@@ -680,10 +685,13 @@ ${extra.script}
   // message replace all three regions even when its HTML was identical to what was already there —
   // one guaranteed DOM rebuild per paint, which is the exact cost this comparison exists to avoid.
   // (CodeRabbit, on the pull request.)
-  let lastQuestions = document.getElementById('live-questions')?.innerHTML ?? '';
-  let lastRounds = document.getElementById('live-rounds')?.innerHTML ?? '';
-  let lastConsultations = document.getElementById('live-consultations')?.innerHTML ?? '';
-  let lastNotifications = document.getElementById('live-notifications')?.innerHTML ?? '';
+  // ONE loop over the regions the host declares, written into the script as a literal — it was four
+  // copied blocks, one per region, and a fifth region would have been a fifth copy (2026-09-29).
+  const liveRegionIds = ${jsonForScript(LIVE_REGION_IDS)};
+  const lastLive = {};
+  for (const id of liveRegionIds) {
+    lastLive[id] = document.getElementById('live-' + id)?.innerHTML ?? '';
+  }
   window.addEventListener('message', (event) => {
     const message = event.data;
     // A phrase that reached the clipboard, said on the button that was pressed. It arrives AFTER the
@@ -714,33 +722,16 @@ ${extra.script}
     if (message?.type !== 'live') {
       return;
     }
-    const questions = document.getElementById('live-questions');
-    const rounds = document.getElementById('live-rounds');
-    const consultations = document.getElementById('live-consultations');
-    // The controls inside a region are destroyed with the markup they lived in, so each region is
-    // re-bound exactly when it was replaced — inside the same branch as the assignment.
-    if (questions !== null && typeof message.questions === 'string' && message.questions !== lastQuestions) {
-      lastQuestions = message.questions;
-      questions.innerHTML = message.questions;
-      bindCommands(questions);
-    }
-    if (rounds !== null && typeof message.rounds === 'string' && message.rounds !== lastRounds) {
-      lastRounds = message.rounds;
-      rounds.innerHTML = message.rounds;
-      bindCommands(rounds);
-    }
-    // Compared before it is written, like the two above: an identical innerHTML assignment still
-    // rebuilds the DOM, and this region sits in a section full of controls.
-    if (consultations !== null && typeof message.consultations === 'string' && message.consultations !== lastConsultations) {
-      lastConsultations = message.consultations;
-      consultations.innerHTML = message.consultations;
-      bindCommands(consultations);
-    }
-    const notifications = document.getElementById('live-notifications');
-    if (notifications !== null && typeof message.notifications === 'string' && message.notifications !== lastNotifications) {
-      lastNotifications = message.notifications;
-      notifications.innerHTML = message.notifications;
-      bindCommands(notifications);
+    // Each region compared before it is written — an identical innerHTML assignment still rebuilds the DOM —
+    // and re-bound exactly when it was replaced: the controls inside it die with the markup they lived in.
+    for (const id of liveRegionIds) {
+      const region = document.getElementById('live-' + id);
+      const html = message[id];
+      if (region !== null && typeof html === 'string' && html !== lastLive[id]) {
+        lastLive[id] = html;
+        region.innerHTML = html;
+        bindCommands(region);
+      }
     }
   });
 </script>
@@ -2663,24 +2654,33 @@ ${reviewers}</div>`;
 export function liveRegions(
   state: PanelState,
   nowMs: number = Date.now(),
-): { questions: string; rounds: string; consultations: string; notifications: string } {
+): { questions: string; rounds: string; consultations: string; cadence: string; notifications: string } {
   return {
     questions: questionsSection(state.questions),
-    rounds: activeRounds(state, nowMs),
+    rounds: roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id)),
     consultations: consultationsBody(state.consultations ?? [], nowMs),
+    cadence: cadenceBody(state),
     notifications: notificationsBody(state),
   };
 }
 
 /**
- * What the Active gates region shows: each recent plan's cadence line, then the rounds running now.
+ * What Consultation cadence shows: each recent plan's cadence line — or why there is none.
  *
- * <p>ONE function for the first paint and the live push, so the two cannot disagree about whether the
- * line is there. In this region rather than one of its own, because a new region is a new branch in the
- * page's script, and the cadence is about the same thing the rounds are — where the gate stands.</p>
+ * <p>ONE function for the first paint and the live push, so the two cannot disagree about whether a line
+ * is there. It was drawn above the running rounds until 2026-09-29, when the operator read the lines as
+ * consultations and asked for a section of their own; the page script patches every region by one loop
+ * now, so a region of its own costs no new branch there.</p>
  */
-function activeRounds(state: PanelState, nowMs: number): string {
-  return cadenceLinesHtml(state.cadence ?? []) + roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id));
+function cadenceBody(state: PanelState): string {
+  const lines = cadenceLinesHtml(state.cadence ?? []);
+  if (lines.length > 0) {
+    return lines;
+  }
+
+  return state.settings.cadence.mode === 'off'
+    ? '<div class="empty">The consultation cadence is off. It is switched on in <b>Settings → Consultant</b>.</div>'
+    : '<div class="empty">No plan is being followed yet: a plan appears here once a gate round names it.</div>';
 }
 
 /**
@@ -2790,6 +2790,7 @@ const CSS = `
   .sec-rounds    > summary { color: var(--tone-plan); }
   /* The Consultant section's own hue: the settings and the consultations they start read as one thing. */
   .sec-consultations > summary { color: var(--tone-uxdx); }
+  .sec-cadence   > summary { color: var(--tone-limits); }
   /* Notifications take the reliability tone, because that is what every record in them is
      about: something refused, failed, stood down or repeated. Sharing the hue with the gate's
      own reliability role says the two are asking the same question of different subjects. */

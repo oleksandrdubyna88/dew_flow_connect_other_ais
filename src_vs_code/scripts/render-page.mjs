@@ -67,7 +67,7 @@ const THEME = {
 
 const NONCE = 'render';
 
-/** Something happening, for the sidebar's picture: one round running, one consultation being had, three phrases. */
+/** Something happening, for the sidebar's picture: one round running, one consultation being had, a plan the cadence follows, three phrases. */
 function DEMO_SIDEBAR() {
   const minutesAgo = (n) => new Date(Date.now() - n * 60_000).toISOString();
   const round = {
@@ -90,6 +90,13 @@ function DEMO_SIDEBAR() {
   return {
     sessions: [{ state: { sessionId: 's1', repoPath: 'D:/work/app', branch: 'feat/settings-page', stage: 'CodeReview', awaitingResolve: false }, rounds: [round] }],
     consultations: [consultation],
+    cadence: [{
+      repoPath: 'D:/work/app', branch: 'feat/settings-page',
+      answer: {
+        plan: 'todo/PLAN_settings_page.md', mode: 'remind', epics: 5, epicsClosed: [1, 2],
+        groups: [{ range: '1-3', consulted: true }], risk: [], riskAnswered: true, unreadable: '',
+      },
+    }],
     phrases: [
       { id: 'p1', name: 'Explain', text: 'Explain, and what do you think about it?' },
       { id: 'p2', name: 'Your thoughts?', text: 'What would you advise here?' },
@@ -113,7 +120,7 @@ function page(name, size) {
   const text = { uiScale: size, textTone: 0 };
   switch (which) {
     case 'sidebar': {
-      const open = ['notifications', 'rounds', 'consultations', 'phrases', 'bugz'];
+      const open = ['notifications', 'rounds', 'consultations', 'cadence', 'phrases', 'bugz'];
       return from('panelView.js').panelHtml({ ...panelState(''), ...text, ...DEMO_SIDEBAR(), openSections: open }, NONCE);
     }
     case 'settings':

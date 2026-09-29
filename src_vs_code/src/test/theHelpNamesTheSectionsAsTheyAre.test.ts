@@ -16,6 +16,22 @@ function everythingIn(language: (typeof HELP_LANGUAGES)[number]): string {
   return HELP_ARTICLES.map((article) => Object.values(bodyFor(article, language).body).join('\n')).join('\n');
 }
 
+// The two articles that walk through the sidebar's sections. Scoped to them, because Consultation cadence
+// is also the name of a Settings control, which the help named long before it was a section too.
+const SIDEBAR_ARTICLES = ['recent-rounds', 'the-settings-tab'];
+
+for (const language of HELP_LANGUAGES) {
+  test(`the ${language} help's sidebar articles name Consultation cadence, the section the cadence lines moved to`, () => {
+    for (const id of SIDEBAR_ARTICLES) {
+      const article = HELP_ARTICLES.find((one) => one.id === id);
+      assert.ok(article !== undefined, `there is no ${id} article`);
+      const text = Object.values(bodyFor(article, language).body).join('\n');
+
+      assert.ok(text.includes('**Consultation cadence**'), `the ${language} ${id} article does not name the Consultation cadence section`);
+    }
+  });
+}
+
 for (const language of HELP_LANGUAGES) {
   test(`the ${language} help no longer sends anybody to Active rounds, and names both sections that replaced it`, () => {
     const text = everythingIn(language);
