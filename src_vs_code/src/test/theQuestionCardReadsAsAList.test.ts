@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { questionHtml } from '../questionLayout';
+import { liveRegions } from '../panelView';
+import { panelState, runPanel } from './panelPageHarness';
 
 /**
  * A round nobody could answer reaches the sidebar's "A review is waiting on you" card as one run-on sentence,
@@ -38,6 +40,30 @@ test('a vendor\'s raw error body is shown as its message, not as JSON', () => {
 
   assert.match(codex, /^codex · PlanCritique — rate limited \(after 1 attempt\): You’ve hit your usage limit\./);
   assert.ok(!codex.includes('{"type"'), `the JSON is still there: ${codex}`);
+});
+
+test('a vendor message with escaped quotes is shown whole, not cut at the first one', () => {
+  const quoted = FAILED_ROUND.replace('You’ve hit your usage limit.', 'The \\"luna\\" model is busy.');
+  const codex = texts(questionHtml(quoted), 'failed')[2]!;
+
+  // The card escapes a quote as &quot; — what must not be there is the JSON's own backslash.
+  assert.match(codex, /rate limited \(after 1 attempt\): The &quot;luna&quot; model is busy\./, `the message was cut or left escaped: ${codex}`);
+  assert.ok(!codex.includes('\\'), `an escape is still on screen: ${codex}`);
+});
+
+test('the card in the running sidebar shows the laid-out question, and a live push keeps it laid out', () => {
+  // RUN (.agents/PROJECT.md): the sidebar's own page, with the question in its live region.
+  const question = { id: 'q1', sessionId: 's1', repoPath: 'D:/r', branch: 'feat/x', question: FAILED_ROUND, openFindings: [], askedUtc: '2026-09-29T00:00:00Z' };
+  const state = panelState('', { questions: [question] });
+  const page = runPanel(state);
+  const card = page.region('live-questions');
+
+  assert.equal(texts(card, 'failed').length, 3, `the rendered card is not laid out: ${card}`);
+  assert.deepEqual(texts(card, 'ask'), ['Proceed anyway, or fix the findings and review again?']);
+
+  const later = { ...question, id: 'q2' };
+  page.deliver({ type: 'live', ...liveRegions(panelState('', { questions: [later] })) });
+  assert.equal(texts(page.region('live-questions'), 'failed').length, 3, 'a live push drew the question as a run-on block');
 });
 
 test('any other question is drawn exactly as it was', () => {
