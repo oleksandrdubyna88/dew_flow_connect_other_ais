@@ -23,6 +23,10 @@ its own.
 **Active consultations** — the consultations being had — and **Consultation cadence**, a line per plan
 saying how many of its epics are closed and whether the consultation it owes was taken.
 
+**A review that is waiting on you reads as a list.** When a round could not be reviewed, its card in the
+sidebar is laid out: what happened, one line for each reviewer that failed and what it said — a vendor's
+raw error shown as its message — and the question on its own line.
+
 **Review roles opens at the text size you chose.** It opened at the theme's size and caught up only when
 the size was pushed to it afterwards.
 
