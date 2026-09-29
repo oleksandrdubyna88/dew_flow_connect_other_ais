@@ -209,3 +209,14 @@ Reciprocal of the *Boundaries* table in [PLAN_settings_page.md](../research/PLAN
 Disjoint otherwise. **Order:** independent; whichever lands second rebases and re-runs its own proof
 (`prove-move.mjs` here, the suite there). The surfaces change is a design change, not a move, so it is
 never bundled into one of this plan's extraction pull requests.
+
+## The boundary with the every-page plan (MANDATORY, both sides)
+
+Reciprocal of the *Boundaries* table in [PLAN_every_page_reads_alike.md](PLAN_every_page_reads_alike.md).
+
+| Item | Built by | The other plan's part |
+|---|---|---|
+| Two `zoom`/`tone` branches in `PanelProvider.receive`, and `uiScale`/`textTone` read into `PanelState` | the every-page plan, story S2 | none — this plan never extracts the dispatcher |
+| Every extraction cluster | this plan | none |
+
+**Order:** independent; whichever lands second rebases.

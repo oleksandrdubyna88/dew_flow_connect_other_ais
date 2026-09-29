@@ -168,6 +168,17 @@ its first commit, which is the shape this plan is converting the others to.
 
 So the count in *How much is left* does not grow when that page lands.
 
+## The boundary with the every-page plan (MANDATORY, both sides)
+
+Reciprocal of the *Boundaries* table in [PLAN_every_page_reads_alike.md](PLAN_every_page_reads_alike.md).
+
+| Item | Built by | This plan's part |
+|---|---|---|
+| A NEW census that RUNS every page's script with its text controls, and the widenings of `test/rolesPageHarness.ts` it needs (per-node click listeners, `style.setProperty`, `documentElement`) | the every-page plan, story S1 | none — the widened shim is there for this plan's conversions to use |
+| The existing source-text assertions | this plan | none — the every-page plan adds no new one |
+
+**Order:** independent. The count in *How much is left* does not grow when that plan lands.
+
 ## Definition of Done
 
 - [ ] `src/test/pageHarness.ts` exists and every page test imports it; no page test builds its own.
