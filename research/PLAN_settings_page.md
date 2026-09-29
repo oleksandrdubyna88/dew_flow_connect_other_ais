@@ -1,6 +1,6 @@
 # PLAN — the sidebar keeps what is happening now; everything you configure opens in a Settings tab
 
-> Status: **IMPLEMENTED, 2026-09-28 — S1, S2, S3 and S4 shipped on `feat/settings-page-e1`, in one pull request under one code round. S5 was NOT built here: it was extracted to [PLAN_the_sidebar_pays_only_for_what_it_shows.md](../todo/PLAN_the_sidebar_pays_only_for_what_it_shows.md). Still open after the merge: the extension and coai-mcp releases, which publish and so wait for the operator; coai-server's one reworded sentence waits for that server's next release.** What shipped differently is in *Progress and deviations*. Scope: `src_vs_code` (the sidebar
+> Status: **IMPLEMENTED, 2026-09-28 — S1, S2, S3 and S4 shipped on `feat/settings-page-e1`, in one pull request under one code round. S5 was NOT built here: it was extracted to [PLAN_the_sidebar_pays_only_for_what_it_shows.md](../todo/PLAN_the_sidebar_pays_only_for_what_it_shows.md). Released 2026-09-29, on the operator's go-ahead: extension 0.59.0 (Marketplace) and coai-mcp 0.40.3 (six platforms). Still open: coai-server's one reworded sentence waits for that server's next release.** What shipped differently is in *Progress and deviations*. Scope: `src_vs_code` (the sidebar
 > `coai.panel`, a new `Settings` editor tab, `package.json`, the help in five languages, the READMEs),
 > the user-facing strings in `src_mcp` and `src_server` that send a person to a sidebar section, and
 > `research/module_extension.md` / `research/architecture.md`.
@@ -380,5 +380,5 @@ No file, table, cache or process is added; the extracted S5 can only remove work
 - [x] The boundary rows exist in all five plans in the table — the four siblings and the extracted S5 plan.
 - [x] One `review_code` round over the whole committed diff; its verdict and reviewer count are in the PR.
 - [ ] **Open:** coai-server's reworded sentence ships with that server's next release — no release of its own.
-- [ ] **Open:** extension and coai-mcp released after the merge (S4 changes both) — each with the
+- [x] Extension 0.59.0 and coai-mcp 0.40.3 released 2026-09-29, after the merge (S4 changes both) — each with the
       operator's go-ahead, since both publish.
