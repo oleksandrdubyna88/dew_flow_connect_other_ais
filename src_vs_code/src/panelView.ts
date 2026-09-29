@@ -386,9 +386,12 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // The SIDEBAR: what is happening now, and the two tools a person reaches for while it happens — in the
   // order the operator named them (`research/PLAN_settings_page.md`, D1).
   { id: 'notifications', title: 'Notifications', surface: 'sidebar', body: (_state, live) => liveRegion('notifications', live) },
-  // A consultation being had is present tense exactly as a round is, so its cards stay here, under the
-  // rounds, when the Consultant's settings move to the Settings tab (D2).
-  { id: 'rounds', title: 'Active rounds', surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) + liveRegion('consultations', live) },
+  // The gates and the consultations each in a section of its own, where Active rounds was — the operator's
+  // ask of 2026-09-29 (`todo/PLAN_every_page_reads_alike.md`, S4). The gates keep the id `rounds`, and the
+  // cadence lines stay with them: they say where each plan's gate stands. A consultation being had is present
+  // tense exactly as a round is, so it stays in the sidebar (`research/PLAN_settings_page.md`, D2).
+  { id: 'rounds', title: 'Active gates', surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
+  { id: 'consultations', title: 'Active consultations', surface: 'sidebar', body: (_state, live) => liveRegion('consultations', live) },
   { id: 'phrases', title: 'Phrases', surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },
   { id: 'bugz', title: 'Bugz', surface: 'sidebar', body: (state) => bugzSection(state) },
   // The SETTINGS tab: what is configured once, one tab each, in the order the sidebar used to hold them.
@@ -406,7 +409,7 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   { id: 'server', title: 'MCP server', surface: 'settings', body: (state) => serverBody(state) },
 ];
 
-/** The Consultant tab: the skew notes, who each caller asks, and when. Its running consultations are in Active rounds. */
+/** The Consultant tab: the skew notes, who each caller asks, and when. Its running consultations are in the sidebar, under Active consultations. */
 function consultantSection(state: PanelState): string {
   return consultantSkew(state)
     + vaultKeySplit(state)
@@ -2670,7 +2673,7 @@ export function liveRegions(
 }
 
 /**
- * What the Active rounds region shows: each recent plan's cadence line, then the rounds running now.
+ * What the Active gates region shows: each recent plan's cadence line, then the rounds running now.
  *
  * <p>ONE function for the first paint and the live push, so the two cannot disagree about whether the
  * line is there. In this region rather than one of its own, because a new region is a new branch in the
@@ -2785,6 +2788,8 @@ const CSS = `
   .sec-bugz      > summary { color: var(--tone-sec); }
   .sec-usage     > summary { color: var(--tone-arch); }
   .sec-rounds    > summary { color: var(--tone-plan); }
+  /* The Consultant section's own hue: the settings and the consultations they start read as one thing. */
+  .sec-consultations > summary { color: var(--tone-uxdx); }
   /* Notifications take the reliability tone, because that is what every record in them is
      about: something refused, failed, stood down or repeated. Sharing the hue with the gate's
      own reliability role says the two are asking the same question of different subjects. */
@@ -2889,7 +2894,7 @@ const CSS = `
     opacity: .8; flex: 0 0 auto;
   }
   .help:hover { opacity: 1; }
-  /* The left edge carries the vendor's colour — the same one its name has in Active rounds and in
+  /* The left edge carries the vendor's colour — the same one its name has in Active gates and in
      the rounds log, so a reviewer can be followed from its settings to its running round without
      reading. The width is here and the COLOUR is inline, because it is computed per vendor rather
      than named by a class; the fallback keeps a card deliberate when there is no colour to give it.
