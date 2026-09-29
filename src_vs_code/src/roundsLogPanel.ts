@@ -6,6 +6,9 @@ import { DbTotals, EMPTY_TOTALS } from './roundsDb';
 import { LogPeriod } from './logPeriod';
 import { Push, PushLedger, Region } from './pushLedger';
 import { ExportedRow, LogCommand, logCommandOf, LogPageMessage } from './roundsLogMessages';
+import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
+import { currentTextTone } from './textToneHost';
+import { currentUiScale } from './uiScaleHost';
 
 /** What the page can ask the extension to do. Everything else is page state and never comes back. */
 export interface RoundsLogHooks {
@@ -138,13 +141,20 @@ export class RoundsLogPanel {
     );
     this.panel = panel;
     panel.webview.html = roundsLogHtml(
-      rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml, totals, consultationsHtml);
+      rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml, totals, consultationsHtml,
+      { size: currentUiScale(), tone: currentTextTone() });
     this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml };
     this.rebuilt();
 
-    panel.webview.onDidReceiveMessage((message: LogPageMessage) => this.received(logCommandOf(message)));
+    const text = pushTextControlsTo(panel.webview);
+    panel.webview.onDidReceiveMessage((message: LogPageMessage) => {
+      if (!appliedTextControl(message, 'review rounds page')) {
+        this.received(logCommandOf(message));
+      }
+    });
 
     panel.onDidDispose(() => {
+      text.dispose();
       this.panel = undefined;
       this.clearAssumption();
       this.ledger.rebuilt();

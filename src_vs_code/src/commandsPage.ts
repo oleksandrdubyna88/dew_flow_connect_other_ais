@@ -2,6 +2,7 @@ import { COMMAND_MODELS_SINCE } from './commandModels';
 import { SHIPPED_COMMANDS, fileIdOf, hasText, shippedTextOf, type CommandRow, type CommandStageName, type ShippedCommand } from './commands';
 import type { RowCommand } from './commandsEdit';
 import { compareVersions } from './coaiInstall';
+import { TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle, textOf } from './textControls';
 import { escapeHtml } from './webviewHtml';
 
 /**
@@ -16,6 +17,9 @@ export interface CommandsPageState {
   /** The installed server's version, or empty when it is not known. */
   readonly serverVersion: string;
   readonly perSide: boolean;
+  /** The text size and tone the page is drawn in; absent is the theme's own, as on the help page. */
+  readonly uiScale?: number;
+  readonly textTone?: number;
 }
 
 /** What the page can ask the host for: an edit of the rows, or a text written or restored. */
@@ -83,10 +87,10 @@ export function commandsHtml(state: CommandsPageState, nonce: string): string {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gate commands</title>
-${STYLES}
+${styles(textOf(state).size, textOf(state).tone)}
 </head>
 <body>
-<header><h1>Gate commands</h1></header>
+<header><h1>Gate commands</h1>${textControlsHtml(textOf(state).size, textOf(state).tone)}</header>
 <p class="lead">The orders the gate hands the AI that called it. Everything here is saved as you type${state.perSide ? ', for this side of the machine' : ''}.</p>
 ${note.length > 0 ? `<div class="stale" role="status">${escapeHtml(note)}</div>` : ''}
 <h2>Yours</h2>
@@ -147,8 +151,11 @@ function placeholderNote(one: ShippedCommand): string {
     : `<p class="note">The server fills in ${one.placeholders.map((p) => `<code>${escapeHtml(p)}</code>`).join(', ')}.</p>`;
 }
 
-const STYLES = `<style>
-body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 0 16px 24px; }
+function styles(size: number, tone: number): string {
+  return `<style>
+${TEXT_CONTROLS_CSS}
+body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 0 16px 24px; ${textControlsStyle(size, tone)} }
+header { display: flex; align-items: baseline; gap: 12px; }
 .lead, .note { color: var(--vscode-descriptionForeground); }
 .stale { border-left: 3px solid var(--vscode-editorWarning-foreground); padding: 4px 8px; margin: 8px 0; }
 .command { border-top: 1px solid var(--vscode-panel-border); padding: 8px 0; }
@@ -157,6 +164,7 @@ textarea { width: 100%; box-sizing: border-box; font-family: var(--vscode-editor
 .marker { margin: 4px 0; }
 .badge { font-size: 0.8em; color: var(--vscode-textLink-foreground); }
 </style>`;
+}
 
 /**
  * Delegated on the document, as the roles page's: a block is replaced whenever the rows change. A
@@ -167,6 +175,7 @@ function script(nonce: string): string {
   return `<script nonce="${nonce}">
 (function () {
   const vscode = acquireVsCodeApi();
+  ${textControlsScript()}
   const post = (message) => { vscode.postMessage(message); };
   const idOf = (el) => { const row = el.closest('[data-id]'); return row ? row.dataset.id : ''; };
   document.addEventListener('input', (event) => {

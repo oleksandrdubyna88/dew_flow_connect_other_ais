@@ -174,6 +174,10 @@ function open(rows: readonly LogRow[], totals: DbTotals = TOTALS, extra = ''): P
 
       return [group];
     }
+    // The text controls, found in the markup like every other control here; pressing them is the page
+    // census's job (everyPageHasBothTextControls), so these stubs are only ever bound.
+    const control = /^button\[data-(zoom|tone)\]$/.exec(selector);
+    if (control !== null) { return byAttribute(`data-${control[1]}`, 'button'); }
     const one = /^\[data-filter="([\w-]+)"\]$/.exec(selector);
     if (one !== null) { return byAttribute('data-filter').filter((s) => s.getAttribute('data-filter') === one[1]); }
 

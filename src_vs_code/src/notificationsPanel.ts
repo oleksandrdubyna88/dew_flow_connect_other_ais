@@ -11,6 +11,9 @@ import {
 import { notificationsPageHtml, waitingPageHtml } from './notificationsPage';
 import { LedgerRead, UNREADABLE_LEDGER, snapshotOf } from './notificationsSnapshot';
 import { Span, acknowledge, covers, readSeen } from './notificationsSeen';
+import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
+import { currentTextTone } from './textToneHost';
+import { currentUiScale } from './uiScaleHost';
 import { withinTheClock } from './withinTheClock';
 
 /**
@@ -127,11 +130,15 @@ export class NotificationsPanel {
       // Something to read WHILE the disk is read. Without it a slow share shows a window with
       // nothing in it, which is indistinguishable from one that failed. (codex, the S5 code round.)
       panel.webview.html = waitingPageHtml(coaiDataDir(), randomBytes(16).toString('base64'));
+      const text = pushTextControlsTo(panel.webview);
       panel.onDidDispose(() => {
+        text.dispose();
         this.panel = undefined;
       });
       panel.webview.onDidReceiveMessage((message: FromThePage) => {
-        this.heard(message);
+        if (!appliedTextControl(message, 'notifications page')) {
+          this.heard(message);
+        }
       });
       panel.reveal(vscode.ViewColumn.Active);
     } else {
@@ -141,7 +148,7 @@ export class NotificationsPanel {
     await this.redraw();
   }
 
-  /** The page's two messages, and nothing else. */
+  /** The page's two messages, and nothing else (a press on a text control never reaches here). */
   private heard(message: FromThePage): void {
     const generation = message.generation;
     if (message.type === 'shown' && typeof generation === 'number') {
@@ -215,7 +222,10 @@ export class NotificationsPanel {
     this.loaded = snapshot.loaded;
     this.covered = snapshot.covered;
     this.notice = '';
-    alive.webview.html = notificationsPageHtml(snapshot.state, randomBytes(16).toString('base64'));
+    alive.webview.html = notificationsPageHtml(
+      { ...snapshot.state, uiScale: currentUiScale(), textTone: currentTextTone() },
+      randomBytes(16).toString('base64'),
+    );
   }
 
   /**

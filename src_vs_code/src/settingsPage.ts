@@ -1,4 +1,6 @@
 import { tabCss } from './tabStrip';
+import { TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle } from './textControls';
+import { scalePx } from './zoomControl';
 import { tabKeysScript } from './tabKeys';
 import { jsonForScript } from './webviewHtml';
 
@@ -25,7 +27,31 @@ ${tabCss('0 0 12px')}
   .settings .tabs .tab { width: auto; margin: 0; flex: 0 0 auto; }
   .settings .pane { max-width: 760px; padding: 4px 2px 16px; }
   .settings [hidden] { display: none !important; }
+  .settingsHead { display: flex; align-items: baseline; gap: 12px; margin: 0 0 8px; }
+  .settingsHead h1 { font-size: 1.2em; margin: 0; }
+  /* The shared sheet draws every button full width with a top margin — right for the sidebar's actions,
+     wrong for four small buttons in a row. */
+  .zoomCtl button, .toneCtl button { width: auto; margin: 0; }
+${TEXT_CONTROLS_CSS}
 `;
+
+/**
+ * The Settings tab's size and tone, for the page's stylesheet — the ROOT as well as the body, because the
+ * shared sheet sizes its small print in `rem`, which is measured from the root alone
+ * (`todo/PLAN_every_page_reads_alike.md`, D5). In the stylesheet rather than the markup, so neither value
+ * is in the paint key and a press never reloads the tab.
+ */
+export function settingsTextCss(size: number, tone: number): string {
+  return `
+  html { font-size: ${scalePx(size)}px; }
+  body { ${textControlsStyle(size, tone)} }
+`;
+}
+
+/** The header above the tab strip: the page's name and its two text controls. */
+export function settingsHead(size: number, tone: number): string {
+  return `<header class="settingsHead"><h1>Settings</h1>${textControlsHtml(size, tone)}</header>`;
+}
 
 /**
  * Opens the tab the host holds, switches on a press or an arrow key, and says which one to the host.
@@ -64,7 +90,12 @@ export function settingsScript(heldTab: string): string {
     if (event.data?.type === 'showTab') { showSettingsTab(String(event.data.id ?? ''), false); }
   });
   showSettingsTab(shownTab, false);
-${tabKeysScript()}`;
+${tabKeysScript()}
+${textControlsScript()}
+  // The root too: the small print is in rem, and rem follows the root, not the body.
+  window.addEventListener('message', (event) => {
+    if (event.data?.type === 'uiScale') { document.documentElement.style.fontSize = event.data.px + 'px'; }
+  });`;
 }
 
 /**

@@ -14,6 +14,9 @@ import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
 import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
 import { chooseSettingsTab, heldSettingsTab, type SettingsHost } from './settingsPanel';
+import { appliedTextControl } from './textControlsHost';
+import { currentTextTone } from './textToneHost';
+import { currentUiScale } from './uiScaleHost';
 import { pastedSnippetStatus } from './snippetInWorkspace';
 import { discoverEngine, LocalEngine, openAiBaseOf, probeEngine } from './localEngines';
 import { EscalationWatcher } from './escalationWatcher';
@@ -902,6 +905,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * the page, so it cannot be claimed. A reply (`copied`, a snap-back) goes to that page alone.
    */
   private receive(from: SurfaceSlot, m: PanelMessage): void {
+    // A press on a text control (the Settings tab's header) is the person's setting: it goes straight to
+    // the configuration, whose change pushes the new value to every page — never through the write queue.
+    if (appliedTextControl(m, 'settings')) {
+      return;
+    }
     if (m.type === 'section' && m.id !== undefined) {
       this.openSections = m.open === true
         ? [...new Set([...this.openSections, m.id])]
@@ -972,6 +980,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       perSide: this.perSide(config),
       questions: this.watcher.openQuestions,
       openSections: this.openSections,
+      uiScale: currentUiScale(),
+      textTone: currentTextTone(),
       sessions,
       // Not asked at all while the cadence is off: the server would answer `null` for every session.
       cadence: settings.cadence.mode === 'off' ? [] : this.cadenceProbes.lines(sessions),

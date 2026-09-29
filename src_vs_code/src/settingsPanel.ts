@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 import { settingsSections } from './panelView';
 import { nextSettingsTab, SETTINGS_LOADING } from './settingsPage';
 import { openedFrom } from './tabStrip';
+import { pushTextControlsTo } from './textControlsHost';
 
 /**
  * The Settings editor tab — a thin host. Everything it SHOWS is the panel's (`panelProvider.ts` paints
@@ -68,7 +69,9 @@ export function openSettings(host: SettingsHost, requested?: unknown): void {
   // a broken one.
   panel.webview.html = SETTINGS_LOADING;
   const opened = panel;
+  const text = pushTextControlsTo(opened.webview);
   opened.onDidDispose(() => {
+    text.dispose();
     if (panel === opened) {
       panel = undefined;
     }

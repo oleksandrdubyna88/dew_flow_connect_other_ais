@@ -68,16 +68,31 @@ export class Node {
     return !this.hidden && (this.parent?.rendered() ?? true);
   }
 
-  /** Listeners a page binds to one element; recorded so a page that binds them can run, never fired. */
+  /** The kinds of the listeners a page bound to this element, in order. */
   readonly listeners: string[] = [];
 
-  addEventListener(kind: string): void {
+  /** The listeners themselves: a click runs this element's own before it bubbles to the document's. */
+  private readonly handlers: { readonly kind: string; readonly run: (event: unknown) => void }[] = [];
+
+  addEventListener(kind: string, run?: (event: unknown) => void): void {
     this.listeners.push(kind);
+    if (run !== undefined) {
+      this.handlers.push({ kind, run });
+    }
   }
 
+  /**
+   * A click: this element's own click listeners first, then the document's, as a browser bubbles it.
+   * The text-size and text-tone controls bind each button directly, so a shim that only bubbled would
+   * never reach them. A node with neither is not in the running page, and says so.
+   */
   click(): void {
-    assert.ok(this.dispatchClick !== undefined, 'this node was clicked but is not in the running page');
-    this.dispatchClick(this);
+    const own = this.handlers.filter((handler) => handler.kind === 'click');
+    assert.ok(own.length > 0 || this.dispatchClick !== undefined, 'this node was clicked but is not in the running page');
+    for (const handler of own) {
+      handler.run({ target: this, currentTarget: this, preventDefault: (): void => undefined });
+    }
+    this.dispatchClick?.(this);
   }
 
   /** The chain upwards, matching `[data-x]` and `[data-x="y"]` — the only two shapes the page uses. */
@@ -124,6 +139,20 @@ export function pageScript(html: string): string {
   return html.slice(start, end);
 }
 
+/**
+ * An element's `style`, recording what the page writes: the two properties the text controls set by name,
+ * and every custom property through `setProperty` — the tone is two of those.
+ */
+export class Style {
+  fontSize = '';
+  color = '';
+  readonly custom: Record<string, string> = {};
+
+  setProperty(name: string, value: string): void {
+    this.custom[name] = value;
+  }
+}
+
 /** An event as the page's handlers receive it, with the one thing a test reads back. */
 export interface FiredEvent {
   readonly defaultPrevented: boolean;
@@ -136,6 +165,10 @@ export interface Page {
   fire(kind: string, target: Node, extra?: Readonly<Record<string, unknown>>): FiredEvent;
   /** A message from the host, delivered to every `window` message listener, as `postMessage` does. */
   message(data: unknown): void;
+  /** What the page wrote to `document.body.style`. */
+  readonly body: Style;
+  /** What the page wrote to `document.documentElement.style` — the root, which `rem` is measured from. */
+  readonly root: Style;
 }
 
 /**
@@ -185,8 +218,13 @@ export function runPageHtml(
   const fakeDocument = {
     addEventListener: add,
     querySelectorAll: (selector: string): readonly Node[] => inDocument[selector] ?? [],
-    getElementById: (): null => null,
-    body: { style: { fontSize: '' } },
+    // The first node a test put in the document under that selector, or nothing — never a stand-in.
+    querySelector: (selector: string): Node | null => inDocument[selector]?.[0] ?? null,
+    // An id answers only with the node a test put in the document under `#id` — never an inert stand-in,
+    // which would let a page that looks up an element it never draws run as if it worked.
+    getElementById: (id: string): Node | null => inDocument[`#${id}`]?.[0] ?? null,
+    body: { style: new Style() },
+    documentElement: { style: new Style() },
   };
 
   const script = pageScript(html);
@@ -216,5 +254,7 @@ export function runPageHtml(
         handler({ data });
       }
     },
+    body: fakeDocument.body.style,
+    root: fakeDocument.documentElement.style,
   };
 }

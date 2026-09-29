@@ -23,6 +23,7 @@ import {
   BlindSpot, countsByRound, DbConsultation, DbFinding, DbLog, DbTotals, decisionsByRound, EMPTY_LOG, EMPTY_TOTALS,
   findingsByRound, resolvedByRound, roundKeyOf,
 } from './roundsDb';
+import { PLAIN_TEXT, TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle, type TextSettings } from './textControls';
 import { escapeHtml, jsonForScript } from './webviewHtml';
 
 /**
@@ -1326,6 +1327,7 @@ export function roundsLogHtml(
   spotsHtml = '',
   totals: DbTotals = EMPTY_TOTALS,
   consultationsHtmlText = '',
+  text: TextSettings = PLAIN_TEXT,
 ): string {
   const headers = COLUMNS
     .map((c) => (c.sortable === false
@@ -1355,7 +1357,9 @@ export function roundsLogHtml(
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>ConnectOtherAIs — review rounds</title>
 <style>
-  body { font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 16px 20px; }
+  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); margin: 0; padding: 16px 20px; ${textControlsStyle(text.size, text.tone)} }
+  header { display: flex; align-items: baseline; gap: 12px; }
+${TEXT_CONTROLS_CSS}
   h1 { font-size: 1.3em; margin: 0 0 12px; }
   h2 { font-size: 1.1em; margin: 16px 0 8px; }
   .question { border: 1px solid var(--vscode-inputValidation-warningBorder, var(--vscode-panel-border)); border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
@@ -1514,7 +1518,7 @@ export function roundsLogHtml(
 </style>
 </head>
 <body>
-<h1>Review rounds</h1>
+<header><h1>Review rounds</h1>${textControlsHtml(text.size, text.tone)}</header>
 <div id="failed" class="failed" hidden></div>
 <div id="questions">${questionsHtml(questions)}</div>
 <div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="conversations">Conversations</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
@@ -1566,6 +1570,7 @@ export function roundsLogHtml(
     failed(String(message) + ' (line ' + line + ':' + column + ')');
   };
   var vscode = acquireVsCodeApi();
+  ${textControlsScript()}
   // Which sections opened on the "Reading the log…" placeholder, stated by the render rather than
   // read back out of the DOM: what a section CONTAINS is HTML from the database, and searching it
   // for the placeholder's own words is a check that a blind spot titled "Reading the log" would

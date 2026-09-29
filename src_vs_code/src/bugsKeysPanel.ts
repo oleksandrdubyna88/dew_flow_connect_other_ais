@@ -30,6 +30,9 @@ import {
 import { Users, usersPageHtml, withControls } from './bugsKeysPage';
 import { Turns } from './bugsKeysTurns';
 import { notify, notifyAndAsk } from './notify';
+import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
+import { currentTextTone } from './textToneHost';
+import { currentUiScale } from './uiScaleHost';
 
 /**
  * The window the Users tab lives in.
@@ -115,8 +118,13 @@ export class BugsKeysPanel {
       this.panel.onDidDispose(() => {
         this.panel = undefined;
       });
+      const text = pushTextControlsTo(this.panel.webview);
+      this.panel.onDidDispose(() => { text.dispose(); });
       this.panel.webview.onDidReceiveMessage((m: { type?: string; id?: string }) => {
-        void this.turns.run(() => this.act(m.type ?? '', m.id ?? ''));
+        // A press on a text control is the person's setting, not a turn of this page's flow.
+        if (!appliedTextControl(m, 'key page')) {
+          void this.turns.run(() => this.act(m.type ?? '', m.id ?? ''));
+        }
       });
     }
 
@@ -451,7 +459,7 @@ export class BugsKeysPanel {
       return;
     }
 
-    this.panel.webview.html = usersPageHtml(users, nonce());
+    this.panel.webview.html = usersPageHtml(users, nonce(), { size: currentUiScale(), tone: currentTextTone() });
     this.lastPaint = users;
   }
 
