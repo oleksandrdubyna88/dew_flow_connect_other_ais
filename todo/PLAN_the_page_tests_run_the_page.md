@@ -170,7 +170,7 @@ So the count in *How much is left* does not grow when that page lands.
 
 ## The boundary with the every-page plan (MANDATORY, both sides)
 
-Reciprocal of the *Boundaries* table in [PLAN_every_page_reads_alike.md](PLAN_every_page_reads_alike.md).
+Reciprocal of the *Boundaries* table in [PLAN_every_page_reads_alike.md](../research/PLAN_every_page_reads_alike.md).
 
 | Item | Built by | This plan's part |
 |---|---|---|

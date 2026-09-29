@@ -1,11 +1,11 @@
 # PLAN — every page reads alike: the text controls everywhere, one column, and the gates apart from the consultations
 
-> Status: **plan only, nothing implemented yet, 2026-09-29.** Scope: `src_vs_code` — the pages' text
+> Status: **IMPLEMENTED, 2026-09-29 — S1 to S5 shipped on `feat/pages-read-alike` in one pull request, under one plan round and one code round, plus the fixes my own code review found after it. Still open after the merge: the extension release (0.60.0), which publishes and so waits for the operator; and question 1 below — whether the sidebar should carry the controls too.** What shipped differently is in § *What shipped differently*. Scope: `src_vs_code` — the pages' text
 > controls, the Settings tab's typography, the Gate commands and Review roles frames, the sidebar's
 > Active rounds section, the help in five languages, the READMEs and their screenshots.
 >
-> Related docs: [PLAN_settings_page.md](../research/PLAN_settings_page.md) (the Settings tab this builds on),
-> [module_extension.md](../research/module_extension.md), [architecture.md](../research/architecture.md).
+> Related docs: [PLAN_settings_page.md](PLAN_settings_page.md) (the Settings tab this builds on),
+> [module_extension.md](module_extension.md), [architecture.md](architecture.md).
 >
 > Revised after the plan round (coai, `good_enough`, 3/3) and my own review beside it: the `rem` sizing,
 > the MCP pane's `zoom`, the render paths that must carry both values, a live CSS defect on Review roles,
@@ -217,6 +217,23 @@ Rejected, with the reasons in the round's record: a press silently failing throu
 push moves the page, not the key), a structural check that a function is called (a run test exists), and
 localization bundles (there are none; UI names stay English in every translation).
 
+## What shipped differently (recorded at promotion, 2026-09-29)
+
+| Story | As planned | As shipped |
+|---|---|---|
+| S1 | the census over all eleven pages | ten pages rendered and RUN; the Chat page's two controls are asserted by its own tests (`chatPage.test.ts`), because its state is large enough that a copy of its fixture here would be the duplication the census exists to prevent |
+| S1 | the size and tone read into each page's state | read when each page's html is BUILT on the two hosts whose state is gathered before awaits — the Settings tab (`panelProvider.pageFor`) and Review roles — found by my own review: a press during a render in flight was otherwise drawn over by the old value, with an unchanged paint key |
+| S1 | hosts push both and apply both | also: Phrases and Review roles take a press OUT of their own write queue first (`appliedTextControl`), as the other four raw-message hosts do — in the queue it flushed a half-typed edit and a failed save read as the page's own |
+| S1 | — | a step that rounds to nothing is not a press (`oneStep`) |
+| S2 | the 22 font sizes, the `?` circle, the two `rem` bases | also the Settings tab's two 64px number boxes, which clipped a price at a large size |
+| S2 | — | the Notifications title's margin moved to the header that now holds it; its waiting and unreadable pages (no script, so no push) are drawn in the chosen size |
+| S3 | Chat presets' and Phrases' parsed rules unchanged, as a test | checked ONCE, by a script, against the build before the change and recorded in the S3 commit: Chat presets identical as a set, Phrases gaining only `select` in the field rule and an `h2` rule, neither of which it draws. Not a lasting test: its baseline would have been a frozen copy of the very rules the module now owns |
+| S3 | Review roles takes the frame | its 900px column landed in S1, with the size defect's fix, and S3 moved it onto `formBodyCss` |
+| S5 | `scripts/render-page.mjs` | as planned, and `browserLayout.mjs` widened with `screenshot()` rather than a second helper; it removes the old picture before rendering and checks the browser's exit, so a failed render is never reported as one |
+| all | — | the host wiring (every host imports `vscode`) is pinned structurally — the host census over blanked source, the Settings dispatcher's early return, the raw-message hosts' order — each paired with a known-instance list |
+
+The real-editor scenarios ran 15 of 15. The coai code round ran over the five stories; the review fixes after it were not re-gated, by the rule of one code round per piece of work.
+
 ## Growth surfaces
 
 Two small modules and two PNG screenshots in `assets/`, each kept under 300 KB as the existing ones are.
@@ -231,22 +248,22 @@ No setting, file, cache or process.
 
 | Plan | This plan owns | That plan keeps | Order |
 |---|---|---|---|
-| [PLAN_the_sidebar_pays_only_for_what_it_shows.md](PLAN_the_sidebar_pays_only_for_what_it_shows.md) | the section registry's split of *rounds* into two entries | what a render gathers per surface | independent; that plan reads the registry as it finds it |
-| [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md) | the shared stylesheet's sizes (a value change inside the CSS constant) | moving the CSS out of `panelView.ts` | this first; that move then re-measures |
-| [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) | the NEW census and the shim widenings it needs | converting the existing source-text assertions to run tests | independent; the widened shim is there for it to use |
-| [PLAN_the_panel_provider_is_too_big.md](PLAN_the_panel_provider_is_too_big.md) | two `zoom`/`tone` branches in `PanelProvider.receive` | every extraction cluster | independent; whichever lands second rebases |
+| [PLAN_the_sidebar_pays_only_for_what_it_shows.md](../todo/PLAN_the_sidebar_pays_only_for_what_it_shows.md) | the section registry's split of *rounds* into two entries | what a render gathers per surface | independent; that plan reads the registry as it finds it |
+| [PLAN_two_files_outgrew_the_rule.md](../todo/PLAN_two_files_outgrew_the_rule.md) | the shared stylesheet's sizes (a value change inside the CSS constant) | moving the CSS out of `panelView.ts` | this first; that move then re-measures |
+| [PLAN_the_page_tests_run_the_page.md](../todo/PLAN_the_page_tests_run_the_page.md) | the NEW census and the shim widenings it needs | converting the existing source-text assertions to run tests | independent; the widened shim is there for it to use |
+| [PLAN_the_panel_provider_is_too_big.md](../todo/PLAN_the_panel_provider_is_too_big.md) | two `zoom`/`tone` branches in `PanelProvider.receive` | every extraction cluster | independent; whichever lands second rebases |
 
 Disjoint otherwise.
 
 ## Definition of Done
 
-- [ ] Every page — the eleven, the transient ones exempt by name — carries both controls, applies both
+- [x] Every page — the eleven, the transient ones exempt by name — carries both controls, applies both
       pushes, and keeps them across its own redraws.
-- [ ] The Settings tab's text all follows the size control; the MCP server tab is twice the size.
-- [ ] Gate commands and Review roles sit in the 900px column; Gate commands' fields are themed.
-- [ ] The sidebar shows Active gates and Active consultations; no LIVE sentence (UI, help ×5, READMEs,
+- [x] The Settings tab's text all follows the size control; the MCP server tab is twice the size.
+- [x] Gate commands and Review roles sit in the 900px column; Gate commands' fields are themed.
+- [x] The sidebar shows Active gates and Active consultations; no LIVE sentence (UI, help ×5, READMEs,
       code comments) says Active rounds.
-- [ ] The README shows the sidebar and the Settings tab as they are now.
-- [ ] `research/module_extension.md` describes the text-controls unit and the frame module.
-- [ ] One plan round and one code round; verdicts in the PR.
-- [ ] Extension released after the merge — with the operator's go-ahead.
+- [x] The README shows the sidebar and the Settings tab as they are now.
+- [x] `research/module_extension.md` describes the text-controls unit and the frame module.
+- [x] One plan round and one code round; verdicts in the PR.
+- [ ] **Open:** extension released after the merge — with the operator's go-ahead.

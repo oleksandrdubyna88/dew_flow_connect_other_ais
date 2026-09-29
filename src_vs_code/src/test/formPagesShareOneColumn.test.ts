@@ -8,7 +8,7 @@ import { stylesheet, type Rule } from './cssRules';
 
 /**
  * Gate commands and Review roles sit in Chat presets' column, and Gate commands looks like Chat presets —
- * themed fields, a card per command (`todo/PLAN_every_page_reads_alike.md`, S3). Read through the PARSED
+ * themed fields, a card per command (`research/PLAN_every_page_reads_alike.md`, S3). Read through the PARSED
  * sheet: what a page looks like is decided by which rule wins, not by which text is present.
  */
 

@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { Node, runPageHtml } from './rolesPageHarness';
 
 /**
- * The shared DOM shim, widened for the text controls (`todo/PLAN_every_page_reads_alike.md`, S1): they bind
+ * The shared DOM shim, widened for the text controls (`research/PLAN_every_page_reads_alike.md`, S1): they bind
  * EACH button rather than one delegated listener, and the tone writes custom properties. Held here so a
  * shim that quietly stopped doing either cannot make a page's tests pass by not running what it binds.
  */

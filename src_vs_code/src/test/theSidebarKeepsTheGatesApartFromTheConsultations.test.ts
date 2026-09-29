@@ -8,7 +8,7 @@ import { panelState } from './panelPageHarness';
 /**
  * The sidebar's Active rounds is two sections: **Active gates** — the rounds running now, and where each
  * plan's gate stands — and **Active consultations** — the consultations being had
- * (`todo/PLAN_every_page_reads_alike.md`, S4; the operator, 2026-09-29).
+ * (`research/PLAN_every_page_reads_alike.md`, S4; the operator, 2026-09-29).
  */
 
 const HTML = panelHtml(panelState(''), 'n');
