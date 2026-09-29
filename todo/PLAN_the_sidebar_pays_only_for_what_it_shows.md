@@ -65,7 +65,7 @@ Bugz corpus (the sidebar's own, 5 s). The every-render whole-file read of `usage
 |---|---|---|---|
 | [PLAN_settings_page.md](../research/PLAN_settings_page.md) (implemented) | its S5 entire: the measurement, `readUsage` leaving the render, any gating by held surface | S1–S4: the two surfaces, painted from one state built whole | that one first — landed 2026-09-28 |
 | [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md) | which probes a render starts, per held surface | *render never awaits a probe* (its step 2), and what a person sees while a probe runs | its step 2 before any gating here (step 4 below) |
-| [PLAN_the_cadence_has_its_own_section.md](PLAN_the_cadence_has_its_own_section.md) | what a render gathers per surface | one more registry entry and live region, `cadence` | independent |
+| [PLAN_the_cadence_has_its_own_section.md](../research/PLAN_the_cadence_has_its_own_section.md) (implemented) | what a render gathers per surface | one more registry entry and live region, `cadence` | independent |
 | [PLAN_every_page_reads_alike.md](../research/PLAN_every_page_reads_alike.md) | what a render gathers per surface | the split of the *rounds* registry entry into Active gates and Active consultations | independent; this plan reads the registry as it finds it |
 
 **Disjoint** otherwise: this plan changes how much a render gathers, never what either page draws.

@@ -4482,7 +4482,7 @@ theme's size with an unstyled control.
 *Active consultations* (id `consultations`, in the Consultant section's hue) and *Consultation cadence*
 (id `cadence`, its own live region: each followed plan's cadence line, or why there is none — the cadence
 is off, or no round has named a plan). The cadence lines moved out of the gates on the operator's word
-(`todo/PLAN_the_cadence_has_its_own_section.md`). Open sections are held in memory by id, so no new one
+(`research/PLAN_the_cadence_has_its_own_section.md`). Open sections are held in memory by id, so no new one
 needs a migration; the page script patches every live region through ONE loop over `LIVE_REGION_IDS`,
 written into the script as a literal, where it had a copied block per region.
 

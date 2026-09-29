@@ -8,7 +8,7 @@ import { textOf } from './renderedText';
 
 /**
  * A round nobody could answer reaches the sidebar's "A review is waiting on you" card as one run-on sentence,
- * and the operator asked for it to read better (2026-09-29, `todo/PLAN_the_cadence_has_its_own_section.md`,
+ * and the operator asked for it to read better (2026-09-29, `research/PLAN_the_cadence_has_its_own_section.md`,
  * story 2). The text itself is right and stays as the server wrote it; the card lays it out.
  */
 
