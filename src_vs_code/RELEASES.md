@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.60.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.60.0...extension-v0.60.1) (2026-09-29)
+
+
+### Bug Fixes
+
+* **extension:** the MCP server tab is one and a half times the size, not twice ([5c1d6e2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/5c1d6e22e6783f02ba3637fa9413a2f971c34e07))
+
 ## [0.60.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.59.0...extension-v0.60.0) (2026-09-29)
 
 
