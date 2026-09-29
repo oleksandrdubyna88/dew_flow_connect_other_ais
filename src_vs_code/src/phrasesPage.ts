@@ -1,4 +1,5 @@
-import { TEXT_CONTROLS_CSS, textControlFrom, textControlsHtml, textControlsScript, textControlsStyle, textOf } from './textControls';
+import { FORM_FIELDS_CSS, FORM_HEAD_CSS, formFrameCss } from './formPageStyle';
+import { textControlFrom, textControlsHtml, textControlsScript, textOf } from './textControls';
 import { escapeHtml } from './webviewHtml';
 import { PHRASE_FALLBACK_COLOUR, phraseColours } from './phrases';
 
@@ -128,28 +129,18 @@ function phraseRow(row: PhraseRowView, colour: string): string {
 }
 
 function styles(uiScale: number, textTone: number): string {
-  return `  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 16px 24px; max-width: 900px; margin: 0 auto; ${textControlsStyle(uiScale, textTone)} }
-  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
-  h1 { font-size: 1.2em; margin: 0; }
-  .lead { opacity: .8; margin: 0 0 12px; }
+  return `${formFrameCss(uiScale, textTone)}
   /* The frame and the edge WIDTH are here; the hue is inline, per row, because it is decided over
      the whole list rather than named by a class. The fallback keeps a row deliberate when nothing
      has given it a colour. */
   .phrase { border: 1px solid var(--vscode-panel-border); border-left-width: 3px; border-left-color: ${PHRASE_FALLBACK_COLOUR}; border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
   .phrase label { display: block; font-size: .85em; opacity: .75; margin: 0 0 2px; }
   .phrase .head label { margin: 0; }
-  .head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
-  .head input[type="text"] { flex: 1 1 12rem; min-width: 0; }
-  input, textarea { font: inherit; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 3px; padding: 4px 6px; }
-  /* The box a person READS a phrase in. It grows with its content where the engine can do it; the
-     rows attribute is the floor for every engine that cannot. */
-  textarea { width: 100%; box-sizing: border-box; field-sizing: content; max-height: 60vh; }
-  button { font: inherit; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; border-radius: 3px; padding: 4px 12px; cursor: pointer; }
-  button.remove { color: var(--vscode-foreground); background: none; border: 1px solid var(--vscode-panel-border); }
+${FORM_HEAD_CSS}
+${FORM_FIELDS_CSS}
   /* A save that did not land. Not a repaint: a repaint would replace what the person typed with what
      the file still says, which is the very thing that was not saved. */
-  .failed { color: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground)); border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground)); border-radius: 3px; padding: 6px 10px; margin: 0 0 12px; }
-${TEXT_CONTROLS_CSS}`;
+  .failed { color: var(--vscode-inputValidation-errorForeground, var(--vscode-errorForeground)); border: 1px solid var(--vscode-inputValidation-errorBorder, var(--vscode-errorForeground)); border-radius: 3px; padding: 6px 10px; margin: 0 0 12px; }`;
 }
 
 function script(nonce: string): string {

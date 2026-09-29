@@ -1,5 +1,6 @@
 import { FEATURE_CODE, FEATURE_DOCUMENT, FEATURE_STAGE, MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, builtInFor, composed, isActive, isBuiltIn, isProgramming, stageOf, whyNotAskable, type RoleRow } from './roles';
-import { TEXT_CONTROLS_CSS, textControlFrom, textControlsHtml, textControlsScript, textControlsStyle, textOf } from './textControls';
+import { formBodyCss } from './formPageStyle';
+import { TEXT_CONTROLS_CSS, textControlFrom, textControlsHtml, textControlsScript, textOf } from './textControls';
 import { STOOD_DOWN, type Tombstone } from './roleDeletion';
 import { escapeHtml } from './webviewHtml';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
@@ -579,9 +580,8 @@ function styles(uiScale: number, textTone: number): string {
   // a browser read them and the next rule as one invalid selector, and dropped both.
   return `<style>
 ${TEXT_CONTROLS_CSS}
-body { font-family: var(--vscode-font-family); color: var(--vscode-foreground);
-  background: var(--vscode-editor-background); padding: 16px 24px; max-width: 900px; margin: 0 auto;
-  ${textControlsStyle(uiScale, textTone)} }
+/* The Chat presets column (formPageStyle.ts), the operator's ask of 2026-09-29. */
+${formBodyCss(uiScale, textTone)}
 header { display: flex; align-items: baseline; gap: 12px; }
 h1 { font-size: 1.4em; }
 h2 { font-size: 1.1em; margin: 20px 0 2px; }

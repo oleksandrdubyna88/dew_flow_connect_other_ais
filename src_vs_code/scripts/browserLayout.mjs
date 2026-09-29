@@ -64,3 +64,29 @@ export function measured(browser, prefix, pages) {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+/**
+ * A page, rendered and photographed — for a layout a person has to LOOK at, where there is no verdict to
+ * write back (`render-page.mjs`). Widened here rather than beside it, so both halves find the same browser
+ * the same way.
+ *
+ * @param {string} browser the Chromium to run
+ * @param {string} prefix the temporary directory's name
+ * @param {{ html: string, width: number, height: number, out: string }} shot
+ * @returns {{ ok: boolean, said: string }}
+ */
+export function screenshot(browser, prefix, { html, width, height, out }) {
+  const dir = mkdtempSync(join(tmpdir(), prefix));
+  try {
+    const file = join(dir, 'page.html');
+    writeFileSync(file, html, 'utf8');
+    const run = spawnSync(browser, [
+      '--headless=new', '--disable-gpu', '--hide-scrollbars', `--window-size=${width},${height}`,
+      `--screenshot=${out}`, pathToFileURL(file).href,
+    ], { encoding: 'utf8', timeout: 60_000 });
+
+    return { ok: existsSync(out), said: (run.stderr ?? '').slice(0, 200) };
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+}
