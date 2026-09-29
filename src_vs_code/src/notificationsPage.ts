@@ -154,7 +154,8 @@ function shell(nonce: string, body: string, script: string, text: TextSettings =
 <style>${PAGE_STYLE}
 ${TEXT_CONTROLS_CSS}
   body { ${textControlsStyle(text.size, text.tone)} }
-  header { display: flex; align-items: baseline; gap: 12px; }
+  /* The title's own margin moves to the header that now holds it beside its controls. */
+  header { display: flex; align-items: baseline; gap: 12px; margin: 16px 0 8px; }
   header h1 { margin: 0; }</style>
 </head>
 <body>
@@ -174,12 +175,13 @@ ${script}
  * webview that failed. It says which directory it is reading, because that is the one fact that
  * makes a slow open diagnosable. (codex, the S5 code round.)</p>
  */
-export function waitingPageHtml(dataDir: string, nonce: string): string {
+export function waitingPageHtml(dataDir: string, nonce: string, text: TextSettings = PLAIN_TEXT): string {
   return shell(
     nonce,
     `<p class="scope">Reading <code>${escapeHtml(dataDir)}</code>…</p>`
     + '<p class="quiet">If this directory is on a network share, the first read can take a moment.</p>',
     '',
+    text,
   );
 }
 
@@ -193,6 +195,7 @@ export function notificationsPageHtml(state: PageState, nonce: string): string {
       `<p class="failed">The notifications could not be read: ${escapeHtml(state.unreadable)}</p>`
       + `<p class="quiet">Nothing was marked read. Reading <code>${escapeHtml(state.dataDir)}</code>.</p>`,
       '',
+      textOf(state),
     );
   }
   const open = firstTab(state.rows);

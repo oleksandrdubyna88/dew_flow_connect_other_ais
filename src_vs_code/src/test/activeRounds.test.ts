@@ -321,7 +321,7 @@ const cadence = [{
   },
 }];
 
-test('the cadence line is in Active rounds as the page renders it, and a live push to the page replaces it', () => {
+test('the cadence line is in Active gates as the page renders it, and a live push to the page replaces it', () => {
   // RUN, not matched (PR #556, CodeRabbit; `.agents/PROJECT.md`): the panel's own script receives each
   // live push and replaces the region, so what is on screen is what this watches.
   const page = runPanel(panelState('rounds', { cadence }));

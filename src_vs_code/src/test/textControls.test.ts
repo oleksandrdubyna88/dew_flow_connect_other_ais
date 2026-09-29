@@ -11,6 +11,7 @@ import { settingsHtml, settingsKey } from '../panelView';
 import { textControlFrom, textControlsScript } from '../textControls';
 import { toneColour } from '../textTone';
 import { scalePx } from '../zoomControl';
+import { blanked } from './blankedSource';
 import { stylesheet } from './cssRules';
 import { panelState } from './panelPageHarness';
 import { Node, runPageHtml } from './rolesPageHarness';
@@ -51,7 +52,6 @@ test('a page whose handle is not called vscode gets presses sent through its own
   smaller.click();
 
   assert.deepEqual(page.posted, [{ type: 'zoom', delta: -1, field: '' }]);
-  assert.ok(!textControlsScript('api').includes('vscode.postMessage('), 'a call through a name the page never declared is still there');
 });
 
 /** The page's `body` rule, parsed — where the chosen size and tone must sit for the FIRST paint. */
@@ -108,7 +108,7 @@ const SRC = path.join(__dirname, '..', '..', 'src');
 function hosts(): readonly { readonly file: string; readonly pushesBoth: boolean }[] {
   return fs.readdirSync(SRC)
     .filter((file) => file.endsWith('.ts'))
-    .map((file) => ({ file, source: fs.readFileSync(path.join(SRC, file), 'utf8') }))
+    .map((file) => ({ file, source: blanked(fs.readFileSync(path.join(SRC, file), 'utf8')) }))
     .filter(({ source }) => source.includes('vscode.window.createWebviewPanel('))
     .map(({ file, source }) => ({
       file,

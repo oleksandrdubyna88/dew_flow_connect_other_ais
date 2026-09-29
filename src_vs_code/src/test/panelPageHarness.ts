@@ -237,7 +237,7 @@ export function runPanel(state: PanelState): Page {
     querySelectorAll: (selector: string): readonly Control[] => selected(selector, controls, commands),
     querySelector: (): null => null,
     // The live regions answer, so the script's live push can be watched landing — widened when the
-    // cadence line joined Active rounds (PR #556, CodeRabbit). Every other id is absent, as before.
+    // cadence line joined Active rounds, now Active gates (PR #556, CodeRabbit). Every other id is absent, as before.
     getElementById: (id: string): Region | null => regions.get(id) ?? null,
     body: { style: { fontSize: '' } },
     documentElement: { style: { setProperty: () => undefined } },

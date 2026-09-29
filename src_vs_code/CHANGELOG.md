@@ -1,5 +1,30 @@
 # Changelog
 
+## Extension 0.60.0 — 2026-09-29
+
+**Every page now has the text size and the text brightness.** The two ± pairs beside a page's title — one
+for the size, one for the tone, brighter or dimmer and warmer — are now on every ConnectOtherAIs page that
+opens as a tab: the Settings tab, Gate commands, Notifications, Review rounds and Who holds a key had
+neither, and Chat presets, Phrases and Review roles had only the size. A press on any page changes the
+text on every page that is open, and a page that redraws keeps what you chose.
+
+**In the Settings tab every line follows the size.** Its small print — the notes under a setting, the
+badges, the `?` circles — used to stay put while the headings grew. It follows the size control now. At
+the default size the sidebar's text is exactly the size it was.
+
+**The MCP server tab's text is twice the size.** It is the tab you read rather than set, and the Settings tab
+has the room.
+
+**Gate commands and Review roles look like Chat presets.** Both sit in the same centred column, and
+Gate commands' boxes are drawn in the theme's colours instead of white, with each command in a card of
+its own.
+
+**Active rounds is two sections.** The sidebar shows **Active gates** — the rounds running now, and
+where each plan's gate stands — and below it **Active consultations**, the consultations being had.
+
+**Review roles opens at the text size you chose.** It opened at the theme's size and caught up only when
+the size was pushed to it afterwards.
+
 ## Extension 0.59.0 · Server 0.40.3 — 2026-09-29
 
 **Settings have a tab of their own.** The sidebar now shows only what is happening now: a question waiting

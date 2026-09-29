@@ -112,7 +112,7 @@ test('a model with an em dash in its name is not mistaken for a separator', () =
 
 test('a session whose status is missing, blank or not a string does not blank the panel', () => {
   // An interface is not runtime validation, and this file already learned that once with `model`.
-  // A session that omits `status` reached `.length` and threw while the Active rounds view was
+  // A session that omits `status` reached `.length` and threw while the Active gates view was
   // being built — one malformed reviewer taking the whole list with it. Raised on the code round by
   // two vendors. Whitespace is not a status either, or the panel renders an indented empty line.
   const states = [

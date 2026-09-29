@@ -938,7 +938,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private pageFor(slot: SurfaceSlot, state: PanelState): { key: string; html: () => string } {
     const withCaret = (): PanelState => ({ ...state, focus: slot.focus() });
     if (slot === this.settingsTab) {
-      return { key: settingsKey(state), html: () => settingsHtml(withCaret(), this.nonce, heldSettingsTab()) };
+      // The size and tone are read when the page is BUILT, not with the state: a render awaits a dozen probes
+      // after gathering it, and a press in between would otherwise be drawn over by the old value — with
+      // the same paint key, so nothing would ever repaint it.
+      return {
+        key: settingsKey(state),
+        html: () => settingsHtml({ ...withCaret(), uiScale: currentUiScale(), textTone: currentTextTone() }, this.nonce, heldSettingsTab()),
+      };
     }
 
     return { key: staticKey(state), html: () => panelHtml(withCaret(), this.nonce) };
@@ -980,8 +986,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       perSide: this.perSide(config),
       questions: this.watcher.openQuestions,
       openSections: this.openSections,
-      uiScale: currentUiScale(),
-      textTone: currentTextTone(),
       sessions,
       // Not asked at all while the cadence is off: the server would answer `null` for every session.
       cadence: settings.cadence.mode === 'off' ? [] : this.cadenceProbes.lines(sessions),
