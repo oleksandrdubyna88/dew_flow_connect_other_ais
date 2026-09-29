@@ -1,6 +1,6 @@
 # PLAN — every page reads alike: the text controls everywhere, one column, and the gates apart from the consultations
 
-> Status: **IMPLEMENTED, 2026-09-29 — S1 to S5 shipped on `feat/pages-read-alike` in one pull request, under one plan round and one code round, plus the fixes my own code review found after it. Still open after the merge: the extension release (0.60.0), which publishes and so waits for the operator; and question 1 below — whether the sidebar should carry the controls too.** What shipped differently is in § *What shipped differently*. Scope: `src_vs_code` — the pages' text
+> Status: **IMPLEMENTED, 2026-09-29 — S1 to S5 shipped on `feat/pages-read-alike` in one pull request, under one plan round and one code round, plus the fixes my own code review found after it. Still open after the merge: the extension release (0.60.0), which publishes and so waits for the operator.** What shipped differently is in § *What shipped differently*. Scope: `src_vs_code` — the pages' text
 > controls, the Settings tab's typography, the Gate commands and Review roles frames, the sidebar's
 > Active rounds section, the help in five languages, the READMEs and their screenshots.
 >
@@ -241,8 +241,8 @@ No setting, file, cache or process.
 
 ## Questions for the operator (the plan proceeds on the answer in brackets)
 
-1. Should the **sidebar** carry the two controls too? **[no — D2]**
-2. "Active consultan…" — **Active consultations**? **[yes — D1]**
+1. Should the **sidebar** carry the two controls too? **No — the operator confirmed D2 on 2026-09-29.**
+2. "Active consultan…" — **Active consultations**? **[yes — D1]** The operator then asked whether the cadence lines (`PLAN_x.md · epics closed 5/7 · consultation for epics 1-3: taken`) are the consultations. They are where each plan's gate stands, and stay under Active gates; the section holds only the consultations being had. Moving the lines under Active consultations is one registry line, if the operator prefers it.
 
 ## Boundaries
 
