@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.40.3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.2...mcp-v0.40.3) (2026-09-29)
+
+
+### Bug Fixes
+
+* **extension:** the code round's fixes; the Settings-page plan is promoted ([e91b207](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e91b2078d8863e3d9592cc60d8fe41dbbe5d31d8))
+* **mcp,server:** messages name ConnectOtherAIs &gt; Team servers / Consultant / MCP server (S4, part 1) ([7310aff](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7310affe3f45749e1def7d03a20c8d18611cf7b3))
+
 ## [0.40.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.1...mcp-v0.40.2) (2026-09-28)
 
 
