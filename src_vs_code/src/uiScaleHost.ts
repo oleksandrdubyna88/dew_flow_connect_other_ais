@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { WriteQueue } from './writeQueue';
 import { clampScale, offsetLabel, scalePx } from './zoomControl';
 
 /**
@@ -19,12 +20,17 @@ export function currentUiScale(): number {
   return clampScale(vscode.workspace.getConfiguration(SECTION).get(KEY));
 }
 
+/** One press at a time: two quick presses both read the same value otherwise, and one is lost. */
+const presses = new WriteQueue();
+
 /** Apply one press. Clamped here — the page reports the press, never the result. */
-export async function applyZoomDelta(delta: number): Promise<void> {
-  const next = clampScale(currentUiScale() + Math.sign(delta));
-  await vscode.workspace
-    .getConfiguration(SECTION)
-    .update(KEY, next, vscode.ConfigurationTarget.Global);
+export function applyZoomDelta(delta: number): Promise<void> {
+  return presses.run(async () => {
+    const next = clampScale(currentUiScale() + Math.sign(delta));
+    await vscode.workspace
+      .getConfiguration(SECTION)
+      .update(KEY, next, vscode.ConfigurationTarget.Global);
+  });
 }
 
 /**

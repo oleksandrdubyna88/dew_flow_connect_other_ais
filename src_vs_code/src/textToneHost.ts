@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { clampTone, toneColours, toneLabel } from './textTone';
+import { WriteQueue } from './writeQueue';
 
 /**
  * The host half of the ± text tone: read the setting, apply a press, keep every open page in step.
@@ -21,12 +22,17 @@ export function currentTextTone(): number {
   return clampTone(vscode.workspace.getConfiguration(SECTION).get(KEY));
 }
 
+/** One press at a time: two quick presses both read the same value otherwise, and one is lost. */
+const presses = new WriteQueue();
+
 /** Apply one press. Only the DIRECTION is taken from the page; the size of a step is ours. */
-export async function applyToneDelta(delta: number): Promise<void> {
-  const next = clampTone(currentTextTone() + Math.sign(delta));
-  await vscode.workspace
-    .getConfiguration(SECTION)
-    .update(KEY, next, vscode.ConfigurationTarget.Global);
+export function applyToneDelta(delta: number): Promise<void> {
+  return presses.run(async () => {
+    const next = clampTone(currentTextTone() + Math.sign(delta));
+    await vscode.workspace
+      .getConfiguration(SECTION)
+      .update(KEY, next, vscode.ConfigurationTarget.Global);
+  });
 }
 
 /**
