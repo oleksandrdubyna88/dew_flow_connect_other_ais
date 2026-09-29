@@ -26,7 +26,10 @@ test('a press is read as one step of one control, and anything else is not a pre
     [{ type: 'tone', delta: -1 }, { kind: 'tone', delta: -1 }],
     [{ type: 'zoom', delta: 7 }, { kind: 'zoom', delta: 1 }],
     [{ type: 'tone', delta: -40 }, { kind: 'tone', delta: -1 }],
-    [{ type: 'tone', delta: 0.6 }, { kind: 'tone', delta: 0 }],
+    // A step of nothing is not a press: the controls only ever send one step, and a zero would write the
+    // setting back unchanged for no reason.
+    [{ type: 'tone', delta: 0.6 }, undefined],
+    [{ type: 'zoom', delta: 0 }, undefined],
     [{ type: 'zoom', delta: '1' }, undefined],
     [{ type: 'zoom', delta: Number.NaN }, undefined],
     [{ type: 'zoom' }, undefined],
