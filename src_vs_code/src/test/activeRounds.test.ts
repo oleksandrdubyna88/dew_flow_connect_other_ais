@@ -4,6 +4,7 @@ import { liveRegions, PanelState, roundsBody, statusMark } from '../panelView';
 import { everyPageHtml } from './panelPages';
 import { panelState, runPanel } from './panelPageHarness';
 import { LIVE_REGION_IDS } from '../panelSurface';
+import type { CadenceLine } from '../cadenceLine';
 import { RoundRecord, SessionFile } from '../rounds';
 import { DEFAULTS } from '../settingsShape';
 import { SNIPPET_VERSION } from '../claudeSnippet';
@@ -320,7 +321,7 @@ test('a live patch that carries the same HTML as last time does not touch the DO
 // The cadence line (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2)
 // ---------------------------------------------------------------------------------------------
 
-const cadence = [{
+const cadence: readonly CadenceLine[] = [{
   repoPath: 'D:/repo',
   branch: 'feat/epic-4',
   answer: {
@@ -347,7 +348,7 @@ test('the cadence line is in its own section as the page renders it, and a live 
 
 test('the rounds region is exactly the running rounds, with a cadence line or without one', () => {
   const plain = state([session([round()])]);
-  const followed = { ...plain, cadence } as PanelState;
+  const followed: PanelState = { ...plain, cadence };
 
   assert.equal(liveRegions(plain, NOW).rounds, roundsBody(plain.sessions, NOW, []));
   assert.equal(liveRegions(followed, NOW).rounds, roundsBody(plain.sessions, NOW, []), 'a cadence line is still drawn with the rounds');

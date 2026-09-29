@@ -689,9 +689,10 @@ ${extra.script}
   // ONE loop over the regions the host declares, written into the script as a literal — it was four
   // copied blocks, one per region, and a fifth region would have been a fifth copy (2026-09-29).
   const liveRegionIds = ${jsonForScript(LIVE_REGION_IDS)};
-  const lastLive = {};
+  // Replaced, never mutated in place: each change makes a new record of what the regions show.
+  let lastLive = {};
   for (const id of liveRegionIds) {
-    lastLive[id] = document.getElementById('live-' + id)?.innerHTML ?? '';
+    lastLive = { ...lastLive, [id]: document.getElementById('live-' + id)?.innerHTML ?? '' };
   }
   window.addEventListener('message', (event) => {
     const message = event.data;
@@ -729,7 +730,7 @@ ${extra.script}
       const region = document.getElementById('live-' + id);
       const html = message[id];
       if (region !== null && typeof html === 'string' && html !== lastLive[id]) {
-        lastLive[id] = html;
+        lastLive = { ...lastLive, [id]: html };
         region.innerHTML = html;
         bindCommands(region);
       }
