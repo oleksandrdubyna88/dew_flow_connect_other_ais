@@ -396,7 +396,7 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   { id: 'rounds', title: 'Active gates', surface: 'sidebar', body: (_state, live) => liveRegion('rounds', live) },
   { id: 'consultations', title: 'Active consultations', surface: 'sidebar', body: (_state, live) => liveRegion('consultations', live) },
   // The cadence lines, out of Active gates into a section of their own — the operator, 2026-09-29, who read
-  // them as consultations (`todo/PLAN_the_cadence_has_its_own_section.md`). Beside the consultations, because
+  // them as consultations (`research/PLAN_the_cadence_has_its_own_section.md`). Beside the consultations, because
   // each line says which consultation a plan owes.
   { id: 'cadence', title: 'Consultation cadence', surface: 'sidebar', body: (_state, live) => liveRegion('cadence', live) },
   { id: 'phrases', title: 'Phrases', surface: 'sidebar', body: (state) => phrasesBody(state.phrases ?? []) },

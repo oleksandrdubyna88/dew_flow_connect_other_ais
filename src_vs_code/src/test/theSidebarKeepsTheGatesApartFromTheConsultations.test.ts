@@ -30,7 +30,7 @@ function sectionOf(html: string, id: string): string {
 
 test('the sidebar is Notifications, Active gates, Active consultations, Consultation cadence, Phrases and Bugz, in that order', () => {
   // The cadence lines left Active gates for a section of their own on 2026-09-29 (the operator:
-  // `todo/PLAN_the_cadence_has_its_own_section.md`).
+  // `research/PLAN_the_cadence_has_its_own_section.md`).
   assert.deepEqual(sections(HTML), [
     ['notifications', 'Notifications'],
     ['rounds', 'Active gates'],

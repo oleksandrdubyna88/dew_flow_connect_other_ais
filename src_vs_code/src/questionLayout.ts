@@ -5,7 +5,7 @@ import { escapeHtml } from './escapeHtml';
  *
  * <p>The server writes a failed round's question as one sentence — the lead, then every reviewer that failed
  * joined by commas, then the question — and the card drew it as one run-on block. The operator asked for it to
- * read better (2026-09-29, `todo/PLAN_the_cadence_has_its_own_section.md`, story 2). The WORDS stay the server's
+ * read better (2026-09-29, `research/PLAN_the_cadence_has_its_own_section.md`, story 2). The WORDS stay the server's
  * (`ReviewerSummary.Sentence`, which the round log and every gate reply read too); this lays them out: the lead,
  * a line per failed reviewer, the question on its own. Anything that does not have that shape is drawn as it
  * always was.</p>

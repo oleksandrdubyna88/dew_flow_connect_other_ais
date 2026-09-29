@@ -1,11 +1,11 @@
 # PLAN — the consultation cadence has a sidebar section of its own
 
-> Status: **in progress, 2026-09-29 — both stories built on `feat/cadence-own-section`; the coai plan round reached proceed after the operator's "act on the findings" (no reviewer could answer the first attempt), the code rounds reached good_enough 8/8 (story 1) and proceed 8/8 (story 2); the PR and the 0.60.0 release are open.** Scope: `src_vs_code` — the sidebar's section
+> Status: **IMPLEMENTED, 2026-09-29 — both stories shipped in PR #616 (`feat/cadence-own-section`). The coai plan round reached proceed after the operator's "act on the findings" (no reviewer could answer the first attempt); the code rounds reached good_enough 8/8 (story 1) and proceed 8/8 (story 2). Still open after the merge: the extension release (0.60.0), which publishes and so waits for the operator.** What shipped differently is in § *What shipped differently*. Scope: `src_vs_code` — the sidebar's section
 > registry and live regions (`panelView.ts`, `panelSurface.ts`), the page script's live patch, the help in
 > five languages, the READMEs, the 0.60.0 changelog section.
 >
-> Related docs: [PLAN_every_page_reads_alike.md](../research/PLAN_every_page_reads_alike.md) (which split
-> Active rounds and left these lines with the gates), [module_extension.md](../research/module_extension.md).
+> Related docs: [PLAN_every_page_reads_alike.md](PLAN_every_page_reads_alike.md) (which split
+> Active rounds and left these lines with the gates), [module_extension.md](module_extension.md).
 
 ## The goal, as the operator asked it (2026-09-29)
 
@@ -87,14 +87,33 @@ None.
 
 | Plan | This plan owns | That plan keeps | Order |
 |---|---|---|---|
-| [PLAN_every_page_reads_alike.md](../research/PLAN_every_page_reads_alike.md) (implemented) | moving the cadence lines out of Active gates into their own section | the split into Active gates and Active consultations | that one first |
-| [PLAN_the_sidebar_pays_only_for_what_it_shows.md](PLAN_the_sidebar_pays_only_for_what_it_shows.md) | one more registry entry and live region | what a render gathers | independent |
+| [PLAN_every_page_reads_alike.md](PLAN_every_page_reads_alike.md) (implemented) | moving the cadence lines out of Active gates into their own section | the split into Active gates and Active consultations | that one first |
+| [PLAN_the_sidebar_pays_only_for_what_it_shows.md](../todo/PLAN_the_sidebar_pays_only_for_what_it_shows.md) | one more registry entry and live region | what a render gathers | independent |
+
+## What shipped differently (recorded at promotion, 2026-09-29)
+
+- **D9 is stricter than written.** A failed-round sentence is laid out only when EVERY entry after `failed:`
+  reads `provider/Role: …`; one entry of any other shape and the whole question is drawn as the plain
+  sentence, rather than that one entry becoming an unlabelled line (CodeRabbit on #616).
+- **D8's vendor body is decoded as the JSON string it is**: `\"` a quote, `\n` a line break, `\u00e9` an é —
+  read up to an unescaped quote, and falling back to dropping the backslashes when the server cut the body
+  mid-escape. The first cut stopped at the first escaped quote (the story-2 code round).
+- **The card is tested on the running sidebar page**, including a live push that changes its text, not only
+  through `questionHtml` (the story-2 code round, then CodeRabbit).
+- **A shared test helper.** The tag-stripping walk `notificationsPage.test.ts` wrote for CodeQL's
+  `js/incomplete-multi-character-sanitization` moved to `src_vs_code/src/test/renderedText.ts`, because the
+  card's test raised the same alert with a `replace`.
+- **Declined on #616, with reasons**: comparing live regions in the browser's serialisation (the first push
+  after a load can redraw a region holding an escaped quote once) — real, but it is how `main`'s four copied
+  blocks already behaved, so it is a follow-up and not this change; and running the section-order tests
+  through the page harness — order, placement and heading colour are the pure `panelHtml`'s output, no page
+  script takes part, and the live patch of the new region is RUN-tested already.
 
 ## Definition of Done
 
-- [ ] The sidebar shows Consultation cadence as its own section, and Active gates holds only the rounds.
-- [ ] The section says why it is empty.
-- [ ] A cadence line still updates live.
-- [ ] A failed round's question card reads as a lead, a line per failed reviewer, and the question.
-- [ ] Help ×5, READMEs, module doc, changelog say so.
-- [ ] One plan round and one code round; released with 0.60.0, on the operator's go-ahead.
+- [x] The sidebar shows Consultation cadence as its own section, and Active gates holds only the rounds.
+- [x] The section says why it is empty.
+- [x] A cadence line still updates live.
+- [x] A failed round's question card reads as a lead, a line per failed reviewer, and the question.
+- [x] Help ×5, READMEs, module doc, changelog say so.
+- [ ] One plan round and one code round; released with 0.60.0, on the operator's go-ahead. — the rounds ran; **the release is the open tail.**
