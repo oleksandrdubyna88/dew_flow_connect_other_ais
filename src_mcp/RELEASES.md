@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.3...mcp-v0.40.4) (2026-09-30)
+
+
+### Bug Fixes
+
+* **mcp:** a failing Claude CLI reviewer says why — the reason in its JSON envelope ([fc129a1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fc129a188be62373e8ec4438658c701c6b162d8d))
+
 ## [0.40.3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.2...mcp-v0.40.3) (2026-09-29)
 
 
