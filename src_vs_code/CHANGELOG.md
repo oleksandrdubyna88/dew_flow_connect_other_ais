@@ -1,5 +1,12 @@
 # Changelog
 
+## Server 0.40.4 — 2026-09-30
+
+**A Claude CLI reviewer that fails now says why.** The Claude CLI puts its failure reason in the JSON it writes
+to stdout, not on stderr. Until now a round showed only `exit 1 (the CLI said nothing on stderr)`, which is how a
+spent monthly limit looked. The round now quotes the CLI's own reason and its HTTP status, for example
+`exit 1: You've hit your monthly spend limit. Switch to another model to continue. (HTTP 429)`.
+
 ## Extension 0.60.1 — 2026-09-29
 
 **The MCP server tab is one and a half times the size, not twice.** At twice the size it read far larger
