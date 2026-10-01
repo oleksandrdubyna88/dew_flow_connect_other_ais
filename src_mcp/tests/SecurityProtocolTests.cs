@@ -3,6 +3,7 @@ using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Security;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
+using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
 
@@ -10,6 +11,38 @@ namespace CoaiMcp.Tests;
 
 public sealed class SecurityProtocolTests
 {
+    [Fact]
+    public void Shipped_redteam_prompts_place_the_operator_boundary_before_output_rules()
+    {
+        foreach (var id in SecurityCatalog.Prompts.Select(p => p.Id).Append("redteam-general"))
+        {
+            var body = RolePrompts.ShippedDefaultFor(id);
+            var boundary = body.IndexOf("### CONTEXT BOUNDARY & TARGET ISOLATION (CRITICAL):", StringComparison.Ordinal);
+            var hygiene = body.IndexOf("### OUTPUT COMPLIANCE & JSON HYGIENE (ZERO-TOLERANCE):", StringComparison.Ordinal);
+            boundary.Should().BeGreaterThanOrEqualTo(0, id);
+            hygiene.Should().BeGreaterThan(boundary, id);
+            body.LastIndexOf("\nIf no ", StringComparison.Ordinal).Should().BeGreaterThan(hygiene, id);
+        }
+    }
+
+    [Fact]
+    public void Only_fenced_material_follows_the_explicit_source_boundary()
+    {
+        const string body = "Operator instructions outside the source boundary.";
+        var files = SecuritySignals.Classify([new("Sample.cs", "+ database.Query(value);")]);
+        var pack = SecurityContext.Compose(body, new("redteam-sql", ["sql"], ["sql"]), files, "diff", 24000);
+        const string start = "=== SOURCE CODE UNDER REVIEW (AUDIT ONLY BELOW) ===";
+        const string end = "=== END OF SOURCE CODE ===";
+        var opening = pack.Text.IndexOf(start, StringComparison.Ordinal);
+        var closing = pack.Text.LastIndexOf(end, StringComparison.Ordinal);
+        pack.Refusal.Should().BeEmpty();
+        opening.Should().BeGreaterThan(pack.Text.IndexOf(SecuritySchema.Json, StringComparison.Ordinal));
+        closing.Should().BeGreaterThan(opening);
+        var source = pack.Text[opening..closing];
+        source.Should().Contain("--- reviewed source (").And.Contain("--- end of reviewed source (")
+            .And.Contain("File: Sample.cs").And.Contain("database.Query(value)").And.NotContain(body);
+    }
+
     private const string Finding = """
         {"severity":"major","category":"security","file":"Controller.cs","line":10,
         "title":"Fixture tenant boundary regression","why":"Fixture evidence","fix":"Restore tenant scope",
