@@ -1,5 +1,15 @@
 # Changelog
 
+## Server 0.40.5 — 2026-10-01
+
+**The CredsForDevs config key you enter in the panel is used now.** The panel saves that key in the settings
+file it shares with the server, but the server only looked for it in its own environment, where the panel never
+puts it. So the vault was never read: `providers` answered *no COAI_CREDS_KEY configured* however often the
+server was restarted, and every reviewer that needs a key from the vault (an OpenAI-compatible endpoint such as
+OpenRouter or DeepSeek, or an `api` row) was badged **cannot review** and left out of every round. The server now
+reads the key from the settings file, as it does every other setting. A `COAI_CREDS_KEY` in your MCP client's own
+`env` block still takes precedence. The model probe behind *Add a reviewer* reads the key the same way.
+
 ## Server 0.40.4 — 2026-09-30
 
 **A Claude CLI reviewer that fails now says why.** The Claude CLI puts its failure reason in the JSON it writes
