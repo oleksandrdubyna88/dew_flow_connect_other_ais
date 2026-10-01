@@ -1,5 +1,16 @@
 # Changelog
 
+## Extension 0.60.2 — 2026-10-01
+
+**A reviewer on someone else's endpoint offers that endpoint's models.** A reviewer pointed at OpenRouter, or at any
+other OpenAI-compatible base URL, used to list the models the Codex CLI keeps for OpenAI, captioned *"models the Codex
+CLI has cached for this machine"*. Those are names that endpoint refuses, so there was nothing on the list you could
+use. Such a card now shows its saved model, and a **≡** button beside the card's other buttons asks the endpoint itself
+which models your key can call, using the key in your vault, and fills the list with them. It asks only when you press
+it, says when it asked, and says why when the endpoint refuses. The same reviewer no longer offers OpenAI's names in
+the chat, in a new chat preset or as a consultant either. Hosted `api` reviewers get the same ≡ instead of a command
+to run in a terminal.
+
 ## Server 0.40.5 — 2026-10-01
 
 **The CredsForDevs config key you enter in the panel is used now.** The panel saves that key in the settings

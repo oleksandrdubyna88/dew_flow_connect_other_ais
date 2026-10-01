@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.60.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.60.1...extension-v0.60.2) (2026-10-01)
+
+
+### Bug Fixes
+
+* **extension:** a reviewer on another endpoint is offered that endpoint's models, never the Codex cache ([632dc3c](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/632dc3c098fb4eb1a05e360c2c81332e59f992b5))
+* **extension:** the endpoint ask cannot stick on a failed render; captions named, not positional ([1bf3453](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/1bf3453856cb73b0e9a8d34ad9b97bbab7594e5f))
+
 ## [0.60.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.60.0...extension-v0.60.1) (2026-09-29)
 
 
