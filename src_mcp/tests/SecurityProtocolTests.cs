@@ -19,8 +19,10 @@ public sealed class SecurityProtocolTests
             var body = RolePrompts.ShippedDefaultFor(id);
             var boundary = body.IndexOf("### CONTEXT BOUNDARY & TARGET ISOLATION (CRITICAL):", StringComparison.Ordinal);
             var hygiene = body.IndexOf("### OUTPUT COMPLIANCE & JSON HYGIENE (ZERO-TOLERANCE):", StringComparison.Ordinal);
+            var evidence = body.IndexOf("### EVIDENTIARY THRESHOLD & ANTI-HALLUCINATION RULES:", StringComparison.Ordinal);
             boundary.Should().BeGreaterThanOrEqualTo(0, id);
-            hygiene.Should().BeGreaterThan(boundary, id);
+            evidence.Should().BeGreaterThan(boundary, id);
+            hygiene.Should().BeGreaterThan(evidence, id);
             body.LastIndexOf("\nIf no ", StringComparison.Ordinal).Should().BeGreaterThan(hygiene, id);
         }
     }
@@ -49,6 +51,20 @@ public sealed class SecurityProtocolTests
         "trigger":"Read endpoint with another tenant's id","mechanism":"Tenant filter removed",
         "consequence":"Another tenant's row is returned","reproduction":null}
         """;
+
+    [Fact]
+    public void Security_severities_exclude_noise_without_changing_ordinary_reviews()
+    {
+        using var security = JsonDocument.Parse(SecuritySchema.Json);
+        using var ordinary = JsonDocument.Parse(FindingSchema.Json);
+        static string?[] Severities(JsonDocument schema) => schema.RootElement.GetProperty("properties")
+            .GetProperty("findings").GetProperty("items").GetProperty("properties")
+            .GetProperty("severity").GetProperty("enum").EnumerateArray().Select(v => v.GetString()).ToArray();
+        Severities(security).Should().Equal("blocking", "major", "minor");
+        Severities(ordinary).Should().Contain("nit");
+        Check("{\"status\":\"FINDINGS\",\"findings\":[" + Finding.Replace("\"major\"", "\"nit\"") + "]}")
+            .Should().BeOfType<ReviewerOutcome.Unparseable>();
+    }
 
     private static ReviewerOutcome Check(string json)
     {

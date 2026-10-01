@@ -82,4 +82,18 @@ public sealed class SecurityEvidenceTests
         pack.Omitted.Should().Contain("A.cs");
         pack.Text.Should().Contain("File: B.cs").And.Contain("query(value)").And.NotContain(new string('\u754c', 30));
     }
+
+    [Fact]
+    public void Production_source_precedes_keyword_rich_supporting_material_under_a_tight_budget()
+    {
+        var files = SecuritySignals.Classify([
+            new("research/checklist.md", "+ authorization endpoint query\n" + new string('x', 45000)),
+            new("src/Orders.cs", "+ database.Query(value);\n" + new string('y', 45000)),
+        ]);
+        var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", ["sql"], ["sql", "authz", "entry-point"]),
+            files, "slice", 24000);
+        pack.Refusal.Should().BeEmpty();
+        pack.Text.Should().Contain("File: src/Orders.cs").And.NotContain("File: research/checklist.md");
+        pack.Omitted.Should().Contain(p => p.Contains("research/checklist.md") && p.Contains("supporting material"));
+    }
 }

@@ -25,28 +25,31 @@ public static class SecurityContext
         var reserve = (long)Math.Max(ResponseReserve, responseTokens) * 4;
         var budget = (long)tokens * 4 - Encoding.UTF8.GetByteCount(instruction) - reserve - 4096;
         if (budget <= 0) return new(string.Empty, "instructions and response reserve exceed the context budget", []);
-        var ranked = mode == "slice" ? files.OrderByDescending(f => f.Signals.Intersect(prompt.Focus).Count()) : files.AsEnumerable();
+        var ranked = mode == "slice" ? files.OrderBy(f => f.SupportingMaterial)
+            .ThenByDescending(f => f.Signals.Intersect(prompt.Focus).Count()) : files.AsEnumerable();
         var text = new StringBuilder();
         var omitted = new List<string>();
         if (excludedFiles > 0) omitted.Add($"{excludedFiles} files beyond the detector file cap were not inspected");
         foreach (var file in ranked)
         {
+            var label = file.Diff.Path + (file.SupportingMaterial ? " (supporting material: documentation/test/prompt example)" : string.Empty);
             if (file.Diff.Text.Length == 0)
             {
-                omitted.Add(file.Diff.Path + (file.DetectionIncomplete ? " (diff exceeds detector character limit)" : string.Empty));
+                omitted.Add(label + (file.DetectionIncomplete ? " (diff exceeds detector character limit)" : string.Empty));
                 continue;
             }
-            if (budget <= 0) { omitted.Add(file.Diff.Path); continue; }
+            if (budget <= 0) { omitted.Add(label); continue; }
             var source = sources?.GetValueOrDefault(file.Diff.Path, string.Empty) ?? string.Empty;
-            var header = $"\nFile: {file.Diff.Path}\n";
+            var header = $"\nFile: {file.Diff.Path}\n"
+                + (file.SupportingMaterial ? "Material kind: documentation/test/prompt example (path hint, not a safety conclusion).\n" : string.Empty);
             const string sourceHeader = "\nSource at pinned head (bounded declarations/windows):\n";
             var bytes = (long)Encoding.UTF8.GetByteCount(header) + Encoding.UTF8.GetByteCount(file.Diff.Text) + 1
                 + (mode == "slice" ? Encoding.UTF8.GetByteCount(sourceHeader) + Encoding.UTF8.GetByteCount(source) : 0);
-            if (bytes > budget) { omitted.Add(file.Diff.Path); continue; }
+            if (bytes > budget) { omitted.Add(label); continue; }
             text.Append(header).Append(file.Diff.Text).Append('\n');
             if (mode == "slice") text.Append(sourceHeader).Append(source);
             budget -= bytes;
-            if (mode == "slice" && source.Length == 0) omitted.Add(file.Diff.Path + " (source body unavailable; patch only)");
+            if (mode == "slice" && source.Length == 0) omitted.Add(label + " (source body unavailable; patch only)");
         }
         if (text.Length == 0) return new(string.Empty, files.Any(f => f.DetectionIncomplete)
             ? "no usable source; diffs exceeding the detector character limit were withheld"

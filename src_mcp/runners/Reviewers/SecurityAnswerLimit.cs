@@ -24,6 +24,8 @@ internal static class SecurityAnswerLimit
             return "security answers must contain only the declared status and valid findings, without prose notes";
         var expected = review.Findings.Length == 0 ? "SECURE" : "FINDINGS";
         if (review.SecurityStatus != expected) return $"security status must be {expected} for this findings list";
+        if (review.Findings.Any(f => f.Severity == Core.Findings.Severity.Nit))
+            return "security findings must use blocking (CRITICAL), major (HIGH) or minor (MEDIUM); Low/Info are not accepted";
         return review.Findings.Any(f => f.AttackEvidence is not { Complete: true })
             ? "every security finding needs nonempty trigger, mechanism and consequence, at most 8000 characters total"
             : string.Empty;

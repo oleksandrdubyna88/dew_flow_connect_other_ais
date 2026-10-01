@@ -18,6 +18,9 @@ public sealed class SecurityLaneAuditTests
         var repo = Required("COAI_SECURITY_AUDIT_REPO");
         var baseline = Required("COAI_SECURITY_AUDIT_BASE");
         var output = Required("COAI_SECURITY_AUDIT_OUT");
+        var contextTokens = int.Parse(Environment.GetEnvironmentVariable("COAI_SECURITY_AUDIT_CONTEXT_TOKENS") ?? "24000",
+            System.Globalization.CultureInfo.InvariantCulture);
+        contextTokens.Should().BeInRange(1024, 131072, "the slice budget must fit this model's measured window");
         var selected = Environment.GetEnvironmentVariable("COAI_SECURITY_AUDIT_PROMPTS")?.Split(',',
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var modules = selected is null ? SecurityCatalog.Prompts.ToArray()
@@ -35,7 +38,8 @@ public sealed class SecurityLaneAuditTests
             head = head.StdOut.Trim(),
             utc = DateTimeOffset.UtcNow,
             model = "Qwen3.5-35B-A3B-Q5_vk128:latest",
-            contextTokens = 131072,
+            modelContextTokens = 131072,
+            contextTokens,
             ordinaryReviewer = "FakeCli clean response; this campaign measures only the local security lane",
             limitation = "One pass per module, no executed reproductions, input coverage unverified",
             prompts = modules.Select(p => new
@@ -50,7 +54,7 @@ public sealed class SecurityLaneAuditTests
             try
             {
                 await SecurityLaneCalibrationTests.RunCell(repo, baseline, head.StdOut.Trim(), Path.Combine(output, prompt.Id), launcher,
-                    scope, [prompt.Id]);
+                    scope, [prompt.Id], contextTokens);
             }
             catch (Exception error)
             {

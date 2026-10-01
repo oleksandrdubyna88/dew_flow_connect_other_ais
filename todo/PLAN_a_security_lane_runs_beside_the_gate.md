@@ -269,6 +269,11 @@ source outlines, `CredentialFiles`, `SourceResolver` and diff shaping, extractin
 where needed. Slice prioritizes changed members matching focus, then their containing entry points;
 diff includes the shaped change. Preserve paths, original line numbers and head/base identity.
 No live-tree reads and no extra source-request conversation for the security lane in this version.
+In slice mode, a shared path hint places production/configuration ahead of documentation/test
+supporting material, then ranks by focus within each tier. Use it for both the sixteen pinned
+source reads and the packed context; otherwise instruction/checklist vocabulary can consume all
+source slots. Supporting material is labelled and retained when it fits, not treated as safe or
+silently excluded. Diff mode retains its existing deterministic file order.
 
 ### 6.2 Trust boundary
 

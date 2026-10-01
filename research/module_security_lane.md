@@ -33,6 +33,12 @@ accounts for instructions, schema, framing and output reserve using a UTF-8/4 es
 omissions, applies the existing credential-file guards and redaction, and fences material with a
 fresh nonce. Coverage remains partial; local input coverage remains unverified even when reported
 token usage looks plausible. Neither the server nor the extension executes reproduction text.
+For slices, production/config paths rank ahead of known documentation and test paths, then focus
+signals rank within each tier. Both the sixteen-file reader and the context composer use this
+same hint. Supporting material is retained when it fits and labelled in the payload/omissions;
+the path hint never proves a file safe. The default local slice budget is 24000 tokens, independent
+of the model's configured context window. Explicit source start/end labels surround the nonce fence;
+all auditor instructions and the JSON schema stay above them.
 
 Each provider/prompt pair has its own invocation, output files, repair and history identity.
 Existing concurrency limits still apply. Security work is exempt from ordinary local stand-down;
@@ -45,6 +51,13 @@ preconditions, steps, expected and actual results, within 8000 characters. This 
 The security schema requires `status: SECURE` with no findings, or `FINDINGS` with findings. Every
 finding carries nonempty `trigger`, `mechanism` and `consequence` (8000 characters total), preserved
 in history and per-pair sightings. Missing or inconsistent status/evidence refuses the answer.
+The security schema does not offer prose `notes`; the operator's source-only and JSON-hygiene
+block is embedded in every redteam prompt and precedes its output instructions.
+The operator's evidence threshold and no-hedging block also precedes the output instructions.
+Security severity uses `blocking` = CRITICAL, `major` = HIGH, and `minor` = MEDIUM;
+the security schema and response validator exclude `nit` (Low/Info). Ordinary schemas keep it.
+The local runtime already sends temperature zero and a fixed seed. These settings do not prove
+semantic correctness: a schema-valid finding still needs its claimed execution path checked.
 Ordinary ownership wins a duplicate; stronger severity survives, with per-pair sightings retained.
 Schema step 17 stores this evidence in `findings.security_evidence`; old database readers remain
 supported by the column-presence ladder. Ordinary findings with no security evidence keep an empty
