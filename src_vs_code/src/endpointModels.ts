@@ -73,9 +73,7 @@ export function listingOf(
 export function listingFor(endpoint: RowEndpoint): EndpointListing | undefined {
   const listed = endpoint.listed;
 
-  return listed !== undefined && listed.baseUrl === endpoint.baseUrl && listed.keyName === endpoint.keyName
-    ? listed
-    : undefined;
+  return listed?.baseUrl === endpoint.baseUrl && listed.keyName === endpoint.keyName ? listed : undefined;
 }
 
 /**

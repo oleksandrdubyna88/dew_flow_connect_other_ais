@@ -302,17 +302,30 @@ export function probeFor(probe: ProbeResult | undefined, executable: string): Pr
   return probe.executable === executable ? probe : undefined;
 }
 
+/**
+ * What a caption may draw on beside the runtime and the Codex cache — each one optional, and passed by NAME.
+ *
+ * <p>They were five trailing positional parameters, and the row's endpoint made a sixth (SonarCloud S107, on
+ * the pull request that added it): a caller had to pad with `undefined`s to reach the one it held, and two
+ * neighbouring parameters of one type could be swapped without a compile error.</p>
+ */
+export interface ProvenanceFacts {
+  readonly localEngine?: LocalEngine | undefined;
+  readonly discoveredAgy?: readonly ModelChoice[] | undefined;
+  readonly remote?: RemoteProvenance | undefined;
+  readonly claudeProbe?: ProbeResult | undefined;
+  readonly askingClaude?: boolean | undefined;
+  /** The row's endpoint and any answer kept for it — what `modelsFor` was handed, so the caption describes that list. */
+  readonly endpoint?: RowEndpoint | undefined;
+}
+
 export function modelsProvenance(
   runtime: Runtime,
   discoveredCodex: readonly ModelChoice[],
-  localEngine?: LocalEngine,
-  discoveredAgy: readonly ModelChoice[] = [],
-  remote: RemoteProvenance = NO_REMOTE_CATALOG,
-  claudeProbe?: ProbeResult,
-  askingClaude = false,
-  /** The row's endpoint and any answer kept for it — what `modelsFor` was handed, so the caption describes that list. */
-  endpoint: RowEndpoint = NO_ENDPOINT,
+  facts: ProvenanceFacts = {},
 ): string {
+  const { localEngine, discoveredAgy = [], remote = NO_REMOTE_CATALOG, claudeProbe, askingClaude = false } = facts;
+  const endpoint = facts.endpoint ?? NO_ENDPOINT;
   // A Team-server row runs no CLI on this machine and has no cache here: its list came over HTTP
   // from a server's catalog. Without this arm the function fell through to the codex sentence, so a
   // Team-server reviewer was captioned "8 models the Codex CLI has cached for this machine" — a

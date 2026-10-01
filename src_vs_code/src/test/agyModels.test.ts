@@ -79,6 +79,6 @@ test('a model already chosen never vanishes from its own dropdown', () => {
 test('the line under the dropdown says where the list actually came from', () => {
   // It used to claim the CLI's answer while offering a snapshot. That is what made a list a model
   // generation behind look like the truth.
-  assert.match(modelsProvenance('antigravity', [], undefined, parseAgyModels(AGY_OUTPUT)), /14 models/);
-  assert.match(modelsProvenance('antigravity', [], undefined, []), /did not answer/);
+  assert.match(modelsProvenance('antigravity', [], { discoveredAgy: parseAgyModels(AGY_OUTPUT) }), /14 models/);
+  assert.match(modelsProvenance('antigravity', [], { discoveredAgy: [] }), /did not answer/);
 });
