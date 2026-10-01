@@ -667,6 +667,23 @@ Environment until the extension arrives: `COAI_PROVIDERS`, `COAI_MODEL_*`, `COAI
 startup; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in
 `providers`, never crashes, never partial applies, never logged values.
 
+**The key is read from the LAYERED configuration, like every other setting (2026-10-01).** The panel
+writes `COAI_CREDS_KEY` into the settings file and nowhere else — `envBlock` puts it there, and no spawn of
+the extension's (`serverEnv()`) carries it in the environment. Every vault read took it from the raw
+process environment instead — serve, `--providers` and `--probe-api` alike, each a few lines after
+building `SettingsFile.Layer` for everything else — so a key saved in the panel was never seen:
+`providers` answered "no COAI_CREDS_KEY configured" after a reconnect, and every vendor needing a vault key
+(an OpenAI-compatible endpoint, an `api` row) was badged *cannot review* and dropped from every round.
+`KeyVault.ReadFromConfigurationAsync(configuration)` is now the one road — and the only PUBLIC read, the
+key-taking `ReadAsync` is private, so no caller can hand the vault a key it looked up itself; all three
+modes hand it their layer, so the client's `env` block still outranks the file key by key. `ForThisMachine` keeps the raw
+environment — where `creds` is installed is a fact about the machine, not a setting.
+`TheVaultKeyIsReadWhereThePanelWritesItTests` (the `--providers` answer, plus a scan refusing a raw
+`KeyVault.KeyVariable` lookup outside `KeyVault.cs` and any read not handed `configuration` — the serve
+path is guarded that way because driving the real binary would read the person's real vault) and
+`ProbeApiModeTests.TheVaultKeyInTheSettingsFile_IsTheOneTheProbeUses`; RED first: `vaultRead` False /
+exit 78, "no COAI_CREDS_KEY configured".
+
 **`creds` is looked for where CredsForDevs installs it, after PATH (2026-09-26, PLAN_feature_review §9.10).**
 The CredsForDevs extension downloads its CLI into its own global storage —
 `<editor data>/User/globalStorage/remsoftdev.creds-for-devs/bin/creds[.exe]` — and the folder it adds to PATH
