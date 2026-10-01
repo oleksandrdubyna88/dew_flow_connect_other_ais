@@ -13,6 +13,7 @@
 
 import { DEFAULT_API_DIALECT } from './apiRuntime';
 import { ProviderNotes } from './providers';
+import { vaultKeyOf } from './vaultKey';
 import { freeVendorId, normaliseId, Vendor } from './vendors';
 
 /** The mark that says an entry is an API key from the vault, not a CLI. */
@@ -70,7 +71,7 @@ export function vaultKeyItems(notes: VaultNotes, answered: boolean, vendors: rea
 
 /** One `!name` row, saying which id it would take when that is not the name itself. */
 function keyItem(keyName: string, vendors: readonly Vendor[], taken: ReadonlySet<string>): VaultKeyItem {
-  const users = vendors.filter((vendor) => vendor.runtime === 'api' && keyOf(vendor) === keyName).map((vendor) => vendor.id);
+  const users = vendors.filter((vendor) => vendor.runtime === 'api' && vaultKeyOf(vendor) === keyName).map((vendor) => vendor.id);
   const id = freeVendorId(normaliseId(keyName), taken);
   const second = users.length > 0 || id !== normaliseId(keyName);
 
@@ -101,10 +102,6 @@ function keyDetail(keyName: string): string {
   return `An API key in your vault under “${keyName}” — ${where}; the model list is asked from the endpoint.`;
 }
 
-/** The name a row's key is filed under: the one it names, else its id — the server's `KeyName`. */
-function keyOf(vendor: Vendor): string {
-  return vendor.vaultKeyName ?? vendor.id;
-}
 
 /**
  * The row a chosen `!name` becomes: an `api` reviewer that reads the key filed under that name.

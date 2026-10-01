@@ -243,6 +243,9 @@ function placed(
     ? modelsFor(
       one.runtime, state.codexModels ?? [], one.model, engine, state.agyModels ?? [], [], state.claudeProbe,
       one.executablePath,
+      // A consultant on somebody else's endpoint gets its saved model, never the Codex CLI's cache
+      // (PLAN_custom_endpoint_model_list). Its key is filed under its vendor id, which names the entry.
+      { baseUrl: one.baseUrl, keyName: one.vendor },
     )
     : [];
 

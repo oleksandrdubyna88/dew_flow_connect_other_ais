@@ -72,6 +72,8 @@ import { LogPeriod } from './logPeriod';
 import { NO_NOTES, ProviderNotes, ProvidersAnswer } from './providers';
 import { readProviders } from './providersProbe';
 import { presetEndpoint, VAULT_KEY_MARK, VaultKeyItem, vaultKeyItems, vaultKeyRow } from './apiKeyVendors';
+import { askedOrRefused, asksAnEndpoint, type EndpointListing, listingOf } from './endpointModels';
+import { vaultKeyOf } from './vaultKey';
 import { isApiSettingKey, resetTarget, withApiSetting, withoutApiSetting } from './apiSettings';
 import { modelsForKey } from './apiModelsProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
@@ -341,6 +343,18 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * the first one's models. Found by Claude Sonnet 5, 2026-09-02.</p>
    */
   private localEngines: Record<string, LocalEngine> = {};
+  /**
+   * What an endpoint row's ≡ last brought back, per row id — kept in memory only, and used by the card
+   * only while the row still has the base URL and key it was asked with (`listingFor`). At most one
+   * entry per reviewer row; a reload forgets them all.
+   */
+  private endpointListings: Record<string, EndpointListing> = {};
+  /**
+   * Rows whose ≡ ask is in flight. ONE ask per row at a time: a second press is ignored rather than started
+   * beside the first, so there is never an older answer that could land after a newer one. (A sequence
+   * number did that job too, and the code round showed it could never fire behind this guard.)
+   */
+  private readonly askingEndpoints = new Set<string>();
   private localProbedEndpoints: Record<string, string> = {};
   private localCheckedAt: Record<string, number> = {};
   /** The discovery payload last written, so an unchanged one is not written again. */
@@ -1003,6 +1017,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // has gone out, so a slow disk delays the count and not the panel.
       notifications: this.notificationsGlance,
       localEngines: await this.probeLocalEngines(vendors),
+      // Only what ≡ brought back — never asked here, on a repaint (PLAN_custom_endpoint_model_list).
+      endpointListings: this.endpointListings,
+      askingEndpoints: [...this.askingEndpoints],
       // The consultant's own engines, keyed by ENDPOINT: since story C5 the section holds no
       // reviewer rows, so there is none to borrow one from, and a row whose endpoint nobody probed
       // had its saved model labelled gone by something that had never looked.
@@ -1999,6 +2016,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         // not fresh is not reused. Nothing else to do and nothing to await beyond the repaint.
         this.localCheckedAt = {};
         await this.render();
+        break;
+      case 'listEndpointModels':
+        if (id !== undefined) {
+          await this.listEndpointModels(id);
+        }
         break;
       case 'forgetUsage':
         if (id !== undefined) {
@@ -3637,6 +3659,50 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         placeHolder: 'Which model should review? — the endpoint’s own list',
       })
       : this.typeVaultModel(keyName, listed.reason);
+  }
+
+  /**
+   * ≡ on an endpoint card: ask that endpoint which models the row's key can call, and keep the answer.
+   *
+   * <p>The same probe the vault flow above uses — `coai-mcp --probe-api` with the row's KEY NAME
+   * (`vaultKeyOf`), never its id: the probe finds its row in the settings file, which carries only enabled
+   * rows, so a switched-off row filed under another key would be asked under the wrong name (plan round,
+   * gemini). Bounded by `modelsForKey` itself (45 s for the spawn, 30 s per call), and whatever wraps it
+   * is caught by `askedOrRefused`: a refusal — the probe's own, or a thrown error's words — is kept like an
+   * answer so the card can say why (code round, codex and gemini).</p>
+   *
+   * <p>One ask per row at a time: a second press while one is in flight does nothing.</p>
+   */
+  private async listEndpointModels(id: string): Promise<void> {
+    const asked = this.startEndpointAsk(id);
+    if (asked === undefined) {
+      return;
+    }
+    await this.render();
+    try {
+      const probed = await askedOrRefused(() => vscode.window.withProgress(
+        { location: vscode.ProgressLocation.Notification, title: `Asking ${asked.baseUrl} which models “${asked.keyName}” can call…` },
+        () => modelsForKey(this.serverExecutable(), asked.keyName, asked.baseUrl),
+      ));
+      this.endpointListings = { ...this.endpointListings, [id]: listingOf(asked, probed, new Date()) };
+    } finally {
+      this.askingEndpoints.delete(id);
+      await this.render();
+    }
+  }
+
+  /**
+   * Marks an ask as started — or answers nothing when the row is gone, asks no endpoint (a stale or forged
+   * message for a plain CLI row), or is already asking.
+   */
+  private startEndpointAsk(id: string): { baseUrl: string; keyName: string } | undefined {
+    const vendor = this.vendorsHere().find((one) => one.id === id);
+    if (vendor === undefined || !asksAnEndpoint(vendor.runtime, vendor.baseUrl) || this.askingEndpoints.has(id)) {
+      return undefined;
+    }
+    this.askingEndpoints.add(id);
+
+    return { baseUrl: vendor.baseUrl, keyName: vaultKeyOf(vendor) };
   }
 
   /** A model id typed by hand, when the endpoint would not list its models — with the reason it would not. */

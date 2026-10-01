@@ -61,11 +61,13 @@ import { vendorPalette, VendorPalette } from './vendorColour';
 import { CliStatus, cliStatusNote, updateAvailable, UNKNOWN_CLI } from './cliVersions';
 import { SnippetStatus, snippetNote } from './claudeSnippet';
 import { ProbeResult, claudeNote } from './claudeModels';
+import { asksAnEndpoint, type EndpointListing, type RowEndpoint } from './endpointModels';
 import { LocalEngine, remoteWarning } from './localEngines';
 import { bugzBody, mayRank } from './bugzView';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
 import { ServerStatus, compareVersions } from './coaiInstall';
 import { ModelPrice } from './modelPrices';
+import { vaultKeyOf } from './vaultKey';
 import { reviewsDocuments, Vendor } from './vendors';
 
 /**
@@ -214,6 +216,14 @@ export interface PanelState {
    * not have. Found by Claude Sonnet 5, 2026-09-02.</p>
    */
   readonly localEngines: Readonly<Record<string, LocalEngine>>;
+  /**
+   * What an endpoint row's own `GET /models` answered when ≡ was pressed, per row id — kept with what it
+   * was asked WITH, so the card uses it only while the row still matches (`listingFor`). Optional: a
+   * state built without one has asked nothing, which is the honest default.
+   */
+  readonly endpointListings?: Readonly<Record<string, EndpointListing>> | undefined;
+  /** The rows whose ≡ ask is in flight, so the card says "asking" instead of going quiet. */
+  readonly askingEndpoints?: readonly string[] | undefined;
   /**
    * The engines behind the CONSULTANT rows, keyed by the ENDPOINT each row stores.
    *
@@ -983,6 +993,8 @@ function reviewersBody(state: PanelState): string {
     cli: state.cliStatus[v.id] ?? UNKNOWN_CLI,
     price: state.modelPrices[v.model],
     localEngine: state.localEngines[v.id],
+    endpointListing: state.endpointListings?.[v.id],
+    askingEndpoint: (state.askingEndpoints ?? []).includes(v.id),
     allowedRemote: allowedModelsFor(v, state.teamServers ?? []),
     reported: state.providers?.reported ?? {},
     // Per card, so the sentence names THIS row (`apiRuntimeOnServer` decides whether there is one).
@@ -1062,6 +1074,10 @@ interface CardContext {
   readonly cli: CliStatus;
   readonly price: ModelPrice | undefined;
   readonly localEngine: LocalEngine | undefined;
+  /** What this row's endpoint listed when ≡ was last pressed — used only while the row still matches it. */
+  readonly endpointListing?: EndpointListing | undefined;
+  /** True while this row's ≡ ask is in flight. */
+  readonly askingEndpoint?: boolean | undefined;
   readonly allowedRemote: RemoteProvenance;
   /** What the SERVER says it can run — displayed, never re-decided here. */
   readonly reported: Readonly<Record<string, ProviderHealth>>;
@@ -1224,8 +1240,14 @@ const RATE_SETTING: Readonly<Record<'in' | 'out' | 'cached', string>> = { in: 'I
 function vendorCard(vendor: Vendor, context: CardContext): string {
   const {
     codexModels, cli, price, localEngine, agyModels, allowedRemote, reported, colour, claudeProbe, askingClaude, apiNote,
-    featureNote: featureOff, serverVersion,
+    featureNote: featureOff, serverVersion, endpointListing, askingEndpoint,
   } = context;
+  // The endpoint this row talks to, and what it listed — so a codex row on OpenRouter is offered
+  // OpenRouter's models, never the Codex CLI's cache (research/PLAN_custom_endpoint_model_list.md). The key
+  // name is the row's own (`vaultKeyOf`), the one `--probe-api` is asked with.
+  const rowEndpoint: RowEndpoint = {
+    baseUrl: vendor.baseUrl, keyName: vaultKeyOf(vendor), listed: endpointListing, asking: askingEndpoint ?? false,
+  };
   const id = escapeHtml(vendor.id);
   const local = vendor.runtime === 'local';
   // A hosted API reached directly: no CLI to run, install or update, so the three CLI buttons are
@@ -1243,7 +1265,7 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
   const remote = vendor.runtime === 'remote';
   const models = modelsFor(
     vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote.models, claudeProbe,
-    executableFor(vendor),
+    executableFor(vendor), rowEndpoint,
   );
   const endpoint = endpointField(vendor, id, local, remote, off);
   // The two stage boxes ride with the prices — `reviews plans` after the in rate, `reviews code`
@@ -1287,7 +1309,7 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
     <input type="checkbox" id="v-${id}" data-setting="enabled" data-vendor="${id}"${vendor.enabled ? ' checked' : ''}${disabled}
            title="${escapeHtml(HELP.vendorEnabled)}">
     <label class="name" for="v-${id}">${id}</label>${cannotRun(vendor.id, reported)}
-    ${headButtons(vendor, id, local, api, localEngine, cli)}
+    ${headButtons(vendor, id, local, api, localEngine, cli)}${endpointButton(vendor, id, askingEndpoint ?? false)}
     <button class="link" data-command="removeVendor" data-id="${id}">remove</button>
   </div>
   <div class="field">
@@ -1295,7 +1317,7 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
       ${modelOptions(models, vendor.model, modelWords(vendor.runtime).empty)}
     </select>
     <div class="hint">${claudeNote(vendor.runtime, askingClaude ?? false).length === 0 ? '' : LOOKING}${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(
-      vendor.runtime, codexModels, localEngine, agyModels, allowedRemote, claudeProbe, askingClaude ?? false,
+      vendor.runtime, codexModels, localEngine, agyModels, allowedRemote, claudeProbe, askingClaude ?? false, rowEndpoint,
     ))}</div>
   </div>
   ${skew}${stages}${endpoint}${dialect}${perModel}${executable}${prices}${documentRow}
@@ -1308,9 +1330,26 @@ function disabledAttr(off: boolean): string {
 }
 
 /**
+ * ≡ — ask this row's endpoint which models its key can call, on demand and never per repaint.
+ *
+ * <p>Every endpoint row has one (`asksAnEndpoint`: an `api` row, or a `codex` row given a base URL);
+ * nothing else does. Disabled while that row's ask is in flight, which is half of "one ask per row at a
+ * time"; the host ignores a second press as the other half (plan round, both vendors).</p>
+ */
+function endpointButton(vendor: Vendor, id: string, asking: boolean): string {
+  if (!asksAnEndpoint(vendor.runtime, vendor.baseUrl)) {
+    return '';
+  }
+
+  return `<button class="run upd" data-command="listEndpointModels" data-id="${id}"
+            title="${escapeHtml(HELP.listEndpointModels)}"${asking ? ' disabled' : ''}
+            aria-label="List the models this endpoint offers">≡</button>`;
+}
+
+/**
  * The buttons in a card's head: a local engine's re-probe (and the WSL fix when it applies), a CLI
  * vendor's run / install / update — and NOTHING for a hosted API, which has no CLI to run, install
- * or update. The model caption tells an api row about `coai-mcp --probe-api` instead.
+ * or update. An api row's one button is {@link endpointButton}, which every endpoint row gets.
  */
 function headButtons(vendor: Vendor, id: string, local: boolean, api: boolean, localEngine: LocalEngine | undefined, cli: CliStatus): string {
   if (api) {
@@ -3087,6 +3126,8 @@ export const PANEL_COMMANDS = [
   'forgetUsage',
   'forgetChat',
   'reprobeLocal',
+  // ≡ on an endpoint row: ask that endpoint which models its key can call (PLAN_custom_endpoint_model_list).
+  'listEndpointModels',
   // Takes the consultant's prompt override away, so the shipped prompt answers again. A command
   // rather than an emptied box: both do it, and only one of them is discoverable.
   'restoreConsultPrompt',

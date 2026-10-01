@@ -121,6 +121,9 @@ export const HELP = {
   localPrice:
     'Left here for accounting, and normally left empty: a model on your own hardware has no token bill. What it costs is electricity and the card being busy, neither of which this panel can see. Fill these in only if you want *What each AI has used*, in Show review rounds, to price local runs anyway — at a rate you invent.',
 
+  listEndpointModels:
+    'Ask this endpoint which models your key can call — the endpoint’s own GET /models, through coai-mcp and the key in your vault. Only when you press it: nothing is asked on a repaint. The answer fills the model list until the endpoint or the key changes; press again to refresh it, or to retry after a refusal.',
+
   reprobeLocal:
     'Ask the engine again what it has. A successful probe is cached for a minute so the panel is not listing models on every repaint — which means a model you just pulled, or an engine you just started, is not there yet. This is the button for that. It was left out of the first version as "a CLI’s button", and the gate reviewing this feature pointed out that a cache with no way to clear it is a stale list with no way out.',
 

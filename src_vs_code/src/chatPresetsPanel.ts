@@ -400,6 +400,11 @@ Promise<{ id: string; label: string } | undefined> {
     catalog.localEngine,
     catalog.discoveredAgy,
     allowedModelsFor(spec, catalog.teamServers).models,
+    undefined,
+    '',
+    // A vendor on somebody else's endpoint offers nothing here rather than the Codex CLI's cache, so the
+    // step answers "whatever that vendor is set to" (PLAN_custom_endpoint_model_list).
+    { baseUrl: vendor.baseUrl ?? '', keyName: '' },
   );
   if (offered.length === 0) {
     return { id: '', label: '' };
