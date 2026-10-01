@@ -62,4 +62,24 @@ public sealed class SecurityEvidenceTests
         pack.Text.Should().Contain("database.Query").And.NotContain("PRIVATE KEY material");
         pack.Omitted.Should().Contain("server.pem");
     }
+
+    [Fact]
+    public void Detector_size_refusal_names_the_limit_instead_of_suggesting_more_context()
+    {
+        var files = SecuritySignals.Classify([new("Query.cs", new string('x', SecuritySignals.MaxFileCharacters + 1))]);
+        var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", ["sql"], []), files, "diff", 24000);
+        pack.Text.Should().BeEmpty();
+        pack.Refusal.Should().Contain("detector character limit");
+        pack.Omitted.Should().Contain("Query.cs (diff exceeds detector character limit)");
+    }
+
+    [Fact]
+    public void A_patch_that_does_not_fit_does_not_hide_a_later_smaller_patch()
+    {
+        var files = SecuritySignals.Classify([new("A.cs", new string('\u754c', 30000)), new("B.cs", "+ query(value);")]);
+        var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", ["sql"], []), files, "diff", 24000);
+        pack.Refusal.Should().BeEmpty();
+        pack.Omitted.Should().Contain("A.cs");
+        pack.Text.Should().Contain("File: B.cs").And.Contain("query(value)").And.NotContain(new string('\u754c', 30));
+    }
 }

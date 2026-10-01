@@ -13,9 +13,11 @@ public static class SecuritySchema
     private static string Create()
     {
         var schema = JsonNode.Parse(FindingSchema.Json)!;
+        schema["properties"]!.AsObject().Remove("notes");
         schema["properties"]!["status"] = new JsonObject
         { ["type"] = "string", ["enum"] = new JsonArray("SECURE", "FINDINGS") };
-        schema["required"]!.AsArray().Add((JsonNode)JsonValue.Create("status"));
+        schema["required"] = new JsonArray([.. schema["properties"]!.AsObject()
+            .Select(p => (JsonNode)JsonValue.Create(p.Key))]);
         var item = schema["properties"]!["findings"]!["items"]!;
         foreach (var name in new[] { "trigger", "mechanism", "consequence" })
         {

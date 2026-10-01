@@ -1,6 +1,7 @@
 # Security lane calibration — Windows Ollama
 
-Status: preparation complete; live measurements pending. No quality claim is made yet.
+Status: the initial live campaign exposed a response-contract defect; the corrected twelve-module
+campaign is pending. No quality claim is made yet.
 
 ## Prediction recorded before the run
 
@@ -60,7 +61,26 @@ run that explicit test through the GPU lease wrapper. Every module must reach th
 a trigger skip cannot count as a completed model review. The ordinary three-repeat calibration
 above remains a separate measurement.
 
-Not run yet. No cells have been counted as successful. Token-usage plausibility cannot establish
+Initial feature-only campaign on `ff833afce42a832148b3a5b358481d49c3722bec`, 2026-10-01:
+authorization and SQL both reached Windows Ollama, using 124040/123465 input and 1331/2083 output
+tokens respectively. Both returned prose `notes`, which the derived security schema allowed but the
+security validator refused. Neither was a usable security answer. The campaign was stopped after
+those two completed cells (the third was cancelled), retaining artifacts under
+`D:/rsd/_wt/security-lane-tools/qwen-twelve-ff833afc`. The schema contradiction was reproduced by a
+failing test and corrected without changing the ordinary schema or the operator's prompt bodies.
+The focused security suite then passed 58 tests, with the two explicit hardware tests skipped.
+
+The authorization output alleged application defects from the prompt's own examples; no such
+application implementation was identified. The SQL output speculated about cap order, coverage
+counting and `ExecuteRawAsync` routing; inspection showed cap-before-gate, explicit incomplete local
+coverage and a case-insensitive `execute` match already present. Claude/Opus consultation
+`df969a82a9c34a76ae5b6040bcddacbb` confirmed the schema contradiction and that deduplicated lane
+evidence survives in `AlsoSeenBy`. The shared framing now requires implementation evidence for
+claims about documentation, prompts or examples. Those files remain reviewable: excluding an
+instruction asset from its own audit could hide a defect in this feature. The campaign uses `slice`,
+so the consultant's proposed change to `diff` ordering would not address this observed failure.
+
+No initial cells have been counted as successful. Token-usage plausibility cannot establish
 full local input coverage; that remains unverified even if all model answers are usable.
 
 This fixture is a wiring and calibration check on one model and one change, not a security benchmark
