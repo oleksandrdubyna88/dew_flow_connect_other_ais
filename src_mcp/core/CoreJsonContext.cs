@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Core.Rounds;
 
 namespace CoaiMcp.Core;
@@ -21,4 +22,8 @@ namespace CoaiMcp.Core;
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, AllowTrailingCommas = true)]
 [JsonSerializable(typeof(RawReview))]
 [JsonSerializable(typeof(RoleSeed))]
+// The question consultant (PLAN_question_consultant.md): its capability table, embedded like the
+// role seed, and the shape an api consultant answers in — both read through this reflection-free context.
+[JsonSerializable(typeof(RuntimeCapabilitySeed))]
+[JsonSerializable(typeof(RawQuestionAnswer))]
 internal sealed partial class CoreJsonContext : JsonSerializerContext;

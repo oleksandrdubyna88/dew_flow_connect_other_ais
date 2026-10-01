@@ -98,6 +98,17 @@ public sealed record ProcessRequest(
     /// than a list of names to strip because the thing being kept out is not a known name.</para>
     /// </remarks>
     public bool InheritsEnvironment { get; init; } = true;
+
+    /// <summary>
+    /// The names a NON-inheriting launch keeps from this process's environment. The Team server's
+    /// allowlist by default, so every launch written before the question consultant confines exactly
+    /// as it did; a question row's launch names <see cref="ProcessEnvironment.Minimal"/> instead.
+    /// </summary>
+    /// <remarks>
+    /// Widened rather than copied (reuse-first): a second launcher flag or a second filter would be the
+    /// second copy of one decision. Ignored while <see cref="InheritsEnvironment"/> is true.
+    /// </remarks>
+    public IReadOnlySet<string> Passthrough { get; init; } = ProcessEnvironment.Passthrough;
 }
 
 /// <summary>What a run produced. <see cref="TimedOut"/> true means the tree was killed.</summary>
@@ -235,7 +246,7 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
     {
         if (!request.InheritsEnvironment)
         {
-            Confine(environment);
+            Confine(environment, request.Passthrough);
         }
 
         foreach (var (name, value) in request.Environment)
@@ -244,16 +255,16 @@ public sealed class ProcessLauncher(IProcessTracker? tracker = null) : IProcessL
         }
     }
 
-    /// <summary>Keeps only the names in <see cref="ProcessEnvironment.Passthrough"/>.</summary>
+    /// <summary>Keeps only the names in the request's allowlist — <see cref="ProcessEnvironment.Passthrough"/> unless the request named another.</summary>
     /// <remarks>
     /// Read into a copy before the clear, because the dictionary being pruned is the one being read.
     /// The comparison is the dictionary's own — .NET builds it case-insensitive on Windows and
     /// case-sensitive elsewhere, the same rule <see cref="ProcessEnvironment.NameComparer"/> follows,
     /// so a Windows <c>Path</c> matches the list's <c>PATH</c> and a Linux <c>path</c> does not.
     /// </remarks>
-    private static void Confine(IDictionary<string, string?> environment)
+    private static void Confine(IDictionary<string, string?> environment, IReadOnlySet<string> passthrough)
     {
-        var kept = environment.Where(entry => ProcessEnvironment.Passthrough.Contains(entry.Key)).ToArray();
+        var kept = environment.Where(entry => passthrough.Contains(entry.Key)).ToArray();
         environment.Clear();
         foreach (var (name, value) in kept)
         {

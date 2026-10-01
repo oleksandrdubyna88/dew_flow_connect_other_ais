@@ -16,6 +16,13 @@ internal sealed record RawReview(
 
 internal sealed record RawSourceRequest(string? File, string? Symbol, int? StartLine, int? EndLine, string? Why);
 
+/// <summary>
+/// The wire shape an <c>api</c> QUESTION consultant answers in (PLAN_question_consultant.md, A9):
+/// prose, and the same source requests a feature reviewer may make — read through the same
+/// request validation, so a path that could climb out of the repository is refused by one rule.
+/// </summary>
+internal sealed record RawQuestionAnswer(string? Answer, List<RawSourceRequest?>? SourceRequests = null);
+
 internal sealed record RawFinding(
     string? Severity,
     string? Category,

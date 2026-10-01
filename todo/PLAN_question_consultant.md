@@ -1,6 +1,6 @@
 # PLAN — the question consultant: other models answer an AI's question before the person is asked
 
-> Status: **plan only, nothing implemented yet, 2026-10-01.** The capability facts it rests on were measured in
+> Status: **in progress — S1 (confinement) built 2026-10-01, S2–S5 open.** The capability facts it rests on were measured in
 > `dew_flow_benchmark · todo/PLAN_question_consultant_probes.md` (full run `01a0f8c7`, 105 cells, 2026-10-01) and are
 > written up in [RESULTS_question_consultant_capabilities.md](../research/RESULTS_question_consultant_capabilities.md). Scope:
 > `src_mcp` (a new tool `ask_consultants`, the phase-aware `ask_human` gate, a confinement layer, escalation
@@ -351,6 +351,42 @@ outline); `QuestionResolution.For`; the minimal child environment and `NoMcpServ
 
 **Not in it.** No tool, no record, no setting, nothing the person sees; no change to the existing stuck consultant
 or confined reviewer (§9, A12).
+
+**Deviations (S1, 2026-10-01).** Built as the acceptance states, with these differences from the wording above:
+1. `ConsultantLaunch` gained `Confinement` — a closed union `LaunchConfinement` (`AsShipped`, the default, or
+   `Planned(Confinement.Planned)`) — and `ScratchDir`, not a defaulted `CapabilityGrant`: a grant whose default meant
+   "not a capability, the adapter's own argv" would have made `none` mean two things. The default still reproduces
+   today's argv byte for byte (`ConfinementPlannerTests.TheShippedConsultants_StillBuildTodaysArgv_ByteForByte`).
+2. `CwdKind` has two values, `Scratch` and `Root`; §4's `repo` is the AsShipped launch's cwd, decided by the adapter —
+   no question row stands in the checkout. Claude's `--permission-mode plan` is the PLANNER's flag (the measured launch
+   carried it), beside `--tools`/`--restricted`/`--add-dir`; codex's `--json` and the output file stay the adapter's,
+   they are output shape, not sandbox.
+3. Every planned launch is filed under a new role `question` (`ConsultantRoles.Question`), not `consult`, so the ledger
+   kind, the track label and the artefact name say what it was; `ConsultantArtefacts.Ours` recognises both markers.
+4. The minimal child environment: the Windows list is S2c verbatim; the bench had no Linux subject, so the Unix list is
+   the launcher's own measured requirement (`HOME`, `USER`, `LOGNAME`, `SHELL`, `PATH`, the locale and temp names) —
+   stated as unmeasured in `ProcessEnvironment`. Applied through the launcher's existing filter, which now takes its
+   allowlist from `ProcessRequest.Passthrough` (widened, not a second flag).
+5. The outline of what exists: `FeatureOutlineBuilder.BuildAtHeadAsync`, against the repository's empty tree, WITHOUT
+   member hunks — the feature pack attaches an added file's whole members as hunks, and against the empty tree every
+   file is added, so the pack's own road would have sent a hosted model every body up to the hunk reserve (found by
+   the first test of the api row). A `-U3` diff against the empty tree is also a print of the whole repository.
+6. The api row's source turns ride `IAnsweringFollowUps.AfterAsync` (the fan-out drives the loop in S2), not
+   `SourceConversation`/`TurnLoop`, which are findings-shaped — `ReviewParser.Parse` requires `findings`. Shared:
+   `ReviewParser.ReadRequests` (made internal) validates the requests, `ServedTurn.Render` renders the slices, and
+   `QuestionAnswer.Parse` is the ONE answer reader — the local consultant's `ConsultantAnswer.TextOf` delegates to it.
+7. `SecretCheck` REFUSES (it never redacts), for the reason D10 gives the web sanitiser; the plan named the check
+   without saying which. Recognition is `Redaction.FirstSecretClass` — the notice redaction's own passes, classifying.
+8. The sanitiser asks `repository` and `root` BEFORE the generic `path` shapes (the more specific cure wins); a
+   `key: value` line refuses only a config-shaped key (ALL_CAPS, or carrying `.`/`_`/`-`), so `Question: …` is prose;
+   and `max_tokens=…` is a SECRET by the credential words, refused as one before the config class — the order.
+9. `ApiConsultant` composes an `IReviewerRuntime` (the `LocalConsultant` shape) and carries `VaultKeyName` for S2 to
+   read the vault with; S1 reads no vault. `ConsultSchemaFile.Ensure` gained a `(directory, name, json)` overload for
+   `question-answer-schema.json`, so the local consultant's file is never overwritten.
+10. Acceptance 1's "the generator's `--check` fails on a hand edit" is `generatedFilesAreCurrent.test.ts`, which now
+    lists `generate-runtime-capabilities.mjs`; the TS twin is `capabilityAdmission.test.ts`, and the pure admission is
+    `capabilityAdmission.ts` over `runtimeCapabilities.generated.ts` (its row types declared in the generated file, so
+    no import cycle).
 
 ### S2 — The fan-out: `ask_consultants`, its record store, and the proved move of `ask_human` — **Fable** (the seam where S1's confinement and sanitiser are actually applied — a row launched past them leaks)
 

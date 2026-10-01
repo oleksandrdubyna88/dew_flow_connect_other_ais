@@ -36,6 +36,13 @@
          with a guessed body would spend a paid call to find out. The extension mirrors the NAMES
          (apiDialects.ts) and a test on each side is held to this file. -->
     <EmbeddedResource Include="..\..\shared\api-dialects.json" LogicalName="CoaiMcp.Core.api-dialects.json" />
+
+    <!-- The question consultant's capability table (PLAN_question_consultant.md, D3): per runtime ×
+         capability what was MEASURED, each row citing its probe cells. Embedded for the reason the
+         three above are; RuntimeCapabilities refuses a table that leaves a pair undecided, because a
+         confinement decided by a default arm is the thing the table exists to end. The extension
+         generates runtimeCapabilities.generated.ts from the same file. -->
+    <EmbeddedResource Include="..\..\shared\runtime-capabilities.json" LogicalName="CoaiMcp.Core.runtime-capabilities.json" />
   </ItemGroup>
 
   <ItemGroup>

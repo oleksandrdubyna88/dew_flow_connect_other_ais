@@ -33,12 +33,30 @@ public sealed record ConsultantLaunch(
     string Handle,
     string OutputDir,
     ReviewerSettings Settings,
-    string AnswerSchemaFile = "");
+    string AnswerSchemaFile = "")
+{
+    /// <summary>
+    /// How this launch is confined. <see cref="LaunchConfinement.AsShipped"/> by default, so every
+    /// launch written before the question consultant builds today's argv byte for byte; a question row
+    /// carries a <see cref="LaunchConfinement.Planned"/> and the adapter composes the plan.
+    /// </summary>
+    public LaunchConfinement Confinement { get; init; } = LaunchConfinement.AsShipped;
 
-/// <summary>The role every consultation launch carries — a string, since roles became data.</summary>
+    /// <summary>
+    /// An EMPTY directory for a planned launch whose plan stands in <c>Scratch</c> — created by the
+    /// caller, never by <c>Build</c>, which is pure. Required then, ignored otherwise.
+    /// </summary>
+    public string ScratchDir { get; init; } = string.Empty;
+}
+
+/// <summary>The roles a consultation launch carries — strings, since roles became data.</summary>
 public static class ConsultantRoles
 {
+    /// <summary>The stuck consultant: a conversation in the live checkout.</summary>
     public const string Consult = "consult";
+
+    /// <summary>A question row: one shot, confined by a plan (PLAN_question_consultant.md).</summary>
+    public const string Question = "question";
 }
 
 /// <summary>
@@ -57,16 +75,19 @@ public static class ConsultantArtefacts
     /// <summary>The infix every consultation artefact carries, because every one is named for the role.</summary>
     public const string Marker = "-" + ConsultantRoles.Consult + "-";
 
+    /// <summary>The infix a question row's artefact carries — the same rule, the other role.</summary>
+    public const string QuestionMarker = "-" + ConsultantRoles.Question + "-";
+
     private static readonly string[] Extensions = [".txt", ".prompt", ".json"];
 
-    /// <summary>A file name this product wrote for a consultation.</summary>
+    /// <summary>A file name this product wrote for a consultation or a question row.</summary>
     public static bool Ours(string fileName) =>
-        fileName.Contains(Marker, StringComparison.Ordinal)
+        (fileName.Contains(Marker, StringComparison.Ordinal) || fileName.Contains(QuestionMarker, StringComparison.Ordinal))
         && Array.Exists(Extensions, e => fileName.EndsWith(e, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>A fresh artefact name for one launch. Unique, so two launches cannot share a file.</summary>
-    public static string Name(string vendor, string extension) =>
-        $"{Core.Rounds.FileName.Safe(vendor)}{Marker}{Guid.NewGuid():N}{extension}";
+    public static string Name(string vendor, string extension, string role = ConsultantRoles.Consult) =>
+        $"{Core.Rounds.FileName.Safe(vendor)}-{Core.Rounds.FileName.Safe(role)}-{Guid.NewGuid():N}{extension}";
 }
 
 /// <summary>
@@ -88,41 +109,16 @@ public static class ConsultantArtefacts
 /// and it is a change to one seam rather than to the adapters. Named by the gate's architecture
 /// reviewer on story 1's code round, and deliberately not built ahead of the vendor that needs it.</para>
 /// </remarks>
-public interface IConsultantRuntime
+/// <para><b>Since the question consultant</b> (PLAN_question_consultant.md, S1) the launch half —
+/// <c>Vendor</c>, <c>Build</c>, <c>NeedsAnswerSchema</c>, <c>ReadAdvice</c> — is the base interface
+/// <see cref="IAnsweringRuntime"/>, which a one-shot question row is launched through; what stays
+/// here is about the CONVERSATION, and no existing adapter changed shape.</para>
+public interface IConsultantRuntime : IAnsweringRuntime
 {
-    string Vendor { get; }
-
     ConsultantMemory Memory { get; }
-
-    /// <summary>The process for ONE turn. Throws on a malformed handle — the caller validates first.</summary>
-    ReviewerInvocation Build(ConsultantLaunch launch);
 
     /// <summary>The vendor's own id for this conversation, read off whatever the process said — or empty.</summary>
     string ReadHandle(ProcessResult result);
-
-    /// <summary>
-    /// This route cannot run without the answer schema on disk, so a failure to provision it is a
-    /// refusal for this route alone.
-    /// </summary>
-    /// <remarks>
-    /// False for the three CLIs, which answer prose and are handed no schema at all — a read-only
-    /// data directory must not stop a consultation that never needed the file.
-    /// </remarks>
-    bool NeedsAnswerSchema => false;
-
-    /// <summary>
-    /// The advice out of whatever shape this vendor answers in. Prose for every CLI; the one
-    /// schema-bound route unwraps its envelope.
-    /// </summary>
-    /// <remarks>
-    /// On the ADAPTER rather than in the service, because it is vendor knowledge: unwrapping every
-    /// answer unconditionally mangled a CLI's prose that happened to be JSON with an <c>answer</c>
-    /// property — a consultant asked about a configuration file could return one — and a future route
-    /// with its own envelope would have meant another branch in the service. (gemini, story 2's code
-    /// round.) An empty string is returned AS an empty string, so the service's own
-    /// "the consultant answered nothing" path fires instead of the envelope being shown as advice.
-    /// </remarks>
-    string ReadAdvice(string raw) => raw;
 
     /// <summary>The vendor no longer holds this conversation: a resume that cannot be honoured.</summary>
     bool DroppedTheConversation(ProcessResult result);

@@ -29,6 +29,10 @@ const SCRIPTS = [
   'generate-credential-words.mjs',
   // Added 2026-09-24, issue #467: the gate's shipped command texts the Edit commands page shows.
   'generate-command-texts.mjs',
+  // Added 2026-10-01, PLAN_question_consultant.md S1: the capability table the settings tab blocks an
+  // incompatible model + prompt pair with (A3). A stale copy is a pair the panel lets a person save
+  // and the server refuses — or admits — with nothing on either side saying so.
+  'generate-runtime-capabilities.mjs',
 ] as const;
 
 // out/test at run time, so two levels reach the package root.

@@ -94,9 +94,11 @@ public static class ReviewParser
     /// Only the feature schema offers the field, so on every other stage this sees nothing and
     /// answers two empty lists. A path is checked here, lexically, with the same rule the collector
     /// uses for a stored path (<see cref="RepoPaths"/>): a request that could climb out of the
-    /// repository is refused before anything could spend a process on it.
+    /// repository is refused before anything could spend a process on it. Internal rather than
+    /// private since the question consultant: its api row asks for source in the same field
+    /// (<c>QuestionConsult.QuestionAnswer</c>), and one validation serves both routes.
     /// </remarks>
-    private static void ReadRequests(
+    internal static void ReadRequests(
         List<RawSourceRequest?>? raw,
         ImmutableArray<SourceRequest>.Builder requests,
         ImmutableArray<RejectedEntry>.Builder refused)

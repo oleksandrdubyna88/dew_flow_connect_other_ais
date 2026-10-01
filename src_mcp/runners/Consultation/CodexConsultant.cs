@@ -30,12 +30,13 @@ public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "cod
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
+        var role = ConsultantLaunches.RoleOf(launch);
         // Named through the one place that also decides what the sweep may delete.
-        var outputFile = Path.Combine(launch.OutputDir, ConsultantArtefacts.Name(vendor, ".txt"));
+        var outputFile = Path.Combine(launch.OutputDir, ConsultantArtefacts.Name(vendor, ".txt", role));
         var argv = (string[])[.. Argv(launch, outputFile)];
         ConsultantLaunches.MustCarryNoLineBreak(argv);
 
-        var request = new ProcessRequest(Executable(launch.Settings), argv, launch.RepoPath)
+        var request = new ProcessRequest(Executable(launch.Settings), argv, Cwd(launch))
         {
             Environment = launch.Settings.ApiKey.Length > 0
                 ? new Dictionary<string, string?> { ["OPENAI_API_KEY"] = launch.Settings.ApiKey }
@@ -44,18 +45,32 @@ public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "cod
             Timeout = launch.Settings.Timeout,
         };
 
-        return new ReviewerInvocation(vendor, ConsultantRoles.Consult, request, outputFile, inner, Model: launch.Settings.Model);
+        return new ReviewerInvocation(
+            vendor, role, launch.Confinement is LaunchConfinement.Planned ? ConsultantLaunches.ForQuestion(request) : request,
+            outputFile, inner, Model: launch.Settings.Model);
     }
 
-    private static IEnumerable<string> Argv(ConsultantLaunch launch, string outputFile) =>
-        launch.Handle.Length == 0
-            ? ["exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", launch.RepoPath, "--json", "-o", outputFile, .. Model(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"]
-            // UNQUOTED, and measured: `-c` parses its value as TOML and falls back to the raw string,
-            // so `sandbox_mode=read-only` arrives as the string this wants. The quoted form worked
-            // too, but an embedded double quote inside an argument that reaches cmd.exe through an
-            // npm shim is a re-tokenisation waiting for the wrong input. Verified 2026-09-12:
-            // a thread resumed with this exact form returned the number planted in turn 1. (gemini, code round.)
-            : ["exec", "resume", launch.Handle, "-c", "sandbox_mode=read-only", "--skip-git-repo-check", "--json", "-o", outputFile, .. Model(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"];
+    /// <summary>The checkout for the stuck consultant; the plan's directory for a question row.</summary>
+    private static string Cwd(ConsultantLaunch launch) =>
+        launch.Confinement is LaunchConfinement.Planned planned ? ConsultantLaunches.Cwd(launch, planned.Plan) : launch.RepoPath;
+
+    private static IEnumerable<string> Argv(ConsultantLaunch launch, string outputFile) => launch.Confinement switch
+    {
+        // A question row (PLAN_question_consultant.md, D4): the plan's leading flags — codex's
+        // top-level `--search` (F1) — then `exec`, the plan's sandbox flags (`-s read-only
+        // --ephemeral`, `-C <root>`), and this adapter's own output shape. One shot: `--ephemeral`
+        // is the plan's, because nothing ever resumes a question.
+        LaunchConfinement.Planned planned =>
+            [.. planned.Plan.Leading, "exec", .. planned.Plan.Flags, "--skip-git-repo-check", "--color", "never", "--json", "-o", outputFile, .. Model(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
+        _ when launch.Handle.Length == 0 =>
+            ["exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", launch.RepoPath, "--json", "-o", outputFile, .. Model(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
+        // UNQUOTED, and measured: `-c` parses its value as TOML and falls back to the raw string,
+        // so `sandbox_mode=read-only` arrives as the string this wants. The quoted form worked
+        // too, but an embedded double quote inside an argument that reaches cmd.exe through an
+        // npm shim is a re-tokenisation waiting for the wrong input. Verified 2026-09-12:
+        // a thread resumed with this exact form returned the number planted in turn 1. (gemini, code round.)
+        _ => ["exec", "resume", launch.Handle, "-c", "sandbox_mode=read-only", "--skip-git-repo-check", "--json", "-o", outputFile, .. Model(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
+    };
 
     private static IEnumerable<string> Model(ReviewerSettings settings) =>
         settings.Model.Length > 0 ? ["-m", settings.Model] : [];

@@ -1,5 +1,5 @@
-using System.Text.Json;
 using CoaiMcp.Core.Consultation;
+using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 
@@ -55,9 +55,11 @@ public sealed class LocalConsultant(IReviewerRuntime inner, string vendor) : ICo
         // schema it is bound to. Re-deriving any of that here would be a second copy of a decision
         // that has already been measured twice.
         var built = inner.Build(
-            ConsultantRoles.Consult,
+            ConsultantLaunches.RoleOf(launch),
             launch.Prompt,
-            launch.RepoPath,
+            // A question row stands in the plan's directory — a completion reads no directory, so
+            // this is where its shim runs and nothing more (PLAN_question_consultant.md, S1).
+            launch.Confinement is LaunchConfinement.Planned planned ? ConsultantLaunches.Cwd(launch, planned.Plan) : launch.RepoPath,
             // Already on disk, put there when the service was built. Provisioning it HERE made this
             // method impure, put a filesystem write in the core, and forced the data directory into
             // the vendor factory — three reviewers found those three faces of it on one round.
@@ -66,7 +68,9 @@ public sealed class LocalConsultant(IReviewerRuntime inner, string vendor) : ICo
             launch.Settings);
         ConsultantLaunches.MustCarryNoLineBreak(built.Request.Arguments);
 
-        return built;
+        return launch.Confinement is LaunchConfinement.Planned
+            ? built with { Request = ConsultantLaunches.ForQuestion(built.Request) }
+            : built;
     }
 
     /// <summary>Nothing to read: a completion is not a conversation, and there is no id to keep.</summary>
@@ -83,36 +87,14 @@ public sealed class LocalConsultant(IReviewerRuntime inner, string vendor) : ICo
 /// The advice out of the schema envelope the local route is bound to.
 /// </summary>
 /// <remarks>
-/// Used by that route ALONE, through <c>IConsultantRuntime.ReadAdvice</c>. Applying it to every
+/// <para>Used by that route ALONE, through <c>IAnsweringRuntime.ReadAdvice</c>. Applying it to every
 /// vendor mangled a CLI's prose that happened to be JSON with an <c>answer</c> property — which is
-/// exactly what a consultant asked about a configuration file might return.
+/// exactly what a consultant asked about a configuration file might return.</para>
+/// <para>Since the question consultant it is the ONE answer reader, <see cref="QuestionAnswer.Parse"/>,
+/// which the api question row also reads its envelope with: an EMPTY answer is still returned as
+/// empty, not as the envelope, and prose that happens to begin with a brace is still the answer.</para>
 /// </remarks>
 public static class ConsultantAnswer
 {
-    public static string TextOf(string raw)
-    {
-        var trimmed = raw.TrimStart();
-        if (!trimmed.StartsWith('{'))
-        {
-            return raw;
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(trimmed);
-
-            // An EMPTY answer is returned as empty, not as the envelope: the service has a path for
-            // "the consultant answered nothing", and showing `{"answer":""}` as advice would take it
-            // past that path and put our own JSON in front of the caller.
-            return document.RootElement.TryGetProperty("answer", out var answer)
-                   && answer.ValueKind == JsonValueKind.String
-                ? answer.GetString() ?? string.Empty
-                : raw;
-        }
-        catch (JsonException)
-        {
-            // Prose that happens to begin with a brace is still the answer.
-            return raw;
-        }
-    }
+    public static string TextOf(string raw) => QuestionAnswer.Parse(raw).Answer;
 }

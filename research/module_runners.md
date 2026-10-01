@@ -64,6 +64,12 @@ sequenceDiagram
 | `TeamServerAuth` | `Reviewers/TeamServerAuth.cs` | one canonical spelling of a server URL, the fingerprint that names its token file, and the owner-only read/write of that file. The same normalised value builds the request URLs, not just the hash |
 | `RemoteProbe`, `RemoteCatalog` | `Reviewers/RemoteProbe.cs` | a remote vendor's health over `GET /api/catalog`: the server's own slot counts as the note, 401/403/426/outage told apart, a cache whose FAILURE wait is never shorter than its success wait, and a refusal that says WHICH of a row's two names was tried |
 | `UsageLedger`, `UsageEntry`, `UsageKinds`, `LedgerJsonContext` | `Reviewers/UsageLedger.cs` | one JSON line per reviewer run, unindented because the reader is line-based; moved here so the server appends the same shape. Since 2026-09-09 a line also carries its **`kind`** — `review` or `chat` — because "what did the gate cost me" and "what did asking cost me" are two questions one total answers neither of. The field is trailing and defaulted, so every line already on disk stays valid and an absent kind is READ as a review, which is what all of them were. `UsageKinds` holds the two names here rather than only in the server's own `JobKind`, which this library cannot see: the dependency runs server → mcp and not back, and two vocabularies for one field is how a writer and a reader come to disagree. A test in `src_server` asserts the enum spells exactly these |
+| `IAnsweringRuntime` | `Consultation/IAnsweringRuntime.cs` | the launch half of the consultant seam — `Vendor`, `Build`, `NeedsAnswerSchema`, `ReadAdvice` — extracted as the base of `IConsultantRuntime` for the question consultant (PLAN_question_consultant.md, S1); the conversation members stay on the derived interface and no shipped adapter changed shape |
+| `LaunchConfinement`, `ConsultantLaunch.Confinement` / `.ScratchDir` | `Consultation/LaunchConfinement.cs`, `IConsultantRuntime.cs` | how a launch is confined: `AsShipped` (the default — today's argv byte for byte) or `Planned(Confinement.Planned)` — the planner's fragments, a scratch or root cwd, one shot, the minimal environment |
+| `ApiConsultant`, `QuestionMaterial`, `AnsweringMemory`, `AnsweringTurn`, `IAnsweringFollowUps` | `Consultation/ApiConsultant.cs`, `AnsweringTurns.cs` | a hosted API answering a question row: composes `ApiRuntime` the way `LocalConsultant` composes `LocalRuntime`, `none` only, the key under the row's `VaultKeyName` read by the caller; its source turns serve `sourceRequests` from the pinned HEAD and hand back the same launch with a tail (A9) |
+| `QuestionResolution` | `Consultation/QuestionResolution.cs` | which answering runtime a question row's vendor gets: `api` → `ApiConsultant`, the rest `ConsultantResolution.For` — `ConsultantResolution.Consulting` is NOT widened |
+| `ProcessEnvironment.Minimal`, `ProcessRequest.Passthrough` | `Processes/ProcessEnvironment.cs`, `ProcessLauncher.cs` | the measured minimal list a question child starts from (S2c), chosen per request: the launcher's filter took its allowlist from the request rather than growing a second flag |
+| `FeatureOutlineBuilder.BuildAtHeadAsync` | `Feature/FeatureOutlineBuilder.cs` | the outline of what EXISTS at a commit — against the repository's empty tree, no member hunks — what an api question row is shown of the code |
 | `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch |
 
 ## The decisions a reader needs
@@ -385,6 +391,77 @@ consultation's is not. The vendor's conversation id has to be read off the strea
 ended in a TIMEOUT or a kill, because the vendor may have accepted the turn before the kill and that
 handle is what stops the caller paying for it twice. Trailing and defaulted, so no existing caller
 changes.
+
+## A question row is launched through a plan, one shot, from a directory of its own (2026-10-01, PLAN_question_consultant.md S1)
+
+The question consultant (the plan's §4) launches the same adapters a consultation does, confined
+differently: by a plan the core's `ConfinementPlanner` made for the row's runtime × grant
+([module_core.md](module_core.md), *The question consultant's confinement*), never by the stuck
+consultant's deny lists (F5: on this machine those are offered the user environment's whole tool set
+and leaked the canary 6 of 6 through PowerShell). S1 is everything below the fan-out; the fan-out, the
+record and the tool are S2.
+
+```mermaid
+sequenceDiagram
+  participant F as fan-out (S2)
+  participant R as QuestionResolution.For
+  participant P as ConfinementPlanner (core)
+  participant A as adapter (IAnsweringRuntime)
+  participant L as ProcessLauncher
+  F->>R: VendorIdentity → ApiConsultant | the shipped CLI / local adapter
+  F->>P: Plan(runtime, grant) → Planned(Leading, Flags, Cwd, AddDirs, Flag) | Refused
+  F->>A: Build(ConsultantLaunch { Confinement = Planned(plan), ScratchDir })
+  A->>A: base argv + plan.Leading/plan.Flags, cwd = plan's, role = question, ONE shot
+  A->>A: ConsultantLaunches.ForQuestion: InheritsEnvironment = false, Passthrough = Minimal
+  A-->>F: ReviewerInvocation
+  F->>L: RunAsync — the child sees the minimal list, plus the vendor key joined last
+```
+
+| runtime | `none` | `disk` | `web` |
+|---|---|---|---|
+| claude | `-p --output-format json --permission-mode plan --tools "" --strict-mcp-config [--model]`, scratch cwd | `… --permission-mode plan --restricted --tools Read,Glob,Grep --add-dir <root>… --strict-mcp-config`, cwd = root 0 | `… --permission-mode plan --tools WebSearch,WebFetch --strict-mcp-config`, scratch cwd, no `--add-dir` |
+| codex | `exec -s read-only --ephemeral --skip-git-repo-check --color never --json -o <answers/…-question-…> [-m] [-c mcp_servers.x.enabled=false] -`, scratch cwd — flagged unconfined | `exec -s read-only --ephemeral -C <root 0> …`, cwd = root 0 — flagged unconfined | `--search exec -s read-only --ephemeral …`, scratch cwd — flagged unconfined |
+| agy | `--print= --input-format stream-json --output-format stream-json --mode plan [--model]`, scratch cwd — flagged default-deny | `… --mode plan --add-dir <root>…`, cwd = root 0 — flagged default-deny | refused by the matrix |
+| local | the `--ask-local` shim from the scratch directory, bound to the schema file the launch names | refused | refused |
+| api | the `--ask-api` shim from the scratch directory, bound to `question-answer-schema.json` | refused | refused (unmeasured) |
+
+- **The default is byte for byte what shipped.** `ConsultantLaunch.Confinement` is
+  `LaunchConfinement.AsShipped` unless set, and `ConfinementPlannerTests.TheShippedConsultants_StillBuildTodaysArgv_ByteForByte`
+  pins the three CLI consultants' argv as whole lists, the checkout as their cwd and `consult` as their
+  role. A closed union rather than the plan's "defaulted `CapabilityGrant`": a grant whose default meant
+  "not a capability — the adapter's own argv" would have made `none` mean two things.
+- **One shot, somewhere else.** A planned launch with a handle is a contract violation (`MustBeLaunchable`),
+  and a plan standing in `Scratch` without a `ScratchDir` is one too — the fallback would have been the
+  checkout, the very directory a none row must not see. Codex's `--ephemeral` is the plan's for the same
+  reason the stuck consultant drops it: nothing ever resumes a question. Every planned launch is filed
+  under the role `question` (`ConsultantRoles.Question`), so its ledger kind, its track label and its
+  artefact name (`codex-question-<guid>.txt`, recognised by `ConsultantArtefacts.Ours`) say what it was.
+- **The minimal environment is one road.** `ConsultantLaunches.ForQuestion` is the only place a question
+  request is made non-inheriting, with `ProcessRequest.Passthrough = ProcessEnvironment.Minimal`; the
+  launcher's filter now takes its allowlist from the request (widened, not copied — the Team server's
+  launches keep `ProcessEnvironment.Passthrough` by default). The Windows list is the benchmark's S2c
+  list verbatim (every CLI started and answered on it on 2026-10-01); the Unix list is NOT the benchmark's
+  — it had no Linux subject — and is the launcher's own measured requirement (`HOME`, or every Node CLI
+  fails in initialisation) plus the locale and temporary-directory names. `ChildEnvironmentTests` observes
+  it on a real child (`FakeCli env-names`): a `COAI_*` canary and a `*_SECRET_TOKEN_*` canary in the parent
+  are absent, and nothing outside the list arrives; and asserts every planned adapter launch asks for it
+  while every AsShipped one still inherits.
+- **The api row answers from an outline and asks for source (A9).** `FeatureOutlineBuilder.BuildAtHeadAsync`
+  outlines what EXISTS at a commit against the repository's own empty tree (`git hash-object -t tree`
+  over no bytes, so SHA-256 repositories get theirs) — decomposed out of `BuildAsync` rather than copied,
+  and WITHOUT the member hunks: the feature pack attaches an added file's whole members as hunks, and
+  against the empty tree every file is added, so the pack's road would have handed a hosted model the
+  bodies of everything under a heading that says "signatures, no bodies" (found by the first test of the
+  row). `ApiConsultant.AfterAsync` then serves `sourceRequests` through the round's `SourceResolver` — the
+  committed HEAD, redacted, capped, never the working tree (the stated limit: uncommitted work reaches an
+  api row only through the context) — and hands back the same planned launch with the base prompt plus a
+  `QuestionTail` (D25). The loop, the deadline and the record are the fan-out's (S2); the seam is
+  `IAnsweringFollowUps`. It is not `SourceConversation`/`TurnLoop`, which are findings-shaped (the parser
+  requires `findings`); what IS shared is the request validation and every rendering of a served slice.
+- **Resolution does not widen the stuck consultant.** `QuestionResolution.Answering` is `Consulting` plus
+  `api`; `ConsultantResolution.Consulting` is unchanged and still refuses an api row by name
+  (`ApiConsultantTests`). The OpenRouter row (`x-ai/grok-4.7`, key name `openrouter`, A11) resolves to an
+  `ApiConsultant` whose `VaultKeyName` is `openrouter` — the caller reads the vault; this library never does.
 
 ## The launcher's two ceilings, and why the write is a task (2026-09-10)
 

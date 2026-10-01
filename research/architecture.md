@@ -960,6 +960,31 @@ than the generated one: eight short strings do not earn a generator.
 | Bench | — | — | — | its marker copy, read against the file in tests |
 | On a missing/broken file | broken build, throws | test failure | both halves refuse to run | test failure |
 
+### A fifth file neither container owns: what each runtime may be trusted with (2026-10-01)
+
+The question consultant (`todo/PLAN_question_consultant.md`, S1) pairs a model with a prompt that
+needs a capability — `none`, `disk` or `web` — and the operator's rule A3 is that an incompatible pair is
+**blocked in the UI AND refused by the server**. That is one rule only if both halves decide from one
+table, so `shared/runtime-capabilities.json` sits beside the four above: per runtime × capability what
+the probe run of 2026-10-01 MEASURED (`confined` · `unconfined` · `default-deny` · `unsupported` ·
+`unmeasured`), every row citing its cells in `research/RESULTS_question_consultant_capabilities.md`.
+It is consumed the role seed's way — `coai-mcp` embeds it (`RuntimeCapabilities.Builtin`, refused whole
+if a pair is undecided) and the extension generates `src/runtimeCapabilities.generated.ts` from it with
+`--check` — and held level the credential words' way: `shared/capability-matrix-vectors.json` is one
+set of admit/refuse/flag answers that `CapabilityMatrixTests` and `capabilityAdmission.test.ts` both
+give, so a pair the panel lets a person save is a pair the server launches, and the reverse.
+
+| | Role seed | Credential words | Capability table |
+|---|---|---|---|
+| Server | embeds | embeds | embeds (`RuntimeCapabilities`), decides with `CapabilityMatrix` |
+| Extension | generates a module | generates a module | generates a module, decides with `capabilityAdmission.ts` |
+| Held together by | each half asserts its loader | one vector file, both suites, a shared corpus | each half asserts its loader, **and one vector file both suites answer** |
+| On a missing/broken file | broken build, throws | both halves refuse to run | the server refuses to start; the panel's build has no table to generate from |
+
+Nothing else crossed a container in S1: the confinement planner, the sanitisers and the api answering
+runtime are `coai-mcp`'s alone ([module_core.md](module_core.md), [module_runners.md](module_runners.md)),
+and the tool, the record and the settings that will reach the extension are S2–S4.
+
 ## How the Team server is deployed (2026-09-06)
 
 `coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the
