@@ -55,6 +55,17 @@ public sealed class SecurityProtocolTests
     }
 
     [Fact]
+    public void The_security_schema_does_not_offer_prose_that_its_validator_refuses()
+    {
+        using var security = JsonDocument.Parse(SecuritySchema.Json);
+        security.RootElement.GetProperty("properties").TryGetProperty("notes", out _).Should().BeFalse();
+        security.RootElement.GetProperty("required").EnumerateArray().Select(v => v.GetString())
+            .Should().BeEquivalentTo(["findings", "status"]);
+        using var ordinary = JsonDocument.Parse(FindingSchema.Json);
+        ordinary.RootElement.GetProperty("properties").TryGetProperty("notes", out _).Should().BeTrue();
+    }
+
+    [Fact]
     public void Required_evidence_survives_the_real_parser_and_lane_attribution()
     {
         var answer = Check("{\"status\":\"FINDINGS\",\"findings\":[" + Finding + "]}")
