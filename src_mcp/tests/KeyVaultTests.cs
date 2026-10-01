@@ -60,7 +60,7 @@ public sealed class KeyVaultProcessTests : IDisposable
     [Fact]
     public async Task NoKeyConfigured_IsNamed_AndKeylessVendorsStillWork()
     {
-        var keys = await _vault.ReadAsync(null, TestContext.Current.CancellationToken);
+        var keys = await _vault.ReadFromConfigurationAsync(VaultConfiguration.Holding(null), TestContext.Current.CancellationToken);
 
         keys.Available.Should().BeFalse();
         keys.Unavailability.Should().Contain("keyless vendors still work");
@@ -72,7 +72,7 @@ public sealed class KeyVaultProcessTests : IDisposable
         Environment.SetEnvironmentVariable("FAKECLI_EXIT", "1");
         Environment.SetEnvironmentVariable("FAKECLI_STDERR", "401");
 
-        var keys = await _vault.ReadAsync("cfg-live-abc", TestContext.Current.CancellationToken);
+        var keys = await _vault.ReadFromConfigurationAsync(VaultConfiguration.Holding("cfg-live-abc"), TestContext.Current.CancellationToken);
 
         keys.Available.Should().BeFalse();
         keys.Unavailability.Should().Contain("revoked");
@@ -84,7 +84,7 @@ public sealed class KeyVaultProcessTests : IDisposable
         Environment.SetEnvironmentVariable("FAKECLI_EXIT", "0");
         Environment.SetEnvironmentVariable("FAKECLI_STDOUT", """{"deepseek": "sk-live"}""");
 
-        var keys = await _vault.ReadAsync("cfg-live-abc", TestContext.Current.CancellationToken);
+        var keys = await _vault.ReadFromConfigurationAsync(VaultConfiguration.Holding("cfg-live-abc"), TestContext.Current.CancellationToken);
 
         keys.Available.Should().BeTrue();
         keys.Keys["deepseek"].Should().Be("sk-live");
@@ -95,9 +95,19 @@ public sealed class KeyVaultProcessTests : IDisposable
     {
         var vault = new KeyVault(new ProcessLauncher(), "creds-binary-that-does-not-exist");
 
-        var keys = await vault.ReadAsync("cfg-live-abc", TestContext.Current.CancellationToken);
+        var keys = await vault.ReadFromConfigurationAsync(VaultConfiguration.Holding("cfg-live-abc"), TestContext.Current.CancellationToken);
 
         keys.Available.Should().BeFalse();
         keys.Unavailability.Should().Contain("not installed");
     }
+}
+
+/// <summary>
+/// A layered configuration that holds only the vault's config key — what the vault tests hand
+/// <see cref="KeyVault.ReadFromConfigurationAsync"/>, the one public read.
+/// </summary>
+internal static class VaultConfiguration
+{
+    public static Func<string, string?> Holding(string? configKey) =>
+        name => name == KeyVault.KeyVariable ? configKey : null;
 }

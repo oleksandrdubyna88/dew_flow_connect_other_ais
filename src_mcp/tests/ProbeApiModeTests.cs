@@ -215,6 +215,47 @@ public sealed class ProbeApiModeTests : IDisposable
         Report().GetProperty("requests").GetArrayLength().Should().BeGreaterThan(0, "the matrix still ran after it");
     }
 
+    /// <summary>
+    /// The panel writes the config key into the settings file and NOWHERE else — `envBlock` puts
+    /// <c>COAI_CREDS_KEY</c> in the file, and no spawn of the extension's carries it in the environment.
+    /// </summary>
+    /// <remarks>
+    /// Measured 2026-10-01: a key saved in the panel, a reconnected server, and <c>providers</c> still
+    /// answering "no COAI_CREDS_KEY configured", because every vault read took the key from the raw
+    /// environment while every other setting came from the layered file. An OpenRouter row was badged
+    /// "cannot review" with its key sitting in the vault.
+    /// </remarks>
+    [Fact]
+    public async Task TheVaultKeyInTheSettingsFile_IsTheOneTheProbeUses()
+    {
+        WriteSettings("""{"COAI_CREDS_KEY": "the-key-the-panel-saved"}""");
+        var vault = new VaultAnswers("{\"grok\":\"" + Key + "\"}");
+
+        var code = await RunAsync(["--probe-api", "--vendor", "grok", "--endpoint", _stub.Endpoint], vault, credsKey: null);
+
+        code.Should().Be(0, Stderr);
+        vault.Requests.Should().ContainSingle().Which.Arguments.Should().Equal("config", "the-key-the-panel-saved");
+        _stub.Requests.Should().ContainSingle("the probe reached the endpoint with the vault's key")
+            .Which.Authorization.Should().Be($"Bearer {Key}");
+        Report().GetProperty("models").GetProperty("ids").EnumerateArray().Select(m => m.GetString())
+            .Should().Equal("grok-4", "grok-3-mini");
+        BothStreamsAreClean();
+    }
+
+    [Fact]
+    public async Task TheEnvironmentKey_StillOutranksTheSettingsFile()
+    {
+        WriteSettings("""{"COAI_CREDS_KEY": "the-key-the-panel-saved"}""");
+        var vault = new VaultAnswers("{\"grok\":\"" + Key + "\"}");
+
+        await RunAsync(["--probe-api", "--vendor", "grok", "--endpoint", _stub.Endpoint], vault, credsKey: "the-client-env-key");
+
+        vault.Requests.Should().ContainSingle().Which.Arguments.Should().Equal(
+            ["config", "the-client-env-key"], "a variable in the client's config is more specific than a file any window may rewrite");
+    }
+
+    private void WriteSettings(string json) => File.WriteAllText(Path.Combine(_dir, "settings.json"), json);
+
     /// <summary>The vault, answering `creds config` with a body — and recording what it was asked.</summary>
     private sealed class VaultAnswers(string stdout, int exitCode = 0) : IProcessLauncher
     {
