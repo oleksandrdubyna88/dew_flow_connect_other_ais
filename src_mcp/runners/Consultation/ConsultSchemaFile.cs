@@ -47,13 +47,21 @@ public static class ConsultSchemaFile
     /// permission that caused it. The caller logs this, and the local route refuses by name.
     /// (codex and gemini, story 2's second code round.)
     /// </remarks>
-    public static Provisioned Ensure(string directory)
+    public static Provisioned Ensure(string directory) =>
+        Ensure(directory, ConsultAnswerSchema.Name, ConsultAnswerSchema.Json, "A local-engine consultation needs it and will be refused");
+
+    /// <summary>
+    /// Any one answer schema's path, written if it is missing or stale — the question consultant's
+    /// <c>QuestionAnswerSchema</c> takes the same road as the stuck consultant's, under its own name.
+    /// </summary>
+    /// <param name="neededBy">The route the sentence names when the file cannot be written — "An api question row needs it and will be refused".</param>
+    public static Provisioned Ensure(string directory, string name, string json, string neededBy)
     {
-        var path = Path.Combine(directory, ConsultAnswerSchema.Name);
+        var path = Path.Combine(directory, name);
         try
         {
             Directory.CreateDirectory(directory);
-            if (File.Exists(path) && File.ReadAllText(path) == ConsultAnswerSchema.Json)
+            if (File.Exists(path) && File.ReadAllText(path) == json)
             {
                 return new Provisioned(path, string.Empty);
             }
@@ -61,7 +69,7 @@ public static class ConsultSchemaFile
             var temp = $"{path}.{Guid.NewGuid():N}.tmp";
             try
             {
-                File.WriteAllText(temp, ConsultAnswerSchema.Json);
+                File.WriteAllText(temp, json);
                 File.Move(temp, path, overwrite: true);
             }
             catch
@@ -82,7 +90,7 @@ public static class ConsultSchemaFile
             return new Provisioned(
                 path,
                 $"the consultant's answer schema could not be written to {path}: {e.Message}. "
-                + "A local-engine consultation needs it and will be refused; every other route is unaffected.");
+                + $"{neededBy}; every other route is unaffected.");
         }
     }
 }

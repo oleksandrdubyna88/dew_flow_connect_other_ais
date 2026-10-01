@@ -65,6 +65,37 @@ public static class ProcessEnvironment
     public static IReadOnlySet<string> Passthrough { get; } = ForPlatform(OperatingSystem.IsWindows());
 
     /// <summary>
+    /// The MINIMAL list a question consultant's child starts from (PLAN_question_consultant.md, §4,
+    /// S2c): what the benchmark's probe children were started with on 2026-10-01, every CLI starting
+    /// and answering on it — no proxy, no certificate, no locale, nothing of this product's own.
+    /// </summary>
+    /// <remarks>
+    /// Windows only, as measured: the loader's names, the npm shims' <c>ComSpec</c>/<c>PATHEXT</c>, the
+    /// profile and program directories, the processor names, <c>OS</c>. The benchmark had no Linux
+    /// subject, so the Unix half is NOT a measurement — it is this launcher's own measured requirement
+    /// (<c>HOME</c>, or every Node CLI fails in initialisation) plus the locale and temporary-directory
+    /// names; recorded as a deviation in the plan's S1 block.
+    /// </remarks>
+    private static readonly string[] MinimalWindows =
+    [
+        "PATH", "PATHEXT", "SystemRoot", "windir", "ComSpec", "USERPROFILE", "HOMEDRIVE", "HOMEPATH",
+        "APPDATA", "LOCALAPPDATA", "TEMP", "TMP", "USERNAME", "ProgramData",
+        "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432",
+        "PROCESSOR_ARCHITECTURE", "PROCESSOR_IDENTIFIER", "PROCESSOR_LEVEL", "PROCESSOR_REVISION",
+        "OS", "NUMBER_OF_PROCESSORS",
+    ];
+
+    private static readonly string[] MinimalUnix =
+        ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR", "TMP", "TEMP"];
+
+    /// <summary>The minimal list for THIS platform — what <c>ProcessRequest.Passthrough</c> is set to for a question launch.</summary>
+    public static IReadOnlySet<string> Minimal { get; } = MinimalFor(OperatingSystem.IsWindows());
+
+    /// <summary>The minimal list a given platform gets — a QUESTION, for the reason <see cref="ForPlatform"/> gives.</summary>
+    public static IReadOnlySet<string> MinimalFor(bool isWindows) =>
+        (isWindows ? MinimalWindows : MinimalUnix).ToFrozenSet(ComparerFor(isWindows));
+
+    /// <summary>
     /// The allowlist a given platform gets — asked as a QUESTION rather than read off the host.
     /// </summary>
     /// <remarks>

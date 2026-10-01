@@ -82,11 +82,72 @@ public sealed class FeatureOutlineBuilder(IProcessLauncher launcher, ISourceOutl
         IReadOnlyList<string>? exclusions = null,
         CancellationToken ct = default)
     {
-        var bounds = limits ?? FeatureOutlineLimits.Shipped;
-        var head = IsCommit(headSha)
-            ? headSha
-            : throw new ArgumentException($"'{headSha}' is not a commit id — resolve head before building its outline", nameof(headSha));
+        var head = CommitOrThrow(headSha);
         var (against, kind) = await new ContextAssembler(launcher).ComparisonBase(repoPath, baseRef, head, ct, GitDeadline);
+
+        return await BuildAgainstAsync(repoPath, against, head, BaseNote(kind), limits, exclusions, withHunks: true, ct);
+    }
+
+    /// <summary>
+    /// The outline of what EXISTS at <paramref name="headSha"/>: every file at head against the
+    /// repository's empty tree, so every file is new and nothing is left out for being unchanged
+    /// (PLAN_question_consultant.md, A9 — what an api question row is shown of the code).
+    /// </summary>
+    /// <remarks>
+    /// <para>The empty tree is asked of git (<c>hash-object -t tree</c> over no bytes) rather than spelled
+    /// as the SHA-1 constant, so a repository on SHA-256 gets its own. It is a tree and not a commit,
+    /// which is why this does not go through <c>ComparisonBase</c> — a merge base needs commits, and
+    /// the numstat and the <c>cat-file</c> checks take any tree-ish base. Same bounds, same redaction,
+    /// same git objects at head and never the working tree.</para>
+    /// <para><b>No member hunks.</b> The feature pack attaches an ADDED file's whole members as hunks
+    /// (every member of a new file is a changed member), and against the empty tree every file is new —
+    /// so the pack's road would have handed a hosted model the bodies of everything up to the hunk
+    /// reserve, under a heading that says "signatures, no bodies". An outline of what exists is the
+    /// signatures; the model asks for a body by name (<c>sourceRequests</c>), and a <c>-U3</c> diff
+    /// against the empty tree is a print of the whole repository besides. Found by the first test of
+    /// the api question row, 2026-10-01.</para>
+    /// </remarks>
+    public async Task<FeatureOutline> BuildAtHeadAsync(
+        string repoPath,
+        string headSha,
+        FeatureOutlineLimits? limits = null,
+        IReadOnlyList<string>? exclusions = null,
+        CancellationToken ct = default)
+    {
+        var head = CommitOrThrow(headSha);
+        var emptyTree = await EmptyTreeAsync(repoPath, ct);
+
+        return await BuildAgainstAsync(
+            repoPath, emptyTree, head, "the whole tree at head, outlined as what exists — every file is new against the empty tree",
+            limits, exclusions, withHunks: false, ct);
+    }
+
+    private static string CommitOrThrow(string headSha) => IsCommit(headSha)
+        ? headSha
+        : throw new ArgumentException($"'{headSha}' is not a commit id — resolve head before building its outline", nameof(headSha));
+
+    /// <summary>The repository's own id for the empty tree — a tree-ish every diff and <c>cat-file</c> here accepts as a base.</summary>
+    private async Task<string> EmptyTreeAsync(string repoPath, CancellationToken ct)
+    {
+        var result = await Git(new Range(repoPath, string.Empty, string.Empty, []), ["hash-object", "-t", "tree", "--stdin"], ct, stdin: string.Empty);
+        var id = result.StdOut.Trim();
+
+        return IsCommit(id) ? id : throw new ContextException("hash-object", $"git did not answer the empty tree's id: '{id}'");
+    }
+
+    /// <summary>The build both roads share: the range from an already-resolved base, bounded before a byte is read.</summary>
+    /// <param name="withHunks">Whether the two diffs that mark changed members and attach their hunks are taken — the feature pack's road; not the at-head outline's.</param>
+    private async Task<FeatureOutline> BuildAgainstAsync(
+        string repoPath,
+        string against,
+        string head,
+        string baseNote,
+        FeatureOutlineLimits? limits,
+        IReadOnlyList<string>? exclusions,
+        bool withHunks,
+        CancellationToken ct)
+    {
+        var bounds = limits ?? FeatureOutlineLimits.Shipped;
         var range = new Range(repoPath, against, head, [.. (exclusions ?? DiffExclusions.Default).Select(e => $":(exclude,glob){e}")]);
 
         var numstat = await Git(range, ["diff", "--numstat", "-z", "-M", range.Span, "--", ".", .. range.Excludes], ct);
@@ -96,14 +157,14 @@ public sealed class FeatureOutlineBuilder(IProcessLauncher launcher, ISourceOutl
 
         var plan = ReadPlan.For(files, p => (objects[p].Head, objects[p].Askable), outliner.LanguageOf, bounds);
         var blobs = await ReadAsync(range, plan.Read, ct);
-        var (marks, marksNote) = await PiecesAsync(range, "-U0", "the `*` marks", ct);
-        var (hunks, hunksNote) = await PiecesAsync(range, "-U3", "the member hunks", ct);
+        var (marks, marksNote) = withHunks ? await PiecesAsync(range, "-U0", "the `*` marks", ct) : NoPieces;
+        var (hunks, hunksNote) = withHunks ? await PiecesAsync(range, "-U3", "the member hunks", ct) : NoPieces;
 
         var (outlined, named) = Classify(files, plan, blobs, marks, hunks);
         var composed = OutlineComposer.Compose(outlined, bounds.OutlineBytes, bounds.CollapseAboveBytes);
 
         return new FeatureOutline(
-            against, head, BaseNote(kind), files, composed.Section, composed.Outlined,
+            against, head, baseNote, files, composed.Section, composed.Outlined,
             new FeatureOmissions(named, composed.Collapsed, composed.Dropped, composed.CutHunks, [.. new[] { marksNote, hunksNote }.Where(n => n.Length > 0), .. composed.Notes]));
     }
 
@@ -210,6 +271,10 @@ public sealed class FeatureOutlineBuilder(IProcessLauncher launcher, ISourceOutl
 
     private static string Piece(IReadOnlyDictionary<string, string> pieces, string path) =>
         pieces.TryGetValue(path, out var piece) ? piece : string.Empty;
+
+    /// <summary>No diff taken: no marks, no hunks, nothing to say about a cut.</summary>
+    private static readonly (IReadOnlyDictionary<string, string> Pieces, string Note) NoPieces =
+        (new Dictionary<string, string>(StringComparer.Ordinal), string.Empty);
 
     private static int Lines(string text) => text.Count(c => c == '\n') + (text.Length > 0 && text[^1] != '\n' ? 1 : 0);
 

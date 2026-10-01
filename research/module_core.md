@@ -69,6 +69,15 @@ flowchart LR
 | `CadenceMode`, `EpicGroup`, `CadenceRule` | `Cadence/CadenceRule.cs` | the consultation cadence's arithmetic: groups of `every` epics counted from the plan's OWN first epic, the risk question from `threshold` epics, nothing past `MostEpics` (14); the defaults 3 / 5 / 3 are the numbers the panel is tested to agree with |
 | `EpicRef` (`None` / `Some` / `Refused`), `CadenceState`, `ClosedEpic`, `RiskItem` | `Cadence/EpicRef.cs`, `Cadence/CadenceState.cs` | where the caller says it is (`plan` + `epic: "k/N"`) — a bad declaration is a sentence, never an exception; what one plan has recorded: the epics through the code gate and the risk answer |
 | `CadenceFacts`, `CadenceOrders`, `PlanOutline`, `PlanOutlineReader` | `Commands/CadenceOrders.cs`, `Commands/PlanOutline.cs` | the orders a round carries — the group due, the risky pieces due — from facts the server gathered; the plan's own Epic headings, which also size a split `Massive` (`PlanShape.ByEpics`) |
+| `Capability`, `Capabilities`, `CapabilityGrant` | `QuestionConsult/Capability.cs` | what a question-consultant prompt NEEDS of its runtime (`none` / `disk` / `web`, the file's words, a parse that never guesses) and what a row is GRANTED — the capability plus, for `disk`, the roots (PLAN_question_consultant.md, A3) |
+| `RuntimeCapabilities`, `RuntimeCapabilityRow`, `MeasuredWith`, `CapabilityStanding` | `QuestionConsult/RuntimeCapabilities.cs` | the embedded `shared/runtime-capabilities.json`: per runtime × capability what was MEASURED (`confined` / `unconfined` / `default-deny` / `unsupported` / `unmeasured`), every row citing its probe cells; refused whole at load when a pair is undecided (D3) |
+| `CapabilityMatrix`, `Admission`, `AdmissionFlag` | `QuestionConsult/CapabilityMatrix.cs` | the one rule a row becomes a decision by: confined admits, unconfined and default-deny admit FLAGGED (D13), the rest refuse by name — the TS `capabilityAdmission.ts` is the same rule over the same file, both held to `shared/capability-matrix-vectors.json` |
+| `ConfinementPlanner`, `Confinement`, `CwdKind` | `QuestionConsult/ConfinementPlanner.cs` | runtime × grant → argv fragments, a cwd kind and the roots — the ONE place a question row's sandbox is decided (D4); `--disallowedTools` in no plan (F3, F5) |
+| `WebQuestionSanitiser`, `WebQuestion`, `WebQuestionContext` | `QuestionConsult/WebQuestionSanitiser.cs` | a web row gets strictly the question (A2): eleven refusal classes in order, each naming its cure, nothing ever redacted |
+| `SecretCheck`, `SecretCheckResult`, `CheckedContext` | `QuestionConsult/SecretCheck.cs` | the secret half alone for a `none` row on a hosted runtime (A9, D10): refuses through the notice redaction's own passes (`Redaction.FirstSecretClass`), and the cleared text is a TYPE only the check can mint |
+| `QuestionAnswer`, `QuestionAnswerSchema` | `QuestionConsult/QuestionAnswer.cs`, `QuestionAnswerSchema.cs` | the ONE reader of a consultant's answer envelope (the local route's `ConsultantAnswer.TextOf` delegates here) and the api row's schema — the consult answer with `sourceRequests`, derived by the feature schema's own step |
+| `ApiQuestionPrompt`, `ApiQuestionInput`, `QuestionTail`, `QuestionTailInput` | `QuestionConsult/ApiQuestionPrompt.cs`, `QuestionTail.cs` | what an api row reads on turn 1 (instruction, what it has, the outline and the checked context fenced as material, the question LAST) and the tail a follow-up turn appends under the byte-identical base (D25) |
+| `RowOutcomes` | `QuestionConsult/RowOutcome.cs` | the six words a row ends in (`answered` … `disabled`), spelled once for the writer and every reader |
 | `RoleEntry`, `PromptEntry`, `RoleComposition` | `Rounds/RoleComposition.cs` | a person's `COAI_ROLES` rows composed onto the seed; every refusal is a sentence, never an exception |
 
 ### The catalog is data, and the seed belongs to neither half (2026-09-12)
@@ -748,3 +757,72 @@ reviewer, one conversation*) is thin on purpose; what it decides with is here, p
   number, never added to the input (codex's is inside its input count; claude's is billed beside it and
   counted as input already). It is what D25's resent prefix is measured by, per turn, in the ledger and
   on the audit line.
+
+## The question consultant's confinement — data, one planner, two sanitisers (2026-10-01, PLAN_question_consultant.md S1)
+
+Everything BELOW the service that decides what a question row may touch, pure, in `core/QuestionConsult/`.
+Nothing here launches, records or shows anything — S2–S4 of the plan do that — and nothing the stuck
+consultant or the confined reviewer ships was moved (A12: a tails-plan item of its own).
+
+```mermaid
+flowchart LR
+  seed["shared/runtime-capabilities.json<br/>15 rows, each citing its probe cells"] --> RC[RuntimeCapabilities.Builtin<br/>refused whole if a pair is undecided]
+  RC --> CM["CapabilityMatrix.Admit(runtime, capability)<br/>confined → admit · unconfined / default-deny → admit FLAGGED · unsupported / unmeasured → refuse"]
+  CM --> CP["ConfinementPlanner.Plan(runtime, grant)<br/>Leading · Flags · CwdKind · AddDirs · Flag"]
+  CP -->|Planned| AD[adapters compose, add nothing]
+  CP -->|Refused| X1[a sentence]
+  q[a web row's question] --> WS["WebQuestionSanitiser.Check<br/>empty · secret · code-fence · inline-code · stack-trace · config-line · repository · root · path · internal-host · too-long"]
+  WS -->|Clean| same[the question, unchanged]
+  WS -->|Refused| X2[class + cure]
+  ctx[a none row's context] --> SC[SecretCheck.Inspect]
+  SC -->|Clean| CC[CheckedContext — a type only the check mints]
+  CC --> AP[ApiQuestionPrompt.Compose]
+  SC -->|Refused| X3[class + cure]
+  vectors["shared/capability-matrix-vectors.json"] -. "answered by CapabilityMatrixTests AND capabilityAdmission.test.ts" .-> CM
+```
+
+- **Capabilities are data, and every row cites the cell that measured it (D3).** The table is embedded
+  for the reason the role seed and the credential words are, and `RuntimeCapabilities.FromSeed` refuses
+  a pair with no row, a pair with two, a runtime or capability outside the matrix, a standing this build
+  does not spell, and a row that cites neither a cell nor a note saying why — because a confinement
+  decided by a default arm is the thing the table exists to end. `local` and `api` carry no probe cell
+  for `none`: the record says they are confined BY CONSTRUCTION (no process, no tools) and the row says
+  so in its note. `api × web` is `unmeasured` and therefore refused; a measurement, not an edit, admits it.
+- **The planner is the one place, and the goldens hold the WHOLE argv.** `ConfinementPlannerTests`
+  asserts each adapter's planned launch as a complete list, so an adapter that composes a sandbox flag
+  of its own — or drops one — is red; a structural test subtracts the plan's fragments from the argv and
+  requires nothing of `IsSandboxVocabulary` to remain. The fragments are F1–F7 verbatim: claude
+  `--permission-mode plan --tools ""` / `--restricted --tools Read,Glob,Grep --add-dir <root>…` /
+  `--tools WebSearch,WebFetch`; codex `--search` BEFORE `exec`, `-s read-only --ephemeral`, `-C <root 0>`;
+  agy `--mode plan`, `--add-dir <root>…`; local and api nothing — a completion has no sandbox flag.
+  `CwdKind` has two values, `Scratch` and `Root`: the plan's §4 also named `repo`, but no question row
+  ever stands in the checkout, and that is the AsShipped launch's cwd, decided by the adapter.
+- **Refuse, never redact — and the refusal never quotes what it refused.** A web row's model may be
+  unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
+  with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first
+  found, a secret first and the length last — with its cure; the checkout and the roots are asked
+  BEFORE the generic path shapes so the more specific cure wins; URL-shaped tokens are set aside before
+  the path checks so a public link may be cited, and the host checks run over the original so a private
+  one may not. Two measured edges: `max_tokens=8192` is a SECRET by the credential words (`token`) and is
+  refused as one before the config class is reached, which is the order; `Question: …` is prose, because
+  a `key: value` line refuses only a config-shaped key (ALL_CAPS, or carrying `.`, `_`, `-`).
+- **The secret check is the redaction's own passes, classifying.** `Redaction.FirstSecretClass` runs
+  the private-key pass, the parameter pass, the three shapes and the labelled pass over the same
+  characters `SafeSource` reads and names the first that would have fired — one list of shapes, kept
+  level with the extension by the parity harness — and fails closed (`unredactable`) as the redaction
+  does. `SecretCheck` refuses on it rather than redacting, for the sanitiser's reason; the plan named
+  the check without saying which, and this is the choice. "After SecretCheck" is a type:
+  `CheckedContext` has no public constructor, and `ApiQuestionPrompt.Compose` takes nothing else.
+- **One answer reader.** `QuestionAnswer.Parse` reads the api row's `{answer, sourceRequests}` through
+  `GeminiPayload.Extract` and `ReviewParser.ReadRequests` (internal now, the same path validation a
+  feature reviewer's requests get), and the local consultant's `ConsultantAnswer.TextOf` delegates to it:
+  an empty `answer` is empty, prose is the answer, and prose that happens to begin with a brace is still
+  the answer.
+
+Tests, each watched red for the real reason before the type existed (`CS0234`/`CS0246` naming the
+missing namespace or type): `CapabilityMatrixTests` (the vectors, the seed row for row, the broken-table
+refusals over a full fifteen-row fixture), `ConfinementPlannerTests` (the fragments, the refusals, the
+adapter goldens, the structural subtraction, the AsShipped argv pinned byte for byte),
+`WebQuestionSanitiserTests` (one test per class, the class list pinned, a clean question unchanged),
+`SecretCheckTests` (a path and a fence pass, each class refused without quoting the value, the
+constructor absent).

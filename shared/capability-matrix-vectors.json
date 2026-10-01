@@ -1,0 +1,34 @@
+{
+  "why": [
+    "Golden vectors for ADMISSION: which runtime x capability pair the question consultant may run, and",
+    "with which flag. Both halves decide this — CapabilityMatrix.Admit in coai-mcp (the server refuses a",
+    "row the matrix refuses) and capabilityAdmission.ts in the extension (the settings tab disables the",
+    "pair) — and the two ship separately, so a pair one admits and the other refuses is a row the panel",
+    "lets a person save and the server never launches, with nothing on either side saying so (A3).",
+    "",
+    "Each side answers EVERY vector with its own loader over shared/runtime-capabilities.json: `admitted`",
+    "and `flag` are the decision, `standing` is the row it was made from. A runtime or capability neither",
+    "file knows must be refused by name, which is why the last vectors are not in the table at all.",
+    "The reason SENTENCES are each side's own; what must never differ is the decision."
+  ],
+  "vectors": [
+    { "runtime": "claude", "capability": "none", "admitted": true, "standing": "confined", "flag": "", "why": "F3: `--tools \"\"` offers nothing" },
+    { "runtime": "claude", "capability": "disk", "admitted": true, "standing": "confined", "flag": "", "why": "F4: `--restricted --add-dir` is a real boundary" },
+    { "runtime": "claude", "capability": "web", "admitted": true, "standing": "confined", "flag": "", "why": "F6: `--tools WebSearch,WebFetch` offers only the two client web tools" },
+    { "runtime": "codex", "capability": "none", "admitted": true, "standing": "unconfined", "flag": "unconfined", "why": "F2: a shell is always there — allowed, flagged (D13)" },
+    { "runtime": "codex", "capability": "disk", "admitted": true, "standing": "unconfined", "flag": "unconfined", "why": "F2: reads anywhere, `--add-dir` adds nothing" },
+    { "runtime": "codex", "capability": "web", "admitted": true, "standing": "unconfined", "flag": "unconfined", "why": "F1/F2: searches, and can read the disk on its own — the operator's own example row (D13)" },
+    { "runtime": "antigravity", "capability": "none", "admitted": true, "standing": "default-deny", "flag": "default-deny", "why": "F7: held only by the headless permission default" },
+    { "runtime": "antigravity", "capability": "disk", "admitted": true, "standing": "default-deny", "flag": "default-deny", "why": "F7: `--add-dir` grants, the default denies the rest" },
+    { "runtime": "antigravity", "capability": "web", "admitted": false, "standing": "unsupported", "flag": "", "why": "F7: it cannot fetch a page headless" },
+    { "runtime": "local", "capability": "none", "admitted": true, "standing": "confined", "flag": "", "why": "a completion with no tools, by construction" },
+    { "runtime": "local", "capability": "disk", "admitted": false, "standing": "unsupported", "flag": "", "why": "no file tool to grant a root to" },
+    { "runtime": "local", "capability": "web", "admitted": false, "standing": "unsupported", "flag": "", "why": "no web tool" },
+    { "runtime": "api", "capability": "none", "admitted": true, "standing": "confined", "flag": "", "why": "F8: one completion, no process, no tools" },
+    { "runtime": "api", "capability": "disk", "admitted": false, "standing": "unsupported", "flag": "", "why": "F8: a hosted completion reads no disk" },
+    { "runtime": "api", "capability": "web", "admitted": false, "standing": "unmeasured", "flag": "", "why": "§6: vendor web search was not measured — an unmeasured pair is refused (D3)" },
+    { "runtime": "gemini", "capability": "none", "admitted": false, "standing": "", "flag": "", "why": "not a runtime in the table (retired 2026-08-31): refused by name, never defaulted" },
+    { "runtime": "remote", "capability": "none", "admitted": false, "standing": "", "flag": "", "why": "a Team server row runs on another box; the question consultant is machine-only (Team server out of scope)" },
+    { "runtime": "claude", "capability": "shell", "admitted": false, "standing": "", "flag": "", "why": "not a capability: refused naming the three" }
+  ]
+}

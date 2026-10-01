@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CoaiMcp.Core.Consultation;
+using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 
@@ -42,20 +43,56 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
-        var request = new ProcessRequest(
-            launch.Settings.ExecutablePath.Length > 0 ? launch.Settings.ExecutablePath : AntigravityStream.InstalledExecutable,
+
+        return launch.Confinement is LaunchConfinement.Planned planned
+            ? Planned(launch, planned.Plan)
+            : AsShipped(launch);
+    }
+
+    /// <summary>The stuck consultant, as it ships: plan mode, the live checkout added, resumable.</summary>
+    private ReviewerInvocation AsShipped(ConsultantLaunch launch)
+    {
+        var request = Request(launch,
             [
-                // Empty ON PURPOSE, as for a review: the flag is mandatory in stream mode and a value
-                // here is refused outright.
-                "--print=",
-                "--input-format", "stream-json",
-                "--output-format", "stream-json",
+                .. Stream,
                 "--mode", "plan",
                 .. launch.Handle.Length > 0 ? (string[])["--conversation", launch.Handle] : [],
-                .. launch.Settings.Model.Length > 0 ? (string[])["--model", launch.Settings.Model] : [],
+                .. Model(launch.Settings),
                 "--add-dir", launch.RepoPath,
             ],
-            launch.RepoPath)
+            launch.RepoPath);
+
+        return new ReviewerInvocation(vendor, ConsultantRoles.Consult, request, string.Empty, inner, Model: launch.Settings.Model);
+    }
+
+    /// <summary>
+    /// A question row: the measured stream launch (F7) with the plan's flags — <c>--mode plan</c>, and
+    /// <c>--add-dir</c> per granted root — one shot, in the plan's directory.
+    /// </summary>
+    private ReviewerInvocation Planned(ConsultantLaunch launch, Confinement.Planned plan)
+    {
+        var request = Request(launch, [.. Stream, .. plan.Flags, .. Model(launch.Settings)], ConsultantLaunches.Cwd(launch, plan));
+
+        return new ReviewerInvocation(
+            vendor, ConsultantRoles.Question, ConsultantLaunches.ForQuestion(request), string.Empty, inner, Model: launch.Settings.Model);
+    }
+
+    /// <summary>
+    /// The stream launch both shapes share. <c>--print=</c> is empty ON PURPOSE, as for a review: the
+    /// flag is mandatory in stream mode and a value here is refused outright — and `--print &lt;value&gt;`
+    /// swallows the next flag (F7).
+    /// </summary>
+    private static readonly string[] Stream = ["--print=", "--input-format", "stream-json", "--output-format", "stream-json"];
+
+    private static IEnumerable<string> Model(ReviewerSettings settings) =>
+        settings.Model.Length > 0 ? ["--model", settings.Model] : [];
+
+    private static ProcessRequest Request(ConsultantLaunch launch, string[] arguments, string cwd)
+    {
+        var request = new ProcessRequest(
+            launch.Settings.ExecutablePath.Length > 0 ? launch.Settings.ExecutablePath : AntigravityStream.InstalledExecutable,
+            arguments,
+            cwd)
         {
             Environment = launch.Settings.ApiKey.Length > 0
                 ? new Dictionary<string, string?> { ["ANTIGRAVITY_API_KEY"] = launch.Settings.ApiKey }
@@ -66,7 +103,7 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
         };
         ConsultantLaunches.MustCarryNoLineBreak(request.Arguments);
 
-        return new ReviewerInvocation(vendor, ConsultantRoles.Consult, request, string.Empty, inner, Model: launch.Settings.Model);
+        return request;
     }
 
     /// <summary>The <c>conversation_id</c> of the last event that names one.</summary>

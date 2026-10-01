@@ -1,10 +1,12 @@
 using CoaiMcp.Core.Consultation;
+using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Processes;
 
 namespace CoaiMcp.Runners.Consultation;
 
 /// <summary>
-/// The two guards every consultant launch shares, and the phrase test its refusals are read with.
+/// The guards every consultant launch shares, the phrase test its refusals are read with — and, since
+/// the question consultant, the three facts a PLANNED launch takes from its plan rather than deciding.
 /// </summary>
 /// <remarks>
 /// Extracted when the second adapter needed them rather than copied into it: a delivery rule that
@@ -21,7 +23,47 @@ internal static class ConsultantLaunches
             throw new ArgumentException(
                 "a consultation handle must be validated before it is launched", nameof(launch));
         }
+
+        if (launch.Confinement is LaunchConfinement.Planned planned)
+        {
+            MustBePlannable(launch, planned.Plan);
+        }
     }
+
+    /// <summary>
+    /// A planned launch is ONE SHOT in a directory of its own: a handle to resume, or a scratch plan
+    /// with nowhere to stand, is a contract violation — the fan-out admits and provisions first.
+    /// </summary>
+    private static void MustBePlannable(ConsultantLaunch launch, Confinement.Planned plan)
+    {
+        if (launch.Handle.Length > 0)
+        {
+            throw new ArgumentException(
+                "a question launch is one-shot: it carries no handle to resume, and a resumed turn would stand in the directory the thread began in", nameof(launch));
+        }
+
+        if (plan.Cwd == CwdKind.Scratch && string.IsNullOrWhiteSpace(launch.ScratchDir))
+        {
+            throw new ArgumentException(
+                "a planned launch standing in Scratch needs a ScratchDir — an empty directory of its own; falling back to the checkout would hand the row the directory it must not see", nameof(launch));
+        }
+    }
+
+    /// <summary>Where a planned launch stands: the first granted root, or the caller's scratch directory.</summary>
+    public static string Cwd(ConsultantLaunch launch, Confinement.Planned plan) =>
+        plan.Cwd == CwdKind.Root ? plan.Grant.Roots[0] : launch.ScratchDir;
+
+    /// <summary>The role a launch is filed under: the stuck consultant's, or a question row's.</summary>
+    public static string RoleOf(ConsultantLaunch launch) =>
+        launch.Confinement is LaunchConfinement.Planned ? ConsultantRoles.Question : ConsultantRoles.Consult;
+
+    /// <summary>
+    /// The request of a planned launch as every adapter hands it on — the one road a question row's
+    /// process goes through. The minimal child environment (S1 acceptance 6) is applied here and
+    /// nowhere else, so no adapter can forget it.
+    /// </summary>
+    public static ProcessRequest ForQuestion(ProcessRequest request) =>
+        request with { InheritsEnvironment = false, Passthrough = ProcessEnvironment.Minimal };
 
     /// <summary>
     /// No argument value may carry a line break.

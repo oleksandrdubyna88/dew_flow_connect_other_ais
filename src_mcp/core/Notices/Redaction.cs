@@ -306,6 +306,63 @@ public static partial class Redaction
     /// <summary>A character that may be served in source: printable, or the layout a file is made of — tab, LF, CR.</summary>
     internal static bool IsSourceCharacter(char unit) => IsPrintable(unit) || unit is '\t' or '\n' or '\r';
 
+    /// <summary>The class answered when the search could not finish: a text nobody can vouch for (fail closed).</summary>
+    public const string Unredactable = "unredactable";
+
+    /// <summary>The class of a private-key block — the one shape that is not one line.</summary>
+    public const string PrivateKeyClass = "private-key";
+
+    /// <summary>
+    /// The NAME of the first pass that would take a secret out of <paramref name="text"/> — in the
+    /// order the passes run — or empty when none would.
+    /// </summary>
+    /// <remarks>
+    /// <para>The question consultant's <c>SecretCheck</c> REFUSES a text carrying a secret rather than
+    /// redacting it (PLAN_question_consultant.md, D10): the text goes to a hosted model and into the
+    /// vendor's own store, and a shape a redactor missed would travel with the rest. Recognising the
+    /// secret still has to be the SAME passes as the redaction — a second list of shapes is the defect
+    /// <c>security.md</c> counts — so this classifies with the redaction's own patterns and callbacks
+    /// (the parameter and labelled passes count only when <c>CredentialWords</c> names a credential)
+    /// over the same characters <see cref="SafeSource"/> reads.</para>
+    /// <para>Fails closed as the redaction does: a search the ceiling ended answers <see cref="Unredactable"/>.</para>
+    /// </remarks>
+    public static string FirstSecretClass(string text)
+    {
+        try
+        {
+            return ClassOf(new string([.. text.Where(IsSourceCharacter)]));
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return Unredactable;
+        }
+    }
+
+    /// <summary>The passes in their order: the block, the parameter, the three shapes, the labelled credential.</summary>
+    private static string ClassOf(string text)
+    {
+        if (PrivateKeyBlocks.Redact(text) != text)
+        {
+            return PrivateKeyClass;
+        }
+
+        if (Parameter().Replace(text, RedactParameter) != text)
+        {
+            return "parameter";
+        }
+
+        return Shapes.FirstOrDefault(shape => shape.Pattern.IsMatch(text)).Name
+            ?? (Labelled().Replace(text, RedactLabelled) != text ? "labelled" : string.Empty);
+    }
+
+    /// <summary>The three shapes recognisable on sight, named as <see cref="Patterns"/> names them.</summary>
+    private static readonly IReadOnlyList<(Regex Pattern, string Name)> Shapes =
+    [
+        (UrlAuthority(), "url-authority"),
+        (Bearer(), "bearer"),
+        (Vendor(), "vendor-key"),
+    ];
+
     /// <summary>The four passes, in the order the contract fixes, under one deadline — then the cut.</summary>
     private static string Passes(string value, int limit)
     {

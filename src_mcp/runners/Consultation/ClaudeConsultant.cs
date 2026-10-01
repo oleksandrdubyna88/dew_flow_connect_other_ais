@@ -1,5 +1,6 @@
 using System.Text.Json;
 using CoaiMcp.Core.Consultation;
+using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 
@@ -50,8 +51,16 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
-        var request = new ProcessRequest(
-            launch.Settings.ExecutablePath.Length > 0 ? launch.Settings.ExecutablePath : "claude",
+
+        return launch.Confinement is LaunchConfinement.Planned planned
+            ? Planned(launch, planned.Plan)
+            : AsShipped(launch);
+    }
+
+    /// <summary>The stuck consultant, as it ships: the deny list, the live checkout, resumable.</summary>
+    private ReviewerInvocation AsShipped(ConsultantLaunch launch)
+    {
+        var request = Request(launch,
             [
                 "-p",
                 "--output-format", "json",
@@ -61,9 +70,40 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
                 NoMcpServers.ClaudeFlag,
                 "--add-dir", launch.RepoPath,
                 .. launch.Handle.Length > 0 ? (string[])["--resume", launch.Handle] : [],
-                .. launch.Settings.Model.Length > 0 ? (string[])["--model", launch.Settings.Model] : [],
+                .. Model(launch.Settings),
             ],
-            launch.RepoPath)
+            launch.RepoPath);
+
+        return new ReviewerInvocation(vendor, ConsultantRoles.Consult, request, string.Empty, inner, Model: launch.Settings.Model);
+    }
+
+    /// <summary>
+    /// A question row: the base, the plan's flags — <c>--tools</c> / <c>--restricted</c> / <c>--add-dir</c>,
+    /// never <c>--disallowedTools</c> (F3, F5) — and nothing of this adapter's own; one shot, in the
+    /// plan's directory (PLAN_question_consultant.md, D4).
+    /// </summary>
+    private ReviewerInvocation Planned(ConsultantLaunch launch, Confinement.Planned plan)
+    {
+        var request = Request(launch,
+            [
+                "-p",
+                "--output-format", "json",
+                .. plan.Flags,
+                NoMcpServers.ClaudeFlag,
+                .. Model(launch.Settings),
+            ],
+            ConsultantLaunches.Cwd(launch, plan));
+
+        return new ReviewerInvocation(
+            vendor, ConsultantRoles.Question, ConsultantLaunches.ForQuestion(request), string.Empty, inner, Model: launch.Settings.Model);
+    }
+
+    private static ProcessRequest Request(ConsultantLaunch launch, string[] arguments, string cwd)
+    {
+        var request = new ProcessRequest(
+            launch.Settings.ExecutablePath.Length > 0 ? launch.Settings.ExecutablePath : "claude",
+            arguments,
+            cwd)
         {
             Environment = launch.Settings.ApiKey.Length > 0
                 ? new Dictionary<string, string?> { ["ANTHROPIC_API_KEY"] = launch.Settings.ApiKey }
@@ -73,8 +113,11 @@ public sealed class ClaudeConsultant(IReviewerRuntime inner, string vendor = "cl
         };
         ConsultantLaunches.MustCarryNoLineBreak(request.Arguments);
 
-        return new ReviewerInvocation(vendor, ConsultantRoles.Consult, request, string.Empty, inner, Model: launch.Settings.Model);
+        return request;
     }
+
+    private static IEnumerable<string> Model(ReviewerSettings settings) =>
+        settings.Model.Length > 0 ? ["--model", settings.Model] : [];
 
     /// <summary>The <c>session_id</c> of the envelope, which the CLI reports whether or not it was given one.</summary>
     public string ReadHandle(ProcessResult result)
