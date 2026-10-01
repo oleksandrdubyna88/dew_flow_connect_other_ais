@@ -1,9 +1,8 @@
 # PLAN — the question consultant: other models answer an AI's question before the person is asked
 
 > Status: **plan only, nothing implemented yet, 2026-10-01.** The capability facts it rests on were measured in
-> `dew_flow_benchmark · todo/PLAN_question_consultant_probes.md` (its S1–S4 shipped 2026-10-01) and are written up by
-> its S5 — open on 2026-10-01 — into
-> [RESULTS_question_consultant_capabilities.md](../research/RESULTS_question_consultant_capabilities.md). Scope:
+> `dew_flow_benchmark · todo/PLAN_question_consultant_probes.md` (full run `01a0f8c7`, 105 cells, 2026-10-01) and are
+> written up in [RESULTS_question_consultant_capabilities.md](../research/RESULTS_question_consultant_capabilities.md). Scope:
 > `src_mcp` (a new tool `ask_consultants`, the phase-aware `ask_human` gate, a confinement layer, escalation
 > retention), `src_vs_code` (a Question consultant settings tab, the sidebar's Active questions, a Logs tab),
 > `shared/commands/` (the autonomy order), the shared consultant rule.
@@ -263,9 +262,8 @@ launch fact rather than a conversation one, so the local and api routes need it 
 deploy verification is already order (5), so A6 rewrites (4) and (5), not (4) alone; `consultantView.ts:320` is
 `offeredOptions`, the picker's option mapper — the row the new section reuses is `consultantRowView` (`:212`);
 `API_RUNTIME_SINCE` is extension-side (`apiRuntime.ts:34`). Anchored for S2: the `ask_human` block is
-`PanelService.cs:1630-1840` (its section marker to the `plumbing` one). Not yet in existence:
-`research/RESULTS_question_consultant_capabilities.md` — the benchmark plan's S1–S4 shipped 2026-10-01 and its S5, the
-write-up into this repository's `research/`, is open, so S1 below waits on it (§1's order). Everything else holds:
+`PanelService.cs:1630-1840` (its section marker to the `plumbing` one). `research/RESULTS_question_consultant_capabilities.md` was written the same evening from the full run, and §2's F2,
+F5 and F7 were corrected against it (codex reads anywhere; the deny-list leak is 6 of 6; agy's headless default). Everything else holds:
 `Tools.cs:369` and `:489-492`, `IConsultantRuntime.cs:30,91`, `LocalConsultant.cs:31-70`, `SourceConversation.cs:23`,
 `FeatureOutlineBuilder.cs:46`, `ConsultantResolution.cs:17`, `ClaudeConsultant.cs:61`,
 `ConsultationService.cs:601,635,808`, `ConsultationRecord.cs:73-96`, `Escalations.cs:280`, `CadenceStore.cs:39`,
@@ -323,7 +321,7 @@ person is asked, S4 shows it, S5 ships it.
 ### S1 — Confinement: capabilities as data, one planner, the sanitisers — **Fable** (the confinement layer: a wrong flag is a model reading past its roots, with nothing in the output to say so)
 
 **Goal.** Everything BELOW the service that decides what a row may touch, pinned by golden tests, with no shipped
-behaviour changed. Waits on the RESULTS record (§1).
+behaviour changed. Every capability row cites its cell in the RESULTS record (§1).
 
 **Contents.** `shared/runtime-capabilities.json` (every runtime × capability row with its `measuredWith` cell;
 `unmeasured` where none) and `shared/capability-matrix-vectors.json`; the generator with `--check` on the
@@ -339,7 +337,7 @@ outline); `QuestionResolution.For`; the minimal child environment and `NoMcpServ
    as measured; an `unmeasured` pair is refused; the generator's `--check` fails on a hand edit of the generated TS.
 2. RED→GREEN `ConfinementPlannerTests` — golden argv per runtime × capability: claude `disk` carries
    `--restricted --tools Read,Glob,Grep --add-dir <root>…` and no shell tool; claude `web` carries no `--add-dir` and a
-   scratch cwd; codex `--search` precedes `exec`; agy `disk` is flagged unconfined; `--disallowedTools` appears in no
+   scratch cwd; codex `--search` precedes `exec`; every codex pair is flagged `unconfined` and agy `disk` `default-deny` (D13, F2, F7); `--disallowedTools` appears in no
    plan (F3, F5). An adapter that composes a flag of its own fails the test — the planner is the one place.
 3. RED→GREEN `WebQuestionSanitiserTests` — one test per refusal class of §4, each naming its cure; a clean question
    passes unchanged; nothing is ever redacted. `SecretCheckTests`: the secret half alone — a path or a code fence passes.
@@ -447,7 +445,7 @@ per question, expandable per model, cost, time, outcome. Help in five languages.
    `settingsReach`/`settingsAreDeclared` cover them; `package.json` declares them.
 2. RED→GREEN page-running tests (`bundledPage.test.ts`, no new source-text assertion): a seventh active row is
    refused; a row without a prompt cannot be saved; agy + `web` and api + `disk` are disabled with the vectors' reason
-   (A3); restore-default puts the shipped text back; the banner shows for a server older than `QCONSULT_SINCE`.
+   (A3); a codex row cannot be enabled until its "can read this machine" acknowledgement is ticked, and the flag is shown on its answers (D13); restore-default puts the shipped text back; the banner shows for a server older than `QCONSULT_SINCE`.
 3. RED→GREEN the sidebar: a `consulting` record draws one line per row that advances as rows settle; the escalation
    card carries the folded answers; an `expired` card leaves the section; one card per question, never two.
 4. RED→GREEN the debounce with an injected clock: five events in 100 ms → one refresh at 175 ms; the poll fires only
@@ -509,6 +507,7 @@ and the check re-run.
 | D10 what each capability receives | S2 | acceptance 2 |
 | D11 15 minutes, 7 days | S3 | acceptance 3, 4 |
 | D12 zero net growth, the proved move first | S2 | acceptance 1, 6 |
+| D13 blocked vs flagged-unconfined, the operator's acknowledgement per row | S4 | acceptance 2 (the flags in the data: S1-1, S1-2) |
 | §0 feature 1 the settings tab | S4 | acceptance 2 |
 | §0 feature 2 the autonomy order asks the consultant first | S3 | acceptance 5 |
 | §0 feature 3 models × base prompts, one prompt per row | S4 | acceptance 2 (the catalog: S2-5) |
