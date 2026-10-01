@@ -22,7 +22,7 @@ namespace CoaiMcp.Tests;
 /// from PATH and APPDATA — which would read the person's real vault. Its guard is therefore
 /// structural, and the shape it forbids is the exact line that shipped.</para>
 /// </remarks>
-public sealed class TheVaultKeyIsReadWhereThePanelWritesItTests : IDisposable
+public sealed partial class TheVaultKeyIsReadWhereThePanelWritesItTests : IDisposable
 {
     private const string VendorKey = "sk-or-0123456789abcdefghijklmnopqrstuv";
 
@@ -77,15 +77,17 @@ public sealed class TheVaultKeyIsReadWhereThePanelWritesItTests : IDisposable
             new StringWriter(),
             _ => { });
 
-        vault.Requests.Where(r => r.Arguments.FirstOrDefault() == "config")
+        vault.Requests.Where(IsTheVaultRead)
             .Should().ContainSingle().Which.Arguments.Should().Equal("config", "the-client-env-key");
     }
 
     /// <summary>A delegate lookup of the key variable — the shape every vault read shipped with.</summary>
-    private static readonly Regex KeyLookedUpByHand = new(@"\(\s*(?:Server\.)?KeyVault\.KeyVariable\s*\)");
+    [GeneratedRegex(@"\(\s*(?:Server\.)?KeyVault\.KeyVariable\s*\)")]
+    private static partial Regex KeyLookedUpByHand();
 
     /// <summary>A CALL of the sanctioned read (the leading dot leaves its declaration out), capturing what it was handed.</summary>
-    private static readonly Regex SanctionedRead = new(@"\.ReadFromConfigurationAsync\(\s*(\w+)");
+    [GeneratedRegex(@"\.ReadFromConfigurationAsync\(\s*(\w+)")]
+    private static partial Regex SanctionedRead();
 
     [Fact]
     public void No_production_file_looks_the_key_up_outside_the_vault()
@@ -110,7 +112,7 @@ public sealed class TheVaultKeyIsReadWhereThePanelWritesItTests : IDisposable
     }
 
     private static List<(string File, string Text)> Lookups() =>
-        [.. ProductionSources().SelectMany(file => KeyLookedUpByHand.Matches(File.ReadAllText(file)).Select(m => (Relative(file), m.Value)))];
+        [.. ProductionSources().SelectMany(file => KeyLookedUpByHand().Matches(File.ReadAllText(file)).Select(m => (Relative(file), m.Value)))];
 
     private static bool IsTheVault(string relativeFile) =>
         relativeFile.EndsWith(Path.Combine("Server", "KeyVault.cs"), StringComparison.Ordinal);
@@ -119,7 +121,7 @@ public sealed class TheVaultKeyIsReadWhereThePanelWritesItTests : IDisposable
     public void Every_vault_read_is_handed_the_layered_configuration()
     {
         var reads = ProductionSources()
-            .SelectMany(file => SanctionedRead.Matches(File.ReadAllText(file)).Select(m => (File: Relative(file), Argument: m.Groups[1].Value)))
+            .SelectMany(file => SanctionedRead().Matches(File.ReadAllText(file)).Select(m => (File: Relative(file), Argument: m.Groups[1].Value)))
             .ToList();
 
         // The companion a scan needs: it must still FIND the reads, or it passes over nothing. Serve,
@@ -134,17 +136,17 @@ public sealed class TheVaultKeyIsReadWhereThePanelWritesItTests : IDisposable
     [Fact]
     public void The_lines_that_shipped_the_defect_are_what_the_scan_refuses()
     {
-        KeyLookedUpByHand.IsMatch("KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable).ReadAsync(Environment.GetEnvironmentVariable(KeyVault.KeyVariable));")
+        KeyLookedUpByHand().IsMatch("KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable).ReadAsync(Environment.GetEnvironmentVariable(KeyVault.KeyVariable));")
             .Should().BeTrue("serve, as it shipped");
-        KeyLookedUpByHand.IsMatch(".ReadAsync(Environment.GetEnvironmentVariable(Server.KeyVault.KeyVariable));")
+        KeyLookedUpByHand().IsMatch(".ReadAsync(Environment.GetEnvironmentVariable(Server.KeyVault.KeyVariable));")
             .Should().BeTrue("--providers, as it shipped");
-        KeyLookedUpByHand.IsMatch("var keys = await KeyVault.ForThisMachine(launcher, env).ReadAsync(env(KeyVault.KeyVariable));")
+        KeyLookedUpByHand().IsMatch("var keys = await KeyVault.ForThisMachine(launcher, env).ReadAsync(env(KeyVault.KeyVariable));")
             .Should().BeTrue("--probe-api, as it shipped");
-        SanctionedRead.Match("KeyVault.ForThisMachine(launcher, env).ReadFromConfigurationAsync(env)").Groups[1].Value
+        SanctionedRead().Match("KeyVault.ForThisMachine(launcher, env).ReadFromConfigurationAsync(env)").Groups[1].Value
             .Should().Be("env", "a read handed the raw environment is caught by the argument check");
     }
 
-    private static IReadOnlyList<string> ProductionSources()
+    private static List<string> ProductionSources()
     {
         var root = Path.Combine(RepoRoot(), "src_mcp", "src");
         var files = Directory.EnumerateFiles(root, "*.cs", SearchOption.AllDirectories)
@@ -157,6 +159,10 @@ public sealed class TheVaultKeyIsReadWhereThePanelWritesItTests : IDisposable
     }
 
     private static string Relative(string file) => Path.GetRelativePath(RepoRoot(), file);
+
+    /// <summary>Whether a launch is the vault's own read — <c>creds config &lt;key&gt;</c> — rather than a CLI probe.</summary>
+    private static bool IsTheVaultRead(ProcessRequest request) =>
+        request.Arguments.Count > 0 && request.Arguments[0] == "config";
 
     /// <summary>Walks up to the repository root, which the test binary sits four folders under.</summary>
     private static string RepoRoot()
@@ -201,7 +207,7 @@ public sealed class TheVaultKeyIsReadWhereThePanelWritesItTests : IDisposable
                 _requests.Add(request);
             }
 
-            var body = request.Arguments.FirstOrDefault() == "config" ? stdout : "fake-cli 1.0.0";
+            var body = IsTheVaultRead(request) ? stdout : "fake-cli 1.0.0";
 
             return Task.FromResult(new ProcessResult(0, body, string.Empty, false));
         }
