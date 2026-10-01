@@ -24,7 +24,7 @@ public sealed class StandDown(int cloudRows)
     private bool _anyFailed;
 
     /// <summary>One per round, counting that round's cloud rows.</summary>
-    public static StandDown For(IReadOnlyList<ReviewerWork> work) => new(work.Count(w => !w.Invocation.IsOnEngine));
+    public static StandDown For(IReadOnlyList<ReviewerWork> work) => new(work.Count(w => !w.IsSecurity && !w.Invocation.IsOnEngine));
 
     /// <summary>A cloud reviewer finished — answered, or failed.</summary>
     public void Record(ReviewerOutcome outcome)

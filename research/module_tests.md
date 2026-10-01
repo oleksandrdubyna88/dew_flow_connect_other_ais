@@ -10,6 +10,20 @@
 
 ## Where the harness is
 
+Security lane scenarios are in `SecurityLaneRoundTests` (real Git, engine and history; paid reviewers
+doubled), with settings/evidence/coverage cases in the other `Security*Tests`. The extension's
+`securityLane.test.ts` runs its page and exercises the settings writer against the built server.
+`SecurityLaneCalibrationTests` is an explicit Windows/Ollama test, excluded from ordinary CI.
+It runs three code rounds with the operator's embedded prompts and retains requests, responses,
+hashes and session history after each cell. The command and current measurement status are in
+[RESULTS_security_lane_qwen_windows.md](RESULTS_security_lane_qwen_windows.md). Run it before a
+security-lane release or when changing these prompts, the model or its runtime; the implementing
+agent/operator owns that run. Deterministic tests do not establish model quality or prove that
+Ollama consumed the full input; the live run does not execute reproductions.
+`SecurityLaneAuditTests` separately runs all twelve modules against an explicitly selected committed
+feature, one at a time, preserving every request, response and failure for consultant triage. Its
+ordinary reviewer is a clean test double; the campaign does not replace the COAI code/feature gates.
+
 Shared-rule adoption adds real filesystem scenarios: `RuleFilesTests` exercises neutral
 PROJECT/local/shared discovery, ordering and missing mount bodies while retaining legacy cases.
 `snippetDiscovery.test.ts` calls the same reader the panel uses, against temporary files:

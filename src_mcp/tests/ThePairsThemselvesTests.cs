@@ -532,6 +532,7 @@ public sealed class ThePairsThemselvesTests : IDisposable
             ALTER TABLE consultations DROP COLUMN plan;
             ALTER TABLE consultations DROP COLUMN epics;
             PRAGMA user_version = 12;
+            ALTER TABLE findings DROP COLUMN security_evidence;
             """);
         SqliteConnection.ClearAllPools();
 

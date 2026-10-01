@@ -12,7 +12,7 @@ namespace CoaiMcp.Core.Findings;
 /// model's JSON is whatever the model wrote.
 /// </param>
 internal sealed record RawReview(
-    List<RawFinding>? Findings, string? Notes = null, List<RawSourceRequest?>? SourceRequests = null);
+    List<RawFinding>? Findings, string? Notes = null, List<RawSourceRequest?>? SourceRequests = null, string? Status = null);
 
 internal sealed record RawSourceRequest(string? File, string? Symbol, int? StartLine, int? EndLine, string? Why);
 
@@ -30,4 +30,6 @@ internal sealed record RawFinding(
     int? Line,
     string? Title,
     string? Why,
-    string? Fix);
+    string? Fix,
+    System.Text.Json.JsonElement Reproduction = default,
+    string? Trigger = null, string? Mechanism = null, string? Consequence = null);

@@ -38,6 +38,7 @@ export interface SettingMessage {
   readonly value: unknown;
   readonly vendor?: string | undefined;
   readonly role?: string | undefined;
+  readonly securityField?: string | undefined;
   readonly caller?: string | undefined;
   /** The caller KIND whose split-order model a box names (issue #117) — a key of `coai.commandModels`. */
   readonly commandModel?: string | undefined;
@@ -58,12 +59,14 @@ export function settingMessageFrom(m: {
   readonly value?: unknown;
   readonly vendor?: string | undefined;
   readonly role?: string | undefined;
+  readonly securityField?: string | undefined;
   readonly caller?: string | undefined;
   readonly commandModel?: string | undefined;
   readonly control?: unknown;
 }): SettingMessage {
   return {
     key: m.key, value: m.value, vendor: m.vendor, role: m.role, caller: m.caller, commandModel: m.commandModel,
+    ...(m.securityField ? { securityField: m.securityField } : {}),
     // Only the literal crosses — the page is the only sender, and a value it never sends is not believed.
     ...(m.control === 'select' ? { control: 'select' as const } : {}),
   };

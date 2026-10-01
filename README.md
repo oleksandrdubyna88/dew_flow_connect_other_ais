@@ -143,6 +143,14 @@ German and Spanish.
 
 ## When the rounds run out
 
+The optional **Security lane** adds reviewer/prompt pairs beside ordinary code and feature reviews.
+Its twelve conditional checks have independent checkboxes: authorization, SQL, concurrency,
+auth tokens, SSRF, webhooks, files, commands, deserialization, secrets, prompt injection and XSS.
+Prompts are versioned under `src_mcp/src/prompts/redteam-*.md`; settings select when each runs
+and how much committed source it receives. Findings keep reproduction evidence and their reviewer
+identity in history. Missing lane answers are recorded explicitly. See
+[the security lane module](research/module_security_lane.md) for configuration and limits.
+
 Four honest answers, and you choose which one this repository gets: **ask a human** (the gate stops
 and puts the decision in front of you), **continue anyway** (it proceeds and says out loud that
 findings remain), **good enough** (the agent applies what is true, rejects the rest *with reasons*,

@@ -127,6 +127,8 @@ public sealed record PanelConfig(
     [System.Text.Json.Serialization.JsonIgnore]
     public RoleCatalog Catalog { get; init; } = RoleCatalog.Builtin;
 
+    public RoleGate SecurityLane { get; init; } = new(2, 0, false);
+
     public IReadOnlyDictionary<string, RoleGate> Roles { get; init; } = Roles ?? Defaults();
 
     private static Dictionary<string, RoleGate> Defaults() =>
@@ -138,7 +140,8 @@ public sealed record PanelConfig(
     /// has written it a budget yet, so it takes its stage's shipped one.
     /// </remarks>
     public RoleGate For(string role) =>
-        Roles.TryGetValue(role, out var gate) ? gate : ShippedFor(role);
+        role == Security.SecurityCatalog.Gate ? SecurityLane
+        : Roles.TryGetValue(role, out var gate) ? gate : ShippedFor(role);
 
     /// <summary>The budget a role takes when nobody has written it one: its stage's shipped default.</summary>
     private RoleGate ShippedFor(string role) =>
@@ -187,7 +190,9 @@ public sealed record PanelConfig(
         var roles = EnabledRolesOf(stage);
         return roles.Count == 0
             ? NoEnabledRoles
-            : new StageGate(roles.Max(r => For(r).MaxRounds), roles.Max(r => For(r).Threshold));
+            : new StageGate(Math.Max(roles.Max(r => For(r).MaxRounds),
+                SecurityLane.Enabled && stage is Stage.CodeReview or Stage.FeatureReview ? SecurityLane.MaxRounds : 0),
+                roles.Max(r => For(r).Threshold));
     }
 
     /// <summary>What a stage whose every role is switched off is worth: no round, nothing open.</summary>

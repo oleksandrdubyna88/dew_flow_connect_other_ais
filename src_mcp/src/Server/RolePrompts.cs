@@ -110,14 +110,18 @@ public sealed class RolePrompts(string dataDir)
     private static string FileOf(string promptId) => $"{FileName.Safe(promptId ?? string.Empty)}.md";
 
     /// <summary>The text compiled into this binary. Static: it depends on nothing on disk.</summary>
-    public static string ShippedDefaultFor(string promptId) => Embedded(FileOf(promptId));
+    public static string ShippedDefaultFor(string promptId, bool optional = false) => Embedded(FileOf(promptId), optional);
 
-    private static string Embedded(string file)
+    private static string Embedded(string file, bool optional = false)
     {
         var name = $"CoaiMcp.prompts.{file}";
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
-            ?? throw new InvalidOperationException(
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name);
+        if (stream is null)
+        {
+            if (optional) return string.Empty;
+            throw new InvalidOperationException(
                 $"the prompt '{name}' is not embedded in this build — check the EmbeddedResource item in CoaiMcp.csproj");
+        }
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }

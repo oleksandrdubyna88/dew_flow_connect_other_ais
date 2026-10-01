@@ -68,6 +68,8 @@ test('each role leads with its universal prompt', () => {
     'document-summary': 1,
     // The feature stage's one role asks one question (S2.1 of the feature-review plan).
     'feature-review': 1,
+    'redteam-authz': 12,
+    'redteam-general': 1,
   }, 'a role leads with its universal prompt, and its lenses follow');
 });
 
@@ -81,7 +83,7 @@ test('a prompt is substantial enough to be the thing a reviewer actually reads',
     // columns.
     const flat = text.replace(/\s+/g, ' ');
     assert.ok(
-      flat.includes('empty findings list is a valid answer'),
+      flat.includes('empty findings list is a valid answer') || /return an empty findings list/i.test(flat),
       `${id} no longer tells the reviewer that finding nothing is allowed — a reviewer told to always find something will.`,
     );
   }

@@ -83,6 +83,7 @@ public abstract record ReviewerOutcome
         public Ok(NormalisedReview Review, bool Repaired) : this(Review, Repaired, Usage.None) { }
 
         protected override Usage OwnUsage => Usage;
+        public string InputCoverage { get; init; } = string.Empty;
     }
 
     /// <param name="FailureReason">

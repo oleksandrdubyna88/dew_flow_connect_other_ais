@@ -82,6 +82,7 @@ public static class ReviewParser
                 // field with a space has said nothing, and a caller must not have to tell the two
                 // apart. Absent, null and blank are one answer.
                 Notes = raw.Notes?.Trim() ?? string.Empty,
+                SecurityStatus = raw.Status,
                 SourceRequests = requests.ToImmutable(),
                 RejectedSourceRequests = refusedRequests.ToImmutable(),
             });
@@ -178,7 +179,11 @@ public static class ReviewParser
             raw.Title.Trim(),
             raw.Why?.Trim() ?? string.Empty,
             raw.Fix?.Trim() ?? string.Empty,
-            [provider]), null);
+            [provider])
+        {
+            Reproduction = Security.Reproduction.Read(raw.Reproduction),
+            AttackEvidence = Security.AttackEvidence.Read(raw.Trigger, raw.Mechanism, raw.Consequence),
+        }, null);
     }
 
     internal static Severity? ParseSeverity(string? value) => value?.Trim().ToLowerInvariant() switch
