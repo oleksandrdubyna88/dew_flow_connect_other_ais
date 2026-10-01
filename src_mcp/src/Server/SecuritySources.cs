@@ -16,6 +16,7 @@ internal static class SecuritySources
     internal static async Task<IReadOnlyDictionary<string, string>> ReadAsync(SecurityLaneSetting lane,
         IReadOnlyList<FileDiff> files, SourceResolver resolver, Stage stage, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
         if (!lane.Applies(stage) || !lane.Runs.Any(r => r.Serves(stage) && r.Context == "slice")) return result;
         var facts = SecuritySignals.Classify(files);
@@ -34,12 +35,17 @@ internal static class SecuritySources
             try
             {
                 foreach (var span in DiffHunks.ChangedSpans(file.Diff.Text).Take(MaxHunksPerFile))
+                {
+                    deadline.Token.ThrowIfCancellationRequested();
                     parts.Add((await resolver.ServeChangeAsync(file.Diff.Path, Math.Max(1, span.Start), deadline.Token)).Render());
+                }
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
                 parts.Add("Source read deadline reached; remaining source omitted.");
             }
+            ct.ThrowIfCancellationRequested();
+            if (deadline.IsCancellationRequested) parts.Add("Source read deadline reached; remaining source omitted.");
             result[file.Diff.Path] = string.Join("\n", parts.Distinct(StringComparer.Ordinal));
             if (deadline.IsCancellationRequested) break;
         }

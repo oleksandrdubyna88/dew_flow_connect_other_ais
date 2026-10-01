@@ -53,9 +53,9 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
     }
 
     private PanelService Service(bool failOrdinary = false, bool failLane = false, Noticing? noticing = null,
-        TimeSpan roundTimeout = default)
+        TimeSpan roundTimeout = default, SecurityLaneSetting? laneSetting = null)
     {
-        var lane = SecurityLaneSetting.Parse("""
+        var lane = laneSetting ?? SecurityLaneSetting.Parse("""
             {"enabled":true,"prompts":[{"id":"redteam-general"}],"runs":[{"vendor":"codex","prompt":"redteam-general"}]}
             """, [new("codex")]);
         var settings = new PanelSettings
@@ -70,6 +70,47 @@ public sealed class SecurityLaneRoundTests : IAsyncLifetime
         };
         return new(settings, VaultKeys.None("fixture"), default, new Reviewers(_real, failOrdinary, failLane),
             Serilog.Core.Logger.None, noticing ?? Noticing.None);
+    }
+
+    private RoundWork SqlWork(FileDiff[] files)
+    {
+        var lane = SecurityLaneSetting.Parse("""
+            {"enabled":true,"runs":[{"vendor":"codex","prompt":"redteam-sql"}]}
+            """, [new("codex")]);
+        return Service(laneSetting: lane).Roster.BuildWork([RoleCatalog.ArchitectureRole], _repo.Path,
+            "fixture", 1, Stage.CodeReview, false, securityFiles: files);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Uninspected_changes_cannot_be_reported_as_a_safe_trigger_skip(bool fileCountLimit)
+    {
+        FileDiff[] files = fileCountLimit
+            ? [.. Enumerable.Range(0, SecuritySignals.MaxFiles).Select(i => new FileDiff($"f{i}.cs", "+return 42;")),
+                new("z.cs", "+database.Query(value);")]
+            : [new("large.cs", new string('a', SecuritySignals.MaxFileCharacters) + "\n+database.Query(value);")];
+        var work = SqlWork(files);
+        work.Excluded.Should().Contain(e => e.Role == "redteam-sql" && e.Reason.Contains("trigger coverage incomplete"));
+        work.NotAsked.Should().NotContain(e => e.Role.Contains("redteam-sql"));
+        SecurityRound.Clause([], work).Should().Contain("incomplete");
+    }
+
+    [Fact]
+    public void A_fully_inspected_nonmatching_change_still_skips_the_preset()
+    {
+        var work = SqlWork([new("small.cs", "+return 42;")]);
+        work.Excluded.Should().NotContain(e => e.Role == "redteam-sql");
+        work.NotAsked.Should().Contain(e => e.Role.Contains("redteam-sql") && e.Reason.Contains("no matching trigger"));
+    }
+
+    [Fact]
+    public void A_known_match_still_runs_when_another_file_is_uninspected()
+    {
+        var work = SqlWork([Files[0], new("large.cs", new string('a', SecuritySignals.MaxFileCharacters + 1))]);
+        work.Reviewers.Should().Contain(w => w.IsSecurity && w.Invocation.Role == "redteam-sql");
+        SecuritySignals.Classify([new("large.cs", new string('a', SecuritySignals.MaxFileCharacters + 1))])
+            .Single().Diff.Text.Should().BeEmpty("oversized source must not enter a context pack");
     }
 
     private Task<string> Run(PanelService service, bool laneOnly = false)

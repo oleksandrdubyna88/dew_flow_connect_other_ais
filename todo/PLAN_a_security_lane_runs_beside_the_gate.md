@@ -249,6 +249,10 @@ code or running repository tools. Return matched paths and reasons in determinis
 Unknown languages use lexical matching; binary/withheld files are named as unavailable. Absence of
 a signal means only that this detector did not match. Tests cover positive, negative, deletion,
 rename, mixed language and bounded-input cases. A focus-only tag is invalid as a trigger.
+When no trigger matches but a diff exceeds the detector's character limit or files exceed its count
+limit, record the selected pairing as excluded with "trigger coverage incomplete". Such a change
+must not become a normal "no matching trigger" skip. A known match still runs with bounded partial
+context; oversized source text remains withheld.
 
 ### 5.3 Data and code
 
