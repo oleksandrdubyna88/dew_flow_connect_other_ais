@@ -44,7 +44,7 @@ public sealed class SecurityLaneAuditTests
         {
             try
             {
-                await SecurityLaneCalibrationTests.RunCell(repo, baseline, Path.Combine(output, prompt.Id), launcher,
+                await SecurityLaneCalibrationTests.RunCell(repo, baseline, head.StdOut.Trim(), Path.Combine(output, prompt.Id), launcher,
                     scope, [prompt.Id]);
             }
             catch (Exception error)
