@@ -8,6 +8,14 @@ import { HelpBody } from './helpContent';
  * that is missing here falls back to the English body, visibly — see `bodyFor`.</p>
  */
 export const ES: Readonly<Record<string, HelpBody>> = {
+  'security-lane': {
+    title: 'Security lane: comprobaciones adicionales de seguridad',
+    whatItIs: 'Revisiones opcionales junto a las revisiones habituales de código y funcionalidad. Cada pareja combina un revisor configurado con un prompt redteam. Están desactivadas inicialmente y requieren el gate habitual.',
+    why: 'Una revisión específica examina un límite de seguridad y conserva los hallazgos y sus pruebas en el historial compartido.',
+    setup: 'En Settings → Security lane, marca los módulos deseados entre los 12 disponibles para cada revisor. La primera activación selecciona authz. Ajusta las etapas, el contexto, el presupuesto, el umbral y las rondas. Los módulos incluidos necesitan señales coincidentes en el código; una lista de condiciones vacía impide ejecutarlos. Los prompts están en Git bajo src_mcp/src/prompts/redteam-*.md. Edit local prompt override abre un archivo local independiente.',
+    usage: 'SECURE indica una lista vacía de hallazgos. Cada hallazgo requiere Trigger, Mechanism y Consequence. Sin reproducción completa, major/blocking se limita a minor antes de combinar resultados. Las pruebas aparecen en el historial y nunca se ejecutan. Se mantienen los límites de concurrencia existentes.',
+    whatCanGoWrong: 'Se necesita MCP 0.41.0 o posterior. La configuración no se envía a servidores antiguos. Se indican los prompts ausentes, los ejecutores no disponibles y los errores de configuración. Un objeto dañado se conserva en invalidConfiguration. El contexto es limitado y las omisiones se identifican; la cobertura de la entrada local sigue sin verificarse. El éxito de esta revisión no sustituye a un revisor habitual que no respondió.',
+  },
   "the-settings-tab": {
     title: "El panel y la pestaña Settings",
     whatItIs: "La barra lateral es lo que está pasando ahora: **Active questions** — lo que el question consultant está respondiendo y una pregunta que espera su respuesta —, y luego **Notifications**, **Active gates** — las rondas en curso en este minuto —, **Active consultations** — las consultas que se están teniendo —, **Consultation cadence** — en qué punto está cada plan que sigue la cadencia —, **Phrases** y **Bugz**. Todo lo que se configura una vez está en la pestaña **Settings**, que abre el engranaje junto al botón de ayuda en la barra de título del panel: una pestaña para Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor keys, Team servers, This side y MCP server.",

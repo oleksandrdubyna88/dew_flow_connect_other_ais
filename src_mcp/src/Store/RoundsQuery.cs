@@ -18,7 +18,10 @@ public sealed record LoggedFinding(
     string Providers,
     string Resolution,
     string Reason,
-    bool ReRaised);
+    bool ReRaised)
+{
+    public Core.Security.SecurityFindingDetails? SecurityEvidence { get; init; }
+}
 
 /// <summary>One round, with the findings it produced. Keyed the way the page keys its own rows.</summary>
 public sealed record LoggedRound(
@@ -571,9 +574,9 @@ public static class RoundsQuery
         SqliteConnection db, int limit, (string StartedUtc, long Id)? before)
     {
         using var read = db.CreateCommand();
-        read.CommandText = """
+        read.CommandText = $"""
             SELECT f.round_id, f.ordinal, f.severity, f.category, f.file, f.line, f.title, f.why, f.fix,
-                   f.role, f.is_gating, f.providers, f.resolution, f.reason, f.re_raised
+                   f.role, f.is_gating, f.providers, f.resolution, f.reason, f.re_raised, {SecurityFindingStore.Column(db)} AS security_evidence
             FROM findings f
             WHERE f.round_id IN (
                 SELECT id FROM rounds
@@ -607,9 +610,9 @@ public static class RoundsQuery
     private static List<LoggedFinding> FindingsFor(SqliteConnection db, long roundId)
     {
         using var read = db.CreateCommand();
-        read.CommandText = """
+        read.CommandText = $"""
             SELECT f.ordinal, f.severity, f.category, f.file, f.line, f.title, f.why, f.fix,
-                   f.role, f.is_gating, f.providers, f.resolution, f.reason, f.re_raised
+                   f.role, f.is_gating, f.providers, f.resolution, f.reason, f.re_raised, {SecurityFindingStore.Column(db)} AS security_evidence
             FROM findings f WHERE f.round_id = $round ORDER BY f.ordinal
             """;
         read.Parameters.AddWithValue("$round", roundId);
@@ -644,7 +647,8 @@ public static class RoundsQuery
             Text(rows, "providers"),
             Text(rows, "resolution"),
             Text(rows, "reason"),
-            Number(rows, "re_raised") == 1);
+            Number(rows, "re_raised") == 1)
+        { SecurityEvidence = SecurityFindingStore.Read(rows) };
 
     /// <summary>
     /// The consultations, newest first, bounded by the same limit the rounds are.
@@ -950,7 +954,7 @@ public static class RoundsQuery
         using var read = db.CreateCommand();
         read.CommandText = $"""
             SELECT ordinal, severity, category, file, line, title, why, fix, role, is_gating,
-                   providers, resolution, reason, re_raised
+                   providers, resolution, reason, re_raised, {SecurityFindingStore.Column(db)} AS security_evidence
             FROM findings WHERE re_raised = 1 AND resolution = 'reject' AND {InPeriod} ORDER BY id DESC LIMIT $limit
             """;
         read.Parameters.AddWithValue("$limit", DefendedCap + 1);

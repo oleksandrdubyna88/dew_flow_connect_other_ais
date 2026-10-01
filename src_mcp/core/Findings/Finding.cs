@@ -73,6 +73,12 @@ public sealed record Finding(
     /// </remarks>
     public string Role { get; init; } = string.Empty;
 
+    public Security.Reproduction? Reproduction { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public Security.AttackEvidence? AttackEvidence { get; init; }
+    public string CapReason { get; init; } = string.Empty;
+    public ImmutableArray<Security.SecuritySighting> AlsoSeenBy { get; init; } = [];
+
     public bool IsGating => Severity is Severity.Blocking or Severity.Major;
 }
 
@@ -82,6 +88,9 @@ public sealed record RejectedEntry(int Index, string Reason);
 /// <summary>What one reviewer's answer normalised into.</summary>
 public sealed record NormalisedReview(ImmutableArray<Finding> Findings, ImmutableArray<RejectedEntry> Rejected)
 {
+    [System.Text.Json.Serialization.JsonIgnore(Condition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull)]
+    public string? SecurityStatus { get; init; }
+
     /// <summary>
     /// This reviewer's prose about the whole document — the summary, when one was asked for.
     /// </summary>

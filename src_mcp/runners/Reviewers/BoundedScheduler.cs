@@ -33,6 +33,7 @@ public sealed record ReviewerWork(
     /// every turn it hands back.
     /// </summary>
     public IReviewerContinuation Continue { get; init; } = ReviewerContinuation.None;
+    public bool IsSecurity { get; init; }
 
     /// <summary>
     /// A cap on the WHOLE conversation — every turn of it, launch to final answer — when the stage sets one;
@@ -222,8 +223,8 @@ public sealed class BoundedScheduler(
             // afterwards can see whether the cloud was quiet (issue #485). Null when the switch is off.
             var cloudProgress = Recording(onProgress, standDown);
             var tasks = work.Select(w => w.Invocation.IsOnEngine
-                ? EngineLaneAsync(w, executor, onProgress, standDown, ct)
-                : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, cloudProgress, ct));
+                ? EngineLaneAsync(w, executor, onProgress, w.IsSecurity ? null : standDown, ct)
+                : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, w.IsSecurity ? onProgress : cloudProgress, ct));
             return await Task.WhenAll(tasks);
         }
         finally

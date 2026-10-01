@@ -891,14 +891,14 @@ public sealed class RoundsDb : IDisposable
             using var write = _db.CreateCommand();
             write.CommandText = """
                 INSERT INTO findings (round_id, ordinal, severity, category, file, line, title, why, fix,
-                                      role, is_gating, providers, re_raised)
+                                      role, is_gating, providers, re_raised, security_evidence)
                 VALUES ($round, $ordinal, $severity, $category, $file, $line, $title, $why, $fix,
-                        $role, $gating, $providers, $reRaised)
+                        $role, $gating, $providers, $reRaised, $security)
                 ON CONFLICT(round_id, ordinal) DO UPDATE SET
                     severity = excluded.severity, category = excluded.category, file = excluded.file,
                     line = excluded.line, title = excluded.title, why = excluded.why, fix = excluded.fix,
                     role = excluded.role, is_gating = excluded.is_gating, providers = excluded.providers,
-                    re_raised = excluded.re_raised,
+                    re_raised = excluded.re_raised, security_evidence = excluded.security_evidence,
                     -- An ordinal is a POSITION in one reply, not an identity. When the finding at
                     -- this position is a different one, its predecessor's decision must not stay
                     -- attached to it — the gate called that out, and attaching a rejection to a
@@ -924,6 +924,7 @@ public sealed class RoundsDb : IDisposable
             Bind(write, "$gating", finding.IsGating ? 1 : 0);
             Bind(write, "$providers", string.Join(",", finding.Providers));
             Bind(write, "$reRaised", context.WasReRaised(finding) ? 1 : 0);
+            Bind(write, "$security", SecurityFindingStore.Write(finding));
             write.ExecuteNonQuery();
         }
     }

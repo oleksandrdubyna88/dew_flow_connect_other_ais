@@ -21,7 +21,8 @@ internal sealed class RosterBuilder(
     RemoteProbe remote,
     Func<ProviderSettings, bool> canRun,
     Func<ProviderSettings, IReviewerRuntime?> runtimeFor,
-    Action pruneOldAnswerDirs)
+    Action pruneOldAnswerDirs,
+    Serilog.ILogger log)
 {
     private readonly PanelSettings _settings = settings;
     private readonly VaultKeys _keys = keys;
@@ -66,7 +67,7 @@ internal sealed class RosterBuilder(
     /// the adapter, the adapter said what it contends on, and the scheduler picks its lane by the same
     /// property.</para>
     /// </remarks>
-    private static IReadOnlyList<ReviewerWork> LocalRowsFirst(IReadOnlyList<ReviewerWork> rows) =>
+    internal static IReadOnlyList<ReviewerWork> LocalRowsFirst(IReadOnlyList<ReviewerWork> rows) =>
         [.. rows.Where(r => r.Invocation.IsOnEngine), .. rows.Where(r => !r.Invocation.IsOnEngine)];
 
     /// <summary>
@@ -122,7 +123,9 @@ internal sealed class RosterBuilder(
         bool deal = false,
         // The feature stage's source turns (S3.2): the round's one resolver and the follow-up cap. Absent
         // — every other stage, and the feature stage with the follow-ups switched off — is a single turn.
-        Runners.Feature.SourceTurns? source = null)
+        Runners.Feature.SourceTurns? source = null,
+        IReadOnlyList<Core.Context.FileDiff>? securityFiles = null,
+        IReadOnlyDictionary<string, string>? securitySources = null)
     {
         var turns = source ?? Runners.Feature.SourceTurns.None;
         // The CATALOG's spelling, and nothing else, from here on. `RolesForRound` already answers
@@ -217,7 +220,10 @@ internal sealed class RosterBuilder(
         var refused = new HashSet<(string Provider, string Role)>();
         Assemble(runnable, items, deal, seed, Add, CanCarry);
 
-        return new RoundWork(LocalRowsFirst(work), notAsked, excluded);
+        var ordinary = new RoundWork(LocalRowsFirst(work), notAsked, excluded) { OrdinaryDue = roles.Count > 0 };
+        return securityFiles is null ? ordinary : new SecurityRoster(_settings, _prompts, _canRun, _runtimeFor,
+            (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi), log)
+            .Append(ordinary, securityFiles, stage, round, securitySources);
 
         // One sentence per ROLE however many vendors would have carried it: a person reading a round
         // needs to know the role did not run, not that four vendors each did not run it.

@@ -33,6 +33,17 @@ region is re-cut from the new main, never resolved by taking a side), `refusal-s
 
 ## 3. Build order
 
+### Boundary with the security lane (2026-10-01)
+
+| Item | [Security lane plan](PLAN_a_security_lane_runs_beside_the_gate.md) | This plan |
+|---|---|---|
+| Round deadline (R2) | Extracts and extends it for serial engines and extra pairings | Reuses that unit; does not repeat R2 |
+| Lane roster, findings and budget seams | Owns behavior changes | Keeps these intact during later moves |
+| Other RoundEngine / PanelService decomposition | Only required integration seams | Owns all unrelated extractions |
+
+Lane deadline and integration seams land first; this plan rebases and re-proves its moves afterwards.
+Local runtime trust work is disjoint from these structural extractions.
+
 The round-engine plan's steps 5–7 come first and stay in that plan. This plan adds:
 
 **`PanelService.cs`**

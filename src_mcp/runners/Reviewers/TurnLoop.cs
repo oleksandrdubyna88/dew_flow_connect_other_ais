@@ -47,6 +47,7 @@ internal sealed class TurnLoop(
         for (var turn = 1; ; turn++)
         {
             var (outcome, elapsed) = await TurnAsync(work, clock, cap, ct);
+            outcome = SecurityAnswerLimit.Apply(work, outcome);
             if (outcome is not ReviewerOutcome.Ok answered)
             {
                 return outcome with { EarlierTurns = _earlier };
@@ -55,7 +56,7 @@ internal sealed class TurnLoop(
             var decision = await AfterAsync(work, turn, answered, elapsed, ct);
             if (decision is not TurnDecision.Next next)
             {
-                return Terminal(answered, turn);
+                return Terminal(answered with { InputCoverage = InputCoverage.Of(work, answered) }, turn);
             }
 
             work = next.Work;
@@ -128,7 +129,8 @@ internal sealed class TurnLoop(
 
     /// <summary>The note a finished conversation carries: how many turns, and what they served.</summary>
     public static string Note(ReviewerOutcome outcome) =>
-        outcome is ReviewerOutcome.Ok { Turns: > 1 } ok ? $"{ok.Turns} turns; source: {ok.Served}" : string.Empty;
+        outcome is ReviewerOutcome.Ok ok ? string.Join(" ", new[]
+        { ok.Turns > 1 ? $"{ok.Turns} turns; source: {ok.Served}" : string.Empty, ok.InputCoverage }.Where(s => s.Length > 0)) : string.Empty;
 
     private void Report(ReviewerInvocation invocation, string note)
     {

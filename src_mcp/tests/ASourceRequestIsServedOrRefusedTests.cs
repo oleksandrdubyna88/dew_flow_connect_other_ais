@@ -80,6 +80,47 @@ public sealed class ASourceRequestIsServedOrRefusedTests : IAsyncLifetime
     private SourceResolver Resolver(IProcessLauncher? launcher = null, string? head = null) =>
         new(new GitHistory(launcher ?? _launcher), Outliner, _git.Path, head ?? _head);
 
+    [Fact]
+    public async Task Security_source_reads_do_not_start_without_a_matching_selected_module()
+    {
+        var recording = new Recording();
+        var lane = CoaiMcp.Server.SecurityLaneSetting.Parse("""
+            {"enabled":true,"runs":[{"vendor":"qwen","prompt":"redteam-sql"}]}
+            """, [new("qwen") { Runtime = "local" }]);
+        var sources = await CoaiMcp.Server.SecuritySources.ReadAsync(lane,
+            [new("README.md", "@@ -1 +1 @@\n+plain prose")], Resolver(recording), CoaiMcp.Core.Rounds.Stage.CodeReview, default);
+        sources.Should().BeEmpty();
+        recording.Launched.Should().BeEmpty();
+    }
+
+    [Fact]
+    public async Task Unselected_modules_cannot_spend_the_selected_modules_source_budget()
+    {
+        await _git.WriteAsync("zQuery.cs", "class Queries { string Query() => \"fixture body\"; }");
+        await _git.CommitAsync("query fixture");
+        var lane = CoaiMcp.Server.SecurityLaneSetting.Parse("""
+            {"enabled":true,"prompts":[{"id":"redteam-sql","focus":["sql"]}],
+            "runs":[{"vendor":"qwen","prompt":"redteam-sql"}]}
+            """, [new("qwen") { Runtime = "local" }]);
+        CoaiMcp.Core.Context.FileDiff[] files = [.. Enumerable.Range(0, 16).Select(i =>
+            new CoaiMcp.Core.Context.FileDiff($"aController{i}.cs", "@@ -1 +1 @@\n+[Authorize]")),
+            new("zQuery.cs", "@@ -1 +1 @@\n+database.Query(value);")];
+        var sources = await CoaiMcp.Server.SecuritySources.ReadAsync(lane, files,
+            Resolver(head: await _git.HeadAsync()), CoaiMcp.Core.Rounds.Stage.CodeReview, default);
+        sources.Should().ContainKey("zQuery.cs").WhoseValue.Should().Contain("fixture body");
+    }
+
+    [Fact]
+    public async Task Security_slice_contains_the_enclosing_committed_body_never_the_dirty_edit()
+    {
+        await _git.WriteAsync("src/Cart.cs", "dirty source must never be served");
+        var turn = await Resolver().ServeChangeAsync("src/Cart.cs", 30);
+        turn.Served.Should().ContainSingle();
+        turn.Render().Should().Contain("secretAdd(item)").And.Contain(_head).And.NotContain("dirty source");
+        turn.Served[0].StartLine.Should().Be(28);
+        turn.Served[0].EndLine.Should().Be(35);
+    }
+
     private static SourceRequest Whole(string file) => new(file, string.Empty, 0, 0, "why");
 
     private static SourceRequest Symbol(string file, string symbol) => new(file, symbol, 0, 0, "the seam");

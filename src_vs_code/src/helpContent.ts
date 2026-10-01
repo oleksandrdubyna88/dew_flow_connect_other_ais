@@ -2,6 +2,7 @@ import { DE } from './helpDe';
 import { ES } from './helpEs';
 import { RU } from './helpRu';
 import { UK } from './helpUk';
+import { SECURITY_HELP } from './securityHelp';
 
 /**
  * The help catalog: every article, in one fixed shape — what it is → why → how to set it up →
@@ -167,6 +168,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
         'A server older than 0.33.0 ignores all of this and gives the shipped orders; the page says so. A command switched on without text — written by hand in the settings — is left out of the round, and the reply names the file to write.',
     },
   },
+  SECURITY_HELP,
   {
     id: 'a-local-model',
     en: {

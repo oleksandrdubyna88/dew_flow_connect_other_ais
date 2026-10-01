@@ -202,6 +202,8 @@ public sealed record PanelSettings
 
     public PanelConfig Rounds { get; init; } = new();
 
+    public SecurityLaneSetting SecurityLane { get; init; } = new();
+
     public int GlobalConcurrency { get; init; } = 3;
 
     public int PerProviderConcurrency { get; init; } = 2;
@@ -786,7 +788,7 @@ public sealed record PanelSettings
         // catalog and the sentences it refused join `Unrecognised`. Calling the parser or the
         // composer again for the second half would let the two halves of one answer describe two
         // different values of the setting. (codex, story B2's second code round.)
-        WithCatalog(env, ParseRoles(env(Key.Roles)));
+        SecurityLaneSetting.Apply(WithCatalog(env, ParseRoles(env(Key.Roles))), env(SecurityLaneSetting.Key));
 
     private static PanelSettings WithCatalog(Func<string, string?> env, RolesSetting roles) =>
         WithCatalog(env, roles, RoleComposition.Compose(roles.Rows));

@@ -64,6 +64,8 @@ import { ConsultPromptFile } from './consultPromptFile';
 import { QconsultHost, isQconsultCallerKey, type QconsultWriteHooks } from './qconsultHost';
 import { isQconsultCommand } from './qconsultWrite';
 import type { QuestionConsult } from './questionConsults';
+import { securityLaneFrom, securityWrite } from './securityLane';
+import { editSecurityPrompt } from './securityPromptEditor';
 import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
@@ -239,6 +241,7 @@ interface PanelMessage {
   readonly id?: string;
   readonly open?: boolean;
   readonly role?: string;
+  readonly securityField?: string;
   readonly caller?: string;
   readonly commandModel?: string;
   readonly round?: number;
@@ -1746,6 +1749,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   private async write(message: SettingMessage, from: SurfaceSlot): Promise<void> {
+    if (message.key === 'securityLane' && message.securityField) {
+      const config = vscode.workspace.getConfiguration('coai');
+      const read = this.read(config);
+      await this.save(config, 'securityLane', securityWrite(securityLaneFrom(read('securityLane')),
+        message.securityField, message.value, vendorsFrom(read('vendors'))));
+      return;
+    }
     const write = settingWrite(message);
     if (write === undefined) {
       return;
@@ -2109,6 +2119,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         if (id !== undefined) {
           await this.customConsultant(id);
         }
+        break;
+      case 'editSecurityPrompt':
+        if (id !== undefined) await editSecurityPrompt(this.dataDir, id,
+          securityLaneFrom(this.read(vscode.workspace.getConfiguration('coai'))('securityLane')));
         break;
       case 'customCommandModel':
         if (id !== undefined) {

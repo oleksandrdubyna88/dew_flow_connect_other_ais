@@ -482,8 +482,8 @@ try {
   fail(`the scratch repository could not be made (git 2.28 or later is needed for --initial-branch): ${e.message}`);
 }
 const session = serverSession();
-const consultFail = (why) => {
-  session.end();
+const consultFail = async (why) => {
+  await session.killAndWait();
   rmSync(repoPath, { recursive: true, force: true });
   fail(why);
 };
@@ -494,7 +494,7 @@ const consultFail = (why) => {
 try {
   await session.ready;
 } catch (e) {
-  consultFail(`the binary never finished the MCP handshake: ${e.message}`);
+  await consultFail(`the binary never finished the MCP handshake: ${e.message}`);
 }
 
 // A consultant nobody configured, for the `other` caller kind — the one a plain client gets.
@@ -512,11 +512,11 @@ let routed;
 try {
   routed = answerOf(await session.consult(repoPath));
 } catch (e) {
-  consultFail(`the binary could not answer a consult call: ${e.message}`);
+  await consultFail(`the binary could not answer a consult call: ${e.message}`);
 }
 
 if (!String(routed.error ?? '').includes(CHOSEN)) {
-  consultFail(`the consultant map did not cross the seam. The server answered: ${JSON.stringify(routed).slice(0, 400)}`);
+  await consultFail(`the consultant map did not cross the seam. The server answered: ${JSON.stringify(routed).slice(0, 400)}`);
 }
 
 // And the switch, which is the other key with no second reader — written under the SAME server, so
@@ -533,21 +533,21 @@ try {
   switched = answerOf(await session.consult(repoPath));
   listed = await session.tools();
 } catch (e) {
-  consultFail(`the binary could not answer a consult call with the feature off: ${e.message}`);
+  await consultFail(`the binary could not answer a consult call with the feature off: ${e.message}`);
 }
 
 if (!String(switched.error ?? '').includes('switched off')) {
-  consultFail(`COAI_CONSULT_ENABLED did not cross the seam, or a live server does not re-read it. The server answered: ${JSON.stringify(switched).slice(0, 400)}`);
+  await consultFail(`COAI_CONSULT_ENABLED did not cross the seam, or a live server does not re-read it. The server answered: ${JSON.stringify(switched).slice(0, 400)}`);
 }
 
 // The tool must still be THERE while it is off. A caller that cannot see a tool cannot be told why
 // it is not there, and the documentation promises this in those words.
 if (!(listed?.result?.tools ?? []).some((tool) => tool.name === 'consult')) {
-  consultFail(`the consult tool vanished from tools/list while the feature was off: ${
+  await consultFail(`the consult tool vanished from tools/list while the feature was off: ${
     (listed?.result?.tools ?? []).map((tool) => tool.name).join(', ')}`);
 }
 
-session.end();
+await session.close();
 
 // ----------------------------------------------------------------------------------------------
 // The THIRD leg: a consultation that answers, projected by one process and read by another.
@@ -560,7 +560,7 @@ session.end();
 
 const cli = fakeCli();
 if (cli === '') {
-  consultFail('no FakeCli build found. Run: dotnet build src_mcp/tests_fakecli/FakeCli.csproj');
+  await consultFail('no FakeCli build found. Run: dotnet build src_mcp/tests_fakecli/FakeCli.csproj');
 }
 
 writeFileSync(join(dataDir, 'settings.json'), serverSettingsJson(
@@ -580,21 +580,21 @@ const answering = serverSession({
 try {
   await answering.ready;
 } catch (e) {
-  answering.end();
-  consultFail(`the binary never finished the MCP handshake for the answering leg: ${e.message}`);
+  await answering.killAndWait();
+  await consultFail(`the binary never finished the MCP handshake for the answering leg: ${e.message}`);
 }
 
 let answered;
 try {
   answered = answerOf(await answering.consult(repoPath));
 } catch (e) {
-  answering.end();
-  consultFail(`the binary could not run a consultation against the stand-in CLI: ${e.message}`);
+  await answering.killAndWait();
+  await consultFail(`the binary could not run a consultation against the stand-in CLI: ${e.message}`);
 }
-answering.end();
+await answering.close();
 
 if (typeof answered.consultationId !== 'string' || answered.consultationId.length === 0) {
-  consultFail(`the consultation did not open. The server answered: ${JSON.stringify(answered).slice(0, 400)}`);
+  await consultFail(`the consultation did not open. The server answered: ${JSON.stringify(answered).slice(0, 400)}`);
 }
 
 // And now the other side of the seam: a SECOND process, `--log`, and the extension's own parser.
@@ -603,16 +603,16 @@ let logged;
 try {
   logged = parseLog(await readLog(), true);
 } catch (e) {
-  consultFail(`--log could not be read: ${e.message}`);
+  await consultFail(`--log could not be read: ${e.message}`);
 }
 
 const consulted = (logged.consultations ?? []).find((one) => one.id === answered.consultationId);
 if (consulted === undefined) {
-  consultFail(`the consultation never reached the log. It holds: ${
+  await consultFail(`the consultation never reached the log. It holds: ${
     JSON.stringify((logged.consultations ?? []).map((one) => one.id)).slice(0, 200)}`);
 }
 if (!String(consulted.advice).includes('token stream')) {
-  consultFail(`the row reached the log without its advice: ${JSON.stringify(consulted).slice(0, 400)}`);
+  await consultFail(`the row reached the log without its advice: ${JSON.stringify(consulted).slice(0, 400)}`);
 }
 
 // ----------------------------------------------------------------------------------------------
@@ -650,27 +650,27 @@ const defined = serverSession({
 try {
   await defined.ready;
 } catch (e) {
-  defined.end();
-  consultFail(`the binary never finished the MCP handshake for the definition leg: ${e.message}`);
+  await defined.killAndWait();
+  await consultFail(`the binary never finished the MCP handshake for the definition leg: ${e.message}`);
 }
 
 let throughDefinition;
 try {
   throughDefinition = answerOf(await defined.consult(repoPath));
 } catch (e) {
-  defined.end();
-  consultFail(`the binary could not answer a consult call on a definition: ${e.message}`);
+  await defined.killAndWait();
+  await consultFail(`the binary could not answer a consult call on a definition: ${e.message}`);
 }
-defined.end();
+await defined.close();
 
 if (typeof throughDefinition.consultationId !== 'string' || throughDefinition.consultationId.length === 0) {
-  consultFail(`the definition did not cross the seam — the server could not consult through a consultant with no reviewer row. It answered: ${
+  await consultFail(`the definition did not cross the seam — the server could not consult through a consultant with no reviewer row. It answered: ${
     JSON.stringify(throughDefinition).slice(0, 400)}`);
 }
 // The positive half: the answer came through the CLI path the DEFINITION named. A consultationId
 // alone would pass for a server that resolved the id some other way.
 if (!String(throughDefinition.advice).includes('The definition crossed')) {
-  consultFail(`the consultation opened, but not through the definition's own CLI path: ${JSON.stringify(throughDefinition).slice(0, 400)}`);
+  await consultFail(`the consultation opened, but not through the definition's own CLI path: ${JSON.stringify(throughDefinition).slice(0, 400)}`);
 }
 
 rmSync(repoPath, { recursive: true, force: true });

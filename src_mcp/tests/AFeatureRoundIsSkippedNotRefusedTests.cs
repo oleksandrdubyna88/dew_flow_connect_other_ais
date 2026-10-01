@@ -137,7 +137,7 @@ public sealed class AFeatureRoundIsSkippedNotRefusedTests : IAsyncLifetime
     private StageRun FeatureRun(PanelService service, Func<PersistedSession>? create = null, bool again = false) =>
         new(again ? RoundMachine.BeginFeatureRoundAgain : RoundMachine.BeginFeatureRound,
             NeedsWorktree: false, Stage: Stage.FeatureReview, ReadsCheckout: false,
-            (running, workingDir, _) =>
+            (running, workingDir, _, _) =>
             {
                 var round = running.State.RoundsRunThisStage + 1;
                 var roles = service.Settings.Rounds.RolesForRound(Stage.FeatureReview, round);
@@ -237,7 +237,7 @@ public sealed class AFeatureRoundIsSkippedNotRefusedTests : IAsyncLifetime
         {
             var run = FeatureRun(service) with
             {
-                MakeWork = (_, _, _) => throw new InvalidOperationException("the pack was built for a round nobody can review"),
+                MakeWork = (_, _, _, _) => throw new InvalidOperationException("the pack was built for a round nobody can review"),
             };
 
             var answer = Parse(await service.Engine.RunStageAsync(_repo, SessionKey.FeatureBranch, PlanText, run, CancellationToken.None));

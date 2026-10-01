@@ -8,6 +8,14 @@ import { HelpBody } from './helpContent';
  * that is missing here falls back to the English body, visibly — see `bodyFor`.</p>
  */
 export const DE: Readonly<Record<string, HelpBody>> = {
+  'security-lane': {
+    title: 'Security lane: zusätzliche Sicherheitsprüfungen',
+    whatItIs: 'Optionale Prüfungen neben dem regulären Code- und Feature-Review. Jedes Paar verbindet einen eingerichteten Reviewer mit einem redteam-Prompt. Standardmäßig ausgeschaltet; das reguläre Gate bleibt erforderlich.',
+    why: 'Eine gezielte Prüfung untersucht eine Sicherheitsgrenze und bewahrt Befunde samt Belegen im gemeinsamen Verlauf auf.',
+    setup: 'Unter Settings → Security lane die gewünschten der 12 Module je Reviewer auswählen. Beim ersten Einschalten wird authz gewählt. Stufen, Kontext, Budget, Schwelle und Runden einstellen. Vordefinierte Module benötigen passende Codesignale; eine leere Bedingungsliste verhindert den Start. Prompts liegen unter src_mcp/src/prompts/redteam-*.md in Git. Edit local prompt override öffnet eine separate lokale Datei.',
+    usage: 'SECURE steht für eine leere Befundliste. Jeder Befund benötigt Trigger, Mechanism und Consequence. Ohne vollständige Reproduktion wird major/blocking vor dem Zusammenführen auf minor begrenzt. Belege erscheinen im Verlauf und werden niemals ausgeführt. Die bestehenden Parallelitätsgrenzen gelten weiter.',
+    whatCanGoWrong: 'MCP 0.41.0 oder neuer ist erforderlich. Ältere Server erhalten die Einstellung nicht. Fehlende Prompts, nicht verfügbare Laufzeiten und ungültige Einstellungen werden benannt. Beschädigte Konfiguration bleibt in invalidConfiguration erhalten. Kontext ist begrenzt, Auslassungen werden genannt; die Vollständigkeit lokaler Eingaben bleibt unbestätigt. Eine erfolgreiche Zusatzprüfung ersetzt keinen ausgefallenen regulären Reviewer.',
+  },
   "the-settings-tab": {
     title: "Das Panel und der Settings-Tab",
     whatItIs: "Die Seitenleiste zeigt, was gerade passiert: **Active questions** — woran der Question consultant gerade arbeitet, und eine Frage, die auf Ihre Antwort wartet —, dann **Notifications**, **Active gates** — die Runden, die in dieser Minute laufen —, **Active consultations** — die Konsultationen, die gerade geführt werden —, **Consultation cadence** — wo jeder Plan steht, dem der Takt folgt —, **Phrases** und **Bugz**. Alles, was Sie einmal einrichten, liegt im Tab **Settings**, den das Zahnrad neben der Hilfe-Schaltfläche in der Titelleiste des Panels öffnet: je ein Tab für Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor keys, Team servers, This side und MCP server.",

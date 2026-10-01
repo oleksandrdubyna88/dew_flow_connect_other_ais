@@ -29,6 +29,7 @@ import { ROLE_TONE_CSS, roleTone } from './roleTone';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
+import { securityLaneBody } from './securityLaneView';
 import { CALLER_KINDS, CUSTOM_ENDPOINT, consultantSkewNote, vaultKeyNote } from './consultSettings';
 import {
   COMMAND_MODEL_RUNTIMES,
@@ -445,6 +446,7 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // After the stuck consultant, because the two are the same idea for two moments: there an AI that is STUCK asks
   // one vendor, here an AI with a QUESTION asks every row before it asks you (todo/PLAN_question_consultant.md, S4).
   { id: 'questionconsultant', title: 'Question consultant', surface: 'settings', body: (state) => questionConsultantSection(state) },
+  { id: 'securityLane', title: 'Security lane', surface: 'settings', body: (state) => securityLaneBody(state.settings.securityLane, state.vendors, state.server.kind === 'absent' ? '' : state.server.version) },
   { id: 'prompts', title: 'Prompts per round', surface: 'settings', body: (state) => promptsBody(state) },
   { id: 'gate', title: 'The gate', surface: 'settings', body: (state) => gateBody(state) },
   { id: 'limits', title: 'Limits', surface: 'settings', body: (state) => limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length) },
@@ -569,7 +571,8 @@ ${busyMarkScript(busy)}
   // repaint mid-edit would put the cursor back in whichever of them the document holds first.
   // And the COMMAND-MODEL kind: four assistants' boxes share the two slot names.
   const idOf = (el) => el.dataset.setting + '|' + (el.dataset.vendor || '') + '|' + (el.dataset.role || '')
-    + '|' + (el.dataset.caller || '') + (el.dataset.commandModel ? '|' + el.dataset.commandModel : '');
+    + '|' + (el.dataset.caller || '') + (el.dataset.commandModel ? '|' + el.dataset.commandModel : '')
+    + (el.dataset.securityField ? '|' + el.dataset.securityField : '');
   const posted = new Map();
   // What each control last held that was a REAL value. A sentinel is a request, not a choice, so the
   // control goes straight back to this when one is picked: nothing is written, so no repaint is
@@ -604,6 +607,7 @@ ${busyMarkScript(busy)}
     // Through \`send\`: a write is numbered, and the control wears the busy mark if the host takes long (busyMark.ts).
     send({ type: 'setting', key: el.dataset.setting, value,
            vendor: el.dataset.vendor, role: el.dataset.role,
+           ...(el.dataset.securityField ? { securityField: el.dataset.securityField } : {}),
            caller: el.dataset.caller,
            // Only on a split-order model picker, so every other write keeps its shape.
            ...(el.dataset.commandModel ? { commandModel: el.dataset.commandModel } : {}),
@@ -2009,6 +2013,8 @@ export
  * carries, and for the same reason.</p>
  */
 function roundLimitNote(s: CoaiSettings, enabledVendors: number): string {
+  if (s.securityLane.enabled && s.roundTimeoutMinutes === 0)
+    return 'Worked out by the server from ordinary reviewers, security pairs and serial engine queues.';
   if (s.roundTimeoutMinutes > 0) {
     return s.roundTimeoutMinutes < s.reviewerTimeoutMinutes
       ? `shorter than one reviewer's ${s.reviewerTimeoutMinutes} min — reviewers will be cut off`
@@ -3228,6 +3234,7 @@ export const PANEL_COMMANDS = [
   // a name and a base URL, and an id keys the vault entry, so nothing may be stored before there is
   // one. Carries the CALLER as its id — four rows share the control.
   'customConsultant',
+  'editSecurityPrompt',
   // And by a split-order model picker (issue #117): "another model…" asks for a name. Its id is
   // `<caller kind>:<slot>` — eight pickers share the control.
   'customCommandModel',
