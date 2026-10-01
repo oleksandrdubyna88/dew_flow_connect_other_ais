@@ -134,7 +134,7 @@ test('models for a local runtime come from the engine, not from a shipped list',
 });
 
 test('the provenance line names the engine', () => {
-  assert.match(modelsProvenance('local', [], ENGINE), /ollama/);
+  assert.match(modelsProvenance('local', [], { localEngine: ENGINE }), /ollama/);
 });
 
 test('a local model that was never asked about is not called gone', () => {

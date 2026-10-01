@@ -1317,7 +1317,8 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
       ${modelOptions(models, vendor.model, modelWords(vendor.runtime).empty)}
     </select>
     <div class="hint">${claudeNote(vendor.runtime, askingClaude ?? false).length === 0 ? '' : LOOKING}${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(
-      vendor.runtime, codexModels, localEngine, agyModels, allowedRemote, claudeProbe, askingClaude ?? false, rowEndpoint,
+      vendor.runtime, codexModels,
+      { localEngine, discoveredAgy: agyModels, remote: allowedRemote, claudeProbe, askingClaude, endpoint: rowEndpoint },
     ))}</div>
   </div>
   ${skew}${stages}${endpoint}${dialect}${perModel}${executable}${prices}${documentRow}

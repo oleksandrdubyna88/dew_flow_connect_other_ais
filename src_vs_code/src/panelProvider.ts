@@ -3678,8 +3678,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     if (asked === undefined) {
       return;
     }
-    await this.render();
+    // The first render is INSIDE the cleanup: the row is already marked as asking, and a render that threw
+    // outside it would leave the row busy for good, with every later ≡ ignored (CodeRabbit, #630).
     try {
+      await this.render();
       const probed = await askedOrRefused(() => vscode.window.withProgress(
         { location: vscode.ProgressLocation.Notification, title: `Asking ${asked.baseUrl} which models “${asked.keyName}” can call…` },
         () => modelsForKey(this.serverExecutable(), asked.keyName, asked.baseUrl),

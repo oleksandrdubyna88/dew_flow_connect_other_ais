@@ -38,6 +38,20 @@ function offered(page: Page, vendor: string): readonly string[] {
   return select.options.map((option) => option.value);
 }
 
+/**
+ * The markup of ONE row's card — what that row shows, and nothing else on the page.
+ *
+ * <p>A caption asserted over the whole page could be matched by another card or another section
+ * (CodeRabbit, #630). The caption is drawn by the host, not by the page script, so its markup is the thing
+ * to read; this narrows it to the card whose checkbox is `v-<id>`.</p>
+ */
+function cardOf(page: Page, vendor: string): string {
+  const mine = page.html.split('<div class="vendor"').slice(1).filter((one) => one.includes(`id="v-${vendor}"`));
+  assert.equal(mine.length, 1, `the page has one card for ${vendor}`);
+
+  return mine[0] ?? '';
+}
+
 function listing(overrides: Partial<EndpointListing> = {}): EndpointListing {
   return {
     baseUrl: OPENROUTER,
@@ -54,8 +68,8 @@ test('an OpenRouter card offers none of the Codex CLI cache', () => {
 
   assert.deepEqual(offered(page, 'openrouter').filter((id) => id.startsWith('gpt-6')), [],
     'OpenAI slugs are not names OpenRouter accepts');
-  assert.doesNotMatch(page.html, /models the Codex CLI has cached/u, 'nor is it captioned with them');
-  assert.match(page.html, /openrouter\.ai is not asked until you press ≡/u);
+  assert.doesNotMatch(cardOf(page, 'openrouter'), /models the Codex CLI has cached/u, 'nor is it captioned with them');
+  assert.match(cardOf(page, 'openrouter'), /openrouter\.ai is not asked until you press ≡/u);
 });
 
 test('≡ on an endpoint card asks the host to list that endpoint’s models', () => {
@@ -71,13 +85,13 @@ test('what the endpoint listed is what the card offers, and the caption says whe
 
   assert.ok(offered(page, 'openrouter').includes('deepseek/deepseek-chat'));
   assert.ok(offered(page, 'openrouter').includes('openai/gpt-5'));
-  assert.match(page.html, /2 models openrouter\.ai listed for the key under 'openrouter', asked 14:05 UTC/u);
+  assert.match(cardOf(page, 'openrouter'), /2 models openrouter\.ai listed for the key under 'openrouter', asked 14:05 UTC/u);
 });
 
 test('while it is asking, the card says so', () => {
   const page = card([openrouter()], { askingEndpoints: ['openrouter'] });
 
-  assert.match(page.html, /asking openrouter\.ai/u);
+  assert.match(cardOf(page, 'openrouter'), /asking openrouter\.ai/u);
 });
 
 test('a plain codex card keeps the Codex CLI list and gets no ≡', () => {

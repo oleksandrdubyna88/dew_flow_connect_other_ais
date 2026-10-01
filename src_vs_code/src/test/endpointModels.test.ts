@@ -84,18 +84,18 @@ test('an answer is only used while the row still has the base URL AND the key it
 });
 
 test('the caption says where the list came from, in each of its states', () => {
-  const never = modelsProvenance('codex', CODEX_CACHE, undefined, [], undefined, undefined, false, endpoint());
+  const never = modelsProvenance('codex', CODEX_CACHE, { endpoint: endpoint() });
   assert.match(never, /openrouter\.ai is not asked until you press ≡/u);
   assert.doesNotMatch(never, /Codex CLI has cached/u, 'the caption is about the endpoint, not the CLI');
 
-  const asking = modelsProvenance('codex', CODEX_CACHE, undefined, [], undefined, undefined, false, endpoint({ asking: true }));
+  const asking = modelsProvenance('codex', CODEX_CACHE, { endpoint: endpoint({ asking: true }) });
   assert.match(asking, /asking openrouter\.ai/u);
 
-  const answered = modelsProvenance('codex', CODEX_CACHE, undefined, [], undefined, undefined, false, endpoint({ listed: listing() }));
+  const answered = modelsProvenance('codex', CODEX_CACHE, { endpoint: endpoint({ listed: listing() }) });
   assert.match(answered, /2 models openrouter\.ai listed for the key under 'openrouter', asked 14:05 UTC/u);
 
-  const refused = modelsProvenance('codex', CODEX_CACHE, undefined, [], undefined, undefined, false,
-    endpoint({ listed: listing({ ids: [], reason: 'the vault holds no key under openrouter' }) }));
+  const refused = modelsProvenance('codex', CODEX_CACHE,
+    { endpoint: endpoint({ listed: listing({ ids: [], reason: 'the vault holds no key under openrouter' }) }) });
   assert.match(refused, /openrouter\.ai did not list its models: the vault holds no key under openrouter/u);
   assert.match(refused, /≡/u, 'and says how to ask again');
 });
@@ -107,7 +107,7 @@ test('an ask is kept with what it was asked with — a refusal too, so the card 
     { baseUrl: OPENROUTER, keyName: 'openrouter', ids: ['a/b'], reason: '', askedUtc: '2026-10-01T14:05:09.000Z' });
   const refused = listingOf({ baseUrl: OPENROUTER, keyName: 'openrouter' }, { ids: [], reason: 'exit 78' }, at);
   assert.equal(refused.reason, 'exit 78');
-  assert.match(modelsProvenance('codex', CODEX_CACHE, undefined, [], undefined, undefined, false, endpoint({ listed: refused })),
+  assert.match(modelsProvenance('codex', CODEX_CACHE, { endpoint: endpoint({ listed: refused }) }),
     /did not list its models: exit 78/u, 'a kept refusal is said, not shown as "not asked"');
 });
 

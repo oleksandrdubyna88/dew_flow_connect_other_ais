@@ -53,7 +53,8 @@ It is installed. It is not on the PATH of the process that asked.
     private), and serve, `--providers` and `--probe-api` all hand it their `SettingsFile.Layer`.
     `ForThisMachine(launcher, env)` still takes the raw environment, so the locator and `COAI_CREDS_EXE` remain
     this plan's. Guards: `TheVaultKeyIsReadWhereThePanelWritesItTests`. Build step 1 below is therefore done.
-  - Nothing tests it: every `KeyVaultTests` case passes the key as an explicit string.
+  - Nothing tested it until that fix: every `KeyVaultTests` case passed the key as an explicit string. Since
+    0.40.5, `TheVaultKeyIsReadWhereThePanelWritesItTests` and `ProbeApiModeTests` cover the settings-file key.
 - The test that pins today's sentence is `src_mcp/tests/KeyVaultTests.cs:93-102` (`MissingCredsBinary_IsNamed`,
   asserting `"not installed"`).
 
