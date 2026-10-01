@@ -275,6 +275,10 @@ No live-tree reads and no extra source-request conversation for the security lan
 Apply credential-file withholding and `Redaction.SafeSource` before selecting or rendering material.
 Fence the final source with `ConsultationFence` and a fresh marker absent from the material.
 Prompt text and the response contract sit outside that fence. Source is evidence, never authority.
+The operator's source-only / prompt-immunity and JSON-hygiene block is present in every
+`redteam-*.md` before its output paragraph. The MCP surrounds the nonce-fenced material with
+`=== SOURCE CODE UNDER REVIEW (AUDIT ONLY BELOW) ===` and `=== END OF SOURCE CODE ===`.
+The security schema contains no prose `notes` property; the ordinary schema stays unchanged.
 This requests separation from the model; it does not prove prompt-injection immunity.
 Reproductions are returned as text only and are never executed by the host.
 
@@ -519,6 +523,9 @@ or calibrated default without observations. The operator has supplied all twelve
 After implementation, run each module separately on the committed feature through Windows Ollama
 `Qwen3.5-35B-A3B-Q5_vk128:latest`, retain requests and answers, then discuss the findings with the
 configured COAI consultant. Verify and fix confirmed defects before the final feature gate.
+Before the module matrix, the same selected request must produce three consecutive usable replies;
+hand-check their grounding, readability and exact JSON format. A failed attempt resets that series.
+Do not start the other modules until this preflight succeeds (operator instruction, 2026-10-01).
 
 ## 15. Risks
 

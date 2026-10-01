@@ -79,6 +79,9 @@ public sealed class SecurityLaneCalibrationTests
             System.Globalization.CultureInfo.InvariantCulture));
         using var parsed = JsonDocument.Parse(reply);
         parsed.RootElement.TryGetProperty("error", out _).Should().BeFalse(reply);
+        var reviewers = parsed.RootElement.GetProperty("reviewers").GetString()!;
+        reviewers.Should().StartWith($"{4 + promptIds.Length} of {4 + promptIds.Length} reviewers answered",
+            "each measured cell needs a usable security answer as well as four clean ordinary test reviewers");
         Directory.GetFiles(output, "*.request.txt").Length.Should().BeGreaterThanOrEqualTo(promptIds.Length,
             "every configured security prompt must actually reach the local shim");
     }

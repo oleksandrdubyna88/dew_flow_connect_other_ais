@@ -18,6 +18,11 @@ public sealed class SecurityLaneAuditTests
         var repo = Required("COAI_SECURITY_AUDIT_REPO");
         var baseline = Required("COAI_SECURITY_AUDIT_BASE");
         var output = Required("COAI_SECURITY_AUDIT_OUT");
+        var selected = Environment.GetEnvironmentVariable("COAI_SECURITY_AUDIT_PROMPTS")?.Split(',',
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var modules = selected is null ? SecurityCatalog.Prompts.ToArray()
+            : selected.Select(id => SecurityCatalog.Prompts.Single(p => p.Id == id)).DistinctBy(p => p.Id).ToArray();
+        modules.Should().NotBeEmpty("select at least one known module before a hardware measurement");
         var scope = await File.ReadAllTextAsync(Path.Combine(repo, "todo", "PLAN_a_security_lane_runs_beside_the_gate.md"));
         Directory.CreateDirectory(output);
         var launcher = new ProcessLauncher();
@@ -33,14 +38,14 @@ public sealed class SecurityLaneAuditTests
             contextTokens = 131072,
             ordinaryReviewer = "FakeCli clean response; this campaign measures only the local security lane",
             limitation = "One pass per module, no executed reproductions, input coverage unverified",
-            prompts = SecurityCatalog.Prompts.Select(p => new
+            prompts = modules.Select(p => new
             {
                 id = p.Id,
                 sha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(RolePrompts.ShippedDefaultFor(p.Id)))),
             }),
         }, new JsonSerializerOptions { WriteIndented = true }));
         var failures = new List<string>();
-        foreach (var prompt in SecurityCatalog.Prompts)
+        foreach (var prompt in modules)
         {
             try
             {
@@ -53,7 +58,7 @@ public sealed class SecurityLaneAuditTests
                 await File.WriteAllTextAsync(Path.Combine(output, prompt.Id + ".failure.txt"), error.ToString());
             }
         }
-        failures.Should().BeEmpty("all twelve module attempts must complete; individual failures were retained");
+        failures.Should().BeEmpty("all selected module attempts must complete; individual failures were retained");
     }
 
     private static string Required(string name)

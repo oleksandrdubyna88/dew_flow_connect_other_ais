@@ -80,6 +80,15 @@ claims about documentation, prompts or examples. Those files remain reviewable: 
 instruction asset from its own audit could hide a defect in this feature. The campaign uses `slice`,
 so the consultant's proposed change to `diff` ordering would not address this observed failure.
 
+The operator subsequently supplied an explicit source-only / prompt-immunity and JSON-hygiene block
+for all thirteen `redteam-*.md` files (twelve presets plus the custom general prompt), and requested
+matching source start/end labels around the MCP's nonce fence. Before restarting the matrix, one
+selected module must answer the same feature request successfully three consecutive times. Each
+answer is checked by hand for grounded, readable findings and by the real product validator for
+JSON compliance. The harness now fails a cell if the local reply is unusable; merely reaching Ollama
+does not count as success. `COAI_SECURITY_AUDIT_PROMPTS` selects the comma-separated module IDs for
+this preflight and the remaining matrix. Every run retains its pinned manifest and raw answers.
+
 No initial cells have been counted as successful. Token-usage plausibility cannot establish
 full local input coverage; that remains unverified even if all model answers are usable.
 
