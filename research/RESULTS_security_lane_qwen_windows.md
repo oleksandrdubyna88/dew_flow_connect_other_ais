@@ -117,7 +117,9 @@ to the existing blocking/major/minor wire values, and the response validator rej
 The new schema test failed on its extra enum member before the fix; the focused suite then passed
 143 tests with two explicit hardware skips. Consultation turn 2 confirmed the old false claims
 named real methods: a name-presence filter would not have caught them. No finding suppression is
-used for this next preflight. Temperature was already zero, seed 4242; the earlier noise cannot
+used for this next preflight. Temperature was already zero; the seed is derived from the prompt's
+UTF-8 bytes by FNV-1a modulo 100000 (83047 for the frozen priority request), not a global 4242.
+The earlier noise cannot
 be attributed to high temperature. Prediction: better source selection and the explicit evidence
 threshold should eliminate the three unsupported authz claims. Every new raw answer will still
 be read before counting a successful repetition; an empty list alone does not establish recall.
@@ -125,3 +127,60 @@ be read before counting a successful repetition; an empty list alone does not es
 This fixture is a wiring and calibration check on one model and one change, not a security benchmark
 or evidence that the lane finds vulnerabilities generally. Larger changes, other languages and
 different model/runtime versions require separate measurements.
+
+## Historical comparison and shorter prompts (2026-10-01)
+
+The operator requested re-reading the COAI research and then halving every redteam prompt.
+[The manually judged local-model study](RESULTS_findings_that_are_worth_something.md) records
+Qwen3.5 35B with four useful findings, one rule-only finding, one duplicate and four wrong findings
+out of ten. Its 50% precision includes the rule-only finding; useful findings alone were 40%.
+[The 128K study](RESULTS_local_models_128k.md) records five of eight planted plan defects twice,
+and approximately 23.5K input tokens per code reviewer. These are different tasks and metrics,
+not a security-lane success rate. The original session records and schema still exist under
+`C:/Users/strug/qwen128`; they identify the universal code roles, including `security-reliability`.
+
+The historical role prompt asks for a concrete situation and wrong outcome, accepts an empty list
+and reviews the bounded change. The ordinary product path carries scope as well as diff. The lane
+currently sends its specialized prompt, schema and source slice. Both use one local request with
+thinking disabled; the old schema had seven finding fields, while this lane requires eleven.
+Neither the short role wording nor the historical precision proves that a rewritten prompt works.
+
+Sequential diagnostics on the frozen feature source at `8d933f72`, base `1056aed9`, used the real
+product `--ask-local` shim with a loopback recording proxy. These are shim probes, not additional
+full `PanelService` rounds. Requests, raw responses, hashes, seeds and failure artifacts remain in
+`D:/rsd/_wt/security-lane-tools/qwen-*-preflight`. No output is silently repaired or suppressed.
+
+| Comparison | Observation | Quality result |
+|---|---|---|
+| System instructions / user source split | 552 output tokens; valid JSON, unsupported polymorphic-deserialization claim | fail |
+| Full product round with 64K slice budget | 54547 input / 601 output tokens; generated help text dominates the slice; intended reproduction cap called a vulnerability | fail |
+| Exact cited serializer body added | 16184 input / 569 output; JSON allegation replaced by an objection to the reproduction cap | fail |
+| Additional caller/privilege proof paragraph | 15996 input / 656 output; unsupported JSON allegation remains | fail |
+| Temperature 0.1, top_p 0.1 | 15868 input / 766 output; unsupported JSON allegation remains | fail |
+| Thinking low, 16384 output limit | output limit exhausted, empty answer | fail |
+| Thinking low, temperature 0.6/top_p 0.95, penalties zero | 16384 output tokens, empty answer | fail |
+| Task wording with long evidence blocks retained | 15480 input / 776 output; speculation about a missing callee | fail |
+| Concise universal-style authorization task | 14817 input / 615 output; intended reproduction cap called an authorization flaw | fail |
+| Original operator prompt on safe invoice fixture | 2292 input / 8192 output; reasoning leaked into a finding, answer cut off despite visible tenant guard | fail; diagnostic, not feature coverage |
+| Half-length AuthZ on unchanged feature source | 15076 input / 520 output; valid JSON but invents malformed serializer output | fail |
+| Half-length AuthZ with cited serializer body | 15392 input / 707 output; invents a downstream failure from intentionally retained incomplete evidence | fail |
+| Half-length AuthZ on safe invoice fixture | 1504 input / 1668 output; valid JSON, two unsupported tenant-bypass findings despite the explicit guard | fail; diagnostic, not feature coverage |
+
+The vulnerable invoice fixture previously produced a grounded tenant-isolation finding. The safe
+twin failure means that positive case alone cannot qualify the prompt. The consultant's proposed
+negative control was useful; its stronger inference that one failed control proves no future prompt
+can work is not supported. The current feature-quality streak remains zero.
+
+All thirteen Git-authored redteam prompts now total **5705 words instead of 11506 (49.6%)**.
+Specialized checks, source isolation, evidence requirements and severity/JSON rules remain; repeated
+attack examples and rhetoric were removed. The JSON instructions now defer to exactly the schema's
+required fields instead of contradicting its title/why/fix/reproduction fields. The generated help
+copy is updated with them. This is an operator-requested wording change, not a claimed model-quality
+fix. Three consecutive adequate feature answers, the remaining modules and the final feature gate
+are still required.
+
+Validation of the shortened prompt assets: Debug server build with zero warnings/errors, 29
+protocol/preset tests passed, 16 generated-help/coverage tests passed, TypeScript typecheck and the
+help generator's consistency check passed. Consultation `fc975f1c8e914679b53a1fb5134b398b` was
+closed as `not_solved`; its source-selection correction is implemented, but answer quality remains
+unresolved. No successful repetition is inferred from schema compliance alone.

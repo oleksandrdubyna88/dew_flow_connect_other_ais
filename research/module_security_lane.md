@@ -56,7 +56,8 @@ block is embedded in every redteam prompt and precedes its output instructions.
 The operator's evidence threshold and no-hedging block also precedes the output instructions.
 Security severity uses `blocking` = CRITICAL, `major` = HIGH, and `minor` = MEDIUM;
 the security schema and response validator exclude `nit` (Low/Info). Ordinary schemas keep it.
-The local runtime already sends temperature zero and a fixed seed. These settings do not prove
+The local runtime already sends temperature zero and a seed derived from the complete prompt.
+These settings do not prove
 semantic correctness: a schema-valid finding still needs its claimed execution path checked.
 Ordinary ownership wins a duplicate; stronger severity survives, with per-pair sightings retained.
 Schema step 17 stores this evidence in `findings.security_evidence`; old database readers remain
@@ -80,6 +81,11 @@ empty triggers to request an unconditional pass. Prompts are embedded by the ser
 commit the changes to change shipped defaults. An optional `<dataDir>/prompts/<id>.md` overrides
 the corresponding default; the Settings button explicitly edits this local override. Custom
 prompt metadata is registered in the lane's prompt library. Empty or oversized text refuses the run.
+
+At the operator's request, all thirteen prompts were shortened to approximately half their word
+count on 2026-10-01. The source/evidence and output sections remain, with the declared schema owning
+the exact required keys. This wording has not yet passed the three-consecutive-answer quality
+preflight; see [the measurement record](RESULTS_security_lane_qwen_windows.md).
 
 The extension's Security lane section controls pairings, triggers, focus, source mode, token budget,
 stages, threshold and rounds. A reviewer can be enabled for security alone. A malformed imported
