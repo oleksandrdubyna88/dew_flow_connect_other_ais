@@ -55,11 +55,11 @@ public sealed class SecurityLaneCalibrationTests
             limitation = "Token usage cannot prove local input coverage. Reproductions are not executed.",
         }, new JsonSerializerOptions { WriteIndented = true }));
         for (var repeat = 1; repeat <= 3; repeat++)
-            await RunCell(repo.Path, baseline, Path.Combine(output!, $"repeat-{repeat}"), real, Scope,
+            await RunCell(repo.Path, baseline, head, Path.Combine(output!, $"repeat-{repeat}"), real, Scope,
                 ["redteam-authz", "redteam-sql"]);
     }
 
-    internal static async Task RunCell(string repo, string baseline, string output, ProcessLauncher real,
+    internal static async Task RunCell(string repo, string baseline, string revision, string output, ProcessLauncher real,
         string scope, string[] promptIds)
     {
         Directory.CreateDirectory(output);
@@ -68,12 +68,12 @@ public sealed class SecurityLaneCalibrationTests
         var service = new PanelService(settings, VaultKeys.None("local calibration"), default, launcher,
             Serilog.Core.Logger.None, Noticing.None);
         // The fixture measures code review, not plan quality; only this isolated session is pre-seeded.
-        new SessionStore(settings.DataDir).Save(new(new SessionState("calibration", repo, "HEAD", settings.Rounds)
+        new SessionStore(settings.DataDir).Save(new(new SessionState("calibration", repo, revision, settings.Rounds)
         { PlanProceeded = true, Stage = Stage.CodeReview }, [])
         { PlanText = scope });
         using var deadline = new CancellationTokenSource(TimeSpan.FromMinutes(20));
         var watch = Stopwatch.StartNew();
-        var reply = await service.ReviewCodeAsync(repo, "HEAD", baseline, scope, ct: deadline.Token);
+        var reply = await service.ReviewCodeAsync(repo, revision, baseline, scope, ct: deadline.Token);
         await File.WriteAllTextAsync(Path.Combine(output, "reply.json"), reply);
         await File.WriteAllTextAsync(Path.Combine(output, "elapsed-seconds.txt"), watch.Elapsed.TotalSeconds.ToString("F3",
             System.Globalization.CultureInfo.InvariantCulture));
