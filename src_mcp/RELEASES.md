@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.40.5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.4...mcp-v0.40.5) (2026-10-01)
+
+
+### Bug Fixes
+
+* **mcp:** read the vault key from the settings file the panel writes ([3b7faa0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/3b7faa0bc9dfc864d99cf355781421bd978779d7))
+
 ## [0.40.4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.3...mcp-v0.40.4) (2026-09-30)
 
 
