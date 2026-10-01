@@ -44,6 +44,13 @@ settings/page tests for the validation warnings. Windows Native AOT publication 
 released MCP 0.40.3 compatibility check confirmed the new setting is withheld, an accidentally sent
 unknown key is inert, and the new binary accepts it. These checks do not measure model quality.
 
+The first committed-code gate returned `proceed` with 5/8 reviewers answering (three Gemini service/
+response failures). Its eight findings were resolved; a configured Claude/Opus consultation confirmed
+the detector-limit routing gap. The correction passed 109 focused tests with two explicit GPU tests
+skipped. Removing the correction reproduced three failures; restoring it passed all five targeted
+cases. The 54-request Team HTTP contract suite passed. The follow-up code gate and final feature
+gate remain separate from this local-model campaign.
+
 The operator also requested an audit of the committed implementation through **each of the twelve
 modules**, followed by a COAI consultation over the findings. `SecurityLaneAuditTests` runs those
 cells sequentially and retains failures without abandoning the remaining modules. It uses the real

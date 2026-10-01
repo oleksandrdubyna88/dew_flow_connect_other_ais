@@ -19,8 +19,11 @@ flowchart LR
 
 `shared/security-lane.json` owns signal names and seed prompt metadata. The C# core embeds it;
 the extension generates `securityLane.generated.ts` during build preparation. A trigger selects
-a run; focus ranks its source. Detectors are bounded lexical heuristics, including removed lines,
-not proof of vulnerability. Unknown triggers refuse their prompt; unknown focus is ignored with
+a run; focus ranks its source. Detectors are bounded lexical heuristics, including removed lines;
+a match is not proof of vulnerability. A non-matching preset becomes an incomplete/excluded pairing when any
+diff exceeds the character cap or files exceed the count cap. Fully inspected non-matches are
+ordinary skips. Positive matches still run with partial context; oversized diff bodies stay withheld.
+Unknown triggers refuse their prompt; unknown focus is ignored with
 a complaint. Invalid root configuration leaves the lane off. Unknown settings fields survive
 extension edits so an older server can refuse them.
 

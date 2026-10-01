@@ -27,8 +27,10 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
             try
             {
                 var prompt = lane.Prompts.First(p => p.Id == run.Prompt);
-                var reason = Skip(run, prompt, facts, round);
+                var reason = Skip(run, prompt, round);
                 if (reason.Length > 0) { skipped.Add(new($"{run.Vendor}/{run.Prompt}", reason)); continue; }
+                if (!SecuritySignals.Triggered(prompt, facts))
+                { RecordUnmatched(run, facts, files.Count - facts.Count, skipped, excluded); continue; }
                 Prepare(run, prompt, facts, sources, files.Count - facts.Count, work, excluded);
             }
             catch (Exception e)
@@ -61,12 +63,22 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
         work.Add(Build(provider, run, pack.Text));
     }
 
-    private string Skip(SecurityRun run, SecurityPrompt prompt, IReadOnlyList<SecurityFile> facts, int round) =>
+    private string Skip(SecurityRun run, SecurityPrompt prompt, int round) =>
         round > settings.SecurityLane.MaxRounds ? "security lane round budget spent"
         : run.Refusal.Length > 0 ? run.Refusal
         : prompt.Refusal.Length > 0 ? prompt.Refusal
-        : !SecuritySignals.Triggered(prompt, facts) ? "no matching trigger in this committed change; prior fixes were not verified by this run"
         : string.Empty;
+
+    private static void RecordUnmatched(SecurityRun run, IReadOnlyList<SecurityFile> facts, int omitted,
+        List<SkippedRole> skipped, List<ExcludedRole> excluded)
+    {
+        var oversized = facts.Count(f => f.DetectionIncomplete);
+        if (oversized > 0 || omitted > 0)
+            excluded.Add(new(run.Vendor, run.Prompt,
+                $"trigger coverage incomplete: {oversized} oversized diffs and {omitted} files beyond the detector limit were not inspected"));
+        else skipped.Add(new($"{run.Vendor}/{run.Prompt}",
+            "no matching trigger in this committed change; prior fixes were not verified by this run"));
+    }
 
     private string Refusal(ProviderSettings provider) =>
         !provider.Enabled ? "reviewer row disabled"

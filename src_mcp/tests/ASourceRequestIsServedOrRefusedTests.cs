@@ -111,6 +111,22 @@ public sealed class ASourceRequestIsServedOrRefusedTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Cancelled_security_collection_never_starts_a_source_read()
+    {
+        var recording = new Recording();
+        var lane = CoaiMcp.Server.SecurityLaneSetting.Parse("""
+            {"enabled":true,"runs":[{"vendor":"qwen","prompt":"redteam-sql"}]}
+            """, [new("qwen") { Runtime = "local" }]);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        var collect = () => CoaiMcp.Server.SecuritySources.ReadAsync(lane,
+            [new("src/Cart.cs", "@@ -1 +1 @@\n+database.Query(value);")], Resolver(recording),
+            CoaiMcp.Core.Rounds.Stage.CodeReview, cancelled.Token);
+        await collect.Should().ThrowAsync<OperationCanceledException>();
+        recording.Launched.Should().BeEmpty();
+    }
+
+    [Fact]
     public async Task Security_slice_contains_the_enclosing_committed_body_never_the_dirty_edit()
     {
         await _git.WriteAsync("src/Cart.cs", "dirty source must never be served");

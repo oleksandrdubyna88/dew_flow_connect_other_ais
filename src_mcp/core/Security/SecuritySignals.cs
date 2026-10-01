@@ -4,7 +4,10 @@ using CoaiMcp.Core.Notices;
 
 namespace CoaiMcp.Core.Security;
 
-public sealed record SecurityFile(FileDiff Diff, IReadOnlyList<string> Signals);
+public sealed record SecurityFile(FileDiff Diff, IReadOnlyList<string> Signals)
+{
+    public bool DetectionIncomplete { get; init; }
+}
 
 /// <summary>Bounded lexical routing, including removed checks. These matches are not vulnerabilities.</summary>
 public static class SecuritySignals
@@ -41,7 +44,8 @@ public static class SecuritySignals
         var safe = withheld ? string.Empty : Redaction.SafeSource(raw);
         var text = file.Path + "\n" + safe;
         return new(file with { Text = safe }, [.. Terms.Where(pair => pair.Value.Any(term =>
-            text.Contains(term, StringComparison.OrdinalIgnoreCase))).Select(pair => pair.Key)]);
+            text.Contains(term, StringComparison.OrdinalIgnoreCase))).Select(pair => pair.Key)])
+        { DetectionIncomplete = !withheld && file.Text.Length > MaxFileCharacters };
     }
 
     public static bool Triggered(SecurityPrompt prompt, IReadOnlyList<SecurityFile> files) =>
