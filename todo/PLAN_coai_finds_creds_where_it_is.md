@@ -1,6 +1,8 @@
 # PLAN — coai finds the `creds` CLI where CredsForDevs put it, reads its settings the way every other setting is read, and says exactly where it looked
 
-> Status: **plan only, nothing implemented yet, 2026-09-26.** Plan gate passed (`proceed`, 3 of 3 reviewers — §9).
+> Status: **partly built — the live defect of §2 (`COAI_CREDS_KEY` read from the raw environment) SHIPPED
+> 2026-10-01 in coai-mcp 0.40.5 (#627); the locator, `COAI_CREDS_EXE` and the "where it looked" sentence are still
+> open, 2026-10-01.** Plan gate passed (`proceed`, 3 of 3 reviewers — §9).
 > Scope: `src_mcp/src/Server/KeyVault.cs`, the two places that construct it in `src_mcp/src/Program.cs`, a new pure
 > locator, `src_vs_code/src/settingsShape.ts` + `package.json` (one setting), tests, and `research/module_server.md`.
 >
@@ -45,6 +47,12 @@ It is installed. It is not on the PATH of the process that asked.
   - **So a key set in the panel does nothing** unless it is also pasted into the MCP client's `env` block and the
     client restarted. That is the scenario `ServerSettingsSync` exists to remove, and plausibly part of what the owner
     hit in #159.
+  - **Fixed 2026-10-01, ahead of the rest of this plan** (coai-mcp 0.40.5, #627), after the operator hit it again
+    with an OpenRouter row. Shipped differently from §4: there is no factory over a `configuration` yet; instead
+    `KeyVault.ReadFromConfigurationAsync(configuration)` is the only public read (the key-taking `ReadAsync` is
+    private), and serve, `--providers` and `--probe-api` all hand it their `SettingsFile.Layer`.
+    `ForThisMachine(launcher, env)` still takes the raw environment, so the locator and `COAI_CREDS_EXE` remain
+    this plan's. Guards: `TheVaultKeyIsReadWhereThePanelWritesItTests`. Build step 1 below is therefore done.
   - Nothing tests it: every `KeyVaultTests` case passes the key as an explicit string.
 - The test that pins today's sentence is `src_mcp/tests/KeyVaultTests.cs:93-102` (`MissingCredsBinary_IsNamed`,
   asserting `"not installed"`).

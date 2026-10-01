@@ -1485,3 +1485,22 @@ test('a consultant on another runtime says nothing about a Claude probe', () => 
     'the probe asks the Claude CLI; a codex row is not waiting for it',
   );
 });
+
+// ---------------------------------------------------------------------------------------------
+// A consultant on somebody else's endpoint (research/PLAN_custom_endpoint_model_list.md, 2026-10-01)
+
+test('a codex consultant on another endpoint is offered its saved model, never the Codex CLI cache', () => {
+  const view = viewWith(
+    definition('openrouter', 'codex', 'deepseek/deepseek-chat', 'https://openrouter.ai/api/v1'),
+    { codexModels: [{ id: 'gpt-6-luna', label: 'GPT-6 Luna' }] },
+  );
+
+  assert.deepEqual(view.models.map((m) => m.id), ['deepseek/deepseek-chat'],
+    'OpenAI slugs from the Codex cache are not names that endpoint accepts');
+});
+
+test('a codex consultant on the Codex CLI’s own endpoint still gets the cache', () => {
+  const view = viewWith(definition('codex', 'codex', ''), { codexModels: [{ id: 'gpt-6-luna', label: 'GPT-6 Luna' }] });
+
+  assert.ok(view.models.some((m) => m.id === 'gpt-6-luna'));
+});

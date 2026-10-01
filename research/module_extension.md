@@ -9654,8 +9654,9 @@ curated gemini list. What shipped:
   Unknown is not old (`apiRuntimeOnServer('')` is true), like every other skew gate here. Teeth: with the
   filter removed, three tests went red with `grok` in the emitted rows.
 - **The card** (`panelView.ts`): no ▶ ⤓ ⟳ (`headButtons` returns nothing for `api`), the endpoint field
-  with an `https://api.x.ai/v1` placeholder, a model the person TYPES (`modelsFor('api')` offers only what
-  was typed; `modelsProvenance` says `coai-mcp --probe-api --vendor <id>` lists the ids the key can call), a
+  with an `https://api.x.ai/v1` placeholder, a model the person TYPES — or, since 2026-10-01, one from the
+  endpoint's own list after pressing ≡ (*An endpoint row is offered its endpoint's models* below; the caption
+  no longer sends anyone to a terminal for `coai-mcp --probe-api`), a
   `dialect` picker (`dialectField`, `dialectChoices()` = the shared file's rows minus `local`). Against an
   older server every control is `disabled` and a `.stale` line names the row and the release
   (`apiRuntimeSkewNote`, per card through `CardContext.apiNote`); teeth: with `off` forced false the RUN
@@ -9840,3 +9841,59 @@ sequenceDiagram
   seventh leg: the row's three values reach the real binary and come back as `effective` — watched red with the
   wire line removed. NOT covered: `writeApiSetting` / `resetApiSetting` in `panelProvider.ts` — thin wiring over
   the tested pure functions; an extension host is the standing gap.
+
+## An endpoint row is offered its endpoint's models, never the Codex cache (2026-10-01, PLAN_custom_endpoint_model_list)
+
+Reported from a screenshot: an `openrouter` reviewer — runtime `codex`, base URL `https://openrouter.ai/api/v1` —
+offered *"10 models the Codex CLI has cached for this machine"*, OpenAI's own slugs, none of which OpenRouter accepts,
+and nothing that said where a working id would come from. `modelsFor` chose a list by RUNTIME alone, so a `codex` row
+pointed at somebody else's endpoint fell through to the Codex cache. The `api` runtime had already decided *"never the
+Codex cache"*; the decision lived at one of its two sites. Design record:
+[PLAN_custom_endpoint_model_list.md](PLAN_custom_endpoint_model_list.md).
+
+- **One predicate, one decision** (`endpointModels.ts`). `asksAnEndpoint(runtime, baseUrl)` — every `api` row, and a
+  `codex` row given a non-blank base URL. `modelsFor` and `modelsProvenance` take a trailing `RowEndpoint`
+  (`{ baseUrl, keyName, listed?, asking? }`, `NO_ENDPOINT` when a caller holds none) and hand every such row to
+  `endpointModels` / `endpointNote`; the old `api` arm is that same arm now. The list is what the endpoint listed when
+  asked, with a saved model it did not list kept and marked *"not in what <host> listed"*; else the saved model alone.
+  The caption has four states: *not asked until you press ≡*, *asking…*, *N models <host> listed for the key under
+  '<key>', asked HH:MM UTC*, and *<host> did not list its models: <reason>*.
+- **Every caller passes the endpoint it holds**: the reviewer card, both chat lists (`chatProvidersFrom`,
+  `chatProvidersFromPresets`), the preset wizard's model step and the consultant picker. `commandModelChoices` holds
+  none. Only the card has ≡; the others offer the saved model, honestly captioned.
+- **≡ asks on demand, never per repaint** (`listEndpointModels`, in `PANEL_COMMANDS`). `PanelProvider` runs
+  `modelsForKey(serverExecutable(), vaultKeyOf(vendor), baseUrl)` — the vault flow's own probe, `coai-mcp --probe-api` —
+  under a progress notification. The key NAME is the row's (`vaultKeyOf` = `vaultKeyName ?? id`, in its own
+  `vaultKey.ts`, the twin of the server's `KeyName`): `--probe-api` finds its row in the settings file, which
+  carries only enabled rows, so a switched-off row filed under another key would be asked under the wrong name. One
+  ask per row at a time: the button is `disabled` while it runs, and a second press — or a message for a row that asks
+  no endpoint — is ignored. A refusal is kept like an answer (`listingOf`) so the card says why, and that includes an
+  ask that THREW: `askedOrRefused` turns the error into a refusal carrying its words. Answers live in memory per row id —
+  at most one per row, gone on reload — and `listingFor` uses one only while the row still has the base URL AND the
+  key name it was asked with.
+
+```mermaid
+sequenceDiagram
+  participant C as Reviewer card (webview)
+  participant P as PanelProvider
+  participant M as coai-mcp --probe-api
+  participant E as Endpoint
+  C->>P: command listEndpointModels (row id)
+  P->>P: ignore if the row asks no endpoint or is already asking; render "asking…"
+  P->>M: --vendor vaultKeyOf(row) --endpoint baseUrl --timeout-seconds 30 (45 s cap)
+  M->>E: GET /models with the vault's key
+  E-->>M: ids, or a refusal
+  M-->>P: report (ids or reason)
+  P->>P: keep listingOf(asked, askedOrRefused(probe), now)
+  P->>C: render: endpointModels + endpointNote for that row
+```
+
+**Tests.** `endpointModels.test.ts` (the decision, the marked saved model, the stale answer dropped by base URL and
+by key, a kept refusal, a probe that THREW kept as a refusal, the four captions, a plain `codex` row keeping its cache), `endpointModelsCard.test.ts` (the
+panel RUN through `panelPageHarness`: no `gpt-*` options on an OpenRouter card, ≡ posting `listEndpointModels`, a
+listed answer offered and captioned, the asking state, no ≡ on a plain codex card), `chatProviders.test.ts` and
+`consultant.test.ts` (each caller). RED first with the real symptom — the card offered `gpt-6-luna`, `gpt-6-astra`;
+the chat `gpt-5.2`, `gpt-5.2-mini`; the consultant `gpt-6-luna`. Teeth: with the codex arm of `asksAnEndpoint`
+removed, 7 + 4 + 2 + 1 tests went red and every "a plain codex row keeps the cache" test stayed green. NOT covered:
+`listEndpointModels` in the host (the in-flight guard) — the standing extension-host gap; the probe
+itself is `ProbeApiModeTests` and `apiKeyVendors.test.ts`.
