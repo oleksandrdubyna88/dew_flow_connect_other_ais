@@ -127,6 +127,23 @@ public sealed class ASourceRequestIsServedOrRefusedTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Supporting_material_cannot_displace_production_from_all_sixteen_source_slots()
+    {
+        await _git.WriteAsync("zQuery.cs", "class Queries { string Query() => \"production body\"; }");
+        await _git.CommitAsync("production source priority fixture");
+        var lane = CoaiMcp.Server.SecurityLaneSetting.Parse("""
+            {"enabled":true,"prompts":[{"id":"redteam-sql","focus":["sql","authz","entry-point"]}],
+            "runs":[{"vendor":"qwen","prompt":"redteam-sql"}]}
+            """, [new("qwen") { Runtime = "local" }]);
+        CoaiMcp.Core.Context.FileDiff[] files = [.. Enumerable.Range(0, 16).Select(i =>
+            new CoaiMcp.Core.Context.FileDiff($"docs/check{i}.md", "@@ -1 +1 @@\n+authorization endpoint query")),
+            new("zQuery.cs", "@@ -1 +1 @@\n+database.Query(value);")];
+        var sources = await CoaiMcp.Server.SecuritySources.ReadAsync(lane, files,
+            Resolver(head: await _git.HeadAsync()), CoaiMcp.Core.Rounds.Stage.CodeReview, default);
+        sources.Should().ContainKey("zQuery.cs").WhoseValue.Should().Contain("production body");
+    }
+
+    [Fact]
     public async Task Security_slice_contains_the_enclosing_committed_body_never_the_dirty_edit()
     {
         await _git.WriteAsync("src/Cart.cs", "dirty source must never be served");

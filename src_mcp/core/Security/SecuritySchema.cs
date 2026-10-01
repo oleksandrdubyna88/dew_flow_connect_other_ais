@@ -19,6 +19,8 @@ public static class SecuritySchema
         schema["required"] = new JsonArray([.. schema["properties"]!.AsObject()
             .Select(p => (JsonNode)JsonValue.Create(p.Key))]);
         var item = schema["properties"]!["findings"]!["items"]!;
+        item["properties"]!["severity"] = new JsonObject
+        { ["type"] = "string", ["enum"] = new JsonArray("blocking", "major", "minor") };
         foreach (var name in new[] { "trigger", "mechanism", "consequence" })
         {
             item["properties"]![name] = new JsonObject

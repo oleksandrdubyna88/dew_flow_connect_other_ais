@@ -89,8 +89,38 @@ JSON compliance. The harness now fails a cell if the local reply is unusable; me
 does not count as success. `COAI_SECURITY_AUDIT_PROMPTS` selects the comma-separated module IDs for
 this preflight and the remaining matrix. Every run retains its pinned manifest and raw answers.
 
+The first source-boundary preflight (`5f3fe8734149902573d8b18d31e0da81bb8a9828`, base
+`1056aed99d968ce04a2f12dbe29461b2ee6aa5d4`) returned schema-valid JSON, 122962 input and 1585 output
+tokens, with all five reviewers answering. Its three authz claims were not adequate: the cap finding
+described the intended behavior with equivalent expected/actual outcomes; merge evidence remained in
+`AlsoSeenBy`; timeout/partial coverage was already reported. It therefore counts as **zero successful
+quality repetitions**, independent of a harness assertion that incorrectly expected the summary
+wording `5 of 5` instead of `all 5` (corrected). Raw evidence is retained under
+`D:/rsd/_wt/security-lane-tools/qwen-boundary-preflight/attempt-1`.
+
+Consultation `fc975f1c8e914679b53a1fb5134b398b` verified all three contradictions and the selection
+problem: keyword-rich documentation/prompts/tests could consume all sixteen source slots. Two RED
+tests reproduced it in the source reader and the packer; both now prioritize production/config
+paths before labelled supporting material. The next series uses the existing 24000-token local
+slice default; the model window remains 131072. `COAI_SECURITY_AUDIT_CONTEXT_TOKENS` records an
+explicit override. These preparation changes are qualified together, not claimed as an isolated
+causal comparison against the earlier 128K-budget attempt. The focused suite passed 142 tests with
+two hardware skips; the rebased extension passed 4847 tests with two skips and clean lint after its
+generated prompt help was synchronized.
+
 No initial cells have been counted as successful. Token-usage plausibility cannot establish
 full local input coverage; that remains unverified even if all model answers are usable.
+
+The next candidate also includes the operator's code-proven-only and no-hedging block in all
+thirteen prompts. The security-only severity schema excludes `nit`; CRITICAL/HIGH/MEDIUM map
+to the existing blocking/major/minor wire values, and the response validator rejects `nit` too.
+The new schema test failed on its extra enum member before the fix; the focused suite then passed
+143 tests with two explicit hardware skips. Consultation turn 2 confirmed the old false claims
+named real methods: a name-presence filter would not have caught them. No finding suppression is
+used for this next preflight. Temperature was already zero, seed 4242; the earlier noise cannot
+be attributed to high temperature. Prediction: better source selection and the explicit evidence
+threshold should eliminate the three unsupported authz claims. Every new raw answer will still
+be read before counting a successful repetition; an empty list alone does not establish recall.
 
 This fixture is a wiring and calibration check on one model and one change, not a security benchmark
 or evidence that the lane finds vulnerabilities generally. Larger changes, other languages and

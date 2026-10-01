@@ -7,6 +7,7 @@ namespace CoaiMcp.Core.Security;
 public sealed record SecurityFile(FileDiff Diff, IReadOnlyList<string> Signals)
 {
     public bool DetectionIncomplete { get; init; }
+    public bool SupportingMaterial => SecuritySignals.IsSupportingMaterial(Diff.Path);
 }
 
 /// <summary>Bounded lexical routing, including removed checks. These matches are not vulnerabilities.</summary>
@@ -14,6 +15,13 @@ public static class SecuritySignals
 {
     public const int MaxFiles = 512;
     public const int MaxFileCharacters = 262144;
+    private static readonly string[] SupportingFolders = ["docs", "research", "todo", "test", "tests", "__tests__", "fixtures"];
+
+    // A ranking hint, never a reason to withhold code or declare a path safe.
+    public static bool IsSupportingMaterial(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() is ".md" or ".markdown" or ".rst"
+        || path.Replace('\\', '/').Split('/').Any(part => SupportingFolders.Contains(part, StringComparer.OrdinalIgnoreCase));
+
     private static readonly IReadOnlyDictionary<string, string[]> Terms = new Dictionary<string, string[]>
     {
         ["sql"] = ["sql", "query", "execute", "database", "dbcontext", "migration", "dapper", "select ", "insert ", "update ", "delete ", "where "],

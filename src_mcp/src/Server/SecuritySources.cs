@@ -29,7 +29,7 @@ internal static class SecuritySources
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(CollectionBudget);
         foreach (var file in facts.Where(f => f.Diff.Text.Length > 0)
-            .OrderByDescending(f => f.Signals.Count(focus.Contains)).Take(MaxSourceFiles))
+            .OrderBy(f => f.SupportingMaterial).ThenByDescending(f => f.Signals.Count(focus.Contains)).Take(MaxSourceFiles))
         {
             var parts = new List<string>();
             try

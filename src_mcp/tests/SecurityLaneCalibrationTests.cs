@@ -60,10 +60,10 @@ public sealed class SecurityLaneCalibrationTests
     }
 
     internal static async Task RunCell(string repo, string baseline, string revision, string output, ProcessLauncher real,
-        string scope, string[] promptIds)
+        string scope, string[] promptIds, int contextTokens = 131072)
     {
         Directory.CreateDirectory(output);
-        var settings = Settings(Path.Combine(output, "state"), promptIds);
+        var settings = Settings(Path.Combine(output, "state"), promptIds, contextTokens);
         var launcher = new RecordingLauncher(new SecurityLaneRoundTests.Reviewers(real, false, false), output);
         var service = new PanelService(settings, VaultKeys.None("local calibration"), default, launcher,
             Serilog.Core.Logger.None, Noticing.None);
@@ -80,13 +80,13 @@ public sealed class SecurityLaneCalibrationTests
         using var parsed = JsonDocument.Parse(reply);
         parsed.RootElement.TryGetProperty("error", out _).Should().BeFalse(reply);
         var reviewers = parsed.RootElement.GetProperty("reviewers").GetString()!;
-        reviewers.Should().StartWith($"{4 + promptIds.Length} of {4 + promptIds.Length} reviewers answered",
+        reviewers.Should().StartWith($"all {4 + promptIds.Length} reviewers answered",
             "each measured cell needs a usable security answer as well as four clean ordinary test reviewers");
         Directory.GetFiles(output, "*.request.txt").Length.Should().BeGreaterThanOrEqualTo(promptIds.Length,
             "every configured security prompt must actually reach the local shim");
     }
 
-    private static PanelSettings Settings(string data, string[] promptIds)
+    private static PanelSettings Settings(string data, string[] promptIds, int contextTokens)
     {
         ProviderSettings[] providers = [
             new("codex") { ExecutablePath = Path.Combine(AppContext.BaseDirectory, "FakeCli.exe") },
@@ -98,7 +98,7 @@ public sealed class SecurityLaneCalibrationTests
             enabled = true,
             threshold = 0,
             maxRounds = 2,
-            runs = promptIds.Select(id => new { vendor = "qwen", prompt = id, context = "slice", contextTokens = 131072 }),
+            runs = promptIds.Select(id => new { vendor = "qwen", prompt = id, context = "slice", contextTokens }),
         }), providers);
         return new()
         {
