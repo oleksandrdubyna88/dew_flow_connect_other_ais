@@ -7,6 +7,15 @@ namespace CoaiMcp.Server;
 /// <summary>The three gate arguments of one <c>ask_human</c> call, as the caller passed them.</summary>
 public sealed record AskArguments(string ConsultId, bool ProductionRisk, string RiskReason);
 
+/// <summary>A consultation's proof spent on one card (S4b item 8) — what <see cref="AskGateDesk.GiveBack"/> needs to undo it.</summary>
+/// <param name="ConsultId">Empty when the call carried no verified proof.</param>
+/// <param name="PreviousOutcome">The record's outcome before the spend, restored by a give-back.</param>
+/// <param name="Refusal">Empty when spent (or nothing to spend); otherwise why the call is refused.</param>
+public sealed record ProofSpend(string ConsultId, string EscalationId, string PreviousOutcome, string Refusal)
+{
+    public static ProofSpend None { get; } = new(string.Empty, string.Empty, string.Empty, string.Empty);
+}
+
 /// <summary>Everything one call's gate decided on, and what the desk needs afterwards to record what happened.</summary>
 /// <param name="Input">What the gate decides on.</param>
 /// <param name="Key">Which phase record this question counts into.</param>
@@ -69,17 +78,48 @@ public sealed class AskGateDesk(
             key, released, caller);
     }
 
-    /// <summary>After the card is written: the batch counted, the proof spent, the consultants beside a production risk.</summary>
+    /// <summary>
+    /// D14 (a), S4b item 8: the verified proof spent on the card about to be posted — ATOMICALLY, before the post, so
+    /// two calls with one <c>consultId</c> in flight at once cannot both go through. <see cref="ProofSpend.None"/> when
+    /// there is nothing to spend; a refusal sentence when it could not be spent.
+    /// </summary>
+    /// <remarks>The verification in <see cref="Facts"/> stays the early answer; this is the one that decides.</remarks>
+    public ProofSpend Spend(AskFacts facts, string escalationId)
+    {
+        if (facts.Input.Proof is not ConsultProof.Verified verified)
+        {
+            return ProofSpend.None;
+        }
+
+        var (outcome, previous) = questions.Store.Spend(verified.ConsultId, escalationId);
+
+        return new ProofSpend(verified.ConsultId, escalationId, previous, outcome switch
+        {
+            SpendOutcome.Spent => string.Empty,
+            SpendOutcome.AlreadyUsed => $"consultId {verified.ConsultId} was already used by another ask_human — one consultation opens the door once; ask the consultants again",
+            SpendOutcome.Busy => $"consultId {verified.ConsultId} could not be spent: its record is busy right now — call ask_human again",
+            _ => $"consultId {verified.ConsultId} could not be spent: its record is gone — ask the consultants again",
+        });
+    }
+
+    /// <summary>The spend undone when its card was never posted (S4b item 8) — the proof opens the door again.</summary>
+    public void GiveBack(ProofSpend spend)
+    {
+        if (spend.ConsultId.Length == 0 || spend.Refusal.Length > 0)
+        {
+            return;
+        }
+
+        var released = questions.Store.Release(spend.ConsultId, spend.EscalationId, spend.PreviousOutcome);
+        log.Warning("ask_human: the card {Id} was not posted; consultId {Consult} given back ({Outcome})", spend.EscalationId, spend.ConsultId, released);
+    }
+
+    /// <summary>After the card is written: the batch counted, the consultants beside a production risk. The proof was spent before the post.</summary>
     public void AfterTheCard(AskFacts facts, EscalationQuestion card, AskDecision.Allowed allowed)
     {
         if (allowed.Counted)
         {
             Counted(facts, card.Id, DateTime.UtcNow);
-        }
-
-        if (facts.Input.Proof is ConsultProof.Verified verified)
-        {
-            Spent(verified.ConsultId, card.Id);
         }
 
         if (allowed.ConsultBeside)
@@ -181,17 +221,6 @@ public sealed class AskGateDesk(
             // The question still reaches the person; what is lost is one batch of the count, and the log says so.
             log.Warning(e, "ask_human gate: question {Id} could not be counted under {Key}", escalationId, facts.Key.Spelled);
         }
-    }
-
-    /// <summary>Single use (D14 (a)): the record names the card it became, and the log says the person was asked after the consultants.</summary>
-    private void Spent(string consultId, string escalationId)
-    {
-        if (questions.Store.Read(consultId) is not { } record)
-        {
-            return;
-        }
-
-        questions.Store.Write(record with { Outcome = QuestionOutcomes.PersonAsked, EscalationId = escalationId });
     }
 
     /// <summary>D8: the consultants beside the person's card, their answers folded under it as the rows settle — the detached edge, with its catch-all.</summary>

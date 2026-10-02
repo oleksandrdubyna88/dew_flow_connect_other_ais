@@ -41,6 +41,8 @@ export interface QuestionConsult {
   readonly startedUtc: string;
   readonly updatedUtc: string;
   readonly endedUtc: string;
+  /** Rewritten by the fan-out every thirty seconds while rows run — the server's proof of life (D14 d). */
+  readonly heartbeatUtc: string;
   readonly rows: readonly QuestionConsultRow[];
   /** The filesystem invariant's sentence over a disk row's roots, when it fired. */
   readonly alert: string;
@@ -48,6 +50,47 @@ export interface QuestionConsult {
 
 /** The record status while rows run — the only one the first stage draws. */
 export const CONSULTING = 'consulting';
+
+/** The terminal word for a question its server stopped answering — the server's sweep writes it, and the sidebar shows it first. */
+export const INTERRUPTED = 'interrupted';
+
+/**
+ * How long a consulting record's heartbeat may be silent before the sidebar shows it INTERRUPTED: the server's own
+ * `QuestionConsultStore.HeartbeatStale`, four beats missed. The server's sweep needs a live server to run; a window
+ * whose server died would otherwise spin "consulting" for ever (S4b item 9).
+ */
+export const HEARTBEAT_STALE_MS = 2 * 60 * 1000;
+
+/** The last moment a record showed life: its heartbeat or its last write, whichever is later — else its start. */
+function lastSign(record: QuestionConsult): number {
+  const signs = [record.heartbeatUtc, record.updatedUtc, record.startedUtc].map((one) => Date.parse(one)).filter(Number.isFinite);
+
+  return signs.length === 0 ? Number.NaN : Math.max(...signs);
+}
+
+/**
+ * The record as the sidebar SHOWS it at `nowMs`: a consulting question whose server gave no sign of life for over
+ * two minutes is interrupted — terminal, not spinning — and so is every row of it still consulting. Nothing on disk
+ * changes; the server's sweep is what ends the record there.
+ */
+export function shownAt(record: QuestionConsult, nowMs: number): QuestionConsult {
+  const sign = lastSign(record);
+  if (record.status !== CONSULTING || !Number.isFinite(sign) || nowMs - sign <= HEARTBEAT_STALE_MS) {
+    return record;
+  }
+
+  return { ...record, status: INTERRUPTED, rows: record.rows.map((row) => (row.status === CONSULTING ? { ...row, status: INTERRUPTED } : row)) };
+}
+
+/** When the sidebar must look again though no file moved: the first consulting question's heartbeat deadline. Undefined is never. */
+export function nextStaleAt(records: readonly QuestionConsult[]): number | undefined {
+  const deadlines = records
+    .filter((one) => one.status === CONSULTING)
+    .map((one) => lastSign(one) + HEARTBEAT_STALE_MS + 1)
+    .filter(Number.isFinite);
+
+  return deadlines.length === 0 ? undefined : Math.min(...deadlines);
+}
 
 /**
  * How long a FINISHED question is kept in the snapshot: a card that follows it can still fold its answers under
@@ -83,6 +126,7 @@ function recordFrom(raw: Record<string, unknown>): QuestionConsult {
     startedUtc: text(raw['startedUtc']),
     updatedUtc: text(raw['updatedUtc']),
     endedUtc: text(raw['endedUtc']),
+    heartbeatUtc: text(raw['heartbeatUtc']),
     rows: (Array.isArray(raw['rows']) ? raw['rows'] : []).flatMap(rowFrom),
     alert: text(raw['alert']),
   };
@@ -118,12 +162,15 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value : '';
 }
 
-/** Whether a record belongs in the snapshot the sidebar draws from: running, or finished a short while ago. */
+/**
+ * Whether a record belongs in the snapshot the sidebar draws from: running, or finished a short while ago — a record
+ * shown interrupted by its silent heartbeat has no end stamp, so its last sign of life is its end.
+ */
 export function isKept(record: QuestionConsult, nowMs: number): boolean {
   if (record.status === CONSULTING) {
     return true;
   }
-  const at = Date.parse(record.endedUtc.length > 0 ? record.endedUtc : record.updatedUtc);
+  const at = record.endedUtc.length > 0 ? Date.parse(record.endedUtc) : lastSign(record);
 
   return Number.isFinite(at) && nowMs - at <= KEPT_AFTER_MS;
 }

@@ -145,6 +145,31 @@ public sealed class EscalationRetentionTests : IDisposable
         Exists(torn).Should().BeFalse();
     }
 
+    /// <summary>
+    /// S4b item 7: a hold is bound to its question by IDENTITY, so a held id keeps its files whatever they say — an
+    /// answered pair (the hold reads the answer), an answer whose question is gone, a question file that will not
+    /// parse. The class remark already promised "whatever its age or status"; the answered and orphan paths did not ask.
+    /// </summary>
+    [Fact]
+    public void AHeldQuestion_IsKept_WhateverItsStatusOrAge_AnsweredOrphanedOrTorn()
+    {
+        Question("answered", Past + TimeSpan.FromHours(1));
+        Answer("answered", Past);
+        Answer("orphan", Past);
+        Directory.CreateDirectory(_escalations.Directory);
+        var torn = _escalations.QuestionPath("torn");
+        File.WriteAllText(torn, "{ half");
+        File.SetLastWriteTimeUtc(torn, Now - Past);
+        _held.UnionWith(["answered", "orphan", "torn"]);
+
+        Retention().Sweep(Now).Should().Be(0, "every one of them is held by a live session");
+
+        Exists(_escalations.QuestionPath("answered")).Should().BeTrue();
+        Exists(_escalations.AnswerPath("answered")).Should().BeTrue("the hold is answered by THIS file");
+        Exists(_escalations.AnswerPath("orphan")).Should().BeTrue();
+        Exists(torn).Should().BeTrue();
+    }
+
     [Fact]
     public void NoDirectoryYet_IsNothingToSweep() =>
         new EscalationRetention(new Escalations(Path.Combine(_data, "never")), _ => false).Sweep(Now).Should().Be(0);

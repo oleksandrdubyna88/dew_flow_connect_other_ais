@@ -8,10 +8,11 @@ import {
   shouldPrompt,
   statusBarText,
 } from './escalations';
-import { WatchedDir, answerPaths, usableDirs, watchedDirs } from './escalationDirs';
+import { answerPaths, usableDirs, watchedDirs } from './escalationDirs';
+import { type DirEntry, type JsonDirectoryShape } from './jsonDirectory';
+import { JsonDirectoryWatcher } from './jsonDirectoryWatcher';
 import { notify, notifyAndAsk } from './notify';
 import { askPerson } from './personWait';
-import { POLL_MS, WATCH_DEBOUNCE_MS, debounced, needsPoll } from './debounced';
 
 /** The setting that names other installations' data directories. */
 export const ALSO_WATCH_SETTING = 'coai.alsoWatchDataDirectories';
@@ -28,17 +29,41 @@ export function alsoWatchDataDirectories(): readonly string[] {
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
 }
 
-/** The five-second poll, as a disposable. */
-function polled(tick: () => void): vscode.Disposable {
-  const timer = setInterval(tick, POLL_MS);
-
-  return new vscode.Disposable(() => clearInterval(timer));
-}
-
 /** A thrown thing, as a sentence — the same shape `cliChatLaunch.ts` uses. */
 function asText(reason: unknown): string {
   return reason instanceof Error ? reason.message : String(reason);
 }
+
+/** The question files of a listing whose answer file is not there yet — an answered question is not open. */
+function unanswered(entries: readonly DirEntry[]): readonly string[] {
+  const answered = new Set(entries.map((entry) => entry.name).filter((name) => name.endsWith('.answer.json')));
+
+  return entries
+    .filter((entry) => entry.isFile && entry.name.endsWith('.json') && !entry.name.endsWith('.answer.json') && !entry.name.endsWith('.tmp'))
+    .map((entry) => entry.name)
+    .filter((name) => !answered.has(name.replace(/\.json$/, '.answer.json')));
+}
+
+/**
+ * `<dir>/escalations/*.json` in every watched directory, as the cards are read: the unanswered questions, each TAGGED
+ * with the directory it came from, so its answer goes back beside it rather than into this window's own store, where
+ * the server that asked polls nowhere.
+ *
+ * <p>An EXPIRED question is not open: the server told the AI to ask in the chat when its wait ran out (S3 of the
+ * question consultant, A10), and a card that stayed would be a question two people answer. The file stays for the log;
+ * the sidebar does not draw it. The signature is the whole card, because the card shows nearly all of it — the
+ * consultants' answers arrive under it as their rows settle.</p>
+ */
+export const ESCALATIONS: JsonDirectoryShape<vscode.Uri, Escalation> = {
+  subdir: 'escalations',
+  records: unanswered,
+  // As before the watchers were one: an unreachable named directory shows no cards rather than its last ones.
+  unreadable: 'none',
+  parse: (text, root) => parseEscalation(text, root.fsPath),
+  keep: (one) => isOpenEscalation(one),
+  fileOf: (one) => `${one.id}.json`,
+  signature: (cards) => cards.map((one) => JSON.stringify(one)).sort((a, b) => a.localeCompare(b)).join('\n'),
+};
 
 /**
  * Watches the server's escalation directory and puts the question in front of a person.
@@ -47,124 +72,72 @@ function asText(reason: unknown): string {
  * does not lose it, and the rounds view so it can be read in full. A round is BLOCKED behind this
  * question — a notification that can be missed is the wrong shape for that.</p>
  *
- * <p>The directory may not exist yet (no escalation has ever happened), so the watcher is a
- * glob over the data dir rather than a handle on a folder, and a poll backs it up: a file created
- * by another process on a network or virtualised path does not always raise a watcher event.</p>
+ * <p>The reading is `JsonDirectoryWatcher`'s (S4b item 12) — a glob per watched directory, the 175 ms debounce, the
+ * poll only for a UNC folder, the last good snapshot and the generation guard — over every directory this window
+ * answers for: its own first, then the ones the setting names. <b>Each directory's failures and latency stay its
+ * own</b>: a disconnected NAS, a WSL distribution that is shut down or a typo keeps that directory's last snapshot and
+ * never stops this window's own questions being seen. (codex, the plan and code rounds.)</p>
  */
 export class EscalationWatcher {
   private readonly prompted = new Set<string>();
   private readonly statusItem: vscode.StatusBarItem;
   private readonly disposables: vscode.Disposable[] = [];
-  private open: Escalation[] = [];
+  private readonly records: JsonDirectoryWatcher<Escalation>;
 
-  /** Called after every refresh, so a view can repaint without polling on its own. */
+  /** Called after every refresh that changed what a person sees, so a view can repaint without polling on its own. */
   public onChanged: () => void = () => {};
-
-  /**
-   * Every directory whose questions this window answers — its own first, then what was named.
-   *
-   * <p>Rebuilt whenever the setting changes, because a list read once at activation is a setting that
-   * appears not to work until the window is reloaded. (gemini, the plan round.)</p>
-   */
-  private watchedRoots: readonly vscode.Uri[] = [];
-  /** What was asked for and what came of it, for the panel to render. */
-  private asked: readonly WatchedDir[] = [];
-  /** The per-directory file watchers, torn down and rebuilt when the setting moves. */
-  private readonly watchers: vscode.Disposable[] = [];
-  /**
-   * Every file event of every watched directory, gathered into one refresh within 175 ms
-   * (todo/PLAN_question_consultant.md, A5) — a card written and then rewritten as the consultants' answers
-   * arrive under it is a burst, and the sidebar answers it once.
-   */
-  private readonly changed = debounced(() => void this.refresh(), WATCH_DEBOUNCE_MS);
-  /** The five-second poll, held only while a watched directory is one whose events are not delivered. */
-  private poll: vscode.Disposable | undefined;
 
   constructor(private readonly dataDir: vscode.Uri) {
     this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
     this.statusItem.command = 'coai.showRounds';
     this.statusItem.tooltip = 'A ConnectOtherAIs review is waiting on your answer';
-    this.disposables.push(this.statusItem);
+    this.records = new JsonDirectoryWatcher<Escalation>([], { shape: ESCALATIONS });
+    this.records.onChanged = () => this.changed();
+    this.disposables.push(this.statusItem, this.records);
   }
 
   /** Everything currently unanswered — the rounds view renders these. */
   get openQuestions(): readonly Escalation[] {
-    return this.open;
+    return this.records.items;
   }
 
   start(): void {
-    this.rebuild();
+    this.records.setRoots(this.roots());
     // The setting names other installations' directories, and a list read once at activation is a
-    // setting that appears not to work until the window is reloaded.
+    // setting that appears not to work until the window is reloaded. (gemini, the plan round.)
     this.disposables.push(vscode.workspace.onDidChangeConfiguration((event) => {
       if (event.affectsConfiguration(ALSO_WATCH_SETTING)) {
-        this.rebuild();
-        void this.refresh();
+        this.records.setRoots(this.roots());
       }
     }));
-
-    // The poll is the whole mechanism on a \\wsl.localhost or a network path, where events are not delivered
-    // at all — and since A5 of the question consultant it is held ONLY for those (`rebuild` decides, because
-    // the list of directories moves with the setting). A local directory is watched by its events, debounced.
-    void this.refresh();
   }
 
-  /** Read the setting, work out the list, and put a watcher on each directory that can have one. */
-  private rebuild(): void {
-    for (const watcher of this.watchers.splice(0)) {
-      watcher.dispose();
-    }
-    // FILESYSTEM PATHS on both sides. The own directory used to go in as a URI string while the
-    // setting's values are paths, so `dirKey` compared `file:///c%3A/...` with `C:\...` and the
-    // own directory named again in the setting was watched twice. (gemini and codex, the code round.)
-    this.asked = watchedDirs(this.dataDir.fsPath, alsoWatchDataDirectories(), process.platform);
-    this.watchedRoots = usableDirs(this.asked).map((dir) => vscode.Uri.file(dir));
-
-    for (const root of this.watchedRoots) {
-      // Each in its own try: a path that cannot be watched — a distribution that is not running, a
-      // share that is not mounted — must not stop the others being watched, this window's own above
-      // all. The poll still reaches it if it comes back.
-      try {
-        const watcher = vscode.workspace.createFileSystemWatcher(
-          new vscode.RelativePattern(root, 'escalations/*.json'),
-        );
-        this.watchers.push(
-          watcher,
-          watcher.onDidCreate(this.changed),
-          watcher.onDidChange(this.changed),
-          watcher.onDidDelete(this.changed),
-        );
-      } catch {
-        // Watched by the poll alone from here. Nothing is lost but the immediacy.
-      }
-    }
-    this.repoll();
-    // NOT a disposable pushed per rebuild: `rebuild` runs on every change to the setting, and each
-    // run would add another teardown to a list nothing empties — a leak that grows with how often
-    // somebody edits their settings. `dispose()` drains `this.watchers` directly instead. (gemini,
-    // the code round, Blocking.)
-  }
-
-  /** The poll, held again only if a directory now watched is one whose events are not delivered. */
-  private repoll(): void {
-    this.poll?.dispose();
-    this.poll = needsPoll(this.watchedRoots.map((root) => root.fsPath)) ? polled(() => void this.refresh()) : undefined;
+  /**
+   * Every directory whose questions this window answers — its own first, then what was named.
+   *
+   * <p>FILESYSTEM PATHS on both sides. The own directory used to go in as a URI string while the
+   * setting's values are paths, so `dirKey` compared `file:///c%3A/...` with `C:\...` and the
+   * own directory named again in the setting was watched twice. (gemini and codex, the code round.)</p>
+   */
+  private roots(): readonly vscode.Uri[] {
+    return usableDirs(watchedDirs(this.dataDir.fsPath, alsoWatchDataDirectories(), process.platform)).map((dir) => vscode.Uri.file(dir));
   }
 
   dispose(): void {
-    for (const watcher of this.watchers.splice(0)) {
-      watcher.dispose();
-    }
-    this.changed.cancel();
-    this.poll?.dispose();
     for (const d of this.disposables) {
       d.dispose();
     }
   }
 
+  /** Reads every watched directory again — after an answer is written, so its card leaves at once. */
   async refresh(): Promise<void> {
-    this.open = await this.readOpen();
-    const text = statusBarText(this.open.length);
+    await this.records.refresh();
+  }
+
+  /** What a person sees moved: the status bar, the views, and a modal for a question nobody was prompted with yet. */
+  private changed(): void {
+    const open = this.records.items;
+    const text = statusBarText(open.length);
     if (text.length === 0) {
       this.statusItem.hide();
     } else {
@@ -174,7 +147,7 @@ export class EscalationWatcher {
 
     this.onChanged();
 
-    for (const escalation of this.open) {
+    for (const escalation of open) {
       if (shouldPrompt(escalation.id, this.prompted, false)) {
         this.prompted.add(escalation.id);
         void this.prompt(escalation);
@@ -315,26 +288,6 @@ export class EscalationWatcher {
     await this.refresh();
   }
 
-  /**
-   * Every question whose answer file is not there yet, from every directory being watched.
-   *
-   * <p><b>Each directory is read on its own and its failures stay inside it.</b> A disconnected NAS,
-   * a WSL distribution that is shut down, a path with a typo: any of them throws on read, and one
-   * unhandled throw would stop the questions from THIS window's own directory being seen — turning a
-   * setting that adds a directory into a setting that silences the feature. (codex, the plan round.)
-   * </p>
-   */
-  private async readOpen(): Promise<Escalation[]> {
-    // IN PARALLEL, and settled rather than awaited in turn. A disconnected share does not fail fast:
-    // it hangs until the operating system gives up, and read one after another that hang is this
-    // window's OWN questions waiting behind somebody else's unplugged NAS — on a five-second poll,
-    // for ever. Each directory's failures were already its own; this makes its latency its own too.
-    // (codex, the code round.)
-    const each = await Promise.allSettled(this.watchedRoots.map((root) => this.readOpenIn(root)));
-
-    return each.flatMap((one) => (one.status === 'fulfilled' ? one.value : []));
-  }
-
   /** Whether an answer is already sitting there. A read that throws is "no answer", not a crash. */
   private async answered(target: vscode.Uri): Promise<boolean> {
     try {
@@ -344,39 +297,5 @@ export class EscalationWatcher {
     } catch {
       return false;
     }
-  }
-
-  /** The questions in ONE directory, tagged with where they came from. */
-  private async readOpenIn(root: vscode.Uri): Promise<Escalation[]> {
-    const dir = vscode.Uri.joinPath(root, 'escalations');
-    const found: Escalation[] = [];
-    try {
-      const entries = await vscode.workspace.fs.readDirectory(dir);
-      const names = entries
-        .filter(([name, kind]) => kind === vscode.FileType.File && name.endsWith('.json') && !name.endsWith('.answer.json') && !name.endsWith('.tmp'))
-        .map(([name]) => name);
-      const answered = new Set(entries.map(([name]) => name).filter((n) => n.endsWith('.answer.json')));
-
-      for (const name of names) {
-        if (answered.has(name.replace(/\.json$/, '.answer.json'))) {
-          continue;
-        }
-        const bytes = await vscode.workspace.fs.readFile(vscode.Uri.joinPath(dir, name));
-        // TAGGED with the directory it came from, so its answer goes back beside it rather than into
-        // this window's own store, where the server that asked polls nowhere.
-        const escalation = parseEscalation(new TextDecoder().decode(bytes), root.fsPath);
-        // An EXPIRED question is not open: the server told the AI to ask in the chat when its wait ran
-        // out (S3 of the question consultant, A10), and a card that stayed would be a question two
-        // people answer. The file stays for the log; the sidebar does not draw it.
-        if (escalation !== undefined && isOpenEscalation(escalation)) {
-          found.push(escalation);
-        }
-      }
-    } catch {
-      // No escalations directory yet — nothing has ever been asked — or a directory somebody named
-      // that is not reachable from here. Neither is this window's problem to throw about; the panel
-      // is where an unreadable directory is reported.
-    }
-    return found;
   }
 }

@@ -260,7 +260,8 @@ export const DEFAULTS: CoaiSettings = {
   reviewerTimeoutMinutes: 10,
   roundTimeoutMinutes: 0,
   credsKey: '',
-  escalationMinutes: 30,
+  // The server's own `PanelSettings.DefaultEscalationMinutes` (15 since S3, A10) — held level by a test that reads the C#.
+  escalationMinutes: 15,
   promptsPerRound: {},
   dealPlanLenses: false,
   dealCodeLenses: false,

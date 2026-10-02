@@ -170,9 +170,8 @@ public sealed class QuestionPhaseStore(string dataDir)
         // The directory, here and not only in Count: the first thing written under a key can be the release stamp
         // Observe makes — found by the after-the-release test, red with DirectoryNotFoundException.
         System.IO.Directory.CreateDirectory(Path.GetDirectoryName(file)!);
-        var temp = file + ".tmp";
-        File.WriteAllText(temp, JsonSerializer.Serialize(state, QuestionPhaseJsonContext.Default.QuestionPhaseState));
-        File.Move(temp, file, overwrite: true);
+        // Under the turn the caller already holds (Observe, Count) — never AtomicJson.Write, which would take it again.
+        AtomicJson.WriteUnderTurn(file, JsonSerializer.Serialize(state, QuestionPhaseJsonContext.Default.QuestionPhaseState));
     }
 
     private static bool Deleted(string file)

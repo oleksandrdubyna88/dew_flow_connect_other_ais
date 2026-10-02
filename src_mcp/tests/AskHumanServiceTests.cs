@@ -192,6 +192,67 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
         again.GetProperty("error").GetString().Should().Contain("already", "D14 (a): single use");
     }
 
+    /// <summary>
+    /// S4b item 8: single use must hold for two calls IN FLIGHT at once, not only for one after another. Both calls
+    /// here verify the consultId before either posts: the gate is held, so each records its question on the session,
+    /// and the test holds the session's claim — both wait there, past their verification, before any card is written.
+    /// The proof was spent only AFTER the card, so both went through.
+    /// </summary>
+    [Fact]
+    public async Task TwoAskHumanCallsInFlightWithOneConsultId_OnlyOneGoesThrough()
+    {
+        var h = Build();
+        h.Sessions.Save(new PersistedSession(
+            new SessionState("s-1", _repo.Path, "main", PanelConfig.Uniform(3, 2)) { PlanProceeded = true, HumanGate = true, Stage = Stage.CodeReview }, []));
+        await Ask(h);
+        await Ask(h);
+        var consultId = await Consulted(h);
+
+        JsonElement[] replies;
+        using (SessionClaim.TryTake(_data, _repo.Path, "main") ?? throw new InvalidOperationException("the test could not hold the session's claim"))
+        {
+            replies = await Task.WhenAll(
+                Task.Run(() => Ask(h, Question + " (first)", consultId, false, string.Empty), TestContext.Current.CancellationToken),
+                Task.Run(() => Ask(h, Question + " (second)", consultId, false, string.Empty), TestContext.Current.CancellationToken));
+        }
+
+        replies.Count(r => r.TryGetProperty("status", out _)).Should().Be(1, $"one consultation opens the door ONCE: {string.Join(" | ", replies.Select(r => r.ToString()))}");
+        replies.Count(r => r.TryGetProperty("error", out var e) && e.GetString()!.Contains("already", StringComparison.Ordinal)).Should().Be(1, "the other is refused as already used");
+        TheCards(h).Count(card => card.ConsultId == consultId).Should().Be(1, "one card follows the consultation");
+        var spent = h.Questions.Store.Read(consultId)!;
+        TheCards(h).Should().Contain(card => card.Id == spent.EscalationId && card.ConsultId == consultId, "the record names the card that spent it");
+    }
+
+    /// <summary>
+    /// S4b item 8, the other half: the proof is spent BEFORE the card is posted, so a post that fails must give it back —
+    /// otherwise a disk hiccup would burn a consultation the person never saw a card for.
+    /// </summary>
+    [Fact]
+    public async Task AConsultIdWhoseCardCouldNotBePosted_IsGivenBack_AndOpensTheDoorAfterwards()
+    {
+        var h = Build();
+        Proceeded(h);
+        await Ask(h);
+        await Ask(h);
+        var consultId = await Consulted(h);
+        var cards = h.Escalations.Directory;
+        Directory.Move(cards, cards + ".aside");
+        File.WriteAllText(cards, "a file where the cards' directory must be: the card cannot be written");
+
+        var lost = async () => await Ask(h, Question + " (lost)", consultId, false, string.Empty);
+
+        await lost.Should().ThrowAsync<IOException>("the post failed, and the caller is told");
+        var record = h.Questions.Store.Read(consultId)!;
+        record.EscalationId.Should().BeEmpty("a card never posted spent nothing");
+        record.Outcome.Should().Be(QuestionOutcomes.AnsweredByConsultants, "the record is as it was before the spend");
+
+        File.Delete(cards);
+        Directory.Move(cards + ".aside", cards);
+        var opened = await Ask(h, Question + " (again)", consultId, false, string.Empty);
+        opened.GetProperty("status").GetString().Should().Be("no_answer_yet", opened.ToString());
+        h.Questions.Store.Read(consultId)!.EscalationId.Should().NotBeEmpty("the proof opened the door the second time");
+    }
+
     private IReadOnlyList<EscalationQuestion> TheCards(Harness h) =>
         [.. Directory.GetFiles(h.Escalations.Directory, "*.json").Where(f => !f.EndsWith(".answer.json"))
             .Select(f => h.Escalations.Read(Path.GetFileNameWithoutExtension(f))!)];

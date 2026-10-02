@@ -1,7 +1,7 @@
 import { escapeHtml } from './escapeHtml';
 import type { Escalation, EscalationAdvice } from './escalations';
 import { questionHtml } from './questionLayout';
-import { CONSULTING, type QuestionConsult, type QuestionConsultRow } from './questionConsults';
+import { CONSULTING, INTERRUPTED, type QuestionConsult, type QuestionConsultRow } from './questionConsults';
 import { shortDuration } from './usage';
 
 /**
@@ -20,10 +20,12 @@ import { shortDuration } from './usage';
  */
 export function activeQuestionsBody(cards: readonly Escalation[], records: readonly QuestionConsult[], nowMs: number): string {
   const bound = new Set(cards.flatMap((card) => boundRecords(card, records).map((one) => one.id)));
-  const consulting = records
-    .filter((one) => one.status === CONSULTING && !bound.has(one.id))
+  const unbound = (status: string): readonly QuestionConsult[] => records
+    .filter((one) => one.status === status && !bound.has(one.id))
     .sort((a, b) => b.startedUtc.localeCompare(a.startedUtc));
-  if (cards.length === 0 && consulting.length === 0) {
+  const consulting = unbound(CONSULTING);
+  const interrupted = unbound(INTERRUPTED);
+  if (cards.length === 0 && consulting.length === 0 && interrupted.length === 0) {
     return '';
   }
 
@@ -31,6 +33,9 @@ export function activeQuestionsBody(cards: readonly Escalation[], records: reado
     '<h2>Active questions</h2>',
     stage('Consulting', consulting.map((one) => consultingCard(one, nowMs))),
     stage('A question is waiting on you', cards.map((card) => waitingCard(card, records, nowMs))),
+    // S4b item 9: a question whose server stopped answering — swept by it, or shown so by a silent heartbeat — is
+    // terminal here rather than spinning for ever; the watcher keeps it the window a finished one is kept.
+    stage('Interrupted — its server stopped answering', interrupted.map((one) => consultingCard(one, nowMs))),
   ].filter((part) => part.length > 0).join('\n');
 }
 
@@ -148,6 +153,7 @@ const CHIP_CLASS: Readonly<Record<string, string>> = {
   failed: ' stopped',
   refused: ' stopped',
   blocked: ' stopped',
+  interrupted: ' stopped',
 };
 
 function who(vendor: string, model: string): string {

@@ -141,7 +141,7 @@ public sealed class QuestionConsultService(
         return peeked.Allowed ? string.Empty : $"this caller session has asked the consultants {peeked.Used} questions, the cap ({QuestionConsultKeys.QuestionsPerSession} = {options.QuestionsPerSession})";
     }
 
-    public int Sweep(Func<int, bool> isAlive) => _store.Sweep(isAlive, DateTime.UtcNow);
+    public int Sweep(Func<int, bool> isAlive) => _store.Sweep(isAlive, DateTime.UtcNow, settings.QuestionConsult.RowBudget);
 
     /// <summary>Re-projects every record the store still holds — the consultation service's reason: the projection is allowed to fail, and a terminal record is never written again.</summary>
     public int Reproject()
