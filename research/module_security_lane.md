@@ -7,11 +7,15 @@ cannot compensate for ordinary reviewers that failed to answer.
 ```mermaid
 flowchart LR
   settings[Validated pairings] --> roster[SecurityRoster]
-  git[Committed diff and pinned source] --> signals[SecuritySignals]
+  diff[Committed diff] --> signals[SecuritySignals]
   signals --> roster
-  roster --> context[Bounded fenced context]
+  pinned[Pinned commit] --> sources[SecuritySources]
+  signals --> sources
+  sources --> context[SecurityContext: bounded fenced context]
+  roster --> context
   context --> scheduler[Existing scheduler and runtime]
-  scheduler --> evidence[Reproduction cap]
+  scheduler --> limit[SecurityAnswerLimit: refuse malformed or oversized answers]
+  limit --> evidence[SecurityEvidence: reproduction cap]
   evidence --> merge[Ordinary findings first]
   merge --> gate[Role and lane thresholds]
   gate --> history[Session and SQLite history]
@@ -122,8 +126,8 @@ There are at most 32 prompt definitions and 16 pairs, with at most ten rounds. T
 rounds and threshold zero; these remain conservative settings, not a claim of calibrated quality.
 Scratch cleanup reuses the existing round cleanup. History is retained indefinitely in the operator's
 data directory without automatic pruning or a disk quota; its owner handles backups and removal.
-Aggregate reproduction caps limit each round's additional payload. See the design's growth
-table for the computed worst case.
+Aggregate reproduction caps limit each round's additional payload. See the growth table in
+[the design plan](../todo/PLAN_a_security_lane_runs_beside_the_gate.md) for the computed worst case.
 
 `SecurityLaneRoundTests` drives the real engine, Git and SQLite with paid reviewers doubled.
 `SecurityEvidenceTests`, `SecurityLaneSettingsTests` and `SecurityCoverageTests` cover caps, routing,
