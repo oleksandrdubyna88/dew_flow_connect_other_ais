@@ -177,6 +177,72 @@ public sealed class QuestionConsultProjectionTests : IDisposable
         return records.Count;
     }
 
+    // ---------- S4: what --log hands the Logs page's Questions tab ----------
+
+    [Fact]
+    public void TheLog_ListsEachQuestionOnce_WithEveryModelRowUnderIt_AndTheOutcome()
+    {
+        var record = Record();
+        var store = Store();
+        var answered = record.WithRow(record.Rows[0] with { Status = RowOutcomes.Answered, Advice = "Use a ladder.", Seconds = 12.5, CostUsd = 0.02 });
+        store.Write(answered with { Status = QuestionConsultStatuses.Partial, Outcome = QuestionOutcomes.PersonAsked, EscalationId = "esc-1", EndedUtc = DateTime.UtcNow.ToString("O") });
+
+        var listed = RoundsQuery.Read(_dir).QuestionConsults;
+
+        var question = listed.Should().ContainSingle("one row per question, never one per state it passed through").Subject;
+        question.Asked.Question.Should().Be("Which retry shape?");
+        question.Asked.Outcome.Should().Be(QuestionOutcomes.PersonAsked, "the tab's what-happened-next column");
+        question.Asked.EscalationId.Should().Be("esc-1");
+        question.Answers.Select(a => a.RowId).Should().Equal("astra-web", "grok");
+        var web = question.Answers[0];
+        web.Advice.Should().Be("Use a ladder.");
+        web.Flag.Should().Be("unconfined", "D13's flag reaches the log beside the answer it produced");
+        web.CostUsd.Should().Be(0.02);
+        question.Answers[1].CostUsd.Should().BeNull("an unpriced row is a blank, never a zero");
+    }
+
+    [Fact]
+    public void TheLogCutsEachRowsAdvice_SoAHundredQuestionsAreNotNineteenMegabytes()
+    {
+        var record = Record();
+        Store().Write(record.WithRow(record.Rows[0] with { Status = RowOutcomes.Answered, Advice = new string('a', QuestionConsultLog.AdviceShown * 3) }));
+
+        RoundsQuery.Read(_dir).QuestionConsults.Single().Answers[0].Advice.Length.Should().Be(QuestionConsultLog.AdviceShown);
+    }
+
+    [Fact]
+    public void ADatabaseWithoutTheQuestionTables_ReadsAsNoQuestions_AndTheRestOfTheLogStillAnswers()
+    {
+        Directory.CreateDirectory(_dir);
+        using (var db = new SqliteConnection($"Data Source={Database};Pooling=False"))
+        {
+            db.Open();
+            using var make = db.CreateCommand();
+            var creates = Array.FindIndex(Schema.Steps, step => step.Contains("question_consults", StringComparison.Ordinal));
+            make.CommandText = string.Join("\n", Schema.Steps.Take(creates));
+            make.ExecuteNonQuery();
+        }
+
+        var log = RoundsQuery.Read(_dir);
+
+        log.QuestionConsults.Should().BeEmpty("an older binary's database has no question tables — an empty tab, not an error");
+        log.Totals.Should().NotBeNull();
+    }
+
+    [Fact]
+    public void TheLogsWireCarriesTheQuestions_UnderTheKeyTheExtensionReads()
+    {
+        var record = Record();
+        Store().Write(record);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(RoundsQuery.Read(_dir), ServerJsonContext.Default.LoggedLog);
+
+        using var parsed = System.Text.Json.JsonDocument.Parse(json);
+        var first = parsed.RootElement.GetProperty("questionConsults")[0];
+        first.GetProperty("asked").GetProperty("id").GetString().Should().Be(record.Id);
+        first.GetProperty("answers")[0].GetProperty("rowId").GetString().Should().Be("astra-web");
+    }
+
     [Fact]
     public void AWriterThatThrows_IsSwallowedByTheProjection_SoAQuestionNeverFailsOverItsView()
     {

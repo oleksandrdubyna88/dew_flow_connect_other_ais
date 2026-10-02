@@ -196,6 +196,9 @@ public sealed record LoggedLog(
     /// </summary>
     public IReadOnlyList<LoggedConsultation> Consultations { get; init; } = [];
 
+    /// <summary>The questions put to the question consultant, newest first — defaulted for the same promise (S4).</summary>
+    public IReadOnlyList<LoggedQuestion> QuestionConsults { get; init; } = [];
+
     /// <summary>
     /// The instant the blind spots and the defended list were counted from, or empty for all time.
     /// </summary>
@@ -416,6 +419,7 @@ public static class RoundsQuery
             Totals(db))
         {
             Consultations = Consultations(db, Math.Clamp(limit, 1, MaxLimit)),
+            QuestionConsults = QuestionConsultLog.Read(db),
             // The echo is the proof it was applied: a coai-mcp 0.36.0 given `--since` was measured to
             // ignore it and answer all time with exit 0, so nothing else could tell the two apart.
             Since = since,
