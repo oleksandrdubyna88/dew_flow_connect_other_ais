@@ -1,5 +1,24 @@
 # Changelog
 
+## Extension 0.61.0 — 2026-10-02
+
+**A long list can be searched.** Any dropdown in the panel or the Settings tab with fifteen or more choices — the two
+hundred models an OpenRouter reviewer lists after ≡, for one — now has a search box above it. Type part of a name and
+the list narrows to what matches, names that start with what you typed first, then names where a part does. Several
+words must all match. Enter picks the first match, Escape puts the whole list back, ↓ moves into the list, and the
+search and the cursor survive the panel redrawing itself. The model you have chosen stays in the list while you search.
+
+**An action that takes time says so.** A setting you changed, a prompt you chose or a button you pressed that the
+extension has not finished within half a second now shows a thin progress bar at the top of the panel and marks the
+control you used, until the work and the redraw it causes are done. A quick change shows nothing at all. The bar
+carries over when the panel redraws itself mid-action, and is gone when nothing is running. While a command waits on
+you in an input box, the bar shows too.
+
+**A reviewer on another endpoint with no model says so.** Its empty choice now reads *"no model yet — press ≡ and pick
+one this endpoint lists"* instead of *"the CLI's default"*: with no model, the Codex CLI sends its own model name, which
+OpenRouter and its like do not serve. **Vendor keys** now names every reviewer that needs a key from the vault,
+including a switched-off one (by the key name it reads), and no longer asks a local engine for a key.
+
 ## Extension 0.60.2 — 2026-10-01
 
 **A reviewer on someone else's endpoint offers that endpoint's models.** A reviewer pointed at OpenRouter, or at any
