@@ -3,7 +3,7 @@ import { test } from 'node:test';
 
 import { CUSTOM_ENDPOINT } from '../consultSettings';
 import { type PanelFocus } from '../panelView';
-import { type Control, type Page, lastWrite, panelState, runPanel } from './panelPageHarness';
+import { type Control, type Page, lastWrite, panelState, runPanel, work } from './panelPageHarness';
 
 /**
  * The Consultant section's controls, RUN — the page's own script over the page's own markup.
@@ -109,7 +109,7 @@ test('choosing the custom endpoint asks the HOST, for THAT caller, and writes no
 
   assert.deepEqual(page.posted.filter((one) => one['type'] === 'setting'), [],
     'the sentinel must never be stored — it is a request for a name, not a vendor');
-  assert.deepEqual(page.posted.filter((one) => one['type'] === 'command'),
+  assert.deepEqual(work(page).filter((one) => one['type'] === 'command'),
     [{ type: 'command', command: 'customConsultant', id: 'codex' }],
     'four rows share this control, so a command with no caller configures whichever the document holds first');
   assert.equal(picker.value, before,

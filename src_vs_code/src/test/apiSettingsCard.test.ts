@@ -8,7 +8,7 @@ import { NO_NOTES, type ProviderHealth } from '../providers';
 import { settingMessageFrom, settingWrite } from '../settingsShape';
 import { DEFAULT_VENDORS, Vendor } from '../vendors';
 import { GENERIC_ANSWER, QWEN_ANSWER, XAI_ANSWER } from './apiReportFixtures';
-import { click, lastWrite, panelState, runPanel, type Control, type Page } from './panelPageHarness';
+import { click, lastWrite, panelState, runPanel, work, type Control, type Page } from './panelPageHarness';
 
 /**
  * The per-model settings on an `api` card, RUN (story S3.8 of `todo/PLAN_feature_review.md`, the extension
@@ -163,7 +163,7 @@ test('each value the row set has a reset, and a click asks the host to clear exa
 
   assert.deepEqual(resets, ['qwen:effort', 'qwen:reviewMinutes'], 'a reset is offered for a value the row never set, or missing for one it did');
   click(panel, 'resetApiSetting', 'qwen:effort');
-  assert.deepEqual(panel.posted.at(-1), { type: 'command', command: 'resetApiSetting', id: 'qwen:effort' });
+  assert.deepEqual(work(panel).at(-1), { type: 'command', command: 'resetApiSetting', id: 'qwen:effort' });
 });
 
 test('after a reset the row holds nothing and the dropdown shows the calibrated default again', () => {

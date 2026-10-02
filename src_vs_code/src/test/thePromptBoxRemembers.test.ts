@@ -8,6 +8,7 @@ import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { ChatSettings } from '../chatSettings';
+import { withoutSeq } from './panelPageHarness';
 
 /**
  * What is typed into *What to ask about the selection* stays typed.
@@ -223,8 +224,9 @@ const promptBox = (): FakeElement => new FakeElement('TEXTAREA', { setting: 'cha
 const languagePicker = (): FakeElement => new FakeElement('SELECT', { setting: 'chatLanguage' }, 'en');
 /** Two controls that share a setting name and are told apart only by their role. */
 const roundsFor = (role: string): FakeElement => new FakeElement('INPUT', { setting: 'rounds', role }, '2', 'number');
+/** The writes, each checked for and stripped of its sequence number (`withoutSeq`, the busy mark's numbering). */
 const settings = (page: Page): Record<string, unknown>[] =>
-  page.posted.filter((message) => message.type === 'setting');
+  page.posted.filter((message) => message.type === 'setting').map(withoutSeq);
 const focusMessages = (page: Page): Record<string, unknown>[] =>
   page.posted.filter((message) => message.type === 'focus');
 
@@ -304,7 +306,10 @@ test('leaving the box writes what was typed, before it says the box is free', ()
   page.fire(0, 'input');
   page.fire(0, 'focusout', { relatedTarget: null });
 
-  const order = page.posted.map((message) => `${String(message.type)}:${String(message.value ?? message.editing)}`);
+  // `ready` is the page announcing it loaded (busyMark.ts) — before any of this, and not part of the order guarded here.
+  const order = page.posted
+    .filter((message) => message.type !== 'ready')
+    .map((message) => `${String(message.type)}:${String(message.value ?? message.editing)}`);
   assert.deepEqual(order, ['focus:true', 'setting:поясни', 'focus:false'],
     'the value must be written before the panel is told it may repaint');
 });
@@ -450,8 +455,9 @@ test('the hold is not renewed by moving between controls, and disposal forgets i
   assert.match(source, /onDidDispose\(\(\) => \{ this\.sidebar\.detach\(view\); \}\)/,
     'a sidebar closed mid-sentence leaves the host believing a control is still being edited');
   // The wait itself moved into `WriteQueue` and is RUN in `snapBackQueue.test.ts` — a write appended while
-  // it waited is waited for too. What stays read here is only that render is the one that waits.
-  assert.match(source, /async render\(\): Promise<void> \{[\s\S]{0,900}await this\.writes\.settled\(\);/,
+  // it waited is waited for too. What stays read here is only that render is the one that waits — in `renderNow`, the
+  // body every counted `render()` call runs (renderTracker.ts, research/PLAN_model_search_and_busy_marks.md §3.14).
+  assert.match(source, /async renderNow\(number: number\): Promise<void> \{[\s\S]{0,900}await this\.writes\.settled\(\);/,
     'render no longer waits for the write queue, so it paints a configuration it has not finished writing');
 });
 

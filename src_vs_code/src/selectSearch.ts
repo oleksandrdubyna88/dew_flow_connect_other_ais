@@ -2,7 +2,7 @@ import { jsonForScript } from './webviewHtml';
 
 /**
  * The search box over a long list: one pure ranking, and the page fragment that attaches a box to every select long
- * enough to need one (todo/PLAN_model_search_and_busy_marks.md, Epic 2).
+ * enough to need one (research/PLAN_model_search_and_busy_marks.md, Epic 2).
  *
  * <p><b>Why a box beside the select, not a datalist.</b> A datalist filters by the value already in its field, so the
  * moment a model was chosen every other one vanished (`modelOptions` in `panelView.ts` records it). The select stays

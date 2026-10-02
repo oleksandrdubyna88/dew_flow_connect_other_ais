@@ -1245,7 +1245,7 @@ test('the Settings tab bundles without the host, and the shipped page switches a
 });
 
 test('the panel page bundles with its list search ranking embedded whole, and the minified text ranks as the source does', async () => {
-  // The search box over a long model list (todo/PLAN_model_search_and_busy_marks.md, Epic 2) embeds `rankChoices` by
+  // The search box over a long model list (research/PLAN_model_search_and_busy_marks.md, Epic 2) embeds `rankChoices` by
   // its SOURCE TEXT, exactly as the rounds log embeds `rowMatches` — the 0.29.10 defect is a renamed helper inside it.
   const bundle = bundleOf('panelView.ts', 'settingsHtml');
   const shim = { exports: {} as Record<string, unknown> };

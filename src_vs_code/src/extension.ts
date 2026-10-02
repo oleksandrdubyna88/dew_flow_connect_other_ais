@@ -238,6 +238,8 @@ export function activate(context: vscode.ExtensionContext): void {
       mirrorSettings(mirroring);
     }
   });
+  // Whatever a page is still waiting on is settled as not done when the window goes away (inFlight.ts).
+  context.subscriptions.push({ dispose: () => { panel.dispose(); } });
   // The panel repaints whenever the watcher's state moves, so a question answered in the modal
   // disappears from the sidebar without anyone asking it to.
   watcher.onChanged = () => {
