@@ -106,9 +106,12 @@ passed the empty-answer feature-slice preflight, but positive-finding fidelity r
 [the consolidated measurement record](RESULTS_security_lane_local_llm_windows.md).
 
 The extension's Security lane section controls pairings, triggers, focus, source mode, token budget,
-stages, threshold and rounds. A reviewer can be enabled for security alone. A malformed imported
-setting is preserved under `invalidConfiguration`, displayed as an error and kept disabled;
-correct that preserved object in settings JSON and replace `coai.securityLane` with it.
+stages, threshold and rounds. A reviewer can be enabled for security alone. Every known member,
+including each pair's `context` (slice|diff), `contextTokens` (1024..200000) and `stages`
+(code/feature), is validated where the setting is read; a malformed value turns the lane off and
+the tab names the malformed part of `coai.securityLane` in settings JSON. The panel never saves
+over a malformed setting. The extension still sends it switched off, with the stored value under
+`invalidConfiguration`, so the server reports the refusal.
 Missing/disabled reviewers, missing prompt ids and presets without triggers carry visible repair
 instructions. Source collection only uses the focus tags of selected, triggered slice pairings;
 unchecked modules cannot consume their sixteen-file source budget.
@@ -131,8 +134,13 @@ Aggregate reproduction caps limit each round's additional payload. See the growt
 
 `SecurityLaneRoundTests` drives the real engine, Git and SQLite with paid reviewers doubled.
 `SecurityEvidenceTests`, `SecurityLaneSettingsTests` and `SecurityCoverageTests` cover caps, routing,
-validation, deadline and ordinary-failure independence. `securityLane.test.ts` executes the real
-page and sends its serialized settings to the built server. The explicit local calibration test
+validation, deadline and ordinary-failure independence. `securityLane.test.ts` and
+`securityLaneMalformed.test.ts` run the page; the eighth leg of `npm run test:seam`
+(`scripts/seam-security.mjs`) sends the extension-serialized lane to the built server (positive
+control, unknown trigger refused, malformed lane refused). `securityEvidenceLog.test.ts` covers
+evidence parsing and its escaped disclosure in the rounds log.
+`SecurityEvidenceOnAnOlderDatabaseTests` reads a history without the evidence column, and a damaged
+projection, through the read-only queries. The explicit local calibration test
 is described in [module_tests.md](module_tests.md); it measures model behavior separately from
 these deterministic guarantees.
 `SecuritySessionCompatibilityTests` loads pre-lane finding shapes through the real `SessionStore`
