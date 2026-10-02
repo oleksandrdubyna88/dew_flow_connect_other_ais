@@ -93,8 +93,14 @@ public sealed class RolePrompts(string dataDir)
     /// the real text — and for a shipped prompt the way to go back is deleting the file, which this
     /// now treats an empty one as. (Found beside the same defect in <see cref="Has"/>.)
     /// </remarks>
-    private string Text(string promptId) =>
-        Override(promptId) is var text && !string.IsNullOrWhiteSpace(text) ? text : Embedded(FileOf(promptId));
+    private string Text(string promptId, bool optional = false) =>
+        Override(promptId) is var text && !string.IsNullOrWhiteSpace(text) ? text : Embedded(FileOf(promptId), optional);
+
+    /// <summary>
+    /// <see cref="For"/> for a prompt the binary may not ship — a person's own security prompt —
+    /// answering empty instead of throwing when there is neither an override with text nor shipped text.
+    /// </summary>
+    public string ForOptional(string promptId) => Text(promptId, optional: true);
 
     /// <summary>
     /// The one place a prompt id becomes a file name — read, write and restore alike.

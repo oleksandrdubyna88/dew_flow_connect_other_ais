@@ -12,7 +12,6 @@ public static class SecurityContext
 {
     public const int ResponseReserve = 8192;
     public const int MaxPromptBytes = 65536;
-    private const string Slice = "slice";
 
     public static SecurityPack Compose(string body, SecurityPrompt prompt, IReadOnlyList<SecurityFile> files,
         string mode, SecurityContextBudget limits, IReadOnlyDictionary<string, string>? sources = null)
@@ -21,9 +20,8 @@ public static class SecurityContext
         var reserve = (long)Math.Max(ResponseReserve, limits.ResponseTokens) * 4;
         var budget = (long)limits.Tokens * 4 - Encoding.UTF8.GetByteCount(instruction) - reserve - 4096;
         if (budget <= 0) return new(string.Empty, "instructions and response reserve exceed the context budget", []);
-        var ranked = mode == Slice ? files.OrderBy(f => f.SupportingMaterial)
-            .ThenByDescending(f => f.Signals.Intersect(prompt.Focus).Count()) : files.AsEnumerable();
-        var material = Collect(ranked, sources, mode == Slice, budget, limits.ExcludedFiles);
+        var ranked = mode == SecurityContextModes.Slice ? SecuritySignals.Rank(files, prompt.Focus) : files.AsEnumerable();
+        var material = Collect(ranked, sources, mode == SecurityContextModes.Slice, budget, limits.ExcludedFiles);
         if (material.Text.Length == 0) return material with
         {
             Refusal = files.Any(f => f.DetectionIncomplete)
@@ -42,7 +40,7 @@ public static class SecurityContext
             + "For such material, identify its consuming implementation and concrete data flow before alleging an application vulnerability. "
             + "Do not invent endpoints, tenants or executed reproductions.\nReturn only JSON matching this schema. "
             + "Use status SECURE with an empty findings list, or FINDINGS with one or more findings. "
-            + "Every finding requires trigger, mechanism and consequence evidence (8000 characters total). "
+            + $"Every finding requires trigger, mechanism and consequence evidence (at most {AttackEvidence.MaxFieldCharacters} characters each). "
             + "Provide reproduction when supported; otherwise use null. Never execute reproduction steps.\n" + SecuritySchema.Json;
 
     private static SecurityPack Collect(IEnumerable<SecurityFile> files, IReadOnlyDictionary<string, string>? sources,
@@ -59,17 +57,40 @@ public static class SecurityContext
                 omitted.Add(WithheldLabel(file, label));
                 continue;
             }
-            if (budget <= 0) { omitted.Add(label); continue; }
             var source = sources?.GetValueOrDefault(file.Diff.Path, string.Empty) ?? string.Empty;
-            var entry = Entry(file, source, slice);
-            var bytes = Encoding.UTF8.GetByteCount(entry);
-            if (bytes > budget) { omitted.Add(label); continue; }
-            text.Append(entry);
-            budget -= bytes;
-            if (slice && source.Length == 0) omitted.Add(label + " (source body unavailable; patch only)");
+            var placed = Place(file, source, slice, budget);
+            if (placed.Text.Length == 0) { omitted.Add(label); continue; }
+            text.Append(placed.Text);
+            budget -= Encoding.UTF8.GetByteCount(placed.Text);
+            if (placed.Note.Length > 0) omitted.Add(label + placed.Note);
         }
         return new(text.ToString(), string.Empty, omitted);
     }
+
+    /// <summary>One file's entry as it fits — whole, or (for a slice) its patch without the source.</summary>
+    private sealed record Placed(string Text, string Note);
+
+    private static readonly Placed Nothing = new(string.Empty, string.Empty);
+
+    private static Placed Place(SecurityFile file, string source, bool slice, long budget)
+    {
+        var whole = Entry(file, source, slice);
+        return Fits(whole, budget)
+            ? new(whole, slice && source.Length == 0 ? " (source body unavailable; patch only)" : string.Empty)
+            : PatchOnly(file, source, slice, budget);
+    }
+
+    // The patch is the change under review and the source only frames it: a source window too large
+    // for the budget must not take the patch out with it.
+    private static Placed PatchOnly(SecurityFile file, string source, bool slice, long budget)
+    {
+        var patch = Entry(file, string.Empty, slice: false);
+        return slice && source.Length > 0 && Fits(patch, budget)
+            ? new(patch, " (source omitted for budget; patch only)")
+            : Nothing;
+    }
+
+    private static bool Fits(string entry, long budget) => Encoding.UTF8.GetByteCount(entry) <= budget;
 
     private static string Label(SecurityFile file) => file.Diff.Path
         + (file.SupportingMaterial ? " (supporting material: documentation/test/prompt example)" : string.Empty);

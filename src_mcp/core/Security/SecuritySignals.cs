@@ -71,6 +71,17 @@ public static class SecuritySignals
         group.Value.Any(term => text.Contains(term, StringComparison.OrdinalIgnoreCase))
         || (group.Key == "sql" && SqlCode.IsMatch(text));
 
+    /// <summary>
+    /// The one order a slice reads files in: production and configuration ahead of documentation and
+    /// tests, then by how many of the focus signals a file carries. Shared by the sixteen-file source
+    /// reader and the context composer, so the files given source are the ones the pack puts first.
+    /// </summary>
+    public static IEnumerable<SecurityFile> Rank(IEnumerable<SecurityFile> files, IEnumerable<string> focus)
+    {
+        var wanted = focus.ToHashSet(StringComparer.Ordinal);
+        return files.OrderBy(f => f.SupportingMaterial).ThenByDescending(f => f.Signals.Count(wanted.Contains));
+    }
+
     public static bool Triggered(SecurityPrompt prompt, IReadOnlyList<SecurityFile> files) =>
         prompt.Triggers.Count == 0 ? !SecurityCatalog.IsPreset(prompt.Id)
             : files.Any(f => f.Signals.Intersect(prompt.Triggers).Any());

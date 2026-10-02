@@ -13,23 +13,29 @@ internal static class SecuritySources
     internal const int MaxHunksPerFile = 4;
     internal static readonly TimeSpan CollectionBudget = TimeSpan.FromSeconds(30);
 
+    /// <summary>The lane's configuration alone, for a caller with no round roster to ask.</summary>
+    internal static Task<IReadOnlyDictionary<string, string>> ReadAsync(SecurityLaneSetting lane,
+        IReadOnlyList<FileDiff> files, SourceResolver resolver, Stage stage, CancellationToken ct) =>
+        ReadAsync(lane, lane.Configured(stage), files, resolver, ct);
+
+    /// <param name="due">
+    /// The pairings this round will ask (<see cref="SecurityRoster.Due"/>) — never the lane's whole
+    /// configuration, so a spent budget or a row that cannot run reads no source at all.
+    /// </param>
     internal static async Task<IReadOnlyDictionary<string, string>> ReadAsync(SecurityLaneSetting lane,
-        IReadOnlyList<FileDiff> files, SourceResolver resolver, Stage stage, CancellationToken ct)
+        IReadOnlyList<SecurityRun> due, IReadOnlyList<FileDiff> files, SourceResolver resolver, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
         var result = new Dictionary<string, string>(StringComparer.Ordinal);
-        if (!lane.Applies(stage) || !lane.Runs.Any(r => r.Serves(stage) && r.Context == "slice")) return result;
+        var selected = due.Where(r => r.Context == SecurityContextModes.Slice).Select(r => r.Prompt).ToHashSet(StringComparer.Ordinal);
+        if (selected.Count == 0) return result;
         var facts = SecuritySignals.Classify(files);
-        var selected = lane.Runs.Where(r => r.Serves(stage) && r.Context == "slice" && r.Refusal.Length == 0)
-            .Select(r => r.Prompt).ToHashSet(StringComparer.Ordinal);
-        var prompts = lane.Prompts.Where(p => selected.Contains(p.Id) && p.Refusal.Length == 0
-            && SecuritySignals.Triggered(p, facts)).ToArray();
+        var prompts = lane.Prompts.Where(p => selected.Contains(p.Id) && SecuritySignals.Triggered(p, facts)).ToArray();
         if (prompts.Length == 0) return result;
         var focus = prompts.SelectMany(p => p.Focus).ToHashSet();
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(CollectionBudget);
-        foreach (var file in facts.Where(f => f.Diff.Text.Length > 0)
-            .OrderBy(f => f.SupportingMaterial).ThenByDescending(f => f.Signals.Count(focus.Contains)).Take(MaxSourceFiles)
+        foreach (var file in SecuritySignals.Rank(facts.Where(f => f.Diff.Text.Length > 0), focus).Take(MaxSourceFiles)
             .Select(f => f.Diff))
         {
             var parts = new List<string>();

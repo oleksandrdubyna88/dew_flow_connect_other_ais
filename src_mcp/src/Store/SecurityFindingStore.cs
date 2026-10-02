@@ -18,9 +18,16 @@ internal static class SecurityFindingStore
         if (column < 0) return null; // Older databases predate the optional projection.
         var json = rows.GetString(column);
         if (json.Length == 0) return null;
-        try { return JsonSerializer.Deserialize(json, ServerJsonContext.Default.SecurityFindingDetails); }
-        catch (JsonException) { return null; } // A damaged projection cannot prevent reading the round.
+        // A damaged projection cannot prevent reading the round — and must not pass for a finding that
+        // never carried evidence either, so what was lost is said where the evidence would have been.
+        try { return JsonSerializer.Deserialize(json, ServerJsonContext.Default.SecurityFindingDetails) ?? Damaged("it reads as null"); }
+        catch (JsonException e) { return Damaged(e.Message); }
     }
+
+    private static SecurityFindingDetails Damaged(string why) => new(null, string.Empty, [])
+    {
+        Unreadable = $"stored security evidence could not be read and is not shown: {why}",
+    };
 
     private static int EvidenceColumn(SqliteDataReader rows)
     {

@@ -27,7 +27,7 @@ public static class SecuritySchema
         foreach (var name in new[] { "trigger", "mechanism", "consequence" })
         {
             item[Properties]![name] = new JsonObject
-            { ["type"] = StringType, ["minLength"] = 1, ["maxLength"] = Reproduction.MaxCharacters };
+            { ["type"] = StringType, ["minLength"] = 1, ["maxLength"] = AttackEvidence.MaxFieldCharacters };
             item[Required]!.AsArray().Add((JsonNode)JsonValue.Create(name));
         }
         var properties = new JsonObject();
