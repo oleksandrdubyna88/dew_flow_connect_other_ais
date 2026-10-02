@@ -232,6 +232,93 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         launcher.Vendors.Should().ContainSingle().Which.Request.Executable.Should().Be("codex");
     }
 
+    /// <summary>
+    /// S4b item 1: the QUESTION travels to a none, disk or api row as well as the context, so it is checked for a
+    /// secret on those rows too — the web row's sanitiser already asks; the others were handed it raw.
+    /// </summary>
+    [Fact]
+    public async Task AQuestionCarryingASecret_IsRefusedOnEveryRow_ByClass_AndNothingIsLaunched()
+    {
+        var settings = Settings([
+            Row("sonnet", "claude", "claude", "sonnet", "question-opinion"),
+            Row("astra-disk", "codex", "codex", "gpt-6-astra", "question-disk"),
+            Row("grok", "grok-openrouter", "api", "x-ai/grok-4.7", "question-opinion", baseUrl: "https://openrouter.ai/api/v1"),
+            Row("astra-web", "codex", "codex", "gpt-6-astra", "question-web"),
+        ]);
+        var launcher = new ScriptedLauncher(_real, AnswersAtOnce);
+        const string leaking = "Why does the vendor answer 401 to sk-live-0123456789abcdefghijklmnop on the models endpoint?";
+
+        var settled = await FanOut(launcher, settings).RunAsync(Fresh(leaking), Input(settings, question: leaking), TestContext.Current.CancellationToken);
+
+        foreach (var row in settled.Rows.Where(r => r.RowId != "astra-web"))
+        {
+            row.Status.Should().Be(RowOutcomes.Refused, $"{row.RowId} would have carried the secret to a hosted model");
+            row.Reason.Should().Contain("question was not sent").And.Contain("vendor-key").And.NotContain("sk-live", "the refusal never quotes the secret");
+        }
+
+        settled.Rows.Single(r => r.RowId == "astra-web").Reason.Should().Contain("(secret)", "the web row's sanitiser refused it as it always did");
+        launcher.Vendors.Should().BeEmpty("no row was handed the question");
+        settled.Status.Should().Be(QuestionConsultStatuses.Failed);
+    }
+
+    /// <summary>
+    /// S4b item 3: what a MODEL wrote (the advice) and what a CLI printed (a failed row's reason carries its stderr) is
+    /// redacted before it reaches the record — the record is the one road to the database, the reply, the card and
+    /// the sidebar, so a secret a consultant repeats is not written down anywhere.
+    /// </summary>
+    [Fact]
+    public async Task ARowsAdviceAndReason_AreRedacted_BeforeTheRecord()
+    {
+        const string vendorKey = "sk-live-0123456789abcdefghijklmnop";
+        const string bearer = "abcdefghijklmnopqrstuvwxyz0123456789";
+        var settings = Settings([Row("leaky", "claude", "claude", "sonnet", "question-opinion"), Row("broken", "claude", "claude", "opus", "question-opinion")]);
+        var launcher = new ScriptedLauncher(_real, launch => Task.FromResult<ScriptedAnswer?>(
+            launch.Request.Executable != "claude" ? null
+            : IsModel(launch, "opus") ? new ScriptedAnswer(ExitCode: 1, StdErr: $"error: Authorization: Bearer {bearer} was refused")
+            : ScriptedAnswer.Claude($"Use the key {vendorKey} from the vault, then retry.\nKeep the ladder.")));
+        var store = Store();
+        var fresh = Fresh();
+
+        var settled = await FanOut(launcher, settings).RunAsync(fresh, Input(settings), TestContext.Current.CancellationToken);
+
+        var leaky = settled.Rows.Single(r => r.RowId == "leaky");
+        leaky.Status.Should().Be(RowOutcomes.Answered);
+        leaky.Advice.Should().NotContain(vendorKey).And.Contain("[redacted]").And.Contain("\nKeep the ladder.", "the advice keeps its layout");
+        var broken = settled.Rows.Single(r => r.RowId == "broken");
+        broken.Status.Should().Be(RowOutcomes.Failed);
+        broken.Reason.Should().NotContain(bearer, "a CLI's stderr is redacted like any other text written down").And.Contain("exit 1");
+        File.ReadAllText(store.PathFor(fresh.Id)).Should().NotContain(vendorKey).And.NotContain(bearer, "nothing on disk carries either");
+    }
+
+    /// <summary>
+    /// S4b item 5: the invariant fingerprints a GIT checkout; a root that is not one cannot be watched, and that used to
+    /// be a log line nobody reads. The row now says it, so its answer is never read as one the invariant stood behind.
+    /// </summary>
+    [Fact]
+    public async Task ADiskRootThatIsNoGitCheckout_IsSaidOnTheRow_AsNotWatched()
+    {
+        var plain = Directory.CreateTempSubdirectory("coai-qfanout-plain-").FullName;
+        try
+        {
+            File.WriteAllText(Path.Combine(plain, "Retry.cs"), "public static class Retry { }\n");
+            var settings = Settings([Row("astra-disk", "codex", "codex", "gpt-6-astra", "question-disk"), Row("sonnet", "claude", "claude", "sonnet", "question-opinion")],
+                roots: [_projects.Path, plain]);
+            var launcher = new ScriptedLauncher(_real, AnswersAtOnce);
+
+            var settled = await FanOut(launcher, settings).RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+
+            var disk = settled.Rows.Single(r => r.RowId == "astra-disk");
+            disk.Status.Should().Be(RowOutcomes.Answered, "the row still runs — what changes is that it says what was not watched");
+            disk.Note.Should().Contain($"root {plain} is not a git checkout: changes there are not watched");
+            disk.Note.Should().NotContain(_projects.Path, "the checkout root WAS watched");
+            settled.Rows.Single(r => r.RowId == "sonnet").Note.Should().BeEmpty("a row that reads no root is not about the invariant");
+        }
+        finally
+        {
+            Directory.Delete(plain, recursive: true);
+        }
+    }
+
     // ---------- D6: six rows at once ----------
 
     /// <remarks>

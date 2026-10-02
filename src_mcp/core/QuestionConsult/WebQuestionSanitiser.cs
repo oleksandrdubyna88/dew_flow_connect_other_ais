@@ -36,8 +36,11 @@ public abstract record WebQuestion
 /// with a hole where a path was still tells the model that there was a path. The caller rewrites the
 /// question; the cure says how.</para>
 /// <para>Every pattern is bounded — no nesting, every repetition capped, a match ceiling — because the
-/// text is the calling AI's and nobody chose it. The URL-shaped tokens are set aside before the path
-/// checks, so a public link may be cited; the host checks run over the original, so a private one may not.</para>
+/// text is the calling AI's and nobody chose it. A public link — http, https or ftp, and nothing else —
+/// is set aside before the path checks, so it may be cited; every other <c>scheme://</c> address is refused
+/// (S4b); the host checks run over the whole text, so a private link may not be cited either.</para>
+/// <para>Every check reads the text as a model reads it (<see cref="TextAsRead"/>): format characters
+/// removed and compatibility forms folded, and a question carrying a format character is refused (S4b).</para>
 /// </remarks>
 public static partial class WebQuestionSanitiser
 {
@@ -48,21 +51,32 @@ public static partial class WebQuestionSanitiser
 
     /// <summary>The refusal classes, in the order they are asked — a secret first, the length last.</summary>
     public static IReadOnlyList<string> RefusalClasses { get; } =
-        ["empty", "secret", "code-fence", "inline-code", "stack-trace", "config-line", "repository", "root", "path", "internal-host", "too-long"];
+        ["empty", "secret", "invisible", "code-fence", "inline-code", "stack-trace", "config-line", "repository", "root", "path", "scheme", "internal-host", "too-long"];
 
     /// <summary>A folder name shorter than this is not matched as a NAME — a checkout called <c>api</c> must not make every API question unaskable.</summary>
     private const int ShortestNameMatched = 4;
 
+    /// <summary>The schemes whose addresses may be cited — a public link. Every other <c>scheme://</c> names a local application, a share or a machine.</summary>
+    private static readonly string[] CitableSchemes = ["http", "https", "ftp"];
+
+    /// <remarks>
+    /// Every check reads the question as a model reads it — format characters removed, compatibility forms folded
+    /// (<see cref="TextAsRead"/>, S4b item 4) — so <c>Ｃ：＼</c> is a drive path and a key split by a zero-width space
+    /// is a key. The question itself is never rewritten: a clean one passes exactly as it arrived, and one that
+    /// carries a format character is refused rather than stripped, because what the model reads must be what the
+    /// check read.
+    /// </remarks>
     public static WebQuestion Check(string question, WebQuestionContext context) =>
-        FirstRefusal(question, context) is { } refused ? refused : new WebQuestion.Clean(question);
+        FirstRefusal(question, TextAsRead.Normalised(question), context) is { } refused ? refused : new WebQuestion.Clean(question);
 
-    private static WebQuestion.Refused? FirstRefusal(string question, WebQuestionContext context) =>
-        Text(question) ?? Shape(question) ?? Place(question, context) ?? Length(question);
+    /// <param name="read">The question as a model reads it — what every shape is checked against.</param>
+    private static WebQuestion.Refused? FirstRefusal(string question, string read, WebQuestionContext context) =>
+        Text(question, read) ?? Shape(read) ?? Place(read, context) ?? Length(read);
 
-    /// <summary>Empty, a secret, a code fence, inline code, a stack trace, a config line.</summary>
-    private static WebQuestion.Refused? Text(string question)
+    /// <summary>Empty, a secret, an invisible character, a code fence, inline code, a stack trace.</summary>
+    private static WebQuestion.Refused? Text(string question, string read)
     {
-        if (string.IsNullOrWhiteSpace(question))
+        if (string.IsNullOrWhiteSpace(read))
         {
             return Refuse("empty", "the question is empty", "ask the question in a sentence or two");
         }
@@ -72,8 +86,15 @@ public static partial class WebQuestionSanitiser
         return secret.Length > 0
             ? Refuse("secret", $"the question carries a secret shape ({secret})",
                 "remove it — a web row's question leaves this machine and is kept in the vendor's own store; describe the failure without the value")
-            : Code(question);
+            : Invisible(question) ?? Code(read);
     }
+
+    /// <summary>A Unicode format character — zero-width, bidi, soft hyphen, tag — which hides text from a reader and not from a model.</summary>
+    private static WebQuestion.Refused? Invisible(string question) =>
+        TextAsRead.FormatCharacters(question) is var count and > 0
+            ? Refuse("invisible", $"the question carries {count} invisible formatting character(s) — zero-width, bidi or another Unicode format character",
+                "retype the question without them — an invisible character can hide a path or a secret from this check while the model still reads it")
+            : null;
 
     private static WebQuestion.Refused? Code(string question)
     {
@@ -100,11 +121,12 @@ public static partial class WebQuestionSanitiser
             ? Refuse("config-line", "the question carries a key=value or key: value line", "write it as prose — a config line names this machine's setup")
             : null;
 
-    /// <summary>The checkout, a root, any path shape, an internal host.</summary>
+    /// <summary>The checkout, a root, any path shape, an address of another scheme, an internal host.</summary>
     private static WebQuestion.Refused? Place(string question, WebQuestionContext context) =>
         Named(question, "repository", [context.RepoPath])
         ?? Named(question, "root", context.Roots)
         ?? Paths(question)
+        ?? Schemes(question)
         ?? Hosts(question);
 
     private static WebQuestion.Refused? Named(string question, string cls, IReadOnlyList<string> places)
@@ -138,9 +160,10 @@ public static partial class WebQuestionSanitiser
                 RegexOptions.IgnoreCase | RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(MatchTimeoutMs));
     }
 
+    /// <remarks>Only a CITABLE link — http, https, ftp — is set aside before the path shapes (S4b item 4); any other address stays in, and <see cref="Schemes"/> refuses it.</remarks>
     private static WebQuestion.Refused? Paths(string question)
     {
-        var withoutUrls = Url().Replace(question, " ");
+        var withoutUrls = CitableUrl().Replace(question, " ");
         var shape = DrivePath().IsMatch(withoutUrls) ? "a drive-qualified path"
             : UncPath().IsMatch(withoutUrls) ? "a UNC path"
             : RelativePath().IsMatch(withoutUrls) ? "a home or relative path"
@@ -152,6 +175,13 @@ public static partial class WebQuestionSanitiser
             ? Refuse("path", $"the question carries {shape}", "describe the file by what it does, not by its name or where it lives")
             : null;
     }
+
+    /// <summary>A <c>scheme://</c> address that is not a public link — <c>vscode://</c>, <c>ssh://</c>, <c>smb://</c>, <c>git+ssh://</c> — names this machine's applications, shares or hosts.</summary>
+    private static WebQuestion.Refused? Schemes(string question) =>
+        AnyScheme().Matches(question).Any(found => !CitableSchemes.Contains(found.Groups[1].Value, StringComparer.OrdinalIgnoreCase))
+            ? Refuse("scheme", "the question carries an address whose scheme is not http, https or ftp",
+                "cite a public http or https link, or describe the resource — any other address names an application, a share or a machine")
+            : null;
 
     private static WebQuestion.Refused? Hosts(string question) =>
         InternalHost().IsMatch(question)
@@ -187,8 +217,13 @@ public static partial class WebQuestionSanitiser
     [GeneratedRegex(@"(?m)^[ \t]*([A-Z][A-Z0-9_]{2,120}|[A-Za-z_]\w{0,60}[._-][\w.-]{0,120})[ \t]{0,8}:[ \t]{0,8}\S", RegexOptions.CultureInvariant, MatchTimeoutMs)]
     private static partial Regex ConfigColon();
 
-    [GeneratedRegex(@"\b[a-z][a-z0-9+.-]{0,15}://\S{1,2000}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, MatchTimeoutMs)]
-    private static partial Regex Url();
+    /// <summary>A public link — http, https or ftp — set aside before the path shapes. Nothing else is.</summary>
+    [GeneratedRegex(@"(?<![A-Za-z0-9+.-])(?:https?|ftp)://\S{1,2000}", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase, MatchTimeoutMs)]
+    private static partial Regex CitableUrl();
+
+    /// <summary>Any <c>scheme://</c> token, the scheme captured — RFC 3986's letter then letters, digits, <c>+</c>, <c>.</c>, <c>-</c>.</summary>
+    [GeneratedRegex(@"(?<![A-Za-z0-9+.-])([A-Za-z][A-Za-z0-9+.-]{0,15})://", RegexOptions.CultureInvariant, MatchTimeoutMs)]
+    private static partial Regex AnyScheme();
 
     [GeneratedRegex(@"\b[A-Za-z]:[\\/]", RegexOptions.CultureInvariant, MatchTimeoutMs)]
     private static partial Regex DrivePath();

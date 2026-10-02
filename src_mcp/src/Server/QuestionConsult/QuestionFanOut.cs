@@ -87,11 +87,11 @@ public sealed class QuestionFanOut(
         Directory.CreateDirectory(store.AnswersDir);
 
         var launches = inputs.OfType<RowInput.Launch>().ToList();
-        var watched = await SnapshotsAsync(launches, ct);
+        var invariant = await SnapshotsAsync(launches, ct);
         await LaunchAllAsync(current, launches, ct);
-        var breach = await BreachAsync(watched, ct);
+        var breach = await BreachAsync(invariant.Watched, ct);
 
-        var settled = Settled(current.Record, launches, breach);
+        var settled = Settled(current.Record, launches, breach, invariant.Unwatched);
         store.Write(settled);
 
         return settled;
@@ -146,9 +146,17 @@ public sealed class QuestionFanOut(
             _ => throw new InvalidOperationException("the union is closed"),
         };
 
-    /// <summary>A none or disk row: the context after the secret check, the outline (none), the roots (disk) — the api row through its own composer (A9).</summary>
+    /// <summary>
+    /// A none or disk row: the question AND the context after the secret check (S4b item 1 — the question reaches
+    /// these rows too), the outline (none), the roots (disk) — the api row through its own composer (A9).
+    /// </summary>
     private RowInput CheckedInput(RowAdmission.Admitted row, FanOutInput input, string instruction, string outline)
     {
+        if (SecretCheck.Inspect(input.Question, "question") is SecretCheckResult.Refused question)
+        {
+            return new RowInput.Refused(row, $"the question was not sent ({question.Class}): {question.Reason} — {question.Cure}");
+        }
+
         if (SecretCheck.Inspect(input.Context) is not SecretCheckResult.Clean clean)
         {
             var refused = (SecretCheckResult.Refused)SecretCheck.Inspect(input.Context);
@@ -271,11 +279,16 @@ public sealed class QuestionFanOut(
 
     // ---------- the invariant, around the disk rows ----------
 
-    /// <summary>One snapshot per distinct root of the disk rows that is a git checkout, taken before any launch. Taken once per fan-out.</summary>
-    private async Task<IReadOnlyList<Watched>> SnapshotsAsync(IReadOnlyList<RowInput.Launch> launches, CancellationToken ct)
+    /// <summary>
+    /// One snapshot per distinct root of the disk rows that is a git checkout, taken before any launch, once per
+    /// fan-out — and the roots that are NOT one, which the invariant cannot fingerprint (S4b item 5: said on every
+    /// disk row that reads one, never only in the log).
+    /// </summary>
+    private async Task<InvariantPlan> SnapshotsAsync(IReadOnlyList<RowInput.Launch> launches, CancellationToken ct)
     {
         var watched = new List<Watched>();
-        foreach (var root in launches.Where(l => l.Row.Plan.Grant.Capability == Capability.Disk).SelectMany(l => l.Row.Plan.Grant.Roots).Distinct(StringComparer.OrdinalIgnoreCase))
+        var unwatched = new List<string>();
+        foreach (var root in DiskRoots(launches).Distinct(StringComparer.OrdinalIgnoreCase))
         {
             try
             {
@@ -283,13 +296,19 @@ public sealed class QuestionFanOut(
             }
             catch (ContextException e)
             {
-                // A root that is no git checkout cannot be fingerprinted by this invariant; said, not hidden.
                 log.Warning("question disk root {Root} is not watched by the filesystem invariant: {Reason}", root, e.Message);
+                unwatched.Add(root);
             }
         }
 
-        return watched;
+        return new InvariantPlan(watched, unwatched);
     }
+
+    private static IEnumerable<string> DiskRoots(IEnumerable<RowInput.Launch> launches) =>
+        launches.Where(l => l.Row.Plan.Grant.Capability == Capability.Disk).SelectMany(l => l.Row.Plan.Grant.Roots);
+
+    /// <summary>The sentence a disk row carries for a root the invariant could not watch — on the row, so the record, the reply and the log say it beside the answer.</summary>
+    public static string NotWatched(string root) => $"root {root} is not a git checkout: changes there are not watched";
 
     /// <summary>The second snapshot of every watched root, compared — the sentence when any changed, else empty.</summary>
     private async Task<string> BreachAsync(IReadOnlyList<Watched> watched, CancellationToken ct)
@@ -313,10 +332,14 @@ public sealed class QuestionFanOut(
 
     // ---------- the settled record ----------
 
-    /// <summary>The record as the question ends: a breach withholds the DISK rows' advice alone; the status is what the rows came to.</summary>
-    private static QuestionConsultRecord Settled(QuestionConsultRecord record, IReadOnlyList<RowInput.Launch> launches, string breach)
+    /// <summary>
+    /// The record as the question ends: a breach withholds the DISK rows' advice alone; a disk row over a root the
+    /// invariant could not watch says so; the status is what the rows came to.
+    /// </summary>
+    private static QuestionConsultRecord Settled(QuestionConsultRecord record, IReadOnlyList<RowInput.Launch> launches, string breach, IReadOnlyList<string> unwatched)
     {
-        var rows = breach.Length == 0 ? record.Rows : [.. record.Rows.Select(row => Withheld(row, launches, breach))];
+        var rows = (breach.Length == 0 ? record.Rows : [.. record.Rows.Select(row => Withheld(row, launches, breach))])
+            .Select(row => SaidUnwatched(row, launches, unwatched)).ToList();
         var launched = rows.Where(row => launches.Any(l => l.Row.Row.Id == row.RowId)).ToList();
         var answered = launched.Count(r => r.Answered);
         var stamp = QuestionConsultStore.Stamp(DateTime.UtcNow);
@@ -339,8 +362,22 @@ public sealed class QuestionFanOut(
             ? row with { Status = RowOutcomes.Failed, Advice = string.Empty, Reason = breach }
             : row;
 
+    /// <summary>A disk row's note for every one of ITS roots the invariant could not watch — its answer is then never read as one the invariant stood behind.</summary>
+    private static QuestionRowRecord SaidUnwatched(QuestionRowRecord row, IReadOnlyList<RowInput.Launch> launches, IReadOnlyList<string> unwatched)
+    {
+        var said = DiskRoots(launches.Where(l => l.Row.Row.Id == row.RowId))
+            .Where(root => unwatched.Contains(root, StringComparer.OrdinalIgnoreCase))
+            .Select(NotWatched)
+            .ToList();
+
+        return said.Count == 0 ? row : row with { Note = string.Join("; ", row.Note.Length > 0 ? said.Prepend(row.Note) : said) };
+    }
+
     /// <summary>A root under the invariant, with its first snapshot.</summary>
     private sealed record Watched(string Root, FilesystemSnapshot Before);
+
+    /// <summary>What the invariant could fingerprint before the launches, and the disk roots it could not.</summary>
+    private sealed record InvariantPlan(IReadOnlyList<Watched> Watched, IReadOnlyList<string> Unwatched);
 
     /// <summary>The record in memory, replaced whole under one gate and written through the store's one road — six rows settle at once.</summary>
     private sealed class Current(QuestionConsultStore store, QuestionConsultRecord record)

@@ -242,6 +242,42 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
         }
     }
 
+    /// <summary>S4b item 5: the caller is TOLD a disk row's root was not watched, beside that row's answer.</summary>
+    [Fact]
+    public async Task ADiskRowOverARootThatIsNoGitCheckout_IsAnsweredWithTheNoteInTheReply()
+    {
+        var plain = Directory.CreateTempSubdirectory("coai-qservice-plain-").FullName;
+        try
+        {
+            var scripted = new ScriptedLauncher(_real, Answers);
+            var settings = new PanelSettings
+            {
+                DataDir = _data,
+                Providers = [],
+                QuestionConsult = new QuestionConsultSettings
+                {
+                    Rows = [new QuestionRow("astra-disk", "codex", "codex", "gpt-6-astra", string.Empty, string.Empty, string.Empty, "question-disk", Enabled: true, Acknowledged: true)],
+                    Roots = [plain],
+                    RowBudget = TimeSpan.FromSeconds(30),
+                },
+            };
+            var service = new QuestionConsultService(
+                settings, scripted, new ReviewerExecutor(scripted), new ContextAssembler(scripted), new RolePrompts(_data),
+                new UsageLedger(_data), VaultKeys.None("no vault"), Logger.None, _ => null, Noticing.None);
+
+            var reply = await AskAsync(service);
+
+            var answer = reply.GetProperty("answers").EnumerateArray().Single();
+            answer.GetProperty("status").GetString().Should().Be(RowOutcomes.Answered, reply.ToString());
+            answer.TryGetProperty("note", out var note).Should().BeTrue($"the reply carries the row's note: {answer}");
+            note.GetString().Should().Contain($"root {plain} is not a git checkout: changes there are not watched");
+        }
+        finally
+        {
+            Directory.Delete(plain, recursive: true);
+        }
+    }
+
     [Fact]
     public async Task RowsThatCannotBeRead_RefuseByName()
     {

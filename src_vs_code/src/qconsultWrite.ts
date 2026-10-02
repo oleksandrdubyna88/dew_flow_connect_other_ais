@@ -318,25 +318,60 @@ export interface RootPlaces {
 
 /**
  * Why a folder may not be a disk root, or empty — the server's `QuestionRoots.WhyNot`, checked before it is
- * stored: not absolute, a drive root, the profile itself, inside the data directory, a system directory.
- * Existence is the host's to check: this is pure.
+ * stored: not absolute, a drive root, the profile itself, inside the data directory, a system directory — and
+ * since S4b item 2 a folder that CONTAINS the profile, the data folder or a system folder, and a credential
+ * folder, anything inside one, or a folder holding one. Existence and links are the host's to resolve
+ * (`rootAdded`'s `real`): this is pure.
  */
 export function rootRefusal(root: string, places: RootPlaces): string {
   const full = trimmed(root);
+  const credential = credentialIn(full, places);
   const checks: readonly (readonly [boolean, string])[] = [
     [!isAbsolute(full), `'${root}' is not an absolute path — a disk root is spelled from a drive or from /`],
     [isDriveRoot(full), `'${full}' is a drive root — a disk row would read the whole disk; name the project folders instead`],
     [same(full, places.profile, places), `'${full}' is your profile folder itself — every file of yours; name the project folders under it instead`],
+    [above(full, places.profile, places), `'${full}' contains your profile folder — every file of yours; name the project folders instead`],
     [within(full, places.dataDir, places), `'${full}' is inside the data folder — the records, the ledger and the sessions are not another project to read`],
+    [above(full, places.dataDir, places), `'${full}' contains the data folder — the records, the ledger and the sessions are not another project to read`],
     [places.systemDirs.some((dir) => within(full, dir, places)), `'${full}' is a system folder — not a project, and not a disk row's to read`],
+    [places.systemDirs.some((dir) => above(full, dir, places)), `'${full}' contains a system folder — not a project, and not a disk row's to read`],
+    [credential.length > 0, `'${full}' is a credential folder (${credential}) or inside one — keys and vendor sign-ins are not a project to read`],
+    [credentialsUnder(places).some((dir) => above(full, dir, places)), `'${full}' contains a credential folder — keys and vendor sign-ins are not a project to read`],
   ];
 
   return checks.find(([refused]) => refused)?.[1] ?? '';
 }
 
-/** A root added — or the sentence refusing it. Two spellings of one folder are one root. */
-export function rootAdded(roots: readonly string[], root: string, places: RootPlaces): { readonly roots: readonly string[]; readonly refusal: string } {
-  const refusal = rootRefusal(root, places);
+/** The credential folder a path is, or is inside, by its segments — `.ssh` anywhere, `.config/gcloud` as a pair. */
+function credentialIn(path: string, places: RootPlaces): string {
+  const segments = `/${comparable(path, places).split('/').filter((part) => part.length > 0).join('/')}/`;
+
+  return CREDENTIAL_DIRECTORIES.find((dir) => segments.includes(`/${places.caseless ? dir.toLowerCase() : dir}/`)) ?? '';
+}
+
+/** The credential folders under the profile — a folder holding one (the profile's `.config`) is refused too. */
+function credentialsUnder(places: RootPlaces): readonly string[] {
+  return places.profile.trim().length === 0 ? [] : CREDENTIAL_DIRECTORIES.map((dir) => `${trimmed(places.profile)}/${dir}`);
+}
+
+/** The folders a root may never be, be inside, or contain — the server's `QuestionRoots.CredentialDirectories`, held level by a test. */
+export const CREDENTIAL_DIRECTORIES: readonly string[] = ['.ssh', '.aws', '.gnupg', '.config/gcloud', '.claude', '.codex', '.azure'];
+
+/**
+ * A root added — or the sentence refusing it. Two spellings of one folder are one root.
+ *
+ * <p>`real` is what the picked folder resolves to through its junctions and symlinks (the host asks `realpath`):
+ * a link to the profile IS the profile, so the root is refused when either spelling is (S4b item 2). What is stored
+ * is the folder as it was picked.</p>
+ */
+export function rootAdded(
+  roots: readonly string[],
+  root: string,
+  places: RootPlaces,
+  real: string = root,
+): { readonly roots: readonly string[]; readonly refusal: string } {
+  const atTarget = same(real, root, places) ? '' : rootRefusal(real, places);
+  const refusal = rootRefusal(root, places) || (atTarget.length > 0 ? `${atTarget} ('${trimmed(root)}' resolves to it)` : '');
   if (refusal.length > 0) {
     return { roots, refusal };
   }
@@ -371,6 +406,11 @@ function comparable(path: string, places: RootPlaces): string {
 
 function same(one: string, other: string, places: RootPlaces): boolean {
   return other.trim().length > 0 && comparable(one, places) === comparable(other, places);
+}
+
+/** Whether `path` is an ANCESTOR of `place` — reading it reads the place too (S4b item 2). */
+function above(path: string, place: string, places: RootPlaces): boolean {
+  return place.trim().length > 0 && !same(path, place, places) && within(place, path, places);
 }
 
 function within(path: string, parent: string, places: RootPlaces): boolean {

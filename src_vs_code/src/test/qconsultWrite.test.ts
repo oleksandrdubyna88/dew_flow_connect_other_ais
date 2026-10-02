@@ -6,6 +6,7 @@ import path from 'node:path';
 import type { QuestionRowSetting } from '../qconsultSettings';
 import {
   type RootPlaces,
+  CREDENTIAL_DIRECTORIES,
   customPromptEdited,
   promptAdded,
   promptRemoved,
@@ -138,4 +139,40 @@ test('a root added twice in two spellings is one root', () => {
   assert.deepEqual(once, { roots: ['D:\\rsd'], refusal: '' });
   assert.deepEqual(rootAdded(once.roots, 'd:/rsd', windows).roots, ['D:\\rsd']);
   assert.match(rootAdded([], 'C:\\', windows).refusal, /drive root/);
+});
+
+// ---------- S4b item 2: ancestors, credential folders, links ----------
+
+test('a folder that CONTAINS the profile, the data folder or a system folder is refused — reading it reads them', () => {
+  // Forward slashes, which every check reads as the backslashes the fixture's places carry.
+  const nested: RootPlaces = { ...windows, systemDirs: ['D:/tools/sys'] };
+
+  assert.match(rootRefusal('C:/Users', windows), /contains your profile folder/);
+  assert.match(rootRefusal('c:/users/ME/AppData', windows), /contains the data folder/, 'Windows compares without case');
+  assert.match(rootRefusal('D:/tools', nested), /contains a system folder/);
+  assert.equal(rootRefusal('D:/rsd', nested), '', 'a sibling of the places is the ordinary case');
+});
+
+test('a credential folder, anything inside one, and a folder holding one are refused — inside the profile or not', () => {
+  for (const credentials of CREDENTIAL_DIRECTORIES) {
+    const at = `C:/Users/me/${credentials}`;
+    assert.match(rootRefusal(at, windows), /credential folder/, at);
+    assert.match(rootRefusal(`${at}/nested`, windows), /credential folder/, `${at}/nested`);
+  }
+  assert.match(rootRefusal('D:/backup/.ssh', windows), /credential folder/, 'a .ssh copied elsewhere is still keys');
+  assert.match(rootRefusal('C:/Users/me/.config', windows), /contains a credential folder/, 'the profile\'s .config holds gcloud\'s');
+});
+
+test('a folder reached through a link is judged at its target, and stored as it was picked', () => {
+  assert.match(rootAdded([], 'D:/links/home', windows, 'C:/Users/me').refusal, /profile folder itself/);
+  assert.match(rootAdded([], 'D:/links/keys', windows, 'C:/Users/me/.ssh').refusal, /credential folder/);
+  assert.deepEqual(rootAdded([], 'D:/links/work', windows, 'E:/work'), { roots: ['D:/links/work'], refusal: '' });
+});
+
+test("the credential folders are the server's own list — read out of the C#, never retyped", () => {
+  const cs = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'src_mcp', 'src', 'Server', 'QuestionConsult', 'QuestionConsultSettings.cs'), 'utf8');
+  const listed = /CredentialDirectories \{ get; \} = \[([^\]]*)\];/.exec(cs);
+  assert.ok(listed, 'CredentialDirectories is not in QuestionConsultSettings.cs in the shape this test reads');
+
+  assert.deepEqual([...(listed[1] ?? '').matchAll(/"([^"]+)"/g)].map((m) => m[1]), [...CREDENTIAL_DIRECTORIES]);
 });

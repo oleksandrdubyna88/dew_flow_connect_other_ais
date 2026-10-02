@@ -167,24 +167,38 @@ public static class QuestionConsultReader
 
 /// <summary>
 /// D14 (c): a disk root is refused when it is a drive root, the user profile directory itself, a system
-/// directory (or inside one), inside the data directory, not absolute, or not an existing directory.
+/// directory (or inside one), inside the data directory, not absolute, or not an existing directory — and
+/// (S4b item 2) when it CONTAINS the profile, the data directory or a system directory, when it is a
+/// credential directory or inside one, or contains one, judged on the path as written AND on what its
+/// junctions and symlinks resolve to.
 /// </summary>
 /// <remarks>
-/// The reviewer's scenario is concrete: a drive root is the whole disk, and a <c>--restricted</c> claude
+/// <para>The reviewer's scenario is concrete: a drive root is the whole disk, and a <c>--restricted</c> claude
 /// with <c>--add-dir C:\</c> is a confined reviewer of everything. Refused by NAME, each with what to set
-/// instead; what is accepted is the full path, so two spellings of one folder are one root.
+/// instead; what is accepted is the full path, so two spellings of one folder are one root.</para>
+/// <para>A descendant check alone left the other direction open: <c>C:\Users</c> is no drive root and not the
+/// profile, and reading it reads the profile, <c>AppData</c> and this product's own records. A link closes
+/// nothing either way — <c>D:\work\home</c> junctioned to the profile IS the profile — so every component is
+/// followed (<see cref="DocumentReader.Canonical"/>, the document reader's own walk), and so are the places'.</para>
 /// </remarks>
 public static class QuestionRoots
 {
     public sealed record Verdict(IReadOnlyList<string> Accepted, IReadOnlyList<string> Refused);
 
-    public static Verdict Validate(IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, bool> isDirectory)
+    /// <param name="followLink">
+    /// Resolves ONE path entry's link (<see cref="DocumentReader.FollowLink"/> by default): every component of a root,
+    /// and of each refused place, is walked through it (<see cref="DocumentReader.Canonical"/>), so a junction or a
+    /// symlink is judged at its final target (S4b item 2).
+    /// </param>
+    public static Verdict Validate(
+        IEnumerable<string> roots, string dataDir, SystemPlaces places, Func<string, bool> isDirectory, Func<string, string>? followLink = null)
     {
+        var seen = Seen.Of(dataDir, places, followLink ?? DocumentReader.FollowLink);
         var accepted = new List<string>();
         var refused = new List<string>();
         foreach (var root in roots)
         {
-            var why = WhyNot(root, dataDir, places, isDirectory);
+            var why = WhyNot(root, seen, isDirectory);
             if (why.Length > 0)
             {
                 refused.Add(why);
@@ -198,8 +212,12 @@ public static class QuestionRoots
         return new Verdict(accepted, refused);
     }
 
-    /// <summary>Why a root may not be read, or empty. The checks in the order a person would fix them.</summary>
-    internal static string WhyNot(string root, string dataDir, SystemPlaces places, Func<string, bool> isDirectory)
+    /// <summary>The folders a root may be under but never ABOVE, as their credentials live in them: a vendor's sign-in, a machine's keys.</summary>
+    /// <remarks>Matched as path segments wherever they are (a <c>.ssh</c> copied to a backup is still keys), and as directories under the profile.</remarks>
+    public static IReadOnlyList<string> CredentialDirectories { get; } = [".ssh", ".aws", ".gnupg", ".config/gcloud", ".claude", ".codex", ".azure"];
+
+    /// <summary>Why a root may not be read, or empty. The checks in the order a person would fix them — on the path as written AND on what it resolves to.</summary>
+    private static string WhyNot(string root, Seen seen, Func<string, bool> isDirectory)
     {
         if (!IsAbsolute(root))
         {
@@ -207,30 +225,104 @@ public static class QuestionRoots
         }
 
         var full = Full(root);
+        var real = seen.Resolved(full);
 
-        return Place(full, dataDir, places) is { Length: > 0 } place ? place
+        return Place(full, seen) is { Length: > 0 } place ? place
+            : Place(real, seen) is { Length: > 0 } target ? $"{target} ('{full}' resolves to it)"
             : !isDirectory(full) ? $"{QuestionConsultKeys.Roots}: '{root}' is not a directory on this machine — a disk row needs a folder that exists"
             : string.Empty;
     }
 
-    private static string Place(string full, string dataDir, SystemPlaces places)
-    {
-        if (IsDriveRoot(full))
-        {
-            return $"{QuestionConsultKeys.Roots}: '{full}' is a drive root — a disk row would read the whole disk; name the project folders instead";
-        }
+    /// <summary>The first place this path may not be — each check its own sentence, or empty.</summary>
+    private static string Place(string full, Seen seen) =>
+        new Func<string, Seen, string>[] { DriveRoot, Profile, DataDirectory, SystemDirectory, Credentials }
+            .Select(check => check(full, seen))
+            .FirstOrDefault(sentence => sentence.Length > 0) ?? string.Empty;
 
-        if (Same(full, places.UserProfile))
-        {
-            return $"{QuestionConsultKeys.Roots}: '{full}' is the user profile directory itself — every file of yours; name the project folders under it instead";
-        }
+    private static string DriveRoot(string full, Seen _) => IsDriveRoot(full)
+        ? $"{QuestionConsultKeys.Roots}: '{full}' is a drive root — a disk row would read the whole disk; name the project folders instead"
+        : string.Empty;
 
-        return Within(full, dataDir)
-            ? $"{QuestionConsultKeys.Roots}: '{full}' is inside the data directory ({Full(dataDir)}) — the records, the ledger and the sessions are not another project to read"
-            : places.SystemDirectories.FirstOrDefault(system => Same(full, system) || Within(full, system)) is { } found
-                ? $"{QuestionConsultKeys.Roots}: '{full}' is a system directory ({Full(found)}) — not a project, and not a disk row's to read"
+    private static string Profile(string full, Seen seen) =>
+        seen.Profile.Any(profile => Same(full, profile))
+            ? $"{QuestionConsultKeys.Roots}: '{full}' is the user profile directory itself — every file of yours; name the project folders under it instead"
+            : seen.Profile.FirstOrDefault(profile => Above(full, profile)) is { } held
+                ? $"{QuestionConsultKeys.Roots}: '{full}' contains the user profile directory ({held}) — every file of yours; name the project folders instead"
                 : string.Empty;
+
+    private static string DataDirectory(string full, Seen seen) =>
+        seen.Data.FirstOrDefault(data => Within(full, data)) is { } inside
+            ? $"{QuestionConsultKeys.Roots}: '{full}' is inside the data directory ({inside}) — the records, the ledger and the sessions are not another project to read"
+            : seen.Data.FirstOrDefault(data => Above(full, data)) is { } held
+                ? $"{QuestionConsultKeys.Roots}: '{full}' contains the data directory ({held}) — the records, the ledger and the sessions are not another project to read"
+                : string.Empty;
+
+    private static string SystemDirectory(string full, Seen seen) =>
+        seen.Systems.FirstOrDefault(system => Within(full, system)) is { } found
+            ? $"{QuestionConsultKeys.Roots}: '{full}' is a system directory ({found}) — not a project, and not a disk row's to read"
+            : seen.Systems.FirstOrDefault(system => Above(full, system)) is { } held
+                ? $"{QuestionConsultKeys.Roots}: '{full}' contains a system directory ({held}) — not a project, and not a disk row's to read"
+                : string.Empty;
+
+    private static string Credentials(string full, Seen seen) =>
+        CredentialSegment(full) is { Length: > 0 } named
+            ? $"{QuestionConsultKeys.Roots}: '{full}' is a credential directory ({named}) or inside one — keys and vendor sign-ins are not a project to read"
+            : seen.Credentials.FirstOrDefault(credentials => Above(full, credentials)) is { } held
+                ? $"{QuestionConsultKeys.Roots}: '{full}' contains a credential directory ({held}) — keys and vendor sign-ins are not a project to read"
+                : string.Empty;
+
+    /// <summary>The credential directory a path is, or is inside, by its segments — <c>.ssh</c> anywhere, <c>.config/gcloud</c> as a pair.</summary>
+    private static string CredentialSegment(string full)
+    {
+        var segments = full.Split([Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar], StringSplitOptions.RemoveEmptyEntries);
+        var joined = "/" + string.Join('/', segments) + "/";
+
+        return CredentialDirectories.FirstOrDefault(credentials => joined.Contains("/" + credentials + "/", Comparison)) ?? string.Empty;
     }
+
+    /// <summary>
+    /// The places a root is compared against, each in every spelling that names it: as written and as its links resolve —
+    /// a data directory reached through a junction is the same directory, and a root resolving into it is refused.
+    /// </summary>
+    private sealed record Seen(
+        IReadOnlyList<string> Profile,
+        IReadOnlyList<string> Data,
+        IReadOnlyList<string> Systems,
+        IReadOnlyList<string> Credentials,
+        Func<string, string> FollowLink)
+    {
+        public static Seen Of(string dataDir, SystemPlaces places, Func<string, string> followLink)
+        {
+            IReadOnlyList<string> Spellings(string place) => place.Trim().Length == 0 ? [] : [.. new[] { Full(place), Real(place, followLink) }.Distinct(Comparer)];
+            var profile = Spellings(places.UserProfile);
+
+            return new Seen(
+                profile,
+                Spellings(dataDir),
+                [.. places.SystemDirectories.SelectMany(Spellings)],
+                [.. profile.SelectMany(home => CredentialDirectories.Select(credentials => Full(Path.Combine(home, credentials))))],
+                followLink);
+        }
+
+        /// <summary>What a root resolves to with every component's link followed.</summary>
+        public string Resolved(string full) => Real(full, FollowLink);
+    }
+
+    private static string Real(string path, Func<string, string> followLink)
+    {
+        try
+        {
+            return Full(DocumentReader.Canonical(Full(path), Full(path), followLink));
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // A link that cannot be followed is judged as written; the check on the written path still stands.
+            return Full(path);
+        }
+    }
+
+    /// <summary>Whether <paramref name="full"/> is an ANCESTOR of <paramref name="place"/> — reading it reads the place too.</summary>
+    private static bool Above(string full, string place) => !Same(full, place) && Within(place, full);
 
     /// <summary>Lexical, like the planner's: a <c>D:/</c> root is not rooted to <c>Path.IsPathRooted</c> on Linux.</summary>
     private static bool IsAbsolute(string root)

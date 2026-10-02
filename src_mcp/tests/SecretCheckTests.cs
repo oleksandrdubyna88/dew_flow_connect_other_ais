@@ -50,6 +50,25 @@ public sealed class SecretCheckTests
         }
     }
 
+    /// <summary>
+    /// S4b item 4: the check reads the text as a model would — Unicode format characters (zero-width, bidi) removed
+    /// and compatibility forms folded (NFKC) — so a key split by an invisible character, or spelled in full-width
+    /// letters, is still the key it reads as. The context itself is never rewritten.
+    /// </summary>
+    [Theory]
+    [InlineData("the key is sk-​live-0123456789abcdefghijklmnop and it still 401s", "vendor-key")]
+    // Split before the key is long enough to match on its own: the raw text then carries no key at all.
+    [InlineData("the key is sk-li⁠‍ve-0123456789abcdefghijklmnop and it still 401s", "vendor-key")]
+    [InlineData("the key is ｓｋ-live-0123456789abcdefghijklmnop and it still 401s", "vendor-key")]
+    // A no-break space and a full-width first letter: no pass reads "Bearer abc…" in the raw text.
+    [InlineData("the header I send is Bearer ａbcdefghijklmnopqrstuvwxyz0123456789", "bearer")]
+    public void ASecretHiddenByInvisibleOrCompatibilityCharacters_IsStillRefused(string context, string cls)
+    {
+        var refused = SecretCheck.Inspect(context).Should().BeOfType<SecretCheckResult.Refused>().Which;
+
+        refused.Class.Should().Be(cls);
+    }
+
     [Fact]
     public void TheClassIsTheFirstPassThatWouldHaveRedacted_InTheRedactionsOwnOrder()
     {

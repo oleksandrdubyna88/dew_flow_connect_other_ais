@@ -115,7 +115,7 @@ function answersOf(card: Escalation, records: readonly QuestionConsult[], nowMs:
 function rowsAsAdvice(records: readonly QuestionConsult[]): readonly EscalationAdvice[] {
   return records.flatMap((record) => record.rows.map((row) => ({
     rowId: row.rowId, vendor: row.vendor, model: row.model, promptTitle: row.promptTitle, capability: row.capability,
-    flag: row.flag, status: row.status, reason: row.reason, advice: row.advice,
+    flag: row.flag, status: row.status, reason: row.reason, advice: row.advice, note: row.note,
   })));
 }
 
@@ -123,8 +123,13 @@ function answerFold(answer: EscalationAdvice, _nowMs: number): string {
   const said = answer.advice.length > 0 ? answer.advice : answer.reason;
 
   return `  <details class="qanswer" data-row="${escapeHtml(answer.rowId)}"><summary>${chip(answer.status)} ${escapeHtml(who(answer.vendor, answer.model))} — ${escapeHtml(answer.promptTitle)}${flagged(answer.flag)}</summary>
-    <div class="advice">${escapeHtml(said.length > 0 ? said : 'nothing yet')}</div>
+    <div class="advice">${escapeHtml(said.length > 0 ? said : 'nothing yet')}</div>${noteLine(answer.note ?? '')}
   </details>`;
+}
+
+/** What the row's record says beside its answer — a disk root nobody watched (S4b item 5) is read WITH the advice it qualifies. */
+function noteLine(note: string): string {
+  return note.length === 0 ? '' : `\n    <div class="hint" data-note>${escapeHtml(note)}</div>`;
 }
 
 /** D13: the flag beside every answer from a row that can read this machine. */

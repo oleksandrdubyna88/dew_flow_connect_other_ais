@@ -181,6 +181,139 @@ public sealed class QuestionConsultSettingsTests : IDisposable
         verdict.Refused[2].Should().Contain("not a directory on this machine");
     }
 
+    // ---------- S4b item 2: ancestors, links, credential directories ----------
+
+    /// <summary>A nested layout under one temp folder: <c>home/me</c> is the profile, <c>local/coai</c> the data, <c>win/sys</c> a system directory.</summary>
+    private sealed class Layout : IDisposable
+    {
+        public string Base { get; } = Directory.CreateTempSubdirectory("coai-qroots-").FullName;
+
+        public string Home => Path.Combine(Base, "home");
+
+        public string Profile => Directory.CreateDirectory(Path.Combine(Home, "me")).FullName;
+
+        public string Data => Directory.CreateDirectory(Path.Combine(Base, "local", "coai")).FullName;
+
+        public string System => Directory.CreateDirectory(Path.Combine(Base, "win", "sys")).FullName;
+
+        public SystemPlaces Places => new(Profile, [System]);
+
+        public string Under(params string[] parts) => Directory.CreateDirectory(Path.Combine([Base, .. parts])).FullName;
+
+        /// <summary>The links a test made — removed FIRST, as links, so the recursive delete never walks through one.</summary>
+        public List<string> Links { get; } = [];
+
+        public void Dispose()
+        {
+            foreach (var link in Links)
+            {
+                try
+                {
+                    Directory.Delete(link);
+                }
+                catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+            }
+
+            try
+            {
+                Directory.Delete(Base, recursive: true);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException) { }
+        }
+    }
+
+    [Fact]
+    public void ARootThatContainsTheProfileTheDataDirectoryOrASystemDirectory_IsRefused()
+    {
+        using var at = new Layout();
+        _ = (at.Profile, at.Data, at.System);
+
+        var verdict = QuestionRoots.Validate([at.Home, Path.Combine(at.Base, "local"), Path.Combine(at.Base, "win"), at.Base], at.Data, at.Places, Directory.Exists);
+
+        verdict.Accepted.Should().BeEmpty("each of the four CONTAINS a place a disk row may not read — reading its parent reads it too");
+        verdict.Refused.Should().HaveCount(4);
+        verdict.Refused[0].Should().Contain("contains the user profile directory");
+        verdict.Refused[1].Should().Contain("contains the data directory");
+        verdict.Refused[2].Should().Contain("contains a system directory");
+        at.Under("projects", "alpha");
+        QuestionRoots.Validate([Path.Combine(at.Base, "projects")], at.Data, at.Places, Directory.Exists).Accepted
+            .Should().ContainSingle("a sibling of the places is the ordinary case");
+    }
+
+    [Theory]
+    [InlineData(".ssh")]
+    [InlineData(".aws")]
+    [InlineData(".gnupg")]
+    [InlineData(".claude")]
+    [InlineData(".codex")]
+    [InlineData(".azure")]
+    [InlineData(".config/gcloud")]
+    public void ACredentialDirectory_OrAnythingInsideOne_IsRefused(string credentials)
+    {
+        using var at = new Layout();
+        var dir = Directory.CreateDirectory(Path.Combine(at.Profile, credentials)).FullName;
+        var inside = Directory.CreateDirectory(Path.Combine(dir, "nested")).FullName;
+
+        var verdict = QuestionRoots.Validate([dir, inside], at.Data, at.Places, Directory.Exists);
+
+        verdict.Accepted.Should().BeEmpty($"{credentials} holds a vendor's or the machine's credentials");
+        verdict.Refused.Should().HaveCount(2).And.OnlyContain(r => r.Contains("credential"));
+    }
+
+    [Fact]
+    public void ACredentialDirectoryByName_IsRefusedOutsideTheProfileToo_AndAFolderHoldingOne_IsRefused()
+    {
+        using var at = new Layout();
+        var copied = at.Under("backup", ".ssh");
+        var config = Directory.CreateDirectory(Path.Combine(at.Profile, ".config", "gcloud")).FullName;
+
+        var verdict = QuestionRoots.Validate([copied, Path.GetDirectoryName(config)!], at.Data, at.Places, Directory.Exists);
+
+        verdict.Accepted.Should().BeEmpty("a .ssh copied elsewhere is still keys, and ~/.config holds gcloud's");
+        verdict.Refused.Should().HaveCount(2).And.OnlyContain(r => r.Contains("credential"));
+    }
+
+    [Fact]
+    public void ARootReachedThroughALink_IsJudgedAtItsTarget()
+    {
+        using var at = new Layout();
+        var straight = Link(at, Path.Combine(at.Base, "to-profile"), at.Profile);
+        var through = Path.Combine(Link(at, Path.Combine(at.Base, "to-home"), at.Home), "me");
+        var toKeys = Link(at, Path.Combine(at.Base, "to-keys"), Directory.CreateDirectory(Path.Combine(at.Profile, ".ssh")).FullName);
+
+        var verdict = QuestionRoots.Validate([straight, through, toKeys], at.Data, at.Places, Directory.Exists);
+
+        verdict.Accepted.Should().BeEmpty("a junction or a symlink to the profile, or to a folder above or inside a refused place, is that place");
+        verdict.Refused.Should().HaveCount(3);
+        verdict.Refused[0].Should().Contain("user profile directory itself");
+        verdict.Refused[1].Should().Contain("user profile directory itself", "a link in the MIDDLE of the path moves the rest of it");
+        verdict.Refused[2].Should().Contain("credential");
+    }
+
+    /// <summary>A directory link without a privilege: a junction on Windows (<c>mklink /J</c>), a symlink elsewhere.</summary>
+    private static string Link(Layout at, string link, string target)
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            using var made = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", ["/c", "mklink", "/J", link, target])
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+            })!;
+            made.WaitForExit(10_000).Should().BeTrue("mklink answers at once");
+            made.ExitCode.Should().Be(0, made.StandardError.ReadToEnd());
+        }
+        else
+        {
+            Directory.CreateSymbolicLink(link, target);
+        }
+
+        Directory.Exists(link).Should().BeTrue("the link was made");
+        at.Links.Add(link);
+
+        return link;
+    }
+
     [Fact]
     public void TheRefusedRoots_ReachPanelSettingsAsComplaints_AndNeverTheRootsList()
     {

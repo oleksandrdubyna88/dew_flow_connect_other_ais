@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.Notices;
 using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Reviewers;
@@ -109,16 +110,25 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         : string.IsNullOrWhiteSpace(launched.Answer) ? (RowOutcomes.Failed, "the consultant exited cleanly but answered nothing")
         : null;
 
+    /// <remarks>
+    /// The advice is what a MODEL wrote, and it is written down — the record, the database, the reply, the card — so it
+    /// passes the product's redaction first (S4b item 3), the source resolver's road: <see cref="Redaction.SafeSource"/>
+    /// keeps the layout, cuts nothing, and fails closed to <see cref="Redaction.Redacted"/>.
+    /// </remarks>
     private static QuestionRowRecord Answered(QuestionRowRecord start, string advice, TimeSpan elapsed, Usage usage, string note) =>
         advice.Trim().Length == 0
             ? Ended(start, RowOutcomes.Failed, "the consultant answered, and its answer carried no advice", elapsed, usage, note)
-            : Ended(start, RowOutcomes.Answered, string.Empty, elapsed, usage, note) with { Advice = advice.Trim() };
+            : Ended(start, RowOutcomes.Answered, string.Empty, elapsed, usage, note) with { Advice = Redaction.SafeSource(advice.Trim()) };
 
+    /// <remarks>
+    /// The reason can carry a CLI's stderr (<see cref="ReviewerSummaryFactory.Describe"/> keeps its tail), so it is a
+    /// written-down text like the advice: one line through <see cref="Redaction.SafeText"/>, bounded at the detail limit.
+    /// </remarks>
     private static QuestionRowRecord Ended(QuestionRowRecord start, string status, string reason, TimeSpan elapsed, Usage usage, string note = "") =>
         start with
         {
             Status = status,
-            Reason = reason,
+            Reason = Redaction.SafeText(reason, Redaction.DetailLimit),
             Seconds = Math.Round(elapsed.TotalSeconds, 1),
             TokensIn = usage.TokensIn,
             TokensOut = usage.TokensOut,

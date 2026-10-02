@@ -63,7 +63,11 @@ public sealed record EscalationAdvice(
     string Flag,
     string Status,
     string Reason,
-    string Advice);
+    string Advice)
+{
+    /// <summary>The row's note — a disk root the invariant could not watch (S4b item 5) is read WITH the advice it qualifies. Absent in a card written before it.</summary>
+    public string Note { get => field ?? string.Empty; init; } = string.Empty;
+}
 
 /// <summary>What a person wrote back, and — when they pressed a button — what they chose.</summary>
 public sealed record EscalationAnswer(string Id, string Answer, string AnsweredUtc)
