@@ -23,6 +23,9 @@ a run; focus ranks its source. Detectors are bounded lexical heuristics, includi
 a match is not proof of vulnerability. A non-matching preset becomes an incomplete/excluded pairing when any
 diff exceeds the character cap or files exceed the count cap. Fully inspected non-matches are
 ordinary skips. Positive matches still run with partial context; oversized diff bodies stay withheld.
+SQL routing uses database API names and bounded query/statement shapes. Generic `database` and
+`migration` prose alone does not select SQL; `DbConnection`, `DbCommand`, `DbContext`, Dapper and
+`MigrationBuilder` still do. This remains lexical routing, not parsing or proof of a data flow.
 Unknown triggers refuse their prompt; unknown focus is ignored with
 a complaint. Invalid root configuration leaves the lane off. Unknown settings fields survive
 extension edits so an older server can refuse them.
@@ -84,8 +87,9 @@ prompt metadata is registered in the lane's prompt library. Empty or oversized t
 
 At the operator's request, all thirteen prompts were shortened to approximately half their word
 count on 2026-10-01. The source/evidence and output sections remain, with the declared schema owning
-the exact required keys. This wording has not yet passed the three-consecutive-answer quality
-preflight; see [the measurement record](RESULTS_security_lane_qwen_windows.md).
+the exact required keys. Qwen did not pass the three-consecutive-answer quality preflight. Gemma
+passed the empty-answer feature-slice preflight, but positive-finding fidelity remains open; see
+[the consolidated measurement record](RESULTS_security_lane_local_llm_windows.md).
 
 The extension's Security lane section controls pairings, triggers, focus, source mode, token budget,
 stages, threshold and rounds. A reviewer can be enabled for security alone. A malformed imported
