@@ -221,6 +221,60 @@ public sealed partial class TheBuiltBinariesTests : IDisposable
     }
 
     /// <summary>
+    /// A port somebody else holds ends the server with EX_TEMPFAIL and one line — never a crash.
+    /// </summary>
+    /// <remarks>
+    /// <para>A taken port is an EXPECTED startup failure: the deploy unit restarts the service, a
+    /// test harness retries another candidate, an operator reads one line. It used to escape
+    /// `RunAsync` as an unhandled <see cref="IOException"/>, so every collision was a crash — the
+    /// runtime's own "Unhandled exception." block on stderr, an exit code no caller can branch on, and
+    /// on Windows a `.NET Runtime 1026` event plus an error report per occurrence: 415 of them on one
+    /// developer machine between 2026-09-17 and 2026-10-01, every one from this suite's own
+    /// deliberate collisions.</para>
+    /// <para>75 rather than 78 on purpose: 78 is EX_CONFIG, which the unit's
+    /// `RestartPreventExitStatus=78` treats as permanent, while a port is held by somebody else only
+    /// until they let go — `Restart=always` is exactly right for it.</para>
+    /// </remarks>
+    [Fact]
+    public async Task APortSomebodyHolds_EndsTheServerWithTempfailAndOneLine_NotACrash()
+    {
+        MustExist(BugsExe);
+        var thief = new TcpListener(IPAddress.Loopback, 0);
+        thief.Start();
+        var taken = ((IPEndPoint)thief.LocalEndpoint).Port;
+
+        try
+        {
+            var server = Start(BugsExe, $"--urls http://127.0.0.1:{taken}", _dir);
+
+            try
+            {
+                (await Listening(server, taken)).Should().BeFalse("the port is held");
+                server.Process.WaitForExit(TimeSpan.FromSeconds(15)).Should().BeTrue();
+
+                var said = server.Text;
+                said.Should().NotContain(
+                    "Unhandled exception",
+                    $"a taken port is an expected failure and must not end in a crash. It said: {said}");
+                server.Process.ExitCode.Should().Be(
+                    75, $"EX_TEMPFAIL tells the unit and a harness to try again. It said: {said}");
+                said.Should().Contain(
+                    $"127.0.0.1:{taken}", "the one line names the address it could not take");
+                LostToARace(said).Should().BeTrue(
+                    $"and the harness's retry must still recognise it. It said: {said}");
+            }
+            finally
+            {
+                Stop(server);
+            }
+        }
+        finally
+        {
+            thief.Stop();
+        }
+    }
+
+    /// <summary>
     /// What THIS platform prints when the port is taken is something the retry recognises.
     /// </summary>
     /// <remarks>
