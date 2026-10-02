@@ -3,6 +3,7 @@ import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { ConsultPromptFile } from './consultPromptFile';
 import { notify } from './notify';
+import { askPerson } from './personWait';
 import { type QconsultSettings, qconsultSettingsFrom } from './qconsultSettings';
 import { SHIPPED_QUESTION_PROMPTS } from './questionPrompts.generated';
 import {
@@ -150,19 +151,19 @@ async function settled<T extends { readonly refusal: string }>(
 
 /** A prompt of your own: its title, then the capability it needs. Dismissing either box adds nothing. */
 async function addPrompt(settings: QconsultSettings, hooks: QconsultWriteHooks): Promise<void> {
-  const title = await vscode.window.showInputBox({
+  const title = await askPerson(() => vscode.window.showInputBox({
     title: 'ConnectOtherAIs — a base prompt of your own',
     prompt: 'Its title — the id is made from it, so it is also the name its rows carry',
     ignoreFocusOut: true,
-  });
-  const capability = title === undefined ? undefined : await vscode.window.showQuickPick(
+  }));
+  const capability = title === undefined ? undefined : await askPerson(() => vscode.window.showQuickPick(
     [
       { label: 'none', detail: 'Answers from the question and its context alone — any runtime.' },
       { label: 'disk', detail: 'Reads the folders below, read-only — Claude Code, Codex (flagged), Antigravity (flagged).' },
       { label: 'web', detail: 'Searches the internet with the question alone — Claude Code, Codex (flagged).' },
     ],
     { title: 'What this prompt needs of its runtime', ignoreFocusOut: true },
-  );
+  ));
   if (title !== undefined && capability !== undefined) {
     await settled(promptAdded(settings.prompts, title, capability.label), 'qconsultPrompts', (r) => r.prompts, hooks);
   }
@@ -173,10 +174,10 @@ async function addPrompt(settings: QconsultSettings, hooks: QconsultWriteHooks):
  * judged at what its junctions and symlinks resolve to as well (S4b item 2: a link to the profile IS the profile).
  */
 async function addRoot(host: QconsultHost, settings: QconsultSettings, hooks: QconsultWriteHooks): Promise<void> {
-  const picked = await vscode.window.showOpenDialog({
+  const picked = await askPerson(() => vscode.window.showOpenDialog({
     canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
     title: 'A folder a disk row may read, read-only',
-  });
+  }));
   const folder = picked?.[0];
   if (folder !== undefined) {
     // A folder whose links cannot be followed is judged as it was picked — the server walks them again, and refuses there.
