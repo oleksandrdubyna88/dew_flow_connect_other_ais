@@ -57,17 +57,17 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
         var body = ReadPrompt(run.Prompt);
         if (string.IsNullOrWhiteSpace(body))
         { excluded.Add(new(run.Vendor, run.Prompt, $"prompt unavailable or over 64 KiB; write text at {prompts.FileToWrite(run.Prompt)}")); return; }
-        var pack = SecurityContext.Compose(body, prompt, facts, run.Context, run.ContextTokens, sources,
-            launchFor(provider, runtimeFor(provider)!).MaxTokens, omitted);
+        var budget = new SecurityContextBudget(run.ContextTokens, launchFor(provider, runtimeFor(provider)!).MaxTokens, omitted);
+        var pack = SecurityContext.Compose(body, prompt, facts, run.Context, budget, sources);
         if (pack.Refusal.Length > 0) { excluded.Add(new(run.Vendor, run.Prompt, pack.Refusal)); return; }
         work.Add(Build(provider, run, pack.Text));
     }
 
-    private string Skip(SecurityRun run, SecurityPrompt prompt, int round) =>
-        round > settings.SecurityLane.MaxRounds ? "security lane round budget spent"
-        : run.Refusal.Length > 0 ? run.Refusal
-        : prompt.Refusal.Length > 0 ? prompt.Refusal
-        : string.Empty;
+    private string Skip(SecurityRun run, SecurityPrompt prompt, int round)
+    {
+        if (round > settings.SecurityLane.MaxRounds) return "security lane round budget spent";
+        return run.Refusal.Length > 0 ? run.Refusal : prompt.Refusal;
+    }
 
     private static void RecordUnmatched(SecurityRun run, IReadOnlyList<SecurityFile> facts, int omitted,
         List<SkippedRole> skipped, List<ExcludedRole> excluded)
@@ -80,12 +80,17 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
             "no matching trigger in this committed change; prior fixes were not verified by this run"));
     }
 
-    private string Refusal(ProviderSettings provider) =>
-        !provider.Enabled ? "reviewer row disabled"
-        : !canRun(provider) ? "reviewer runtime or credentials unavailable"
-        : runtimeFor(provider) is RemoteRuntime ? "this Team runtime does not advertise the security schema; use a local CLI or API reviewer row"
-        : runtimeFor(provider) is ApiRuntime ? ApiRowView.Of(provider, settings.ApiOverrides).Refusal
-        : string.Empty;
+    private string Refusal(ProviderSettings provider)
+    {
+        if (!provider.Enabled) return "reviewer row disabled";
+        if (!canRun(provider)) return "reviewer runtime or credentials unavailable";
+        return runtimeFor(provider) switch
+        {
+            RemoteRuntime => "this Team runtime does not advertise the security schema; use a local CLI or API reviewer row",
+            ApiRuntime => ApiRowView.Of(provider, settings.ApiOverrides).Refusal,
+            _ => string.Empty,
+        };
+    }
 
     private string ReadPrompt(string id)
     {

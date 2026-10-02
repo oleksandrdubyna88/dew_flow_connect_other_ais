@@ -9,12 +9,13 @@ namespace CoaiMcp.Core.Security;
 public sealed record Reproduction(string Preconditions, string Steps, string Expected, string Actual)
 {
     public const int MaxCharacters = 8000;
+    private static readonly string[] PartNames = ["preconditions", "steps", "expected", "actual"];
     public bool Complete => new[] { Preconditions, Steps, Expected, Actual }.All(s => !string.IsNullOrWhiteSpace(s));
 
     public static Reproduction? Read(JsonElement value)
     {
         if (value.ValueKind != JsonValueKind.Object) return null;
-        var parts = new[] { "preconditions", "steps", "expected", "actual" }.Select(key => Part(value, key)).ToArray();
+        var parts = PartNames.Select(key => Part(value, key)).ToArray();
         return parts.Sum(s => s.Length) <= MaxCharacters ? new(parts[0], parts[1], parts[2], parts[3]) : null;
     }
 

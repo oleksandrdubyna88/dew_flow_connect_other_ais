@@ -11,11 +11,17 @@ internal static class SecurityAnswerLimit
     internal static ReviewerOutcome Apply(ReviewerWork work, ReviewerOutcome outcome)
     {
         if (!work.IsSecurity || outcome is not ReviewerOutcome.Ok ok) return outcome;
-        var reason = ok.Review.Findings.Length > MaxFindings ? $"security response exceeds {MaxFindings} findings"
-            : ok.Review.Findings.Sum(f => Size(f.Reproduction) + (f.AttackEvidence?.Characters ?? 0)) > MaxReproductionCharacters
-                ? $"security evidence exceeds {MaxReproductionCharacters} characters per response" : ProtocolRefusal(ok.Review);
+        var reason = Refusal(ok.Review);
         return reason.Length == 0 ? outcome : new ReviewerOutcome.Unparseable(reason, ok.LastTurnUsage)
         { EarlierTurns = ok.EarlierTurns };
+    }
+
+    private static string Refusal(Core.Findings.NormalisedReview review)
+    {
+        if (review.Findings.Length > MaxFindings) return $"security response exceeds {MaxFindings} findings";
+        if (review.Findings.Sum(f => Size(f.Reproduction) + (f.AttackEvidence?.Characters ?? 0)) > MaxReproductionCharacters)
+            return $"security evidence exceeds {MaxReproductionCharacters} characters per response";
+        return ProtocolRefusal(review);
     }
 
     private static string ProtocolRefusal(Core.Findings.NormalisedReview review)

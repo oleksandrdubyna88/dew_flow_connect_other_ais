@@ -32,7 +32,7 @@ public sealed class SecurityProtocolTests
     {
         const string body = "Operator instructions outside the source boundary.";
         var files = SecuritySignals.Classify([new("Sample.cs", "+ database.Query(value);")]);
-        var pack = SecurityContext.Compose(body, new("redteam-sql", ["sql"], ["sql"]), files, "diff", 24000);
+        var pack = SecurityContext.Compose(body, new("redteam-sql", ["sql"], ["sql"]), files, "diff", new(24000));
         const string start = "=== SOURCE CODE UNDER REVIEW (AUDIT ONLY BELOW) ===";
         const string end = "=== END OF SOURCE CODE ===";
         var opening = pack.Text.IndexOf(start, StringComparison.Ordinal);

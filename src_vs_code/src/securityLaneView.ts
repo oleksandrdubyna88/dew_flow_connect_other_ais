@@ -6,7 +6,13 @@ import type { Vendor } from './vendors';
 const at = (field: string): string => `data-setting="securityLane" data-security-field="${esc(field)}"`;
 const check = (field: string, on: boolean, label: string, disabled = false): string => `<label><input type="checkbox" ${at(field)}${on ? ' checked' : ''}${disabled ? ' disabled' : ''}> ${esc(label)}</label>`;
 const count = (field: string, value: number, min: number, max: number): string => `<input type="number" ${at(field)} min="${min}" max="${max}" value="${value}">`;
-const select = (field: string, value: string, choices: readonly string[]): string => `<select ${at(field)}>${[...new Set([value, ...choices])].map(id => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(id)}</option>`).join('')}</select>`;
+const option = (id: string, value: string): string => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(id)}</option>`;
+const select = (field: string, value: string, choices: readonly string[]): string => {
+  const options = [...new Set([value, ...choices])].map(id => option(id, value)).join('');
+  return `<select ${at(field)}>${options}</select>`;
+};
+const signalLabels = (): string => SECURITY_SEED.signals.map(s =>
+  `<code>${esc(s.id)}</code> (${esc(s.label)}${s.trigger ? '' : '; focus only'})`).join(', ');
 
 export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[], version: string): string {
   if ('invalidConfiguration' in lane) return '<p class="stale">Security lane is off: malformed configuration was preserved in coai.securityLane.invalidConfiguration. Correct that object in settings JSON and replace coai.securityLane with it.</p>';
@@ -18,7 +24,7 @@ export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[],
       <label>Allowed major/blocking findings ${count('threshold', lane.threshold, 0, 100)}</label>
       <label>Maximum rounds ${count('maxRounds', lane.maxRounds, 1, 10)}</label>
       <h3>Prompts</h3><p>Tick each check for the reviewer that should run it. Matching code conditions are required for the twelve presets; removing every trigger disables their execution. Custom prompts with no triggers run every time. Focus prioritizes source. At most 16 reviewer / prompt pairs.</p>
-      <p>${SECURITY_SEED.signals.map(s => `<code>${esc(s.id)}</code> (${esc(s.label)}${s.trigger ? '' : '; focus only'})`).join(', ')}</p>`
+      <p>${signalLabels()}</p>`
     + lane.prompts.map(p => promptBody(p, lane, vendors, old)).join('')
     + `<label>Add prompt (redteam-name) <input type="text" ${at('addPrompt')} value=""></label><h3>Reviewer / prompt pairs</h3>`
     + lane.runs.map((r, i) => runBody(r, i, lane, vendors)).join('')

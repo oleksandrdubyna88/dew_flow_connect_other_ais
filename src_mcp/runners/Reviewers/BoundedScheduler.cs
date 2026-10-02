@@ -222,9 +222,14 @@ public sealed class BoundedScheduler(
             // A cloud reviewer's outcome is recorded as it finishes, so a local row that reaches the card
             // afterwards can see whether the cloud was quiet (issue #485). Null when the switch is off.
             var cloudProgress = Recording(onProgress, standDown);
-            var tasks = work.Select(w => w.Invocation.IsOnEngine
-                ? EngineLaneAsync(w, executor, onProgress, w.IsSecurity ? null : standDown, ct)
-                : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, w.IsSecurity ? onProgress : cloudProgress, ct));
+            var tasks = work.Select(w =>
+            {
+                var engineStandDown = w.IsSecurity ? null : standDown;
+                var progress = w.IsSecurity ? onProgress : cloudProgress;
+                return w.Invocation.IsOnEngine
+                    ? EngineLaneAsync(w, executor, onProgress, engineStandDown, ct)
+                    : MachineLaneAsync(w, global, perProvider[w.Invocation.Provider], runningPerProvider, executor, progress, ct);
+            });
             return await Task.WhenAll(tasks);
         }
         finally

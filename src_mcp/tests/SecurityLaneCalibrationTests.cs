@@ -14,6 +14,8 @@ namespace CoaiMcp.Tests;
 /// <summary>Explicit hardware measurement through real code rounds. Never part of unattended CI.</summary>
 public sealed class SecurityLaneCalibrationTests
 {
+    private static readonly JsonSerializerOptions ManifestJson = new() { WriteIndented = true };
+    private static readonly string[] CalibrationPrompts = ["redteam-authz", "redteam-sql"];
     internal static string Model => Environment.GetEnvironmentVariable("COAI_SECURITY_CALIBRATION_MODEL")
         ?? "Qwen3.5-35B-A3B-Q5_vk128:latest";
     private const string Scope = """
@@ -51,14 +53,14 @@ public sealed class SecurityLaneCalibrationTests
             head,
             sourceHash = Hash(Source(true)),
             utc = DateTimeOffset.UtcNow,
-            prompts = new[] { "redteam-authz", "redteam-sql" }.Select(id => new
+            prompts = CalibrationPrompts.Select(id => new
             { id, sha256 = Hash(RolePrompts.ShippedDefaultFor(id)) }),
             ordinaryReviewer = "FakeCli clean answer; only local security findings are measured",
             limitation = "Token usage cannot prove local input coverage. Reproductions are not executed.",
-        }, new JsonSerializerOptions { WriteIndented = true }));
+        }, ManifestJson));
         for (var repeat = 1; repeat <= 3; repeat++)
             await RunCell(repo.Path, baseline, head, Path.Combine(output!, $"repeat-{repeat}"), real, Scope,
-                ["redteam-authz", "redteam-sql"]);
+                CalibrationPrompts);
     }
 
     internal static async Task RunCell(string repo, string baseline, string revision, string output, ProcessLauncher real,

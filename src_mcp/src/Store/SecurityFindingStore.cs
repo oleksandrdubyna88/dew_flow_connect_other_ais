@@ -12,14 +12,20 @@ internal static class SecurityFindingStore
             ? string.Empty : JsonSerializer.Serialize(SecurityFindingDetails.Of(finding),
                 ServerJsonContext.Default.SecurityFindingDetails);
 
-    internal static string Column(SqliteConnection db) => RoundsQuery.HasColumn(db, "findings", "security_evidence")
-        ? "security_evidence" : "''";
-
     internal static SecurityFindingDetails? Read(SqliteDataReader rows)
     {
-        var json = rows.GetString(rows.GetOrdinal("security_evidence"));
+        var column = EvidenceColumn(rows);
+        if (column < 0) return null; // Older databases predate the optional projection.
+        var json = rows.GetString(column);
         if (json.Length == 0) return null;
         try { return JsonSerializer.Deserialize(json, ServerJsonContext.Default.SecurityFindingDetails); }
         catch (JsonException) { return null; } // A damaged projection cannot prevent reading the round.
+    }
+
+    private static int EvidenceColumn(SqliteDataReader rows)
+    {
+        for (var column = 0; column < rows.FieldCount; column++)
+            if (rows.GetName(column) == "security_evidence") return column;
+        return -1;
     }
 }

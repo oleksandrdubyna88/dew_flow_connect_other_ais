@@ -12,6 +12,7 @@ namespace CoaiMcp.Tests;
 /// <summary>Operator-requested, sequential audit of a committed change using every shipped module.</summary>
 public sealed class SecurityLaneAuditTests
 {
+    private static readonly JsonSerializerOptions ManifestJson = new() { WriteIndented = true };
     [Fact(Explicit = true)]
     public async Task Each_module_reviews_the_committed_change_on_Windows_Ollama()
     {
@@ -47,7 +48,7 @@ public sealed class SecurityLaneAuditTests
                 id = p.Id,
                 sha256 = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(RolePrompts.ShippedDefaultFor(p.Id)))),
             }),
-        }, new JsonSerializerOptions { WriteIndented = true }));
+        }, ManifestJson));
         var failures = new List<string>();
         foreach (var prompt in modules)
         {
