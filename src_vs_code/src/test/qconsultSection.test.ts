@@ -7,7 +7,7 @@ import { admit } from '../capabilityAdmission';
 import { QCONSULT_SINCE, type QuestionRowSetting } from '../qconsultSettings';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
-import { type Control, type Page, click, panelState, runPanel } from './panelPageHarness';
+import { type Control, type Page, click, panelState, runPanel, withoutSeq } from './panelPageHarness';
 
 /**
  * The Question consultant tab, RUN (todo/PLAN_question_consultant.md, S4 acceptance 2): its own script over its
@@ -137,7 +137,7 @@ test('Restore default is pressed on an edited shipped prompt — and the box the
 
   assert.equal(controlOf(edited, 'qconsultPromptText', 'question-opinion').value, '', 'a textarea carries its words between its tags, not in value');
   click(edited, 'qconsultRestorePrompt', 'question-opinion');
-  assert.deepEqual(edited.posted.at(-1), { type: 'command', command: 'qconsultRestorePrompt', id: 'question-opinion' });
+  assert.deepEqual(withoutSeq(edited.posted.at(-1)!), { type: 'command', command: 'qconsultRestorePrompt', id: 'question-opinion' });
 
   // What the host repaints once the override file is gone: the shipped words, read from the seed the server embeds.
   const restored = page([], { qconsultPromptOverrides: {} });
@@ -175,7 +175,7 @@ test('Add a row, Remove, Add a prompt and Add a folder are buttons the page bind
 
   for (const [command, id] of [['qconsultAddRow', ''], ['qconsultRemoveRow', 'sonnet-1'], ['qconsultAddPrompt', ''], ['qconsultAddRoot', '']] as const) {
     click(on, command, id);
-    assert.deepEqual(on.posted.at(-1), { type: 'command', command, id });
+    assert.deepEqual(withoutSeq(on.posted.at(-1)!), { type: 'command', command, id });
   }
 });
 
