@@ -2537,3 +2537,18 @@ endpoint is read from `ReviewerRuntime.cs` (no `-m` without a model), not observ
 
 **What this does NOT prove.** No real webview runs here: what a native dropdown shows while a box detaches options is
 Chromium's, and is not observed. Enter on a prompt picker is not page-tested — no shipped role has 15 prompts.
+
+## The busy mark (2026-10-02, PLAN_model_search_and_busy_marks E3)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `renderTracker.test.ts` (new, 12) | Renders numbered and run side by side: a slow render never holds up the next; each told its number; `runAfter` sharing / answering at once; a stalled post-mark render does not hold a write a LATER render carried; a render begun before the mark not counted; a grace period shares the listener's render and starts one when none comes; a failed render rejects a write only when nothing else after its mark runs; `superseded`; a synchronous throw never wedges it | `a slow render never holds up the next one` and a 3 s hang on the synchronous throw — both against the withdrawn serialising `RenderCoalescer`; teeth: five decisions deleted → 1, 2, 1, 1, 1 red |
+| `inFlight.test.ts` (new, 9 — with a page that refuses its post not stopping the others) | `InFlight` and `tracked()`: the count and the oldest age; `busy` to every slot at start and end; `settled {seq, doc, ok}` to the poster only; a throwing work settles `ok: false` and is reported; dispose settles all; a double finish never below zero; `settleAfterWrite`'s order; `askOf` | teeth: the settle post, the final announcement, `finish`, `ok = true` → 2, 2, 2, 1 red; either await of the settle order → 1 |
+| `busyMarkWiring.test.ts` (new, 5, structural — with the superseded-paint skip and the tracker's grace) | `PanelProvider` cannot be constructed here: each write is followed by its settle in the same turn, a command tracked, `ready` answered, the snapshot in `withCaret`, `dispose` registered | each of three lines deleted from the SOURCE → 1 red |
+| `busyMarkPage.test.ts` (new, 12 — with a control's mark kept while a second operation on it runs) | The page RUN on `PageClock`: 499 ms nothing / 500 ms bar + `aria-busy`; settled clears both; settled at 300 ms never shows; commands numbered, focus not; painted age; host-only marks no control; `ready` last and its answer; a replaced page; a new document's seq 1 not cleared by its predecessor's; two writes; the paint key untouched by the snapshot | `a numbered post names the document that sent it` before `doc` existed; teeth: eight lines of the fragment → 6, 1, 2, 3, 2, 2, 1, 4 red, the document check → 1 |
+| `panelPageHarness.ts` (widened) | `PageClock` — `setTimeout` runs only when a test advances past it; `hidden`/`removeAttribute`; the busy bar read off the markup; `withoutSeq` and `work(page)` check the number and compare the rest | — |
+| changed to compare through `withoutSeq` | `apiSettingsCard`, `consultantSectionScript`, `endpointModelsCard`, `gateModelPickers`, `panelPageHarness`, `thePromptBoxRemembers`, `liveRegionsRebind`, `panelStorageScript` (the last three with fakes of their own) | `+ seq: 1` on every exact message comparison, and `{ type: 'ready' }` in exact posted lists |
+
+**What this does NOT prove.** No real webview runs: the bar's look and the animation are not observed, and VS Code
+dropping a message posted while a document loads is reasoned (hence `ready`), not reproduced. The host's tracking is
+tested as values over fake slots; `PanelProvider.receive` itself is the standing extension-host gap.

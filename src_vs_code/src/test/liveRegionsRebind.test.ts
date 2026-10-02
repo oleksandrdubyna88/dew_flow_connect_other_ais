@@ -6,6 +6,12 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 import type { DataLocation } from '../dataDir';
+import { withoutSeq } from './panelPageHarness';
+
+/** What the page ASKED the host for: its load-time `ready` left out, and every post checked for its number and compared
+ * without it (`withoutSeq`, the busy mark’s numbering). */
+const asked = (posted: readonly unknown[]): readonly Record<string, unknown>[] =>
+  (posted as Record<string, unknown>[]).filter((one) => one['type'] !== 'ready').map(withoutSeq);
 
 /**
  * A click must post ONE message, however long the panel has been open.
@@ -194,7 +200,7 @@ test('a region that was replaced binds its new controls, and a press posts once'
   (page.regions.get('live-notifications') as Region).only().click();
 
   assert.deepEqual(
-    page.posted,
+    asked(page.posted),
     [{ type: 'command', command: 'showNotifications', id: '' }],
     'the button inside the patched markup reaches the host',
   );
@@ -211,7 +217,7 @@ test('a tick that changed NOTHING does not bind the same control a second time',
   }
   (page.regions.get('live-notifications') as Region).only().click();
 
-  assert.equal(page.posted.length, 1, 'one press, one message — not one per tick since the paint');
+  assert.equal(asked(page.posted).length, 1, 'one press, one message — not one per tick since the paint');
 });
 
 test('the questions region three lines away behaves the same way', () => {
@@ -225,7 +231,7 @@ test('the questions region three lines away behaves the same way', () => {
   page.tick({ questions: answer });
   (page.regions.get('live-questions') as Region).only().click();
 
-  assert.deepEqual(page.posted, [{ type: 'command', command: 'answer', id: 'q1' }]);
+  assert.deepEqual(asked(page.posted), [{ type: 'command', command: 'answer', id: 'q1' }]);
 });
 
 test('every live region is patched, and one that changed is bound while the others are left alone', () => {
@@ -245,7 +251,7 @@ test('every live region is patched, and one that changed is bound while the othe
   (page.regions.get('live-notifications') as Region).only().click();
   (page.regions.get('live-questions') as Region).only().click();
 
-  assert.deepEqual(page.posted, [
+  assert.deepEqual(asked(page.posted), [
     { type: 'command', command: 'showNotifications', id: '' },
     { type: 'command', command: 'answer', id: 'q2' },
   ]);

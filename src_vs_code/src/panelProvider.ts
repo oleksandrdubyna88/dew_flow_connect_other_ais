@@ -104,6 +104,8 @@ import {
 } from './settingsShape';
 import { afterTheWrite, saveOrSnapBack, writePlain } from './refusedWrite';
 import { WriteQueue } from './writeQueue';
+import { RenderTracker } from './renderTracker';
+import { askOf, InFlight, settleAfterWrite, settleEverything, tracked } from './inFlight';
 import {
   mirroredLines,
   NetworkingMode,
@@ -208,6 +210,15 @@ const TEAM_SERVER_FRESH_MS = 60 * 1000;
  */
 const MINT_BACKOFF_MS = 10 * 60 * 1000;
 
+/**
+ * How long a written setting's busy mark waits for the configuration listener's render before starting one of its own.
+ *
+ * <p>The listener's render arrives a turn or two after the write; without the wait, each write cost two full renders
+ * (final E3 round, gemini). Long enough for that, short enough that a write which changed nothing — no event, so no
+ * listener render — still settles well inside the half second before its mark would show.</p>
+ */
+const SETTLE_GRACE_MS = 250;
+
 /** Is this caller's consultant a DEFINITION on that runtime? An unplaceable entry is on none. */
 function onRuntime(one: ResolvedConsultant | undefined, runtime: string): boolean {
   return one !== undefined && one.kind === 'definition' && one.runtime === runtime;
@@ -230,6 +241,10 @@ interface PanelMessage {
   readonly editing?: boolean;
   readonly start?: number;
   readonly end?: number;
+  /** The page's own number for a setting, prompt or command, which the host settles it under (`inFlight.ts`). */
+  readonly seq?: number;
+  /** The document that numbered it — echoed in `settled`, so a predecessor's number cannot clear this one's mark. */
+  readonly doc?: string;
 }
 
 export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
@@ -369,6 +384,15 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * `render` awaits the queue.</p>
    */
   private readonly writes = new WriteQueue();
+
+  /**
+   * The renders, numbered, so a write knows when one has carried it (`renderTracker.ts`). They still run side by side.
+   * A write's settle waits up to {@link SETTLE_GRACE_MS} for the configuration listener's render before starting one.
+   */
+  private readonly renders = new RenderTracker((number) => this.renderNow(number), SETTLE_GRACE_MS);
+
+  /** What the pages posted and the host has not finished — what their busy marks are drawn from (`inFlight.ts`). */
+  private readonly inFlight = new InFlight<SurfaceSlot>(() => Date.now());
 
   constructor(
     private readonly context: vscode.ExtensionContext,
@@ -932,14 +956,20 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // A setting write like any other, so it is serialised with them (the gate's code round).
       const { role, round } = m;
       this.enqueue(() => this.choosePrompt(role, round, String(m.value), from));
+      this.settleQueued(from, m);
     } else if (m.type === 'setting') {
       this.enqueue(() => this.write(settingMessageFrom(m), from));
+      this.settleQueued(from, m);
     } else if (m.type === 'focus') {
       if (from.edited(m.editing === true, m.id ?? '', Number(m.start), Number(m.end))) {
         void this.render();
       }
     } else if (m.type === 'command') {
-      void this.run(m.command, m.id, from);
+      this.track(from, m, () => this.run(m.command, m.id, from));
+    } else if (m.type === 'ready') {
+      // A document that has just loaded asks what is running: anything announced while it was being replaced
+      // reached the document it replaced (research/PLAN_model_search_and_busy_marks.md §3.12).
+      from.post({ type: 'busy', ...this.inFlight.snapshot() });
     } else if (m.type === 'tab') {
       // Held by the host, never drawn into the markup (D6), and answered with the tab now held: a page
       // that was repainted while the press was on its way shows the tab the person chose, and a page
@@ -950,7 +980,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /** What a slot paints on, and the page it paints — the page built only if the key says it is due. */
   private pageFor(slot: SurfaceSlot, state: PanelState): { key: string; html: () => string } {
-    const withCaret = (): PanelState => ({ ...state, focus: slot.focus() });
+    // What is in flight rides with the caret: read when BUILT, never in the key (busyMark.ts).
+    const withCaret = (): PanelState => ({ ...state, focus: slot.focus(), busy: this.inFlight.snapshot() });
     if (slot === this.settingsTab) {
       // The size and tone are read when the page is BUILT, not with the state: a render awaits a dozen probes
       // after gathering it, and a press in between would otherwise be drawn over by the old value — with
@@ -964,8 +995,49 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     return { key: staticKey(state), html: () => panelHtml(withCaret(), this.nonce) };
   }
 
-  /** Re-read everything and repaint: the configuration, the sessions, the ledger and the probes. */
-  async render(): Promise<void> {
+  /**
+   * A write the page numbered, already queued as every write is: tracked until the queue has written it AND a render
+   * that started after it was queued has finished (research/PLAN_model_search_and_busy_marks.md §3.9).
+   *
+   * <p>Beside the queue, never inside it: work in the queue that waited on a render would be the self-wait
+   * `afterTheWrite` exists to avoid. The mark is taken in the same turn the write was queued, so any render numbered
+   * after it awaits the queue before it reads the configuration — which is how the configuration listener's own render
+   * is shared rather than followed by a second one. The queue swallows a failed write (and its refusal is already said
+   * by `reportRefusal`), so a write settles `ok` once it is done either way; only a failed render settles `ok: false`.</p>
+   */
+  private settleQueued(from: SurfaceSlot, m: PanelMessage): void {
+    this.track(from, m, settleAfterWrite(this.writes, this.renders), false);
+  }
+
+  /**
+   * Runs what a page posted under the in-flight record when the page numbered it (`askOf`). Unnumbered — a page from
+   * before the busy mark — it runs plainly when `plainly` says the work must happen anyway (a command), and not at all
+   * when the work is only the settling of something already done (a queued write).
+   */
+  private track(from: SurfaceSlot, m: PanelMessage, work: () => Promise<void>, plainly = true): void {
+    const ask = askOf(m);
+    if (ask !== undefined) {
+      void tracked(this.inFlight, this.slots, from, ask, work);
+    } else if (plainly) {
+      void work();
+    }
+  }
+
+  /** The panel is going away: whatever is still in flight is settled as not done, so no page is left marked busy. */
+  dispose(): void {
+    settleEverything(this.inFlight);
+  }
+
+  /**
+   * Re-read everything and repaint — counted (`renderTracker.ts`), so a write's busy mark can settle on a render that
+   * carried it. Renders still run side by side: one stalled on a slow fetch must not hold up the next paint.
+   */
+  render(): Promise<void> {
+    return this.renders.run();
+  }
+
+  /** The render itself: the configuration, the sessions, the ledger and the probes, then the paint. */
+  private async renderNow(number: number): Promise<void> {
     if (!anyHeld(this.slots)) {
       return;
     }
@@ -1081,6 +1153,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // write with it — which is how `поясни` was lost, five times a minute, to probes and version
     // checks nobody asked for. Each slot decides for its own page, with its own caret: a caret
     // recorded on one page is never put back into another.
+    // And a fourth: SKIP. Renders run side by side, so a slow one that read the state early can finish after a newer
+    // one has painted; painting it now would put the older state back (renderTracker.ts, the final E3 round).
+    if (this.renders.superseded(number)) {
+      return;
+    }
     const live = { type: 'live', ...liveRegions(state) };
     paintEach(this.slots, (slot) => this.pageFor(slot, state), live);
 

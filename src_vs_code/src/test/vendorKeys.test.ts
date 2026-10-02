@@ -7,7 +7,7 @@ import { panelState, runPanel } from './panelPageHarness';
 /**
  * The Vendor keys tab, as the Settings page draws it: whether it says a key is needed, and for whom.
  *
- * <p>Reported from a screenshot on 2026-10-02 (todo/PLAN_model_search_and_busy_marks.md, symptom 4): with an
+ * <p>Reported from a screenshot on 2026-10-02 (research/PLAN_model_search_and_busy_marks.md, symptom 4): with an
  * `openrouter` row on the Reviewers tab — switched off — this tab read <i>"Every reviewer you have signs in through
  * its own CLI, so none of them needs an API key"</i>. `keysBody` counted only ENABLED rows with a base URL, so a row
  * that cannot work without a key was described as not needing one.</p>

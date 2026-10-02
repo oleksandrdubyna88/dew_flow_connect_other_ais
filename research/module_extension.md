@@ -9901,7 +9901,7 @@ itself is `ProbeApiModeTests` and `apiKeyVendors.test.ts`.
 ## An endpoint row's empty model and its key say what is true (2026-10-02, PLAN_model_search_and_busy_marks E1)
 
 Two more sites of the decision above, reported from screenshots after 0.60.2 shipped. Design record:
-[PLAN_model_search_and_busy_marks.md](../todo/PLAN_model_search_and_busy_marks.md).
+[PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md).
 
 - **The empty model choice.** `modelWords(runtime, baseUrl)` — the reviewer card's tooltip and empty-choice label —
   decided by runtime alone, so an OpenRouter card offered *"the CLI's default"*. That entry stores an empty model; a
@@ -9931,7 +9931,7 @@ red.
 Reported after ≡ filled an OpenRouter card with two hundred `vendor/model` ids in the endpoint's own order: the only
 way to find one was to scroll. The operator asked for a field above the list that filters and sorts as one types, on
 every long list rather than only endpoint rows. Design record:
-[PLAN_model_search_and_busy_marks.md](../todo/PLAN_model_search_and_busy_marks.md).
+[PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md).
 
 - **One road in** (`selectSearch.ts`). `selectSearchScript(sentinels)` runs once in the shared page script
   (`pageDocument`), over `document.querySelectorAll('select')`, on both the sidebar and the Settings tab. Every select
@@ -9991,3 +9991,96 @@ carries; `dispatchEvent` and a `PageEvent` with `key`, `relatedTarget` and `prev
 `input` only; prompt pickers parsed and answered for `[data-prompt]` and `select`, never `[data-setting]`; a seedable
 `getState`/`setState`. `gateModelPickers.test.ts` had been picking a model no picker offered — the stricter select
 refused it, and it now picks an option the page drew. `rolesPageHarness.ts` gained the state API every webview has.
+
+## A panel action that takes time says so (2026-10-02, PLAN_model_search_and_busy_marks E3)
+
+Reported on the consultant's model picker: a setting change froze the panel for seconds with nothing on screen. The
+operator asked for a progress bar or a spinner wherever an action takes longer than half a second, and accepted that
+the work itself takes time. Design record: [PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md).
+
+- **The page numbers its work** (`busyMark.ts`, one fragment in `pageDocument`). Every setting, prompt and command
+  post goes through `send(message, control)`, which stamps a `seq`; `focus`, `section` and `tab` pass unnumbered. A
+  number not settled after `BUSY_AFTER_MS` (500 ms) shows a 2 px indeterminate bar at the top of the page
+  (`#busy-bar`, `role="progressbar"`, labelled, `aria-busy` while shown) and marks the control that started it
+  `aria-busy="true"`. Settled sooner, nothing is drawn. A reduced-motion viewer gets a still bar.
+- **The host owns the truth** (`inFlight.ts`). `InFlight` keeps one entry per operation — the page's `seq`, the slot
+  that posted it, its start — removed in a `finally`. `tracked()` announces `busy {count, oldestMs}` to every slot
+  as the work starts and again as it ends, and posts `settled {seq, doc, ok}` to the poster alone. `doc` is the
+  sending document's own id (random, minted once per document): every document numbers from 1 and a settle reaches
+  the slot's CURRENT document, so without it a predecessor's seq 1 finishing cleared the new page's mark (own review
+  of E3). `askOf` decides what counts as numbered: a positive whole `seq` and a non-empty `doc`. A command settles when
+  `run()` returns; a write when the queue has written it AND a render that started after it was queued has finished
+  (`settleQueued`, beside the queue, never in it — the self-wait `afterTheWrite` exists to avoid). The queue swallows
+  a failed write (its refusal is already reported), so a write settles `ok` once done; only a failed render, or a
+  command that threw, settles `ok: false`. `PanelProvider.dispose()` settles everything still running as not done.
+- **A repaint does not lose it.** The paint carries the host's snapshot beside the caret (`withCaret`), read when
+  the page is BUILT and never put into `staticKey`/`settingsKey`; the page shows the bar after
+  `max(0, 500 − oldestMs)` of it, so work already running neither flashes nor waits a fresh delay. Every document
+  posts `ready` as its script's last statement and the host answers that slot with the snapshot. A replaced document
+  owns nothing: a `settled` for a number it never sent changes nothing; the host's count reaching 0 clears its bar.
+- **Renders are numbered, not serialised** (`renderTracker.ts`). `render()` runs `renderNow()` through a
+  `RenderTracker`, which counts renders and runs them side by side exactly as before. A write takes `mark()` when it is
+  queued and its settle awaits `runAfter(mark)` (`settleAfterWrite` in `inFlight.ts`): at once if a render numbered
+  after the mark finished, the earliest such render if one is in flight — usually the configuration listener's own,
+  which is how no second render is asked for — and a new one otherwise. Only a FINISHED render counts; a write waiting
+  on a failed one settles `ok: false`. The plan's first version ran renders one at a time with a shared trailing run;
+  the E3 review found that `renderNow` awaits an un-timed fetch to GitHub (`publishedVersion`) and the price tables, so
+  one stalled render then held up every paint after it — the reported freeze, made longer by its fix. It was withdrawn
+  before it shipped; concurrent renders are as they were. A work that throws before its first `await` is a failed
+  render, never one recorded as running for good. The final E3 round (8 of 8 reviewers) added three rules: a waiting
+  write is released by ANY render after its mark that finishes well, never bound to the oldest (which may be the
+  stalled one); a write that finds no such render waits `SETTLE_GRACE_MS` (250 ms) for the configuration listener's
+  before starting its own, so a write costs one render, not two; and `renderNow(number)` skips its paint when
+  `superseded(number)` — a newer render already painted — so a slow older render never puts stale state back, a race
+  that predates this work. A failed render rejects a waiting write only when no other render after its mark still runs.
+- **Posting cannot strand a page.** `tracked()` posts through `postTo`, which reports a page that refuses (a Settings
+  tab closed mid-action) and goes on, so the surviving pages still hear the count fall; `settleEverything` the same.
+  On the page, settling one operation keeps a control's `aria-busy` while another operation on it is past its delay.
+
+```mermaid
+sequenceDiagram
+  participant W as Page (send)
+  participant P as PanelProvider
+  participant Q as WriteQueue
+  participant C as RenderTracker
+  W->>P: setting {seq, doc}
+  P->>Q: enqueue(write)
+  P->>P: InFlight.start, mark = C.mark()
+  P-->>W: busy {count 1, oldestMs 0} (every slot)
+  Note over W: 500 ms unsettled -> bar + aria-busy
+  Q-->>P: written (settled())
+  P->>C: runAfter(mark) - shares the config listener's render
+  C-->>P: a render that started after the mark finished
+  P-->>W: settled {seq, doc, ok}
+  P-->>W: busy {count 0} (every slot)
+  Note over W: bar and mark cleared
+```
+
+**Tests.** `renderTracker.test.ts` (6: a slow render never holds up the next — RED against the withdrawn
+serialising version; `runAfter` sharing a render started after the mark and answering at once after a finished one;
+a render begun BEFORE the mark not counted; nothing in flight starts one; a failed render rejects its callers and a
+later one still counts; a synchronous throw never wedges it — RED: the old version hung), `inFlight.test.ts` (8: idle; the
+count and the OLDEST age; start and end announced to every slot, `settled` with its `doc` to the poster only; a
+throwing work settles `ok: false` and is reported; dispose settles all; a double finish never goes below zero; the
+settle order — mark when queued, then the queue, then a render after the mark; what `askOf` accepts),
+`busyMarkWiring.test.ts` (4, structural, for the reason `bothPagesWriteThroughOneQueue.test.ts` gives: each write is
+followed by its settle in the same turn, a command is tracked, `ready` is answered, `withCaret` carries the snapshot,
+the extension disposes the panel — each proven by deleting the line), `busyMarkPage.test.ts` (11,
+the page RUN on `PageClock`, a clock that moves only when the test moves it: nothing at 499 ms, bar + `aria-busy` at
+500; settled — `ok` true or false — clears both; settled at 300 ms never shows; a command numbered, a focus report
+not; painted age 400 → bar 100 ms later, 900 → at once, 0 → never; a host-only state marks no control; `ready` is the
+last post and an answer replaces the painted timer; a replaced page ignores its predecessor's `seq` and clears on
+count 0; a new document's own seq 1 survives its predecessor's seq 1 finishing — RED: the posts named no document;
+two writes keep the bar until both settle; the snapshot never changes the paint key). Teeth, each by deleting the line
+in the compiled module: the tracker's five decisions → 1, 2, 1, 1, 1 red (timed-out tests counted, which node reports
+as cancelled, not failed); the page fragment's eight → 6, 1, 2, 3, 2, 2, 1, 4, and its document check → 1;
+`tracked`'s four → 2, 2, 2, 1; the settle order's two awaits → 1 each; the wiring guard's three lines → 1 each.
+
+**Known behaviour, by design.** A command stays in flight while VS Code waits on the person in an input box or a
+quick pick (`customModel`, `closeConsultation`), so the bar shows while they type there. That is what "a command
+settles when `run()` returns" means; whether to exclude a command's prompt time is an open question for the operator.
+
+**The tests that had to follow the change.** Posts now carry `seq` and `doc`, and every page posts `ready`: the
+harness's `lastWrite` and the new `work(page)` CHECK both and compare the rest (`withoutSeq`), and three tests with
+fakes of their own compare through the same helper. One structural guard followed the render body into `renderNow`;
+the `pageFor` guard's 800-character window is why the snapshot rides in `withCaret` rather than in each call.

@@ -5,11 +5,11 @@ import type { EndpointListing } from '../endpointModels';
 import type { PanelState } from '../panelView';
 import { SEARCH_FROM_OPTIONS } from '../selectSearch';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
-import { type Control, PageEvent, type Page, panelState, runPanel } from './panelPageHarness';
+import { type Control, PageEvent, type Page, panelState, runPanel, withoutSeq } from './panelPageHarness';
 
 /**
  * A long model list's search box, RUN — the panel's own script over the card the panel really renders
- * (todo/PLAN_model_search_and_busy_marks.md, Epic 2).
+ * (research/PLAN_model_search_and_busy_marks.md, Epic 2).
  *
  * <p>Reported on 2026-10-02: ≡ on an OpenRouter card filled its dropdown with two hundred `vendor/model` ids in the
  * endpoint's own order, and the only way to find one was to scroll. Every assertion here answers "what would I see if
@@ -125,7 +125,10 @@ test('Enter commits the first MATCH through the select’s own change, exactly a
   const pickedFrom = picked.posted.length;
   pickedSelect.fire('change');
 
-  assert.deepEqual(posted, picked.posted.slice(pickedFrom),
+  // Two documents, so their numbering is their own: the write is compared without it (`withoutSeq`, which checks it).
+  const asSent = (list: readonly Record<string, unknown>[]): readonly Record<string, unknown>[] =>
+    list.map((one) => (typeof one['seq'] === 'number' ? withoutSeq(one) : one));
+  assert.deepEqual(asSent(posted), asSent(picked.posted.slice(pickedFrom)),
     'the same setting write AND the same focus release — the select’s change handler ran, not a shortcut around it');
   assert.equal(posted[0]?.['value'], 'anthropic/claude-opus-5.5', 'never the preserved, non-matching chosen model');
 });

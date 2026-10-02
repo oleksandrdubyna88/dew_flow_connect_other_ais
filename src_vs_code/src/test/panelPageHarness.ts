@@ -52,7 +52,7 @@ const NO_PARENT: PageParent = {
 
 /**
  * Just enough of a control for the script's `dataset`, `value` and caret reads — and, since the list search box
- * (todo/PLAN_model_search_and_busy_marks.md, Epic 2), for a select's options to be moved, removed and re-added.
+ * (research/PLAN_model_search_and_busy_marks.md, Epic 2), for a select's options to be moved, removed and re-added.
  *
  * <p>Stricter than a DOM wherever the two can differ, never more permissive (`generated-code-tests.md` §3): a select
  * refuses a value none of its options carries (a DOM selects nothing and answers `''`), `removeChild` of a node that is
@@ -69,6 +69,8 @@ export class Control {
   focused = false;
   selection: readonly [number, number] = [-1, -1];
   className = '';
+  /** A DOM's `hidden` — the busy bar is drawn hidden and shown by the page (`busyMark.ts`). */
+  hidden = false;
   /** The node the control sits in: what a page calls `insertBefore` on. Set when the control joins a running page. */
   parentNode: PageParent = NO_PARENT;
   /**
@@ -127,6 +129,10 @@ export class Control {
 
   getAttribute(name: string): string | null {
     return this.attributes.get(name) ?? null;
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
   }
 
   /** A select's option moved to its end — taken out of wherever it was first, never copied. */
@@ -280,6 +286,10 @@ export interface Page {
   readonly inserted: () => readonly Inserted[];
   /** What the page last saved with `vscode.setState` — what a replaced document of the same webview will be handed. */
   readonly saved: () => unknown;
+  /** The page's clock: its timers run only when a test advances it. */
+  readonly clock: PageClock;
+  /** The busy bar as the page drew it (`busyMark.ts`), or `null` when this page has none. */
+  readonly bar: Control | null;
   /** Every `data-command` button, bound by the page's own script — `fire('click')` is a person clicking it. */
   readonly commands: readonly Control[];
   readonly posted: readonly Record<string, unknown>[];
@@ -363,6 +373,55 @@ export interface RunOptions {
   readonly saved?: unknown;
 }
 
+/**
+ * The page's clock: a timer runs only when a test ADVANCES it past the timer's time — never on its own, never early.
+ * Every test that never advances sees what it saw before this existed: no timer ever firing.
+ */
+export class PageClock {
+  private now = 0;
+  private next = 0;
+  private timers: ReadonlyMap<number, { readonly at: number; readonly run: () => void }> = new Map();
+
+  readonly setTimeout = (run: () => void, ms = 0): number => {
+    this.next += 1;
+    this.timers = new Map([...this.timers, [this.next, { at: this.now + Math.max(0, ms), run }]]);
+
+    return this.next;
+  };
+
+  readonly clearTimeout = (id: number): void => {
+    this.timers = new Map([...this.timers].filter(([key]) => key !== id));
+  };
+
+  /** Moves time on by `ms`, running every timer due on the way, in the order they fall due. */
+  advance(ms: number): void {
+    const until = this.now + ms;
+    for (let due = this.earliest(until); due !== undefined; due = this.earliest(until)) {
+      const [id, timer] = due;
+      this.clearTimeout(id);
+      this.now = timer.at;
+      timer.run();
+    }
+    this.now = until;
+  }
+
+  private earliest(until: number): [number, { readonly at: number; readonly run: () => void }] | undefined {
+    return [...this.timers].filter(([, timer]) => timer.at <= until).sort((a, b) => a[1].at - b[1].at || a[0] - b[0])[0];
+  }
+}
+
+/** The page's busy bar, read off its markup — drawn hidden, as the page draws it — or `null` when it has none. */
+function busyBarOf(html: string): Control | null {
+  const tag = /<div\b([^>]*\bid="busy-bar"[^>]*)>/.exec(html);
+  if (tag === null) {
+    return null;
+  }
+  const bar = new Control('DIV', '');
+  bar.hidden = /\shidden(?=[\s>]|$)/.test(tag[1]!);
+
+  return bar;
+}
+
 /** The tags a page may create here. Anything else refuses, so a page that builds what this harness cannot see fails loudly. */
 const CREATABLE: readonly string[] = ['input'];
 
@@ -390,13 +449,16 @@ export function runPanel(state: PanelState, options: RunOptions = {}): Page {
   // EVERY message listener: the Settings page adds its own (the tab it is told to show) after the shared
   // script's, and keeping only the last one would hand a live push to the listener that ignores it.
   const listeners: ((event: { data: unknown }) => void)[] = [];
+  const clock = new PageClock();
+  const bar = busyBarOf(html);
   const fakeDocument = {
     addEventListener: () => undefined,
     querySelectorAll: (selector: string): readonly Control[] => selected(selector, controls, commands, prompts),
     querySelector: (): null => null,
     // The live regions answer, so the script's live push can be watched landing — widened when the
-    // cadence line joined Active rounds, now Active gates (PR #556, CodeRabbit). Every other id is absent, as before.
-    getElementById: (id: string): Region | null => regions.get(id) ?? null,
+    // cadence line joined Active rounds, now Active gates (PR #556, CodeRabbit). And the busy bar, when the page
+    // drew one (`busyMark.ts`). Every other id is absent, as before.
+    getElementById: (id: string): Region | Control | null => (id === 'busy-bar' ? bar : regions.get(id) ?? null),
     createElement: createdElement,
     body: { style: { fontSize: '' } },
     documentElement: { style: { setProperty: () => undefined } },
@@ -418,8 +480,8 @@ export function runPanel(state: PanelState, options: RunOptions = {}): Page {
         }
       },
     },
-    (): number => 0,
-    (): void => undefined,
+    clock.setTimeout,
+    clock.clearTimeout,
     PageEvent,
   );
 
@@ -429,6 +491,8 @@ export function runPanel(state: PanelState, options: RunOptions = {}): Page {
     prompts,
     commands,
     posted,
+    clock,
+    bar,
     inserted: () => inserted.map((one) => one),
     saved: () => saved,
     region: (id) => regions.get(id)?.innerHTML ?? '',
@@ -471,10 +535,29 @@ export function click(page: Page, command: string, id: string): void {
   button.fire('click');
 }
 
-/** Whatever the script last sent as a setting write. */
+/**
+ * A numbered post — a setting, a prompt or a command — as the host's contract reads it: its number and the id of
+ * the document that numbered it are CHECKED (a positive integer and a non-empty string, which the busy mark settles
+ * it under, `busyMark.ts`) and then left out, so an assertion about what was asked for is not also an assertion about
+ * how many posts came before it, or about which document of the webview sent it.
+ */
+export function withoutSeq(message: Record<string, unknown>): Record<string, unknown> {
+  const { seq, doc, ...rest } = message;
+  assert.ok(Number.isInteger(seq) && (seq as number) > 0, `a ${String(message['type'])} post carries no sequence number`);
+  assert.ok(typeof doc === 'string' && doc.length > 0, `a ${String(message['type'])} post names no document`);
+
+  return rest;
+}
+
+/** The work a page asked for — every setting, prompt and command it posted, in order, each through {@link withoutSeq}. */
+export function work(page: Page): readonly Record<string, unknown>[] {
+  return page.posted.filter((one) => ['setting', 'prompt', 'command'].includes(String(one['type']))).map(withoutSeq);
+}
+
+/** Whatever the script last sent as a setting write — numbered, which is checked, and compared without the number. */
 export function lastWrite(page: Page): Record<string, unknown> {
   const writes = page.posted.filter((one) => one['type'] === 'setting');
   assert.ok(writes.length > 0, 'the control was changed and the page wrote nothing');
 
-  return writes.at(-1)!;
+  return withoutSeq(writes.at(-1)!);
 }

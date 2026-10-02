@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { click, controlFrom, createdElement, PageEvent, PageOption, panelState, runPanel } from './panelPageHarness';
+import { click, controlFrom, createdElement, PageEvent, PageOption, panelState, runPanel, work } from './panelPageHarness';
 
 /** A select carrying these option values, built the way the harness builds one from a page. */
 function selectOf(...values: string[]): ReturnType<typeof controlFrom> {
@@ -14,7 +14,7 @@ function selectOf(...values: string[]): ReturnType<typeof controlFrom> {
 }
 
 test('a select refuses a value none of its options carries, as a DOM does — it selects nothing', () => {
-  // Widened for the list search box (todo/PLAN_model_search_and_busy_marks.md, Epic 2). Before, any string was
+  // Widened for the list search box (research/PLAN_model_search_and_busy_marks.md, Epic 2). Before, any string was
   // accepted, so a test could "pick" a model the page never offered and pass.
   const select = selectOf('', 'a', 'b');
   select.value = 'b';
@@ -131,7 +131,7 @@ test('a data-command button is bound by the page and a click posts exactly its c
   assert.ok(page.commands.some((one) => one.dataset['command'] === 'removeVendor'), 'no command button was read off the page');
   click(page, 'removeVendor', 'codex');
 
-  assert.deepEqual(page.posted.at(-1), { type: 'command', command: 'removeVendor', id: 'codex' });
+  assert.deepEqual(work(page).at(-1), { type: 'command', command: 'removeVendor', id: 'codex' });
   assert.throws(() => click(page, 'removeVendor', 'nobody'), /no removeVendor button for nobody/u);
 });
 

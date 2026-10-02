@@ -7,6 +7,12 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 import type { DataLocation } from '../dataDir';
+import { withoutSeq } from './panelPageHarness';
+
+/** What the page ASKED the host for: its load-time `ready` left out, and every post checked for its number and compared
+ * without it (`withoutSeq`, the busy mark’s numbering). */
+const asked = (posted: readonly unknown[]): readonly Record<string, unknown>[] =>
+  (posted as Record<string, unknown>[]).filter((one) => one['type'] !== 'ready').map(withoutSeq);
 
 /**
  * The storage section's controls, RUN — not read.
@@ -153,7 +159,7 @@ test('pressing Change where your data lives asks the host to change it', () => {
 
   page.press('changeDataDirectory');
 
-  assert.deepEqual(page.posted, [{ type: 'command', command: 'changeDataDirectory', id: undefined }]);
+  assert.deepEqual(asked(page.posted), [{ type: 'command', command: 'changeDataDirectory', id: undefined }]);
 });
 
 test('and pressing Move what is here asks the host to move it', () => {
@@ -161,5 +167,5 @@ test('and pressing Move what is here asks the host to move it', () => {
 
   page.press('moveDataDirectory');
 
-  assert.deepEqual(page.posted, [{ type: 'command', command: 'moveDataDirectory', id: undefined }]);
+  assert.deepEqual(asked(page.posted), [{ type: 'command', command: 'moveDataDirectory', id: undefined }]);
 });

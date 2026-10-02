@@ -1,14 +1,19 @@
 # PLAN — a long model list can be searched, and a panel action that takes time says so
 
-> Status: **plan only, nothing implemented yet, 2026-10-02. Plan gate good_enough (2/2 reviewers, 9 findings
-> accepted); E1 plan round proceed (2/2); cadence consultation (codex, gpt-6-astra) folded in — §3.4, §3.4a,
-> §3.9, §3.14.** Scope: the two pages built by `pageDocument` (the sidebar and the Settings tab) —
-> `src_vs_code/src/panelView.ts`, `panelProvider.ts`, `extension.ts` (one `dispose` registration), three new
-> page/host modules (`selectSearch.ts`, `busyMark.ts`, `inFlight.ts`), one new `renderCoalescer.ts`, tests,
-> `research/module_extension.md`, `research/module_tests.md`. Three epics, three branches, three commits (§5a).
+> Status: **IMPLEMENTED, 2026-10-02.** Three epics, three commits. Plan gate good_enough (2/2, 9 accepted); cadence
+> consultation (codex gpt-6-astra) closed solved and folded in (§3.4, §3.4a, §3.9, §3.14). E1: plan proceed (2/2), code
+> proceed (4 of 8 — codex rate-limited). E2: plan proceed (1 of 2), code proceed (4/4, local; 1 accepted, 8 rejected
+> on a measurement). E3: plan proceed (1/1, local; 1 accepted, 3 rejected), code proceed (4/4, local; 1 accepted, 10 rejected), final
+> code round proceed (8/8; 10 accepted, 4 rejected); own review (Opus) changed the shape — the render coalescer was withdrawn for a non-serialising tracker. Deviations in §8a. The open tails are
+> [PLAN_busy_marks_on_every_webview.md](../todo/PLAN_busy_marks_on_every_webview.md) and
+> [PLAN_refuse_an_endpoint_row_without_a_model.md](../todo/PLAN_refuse_an_endpoint_row_without_a_model.md).
+> Scope: the two pages built by `pageDocument` (the sidebar and the Settings tab) — `src_vs_code/src/panelView.ts`,
+> `panelProvider.ts`, `extension.ts` (one `dispose` registration), four new modules (`selectSearch.ts`, `busyMark.ts`,
+> `inFlight.ts`, `renderTracker.ts`), tests, `research/module_extension.md`, `research/module_tests.md`,
+> `research/architecture.md`.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_custom_endpoint_model_list.md](../research/PLAN_custom_endpoint_model_list.md) (the ≡ list this builds on).
+> Related docs: [module_extension.md](module_extension.md),
+> [PLAN_custom_endpoint_model_list.md](PLAN_custom_endpoint_model_list.md) (the ≡ list this builds on).
 
 ## 1. The symptoms
 
@@ -227,11 +232,9 @@ on `1056aed9` before any fix.
 
 ## 8. Follow-up, not built here
 
-The same mark on the other webviews, each with its own message loop: `chatPanel.ts` (a turn already shows its own
-state), `roundsLogPanel.ts`, `bugzReviewPanel.ts` (has its own in-flight map), `rolesPanel.ts`, `phrasesPanel.ts`,
-`commandsPanel.ts`, `chatPresetsPanel.ts`, `notificationsPanel.ts`, `helpPanel.ts`, `bugsKeysPanel.ts`,
-`chatRestorePanel.ts`. `busyMark.ts` is written to be included by any of them. The server-side refusal of an endpoint
-row with no model (§4) belongs with it or on its own.
+Extracted on promotion into plans of their own: the same mark on the other webviews —
+[PLAN_busy_marks_on_every_webview.md](../todo/PLAN_busy_marks_on_every_webview.md) — and the server-side refusal of an
+endpoint row with no model (§4) — [PLAN_refuse_an_endpoint_row_without_a_model.md](../todo/PLAN_refuse_an_endpoint_row_without_a_model.md).
 
 ## 8a. What shipped differently (kept as each epic lands)
 
@@ -249,14 +252,44 @@ row with no model (§4) belongs with it or on its own.
   leaves a `searchFocus` note so the next document puts the caret back in the box (own review — the pick's focus
   release meant the caret landed nowhere), bounded by `RETURN_TO_BOX_MS`; and an unchanged answer moves no option (code
   round, local). The round's other performance findings were rejected on a measurement (20–160 µs per keystroke).
+- **E3.** A write settles BESIDE the queue rather than through `WriteQueue.run`: `settleQueued` awaits
+  `writes.settled()` and then a render that started after its mark. Every write site and `enqueue` stayed verbatim,
+  which kept three structural guards over `panelProvider.ts` true instead of rewritten; the cost is that the queue
+  swallows a failed write, so a write settles `ok` once done (its refusal is already reported) and `ok: false` comes
+  only from a failed render or a command that threw — recorded rather than inventing a third state. The snapshot rides
+  in `withCaret` (read at build time) rather than in each paint call, because the `pageFor` guard reads only its first
+  800 characters. One guard followed the render body into `renderNow`. The bar carries `aria-busy` while shown (E3
+  plan round, local). Posts now carry `seq` and every page posts `ready`, so eight test files compare through
+  `withoutSeq` / `work(page)`, which check the number rather than ignore it. Teeth checks counted node's TIMED-OUT
+  tests as red — node reports them as cancelled, and a first count that read only "fail" said three coalescer
+  mutants were green when they were not.
+- **E3, after its own review — §3.14 was NOT built as planned.** Renders are numbered by a `RenderTracker` and run
+  side by side, exactly as before; the serialising `RenderCoalescer` was withdrawn before it shipped. `renderNow`
+  awaits a fetch to GitHub (`publishedVersion`, `installer.ts`) and the price tables with no timeout of its own, so with
+  renders serialised one stalled fetch held up every later paint — the reported freeze, made longer by its fix; the
+  red test is *a slow render never holds up the next one*. The settle needs only the numbering (`settleAfterWrite`).
+  The same review found that every document numbered from 1 while a settle reaches the slot's CURRENT document, so a
+  predecessor's seq 1 finishing cleared a new page's mark: posts now carry a per-document `doc`, echoed in `settled`.
+  A work throwing before its first `await` could wedge the coalescer for good; the tracker starts work inside a
+  promise. And the host wiring had no test — deleting the `ready` answer or the settle's `runAfter` left the suite
+  green — so `settleAfterWrite`/`askOf` became tested values and `busyMarkWiring.test.ts` pins the rest, in the
+  structural style `bothPagesWriteThroughOneQueue.test.ts` set. The FINAL code round (8 of 8 reviewers, codex back)
+  added: a write released by ANY post-mark render that finishes well (it had been bound to the oldest, which may be
+  the stalled one); a 250 ms grace so a write shares the configuration listener's render instead of starting a second;
+  a superseded render skipping its paint (a pre-existing race, fixed because it lives in what this epic touched); a
+  page that refuses its post not stopping the others hearing the count fall; and a control's mark kept while a second
+  operation on it runs. Open, for the operator: a command stays in flight
+  while VS Code waits on the person in an input box, so the bar shows while they type there.
 
 ## 9. Definition of Done
 
-- [ ] §3.1–§3.16 each have a test that was watched failing first (E1) or written before the code (E2, E3), and was
+- [x] §3.1–§3.16 each have a test that was watched failing first (E1) or written before the code (E2, E3), and was
       proven to have teeth.
-- [ ] Three branches, three commits, three `review_code` rounds — each epic's suite, typecheck and lint green from
+- [x] Three branches, three commits, three `review_code` rounds — each epic's suite, typecheck and lint green from
       exit codes; `plan-lifecycle`, `pin-check`, `adapter-check` and `rules check` clean at the end of each.
-- [ ] No select builder, command handler or post site was edited to gain the search or the mark — the one road in
-      did it.
-- [ ] `research/module_extension.md` and `research/module_tests.md` describe what shipped; this plan promoted.
-- [ ] Code gate `proceed` per epic; PRs merged with every thread answered; extension release cut after E3.
+- [x] No select builder and no command handler was edited to gain the search or the mark. The page's seven post
+      sites were each changed once, from `vscode.postMessage` to `send` — the one road in; `focus`, `section` and
+      `tab` pass through it unnumbered.
+- [x] `research/module_extension.md`, `research/module_tests.md` and `research/architecture.md` describe what
+      shipped; this plan promoted.
+- [ ] PR merged with every thread answered; extension release cut after E3.

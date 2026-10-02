@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { CALLER_KINDS } from '../consultSettings';
 import { commandModelsFrom } from '../commandModels';
 import { DEFAULTS, settingMessageFrom, settingWrite } from '../settingsShape';
-import { type Control, type Page, lastWrite, panelState, runPanel } from './panelPageHarness';
+import { type Control, type Page, lastWrite, panelState, runPanel, work } from './panelPageHarness';
 
 /**
  * The gate section's split-order model pickers (issue #117), RUN — the panel's own script over the
@@ -89,7 +89,7 @@ test('"another model…" asks the host for a name for THAT kind and slot, and wr
   control.value = '__other__';
   control.fire('change');
 
-  assert.deepEqual(page.posted.filter((one) => one['type'] === 'command'), [
+  assert.deepEqual(work(page).filter((one) => one['type'] === 'command'), [
     { type: 'command', command: 'customCommandModel', id: 'gemini:implementation' },
   ]);
   assert.equal(page.posted.filter((one) => one['type'] === 'setting').length, 0);

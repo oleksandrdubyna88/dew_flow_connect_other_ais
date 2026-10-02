@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { rankChoices, SEARCH_FROM_OPTIONS } from '../selectSearch';
 
 /**
- * The ranking behind a model list's search box, as a value (todo/PLAN_model_search_and_busy_marks.md §3.2).
+ * The ranking behind a model list's search box, as a value (research/PLAN_model_search_and_busy_marks.md §3.2).
  *
  * <p>The same function is embedded into the page by its source text, so what is asserted here is what the page runs;
  * `selectSearchPage.test.ts` runs the page itself and `bundledPage.test.ts` the minified bundle.</p>

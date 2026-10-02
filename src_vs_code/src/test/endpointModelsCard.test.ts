@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import type { EndpointListing } from '../endpointModels';
 import type { PanelState } from '../panelView';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
-import { click, panelState, runPanel, type Page } from './panelPageHarness';
+import { click, panelState, runPanel, work, type Page } from './panelPageHarness';
 
 /**
  * The reviewer card of a row on somebody else's endpoint, RUN: what its model dropdown offers, what its
@@ -82,7 +82,7 @@ function labels(page: Page, vendor: string): readonly string[] {
 
 test('an endpoint card with no model says so, rather than offering the CLI’s default', () => {
   // The empty choice stores no model, and a codex row with no model passes no -m: the Codex CLI then sends ITS
-  // default id to the endpoint, which OpenRouter does not serve (todo/PLAN_model_search_and_busy_marks.md, symptom 3).
+  // default id to the endpoint, which OpenRouter does not serve (research/PLAN_model_search_and_busy_marks.md, symptom 3).
   const page = card([openrouter(), { ...openrouter(), id: 'codex', baseUrl: '' }]);
 
   assert.equal(labels(page, 'openrouter')[0], 'no model yet — press ≡ and pick one this endpoint lists');
@@ -94,7 +94,7 @@ test('≡ on an endpoint card asks the host to list that endpoint’s models', (
 
   click(page, 'listEndpointModels', 'openrouter');
 
-  assert.deepEqual(page.posted.at(-1), { type: 'command', command: 'listEndpointModels', id: 'openrouter' });
+  assert.deepEqual(work(page).at(-1), { type: 'command', command: 'listEndpointModels', id: 'openrouter' });
 });
 
 test('what the endpoint listed is what the card offers, and the caption says when it was asked', () => {

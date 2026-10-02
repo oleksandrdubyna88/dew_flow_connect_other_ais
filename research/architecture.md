@@ -392,12 +392,22 @@ keys, Team servers, This side, MCP server. Plan: [PLAN_settings_page.md](PLAN_se
 
 ```mermaid
 flowchart LR
-  P["PanelProvider<br/>one state, one write queue"] --> S["SurfaceSlot sidebar<br/>WebviewView coai.panel"]
+  P["PanelProvider<br/>one state, one write queue,<br/>numbered renders, side by side"] --> S["SurfaceSlot sidebar<br/>WebviewView coai.panel"]
   P --> T["SurfaceSlot settings<br/>WebviewPanel coaiSettings"]
   R["PANEL_SECTIONS<br/>id · title · surface · body"] --> P
-  S -->|setting · command · focus| P
-  T -->|setting · command · focus · tab| P
+  S -->|setting · command · focus · ready| P
+  T -->|setting · command · focus · tab · ready| P
+  P -->|settled · busy| S
+  P -->|settled · busy| T
 ```
+
+**A posted setting, prompt or command is numbered, and the host settles the number** (2026-10-02,
+[PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md)). The page's `send()` stamps a `seq` and
+its document's id; `PanelProvider` keeps the operation in an `InFlight` record until its work and a render that started
+after it are done, posts `settled` to the page that asked and `busy {count, oldestMs}` to both, writes the same
+snapshot into every document it paints (never into the paint key), and answers a fresh document's `ready`. Renders are
+counted by a `RenderTracker` and still run side by side, so a render stalled on a slow fetch never holds up the next
+paint. All of it is inside the extension: nothing new crosses to coai-mcp or the Team server.
 
 **Nothing crosses a container that did not before**, and that is the point worth stating at this level:
 both webviews are painted by the SAME provider from the same state and write through the same queue, so

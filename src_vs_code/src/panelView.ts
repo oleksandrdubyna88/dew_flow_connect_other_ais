@@ -20,6 +20,8 @@ import { textOf } from './textControls';
 import { executableFor } from './vendorTerminal';
 import { LOOKING, LOOKING_CSS } from './lookingSpinner';
 import { SELECT_SEARCH_CSS, selectSearchScript } from './selectSearch';
+import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
+import { type BusySnapshot, IDLE } from './inFlight';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
@@ -297,6 +299,11 @@ export interface PanelState {
    * reach the page's script.</p>
    */
   readonly focus?: PanelFocus | undefined;
+  /**
+   * What the host has in flight when this page is BUILT — set beside the caret in the paint, never in the paint key
+   * (`inFlight.ts`). Absent is idle. The page starts its busy mark from it, after what is left of the delay.
+   */
+  readonly busy?: BusySnapshot | undefined;
 }
 
 /**
@@ -369,7 +376,7 @@ export const OPEN_BY_DEFAULT: readonly string[] = [];
  * <p>And a list's search box holds the caret under its select's identity behind a literal `search|`
  * (`selectSearch.ts`); a prompt picker's identity is `prompt|role|round|`, the same four parts. The
  * search box's caret was forgotten here the same way a third time, and its page test went red with
- * "the caret is back in the box" before this prefix existed (todo/PLAN_model_search_and_busy_marks.md).</p>
+ * "the caret is back in the box" before this prefix existed (research/PLAN_model_search_and_busy_marks.md).</p>
  */
 const FOCUS_ID = /^(search\|)?[A-Za-z0-9_.-]+\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*(\|[A-Za-z0-9_.-]+)?$/;
 
@@ -485,7 +492,7 @@ function bugzSection(state: PanelState): string {
 export function panelHtml(state: PanelState, nonce: string, nowMs: number = Date.now()): string {
   const open = state.openSections.length === 0 ? OPEN_BY_DEFAULT : state.openSections;
 
-  return pageDocument(sidebarBody(PANEL_SECTIONS, state, open, liveRegions(state, nowMs)), nonce, state.focus, NO_EXTRA);
+  return pageDocument(sidebarBody(PANEL_SECTIONS, state, open, liveRegions(state, nowMs)), nonce, state.focus, NO_EXTRA, state.busy ?? IDLE);
 }
 
 /**
@@ -506,7 +513,9 @@ const NO_EXTRA: PageExtra = { css: '', script: '' };
  * same `data-setting` / `data-command` / focus wiring (`research/PLAN_settings_page.md`). A page adds to it
  * through {@link PageExtra}; it never gets a copy of it.
  */
-export function pageDocument(body: string, nonce: string, focus: PanelFocus | undefined, extra: PageExtra): string {
+export function pageDocument(
+  body: string, nonce: string, focus: PanelFocus | undefined, extra: PageExtra, busy: BusySnapshot = IDLE,
+): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -516,12 +525,14 @@ export function pageDocument(body: string, nonce: string, focus: PanelFocus | un
 <style>${CSS}${extra.css}</style>
 </head>
 <body>
+${BUSY_BAR}
 ${body}
 <script nonce="${nonce}">
   const vscode = acquireVsCodeApi();
   // The page's OWN script first — before the caret is put back below. The Settings tab opens its held
   // tab here, and a caret restored into a pane that is not shown yet is a focus the browser refuses.
 ${extra.script}
+${busyMarkScript(busy)}
 
   // What names ONE control. A role-keyed control and a vendor-keyed one can share a setting name,
   // so a name alone would refocus whichever of them the document holds first.
@@ -542,16 +553,16 @@ ${extra.script}
       // Not a model — a request to type one; the input box comes from the provider side.
       el.value = real.get(el) || '';
       // A split-order model picker names a caller kind and a slot, not a vendor row (issue #117).
-      vscode.postMessage(el.dataset.commandModel
+      send(el.dataset.commandModel
         ? { type: 'command', command: 'customCommandModel', id: el.dataset.commandModel + ':' + el.dataset.setting }
-        : { type: 'command', command: 'customModel', id: el.dataset.vendor });
+        : { type: 'command', command: 'customModel', id: el.dataset.vendor }, el);
       return;
     }
     if (value === '${CUSTOM_ENDPOINT}') {
       // Not a vendor — a request for one. An id keys the vault entry, so nothing may be stored until
       // the host has asked for a name and a base URL; the caller says whose row is waiting for it.
       el.value = real.get(el) || '';
-      vscode.postMessage({ type: 'command', command: 'customConsultant', id: el.dataset.caller });
+      send({ type: 'command', command: 'customConsultant', id: el.dataset.caller }, el);
       return;
     }
     // \`change\` compares with the value the control had when it gained FOCUS, not with the value
@@ -561,14 +572,15 @@ ${extra.script}
     }
     real.set(el, value);
     posted.set(el, value);
-    vscode.postMessage({ type: 'setting', key: el.dataset.setting, value,
-                         vendor: el.dataset.vendor, role: el.dataset.role,
-                         caller: el.dataset.caller,
-                         // Only on a split-order model picker, so every other write keeps its shape.
-                         ...(el.dataset.commandModel ? { commandModel: el.dataset.commandModel } : {}),
-                         // Only on a dropdown: its value is a string like typed text's, and a refused one
-                         // snaps back where typed text must not (the follow-up to PR #561).
-                         ...(el.tagName === 'SELECT' ? { control: 'select' } : {}) });
+    // Through \`send\`: a write is numbered, and the control wears the busy mark if the host takes long (busyMark.ts).
+    send({ type: 'setting', key: el.dataset.setting, value,
+           vendor: el.dataset.vendor, role: el.dataset.role,
+           caller: el.dataset.caller,
+           // Only on a split-order model picker, so every other write keeps its shape.
+           ...(el.dataset.commandModel ? { commandModel: el.dataset.commandModel } : {}),
+           // Only on a dropdown: its value is a string like typed text's, and a refused one
+           // snaps back where typed text must not (the follow-up to PR #561).
+           ...(el.tagName === 'SELECT' ? { control: 'select' } : {}) }, el);
   };
   const reportFocus = (el, editing) => vscode.postMessage({
     type: 'focus',
@@ -684,7 +696,7 @@ ${selectSearchScript(['', '__other__', CUSTOM_ENDPOINT])}
   }
   for (const el of document.querySelectorAll('[data-prompt]')) {
     el.addEventListener('change', () =>
-      vscode.postMessage({ type: 'prompt', role: el.dataset.prompt, round: Number(el.dataset.round), value: el.value }));
+      send({ type: 'prompt', role: el.dataset.prompt, round: Number(el.dataset.round), value: el.value }, el));
   }
   for (const el of document.querySelectorAll('.section')) {
     el.addEventListener('toggle', () =>
@@ -698,7 +710,7 @@ ${selectSearchScript(['', '__other__', CUSTOM_ENDPOINT])}
   function bindCommands(within) {
     for (const el of within.querySelectorAll('[data-command]')) {
       el.addEventListener('click', () =>
-        vscode.postMessage({ type: 'command', command: el.dataset.command, id: el.dataset.id }));
+        send({ type: 'command', command: el.dataset.command, id: el.dataset.id }, el));
     }
   }
   bindCommands(document);
@@ -764,6 +776,9 @@ ${selectSearchScript(['', '__other__', CUSTOM_ENDPOINT])}
       }
     }
   });
+  // LAST: this document is ready to hear what is running. Anything announced while it was being built reached the
+  // document it replaced (busyMark.ts; research/PLAN_model_search_and_busy_marks.md §3.12).
+  vscode.postMessage({ type: 'ready' });
 </script>
 </body>
 </html>`;
@@ -1410,7 +1425,7 @@ function cliButtons(vendor: Vendor, id: string, cli: CliStatus): string {
  * endpoint, and there an empty model is not "the CLI's default": with no `-m` the CLI sends ITS default id, which
  * OpenRouter and its like do not serve. `asksAnEndpoint` is the one decision the model list already takes this from
  * (PLAN_custom_endpoint_model_list); the label asks the same question, so the two can never disagree about a row
- * (todo/PLAN_model_search_and_busy_marks.md, symptom 3).</p>
+ * (research/PLAN_model_search_and_busy_marks.md, symptom 3).</p>
  */
 function modelWords(runtime: Runtime, baseUrl: string): { title: string; empty: string } {
   switch (runtime) {
@@ -1655,7 +1670,7 @@ function limitsBody(s: CoaiSettings, enabledVendors: number): string {
 function keysBody(state: PanelState): string {
   // Every row whose models belong to an endpoint, by the same decision the model list and its label use. Counting only
   // ENABLED rows said "none of them needs an API key" about a switched-off OpenRouter row that cannot run without one
-  // (todo/PLAN_model_search_and_busy_marks.md, symptom 4).
+  // (research/PLAN_model_search_and_busy_marks.md, symptom 4).
   const endpoints = state.vendors.filter((v) => asksAnEndpoint(v.runtime, v.baseUrl));
   const field = `<div class="field">
   ${labelled('credsKey', 'CredsForDevs config key', 'credsKey')}
@@ -3153,6 +3168,7 @@ ${ROLE_TONE_CSS}
   .status { margin: 2px 0 0; }
 ${LOOKING_CSS}
 ${SELECT_SEARCH_CSS}
+${BUSY_CSS}
 `;
 
 /**
@@ -3306,7 +3322,7 @@ export function settingsHtml(state: PanelState, nonce: string, heldTab: string):
   return pageDocument(settingsHead(size, tone) + settingsBody(settingsSections(), state), nonce, state.focus, {
     css: SETTINGS_CSS + settingsTextCss(size, tone),
     script: settingsScript(heldTab),
-  });
+  }, state.busy ?? IDLE);
 }
 
 /** What the Settings tab paints on — its body as drawn, which holds no live region and no held tab. */
