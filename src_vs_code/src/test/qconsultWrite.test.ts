@@ -170,6 +170,8 @@ test('a folder reached through a link is judged at its target, and stored as it 
 });
 
 test("the credential folders are the server's own list — read out of the C#, never retyped", () => {
+  // reads-another-program: a POSITIVE assertion — the list must be found in QuestionConsultSettings.cs in this
+  // shape (assert.ok below), so a moved or reshaped list turns this red instead of comparing two empty lists.
   const cs = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'src_mcp', 'src', 'Server', 'QuestionConsult', 'QuestionConsultSettings.cs'), 'utf8');
   const listed = /CredentialDirectories \{ get; \} = \[([^\]]*)\];/.exec(cs);
   assert.ok(listed, 'CredentialDirectories is not in QuestionConsultSettings.cs in the shape this test reads');

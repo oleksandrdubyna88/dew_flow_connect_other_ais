@@ -47,6 +47,8 @@ test('defaults match the master plan configuration table', () => {
  * consultant's defaults are (`qconsultSettings.test.ts`).
  */
 test("the escalation wait's default is the server's own — read out of PanelSettings.cs — and a person's 30 still reaches it", () => {
+  // reads-another-program: a POSITIVE assertion — the constant must be found in PanelSettings.cs in this shape
+  // (assert.ok below), so a renamed or moved default turns this red rather than passing over nothing.
   const cs = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'src_mcp', 'src', 'Server', 'PanelSettings.cs'), 'utf8');
   const declared = /public const int DefaultEscalationMinutes\s*=\s*(\d+);/.exec(cs);
   assert.ok(declared, 'DefaultEscalationMinutes is not in PanelSettings.cs in the shape this test reads');
