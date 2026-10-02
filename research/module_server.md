@@ -550,7 +550,7 @@ flowchart LR
   FO --> AD[QuestionAdmission<br/>prompt · QuestionRowResolver · QuestionResolution · ConfinementPlanner]
   FO -->|web| SAN[WebQuestionSanitiser → QuestionPrompt — the question alone]
   FO -->|none · disk| SC[SecretCheck → QuestionPrompt / ApiQuestionPrompt]
-  FO -->|none| OUT[FeatureOutlineBuilder.BuildAtHeadAsync — ONCE per question]
+  FO -->|api none only| OUT[QuestionOutlineCache — repo + HEAD, last 4<br/>FeatureOutlineBuilder.BuildAtHeadAsync on a miss]
   FO -->|disk roots| INV[FilesystemInvariant — one snapshot pair per fan-out]
   FO --> RL[QuestionRowLaunch × N in parallel<br/>ReviewerExecutor.LaunchAsync · api follow-ups · ledger kind question]
   RL -->|each row as it settles| ST
@@ -563,10 +563,12 @@ flowchart LR
 `web` row is given the question through `WebQuestionSanitiser` and nothing more — `QuestionPrompt.Compose`
 refuses a web input carrying a context, an outline or a root by name, so no later edit of the fan-out can add
 one (A2 as a contract). A `none` or `disk` row is given the context through `SecretCheck`, which refuses
-(never redacts) and never quotes what it found; a `none` row also gets the OUTLINE of the repository at HEAD
-— built ONCE per question whatever the row count, and timed in the log: on this checkout at `2d6dea41` it is
-1,997 files against the empty tree, 78 outlined under the file cap, 170 KB of section, **6.2 s** (the
-`QuestionOutlineTimingTests` measurement) — and an `api` row its source turns on top (A9, S1's
+(never redacts) and never quotes what it found — and, since S4b, the QUESTION through it too; an api `none`
+row also gets the OUTLINE of the repository at HEAD — on this checkout at `2d6dea41` 1,997 files against the
+empty tree, 78 outlined under the file cap, 170 KB of section, **6.2 s** (the `QuestionOutlineTimingTests`
+measurement), which is why since S4b it is built only for an api `none` row, awaited by that row alone, and
+kept per repository + HEAD for the last four (`QuestionOutlineCache`); a CLI row is given none — and an `api`
+row its source turns on top (A9, S1's
 `IAnsweringFollowUps`, the fan-out driving the loop under the row's deadline). A `disk` row is given its
 read-only roots, listed in the prompt, and stands in the first of them.
 
@@ -581,7 +583,8 @@ and a backstop deadline a grace past it (`ConsultationDeadline.For`) is told apa
 cancellation by the token's state, never the exception's type.
 
 **The invariant guards the DISK rows' roots.** One snapshot pair per fan-out over each distinct root of the
-admitted disk rows that is a git checkout (a root that is not one is logged as unwatched); a breach withholds
+admitted disk rows that is a git checkout (a root that is not one is said ON THE ROW since S4b — "root <name> is
+not a git checkout: changes there are not watched" — in the record, the reply, the card and the log); a breach withholds
 the disk rows' advice alone — their status `failed`, their advice emptied, the sentence on the record's
 `alert` — and the `none` and `web` rows' answers stand. Nothing is deleted and nothing is reverted, as the
 consultant's invariant never did.
@@ -594,7 +597,9 @@ advice and note; the question carries status (`consulting` → `answered` · `pa
 `interrupted`) and outcome (`answered_by_consultants`, `quota_spent`, `none_available`; S3 adds
 `person_asked` and `production_risk`). **The sweep is D14 (d)**: a `consulting` record ends `interrupted`
 only when its heartbeat is older than two minutes AND its pid is dead — a recycled Windows pid alone cannot
-end a live question, a stale heartbeat alone cannot either (a live server settles its own record); a terminal
+end a live question, a stale heartbeat alone cannot either (a live server settles its own record) — and, since
+S4b, a `consulting` record past TWICE its deadline (the row budget) is ended `interrupted` whatever its pid and
+heartbeat say, its rows naming that fact (§5: a live server whose fan-out beats but never settles); a terminal
 record goes seven days after it ended; the directory is capped at 500 files, the oldest TERMINAL records
 going first and a consulting one never; the rows' answer files go on the same clock through
 `ConsultantArtefactSweep`, extracted from `ConsultationStore` rather than copied (one naming rule,
@@ -624,7 +629,10 @@ person's own `{id, title, capability, text}`, beside the three shipped in `share
 embedded as `QuestionPromptSet.Shipped`; edited through the `RolePrompts` override layer, restored by deleting
 the override), `COAI_QCONSULT_ROOTS` (**D14 (c)**: a root that is a drive, the user profile itself, a system
 directory or anything inside one, inside the data directory, relative or missing is refused BY NAME into
-`Unrecognised` and never read), `COAI_QCONSULT_ROW_MINUTES` (5), `COAI_QCONSULT_QUESTIONS_PER_SESSION` (10),
+`Unrecognised` and never read — and since S4b one that CONTAINS the profile, the data directory or a system
+directory, and a credential directory (`QuestionRoots.CredentialDirectories`: `.ssh .aws .gnupg .config/gcloud
+.claude .codex .azure`) as a root, inside one or holding one, judged as written AND at what every component's
+junction or symlink resolves to), `COAI_QCONSULT_ROW_MINUTES` (5), `COAI_QCONSULT_QUESTIONS_PER_SESSION` (10),
 `COAI_QCONSULT_FREE_BATCHES` (2; S3's). A row's vendor is a definition of its own, or a reviewer row borrowed
 by id (its runtime, endpoint, path, dialect, price and per-model settings), or a runtime's own name
 (`QuestionRowResolver`, over the consultant resolver's three materialisers and the QUESTION allowlist, which
@@ -663,8 +671,12 @@ sequenceDiagram
     alt Refused (require, past the free batches, no proof)
         G-->>AI: error naming ask_consultants, the count, productionRisk
     else Allowed
-        H->>E: Post(card) — at once
-        H->>D: AfterTheCard: Count the batch · Spend the proof · beside?
+        H->>D: Spend(proof) — atomic, under the record's turn (S4b)
+        alt already used
+            D-->>AI: error — one consultation opens the door once
+        end
+        H->>E: Post(card) — at once (a failed post gives the proof back)
+        H->>D: AfterTheCard: Count the batch · beside?
         D-->>Q: BesideAsync (production risk, detached)
         Q-->>E: Attach(consultantAnswers)
         H->>E: WaitAsync(15 min)
@@ -722,12 +734,17 @@ batches).
 
 **The proof, verified (D14 a).** A `consultId` must name a record in `question-consults/` whose caller is this
 caller session and whose repository is this one (`ConsultationService.SamePath`), that is terminal, that
-ended under `QuestionPolicy.ConsultProofAge` (30 minutes) ago, and that no earlier `ask_human` has used —
-the record is written `person_asked` with the card's id the moment the card is posted, which is what makes it
-single use. Anything else is `Rejected(why)`: under `require` past the free batches that is the refusal with
-the reason appended; elsewhere the note carries it. The residual, stated: two `ask_human` calls passing one
-id in the same instant both read it unused; the second's card is a duplicate the person sees twice, never a
-bypass of anything.
+ended under `QuestionPolicy.ConsultProofAge` (30 minutes) ago, and that no earlier `ask_human` has used.
+Anything else is `Rejected(why)`: under `require` past the free batches that is the refusal with the reason
+appended; elsewhere the note carries it. **Single use is atomic since S4b (item 8)**: the verification above is
+the early answer, and the deciding one is `QuestionConsultStore.Spend`, run BEFORE the question is recorded on
+the session or its card posted — the record read, judged unspent and written `person_asked` with the card's id
+under the record's turn and an in-process gate (the turn is a `FileShare.None` lock file and not re-entrant, so
+two calls of one process would otherwise wait it out and go on without it). A second spender is refused
+"already used"; a turn that cannot be had is refused rather than spent without it; a post that fails gives the
+proof back (`Release`, fenced by the card's id, the record's previous outcome restored). The old residual — two
+calls in the same instant both reading it unused, the person seeing the card twice — is gone
+(`TwoAskHumanCallsInFlightWithOneConsultId_OnlyOneGoesThrough`).
 
 **The bypass (D8, A8).** `productionRisk: true` with a `riskReason`: the card is posted BEFORE anything else
 (`Escalations.Post`, split out of `AskAsync` rather than relying on an async method's synchronous prefix),
@@ -749,10 +766,12 @@ open (every accessor null-normalises). Both replies carry `note` — the gate's 
 **The retention (A4).** `EscalationRetention`, on the startup sweep and the one-minute beat beside the two
 consultation sweeps: an answered pair goes seven days after the ANSWER's stamp (both files), an expired
 question seven days after its expiry, an open question nobody holds seven days after it was asked, an orphan
-answer and a stray `.tmp` seven days after their write time, a torn file likewise; a question a live session
-holds — on a hold (`HoldQuestions`) or as a feature session's request (`RequestQuestions`), asked through
+answer and a stray `.tmp` seven days after their write time, a torn file likewise; every file of an id a live
+session holds — on a hold (`HoldQuestions`) or as a feature session's request (`RequestQuestions`), asked through
 `SessionStore.HoldsQuestion` — is kept whatever its age or status, because a hold is bound to its question by
-identity. Judged through `Escalations`' own readers, under the same turn.
+identity: since S4b (item 7) the hold is asked BEFORE the file is judged, so an answered pair, an orphan answer
+and a torn question of a held id are kept too (the answered pair used to go: the hold reads that very answer).
+Judged through `Escalations`' own readers, under the same turn.
 
 **D13 on the server too** (the coordinator's decision, over S2's deviation 12): `QuestionAdmission` refuses a
 pair the planner admits but FLAGS — codex on every capability, agy's disk read — unless the row carries
@@ -781,7 +800,7 @@ The MCP instructions name the twelfth tool in 1992 of their 2000 characters.
 
 **What crosses the seam.** The card file gained `status`, `expiredUtc`, `consultId`, `productionRisk`,
 `riskReason` and `consultantAnswers` (an `EscalationAdvice` per row: vendor, model, prompt title, capability,
-D13's flag, status, reason, advice — raw, a person reads it); `ask_human` gained three optional arguments and
+D13's flag, status, reason, advice — redacted at the record since S4b, and its `note`); `ask_human` gained three optional arguments and
 `note` on both replies; the settings gained no key (`COAI_QCONSULT_MODE` and `COAI_QCONSULT_FREE_BATCHES` were
 read since S2 and are acted on now). An older extension against this server shows an expired card until the
 person answers it or the retention takes it; a newer extension against an older server sees no status and
@@ -818,6 +837,29 @@ S4 is the extension's story; four things in it are this server's, each in a comm
   bound by 138 ms under load while the fan-out was as parallel as ever.
 - **`dotnet format`'s WHITESPACE finding** in `QuestionConsultProjectionTests.cs` is gone: a `with { … }` that
   continued a fluent chain is now two statements, which is what the formatter can lay out.
+
+## The code review's fixes, on the server (2026-10-02, `todo/PLAN_question_consultant.md` S4b)
+
+The accepted findings of the question-consultant branch's code review, each with a test that was watched red
+against the code without its fix. What changed on this side, by item:
+
+| # | What was wrong | What it does now | Where |
+|---|---|---|---|
+| 1 | The QUESTION reached none, disk and api rows unchecked (only the context went through `SecretCheck`) | both are checked on every non-web row, the production-risk beside run included; a hit refuses THAT row, naming the class, never the value | `QuestionFanOut.CheckedInput`, `SecretCheck.Inspect(text, what)` |
+| 2 | A root ABOVE the profile, the data directory or a system directory passed, links were not followed, credential directories were readable | refused as written and at what every component resolves to (`DocumentReader.Canonical` over `ResolveLinkTarget(returnFinalTarget: true)`), credential directories as a root, inside one or holding one | `QuestionRoots` |
+| 3 | A row's advice and its reason (a CLI's stderr) were written down raw | `Redaction.SafeSource` on the advice (layout kept), `Redaction.SafeText` on the reason, before the record — the one road to the database, reply, card and sidebar | `QuestionRowLaunch` |
+| 4 | Any `scheme://` was set aside before the path checks; invisible and compatibility characters beat every pattern | only http/https/ftp is set aside and any other scheme is refused (`scheme`); every check reads `TextAsRead.Normalised` (Unicode `Cf` removed, the NFKC mappings that reach ASCII folded — `Normalize(FormKC)` folds nothing under `InvariantGlobalization`, measured and pinned), and a question carrying a format character is refused (`invisible`); `SecretCheck` reads the raw AND the folded text | `WebQuestionSanitiser`, `TextAsRead`, `SecretCheck` |
+| 5 | A disk root that is no git checkout was a log line | the row's `note` says "root <name> is not a git checkout: changes there are not watched" — record, reply (`answers[].note`), card (`consultantAnswers[].note`), projection | `QuestionFanOut.SaidUnwatched` |
+| 7 | An answered pair, orphan answer or torn question of a HELD id was swept | the hold is asked first, whatever the file says | `EscalationRetention` |
+| 8 | `consultId` single use was decided after the card was posted, so two calls in flight both went through | spent atomically before anything is recorded or posted; a failed post gives it back | `QuestionConsultStore.Spend`/`Release`, `AskGateDesk.Spend`/`GiveBack`, `AskHumanService.PostedAsync` |
+| 9 | A live server whose fan-out never settled left `consulting` for ever | past twice the row budget the sweep ends it `interrupted`, naming the deadline | `QuestionConsultStore.Sweep(isAlive, now, deadline)` |
+| 11 | The ~6 s outline was built for every question with any `none` row, before ANY row launched | built only for an api `none` row (A9 names them), awaited by that row alone, cached per repository + HEAD for the last four, a failed build never kept | `QuestionOutlineCache`, `RowInput.AfterOutline` |
+| 13 | Four record directories each carried their own id guard, turn read, stamp, parse and delete-and-warn | one `RecordFiles`, used by `QuestionConsultStore`, `ConsultationStore`, `QuestionPhaseStore` and `EscalationRetention` | `RecordFiles` |
+| 14 | `AtomicJson.Write` takes the turn, so a caller holding it could not use it | `Write` (takes the turn) and `WriteUnderTurn` (temp + move); the phase store and the spend call the latter | `AtomicJson` |
+| 15 | The question prompts kept a copy of the prompt-id expression without the Windows device names (`con` was a prompt) | `RoleComposition.IsPromptId`, the whole rule | `QuestionPromptSet` |
+
+Item 6 (the panel's 15-minute default), 10 and 12 (the extension's watchers) are the extension's; see
+[module_extension.md](module_extension.md).
 
 ## The round engine is its own unit (2026-09-25)
 

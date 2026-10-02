@@ -4200,8 +4200,9 @@ flowchart LR
 | `consultantView.ts` | pure: the *Consultant* section — a row per caller, the caps, the prompt box. Its decisions are `consultantRowView`, a VALUE: which options the picker offers, which is selected, whether the entry is `offered`/`stranded`/`unavailable`, which of the consultant's own fields the runtime even has, and what to say beside the row. The markup only renders one, so the section is tested without parsing HTML |
 | `consultPrompt.ts` | pure: where the prompt override lives, and what an emptied box means (remove, never an empty prompt) |
 | `consultations.ts` | pure: one consultation record, and the card the sidebar draws while it runs |
-| `consultationWatcher.ts` | the impure half: the glob + 5 s poll over `consultations/*.json`, silent unless something a person would SEE changed |
-| `escalationWatcher.ts` | the impure half: file watcher + a 5s poll (a watcher on a path outside the workspace is not guaranteed), the modal, the status-bar item, the atomic answer write |
+| `consultationWatcher.ts` | `consultations/*.json` as a `JsonDirectoryWatcher` shape (since S4b of the question consultant): debounced events, the poll only for a UNC folder, silent unless something a person would SEE changed |
+| `escalationWatcher.ts` | `escalations/*.json` over a `JsonDirectoryWatcher` (since S4b: debounced events, the poll only for a UNC folder, an unreachable directory showing no cards), the modal, the status-bar item, the atomic answer write |
+| `jsonDirectory.ts` · `jsonDirectoryWatcher.ts` | the one record-directory watcher (S4b): the pure snapshot (last good snapshot, the generation guard) and the editor around it |
 | `extension.ts` | activation, the four commands, the update offer |
 
 ## Three UI decisions with a cause
@@ -10203,9 +10204,10 @@ flowchart LR
   QW[questionConsultWatcher.ts<br/>question-consults/*.json] --> AQ[activeQuestions.ts<br/>live region qconsults]
   EW[escalationWatcher.ts<br/>escalations/*.json] --> AQ
   L[--log questionConsults] --> QL[qconsultLog.ts<br/>Logs · Questions tab]
-  D[debounced.ts<br/>175 ms · poll only for UNC] -.-> QW
-  D -.-> EW
-  D -.-> CW[consultationWatcher.ts]
+  J[jsonDirectoryWatcher.ts + jsonDirectory.ts<br/>debounce 175 ms · poll only for UNC · last good snapshot · generation guard] -.-> QW
+  J -.-> EW
+  J -.-> CW[consultationWatcher.ts]
+  D[debounced.ts] -.-> J
 ```
 
 **The settings mirror** (`qconsultSettings.ts`, the `cadenceSettings.ts` shape). Eight `coai.qconsult*` keys —
@@ -10244,8 +10246,9 @@ the markup only renders them (`qconsultView.ts`, the `consultantRowView` split):
   a title and a capability; a custom prompt a row still runs cannot be removed.
 - *Folders a disk row may read* — **Add a folder…** opens the system's folder picker (so it exists) and refuses,
   by name, a drive root, the profile folder itself, a system folder or anything inside the data folder, or a
-  relative path — D14 (c), the server's `QuestionRoots.WhyNot` mirrored; a stored root that is one of those
-  shows the refusal beside it.
+  relative path — D14 (c), the server's `QuestionRoots` mirrored (and since S4b a folder holding one of those, a
+  credential folder, and a link resolving to any of them); a stored root that is one of those shows the refusal
+  beside it.
 - *Before it asks you* (off / remind / require) and the three limits.
 
 A row's controls ride the write's CALLER slot (the row id; a prompt box the prompt id) and `panelProvider`
@@ -10293,3 +10296,36 @@ question row offers no custom endpoint of one's own. The watchers' wiring (`vsco
 debounce and the poll rule beneath it are tests. The two halves ship apart: an older extension against this
 server draws the old card and no Active questions; this extension against an older server sends none of the
 eight keys and says so.
+
+### The code review's fixes, in the extension (2026-10-02, `todo/PLAN_question_consultant.md` S4b)
+
+- **One watcher, three shapes (items 10 and 12).** `jsonDirectory.ts` is the pure snapshot — a `SnapshotFs`
+  handed in, a `JsonDirectoryShape` per kind (`subdir`, `records`, `parse`, `shown`, `keep`, `fileOf`,
+  `signature`, `unreadable`) — and `jsonDirectoryWatcher.ts` the editor around it: a glob per root, the 175 ms
+  debounce, the poll only for a UNC folder, and a recheck timer a shape may ask for. `consultationWatcher.ts`,
+  `questionConsultWatcher.ts` and `escalationWatcher.ts` are now configurations (`CONSULTATIONS`,
+  `QUESTION_CONSULTS`, `ESCALATIONS`) instead of three hand-written bodies. **The generation guard**: every refresh
+  is numbered as it STARTS, and one that finishes after a later-started one has landed changes nothing — since
+  S4 dropped the local poll, an older, slower read finishing last would have left the sidebar stale with nothing to
+  heal it (`jsonDirectory.test.ts`, a fake file system whose first listing resolves after the second). The
+  escalation shape keeps its own rule, `unreadable: 'none'`: an unreachable named directory shows no cards rather
+  than its last ones, as before; the other two keep their last good snapshot. The one behaviour that did move: an
+  escalation file that cannot be read this pass drops only that card, where the old loop dropped every card after
+  it in the same directory.
+- **A dead server's question does not spin (item 9).** `shownAt` shows a `consulting` record whose last sign of
+  life (heartbeat, last write, start) is older than two minutes — the server's `HeartbeatStale` — as
+  `interrupted`, its consulting rows too, with the terminal chip and a stage of its own, *Interrupted — its server
+  stopped answering*; nothing on disk changes (the server's sweep does that, when a server runs). The watcher asks
+  `nextStaleAt` and reads again at that moment, because no file event announces a server that died.
+- **The wait's default is the server's (item 6).** `DEFAULTS.escalationMinutes` and `package.json` say 15, the
+  server's `PanelSettings.DefaultEscalationMinutes`; `settingsShape.test.ts` reads the constant out of the C# and
+  checks a person's 30 still reaches the server.
+- **A row's note is drawn (item 5).** The note the server puts on a disk row whose root is no git checkout ("root
+  … is not a git checkout: changes there are not watched") is drawn under the answer in Active questions and in the
+  Questions tab's model row.
+- **Roots, as the server judges them (item 2).** `rootRefusal` also refuses a folder that CONTAINS the profile, the
+  data folder or a system folder, and a credential folder (`CREDENTIAL_DIRECTORIES`, held to the server's list by a
+  test that reads it) as a root, inside one or holding one; **Add a folder…** asks `realpath` and refuses a folder
+  whose link resolves to one of those, storing the folder as it was picked.
+- **A prompt of your own named like a device (item 15's twin).** **Add a prompt…** refuses a title whose id is a
+  Windows device name (`RESERVED_FILE_NAMES`), as the server's `RoleComposition.IsPromptId` now does.

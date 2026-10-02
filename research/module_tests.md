@@ -2655,3 +2655,31 @@ classes, read and not run; the rule beneath it is a test. A person pressing a co
 webview is not driven — the host scenario stops at what a host can observe. A real vendor answering a row is the
 plan's live check (S5). The three clipboard scenarios of `npm run test:host` fail on this machine (something else
 writes to the clipboard during the run) as they did before S4.
+
+## The code review's fixes — S4b's suites (2026-10-02)
+
+`todo/PLAN_question_consultant.md` S4b, items 1–15. Each fix's test was watched RED against the code without the fix
+— for the items a previous session had already fixed, by reverting the production file to the branch's head (C#)
+or compiling a mutation that removes the fix (TS), and restoring it byte for byte (files re-touched so the next
+build saw them).
+
+| Item | Suite · test | RED observed |
+|---|---|---|
+| 1 | `QuestionFanOutTests.AQuestionCarryingASecret_IsRefusedOnEveryRow…`, `AskHumanServiceTests.AProductionRiskQuestionCarryingASecret…` | `Expected row.Status to be "refused" … but "answered"` |
+| 2 | `QuestionConsultSettingsTests` (contains a place, credential directories ×7, outside the profile, through a junction/symlink); `qconsultWrite.test.ts` (three, and the credential list read out of the C#) | `verdict.Accepted … found …\to-profile`, `…\home\me\.ssh`; three TS tests red with the checks mutated off |
+| 3 | `QuestionFanOutTests.ARowsAdviceAndReason_AreRedacted_BeforeTheRecord` | `Did not expect leaky.Advice … to contain "sk-live-…"` |
+| 4 | `WebQuestionSanitiserTests` (schemes, citable links, invisible characters, compatibility spellings, the thirteen classes), `SecretCheckTests` (four hidden secrets), `TextAsReadTests` | `Expected type … Refused, but found … Clean` per case; one SecretCheck case had no teeth (the split fell after a key long enough to match raw) and was moved earlier |
+| 5 | `QuestionFanOutTests.ADiskRootThatIsNoGitCheckout…`, `QuestionConsultServiceTests.ADiskRowOverARoot…`, `AskHumanServiceTests.ARiskCardsDiskAnswer…`, `activeQuestions.test.ts`, `bundledPage.test.ts` | `Expected disk.Note "" to contain "root … is not a git checkout…"`; the two TS draws red when mutated off |
+| 6 | `settingsShape.test.ts` — the default read out of `PanelSettings.cs` | `30 !== 15` |
+| 7 | `EscalationRetentionTests.AHeldQuestion_IsKept_WhateverItsStatusOrAge…` | `Expected Retention().Sweep(Now) to be 0 … but found 4` |
+| 8 | `AskHumanServiceTests.TwoAskHumanCallsInFlightWithOneConsultId_OnlyOneGoesThrough`; `…WhoseCardCouldNotBePosted_IsGivenBack…` | `Expected … to be 1 … but found 2` (both went through); break-it: without the give-back the record still names the lost card |
+| 9 | `QuestionConsultStoreTests.AConsultingRecordPastTwiceItsDeadline…`; `activeQuestions.test.ts` (heartbeat older than two minutes) | `Expected _store.Sweep(…) to be 1 … but found 0`; TS red with `shownAt` mutated to identity |
+| 10 | `jsonDirectory.test.ts` — a fake file system whose first listing resolves after the second | `a superseded refresh tells nobody` with the guard mutated off |
+| 11 | `QuestionFanOutTests.WithNoApiNoneRow_TheOutlineIsNeverBuilt`, `TheOtherRowsLaunch_WhileTheApiRowsOutlineIsStillBuilding`, `TheOutline_IsBuiltOncePerRepositoryAndHead…`; `QuestionOutlineCacheTests` | `Expected held.Built to be 0 … but found 1`; `Expected sonnetLaunched to be True … but found False` (15 s) |
+| 12, 13, 14 | `jsonDirectory.test.ts` (the snapshot's keep/drop rules, `unreadable: 'none'`), `RecordFilesTests`; the stores' existing suites unchanged and green | refactors: no behaviour to watch fail; the existing suites are the guard |
+| 15 | `QuestionPromptSetTests` (`con`, `nul`); `qconsultWrite.test.ts` (a title making `con`) | `Expected custom.Prompts to be empty, but found at least one item`; TS red before the device-name check |
+
+**What it does NOT prove.** The junction test makes real links (`mklink /J` on Windows, a symlink elsewhere) but no
+link on a network share. The watcher's recheck timer and file events are `vscode`-bound and read, not run; the
+snapshot beneath them is the test. The atomic spend is proved for two calls of ONE process; two server processes
+share it through the turn, which `SessionTurn`'s own measurement covers, not this suite.

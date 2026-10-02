@@ -1,6 +1,6 @@
 # PLAN — the question consultant: other models answer an AI's question before the person is asked
 
-> Status: **in progress — S1 (confinement) and S2 (the fan-out, `ask_consultants`, the proved move of `ask_human`) built 2026-10-01, S3 (the door to the person: the gate, the wait, the retention, the order) built 2026-10-02, S4 (the person sees it: the Settings tab, Active questions, the Questions tab) built 2026-10-02, S5 open.** The capability facts it rests on were measured in
+> Status: **in progress — S1 (confinement) and S2 (the fan-out, `ask_consultants`, the proved move of `ask_human`) built 2026-10-01, S3 (the door to the person: the gate, the wait, the retention, the order) built 2026-10-02, S4 (the person sees it: the Settings tab, Active questions, the Questions tab) built 2026-10-02, S4b (the code review's fifteen fixes) built 2026-10-02, S5 open.** The capability facts it rests on were measured in
 > `dew_flow_benchmark · todo/PLAN_question_consultant_probes.md` (full run `01a0f8c7`, 105 cells, 2026-10-01) and are
 > written up in [RESULTS_question_consultant_capabilities.md](../research/RESULTS_question_consultant_capabilities.md). Scope:
 > `src_mcp` (a new tool `ask_consultants`, the phase-aware `ask_human` gate, a confinement layer, escalation
@@ -668,6 +668,64 @@ lands first. The live check should include the Grok-through-OpenRouter row exact
 it, the server's resolution of an `api` vendor with a key name was tested in S1, not with this row on a real
 endpoint. S3's question stays the operator's: whether an expired card a person answers later should still count
 (the server's `AnsweredFor` reads it). The extension's version and CHANGELOG are S5's.
+
+**Deviations (S4b — review fixes, 2026-10-02).** The code review of the branch accepted fifteen findings; each landed
+with a test watched RED against the code without its fix (where a previous, interrupted session had already written
+the fix, its teeth were proved by reverting the production file to the branch's head or compiling a mutation, and
+restoring it). Commits `d951aa39` (security, 1–5), `a9c51a82` (format and complexity of that commit), `f459bf91`
+(correctness 6–10, with the extractions 12 and 14 they stand on), `3826a3af` (two suite guards over them), `9b37f69d`
+(Sonar's coverage exclusion for the new watcher), `5d9fd1fc` (performance and reuse, 11, 13, 15). Item → test:
+
+| # | Finding | Test that proves it |
+|---|---|---|
+| 1 | the question secret-checked on every non-web row, the beside run included | `QuestionFanOutTests.AQuestionCarryingASecret_IsRefusedOnEveryRow…`, `AskHumanServiceTests.AProductionRiskQuestionCarryingASecret…` |
+| 2 | roots: ancestors of the profile/data/system dirs, credential dirs, links resolved | `QuestionConsultSettingsTests` (four new), `qconsultWrite.test.ts` (three new + the list read out of the C#) |
+| 3 | advice and reason redacted before the record | `QuestionFanOutTests.ARowsAdviceAndReason_AreRedacted_BeforeTheRecord` |
+| 4 | only http/https/ftp set aside, other schemes refused; Cf removed, NFKC-to-ASCII folded, in the sanitiser and SecretCheck | `WebQuestionSanitiserTests` (five new), `SecretCheckTests`, `TextAsReadTests` |
+| 5 | a non-git disk root said on the row, the reply, the card, the log | `QuestionFanOutTests.ADiskRootThatIsNoGitCheckout…`, `QuestionConsultServiceTests.ADiskRowOverARoot…`, `AskHumanServiceTests.ARiskCardsDiskAnswer…`, `activeQuestions.test.ts`, `bundledPage.test.ts` |
+| 6 | the panel's wait default 15, as the server's | `settingsShape.test.ts` (reads `PanelSettings.DefaultEscalationMinutes`) |
+| 7 | a held id's answered pair / orphan answer / torn question kept | `EscalationRetentionTests.AHeldQuestion_IsKept_WhateverItsStatusOrAge…` |
+| 8 | `consultId` spent atomically before the post, given back on a failed post | `AskHumanServiceTests.TwoAskHumanCallsInFlight…`, `…WhoseCardCouldNotBePosted_IsGivenBack…` |
+| 9 | a stale heartbeat shown `interrupted`; the sweep ends a record past twice its deadline | `activeQuestions.test.ts` (heartbeat), `QuestionConsultStoreTests.AConsultingRecordPastTwiceItsDeadline…` |
+| 10 | the generation guard | `jsonDirectory.test.ts` (a first read resolving after the second) |
+| 11 | the outline only for an api none row, not delaying the others, cached per repo + HEAD (last 4) | `QuestionFanOutTests` (three new), `QuestionOutlineCacheTests` |
+| 12 | one JSON-directory watcher for the three | `jsonDirectory.test.ts`; the watchers' existing suites |
+| 13 | one record-directory helper for the four stores | `RecordFilesTests`; the four stores' existing suites |
+| 14 | `AtomicJson.Write` / `WriteUnderTurn` | used under the turn by `QuestionPhaseStore` and the spend (item 8's tests) |
+| 15 | `RoleComposition.IsPromptId`, used by `QuestionPromptSet` | `QuestionPromptSetTests` (`con`, `nul`) |
+
+Differences from the findings' wording, each a decision:
+1. **Item 4's "NFKC-normalise" is a managed fold, not `string.Normalize`.** Measured: under `InvariantGlobalization`
+   (every binary here) `Normalize(FormKC)` returns full-width letters, a no-break space, a ligature and an ellipsis
+   unchanged. `TextAsRead` carries the NFKC mappings that reach ASCII (full-width block, space separators, small
+   forms, mathematical letters and digits, super/subscript digits, ligatures, dot leaders); a test pins the
+   measurement. The text that travels is never rewritten: a web question with a format character is REFUSED
+   (`invisible`), and `SecretCheck` reads both the raw and the folded text (folding can also join what the raw text
+   kept apart).
+2. **Item 11 takes the outline away from the CLI `none` rows.** A9 names only the api rows; the CLI rows had been
+   given it too, which is what made every question pay ~6 s before any launch. An api `none` row now waits for its
+   own outline (`RowInput.AfterOutline`), its budget starting at its launch as before; an outline that fails, or
+   whose shared build another caller cancelled, leaves the row without one (logged) and never fails it.
+3. **Item 12 keeps the escalation watcher's own rule** through a shape option, `unreadable: 'none'`: an unreachable
+   named directory shows no cards (the other two watchers keep their last good snapshot). The one behaviour that
+   moved: an escalation file that cannot be read this pass drops only that card, where the old loop dropped every
+   card after it in the same directory. The watchers' `onChanged` now fires only when what a person sees changed.
+4. **Item 9's server half reads the deadline from the settings** (`Sweep(isAlive, now, RowBudget)` — rows run in
+   parallel, so a row's budget is the question's); the swept rows name "past twice its deadline", not a death.
+5. **Item 8 refuses rather than spends without the turn**: a record whose turn cannot be had answers "busy — call
+   ask_human again". An in-process gate sits beside the turn, which is a `FileShare.None` lock file and not
+   re-entrant.
+6. **Item 15's twin in the extension**: **Add a prompt…** refuses a title whose id is a Windows device name, as the
+   server now does — the same decision at its second site.
+7. **Found by the full run, fixed in `3826a3af`:** the refusal census counted AskHumanService's new refusal (3 → 4,
+   re-recorded), and the two TS tests that read the C# carry the `reads-another-program:` marker (positive
+   assertions, the exemption the guard documents). The full `npm test` then found `jsonDirectoryWatcher.ts` missing
+   from Sonar's coverage exclusions (it imports `vscode`), fixed in `9b37f69d` beside the three watchers listed there.
+8. **Fixed in `a9c51a82`:** `dotnet format` laid `TextAsRead`'s table one entry per line, and `rootAdded` was split
+   under eslint's complexity 4.
+9. **Item 6's help texts** never quoted 30 (checked: `help.ts`, `helpContent.ts`, the four translations); the
+   `escalationMinutes` tooltip still says a question "stays open in the sidebar either way", which has not been true
+   since S3's expiry — left for S5's help pass, not part of the finding.
 
 ### S5 — Release, the live check, the rule, the tails — **Opus** (procedural: every outward step is shown to the operator before it happens and the cascade follows a written recipe)
 
