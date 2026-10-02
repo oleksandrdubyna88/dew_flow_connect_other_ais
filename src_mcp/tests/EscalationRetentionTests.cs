@@ -68,6 +68,24 @@ public sealed class EscalationRetentionTests : IDisposable
         Exists(_escalations.AnswerPath("young")).Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AnAnsweredPair_CountsTwo_WhicheverFileTheDirectoryListsFirst(bool questionFirst)
+    {
+        // Windows lists `old.answer.json` before `old.json`; Linux lists in no promised order. With the question
+        // first, the pair went at once and the answer — already in the listing — was judged again as an orphan of a
+        // file that no longer existed: counted three (CI on ubuntu, PR #646).
+        Question("old", Past + TimeSpan.FromHours(1));
+        Answer("old", Past);
+        string[] pair = [_escalations.QuestionPath("old"), _escalations.AnswerPath("old")];
+
+        Retention().Sweep(questionFirst ? pair : [.. pair.Reverse()], Now).Should().Be(2);
+
+        Exists(_escalations.QuestionPath("old")).Should().BeFalse();
+        Exists(_escalations.AnswerPath("old")).Should().BeFalse();
+    }
+
     [Fact]
     public void TheClockIsTheAnswer_NotTheQuestion()
     {

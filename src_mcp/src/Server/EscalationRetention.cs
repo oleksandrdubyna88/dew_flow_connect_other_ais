@@ -30,11 +30,21 @@ public sealed class EscalationRetention(Escalations escalations, Func<string, bo
             return 0;
         }
 
-        return Directory.EnumerateFiles(escalations.Directory).ToList().Sum(path => SweepOne(path, nowUtc));
+        return Sweep([.. Directory.EnumerateFiles(escalations.Directory)], nowUtc);
     }
+
+    /// <summary>Sweeps these files in this order — the seam that lets a test hold the order a platform's listing does not promise.</summary>
+    internal int Sweep(IReadOnlyList<string> paths, DateTime nowUtc) => paths.Sum(path => SweepOne(path, nowUtc));
 
     private int SweepOne(string path, DateTime nowUtc)
     {
+        // Gone since the listing — its pair's question took it, or a session answered and cleaned up. Judging it anyway
+        // reads a missing file's write time as 1601 and counts a deletion that did not happen.
+        if (!File.Exists(path))
+        {
+            return 0;
+        }
+
         var name = Path.GetFileName(path);
         if (name.EndsWith(".tmp", StringComparison.Ordinal))
         {

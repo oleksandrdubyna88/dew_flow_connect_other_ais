@@ -74,7 +74,9 @@ public static class ProcessEnvironment
     /// profile and program directories, the processor names, <c>OS</c>. The benchmark had no Linux
     /// subject, so the Unix half is NOT a measurement — it is this launcher's own measured requirement
     /// (<c>HOME</c>, or every Node CLI fails in initialisation) plus the locale and temporary-directory
-    /// names; recorded as a deviation in the plan's S1 block.
+    /// names; recorded as a deviation in the plan's S1 block. <c>DOTNET_ROOT</c> joined after macOS CI:
+    /// a framework-dependent child whose runtime is outside the default place cannot start without it,
+    /// and Windows finds the runtime through the registry instead.
     /// </remarks>
     private static readonly string[] MinimalWindows =
     [
@@ -86,7 +88,7 @@ public static class ProcessEnvironment
     ];
 
     private static readonly string[] MinimalUnix =
-        ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR", "TMP", "TEMP"];
+        ["PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR", "TMP", "TEMP", "DOTNET_ROOT"];
 
     /// <summary>The minimal list for THIS platform — what <c>ProcessRequest.Passthrough</c> is set to for a question launch.</summary>
     public static IReadOnlySet<string> Minimal { get; } = MinimalFor(OperatingSystem.IsWindows());
