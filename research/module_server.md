@@ -791,6 +791,34 @@ draws every card, as before.
 sweep asks; the gate's wiring and the two forwarders paid for inside the file); `PanelSettings.cs` 1497 → 1497
 (the default's constant and its remark paid for by the surplus blank lines beside it).
 
+## The questions reach `--log`, and the consultants beside a long question still run (2026-10-02, `todo/PLAN_question_consultant.md` S4)
+
+S4 is the extension's story; four things in it are this server's, each in a commit of its own.
+
+- **`--log` carries the questions.** `LoggedLog.QuestionConsults` (JSON `questionConsults`) is each question's
+  projected head with its model rows under it — the projection's own row types, `QuestionConsultRow` and
+  `QuestionConsultRowEntry`, wrapped as `LoggedQuestion(Asked, Answers)` rather than a third shape restating
+  the table (`Store/QuestionConsultLog.cs`). Newest first and **bounded twice, in the type**: at most
+  `Shown` = 100 questions, each row's advice cut to `AdviceShown` = 4 000 characters — the table keeps 16 KB a
+  row, and six rows of that under two hundred questions would be a 19 MB answer the panel parses on every
+  tick; the record file keeps the whole advice for its seven days. A database last written before schema step
+  17 has no tables and answers an EMPTY list — the promise `Consultations` makes — and the rest of the log still
+  answers. No new one-shot mode: `--log` gained a field, and an older extension ignores it.
+- **The consultants beside a production risk run whatever the question's length.** `BesideAsync` used to run
+  the tool's own argument checks on the PERSON's question, so a question past 4 KB (or a declared risk pushing
+  the context past 8 KB) answered null and no consultant ran — silently, one Information line. The person is
+  still asked the whole question; the consultants get it cut to the limit through `FeatureContext.Within`
+  (widened with an optional marker, not copied), ending `[…truncated]`, and the record says what was cut in
+  `truncated` ("the question was N bytes, cut to 4096"). That field is the record file's alone; the projection
+  does not carry it.
+- **`QuestionFanOutTests.SixRowsStartWithinOneTick…` asserts the guarantee, not a budget.** Each scripted
+  launch waits at a barrier that opens only when all six have arrived (a 20 s timeout is the failure), and the
+  test reads how many had started when the first was let through: 6 for a parallel fan-out, 1 for a sequential
+  one — observed by making `LaunchAllAsync` sequential, then restored byte for byte. It had missed a 1.8 s wall
+  bound by 138 ms under load while the fan-out was as parallel as ever.
+- **`dotnet format`'s WHITESPACE finding** in `QuestionConsultProjectionTests.cs` is gone: a `with { … }` that
+  continued a fluent chain is now two statements, which is what the formatter can lay out.
+
 ## The round engine is its own unit (2026-09-25)
 
 `PanelService` is the MCP surface — `open`, `status`, the three `review_*` entry points, `resolve`,

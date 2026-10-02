@@ -10184,3 +10184,112 @@ this half is small and all of it is about the one file neither container owns, `
 The two halves ship on their own clocks, stated: an older extension against this server draws an expired card
 until the person answers it or the retention takes it; this extension against an older server sees no
 status and draws every card, as before.
+
+## The question consultant, as the person sees it (2026-10-02, S4 of `todo/PLAN_question_consultant.md`)
+
+S1–S3 built the confinement, the fan-out and the door; S4 is the three surfaces of §0 items 1, 3, 5 and 6 — a
+Settings tab, a sidebar region and a Logs tab — plus the watchers' debounce (A5).
+
+```mermaid
+flowchart LR
+  subgraph Settings tab
+    V[qconsultView.ts<br/>rows · prompts · folders · mode · limits] --> W[qconsultWrite.ts<br/>pure decisions]
+    V -. host half .-> H[qconsultHost.ts<br/>buttons · writes · prompt files]
+  end
+  W --> A[capabilityAdmission.ts<br/>runtime-capabilities table]
+  H --> S[(coai.qconsult* settings)]
+  H --> P[(dataDir/prompts/question-*.md)]
+  S --> E[qconsultSettings.ts<br/>COAI_QCONSULT_* in settings.json]
+  QW[questionConsultWatcher.ts<br/>question-consults/*.json] --> AQ[activeQuestions.ts<br/>live region qconsults]
+  EW[escalationWatcher.ts<br/>escalations/*.json] --> AQ
+  L[--log questionConsults] --> QL[qconsultLog.ts<br/>Logs · Questions tab]
+  D[debounced.ts<br/>175 ms · poll only for UNC] -.-> QW
+  D -.-> EW
+  D -.-> CW[consultationWatcher.ts]
+```
+
+**The settings mirror** (`qconsultSettings.ts`, the `cadenceSettings.ts` shape). Eight `coai.qconsult*` keys —
+`Enabled`, `Mode`, `Rows`, `Prompts`, `Roots`, `RowMinutes`, `QuestionsPerSession`, `FreeBatches` — read the way
+the server reads them (a mode in any case with `require` the catch-all, a positive count or the default, the
+seventh active row switched off as `QuestionRows.Capped` does), each `COAI_QCONSULT_*` key written only when it
+differs from the server's default. The rows, prompts and roots go out as stored: those settings ARE the wire
+format, as `COAI_ROLES` is. `QCONSULT_SINCE = 0.41.0` (the release S5 cuts) keeps every key out of the file for a
+server KNOWN to be older, and the tab carries the banner; an unknown version is not an old one. The keys are a
+side's own (`OVERLAID_SETTINGS`), like the consultant's. `qconsultSettings.test.ts` reads
+`QuestionConsultSettings.cs` and `QuestionRow.cs` for every default and derives the server's key list from
+`QuestionConsultKeys`.
+
+**The Settings tab** (`questionconsultant`, after *Consultant*). The decisions are pure (`qconsultWrite.ts`) and
+the markup only renders them (`qconsultView.ts`, the `consultantRowView` split):
+
+- *Who answers* — the rows. A row is a vendor from the same catalogue the stuck consultant offers
+  (`consultableVendors` widened with a runtimes list, so the `api` presets — Grok, an API row with its vault key
+  name — are offered too; `catalogueOptions` is the catalogue without the custom-endpoint door), its model
+  through the shared `modelsFor`, exactly one prompt, on/off. **Add a row** appends one OFF with a prompt its
+  runtime admits under an id no row holds, so a row is never stored without a prompt and adding never breaks the
+  cap. The switch of a row that is off is DISABLED, with the reason as its title, while the row has no prompt,
+  while its pair is refused, while a flagged pair is unacknowledged, or while six rows are on. A prompt the row's
+  runtime cannot run is a DISABLED option with the capability table's own reason (A3 — every refused vector pair
+  is checked). A flagged pair (every codex pair; agy on disk) says **Can read this machine** with the caveat and
+  shows the tick **I accept that this row can read this machine**, which writes `acknowledged: true` into the row
+  — the server refuses a flagged row without it (S3). Changing a row's vendor or prompt switches it off and drops
+  the acknowledgement, which was for the old pair; taking the tick away switches it off too.
+- *Base prompts* — the three shipped prompts (generated from `shared/question-prompts.json` by
+  `scripts/generate-question-prompts.mjs`, `--check` in `generatedFilesAreCurrent`) and a person's own, each with
+  its capability. A shipped prompt's box is written to its override file `<dataDir>/prompts/<id>.md` through
+  `ConsultPromptFile` (widened with a path and a label, not copied) — an emptied box, or one holding exactly the
+  shipped words, REMOVES the override so the prompt follows the next release — and **Restore default** removes
+  it; the box then shows the shipped words, which the panel knows (unlike the consultant's own prompt, whose
+  shipped text is compiled into the server). A custom prompt's box edits its setting; **Add a prompt…** asks for
+  a title and a capability; a custom prompt a row still runs cannot be removed.
+- *Folders a disk row may read* — **Add a folder…** opens the system's folder picker (so it exists) and refuses,
+  by name, a drive root, the profile folder itself, a system folder or anything inside the data folder, or a
+  relative path — D14 (c), the server's `QuestionRoots.WhyNot` mirrored; a stored root that is one of those
+  shows the refusal beside it.
+- *Before it asks you* (off / remind / require) and the three limits.
+
+A row's controls ride the write's CALLER slot (the row id; a prompt box the prompt id) and `panelProvider`
+hands those keys to `qconsultHost.ts` before its `caller` case would merge them into `consultants`; the
+buttons are one group of `PANEL_COMMANDS` (`QCONSULT_COMMANDS`). A refused edit snaps the control back.
+
+**Active questions** (`activeQuestions.ts`, live region `qconsults`). It REPLACED the `questions` region that
+drew "A review is waiting on you" and stands where it stood — first, never collapsible (the guarantee
+`panelView.test.ts` already pinned). Stage 1, *Consulting*: a question put to the consultants, one line per model
+— status chip, vendor · model, prompt, the flag, elapsed (from the question's start while consulting, the row's
+own seconds once settled) — advancing as each row settles because the server rewrites the record per row.
+Stage 2, *A question is waiting on you*: the card — the question (`questionHtml`), the findings still gating, a
+production risk with its reason, the consultation it followed (`consultId`), every consultant answer folded
+under it (the server's `consultantAnswers`, or the rows of the followed consultation), and **Answer…**. A record
+bound to an open card (by `consultId`, or `escalationId` for one run beside it) is drawn inside the card and
+never also as a stage-1 line, so a question is drawn once. An expired card is not kept by the watcher. Every
+model- and server-written word is escaped. `questionConsultWatcher.ts` keeps a record while it consults and for
+45 minutes after it ends (a `consultId` is accepted for thirty, the card then waits fifteen).
+
+**Answer… on a question card offers the free-text box FIRST** (`answerChoices`): until now it offered only the
+three review decisions, so an AI's question could not be answered in words at all. A gate verdict with findings
+still gating keeps exactly the three.
+
+**The watchers (A5)** — `debounced(refresh, 175)` with an injectable timer: one refresh 175 ms after the FIRST
+event of a burst, however many follow (a record rewritten per row, a temp renamed over its target), and the next
+event after it opens the next window. The consultation, escalation and question-consult watchers all take it;
+the five-second poll is held ONLY while a watched data folder is UNC (`\\wsl.localhost`, `\\wsl$`,
+`\\server\share`, `//server/share` — `needsPoll`), re-decided on every rebuild of the escalation watcher's
+directory list. A local directory is watched by its events alone.
+
+**The Logs page's Questions tab** (`qconsultLog.ts`): one row per question from `--log`'s `questionConsults` —
+started, where, the question folded, answered of rows, cost (a dash when nothing was priced, never $0.00), time,
+what happened next — and under each a fold with one row per model: who, prompt and capability, how it ended,
+the flag, time, cost, advice or reason. Parsed by `parseLog` (a server older than the field sends none: an empty
+tab, saying why), pushed as region `qconsults` with folds kept open across a push, and under the page's
+fifteen-second "never received its data" deadline. `roundsDb.ts` was at the lint's 800 lines, so
+`RoundOrders`/`parseOrders` moved out unchanged to `roundOrders.ts` (re-exported; `prove-move.mjs` clean).
+
+**Help** — the article *The question consultant* in all five languages (the tab, Active questions, the Questions
+tab), ten tooltips, the eight settings' aliases in `helpCoverage`, and the sidebar and log-page articles updated.
+
+**Stated limits.** The Questions tab shows the cost the server recorded and prices nothing itself (the
+Consultations tab prices from the ledger and the price lists); it has no period buttons. The vendor picker of a
+question row offers no custom endpoint of one's own. The watchers' wiring (`vscode`-bound) is read, not run; the
+debounce and the poll rule beneath it are tests. The two halves ship apart: an older extension against this
+server draws the old card and no Active questions; this extension against an older server sends none of the
+eight keys and says so.
