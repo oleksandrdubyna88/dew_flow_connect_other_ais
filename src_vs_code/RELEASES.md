@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.61.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.60.2...extension-v0.61.0) (2026-10-02)
+
+
+### Features
+
+* **extension:** a long list has a search box that ranks and narrows it ([ce34440](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ce344404ad80985c363a4f3185906781bb05df39))
+* **extension:** a panel action that takes time shows a progress bar, settled by the host ([efbab19](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/efbab19f1e4df83a70d56d77bbcdd073d7fc96c4))
+
+
+### Bug Fixes
+
+* **extension:** a switched-off row is told its key's own name, and Enter in an IME composition picks nothing ([33fd5e2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/33fd5e2bf86fb243893b3bb9a43eb10f4f4492d2))
+* **extension:** an endpoint row with no model says so, and Vendor keys names every endpoint row ([5997e28](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/5997e28e6fd5b441c13a76a1edc60831c2d492a3))
+
 ## [0.60.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.60.1...extension-v0.60.2) (2026-10-01)
 
 
