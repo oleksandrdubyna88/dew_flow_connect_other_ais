@@ -1,11 +1,14 @@
 import { escapeHtml as esc } from './escapeHtml';
 import { SECURITY_SEED } from './securityLane.generated';
-import { SECURITY_SINCE, securitySupported, type SecurityLane, type SecurityPrompt, type SecurityRun } from './securityLane';
+import {
+  SECURITY_SINCE, SECURITY_STAGES, securityLaneProblem, securitySupported, securityTokenBudget,
+  type SecurityLane, type SecurityPrompt, type SecurityRun,
+} from './securityLane';
 import type { Vendor } from './vendors';
 
 const at = (field: string): string => `data-setting="securityLane" data-security-field="${esc(field)}"`;
 const check = (field: string, on: boolean, label: string, disabled = false): string => `<label><input type="checkbox" ${at(field)}${on ? ' checked' : ''}${disabled ? ' disabled' : ''}> ${esc(label)}</label>`;
-const count = (field: string, value: number, min: number, max: number): string => `<input type="number" ${at(field)} min="${min}" max="${max}" value="${value}">`;
+const count = (field: string, value: number, min: number, max: number): string => `<input type="number" ${at(field)} min="${min}" max="${max}" value="${esc(String(value))}">`;
 const option = (id: string, value: string): string => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(id)}</option>`;
 const select = (field: string, value: string, choices: readonly string[]): string => {
   const options = [...new Set([value, ...choices])].map(id => option(id, value)).join('');
@@ -15,7 +18,7 @@ const signalLabels = (): string => SECURITY_SEED.signals.map(s =>
   `<code>${esc(s.id)}</code> (${esc(s.label)}${s.trigger ? '' : '; focus only'})`).join(', ');
 
 export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[], version: string): string {
-  if ('invalidConfiguration' in lane) return '<p class="stale">Security lane is off: malformed configuration was preserved in coai.securityLane.invalidConfiguration. Correct that object in settings JSON and replace coai.securityLane with it.</p>';
+  if ('invalidConfiguration' in lane) return malformedNote(lane.invalidConfiguration);
   const old = !securitySupported(version);
   return versionNote(version)
     + (!vendors.some(v => v.enabled && (v.code || v.feature)) ? '<p class="stale">Enable an ordinary code or feature reviewer too: the security lane cannot replace the ordinary gate.</p>' : '')
@@ -31,6 +34,13 @@ export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[],
     + `<p>${check('addRun', false, 'Add reviewer / prompt pair')}</p>`;
 }
 
+/** Where the malformed value lives and what is wrong with it — the setting a person can open, never the panel's stand-in. */
+function malformedNote(stored: unknown): string {
+  const problem = securityLaneProblem(stored);
+  return '<p class="stale">Security lane is off: coai.securityLane in your settings JSON is malformed'
+    + (problem === '' ? '' : ` (${esc(problem)})`) + '. Correct it there.</p>';
+}
+
 function versionNote(version: string): string {
   if (!securitySupported(version)) return `<p class="stale">The installed MCP server ${esc(version)} does not run this lane. Update to ${SECURITY_SINCE} or later.</p>`;
   if (version === '' || version === '0.0.0') return '<p>Server version is unverified; security settings will be sent, but lane support has not been confirmed.</p>';
@@ -41,19 +51,18 @@ function runBody(r: SecurityRun, i: number, lane: SecurityLane, vendors: readonl
   const v = vendors.find(v => v.id === r.vendor);
   const context = r.context ?? defaultContext(v);
   const field = (key: string): string => 'run:' + i + ':' + key;
-  const stages = r.stages ?? ['code', 'feature'];
+  const stages = r.stages ?? SECURITY_STAGES;
   return `<fieldset><legend>Pair ${i + 1}${securityOnly(v) ? ' — security only' : ''}</legend>
         ${runWarnings(r, lane, v)}
         <label>Reviewer ${select(field('vendor'), r.vendor, vendors.map(v => v.id))}</label>
         <label>Prompt ${select(field('prompt'), r.prompt, lane.prompts.map(p => p.id))}</label>
         <label>Source ${select(field('context'), context, ['slice', 'diff'])}</label>
-        <label>Context token budget ${count(field('contextTokens'), tokenBudget(r, context), 1024, 200000)}</label>
+        <label>Context token budget ${count(field('contextTokens'), securityTokenBudget(r, context), 1024, 200000)}</label>
         ${check(field('code'), stages.includes('code'), 'Code')}
         ${check(field('feature'), stages.includes('feature'), 'Feature')}
         ${check(field('remove'), false, 'Remove pair')}</fieldset>`;
 }
 const defaultContext = (v: Vendor | undefined): string => v?.runtime === 'local' ? 'slice' : 'diff';
-const tokenBudget = (r: SecurityRun, context: string): number => r.contextTokens ?? (context === 'slice' ? 24000 : 200000);
 const securityOnly = (v: Vendor | undefined): boolean => v !== undefined && ![v.code, v.plan, v.document, v.feature].some(Boolean);
 
 function runWarnings(run: SecurityRun, lane: SecurityLane, vendor: Vendor | undefined): string {

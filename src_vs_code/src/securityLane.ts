@@ -20,22 +20,45 @@ export function securityEnv(lane: SecurityLane, version: string): Record<string,
 }
 const configured = (lane: SecurityLane): boolean => lane.enabled || lane.runs.length > 0 || 'invalidConfiguration' in lane;
 
-/** Preserve unknown fields/tags on the wire so the server can refuse them instead of broadening a run. */
+/**
+ * The lane a stored `coai.securityLane` describes. Unknown MEMBERS travel on the wire so the server can
+ * refuse them instead of broadening a run; a known member holding a value the lane cannot mean keeps the
+ * whole stored value aside as `invalidConfiguration`, and the lane off.
+ *
+ * <p>The setting has no scope, so a cloned repository's `.vscode/settings.json` can supply it: every
+ * known member is checked here, on the one road in, before any of it reaches the Settings page or a
+ * write.</p>
+ */
 export function securityLaneFrom(value: unknown): SecurityLane {
   if (value == null) return DEFAULT_SECURITY;
-  if (!record(value)) return { ...DEFAULT_SECURITY, invalidConfiguration: value };
-  if ('invalidConfiguration' in value) return { ...DEFAULT_SECURITY, invalidConfiguration: value['invalidConfiguration'] };
-  return fromRecord(value);
+  return record(value) && securityLaneProblem(value) === ''
+    ? fromRecord(value)
+    : { ...DEFAULT_SECURITY, invalidConfiguration: value };
+}
+
+/** Why a stored `coai.securityLane` cannot be used, naming the part that is wrong — empty when it can. */
+export function securityLaneProblem(value: unknown): string {
+  if (value == null) return '';
+  return record(value) ? recordProblem(value) : 'it must be a JSON object';
+}
+function recordProblem(value: Record<string, unknown>): string {
+  if ('invalidConfiguration' in value)
+    return 'it holds invalidConfiguration, which is not a setting: once the object inside it is correct, make that object the whole value';
+  const runs: readonly unknown[] = Array.isArray(value['runs']) ? value['runs'] : [];
+  const checks = [
+    () => fieldProblem(value, ROOT_FIELDS),
+    () => listProblem('prompts', promptsFrom(value['prompts']), promptProblem),
+    () => listProblem('runs', runs, runProblem),
+  ];
+  return checks.map(check => check()).find(problem => problem !== '') ?? '';
 }
 function fromRecord(value: Record<string, unknown>): SecurityLane {
-  const prompts = promptsFrom(value['prompts']);
-  if (!validRoot(value) || !prompts.every(prompt))
-    return { ...DEFAULT_SECURITY, invalidConfiguration: value };
+  const prompts = promptsFrom(value['prompts']).filter(isPrompt);
   return {
     ...value, enabled: value['enabled'] === true,
     threshold: number(value['threshold'], 0, 0, 100), maxRounds: number(value['maxRounds'], 2, 1, 10),
     prompts: [...prompts, ...DEFAULT_SECURITY.prompts.filter(seed => !prompts.some(p => p.id === seed.id))],
-    runs: Array.isArray(value['runs']) ? value['runs'] : [],
+    runs: Array.isArray(value['runs']) ? value['runs'].filter(isRun) : [],
   };
 }
 const promptsFrom = (value: unknown): readonly unknown[] => Array.isArray(value) ? value.map(promptDefaults) : DEFAULT_SECURITY.prompts;
@@ -44,22 +67,66 @@ function promptDefaults(value: unknown): unknown {
   const seed = SECURITY_SEED.prompts.find(p => p.id === value['id']) ?? { triggers: [], focus: [] };
   return { triggers: seed.triggers, focus: seed.focus, ...value };
 }
-function validRoot(value: Record<string, unknown>): boolean {
-  const validators: Record<string, (v: unknown) => boolean> = {
-    enabled: v => typeof v === 'boolean', threshold: v => number(v, -1, 0, 100) !== -1,
-    maxRounds: v => number(v, -1, 1, 10) !== -1, prompts: Array.isArray,
-    runs: v => Array.isArray(v) && v.every(run),
-  };
-  return Object.entries(validators).every(([key, validate]) => !(key in value) || validate(value[key]));
-}
+
 const record = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 const strings = (v: unknown): v is readonly string[] => Array.isArray(v) && v.every(x => typeof x === 'string');
-const prompt = (v: unknown): v is SecurityPrompt => record(v) && typeof v['id'] === 'string' && strings(v['triggers']) && strings(v['focus']);
-const run = (v: unknown): v is SecurityRun => record(v) && typeof v['vendor'] === 'string' && typeof v['prompt'] === 'string';
+/** A member's check and what to say when it fails. */
+type Rule = readonly [ok: (v: unknown) => boolean, problem: string];
+const text: Rule[0] = v => typeof v === 'string';
+const ROOT_FIELDS: Readonly<Record<string, Rule>> = {
+  enabled: [v => typeof v === 'boolean', 'enabled must be true or false'],
+  threshold: [v => within(v, 0, 100), 'threshold must be a whole number from 0 to 100'],
+  maxRounds: [v => within(v, 1, 10), 'maxRounds must be a whole number from 1 to 10'],
+  prompts: [Array.isArray, 'prompts must be a list'],
+  runs: [Array.isArray, 'runs must be a list'],
+};
+const PROMPT_FIELDS: Readonly<Record<string, Rule>> = {
+  id: [text, 'id must be text'],
+  triggers: [strings, 'triggers must be a list of text'],
+  focus: [strings, 'focus must be a list of text'],
+};
+/** The stages a pair can serve — the server's `SecurityRun.Serves` knows these two and refuses any other. */
+export const SECURITY_STAGES: readonly string[] = ['code', 'feature'];
+const RUN_FIELDS: Readonly<Record<string, Rule>> = {
+  vendor: [text, 'vendor must be text'],
+  prompt: [text, 'prompt must be text'],
+  context: [v => v === 'slice' || v === 'diff', 'context must be slice or diff'],
+  contextTokens: [v => within(v, 1024, 200000), 'contextTokens must be a whole number from 1024 to 200000'],
+  stages: [v => strings(v) && v.every(s => SECURITY_STAGES.includes(s)), 'stages must be a list holding only code and feature'],
+};
+const promptProblem = (v: unknown): string => record(v) ? fieldProblem(v, PROMPT_FIELDS, Object.keys(PROMPT_FIELDS)) : 'must be an object';
+const runProblem = (v: unknown): string => record(v) ? fieldProblem(v, RUN_FIELDS, ['vendor', 'prompt']) : 'must be an object';
+const isPrompt = (v: unknown): v is SecurityPrompt => promptProblem(v) === '';
+const isRun = (v: unknown): v is SecurityRun => runProblem(v) === '';
+function fieldProblem(value: Record<string, unknown>, rules: Readonly<Record<string, Rule>>, required: readonly string[] = []): string {
+  return Object.entries(rules).map(([key, rule]) => memberProblem(value, key, rule, required.includes(key))).find(p => p !== '') ?? '';
+}
+function memberProblem(value: Record<string, unknown>, key: string, [ok, problem]: Rule, required: boolean): string {
+  if (!(key in value)) return required ? `${key} is missing` : '';
+  return ok(value[key]) ? '' : problem;
+}
+function listProblem(name: string, items: readonly unknown[], problem: (v: unknown) => string): string {
+  const index = items.findIndex(item => problem(item) !== '');
+  return index < 0 ? '' : `${name}[${index}]: ${problem(items[index])}`;
+}
 const number = (v: unknown, fallback: number, min: number, max: number): number =>
   within(v, min, max) ? v : fallback;
 const within = (v: unknown, min: number, max: number): v is number =>
   typeof v === 'number' && Number.isInteger(v) && v >= min && v <= max;
+
+/** The token budget a pair runs with: its own when it holds a usable one, its source mode's default otherwise. */
+export const securityTokenBudget = (r: SecurityRun, context: string): number =>
+  number(r.contextTokens, context === 'slice' ? 24000 : 200000, 1024, 200000);
+
+/**
+ * What the host saves for one control's write against the STORED setting — nothing when that setting is
+ * malformed. Saving the panel's stand-in would overwrite what the person wrote in settings JSON, which is
+ * exactly where the Security lane tab tells them to correct it.
+ */
+export function securityLaneSave(stored: unknown, field: string, value: unknown, vendors: readonly Vendor[]): SecurityLane | undefined {
+  const lane = securityLaneFrom(stored);
+  return 'invalidConfiguration' in lane ? undefined : securityWrite(lane, field, value, vendors);
+}
 
 /** One control edits one field; all other pairs and forward-compatible metadata survive. */
 export function securityWrite(lane: SecurityLane, field: string, value: unknown, vendors: readonly Vendor[]): SecurityLane {
@@ -154,6 +221,6 @@ function runWrite(r: SecurityRun, key: string, value: unknown, vendors: readonly
   return Object.hasOwn(edits, key) ? edits[key]!() : r;
 }
 function stageWrite(r: SecurityRun, stage: string, value: unknown): SecurityRun {
-  const stages = r.stages ?? ['code', 'feature'];
+  const stages = r.stages ?? SECURITY_STAGES;
   return { ...r, stages: value === true ? [...new Set([...stages, stage])] : stages.filter(s => s !== stage) };
 }
