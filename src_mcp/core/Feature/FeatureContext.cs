@@ -143,16 +143,17 @@ public static class FeatureContext
     /// </summary>
     /// <remarks>
     /// At a line break, so a reviewer never reads half a sentence as if it were the whole; at a character
-    /// boundary when there is no line break to use, so a multi-byte character is never split.
+    /// boundary when there is no line break to use, so a multi-byte character is never split. The marker is
+    /// this context's own unless a caller names another (the question consultant's <c>[…truncated]</c>).
     /// </remarks>
-    public static (string Text, bool WasCut) Within(string text, int budget)
+    public static (string Text, bool WasCut) Within(string text, int budget, string cutMarker = Cut)
     {
         if (Encoding.UTF8.GetByteCount(text) <= budget)
         {
             return (text, false);
         }
 
-        var marker = Encoding.UTF8.GetByteCount("\n" + Cut);
+        var marker = Encoding.UTF8.GetByteCount("\n" + cutMarker);
         if (budget < marker)
         {
             // A budget smaller than the marker itself: the marker would be the overrun. The cut is still
@@ -164,7 +165,7 @@ public static class FeatureContext
         var line = head.LastIndexOf('\n');
         var kept = line > 0 ? head[..line] : head;
 
-        return (kept + "\n" + Cut, true);
+        return (kept + "\n" + cutMarker, true);
     }
 
     /// <summary>The longest prefix of <paramref name="text"/> that is at most <paramref name="bytes"/> UTF-8 bytes, never splitting a character.</summary>

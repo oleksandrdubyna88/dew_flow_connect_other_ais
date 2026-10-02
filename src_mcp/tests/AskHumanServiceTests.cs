@@ -390,6 +390,32 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
         record.EscalationId.Should().Be(card.Id);
     }
 
+    /// <summary>
+    /// A person may be asked a long question; the consultants beside it are bounded by the tool's 4 KB. Before
+    /// this, a question past it made <c>BesideAsync</c> answer null and the consultants silently did not run.
+    /// </summary>
+    [Fact]
+    public async Task AProductionRiskQuestionPastFourKilobytes_StillRunsTheConsultants_WithTheQuestionCutAndSaidSo()
+    {
+        var h = Build(budget: TimeSpan.FromSeconds(2), script: launch => Task.FromResult<ScriptedAnswer?>(
+            launch.Request.Executable == "claude" ? ScriptedAnswer.Claude("Back the column up first.") : null));
+        Proceeded(h);
+        var longQuestion = "Is it safe to drop the legacy column now? " + string.Join(' ', Enumerable.Repeat("The table holds every invoice since 2019.", 150));
+        System.Text.Encoding.UTF8.GetByteCount(longQuestion).Should().BeGreaterThan(QuestionConsultService.MaxQuestionBytes, "the fixture is past the limit");
+
+        await Ask(h, longQuestion, string.Empty, true, "the migration drops a column nothing can restore");
+
+        var card = await Eventually(() => TheCards(h).FirstOrDefault(c => c.ProductionRisk && c.ConsultantAnswers.Count > 0), TimeSpan.FromSeconds(20));
+        card.Should().NotBeNull("the consultants ran beside the card although the question was past 4 KB");
+        card!.Question.Should().Be(longQuestion, "the PERSON is asked the whole question; only the consultants get the cut one");
+        var prompt = h.Launcher.Vendors.Single().Prompt;
+        prompt.Should().Contain("Is it safe to drop the legacy column now?").And.Contain("[…truncated]").And.NotContain(longQuestion);
+        var record = h.Questions.Store.All().Single(r => r.ProductionRisk);
+        System.Text.Encoding.UTF8.GetByteCount(record.Question).Should().BeLessThanOrEqualTo(QuestionConsultService.MaxQuestionBytes);
+        record.Question.Should().EndWith("[…truncated]");
+        record.Truncated.Should().Contain("question").And.Contain(System.Text.Encoding.UTF8.GetByteCount(longQuestion).ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
     private static async Task<T?> Eventually<T>(Func<T?> read, TimeSpan within)
     {
         var deadline = DateTime.UtcNow + within;

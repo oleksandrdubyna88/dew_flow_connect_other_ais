@@ -120,6 +120,13 @@ public sealed record QuestionConsultRecord(
 
     public string RiskReason { get => field ?? string.Empty; init; } = string.Empty;
 
+    /// <summary>
+    /// What was cut to fit the tool's limits, one sentence — empty when nothing was. Only the consultants BESIDE a
+    /// person's card (D8) are ever handed a cut question: the person was asked the whole of it, and a refusal there
+    /// would have meant no consultant ran at all.
+    /// </summary>
+    public string Truncated { get => field ?? string.Empty; init; } = string.Empty;
+
     public string Status { get => field ?? string.Empty; init; } = QuestionConsultStatuses.Consulting;
 
     public string Outcome { get => field ?? string.Empty; init; } = string.Empty;
