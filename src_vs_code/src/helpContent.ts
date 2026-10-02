@@ -422,7 +422,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: "The log: Show review rounds",
       whatItIs:
-        "**Show review rounds** is the page that holds everything that has already happened. It opens from the list icon in the ConnectOtherAIs sidebar's title bar, from the command palette, and — while a question is waiting on you — from the status-bar item. Any question waiting on you is at the top, under *Open questions — a review is waiting on you*, with **Answer…** on each. Under it five tabs: **Rounds**, **Conversations**, **Consultations**, **What each AI has used** and **What it keeps missing**.",
+        "**Show review rounds** is the page that holds everything that has already happened. It opens from the list icon in the ConnectOtherAIs sidebar's title bar, from the command palette, and — while a question is waiting on you — from the status-bar item. Any question waiting on you is at the top, under *Open questions — a review is waiting on you*, with **Answer…** on each. Under it six tabs: **Rounds**, **Conversations**, **Consultations**, **Questions** — every question put to the question consultant, its models on expand — **What each AI has used** and **What it keeps missing**.",
       why:
         "The sidebar is present tense on purpose: what somebody is waiting on is the reviewers that are running. \"What happened\" is a different question — a log, which wants filters, sorting, search and more than one page — and it is five questions rather than one: what the gate decided, what the chats cost, whether consulting helped, what it all cost, and what the AI keeps failing to see for itself.",
       setup:
@@ -522,7 +522,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: "The panel and the Settings tab",
       whatItIs:
-        "The sidebar is what is happening now: any question waiting on you, then **Notifications**, **Active gates** — the rounds running this minute — **Active consultations** — the consultations being had — **Consultation cadence** — where each plan the cadence follows stands — **Phrases** and **Bugz**. Everything you configure once is in the **Settings** tab, which the gear beside the help button in the panel title bar opens: one tab each for Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor keys, Team servers, This side and MCP server.",
+        "The sidebar is what is happening now: **Active questions** — what the question consultant is answering, and any question waiting on you — then **Notifications**, **Active gates** — the rounds running this minute — **Active consultations** — the consultations being had — **Consultation cadence** — where each plan the cadence follows stands — **Phrases** and **Bugz**. Everything you configure once is in the **Settings** tab, which the gear beside the help button in the panel title bar opens: one tab each for Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor keys, Team servers, This side and MCP server.",
       why:
         "Fourteen folded sections in one narrow column meant scrolling past ten things you set up once to reach the four you come back for. The tabs hold the same controls as the sections did, with the same effect — only where they are drawn changed — so a choice made in a tab is stored exactly as the same choice made in the sidebar was.",
       setup:
