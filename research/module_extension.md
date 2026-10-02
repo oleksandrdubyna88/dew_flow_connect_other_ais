@@ -9914,7 +9914,8 @@ Two more sites of the decision above, reported from screenshots after 0.60.2 shi
   said nobody needed a key. It now takes every `asksAnEndpoint` row: enabled ones get the sentence they had
   (`keysNeededNow`), switched-off ones are NAMED as needing a key once switched on (`keysNeededLater`) without a key
   being demanded now, and *"Nothing to fill in yet"* — with the box's *"not needed yet"* placeholder — is left for a
-  configuration with no endpoint row at all. An `api` row counts, enabled or not. A side effect, pinned by a test: a `local` row given the address its engine listens on was asked for a key by the old `enabled && baseUrl` count — a local engine needs none, and `asksAnEndpoint` never takes one. This reverses an older test's
+  configuration with no endpoint row at all. The switched-off sentence names the KEY each row reads (`vaultKeyOf` —
+  `vaultKeyName` when the row names one, else its id; CodeRabbit on #637). An `api` row counts, enabled or not. A side effect, pinned by a test: a `local` row given the address its engine listens on was asked for a key by the old `enabled && baseUrl` count — a local engine needs none, and `asksAnEndpoint` never takes one. This reverses an older test's
   decision (*"a reviewer that does not run needs nothing"*, `panelView.test.ts`), by the operator's choice on
   2026-10-02; that test now asserts the new sentence.
 
@@ -9950,7 +9951,8 @@ every long list rather than only endpoint rows. Design record:
   select's value is re-applied after every pass.
 - **Enter** commits the first MATCH by setting the select's value and dispatching the select's OWN `change` — so a
   setting select runs `save()` and its focus release, and a prompt picker its prompt handler, exactly as a mouse pick
-  (cadence consultation, codex gpt-6-astra). A blank box, no match, or a disabled select: nothing. **Escape** empties;
+  (cadence consultation, codex gpt-6-astra). A blank box, no match, a disabled select, or an Enter that confirms an
+  input method's composition (`isComposing` / keyCode 229 — CJK input; CodeRabbit on #637): nothing. **Escape** empties;
   **ArrowDown** moves to the select.
 - **A query survives a repaint.** The box reports a focus hold through the same `focus` message the settings send,
   under `search|` + the select's identity (a prompt picker's is `prompt|role|round|`); the host keeps it as an opaque

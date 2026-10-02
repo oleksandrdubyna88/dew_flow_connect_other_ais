@@ -45,6 +45,14 @@ test('a switched-off OpenRouter row is named as needing a key once it is switche
   assert.match(pane, /once (it is|they are) switched on/u, 'and said to need the key when it runs, not now');
 });
 
+test('a switched-off row filed under another key name is told THAT name', () => {
+  // CodeRabbit on #637: the row reads the key `vaultKeyOf` names (vaultKeyName ?? id), so "under its name" sent the
+  // person to file it under the row's id, where the row would never find it.
+  const pane = keysPane([codexRow({ id: 'openrouter', baseUrl: OPENROUTER, enabled: false, vaultKeyName: 'openrouter-team' })]);
+
+  assert.match(pane, /openrouter-team/u, 'the key name the row reads is named');
+});
+
 test('an enabled endpoint row still needs its key now, in the sentence it had', () => {
   const pane = keysPane([codexRow({ id: 'openrouter', baseUrl: OPENROUTER, enabled: true })]);
 

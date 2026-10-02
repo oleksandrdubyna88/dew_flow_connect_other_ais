@@ -144,6 +144,19 @@ test('Enter with nothing matching does nothing: no write, no throw', () => {
   assert.deepEqual(values(modelSelect(page)), ['', '__other__'], 'and the list holds only what is always there');
 });
 
+test('Enter that confirms an input method’s candidate is not a pick', () => {
+  // CodeRabbit on #637: with CJK input, the Enter that ends a composition chose the first match and wrote it.
+  const page = card();
+  const box = boxFor(page, modelSelect(page));
+  type(box, 'opus');
+  const before = page.posted.length;
+  box.fire('keydown', new PageEvent('keydown', 'Enter', null, true));
+
+  assert.deepEqual(page.posted.slice(before).filter((one) => one['type'] === 'setting'), [], 'nothing was chosen yet');
+  press(box, 'Enter');
+  assert.equal(page.posted.filter((one) => one['type'] === 'setting').length, 1, 'the Enter after the composition still picks');
+});
+
 test('Enter on a blank box does not pick the first model', () => {
   const page = card();
   const box = boxFor(page, modelSelect(page));

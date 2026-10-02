@@ -1704,7 +1704,17 @@ function keysNeededLater(off: readonly Vendor[]): string {
   }
   const one = off.length === 1;
 
-  return `<div class="hint">${vendorNames(off)} ${one ? 'is switched off, and reaches an endpoint of its own: it needs an API key once it is switched on' : 'are switched off, and reach endpoints of their own: they need an API key once they are switched on'} — in a CredsForDevs entry of kind <code>config</code>, under ${one ? 'its' : 'each one’s'} name, with <i>Enable Code Access…</i> turned on for it.</div>`;
+  return `<div class="hint">${vendorNames(off)} ${one ? 'is switched off, and reaches an endpoint of its own: it needs an API key once it is switched on' : 'are switched off, and reach endpoints of their own: they need an API key once they are switched on'} — in a CredsForDevs entry of kind <code>config</code>, under ${keyNames(off)}, with <i>Enable Code Access…</i> turned on for it.</div>`;
+}
+
+/**
+ * The names the rows' keys are filed under — `vaultKeyOf`, the name each row READS, which is not its id when the row
+ * names another (CodeRabbit on #637). Escaped: every one is a person's string.
+ */
+function keyNames(vendors: readonly Vendor[]): string {
+  const names = vendors.map((v) => `<code>${escapeHtml(vaultKeyOf(v))}</code>`).join(', ');
+
+  return vendors.length === 1 ? `the key name ${names}` : `the key names ${names}`;
 }
 
 /** Row ids for a sentence — every one a person's string, so every one escaped. */

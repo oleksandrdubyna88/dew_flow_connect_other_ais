@@ -200,6 +200,10 @@ function searchBoxScript(): string {
 function searchKeysScript(): string {
   return `
   function onSearchKey(event, box, select, search) {
+    // An Enter inside an input method's composition confirms a candidate, not a choice (CodeRabbit on #637).
+    if (event.isComposing || event.keyCode === 229) {
+      return;
+    }
     if (event.key === 'Enter') {
       event.preventDefault();
       const first = search.matches()[0];
