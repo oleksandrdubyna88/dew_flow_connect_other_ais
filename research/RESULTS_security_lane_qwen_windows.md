@@ -1,5 +1,10 @@
 # Security lane calibration — Windows Ollama
 
+For the consolidated experiment inventory and subsequent PR-group/configuration results, see
+[Local LLM security-lane experiments](RESULTS_security_lane_local_llm_windows.md).
+The dated sections below retain their original checkpoint; their pending-work statements are not
+the latest campaign status.
+
 Status, 2026-10-02: Gemma completed three consecutive adequate feature replies and all twelve
 modules. Positive controls still expose inaccurate explanation/reproduction details; broader quality
 calibration remains open. Qwen has not qualified. The dated campaigns below retain their own results.
