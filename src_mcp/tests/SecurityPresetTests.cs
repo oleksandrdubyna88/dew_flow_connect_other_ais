@@ -109,6 +109,18 @@ public sealed class SecurityPresetTests
     public void A_legitimate_skip_is_not_reported_as_a_failed_security_attempt()
     {
         var work = new RoundWork([], [new("qwen/redteam-sql", "security lane round budget spent")]) { SecurityActive = true };
-        SecurityRound.Clause([], work).Should().Contain("skipped").And.NotContain("coverage was not established");
+        SecurityRound.Clause([], work).Should().StartWith("Security lane skipped").And.NotContain("incomplete");
+    }
+
+    [Fact]
+    public void A_pairing_that_could_not_run_is_reported_as_incomplete_not_skipped()
+    {
+        // The positive control for the test above, with the same skip present: an EXCLUDED security
+        // pairing (here, oversized diffs left the trigger check unfinished) is a failed attempt.
+        var work = new RoundWork([], [new("qwen/redteam-sql", "security lane round budget spent")],
+            [new("qwen", "redteam-authz", "trigger coverage incomplete: 1 oversized diffs and 0 files beyond the detector limit were not inspected")])
+        { SecurityActive = true };
+        SecurityRound.Clause([], work).Should().StartWith("Security lane incomplete: configured pairings could not run")
+            .And.NotContain("skipped");
     }
 }

@@ -20,6 +20,22 @@ public sealed class SecurityLaneSettingsTests
         lane.Complaints.Should().NotBeEmpty();
     }
 
+    /// <summary>
+    /// The positive control for the refusals above, with the same providers: a well-formed root DOES
+    /// enable the lane, so "never enables" is about the malformation and not about the fixture.
+    /// </summary>
+    [Theory]
+    [InlineData("{\"enabled\":true}")]
+    [InlineData("{\"enabled\":true,\"threshold\":1,\"maxRounds\":3,\"prompts\":[],\"runs\":[{\"vendor\":\"qwen\",\"prompt\":\"redteam-sql\"}]}")]
+    public void A_valid_root_enables_the_lane(string json)
+    {
+        var lane = SecurityLaneSetting.Parse(json, Providers);
+        lane.Complaints.Should().BeEmpty();
+        lane.Enabled.Should().BeTrue();
+        lane.Applies(Core.Rounds.Stage.CodeReview).Should().BeTrue();
+        lane.Runs.Should().NotContain(r => r.Refusal.Length > 0);
+    }
+
     [Fact]
     public void Unknown_trigger_refuses_its_pair_while_unknown_focus_is_ignored()
     {
