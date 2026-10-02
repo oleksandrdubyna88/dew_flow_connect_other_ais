@@ -19,11 +19,13 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-02 · extension **0.61.0** / mcp 0.40.5 / server tag 0.9.0 · items 1, 2, 6 and 9 PASS (the
-Marketplace served 0.61.0 about seven minutes after the publish; item 2 fails until then), **item 10 FAILS**: the box
-answers `/api/health` 0.8.0 while `server-v0.9.0` is tagged — a server release that was never deployed, older than this
-extension release, and the box is the only environment, so the deploy is the operator's decision. Run with
-`MCP_VERSION` and `SERVER_VERSION` set to the newest tags: unset, items 1, 9 and 10 fail on any extension-only release.
+Last verified: 2026-10-02 · extension **0.61.1** / mcp 0.40.5 / **server 0.9.0** · all five automated items PASS.
+Item 10 failed earlier the same day (extension 0.61.0: the box answered 0.8.0 while `server-v0.9.0` was tagged); the
+operator then asked for the deploy, and run 37032861056 took the box from 0.8.0 to 0.9.0 — the release script's canary
+ran one real review per vendor with the host's CLIs just updated (codex 0.160.0, claude 2.1.287, agy 1.2.14):
+`codex: done`, `antigravity: done`, `claude: done`, which is items 7 and 12 observed rather than asserted. The
+Marketplace served 0.61.1 about ten minutes after the publish. Run with `MCP_VERSION` and `SERVER_VERSION` set to the
+newest tags: unset, items 1, 9 and 10 fail on any extension-only release.
 
 Previously verified: 2026-09-11 · extension 0.33.1 / mcp 0.18.17 / **server 0.5.7** · all five automated items PASS. **Item 12 observed for the first time, and it is the reason this release exists**: the release script's canary ran one real review per configured vendor on the box — `codex: done`, `antigravity: done`, `claude: done` — so the INSTALLED claude (2.1.261, not the 2.1.258 the flags were read against) accepts both halves of the confinement: the eleven `--disallowedTools` names and an allowlisted environment. Until that ran, both were asserted as SENT and nothing had observed them being taken.
 
