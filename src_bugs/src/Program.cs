@@ -182,6 +182,30 @@ internal sealed class Program
         return 78; // EX_CONFIG
     }
 
+    /// <summary>Serves until stopped — or says, in one line, that the address is somebody else's.</summary>
+    /// <remarks>
+    /// A taken port is an EXPECTED startup failure and so a value, not a crash; what it means and why
+    /// the code is 75 rather than 78 is decided once, in <see cref="BindFailure"/>, for both HTTP hosts.
+    /// Only the bind failure is caught — anything else still flies, because this layer handles nothing
+    /// else.
+    /// </remarks>
+    private static async Task<int> ServedAsync(WebApplication app)
+    {
+        try
+        {
+            await app.RunAsync();
+        }
+        catch (IOException taken) when (BindFailure.IsAddressInUse(taken))
+        {
+            app.Logger.LogError(taken, "Cannot listen: {Reason}", taken.Message);
+            await Console.Error.WriteLineAsync(BindFailure.Explained("coai-bugs", taken));
+
+            return BindFailure.ExitCode;
+        }
+
+        return 0;
+    }
+
     /// <summary>The transport: one server per data directory, one connection, two routes.</summary>
     /// <remarks>
     /// <para><b>The lock FIRST, before a logger or a listener is configured</b> — a server that will
@@ -257,9 +281,7 @@ internal sealed class Program
                 Judged(corpus, ready.Keywords, request, IngestGate.WhoOf(http), clock, limiter,
                     commented: true));
 
-        await app.RunAsync();
-
-        return 0;
+        return await ServedAsync(app);
     }
 
     /// <summary>Everything the host is made of, before anything listens.</summary>

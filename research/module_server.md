@@ -4353,7 +4353,13 @@ minute-sweep never evicts a window that just gained a stamp — both raced by th
 (`revoked_utc` non-empty) is refused before the limiter and before any write, and a test proves
 revoking actually stops an ingest. The limiter is one process's memory and resets on restart by
 design; `ServeLock` makes "one process" enforced rather than assumed — a second server on the same
-data directory exits 78, while the one-shots never take it. `/admin/*` has its own limiter identity
+data directory exits 78, while the one-shots never take it. **A port somebody else holds exits 75**
+(EX_TEMPFAIL) with one stderr line naming the address — `BindFailure` in `src_mcp/service_defaults`,
+shared with the Team server — and the unit's `Restart=always` retries it. Until 2026-10-02 it escaped
+`RunAsync` as an unhandled `IOException`, so every collision, including this suite's own deliberate
+ones, was a crash and on Windows a `.NET Runtime 1026` event (415 on one machine in two weeks);
+`TheBuiltBinariesTests.APortSomebodyHolds_EndsTheServerWithTempfailAndOneLine_NotACrash` pins it.
+`/admin/*` has its own limiter identity
 (`LimiterSubject.Administrator(AdminId)` → `admin-<8 hex>`) so an admin route cannot land in the
 contributor bucket.
 

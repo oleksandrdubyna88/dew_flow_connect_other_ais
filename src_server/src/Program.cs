@@ -324,6 +324,15 @@ try
 
     return 0;
 }
+catch (IOException taken) when (CoaiMcp.ServiceDefaults.BindFailure.IsAddressInUse(taken))
+{
+    // A port somebody else holds is an expected startup failure, decided once for both HTTP hosts:
+    // one line and EX_TEMPFAIL, so the restart policy tries again rather than a crash report per try.
+    Log.Error(taken, "Cannot listen: {Reason}", taken.Message);
+    await Console.Error.WriteLineAsync(CoaiMcp.ServiceDefaults.BindFailure.Explained("coai-server", taken));
+
+    return CoaiMcp.ServiceDefaults.BindFailure.ExitCode;
+}
 finally
 {
     await Log.CloseAndFlushAsync();
