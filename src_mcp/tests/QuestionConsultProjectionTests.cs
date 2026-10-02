@@ -108,10 +108,10 @@ public sealed class QuestionConsultProjectionTests : IDisposable
         Text("SELECT status FROM question_consults").Should().Be(QuestionConsultStatuses.Consulting);
         Text("SELECT flag FROM question_consult_rows WHERE row_id = 'astra-web'").Should().Be("unconfined", "D13's flag reaches the log");
 
-        var answered = record
+        var settledRows = record
             .WithRow(record.Rows[0] with { Status = RowOutcomes.Answered, Advice = "Use a ladder.", Seconds = 12.5, TokensIn = 1000, TokensOut = 200, CostUsd = 0.02 })
-            .WithRow(record.Rows[1] with { Status = RowOutcomes.TimedOut, Reason = "the row ran past its budget", Seconds = 300 })
-            with { Status = QuestionConsultStatuses.Partial, Outcome = QuestionOutcomes.AnsweredByConsultants, EndedUtc = DateTime.UtcNow.ToString("O") };
+            .WithRow(record.Rows[1] with { Status = RowOutcomes.TimedOut, Reason = "the row ran past its budget", Seconds = 300 });
+        var answered = settledRows with { Status = QuestionConsultStatuses.Partial, Outcome = QuestionOutcomes.AnsweredByConsultants, EndedUtc = DateTime.UtcNow.ToString("O") };
         store.Write(answered);
 
         Count("SELECT COUNT(*) FROM question_consults").Should().Be(1, "one row per question that ADVANCES");
