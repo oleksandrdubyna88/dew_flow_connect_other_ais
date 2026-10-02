@@ -1,6 +1,6 @@
 # PLAN — the question consultant: other models answer an AI's question before the person is asked
 
-> Status: **in progress — S1 (confinement) and S2 (the fan-out, `ask_consultants`, the proved move of `ask_human`) built 2026-10-01, S3 (the door to the person: the gate, the wait, the retention, the order) built 2026-10-02, S4–S5 open.** The capability facts it rests on were measured in
+> Status: **in progress — S1 (confinement) and S2 (the fan-out, `ask_consultants`, the proved move of `ask_human`) built 2026-10-01, S3 (the door to the person: the gate, the wait, the retention, the order) built 2026-10-02, S4 (the person sees it: the Settings tab, Active questions, the Questions tab) built 2026-10-02, S5 open.** The capability facts it rests on were measured in
 > `dew_flow_benchmark · todo/PLAN_question_consultant_probes.md` (full run `01a0f8c7`, 105 cells, 2026-10-01) and are
 > written up in [RESULTS_question_consultant_capabilities.md](../research/RESULTS_question_consultant_capabilities.md). Scope:
 > `src_mcp` (a new tool `ask_consultants`, the phase-aware `ask_human` gate, a confinement layer, escalation
@@ -617,6 +617,57 @@ per question, expandable per model, cost, time, outcome. Help in five languages.
 6. The real-editor check (`npm run test:host`) opens the section and the tab.
 
 **Not in it.** No server change; no release; no conventions text.
+
+**Deviations (S4, 2026-10-02).** Built as the acceptance states — the settings mirror and its agreement test, the
+`questionconsultant` tab, Active questions, the debounce, the Questions tab, the help in five languages, the
+real-editor check — with these differences from the wording above:
+1. **Not "no server change": four, each its own commit, assigned to S4 by the coordinator.** (a)
+   `SixRowsStartWithinOneTick…` asserts a start barrier instead of a wall clock (RED with the fan-out made
+   sequential: `found 1`); (b) the `dotnet format` WHITESPACE finding in `QuestionConsultProjectionTests.cs`;
+   (c) a production-risk question past 4 KB made `BesideAsync` answer null so no consultant ran — it now runs with
+   the question cut to 4 KB ending `[…truncated]`, the record's new `truncated` field saying so (file only, not
+   projected), `FeatureContext.Within` widened with a marker rather than copied; and (d) **`--log` carries
+   `questionConsults`** — the plan said the tab "reads question_consults" and nothing emitted them; bounded to 100
+   questions and 4 000 characters of advice a row, empty on a database before step 17.
+2. **Active questions is not a disclosure section.** It REPLACED the top `questions` live region (now
+   `qconsults`) and stands where that stood — first, never collapsible — because `panelView.test.ts` already pins
+   that a waiting question stands before every collapsible section. Its heading is *Active questions*, its stages
+   *Consulting* and *A question is waiting on you*.
+3. **Answer… offers the free-text box FIRST on a card with no findings gating** (`answerChoices`) — and that
+   fixed a defect beneath it: the card offered only the three review decisions, so an ask_human QUESTION could
+   not be answered in words at all. A gate verdict with findings keeps exactly its three.
+4. **Restore default shows the shipped words.** The panel generates them from `shared/question-prompts.json`
+   (`scripts/generate-question-prompts.mjs`, `--check` in `generatedFilesAreCurrent`), so the box shows the
+   effective text; an emptied box, or one holding exactly the shipped words, removes the override file. The file
+   is written through `ConsultPromptFile`, widened with a path and a label.
+5. **A row's vendor picker is the stuck consultant's catalogue under the question runtimes** —
+   `consultableVendors` widened with a runtimes list, the api presets included (A11) — **without the custom
+   endpoint door**: that flow writes `consultants`, and a question row of one's own endpoint is a tail.
+6. **The row's controls ride the existing CALLER slot** (the row id; a prompt box the prompt id), handed to
+   `qconsultHost.ts` before the provider's `caller` case — no new routing field, so `FOCUS_ID` is unchanged.
+   The buttons are `QCONSULT_COMMANDS`, spread into `PANEL_COMMANDS`.
+7. **The debounce fires 175 ms after the FIRST event of a burst**, coalescing the rest, rather than after the
+   last — a burst then never delays a change past 175 ms (acceptance 4's "five events in 100 ms → one refresh at
+   175 ms" is that). **"Network path" is a UNC path** (`\\wsl.localhost`, `\\wsl$`, `\\server`,
+   `//server`); a mapped drive letter cannot be told from a local disk without an OS call and is watched by events.
+8. **The Questions tab shows the cost the server recorded** and prices nothing itself (the Consultations tab
+   prices from the ledger); it has no period buttons. `roundsDb.ts` was at the lint's 800 lines, so
+   `RoundOrders`/`parseOrders` moved unchanged to `roundOrders.ts` (re-exported, `prove-move.mjs` clean).
+9. **The question-consult watcher keeps a finished record 45 minutes**, so a card that follows it (a
+   `consultId` is accepted for thirty, the card waits fifteen) can fold its answers.
+10. **The teeth were checked by compiled mutations**, and one was not at first: the section's "no cap" mutation
+    (`return false` in a string function) did not compile and reused the previous output; re-run as a compiling
+    mutation it turns both cap tests red (recorded in 9c14d866's message).
+11. **The real-editor check runs here**: `npm run test:host` 13 of 16 — the new scenario ok; the three clipboard
+    scenarios fail on this machine (another writer on the clipboard) as they did before.
+12. D12 by the numbers: `PanelService.cs` and `PanelSettings.cs` untouched in S4 (1759 and 1497).
+
+**Open for S5.** `QCONSULT_SINCE = 0.41.0` assumes the next mcp release is the one S5 cuts — move it if another
+lands first. The live check should include the Grok-through-OpenRouter row exactly as the tab writes it (vendor
+`api`, base URL `https://openrouter.ai/api/v1`, key name `openrouter`, model `x-ai/grok-4.7`) — the panel stores
+it, the server's resolution of an `api` vendor with a key name was tested in S1, not with this row on a real
+endpoint. S3's question stays the operator's: whether an expired card a person answers later should still count
+(the server's `AnsweredFor` reads it). The extension's version and CHANGELOG are S5's.
 
 ### S5 — Release, the live check, the rule, the tails — **Opus** (procedural: every outward step is shown to the operator before it happens and the cascade follows a written recipe)
 

@@ -1003,6 +1003,27 @@ before. And the sixth file neither half owns gained one row rather than a sixth 
 records the gate counts batches into, is in `shared/data-inventory.json` and `DATA_TO_MOVE`, because a move that
 left it behind would hand every plan two fresh free batches.
 
+### The person sees the question consultant: three crossings, one new field (2026-10-02, S4 of the question consultant)
+
+Three seams carry S4, and only one of them gained anything on the wire.
+
+- **The settings file.** Eight `COAI_QCONSULT_*` keys cross the seam every other setting crosses — written by the
+  panel only when they differ from the server's default (the defaults are read out of the C# by a test), and
+  withheld whole while the installed server is known to be older than `QCONSULT_SINCE`, which the tab says in a
+  banner. The rows, the custom prompts and the roots ARE the wire format. A shipped prompt's words are an override
+  FILE under `<dataDir>/prompts/`, which the server already read override-first (`RolePrompts.Written`); the
+  panel now writes and removes it.
+- **`--log` gained `questionConsults`** — each question's projected head and its model rows, bounded (100
+  questions, 4 000 characters of advice a row). The Logs page's Questions tab reads it; an older server sends none
+  and the tab is empty, saying so; an older extension ignores the field. No new one-shot mode.
+- **The two record files neither half owns** — `question-consults/<id>.json` and `escalations/<id>.json` — are
+  now drawn by the extension's **Active questions**, which replaced the region that drew a waiting question: the
+  consulting rows from the one, the person's card from the other, a record bound to a card drawn inside it, so a
+  question appears once. The three watchers react to file events within 175 ms and poll only a UNC data folder.
+
+Nothing else crossed: the decisions the tab makes (a refused pair disabled, a flagged pair waiting for its tick, a
+disk root refused) are the server's own refusals said first, from the same capability table and the same rules.
+
 ## How the Team server is deployed (2026-09-06)
 
 `coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the
