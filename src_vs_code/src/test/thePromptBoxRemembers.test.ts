@@ -187,7 +187,12 @@ function run(elements: readonly FakeElement[], over: Partial<PanelState> = {}): 
   // its text is what the code round refused.
   const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', script);
   body(
-    () => ({ postMessage: (message: Record<string, unknown>) => { posted.push(message); } }),
+    // A webview always has its state API; this one has nothing saved, which is a first load.
+    () => ({
+      postMessage: (message: Record<string, unknown>) => { posted.push(message); },
+      getState: (): unknown => undefined,
+      setState: (): void => undefined,
+    }),
     fakeDocument,
     fakeWindow,
     later,

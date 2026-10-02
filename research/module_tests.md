@@ -2524,3 +2524,16 @@ was owed until a reviewer runs it or a person decides.
 
 **What this does NOT prove.** Nothing here runs a round: that an endpoint row with no model is refused by the
 endpoint is read from `ReviewerRuntime.cs` (no `-m` without a model), not observed in this task.
+
+## A long list's search box (2026-10-02, PLAN_model_search_and_busy_marks E2)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `selectSearch.test.ts` (new, 11) | `rankChoices` as a value: prefix > segment start (`/ - . :` space) > contains; list order inside a tier; every word must match, the first decides the tier; case; the label counts; blank query → all, in order; no match → `[]`; regex characters are text; `SEARCH_FROM_OPTIONS` is 15; the function run from its own source text in an empty scope | written before the module existed |
+| `selectSearchPage.test.ts` (new, 17 — five after review: no move for an unchanged answer, Escape kept empty across documents, select→box no release, the caret back after Enter, an old note ignored) | The reviewer card RUN through `panelPageHarness`: the 15/14 threshold; typing `opus` leaves `''`, the prefix match, the segment matches, `__other__`; the chosen model kept and still chosen; Enter posts exactly the setting write and focus release a mouse pick posts; no match / blank / disabled card post nothing; Escape restores the drawn order; ArrowDown focuses the select; the hold's id is `search|model|openrouter|…` and box→select is no release; a second page from the saved state re-applies the query and the caret; an orphaned stored query is dropped | `the caret is back in the box` — `FOCUS_ID` dropped every `search|` id; `one search box before the select, found 0` — a fixture keyed to the wrong row |
+| `bundledPage.test.ts` (one more) | The minified Settings page embeds `rankChoices` calling nothing the bundle renamed, and the minified text ranks six queries exactly as the source | — |
+| `panelPageHarness.test.ts` (eight more) | The widened fake against a DOM's contract: a select refuses an unoffered value; `appendChild` moves; `removeChild` refuses a stranger and re-runs selectedness for the chosen option; `dispatchEvent`; `createElement` only for `input`; no parent outside a running page; prompt pickers apart from settings; the saved state | the teeth check: with the value re-apply deleted the chosen-model test stayed GREEN until `removeChild` modelled selectedness |
+| `gateModelPickers.test.ts` (changed) | Picks an option the picker drew (the `other` kind offers only its default) | `the other strongest picker offers at least one model` — it had been assigning a model no picker offered |
+
+**What this does NOT prove.** No real webview runs here: what a native dropdown shows while a box detaches options is
+Chromium's, and is not observed. Enter on a prompt picker is not page-tested — no shipped role has 15 prompts.

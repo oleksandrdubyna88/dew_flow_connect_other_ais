@@ -1243,3 +1243,34 @@ test('the Settings tab bundles without the host, and the shipped page switches a
   assert.deepEqual(page.posted.filter((m) => m['type'] === 'tab'), [{ type: 'tab', id: ids[0] }],
     'the shipped page switches without telling the host, so the next repaint throws the choice away');
 });
+
+test('the panel page bundles with its list search ranking embedded whole, and the minified text ranks as the source does', async () => {
+  // The search box over a long model list (todo/PLAN_model_search_and_busy_marks.md, Epic 2) embeds `rankChoices` by
+  // its SOURCE TEXT, exactly as the rounds log embeds `rowMatches` — the 0.29.10 defect is a renamed helper inside it.
+  const bundle = bundleOf('panelView.ts', 'settingsHtml');
+  const shim = { exports: {} as Record<string, unknown> };
+  new Function('module', 'exports', bundle)(shim, shim.exports);
+  const shipped = shim.exports as { settingsHtml?: (state: unknown, nonce: string, tab: string) => string };
+  assert.equal(typeof shipped.settingsHtml, 'function');
+
+  const { DEFAULTS } = await import('../settingsShape');
+  const { DEFAULT_VENDORS } = await import('../vendors');
+  const { rankChoices } = await import('../selectSearch');
+  const html = shipped.settingsHtml!({
+    settings: DEFAULTS, vendors: DEFAULT_VENDORS, codexModels: [], agyModels: [], localEngines: {},
+    server: { kind: 'absent', version: '', remembered: false, updateOffered: false }, side: '', perSide: false,
+    questions: [], sessions: [], openSections: [], usage: [], usageWindow: 'week', latestServerVersion: '',
+    cliStatus: {}, modelPrices: {}, snippetStatus: { kind: 'absent', current: 0 },
+  }, 'n', 'reviewers');
+  const open = html.lastIndexOf('<script');
+  const script = html.slice(html.indexOf('>', open) + 1, html.indexOf('</script>', open));
+
+  const source = embedded(script, 'rankChoices');
+  assert.deepEqual(strangers(source, 'rankChoices'), [], 'rankChoices calls a name that only exists inside the bundle');
+  const minified = new Function(`return (${source.slice(source.indexOf('function'))});`)() as typeof rankChoices;
+  const choices = ['opus-community/opus-7b', 'anthropic/claude-opus-5.5', 'openai/gpt-6-luna', 'a.b']
+    .map((id) => ({ value: id, text: id }));
+  for (const query of ['opus', 'claude opus', 'a.b', 'LUNA', '', 'nothing']) {
+    assert.deepEqual(minified(query, choices), rankChoices(query, choices), `the shipped ranking differs for "${query}"`);
+  }
+});

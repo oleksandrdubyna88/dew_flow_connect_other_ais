@@ -233,6 +233,23 @@ state), `roundsLogPanel.ts`, `bugzReviewPanel.ts` (has its own in-flight map), `
 `chatRestorePanel.ts`. `busyMark.ts` is written to be included by any of them. The server-side refusal of an endpoint
 row with no model (§4) belongs with it or on its own.
 
+## 8a. What shipped differently (kept as each epic lands)
+
+- **E1.** The new `keysBody` decision (`asksAnEndpoint`) also stopped asking a `local` row with its engine's address
+  for a key — the old `enabled && baseUrl` count did; a local engine needs none. Pinned by a fifth keys test. An older
+  test (*"a reviewer that does not run needs nothing"*) was reversed by the operator's decision, not kept.
+- **E2.** `FOCUS_ID` (`panelView.ts`), the guard that lets a focus id into the page script, had to gain an optional
+  literal `search|` prefix — the plan named the box's identity but not this guard, and the caret test went red until
+  it did. A prompt picker's identity is `prompt|role|round|` (four parts) so the same pattern admits it.
+  Enter on a PROMPT picker is not page-tested: no shipped role has 15 prompts, so no prompt picker gets a box; its
+  routing is the select's own `change`, which the setting case proves is what Enter dispatches. The harness's
+  `removeChild` had to model a DOM's selectedness (removing the chosen option moves the choice) — without it the
+  teeth check showed the value re-apply could be deleted with every test green. `gateModelPickers.test.ts` had been
+  assigning a model no picker offered; the stricter select refused it. Added after review, not in the plan: Enter
+  leaves a `searchFocus` note so the next document puts the caret back in the box (own review — the pick's focus
+  release meant the caret landed nowhere), bounded by `RETURN_TO_BOX_MS`; and an unchanged answer moves no option (code
+  round, local). The round's other performance findings were rejected on a measurement (20–160 µs per keystroke).
+
 ## 9. Definition of Done
 
 - [ ] §3.1–§3.16 each have a test that was watched failing first (E1) or written before the code (E2, E3), and was

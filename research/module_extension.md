@@ -9923,5 +9923,71 @@ drawn) and `vendorKeys.test.ts` (the Vendor keys pane of the Settings tab, narro
 OpenRouter row named, an enabled one's sentence unchanged, no endpoint row → nothing to fill in, a switched-off `api`
 row named, a local engine with an address not asked for one). RED first on `1056aed9` with the real symptoms — `actual: "the CLI's default"`, and the pane reading
 *"Nothing to fill in yet"* for both switched-off rows. Teeth: with the `asksAnEndpoint` arm of `modelWords` replaced
-by `false` the label test goes red; with `keysBody` filtering `enabled && baseUrl` again two of the four keys tests go
+by `false` the label test goes red; with `keysBody` filtering `enabled && baseUrl` again three of the five keys tests go
 red.
+
+## A long list has a search box (2026-10-02, PLAN_model_search_and_busy_marks E2)
+
+Reported after ≡ filled an OpenRouter card with two hundred `vendor/model` ids in the endpoint's own order: the only
+way to find one was to scroll. The operator asked for a field above the list that filters and sorts as one types, on
+every long list rather than only endpoint rows. Design record:
+[PLAN_model_search_and_busy_marks.md](../todo/PLAN_model_search_and_busy_marks.md).
+
+- **One road in** (`selectSearch.ts`). `selectSearchScript(sentinels)` runs once in the shared page script
+  (`pageDocument`), over `document.querySelectorAll('select')`, on both the sidebar and the Settings tab. Every select
+  with `SEARCH_FROM_OPTIONS` (15) or more options gets an `<input type="search" class="select-search">` inserted before
+  it, labelled with how many choices it searches; a disabled select gets a disabled box. No select builder was edited.
+  The box is styled by the shared input rule (`input[type="search"]` joined it).
+- **The ranking is one pure function**, `rankChoices(query, choices)` → indices in rank order: every word must occur
+  in the value or the label, ignoring case; the first word decides the tier — starts with it, then a segment after
+  `/ - . :` or a space starts with it, then merely contains it; inside a tier the list keeps its order. It is EMBEDDED
+  into the page by its source text (`var rankChoices = ${rankChoices.toString()}`), the rounds log's pattern, so the
+  unit-tested function is the one that runs.
+- **Non-matches are DETACHED, not hidden** — an `option hidden` is not honoured by every native dropdown and stays
+  reachable by the arrow keys (E2 plan round, gemini). The original order is recorded once at attach, and is what an
+  emptied box and Escape restore. Sentinels (`''`, `__other__`, `CUSTOM_ENDPOINT`) are never ranked or removed and keep
+  their end of the list; the chosen option stays, right after the leading sentinels, even when it does not match; the
+  select's value is re-applied after every pass.
+- **Enter** commits the first MATCH by setting the select's value and dispatching the select's OWN `change` — so a
+  setting select runs `save()` and its focus release, and a prompt picker its prompt handler, exactly as a mouse pick
+  (cadence consultation, codex gpt-6-astra). A blank box, no match, or a disabled select: nothing. **Escape** empties;
+  **ArrowDown** moves to the select.
+- **A query survives a repaint.** The box reports a focus hold through the same `focus` message the settings send,
+  under `search|` + the select's identity (a prompt picker's is `prompt|role|round|`); the host keeps it as an opaque
+  string (`SurfaceSlot.edited`). Tabbing between a box and a control is no release (the setting `focusout` guard
+  recognises `data-search-for`). The query is kept in `vscode.setState` keyed by the select's identity and re-applied
+  on the next document; a held box gets its caret back. `FOCUS_ID`, the guard that lets a focus id into the script,
+  gained an optional literal `search|` prefix — without it the caret could never come back (the page test went red
+  with *"the caret is back in the box"* first). A stored query whose list no longer has a box is dropped on load.
+- **Enter keeps the caret in the box.** A pick releases the hold exactly as a mouse pick does, so the repaint it
+  causes carried no caret (own review of E2). Enter now leaves a note in the webview state — `searchFocus` with the
+  box's identity and the time — and the next document puts the caret back at the end of the query when the note is
+  younger than `RETURN_TO_BOX_MS` (15 s), then spends it either way, so a repaint minutes later never takes the caret.
+  No repaint hold is used for it: a hold would delay the very repaint the pick asked for.
+- **A keystroke that leaves the answer unchanged moves nothing** (E2 code round): when the computed order is the
+  list already shown, no option is removed or re-added. Measured before rejecting the round's other performance
+  findings: `rankChoices` over 200 choices costs 20–160 µs per keystroke.
+
+**Tests.** `selectSearch.test.ts` (11: the tiers, the segment separators, order inside a tier, all words, case, the
+label, a blank query, no match, regex characters as text, the threshold, and the function run from its own TEXT in an
+empty scope), `selectSearchPage.test.ts` (17, the page RUN — five added after review: an unchanged answer moves no
+option, Escape's empty box survives the next document, select→box is no release, the caret back after Enter, an old
+note ignored; and: 15 options → a box and 14 → none; ranking and detaching
+with the sentinels in place; the chosen model kept and still chosen; Enter posting exactly what a mouse pick posts;
+no match, a blank box and a disabled card posting nothing; Escape and ArrowDown; the focus hold's id and the
+box→select tab; the query re-applied on a second page from the saved state; the caret back; an orphaned query
+dropped), `bundledPage.test.ts` (the minified Settings page embeds `rankChoices` calling nothing the minifier renamed,
+and the minified text ranks as the source does). Teeth, each by deleting the line in the compiled fragment: no
+`removeChild` → 3 red; no `dispatchEvent` → the Enter test; no value re-applied → the chosen-model test; no stored
+query → 2; no `disabled` check → the disabled test. NOT covered by a page test: Enter on a PROMPT picker — the shipped
+prompt catalog gives no role 15 prompts, so no prompt picker gets a box; its routing is the select's own `change`,
+which the setting case proves is what Enter dispatches.
+
+**The harness grew** (`panelPageHarness.ts`), stricter than a DOM and never more permissive, each widening with its
+own test in `panelPageHarness.test.ts`: live `PageOption`s; `appendChild` MOVES; `removeChild` refuses a stranger
+(`NotFoundError`) and, removing the chosen option, moves the choice to the first one left as a DOM's selectedness does
+(found by the teeth check: without it, deleting the value re-apply stayed green); a select refuses a value no option
+carries; `dispatchEvent` and a `PageEvent` with `key`, `relatedTarget` and `preventDefault`; `createElement` for
+`input` only; prompt pickers parsed and answered for `[data-prompt]` and `select`, never `[data-setting]`; a seedable
+`getState`/`setState`. `gateModelPickers.test.ts` had been picking a model no picker offered — the stricter select
+refused it, and it now picks an option the page drew. `rolesPageHarness.ts` gained the state API every webview has.
