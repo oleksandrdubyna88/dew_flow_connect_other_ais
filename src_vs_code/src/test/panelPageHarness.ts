@@ -23,7 +23,12 @@ import { camel } from './rolesPageHarness';
 export class PageEvent {
   defaultPrevented = false;
 
-  constructor(readonly type: string, readonly key = '', readonly relatedTarget: Control | null = null) {}
+  /**
+   * @param isComposing a keyboard event inside an input method's composition (CJK candidates) — a DOM's `isComposing`
+   */
+  constructor(
+    readonly type: string, readonly key = '', readonly relatedTarget: Control | null = null, readonly isComposing = false,
+  ) {}
 
   preventDefault(): void {
     this.defaultPrevented = true;
