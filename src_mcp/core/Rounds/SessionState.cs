@@ -186,15 +186,17 @@ public sealed record PanelConfig(
     /// either in would keep the stage running rounds nobody reviews, or hold the gate open against a
     /// number no reviewer can bring down. With every role off the answer is <c>(0, 0)</c> — a stage
     /// that may run no round — rather than an exception from <c>Max</c> over an empty sequence.
+    /// <para><b>The ordinary roles only.</b> The security lane keeps its own budget
+    /// (<see cref="SecurityLane"/>, read through <see cref="For(string)"/> under
+    /// <see cref="Security.SecurityCatalog.Gate"/>). Folding it in here let a lane of two rounds buy a
+    /// feature stage whose roles have one a second round for an ORDINARY reviewer's failure — a round
+    /// only the lane would then have answered.</para>
     /// </remarks>
     public StageGate For(Stage stage)
     {
         var roles = EnabledRolesOf(stage);
         if (roles.Count == 0) return NoEnabledRoles;
-        var securityRounds = SecurityLane.Enabled && stage is Stage.CodeReview or Stage.FeatureReview
-            ? SecurityLane.MaxRounds : 0;
-        return new StageGate(Math.Max(roles.Max(r => For(r).MaxRounds), securityRounds),
-            roles.Max(r => For(r).Threshold));
+        return new StageGate(roles.Max(r => For(r).MaxRounds), roles.Max(r => For(r).Threshold));
     }
 
     /// <summary>What a stage whose every role is switched off is worth: no round, nothing open.</summary>

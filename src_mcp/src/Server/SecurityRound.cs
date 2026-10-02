@@ -25,9 +25,25 @@ internal static class SecurityRound
         var ordinary = results.Where(r => !IsLane(r.Invocation, work.Reviewers)).ToArray();
         // A later lane-only round is allowed after ordinary roles spent their budgets. An ordinary
         // reviewer that WAS asked and failed can never be rescued by a lane answer.
+        // Only the COUNTS are the ordinary reviewers'. Who could not run, who was not asked and the
+        // deadline are facts about the round, and a call_human reason without them sends a person
+        // to look for a failure the round already named.
         return ordinary.Length == 0 && !work.OrdinaryDue ? all
-            : ReviewerSummaryFactory.From(ordinary) with { EndedByDeadline = all.EndedByDeadline };
+            : ReviewerSummaryFactory.From(ordinary) with
+            {
+                Excluded = all.Excluded,
+                NotAsked = all.NotAsked,
+                EndedByDeadline = all.EndedByDeadline,
+            };
     }
+
+    /// <summary>Why a round only the lane's budget admitted has nobody in it — or the work unchanged.</summary>
+    internal static RoundWork NamingAnEmptyLaneRound(RoundWork work) => work.Reviewers.Count > 0 ? work : work with
+    {
+        NotAsked = [.. work.NotAsked, new SkippedRole(SecurityCatalog.Gate,
+            "this round lies past every ordinary role's budget and was admitted for the security lane, "
+            + "which had no work to run in it; nothing was reviewed")],
+    };
 
     internal static void Notice(IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results,
         RoundWork work, Noticing noticing)
