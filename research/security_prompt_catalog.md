@@ -46,3 +46,12 @@ the upload surface is described in the [File Upload cheat sheet](https://cheatsh
 Detector metadata has one source, `shared/security-lane.json`; the C# matchers live in
 `src_mcp/core/Security/SecuritySignals.cs`. The reviewed model decides whether a real defect exists.
 Reproduction text is evidence and is never executed by the MCP.
+
+Source/reuse review, 2026-10-02: the existing `security-reliability.md` and `sec-attack.md`
+already require concrete inputs, consequences and changed-code scope. The lane reuses that
+discipline and the existing prompt loader/runtime; their broad ordinary roles cannot provide
+independent conditional checkboxes. The operator supplied the specialized bodies and later
+authorized shorter experimental variants. The four OWASP sources above were rechecked: they
+support access-control/injection risk families, source-level authorization checks, OAuth PKCE
+and redirect handling, and upload filename/type/storage checks. They guide inspection areas;
+they do not validate our lexical detectors, rank these twelve presets, or qualify model accuracy.
