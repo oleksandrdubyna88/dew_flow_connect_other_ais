@@ -32,7 +32,9 @@ Final verification includes `review_feature` over the complete E1–E5 delivery,
 
 Operator purpose (from the supplied twelve-module specification): inspect changed code for relevant
 risk signatures and select narrow security reviews without sending every attack area on every change.
-The selected local auditor is `Qwen3.5-35B-A3B-Q5_vk128:latest` in Windows Ollama, with 128 Ki context.
+The operator initially selected `Qwen3.5-35B-A3B-Q5_vk128:latest`, then selected
+`Gemma4-26B-A4B-Uncensored_vk128:latest` for the current acceptance campaign in Windows Ollama,
+with 128 Ki context. The latest thirty merged PRs are measured in groups of three before advancing.
 
 What must become possible (issue #587 and the operator's rulings in the planning conversation, 2026-10-01):
 
@@ -249,6 +251,11 @@ code or running repository tools. Return matched paths and reasons in determinis
 Unknown languages use lexical matching; binary/withheld files are named as unavailable. Absence of
 a signal means only that this detector did not match. Tests cover positive, negative, deletion,
 rename, mixed language and bounded-input cases. A focus-only tag is invalid as a trigger.
+Markdown and reStructuredText remain supporting context but do not themselves activate an application
+security module. Source under a documentation/test directory still participates; this is not a folder
+allowlist. SQL matching uses database identifiers, query/execution calls and SQL statement shapes;
+ordinary prose words such as `where` and `update`, `querySelector` and `executeCommand` are insufficient.
+These remain lexical heuristics, not a proof that a database or vulnerability exists.
 When no trigger matches but a diff exceeds the detector's character limit or files exceed its count
 limit, record the selected pairing as excluded with "trigger coverage incomplete". Such a change
 must not become a normal "no matching trigger" skip. A known match still runs with bounded partial

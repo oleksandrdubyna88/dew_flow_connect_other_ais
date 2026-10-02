@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using CoaiMcp.Core.Context;
 using CoaiMcp.Core.Feature;
 using CoaiMcp.Core.Notices;
@@ -19,12 +20,23 @@ public static class SecuritySignals
 
     // A ranking hint, never a reason to withhold code or declare a path safe.
     public static bool IsSupportingMaterial(string path) =>
-        Path.GetExtension(path).ToLowerInvariant() is ".md" or ".markdown" or ".rst"
+        IsProse(path)
         || path.Replace('\\', '/').Split('/').Any(part => SupportingFolders.Contains(part, StringComparer.OrdinalIgnoreCase));
+
+    // Prose remains available as supporting context, but cannot alone assert an application surface.
+    private static bool IsProse(string path) =>
+        Path.GetExtension(path).ToLowerInvariant() is ".md" or ".markdown" or ".rst";
+
+    // Ordinary words such as "where" and "update", and querySelector/executeCommand, are not SQL.
+    // Keep common query calls and statement shapes, including removed code and configuration strings.
+    private static readonly Regex SqlCode = new(
+        @"\b(?:(?:query(?:first|single|multiple)?(?:ordefault)?|execute(?:reader|nonquery|scalar)?)(?:async)?\s*(?:<[^>\r\n]{1,160}>)?\s*\(|select\s+[\s\S]{1,256}\s+from\b|insert\s+into\b|update\s+\S+\s+set\b|delete\s+from\b|(?:create|alter|drop)\s+table\b)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking,
+        TimeSpan.FromSeconds(1));
 
     private static readonly IReadOnlyDictionary<string, string[]> Terms = new Dictionary<string, string[]>
     {
-        ["sql"] = ["sql", "query", "execute", "database", "dbcontext", "migration", "dapper", "select ", "insert ", "update ", "delete ", "where "],
+        ["sql"] = ["sql", "database", "dbcontext", "migration", "dapper"],
         ["auth-token"] = ["jwt", "bearer", "cookie", "session", "authenticate", "oauth", "openid", "oidc", "pkce", "tokenvalidationparameters", "validateissuersigningkey", "redirect_uri", "client_secret"],
         ["oauth"] = ["oauth", "openid", "oidc", "pkce", "redirect_uri", "redirecturi", "code_verifier", "code_challenge", "authorization_code", "acquiretoken", "msal"],
         ["authz"] = ["authorize", "authorization", "permission", "tenant", "role", "allowanonymous", "mapget", "mappost", "mapput", "mapdelete", "httppost", "httpget", "controller", "route(", "user.claims", "companyid", "frombody", "dbcontext.update", ".updateasync", "patch", "endpoint"],
@@ -50,11 +62,14 @@ public static class SecuritySignals
         var withheld = file.IsBinary || CredentialFiles.LooksLikeOne(file.Path);
         var raw = file.Text.Length <= MaxFileCharacters ? file.Text : string.Empty;
         var safe = withheld ? string.Empty : Redaction.SafeSource(raw);
-        var text = file.Path + "\n" + safe;
-        return new(file with { Text = safe }, [.. Terms.Where(pair => pair.Value.Any(term =>
-            text.Contains(term, StringComparison.OrdinalIgnoreCase))).Select(pair => pair.Key)])
+        var text = IsProse(file.Path) ? string.Empty : file.Path + "\n" + safe;
+        return new(file with { Text = safe }, [.. Terms.Where(pair => Matches(pair, text)).Select(pair => pair.Key)])
         { DetectionIncomplete = !withheld && file.Text.Length > MaxFileCharacters };
     }
+
+    private static bool Matches(KeyValuePair<string, string[]> group, string text) =>
+        group.Value.Any(term => text.Contains(term, StringComparison.OrdinalIgnoreCase))
+        || (group.Key == "sql" && SqlCode.IsMatch(text));
 
     public static bool Triggered(SecurityPrompt prompt, IReadOnlyList<SecurityFile> files) =>
         prompt.Triggers.Count == 0 ? !SecurityCatalog.IsPreset(prompt.Id)

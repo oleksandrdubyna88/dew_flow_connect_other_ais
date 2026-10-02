@@ -271,3 +271,63 @@ into successes. The model selector and corrected fixture build with zero warning
 focused security suite passed 62 tests with two explicit hardware skips before the fixture fix,
 and the corrected fixture itself subsequently passed its live three-round test.
 Code/feature gate outcomes and current CI disposition are recorded on draft PR #634 separately.
+
+## Historical merged-PR campaign: first group, 2026-10-02
+
+The operator requested the latest thirty merged PRs, ordered by merge time, with stable final diffs,
+all security selections enabled and Gemma on every active reviewer and consultant route. Selection
+and merged ranges are frozen under `D:/rsd/_wt/security-lane-tools/pr30-campaign`; multi-commit rebases
+are included in full. The final changed-file list and blob hashes for all thirty were checked against GitHub.
+No later group has been run yet.
+
+This campaign calls the actual MCP stdio tools through `gate-windows.mjs`, with
+`invoke-pr30.ps1` retaining each request/result and dedicated per-PR temporary directories retaining
+model prompts and raw replies. It exercises `open`, `review_plan`, explicit per-finding `resolve`,
+`review_code`, and `resolve`. Every reviewer here is real Gemma, with no clean reviewer doubles.
+Document-only deliverables will use the document gate; release metadata/configuration changes still
+require the plan/code cycle. Feature-stage applicability is assessed from the actual original plan,
+without inventing epics to reach its minimum. The security feature's own final gate remains last.
+
+The baseline server is native Windows AOT from `71c5dab0`, version `0.41.0-security.71c5dab0`.
+Model/context are the same Gemma tag and observed 131072-token window above. Requests use temperature
+zero, frequency penalty 0.2, an 8192 output ceiling and `reasoning_effort: none`; security slices use
+24000 tokens. There is one active local reviewer row for all stages, local concurrency one, all
+twelve presets plus custom general. General uses the union of catalog triggers, so it is conditional
+too. Prompts are the Git-embedded bodies, without overrides. Hashes and settings are in
+`runtime-manifest.json` and `pr30-config/campaign-env.json` beside the campaign.
+
+| PR | Final base → head | Plan replies | Code replies | Security replies | Code findings |
+|---|---|---:|---:|---:|---:|
+| #631, extension release metadata | `1bf3453` → `1056aed9` | 1/1 | 7/7 | 3, all empty | 6 ordinary |
+| #630, endpoint model UI | `288b910` → `1bf3453` | 1/1 | 13/13 | 9, all empty | 9 ordinary |
+| #629, release baseline | `b4f5fe7` → `288b910` | 1/1 | 4/4 | 0; all 13 selections skipped | 0 |
+
+All 27 model calls answered; every admitted security call returned usable `SECURE` JSON. All three
+plan and code verdicts were `proceed`. The eleven plan findings and fifteen ordinary code findings
+were individually inspected and rejected with reasons recorded through MCP. Examples include a
+release note treated as missing implementation, a nonexistent vault probe from a pure list-selection
+function, and a race already prevented by the visible synchronous in-flight guard. This is evidence
+of ordinary-role false positives, not a claim of excellent overall model accuracy. The scopes quoted
+historical PR descriptions; conflating background release history with requested work remains a
+measurement-input concern. No reproduction was executed.
+
+The group exposed two routing defects before advancement: a changelog alone activated AuthZ/SSRF,
+and SQL matched ordinary `Where`/`update` comments in TypeScript. The actual classifier probe is
+`pr30-routing-probe/Program.cs`, referencing the product's `DiffSplitter` and `SecuritySignals`.
+The correction excludes Markdown/reStructuredText from trigger evidence while retaining them as
+supporting context, and uses database terms/call/statement shapes for SQL. Source in documentation
+folders, SQL scripts, configuration and removed query calls remain eligible. New behavioral tests
+failed seven cases against the old matcher, then passed after correction; restoring the old matcher
+made the same seven fail again. The focused security suite passed 76 tests with two explicit hardware
+skips before and after that mutation check. A classifier replay of the three frozen diffs now has no
+signals for #631/#629 and six conditional pairings for #630 (AuthZ, SSRF, files, secrets, XSS and
+general), dropping SQL, tokens and commands. The corrected historical group must still be repeated; no later
+group is counted as accepted.
+
+The native preview MCP and extension `0.61.0` were installed locally with backups of the prior binary
+and settings. Existing editor windows need reload to display the new UI. This is a local preview,
+not a published release. The consultant was requested again about the observed routing/grounding
+failures and refused at the unchanged ten-call/24-hour cap; no fresh advice was obtained. The GPU
+lease daemon was unavailable, so the previously authorized native fallback was used. Other machine
+activity was not controlled, and no latency comparison is claimed. Empty findings on merged PRs do
+not establish recall, complete input coverage or resolution of the positive-control fidelity issues.

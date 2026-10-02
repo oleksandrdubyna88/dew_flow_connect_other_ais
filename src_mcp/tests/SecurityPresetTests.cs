@@ -49,6 +49,43 @@ public sealed class SecurityPresetTests
         SecuritySignals.Triggered(new("redteam-custom", [], []), []).Should().BeTrue();
     }
 
+    [Theory]
+    [InlineData("CHANGELOG.md")]
+    [InlineData("prompts/redteam-sql.markdown")]
+    [InlineData("docs/security.rst")]
+    public void Prose_alone_does_not_activate_application_security_checks(string path)
+    {
+        var files = SecuritySignals.Classify([new(path,
+            "+The endpoint uses a credential, SQL queries and Process.Start; fetch(url) reads a file.")]);
+        foreach (var prompt in SecurityCatalog.Prompts)
+            SecuritySignals.Triggered(prompt, files).Should().BeFalse("a description is not an implementation");
+    }
+
+    [Theory]
+    [InlineData("+/** Where the list came from, in each of its four states. */")]
+    [InlineData("+// vendor run / install / update — and nothing for a hosted API")]
+    [InlineData("+document.querySelector('#models');")]
+    [InlineData("+commands.executeCommand('refresh');")]
+    public void Sql_routing_requires_a_database_shape_instead_of_generic_words(string patch)
+    {
+        var files = SecuritySignals.Classify([new("panel.ts", patch)]);
+        SecuritySignals.Triggered(SecurityCatalog.Prompts.Single(p => p.Id == "redteam-sql"), files).Should().BeFalse();
+    }
+
+    [Theory]
+    [InlineData("src/Query.cs", "-connection.Query<Invoice>(command, parameters);")]
+    [InlineData("src/Store.cs", "+connection.QuerySingleOrDefaultAsync<Invoice>(command);")]
+    [InlineData("src/Store.cs", "+connection.ExecuteAsync(command);")]
+    [InlineData("src/Store.cs", "+command.ExecuteNonQuery();")]
+    [InlineData("research/example.cs", "+database.Query(command);")]
+    [InlineData("migrations/change.sql", "+UPDATE invoices SET tenant_id = 3;")]
+    [InlineData("config/database.json", "+\"query\": \"SELECT id FROM invoices WHERE tenant_id = 3\"")]
+    public void Sql_source_and_configuration_still_route_including_removed_calls(string path, string patch)
+    {
+        var files = SecuritySignals.Classify([new(path, patch)]);
+        SecuritySignals.Triggered(SecurityCatalog.Prompts.Single(p => p.Id == "redteam-sql"), files).Should().BeTrue();
+    }
+
     [Fact]
     public void A_derived_slice_round_reserves_source_collection_once_but_an_explicit_deadline_wins()
     {
