@@ -139,7 +139,7 @@ function busySendScript(): string {
 }
 
 /**
- * The person has a VS Code prompt of this work open, then answers it (todo/PLAN_busy_mark_pauses_while_you_type.md §3.4).
+ * The person has a VS Code prompt of this work open, then answers it (research/PLAN_busy_mark_pauses_while_you_type.md §3.4).
  * Waiting on the person is not the host working: the entry stops its timer and drops its mark, and on the answer starts
  * again from the time the host says the work has taken — the page keeps no clock of its own for the pause.
  */

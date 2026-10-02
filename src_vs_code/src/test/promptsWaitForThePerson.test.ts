@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import { blanked } from './blankedSource';
 
 /**
- * Every VS Code prompt goes through `askPerson` (todo/PLAN_busy_mark_pauses_while_you_type.md §3.5).
+ * Every VS Code prompt goes through `askPerson` (research/PLAN_busy_mark_pauses_while_you_type.md §3.5).
  *
  * <p>Structural, because a prompt is `vscode.window.*` and no unit test here has a VS Code. What `askPerson` DOES is run
  * in `personWait.test.ts` and `inFlight.test.ts`; what is read here is that nobody opens a box without it. One prompt

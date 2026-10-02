@@ -13,7 +13,7 @@ import { type Waiting, whileWorking } from './personWait';
  * <p><b>Growth.</b> One entry per operation in flight — bounded by what one person clicks while the host is busy —
  * removed in its own `finally`, and all of them settled by {@link settleEverything} when the panel goes away.</p>
  *
- * <p><b>Waiting on the person is not work</b> (todo/PLAN_busy_mark_pauses_while_you_type.md). An operation with a VS Code
+ * <p><b>Waiting on the person is not work</b> (research/PLAN_busy_mark_pauses_while_you_type.md). An operation with a VS Code
  * prompt open — `askPerson` in `personWait.ts` — leaves the count and its clock stops until the person answers.</p>
  */
 
@@ -35,7 +35,7 @@ export interface Ask {
 /**
  * One operation in flight: what the page numbered it, the page that posted it, and when it started — moved on by every
  * wait for the person, so `now - startedAt` is the time it has worked. `waits` is how many prompts it has open, and
- * `pausedAt` when the first of them opened (todo/PLAN_busy_mark_pauses_while_you_type.md §3.2).
+ * `pausedAt` when the first of them opened (research/PLAN_busy_mark_pauses_while_you_type.md §3.2).
  */
 export interface Operation<S> extends Ask {
   readonly slot: S;
@@ -177,7 +177,7 @@ export async function tracked<S extends Poster>(
 }
 
 /**
- * What one tracked operation is told while the person has a prompt of it open (todo/PLAN_busy_mark_pauses_while_you_type.md
+ * What one tracked operation is told while the person has a prompt of it open (research/PLAN_busy_mark_pauses_while_you_type.md
  * §3.3): its poster hears `waiting` and stops its own half of the mark, then `working` with the time the operation has
  * worked — the host's clock is the one measurement of the pause — and every page hears the count without it.
  */

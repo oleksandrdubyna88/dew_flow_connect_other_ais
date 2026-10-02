@@ -217,7 +217,7 @@ test('two writes in flight keep the bar until BOTH are settled', () => {
   assert.equal(shown(page), false);
 });
 
-// ---- Waiting on the person (todo/PLAN_busy_mark_pauses_while_you_type.md §3.4) ----
+// ---- Waiting on the person (research/PLAN_busy_mark_pauses_while_you_type.md §3.4) ----
 // "пока печатаю не считаем" (the operator, 2026-10-02): a box VS Code opens for the person is not the host working.
 
 /** What the host posts when the work numbered `seq` opens a box for the person, and when the person answers it. */

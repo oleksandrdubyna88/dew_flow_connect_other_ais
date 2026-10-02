@@ -10084,7 +10084,7 @@ ruled the question that note left open — "пока печатаю не счи�
 
 ## The busy mark stops while the person answers VS Code (2026-10-02, PLAN_busy_mark_pauses_while_you_type)
 
-Design record: [PLAN_busy_mark_pauses_while_you_type.md](../todo/PLAN_busy_mark_pauses_while_you_type.md).
+Design record: [PLAN_busy_mark_pauses_while_you_type.md](PLAN_busy_mark_pauses_while_you_type.md).
 
 - **The prompt finds its operation** (`personWait.ts`). `tracked()` runs the work inside `whileWorking(waiting, work)`,
   an `AsyncLocalStorage` run, so an operation is carried through every `await` beneath it without passing it down —
@@ -10103,6 +10103,10 @@ Design record: [PLAN_busy_mark_pauses_while_you_type.md](../todo/PLAN_busy_mark_
   control's `aria-busy` away unless another due entry holds that control. `working` starts the timer again for
   `max(0, 500 − spentMs)`, or marks it due at once. The page keeps no clock of its own for the pause: the host's is the
   one measurement, and the one a test drives. Entries are replaced, never mutated — the timer calls `markDue(seq)`.
+- **The pages import nothing from Node** (`busySnapshot.ts`). `BusySnapshot` and `IDLE` moved out of `inFlight.ts`
+  into a module with no imports, because `panelView.ts` and `busyMark.ts` are bundled into webview pages that run with
+  no `require`. Reached through `inFlight.ts`, the module-level `AsyncLocalStorage` kept `require('node:async_hooks')`
+  in those bundles — nine `bundledPage.test.ts` tests went red with *require is not defined* until it moved.
 
 **Tests.**
 - `personWait.test.ts` (4): no operation means a plain prompt. A prompt three awaits down pauses its operation before

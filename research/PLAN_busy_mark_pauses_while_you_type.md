@@ -1,11 +1,14 @@
 # PLAN — the busy mark does not count the time a person spends answering VS Code
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/inFlight.ts`, `busyMark.ts`, one new
-> module (`personWait.ts`), every VS Code prompt site in `src_vs_code/src` (wrapped, not changed), `notify.ts`
-> (`notifyAndAsk`), tests, `research/module_extension.md`, `research/module_tests.md`, `src_vs_code/CHANGELOG.md`.
+> Status: **IMPLEMENTED, 2026-10-02.** One epic, one pull request. Plan gate proceed (1 of 1, gemini; 4 accepted,
+> 1 rejected); code gate proceed (4 of 4; 1 accepted — this promotion). Deviations in §7. The release (extension
+> 0.61.1, its CHANGELOG section on the release-please PR) follows the merge.
+> Scope: `src_vs_code/src/inFlight.ts`, `busyMark.ts`, two new modules (`personWait.ts`, `busySnapshot.ts`), every VS
+> Code prompt site in `src_vs_code/src` (wrapped, not changed), `notify.ts` (`notifyAndAsk`), tests,
+> `research/module_extension.md`, `research/module_tests.md`.
 >
-> Related docs: [PLAN_model_search_and_busy_marks.md](../research/PLAN_model_search_and_busy_marks.md) (the busy mark
-> this corrects, Epic 3), [module_extension.md](../research/module_extension.md).
+> Related docs: [PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md) (the busy mark
+> this corrects, Epic 3), [module_extension.md](module_extension.md).
 
 ## 1. Symptom
 
@@ -133,8 +136,27 @@ none today (checked: no `void` before a prompt or `notifyAndAsk`), and the guard
 
 ## 6. Definition of Done
 
-- [ ] Plan gate passed; code gate passed (per epic: this is one epic).
-- [ ] Every test above RED first, then GREEN, with teeth checks recorded.
-- [ ] `npm test` green; lint clean; suppression file did not grow.
-- [ ] `research/module_extension.md`, `research/module_tests.md` updated; this plan promoted to `research/`.
-- [ ] CHANGELOG section for extension 0.61.1; released and verified on the Marketplace.
+- [x] Plan gate passed; code gate passed (per epic: this is one epic).
+- [x] Every test above RED first, then GREEN, with teeth checks recorded (`research/module_tests.md`).
+- [x] `npm test` green; lint clean; suppression file shrank by one (`dataCommands.ts` complexity 4 → 3).
+- [x] `research/module_extension.md`, `research/module_tests.md` updated; this plan promoted to `research/`.
+- [ ] CHANGELOG section for extension 0.61.1; released and verified on the Marketplace — after the merge, on the
+      release-please PR, as every extension release here is.
+
+## 7. Deviations — what shipped differently
+
+- **The page keeps no clock for the pause.** The plan had the page measure its own `spent`. The page harness runs on
+  the real `Date.now`, and two clocks measuring one pause can disagree. So `working` carries `spentMs`, measured by
+  the host's clock, and the page restarts its timer from it. The plan round's first finding (gemini: a second prompt
+  counted the first one's typing) applied to the old shape. It is covered by a host test of two prompts in turn.
+- **The conversation picker is not wrapped.** Its `createQuickPick` is shown by a synchronous `switchConversations`
+  that nothing awaits, so there is nothing to pause; the guard names it as the one exception.
+- **A second new module, `busySnapshot.ts`.** The full suite found it, not the plan. `panelView.ts` imported `IDLE`
+  from `inFlight.ts`, so the webview bundles reached `personWait.ts`, and its module-level `AsyncLocalStorage` kept
+  `require('node:async_hooks')` in a bundle that runs with no `require`. Nine bundle tests went red. The snapshot
+  type and `IDLE` now live in a module with no imports.
+- **The structural guard has a companion** (plan round, gemini). It feeds the scan an unwrapped prompt, a wrapped
+  one and a comment, so a scan that matches nothing cannot pass.
+- **Rejected at the plan round**, with the reason recorded: patching `vscode.window` globally instead of one wrapper.
+  Modal questions already have a single road (`notify.ts` is the only caller of `show*Message`), and `askPerson` plus
+  its guard is the road for prompts.

@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 
 /**
- * Which panel operation a VS Code prompt holds up (todo/PLAN_busy_mark_pauses_while_you_type.md §3.1).
+ * Which panel operation a VS Code prompt holds up (research/PLAN_busy_mark_pauses_while_you_type.md §3.1).
  *
  * <p>Asked for on 2026-10-02, once the busy mark shipped: an action that opens an input box was "in flight" for as long
  * as the box was open, so the bar ran over the person's typing. The operator's ruling — "пока печатаю не считаем" — is

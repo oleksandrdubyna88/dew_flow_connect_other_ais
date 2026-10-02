@@ -3,7 +3,7 @@
  *
  * <p>Its own module, with no imports, because the PAGES read it: `panelView.ts` paints it and `busyMark.ts` draws it,
  * and both are bundled into webview pages that run with no `require` (`bundledPage.test.ts`). The record that produces
- * it, `inFlight.ts`, runs its work under Node's `AsyncLocalStorage` (todo/PLAN_busy_mark_pauses_while_you_type.md), and a
+ * it, `inFlight.ts`, runs its work under Node's `AsyncLocalStorage` (research/PLAN_busy_mark_pauses_while_you_type.md), and a
  * page that imported the snapshot from there carried `node:async_hooks` into the bundle with it.</p>
  */
 

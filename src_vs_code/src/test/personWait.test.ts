@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { askPerson, type Waiting, whileWorking } from '../personWait';
 
 /**
- * Which panel operation a VS Code prompt holds up (todo/PLAN_busy_mark_pauses_while_you_type.md §3.1).
+ * Which panel operation a VS Code prompt holds up (research/PLAN_busy_mark_pauses_while_you_type.md §3.1).
  *
  * <p>Asked for on 2026-10-02, once the busy mark shipped: an action that opens an input box was "in flight" while the
  * person typed into it, so the bar ran over their typing. The operator's ruling — "пока печатаю не считаем" — is that

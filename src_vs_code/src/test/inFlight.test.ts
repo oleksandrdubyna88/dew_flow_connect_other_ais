@@ -164,7 +164,7 @@ test('only a positive whole seq with a document id is a numbered ask', () => {
   assert.equal(askOf({ seq: 3, doc: '' }), undefined);
 });
 
-// ---- Waiting on the person (todo/PLAN_busy_mark_pauses_while_you_type.md §3.2–§3.3) ----
+// ---- Waiting on the person (research/PLAN_busy_mark_pauses_while_you_type.md §3.2–§3.3) ----
 // Asked for on 2026-10-02: an action that opens an input box was counted as running while the person typed into it,
 // so the bar ran over their typing. Waiting on the person is not work: it leaves the count, and its time is not counted.
 
