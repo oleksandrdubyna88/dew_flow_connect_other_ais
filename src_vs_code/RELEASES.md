@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.61.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.61.0...extension-v0.61.1) (2026-10-02)
+
+
+### Bug Fixes
+
+* **extension:** the busy mark does not count the time you spend answering VS Code ([#643](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/643)) ([94ee572](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/94ee5728866c746a8b6769ed1d78fe575880962c))
+
 ## [0.61.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.60.2...extension-v0.61.0) (2026-10-02)
 
 
