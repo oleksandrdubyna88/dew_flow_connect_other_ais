@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { askOf, IDLE, InFlight, settleAfterWrite, settleEverything, tracked } from '../inFlight';
+import { IDLE } from '../busySnapshot';
+import { askOf, InFlight, settleAfterWrite, settleEverything, tracked } from '../inFlight';
 import { askPerson } from '../personWait';
 
 /**

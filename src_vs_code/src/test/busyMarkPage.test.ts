@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { BUSY_AFTER_MS } from '../busyMark';
-import type { BusySnapshot } from '../inFlight';
+import type { BusySnapshot } from '../busySnapshot';
 import { settingsKey, staticKey } from '../panelView';
 import { type Control, type Page, panelState, runPanel } from './panelPageHarness';
 

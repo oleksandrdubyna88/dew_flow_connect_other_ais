@@ -1,3 +1,4 @@
+import { type BusySnapshot, IDLE } from './busySnapshot';
 import { type Waiting, whileWorking } from './personWait';
 
 /**
@@ -15,15 +16,6 @@ import { type Waiting, whileWorking } from './personWait';
  * <p><b>Waiting on the person is not work</b> (todo/PLAN_busy_mark_pauses_while_you_type.md). An operation with a VS Code
  * prompt open — `askPerson` in `personWait.ts` — leaves the count and its clock stops until the person answers.</p>
  */
-
-/** What a page needs to draw the host's part of the mark: how much is running, and for how long the oldest has. */
-export interface BusySnapshot {
-  readonly count: number;
-  readonly oldestMs: number;
-}
-
-/** Nothing in flight. */
-export const IDLE: BusySnapshot = { count: 0, oldestMs: 0 };
 
 /** Somewhere a message can be posted: a page slot, as far as tracking needs one. */
 export interface Poster {

@@ -1,4 +1,4 @@
-import type { BusySnapshot } from './inFlight';
+import type { BusySnapshot } from './busySnapshot';
 import { jsonForScript } from './webviewHtml';
 
 /**
