@@ -69,6 +69,8 @@ const { tokenFileName } = await import('../out/teamServers.js');
 // copies of them.
 const { refusalSeam } = await import('./seam-refusal.mjs');
 const { answerOf, sessionsFor } = await import('./seam-session.mjs');
+// The security lane's leg, in a module of its own for the same reason as the sixth.
+const { securitySeam } = await import('./seam-security.mjs');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -388,6 +390,11 @@ async function apiSettingsSeam() {
 
 await apiSettingsSeam();
 console.log('  ok  an api row\'s effort, thinking switch and review limit reach the server and come back as what it runs with');
+
+// The EIGHTH leg: the security lane as the extension serializes it — a well-formed lane draws no
+// complaint, its unknown trigger is refused by name, and its malformed form is refused, not ignored.
+const security = await securitySeam({ providersIn, fail });
+console.log(`  ok  the security lane crosses the seam; the unknown trigger was refused: "${security.refusal}"`);
 
 // The SIXTH leg: a real refusal over stdio, its secret taken out, read back by the extension.
 const refusal = await refusalSeam({ serverSession, resolvedFor, answerOf, fail, timeoutMs: TIMEOUT_MS });

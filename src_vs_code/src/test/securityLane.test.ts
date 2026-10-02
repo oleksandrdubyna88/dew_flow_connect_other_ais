@@ -1,16 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
-import { spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { DEFAULTS, envBlock } from '../settingsShape';
-import { DEFAULT_SECURITY, securityWrite, securityLaneFrom } from '../securityLane';
-import { DEFAULT_VENDORS, vendorsFrom } from '../vendors';
+import { DEFAULT_SECURITY, securityWrite, securityLaneFrom, type SecurityLane } from '../securityLane';
+import { DEFAULT_VENDORS } from '../vendors';
 import { SECURITY_SEED } from '../securityLane.generated';
-import { securityLaneBody } from '../securityLaneView';
 import { settingMessageFrom } from '../settingRoute';
-import { lastWrite, panelState, runPanel } from './panelPageHarness';
+import { type Control, lastWrite, type Page, panelState, runPanel, withoutSeq } from './panelPageHarness';
 
 test('each of the twelve presets has a real pairing checkbox and switching it off preserves other pairs', () => {
   assert.equal(SECURITY_SEED.prompts.length, 12);
@@ -64,7 +61,7 @@ test('opening prompt text posts its stable redteam id', () => {
   const edit = page.commands.find(c => c.dataset['command'] === 'editSecurityPrompt');
   assert.ok(edit);
   edit.fire('click');
-  assert.deepEqual(page.posted.at(-1), { type: 'command', command: 'editSecurityPrompt', id: 'redteam-authz' });
+  assert.deepEqual(withoutSeq(page.posted.at(-1)!), { type: 'command', command: 'editSecurityPrompt', id: 'redteam-authz' });
 });
 
 test('editing a known field preserves unknown root, prompt and run fields', () => {
@@ -101,11 +98,58 @@ test('stored custom metadata keeps all twelve presets selectable and condition e
   assert.deepEqual(untagged.prompts.find(p => p.id === 'redteam-custom')?.triggers, ['future-detector']);
 });
 
-test('an older server cannot enable the lane through its checkbox', () => {
-  const html = securityLaneBody(DEFAULT_SECURITY, DEFAULT_VENDORS, '0.40.3');
-  assert.match(html, /data-security-field="enabled" disabled/);
-  assert.match(html, /does not run this lane/);
-  assert.doesNotMatch(securityLaneBody(DEFAULT_SECURITY, DEFAULT_VENDORS, '0.41.0'), /data-security-field="enabled" disabled/);
+const OLD_SERVER = { kind: 'known', version: '0.40.3', remembered: false, updateOffered: false } as const;
+const CURRENT_SERVER = { ...OLD_SERVER, version: '0.41.0' } as const;
+
+/** The Security lane tab's own pane, as the Settings page drew it. */
+function lanePane(page: Page): string {
+  const start = page.html.indexOf('id="pane-securityLane"');
+  assert.ok(start >= 0, 'the Settings page has no Security lane tab');
+  return page.html.slice(start, page.html.indexOf('</section>', start));
+}
+
+/** A person changing one control the way the page lets them: a box flipped, a field typed into. */
+function change(control: Control): void {
+  const typed: Record<string, string> = { number: '3', text: 'redteam-extra' };
+  if (control.type === 'checkbox') control.checked = !control.checked;
+  else if (control.type in typed) control.value = typed[control.type]!;
+  control.fire('change');
+}
+
+test('no control on an older server\'s Security lane tab can switch the lane on', () => {
+  const page = runPanel(panelState('securityLane', { server: OLD_SERVER }));
+  const lane = page.controls.filter(c => c.dataset['setting'] === 'securityLane');
+  const enabled = lane.find(c => c.dataset['securityField'] === 'enabled');
+  assert.ok(enabled, 'the tab has no lane switch at all');
+  // A disabled box is one a person cannot change in a webview; that is the whole of its guarantee.
+  assert.equal(enabled.disabled, true, 'an older server\'s lane switch can be ticked');
+  assert.match(lanePane(page), /does not run this lane/);
+
+  // Everything the page still lets a person change, changed, each write routed as the host routes it.
+  let written = DEFAULT_SECURITY;
+  let writes = 0;
+  for (const control of lane.filter(c => !c.disabled)) {
+    const before = page.posted.length;
+    change(control);
+    if (page.posted.length === before) continue;
+    const message = lastWrite(page);
+    written = securityWrite(written, String(message['securityField']), message['value'], DEFAULT_VENDORS);
+    writes += 1;
+  }
+  assert.ok(writes > 0, 'nothing on the tab could be changed, so this proved nothing about what can');
+  assert.equal(written.enabled, false, 'a control on an older server\'s tab switched the lane on');
+  assert.equal(envBlock({ ...DEFAULTS, securityLane: written }, DEFAULT_VENDORS, OLD_SERVER.version)['COAI_SECURITY_LANE'], undefined);
+});
+
+test('a server new enough for the lane offers its switch, and ticking it turns the lane on', () => {
+  const page = runPanel(panelState('securityLane', { server: CURRENT_SERVER }));
+  const enabled = page.controls.find(c => c.dataset['securityField'] === 'enabled');
+  assert.ok(enabled);
+  assert.equal(enabled.disabled, false);
+  assert.doesNotMatch(lanePane(page), /does not run this lane/);
+  change(enabled);
+  const message = lastWrite(page);
+  assert.equal(securityWrite(DEFAULT_SECURITY, String(message['securityField']), message['value'], DEFAULT_VENDORS).enabled, true);
 });
 
 test('security configuration is held back from older servers without erasing the saved selection', () => {
@@ -125,38 +169,50 @@ test('a newly enabled lane selects its conditional authorization check by defaul
   assert.equal(securityWrite(enabled, 'pair:' + vendor + ':redteam-authz', false, DEFAULT_VENDORS).runs.length, 0);
 });
 
-test('settings explain why a saved preset with no triggers cannot run', () => {
+function pageWith(securityLane: SecurityLane): Page {
+  return runPanel(panelState('securityLane', { settings: { ...DEFAULTS, securityLane }, server: CURRENT_SERVER }));
+}
+
+function routed(page: Page, lane: SecurityLane): SecurityLane {
+  const message = lastWrite(page);
+  return securityWrite(lane, String(message['securityField']), message['value'], DEFAULT_VENDORS);
+}
+
+test('a saved preset with no triggers says why it cannot run, and ticking a condition on the tab clears it', () => {
   const lane = securityWrite(DEFAULT_SECURITY, 'prompt:redteam-authz:triggers', '', DEFAULT_VENDORS);
-  const html = securityLaneBody(lane, DEFAULT_VENDORS, '0.41.0');
-  assert.match(html, /redteam-authz has no triggers; select at least one condition to run this preset/);
+  const page = pageWith(lane);
+  const warning = /redteam-authz has no triggers; select at least one condition to run this preset/;
+  assert.match(lanePane(page), warning);
+
+  const box = page.controls.find(c => c.dataset['securityField'] === 'trigger:redteam-authz:authz');
+  assert.ok(box, 'the tab offers no condition to tick');
+  change(box);
+  const repaired = routed(page, lane);
+  assert.deepEqual(repaired.prompts.find(p => p.id === 'redteam-authz')?.triggers, ['authz']);
+  assert.doesNotMatch(lanePane(pageWith(repaired)), warning);
 });
 
-test('a removed reviewer or prompt remains visible with a repair instruction', () => {
+test('a removed reviewer stays visible with a repair instruction, and choosing one on the tab repairs the pair', () => {
   const lane = securityLaneFrom({ ...DEFAULT_SECURITY,
     runs: [{ vendor: 'removed-reviewer', prompt: 'redteam-removed' }],
   });
-  const html = securityLaneBody(lane, DEFAULT_VENDORS, '0.41.0');
-  assert.match(html, /Reviewer removed-reviewer is unavailable; select an enabled reviewer/);
-  assert.match(html, /Prompt redteam-removed is missing; select a registered prompt/);
   assert.equal(lane.runs[0]?.vendor, 'removed-reviewer');
+  const page = pageWith(lane);
+  assert.match(lanePane(page), /Reviewer removed-reviewer is unavailable; select an enabled reviewer/);
+  assert.match(lanePane(page), /Prompt redteam-removed is missing; select a registered prompt/);
+
+  const vendor = DEFAULT_VENDORS.find(v => v.enabled)!.id;
+  const picker = page.controls.find(c => c.dataset['securityField'] === 'run:0:vendor');
+  assert.ok(picker, 'the pair has no reviewer picker');
+  assert.ok(picker.options.some(o => o.value === vendor), 'the picker does not offer an enabled reviewer');
+  picker.value = vendor;
+  picker.fire('change');
+  const repaired = routed(page, lane);
+  assert.equal(repaired.runs[0]?.vendor, vendor);
+  assert.doesNotMatch(lanePane(pageWith(repaired)), /Reviewer removed-reviewer is unavailable/);
 });
 
-const binary = resolve(__dirname, '../../../src_mcp/src/bin/Debug/net10.0', process.platform === 'win32' ? 'coai-mcp.exe' : 'coai-mcp');
-test('the real server refuses the unknown trigger preserved by panel serialization',
-  { skip: existsSync(binary) ? false : 'build the Debug MCP server for the live settings contract' }, () => {
-    const data = mkdtempSync(join(tmpdir(), 'coai-security-contract-'));
-    const vendors = vendorsFrom([{ id: 'qwen', runtime: 'local', model: 'fixture' }]);
-    const securityLane = securityLaneFrom({ ...DEFAULT_SECURITY, enabled: true,
-      prompts: [{ id: 'redteam-general', triggers: ['future-detector'], focus: [] }],
-      runs: [{ vendor: 'qwen', prompt: 'redteam-general' }],
-    });
-    try {
-      writeFileSync(join(data, 'settings.json'), JSON.stringify(envBlock({ ...DEFAULTS, securityLane }, vendors)));
-      const env = Object.fromEntries(Object.entries(process.env).filter(([key]) => !key.startsWith('COAI_')));
-      const result = spawnSync(binary, ['--providers'], { env: { ...env, COAI_DATA_DIR: data, COAI_CREDS_KEY: '' },
-        encoding: 'utf8', windowsHide: true, timeout: 60_000, maxBuffer: 1024 * 1024 });
-      assert.equal(result.status, 0, result.stderr);
-      const reply = JSON.parse(result.stdout);
-      assert.ok(reply.unrecognised.some((s: string) => s.includes('COAI_SECURITY_LANE') && s.includes('trigger')));
-    } finally { rmSync(data, { recursive: true, force: true }); }
-  });
+// The live settings contract — the extension's serialized lane read by the REAL server — is a leg of
+// `scripts/run-seam.mjs` (`npm run test:seam`), which CI runs against the binary it built and which
+// refuses rather than skips when there is none. It used to live here, skipped whenever no Debug build
+// sat beside the suite, which in CI was always.
