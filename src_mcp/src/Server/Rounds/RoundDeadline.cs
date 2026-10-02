@@ -22,7 +22,7 @@ internal static class RoundDeadline
             r.Provider.BaseUrl.Length > 0 ? r.Provider.BaseUrl : LocalRuntime.DefaultEndpoint));
         waves = Math.Max(waves, engines.Select(g => Waves(g.Sum(r => r.Count), settings.LocalConcurrency)).DefaultIfEmpty(1).Max());
         var sourceBudget = settings.SecurityLane.Applies(stage)
-            && settings.SecurityLane.Runs.Any(r => r.Serves(stage) && r.Context == "slice") ? SecuritySources.CollectionBudget : TimeSpan.Zero;
+            && settings.SecurityLane.Runs.Any(r => r.Serves(stage) && r.Context == Core.Security.SecurityContextModes.Slice) ? SecuritySources.CollectionBudget : TimeSpan.Zero;
         var whole = RoundBudget.Expressible(settings.RoundTimeout > TimeSpan.Zero
             ? settings.RoundTimeout : RoundBudget.For(perReviewer, waves, 1) + sourceBudget);
         if (whole < perReviewer) log.Warning("the round limit of {Limit:0} minute(s) is shorter than one reviewer's own {Reviewer:0}; reviewers may be cancelled", whole.TotalMinutes, perReviewer.TotalMinutes);

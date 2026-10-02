@@ -7,13 +7,16 @@ namespace CoaiMcp.Server;
 public sealed record SecurityRun(string Vendor, string Prompt, string Context, int ContextTokens, IReadOnlyList<string> Stages)
 {
     public string Refusal { get; init; } = string.Empty;
-    public bool Serves(Stage stage) => Stages.Contains(stage == Stage.CodeReview ? "code" : "feature");
+    public bool Serves(Stage stage) => Stages.Contains(SecurityStages.Of(stage));
 }
 
 /// <summary>One bounded configuration, with named refusals rather than guessed future semantics.</summary>
 public sealed record SecurityLaneSetting
 {
     public const string Key = "COAI_SECURITY_LANE";
+
+    /// <summary>The member the extension preserves a malformed <c>coai.securityLane</c> under.</summary>
+    private const string Preserved = "invalidConfiguration";
     public bool Enabled { get; init; }
     public int Threshold { get; init; }
     public int MaxRounds { get; init; } = 2;
@@ -36,6 +39,17 @@ public sealed record SecurityLaneSetting
 
     public RoleGate Gate => new(MaxRounds, Threshold, Enabled);
 
+    /// <summary>What is wrong with a pairing's own configuration, or empty — a fault to repair, never "not due".</summary>
+    public string ConfigurationRefusal(SecurityRun run) =>
+        run.Refusal.Length > 0 ? run.Refusal : Prompts.First(p => p.Id == run.Prompt).Refusal;
+
+    /// <summary>The pairings this stage's configuration can run: the lane on, the stage served, nothing broken.</summary>
+    /// <remarks>The settings' half of the decision only; what a round adds — its budget, the reviewer rows — is
+    /// <see cref="SecurityRoster.Due"/>'s.</remarks>
+    public IReadOnlyList<SecurityRun> Configured(Stage stage) => Applies(stage)
+        ? [.. Runs.Where(r => r.Serves(stage) && ConfigurationRefusal(r).Length == 0)]
+        : [];
+
     public static SecurityLaneSetting Parse(string? json, IReadOnlyList<ProviderSettings> providers)
     {
         if (string.IsNullOrWhiteSpace(json)) return new();
@@ -53,9 +67,16 @@ public sealed record SecurityLaneSetting
 
     private static SecurityLaneSetting Refused(string reason) => new() { Complaints = [$"{Key}: {reason}"] };
 
+    // The extension keeps a setting it could not read under this member and sends the lane off: a
+    // fault in the operator's settings, which "update this server" would send them to cure in vain.
+    private static string RootProblem(JsonElement root) =>
+        root.ValueKind == JsonValueKind.Object && root.TryGetProperty(Preserved, out _)
+            ? "the extension found the security lane configuration malformed; the lane is off until coai.securityLane is corrected"
+            : Members(root, ["enabled", "threshold", "maxRounds", "prompts", "runs"]);
+
     private static SecurityLaneSetting Read(JsonElement root, IReadOnlyList<ProviderSettings> providers)
     {
-        var problem = Members(root, ["enabled", "threshold", "maxRounds", "prompts", "runs"]);
+        var problem = RootProblem(root);
         if (problem.Length > 0) return Refused(problem);
         foreach (var name in new[] { "prompts", "runs" })
             if (root.TryGetProperty(name, out var list) && list.ValueKind != JsonValueKind.Array)
@@ -145,12 +166,15 @@ public sealed record SecurityLaneSetting
     {
         var refusal = Members(entry, ["vendor", "prompt", "context", "contextTokens", "stages"]);
         var context = Text(entry, "context");
-        if (!entry.TryGetProperty("context", out _)) context = provider.Runtime == "local" ? "slice" : "diff";
-        if (context is not ("slice" or "diff")) refusal = "context must be slice or diff";
-        if (!Number(entry, "contextTokens", context == "slice" ? 24000 : 200000, 1024, 200000, out var tokens))
+        if (!entry.TryGetProperty("context", out _))
+            context = provider.Runtime == "local" ? SecurityContextModes.Slice : SecurityContextModes.Diff;
+        if (context is not (SecurityContextModes.Slice or SecurityContextModes.Diff))
+            refusal = $"context must be {SecurityContextModes.Slice} or {SecurityContextModes.Diff}";
+        if (!Number(entry, "contextTokens", context == SecurityContextModes.Slice ? 24000 : 200000, 1024, 200000, out var tokens))
             refusal = "contextTokens must be 1024..200000";
-        var stages = Tags(entry, "stages", ["code", "feature"], out var badStages);
-        if (badStages || stages.Any(s => s is not ("code" or "feature"))) refusal = "stages must contain only code and feature";
+        var stages = Tags(entry, "stages", [SecurityStages.Code, SecurityStages.Feature], out var badStages);
+        if (badStages || stages.Any(s => s is not (SecurityStages.Code or SecurityStages.Feature)))
+            refusal = $"stages must contain only {SecurityStages.Code} and {SecurityStages.Feature}";
         return new(provider.Provider, prompt, context, tokens, stages) { Refusal = refusal };
     }
 

@@ -12,23 +12,36 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
     Func<ProviderSettings, bool> canRun, Func<ProviderSettings, IReviewerRuntime?> runtimeFor,
     Func<ProviderSettings, IReviewerRuntime, ReviewerSettings> launchFor, Serilog.ILogger log)
 {
+    /// <summary>The ONE answer to "will the lane add work to this stage's rounds at all".</summary>
+    private bool Applies(Stage stage) => settings.SecurityLane.Applies(stage)
+        && settings.Providers.Any(p => p.Serves(stage)) && settings.Rounds.EnabledRolesOf(stage).Count > 0;
+
+    /// <summary>
+    /// The pairings that will be asked in this round if their trigger matches — the decision
+    /// <see cref="Append"/> makes, offered to the source reader so it reads nothing for a pairing that
+    /// cannot run: a spent lane budget, a broken pairing, a reviewer row that cannot take the work.
+    /// </summary>
+    internal IReadOnlyList<SecurityRun> Due(Stage stage, int round) =>
+        Applies(stage) && WithinBudget(round)
+            ? [.. settings.SecurityLane.Configured(stage)
+                .Where(r => settings.Providers.Any(p => p.Provider == r.Vendor && Refusal(p).Length == 0))]
+            : [];
+
     internal RoundWork Append(RoundWork ordinary, IReadOnlyList<FileDiff> files, Stage stage, int round,
         IReadOnlyDictionary<string, string>? sources = null)
     {
-        var lane = settings.SecurityLane;
-        if (!lane.Applies(stage) || !settings.Providers.Any(p => p.Serves(stage))
-            || settings.Rounds.EnabledRolesOf(stage).Count == 0) return ordinary;
+        if (!Applies(stage)) return ordinary;
         var facts = SecuritySignals.Classify(files);
         var work = new List<ReviewerWork>();
         var skipped = new List<SkippedRole>();
         var excluded = new List<ExcludedRole>();
-        foreach (var run in lane.Runs.Where(r => r.Serves(stage)))
+        foreach (var run in settings.SecurityLane.Runs.Where(r => r.Serves(stage)))
         {
             try
             {
-                var prompt = lane.Prompts.First(p => p.Id == run.Prompt);
-                var reason = Skip(run, prompt, round);
-                if (reason.Length > 0) { skipped.Add(new($"{run.Vendor}/{run.Prompt}", reason)); continue; }
+                if (!WithinBudget(round)) { skipped.Add(new($"{run.Vendor}/{run.Prompt}", BudgetSpent)); continue; }
+                if (settings.SecurityLane.ConfigurationRefusal(run) is { Length: > 0 } broken) { excluded.Add(new(run.Vendor, run.Prompt, broken)); continue; }
+                var prompt = PromptOf(run);
                 if (!SecuritySignals.Triggered(prompt, facts))
                 { RecordUnmatched(run, facts, files.Count - facts.Count, skipped, excluded); continue; }
                 Prepare(run, prompt, facts, sources, files.Count - facts.Count, work, excluded);
@@ -48,10 +61,16 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
         };
     }
 
+    private const string BudgetSpent = "security lane round budget spent";
+
+    private bool WithinBudget(int round) => round <= settings.SecurityLane.MaxRounds;
+
+    private SecurityPrompt PromptOf(SecurityRun run) => settings.SecurityLane.Prompts.First(p => p.Id == run.Prompt);
+
     private void Prepare(SecurityRun run, SecurityPrompt prompt, IReadOnlyList<SecurityFile> facts,
         IReadOnlyDictionary<string, string>? sources, int omitted, List<ReviewerWork> work, List<ExcludedRole> excluded)
     {
-        var provider = settings.Providers.First(p => p.Provider == run.Vendor);
+        var provider = ProviderOf(run);
         var refusal = Refusal(provider);
         if (refusal.Length > 0) { excluded.Add(new(run.Vendor, run.Prompt, refusal)); return; }
         var body = ReadPrompt(run.Prompt);
@@ -63,11 +82,7 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
         work.Add(Build(provider, run, pack.Text));
     }
 
-    private string Skip(SecurityRun run, SecurityPrompt prompt, int round)
-    {
-        if (round > settings.SecurityLane.MaxRounds) return "security lane round budget spent";
-        return run.Refusal.Length > 0 ? run.Refusal : prompt.Refusal;
-    }
+    private ProviderSettings ProviderOf(SecurityRun run) => settings.Providers.First(p => p.Provider == run.Vendor);
 
     private static void RecordUnmatched(SecurityRun run, IReadOnlyList<SecurityFile> facts, int omitted,
         List<SkippedRole> skipped, List<ExcludedRole> excluded)
@@ -96,7 +111,8 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
     {
         var path = prompts.FileToWrite(id);
         if (File.Exists(path) && new FileInfo(path).Length > SecurityContext.MaxPromptBytes) return string.Empty;
-        var text = File.Exists(path) ? prompts.Written(id) : RolePrompts.ShippedDefaultFor(id, optional: true);
+        // An empty or blank override is no override — the shipped text stands, as it does for every other role.
+        var text = prompts.ForOptional(id);
         if (Encoding.UTF8.GetByteCount(text) > SecurityContext.MaxPromptBytes) return string.Empty;
         var trimmed = text.Trim();
         return trimmed.StartsWith("<!-- OPERATOR:", StringComparison.Ordinal)

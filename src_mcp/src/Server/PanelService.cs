@@ -754,9 +754,10 @@ public sealed class PanelService
                         round, RosterBuilder.NoWrittenRules, string.Join(", ", RuleFiles.SourceNames));
                 }
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
-                var securitySources = await SecuritySources.ReadAsync(_settings.SecurityLane, collected.Files,
+                var securitySources = await SecuritySources.ReadAsync(_settings.SecurityLane,
+                    _roster.Security().Due(Stage.CodeReview, round), collected.Files,
                     new Runners.Feature.SourceResolver(new Runners.Collecting.GitHistory(_launcher),
-                        new Normalizer.TreeSitterOutliner(), repoPath, sha), Stage.CodeReview, roundToken);
+                        new Normalizer.TreeSitterOutliner(), repoPath, sha), roundToken);
                 var built = WithSkippedByRule(
                     _roster.BuildWork(roles, workingDir, context, round,
                         stage: Stage.CodeReview, readsCheckout: true,

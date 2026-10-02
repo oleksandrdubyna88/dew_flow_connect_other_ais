@@ -81,6 +81,13 @@ internal sealed class RosterBuilder(
     internal static bool Remote(ProviderSettings provider) => provider.IsRemote;
 
     /// <summary>
+    /// The security lane's roster for these settings — the one place its decisions are made, shared by
+    /// the work it appends and the source reader that must not read for a pairing that will not run.
+    /// </summary>
+    internal SecurityRoster Security() => new(_settings, _prompts, _canRun, _runtimeFor,
+        (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi), log);
+
+    /// <summary>
     /// The prompt this round of this role gets — from the session's CATALOG, not from the compiled
     /// list this product used to have.
     /// </summary>
@@ -221,9 +228,7 @@ internal sealed class RosterBuilder(
         Assemble(runnable, items, deal, seed, Add, CanCarry);
 
         var ordinary = new RoundWork(LocalRowsFirst(work), notAsked, excluded) { OrdinaryDue = roles.Count > 0 };
-        return securityFiles is null ? ordinary : new SecurityRoster(_settings, _prompts, _canRun, _runtimeFor,
-            (provider, runtime) => SettingsFor(provider, runtime, runtime is ApiRuntime ? ApiRowView.Of(provider, _settings.ApiOverrides) : NotApi), log)
-            .Append(ordinary, securityFiles, stage, round, securitySources);
+        return securityFiles is null ? ordinary : Security().Append(ordinary, securityFiles, stage, round, securitySources);
 
         // One sentence per ROLE however many vendors would have carried it: a person reading a round
         // needs to know the role did not run, not that four vendors each did not run it.

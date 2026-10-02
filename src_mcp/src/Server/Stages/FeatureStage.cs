@@ -239,8 +239,9 @@ internal sealed class FeatureStage(
         var securityDiff = settings.SecurityLane.Applies(Stage.FeatureReview)
             && settings.SecurityLane.Runs.Any(r => r.Serves(Stage.FeatureReview))
             ? (await new ContextAssembler(launcher).CollectAsync(repoPath, baseSha, sha, ct: ct)).Files : [];
-        var securitySources = await SecuritySources.ReadAsync(settings.SecurityLane, securityDiff,
-            new SourceResolver(new GitHistory(launcher), outliner, repoPath, sha), Stage.FeatureReview, ct);
+        var securitySources = await SecuritySources.ReadAsync(settings.SecurityLane,
+            roster.Security().Due(Stage.FeatureReview, round), securityDiff,
+            new SourceResolver(new GitHistory(launcher), outliner, repoPath, sha), ct);
         var work = roster.BuildWork(
             settings.Rounds.RolesForRound(Stage.FeatureReview, round), workingDir, context, round,
             stage: Stage.FeatureReview, readsCheckout: false, seed: PanelService.StableSeed(session.State.SessionId, round),
