@@ -291,6 +291,44 @@ const SCENARIOS: readonly Scenario[] = [
     },
   },
   {
+    // The Question consultant, in a real editor (todo/PLAN_question_consultant.md, S4 acceptance 6). A host
+    // cannot read a webview's DOM — what the tab DRAWS is the page tests' (qconsultSection, activeQuestions,
+    // the bundled Questions tab) — so this drives what only a host can: the gear opening the Settings tab ON
+    // the Question consultant section, a row written in this editor reaching the file the server reads, and
+    // Show review rounds opening the page that holds the Questions tab.
+    name: 'the Question consultant tab opens, a row set in this editor reaches the server, and the log page opens',
+    run: async (): Promise<void> => {
+      const tabsOf = (viewType: string): vscode.Tab[] => vscode.window.tabGroups.all
+        .flatMap((group) => group.tabs)
+        .filter((one) => one.input instanceof vscode.TabInputWebview && one.input.viewType.endsWith(viewType));
+      const extension = vscode.extensions.getExtension('remsoftdev.connect-other-ais');
+      assert.ok(extension !== undefined, 'the extension under test is not installed in this host');
+      await extension.activate();
+
+      await vscode.commands.executeCommand('coai.openSettings', 'questionconsultant');
+      await until(() => tabsOf('coaiSettings').length === 1, 'the gear did not open the Settings tab on the Question consultant section');
+
+      const home = process.env['COAI_DATA_DIR'] ?? '';
+      assert.ok(home.length > 0, 'the launcher did not give this host a data directory of its own');
+      const file = path.join(home, 'settings.json');
+      const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
+      const row = { id: 'host-row', vendor: 'claude', runtime: 'claude', model: 'sonnet', baseUrl: '', executablePath: '', key: '', prompt: 'question-disk', enabled: true, acknowledged: false };
+      try {
+        await config().update('qconsultRows', [row], vscode.ConfigurationTarget.Global);
+        await settingsUntil(file, (text) => text.includes('COAI_QCONSULT_ROWS') && text.includes('host-row'),
+          'a question-consultant row set in this editor never reached the file the server reads');
+      } finally {
+        await config().update('qconsultRows', undefined, vscode.ConfigurationTarget.Global);
+      }
+      await settingsUntil(file, (text) => !text.includes('COAI_QCONSULT_ROWS'), 'removing the row left it in the file');
+      await vscode.window.tabGroups.close(tabsOf('coaiSettings'));
+
+      await vscode.commands.executeCommand('coai.showRounds');
+      await until(() => tabsOf('coaiRoundsLog').length === 1, 'Show review rounds opened no page, so no Questions tab can be reached');
+      await vscode.window.tabGroups.close(tabsOf('coaiRoundsLog'));
+    },
+  },
+  {
     // The guard, wired. `answerCopy.test.ts` proves it refuses; this proves the refusal is what the
     // real press reaches. A hook that called the decision and then copied anyway would pass every
     // test in that file.
