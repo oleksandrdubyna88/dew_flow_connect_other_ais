@@ -29,6 +29,10 @@ and the reviewer vendor ID is `local-security` independently of the model family
 The calibration fixture includes written repository rules so its Conventions reviewer participates.
 Passing these hardware tests establishes usable replies and wiring; semantic accuracy of each
 finding and reproduction is inspected separately in the [Windows results](RESULTS_security_lane_qwen_windows.md).
+`SecurityPresetTests` also covers the historical-PR routing regressions: prose-only changes do not
+activate application audits, UI words and DOM/command APIs do not count as SQL, and real query calls,
+removed controls, SQL scripts and configuration still participate. Source files under `research/`
+remain eligible. These tests check routing behavior; they do not establish semantic model accuracy.
 
 Shared-rule adoption adds real filesystem scenarios: `RuleFilesTests` exercises neutral
 PROJECT/local/shared discovery, ordering and missing mount bodies while retaining legacy cases.
