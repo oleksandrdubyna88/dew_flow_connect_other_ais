@@ -110,20 +110,23 @@ public sealed class SecurityEvidenceOnAnOlderDatabaseTests : IDisposable
     }
 
     [Fact]
-    public void A_damaged_security_projection_leaves_the_round_readable_with_no_projection()
+    public void A_damaged_security_projection_leaves_the_round_readable_and_says_the_evidence_was_lost()
     {
         RecordDefendedLaneFinding();
         RoundsQuery.FindingsOf(_dir, "s1", "CodeReview", 2).Findings.Should().ContainSingle()
-            .Which.SecurityEvidence.Should().NotBeNull("the positive control: the undamaged projection reads back");
+            .Which.SecurityEvidence.Should().NotBeNull("the positive control: the undamaged projection reads back")
+            .And.Match<SecurityFindingDetails>(d => d.Unreadable.Length == 0, "an intact projection is not reported as lost");
 
         Execute("UPDATE findings SET security_evidence = '{not json';");
         SqliteConnection.ClearAllPools();
 
         RoundsQuery.FindingsOf(_dir, "s1", "CodeReview", 2).Findings.Should().ContainSingle()
-            .Which.Should().Match<LoggedFinding>(f => f.Title == Title && f.SecurityEvidence == null);
+            .Which.Should().Match<LoggedFinding>(f => f.Title == Title && f.SecurityEvidence != null
+                && f.SecurityEvidence.Unreadable.Contains("could not be read") && f.SecurityEvidence.Reproduction == null);
         var log = RoundsQuery.Read(_dir, withFindings: true);
-        log.Rounds.Should().ContainSingle().Which.Findings.Should().ContainSingle().Which.SecurityEvidence.Should().BeNull();
-        log.Defended.Should().ContainSingle().Which.SecurityEvidence.Should().BeNull();
+        log.Rounds.Should().ContainSingle().Which.Findings.Should().ContainSingle()
+            .Which.SecurityEvidence!.Unreadable.Should().Contain("could not be read");
+        log.Defended.Should().ContainSingle().Which.SecurityEvidence!.Unreadable.Should().Contain("could not be read");
     }
 
     public void Dispose()
