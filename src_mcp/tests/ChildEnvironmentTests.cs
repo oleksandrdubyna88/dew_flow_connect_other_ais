@@ -72,6 +72,13 @@ public sealed class ChildEnvironmentTests
         ProcessEnvironment.Minimal.Should().BeEquivalentTo(ProcessEnvironment.MinimalFor(OperatingSystem.IsWindows()));
     }
 
+    /// <summary>
+    /// Names the child's OWN runtime writes into its environment at start, so it reports them whatever it was given:
+    /// on macOS CoreFoundation sets <c>__CF_USER_TEXT_ENCODING</c> when it is absent (macOS CI, PR #646). Nothing here
+    /// is passed by the launcher, which is what the assertion below is about.
+    /// </summary>
+    private static readonly string[] SetByTheChildItself = OperatingSystem.IsMacOS() ? ["__CF_USER_TEXT_ENCODING"] : [];
+
     [Fact]
     public async Task AQuestionChild_SeesTheMinimalList_AndNothingElse()
     {
@@ -86,8 +93,9 @@ public sealed class ChildEnvironmentTests
         var names = result.StdOut.Split('\n', StringSplitOptions.RemoveEmptyEntries).Select(line => line.TrimEnd('\r')).ToList();
         names.Should().NotBeEmpty();
         names.Should().NotContain(canary.Name).And.NotContain(secret.Name);
-        names.Should().OnlyContain(name => ProcessEnvironment.Minimal.Contains(name),
-            "the list and nothing else: {0}", string.Join(", ", names.Where(n => !ProcessEnvironment.Minimal.Contains(n))));
+        var passed = names.Except(SetByTheChildItself).ToList();
+        passed.Should().OnlyContain(name => ProcessEnvironment.Minimal.Contains(name),
+            "the list and nothing else: {0}", string.Join(", ", passed.Where(n => !ProcessEnvironment.Minimal.Contains(n))));
         names.Should().Contain(name => string.Equals(name, "PATH", OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal));
     }
 
