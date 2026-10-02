@@ -139,9 +139,11 @@ public sealed record PanelConfig(
     /// The fallback is what makes a role a person just created work with no settings at all: nobody
     /// has written it a budget yet, so it takes its stage's shipped one.
     /// </remarks>
-    public RoleGate For(string role) =>
-        role == Security.SecurityCatalog.Gate ? SecurityLane
-        : Roles.TryGetValue(role, out var gate) ? gate : ShippedFor(role);
+    public RoleGate For(string role)
+    {
+        if (role == Security.SecurityCatalog.Gate) return SecurityLane;
+        return Roles.TryGetValue(role, out var gate) ? gate : ShippedFor(role);
+    }
 
     /// <summary>The budget a role takes when nobody has written it one: its stage's shipped default.</summary>
     private RoleGate ShippedFor(string role) =>
@@ -188,11 +190,11 @@ public sealed record PanelConfig(
     public StageGate For(Stage stage)
     {
         var roles = EnabledRolesOf(stage);
-        return roles.Count == 0
-            ? NoEnabledRoles
-            : new StageGate(Math.Max(roles.Max(r => For(r).MaxRounds),
-                SecurityLane.Enabled && stage is Stage.CodeReview or Stage.FeatureReview ? SecurityLane.MaxRounds : 0),
-                roles.Max(r => For(r).Threshold));
+        if (roles.Count == 0) return NoEnabledRoles;
+        var securityRounds = SecurityLane.Enabled && stage is Stage.CodeReview or Stage.FeatureReview
+            ? SecurityLane.MaxRounds : 0;
+        return new StageGate(Math.Max(roles.Max(r => For(r).MaxRounds), securityRounds),
+            roles.Max(r => For(r).Threshold));
     }
 
     /// <summary>What a stage whose every role is switched off is worth: no round, nothing open.</summary>

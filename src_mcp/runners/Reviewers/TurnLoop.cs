@@ -128,9 +128,12 @@ internal sealed class TurnLoop(
             : invocation with { Request = invocation.Request with { Timeout = left } };
 
     /// <summary>The note a finished conversation carries: how many turns, and what they served.</summary>
-    public static string Note(ReviewerOutcome outcome) =>
-        outcome is ReviewerOutcome.Ok ok ? string.Join(" ", new[]
-        { ok.Turns > 1 ? $"{ok.Turns} turns; source: {ok.Served}" : string.Empty, ok.InputCoverage }.Where(s => s.Length > 0)) : string.Empty;
+    public static string Note(ReviewerOutcome outcome)
+    {
+        if (outcome is not ReviewerOutcome.Ok ok) return string.Empty;
+        var turns = ok.Turns > 1 ? $"{ok.Turns} turns; source: {ok.Served}" : string.Empty;
+        return string.Join(" ", new[] { turns, ok.InputCoverage }.Where(s => s.Length > 0));
+    }
 
     private void Report(ReviewerInvocation invocation, string note)
     {

@@ -29,15 +29,16 @@ internal static class SecuritySources
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(ct);
         deadline.CancelAfter(CollectionBudget);
         foreach (var file in facts.Where(f => f.Diff.Text.Length > 0)
-            .OrderBy(f => f.SupportingMaterial).ThenByDescending(f => f.Signals.Count(focus.Contains)).Take(MaxSourceFiles))
+            .OrderBy(f => f.SupportingMaterial).ThenByDescending(f => f.Signals.Count(focus.Contains)).Take(MaxSourceFiles)
+            .Select(f => f.Diff))
         {
             var parts = new List<string>();
             try
             {
-                foreach (var span in DiffHunks.ChangedSpans(file.Diff.Text).Take(MaxHunksPerFile))
+                foreach (var span in DiffHunks.ChangedSpans(file.Text).Take(MaxHunksPerFile))
                 {
                     deadline.Token.ThrowIfCancellationRequested();
-                    parts.Add((await resolver.ServeChangeAsync(file.Diff.Path, Math.Max(1, span.Start), deadline.Token)).Render());
+                    parts.Add((await resolver.ServeChangeAsync(file.Path, Math.Max(1, span.Start), deadline.Token)).Render());
                 }
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
@@ -46,7 +47,7 @@ internal static class SecuritySources
             }
             ct.ThrowIfCancellationRequested();
             if (deadline.IsCancellationRequested) parts.Add("Source read deadline reached; remaining source omitted.");
-            result[file.Diff.Path] = string.Join("\n", parts.Distinct(StringComparer.Ordinal));
+            result[file.Path] = string.Join("\n", parts.Distinct(StringComparer.Ordinal));
             if (deadline.IsCancellationRequested) break;
         }
         return result;

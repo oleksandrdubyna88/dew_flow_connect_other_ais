@@ -179,6 +179,11 @@ jobs:
       #     is `helpCoverage.test.ts`, and only partly: it proves every article exists in every
       #     language, not that it still says what the English says. `todo/PLAN_a_stale_translation_is_invisible.md`
       #     is the open plan for that half.
+      #   securityLane.generated.ts is emitted entirely from shared/security-lane.json during
+      #     prepare:gate. Its repeated data rows are the catalog, not copied application logic.
+      #     Exclude only this generated artifact from CPD; normal analysis still applies.
+      #     securityLane.test.ts executes the generated export and compares the whole object
+      #     with the shared JSON, so generator drift fails the ordinary extension suite.
       - name: Begin
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -190,7 +195,7 @@ jobs:
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml"             /d:sonar.javascript.lcov.reportPaths="coverage/extension.lcov"             /d:sonar.typescript.lcov.reportPaths="coverage/extension.lcov" \
             /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**,.agents/conventions/**" \
-            /d:sonar.cpd.exclusions="src_vs_code/src/helpContent.ts,src_vs_code/src/helpRu.ts,src_vs_code/src/helpUk.ts,src_vs_code/src/helpDe.ts,src_vs_code/src/helpEs.ts" \
+            /d:sonar.cpd.exclusions="src_vs_code/src/helpContent.ts,src_vs_code/src/helpRu.ts,src_vs_code/src/helpUk.ts,src_vs_code/src/helpDe.ts,src_vs_code/src/helpEs.ts,src_vs_code/src/securityLane.generated.ts" \
             /d:sonar.issue.ignore.multicriteria="e1,e2" \
             /d:sonar.issue.ignore.multicriteria.e1.ruleKey="typescript:S1523" \
             /d:sonar.issue.ignore.multicriteria.e1.resourceKey="src_vs_code/src/test/**" \

@@ -114,7 +114,7 @@ public sealed record SecurityLaneSetting
         return seed with { Triggers = triggers, Focus = [.. focus.Where(t => SecurityCatalog.Signals.Any(s => s.Id == t))], Refusal = refusal };
     }
 
-    private static IReadOnlyList<SecurityRun> ReadRuns(JsonElement root, IReadOnlyList<ProviderSettings> providers,
+    private static List<SecurityRun> ReadRuns(JsonElement root, IReadOnlyList<ProviderSettings> providers,
         IReadOnlyList<SecurityPrompt> prompts, List<string> complaints)
     {
         var result = new List<SecurityRun>();
@@ -154,7 +154,7 @@ public sealed record SecurityLaneSetting
         return new(provider.Provider, prompt, context, tokens, stages) { Refusal = refusal };
     }
 
-    private static IEnumerable<JsonElement> Entries(JsonElement root, string name, int limit, List<string> complaints)
+    private static JsonElement[] Entries(JsonElement root, string name, int limit, List<string> complaints)
     {
         if (!root.TryGetProperty(name, out var entries)) return [];
         if (entries.ValueKind != JsonValueKind.Array)

@@ -57,7 +57,7 @@ public sealed class SecurityEvidenceTests
     public void Credential_files_never_reach_the_prompt_even_when_their_text_matches_focus()
     {
         var files = SecuritySignals.Classify([new("server.pem", "PRIVATE KEY material"), new("Query.cs", "+ database.Query(value);")]);
-        var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", [], ["sql"]), files, "slice", 24000);
+        var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", [], ["sql"]), files, "slice", new(24000));
         pack.Refusal.Should().BeEmpty();
         pack.Text.Should().Contain("database.Query").And.NotContain("PRIVATE KEY material");
         pack.Omitted.Should().Contain("server.pem");
@@ -67,7 +67,7 @@ public sealed class SecurityEvidenceTests
     public void Detector_size_refusal_names_the_limit_instead_of_suggesting_more_context()
     {
         var files = SecuritySignals.Classify([new("Query.cs", new string('x', SecuritySignals.MaxFileCharacters + 1))]);
-        var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", ["sql"], []), files, "diff", 24000);
+        var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", ["sql"], []), files, "diff", new(24000));
         pack.Text.Should().BeEmpty();
         pack.Refusal.Should().Contain("detector character limit");
         pack.Omitted.Should().Contain("Query.cs (diff exceeds detector character limit)");
@@ -77,7 +77,7 @@ public sealed class SecurityEvidenceTests
     public void A_patch_that_does_not_fit_does_not_hide_a_later_smaller_patch()
     {
         var files = SecuritySignals.Classify([new("A.cs", new string('\u754c', 30000)), new("B.cs", "+ query(value);")]);
-        var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", ["sql"], []), files, "diff", 24000);
+        var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", ["sql"], []), files, "diff", new(24000));
         pack.Refusal.Should().BeEmpty();
         pack.Omitted.Should().Contain("A.cs");
         pack.Text.Should().Contain("File: B.cs").And.Contain("query(value)").And.NotContain(new string('\u754c', 30));
@@ -91,7 +91,7 @@ public sealed class SecurityEvidenceTests
             new("src/Orders.cs", "+ database.Query(value);\n" + new string('y', 45000)),
         ]);
         var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", ["sql"], ["sql", "authz", "entry-point"]),
-            files, "slice", 24000);
+            files, "slice", new(24000));
         pack.Refusal.Should().BeEmpty();
         pack.Text.Should().Contain("File: src/Orders.cs").And.NotContain("File: research/checklist.md");
         pack.Omitted.Should().Contain(p => p.Contains("research/checklist.md") && p.Contains("supporting material"));
