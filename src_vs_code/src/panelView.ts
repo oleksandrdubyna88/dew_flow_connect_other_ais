@@ -19,6 +19,7 @@ import { SETTINGS_CSS, settingsHead, settingsScript, settingsTextCss } from './s
 import { textOf } from './textControls';
 import { executableFor } from './vendorTerminal';
 import { LOOKING, LOOKING_CSS } from './lookingSpinner';
+import { SELECT_SEARCH_CSS, selectSearchScript } from './selectSearch';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
@@ -364,8 +365,13 @@ export const OPEN_BY_DEFAULT: readonly string[] = [];
  * forgotten segment does not fail loudly — it silently stops putting the caret back, in every
  * control on the panel. Eight tests said so within a second of the id gaining its fourth part. The
  * fifth (issue #117) was forgotten here exactly that way, and CodeRabbit found it on the PR.</p>
+ *
+ * <p>And a list's search box holds the caret under its select's identity behind a literal `search|`
+ * (`selectSearch.ts`); a prompt picker's identity is `prompt|role|round|`, the same four parts. The
+ * search box's caret was forgotten here the same way a third time, and its page test went red with
+ * "the caret is back in the box" before this prefix existed (todo/PLAN_model_search_and_busy_marks.md).</p>
  */
-const FOCUS_ID = /^[A-Za-z0-9_.-]+\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*(\|[A-Za-z0-9_.-]+)?$/;
+const FOCUS_ID = /^(search\|)?[A-Za-z0-9_.-]+\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*(\|[A-Za-z0-9_.-]+)?$/;
 
 /**
  * {@link PanelState.focus} as a literal the page's own script can hold, or `null`.
@@ -630,8 +636,9 @@ ${extra.script}
       // Tabbing from one control to the next is not a moment to rebuild the page. The focusout of
       // the control being left arrives before the focusin of the one being entered, so a release
       // here would repaint over a caret that is on its way.
+      // A list's search box counts as a control here: tabbing into it from its own select is not a release either.
       const next = event.relatedTarget;
-      if (next && next.dataset && next.dataset.setting !== undefined) {
+      if (next && next.dataset && (next.dataset.setting !== undefined || next.dataset.searchFor !== undefined)) {
         return;
       }
       reportFocus(el, false);
@@ -644,13 +651,23 @@ ${extra.script}
     }
   });
   window.addEventListener('pagehide', () => flush());
+${selectSearchScript(['', '__other__', CUSTOM_ENDPOINT])}
 
   // A repaint that could not be withheld any longer lands under a focused control. The provider
   // names it, and the caret comes back to the end of what is in it — the end rather than where it
   // was, because a caret position per keystroke is a message per keystroke, and this happens only
   // after half a minute of focus that never moved.
   const focusOn = ${focusLiteral(focus)};
-  if (focusOn !== null) {
+  // A search box held the caret: its query is already back (selectSearch.ts), so put the caret back in it too.
+  const searchHeld = focusOn !== null && focusOn.id.indexOf('search|') === 0
+    ? searchBoxes.find((box) => 'search|' + box.dataset.searchFor === focusOn.id)
+    : undefined;
+  if (searchHeld !== undefined) {
+    searchHeld.focus();
+    const end = Math.min(focusOn.end, searchHeld.value.length);
+    searchHeld.setSelectionRange(Math.min(focusOn.start, end), end);
+  }
+  if (focusOn !== null && searchHeld === undefined) {
     for (const back of document.querySelectorAll('[data-setting]')) {
       if (idOf(back) !== focusOn.id) {
         continue;
@@ -2949,7 +2966,7 @@ const CSS = `
   .inventory { opacity: .65; font-size: calc(11rem / 13); margin: 3px 0 0; padding-left: 16px;
     columns: 2; column-gap: 12px; overflow-wrap: anywhere; }
   .inventory li { break-inside: avoid; }
-  input[type="text"], input[type="url"], input[type="number"], select, textarea {
+  input[type="text"], input[type="url"], input[type="number"], input[type="search"], select, textarea {
     background: var(--vscode-input-background); color: var(--vscode-input-foreground);
     border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px;
     padding: 3px 6px; font-family: inherit; font-size: inherit;
@@ -3135,6 +3152,7 @@ ${ROLE_TONE_CSS}
   .empty { opacity: .6; font-style: italic; margin: 6px 0; }
   .status { margin: 2px 0 0; }
 ${LOOKING_CSS}
+${SELECT_SEARCH_CSS}
 `;
 
 /**

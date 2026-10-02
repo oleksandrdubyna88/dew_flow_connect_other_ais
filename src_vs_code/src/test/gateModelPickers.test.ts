@@ -40,11 +40,16 @@ test('every caller kind has both pickers, and each writes for its own kind', () 
   for (const { id } of CALLER_KINDS) {
     for (const slot of ['strongest', 'implementation']) {
       const control = picker(page, id, slot);
-      control.value = `${id}-${slot}-model`;
+      // An option the page DREW: a select takes no other value, and the harness now refuses one as a DOM does.
+      // A kind with no list of its own (`other`) offers only its default, which is then the choice to make.
+      const model = (control.options.find((option) => option.value !== '' && option.value !== '__other__')
+        ?? control.options.find((option) => option.value === ''))?.value;
+      assert.ok(model !== undefined, `the ${id} ${slot} picker offers a choice`);
+      control.value = model;
       control.fire('change');
 
       assert.deepEqual(lastWrite(page), {
-        type: 'setting', key: slot, value: `${id}-${slot}-model`,
+        type: 'setting', key: slot, value: model,
         vendor: undefined, role: undefined, caller: undefined, commandModel: id, control: 'select',
       }, 'eight pickers share two slot names, so a write with no kind lands in whichever the host guesses');
     }
