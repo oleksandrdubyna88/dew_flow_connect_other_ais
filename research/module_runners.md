@@ -442,7 +442,9 @@ sequenceDiagram
   launches keep `ProcessEnvironment.Passthrough` by default). The Windows list is the benchmark's S2c
   list verbatim (every CLI started and answered on it on 2026-10-01); the Unix list is NOT the benchmark's
   — it had no Linux subject — and is the launcher's own measured requirement (`HOME`, or every Node CLI
-  fails in initialisation) plus the locale and temporary-directory names. `ChildEnvironmentTests` observes
+  fails in initialisation) plus the locale and temporary-directory names and `DOTNET_ROOT` (macOS CI: a
+  framework-dependent child whose runtime is outside the default place cannot start without it; Windows
+  finds the runtime through the registry). `ChildEnvironmentTests` observes
   it on a real child (`FakeCli env-names`): a `COAI_*` canary and a `*_SECRET_TOKEN_*` canary in the parent
   are absent, and nothing outside the list arrives; and asserts every planned adapter launch asks for it
   while every AsShipped one still inherits.
