@@ -725,7 +725,8 @@ Differences from the findings' wording, each a decision:
    under eslint's complexity 4.
 9. **Item 6's help texts** never quoted 30 (checked: `help.ts`, `helpContent.ts`, the four translations); the
    `escalationMinutes` tooltip still says a question "stays open in the sidebar either way", which has not been true
-   since S3's expiry — left for S5's help pass, not part of the finding.
+   since S3's expiry — left for S5's help pass, not part of the finding (done in S5: the card leaves Active
+   questions and is kept on the Logs page as expired).
 10. **Found by the PR's CI on the other platforms, each RED first:** (a) the retention sweep counted an answered
     pair THREE on Linux — the directory listing there is unordered, and with the question listed first the pair went
     at once and the answer, still in the listing, was judged again as an orphan whose missing file reads as 1601
