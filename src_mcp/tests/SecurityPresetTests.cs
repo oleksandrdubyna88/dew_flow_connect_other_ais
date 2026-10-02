@@ -66,6 +66,8 @@ public sealed class SecurityPresetTests
     [InlineData("+// vendor run / install / update — and nothing for a hosted API")]
     [InlineData("+document.querySelector('#models');")]
     [InlineData("+commands.executeCommand('refresh');")]
+    [InlineData(" // read back out of the DOM: what a section CONTAINS is HTML from the database")]
+    [InlineData("+// Open sections are held in memory; the new id needs no migration.")]
     public void Sql_routing_requires_a_database_shape_instead_of_generic_words(string patch)
     {
         var files = SecuritySignals.Classify([new("panel.ts", patch)]);
@@ -77,6 +79,9 @@ public sealed class SecurityPresetTests
     [InlineData("src/Store.cs", "+connection.QuerySingleOrDefaultAsync<Invoice>(command);")]
     [InlineData("src/Store.cs", "+connection.ExecuteAsync(command);")]
     [InlineData("src/Store.cs", "+command.ExecuteNonQuery();")]
+    [InlineData("src/Store.cs", "+DbConnection connection;")]
+    [InlineData("src/Store.cs", "+DbCommand command;")]
+    [InlineData("src/Changes.cs", "+void Up(MigrationBuilder builder) => builder.AddColumn<int>(name, table);")]
     [InlineData("research/example.cs", "+database.Query(command);")]
     [InlineData("migrations/change.sql", "+UPDATE invoices SET tenant_id = 3;")]
     [InlineData("config/database.json", "+\"query\": \"SELECT id FROM invoices WHERE tenant_id = 3\"")]

@@ -36,7 +36,7 @@ public static class SecuritySignals
 
     private static readonly IReadOnlyDictionary<string, string[]> Terms = new Dictionary<string, string[]>
     {
-        ["sql"] = ["sql", "database", "dbcontext", "migration", "dapper"],
+        ["sql"] = ["sql", "dbcontext", "dbconnection", "dbcommand", "migrationbuilder", "dapper"],
         ["auth-token"] = ["jwt", "bearer", "cookie", "session", "authenticate", "oauth", "openid", "oidc", "pkce", "tokenvalidationparameters", "validateissuersigningkey", "redirect_uri", "client_secret"],
         ["oauth"] = ["oauth", "openid", "oidc", "pkce", "redirect_uri", "redirecturi", "code_verifier", "code_challenge", "authorization_code", "acquiretoken", "msal"],
         ["authz"] = ["authorize", "authorization", "permission", "tenant", "role", "allowanonymous", "mapget", "mappost", "mapput", "mapdelete", "httppost", "httpget", "controller", "route(", "user.claims", "companyid", "frombody", "dbcontext.update", ".updateasync", "patch", "endpoint"],
