@@ -48,6 +48,7 @@ import { installedVersion, installLatest, knownServerVersion, latestServerVersio
 import { EscalationWatcher } from './escalationWatcher';
 import { ConsultationWatcher } from './consultationWatcher';
 import { QuestionConsultWatcher } from './questionConsultWatcher';
+import { qconsultLogHtml } from './qconsultLog';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
 import { openSettings } from './settingsPanel';
@@ -1316,6 +1317,8 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
   const usage = await regionOr('spending', () => panel.usageTab());
   const spots = await regionOr('blind-spot', () => blindSpotsHtml(fresh, panel.spotsPeriod()));
   const consultations = await regionOr('consultations', () => panel.consultationsTab(fresh));
+  // The Questions tab: what `--log` carried of question_consults — none from an older server, which is an empty tab.
+  const qconsults = await regionOr('questions', async () => qconsultLogHtml(fresh.questions ?? []));
   log.update(
     await logRows(panel, fresh),
     watcher.openQuestions,
@@ -1323,7 +1326,8 @@ async function refreshRoundsLog(log: RoundsLogPanel, watcher: EscalationWatcher,
     force,
     spots,
     fresh.totals,
-    consultations);
+    consultations,
+    qconsults);
 }
 
 /**

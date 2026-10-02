@@ -1274,3 +1274,122 @@ test('the panel page bundles with its list search ranking embedded whole, and th
     assert.deepEqual(minified(query, choices), rankChoices(query, choices), `the shipped ranking differs for "${query}"`);
   }
 });
+
+/* ------------------------------------------------------------------------------------------------
+ * The Logs page's Questions tab (todo/PLAN_question_consultant.md, S4 acceptance 5), as it SHIPS: the
+ * modules bundled and minified together, the table drawn by the bundled renderer from a `--log` answer the
+ * bundled parser read, the page's own script run over a stub DOM — a press on the tab, a push into it.
+ * --------------------------------------------------------------------------------------------- */
+
+/** A `--log` answer carrying two questions, as coai-mcp writes them (`LoggedQuestion`: the projected head and its rows). */
+const QUESTIONS_LOG = {
+  rounds: [], blindSpots: [], defended: [], totals: {}, consultations: [],
+  questionConsults: [
+    {
+      asked: {
+        id: 'q-new', callerKind: 'claude', repoPath: 'D:/rsd/shop', branch: 'feat/cart', question: 'Ladder or breaker for a flaky vendor?',
+        context: 'tried a fixed wait', productionRisk: false, riskReason: '', status: 'partial', outcome: 'person_asked', escalationId: 'esc-9',
+        startedUtc: '2026-10-02T11:00:00.000Z', rows: 2, answered: 1, seconds: 312.4, costUsd: 0.034, alert: '',
+      },
+      answers: [
+        { rowId: 'sonnet-disk', vendor: 'claude', model: 'sonnet', promptTitle: 'Projects on this disk', capability: 'disk', flag: '', status: 'answered', reason: '', seconds: 41, costUsd: 0.034, advice: 'Use the ladder in D:/rsd/billing.' },
+        { rowId: 'astra-web', vendor: 'codex', model: 'gpt-6-astra', promptTitle: 'The internet', capability: 'web', flag: 'unconfined', status: 'timed_out', reason: 'past its five minutes', seconds: 300 },
+      ],
+    },
+    {
+      asked: { id: 'q-old', repoPath: 'D:/rsd/shop', branch: 'main', question: 'Drop the column?', status: 'answered', outcome: 'production_risk', productionRisk: true, riskReason: 'nothing restores it', startedUtc: '2026-10-01T09:00:00.000Z', rows: 1, answered: 1, seconds: 20 },
+      answers: [{ rowId: 'grok', vendor: 'api', model: 'x-ai/grok-4.7', promptTitle: 'The best developer\'s opinion', capability: 'none', flag: '', status: 'answered', seconds: 20, advice: 'Back it up first.' }],
+    },
+  ],
+};
+
+/** The log modules as one shipped bundle: the parser, the tab's renderer and the page. */
+function bundledLog(): {
+  parseLog: (text: string, paged?: boolean) => { questions?: readonly unknown[] };
+  qconsultLogHtml: (questions: readonly unknown[]) => string;
+  roundsLogHtml: (rows: unknown[], questions: unknown[], nonce: string, usage?: string, spots?: string, totals?: unknown, options?: Record<string, unknown>) => string;
+} {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'coai-bundle-'));
+  const entry = path.join(dir, 'entry.mjs');
+  const out = path.join(dir, 'bundle.cjs');
+  fs.writeFileSync(entry, [
+    `export { roundsLogHtml } from ${JSON.stringify(path.join(ROOT, 'src', 'roundsLog.ts'))};`,
+    `export { parseLog } from ${JSON.stringify(path.join(ROOT, 'src', 'roundsDb.ts'))};`,
+    `export { qconsultLogHtml } from ${JSON.stringify(path.join(ROOT, 'src', 'qconsultLog.ts'))};`,
+  ].join('\n'));
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const esbuild = require('esbuild') as { buildSync: (options: Record<string, unknown>) => void };
+  esbuild.buildSync({ entryPoints: [entry], outfile: out, bundle: true, format: 'cjs', platform: 'node', minify: true });
+  const shim = { exports: {} as Record<string, unknown> };
+  new Function('module', 'exports', fs.readFileSync(out, 'utf8'))(shim, shim.exports);
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  return shim.exports as unknown as ReturnType<typeof bundledLog>;
+}
+
+/** The `<tr>` rows of a table with `attribute`, each as its cells' text — the PARSED table, never a substring of it. */
+function rowsWith(html: string, attribute: string): readonly { readonly key: string; readonly cells: readonly string[] }[] {
+  return [...html.matchAll(new RegExp(`<tr ${attribute}="([^"]*)">([\\s\\S]*?)</tr>`, 'g'))].map(([, key, body]) => ({
+    key: key!,
+    cells: [...body!.matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(([, cell]) => cell!.replace(/<summary>[\s\S]*?<\/summary>/g, '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()),
+  }));
+}
+
+test('the shipped Questions tab: one row per question, its models on expand, cost, time and what happened next', () => {
+  const log = bundledLog();
+  const html = log.qconsultLogHtml(log.parseLog(JSON.stringify(QUESTIONS_LOG), true).questions ?? []);
+
+  const questions = rowsWith(html, 'data-question');
+  assert.deepEqual(questions.map((one) => one.key), ['q-new', 'q-old'], 'one row per question, as the server listed them');
+  const [, where, , answered, cost, time, next] = questions[0]!.cells;
+  assert.deepEqual({ where, answered, cost, next }, { where: 'shop · feat/cart', answered: '1 of 2', cost: '$0.03', next: 'then asked the person' });
+  assert.equal(time, '5.2 min', 'the time is the question\'s whole time');
+  assert.equal(questions[1]!.cells[6], 'production risk — the person was asked at once');
+  assert.equal(questions[1]!.cells[4], '—', 'a question nobody priced is a dash, never $0.00');
+
+  const models = rowsWith(html, 'data-row');
+  assert.deepEqual(models.map((one) => one.key), ['sonnet-disk', 'astra-web', 'grok'], 'one row per model, under its question');
+  assert.match(models[1]!.cells[2]!, /timed out can read this machine \(unconfined\)/, 'the flag beside the answer of a flagged row');
+  assert.equal(models[1]!.cells[5], 'past its five minutes', 'a row that did not answer says why');
+});
+
+test('a server too old for questionConsults is an empty Questions tab, saying why — never an error', () => {
+  const log = bundledLog();
+  const { questionConsults: _absent, ...older } = QUESTIONS_LOG;
+  const parsed = log.parseLog(JSON.stringify(older), true);
+
+  assert.deepEqual(parsed.questions, []);
+  assert.equal(rowsWith(log.qconsultLogHtml([]), 'data-question').length, 0);
+  assert.match(log.qconsultLogHtml([]), /No question has been put to the consultants yet/);
+});
+
+test('the shipped page opens the Questions tab on a press, and a push replaces its body', () => {
+  const log = bundledLog();
+  const html = log.roundsLogHtml([], [], 'n0nce', '', '', undefined, { qconsults: '<div class="empty">first</div>' });
+  const script = html.slice(html.indexOf('<script'), html.lastIndexOf('</script>'));
+  const body = script.slice(script.indexOf('>') + 1);
+  const seen: Record<string, Stub> = {};
+  const clicks: Array<(event: unknown) => void> = [];
+  const messages: Array<(event: { data: unknown }) => void> = [];
+  // Every section the PAGE drew, so the tab handler — which derives them from the markup — meets them all.
+  const sections = [...html.matchAll(/<section id="tab-([a-z]+)" data-section="([a-z]+)"/g)]
+    .map(([, , name]) => Object.assign(stub(), { hidden: true, getAttribute: (attr: string) => (attr === 'data-section' ? name! : null) }));
+  const document_ = {
+    getElementById: (id: string) => (seen[id] ??= stub()),
+    querySelectorAll: (selector: string) => (selector === 'section[data-section]' ? sections : []),
+    addEventListener(type: string, fn: (event: unknown) => void) { if (type === 'click') { clicks.push(fn); } },
+  };
+  new Function('document', 'window', 'acquireVsCodeApi', body)(
+    document_,
+    { addEventListener(type: string, fn: (event: { data: unknown }) => void) { if (type === 'message') { messages.push(fn); } } },
+    () => ({ postMessage() {}, setState() {} }));
+
+  const tab = { getAttribute: (name: string) => (name === 'data-tab' ? 'questions' : null), className: '' };
+  for (const fn of clicks) { fn({ target: { closest: (asked: string) => (asked === '[data-tab]' ? tab : null) } }); }
+  assert.deepEqual(sections.filter((one) => !one.hidden).map((one) => one.getAttribute('data-section')), ['questions'],
+    'the press did not open the Questions tab, or opened another with it');
+
+  const table = log.qconsultLogHtml(log.parseLog(JSON.stringify(QUESTIONS_LOG), true).questions ?? []);
+  for (const fn of messages) { fn({ data: { type: 'qconsults', html: table } }); }
+  assert.equal(seen['qconsults-body']?.innerHTML, table, 'a push of the tab did not reach its body');
+});
