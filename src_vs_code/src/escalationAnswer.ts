@@ -71,3 +71,24 @@ export function decisionChoices(branch = ''): readonly DecisionChoice[] {
 export function answerJson(id: string, answer: string, nowUtc: string, decision = ''): string {
   return JSON.stringify({ id, answer, decision, answeredUtc: nowUtc }, null, 2);
 }
+
+/** The free-text answer: a sentence of the person's own, sent back to the AI that asked. */
+export const TYPE_AN_ANSWER: DecisionChoice = {
+  decision: '',
+  label: 'Type an answer…',
+  detail: 'Your own words go back to the AI that asked — the answer to a question it put in words.',
+};
+
+/**
+ * What the Answer… button offers for one card (todo/PLAN_question_consultant.md, S4).
+ *
+ * <p>An AI's QUESTION — no findings gating, which is every question that went through the question consultant —
+ * is answered in words, so the box for them comes FIRST, and the decisions after it. It used to offer only the three
+ * decisions, so a person could not type an answer to a question at all. A gate verdict with findings still gating
+ * is a CHOICE, as the module comment says, and keeps exactly the three.</p>
+ */
+export function answerChoices(escalation: { readonly branch: string; readonly openFindings: readonly unknown[] }): readonly DecisionChoice[] {
+  return escalation.openFindings.length === 0
+    ? [TYPE_AN_ANSWER, ...decisionChoices(escalation.branch)]
+    : decisionChoices(escalation.branch);
+}

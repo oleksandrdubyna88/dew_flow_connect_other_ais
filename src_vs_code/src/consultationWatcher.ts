@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { Consultation, isLive, parseConsultation } from './consultations';
+import { POLL_MS, WATCH_DEBOUNCE_MS, debounced, needsPoll } from './debounced';
 
 /**
  * Watches the server's consultation directory so the sidebar can say what is being asked right now.
@@ -22,7 +23,7 @@ import { Consultation, isLive, parseConsultation } from './consultations';
  * outside the workspace is not guaranteed on every platform, so this is what makes "you will see it"
  * true rather than likely.</p>
  */
-export const POLL_MS = 5000;
+export { POLL_MS };
 
 export class ConsultationWatcher {
   private readonly disposables: vscode.Disposable[] = [];
@@ -41,15 +42,22 @@ export class ConsultationWatcher {
   start(): void {
     const pattern = new vscode.RelativePattern(this.dataDir, 'consultations/*.json');
     const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+    // A file event within 175 ms, gathered (todo/PLAN_question_consultant.md, A5): a record rewritten per turn is
+    // a burst of events, and one repaint answers all of them.
+    const changed = debounced(() => void this.refresh(), WATCH_DEBOUNCE_MS);
     this.disposables.push(
       watcher,
-      watcher.onDidCreate(() => void this.refresh()),
-      watcher.onDidChange(() => void this.refresh()),
-      watcher.onDidDelete(() => void this.refresh()),
+      watcher.onDidCreate(changed),
+      watcher.onDidChange(changed),
+      watcher.onDidDelete(changed),
+      new vscode.Disposable(() => changed.cancel()),
     );
 
-    const timer = setInterval(() => void this.refresh(), POLL_MS);
-    this.disposables.push(new vscode.Disposable(() => clearInterval(timer)));
+    // The poll only where events are not delivered: a \wsl.localhost or network data folder.
+    if (needsPoll([this.dataDir.fsPath])) {
+      const timer = setInterval(() => void this.refresh(), POLL_MS);
+      this.disposables.push(new vscode.Disposable(() => clearInterval(timer)));
+    }
     void this.refresh();
   }
 

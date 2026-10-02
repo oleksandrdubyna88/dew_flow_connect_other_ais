@@ -13,7 +13,8 @@ import { ChatPriceOf, ChatSpendRow, ChatVendorOf, chatSpend } from './chatSpendR
 import { ChatTurnRecord } from './chatUsage';
 import { escapeHtml } from './escapeHtml';
 import { jsonForScript } from './webviewHtml';
-import { questionHtml } from './questionLayout';
+import { activeQuestionsBody } from './activeQuestions';
+import type { QuestionConsult } from './questionConsults';
 import { LIVE_REGION_IDS, liveRegion, type SectionSpec, sectionsOn, settingsBody, sidebarBody, sidebarKey } from './panelSurface';
 import { SETTINGS_CSS, settingsHead, settingsScript, settingsTextCss } from './settingsPage';
 import { textOf } from './textControls';
@@ -158,6 +159,8 @@ export interface PanelState {
   readonly qconsultPromptOverrides?: Readonly<Record<string, string>> | undefined;
   /** Where a disk root may not be on this machine — the data folder, the profile, the system folders (D14 c). */
   readonly qconsultPlaces?: RootPlaces | undefined;
+  /** The questions the consultants are answering, and those finished a short while ago — Active questions' first stage. */
+  readonly qconsults?: readonly QuestionConsult[] | undefined;
   readonly vendors: readonly Vendor[];
   readonly codexModels: readonly ModelChoice[];
   /** What `agy models` lists on this machine, or none when it could not be asked. */
@@ -1975,29 +1978,6 @@ function movingHint(storage: DataLocation): string {
 <div class="hint">Start it again and check that the rounds list here still shows your history before deleting anything from the old place. <b>Only into an empty one:</b> if there is already a <code>coai.db</code> where you are copying to, that side has its own history and copying over it destroys that history — back it up and decide which one you are keeping first. Leave ${leave} behind: the first is scratch, pruned on every <code>open</code>, and the second holds sign-ins that belong to the side that made them.</div>`;
 }
 
-function questionsSection(questions: readonly Escalation[]): string {
-  if (questions.length === 0) {
-    return '';
-  }
-  const cards = questions
-    .map((q) => {
-      const findings = q.openFindings
-        .map(
-          (f) =>
-            `<div class="finding">• ${escapeHtml(f.severity)} ${escapeHtml(f.category)} — ${escapeHtml(f.title)}</div>`,
-        )
-        .join('\n      ');
-      return `<div class="question">
-      <div class="said">${questionHtml(q.question)}</div>
-      ${findings}
-      <div class="meta">${escapeHtml(q.branch)}${q.translationNote ? ` · shown untranslated: ${escapeHtml(q.translationNote)}` : ''}</div>
-      <button data-command="answer" data-id="${escapeHtml(q.id)}">Answer…</button>
-    </div>`;
-    })
-    .join('\n');
-  // Never collapsible: a blocked round is the one thing that must not be tidied away.
-  return `<h2>A review is waiting on you</h2>\n${cards}`;
-}
 
 /**
  * What has run — and what is running RIGHT NOW, which is the question people actually have
@@ -2802,9 +2782,9 @@ ${reviewers}</div>`;
 export function liveRegions(
   state: PanelState,
   nowMs: number = Date.now(),
-): { questions: string; rounds: string; consultations: string; cadence: string; notifications: string } {
+): { qconsults: string; rounds: string; consultations: string; cadence: string; notifications: string } {
   return {
-    questions: questionsSection(state.questions),
+    qconsults: activeQuestionsBody(state.questions, state.qconsults ?? [], nowMs),
     rounds: roundsBody(state.sessions, nowMs, state.vendors.map((v) => v.id)),
     consultations: consultationsBody(state.consultations ?? [], nowMs),
     cadence: cadenceBody(state),

@@ -16,13 +16,19 @@ import { tabStrip } from './tabStrip';
  * open/closed state of a section, which only the page itself ever changes.</p>
  */
 
-/** The regions a live message patches in place. Everything else on a page is a control. */
-export const LIVE_REGION_IDS = ['questions', 'rounds', 'consultations', 'cadence', 'notifications'] as const;
+/**
+ * The regions a live message patches in place. Everything else on a page is a control.
+ *
+ * <p>`qconsults` is **Active questions** (todo/PLAN_question_consultant.md, S4): it REPLACED the `questions` region
+ * that drew "A review is waiting on you", so a question waiting on the person is drawn once — beside whatever the
+ * consultants answered — and stays where that region stood, first and never collapsible.</p>
+ */
+export const LIVE_REGION_IDS = ['qconsults', 'rounds', 'consultations', 'cadence', 'notifications'] as const;
 export type LiveRegionId = (typeof LIVE_REGION_IDS)[number];
 export type Regions = Readonly<Record<LiveRegionId, string>>;
 
 /** Every region empty — what a paint key is built with, so a live change can never move the key. */
-export const BLANK_REGIONS: Regions = { questions: '', rounds: '', consultations: '', cadence: '', notifications: '' };
+export const BLANK_REGIONS: Regions = { qconsults: '', rounds: '', consultations: '', cadence: '', notifications: '' };
 
 /**
  * The webviews a section can be drawn on — the list every page-wide test iterates.
@@ -61,7 +67,7 @@ ${body}
 }
 
 /**
- * The sidebar's body: the questions region first, never collapsible, then one disclosure per section.
+ * The sidebar's body: Active questions first, never collapsible, then one disclosure per section.
  *
  * @param open the sections the person has open — drawn, and deliberately NOT part of the key
  */
@@ -72,7 +78,7 @@ export function sidebarBody<S>(
   live: Regions,
 ): string {
   return [
-    liveRegion('questions', live),
+    liveRegion('qconsults', live),
     ...sectionsOn(specs, 'sidebar').map((spec) => disclosure(spec.id, spec.title, open.includes(spec.id), spec.body(state, live))),
   ].join('\n');
 }
