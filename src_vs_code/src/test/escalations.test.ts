@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   Escalation,
+  isOpenEscalation,
   modalText,
   parseEscalation,
   shouldPrompt,
@@ -80,3 +81,31 @@ test('a question with no findings reads cleanly, with no empty heading', () => {
   assert.ok(text.includes('Ship anyway?'));
 });
 
+
+test('an expired question parses, keeps its status, and is not OPEN — the server marked it after its wait', () => {
+  // S3 of the question consultant (A10): a question nobody answered in the budget is marked `expired`
+  // in its own file — kept for the log, out of the active set. The watcher reads this predicate; a card
+  // that stayed on the sidebar after the server had already told the AI to ask in the chat would be a
+  // question two people answer.
+  const expired = parseEscalation(JSON.stringify({ ...escalation(), status: 'expired', expiredUtc: '2026-10-02T09:15:00Z' }));
+  assert.equal(expired?.status, 'expired', 'the status is carried, not dropped');
+  assert.equal(expired?.expiredUtc, '2026-10-02T09:15:00Z');
+  assert.equal(isOpenEscalation(expired!), false);
+});
+
+test('a question without a status is open — every file written before the status existed', () => {
+  assert.equal(isOpenEscalation(parseEscalation(JSON.stringify(escalation()))!), true);
+  assert.equal(isOpenEscalation(parseEscalation('{"id":"x","question":"ship?","status":""}')!), true, 'an empty status is no status');
+});
+
+test('the consultant answers folded under a card are carried as they were written', () => {
+  const parsed = parseEscalation(JSON.stringify({
+    ...escalation(),
+    productionRisk: true,
+    riskReason: 'the migration drops a column',
+    consultantAnswers: [{ rowId: 'astra', vendor: 'codex', model: 'gpt-6-astra', promptTitle: 'The internet', capability: 'web', flag: 'unconfined', status: 'answered', reason: '', advice: 'Back the column up first.' }],
+  }));
+  assert.equal(parsed?.productionRisk, true);
+  assert.equal(parsed?.consultantAnswers?.length, 1);
+  assert.equal(parsed?.consultantAnswers?.[0]?.advice, 'Back the column up first.');
+});

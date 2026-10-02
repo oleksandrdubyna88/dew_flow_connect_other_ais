@@ -23,7 +23,47 @@ public sealed record EscalationQuestion(
     string Language,
     string TranslationNote,
     IReadOnlyList<Finding> OpenFindings,
-    string AskedUtc);
+    string AskedUtc)
+{
+    // EVERY member below normalises null in its accessor: a question file written before S3 has none of them, and
+    // the source-generated deserializer runs no initialiser for an absent member.
+
+    /// <summary>Empty while the question is open; <see cref="EscalationStatuses.Expired"/> once the wait ran out (A10). Out of the active set, kept for the log.</summary>
+    public string Status { get => field ?? string.Empty; init; } = string.Empty;
+
+    public string ExpiredUtc { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>The <c>ask_consultants</c> reply this question followed, verified — so the sidebar can fold its answers under the card.</summary>
+    public string ConsultId { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>D8: the caller declared a production risk — the person was asked at once, the consultants ran beside.</summary>
+    public bool ProductionRisk { get; init; }
+
+    public string RiskReason { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>The consultants' answers folded under the card, attached as the rows settle (D8). Raw advice: a person reads it, not a model.</summary>
+    public IReadOnlyList<EscalationAdvice> ConsultantAnswers { get => field ?? []; init; } = [];
+}
+
+/// <summary>The words a question file's <c>status</c> can hold — absent and empty are open.</summary>
+public static class EscalationStatuses
+{
+    public const string Open = "";
+
+    public const string Expired = "expired";
+}
+
+/// <summary>One consultant row's answer as it sits under a person's card — the row's own words, with the flag D13 puts beside every answer.</summary>
+public sealed record EscalationAdvice(
+    string RowId,
+    string Vendor,
+    string Model,
+    string PromptTitle,
+    string Capability,
+    string Flag,
+    string Status,
+    string Reason,
+    string Advice);
 
 /// <summary>What a person wrote back, and — when they pressed a button — what they chose.</summary>
 public sealed record EscalationAnswer(string Id, string Answer, string AnsweredUtc)
@@ -112,18 +152,30 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
         : remaining < poll ? remaining
         : poll;
 
-    public async Task<EscalationOutcome> AskAsync(
+    public Task<EscalationOutcome> AskAsync(
         EscalationQuestion question,
         TimeSpan budget,
         CancellationToken ct = default)
     {
+        Post(question);
+
+        return WaitAsync(question.Id, budget, ct);
+    }
+
+    /// <summary>Writes the question — the card appears at once, before anything waits on it (D8's first half).</summary>
+    public void Post(EscalationQuestion question)
+    {
         System.IO.Directory.CreateDirectory(Directory);
         WriteAtomic(QuestionPath(question.Id), JsonSerializer.Serialize(question, EscalationJsonContext.Default.EscalationQuestion));
+    }
 
+    /// <summary>Waits for the answer to a question already posted, or the budget, whichever comes first.</summary>
+    public async Task<EscalationOutcome> WaitAsync(string id, TimeSpan budget, CancellationToken ct = default)
+    {
         var deadline = DateTime.UtcNow + budget;
         while (DateTime.UtcNow < deadline)
         {
-            if (ReadAnswer(question.Id) is { } answer)
+            if (ReadAnswer(id) is { } answer)
             {
                 return new EscalationOutcome.Answered(answer.Answer);
             }
@@ -132,9 +184,49 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
         }
 
         // One last look: an answer written during the final wait must not be missed.
-        return ReadAnswer(question.Id) is { } late
+        return ReadAnswer(id) is { } late
             ? new EscalationOutcome.Answered(late.Answer)
             : new EscalationOutcome.NoAnswerYet(budget);
+    }
+
+    /// <summary>The question as it sits on disk, or nothing — torn, busy or absent is nothing.</summary>
+    public EscalationQuestion? Read(string id) => ReadQuestion(QuestionPath(id));
+
+    /// <summary>A10: nobody answered in the budget — marked in the file, kept for the log. False when there is no such question or it could not be written.</summary>
+    public bool Expire(string id, DateTime nowUtc) =>
+        Rewrite(id, question => question with { Status = EscalationStatuses.Expired, ExpiredUtc = nowUtc.ToString("O") });
+
+    /// <summary>D8: the consultants' answers folded under the card, whole — the last attach wins, rows and all.</summary>
+    public bool Attach(string id, IReadOnlyList<EscalationAdvice> answers) =>
+        Rewrite(id, question => question with { ConsultantAnswers = answers });
+
+    /// <summary>
+    /// One rewrite at a time in this process: an expiry at the budget and an attach from the beside run can land
+    /// in the same second, and each replaces the file whole. The turn <see cref="AtomicJson"/> takes guards the
+    /// file against OTHER processes; this gate guards the read-modify-write against ourselves.
+    /// </summary>
+    private static readonly Lock RewriteGate = new();
+
+    private bool Rewrite(string id, Func<EscalationQuestion, EscalationQuestion> change)
+    {
+        lock (RewriteGate)
+        {
+            if (ReadQuestion(QuestionPath(id)) is not { } question)
+            {
+                return false;
+            }
+
+            try
+            {
+                WriteAtomic(QuestionPath(id), JsonSerializer.Serialize(change(question), EscalationJsonContext.Default.EscalationQuestion));
+
+                return true;
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                return false;
+            }
+        }
     }
 
     /// <summary>
@@ -291,6 +383,7 @@ internal static class AtomicJson
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]
 [JsonSerializable(typeof(EscalationQuestion))]
 [JsonSerializable(typeof(EscalationAnswer))]
+[JsonSerializable(typeof(EscalationAdvice))]
 internal sealed partial class EscalationJsonContext : JsonSerializerContext;
 
 /// <summary>

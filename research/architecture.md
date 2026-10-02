@@ -985,6 +985,24 @@ Nothing else crossed a container in S1: the confinement planner, the sanitisers 
 runtime are `coai-mcp`'s alone ([module_core.md](module_core.md), [module_runners.md](module_runners.md)),
 and the tool, the record and the settings that will reach the extension are S2–S4.
 
+### The question card gained a status and the consultants' answers (2026-10-02, S3 of the question consultant)
+
+`escalations/<id>.json` has been the one file neither container owns since escalation shipped: `coai-mcp`
+writes it, the extension watches it, and neither is the other's caller. S3 added to it, and only to it, what
+the gate in front of `ask_human` decides ([module_server.md](module_server.md), *The door to the person*): the
+server now marks a question nobody answered in fifteen minutes `status: "expired"` in its own file — the AI is
+told to ask in the chat, the card leaves the active set, the file stays for the log and the server's own
+retention takes it after seven days — and, when the AI declared a production risk, attaches every consultant
+row's answer to the card as it settles (`consultantAnswers`), beside `consultId`, `productionRisk` and
+`riskReason`. The extension's watcher reads one predicate (`isOpenEscalation`: absent and empty are open,
+which is every file written before S3) and draws nothing more yet; the card that folds the answers is S4's.
+
+Both directions of the clock are stated rather than hoped: an older extension draws an expired card until it
+is answered or swept; a newer extension against an older server sees no status and draws every card, as
+before. And the sixth file neither half owns gained one row rather than a sixth file: `qphase/`, the phase
+records the gate counts batches into, is in `shared/data-inventory.json` and `DATA_TO_MOVE`, because a move that
+left it behind would hand every plan two fresh free batches.
+
 ## How the Team server is deployed (2026-09-06)
 
 `coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the

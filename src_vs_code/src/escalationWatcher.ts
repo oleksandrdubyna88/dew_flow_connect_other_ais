@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { answerJson, decisionChoices } from './escalationAnswer';
 import {
   Escalation,
+  isOpenEscalation,
   modalText,
   parseEscalation,
   shouldPrompt,
@@ -341,7 +342,10 @@ export class EscalationWatcher {
         // TAGGED with the directory it came from, so its answer goes back beside it rather than into
         // this window's own store, where the server that asked polls nowhere.
         const escalation = parseEscalation(new TextDecoder().decode(bytes), root.fsPath);
-        if (escalation !== undefined) {
+        // An EXPIRED question is not open: the server told the AI to ask in the chat when its wait ran
+        // out (S3 of the question consultant, A10), and a card that stayed would be a question two
+        // people answer. The file stays for the log; the sidebar does not draw it.
+        if (escalation !== undefined && isOpenEscalation(escalation)) {
           found.push(escalation);
         }
       }

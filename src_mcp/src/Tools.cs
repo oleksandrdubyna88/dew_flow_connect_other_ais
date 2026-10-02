@@ -367,8 +367,12 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            async (string repoPath, string branch, string question, string? document = null, string? feature = null) =>
-                await host.Current.AskHumanAsync(repoPath, branch, question, document ?? string.Empty, feature ?? string.Empty),
+            // The three gate arguments carry defaults, so every client that predates them keeps calling with three.
+            async (string repoPath, string branch, string question, string? document = null, string? feature = null,
+                   string? consultId = null, bool productionRisk = false, string? riskReason = null) =>
+                await host.Current.AskHumanAsync(
+                    repoPath, branch, question, document ?? string.Empty, feature ?? string.Empty,
+                    consultId ?? string.Empty, productionRisk, riskReason ?? string.Empty),
             new McpServerToolCreateOptions
             {
                 Name = "ask_human",
@@ -378,7 +382,20 @@ internal static class Tools
                     else only they can settle. The question appears in VS Code (a dialog, the status
                     bar, and the open-questions list) together with the round's still-gating
                     findings, and THIS CALL BLOCKS until they answer or the budget runs out
-                    (30 minutes by default).
+                    (15 minutes by default).
+
+                    The phase rule, which the server enforces: a question asked while the plan is being
+                    formed, and the first 2 batches of questions after the plan's `proceed`, go to the person
+                    directly; every question after that, until the work is released to the stage environment,
+                    goes through `ask_consultants` first and reaches `ask_human` with the `consultId` it
+                    returned — unless `productionRisk: true` with a `riskReason` says a wrong answer could
+                    take production down, which asks the person at once and runs the consultants beside the
+                    question. After the release, questions go to the person directly again. A `consultId` is VERIFIED,
+                    never trusted: a consultation this caller session asked in this repository, finished,
+                    under 30 minutes old and not yet used — anything else counts as none. Under `require` a
+                    question the rule sends to the consultants is refused naming `ask_consultants`; under
+                    `remind` it is let through with a `note`; when no consultant can be had the gate stands
+                    down and the `note` says so. `productionRisk` without a `riskReason` is refused.
 
                     Asking about a DOCUMENT review: pass `document` — the same `documentPath` or
                     `documentName` you gave `review_document`, exactly as `resolve` and `status`
@@ -390,7 +407,9 @@ internal static class Tools
                     Two possible replies. `status: "answered"` carries their words in `answer` — act
                     on them. `status: "no_answer_yet"` means nobody was at the keyboard: ask the
                     person directly in this conversation and wait for their reply. Never decide
-                    alone because nobody answered; the question stays open in VS Code either way.
+                    alone because nobody answered. The question is then marked expired in VS Code —
+                    out of the active list, kept in the log for seven days — and either reply's `note`
+                    carries what the gate said beside the door.
                     """,
                 ReadOnly = true,
                 Idempotent = false,
@@ -532,6 +551,16 @@ internal static class Tools
                     verify it before acting on it, and ask the person when the answers do not settle the
                     question. `document` and `feature` file the question under that review's session, as
                     `ask_human` takes them.
+
+                    The phase rule, which the server enforces: a question asked while the plan is being
+                    formed, and the first 2 batches of questions after the plan's `proceed`, go to the person
+                    directly; every question after that, until the work is released to the stage environment,
+                    goes through `ask_consultants` first and reaches `ask_human` with the `consultId` it
+                    returned — unless `productionRisk: true` with a `riskReason` says a wrong answer could
+                    take production down, which asks the person at once and runs the consultants beside the
+                    question. After the release, questions go to the person directly again. Pass this reply's
+                    `consultId` to `ask_human` when the answers do not settle the question — that is how
+                    the gate knows the consultants came first.
                     """,
                 ReadOnly = true,
                 Idempotent = false,

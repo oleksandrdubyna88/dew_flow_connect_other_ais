@@ -1,12 +1,13 @@
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using CoaiMcp.Core.QuestionConsult;
 using CoaiMcp.Core.Rounds;
 
 namespace CoaiMcp.Server;
 
 /// <summary>
-/// The <c>ask_human</c> block, in a file of its own: the question written into the data directory the
-/// extension watches, the wait for the person, and the answer as they gave it.
+/// The <c>ask_human</c> block, in a file of its own: the gate in front of the person (S3), the question written
+/// into the data directory the extension watches, the wait for the person, and the answer as they gave it.
 /// </summary>
 /// <remarks>
 /// <para>MOVED out of <see cref="PanelService"/> as a proved move (<c>todo/PLAN_question_consultant.md</c>, S2,
@@ -14,9 +15,12 @@ namespace CoaiMcp.Server;
 /// fields keep the names the block reads them by, and the two helpers it called on the service
 /// (<c>AddressOf</c>, <c>Both</c>) are forwarded under the same names. The service keeps a one-line
 /// delegation so every caller is unchanged.</para>
-/// <para>Its own file because the question consultant's gate (S3) lands HERE — the phase rule, the
-/// consultant-first refusal, the fifteen-minute wait — and <c>PanelService.cs</c> was 1884 lines before this
-/// cut, with a plan of its own to shrink.</para>
+/// <para><b>S3 landed here, as planned.</b> Before the card is written the gate decides (<see cref="AskGate"/> over
+/// the facts <see cref="AskGateDesk"/> gathers): the phase rule (D7), the consultId verified (D14 (a)), a production
+/// risk asked at once with the consultants beside (D8), the stand-down when none can be had (D9). The wait is the
+/// settings' budget — fifteen minutes by default since S3 (A10) — and a question nobody answered is marked
+/// <c>expired</c> in its own file: out of the active set, kept for the log, taken by <see cref="EscalationRetention"/>
+/// after seven days.</para>
 /// </remarks>
 public sealed class AskHumanService
 {
@@ -26,18 +30,21 @@ public sealed class AskHumanService
     private readonly Serilog.ILogger _log;
     private readonly Noticing _noticing;
     private readonly Func<string, string, string, string, SessionAddress> _addressOf;
+    private readonly AskGateDesk _desk;
 
     /// <param name="addressOf">
     /// Which session a caller's arguments name — the service's own resolution, handed in rather than
     /// re-derived, because it reads the document store the service owns.
     /// </param>
+    /// <param name="desk">The gate's facts and its bookkeeping — the phase, the proof, the beside run.</param>
     internal AskHumanService(
         PanelSettings settings,
         SessionStore store,
         Escalations escalations,
         Serilog.ILogger log,
         Noticing noticing,
-        Func<string, string, string, string, SessionAddress> addressOf)
+        Func<string, string, string, string, SessionAddress> addressOf,
+        AskGateDesk desk)
     {
         _settings = settings;
         _store = store;
@@ -45,11 +52,12 @@ public sealed class AskHumanService
         _log = log;
         _noticing = noticing;
         _addressOf = addressOf;
+        _desk = desk;
     }
 
     /// <summary>
     /// Puts the question in front of a person and waits — through the data directory the extension
-    /// watches, so no port is opened by either half.
+    /// watches, so no port is opened by either half — once the gate has let it through.
     /// </summary>
     /// <remarks>
     /// The open findings ride with it: a person deciding "ship anyway?" needs to see what is still
@@ -68,8 +76,12 @@ public sealed class AskHumanService
     /// Which plan's feature review is asking: the same <c>planPath</c> passed to <c>review_feature</c>, so
     /// the question is filed under that session and the person's answer reaches it.
     /// </param>
+    /// <param name="consultId">The <c>ask_consultants</c> reply this question follows — verified, never trusted (D14 (a)).</param>
+    /// <param name="productionRisk">A8: a wrong answer could take production down — the person at once, the consultants beside (D8).</param>
+    /// <param name="riskReason">Required with <paramref name="productionRisk"/>: what a wrong answer could do.</param>
     public async Task<string> AskHumanAsync(
-        string repoPath, string branch, string question, string document = "", string feature = "", CancellationToken ct = default)
+        string repoPath, string branch, string question, string document = "", string feature = "",
+        string consultId = "", bool productionRisk = false, string riskReason = "", CancellationToken ct = default)
     {
         if (string.IsNullOrWhiteSpace(question))
         {
@@ -83,18 +95,49 @@ public sealed class AskHumanService
 
         var at = AddressOf(repoPath, branch, document, feature);
         var session = _store.Load(repoPath, at.Branch, at.Document, at.Feature);
+        var facts = _desk.Facts(repoPath, session, new AskArguments(consultId ?? string.Empty, productionRisk, (riskReason ?? string.Empty).Trim()), DateTime.UtcNow);
+
+        return AskGate.Decide(facts.Input) switch
+        {
+            AskDecision.Refused refused => Error(refused.Sentence),
+            AskDecision.Allowed allowed => await ThroughTheDoorAsync(session, at, repoPath, branch, question.Trim(), facts, allowed, ct),
+            _ => throw new InvalidOperationException("the union is closed"),
+        };
+    }
+
+    /// <summary>The question reaches the person: recorded on the session, the card written at once, the desk's bookkeeping, then the wait.</summary>
+    private async Task<string> ThroughTheDoorAsync(
+        PersistedSession? session, SessionAddress at, string repoPath, string branch, string text, AskFacts facts, AskDecision.Allowed allowed, CancellationToken ct)
+    {
         var id = Guid.NewGuid().ToString("N")[..12];
         // A question asked while the gate is HELD is asked for that hold, and one asked on a feature session
         // after its first round may be the person's request for the second: recorded on the session, so the
         // person's answer counts by identity — as the hold's own notice does.
         await RecordOnTheSessionAsync(session, at, repoPath, id, ct);
 
-        // English, as the caller wrote it. There used to be a translator here, and a set of
-        // buttons replaced the prose it existed for: the question is one fixed sentence and the
-        // answer is a choice, so a subprocess per escalation that can time out or answer in the
-        // wrong language was a moving part earning nothing.
-        var text = question.Trim();
-        var asked = new EscalationQuestion(
+        var asked = Card(session, repoPath, branch, text, id, facts);
+        _log.Information("escalating {Id} to a person: {Question}", id, asked.Question);
+        // The card FIRST, then everything that follows it — the batch counted, the proof spent, the consultants
+        // beside a production risk (D8: the person is never delayed by them) — and only then the wait.
+        _escalations.Post(asked);
+        _desk.AfterTheCard(facts, asked, allowed);
+        var outcome = await _escalations.WaitAsync(id, _settings.EscalationBudget, ct);
+
+        return outcome switch
+        {
+            // Their own words, unchanged. Nothing stands between the person and the caller now.
+            EscalationOutcome.Answered answered => Json(AnswerFor(answered.Text) with { Note = allowed.Note }, ServerJsonContext.Default.HumanAnswer),
+            _ => Expired(id, allowed.Note),
+        };
+    }
+
+    /// <summary>
+    /// The card, as it sits on disk: English, as the caller wrote it — there used to be a translator here, and a set of
+    /// buttons replaced the prose it existed for — with the gate's three facts on it, so the sidebar can fold the
+    /// consultants' answers under it and say why the person was asked at once.
+    /// </summary>
+    private static EscalationQuestion Card(PersistedSession? session, string repoPath, string branch, string text, string id, AskFacts facts) =>
+        new(
             id,
             session?.State.SessionId ?? "no-session",
             repoPath,
@@ -104,30 +147,38 @@ public sealed class AskHumanService
             "en",
             string.Empty,
             session?.Pending.Where(f => f.IsGating).ToList() ?? [],
-            DateTime.UtcNow.ToString("O"));
-
-        _log.Information("escalating {Id} to a person: {Question}", id, asked.Question);
-        var outcome = await _escalations.AskAsync(asked, _settings.EscalationBudget, ct);
-
-        return outcome switch
+            DateTime.UtcNow.ToString("O"))
         {
-            // Their own words, unchanged. Nothing stands between the person and the caller now.
-            EscalationOutcome.Answered answered => Json(
-                AnswerFor(answered.Text), ServerJsonContext.Default.HumanAnswer),
-
-            // The family's `remote-ask` fallback, verbatim in shape: nobody answered in the budget,
-            // so ASK IN THE CHAT rather than stalling or deciding alone. The question file stays.
-            _ => Json(
-                new HumanAnswer(
-                    "no_answer_yet",
-                    string.Empty,
-                    string.Empty,
-                    $"nobody answered in {_settings.EscalationBudget.TotalMinutes:0} minutes — ask the person " +
-                    $"directly in this conversation and wait for their reply. The question is still open in " +
-                    $"VS Code as escalation {id}."),
-                ServerJsonContext.Default.HumanAnswer),
+            ConsultId = facts.Input.Proof is ConsultProof.Verified verified ? verified.ConsultId : string.Empty,
+            ProductionRisk = facts.Input.ProductionRisk,
+            RiskReason = facts.Input.RiskReason,
         };
+
+    /// <summary>
+    /// The family's <c>remote-ask</c> fallback, verbatim in shape: nobody answered in the budget, so ASK IN THE CHAT
+    /// rather than stalling or deciding alone. The question file stays — marked <c>expired</c> (A10), out of the
+    /// active set and in the log for seven days.
+    /// </summary>
+    private string Expired(string id, string note)
+    {
+        if (!_escalations.Expire(id, DateTime.UtcNow))
+        {
+            _log.Warning("escalation {Id} could not be marked expired; the card stays open until the retention takes it", id);
+        }
+
+        return Json(
+            new HumanAnswer(
+                "no_answer_yet",
+                string.Empty,
+                string.Empty,
+                $"nobody answered in {_settings.EscalationBudget.TotalMinutes:0.#} minutes — ask the person directly in this conversation "
+                + $"and wait for their reply. The question is marked expired in VS Code (escalation {id}, kept in the log for seven days).")
+            { Note = note },
+            ServerJsonContext.Default.HumanAnswer);
     }
+
+    /// <summary>The phase records this service counts into, swept with the escalation cards (§5: 30 days).</summary>
+    public int SweepPhases(DateTime nowUtc) => _desk.Sweep(nowUtc);
 
     /// <summary>
     /// A question asked while the gate is held is one of the hold's, and one asked on a feature session

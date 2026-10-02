@@ -34,6 +34,7 @@ public sealed class PanelService
     private readonly FeatureStage _feature;
     private readonly Escalations _escalations;
     private readonly AskHumanService _askHuman;
+    private readonly EscalationRetention _retention;
     private readonly Store.Projection _projection;
     private readonly Runners.Processes.ProcessTracking _tracking;
     private readonly RemoteProbe _remote;
@@ -84,7 +85,6 @@ public sealed class PanelService
             problem => _log.Warning("evidence: {Problem}", problem));
         var prompts = new RolePrompts(settings.DataDir);
         _escalations = new Escalations(settings.DataDir);
-        _askHuman = new AskHumanService(settings, _store, _escalations, log, noticing, AddressOf);
         var ledger = new UsageLedger(settings.DataDir);
         var callers = new CallerSessions(settings.DataDir);
         _projection = new Store.Projection(settings.DataDir, log);
@@ -95,11 +95,17 @@ public sealed class PanelService
         // its own record store and its fan-out — kept out of this file, as the consultation is.
         _questions = new QuestionConsultService(
             settings, launcher, executor, _context, prompts, ledger, keys, log, Environment.GetEnvironmentVariable, noticing);
+        var cadenceStore = new CadenceStore(settings.DataDir);
+        // ask_human with its gate (S3): the desk gathers the phase from the session and the cadence record, verifies
+        // a consultId against the question records, and runs the consultants beside a production risk.
+        _askHuman = new AskHumanService(settings, _store, _escalations, log, noticing, AddressOf,
+            new AskGateDesk(_questions, cadenceStore, new QuestionPhaseStore(settings.DataDir), _escalations, Environment.GetEnvironmentVariable, log));
+        _retention = new EscalationRetention(_escalations, _store.HoldsQuestion, message => _log.Warning("escalations: {Detail}", message));
         // The consultation cadence (research/PLAN_consult_on_a_cadence.md): its record, its gate over the
         // consultation records, and every decision a round makes about it — kept out of this file.
         _cadence = new CadenceDesk(
             settings,
-            new CadenceStore(settings.DataDir),
+            cadenceStore,
             new CadenceGate(_consultations.Store, () => _consultations.Preflight()),
             _context,
             new Runners.Collecting.GitHistory(launcher),
@@ -130,7 +136,7 @@ public sealed class PanelService
         // Rounds this server never finished cannot be running any more, whatever their file says.
         // A round left at "running" would sit in the panel forever; sweeping only rounds whose
         // recorded process is gone keeps a SECOND server sharing this directory out of the way.
-        var swept = _store.SweepOrphanedRounds(ProcessIsAlive);
+        var swept = _store.SweepOrphanedRounds(ProcessLiveness.IsAlive);
         if (swept > 0)
         {
             _log.Warning("swept {Count} round(s) abandoned by a dead process", swept);
@@ -139,7 +145,7 @@ public sealed class PanelService
         // The same sweep for consultations: one left `asking` by a dead server or past a turn's
         // deadline, one left open past its idle budget, one finished long ago. The repository lock,
         // not the pid, is what protects a live turn.
-        var consultationsSwept = _consultations.Sweep(ProcessIsAlive);
+        var consultationsSwept = _consultations.Sweep(ProcessLiveness.IsAlive);
         if (consultationsSwept > 0)
         {
             _log.Warning("swept {Count} consultation(s): interrupted by a dead process or a passed turn deadline, idle past their budget, or expired", consultationsSwept);
@@ -156,13 +162,16 @@ public sealed class PanelService
         // The question consultant's records on the same two roads (S2): a `consulting` record whose server
         // died — its heartbeat stale AND its pid gone (D14 d) — ends `interrupted`, the long finished go, and
         // the log catches up with the files for the same reason the consultations' does.
-        var questionsSwept = _questions.Sweep(ProcessIsAlive);
+        var questionsSwept = _questions.Sweep(ProcessLiveness.IsAlive);
         if (questionsSwept > 0)
         {
             _log.Warning("swept {Count} question consultation(s): interrupted by a dead server, past retention, or over the file cap", questionsSwept);
         }
 
         _log.Debug("re-projected {Count} question consultation(s) into the rounds database", _questions.Reproject());
+        // And the person's cards (A4, S3): answered and expired questions, orphans and temp files older than seven
+        // days go; a question a live session still holds is kept. The phase records they count into go after thirty.
+        _log.Debug("swept {Count} escalation file(s) and phase record(s)", SweepEscalations());
 
         // And the reviewers those rounds left RUNNING, which is the more expensive half of the
         // same failure. The timeout kill is performed by the parent, so a server that dies takes
@@ -181,41 +190,6 @@ public sealed class PanelService
         if (killed > 0)
         {
             _log.Warning("killed {Count} reviewer(s) left running by a server that is gone", killed);
-        }
-    }
-
-    /// <summary>Is the process that owned a running turn still there?</summary>
-    /// <remarks>
-    /// <para><b>Every failure to ask is NOT ALIVE, and none of them may throw.</b> This is called
-    /// from the consultation sweep, which runs on startup — so an exception here does not fail a
-    /// sweep, it takes the whole binary down before it has answered anything. Found by the
-    /// <c>--close-consult</c> scenario on issue #309: a record left at <c>asking</c> with pid 0,
-    /// which is what a torn write or an older build leaves, made Windows answer
-    /// <c>Win32Exception (5): Access is denied</c> — pid 0 is the idle process and nobody may open
-    /// it. A pid belonging to another user does the same.</para>
-    /// <para>A pid this process cannot open is one it cannot vouch for, and the sweep's question is
-    /// "may I reclaim this record". Answering "not alive" reclaims it, which is the safe direction:
-    /// the alternative is a consultation stuck at <c>asking</c> for ever because nobody could ask.</para>
-    /// </remarks>
-    private static bool ProcessIsAlive(int pid)
-    {
-        // A pid nothing could ever own. Windows answers "access denied" for 0 rather than "no such
-        // process", so it is refused here rather than through an exception handler.
-        if (pid <= 0)
-        {
-            return false;
-        }
-
-        try
-        {
-            using var process = System.Diagnostics.Process.GetProcessById(pid);
-            return !process.HasExited;
-        }
-        catch (Exception e) when (e is ArgumentException or InvalidOperationException
-                                       or System.ComponentModel.Win32Exception or NotSupportedException)
-        {
-            // Gone, never existed, or not ours to open. All three mean the same thing to a sweep.
-            return false;
         }
     }
 
@@ -1649,8 +1623,12 @@ public sealed class PanelService
     /// to as a proved move (PLAN_question_consultant.md, S2, D12). A delegation, so every caller is unchanged.
     /// </summary>
     public Task<string> AskHumanAsync(
-        string repoPath, string branch, string question, string document = "", string feature = "", CancellationToken ct = default) =>
-        _askHuman.AskHumanAsync(repoPath, branch, question, document, feature, ct);
+        string repoPath, string branch, string question, string document = "", string feature = "",
+        string consultId = "", bool productionRisk = false, string riskReason = "", CancellationToken ct = default) =>
+        _askHuman.AskHumanAsync(repoPath, branch, question, document, feature, consultId, productionRisk, riskReason, ct);
+
+    /// <summary>The escalation cards' retention and the phase records' (S3), for <see cref="ConsultationSweeper"/>'s beat beside the other two sweeps.</summary>
+    public int SweepEscalations() => _retention.Sweep(DateTime.UtcNow) + _askHuman.SweepPhases(DateTime.UtcNow);
 
     /// <summary>
     /// The ninth tool: another vendor's model, consulted about the LIVE working tree — a thin
@@ -1683,7 +1661,7 @@ public sealed class PanelService
     /// The consultation sweep the constructor runs, for <see cref="ConsultationSweeper"/> to run while the
     /// server serves: without it an idle consultation read <c>open</c> until the next start.
     /// </summary>
-    public int SweepConsultations() => _consultations.Sweep(ProcessIsAlive);
+    public int SweepConsultations() => _consultations.Sweep(ProcessLiveness.IsAlive);
 
     /// <summary>
     /// The twelfth tool (todo/PLAN_question_consultant.md, S2): the question consultant — every active row answers
@@ -1709,7 +1687,7 @@ public sealed class PanelService
     }
 
     /// <summary>The question consultant's sweep, for <see cref="ConsultationSweeper"/>'s beat beside the consultations'.</summary>
-    public int SweepQuestionConsults() => _questions.Sweep(ProcessIsAlive);
+    public int SweepQuestionConsults() => _questions.Sweep(ProcessLiveness.IsAlive);
 
     /// <summary>The question records, for the tests that read what was written.</summary>
     public QuestionConsultStore QuestionConsults => _questions.Store;

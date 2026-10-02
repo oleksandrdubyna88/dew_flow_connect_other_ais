@@ -566,17 +566,7 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         var swept = 0;
         foreach (var file in Directory.EnumerateFiles(SessionsDir, "session-*.json"))
         {
-            PersistedSession? session;
-            try
-            {
-                session = Normalised(
-                    JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession));
-            }
-            catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
-            {
-                continue;
-            }
-
+            var session = TryRead(file);
             if (session is null || !session.Rounds.Any(r => IsOrphaned(r, processIsAlive)))
             {
                 continue;
@@ -592,6 +582,33 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
         }
 
         return swept;
+    }
+
+    /// <summary>
+    /// Whether any session on disk still holds this question — on its hold (<see cref="SessionState.HoldQuestions"/>)
+    /// or as a feature session's request (<see cref="SessionState.RequestQuestions"/>). What
+    /// <see cref="EscalationRetention"/> asks before it takes a card: a hold is bound to its question by identity,
+    /// and the file is what the person answers.
+    /// </summary>
+    public bool HoldsQuestion(string id) =>
+        Directory.Exists(SessionsDir)
+        && Directory.EnumerateFiles(SessionsDir, "session-*.json")
+            .Select(TryRead)
+            .OfType<PersistedSession>()
+            .Any(session => session.State.HoldQuestions.Contains(id, StringComparer.Ordinal)
+                || session.State.RequestQuestions.Contains(id, StringComparer.Ordinal));
+
+    /// <summary>One session file, or nothing — torn, busy or not a session is nothing, and a sweep walks on.</summary>
+    private PersistedSession? TryRead(string file)
+    {
+        try
+        {
+            return Normalised(JsonSerializer.Deserialize(ReadShared(file), ServerJsonContext.Default.PersistedSession));
+        }
+        catch (Exception e) when (e is JsonException or IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
     }
 
     /// <summary>

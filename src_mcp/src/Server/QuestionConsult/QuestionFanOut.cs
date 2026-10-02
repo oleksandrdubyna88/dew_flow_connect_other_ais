@@ -56,9 +56,13 @@ public sealed class QuestionFanOut(
     ISourceOutliner outliner,
     string schemaFile,
     Func<string, string?> env,
-    Serilog.ILogger log)
+    Serilog.ILogger log,
+    TimeSpan? heartbeatEvery = null)
 {
     private readonly QuestionRowLaunch _launch = new(executor, ledger, log);
+
+    /// <summary>How often the heartbeat is rewritten — the store's thirty seconds, or a test's seam (D14 d).</summary>
+    private readonly TimeSpan _heartbeatEvery = heartbeatEvery ?? QuestionConsultStore.HeartbeatEvery;
     private readonly FilesystemInvariant _invariant = new(launcher);
 
     /// <summary>Runs every row of <paramref name="consulting"/>'s question and answers the settled record.</summary>
@@ -197,7 +201,7 @@ public sealed class QuestionFanOut(
         }
 
         using var beating = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        var heartbeat = HeartbeatAsync(current, beating.Token);
+        var heartbeat = HeartbeatAsync(current, _heartbeatEvery, beating.Token);
         try
         {
             // Every admitted row at once (D6): no BoundedScheduler, no RepositoryLock — the rows read, and a
@@ -222,13 +226,13 @@ public sealed class QuestionFanOut(
     }
 
     /// <summary>D14 (d): the heartbeat the sweep reads, rewritten every thirty seconds while anything runs.</summary>
-    private static async Task HeartbeatAsync(Current current, CancellationToken stop)
+    private static async Task HeartbeatAsync(Current current, TimeSpan every, CancellationToken stop)
     {
         try
         {
             while (!stop.IsCancellationRequested)
             {
-                await Task.Delay(QuestionConsultStore.HeartbeatEvery, stop);
+                await Task.Delay(every, stop);
                 await current.UpdateAsync(record => record with { HeartbeatUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) });
             }
         }

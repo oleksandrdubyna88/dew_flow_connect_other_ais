@@ -4,7 +4,7 @@ import { unknownFields } from './roles';
 /**
  * The gate's commands, as the Edit commands page shows them — issue #467, Epic B.
  *
- * <p>Two kinds. The twenty SHIPPED texts are what the gate's orders are made of (the server embeds
+ * <p>Two kinds. The twenty-one SHIPPED texts are what the gate's orders are made of (the server embeds
  * `shared/commands/`, this page gets a generated copy); a person rewords one by writing
  * `<dataDir>/prompts/<id>.md`, and Restore deletes that file. A person's OWN commands are rows of
  * `coai.commands`, mirrored to the server as `COAI_COMMANDS`, each with its text in
@@ -43,10 +43,11 @@ const CONSULT_FILL = ['{load}', '{every}', '{threshold}', '{max}', '{most}', '{p
 const shipped = (id: string, title: string, marker = '', placeholders: readonly string[] = []): ShippedCommand =>
   ({ id: COMMAND_PREFIX + id, title, marker, placeholders });
 
-/** The twenty, in the order an order is read. A test holds these ids and the generated texts equal. */
+/** The twenty-one, in the order an order is read. A test holds these ids and the generated texts equal. */
 export const SHIPPED_COMMANDS: readonly ShippedCommand[] = [
   shipped('preamble', 'The sentence before the orders'),
   shipped('autonomy', 'Work autonomously', 'Work AUTONOMOUSLY. ', ['{scope}']),
+  shipped('question-consult', 'Ask the consultants first', 'ASK THE CONSULTANTS FIRST. ', ['{freeBatches}', '{enforced}']),
   shipped('split-none', 'Split: a plan small enough to build as it stands'),
   shipped('split-small', 'Split: stories only'),
   shipped('split-medium', 'Split: 2-3 epics'),

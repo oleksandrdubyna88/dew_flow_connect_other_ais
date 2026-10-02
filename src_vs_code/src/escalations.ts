@@ -14,6 +14,23 @@ export interface EscalationFinding {
   readonly title: string;
 }
 
+/** One consultant row's answer as the server folds it under a card (S3 of the question consultant, D8). */
+export interface EscalationAdvice {
+  readonly rowId: string;
+  readonly vendor: string;
+  readonly model: string;
+  readonly promptTitle: string;
+  readonly capability: string;
+  /** D13's caveat on the pair — `unconfined`, `default-deny` — or empty. Shown beside the advice. */
+  readonly flag: string;
+  readonly status: string;
+  readonly reason: string;
+  readonly advice: string;
+}
+
+/** The one status word a question file can carry besides none: the server marked it after its wait ran out (A10). */
+export const EXPIRED = 'expired';
+
 export interface Escalation {
   readonly id: string;
   readonly sessionId: string;
@@ -25,6 +42,19 @@ export interface Escalation {
   readonly questionOriginal?: string;
   readonly language?: string;
   readonly translationNote?: string;
+  /**
+   * Empty or absent while the question is open; `expired` once the server's wait ran out (S3 of the
+   * question consultant, A10) — the AI was told to ask in the chat, so the card leaves the active set
+   * and stays only for the log. Every file written before S3 has no status and is open.
+   */
+  readonly status?: string;
+  readonly expiredUtc?: string;
+  /** The `ask_consultants` reply this question followed, verified by the server. */
+  readonly consultId?: string;
+  /** D8: the person was asked at once and the consultants ran beside; their answers are under `consultantAnswers`. */
+  readonly productionRisk?: boolean;
+  readonly riskReason?: string;
+  readonly consultantAnswers?: readonly EscalationAdvice[];
   /**
    * The directory this question was READ from, so its answer goes back beside it.
    *
@@ -61,6 +91,17 @@ export function parseEscalation(text: string, from = ''): Escalation | undefined
   }
 }
 
+
+/**
+ * Whether a question is still OPEN — the one thing the watcher asks before it shows a card.
+ *
+ * <p>A file without a status, or with an empty one, is open: that is every file written before the
+ * status existed. Only the server's own word closes it; an answer file beside the question is the
+ * other closer, and the watcher reads that from the directory, not from here.</p>
+ */
+export function isOpenEscalation(escalation: Escalation): boolean {
+  return (escalation.status ?? '') !== EXPIRED;
+}
 
 /**
  * What the status bar says. Empty means hide it: a status-bar item that says "0" is furniture.

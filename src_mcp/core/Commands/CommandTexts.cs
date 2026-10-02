@@ -22,7 +22,8 @@ namespace CoaiMcp.Core.Commands;
 /// <c>{call}</c>, <c>{item}</c>, <c>{reason}</c>, <c>{count}</c>, <c>{load}</c>, <c>{every}</c>,
 /// <c>{threshold}</c>, <c>{max}</c>, <c>{most}</c>, <c>{plan}</c>, <c>{enforced}</c> — filled by
 /// <see cref="CadenceOrders"/>; an override that drops <c>{call}</c> drops the one thing a caller with a
-/// deferred schema cannot write for itself.</para>
+/// deferred schema cannot write for itself. The question-consult text (<c>command-question-consult</c>) has
+/// <c>{freeBatches}</c> and its own <c>{enforced}</c>, filled by <see cref="QuestionConsultOrder"/>.</para>
 /// </remarks>
 public sealed record CommandTexts(IReadOnlyDictionary<string, string> Overrides)
 {
@@ -52,13 +53,14 @@ public sealed record CommandTexts(IReadOnlyDictionary<string, string> Overrides)
     public const string ConsultGroup = "command-consult-group";
     public const string ConsultRiskQuestion = "command-consult-risk-question";
     public const string ConsultRiskItem = "command-consult-risk-item";
+    public const string QuestionConsult = "command-question-consult";
 
     /// <summary>Every text this build ships — THE list; a test holds it and <c>shared/commands/</c> equal.</summary>
     public static readonly IReadOnlyList<string> ShippedIds =
     [
         Preamble, Autonomy, Model, SplitNone, SplitSmall, SplitMedium, SplitLarge, SplitHuge, SplitMassive, SplitMeasured,
         CadenceEpic, CadenceTask, CadenceSingle, AnotherCodeRound, AlreadySplitEpic, AlreadySplitTask,
-        ConsultForecast, ConsultGroup, ConsultRiskQuestion, ConsultRiskItem,
+        ConsultForecast, ConsultGroup, ConsultRiskQuestion, ConsultRiskItem, QuestionConsult,
     ];
 
     /// <summary>What every release said before a person could change a word of it.</summary>

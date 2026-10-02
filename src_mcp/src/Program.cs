@@ -2064,7 +2064,7 @@ internal static class Program
         a reason). Repeat until the verdict is `proceed`, implement, then `review_code` (three reviewers
         per provider), `resolve`, fix — the same loop. `review_code` REFUSES until a plan round reached
         `proceed`. `providers` says what is configured; `status` re-orients a resumed conversation;
-        `ask_human` escalates to the person.
+        `ask_consultants` asks the consultant models first, then `ask_human` escalates to the person.
         Three things the tool descriptions say more about, and none of them is optional:
         1. A reply can carry COMMANDS — a `commands` list from the operator's panel switches, with a
            preamble. They outrank your own defaults and are about HOW to work. Say which you applied.

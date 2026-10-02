@@ -15,7 +15,7 @@
 | `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
-| `ask_human` | `AskHumanService` (its own file since 2026-10-01, a proved move out of `PanelService` — S2 of the question consultant) over `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it; while the gate is HELD the question's id is recorded on the hold (`SessionState.HoldQuestions`, under the session's claim, 2026-09-26) so the person's answer to it is the hold's, and on a feature session after its first round it is recorded as a request question (`SessionState.RequestQuestions`, 2026-09-27) so the person's answer to it — and to nothing else — can be the second-round request | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
+| `ask_human` | `AskHumanService` (its own file since 2026-10-01, a proved move out of `PanelService` — S2 of the question consultant) over `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it; while the gate is HELD the question's id is recorded on the hold (`SessionState.HoldQuestions`, under the session's claim, 2026-09-26) so the person's answer to it is the hold's, and on a feature session after its first round it is recorded as a request question (`SessionState.RequestQuestions`, 2026-09-27) so the person's answer to it — and to nothing else — can be the second-round request; **since 2026-10-02 (S3) the GATE stands in front of it**: the phase rule inferred by the server, a `consultId` verified, a `productionRisk` asked at once with the consultants beside — see *The door to the person* below | an empty question; `document` and `feature` together; `productionRisk` without a `riskReason`; and, under `require`, a question the phase rule sends to the consultants first (named `ask_consultants`, with the count); otherwise it WAITS the budget (15 minutes by default), then answers `no_answer_yet` telling the model to ask in the chat and marks the card `expired` |
 | `consult` | `ConsultationService` — another vendor's model over the LIVE working tree | eleven ways, each a sentence naming its cure — see below |
 | `close_consult` | `CloseAsync` — how a consultation ENDED, recorded by whoever knows | not your consultation; a word outside the closed set; `lapsed`, which is the server's own; a consultation that FAILED and produced no advice; a different verdict over one already recorded |
 | `ask_consultants` | `QuestionConsultService` → `QuestionFanOut` — every active model × prompt row answers in PARALLEL before the person is asked (2026-10-01, `todo/PLAN_question_consultant.md` S2) | the switch off, nobody to ask and the quota are ANSWERS (`status`: `off` · `none_available` · `quota_spent`), not refusals; refused: an empty `context` by name, a question over 4 KB, a context over 8 KB, rows that cannot be read, `document` and `feature` together, a path that is no repository — see *The question consultant* below |
@@ -629,14 +629,167 @@ directory or anything inside one, inside the data directory, relative or missing
 by id (its runtime, endpoint, path, dialect, price and per-model settings), or a runtime's own name
 (`QuestionRowResolver`, over the consultant resolver's three materialisers and the QUESTION allowlist, which
 admits `api`). D13's `acknowledged` is carried on the row since S2 and shown beside every answer; the UI that
-asks for it is S4's, and whether the server should refuse an unacknowledged flagged row is an open question
-for S3/S4 — the plan files D13 under S4.
+asks for it is S4's. Whether the server should refuse an unacknowledged flagged row was an open question for
+S3/S4 — **answered in S3: it refuses** (the coordinator's decision; *The door to the person* below).
 
 **`ask_human` moved first**, as a proved move (`prove-move.mjs` against `95bc7048`: the region alone 137 body
 lines, one contiguous run, zero residue; the whole file's 30 residue lines all scaffolding, listed in the
 commit) — `AskHumanService`, with the two helpers it called on the service forwarded under their names and
 `SessionAddress` moved to a file of its own because the refusal census rightly refuses an alias. Behaviour
 unchanged, its callers untouched; S3's gate lands there.
+
+## The door to the person — the phase-aware gate, the fifteen-minute wait, the retention, the autonomy order (2026-10-02, `todo/PLAN_question_consultant.md` S3)
+
+S2 built the consultants; S3 decides WHEN the person is asked. `ask_human` now stands behind a gate that is
+pure (`AskGate.Decide`, core), fed by a desk that gathers every fact the server can infer and never takes a
+caller's word for any of them (`AskGateDesk`): the phase from the session and the cadence record, the batches
+from a store of its own, a `consultId` verified against the question records, and whether a consultant can be
+had at all. The order text the autonomy switch hands back says the same rule the server enforces, from one
+constant.
+
+```mermaid
+sequenceDiagram
+    participant AI as calling AI
+    participant H as AskHumanService
+    participant D as AskGateDesk
+    participant G as AskGate (core, pure)
+    participant E as escalations/{id}.json
+    participant Q as QuestionConsultService
+    AI->>H: ask_human(question, consultId?, productionRisk?, riskReason?)
+    H->>D: Facts(session, args)
+    D->>D: phase: Planning · Building · Released (StageRelease.Of)
+    D->>D: batches (QuestionPhaseStore.Observe) · proof (D14 a) · Preflight (D9)
+    H->>G: Decide(input)
+    alt Refused (require, past the free batches, no proof)
+        G-->>AI: error naming ask_consultants, the count, productionRisk
+    else Allowed
+        H->>E: Post(card) — at once
+        H->>D: AfterTheCard: Count the batch · Spend the proof · beside?
+        D-->>Q: BesideAsync (production risk, detached)
+        Q-->>E: Attach(consultantAnswers)
+        H->>E: WaitAsync(15 min)
+        alt answered
+            E-->>AI: answered + note
+        else nobody
+            H->>E: Expire(id)
+            E-->>AI: no_answer_yet + note — ask in the chat
+        end
+    end
+```
+
+**The gate's table, as built** (`AskGate.Decide`; every row is a case of `AskGateTests`, and four mutations —
+the third batch made free, the stand-down removed, `off` made to speak, the release read from the last epic
+alone — each turned exactly its guard red before the code was kept):
+
+| phase (inferred) | mode | what the caller sent | decision |
+|---|---|---|---|
+| any | any | `productionRisk: true` with no `riskReason` | **refused** naming `riskReason` — a claim with no reason, in every mode |
+| any | `off` | anything | allowed, silent, nothing counted |
+| Planning (no `proceed` yet, or no session) | remind · require | anything | allowed, silent, nothing counted — the person's door |
+| Released | remind · require | anything | allowed, silent, nothing counted — the person's door again |
+| Building, phase record unreadable | remind · require | anything | allowed with a note saying so; nothing written over the record |
+| Building | remind · require | `productionRisk` + reason | allowed, counted; the consultants run BESIDE (D8) when one can be had, else the note says none ran |
+| Building | remind · require | a VERIFIED `consultId` | allowed, counted; the note is empty — or the stand-down sentence when the record itself ended `failed`, `quota_spent` or `none_available` (the coordinator's decision: `failed` counts like `none_available`) |
+| Building, batches < 2 | remind · require | nothing | allowed, counted — `free batch n of 2`, and told that `ask_consultants` comes next |
+| Building, batches ≥ 2 | remind · require | nothing, no consultant can be had | allowed, counted — `stood down: <why>` (D9; never a deadlock) |
+| Building, batches ≥ 2 | `require` | nothing, a consultant can be had | **refused** — the count, the free number, `ask_consultants`, how the `consultId` comes back, the `productionRisk` bypass |
+| Building, batches ≥ 2 | `remind` | nothing, a consultant can be had | allowed, counted — the reminder; "this gate reminds; it does not refuse" |
+| any Building row | | a REJECTED `consultId` | as if none were given (D14 a), and the sentence or note says why it did not count |
+
+Never the word "critical" in any of it (A8): `NothingTheGateSays_EverSaysCritical` sweeps 432 inputs.
+
+**The phase, inferred (D7).** `Planning` until the session's `PlanProceeded`; `Released` when `StageRelease.Of`
+says so; `Building` between. The release: with an epic declared (`k/N`), every epic from the plan's first to
+`N` through the code gate in the cadence record — the plan's first epic is not stored, so the lowest number the
+record holds stands in for it, which is the stated limit (a plan whose first epic was never closed while every
+later one was reads as released); without an epic, the session at `Done` after its code round. No session, a
+plan not proceeded, a cadence record that cannot be read — unknown, and unknown is not released. A document
+or feature session never proceeds a plan, so it never leaves `Planning`.
+
+**The batches (D14 b).** `QuestionPhaseStore`, one JSON per key under `qphase/`: the key is the repository's
+common dir + the plan's file name when the session declares a plan (`EpicRef.PlanKey`, so promotion keeps
+it; the branch is deliberately absent — one gate per epic is one session per branch), else the caller
+session. Escalation ids, so a retry after a lost reply is not a second batch. Every question that reaches the
+person in the building phase counts — free, proven, reminded, stood down, risk — because "how many batches
+the person has been asked" is the fact the rule rests on. A record that exists and cannot be read is said and
+the gate ALLOWS (`unreadable → allow`): the cadence store fails closed because a gate that waved a group
+through would skip a consultation somebody owed; this one fails open because a gate that refused on a torn
+file would stop an AI asking a person. The release is stamped on the record the first time `Observe` sees it,
+and a record seen un-released afterwards is a plan key reused — its count starts over. Swept thirty days after
+its last write, on the startup sweep and the one-minute beat; `qphase/` is in `shared/data-inventory.json`
+and `DATA_TO_MOVE` (move: it carries the count — a move that left it would hand every plan two fresh free
+batches).
+
+**The proof, verified (D14 a).** A `consultId` must name a record in `question-consults/` whose caller is this
+caller session and whose repository is this one (`ConsultationService.SamePath`), that is terminal, that
+ended under `QuestionPolicy.ConsultProofAge` (30 minutes) ago, and that no earlier `ask_human` has used —
+the record is written `person_asked` with the card's id the moment the card is posted, which is what makes it
+single use. Anything else is `Rejected(why)`: under `require` past the free batches that is the refusal with
+the reason appended; elsewhere the note carries it. The residual, stated: two `ask_human` calls passing one
+id in the same instant both read it unused; the second's card is a duplicate the person sees twice, never a
+bypass of anything.
+
+**The bypass (D8, A8).** `productionRisk: true` with a `riskReason`: the card is posted BEFORE anything else
+(`Escalations.Post`, split out of `AskAsync` rather than relying on an async method's synchronous prefix),
+then the desk runs the consultants in the background through S2's service (`QuestionConsultService.BesideAsync`
+— the question is the person's, the context is the declared risk, the record carries `productionRisk`,
+`riskReason` and the card's id and ends `production_risk` unless nobody could be asked), and attaches every
+row's answer to the card file as they settle (`Escalations.Attach`, `consultantAnswers`) — the extension's
+watcher sees the rewrite and S4 folds them under the card. Detached and observed: the run has no caller token
+(the `ask_human` call may return before the rows do; the rows' own budgets bound them) and ends in a
+catch-all that logs. The person is never delayed. The quota is spent like any question's.
+
+**The wait (A10, D11).** `COAI_ESCALATION_MINUTES` defaults to 15 (`PanelSettings.DefaultEscalationMinutes`;
+`COAI_ESCALATION_SECONDS` still wins when set, its own default unchanged). At the budget the reply is
+`no_answer_yet` with the family's instruction — ask the person directly in this conversation — and the card
+is marked `status: "expired"` with `expiredUtc` in its own file (`Escalations.Expire`): out of the active set,
+kept for the log, taken by the retention after seven days. A file written before the status existed reads as
+open (every accessor null-normalises). Both replies carry `note` — the gate's sentence beside the door.
+
+**The retention (A4).** `EscalationRetention`, on the startup sweep and the one-minute beat beside the two
+consultation sweeps: an answered pair goes seven days after the ANSWER's stamp (both files), an expired
+question seven days after its expiry, an open question nobody holds seven days after it was asked, an orphan
+answer and a stray `.tmp` seven days after their write time, a torn file likewise; a question a live session
+holds — on a hold (`HoldQuestions`) or as a feature session's request (`RequestQuestions`), asked through
+`SessionStore.HoldsQuestion` — is kept whatever its age or status, because a hold is bound to its question by
+identity. Judged through `Escalations`' own readers, under the same turn.
+
+**D13 on the server too** (the coordinator's decision, over S2's deviation 12): `QuestionAdmission` refuses a
+pair the planner admits but FLAGS — codex on every capability, agy's disk read — unless the row carries
+`acknowledged: true`; the refusal is the `blocked` RowOutcome naming the tick and the section, so a row typed
+by hand with `"enabled": true` and nothing else never reads this machine. A picker is not an enforcement.
+
+**The heartbeat, now proved to be WRITTEN.** S2 covered the sweep's reading of a stale beat; nothing ran a
+row past thirty seconds. `QuestionFanOut` takes the interval as a seam (`heartbeatEvery`, the store's thirty
+seconds by default), and `TheHeartbeatIsRewritten_WhileARowRuns_OnTheConfiguredInterval` sees three distinct
+beats on a 200 ms seam while a scripted row waits a second and a half.
+
+**The order (§0 item 2, A6, A7).** `command-question-consult` is the twenty-first shipped text, appended right
+after the autonomy order it amends — only with it (`Autonomous`), and only when the mode is not `off` (`Enabled`
+off is `Off` for the order, so a reply never orders a tool that would answer `off`) — behind the marker
+`ASK THE CONSULTANTS FIRST.` kept in code; `{freeBatches}` is filled from the settings (default
+`QuestionPolicy.FreeBatches`), `{enforced}` says "the gate ENFORCES this" under `require` and "this gate
+reminds; it does not refuse" under `remind`. The autonomy order's orders (4) and (5) are ONE stage sequence now,
+the operator's A6: create the pull request, wait about five minutes, read CodeRabbit's comments and fix what
+they name, merge, let the deploy run, then verify on the server — no degradation, the new behaviour works as
+expected, its logs read clean — before calling it done; (6) became (5). `fixtures/gate-commands-before-467.json`
+was re-recorded for it through a recording escape (`COAI_RECORD_GATE_COMMANDS=1`, the refusal census's shape),
+and the diff of the re-recording touched the two autonomy texts and nothing else. One sentence — the phase
+rule — is pinned WHOLE in both `ask_human`'s and `ask_consultants`' descriptions, and its number is held to
+`QuestionPolicy.FreeBatches` as the order's and the settings default are (`TheOrderTextAgreesWithThePolicyTests`).
+The MCP instructions name the twelfth tool in 1992 of their 2000 characters.
+
+**What crosses the seam.** The card file gained `status`, `expiredUtc`, `consultId`, `productionRisk`,
+`riskReason` and `consultantAnswers` (an `EscalationAdvice` per row: vendor, model, prompt title, capability,
+D13's flag, status, reason, advice — raw, a person reads it); `ask_human` gained three optional arguments and
+`note` on both replies; the settings gained no key (`COAI_QCONSULT_MODE` and `COAI_QCONSULT_FREE_BATCHES` were
+read since S2 and are acted on now). An older extension against this server shows an expired card until the
+person answers it or the retention takes it; a newer extension against an older server sees no status and
+draws every card, as before.
+
+**Sizes (D12).** `PanelService.cs` 1781 → 1759 (`ProcessIsAlive` moved to `ProcessLiveness`, a static unit every
+sweep asks; the gate's wiring and the two forwarders paid for inside the file); `PanelSettings.cs` 1497 → 1497
+(the default's constant and its remark paid for by the surplus blank lines beside it).
 
 ## The round engine is its own unit (2026-09-25)
 
@@ -761,9 +914,13 @@ with the question, because a person deciding "ship anyway?" should not have to g
 gates.
 
 A malformed, half-written or empty answer file is **not** an answer — the wait continues; unblocking
-a round on nothing is the failure this guards against. The budget (`COAI_ESCALATION_MINUTES`, 30 by
-default; `COAI_ESCALATION_SECONDS` wins when set) ends in `no_answer_yet` with the instruction to ask
-in the chat — the family's `remote-ask` fallback — and the question file **stays open**.
+a round on nothing is the failure this guards against. The budget (`COAI_ESCALATION_MINUTES`, 15 by
+default since 2026-10-02 — 30 before S3 of the question consultant; `COAI_ESCALATION_SECONDS` wins when set)
+ends in `no_answer_yet` with the instruction to ask in the chat — the family's `remote-ask` fallback — and
+the question file **stays, marked `expired`**: out of the active set the extension shows, kept for the log,
+taken by `EscalationRetention` seven days later with every other finished card (A4). Before S3 the file
+stayed open for ever and nothing retired the directory. Since S3 the question is asked only once the gate in
+front of `ask_human` has let it through — *The door to the person*, above.
 
 ## Configuration and keys
 
@@ -3888,8 +4045,9 @@ epic 3 sets `CommandContext.Cadence` — its default is `CadenceFacts.Off`, and
 | **Four orders, after every existing one**: the FORECAST on the first plan round of work with epics (named in headings, or ordered by a split); a GROUP DUE when the declared epic's group has no closed consultation; the RISK QUESTION from the threshold until answered; a RISK ITEM DUE for the declared epic. Each carries the call LITERALLY — the ToolSearch line that loads a deferred schema, then `mcp__coai__consult({...})` as JSON with repoPath, kind, plan, epics and a problem naming the group's titles — and the `close_consult` with its outcomes. `Require` adds "until then this gate refuses the code round". None says "critical" (the canonical invented severity `ReviewParser` rejects). Markers `CadenceOrders.ForecastMarker` / `GroupMarker` / `RiskQuestionMarker` / `RiskItemMarker` stay in code; the texts are `shared/commands/command-consult-forecast\|group\|risk-question\|risk-item.md`. | `core/Commands/CadenceOrders.cs`, `GateCommands.For` / `ForecastsCadence` |
 | **`Massive`, a sixth size: 6–14 epics.** A plan that names its epics is sized by them (1 → Small, 2–3 → Medium, 4 → Large, 5 → Huge, 6+ → Massive); story headings count as steps when there are no epics; the #131 table is untouched for a plan with neither. Measured on private repo A: the 10-epic plan has 5 numbered steps and the 4-epic plan 31, and the longer file is the smaller plan — steps and length both invert. `Numbers` names the headings only when there are some. The order: "6-14 EPICS … never more than 14 — past that, split the PLAN into two plans". | `core/Commands/PlanShape.cs` (`ByEpics`), `shared/commands/command-split-massive.md` |
 
-There are twenty shipped command texts now; the extension's Edit commands page lists them with their
-markers and placeholders (`src_vs_code/src/commands.ts`).
+There are twenty shipped command texts now — twenty-one since 2026-10-02, with `command-question-consult`
+(S3 of the question consultant); the extension's Edit commands page lists them with their markers and
+placeholders (`src_vs_code/src/commands.ts`).
 
 ### The consultant on a cadence — epic 2: what a consultation is for, the record and the gate (2026-09-25)
 
@@ -4169,6 +4327,13 @@ repository's release or pull-request process followed, with a pull request's aut
 five minutes later; an automatic deploy verified against dev, stage or test with its logs read; the
 code re-read against the repository's rules; and the assistant saying that it is autonomous and what it
 is writing right now. The question-batching rule is unchanged.
+
+**Five since 2026-10-02** (A6 of `todo/PLAN_question_consultant.md`, S3): orders (4) and (5) — the pull request
+with its automatic comments, and an automatic deploy verified — became ONE stage sequence the AI carries out
+itself, end to end: create the pull request, wait about five minutes, read CodeRabbit's comments and fix what
+they name, merge, let the deploy run, then verify on the server that everything works — no degradation, the new
+behaviour works as expected, its logs read clean — before calling it done. `AutonomyIsAnInstructionTests` holds
+the sequence as a sequence. And the order gained a companion: *The door to the person*, above.
 
 ## The document gate
 

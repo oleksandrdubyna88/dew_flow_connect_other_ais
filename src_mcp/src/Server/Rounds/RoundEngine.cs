@@ -504,6 +504,11 @@ internal sealed class RoundEngine(
                 // The consultation cadence as it stands for this call — Off unless the operator switched it on
                 // (research/PLAN_consult_on_a_cadence.md).
                 Cadence = stage.Cadence.Call.Facts,
+                // The question consultant's mode and number (S3): the order that amends the autonomy order. Off when
+                // the switch is off, so a reply never orders a tool that would answer `off`.
+                QuestionConsult = _settings.QuestionConsult.Enabled
+                    ? new Core.Commands.QuestionConsultFacts(Core.QuestionConsult.QuestionModes.Of(_settings.QuestionConsult.Mode), _settings.QuestionConsult.FreeBatches)
+                    : Core.Commands.QuestionConsultFacts.Off,
             };
             // The caller's one order is CLAIMED, and only on a round that would actually give it —
             // a claim taken on a code round would spend it on a round that issues nothing. The

@@ -1,6 +1,6 @@
 # PLAN — the question consultant: other models answer an AI's question before the person is asked
 
-> Status: **in progress — S1 (confinement) and S2 (the fan-out, `ask_consultants`, the proved move of `ask_human`) built 2026-10-01, S3–S5 open.** The capability facts it rests on were measured in
+> Status: **in progress — S1 (confinement) and S2 (the fan-out, `ask_consultants`, the proved move of `ask_human`) built 2026-10-01, S3 (the door to the person: the gate, the wait, the retention, the order) built 2026-10-02, S4–S5 open.** The capability facts it rests on were measured in
 > `dew_flow_benchmark · todo/PLAN_question_consultant_probes.md` (full run `01a0f8c7`, 105 cells, 2026-10-01) and are
 > written up in [RESULTS_question_consultant_capabilities.md](../research/RESULTS_question_consultant_capabilities.md). Scope:
 > `src_mcp` (a new tool `ask_consultants`, the phase-aware `ask_human` gate, a confinement layer, escalation
@@ -507,6 +507,84 @@ the `note`, the 15-minute wait → `no_answer_yet` and the card `expired`; `COAI
    → `ask_human` allowed* runs against a real server build.
 
 **Not in it.** No UI; no release; no conventions text (the rule follows the release, S5).
+
+**Deviations (S3, 2026-10-02).** Built as the acceptance states — the gate, the phase store, the release inference, the
+verified `consultId`, the production risk beside, the fifteen-minute wait and the expiry, the retention, the order and
+the descriptions — with these differences from the wording above:
+1. **D13 is enforced on the server too** (the coordinator's decision over S2's deviation 12): `QuestionAdmission` refuses
+   a flagged pair (`unconfined`, `default-deny`) whose row does not carry `acknowledged: true`, as the `blocked`
+   RowOutcome naming the tick and the section — RED first (`Admitted` where `Refused` was expected).
+2. The question-consult order is given only WITH the autonomy order (`Autonomous && mode != off`): §0 item 2 says the
+   autonomy order is amended, and §4 named `GateCommands.AutonomyCommand`; S3's contents said "appended by
+   `GateCommands.For` after the autonomy order", which reads both ways. Without the autonomy switch the rule still
+   reaches a caller through both tool descriptions and the gate's refusal. `COAI_QCONSULT_ENABLED=false` is `Off` for
+   the ORDER (a reply never orders a tool that would answer `off`) and a stand-down for the GATE (a consultant that
+   cannot be had, D9).
+3. `QuestionMode` is an enum in the core (`QuestionModes.Of` maps the settings' word; unknown → `require`, the reader's
+   own rule); `QuestionConsultSettings.Mode` keeps S2's string so nothing of S2 moved.
+4. Batches are counted for EVERY question that reaches the person in the building phase — free, proven, reminded, stood
+   down, risk — because "how many batches the person has been asked" is the fact A7 rests on; the plan's "the first
+   two batches" is the free number, not a count of only the free ones.
+5. The release inference reads the plan's first epic as the lowest number the cadence record holds (the first epic is
+   stored nowhere; reading the plan text needs git at the sha, which this inference deliberately asks for nothing): a
+   plan whose first epic was never closed while every later one was reads as released. Stated in the code, the module
+   doc and `module_tests.md`'s "what it does not prove". A document or feature session never proceeds a plan, so it
+   never leaves the plan stage. A session that declares a plan but carries no `CadenceRepoId` (the desk always sets
+   both) counts under the caller key.
+6. `productionRisk` without a `riskReason` is refused in every mode, `off` included — argument validation precedes the
+   gate; a bypass is a claim, and a claim with no reason is a fault, not a phase. The consultants run beside a risk
+   only in the building phase (where the gate is in play) and in the free batches too (the AI asked for them); the
+   context they are given is the declared risk ("The caller declared a production risk: …"), the record ends
+   `production_risk` unless nobody could be asked, and the quota is spent like any question's.
+7. `Escalations.AskAsync` became `Post` + `WaitAsync` (widened, not duplicated): D8's "the card at once" is then a
+   call, not an async method's synchronous prefix. `Read`, `Expire` and `Attach` were added; a rewrite is serialised
+   in-process by a gate because `SessionTurn` is not re-entrant, and the turn still guards the file against other
+   processes. The expiry and an attach can land in the same second and each replaces the file whole.
+8. `EscalationRetention` keeps a HELD question whatever its age or status (the plan said "a live session still holds");
+   the clock of an answered pair is the ANSWER's stamp, of an expired question its expiry, of an open one its asking;
+   torn files, orphan answers and `.tmp` files go by write time; the sweep counts files, not questions. It runs on the
+   startup sweep and the one-minute beat as the plan says, through `PanelService.SweepEscalations`, which also sweeps
+   the phase records (§5's 30 days) — `qphase/` joined both halves' data inventories (the inventory test fired first).
+9. `HumanAnswer.Note` is an init property, so every positional construction of the record compiles unchanged; both
+   replies carry it. The `no_answer_yet` instruction keeps "ask the person directly" (the contract test's phrase) and
+   says the card is expired and kept for the log.
+10. `COAI_ESCALATION_MINUTES` 30 → 15 through one constant (`PanelSettings.DefaultEscalationMinutes`); the seconds
+    knob's own default (30 s) is untouched — it is the test budget, not the person's.
+11. The byte-identical orders fixture was re-recorded through a recording escape added to its test
+    (`COAI_RECORD_GATE_COMMANDS=1`, the refusal census's shape — it rewrites and then FAILS), and the diff of the
+    re-recording touched the two autonomy texts and nothing else. The autonomy order has five numbered orders now
+    (A6 folded (4) and (5) into the stage sequence; (6) became (5)).
+12. `ScenarioCoverageTests`: `ask_human` moved to `Covered` (the scenario the acceptance names runs against the real
+    binary), which emptied `NotCovered`; its "every gap carries a reason" assertion was rewritten as "no gap with a
+    short reason" because `OnlyContain` refuses an empty list. `StdioServer` was extracted from `McpContractTests`
+    for that scenario rather than copied.
+13. The MCP instructions name the twelfth tool ("`ask_consultants` asks the consultant models first, then `ask_human`
+    escalates to the person") in 1992 of the 2000-character budget; the help in five languages says twelve tools with
+    one sentence on the consultant.
+14. D12 by the numbers: `PanelService.cs` 1781 → 1759 (`ProcessIsAlive` moved to `ProcessLiveness`; the gate's wiring,
+    the retention and the two forwarders paid for inside the file); `PanelSettings.cs` 1497 → 1497.
+15. Found while building, by the after-the-release test: `QuestionPhaseStore.Observe` stamped the release into a
+    directory that did not exist yet (`DirectoryNotFoundException`); `Write` creates it.
+16. The heartbeat's writing is proved through a seam on `QuestionFanOut` (`heartbeatEvery`, the store's thirty seconds
+    by default) — 200 ms in the test, three distinct beats seen while a scripted row waits 1.5 s — as the coordinator
+    asked, rather than a thirty-second sleep.
+17. Three existing tests (`ThePersonsCommandsReachTheCallerTests`) expected the autonomy switch to give exactly one
+    order through a real `review_plan`; under the shipped `require` it gives two now, so their expected context is
+    derived from the settings the service is handed (`FactsOf`, the engine's own mapping) rather than built bare.
+    The full suite's first run showed exactly those three red (`contains 1 item(s) too many`); nothing else moved.
+18. The second full run turned two TIMING assertions red and nothing else: my `AProductionRisk_…` asserted "the
+    consultants ran" the instant `ask_human` returned (a two-second budget), while the beside run is detached and
+    does git and the outline before its first launch — the assertion now follows the wait for the answers, which is
+    the guarantee; and S2's `SixRowsStartWithinOneTick…` missed its 1.8 s bound by 138 ms under load (green in the
+    first run and alone) — a pre-existing bound, named in the report and not re-tuned here.
+
+**Open for S4.** The sidebar must (a) not draw an expired card — the watcher already filters, the section is S4's —
+and (b) fold `consultantAnswers` under a card, say `productionRisk`/`riskReason` on it, and show the `consultId` it
+followed; the Questions log tab reads `question_consults` (the phase records are file-only, deliberately); the row
+acknowledgement UI must WRITE `acknowledged: true` — the server now refuses a flagged row without it, so a codex row
+typed by hand is `blocked` until the tick exists; the `note` on `ask_human`'s reply is for the AI and nothing in the
+extension reads it; and whether an expired card a person answers LATER should count (the server's `AnsweredFor` still
+reads it, which releases a hold bound to that id) is a decision S4 should take with the operator.
 
 ### S4 — The person sees it: settings, Active questions, the Questions tab — **Opus** (ordinary extension work with a shipped twin for every piece — the consultant section, the cadence block, the three watchers, the log's tabs)
 

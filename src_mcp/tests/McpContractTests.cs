@@ -32,41 +32,15 @@ public sealed class McpContractTests : IDisposable
         }
     }
 
+    /// <summary>The real binary over real stdio — <see cref="StdioServer"/>, shared with the scenario suites since S3.</summary>
     private Process Start(
         string logLevel = "debug",
         int escalationSeconds = 1800,
-        params (string Name, string Value)[] alsoInTheEnvironment)
-    {
-        var info = new ProcessStartInfo(ServerExe)
-        {
-            RedirectStandardInput = true,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-        };
-        info.Environment["COAI_DATA_DIR"] = _data;
-        foreach (var (name, value) in alsoInTheEnvironment)
-        {
-            info.Environment[name] = value;
-        }
+        params (string Name, string Value)[] alsoInTheEnvironment) =>
+        StdioServer.Start(_data, logLevel, escalationSeconds, alsoInTheEnvironment);
 
-        info.Environment["COAI_LOG_LEVEL"] = logLevel; // chatty on purpose: purity is the claim
-        info.Environment["COAI_ESCALATION_SECONDS"] = escalationSeconds.ToString();
-        // These test the WIRE. Translation is a vendor call with its own tests; leaving it on
-        // would make every escalation here wait on a real model.
-        info.Environment["COAI_TRANSLATOR_PROVIDER"] = "none";
-        var process = Process.Start(info)!;
-        return process;
-    }
-
-    private static async Task<JsonDocument> RoundTrip(Process server, string request, int timeoutSeconds = 30)
-    {
-        await server.StandardInput.WriteLineAsync(request);
-        await server.StandardInput.FlushAsync();
-        var line = await server.StandardOutput.ReadLineAsync().WaitAsync(TimeSpan.FromSeconds(timeoutSeconds));
-        line.Should().NotBeNull("the server must answer before the client gives up");
-        return JsonDocument.Parse(line!);
-    }
+    private static Task<JsonDocument> RoundTrip(Process server, string request, int timeoutSeconds = 30) =>
+        StdioServer.RoundTrip(server, request, timeoutSeconds);
 
     [Fact]
     public async Task Initialize_ThenToolsList_NamesTheTwelveTools_AndStdoutStaysPure()
@@ -512,6 +486,43 @@ public sealed class McpContractTests : IDisposable
                 "an undeclared argument is dropped by the SDK without an error, which is how a wrong head went unnoticed");
             schema.GetProperty("required").EnumerateArray().Select(r => r.GetString())
                 .Should().NotContain("head", "a call without it keeps its old meaning — the checkout's HEAD");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
+    /// <summary>
+    /// `consultId`, `productionRisk` and `riskReason` are declared on `ask_human`, and OPTIONAL — every client that
+    /// never sent one keeps calling as it did (<c>todo/PLAN_question_consultant.md</c>, S3 acceptance 6).
+    /// </summary>
+    [Fact]
+    public async Task AskHuman_DeclaresItsThreeGateArguments_AllOptional()
+    {
+        using var server = Start();
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"contract-test","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var tools = await RoundTrip(server, """{"jsonrpc":"2.0","id":2,"method":"tools/list"}""");
+            var schema = tools.RootElement.GetProperty("result").GetProperty("tools").EnumerateArray()
+                .Single(t => t.GetProperty("name").GetString() == "ask_human")
+                .GetProperty("inputSchema");
+            var properties = schema.GetProperty("properties");
+            var required = schema.GetProperty("required").EnumerateArray().Select(r => r.GetString()).ToList();
+
+            foreach (var argument in new[] { "consultId", "productionRisk", "riskReason" })
+            {
+                properties.TryGetProperty(argument, out _).Should().BeTrue(
+                    $"`{argument}` is read by the gate, and an undeclared argument is dropped by the SDK without an error");
+                required.Should().NotContain(argument, "a call without it keeps its old meaning — a plain question");
+            }
         }
         finally
         {

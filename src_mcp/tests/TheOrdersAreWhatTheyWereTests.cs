@@ -16,17 +16,38 @@ namespace CoaiMcp.Tests;
 /// <c>fixtures/gate-commands-before-467.json</c> was written by the code as it stood BEFORE the move, over
 /// every combination of the switches, every plan size, both gate scopes and both kinds of model pair:
 /// each distinct order once, and each combination as the indices of the orders it produced.</para>
+/// <para><b>Re-recorded 2026-10-02</b> for A6 of the question consultant (<c>todo/PLAN_question_consultant.md</c>,
+/// S3): the operator rewrote the autonomy order's orders (4)–(5) as one stage sequence, which is a deliberate
+/// change to what every autonomous caller is told. The recording escape below is the refusal census's shape —
+/// <c>COAI_RECORD_GATE_COMMANDS=1</c> rewrites the fixture from the code as it stands and then FAILS, because a
+/// run that writes its own expectation checks nothing — and the diff of that re-recording touched the two
+/// autonomy texts (with and without the split's scope) and nothing else, which is what the escape is for: a
+/// wanted change to one order is visible as exactly that, never as a wholesale re-blessing.</para>
 /// </remarks>
 public sealed class TheOrdersAreWhatTheyWereTests
 {
     private const string Fixture = "gate-commands-before-467.json";
 
+    /// <summary>The recording escape, named once.</summary>
+    private const string RecordingEscape = "COAI_RECORD_GATE_COMMANDS";
+
+    /// <summary>Where the committed fixture lives — the SOURCE, which a re-recording rewrites; the copy beside the binary is what a run reads.</summary>
+    private static string SourceFixture =>
+        Path.Combine(ProductionSources.RepositoryRoot(), "src_mcp", "tests", "fixtures", Fixture);
+
     [Fact]
     public void EveryOrderForEveryCombination_IsWhatItWasBeforeTheTextsBecameData()
     {
+        var now = Record();
+        if (Environment.GetEnvironmentVariable(RecordingEscape) == "1")
+        {
+            File.WriteAllText(SourceFixture, JsonSerializer.Serialize(now, new JsonSerializerOptions { WriteIndented = true }));
+            Assert.Fail($"{SourceFixture} was REGENERATED because {RecordingEscape}=1. Re-run without it, read the fixture's diff — it must "
+                + "touch only the orders the change meant to change — and commit the fixture with that change.");
+        }
+
         var recorded = JsonSerializer.Deserialize<Recording>(
             File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "fixtures", Fixture)))!;
-        var now = Record();
 
         now.Preamble.Should().Be(recorded.Preamble, "the preamble is part of every reply that carries orders");
         now.Contexts.Keys.Should().BeEquivalentTo(recorded.Contexts.Keys, "the combinations are the same ones");

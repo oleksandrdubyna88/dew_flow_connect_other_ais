@@ -263,7 +263,11 @@ public sealed record RoundKeyDto(string SessionId = "", string Stage = "", int N
 /// </summary>
 /// <param name="Answer">In the language the question was asked in.</param>
 /// <param name="AnswerOriginal">The person's own words, verbatim — empty when nobody answered.</param>
-public sealed record HumanAnswer(string Status, string Answer, string AnswerOriginal, string Instruction);
+public sealed record HumanAnswer(string Status, string Answer, string AnswerOriginal, string Instruction)
+{
+    /// <summary>S3 of the question consultant: what the gate said beside the person's door — a reminder, a stand-down, the free batch; empty when nothing.</summary>
+    public string Note { get; init; } = string.Empty;
+}
 
 /// <summary>The wire shape of one decision passed to `resolve`.</summary>
 public sealed record DecisionDto(int Finding, string Action, string Reason = "");
