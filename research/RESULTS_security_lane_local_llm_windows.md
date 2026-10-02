@@ -1,6 +1,6 @@
 # Local LLM security-lane experiments — consolidated Windows report
 
-> Measurement checkpoint: **2026-10-02**, feature branch `feat/security-lane-modules`, published implementation `cc9173dd9235f392ac7e36acc32a5627915735ed`, draft PR [#634](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/pull/634). The campaign is incomplete. This records observed experiments, including failures; it does not mark the feature implemented or the model qualified for general security auditing.
+> Measurement checkpoint: **2026-10-02**, feature branch `feat/security-lane-modules`, SQL-term correction `98b01d3abce5ccf40e007cc5e5cd48d23c2ab193`, draft PR [#634](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/pull/634). Historical campaign groups used `cc9173dd9235f392ac7e36acc32a5627915735ed`. The campaign is incomplete. This records observed experiments, including failures; it does not mark the feature implemented or the model qualified for general security auditing.
 
 ## Results at this checkpoint
 
@@ -218,7 +218,7 @@ These are actual `--ask-local` requests through `ART/probe-gemma-wire.mjs`, not 
 
 Variant 3 put the operation and remaining-predicate constraints first and shortened the SQL payload from 7850 to 4989 characters, retaining its schema and source suffix. Variant 4 requested the schema-permitted null reproduction and required the concrete trace in the mandatory evidence fields instead. The latter did not cure grounding; removing a duplicate output obligation did not remove the model's error. Variant 5 added a generic worked example of preserving filters and evaluating SQL precedence, outside the source fence. It improved the one reported SQL trace but did not meet the predeclared two-defect recall criterion.
 
-The separate AuthZ task then excluded SQL injection and requested an independent access-control trace with ordinary inputs. Variant 6 also constrained impact quantifiers and the expected prior behavior. After its safe twin returned empty, three sequential identical requests each produced one manually checked, readable, schema-shaped finding with a matching sample row and request. All had wire SHA-256 `d93a846a9263c42441852e1de81643a8c41b8dbfc7881cdafa0f92d5a2413978`, seed 44792 and no thinking. Reported cached input tokens were 1155, 1720 and 1720; the first answer differed in wording/sample values, while the last two matched. Thus fixed wire inputs did not establish byte-level determinism.
+The separate AuthZ task then excluded SQL injection and requested an independent access-control trace with ordinary inputs. Variant 6 also constrained impact quantifiers and the expected prior behavior. `authz-v6-pinned-run` was the exploratory positive check. After its safe twin returned empty, the separate `authz-v6-repeat-1/2/3` sequence each produced one manually checked, readable, schema-shaped finding with a matching sample row and request; only these three repetitions constitute the reported streak. All had wire SHA-256 `d93a846a9263c42441852e1de81643a8c41b8dbfc7881cdafa0f92d5a2413978`, seed 44792 and no thinking. Reported cached input tokens were 1155, 1720 and 1720; the first answer differed in wording/sample values, while the last two matched. Thus fixed wire inputs did not establish byte-level determinism.
 
 This is a **3/3 positive AuthZ diagnostic streak on one fixture**, not a new full-product qualification or a general accuracy score. The reproduced access is to matching invoice rows in another tenant; it does not prove arbitrary table access or all rows. The model cites the method block at line 11 rather than the query at line 12. Severity calibration, other defect classes, unseen fixtures and the final product-composed prompt remain separate checks. No scratch variant has replaced a Git prompt at this checkpoint, and no generated reproduction was executed.
 
@@ -227,6 +227,31 @@ The thinking/sampling comparison kept the variant-2 prompt and low effort unchan
 The harness initially derived a different seed from the changed prompt. Its first variant-3 run therefore changed both prompt and seed and cannot isolate a prompt effect. An explicit optional seed was then added to the existing recorder, and the sent request was read back before assessing the controlled follow-up. Another harness error is retained: preparation wrote the positive variant before failing on the safe fixture's different context prefix; that positive request was launched before preparation succeeded. The prediction text existed in `prepare-v3.mjs` before launch, but its JSON manifest was saved during inference, before reading the answer. Later runs have separate pre-run prediction files. These qualifications matter more than a cleaner-looking table.
 
 Evidence: `low-reasoning-prediction.json`, `v3-prediction.json`, `v3-seed-prediction.json`, `v4-prediction.json`, `thinking-sampling-prediction.json`, `v5-prediction.json`, `authz-v5-prediction.json`, `authz-v6-prediction.json`, and each named arm's `sent-request.json`, `observation.json`, `raw-response.json` and `exit.json` under `ART/gemma-refinement`.
+
+### 6.4 AuthZ v6 through the real product composer
+
+The existing explicit C# calibration harness then loaded v6 as a private prompt override and ran
+three real `PanelService.ReviewCodeAsync` rounds. Ordinary reviewers remained clean test doubles;
+SQL used its shipped prompt as a separate control. This transfer changes the wrapper and derived
+nonce/seed as well as the execution path, so it is not a single-variable comparison with §6.3.
+All three captured AuthZ requests were checked to start with the actual override.
+
+The harness passed in 2m12.145s, with six usable local replies. Manual AuthZ assessment was **2/3,
+not the required three consecutive adequate replies**: repeat 1 invented an alternative expected
+empty-row response where the removed guard explicitly throws `UnauthorizedAccessException`.
+Repeats 2 and 3 supplied matching row/request values and the exact prior exception. Input/output
+tokens were 1845/332, 1847/318 and 1847/325. The SQL controls still contained unsupported provider
+impacts, wrong row-set reasoning or incomplete text; a usable response is not a correct finding.
+
+Evidence: `ART/gemma-refinement/authz-v6-product-resumed`, fixture base
+`55dc06b32907535eb4415f27e4ceb90c488cd3e9`, head
+`29e1110d56947f3c5e6aa978a96720d96b950c91`, source SHA-256
+`7639062b29b9bdb957395737307c3cca74fe78286f7ef3d3fb3ce4bde32b87ea`.
+`override-manifest.json` records the actual prompt hash
+`b69cf38a62231c8a0dcdecb87bb69be9d5bda9be1319f7736c79f5b52cc2fdfe`;
+the existing harness's `manifest.json` hashes embedded defaults rather than overrides and cannot
+identify this candidate by itself. The earlier `authz-v6-product` attempt was interrupted by the
+session lifecycle; its partial artifacts remain separate. No candidate has been deployed.
 
 ## 7. Frozen 30-PR campaign through MCP
 
@@ -251,10 +276,10 @@ Commit `cc9173dd` excludes Markdown/reStructuredText from trigger evidence and n
 | Group | PRs | Answered model calls | Security replies | Ordinary findings, all individually rejected | State |
 |---|---|---:|---:|---:|---|
 | 1, corrected r2 | 631, 630, 629 | 21 | 6 | 23 | Resolved; assessed |
-| 2 | 628, 627, 626 | 24 | 9 | 16 | Resolved; assessed |
+| 2 | 628, 627, 626 | 24 | 9 | 16 | Historical complete run; routing qualification provisional pending SQL-term rerun |
 | 3 | 625, 622, 621 | 19 | 4 | 17 | Resolved; assessed |
 | 4 | 620, 619, 618 | 14 | 2 | 16 | Resolved; assessed; 619 document stage |
-| Completed subtotal | 12 PRs | **78** | **21** | **72** | Routing/format evidence only |
+| Historical completed-call subtotal | 12 PRs | **78** | **21** | **72** | Not qualification under the latest classifier; group 2 requires rerun |
 
 Group 5's initial calls also used **all Gemma**, before the shared-setting correction. They remain an incomplete historical measurement and are excluded from the subtotal. The following is a continuation schedule, not measured mixed-reviewer results:
 
@@ -281,9 +306,9 @@ PR #615 also activated SQL solely from unchanged source context in `src_vs_code/
 
 The follow-up now replaces weak `database`/`migration` terms with `dbconnection`, `dbcommand` and `migrationbuilder`, retaining SQL/DbContext/Dapper terms and the existing bounded query/statement matcher. The 36-case preset suite passed; restoring the old production terms made the same four tests fail; restoring the fix passed the broader security selection: **81 passed, two explicit hardware skips**. Evidence: `ART/sql-routing-terms-{red,green,mutation,restored}-tests.log`. These deterministic observations do not establish local-model quality.
 
-All thirty frozen diffs were then replayed through the actual old and rebuilt classifier. SQL selection changed in exactly three PRs: **#627 (group 2), #615 (group 5), #608 (group 7)**. Manual inspection found migration prose in #627's `Program.cs`, database prose in #615's `roundsLog.ts`, and help strings/test descriptions in #608. Other signal lists were unchanged. The replay retains input and assembly hashes, both outputs and the comparison under `ART/pr30-campaign/sql-terms-replay`. Completed group 2 and incomplete group 5 require new runtime-labelled reruns; group 7 has not run and needs its updated prediction. No new-model campaign round has yet been counted from this classifier-only replay.
+All thirty frozen diffs were then replayed through the actual old and rebuilt classifier. SQL selection changed **from selected to not selected** in exactly three PRs: **#627 (group 2), #615 (group 5), #608 (group 7)**. Manual inspection found migration prose in #627's `Program.cs`, database prose in #615's `roundsLog.ts`, and help strings/test descriptions in #608; those fragments do not implement SQL. Other signal lists were unchanged. The replay retains input and assembly hashes, both outputs and the comparison under `ART/pr30-campaign/sql-terms-replay`. Completed group 2 and incomplete group 5 require new runtime-labelled reruns, both with **cloud ordinary reviewers and local Gemma security only**, recorded separately from the all-Gemma historical subtotal. Group 1 r2 used `cc9173dd`; this later SQL-term correction did not change any of its three predictions, so it does not require another rerun. Group 7 has not run and needs its updated prediction. No new-model campaign round has yet been counted from this classifier-only replay.
 
-Cross-process engine waiting consumes the same reviewer deadline as generation. Launching several large PR rounds in parallel can therefore exhaust a reviewer before inference, despite per-process concurrency one. Large remaining PRs should execute sequentially within each group. The next routing change must be followed by classifier replay of all thirty frozen diffs and reruns of affected groups; recorded predictions alone cannot replace manually checking relevance.
+Cross-process engine waiting consumes the same reviewer deadline as generation. Launching several large PR rounds in parallel can therefore exhaust a reviewer before inference, despite per-process concurrency one. Large remaining PRs should execute sequentially within each group. Any further routing change requires another classifier replay of all thirty frozen diffs and reruns of affected groups; recorded predictions alone cannot replace manually checking relevance.
 
 ## 8. Consultant interactions and disposition
 
@@ -314,6 +339,7 @@ Advice is not ground truth. A consultant's strong inference that a failed contro
 | Low thinking exhausted completion budget | Model/runtime interaction | Measured; bounded thinking returned content without curing false claims |
 | Engine wait exhausted reviewer deadline | Scheduling / campaign execution | Observed in group 5; sequential large-PR rerun required |
 | Consultant cap / cloud reviewer quota | Service availability | Recorded; not counted as model judgments |
+| Old sessions crash while serializing missing lane sightings | Product backward compatibility | Reproduced and corrected at the finding properties; live retry remains required |
 
 ## 10. Validation, gates, and conclusions that remain open
 
@@ -328,6 +354,28 @@ Own-feature `review_code` at predecessor `71c5dab0` returned **proceed, 8/8 answ
 At this report's checkpoint, current-head CI build/test/platform/extension/CodeQL checks passed; SonarCloud quality gate remained red (6.0% new-code duplication versus 3% allowed and security rating C versus A required). CodeRabbit skipped the draft; its successful check is not a performed review. These are independent acceptance conditions and must not be conflated with local-model calibration.
 
 The data supports continuing with Gemma and narrower controlled experiments. It does **not** support saying the feature is secure, Qwen is intrinsically incapable, all thirty PRs completed, all checked prompts always run, or all detected positive findings have accurate reproductions. Next work: complete the routing correction and affected reruns; separate engine waiting from model failure; test positive finding fidelity with pinned safe/unsafe controls; finish the historical groups; then current-head code review and final feature gate.
+
+### 10.1 A real code-gate crash exposed old-session incompatibility
+
+The actual `review_code` attempt on committed `98b01d3a` failed before reviewers with a
+`NullReferenceException`. The Native-AOT log points to generated
+`ImmutableArraySecuritySightingSerializeHandler`, reached through a prior rejection while
+`LiveRound.Persist` saves the session. Pre-lane findings lack `alsoSeenBy`; source-generated
+deserialization supplies a default `ImmutableArray` despite its property initializer. Missing
+`capReason` similarly becomes null. This is a product defect, not a model failure or a gate pass.
+
+`SecuritySessionCompatibilityTests` reproduced it through the actual `SessionStore` and generated
+JSON context: **two failed, one positive control passed**. Normalizing both values at their owning
+`Finding` properties passed the focused security suite: **84 passed, two explicit hardware skips**.
+Removing the normalization again failed the same two cases; restoring it passed all three
+compatibility cases. Pending findings, rejection reasons and nonempty new sightings/caps survive
+the roundtrip. No live session was reset or rewritten to avoid the failure.
+
+Evidence: `ART/code-sql-terms-98b01d3a-result.json`,
+`ART/security-session-{red,green,mutation,restored}-tests.log`, and installed preview log
+`%LOCALAPPDATA%/coai-mcp/logs/2026-10-02/coai-mcp-13-46-49-46472.log`.
+The full Release run predates this compatibility patch; a rebuilt Native-AOT live retry and
+Release validation of the fix remain open.
 
 ## 11. Evidence index and continuation commands
 
@@ -353,6 +401,25 @@ $env:COAI_SECURITY_CALIBRATION_OUT = 'D:/chosen-new-output/security-calibration'
 & src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --explicit only --filter-class '*SecurityLaneCalibrationTests' --timeout 60m
 ```
 
+For the bounded full Release suite, run the following in a **dedicated test child PowerShell process**. Clearing these variables isolates the consultant fixture; never apply it to actual COAI calls or use it to change their caller identity or budget.
+
+```powershell
+foreach ($callerVariable in @('COAI_CALLER_SESSION', 'CLAUDE_CODE_SESSION_ID', 'CODEX_SESSION_ID', 'GEMINI_CLI_SESSION_ID')) {
+    [Environment]::SetEnvironmentVariable($callerVariable, $null, 'Process')
+}
+& src_mcp/tests/bin/Release/net10.0/CoaiMcp.Tests.exe --timeout 30m
+```
+
 Use a new artifact directory for each measurement. Record the actual implementation/fixture SHAs, prompt/schema hashes, model digest, requests and raw responses. Predict the distinction before running; inspect every finding before calling the result adequate. Preserve failed and superseded measurements separately. Do not infer missing data as zero, or turn a successful validator check into a security-quality score.
 
-Document review of the earlier `f07fffb5` checkpoint returned `proceed`, **4/4 reviewers answered** (Codex Luna and Gemini Flash Medium, review and summary roles). Two findings were accepted as clarity improvements: concurrency applies per MCP process, and the future mixed-reviewer schedule is separate from measured all-Gemma results. Two were rejected with evidence: the executable's `--help` lists `--filter-class`, and `COAI_FEATURE_MIN_EPICS` counts epics rather than reviewers. All four decisions were recorded; that document session is `Done`. The follow-up observations above require a new document review. Neither review is the pending final feature gate.
+Document review of the earlier `f07fffb5` checkpoint returned `proceed`, **4/4 reviewers answered** (Codex Luna and Gemini Flash Medium, review and summary roles). Two findings were accepted as clarity improvements: concurrency applies per MCP process, and the future mixed-reviewer schedule is separate from measured all-Gemma results. Two were rejected with evidence: the executable's `--help` lists `--filter-class`, and `COAI_FEATURE_MIN_EPICS` counts epics rather than reviewers. All four decisions were recorded; that document session is `Done`.
+
+A follow-up document review returned `proceed`, **4/4 answered**, with six findings resolved through
+MCP. Five clarity improvements were accepted: changed SQL selection direction, historical group 2's
+provisional routing status, mixed-reviewer rerun configuration, the exploratory run versus the
+three-repeat streak, and the full-suite continuation command. The claim that §7.3 required another
+group 1 rerun was rejected against the actual text and unchanged classifier predictions; its exact
+runtime was nevertheless clarified. Both reviewers' summaries supported bounded continuation,
+not a quality qualification. That session is `Done`, with six recorded decisions. The subsequent
+product-transfer and compatibility-crash observations still need document review. Neither document
+review is the pending final feature gate.

@@ -66,6 +66,10 @@ Ordinary ownership wins a duplicate; stronger severity survives, with per-pair s
 Schema step 17 stores this evidence in `findings.security_evidence`; old database readers remain
 supported by the column-presence ladder. Ordinary findings with no security evidence keep an empty
 column and no evidence disclosure in the extension.
+Persisted findings written before the lane have neither `alsoSeenBy` nor `capReason`.
+Their owning properties normalize the source generator's missing-field defaults to an empty
+array/string, so resuming and saving old pending findings or rejections cannot crash the round.
+Existing nonempty sightings and cap reasons survive the same serialization path.
 
 The lane has its own round budget and threshold. Missing, failed and unverified local answers
 are named in the reply and persisted round summary; failed/unverified or excluded work also
@@ -121,3 +125,6 @@ validation, deadline and ordinary-failure independence. `securityLane.test.ts` e
 page and sends its serialized settings to the built server. The explicit local calibration test
 is described in [module_tests.md](module_tests.md); it measures model behavior separately from
 these deterministic guarantees.
+`SecuritySessionCompatibilityTests` loads pre-lane finding shapes through the real `SessionStore`
+and generated JSON context, saves and reloads them, and checks the empty evidence projection.
+Its positive control preserves nonempty lane evidence through the same store.
