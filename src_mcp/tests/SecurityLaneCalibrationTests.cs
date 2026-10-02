@@ -14,7 +14,8 @@ namespace CoaiMcp.Tests;
 /// <summary>Explicit hardware measurement through real code rounds. Never part of unattended CI.</summary>
 public sealed class SecurityLaneCalibrationTests
 {
-    private const string Model = "Qwen3.5-35B-A3B-Q5_vk128:latest";
+    internal static string Model => Environment.GetEnvironmentVariable("COAI_SECURITY_CALIBRATION_MODEL")
+        ?? "Qwen3.5-35B-A3B-Q5_vk128:latest";
     private const string Scope = """
         Review the committed invoice-search change. A caller must only read invoices belonging to
         the tenant in their authenticated claims, and search text must remain a SQL parameter.
@@ -30,6 +31,7 @@ public sealed class SecurityLaneCalibrationTests
         Directory.CreateDirectory(output!);
         var real = new ProcessLauncher();
         await using var repo = await TempGitRepo.InitAsync(real, "coai-security-calibration-");
+        await repo.WriteAsync("AGENTS.md", "Review this isolated invoice fixture. Preserve tenant isolation and SQL parameterization.\n");
         await repo.WriteAsync("Invoices.cs", Source(false));
         await repo.CommitAsync("safe calibration baseline");
         var baseline = await repo.HeadAsync();
@@ -90,7 +92,7 @@ public sealed class SecurityLaneCalibrationTests
     {
         ProviderSettings[] providers = [
             new("codex") { ExecutablePath = Path.Combine(AppContext.BaseDirectory, "FakeCli.exe") },
-            new("qwen") { Runtime = "local", Model = Model, BaseUrl = "http://localhost:11434/v1",
+            new("local-security") { Runtime = "local", Model = Model, BaseUrl = "http://localhost:11434/v1",
                 Plan = false, Code = false, ExecutablePath = Path.Combine(AppContext.BaseDirectory, "coai-mcp.exe") },
         ];
         var lane = SecurityLaneSetting.Parse(JsonSerializer.Serialize(new
@@ -98,7 +100,7 @@ public sealed class SecurityLaneCalibrationTests
             enabled = true,
             threshold = 0,
             maxRounds = 2,
-            runs = promptIds.Select(id => new { vendor = "qwen", prompt = id, context = "slice", contextTokens }),
+            runs = promptIds.Select(id => new { vendor = "local-security", prompt = id, context = "slice", contextTokens }),
         }), providers);
         return new()
         {
