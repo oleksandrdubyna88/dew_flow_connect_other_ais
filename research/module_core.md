@@ -73,7 +73,8 @@ flowchart LR
 | `RuntimeCapabilities`, `RuntimeCapabilityRow`, `MeasuredWith`, `CapabilityStanding` | `QuestionConsult/RuntimeCapabilities.cs` | the embedded `shared/runtime-capabilities.json`: per runtime × capability what was MEASURED (`confined` / `unconfined` / `default-deny` / `unsupported` / `unmeasured`), every row citing its probe cells; refused whole at load when a pair is undecided (D3) |
 | `CapabilityMatrix`, `Admission`, `AdmissionFlag` | `QuestionConsult/CapabilityMatrix.cs` | the one rule a row becomes a decision by: confined admits, unconfined and default-deny admit FLAGGED (D13), the rest refuse by name — the TS `capabilityAdmission.ts` is the same rule over the same file, both held to `shared/capability-matrix-vectors.json` |
 | `ConfinementPlanner`, `Confinement`, `CwdKind` | `QuestionConsult/ConfinementPlanner.cs` | runtime × grant → argv fragments, a cwd kind and the roots — the ONE place a question row's sandbox is decided (D4); `--disallowedTools` in no plan (F3, F5) |
-| `WebQuestionSanitiser`, `WebQuestion`, `WebQuestionContext` | `QuestionConsult/WebQuestionSanitiser.cs` | a web row gets strictly the question (A2): eleven refusal classes in order, each naming its cure, nothing ever redacted |
+| `WebQuestionSanitiser`, `WebQuestion`, `WebQuestionContext` | `QuestionConsult/WebQuestionSanitiser.cs` | a web row gets strictly the question (A2): thirteen refusal classes in order (S4b added `invisible` and `scheme`), each naming its cure, nothing ever redacted |
+| `TextAsRead` | `QuestionConsult/TextAsRead.cs` | the text as a model reads it (S4b): Unicode `Cf` removed, the NFKC compatibility mappings that reach ASCII folded — what the sanitiser and the secret check read |
 | `SecretCheck`, `SecretCheckResult`, `CheckedContext` | `QuestionConsult/SecretCheck.cs` | the secret half alone for a `none` row on a hosted runtime (A9, D10): refuses through the notice redaction's own passes (`Redaction.FirstSecretClass`), and the cleared text is a TYPE only the check can mint |
 | `QuestionAnswer`, `QuestionAnswerSchema` | `QuestionConsult/QuestionAnswer.cs`, `QuestionAnswerSchema.cs` | the ONE reader of a consultant's answer envelope (the local route's `ConsultantAnswer.TextOf` delegates here) and the api row's schema — the consult answer with `sourceRequests`, derived by the feature schema's own step |
 | `ApiQuestionPrompt`, `ApiQuestionInput`, `QuestionTail`, `QuestionTailInput` | `QuestionConsult/ApiQuestionPrompt.cs`, `QuestionTail.cs` | what an api row reads on turn 1 (instruction, what it has, the outline and the checked context fenced as material, the question LAST) and the tail a follow-up turn appends under the byte-identical base (D25) |
@@ -771,10 +772,11 @@ flowchart LR
   CM --> CP["ConfinementPlanner.Plan(runtime, grant)<br/>Leading · Flags · CwdKind · AddDirs · Flag"]
   CP -->|Planned| AD[adapters compose, add nothing]
   CP -->|Refused| X1[a sentence]
-  q[a web row's question] --> WS["WebQuestionSanitiser.Check<br/>empty · secret · code-fence · inline-code · stack-trace · config-line · repository · root · path · internal-host · too-long"]
+  q[a web row's question] --> TR["TextAsRead.Normalised<br/>Cf removed · NFKC-to-ASCII folded"]
+  TR --> WS["WebQuestionSanitiser.Check<br/>empty · secret · invisible · code-fence · inline-code · stack-trace · config-line · repository · root · path · scheme · internal-host · too-long"]
   WS -->|Clean| same[the question, unchanged]
   WS -->|Refused| X2[class + cure]
-  ctx[a none row's context] --> SC[SecretCheck.Inspect]
+  ctx[a none · disk · api row's question AND context] --> SC[SecretCheck.Inspect — raw and folded]
   SC -->|Clean| CC[CheckedContext — a type only the check mints]
   CC --> AP[ApiQuestionPrompt.Compose]
   SC -->|Refused| X3[class + cure]
@@ -801,9 +803,17 @@ flowchart LR
   unconfined (codex, F2), so what the row is GIVEN is the only thing ours to control, and a question
   with a hole where a path was still says there was a path. The sanitiser answers ONE class — the first
   found, a secret first and the length last — with its cure; the checkout and the roots are asked
-  BEFORE the generic path shapes so the more specific cure wins; URL-shaped tokens are set aside before
-  the path checks so a public link may be cited, and the host checks run over the original so a private
-  one may not. Two measured edges: `max_tokens=8192` is a SECRET by the credential words (`token`) and is
+  BEFORE the generic path shapes so the more specific cure wins; a public link — http, https or ftp, and
+  since S4b NOTHING else — is set aside before the path checks so it may be cited, any other `scheme://`
+  (`vscode://`, `ssh://`, `smb://`, `git+ssh://`) is refused as `scheme`, and the host checks run over the
+  whole text so a private link may not be cited either. **Since S4b every check reads the text as a model
+  reads it** (`TextAsRead`): Unicode format characters (`Cf` — zero-width, bidi, the soft hyphen, tags)
+  removed and the compatibility forms that spell ASCII folded the way NFKC folds them — the full-width block,
+  every space separator, the small form variants, the mathematical letters and digits, the super- and
+  subscript digits, the Latin ligatures, the dot leaders. The fold is ours because `string.Normalize(FormKC)`
+  returns its input unchanged under `InvariantGlobalization`, which every binary here is built with (measured
+  2026-10-02 and pinned by `TextAsReadTests`). The question itself is never rewritten: one carrying a format
+  character is refused as `invisible` (after `secret`, which is found on the folded text). Two measured edges: `max_tokens=8192` is a SECRET by the credential words (`token`) and is
   refused as one before the config class is reached, which is the order; `Question: …` is prose, because
   a `key: value` line refuses only a config-shaped key (ALL_CAPS, or carrying `.`, `_`, `-`).
 - **The secret check is the redaction's own passes, classifying.** `Redaction.FirstSecretClass` runs
@@ -812,7 +822,10 @@ flowchart LR
   level with the extension by the parity harness — and fails closed (`unredactable`) as the redaction
   does. `SecretCheck` refuses on it rather than redacting, for the sanitiser's reason; the plan named
   the check without saying which, and this is the choice. "After SecretCheck" is a type:
-  `CheckedContext` has no public constructor, and `ApiQuestionPrompt.Compose` takes nothing else.
+  `CheckedContext` has no public constructor, and `ApiQuestionPrompt.Compose` takes nothing else. Since S4b
+  it reads both the raw text and `TextAsRead.Normalised` of it (folding can also JOIN what the raw text kept
+  apart, so a shape either reading reveals is a secret), and `Inspect(text, what)` names which text it refused —
+  the fan-out checks the QUESTION as well as the context on every non-web row.
 - **One answer reader.** `QuestionAnswer.Parse` reads the api row's `{answer, sourceRequests}` through
   `GeminiPayload.Extract` and `ReviewParser.ReadRequests` (internal now, the same path validation a
   feature reviewer's requests get), and the local consultant's `ConsultantAnswer.TextOf` delegates to it:
@@ -834,7 +847,7 @@ Three more pure units beside the five above, for the fan-out that S2 built in th
 | Type | File | What it is |
 |---|---|---|
 | `QuestionRow`, `QuestionRows`, `QuestionRowsSetting` | `QuestionConsult/QuestionRow.cs` | the parser of `COAI_QCONSULT_ROWS`: a model and exactly one base prompt per row, on or off, D13's `acknowledged` carried; a row with no id, vendor or prompt dropped and said, a second row under one id dropped and said, the SEVENTH active row and after switched OFF and said (`MaxActive = 6`); the same prompt on several rows is ordinary; an unreadable value is `Unreadable`, and the tool then refuses by name |
-| `QuestionPromptSet`, `QuestionPromptDefinition`, `QuestionPromptsSetting` | `QuestionConsult/QuestionPromptSet.cs` | the three shipped base prompts (`question-disk` · `question-web` · `question-opinion`, one per capability), embedded from `shared/question-prompts.json` like the role seed and refused whole as a broken build; a person's own (`COAI_QCONSULT_PROMPTS`) checked row by row — the override-file id rule, no shipped id redefined, a capability of the three, a text — and joined after the shipped ones. Named `…Set` rather than the plan's `…Catalog`: the retired-name guard (`NothingReadsAnotherProgramsSourceTests`) forbids the substring `PromptCatalog` in source |
+| `QuestionPromptSet`, `QuestionPromptDefinition`, `QuestionPromptsSetting` | `QuestionConsult/QuestionPromptSet.cs` | the three shipped base prompts (`question-disk` · `question-web` · `question-opinion`, one per capability), embedded from `shared/question-prompts.json` like the role seed and refused whole as a broken build; a person's own (`COAI_QCONSULT_PROMPTS`) checked row by row — the override-file id rule (`RoleComposition.IsPromptId` since S4b: the slug AND not a Windows device name — the set's own copy of the expression had let `con` through), no shipped id redefined, a capability of the three, a text — and joined after the shipped ones. Named `…Set` rather than the plan's `…Catalog`: the retired-name guard (`NothingReadsAnotherProgramsSourceTests`) forbids the substring `PromptCatalog` in source |
 | `QuestionPrompt`, `QuestionPromptInput` | `QuestionConsult/QuestionPrompt.cs` | the CLI rows' prompt by capability — the instruction, what the row has, the roots (disk), the outline (none) and the context fenced with the question's nonce, the question LAST; a WEB input carrying a context, an outline or a root is refused by name (A2 as a contract), a none input carrying a root too. The `api` row keeps `ApiQuestionPrompt`, which speaks its schema |
 
 `CoreJsonContext` gained the seed and the two wire shapes (every field nullable: an omitted field arrives
