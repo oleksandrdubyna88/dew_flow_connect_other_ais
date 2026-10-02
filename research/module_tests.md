@@ -23,6 +23,12 @@ Ollama consumed the full input; the live run does not execute reproductions.
 `SecurityLaneAuditTests` separately runs all twelve modules against an explicitly selected committed
 feature, one at a time, preserving every request, response and failure for consultant triage. Its
 ordinary reviewer is a clean test double; the campaign does not replace the COAI code/feature gates.
+Both hardware harnesses accept `COAI_SECURITY_CALIBRATION_MODEL` to select the installed Ollama
+model; if unset they retain the original Qwen default. Their manifests record the selected model,
+and the reviewer vendor ID is `local-security` independently of the model family.
+The calibration fixture includes written repository rules so its Conventions reviewer participates.
+Passing these hardware tests establishes usable replies and wiring; semantic accuracy of each
+finding and reproduction is inspected separately in the [Windows results](RESULTS_security_lane_qwen_windows.md).
 
 Shared-rule adoption adds real filesystem scenarios: `RuleFilesTests` exercises neutral
 PROJECT/local/shared discovery, ordering and missing mount bodies while retaining legacy cases.

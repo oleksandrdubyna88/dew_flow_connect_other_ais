@@ -1,7 +1,8 @@
 # Security lane calibration — Windows Ollama
 
-Status: the initial live campaign exposed a response-contract defect; the corrected twelve-module
-campaign is pending. No quality claim is made yet.
+Status, 2026-10-02: Gemma completed three consecutive adequate feature replies and all twelve
+modules. Positive controls still expose inaccurate explanation/reproduction details; broader quality
+calibration remains open. Qwen has not qualified. The dated campaigns below retain their own results.
 
 ## Prediction recorded before the run
 
@@ -29,6 +30,8 @@ Run on Windows after building the test project:
 
 ```powershell
 $env:COAI_SECURITY_CALIBRATION_OUT = 'D:/chosen-output/security-lane-qwen'
+# Optional; the audit harness uses the same model selector. Unset retains the Qwen default.
+$env:COAI_SECURITY_CALIBRATION_MODEL = 'Qwen3.5-35B-A3B-Q5_vk128:latest'
 & src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe --explicit only --filter-class '*SecurityLaneCalibrationTests' --timeout 60m
 ```
 
@@ -184,3 +187,87 @@ protocol/preset tests passed, 16 generated-help/coverage tests passed, TypeScrip
 help generator's consistency check passed. Consultation `fc975f1c8e914679b53a1fb5134b398b` was
 closed as `not_solved`; its source-selection correction is implemented, but answer quality remains
 unresolved. No successful repetition is inferred from schema compliance alone.
+
+## Gemma comparison (2026-10-02)
+
+The operator selected the installed `Gemma4-26B-A4B-Uncensored_vk128:latest`, digest
+`6548c373a4c1a01c84d5bb3166f0971ae14d3e8216bb676c2f9f393527b6dc2e` (Q5_K_M, 25.2B).
+Windows Ollama 0.35.0 reported `context_length: 131072` in `/api/ps`; this is observed runtime
+capacity, not just the requested setting. Calls remained sequential on the native Windows endpoint.
+The lease daemon refused connection at `127.0.0.1:5455`; the existing operator-authorized native
+fallback was used. No model was downloaded and no global model selection was changed.
+
+Subject: committed feature `1308108cd5ac903c60df62d6a445de3338abd1e0`, base
+`1056aed99d968ce04a2f12dbe29461b2ee6aa5d4`. `SecurityLaneAuditTests` used the existing 24000-token
+slice budget, 8192 output ceiling and a single local request. The Git prompt assets remained exactly
+those of the shortened-prompt commit. The measured harness adds the model environment selector and
+records its assembly hash before each run. Temperature stayed zero; the product derives its seed
+from each composed request, so fresh nonce fences make these independent rounds rather than
+byte-identical API replays. Predictions and raw requests/answers are retained under
+`D:/rsd/_wt/security-lane-tools/gemma-feature`.
+
+| Full product round | Input / output tokens | Observed result |
+|---|---|---|
+| AuthZ repetition 1 | 16894 / 10 | SECURE, empty findings, all 5 reviewers answered |
+| AuthZ repetition 2 | 16900 / 10 | SECURE, empty findings, all 5 reviewers answered |
+| AuthZ repetition 3 | 16904 / 10 | SECURE, empty findings, all 5 reviewers answered |
+| SQL | 16999 / 10 | SECURE, empty findings |
+| Concurrency | 16935 / 10 | SECURE, empty findings |
+| Auth tokens | 18024 / 10 | SECURE, empty findings |
+| SSRF | 16599 / 10 | SECURE, empty findings |
+| Webhooks | 17395 / 10 | SECURE, empty findings |
+| Files | 18267 / 10 | SECURE, empty findings |
+| Command | 17792 / 10 | SECURE, empty findings |
+| Deserialization | 17732 / 10 | SECURE, empty findings |
+| Secrets | 18276 / 10 | SECURE, empty findings |
+| Prompt injection | 17147 / 10 | SECURE, empty findings |
+| XSS | 17137 / 10 | SECURE, empty findings |
+
+Only after the three AuthZ successes were the remaining eleven modules launched. Every module
+actually reached Ollama, passed the real reply validator and answered alongside all four ordinary
+test reviewers. The custom `redteam-general.md` also returned SECURE (16914 / 10 tokens), through
+the real `--ask-local` shim on the captured AuthZ source slice; that additional run is not a full
+panel round or an automatic routing test. All thirteen prompt files were exercised.
+
+These empty feature replies were adequate for the supplied slices, not evidence that the whole
+feature is secure. The ordinary reviewers are `FakeCli` clean replies, and every round still says
+local input coverage is unverified/incomplete. These runs cannot pass the real code/feature gates
+or close local-trust §6. There were no feature findings to fix from this campaign.
+
+### Positive and negative controls
+
+A frozen safe invoice fixture returned SECURE (1535 / 10 tokens); removing only its tenant guard
+returned a grounded tenant-bypass finding (1511 / 391). The direct API comparison changed the model
+tag, which also selects that model's template/system text; it does not isolate weights alone.
+Artifacts: `D:/rsd/_wt/security-lane-tools/gemma-controls`.
+
+The full `SecurityLaneCalibrationTests` fixture removes both tenant validation and SQL parameters.
+Its first run exposed a harness error: no written repository rules meant Conventions was skipped,
+so the assertion expecting six replies received five. Adding fixture `AGENTS.md` reproduced the
+intended six-reviewer setup without weakening that assertion. The corrected test passed all three
+rounds (six local answers) in 2m15.649s. Artifacts:
+`D:/rsd/_wt/security-lane-tools/gemma-calibration-corrected-fixture`.
+
+Reading all six raw answers found the two planted defect classes every time, but also defects in
+the explanations: clipped C# quotations, invented `Users` tables in AuthZ reproductions, missing
+search-value preconditions and hypothetical database writes in SQL consequences. The product
+accepted these answers; its schema/anchor checks do not prove semantic grounding. Therefore the
+passing hardware test is wiring evidence, not a claim that all returned findings meet the operator's
+quality threshold. No synthetic application or model-proposed reproduction was executed.
+
+Two bounded scratch prompt variants requested complete prose, visible database objects, exact
+remaining predicates and a single proved impact. Each was measured against both frozen positive
+requests through the product shim. Readability improved, but both retained unsupported SQL impacts;
+one also described the wrong row set. Neither variant was applied to the Git prompts. Raw probes:
+`D:/rsd/_wt/security-lane-tools/gemma-refinement`. No finding was suppressed or silently repaired.
+The second variant's safe twin still returned SECURE (1625 / 10 tokens); this did not repair its
+positive-control explanation failures.
+
+The configured consultant was requested with these observations and verbatim unsupported model
+text. It refused because the caller session had reached its 10-call/24-hour cap. No fresh advice
+was obtained and the cap was not changed. Remaining quality work is explanation/reproduction fidelity
+and broader positive controls; this Gemma result does not turn Qwen's failed series
+into successes. The model selector and corrected fixture build with zero warnings/errors; the
+focused security suite passed 62 tests with two explicit hardware skips before the fixture fix,
+and the corrected fixture itself subsequently passed its live three-round test.
+Code/feature gate outcomes and current CI disposition are recorded on draft PR #634 separately.

@@ -1,6 +1,6 @@
 # PLAN — a security lane runs beside the gate: prompts and models a person pairs, switched on by what the change contains
 
-> Status: **implementation in progress, 2026-10-01.** E1–E4 under verification; twelve conditional presets, their checkboxes and operator-authored bodies are present; E5 live calibration and the operator-requested twelve-module audit are pending. Issue #587. Scope: `src_mcp/core`
+> Status: **implementation in progress, 2026-10-02.** E1–E4 implemented and reviewed; Gemma completed three adequate feature replies and the twelve-module audit. E5 explanation/reproduction fidelity remains open; Qwen has not qualified. See [live results](../research/RESULTS_security_lane_qwen_windows.md); final gate outcomes are tracked in draft PR #634. Issue #587. Scope: `src_mcp/core`
 > (findings, gate, rounds, a new `Security/` folder), `src_mcp/runners` (scheduler, stand-down, feature
 > outline), `src_mcp/src` (settings, roster, round engine, stages, store, prompts), `shared/` (one new
 > seed), `src_vs_code/src` (a new Settings section, the rounds log, export/import), `src_bench` (the
@@ -496,6 +496,11 @@ measurements and interpretation. No story is separately gated. The Windows valid
 tokens, and the authored prompts under Git. No credentials are needed for this local endpoint.
 CI uses reviewer doubles; the live run is operator-machine verification. Unavailable/auth/quota
 outcomes are named incomplete cells, never a passing check or a claimed product defect.
+On 2026-10-02 the operator also selected the installed
+`Gemma4-26B-A4B-Uncensored_vk128:latest` for the same Windows validation. The hardware harnesses
+accept `COAI_SECURITY_CALIBRATION_MODEL` and record the selected model. Gemma measurements do not
+turn the preceding unsuccessful Qwen measurements into passes. The explicitly requested final
+feature gate uses `COAI_FEATURE_MIN_EPICS=2` for that invocation so these two review epics are reviewed.
 
 ### E1 — Configuration and contracts
 

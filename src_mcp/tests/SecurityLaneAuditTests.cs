@@ -37,7 +37,7 @@ public sealed class SecurityLaneAuditTests
             baseline,
             head = head.StdOut.Trim(),
             utc = DateTimeOffset.UtcNow,
-            model = "Qwen3.5-35B-A3B-Q5_vk128:latest",
+            model = SecurityLaneCalibrationTests.Model,
             modelContextTokens = 131072,
             contextTokens,
             ordinaryReviewer = "FakeCli clean response; this campaign measures only the local security lane",
