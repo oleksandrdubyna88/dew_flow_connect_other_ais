@@ -54,6 +54,19 @@ public sealed class BindFailureTests
     }
 
     [Fact]
+    public void AMessageThatSpansLines_IsStillOneLine()
+    {
+        // A platform or a future Kestrel may put a line break in its message; the line is a contract
+        // a journal reader and a log grep rely on (CodeRabbit, PR #636).
+        var failure = new IOException("Failed to bind to address http://127.0.0.1:1:\r\naddress already in use.\nretry later");
+
+        var line = BindFailure.Explained("coai-server", failure);
+
+        line.Should().NotContain("\n").And.NotContain("\r");
+        line.Should().Contain("http://127.0.0.1:1: address already in use. retry later", "breaks become single spaces");
+    }
+
+    [Fact]
     public void TheExitCode_IsTempfail_NotConfig()
     {
         BindFailure.ExitCode.Should().Be(75, "78 is EX_CONFIG, which a deploy unit treats as permanent");

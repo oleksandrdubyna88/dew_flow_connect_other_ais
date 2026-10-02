@@ -328,7 +328,9 @@ catch (IOException taken) when (CoaiMcp.ServiceDefaults.BindFailure.IsAddressInU
 {
     // A port somebody else holds is an expected startup failure, decided once for both HTTP hosts:
     // one line and EX_TEMPFAIL, so the restart policy tries again rather than a crash report per try.
-    Log.Error(taken, "Cannot listen: {Reason}", taken.Message);
+    // stderr only: by now the host — and the logger UseSerilog gave it — is disposed, so a log call
+    // here would be dropped in silence (measured on PR #636). The log file keeps the host framework's
+    // own "Hosting failed to start" record with the exception.
     await Console.Error.WriteLineAsync(CoaiMcp.ServiceDefaults.BindFailure.Explained("coai-server", taken));
 
     return CoaiMcp.ServiceDefaults.BindFailure.ExitCode;

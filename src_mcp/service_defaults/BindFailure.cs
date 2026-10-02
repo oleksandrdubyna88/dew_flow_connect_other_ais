@@ -33,10 +33,19 @@ public static class BindFailure
 
     /// <summary>The one line a host prints: what it could not take, and what that means.</summary>
     /// <remarks>
-    /// Carries Kestrel's own message verbatim, because that is the sentence that names the address —
-    /// and the one a test harness's port-race retry already recognises.
+    /// <para>Carries Kestrel's own message, because that is the sentence that names the address — and the
+    /// one a test harness's port-race retry already recognises.</para>
+    /// <para>ONE line whatever the message holds: any run of line breaks becomes a single space, because a
+    /// journal reader and a log grep treat the line as the record (CodeRabbit, PR #636). A host prints it to
+    /// stderr and adds no stack of its own — an expected failure is reported, not traced; the host
+    /// framework's one "Hosting failed to start" record already carries the exception into the log file.
+    /// ASCII only: a Windows console re-encodes stderr into its code page, and a dash outside it arrives
+    /// as something else (measured: an em dash came back as a hyphen).</para>
     /// </remarks>
     public static string Explained(string appName, Exception failure) =>
-        $"[{appName}] cannot listen — {failure.Message} Another process holds that address; nothing "
-        + "was served, and a restart can succeed once it is released.";
+        $"[{appName}] cannot listen: {OneLine(failure.Message)} Another process holds that address; "
+        + "nothing was served, and a restart can succeed once it is released.";
+
+    private static string OneLine(string text) =>
+        string.Join(' ', text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
 }
