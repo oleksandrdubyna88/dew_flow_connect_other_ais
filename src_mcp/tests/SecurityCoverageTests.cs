@@ -37,8 +37,15 @@ public sealed class SecurityCoverageTests
             Reproduction = new(new string('x', 2000), new string('x', 2000), new string('x', 2000), new string('x', 2000)),
             AttackEvidence = new("fixture input", "fixture missing check", "fixture unintended output"),
         };
-        var answer = new ReviewerOutcome.Ok(new(Enumerable.Repeat(item, 17).ToImmutableArray(), []), false);
-        SecurityAnswerLimit.Apply(Work(), answer).Should().BeOfType<ReviewerOutcome.Unparseable>();
+        // Both answers are otherwise protocol-valid (FINDINGS status, complete trigger/mechanism/consequence),
+        // so the ONLY thing separating them is the aggregate: 16 items fit under the cap, 17 do not.
+        var perItem = 4 * 2000 + item.AttackEvidence!.Characters;
+        (16 * perItem).Should().BeLessThanOrEqualTo(SecurityAnswerLimit.MaxReproductionCharacters);
+        (17 * perItem).Should().BeGreaterThan(SecurityAnswerLimit.MaxReproductionCharacters);
+        var answer = new ReviewerOutcome.Ok(new(Enumerable.Repeat(item, 17).ToImmutableArray(), []) { SecurityStatus = "FINDINGS" }, false);
+        SecurityAnswerLimit.Apply(Work(), answer).Should().BeOfType<ReviewerOutcome.Unparseable>()
+            .Which.Reason.Should().Be(
+                $"security evidence exceeds {SecurityAnswerLimit.MaxReproductionCharacters} characters per response");
         var admitted = answer with { Review = new(Enumerable.Repeat(item, 16).ToImmutableArray(), []) { SecurityStatus = "FINDINGS" } };
         SecurityAnswerLimit.Apply(Work(), admitted).Should().BeOfType<ReviewerOutcome.Ok>();
     }

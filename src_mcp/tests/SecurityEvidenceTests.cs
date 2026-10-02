@@ -48,7 +48,10 @@ public sealed class SecurityEvidenceTests
     [Fact]
     public void Deleted_authorization_still_routes_the_security_prompt()
     {
-        var files = SecuritySignals.Classify([new("Controller.cs", "-[Authorize]\n+// removed")]);
+        // A neutral path: nothing in "sample.cs" is an authz term, so only the REMOVED line can route.
+        SecuritySignals.Classify([new("sample.cs", "+// removed")]).Single().Signals.Should().BeEmpty(
+            "the control: the same file without the deleted line carries no signal");
+        var files = SecuritySignals.Classify([new("sample.cs", "-[Authorize]\n+// removed")]);
         SecuritySignals.Triggered(new("redteam-auth", ["authz"], []), files).Should().BeTrue();
         SecuritySignals.Triggered(new("redteam-sql", ["sql"], []), files).Should().BeFalse();
     }
@@ -84,16 +87,26 @@ public sealed class SecurityEvidenceTests
     }
 
     [Fact]
-    public void Production_source_precedes_keyword_rich_supporting_material_under_a_tight_budget()
+    public void Production_source_precedes_signal_richer_supporting_material_under_a_tight_budget()
     {
+        // The supporting file is CODE (prose is stripped of signals, so a .md fixture would lose on focus
+        // alone), sorts before the production path, and carries more focus signals than it. Only the
+        // production-before-supporting tier can put src/Orders.cs first; each file fills most of the budget.
+        string[] focus = ["sql", "authz", "entry-point"];
         var files = SecuritySignals.Classify([
-            new("research/checklist.md", "+ authorization endpoint query\n" + new string('x', 45000)),
+            new("docs/OrdersSample.cs", "+ [Authorize] endpoint database.Query(value);\n" + new string('x', 45000)),
             new("src/Orders.cs", "+ database.Query(value);\n" + new string('y', 45000)),
         ]);
-        var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", ["sql"], ["sql", "authz", "entry-point"]),
+        var supporting = files.Single(f => f.Diff.Path == "docs/OrdersSample.cs");
+        var production = files.Single(f => f.Diff.Path == "src/Orders.cs");
+        supporting.SupportingMaterial.Should().BeTrue();
+        production.SupportingMaterial.Should().BeFalse();
+        supporting.Signals.Intersect(focus).Count().Should().BeGreaterThan(production.Signals.Intersect(focus).Count(),
+            "otherwise focus ranking alone would already put production first");
+        var pack = SecurityContext.Compose("Operator test instructions", new("redteam-sql", ["sql"], focus),
             files, "slice", new(24000));
         pack.Refusal.Should().BeEmpty();
-        pack.Text.Should().Contain("File: src/Orders.cs").And.NotContain("File: research/checklist.md");
-        pack.Omitted.Should().Contain(p => p.Contains("research/checklist.md") && p.Contains("supporting material"));
+        pack.Text.Should().Contain("File: src/Orders.cs").And.NotContain("File: docs/OrdersSample.cs");
+        pack.Omitted.Should().Contain(p => p.Contains("docs/OrdersSample.cs") && p.Contains("supporting material"));
     }
 }

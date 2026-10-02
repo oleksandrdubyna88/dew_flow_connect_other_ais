@@ -135,12 +135,22 @@ public sealed class ASourceRequestIsServedOrRefusedTests : IAsyncLifetime
             {"enabled":true,"prompts":[{"id":"redteam-sql","focus":["sql","authz","entry-point"]}],
             "runs":[{"vendor":"qwen","prompt":"redteam-sql"}]}
             """, [new("qwen") { Runtime = "local" }]);
+        // Sixteen supporting CODE files (a .md would be stripped of signals and lose on focus anyway), each
+        // with more focus signals than the production file and sorting before it: only the
+        // production-before-supporting tier can keep zQuery.cs inside the sixteen slots.
+        string[] focus = ["sql", "authz", "entry-point"];
         CoaiMcp.Core.Context.FileDiff[] files = [.. Enumerable.Range(0, 16).Select(i =>
-            new CoaiMcp.Core.Context.FileDiff($"docs/check{i}.md", "@@ -1 +1 @@\n+authorization endpoint query")),
+            new CoaiMcp.Core.Context.FileDiff($"docs/sample{i}.cs", "@@ -1 +1 @@\n+[Authorize] endpoint database.Query(value);")),
             new("zQuery.cs", "@@ -1 +1 @@\n+database.Query(value);")];
+        var facts = CoaiMcp.Core.Security.SecuritySignals.Classify(files);
+        facts.Where(f => f.Diff.Path != "zQuery.cs").Should().OnlyContain(f =>
+            f.SupportingMaterial && f.Signals.Intersect(focus).Count() > 1);
+        facts.Single(f => f.Diff.Path == "zQuery.cs").Should().Match<CoaiMcp.Core.Security.SecurityFile>(f =>
+            !f.SupportingMaterial && f.Signals.Intersect(focus).Count() == 1);
         var sources = await CoaiMcp.Server.SecuritySources.ReadAsync(lane, files,
             Resolver(head: await _git.HeadAsync()), CoaiMcp.Core.Rounds.Stage.CodeReview, default);
         sources.Should().ContainKey("zQuery.cs").WhoseValue.Should().Contain("production body");
+        sources.Should().HaveCount(CoaiMcp.Server.SecuritySources.MaxSourceFiles, "the cap still holds; one supporting file gave way");
     }
 
     [Fact]
