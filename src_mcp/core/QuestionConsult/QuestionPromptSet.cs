@@ -1,5 +1,5 @@
 using System.Text.Json;
-using System.Text.RegularExpressions;
+using CoaiMcp.Core.Rounds;
 
 namespace CoaiMcp.Core.QuestionConsult;
 
@@ -39,7 +39,7 @@ internal sealed record QuestionPromptSeedRow(string? Id, string? Title, string? 
 /// never redefined), when its capability is not one of the three, or when it has no text. A list that
 /// cannot be parsed at all is NO custom prompt, said so; the shipped three are never in doubt.</para>
 /// </remarks>
-public sealed partial record QuestionPromptSet(IReadOnlyList<QuestionPromptDefinition> Prompts)
+public sealed record QuestionPromptSet(IReadOnlyList<QuestionPromptDefinition> Prompts)
 {
     internal const string SeedResource = "CoaiMcp.Core.question-prompts.json";
 
@@ -105,7 +105,7 @@ public sealed partial record QuestionPromptSet(IReadOnlyList<QuestionPromptDefin
     private static (QuestionPromptDefinition? Prompt, string Complaint) One(QuestionPromptSeedRow row, IReadOnlyList<QuestionPromptDefinition> accepted)
     {
         var id = row.Id?.Trim() ?? string.Empty;
-        if (!WellFormedId().IsMatch(id))
+        if (!RoleComposition.IsPromptId(id))
         {
             return (null, $"COAI_QCONSULT_PROMPTS: the prompt id '{id}' is not one an override file can be named by — lower-case letters, digits and dashes, starting with a letter or digit");
         }
@@ -159,7 +159,7 @@ public sealed partial record QuestionPromptSet(IReadOnlyList<QuestionPromptDefin
 
     private static QuestionPromptDefinition ShippedRow(QuestionPromptSeedRow? row)
     {
-        if (row is null || !WellFormedId().IsMatch(row.Id ?? string.Empty))
+        if (row is null || !RoleComposition.IsPromptId(row.Id))
         {
             throw Broken($"the shipped prompt '{row?.Id}' has an id an override file cannot be named by");
         }
@@ -177,8 +177,4 @@ public sealed partial record QuestionPromptSet(IReadOnlyList<QuestionPromptDefin
     private static InvalidOperationException Broken(string what) =>
         new($"the question prompt catalog ('{SeedResource}') is not usable: {what}. "
             + "It is embedded in this binary, so this is a broken build rather than anything a person configured.");
-
-    /// <summary>The role-prompt id rule (<c>RoleComposition</c>): the id becomes an override file's name.</summary>
-    [GeneratedRegex(@"\A[a-z0-9][a-z0-9-]*\z")]
-    private static partial Regex WellFormedId();
 }

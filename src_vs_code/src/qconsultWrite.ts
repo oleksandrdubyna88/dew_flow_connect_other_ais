@@ -1,6 +1,7 @@
 import { type Admission, admit } from './capabilityAdmission';
 import { SHIPPED_QUESTION_PROMPTS } from './questionPrompts.generated';
 import { MAX_ACTIVE_ROWS, type QuestionPromptSetting, type QuestionRowSetting } from './qconsultSettings';
+import { RESERVED_FILE_NAMES } from './rolesPrompts';
 import { VENDOR_PRESETS, type Vendor, normaliseId } from './vendors';
 
 /**
@@ -285,6 +286,8 @@ export function promptAdded(
 function newPromptRefusal(id: string, capability: string, custom: readonly QuestionPromptSetting[]): string {
   const checks: readonly (readonly [boolean, string])[] = [
     [id.length === 0, 'a prompt needs a title that makes an id — letters or digits'],
+    // The id names the prompt's override FILE: the server's RoleComposition.IsPromptId refuses a device name (S4b item 15).
+    [RESERVED_FILE_NAMES.has(id), `'${id}' is a name Windows reserves for a device, so the prompt's text could be neither written nor read — choose another title`],
     [questionPrompts(custom).some((p) => p.id === id), `'${id}' is already a prompt — one id is one prompt`],
     [!['none', 'disk', 'web'].includes(capability), `'${capability}' is not a capability — none, disk or web`],
   ];

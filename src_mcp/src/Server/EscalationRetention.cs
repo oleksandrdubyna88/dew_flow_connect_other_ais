@@ -1,5 +1,3 @@
-using System.Globalization;
-
 namespace CoaiMcp.Server;
 
 /// <summary>
@@ -91,26 +89,8 @@ public sealed class EscalationRetention(Escalations escalations, Func<string, bo
 
     private static bool Older(DateTime ended, DateTime nowUtc) => nowUtc - ended > Retention;
 
-    private static DateTime? Parsed(string? stamp) =>
-        DateTime.TryParse(stamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
-            ? parsed.ToUniversalTime()
-            : null;
+    private static DateTime? Parsed(string? stamp) => RecordFiles.Parsed(stamp);
 
-    private int Deleted(string path)
-    {
-        try
-        {
-            File.Delete(path);
-
-            return 1;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // Retried on the next sweep — and SAID, because a retention that silently never runs is a directory
-            // that grows for ever with nothing anywhere reporting it.
-            warn?.Invoke($"{Path.GetFileName(path)} is past retention and could not be removed: {e.Message}");
-
-            return 0;
-        }
-    }
+    /// <summary>One file gone (1) or refused and said (0) — <see cref="RecordFiles.Delete"/>.</summary>
+    private int Deleted(string path) => RecordFiles.Delete(path, warn, Path.GetFileName(path)) ? 1 : 0;
 }

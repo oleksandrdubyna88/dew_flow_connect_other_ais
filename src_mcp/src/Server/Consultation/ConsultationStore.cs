@@ -1,6 +1,4 @@
-using System.Globalization;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace CoaiMcp.Server;
 
@@ -8,16 +6,13 @@ namespace CoaiMcp.Server;
 /// One JSON file per consultation in the data directory both halves share — the escalation channel's
 /// shape: written whole under the turn, read without forbidding a writer, a torn file is nothing.
 /// </summary>
-public sealed partial class ConsultationStore(
+public sealed class ConsultationStore(
     string dataDir,
     Action<string>? warn = null,
     Action<ConsultationRecord>? projected = null)
 {
     /// <summary>How long a finished consultation is kept for the log and the card before its file goes.</summary>
     public static readonly TimeSpan Retention = TimeSpan.FromDays(7);
-
-    [GeneratedRegex("^[0-9a-f]{32}$")]
-    private static partial Regex WellFormedId();
 
     public string Directory => Path.Combine(dataDir, "consultations");
 
@@ -32,7 +27,7 @@ public sealed partial class ConsultationStore(
     /// throws, `All` is what `Sweep` enumerates, and so one malformed file in the directory stopped
     /// the sweep for every record behind it. (CodeRabbit, on the pull request.)
     /// </remarks>
-    public static bool IsWellFormedId(string? id) => id is not null && WellFormedId().IsMatch(id);
+    public static bool IsWellFormedId(string? id) => RecordFiles.IsRecordId(id);
 
     public string PathFor(string id) => Path.Combine(Directory, $"{id}.json");
 
@@ -272,50 +267,18 @@ public sealed partial class ConsultationStore(
     /// plan). A lapsed or failed one is no evidence and goes like any other.
     /// </remarks>
     /// <summary>A record past retention, removed — its decision made by <see cref="ExpiryOf"/>.</summary>
-    private bool Deleted(ConsultationRecord record)
-    {
-        try
-        {
-            File.Delete(PathFor(record.Id));
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // Retried on the next sweep — but SAID, because a retention that silently never runs is
-            // a directory that grows for ever with nothing anywhere reporting it. (codex, code round.)
-            warn?.Invoke($"consultation {record.Id} is past retention and could not be removed: {e.Message}");
-
-            return false;
-        }
-
-        return true;
-    }
+    /// <remarks>Retried on the next sweep — but SAID (codex, code round): <see cref="RecordFiles.Delete"/>.</remarks>
+    private bool Deleted(ConsultationRecord record) => RecordFiles.Delete(PathFor(record.Id), warn, $"consultation {record.Id}");
 
     /// <summary>Since the last turn was answered — or since it started, for a record with no stamp at all.</summary>
     public static TimeSpan IdleFor(ConsultationRecord record, DateTime nowUtc) =>
         nowUtc - Parse(record.UpdatedUtc.Length > 0 ? record.UpdatedUtc : record.StartedUtc, nowUtc);
 
-    public static string Stamp(DateTime utc) => utc.ToString("O", CultureInfo.InvariantCulture);
+    public static string Stamp(DateTime utc) => RecordFiles.Stamp(utc);
 
-    private static DateTime Parse(string stamp, DateTime fallback) =>
-        DateTime.TryParse(stamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
-            ? parsed.ToUniversalTime()
-            : fallback;
+    private static DateTime Parse(string stamp, DateTime fallback) => RecordFiles.Parse(stamp, fallback);
 
-    private static ConsultationRecord? ReadFile(string path)
-    {
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        try
-        {
-            using var turn = SessionTurn.Take(path);
-            return JsonSerializer.Deserialize(SharedRead.Text(path), ConsultationJsonContext.Default.ConsultationRecord);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
-        {
-            return null; // torn, busy, or half-written: not a consultation, and the next read may find it whole
-        }
-    }
+    /// <summary>Torn, busy, or half-written is null: not a consultation, and the next read may find it whole.</summary>
+    private static ConsultationRecord? ReadFile(string path) =>
+        RecordFiles.Read(path, ConsultationJsonContext.Default.ConsultationRecord);
 }

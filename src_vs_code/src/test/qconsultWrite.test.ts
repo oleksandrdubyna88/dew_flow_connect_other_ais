@@ -105,6 +105,8 @@ test('a prompt of your own is added under an id from its title — refused for n
   assert.match(promptAdded([], '!!!', 'web').refusal, /needs a title/);
   assert.match(promptAdded([], 'Question web', 'web').refusal, /already a prompt/, 'a shipped id is taken');
   assert.match(promptAdded([], 'Shell', 'shell').refusal, /not a capability/);
+  // S4b item 15's twin: the id names an override FILE, so the server's rule refuses a Windows device name — and so does this.
+  assert.match(promptAdded([], 'Con', 'none').refusal, /Windows/, 'con.md is the console, not a file');
   assert.equal(customPromptEdited([{ id: 'x', title: 'X', capability: 'none', text: 'a' }], 'x', '  '), undefined, 'a prompt that says nothing');
 });
 

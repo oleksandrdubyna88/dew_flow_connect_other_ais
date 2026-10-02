@@ -1,6 +1,4 @@
-using System.Globalization;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using CoaiMcp.Core.QuestionConsult;
 
 namespace CoaiMcp.Server;
@@ -21,7 +19,7 @@ namespace CoaiMcp.Server;
 /// <para>No repository lock, deliberately (D6): the fan-out takes none, so there is none for the sweep
 /// to ask. The heartbeat is the fan-out's proof of life instead.</para>
 /// </remarks>
-public sealed partial class QuestionConsultStore(
+public sealed class QuestionConsultStore(
     string dataDir,
     Action<string>? warn = null,
     Action<QuestionConsultRecord>? projected = null)
@@ -38,9 +36,6 @@ public sealed partial class QuestionConsultStore(
     /// <summary>The most records the directory holds (§5): ~200 KB each at the worst, 100 MB in all.</summary>
     public const int MaxFiles = 500;
 
-    [GeneratedRegex("^[0-9a-f]{32}$")]
-    private static partial Regex WellFormedId();
-
     public string Directory => Path.Combine(dataDir, "question-consults");
 
     /// <summary>Where a row's launch may write its answer and prompt files — swept on the record's clock.</summary>
@@ -48,7 +43,7 @@ public sealed partial class QuestionConsultStore(
 
     public static string NewId() => Guid.NewGuid().ToString("N");
 
-    public static bool IsWellFormedId(string? id) => id is not null && WellFormedId().IsMatch(id);
+    public static bool IsWellFormedId(string? id) => RecordFiles.IsRecordId(id);
 
     public string PathFor(string id) => Path.Combine(Directory, $"{id}.json");
 
@@ -226,58 +221,21 @@ public sealed partial class QuestionConsultStore(
         return true;
     }
 
-    private bool Deleted(QuestionConsultRecord record)
-    {
-        try
-        {
-            File.Delete(PathFor(record.Id));
-
-            return true;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // Retried on the next sweep — but SAID, because a retention that silently never runs is a
-            // directory that grows for ever with nothing anywhere reporting it.
-            warn?.Invoke($"question {record.Id} is past retention and could not be removed: {e.Message}");
-
-            return false;
-        }
-    }
+    private bool Deleted(QuestionConsultRecord record) => RecordFiles.Delete(PathFor(record.Id), warn, $"question {record.Id}");
 
     private static string Ended(QuestionConsultRecord record) =>
         record.EndedUtc.Length > 0 ? record.EndedUtc : record.UpdatedUtc.Length > 0 ? record.UpdatedUtc : record.StartedUtc;
 
-    public static string Stamp(DateTime utc) => utc.ToString("O", CultureInfo.InvariantCulture);
+    public static string Stamp(DateTime utc) => RecordFiles.Stamp(utc);
 
-    private static DateTime Parse(string stamp, DateTime fallback) =>
-        DateTime.TryParse(stamp, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
-            ? parsed.ToUniversalTime()
-            : fallback;
+    private static DateTime Parse(string stamp, DateTime fallback) => RecordFiles.Parse(stamp, fallback);
 
-    private static QuestionConsultRecord? ReadFile(string path)
-    {
-        if (!File.Exists(path))
-        {
-            return null;
-        }
-
-        using var turn = SessionTurn.Take(path);
-
-        return ParsedFile(path);
-    }
+    private static QuestionConsultRecord? ReadFile(string path) =>
+        RecordFiles.Read(path, QuestionConsultJsonContext.Default.QuestionConsultRecord);
 
     /// <summary>The record in the file, read by a caller that holds its turn — or null: torn, busy, half-written or gone.</summary>
-    private static QuestionConsultRecord? ParsedFile(string path)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize(SharedRead.Text(path), QuestionConsultJsonContext.Default.QuestionConsultRecord);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
-        {
-            return null; // torn, busy, or half-written: not a question, and the next read may find it whole
-        }
-    }
+    private static QuestionConsultRecord? ParsedFile(string path) =>
+        RecordFiles.ReadHeld(path, QuestionConsultJsonContext.Default.QuestionConsultRecord);
 }
 
 /// <summary>What spending (or releasing) a consultation's proof came to (S4b item 8).</summary>
