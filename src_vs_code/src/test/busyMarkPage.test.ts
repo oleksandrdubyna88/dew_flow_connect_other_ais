@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { BUSY_AFTER_MS } from '../busyMark';
-import type { BusySnapshot } from '../inFlight';
+import type { BusySnapshot } from '../busySnapshot';
 import { settingsKey, staticKey } from '../panelView';
 import { type Control, type Page, panelState, runPanel } from './panelPageHarness';
 
@@ -215,4 +215,95 @@ test('two writes in flight keep the bar until BOTH are settled', () => {
   assert.equal(shown(page), true, 'one is still running');
   page.deliver(settled(page, second));
   assert.equal(shown(page), false);
+});
+
+// ---- Waiting on the person (research/PLAN_busy_mark_pauses_while_you_type.md §3.4) ----
+// "пока печатаю не считаем" (the operator, 2026-10-02): a box VS Code opens for the person is not the host working.
+
+/** What the host posts when the work numbered `seq` opens a box for the person, and when the person answers it. */
+function waiting(page: Page, seq: number): Record<string, unknown> {
+  return { type: 'waiting', seq, doc: docOf(page) };
+}
+
+function working(page: Page, seq: number, spentMs: number): Record<string, unknown> {
+  return { type: 'working', seq, doc: docOf(page), spentMs };
+}
+
+test('while the person types into a box the action opened, nothing is shown, however long they take', () => {
+  const page = reviewers();
+  const seq = pick(page);
+  page.clock.advance(200);
+  page.deliver(waiting(page, seq));
+  page.clock.advance(10_000);
+
+  assert.equal(shown(page), false, 'ten seconds of typing is not ten seconds of work');
+  assert.equal(codexModel(page).getAttribute('aria-busy'), null);
+});
+
+test('once answered, the bar comes only when the WORKING time passes the delay', () => {
+  const page = reviewers();
+  const seq = pick(page);
+  page.clock.advance(200);
+  page.deliver(waiting(page, seq));
+  page.clock.advance(10_000);
+  page.deliver(working(page, seq, 200));
+
+  page.clock.advance(BUSY_AFTER_MS - 200 - 1);
+  assert.equal(shown(page), false, 'the 200 ms before the box counts, the typing does not');
+  page.clock.advance(1);
+  assert.equal(shown(page), true);
+  assert.equal(codexModel(page).getAttribute('aria-busy'), 'true');
+});
+
+test('a bar already up when the box opens goes away while it is open, and is back at once after', () => {
+  const page = reviewers();
+  const seq = pick(page);
+  page.clock.advance(BUSY_AFTER_MS + 100);
+  assert.equal(shown(page), true);
+
+  page.deliver(waiting(page, seq));
+  assert.equal(shown(page), false, 'the box is the person’s turn, not the host’s');
+  assert.equal(codexModel(page).getAttribute('aria-busy'), null);
+  page.deliver(working(page, seq, BUSY_AFTER_MS + 100));
+  assert.equal(shown(page), true, 'it had already worked past the delay');
+  assert.equal(codexModel(page).getAttribute('aria-busy'), 'true');
+});
+
+test('another document’s box changes nothing on this page', () => {
+  const before = reviewers();
+  const old = pick(before);
+  const after = reviewers();
+  const mine = pick(after);
+  after.clock.advance(BUSY_AFTER_MS);
+
+  after.deliver(waiting(before, old));
+  assert.equal(mine, old, 'the same number from two documents — the collision this guards');
+  assert.equal(shown(after), true, 'this page’s work is still running');
+  assert.equal(codexModel(after).getAttribute('aria-busy'), 'true');
+});
+
+test('a control with one action waiting and another past the delay keeps its mark', () => {
+  const page = reviewers();
+  const first = pick(page, 'gpt-6-luna');
+  const second = pick(page, 'gpt-6-astra');
+  page.clock.advance(BUSY_AFTER_MS);
+  page.deliver(waiting(page, first));
+
+  assert.equal(codexModel(page).getAttribute('aria-busy'), 'true', 'the second action on this control is still working');
+  assert.equal(shown(page), true);
+  page.deliver(settled(page, second));
+  assert.equal(codexModel(page).getAttribute('aria-busy'), null, 'the one left is waiting on the person, which marks nothing');
+  assert.equal(shown(page), false);
+});
+
+test('settled while waiting leaves nothing behind, and a late working revives nothing', () => {
+  const page = reviewers();
+  const seq = pick(page);
+  page.deliver(waiting(page, seq));
+  page.deliver(settled(page, seq));
+  page.deliver(working(page, seq, 900));
+  page.clock.advance(5_000);
+
+  assert.equal(shown(page), false);
+  assert.equal(codexModel(page).getAttribute('aria-busy'), null);
 });

@@ -9,6 +9,7 @@ import {
 } from './escalations';
 import { WatchedDir, answerPaths, usableDirs, watchedDirs } from './escalationDirs';
 import { notify, notifyAndAsk } from './notify';
+import { askPerson } from './personWait';
 
 /** The setting that names other installations' data directories. */
 export const ALSO_WATCH_SETTING = 'coai.alsoWatchDataDirectories';
@@ -189,7 +190,7 @@ export class EscalationWatcher {
     // The question's branch says which review is asking: a feature session's first choice is also the
     // person's request for that review's second round, and its detail says so.
     const choices = decisionChoices(escalation.branch);
-    const picked = await vscode.window.showQuickPick(
+    const picked = await askPerson(() => vscode.window.showQuickPick(
       choices.map((c) => ({ label: c.label, detail: c.detail, choice: c })),
       {
         title: `ConnectOtherAIs — ${escalation.branch}`,
@@ -197,7 +198,7 @@ export class EscalationWatcher {
         ignoreFocusOut: true,
         matchOnDetail: true,
       },
-    );
+    ));
     if (picked === undefined) {
       return; // dismissing is not answering; the question stays open
     }
@@ -205,12 +206,12 @@ export class EscalationWatcher {
     const decision = picked.choice.decision;
     let text = picked.choice.label;
     if (decision === '') {
-      const typed = await vscode.window.showInputBox({
+      const typed = await askPerson(() => vscode.window.showInputBox({
         title: `ConnectOtherAIs — ${escalation.branch}`,
         prompt: escalation.question,
         placeHolder: 'Your answer goes back to the AI that asked',
         ignoreFocusOut: true,
-      });
+      }));
       if (typed === undefined || typed.trim().length === 0) {
         return;
       }

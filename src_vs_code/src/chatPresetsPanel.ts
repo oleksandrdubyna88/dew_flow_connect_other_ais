@@ -24,6 +24,7 @@ import { CHAT_RUNTIMES } from './cliChatLaunch';
 import { allowedModelsFor, modelsFor } from './models';
 import { teamServersFrom } from './teamServers';
 import { VENDOR_PRESETS } from './vendors';
+import { askPerson } from './personWait';
 
 /**
  * The presets tab: one webview, reused while open.
@@ -302,22 +303,22 @@ async function askForAModel(): Promise<
   if (model === undefined) {
     return undefined;
   }
-  const name = await vscode.window.showInputBox({
+  const name = await askPerson(() => vscode.window.showInputBox({
     title: 'Add a model — step 3 of 4',
     prompt: 'A name for this preset — it is what the button above the composer says',
     value: model.label.length > 0 ? model.label : chosen.label,
-  });
+  }));
   if (name === undefined) {
     return undefined;
   }
   // The LAST step is optional, and escaping it means "none" rather than "throw the other three
   // away". Escape is how a person skips an optional field in every other VS Code dialog, and
   // discarding a finished preset for using it is the wizard punishing the ordinary gesture.
-  const startingPrompt = await vscode.window.showInputBox({
+  const startingPrompt = await askPerson(() => vscode.window.showInputBox({
     title: 'Add a model — step 4 of 4, optional',
     prompt: 'What the composer opens with when this model is chosen. Leave it empty for none.',
     placeHolder: 'You are a business analyst…',
-  });
+  }));
 
   return { vendor: chosen.vendor, model: model.id, name, startingPrompt: startingPrompt ?? '' };
 }
@@ -350,10 +351,10 @@ async function askWhichVendor(): Promise<{ label: string; vendor: ChatVendorChoi
       vendor: { runtime: 'remote', teamServerId: server.id, remoteVendor: name } as ChatVendorChoice,
     })));
 
-  return vscode.window.showQuickPick(
+  return askPerson(() => vscode.window.showQuickPick(
     [...local, ...remote],
     { title: 'Add a model — step 1 of 4', placeHolder: 'Which vendor should answer?' },
-  );
+  ));
 }
 
 /** What a Team server said it hosts, from the catalog the panel last fetched. */
@@ -410,8 +411,8 @@ Promise<{ id: string; label: string } | undefined> {
     return { id: '', label: '' };
   }
 
-  return vscode.window.showQuickPick(
+  return askPerson(() => vscode.window.showQuickPick(
     offered.map((one) => ({ label: one.label, id: one.id })),
     { title: 'Add a model — step 2 of 4', placeHolder: 'Which of ' + label + ' models?' },
-  );
+  ));
 }

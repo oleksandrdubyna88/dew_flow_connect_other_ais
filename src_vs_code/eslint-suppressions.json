@@ -509,7 +509,7 @@
   },
   "src/dataCommands.ts": {
     "complexity": {
-      "count": 4
+      "count": 3
     },
     "max-lines-per-function": {
       "count": 3

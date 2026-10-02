@@ -1,3 +1,6 @@
+import { type BusySnapshot, IDLE } from './busySnapshot';
+import { type Waiting, whileWorking } from './personWait';
+
 /**
  * What the panel's pages posted and the host has not finished (research/PLAN_model_search_and_busy_marks.md §3.8–§3.10).
  *
@@ -9,16 +12,10 @@
  *
  * <p><b>Growth.</b> One entry per operation in flight — bounded by what one person clicks while the host is busy —
  * removed in its own `finally`, and all of them settled by {@link settleEverything} when the panel goes away.</p>
+ *
+ * <p><b>Waiting on the person is not work</b> (research/PLAN_busy_mark_pauses_while_you_type.md). An operation with a VS Code
+ * prompt open — `askPerson` in `personWait.ts` — leaves the count and its clock stops until the person answers.</p>
  */
-
-/** What a page needs to draw the host's part of the mark: how much is running, and for how long the oldest has. */
-export interface BusySnapshot {
-  readonly count: number;
-  readonly oldestMs: number;
-}
-
-/** Nothing in flight. */
-export const IDLE: BusySnapshot = { count: 0, oldestMs: 0 };
 
 /** Somewhere a message can be posted: a page slot, as far as tracking needs one. */
 export interface Poster {
@@ -35,10 +32,16 @@ export interface Ask {
   readonly doc: string;
 }
 
-/** One operation in flight: what the page numbered it, the page that posted it, and when it started. */
+/**
+ * One operation in flight: what the page numbered it, the page that posted it, and when it started — moved on by every
+ * wait for the person, so `now - startedAt` is the time it has worked. `waits` is how many prompts it has open, and
+ * `pausedAt` when the first of them opened (research/PLAN_busy_mark_pauses_while_you_type.md §3.2).
+ */
 export interface Operation<S> extends Ask {
   readonly slot: S;
   readonly startedAt: number;
+  readonly waits: number;
+  readonly pausedAt: number;
 }
 
 /** The record itself. Replaced on every change, never mutated in place. */
@@ -51,7 +54,7 @@ export class InFlight<S extends Poster> {
   /** Records an operation and answers the id that finishes it. */
   start(ask: Ask, slot: S): number {
     this.next += 1;
-    this.entries = new Map([...this.entries, [this.next, { seq: ask.seq, doc: ask.doc, slot, startedAt: this.now() }]]);
+    this.entries = new Map([...this.entries, [this.next, { seq: ask.seq, doc: ask.doc, slot, startedAt: this.now(), waits: 0, pausedAt: 0 }]]);
 
     return this.next;
   }
@@ -72,11 +75,52 @@ export class InFlight<S extends Poster> {
     return all;
   }
 
+  /**
+   * The person has a prompt of this operation open. Answers `true` only when that stops its clock — the first prompt
+   * open; a second open at once, or an operation already finished, changes nothing to tell anybody.
+   */
+  pause(id: number): boolean {
+    const one = this.entries.get(id);
+    if (one === undefined) {
+      return false;
+    }
+    this.replace(id, { ...one, waits: one.waits + 1, pausedAt: one.waits === 0 ? this.now() : one.pausedAt });
+
+    return one.waits === 0;
+  }
+
+  /**
+   * A prompt of this operation was answered. When it was the last one open, the clock runs again from where it stopped
+   * and this answers how long the operation has WORKED; otherwise — or for an operation already finished — nothing.
+   */
+  resume(id: number): number | undefined {
+    const one = this.entries.get(id);
+    if (one === undefined || one.waits === 0) {
+      return undefined;
+    }
+    const next = resumed(one, this.now());
+    this.replace(id, next);
+
+    return next.waits === 0 ? this.now() - next.startedAt : undefined;
+  }
+
+  /** What is running: an operation waiting on the person is not, and its wait is not part of its age. */
   snapshot(): BusySnapshot {
-    const starts = [...this.entries.values()].map((one) => one.startedAt);
+    const starts = [...this.entries.values()].filter((one) => one.waits === 0).map((one) => one.startedAt);
 
     return starts.length === 0 ? IDLE : { count: starts.length, oldestMs: this.now() - Math.min(...starts) };
   }
+
+  private replace(id: number, one: Operation<S>): void {
+    this.entries = new Map([...this.entries, [id, one]]);
+  }
+}
+
+/** One prompt fewer open; the last one closing moves the start on by the wait, so only working time is counted. */
+function resumed<S>(one: Operation<S>, now: number): Operation<S> {
+  return one.waits > 1
+    ? { ...one, waits: one.waits - 1 }
+    : { ...one, waits: 0, startedAt: one.startedAt + (now - one.pausedAt) };
 }
 
 /** What a failure to post is reported through when the caller names nothing better. */
@@ -121,7 +165,7 @@ export async function tracked<S extends Poster>(
   announce(flight, slots, report);
   let ok = false;
   try {
-    await work();
+    await whileWorking(waitingOf(flight, slots, from, ask, id, report), work);
     ok = true;
   } catch (error) {
     report(error);
@@ -130,6 +174,36 @@ export async function tracked<S extends Poster>(
     postTo(from, { type: 'settled', seq: ask.seq, doc: ask.doc, ok }, report);
     announce(flight, slots, report);
   }
+}
+
+/**
+ * What one tracked operation is told while the person has a prompt of it open (research/PLAN_busy_mark_pauses_while_you_type.md
+ * §3.3): its poster hears `waiting` and stops its own half of the mark, then `working` with the time the operation has
+ * worked — the host's clock is the one measurement of the pause — and every page hears the count without it.
+ */
+function waitingOf<S extends Poster>(
+  flight: InFlight<S>,
+  slots: readonly S[],
+  from: S,
+  ask: Ask,
+  id: number,
+  report: (error: unknown) => void,
+): Waiting {
+  return {
+    pause: () => {
+      if (flight.pause(id)) {
+        postTo(from, { type: 'waiting', seq: ask.seq, doc: ask.doc }, report);
+        announce(flight, slots, report);
+      }
+    },
+    resume: () => {
+      const spentMs = flight.resume(id);
+      if (spentMs !== undefined) {
+        postTo(from, { type: 'working', seq: ask.seq, doc: ask.doc, spentMs }, report);
+        announce(flight, slots, report);
+      }
+    },
+  };
 }
 
 /** Ending the panel: every operation still in flight is settled as not done, and the record is emptied. */

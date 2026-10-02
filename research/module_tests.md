@@ -2552,3 +2552,17 @@ Chromium's, and is not observed. Enter on a prompt picker is not page-tested —
 **What this does NOT prove.** No real webview runs: the bar's look and the animation are not observed, and VS Code
 dropping a message posted while a document loads is reasoned (hence `ready`), not reproduced. The host's tracking is
 tested as values over fake slots; `PanelProvider.receive` itself is the standing extension-host gap.
+
+## The busy mark stops while the person answers VS Code (2026-10-02, PLAN_busy_mark_pauses_while_you_type)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `personWait.test.ts` (new, 4) | `askPerson` outside an operation is a plain prompt; three awaits down it pauses its own operation before the box shows and resumes it after; a refused box still resumes; two operations side by side each pause only themselves | RED against a stub that ran the prompt plainly → 3 |
+| `inFlight.test.ts` (+6, now 15) | A waiting entry leaves the count and its wait leaves its age; two prompts at once pause once; two in turn each skip their wait; a finished operation stays finished; `tracked` posts `waiting` then `working {spentMs: 150}` after ten seconds of typing; a refused prompt resumes before it settles | RED against stubbed `pause`/`resume` → 5 |
+| `busyMarkPage.test.ts` (+6, now 18) | Ten seconds in a box show nothing; once answered the bar comes at 500 ms of WORKING time; a bar already up goes while the box is open and returns at once; another document's `waiting` changes nothing; one waiting and one due action on a control keep the mark, and the waiting one alone marks nothing; a late `working` revives nothing | RED before the page knew the messages → 4; teeth: the page ignoring `spentMs` → 2 |
+| `promptsWaitForThePerson.test.ts` (new, 6, structural over comment-blanked source) | Every input box, quick pick and file dialog in `src` is `askPerson(() => vscode.…`; fifteen in `panelProvider.ts`; no detached `askPerson`/`notifyAndAsk`; `notifyAndAsk` waits through `askPerson` and is the only wrapper in `notify.ts`; the one `createQuickPick` is the conversation picker; a companion shows the scan an unwrapped prompt, a wrapped one and a comment (plan round, gemini) | RED with 32 sites unwrapped → 2; teeth: one panel prompt unwrapped → 1 |
+
+**What this does NOT prove.** That `AsyncLocalStorage` carries the operation through `vscode.commands.executeCommand`
+into a command the panel delegates to (the data-directory moves) is reasoned — the store survives any awaited promise
+in one isolate — not run in a real extension host. If it did not, that prompt would only fall back to how 0.61.0
+behaved: the bar over the typing.

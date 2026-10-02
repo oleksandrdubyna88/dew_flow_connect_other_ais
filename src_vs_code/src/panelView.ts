@@ -21,7 +21,7 @@ import { executableFor } from './vendorTerminal';
 import { LOOKING, LOOKING_CSS } from './lookingSpinner';
 import { SELECT_SEARCH_CSS, selectSearchScript } from './selectSearch';
 import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
-import { type BusySnapshot, IDLE } from './inFlight';
+import { type BusySnapshot, IDLE } from './busySnapshot';
 import type { Phrase } from './phrases';
 import { phraseColours } from './phrases';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
