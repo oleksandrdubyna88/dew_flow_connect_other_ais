@@ -253,6 +253,45 @@ the existing harness's `manifest.json` hashes embedded defaults rather than over
 identify this candidate by itself. The earlier `authz-v6-product` attempt was interrupted by the
 session lifecycle; its partial artifacts remain separate. No candidate has been deployed.
 
+### 6.5 Shorter AuthZ v7 through the product composer
+
+The 260-word v7 override made the prior-code outcome explicit and required a matching sample
+resource and request. The same C# product harness completed three rounds in **1m37.094s** with
+six usable local replies. AuthZ input/output counts were **1574/403, 1572/362, 1572/386**.
+All three named the prior `UnauthorizedAccessException`; repeat 2 nevertheless printed returned
+`Id = 101` without declaring that value in its sample preconditions. Under the predeclared
+complete-trace criterion this is **2/3**, not a three-answer qualification. The unchanged SQL
+controls still overclaimed provider-dependent operations or described the wrong row set.
+
+Evidence: `ART/gemma-refinement/authz-v7-product` and `authz-v7-product-tests.log`;
+actual override SHA-256 `4d190143df0c36880af12a467d0c6ad6dfa40942252cd4561d2f4675df208bf7`.
+The external override manifest remains necessary because the harness's top-level manifest names
+embedded defaults. This is another product-transfer observation, not a controlled prompt-only
+comparison: fresh fixture commits and nonce-derived seeds differ between runs. No Git prompt was
+replaced from this result.
+
+### 6.6 AuthZ v8 and v9: format still does not establish a correct trace
+
+Both candidates used three real product rounds with the unchanged shipped SQL control and six
+usable responses each. Ordinary reviewers were doubles. All raw answers were retained.
+
+| Candidate | AuthZ input/output tokens, repeats 1–3 | Duration | Manual AuthZ result |
+|---|---|---|---|
+| v8, 277 words, declare projected sample values | 1591/390, 1591/442, 1581/342 | 1m49.867s | **1/3**: repeat 2 clipped its `why` mid-expression; repeat 3 used a SQL-injection request for an authorization-only trace and described only one tenant's row despite the broadened predicate |
+| v9, 226 words, plain prose and normal inputs | 1515/306, 1513/298, 1523/295 | 1m41.971s | **1/3**: repeat 1 claimed all invoice data despite the name predicate; repeat 3 declared name `Secret Invoice` but requested `Secret` and asserted that row returned |
+
+The single adequate answer in each run was repeat 1 for v8 and repeat 2 for v9. Neither reached
+the three-answer criterion. V8's SQL controls still claimed unseen-table access, driver-dependent
+writes or unsupported HTTP outcomes; no such response was promoted to a verified finding.
+V9's table assesses AuthZ only. These are exploratory, adaptively revised candidates on one
+known fixture; an eventual successful streak here must still transfer to new safe/unsafe inputs.
+
+Evidence: `ART/gemma-refinement/authz-v8-product` and `authz-v9-product`, corresponding test logs
+and pre-run override manifests. Actual prompt hashes are
+`ed2ad08970103e10ae4046de7176b8bc031041d73c033ba2efd0c7ff30ca7861` and
+`7fcf9655b0c885f9c9fdd0050c5dc28ad7dbb7b28cc35b1248387283fd120f35`.
+The harness's success proves usable replies, not these semantic judgments. No Git prompt changed.
+
 ## 7. Frozen 30-PR campaign through MCP
 
 ### 7.1 Setup and selection
@@ -310,6 +349,17 @@ All thirty frozen diffs were then replayed through the actual old and rebuilt cl
 
 Cross-process engine waiting consumes the same reviewer deadline as generation. Launching several large PR rounds in parallel can therefore exhaust a reviewer before inference, despite per-process concurrency one. Large remaining PRs should execute sequentially within each group. Any further routing change requires another classifier replay of all thirty frozen diffs and reruns of affected groups; recorded predictions alone cannot replace manually checking relevance.
 
+### 7.4 Mixed-reviewer replay and missing convention context
+
+The first mixed-reviewer replay, PR #628 `r3`, received two cloud plan answers but both noted
+seven missing stage rules. The campaign clone's conventions submodule was uninitialized.
+It was restored at its pinned `8355757833a1273c02b1aeaa6794ddddb6669056` without changing any
+frozen PR diff. That plan is retained as incomplete-context evidence, resolved with no findings,
+and excluded from qualified counts. The `r4-mixed` replay starts from the same scope and source
+with the rules present. Earlier all-Gemma counts remain historical; their convention coverage
+must not be inferred from answered-reviewer counts. This correction changes measurement setup,
+not the security detectors or the reviewed historical source.
+
 ## 8. Consultant interactions and disposition
 
 Actual COAI consultations were requested rather than replacing them with this session's own judgment. Earlier configured Claude/Opus advice helped identify the schema contradiction and source-selection limits. Key retained consultations:
@@ -339,13 +389,13 @@ Advice is not ground truth. A consultant's strong inference that a failed contro
 | Low thinking exhausted completion budget | Model/runtime interaction | Measured; bounded thinking returned content without curing false claims |
 | Engine wait exhausted reviewer deadline | Scheduling / campaign execution | Observed in group 5; sequential large-PR rerun required |
 | Consultant cap / cloud reviewer quota | Service availability | Recorded; not counted as model judgments |
-| Old sessions crash while serializing missing lane sightings | Product backward compatibility | Reproduced and corrected at the finding properties; live retry remains required |
+| Old sessions crash while serializing missing lane sightings | Product backward compatibility | Reproduced and corrected at the finding properties; Native-AOT retry passed on the original session |
 
 ## 10. Validation, gates, and conclusions that remain open
 
 CPU tests establish implementation behavior, not model quality. Earlier full Release MCP validation reported **6395 passed / 7 skipped**. Later full extension validation reported **4847 passed / 2 skipped**, clean lint. At committed routing head `cc9173dd`, the focused security suite had **76 passed / 2 explicit hardware skips**, and Debug build had zero warnings/errors. The SQL-term follow-up has **81 passed / 2 explicit hardware skips**, with the four failing-before observations recorded above; its Release build has zero warnings/errors. These follow-up observations concern the working-tree patch, not the older committed head.
 
-Full-suite verification exposed a separate test-environment dependency: inherited `CODEX_SESSION_ID` made the consultant fixture choose the shipped Claude route instead of its fake Codex process, causing a 30-second timeout. The owned test process was stopped, preserving the log. Clearing only caller/session variables in the test child process made the affected method pass (one test, 4.249 seconds). The full rerun under that same isolated environment reached **6356 passed / 5 skipped / 0 failed**, then its global ten-minute deadline aborted it: this is incomplete, not a suite pass. A thirty-minute bounded full run is pending. Actual COAI caller identity and consultant limits were not altered. Evidence: `ART/sql-routing-terms-release-tests.log`, `ART/sql-routing-terms-consult-clean-env.log`, `ART/sql-routing-terms-release-clean-env-tests.log`, and `ART/sql-routing-terms-release-clean-env-30m-tests.log`.
+Full-suite verification exposed a separate test-environment dependency: inherited `CODEX_SESSION_ID` made the consultant fixture choose the shipped Claude route instead of its fake Codex process, causing a 30-second timeout. The owned test process was stopped, preserving the log. Clearing only caller/session variables in the test child process made the affected method pass (one test, 4.249 seconds). The full rerun under that same isolated environment reached **6356 passed / 5 skipped / 0 failed**, then its global ten-minute deadline aborted it: this is incomplete, not a suite pass. The resumed thirty-minute bounded run completed at SQL-term head `98b01d3a`: **6439 passed / 8 skipped / 0 failed**, total 6447, in **15m10.096s**. It predates the old-session compatibility fix. Actual COAI caller identity and consultant limits were not altered. Evidence: `ART/sql-routing-terms-release-tests.log`, `ART/sql-routing-terms-consult-clean-env.log`, `ART/sql-routing-terms-release-clean-env-tests.log`, `ART/sql-routing-terms-release-clean-env-30m-tests.log`, and `ART/sql-routing-terms-release-resumed-tests.log`.
 
 Released MCP 0.40.3 compatibility was measured on Windows: the new setting is withheld, an accidentally sent unknown key is inert, and the new server accepts it. These compatibility results are unrelated to finding accuracy.
 
@@ -374,8 +424,18 @@ the roundtrip. No live session was reset or rewritten to avoid the failure.
 Evidence: `ART/code-sql-terms-98b01d3a-result.json`,
 `ART/security-session-{red,green,mutation,restored}-tests.log`, and installed preview log
 `%LOCALAPPDATA%/coai-mcp/logs/2026-10-02/coai-mcp-13-46-49-46472.log`.
-The full Release run predates this compatibility patch; a rebuilt Native-AOT live retry and
-Release validation of the fix remain open.
+The rebuilt Release Native-AOT preview at `8e2fd44e`, version
+`0.41.0-security.20261002.1408`, has executable SHA-256
+`487ba0fd4840aae32555378e1ccd67e9718713c51199349c6c665a6da5ea71cb`.
+The actual code gate on the original session returned **proceed, 8/8 reviewers answered**.
+All five findings were resolved: one catalog source/reuse clarification accepted, four claims
+rejected against the refusal guards, bounded file selection and per-prompt ranking. The session
+is `Done`, with five recorded decisions and no pending resolution. Evidence:
+`ART/code-compat-8e2fd44e-result.json`, `ART/resolve-code-compat-8e2fd44e-result.json`, and
+`ART/security-session-aot-8e2fd44e-release-build.log`. The first publish attempt failed because
+`vswhere.exe` was absent from PATH; adding the installed Visual Studio Installer directory only
+to the build child process let the Release publish complete. The shared installed server was
+not replaced. Full Release validation of this fix and subsequent refactors remains separate.
 
 ## 11. Evidence index and continuation commands
 

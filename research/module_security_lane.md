@@ -63,13 +63,19 @@ The local runtime already sends temperature zero and a seed derived from the com
 These settings do not prove
 semantic correctness: a schema-valid finding still needs its claimed execution path checked.
 Ordinary ownership wins a duplicate; stronger severity survives, with per-pair sightings retained.
-Schema step 17 stores this evidence in `findings.security_evidence`; old database readers remain
-supported by the column-presence ladder. Ordinary findings with no security evidence keep an empty
+Schema step 17 stores this evidence in `findings.security_evidence`. Finding queries use literal
+SQL and read columns by name; a missing optional evidence column in an older database yields no
+security projection. Ordinary findings with no security evidence keep an empty
 column and no evidence disclosure in the extension.
 Persisted findings written before the lane have neither `alsoSeenBy` nor `capReason`.
 Their owning properties normalize the source generator's missing-field defaults to an empty
 array/string, so resuming and saving old pending findings or rejections cannot crash the round.
 Existing nonempty sightings and cap reasons survive the same serialization path.
+Context composition separates instructions, bounded file selection and fencing; a typed budget
+carries input/output limits and the excluded-file count. These refactors retain the existing
+caps, ordering, omissions and evidence protocol. Schema keys and calibration serializer options
+are shared constants. Generated extension catalog data is excluded only from Sonar's duplication
+metric; its complete runtime value remains checked against the shared JSON by `securityLane.test.ts`.
 
 The lane has its own round budget and threshold. Missing, failed and unverified local answers
 are named in the reply and persisted round summary; failed/unverified or excluded work also
