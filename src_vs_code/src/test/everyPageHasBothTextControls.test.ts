@@ -31,7 +31,7 @@ import { Node, runPageHtml, type Page } from './rolesPageHarness';
 /** Elements a page's own script looks up by id before it can run, beyond the two offset labels every page has. */
 const HELP_IDS = ['index', 'article', 'crumbs', 'back', 'searchRow', 'noHits', 'search', 'language'];
 const BUGZ_IDS = ['keep', 'drop', 'picked', 'pickall'];
-const ROUNDS_IDS = ['failed', 'rows', 'empty', 'count', 'exportpicked', 'clearpicked', 'pickall', 'prev', 'next', 'pageinfo', 'recorded', 'tab-rounds', 'search', 'from', 'to', 'today', 'alldates', 'clear', 'consultations-body', 'consultations-none', 'spots-body', 'usage-body', 'questions'];
+const ROUNDS_IDS = ['failed', 'rows', 'empty', 'count', 'exportpicked', 'clearpicked', 'pickall', 'prev', 'next', 'pageinfo', 'recorded', 'tab-rounds', 'search', 'from', 'to', 'today', 'alldates', 'clear', 'consultations-body', 'consultations-none', 'qconsults-body', 'spots-body', 'usage-body', 'questions'];
 const NOTIFICATION_IDS = ['mark-all', 'notice', 'from', 'to', 'range-note', 'find', 'source', 'where', 'prev', 'next', 'ack-note', 'clear'];
 
 const PAGES: readonly (readonly [name: string, render: () => string, ids?: readonly string[]])[] = [

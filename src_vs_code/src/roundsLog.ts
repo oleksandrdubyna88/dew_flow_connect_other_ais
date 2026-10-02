@@ -1326,7 +1326,7 @@ export function roundsLogHtml(
   usageHtml = '',
   spotsHtml = '',
   totals: DbTotals = EMPTY_TOTALS,
-  { consultations: consultationsHtmlText = '', text = PLAIN_TEXT }: { readonly consultations?: string; readonly text?: TextSettings } = {},
+  { consultations: consultationsHtmlText = '', qconsults: qconsultsHtmlText = '', text = PLAIN_TEXT }: { readonly consultations?: string; readonly qconsults?: string; readonly text?: TextSettings } = {},
 ): string {
   const headers = COLUMNS
     .map((c) => (c.sortable === false
@@ -1520,7 +1520,7 @@ ${TEXT_CONTROLS_CSS}
 <header><h1>Review rounds</h1>${textControlsHtml(text.size, text.tone)}</header>
 <div id="failed" class="failed" hidden></div>
 <div id="questions">${questionsHtml(questions)}</div>
-<div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="conversations">Conversations</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
+<div class="tabs"><button type="button" class="tab on" data-tab="rounds">Rounds</button><button type="button" class="tab" data-tab="conversations">Conversations</button><button type="button" class="tab" data-tab="consultations">Consultations</button><button type="button" class="tab" data-tab="questions">Questions</button><button type="button" class="tab" data-tab="usage">What each AI has used</button><button type="button" class="tab" data-tab="spots">What it keeps missing</button></div>
 <section id="tab-rounds" data-section="rounds" class="view-rounds">
 <div class="asChat">${periodButtonsHtml('conversations', DEFAULT_PERIOD)}</div>
 <div class="toolbar">
@@ -1551,6 +1551,7 @@ ${TEXT_CONTROLS_CSS}
 <div class="hint">Opens on <b>today</b> — <b>All dates</b> clears the range, and the pickers take a time as well as a day. Cost is <b>in / out / total</b> — <code>~</code> means worked out from a public price list rather than billed, <code>+</code> means one reviewer's model had no listed price so the total is a floor. <b>Took</b> is how long the reviewers ran and, after a <code>&#183;</code>, how long the deciding took — from the round finishing to its last decision; one number alone means nobody has decided it yet. Click a column to sort, a row to see its reviewers. The table advances by itself while a round runs; your sort, filters and search stay.</div>
 </section>
 <section id="tab-consultations" data-section="consultations" hidden>${periodButtonsHtml('consultations', DEFAULT_PERIOD)}<div id="consultations-none" class="empty" hidden>No consultation in this period — All shows every one.</div><div id="consultations-body">${consultationsHtmlText || waitingFor()}</div></section>
+<section id="tab-questions" data-section="questions" hidden><div id="qconsults-body">${qconsultsHtmlText || waitingFor()}</div></section>
 <section id="tab-usage" data-section="usage" hidden><div id="usage-body">${usageHtml || waitingFor()}</div></section>
 <section id="tab-spots" data-section="spots" hidden><div id="spots-body">${spotsHtml || waitingFor()}</div></section>
 <script nonce="${nonce}">
@@ -1578,7 +1579,7 @@ ${TEXT_CONTROLS_CSS}
   // the consultations entry read undefined, the guard skipped it on every tick, and a tab that
   // opened on the placeholder and never received a push sat on "Reading the log…" for ever — which
   // is the exact state the timeout exists to end. (CodeRabbit, on the pull request.)
-  var WAITING = ${JSON.stringify({ usage: usageHtml === '', spots: spotsHtml === '', consultations: consultationsHtmlText === '' })};
+  var WAITING = ${JSON.stringify({ usage: usageHtml === '', spots: spotsHtml === '', consultations: consultationsHtmlText === '', qconsults: qconsultsHtmlText === '' })};
   var ROWS = ${jsonForScript(rows)};
   // Assigned, never declared: the extension ships BUNDLED and minified, and a minifier renames a
   // function that is not a top-level export — so the declaration this embedded read
@@ -2208,6 +2209,12 @@ ${TEXT_CONTROLS_CSS}
       filterConsultations();
       return;
     }
+    // The Questions tab (S4): replaced whole, its open folds kept open, as the Consultations tab's are.
+    if (message.type === 'qconsults' && typeof message.html === 'string') {
+      told.qconsults = true;
+      replaceKeepingFolds(document.getElementById('qconsults-body'), message.html);
+      return;
+    }
     if (message.type === 'spots' && typeof message.html === 'string') {
       told.spots = true;
       document.getElementById('spots-body').innerHTML = message.html;
@@ -2275,7 +2282,7 @@ ${TEXT_CONTROLS_CSS}
   // is a console.warn in the extension host, which nobody opens. Four findings across both remote
   // vendors and three roles said so on the code round.
   setTimeout(function () {
-    var sections = [['usage', 'usage-body'], ['spots', 'spots-body'], ['consultations', 'consultations-body']];
+    var sections = [['usage', 'usage-body'], ['spots', 'spots-body'], ['consultations', 'consultations-body'], ['qconsults', 'qconsults-body']];
     for (var w = 0; w < sections.length; w++) {
       // Only a section that OPENED on the placeholder, and only one nothing ever reached. The
       // spending tab is painted with real numbers on the first paint, and replacing those with an

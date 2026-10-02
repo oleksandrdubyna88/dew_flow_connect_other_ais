@@ -90,7 +90,8 @@ export class RoundsLogPanel {
     spots: string;
     totals: DbTotals;
     consultations: string;
-  } = { rows: [], questions: [], usage: '', spots: '', totals: EMPTY_TOTALS, consultations: '' };
+    qconsults: string;
+  } = { rows: [], questions: [], usage: '', spots: '', totals: EMPTY_TOTALS, consultations: '', qconsults: '' };
 
   /**
    * The belt to the handshake's braces.
@@ -119,10 +120,11 @@ export class RoundsLogPanel {
     spotsHtml = '',
     totals: DbTotals = EMPTY_TOTALS,
     consultationsHtml = '',
+    qconsultsHtml = '',
   ): void {
     if (this.panel !== undefined) {
       this.panel.reveal();
-      this.update(rows, questions, usageHtml, true, spotsHtml, totals, consultationsHtml);
+      this.update(rows, questions, usageHtml, true, spotsHtml, totals, consultationsHtml, qconsultsHtml);
       return;
     }
     const panel = vscode.window.createWebviewPanel(
@@ -142,8 +144,8 @@ export class RoundsLogPanel {
     this.panel = panel;
     panel.webview.html = roundsLogHtml(
       rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml, totals,
-      { consultations: consultationsHtml, text: { size: currentUiScale(), tone: currentTextTone() } });
-    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml };
+      { consultations: consultationsHtml, qconsults: qconsultsHtml, text: { size: currentUiScale(), tone: currentTextTone() } });
+    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml, qconsults: qconsultsHtml };
     this.rebuilt();
 
     const text = pushTextControlsTo(panel.webview);
@@ -170,11 +172,12 @@ export class RoundsLogPanel {
     spotsHtml = '',
     totals: DbTotals = EMPTY_TOTALS,
     consultationsHtml = '',
+    qconsultsHtml = '',
   ): void {
     if (this.panel === undefined) {
       return;
     }
-    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml };
+    this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml, qconsults: qconsultsHtml };
     void this.pushAll(force);
   }
 
@@ -291,7 +294,7 @@ export class RoundsLogPanel {
   }
 
   private async pushEach(force: boolean): Promise<void> {
-    const { rows, questions, usage, spots, totals, consultations } = this.latest;
+    const { rows, questions, usage, spots, totals, consultations, qconsults } = this.latest;
     // A RECORD over `Region` rather than a list: adding a region to the union without giving it a
     // push here is then a compile error rather than a region that silently never updates.
     // (gemini, the code round.)
@@ -306,6 +309,8 @@ export class RoundsLogPanel {
         content: consultations,
         message: () => ({ type: 'consultations', html: consultations }),
       },
+      // The Questions tab (todo/PLAN_question_consultant.md, S4).
+      qconsults: { content: qconsults, message: () => ({ type: 'qconsults', html: qconsults }) },
       // The page is painted before the database is read, so the line under the table opens on
       // nothing. This is what fills it in. It used to be recorded in `latest` and pushed nowhere,
       // which left the whole SQL-totals line permanently empty. (Code round, CodeRabbit.)
