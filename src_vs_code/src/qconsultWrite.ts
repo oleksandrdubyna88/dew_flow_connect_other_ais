@@ -370,13 +370,23 @@ export function rootAdded(
   places: RootPlaces,
   real: string = root,
 ): { readonly roots: readonly string[]; readonly refusal: string } {
-  const atTarget = same(real, root, places) ? '' : rootRefusal(real, places);
-  const refusal = rootRefusal(root, places) || (atTarget.length > 0 ? `${atTarget} ('${trimmed(root)}' resolves to it)` : '');
+  const refusal = refusalOf(root, real, places);
   if (refusal.length > 0) {
     return { roots, refusal };
   }
 
   return roots.some((r) => same(r, root, places)) ? { roots, refusal: '' } : { roots: [...roots, trimmed(root)], refusal: '' };
+}
+
+/** The picked folder's refusal, or — when it has none — the refusal of what it RESOLVES to, saying so. */
+function refusalOf(root: string, real: string, places: RootPlaces): string {
+  return rootRefusal(root, places) || targetRefusal(root, real, places);
+}
+
+function targetRefusal(root: string, real: string, places: RootPlaces): string {
+  const atTarget = same(real, root, places) ? '' : rootRefusal(real, places);
+
+  return atTarget.length > 0 ? `${atTarget} ('${trimmed(root)}' resolves to it)` : '';
 }
 
 export function rootRemoved(roots: readonly string[], root: string): readonly string[] {
