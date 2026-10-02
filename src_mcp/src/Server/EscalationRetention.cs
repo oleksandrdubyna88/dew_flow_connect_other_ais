@@ -43,12 +43,15 @@ public sealed class EscalationRetention(Escalations escalations, Func<string, bo
             return Older(File.GetLastWriteTimeUtc(path), nowUtc) ? Deleted(path) : 0;
         }
 
-        if (name.EndsWith(Answer, StringComparison.Ordinal))
-        {
-            return OrphanAnswer(path, name[..^Answer.Length], nowUtc);
-        }
+        var id = name.EndsWith(Answer, StringComparison.Ordinal) ? name[..^Answer.Length]
+            : name.EndsWith(".json", StringComparison.Ordinal) ? Path.GetFileNameWithoutExtension(path)
+            : string.Empty;
 
-        return name.EndsWith(".json", StringComparison.Ordinal) ? Question(path, Path.GetFileNameWithoutExtension(path), nowUtc) : 0;
+        // HELD WINS, whatever the file says (S4b item 7): an answered pair, an orphan answer, a torn question — the hold
+        // is bound to the id, and deleting any of its files leaves it unanswerable. Asked before the file is judged.
+        return id.Length == 0 || isHeld(id) ? 0
+            : name.EndsWith(Answer, StringComparison.Ordinal) ? OrphanAnswer(path, id, nowUtc)
+            : Question(path, id, nowUtc);
     }
 
     /// <summary>An answer whose question is gone: judged alone, by its own stamp. One with a question is judged with it.</summary>
@@ -78,7 +81,7 @@ public sealed class EscalationRetention(Escalations escalations, Func<string, bo
             return Older(answered, nowUtc) ? Deleted(path) + Deleted(escalations.AnswerPath(id)) : 0;
         }
 
-        return !isHeld(id) && Older(Ended(question, path), nowUtc) ? Deleted(path) : 0;
+        return Older(Ended(question, path), nowUtc) ? Deleted(path) : 0;
     }
 
     /// <summary>When an unanswered question ended: its expiry, or — never expired — when it was asked.</summary>

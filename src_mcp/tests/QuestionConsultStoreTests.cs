@@ -29,6 +29,9 @@ public sealed class QuestionConsultStoreTests : IDisposable
 
     private static readonly DateTime Now = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
 
+    /// <summary>A row's budget — the deadline the sweep is told, as the service tells it the settings' <c>RowBudget</c>.</summary>
+    private static readonly TimeSpan Deadline = TimeSpan.FromMinutes(5);
+
     private static QuestionConsultRecord Consulting(DateTime heartbeat, int pid = 4242) =>
         new(QuestionConsultStore.NewId(), "caller-1", "claude", "no-session", "D:/repo", "main", "0123abc", "Which shape?", QuestionConsultStore.Stamp(Now.AddMinutes(-10)))
         {
@@ -99,7 +102,7 @@ public sealed class QuestionConsultStoreTests : IDisposable
         _store.Write(Consulting(Now));
 
         _store.All().Should().ContainSingle();
-        _store.Sweep(_ => false, Now.AddYears(1)).Should().Be(1, "the one real record expired; the note was never a candidate");
+        _store.Sweep(_ => false, Now.AddYears(1), Deadline).Should().Be(1, "the one real record expired; the note was never a candidate");
         File.Exists(Path.Combine(_store.Directory, "notes.json")).Should().BeTrue();
     }
 
@@ -111,7 +114,7 @@ public sealed class QuestionConsultStoreTests : IDisposable
         var record = Consulting(Now.AddMinutes(-3));
         _store.Write(record);
 
-        _store.Sweep(_ => false, Now).Should().Be(1);
+        _store.Sweep(_ => false, Now, Deadline).Should().Be(1);
 
         var swept = _store.Read(record.Id)!;
         swept.Status.Should().Be(QuestionConsultStatuses.Interrupted);
@@ -128,7 +131,7 @@ public sealed class QuestionConsultStoreTests : IDisposable
         var record = Consulting(Now.AddMinutes(-3));
         _store.Write(record);
 
-        _store.Sweep(_ => true, Now).Should().Be(0);
+        _store.Sweep(_ => true, Now, Deadline).Should().Be(0);
 
         _store.Read(record.Id)!.Status.Should().Be(QuestionConsultStatuses.Consulting);
     }
@@ -141,9 +144,32 @@ public sealed class QuestionConsultStoreTests : IDisposable
         var record = Consulting(Now.AddSeconds(-30));
         _store.Write(record);
 
-        _store.Sweep(_ => false, Now).Should().Be(0);
+        _store.Sweep(_ => false, Now, Deadline).Should().Be(0);
 
         _store.Read(record.Id)!.Status.Should().Be(QuestionConsultStatuses.Consulting);
+    }
+
+    /// <summary>
+    /// S4b item 9 (plan §5: "a record past twice its deadline is swept to interrupted"): a live server whose fan-out
+    /// still beats but never settles — a wedged launch, a record write that failed — is not left consulting for ever.
+    /// Past twice its deadline the record is ended whatever its pid and heartbeat say; inside it, a live one is kept.
+    /// </summary>
+    [Fact]
+    public void AConsultingRecordPastTwiceItsDeadline_IsEndedInterrupted_EvenWithALivePidAndAFreshHeartbeat()
+    {
+        var wedged = Consulting(Now.AddSeconds(-10)) with { StartedUtc = QuestionConsultStore.Stamp(Now - (2 * Deadline) - TimeSpan.FromSeconds(1)) };
+        var inside = Consulting(Now.AddSeconds(-10)) with { StartedUtc = QuestionConsultStore.Stamp(Now - (2 * Deadline) + TimeSpan.FromSeconds(1)) };
+        _store.Write(wedged);
+        _store.Write(inside);
+
+        _store.Sweep(_ => true, Now, Deadline).Should().Be(1, "only the one past twice its deadline");
+
+        var swept = _store.Read(wedged.Id)!;
+        swept.Status.Should().Be(QuestionConsultStatuses.Interrupted);
+        swept.EndedUtc.Should().NotBeEmpty();
+        swept.Rows.Single().Status.Should().Be(RowOutcomes.Failed);
+        swept.Rows.Single().Reason.Should().Contain("twice its deadline", "the reason names the fact that ended it, not a death nobody saw");
+        _store.Read(inside.Id)!.Status.Should().Be(QuestionConsultStatuses.Consulting, "a live question inside the window settles its own record");
     }
 
     [Fact]
@@ -167,7 +193,7 @@ public sealed class QuestionConsultStoreTests : IDisposable
         _store.Write(old);
         _store.Write(young);
 
-        _store.Sweep(_ => true, Now).Should().Be(1);
+        _store.Sweep(_ => true, Now, Deadline).Should().Be(1);
 
         _store.Read(old.Id).Should().BeNull();
         _store.Read(young.Id).Should().NotBeNull();
@@ -186,7 +212,7 @@ public sealed class QuestionConsultStoreTests : IDisposable
         }
 
         _store.All().Should().HaveCount(QuestionConsultStore.MaxFiles + 2);
-        _store.Sweep(_ => true, Now).Should().Be(2, "two over the cap");
+        _store.Sweep(_ => true, Now, Deadline).Should().Be(2, "two over the cap");
 
         _store.All().Should().HaveCount(QuestionConsultStore.MaxFiles);
         _store.Read(oldest.Id).Should().BeNull("the oldest terminal record goes first");
@@ -204,7 +230,7 @@ public sealed class QuestionConsultStoreTests : IDisposable
         File.SetLastWriteTimeUtc(ours, Now.AddDays(-8));
         File.SetLastWriteTimeUtc(theirs, Now.AddDays(-8));
 
-        _store.Sweep(_ => true, Now).Should().Be(1);
+        _store.Sweep(_ => true, Now, Deadline).Should().Be(1);
 
         File.Exists(ours).Should().BeFalse();
         File.Exists(theirs).Should().BeTrue("age is not ownership");

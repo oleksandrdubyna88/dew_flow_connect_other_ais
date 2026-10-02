@@ -110,16 +110,19 @@ public sealed class AskHumanService
         PersistedSession? session, SessionAddress at, string repoPath, string branch, string text, AskFacts facts, AskDecision.Allowed allowed, CancellationToken ct)
     {
         var id = Guid.NewGuid().ToString("N")[..12];
-        // A question asked while the gate is HELD is asked for that hold, and one asked on a feature session
-        // after its first round may be the person's request for the second: recorded on the session, so the
-        // person's answer counts by identity — as the hold's own notice does.
-        await RecordOnTheSessionAsync(session, at, repoPath, id, ct);
+        // The consultId spent FIRST, atomically (S4b item 8): two calls holding one proof both passed the
+        // verification, and the second must be refused here — before it records anything or posts a card.
+        var spend = _desk.Spend(facts, id);
+        if (spend.Refusal.Length > 0)
+        {
+            return Error(spend.Refusal);
+        }
 
         var asked = Card(session, repoPath, branch, text, id, facts);
+        await PostedAsync(session, at, repoPath, asked, spend, ct);
         _log.Information("escalating {Id} to a person: {Question}", id, asked.Question);
-        // The card FIRST, then everything that follows it — the batch counted, the proof spent, the consultants
-        // beside a production risk (D8: the person is never delayed by them) — and only then the wait.
-        _escalations.Post(asked);
+        // The card FIRST, then everything that follows it — the batch counted, the consultants beside a production
+        // risk (D8: the person is never delayed by them) — and only then the wait.
         _desk.AfterTheCard(facts, asked, allowed);
         var outcome = await _escalations.WaitAsync(id, _settings.EscalationBudget, ct);
 
@@ -129,6 +132,30 @@ public sealed class AskHumanService
             EscalationOutcome.Answered answered => Json(AnswerFor(answered.Text) with { Note = allowed.Note }, ServerJsonContext.Default.HumanAnswer),
             _ => Expired(id, allowed.Note),
         };
+    }
+
+    /// <summary>
+    /// The question recorded on the session and the card posted — and, when either fails, the spent proof given back
+    /// (S4b item 8): a consultation the person never saw a card for opens the door again.
+    /// </summary>
+    /// <remarks>
+    /// A question asked while the gate is HELD is asked for that hold, and one asked on a feature session after its
+    /// first round may be the person's request for the second: recorded on the session, so the person's answer counts
+    /// by identity — as the hold's own notice does.
+    /// </remarks>
+    private async Task PostedAsync(PersistedSession? session, SessionAddress at, string repoPath, EscalationQuestion asked, ProofSpend spend, CancellationToken ct)
+    {
+        try
+        {
+            await RecordOnTheSessionAsync(session, at, repoPath, asked.Id, ct);
+            _escalations.Post(asked);
+        }
+        catch
+        {
+            // Not a handler: the compensation for the spend above, and the failure goes on to the caller unchanged.
+            _desk.GiveBack(spend);
+            throw;
+        }
     }
 
     /// <summary>

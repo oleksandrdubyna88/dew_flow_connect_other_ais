@@ -474,11 +474,6 @@
       "count": 2
     }
   },
-  "src/consultationWatcher.ts": {
-    "complexity": {
-      "count": 1
-    }
-  },
   "src/consultations.ts": {
     "complexity": {
       "count": 4
@@ -535,7 +530,7 @@
   },
   "src/escalationWatcher.ts": {
     "complexity": {
-      "count": 2
+      "count": 1
     },
     "max-lines-per-function": {
       "count": 1

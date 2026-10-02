@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import type { Escalation } from '../escalations';
 import { isOpenEscalation, parseEscalation } from '../escalations';
 import { liveRegions } from '../panelView';
-import { type QuestionConsult, type QuestionConsultRow, isKept, parseQuestionConsult } from '../questionConsults';
+import { type QuestionConsult, type QuestionConsultRow, HEARTBEAT_STALE_MS, isKept, nextStaleAt, parseQuestionConsult, shownAt } from '../questionConsults';
 import { panelState, runPanel } from './panelPageHarness';
 import { textOf } from './renderedText';
 
@@ -27,7 +27,7 @@ function row(rowId: string, overrides: Partial<QuestionConsultRow> = {}): Questi
 function record(overrides: Partial<QuestionConsult> = {}): QuestionConsult {
   return {
     id: 'q-1', repoPath: 'D:/repo', branch: 'feat/x', question: 'Which retry shape fits a flaky vendor?', status: 'consulting',
-    outcome: '', escalationId: '', productionRisk: false, startedUtc: '2026-10-02T12:09:00.000Z', updatedUtc: '', endedUtc: '',
+    outcome: '', escalationId: '', productionRisk: false, startedUtc: '2026-10-02T12:09:00.000Z', updatedUtc: '', endedUtc: '', heartbeatUtc: '',
     rows: [row('sonnet-disk'), row('astra-web', { vendor: 'codex', model: 'gpt-6-astra', flag: 'unconfined', promptTitle: 'The internet' })],
     alert: '', ...overrides,
   };
@@ -158,3 +158,26 @@ test('the record reader keeps a running question and one finished within the win
   assert.deepEqual(parseQuestionConsult(JSON.stringify({ id: 'q', rows: 'nope' }))?.rows, [], 'an unreadable row list is no rows');
 });
 
+/**
+ * S4b item 9: the server's sweep ends a dead server's record, but only a LIVE server sweeps — so a window whose server
+ * died showed "consulting" for ever. The record is SHOWN interrupted once its heartbeat has been silent past two
+ * minutes (the server's own `HeartbeatStale`), terminal and not spinning, and the watcher looks again at that moment.
+ */
+test('a consulting question whose heartbeat is older than two minutes is shown interrupted — terminal, not spinning', () => {
+  const beat = (msAgo: number): QuestionConsult => record({ heartbeatUtc: new Date(NOW - msAgo).toISOString(), startedUtc: new Date(NOW - msAgo - 60_000).toISOString() });
+  const live = beat(HEARTBEAT_STALE_MS - 1_000);
+  const silent = beat(HEARTBEAT_STALE_MS + 1_000);
+
+  assert.equal(shownAt(live, NOW).status, 'consulting', 'a beat inside the window is a live question');
+  const shown = shownAt(silent, NOW);
+  assert.equal(shown.status, 'interrupted');
+  assert.deepEqual(shown.rows.map((one) => one.status), ['interrupted', 'interrupted'], 'its rows stop spinning too');
+  assert.equal(shownAt(record({ status: 'answered', heartbeatUtc: new Date(NOW - 3_600_000).toISOString() }), NOW).status, 'answered', 'a finished one is what it says');
+  assert.equal(nextStaleAt([live]), Date.parse(live.heartbeatUtc) + HEARTBEAT_STALE_MS + 1, 'the watcher looks again at the deadline');
+  assert.equal(nextStaleAt([shown]), undefined, 'nothing left to wait for');
+
+  const region = runPanel(panelState('', { qconsults: [shown] })).region('live-qconsults');
+  assert.match(textOf(region), /Interrupted/, `the question is drawn, as interrupted: ${region}`);
+  assert.ok(!region.includes('badge running'), 'no row spins');
+  assert.equal((region.match(/badge stopped/g) ?? []).length, 2, 'each row wears the terminal chip');
+});

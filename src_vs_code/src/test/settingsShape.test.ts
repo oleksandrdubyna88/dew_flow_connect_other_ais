@@ -37,8 +37,23 @@ test('defaults match the master plan configuration table', () => {
   assert.equal(DEFAULTS.maxConcurrency, 3);
   assert.equal(DEFAULTS.maxPerProvider, 2);
   assert.equal(DEFAULTS.reviewerTimeoutMinutes, 10);
-  assert.equal(DEFAULTS.escalationMinutes, 30);
   assert.equal(DEFAULTS.credsKey, '');
+});
+
+/**
+ * The wait for a person is a default on BOTH sides, and `envBlock` writes the key only when the panel's value differs
+ * from the panel's default — so a panel default that is not the server's own shows a wait nobody runs. The panel said
+ * 30 while the server waited 15 (S4b item 6): read out of the C#, never transcribed, the way the question
+ * consultant's defaults are (`qconsultSettings.test.ts`).
+ */
+test("the escalation wait's default is the server's own — read out of PanelSettings.cs — and a person's 30 still reaches it", () => {
+  const cs = fs.readFileSync(path.join(__dirname, '..', '..', '..', 'src_mcp', 'src', 'Server', 'PanelSettings.cs'), 'utf8');
+  const declared = /public const int DefaultEscalationMinutes\s*=\s*(\d+);/.exec(cs);
+  assert.ok(declared, 'DefaultEscalationMinutes is not in PanelSettings.cs in the shape this test reads');
+
+  assert.equal(DEFAULTS.escalationMinutes, Number(declared[1]), 'the panel would show a wait the server does not run');
+  assert.equal(envBlock(settingsFrom(reader({})))['COAI_ESCALATION_MINUTES'], undefined, 'the default is not written');
+  assert.equal(envBlock(settingsFrom(reader({ escalationMinutes: 30 })))['COAI_ESCALATION_MINUTES'], '30', 'a person who chooses 30 gets 30');
 });
 
 /**

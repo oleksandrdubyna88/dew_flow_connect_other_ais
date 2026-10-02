@@ -375,9 +375,23 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
 /// </remarks>
 internal static class AtomicJson
 {
+    /// <summary>Takes the file's turn, then writes it whole (<see cref="WriteUnderTurn"/>).</summary>
     public static void Write(string path, string content)
     {
         using var turn = SessionTurn.Take(path);
+        WriteUnderTurn(path, content);
+    }
+
+    /// <summary>
+    /// The temp file and the move alone, for a caller that already HOLDS the file's turn — a read–modify–write
+    /// (S4b item 14).
+    /// </summary>
+    /// <remarks>
+    /// The turn is not re-entrant: <see cref="Write"/> called while this process holds it cannot take it, waits out
+    /// its forty attempts and then writes WITHOUT it, which is the race the turn exists to close.
+    /// </remarks>
+    public static void WriteUnderTurn(string path, string content)
+    {
         var temp = path + ".tmp";
         File.WriteAllText(temp, content);
         File.Move(temp, path, overwrite: true);
