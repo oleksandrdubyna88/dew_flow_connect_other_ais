@@ -71,14 +71,14 @@ test('the card in the running sidebar shows the laid-out question, and a live pu
   const question = { id: 'q1', sessionId: 's1', repoPath: 'D:/r', branch: 'feat/x', question: FAILED_ROUND, openFindings: [], askedUtc: '2026-09-29T00:00:00Z' };
   const state = panelState('', { questions: [question] });
   const page = runPanel(state);
-  const card = page.region('live-questions');
+  const card = page.region('live-qconsults');
 
   assert.equal(texts(card, 'failed').length, 3, `the rendered card is not laid out: ${card}`);
   assert.deepEqual(texts(card, 'ask'), ['Proceed anyway, or fix the findings and review again?']);
 
   const later = { ...question, id: 'q2', question: FAILED_ROUND.replace('The engine is up;', 'The engine is up; changed:') };
   page.deliver({ type: 'live', ...liveRegions(panelState('', { questions: [later] })) });
-  const pushed = texts(page.region('live-questions'), 'failed');
+  const pushed = texts(page.region('live-qconsults'), 'failed');
   assert.equal(pushed.length, 3, 'a live push drew the question as a run-on block');
   assert.match(pushed[0]!, /The engine is up; changed:/, 'the live push never reached the card');
 });

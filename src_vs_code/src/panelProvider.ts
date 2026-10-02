@@ -63,6 +63,7 @@ import { ClaudeProbeCache } from './claudeProbeCache';
 import { ConsultPromptFile } from './consultPromptFile';
 import { QconsultHost, isQconsultCallerKey, type QconsultWriteHooks } from './qconsultHost';
 import { isQconsultCommand } from './qconsultWrite';
+import type { QuestionConsult } from './questionConsults';
 import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
@@ -290,6 +291,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   private readonly consultPrompt: ConsultPromptFile;
   /** The Question consultant tab's host half — its buttons, its writes, its prompt files (todo/PLAN_question_consultant.md, S4). */
+  /**
+   * What Active questions draws its first stage from — the question-consults watcher, handed in by `extension.ts`
+   * beside the escalation watcher rather than as one more constructor argument. Absent reads as none.
+   */
+  public questionConsults: { readonly questions: readonly QuestionConsult[] } | undefined;
   private readonly qconsult: QconsultHost;
   private readonly roundsLog_: RoundsLogCache;
 
@@ -1092,6 +1098,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       consultPrompt: await this.consultPrompt.readConsultPrompt(),
       qconsultPromptOverrides: await this.qconsult.overrides(),
       qconsultPlaces: this.qconsult.places(),
+      qconsults: this.questionConsults?.questions ?? [],
       consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html
       // has gone out, so a slow disk delays the count and not the panel.

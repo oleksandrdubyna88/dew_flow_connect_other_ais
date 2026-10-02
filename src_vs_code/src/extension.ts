@@ -47,6 +47,7 @@ import { clientTargetsLine, CLIENT_TARGETS, installedMessage, mcpServerBlock } f
 import { installedVersion, installLatest, knownServerVersion, latestServerVersion, serverExists, serverOnThisSide, serverPath } from './installer';
 import { EscalationWatcher } from './escalationWatcher';
 import { ConsultationWatcher } from './consultationWatcher';
+import { QuestionConsultWatcher } from './questionConsultWatcher';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
 import { openSettings } from './settingsPanel';
@@ -106,6 +107,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // has no modal and no status-bar item — it appears in the sidebar where a person is already
   // looking, and nowhere else.
   const consultations = new ConsultationWatcher(dataDir());
+  // The third, for Active questions (todo/PLAN_question_consultant.md, S4): a question the consultants are
+  // answering blocks nothing either, so it too is drawn where a person is looking and raises nothing.
+  const questionConsults = new QuestionConsultWatcher(dataDir());
 
   // Exports run one at a time: two dialogs answered with the same path would otherwise race,
   // and the file would hold whichever write finished last while both reported success.
@@ -269,6 +273,10 @@ export function activate(context: vscode.ExtensionContext): void {
     void refreshRoundsLog(roundsLog, watcher, panel, true);
   };
   consultations.start();
+
+  panel.questionConsults = questionConsults;
+  questionConsults.onChanged = () => void panel.render();
+  questionConsults.start();
 
   // The settings the server reads, mirrored from activation — never from the panel.
   //
@@ -450,6 +458,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     watcher,
     consultations,
+    questionConsults,
     vscode.window.registerWebviewViewProvider(PanelProvider.viewType, panel),
     // The key is typed HERE or in the tab, and stored in the editor's secret storage either way.
     // A command as well as a button because the tab cannot be opened usefully without a key, and a

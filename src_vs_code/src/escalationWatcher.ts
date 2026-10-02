@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { answerJson, decisionChoices } from './escalationAnswer';
+import { answerChoices, answerJson } from './escalationAnswer';
 import {
   Escalation,
   isOpenEscalation,
@@ -11,6 +11,7 @@ import {
 import { WatchedDir, answerPaths, usableDirs, watchedDirs } from './escalationDirs';
 import { notify, notifyAndAsk } from './notify';
 import { askPerson } from './personWait';
+import { POLL_MS, WATCH_DEBOUNCE_MS, debounced, needsPoll } from './debounced';
 
 /** The setting that names other installations' data directories. */
 export const ALSO_WATCH_SETTING = 'coai.alsoWatchDataDirectories';
@@ -25,6 +26,13 @@ export function alsoWatchDataDirectories(): readonly string[] {
   const value: unknown = vscode.workspace.getConfiguration().get(ALSO_WATCH_SETTING);
 
   return Array.isArray(value) ? value.filter((entry): entry is string => typeof entry === 'string') : [];
+}
+
+/** The five-second poll, as a disposable. */
+function polled(tick: () => void): vscode.Disposable {
+  const timer = setInterval(tick, POLL_MS);
+
+  return new vscode.Disposable(() => clearInterval(timer));
 }
 
 /** A thrown thing, as a sentence — the same shape `cliChatLaunch.ts` uses. */
@@ -63,6 +71,14 @@ export class EscalationWatcher {
   private asked: readonly WatchedDir[] = [];
   /** The per-directory file watchers, torn down and rebuilt when the setting moves. */
   private readonly watchers: vscode.Disposable[] = [];
+  /**
+   * Every file event of every watched directory, gathered into one refresh within 175 ms
+   * (todo/PLAN_question_consultant.md, A5) — a card written and then rewritten as the consultants' answers
+   * arrive under it is a burst, and the sidebar answers it once.
+   */
+  private readonly changed = debounced(() => void this.refresh(), WATCH_DEBOUNCE_MS);
+  /** The five-second poll, held only while a watched directory is one whose events are not delivered. */
+  private poll: vscode.Disposable | undefined;
 
   constructor(private readonly dataDir: vscode.Uri) {
     this.statusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
@@ -87,11 +103,9 @@ export class EscalationWatcher {
       }
     }));
 
-    // A watcher on a path outside the workspace is not guaranteed on every platform; the poll is
-    // what makes the promise "you will see the question" true rather than likely. It is also the
-    // whole mechanism on a \\wsl.localhost or a network path, where events are not delivered at all.
-    const timer = setInterval(() => void this.refresh(), 5000);
-    this.disposables.push(new vscode.Disposable(() => clearInterval(timer)));
+    // The poll is the whole mechanism on a \\wsl.localhost or a network path, where events are not delivered
+    // at all — and since A5 of the question consultant it is held ONLY for those (`rebuild` decides, because
+    // the list of directories moves with the setting). A local directory is watched by its events, debounced.
     void this.refresh();
   }
 
@@ -116,24 +130,33 @@ export class EscalationWatcher {
         );
         this.watchers.push(
           watcher,
-          watcher.onDidCreate(() => void this.refresh()),
-          watcher.onDidChange(() => void this.refresh()),
-          watcher.onDidDelete(() => void this.refresh()),
+          watcher.onDidCreate(this.changed),
+          watcher.onDidChange(this.changed),
+          watcher.onDidDelete(this.changed),
         );
       } catch {
         // Watched by the poll alone from here. Nothing is lost but the immediacy.
       }
     }
+    this.repoll();
     // NOT a disposable pushed per rebuild: `rebuild` runs on every change to the setting, and each
     // run would add another teardown to a list nothing empties — a leak that grows with how often
     // somebody edits their settings. `dispose()` drains `this.watchers` directly instead. (gemini,
     // the code round, Blocking.)
   }
 
+  /** The poll, held again only if a directory now watched is one whose events are not delivered. */
+  private repoll(): void {
+    this.poll?.dispose();
+    this.poll = needsPoll(this.watchedRoots.map((root) => root.fsPath)) ? polled(() => void this.refresh()) : undefined;
+  }
+
   dispose(): void {
     for (const watcher of this.watchers.splice(0)) {
       watcher.dispose();
     }
+    this.changed.cancel();
+    this.poll?.dispose();
     for (const d of this.disposables) {
       d.dispose();
     }
@@ -190,7 +213,7 @@ export class EscalationWatcher {
   async answerCommand(escalation: Escalation): Promise<void> {
     // The question's branch says which review is asking: a feature session's first choice is also the
     // person's request for that review's second round, and its detail says so.
-    const choices = decisionChoices(escalation.branch);
+    const choices = answerChoices(escalation);
     const picked = await askPerson(() => vscode.window.showQuickPick(
       choices.map((c) => ({ label: c.label, detail: c.detail, choice: c })),
       {

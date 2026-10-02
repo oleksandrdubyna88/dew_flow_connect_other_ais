@@ -497,7 +497,7 @@ test('the live regions are addressable, so an update need not reload the panel',
   // The dropdowns closing after two seconds was a full webview reload on every watcher tick.
   // Patching these two containers is what replaced it.
   const html = everyPageHtml(state(), 'n');
-  assert.ok(html.includes('id="live-questions"'));
+  assert.ok(html.includes('id="live-qconsults"'));
   assert.ok(html.includes('id="live-rounds"'));
 });
 

@@ -226,10 +226,10 @@ test('the questions region three lines away behaves the same way', () => {
   const page = run();
   const answer = '<button data-command="answer" data-id="q1">Answer…</button>';
 
-  page.tick({ questions: answer });
-  page.tick({ questions: answer });
-  page.tick({ questions: answer });
-  (page.regions.get('live-questions') as Region).only().click();
+  page.tick({ qconsults: answer });
+  page.tick({ qconsults: answer });
+  page.tick({ qconsults: answer });
+  (page.regions.get('live-qconsults') as Region).only().click();
 
   assert.deepEqual(asked(page.posted), [{ type: 'command', command: 'answer', id: 'q1' }]);
 });
@@ -238,7 +238,7 @@ test('every live region is patched, and one that changed is bound while the othe
   const page = run();
 
   page.tick({
-    questions: '<button data-command="answer" data-id="q2"></button>',
+    qconsults: '<button data-command="answer" data-id="q2"></button>',
     rounds: '<i>a round</i>',
     consultations: '<i>a consultation</i>',
     cadence: '<i>a cadence line</i>',
@@ -249,7 +249,7 @@ test('every live region is patched, and one that changed is bound while the othe
   assert.equal((page.regions.get('live-consultations') as Region).innerHTML, '<i>a consultation</i>');
   assert.equal((page.regions.get('live-cadence') as Region).innerHTML, '<i>a cadence line</i>');
   (page.regions.get('live-notifications') as Region).only().click();
-  (page.regions.get('live-questions') as Region).only().click();
+  (page.regions.get('live-qconsults') as Region).only().click();
 
   assert.deepEqual(asked(page.posted), [
     { type: 'command', command: 'showNotifications', id: '' },
