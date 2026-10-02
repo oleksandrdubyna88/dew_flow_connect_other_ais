@@ -13,6 +13,11 @@
 Security lane scenarios are in `SecurityLaneRoundTests` (real Git, engine and history; paid reviewers
 doubled), with settings/evidence/coverage cases in the other `Security*Tests`. The extension's
 `securityLane.test.ts` runs its page and exercises the settings writer against the built server.
+`SecuritySessionCompatibilityTests` exercises the real session store and source-generated JSON
+serializer with pre-lane pending/rejected findings, both omitted and null cap reasons, and a
+nonempty new-evidence control. It verifies save/reload without losing findings or rejection
+reasons, and the ordinary finding's empty SQLite evidence projection. It does not invoke a paid
+reviewer or establish model accuracy.
 `SecurityLaneCalibrationTests` is an explicit Windows/Ollama test, excluded from ordinary CI.
 It runs three code rounds with the operator's embedded prompts and retains requests, responses,
 hashes and session history after each cell. The command and current measurement status are in
