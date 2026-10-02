@@ -310,6 +310,49 @@ public sealed class EscalationsTests : IDisposable
         failures.Should().Be(0, "the question file is written by the panel while the server reads it");
     }
 
+    /// <summary>A10 (S3 of the question consultant): a question nobody answered is marked expired in its own file — kept, out of the active set.</summary>
+    [Fact]
+    public void Expire_MarksTheQuestionFile_AndKeepsIt()
+    {
+        _escalations.Notify(Question("qExp"));
+        var when = new DateTime(2026, 10, 2, 9, 15, 0, DateTimeKind.Utc);
+
+        _escalations.Expire("qExp", when).Should().BeTrue();
+
+        var read = _escalations.Read("qExp")!;
+        read.Status.Should().Be(EscalationStatuses.Expired);
+        read.ExpiredUtc.Should().Be(when.ToString("O"));
+        read.Question.Should().Contain("Ship anyway?", "everything else is as it was");
+        _escalations.Expire("nobody", when).Should().BeFalse("a question that is not there cannot be marked");
+    }
+
+    /// <summary>D8: the consultants' answers are folded under the card as the rows settle, by rewriting the question file.</summary>
+    [Fact]
+    public void Attach_FoldsTheConsultantsAnswersUnderTheQuestion()
+    {
+        _escalations.Notify(Question("qRisk"));
+        var answers = new[] { new EscalationAdvice("astra", "codex", "gpt-6-astra", "The internet", "web", "unconfined", "answered", string.Empty, "Back the column up first.") };
+
+        _escalations.Attach("qRisk", answers).Should().BeTrue();
+
+        var read = _escalations.Read("qRisk")!;
+        read.ConsultantAnswers.Should().ContainSingle().Which.Advice.Should().Be("Back the column up first.");
+        read.Status.Should().BeEmpty("attaching answers does not change whether the question is open");
+    }
+
+    [Fact]
+    public void AQuestionWrittenBeforeTheStatusExisted_ReadsAsOpen_WithNoAnswersAttached()
+    {
+        Directory.CreateDirectory(_escalations.Directory);
+        File.WriteAllText(_escalations.QuestionPath("qOld"), """{"id":"qOld","sessionId":"s-1","repoPath":"D:/repo","branch":"main","question":"Ship?","questionOriginal":"Ship?","language":"en","translationNote":"","openFindings":[],"askedUtc":"2026-08-31T15:00:00Z"}""");
+
+        var read = _escalations.Read("qOld")!;
+
+        read.Status.Should().BeEmpty();
+        read.ConsultantAnswers.Should().BeEmpty();
+        read.ConsultId.Should().BeEmpty();
+    }
+
     [Fact]
     public void AFileNobodyCanReadRightNow_IsNothingYet_NotAThrow()
     {

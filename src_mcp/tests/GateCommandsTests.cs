@@ -198,6 +198,45 @@ public sealed class GateCommandsTests
             .Should().StartWith(GateCommands.ModelOrderMarker);
     }
 
+    /// <summary>
+    /// S3 of the question consultant: the question-consult order follows the autonomy order, appears only when the
+    /// mode is not off, and moves no order a bench or a person already knows by position.
+    /// </summary>
+    [Fact]
+    public void TheQuestionConsultOrder_FollowsTheAutonomyOrder_OnlyWhenTheModeIsNotOff_AndMovesNothing()
+    {
+        var context = new CommandContext(
+            Autonomous: true, SplitPlan: true, SplitWithFable: true,
+            PlanText: PlanOf(lines: 150, steps: 5, files: 3, areas: 2), PlanStage: true);
+        var before = GateCommands.For(context);
+        var with = GateCommands.For(context with
+        {
+            QuestionConsult = new QuestionConsultFacts(Core.QuestionConsult.QuestionMode.Require, Core.QuestionConsult.QuestionPolicy.FreeBatches),
+        });
+
+        before.Should().HaveCount(3, "split, model, autonomy — the shape every release before S3 had");
+        with.Should().HaveCount(4);
+        with.Take(3).Should().Equal(before, "nothing before the new order moved");
+        with[2].Should().Contain("AUTONOMOUSLY");
+        with[3].Should().StartWith(GateCommands.QuestionConsultMarker, "and the new order follows the autonomy order it amends");
+    }
+
+    [Fact]
+    public void TheQuestionConsultOrder_IsAnAmendmentToTheAutonomyOrder_AndNeedsIt()
+    {
+        // §0 item 2 of the plan: "the Work autonomously order is amended". Without the autonomy switch the rule still
+        // reaches the caller — through ask_human's own description and the gate's refusal — but no order is given.
+        GateCommands.For(new CommandContext(Autonomous: false, PlanStage: true)
+        {
+            QuestionConsult = new QuestionConsultFacts(Core.QuestionConsult.QuestionMode.Require, 2),
+        }).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void TheQuestionConsultOrder_WithTheModeOff_IsWhatItAlwaysWas() =>
+        GateCommands.For(new CommandContext(Autonomous: true, PlanStage: true) { QuestionConsult = QuestionConsultFacts.Off })
+            .Should().ContainSingle().Which.Should().Contain("AUTONOMOUSLY");
+
     [Fact]
     public void WithEverythingOn_TheOrderIsSplitThenModelThenAutonomy()
     {

@@ -81,6 +81,25 @@ public sealed class ConsultCallCounter(string dataDir)
         }
     }
 
+    /// <summary>
+    /// What the counter would say WITHOUT taking a call — for a gate that has to know whether a consultant can
+    /// still be had before it refuses a question (S3 of the question consultant, D9). Memory first when this
+    /// process is already counting in memory, else the file; unreadable is an empty window, as
+    /// <see cref="Persisted"/> reads it.
+    /// </summary>
+    public CounterOutcome Peek(string caller, int cap, DateTime nowUtc)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(caller);
+        var key = Path.GetFullPath(dataDir) + "\0" + caller;
+        Spent spent;
+        lock (Gate)
+        {
+            spent = Memory.TryGetValue(key, out var known) && nowUtc - known.Start < Window ? known : Persisted(caller, nowUtc);
+        }
+
+        return new CounterOutcome(spent.Count < cap, spent.Count, string.Empty);
+    }
+
     private CounterOutcome TakeFromFile(string caller, int cap, DateTime nowUtc)
     {
         Directory.CreateDirectory(Dir);

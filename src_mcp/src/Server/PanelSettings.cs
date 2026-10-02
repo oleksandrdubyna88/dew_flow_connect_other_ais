@@ -264,13 +264,14 @@ public sealed record PanelSettings
     /// How long an escalation waits for a person before answering "nobody answered yet".
     /// </summary>
     /// <remarks>
-    /// Thirty minutes, and the fallback is the family's: the main AI then asks in the chat, the
-    /// same shape `remote-ask.md` prescribes on `no_answer_yet`. Waiting forever would hand the
-    /// decision to whichever MCP client's own timeout fires first, with nothing said about why.
+    /// Fifteen minutes (thirty until S3 of the question consultant, A10), then the card is marked expired and
+    /// the fallback is the family's: the main AI asks in the chat, as `remote-ask.md` prescribes on
+    /// `no_answer_yet`. Waiting forever would hand the decision to whichever MCP client's own timeout fires first.
     /// </remarks>
-    public TimeSpan EscalationBudget { get; init; } = TimeSpan.FromMinutes(30);
+    public TimeSpan EscalationBudget { get; init; } = TimeSpan.FromMinutes(DefaultEscalationMinutes);
 
-
+    /// <summary>The one number the default above and the reader below share.</summary>
+    public const int DefaultEscalationMinutes = 15;
 
     /// <summary>
     /// Which prompt each role uses on each round — <c>role -> [round1, round2, ...]</c>, by
@@ -859,12 +860,11 @@ public sealed record PanelSettings
             RoundTimeout = TimeSpan.FromMinutes(CountVar(env, "COAI_ROUND_TIMEOUT_MINUTES", 0)),
             RateLimitBackoff = TimeSpan.FromSeconds(IntVar(env, "COAI_RATE_LIMIT_BACKOFF_SECONDS", 15)),
             RetryLadder = LadderFrom(env),
-            // Seconds win when set: minutes are the setting a person configures, seconds are for a
-            // short budget a test or a scripted run needs. One knob would have had to lie about one
-            // of the two.
+            // Seconds win when set: minutes are the setting a person configures, seconds are for a short
+            // budget a test or a scripted run needs. One knob would have had to lie about one of the two.
             EscalationBudget = env("COAI_ESCALATION_SECONDS") is { Length: > 0 }
             ? TimeSpan.FromSeconds(IntVar(env, "COAI_ESCALATION_SECONDS", 30))
-            : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", 30)),
+            : TimeSpan.FromMinutes(IntVar(env, "COAI_ESCALATION_MINUTES", DefaultEscalationMinutes)),
             // ABSOLUTE, always. A relative one was accepted happily and made every round unrunnable: the
             // server writes its schema file and hands the reviewer that same relative path, and a vendor
             // CLI is launched in a directory of its own — so every reviewer answered "cannot find the

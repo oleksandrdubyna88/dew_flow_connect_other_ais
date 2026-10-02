@@ -1,0 +1,151 @@
+using System.Text.Json;
+using CoaiMcp.Server;
+using FluentAssertions;
+using Xunit;
+
+namespace CoaiMcp.Tests;
+
+/// <summary>
+/// The lifecycle of <c>escalations/*.json</c> (<c>todo/PLAN_question_consultant.md</c> A4, D11, S3 acceptance 4):
+/// answered and expired pairs, orphans and temp files go seven days after they ended; a question a live
+/// session still holds is kept.
+/// </summary>
+public sealed class EscalationRetentionTests : IDisposable
+{
+    private static readonly DateTime Now = new(2026, 10, 2, 9, 0, 0, DateTimeKind.Utc);
+    private static readonly TimeSpan Past = EscalationRetention.Retention + TimeSpan.FromHours(1);
+    private static readonly TimeSpan Recent = EscalationRetention.Retention - TimeSpan.FromHours(1);
+
+    private readonly string _data = Directory.CreateTempSubdirectory("coai-esc-ret-").FullName;
+    private readonly Escalations _escalations;
+    private readonly HashSet<string> _held = [];
+
+    public EscalationRetentionTests() => _escalations = new Escalations(_data);
+
+    public void Dispose()
+    {
+        try
+        {
+            Directory.Delete(_data, recursive: true);
+        }
+        catch (IOException) { }
+    }
+
+    private EscalationRetention Retention() => new(_escalations, id => _held.Contains(id));
+
+    private EscalationQuestion Asked(string id, TimeSpan ago) => new(
+        id, "s-1", "D:/repo", "main", "Ship?", "Ship?", "en", string.Empty, [], (Now - ago).ToString("O"));
+
+    private void Question(string id, TimeSpan askedAgo) => _escalations.Notify(Asked(id, askedAgo));
+
+    private void Answer(string id, TimeSpan answeredAgo)
+    {
+        Directory.CreateDirectory(_escalations.Directory);
+        File.WriteAllText(_escalations.AnswerPath(id), JsonSerializer.Serialize(new { id, answer = "no", answeredUtc = (Now - answeredAgo).ToString("O") }));
+    }
+
+    private void Expired(string id, TimeSpan expiredAgo)
+    {
+        Question(id, expiredAgo + TimeSpan.FromMinutes(15));
+        _escalations.Expire(id, Now - expiredAgo).Should().BeTrue();
+    }
+
+    private bool Exists(string path) => File.Exists(path);
+
+    [Fact]
+    public void AnAnsweredPair_GoesSevenDaysAfterTheAnswer_BothFiles()
+    {
+        Question("old", Past + TimeSpan.FromHours(1));
+        Answer("old", Past);
+        Question("young", Recent + TimeSpan.FromHours(1));
+        Answer("young", Recent);
+
+        Retention().Sweep(Now).Should().Be(2, "the old question and its answer");
+
+        Exists(_escalations.QuestionPath("old")).Should().BeFalse();
+        Exists(_escalations.AnswerPath("old")).Should().BeFalse();
+        Exists(_escalations.QuestionPath("young")).Should().BeTrue();
+        Exists(_escalations.AnswerPath("young")).Should().BeTrue();
+    }
+
+    [Fact]
+    public void TheClockIsTheAnswer_NotTheQuestion()
+    {
+        // Asked long ago, answered yesterday: the pair is recent — the person's words are a day old.
+        Question("slow", Past + TimeSpan.FromDays(10));
+        Answer("slow", TimeSpan.FromDays(1));
+
+        Retention().Sweep(Now).Should().Be(0);
+    }
+
+    [Fact]
+    public void AnExpiredQuestion_GoesSevenDaysAfterItExpired()
+    {
+        Expired("old", Past);
+        Expired("young", Recent);
+
+        Retention().Sweep(Now).Should().Be(1);
+
+        Exists(_escalations.QuestionPath("old")).Should().BeFalse();
+        Exists(_escalations.QuestionPath("young")).Should().BeTrue("kept for the log until its seven days are up");
+    }
+
+    [Fact]
+    public void AnOrphanAnswer_AndAStrayTempFile_GoAfterSevenDays()
+    {
+        Answer("nobody", Past);
+        Answer("recent-nobody", Recent);
+        Directory.CreateDirectory(_escalations.Directory);
+        var tmp = Path.Combine(_escalations.Directory, "abc.json.tmp");
+        File.WriteAllText(tmp, "{");
+        File.SetLastWriteTimeUtc(tmp, Now - Past);
+        var youngTmp = Path.Combine(_escalations.Directory, "def.json.tmp");
+        File.WriteAllText(youngTmp, "{");
+        File.SetLastWriteTimeUtc(youngTmp, Now - Recent);
+
+        Retention().Sweep(Now).Should().Be(2);
+
+        Exists(_escalations.AnswerPath("nobody")).Should().BeFalse();
+        Exists(_escalations.AnswerPath("recent-nobody")).Should().BeTrue();
+        Exists(tmp).Should().BeFalse();
+        Exists(youngTmp).Should().BeTrue();
+    }
+
+    [Fact]
+    public void AnOpenQuestionNobodyHolds_GoesAfterSevenDays_AndAHeldOneIsKept()
+    {
+        Question("forgotten", Past);
+        Question("held", Past);
+        _held.Add("held");
+
+        Retention().Sweep(Now).Should().Be(1);
+
+        Exists(_escalations.QuestionPath("forgotten")).Should().BeFalse("a call_human notice nobody ever answered is litter after a week");
+        Exists(_escalations.QuestionPath("held")).Should().BeTrue("a live session's hold is bound to this id; deleting it would leave the hold unanswerable");
+    }
+
+    [Fact]
+    public void AnOpenQuestionYoungerThanSevenDays_IsKept()
+    {
+        Question("fresh", Recent);
+
+        Retention().Sweep(Now).Should().Be(0);
+    }
+
+    [Fact]
+    public void ATornQuestionFile_IsLitterAfterSevenDays_ByItsWriteTime()
+    {
+        Directory.CreateDirectory(_escalations.Directory);
+        var torn = Path.Combine(_escalations.Directory, "torn.json");
+        File.WriteAllText(torn, "{ half");
+        File.SetLastWriteTimeUtc(torn, Now - Past);
+
+        Retention().Sweep(Now).Should().Be(1);
+
+        Exists(torn).Should().BeFalse();
+    }
+
+    [Fact]
+    public void NoDirectoryYet_IsNothingToSweep() =>
+        new EscalationRetention(new Escalations(Path.Combine(_data, "never")), _ => false).Sweep(Now).Should().Be(0);
+}

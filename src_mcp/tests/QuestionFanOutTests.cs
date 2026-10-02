@@ -66,7 +66,7 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
 
     private QuestionConsultStore Store() => new(_data);
 
-    private QuestionFanOut FanOut(ScriptedLauncher launcher, QuestionConsultSettings settings) => new(
+    private QuestionFanOut FanOut(ScriptedLauncher launcher, QuestionConsultSettings settings, TimeSpan? heartbeatEvery = null) => new(
         launcher,
         new ReviewerExecutor(launcher),
         Store(),
@@ -77,7 +77,8 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         new TreeSitterOutliner(),
         ConsultSchemaFile.Ensure(Path.Combine(_data, "schemas"), QuestionAnswerSchema.Name, QuestionAnswerSchema.Json, "a test").Path,
         _ => null,
-        Logger.None);
+        Logger.None,
+        heartbeatEvery);
 
     private FanOutInput Input(QuestionConsultSettings settings, string question = Question, string context = Context) =>
         new(settings, [], Core.Api.ApiOverrides.None, question, context, _repo.Path, _head, FollowUps: 3, Nonce: "n0nce");
@@ -336,6 +337,40 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         none.Advice.Should().NotBeEmpty();
         File.Exists(Path.Combine(_projects.Path, "written-by-the-consultant.txt")).Should().BeTrue("nothing is deleted and nothing is reverted");
         settled.Status.Should().Be(QuestionConsultStatuses.Partial);
+    }
+
+    // ---------- D14 (d): the heartbeat is REWRITTEN while a row runs ----------
+
+    /// <summary>
+    /// The sweep's reading of a stale beat was covered in S2; the WRITING was not, because every scripted row
+    /// settled in under a second. The interval is a seam here (thirty seconds in production, two hundred
+    /// milliseconds in this test), so the proof costs under two seconds instead of thirty.
+    /// </summary>
+    [Fact]
+    public async Task TheHeartbeatIsRewritten_WhileARowRuns_OnTheConfiguredInterval()
+    {
+        var settings = Settings([Row("slow", "claude", "claude", "opus", "question-opinion")], budget: TimeSpan.FromSeconds(20));
+        var launcher = new ScriptedLauncher(_real, launch => Task.FromResult<ScriptedAnswer?>(
+            launch.Request.Executable == "claude" ? ScriptedAnswer.Claude("A ladder.") with { Wait = TimeSpan.FromMilliseconds(1500) } : null));
+        var store = Store();
+        var fresh = Fresh();
+        var beats = new HashSet<string>(StringComparer.Ordinal);
+
+        var run = FanOut(launcher, settings, heartbeatEvery: TimeSpan.FromMilliseconds(200)).RunAsync(fresh, Input(settings), TestContext.Current.CancellationToken);
+        while (!run.IsCompleted)
+        {
+            if (store.Read(fresh.Id) is { Status: QuestionConsultStatuses.Consulting, HeartbeatUtc.Length: > 0 } live)
+            {
+                beats.Add(live.HeartbeatUtc);
+            }
+
+            await Task.Delay(40, TestContext.Current.CancellationToken);
+        }
+
+        var settled = await run;
+        settled.Rows.Single().Status.Should().Be(RowOutcomes.Answered, "the row answered after its wait; the beat was not the row");
+        beats.Count.Should().BeGreaterThanOrEqualTo(3,
+            "a row that ran a second and a half on a 200 ms beat was seen with at least three distinct heartbeats — the first write and two rewrites");
     }
 
     [Fact]

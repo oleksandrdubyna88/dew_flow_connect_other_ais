@@ -72,11 +72,23 @@ public static class QuestionAdmission
 
         return ConfinementPlanner.Plan(RuntimeResolution.NameOf(identity), Grant(prompt.Capability, settings.Roots)) switch
         {
-            Confinement.Planned plan => new RowAdmission.Admitted(row, prompt, provider, runtime, plan),
+            Confinement.Planned plan => Planned(row, prompt, provider, runtime, plan),
             Confinement.Refused refused => new RowAdmission.Refused(row, prompt, RowOutcomes.Blocked, refused.Reason),
             _ => throw new InvalidOperationException("the union is closed"),
         };
     }
+
+    /// <summary>
+    /// D13 on the SERVER (decided for S3): a pair the planner admits but FLAGS — the runtime can read this machine
+    /// whatever it is told — runs only once the operator ticked the row's acknowledgement. A picker is not an
+    /// enforcement: the rows file is written by hand as often as by the panel.
+    /// </summary>
+    private static RowAdmission Planned(QuestionRow row, QuestionPromptDefinition prompt, ProviderSettings provider, IAnsweringRuntime runtime, Confinement.Planned plan) =>
+        plan.Flag == AdmissionFlag.None || row.Acknowledged
+            ? new RowAdmission.Admitted(row, prompt, provider, runtime, plan)
+            : new RowAdmission.Refused(row, prompt, RowOutcomes.Blocked,
+                $"the row '{row.Id}' pairs {RuntimeResolution.NameOf(provider.Identity())} with '{prompt.Capability.Spelled()}', and that runtime can read this machine "
+                + $"whatever it is told ({plan.Flag.Spelled()}) — tick the acknowledgement for this row in {Section} to run it anyway");
 
     /// <summary>The grant a prompt's capability is: the roots travel with <c>disk</c> alone (<see cref="CapabilityGrant"/>).</summary>
     private static CapabilityGrant Grant(Capability capability, IReadOnlyList<string> roots) => capability switch

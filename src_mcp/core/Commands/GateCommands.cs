@@ -59,6 +59,13 @@ public sealed record CommandContext(
     /// </summary>
     /// <remarks>Off by default, so a context built without it says what every release before it said.</remarks>
     public CadenceFacts Cadence { get; init; } = CadenceFacts.Off;
+
+    /// <summary>
+    /// What the server knows about the question consultant (<c>todo/PLAN_question_consultant.md</c>, S3): the
+    /// mode and the free-batch number the order that amends the autonomy order carries.
+    /// </summary>
+    /// <remarks>Off by default, for the same reason as the cadence.</remarks>
+    public QuestionConsultFacts QuestionConsult { get; init; } = QuestionConsultFacts.Off;
 }
 
 /// <summary>How often split work is gated (issue #131). Never per story: that cost two rounds a story.</summary>
@@ -117,6 +124,12 @@ public static class GateCommands
         if (context.Autonomous)
         {
             commands.Add(AutonomyCommand(context));
+        }
+        // Right after the autonomy order it amends (S3 of the question consultant): the question consultant
+        // comes before the person. Only with that order, and only when the mode says something.
+        if (QuestionConsultOrder.Gives(context))
+        {
+            commands.Add(QuestionConsultOrder.For(context.QuestionConsult, context.Texts));
         }
         // Last, so no order a bench or a person already knows by position moves when the cadence is on.
         // The plan is read once, and only when the cadence is on (epic 1's code round, gemini).
@@ -236,6 +249,9 @@ public static class GateCommands
 
     /// <summary>The words the autonomy order opens with — what the bench looks for, kept out of the editable text.</summary>
     public const string AutonomyMarker = "Work AUTONOMOUSLY.";
+
+    /// <summary>The words the question-consult order opens with (S3 of the question consultant) — in code, before the editable text, like every marker.</summary>
+    public const string QuestionConsultMarker = "ASK THE CONSULTANTS FIRST.";
 
     /// <summary>
     /// The words every model order opens with, whichever models it names.

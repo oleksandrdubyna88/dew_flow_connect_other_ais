@@ -45,6 +45,16 @@ public sealed class ScenarioCoverageTests
         ["close_consult"] = "ConsultScenarioTests — a real consultation opened over the fake CLI and "
             + "then ENDED: the verdict on the record, a repeat that changes nothing, a conflicting "
             + "outcome refused, a cap-closed one lapsing and still taking a verdict",
+        ["ask_human"] = "AskHumanScenarioTests — a REAL server build over real stdio (S3 of the question consultant): the plan "
+            + "proceeded, two free batches each waiting their one-second budget and marked expired, the third refused naming "
+            + "ask_consultants, the consultants answering through the fake CLI as a codex row, and ask_human with that consultId "
+            + "allowed — the record marked person_asked and bound to its card. Beneath it: AskHumanServiceTests (every row of "
+            + "the gate's table against the real service: the plan stage, the free batches counted, the third refused, a verified "
+            + "consultId spent once, a fabricated, foreign, consulting or stale one refused as none, remind, off, the stand-down "
+            + "when no row is on or the switch is off, the release, a plan key counting under the plan, an unreadable phase "
+            + "record allowing, a production risk's card written BEFORE any launch with the answers folded under it, the wait "
+            + "ending in no_answer_yet with the file expired and an answered question never expired), AskGateTests (the pure "
+            + "table), QuestionPhaseStoreTests, StageReleaseTests, EscalationRetentionTests, EscalationsTests and HumanDecisionTests",
         ["ask_consultants"] = "QuestionConsultScenarioTests — the fake CLI as a codex row, a REAL child: the planner's "
             + "argv reaches a process, its answer file is read back fenced, the record and the ledger line are on disk; "
             + "a web question carrying a path refused before any launch. Beneath it: QuestionFanOutTests (one row past "
@@ -59,11 +69,10 @@ public sealed class ScenarioCoverageTests
     /// </summary>
     private static readonly Dictionary<string, string> NotCovered = new(StringComparer.Ordinal)
     {
-        ["ask_human"] = "it BLOCKS until a person answers in the panel or on their phone; the wait is "
-            + "the behaviour, and a scenario that answers it from a fake surface would exercise the "
-            + "fake. Its pieces are covered by EscalationsTests and HumanDecisionTests; which SESSION "
-            + "a question is filed under (the document's, when `document` is passed) by "
-            + "ADocumentIsReviewedEndToEndTests, against the real service with a budget nobody meets.",
+        // Empty since S3 of the question consultant: `ask_human` was the one debt — its wait IS the behaviour, and a
+        // scenario answering it from a fake surface would have exercised the fake — and the gate changed the shape of
+        // the question: the refusal does not wait at all, and the allowed path's wait is a budget the scenario sets
+        // and asserts the expiry of, through the file the person's surface reads rather than a fake of the person.
     };
 
     [Fact]
@@ -88,8 +97,10 @@ public sealed class ScenarioCoverageTests
     [Fact]
     public void EveryDeclaredGap_CarriesAReason()
     {
-        // A reason of "TODO" or an empty string is the silent gap this whole check exists to prevent.
-        NotCovered.Should().OnlyContain(gap => gap.Value.Length > 40);
+        // A reason of "TODO" or an empty string is the silent gap this whole check exists to prevent. Spelled as
+        // "no gap with a short reason" rather than OnlyContain, which refuses an EMPTY list — and the list has been
+        // empty since S3 of the question consultant covered `ask_human`; a gap added later is still named here.
+        NotCovered.Where(gap => gap.Value.Length <= 40).Should().BeEmpty("a declared gap says why it is one");
     }
 
     /// <summary>

@@ -10153,3 +10153,34 @@ ten seconds of typing, a prompt unwrapped. Teeth after GREEN: one panel prompt u
 harness's `lastWrite` and the new `work(page)` CHECK both and compare the rest (`withoutSeq`), and three tests with
 fakes of their own compare through the same helper. One structural guard followed the render body into `renderNow`;
 the `pageFor` guard's 800-character window is why the snapshot rides in `withCaret` rather than in each call.
+
+## An expired question leaves the sidebar, and a card carries the consultants' answers (2026-10-02, S3 of `todo/PLAN_question_consultant.md`)
+
+The server's half of S3 is in [module_server.md](module_server.md) (*The door to the person*). What reached
+this half is small and all of it is about the one file neither container owns, `escalations/<id>.json`:
+
+- **`status: "expired"`** (A10). After its fifteen-minute wait the server marks a question nobody answered in
+  its own file and tells the AI to ask in the chat. A card that stayed on the sidebar would be a question two
+  people answer, so `escalations.ts` gained `isOpenEscalation` — open unless the status is `expired`; absent
+  and empty are open, which is every file written before S3 — and `EscalationWatcher.readOpenIn` reads it
+  before it adds a card. The file stays for the log until the server's retention takes it (seven days). The
+  predicate is tested (`escalations.test.ts`); the watcher's one-line filter is read, not run — the class is
+  `vscode`-bound.
+- **The card's new fields**, carried through `parseEscalation`'s spread as every unknown field always was and
+  now typed on `Escalation`: `expiredUtc`, `consultId` (the `ask_consultants` reply the question followed),
+  `productionRisk` and `riskReason` (the person was asked at once, the consultants beside), and
+  `consultantAnswers` — one `EscalationAdvice` per row (vendor, model, prompt title, capability, D13's flag,
+  status, reason, advice). Nothing draws them yet: the sidebar's *Active questions* (one card, the answers
+  folded under it, the risk said) is S4's.
+- **`qphase/`** joined `DATA_TO_MOVE` and `shared/data-inventory.json`: the phase records carry how many batches
+  the person has been asked under each plan, and a move that left them would hand every plan two fresh free
+  batches. `theInventoryIsComplete.test.ts` named it red on the first run, as it is there to.
+- **`command-question-consult`** is the twenty-first shipped text on the Edit commands page (`commands.ts`:
+  marker `ASK THE CONSULTANTS FIRST. `, placeholders `{freeBatches}` and `{enforced}`), regenerated into
+  `commandTexts.generated.ts`.
+- **The help** says twelve tools in all five languages, with one sentence on `ask_consultants` — the question
+  consultant before `ask_human`, the two free batches, the production risk reaching the person at once.
+
+The two halves ship on their own clocks, stated: an older extension against this server draws an expired card
+until the person answers it or the retention takes it; this extension against an older server sees no
+status and draws every card, as before.

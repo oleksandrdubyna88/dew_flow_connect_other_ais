@@ -109,6 +109,36 @@ public sealed class QuestionConsultService(
 
     public QuestionConsultStore Store => _store;
 
+    /// <summary>The settings this service was built from — what the gate reads the mode and the free-batch number off.</summary>
+    public QuestionConsultSettings Options => settings.QuestionConsult;
+
+    /// <summary>
+    /// Whether a consultant can be had right now for this caller, without launching or spending anything: empty
+    /// when one can; else why not — the switch, the rows, the quota. What the gate stands down on (D9).
+    /// </summary>
+    public string Preflight(string caller, DateTime nowUtc)
+    {
+        var options = settings.QuestionConsult;
+        if (!options.Enabled)
+        {
+            return $"the question consultant is switched off in this installation ({QuestionConsultKeys.Enabled})";
+        }
+
+        if (options.RowsUnreadable)
+        {
+            return $"the question consultant's rows ({QuestionConsultKeys.Rows}) could not be read";
+        }
+
+        if (options.Rows.Count(r => r.Enabled) == 0)
+        {
+            return $"no question-consultant row is switched on ({QuestionAdmission.Section})";
+        }
+
+        var peeked = _counter.Peek(QuotaKey(caller), options.QuestionsPerSession, nowUtc);
+
+        return peeked.Allowed ? string.Empty : $"this caller session has asked the consultants {peeked.Used} questions, the cap ({QuestionConsultKeys.QuestionsPerSession} = {options.QuestionsPerSession})";
+    }
+
     public int Sweep(Func<int, bool> isAlive) => _store.Sweep(isAlive, DateTime.UtcNow);
 
     /// <summary>Re-projects every record the store still holds — the consultation service's reason: the projection is allowed to fail, and a terminal record is never written again.</summary>
@@ -156,9 +186,62 @@ public sealed class QuestionConsultService(
         }
 
         var (repo, refusal) = await context.TopLevelAsync(repoPath, ct);
+        if (refusal.Length > 0)
+        {
+            return Error(refusal);
+        }
 
-        return refusal.Length > 0 ? Error(refusal) : await InTheRepositoryAsync(repo, question.Trim(), contextText.Trim(), document, feature, sessionOf, ct);
+        var (sha, branch) = await context.HeadAsync(repo, ct);
+        var record = NewRecord(repo, branch, sha, question.Trim(), contextText.Trim(), sessionOf(repo, branch, document, feature));
+
+        return Reply(await InTheRepositoryAsync(record, ct));
     }
+
+    /// <summary>
+    /// D8: the consultants BESIDE a person's card. The question is the one the person was asked, the context the
+    /// caller's declared risk, the record marked as such and bound to the card; the switch, unreadable rows and a
+    /// path that is no repository answer nothing (null) rather than a refusal — the person was already asked.
+    /// </summary>
+    public async Task<QuestionConsultRecord?> BesideAsync(string repoPath, string question, string contextText, string sessionId, string escalationId, CancellationToken ct)
+    {
+        var options = settings.QuestionConsult;
+        if (!options.Enabled || options.RowsUnreadable || Arguments(question, contextText).Length > 0)
+        {
+            return null;
+        }
+
+        var (repo, refusal) = await context.TopLevelAsync(repoPath, ct);
+        if (refusal.Length > 0)
+        {
+            return null;
+        }
+
+        var (sha, branch) = await context.HeadAsync(repo, ct);
+        var record = NewRecord(repo, branch, sha, question.Trim(), contextText.Trim(), sessionId) with
+        {
+            ProductionRisk = true,
+            RiskReason = contextText.Trim(),
+            EscalationId = escalationId,
+        };
+        var consulted = await InTheRepositoryAsync(record, ct);
+        // The outcome says how the question ENDED: beside the person's card, unless nobody could be asked at all.
+        var ended = consulted.Record.Outcome is QuestionOutcomes.QuotaSpent or QuestionOutcomes.NoneAvailable
+            ? consulted.Record
+            : consulted.Record with { Outcome = QuestionOutcomes.ProductionRisk };
+        _store.Write(ended);
+
+        return ended;
+    }
+
+    private QuestionConsultRecord NewRecord(string repo, string branch, string sha, string question, string contextText, string sessionId) =>
+        new(QuestionConsultStore.NewId(), ConsultationService.CallerOf(env, repo), CallerIdentity.KindFrom(env), sessionId,
+            repo, branch, sha, question, QuestionConsultStore.Stamp(DateTime.UtcNow))
+        {
+            Context = contextText,
+        };
+
+    /// <summary>What one question came to: the reply's parts, and the record as it ended.</summary>
+    private sealed record Consulted(QuestionConsultRecord Record, string Status, IReadOnlyList<QuestionRowAnswer> Answers, int Left, string Next);
 
     /// <summary>The argument checks, each a sentence naming the cure: an empty context by NAME, the two sizes.</summary>
     internal static string Arguments(string question, string contextText)
@@ -180,20 +263,10 @@ public sealed class QuestionConsultService(
                 : string.Empty;
     }
 
-    private async Task<string> InTheRepositoryAsync(
-        string repo, string question, string contextText, string document, string feature,
-        Func<string, string, string, string, string> sessionOf, CancellationToken ct)
+    private async Task<Consulted> InTheRepositoryAsync(QuestionConsultRecord record, CancellationToken ct)
     {
         var options = settings.QuestionConsult;
-        var caller = ConsultationService.CallerOf(env, repo);
-        var (sha, branch) = await context.HeadAsync(repo, ct);
-        var record = new QuestionConsultRecord(
-            QuestionConsultStore.NewId(), caller, CallerIdentity.KindFrom(env), sessionOf(repo, branch, document, feature),
-            repo, branch, sha, question, QuestionConsultStore.Stamp(DateTime.UtcNow))
-        {
-            Context = contextText,
-        };
-
+        var caller = record.Caller;
         if (options.Rows.Count(r => r.Enabled) == 0)
         {
             return Written(record, QuestionOutcomes.NoneAvailable, Statuses.NoneAvailable, Left(caller, options),
@@ -213,7 +286,7 @@ public sealed class QuestionConsultService(
         return await FannedOutAsync(record, Math.Max(0, options.QuestionsPerSession - counted.Used), counted.Note, ct);
     }
 
-    private async Task<string> FannedOutAsync(QuestionConsultRecord record, int left, string counterNote, CancellationToken ct)
+    private async Task<Consulted> FannedOutAsync(QuestionConsultRecord record, int left, string counterNote, CancellationToken ct)
     {
         var nonce = Guid.NewGuid().ToString("N")[..8];
         var fanOut = new QuestionFanOut(launcher, executor, _store, prompts, ledger, keys, settings, new Normalizer.TreeSitterOutliner(), _answerSchema.Path, env, log);
@@ -225,7 +298,7 @@ public sealed class QuestionConsultService(
         var answers = settled.Rows.Select(row => Answer(row, nonce)).ToList();
         var launched = settled.Rows.Count(r => r.Status is not (RowOutcomes.Blocked or RowOutcomes.Disabled or RowOutcomes.Refused));
 
-        return Reply(settled.Id, StatusOf(settled, launched), answers, left, Next(settled, launched, counterNote));
+        return new Consulted(settled, StatusOf(settled, launched), answers, left, Next(settled, launched, counterNote));
     }
 
     private static string StatusOf(QuestionConsultRecord settled, int launched) =>
@@ -252,12 +325,13 @@ public sealed class QuestionConsultService(
         row.Answered ? ConsultationFence.Advice(row.Vendor, row.Model, new TurnBudget(1, 0), nonce, row.Advice) : string.Empty);
 
     /// <summary>A question that ends before any launch: written down with its outcome, so the log says it went straight to the person.</summary>
-    private string Written(QuestionConsultRecord record, string outcome, string status, int left, string next)
+    private Consulted Written(QuestionConsultRecord record, string outcome, string status, int left, string next)
     {
         var stamp = QuestionConsultStore.Stamp(DateTime.UtcNow);
-        _store.Write(record with { Status = QuestionConsultStatuses.Failed, Outcome = outcome, UpdatedUtc = stamp, EndedUtc = stamp });
+        var ended = record with { Status = QuestionConsultStatuses.Failed, Outcome = outcome, UpdatedUtc = stamp, EndedUtc = stamp };
+        _store.Write(ended);
 
-        return Reply(record.Id, status, [], left, next);
+        return new Consulted(ended, status, [], left, next);
     }
 
     private int Left(string caller, QuestionConsultSettings options) => options.QuestionsPerSession;
@@ -267,6 +341,9 @@ public sealed class QuestionConsultService(
 
     private static string Reply(string id, string status, IReadOnlyList<QuestionRowAnswer> answers, int left, string next) =>
         JsonSerializer.Serialize(new AskConsultantsAnswer(id, status, answers, left, next), ServerJsonContext.Default.AskConsultantsAnswer);
+
+    private static string Reply(Consulted consulted) =>
+        Reply(consulted.Record.Id, consulted.Status, consulted.Answers, consulted.Left, consulted.Next);
 
     /// <summary>A refusal, through the ONE place the wire shape is built. See <see cref="Refusal"/>.</summary>
     private string Error(string sentence, [CallerMemberName] string from = "") =>

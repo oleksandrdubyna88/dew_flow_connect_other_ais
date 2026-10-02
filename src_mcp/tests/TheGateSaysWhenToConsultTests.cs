@@ -131,6 +131,52 @@ public class TheGateSaysWhenToConsultTests
             "and that is where this one used to stop");
     }
 
+    /// <summary>
+    /// The phase rule, pinned WHOLE in BOTH descriptions (<c>todo/PLAN_question_consultant.md</c> §4, S3): the server
+    /// enforces it in <c>ask_human</c>, and <c>ask_consultants</c> is where a caller stands when it decides to obey it.
+    /// </summary>
+    /// <remarks>
+    /// One sentence, two carriers, for the reason <see cref="ConsultPointer"/> gives: a fragment both still contain
+    /// stays green when the trigger is widened in one of them. The number in it is held to
+    /// <c>QuestionPolicy.FreeBatches</c> by <c>TheOrderTextAgreesWithThePolicyTests</c>.
+    /// </remarks>
+    private const string PhaseRule =
+        "The phase rule, which the server enforces: a question asked while the plan is being formed, and the first 2 "
+        + "batches of questions after the plan's `proceed`, go to the person directly; every question after that, until "
+        + "the work is released to the stage environment, goes through `ask_consultants` first and reaches `ask_human` "
+        + "with the `consultId` it returned — unless `productionRisk: true` with a `riskReason` says a wrong answer could "
+        + "take production down, which asks the person at once and runs the consultants beside the question. After the "
+        + "release, questions go to the person directly again.";
+
+    /// <summary>Both doors carry the phase rule, whole — the gate's and the consultants'.</summary>
+    [Fact]
+    public void BothDoorsCarryThePhaseRule_Whole()
+    {
+        DescriptionOf("ask_human").Should().Contain(PhaseRule,
+            "the gate that refuses lives behind this tool, so the rule has to be readable where the refusal lands");
+        DescriptionOf("ask_consultants").Should().Contain(PhaseRule,
+            "and the tool the rule sends a caller to has to say the same thing, or the two drift");
+
+        DescriptionOf("ask_human").Should().NotContain("the question stays open in VS Code either way",
+            "that ending predates the fifteen-minute wait: a question nobody answered is marked expired now, not left open");
+        DescriptionOf("ask_consultants").Should().NotEndWith("`ask_human` takes them.",
+            "that is where this description used to stop, so if it still does the rule is not in it");
+    }
+
+    /// <summary>The three arguments the gate reads are named where a caller learns to pass them, and the wait is fifteen minutes.</summary>
+    [Fact]
+    public void AskHumanNamesItsGateArguments_AndTheFifteenMinuteWait()
+    {
+        var askHuman = DescriptionOf("ask_human");
+
+        askHuman.Should().Contain("`consultId`", "the proof that the consultants were asked first travels on this call");
+        askHuman.Should().Contain("`productionRisk`").And.Contain("`riskReason`",
+            "the one bypass, spelled as the operator spelled it (A8) — never as a severity");
+        askHuman.Should().Contain("15 minutes by default", "A10: the wait is fifteen minutes, then no_answer_yet");
+        askHuman.Should().NotContain("30 minutes by default", "the old default, which left a person's card open for half an hour");
+        askHuman.Should().Contain("expired", "a question nobody answered leaves the active list and stays in the log");
+    }
+
     /// <summary>A plan is not a document, said where a caller chooses between the two gates.</summary>
     [Fact]
     public void ReviewDocumentNamesAPlanAsTheCounterExample()
@@ -221,7 +267,7 @@ public class TheGateSaysWhenToConsultTests
     /// a rename would turn every case in this class back into the file-wide check they exist to
     /// replace.
     /// </remarks>
-    private static string DescriptionOf(string tool)
+    internal static string DescriptionOf(string tool)
     {
         var source = Source.Value;
 

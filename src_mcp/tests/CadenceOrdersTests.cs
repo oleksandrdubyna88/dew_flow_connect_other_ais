@@ -228,6 +228,16 @@ public sealed class CadenceOrdersTests
             CodeRound(Facts(CadenceMode.Require, epic: 1, epics: 9) with { RiskAnswered = false }),
             CodeRound(Facts(CadenceMode.Require, epic: 1) with { RiskItems = [new RiskItem(1, "", "why")] }),
             GateCommands.For(new CommandContext(PlanText: PlanWithEpics(9), PlanStage: true) { Cadence = CadenceFacts.Off with { Mode = CadenceMode.Require } }),
+            // S3 of the question consultant: the autonomy order (its stage sequence, A6) and the question-consult order
+            // in both modes that say anything — extended here rather than in a new sweep, so one list is THE list.
+            GateCommands.For(new CommandContext(Autonomous: true, PlanStage: true)
+            {
+                QuestionConsult = new Core.Commands.QuestionConsultFacts(Core.QuestionConsult.QuestionMode.Require, Core.QuestionConsult.QuestionPolicy.FreeBatches),
+            }),
+            GateCommands.For(new CommandContext(Autonomous: true, PlanStage: true)
+            {
+                QuestionConsult = new Core.Commands.QuestionConsultFacts(Core.QuestionConsult.QuestionMode.Remind, Core.QuestionConsult.QuestionPolicy.FreeBatches),
+            }),
         }.SelectMany(orders => orders).ToList();
 
         all.Should().NotBeEmpty();
