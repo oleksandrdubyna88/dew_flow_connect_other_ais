@@ -33,7 +33,7 @@ internal static class Schema
         Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
-        WhyARoundDidNotRun,
+        WhyARoundDidNotRun, TheQuestionsAsked,
     ];
 
     internal const string Tables = """
@@ -474,5 +474,74 @@ internal static class Schema
     /// </remarks>
     internal const string WhyARoundDidNotRun = """
         ALTER TABLE rounds ADD COLUMN note TEXT NOT NULL DEFAULT '';
+        """;
+
+    /// <summary>
+    /// Step 17: the question consultant (<c>todo/PLAN_question_consultant.md</c>, S2) — one row per
+    /// question an AI put to the consultants before it asked the person, and one row per model row
+    /// that answered it.
+    /// </summary>
+    /// <remarks>
+    /// <para>A projection, as everything here is: <c>question-consults/&lt;id&gt;.json</c> stays the truth and
+    /// the file is upserted as the question advances, so the Logs tab (S4) reads one row per question
+    /// with its outcome, and per model on expand. The advice column is cut at 16 KB per row (§5) —
+    /// the record keeps the whole text.</para>
+    /// <para>Two tables rather than a JSON column, because the page's questions are per ROW — which
+    /// model answered, in how long, at what cost — and a column nobody can <c>WHERE</c> on is a column
+    /// nobody can total. <c>-1</c> and the empty string mean "not recorded", the convention every
+    /// table here keeps; a question's <c>outcome</c> is empty until something settled it.</para>
+    /// <para>Its own step, appended: a database that has run sixteen records sixteen, and widening the
+    /// sixteenth would leave it without these tables while believing it had run every step.</para>
+    /// </remarks>
+    internal const string TheQuestionsAsked = """
+        CREATE TABLE IF NOT EXISTS question_consults (
+            id              TEXT PRIMARY KEY,
+            caller          TEXT NOT NULL DEFAULT '',
+            caller_kind     TEXT NOT NULL DEFAULT '',
+            session_id      TEXT NOT NULL DEFAULT '',
+            repo_path       TEXT NOT NULL DEFAULT '',
+            branch          TEXT NOT NULL DEFAULT '',
+            head_sha        TEXT NOT NULL DEFAULT '',
+            plan_key        TEXT NOT NULL DEFAULT '',
+            question        TEXT NOT NULL DEFAULT '',
+            context         TEXT NOT NULL DEFAULT '',
+            production_risk INTEGER NOT NULL DEFAULT 0,
+            risk_reason     TEXT NOT NULL DEFAULT '',
+            status          TEXT NOT NULL DEFAULT '',
+            outcome         TEXT NOT NULL DEFAULT '',
+            escalation_id   TEXT NOT NULL DEFAULT '',
+            started_utc     TEXT NOT NULL DEFAULT '',
+            ended_utc       TEXT NOT NULL DEFAULT '',
+            rows            INTEGER NOT NULL DEFAULT 0,
+            answered        INTEGER NOT NULL DEFAULT 0,
+            seconds         REAL NOT NULL DEFAULT 0,
+            tokens_in       INTEGER NOT NULL DEFAULT 0,
+            tokens_out      INTEGER NOT NULL DEFAULT 0,
+            cost_usd        REAL,
+            alert           TEXT NOT NULL DEFAULT ''
+        );
+
+        CREATE INDEX IF NOT EXISTS question_consults_by_time ON question_consults (started_utc DESC);
+
+        CREATE TABLE IF NOT EXISTS question_consult_rows (
+            consult_id   TEXT NOT NULL REFERENCES question_consults(id),
+            row_id       TEXT NOT NULL,
+            vendor       TEXT NOT NULL DEFAULT '',
+            model        TEXT NOT NULL DEFAULT '',
+            runtime      TEXT NOT NULL DEFAULT '',
+            prompt_id    TEXT NOT NULL DEFAULT '',
+            prompt_title TEXT NOT NULL DEFAULT '',
+            capability   TEXT NOT NULL DEFAULT '',
+            flag         TEXT NOT NULL DEFAULT '',
+            status       TEXT NOT NULL DEFAULT '',
+            reason       TEXT NOT NULL DEFAULT '',
+            seconds      REAL NOT NULL DEFAULT 0,
+            tokens_in    INTEGER NOT NULL DEFAULT 0,
+            tokens_out   INTEGER NOT NULL DEFAULT 0,
+            cost_usd     REAL,
+            advice       TEXT NOT NULL DEFAULT '',
+            note         TEXT NOT NULL DEFAULT '',
+            PRIMARY KEY (consult_id, row_id)
+        );
         """;
 }

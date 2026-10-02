@@ -4,7 +4,7 @@
 > config key (which is what prefixes the tools: `mcp__coai__review_plan`). Built by hand on the
 > `ModelContextProtocol` SDK — the hosted default logs to stdout, and stdout carries JSON-RPC.
 
-## The nine tools
+## The twelve tools
 
 | Tool | Backed by | Refuses when |
 |---|---|---|
@@ -15,9 +15,10 @@
 | `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
-| `ask_human` | `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it; while the gate is HELD the question's id is recorded on the hold (`SessionState.HoldQuestions`, under the session's claim, 2026-09-26) so the person's answer to it is the hold's, and on a feature session after its first round it is recorded as a request question (`SessionState.RequestQuestions`, 2026-09-27) so the person's answer to it — and to nothing else — can be the second-round request | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
+| `ask_human` | `AskHumanService` (its own file since 2026-10-01, a proved move out of `PanelService` — S2 of the question consultant) over `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it; while the gate is HELD the question's id is recorded on the hold (`SessionState.HoldQuestions`, under the session's claim, 2026-09-26) so the person's answer to it is the hold's, and on a feature session after its first round it is recorded as a request question (`SessionState.RequestQuestions`, 2026-09-27) so the person's answer to it — and to nothing else — can be the second-round request | only an empty question; otherwise it WAITS the budget, then answers `no_answer_yet` telling the model to ask in the chat |
 | `consult` | `ConsultationService` — another vendor's model over the LIVE working tree | eleven ways, each a sentence naming its cure — see below |
 | `close_consult` | `CloseAsync` — how a consultation ENDED, recorded by whoever knows | not your consultation; a word outside the closed set; `lapsed`, which is the server's own; a consultation that FAILED and produced no advice; a different verdict over one already recorded |
+| `ask_consultants` | `QuestionConsultService` → `QuestionFanOut` — every active model × prompt row answers in PARALLEL before the person is asked (2026-10-01, `todo/PLAN_question_consultant.md` S2) | the switch off, nobody to ask and the quota are ANSWERS (`status`: `off` · `none_available` · `quota_spent`), not refusals; refused: an empty `context` by name, a question over 4 KB, a context over 8 KB, rows that cannot be read, `document` and `feature` together, a path that is no repository — see *The question consultant* below |
 
 ## A consultation ends with an outcome — the tenth tool (2026-09-17)
 
@@ -531,6 +532,112 @@ editable and restorable like any role prompt. It lives OUTSIDE `src/prompts/` be
 `generate-help-prompts.mjs` walks that folder and refuses any file the role seed does not name, and a
 consultation has no role.
 
+## The question consultant — the twelfth tool, and `ask_human` in a file of its own (2026-10-01, `todo/PLAN_question_consultant.md` S2)
+
+The consultant above is one model, asked when the agent is STUCK, in a conversation, in the live checkout
+under a repository lock. `ask_consultants` is the other door: several models at once, each paired with
+ONE base prompt — "study the other projects on this disk", "search the internet", "the best developer's
+opinion" — each given only what its capability allows (S1's planner and sanitisers, applied here), each
+under its own deadline, every answer fenced `advisory_only` and returned SEPARATELY (D2: no summariser).
+It is called before `ask_human`, which stays the only door to the person; the gate that makes it
+MANDATORY by phase is S3's and lives in `AskHumanService`, which is why that block moved first.
+
+```mermaid
+flowchart LR
+  AI[calling AI] -->|ask_consultants| QS[QuestionConsultService<br/>switch · arguments · rows readable · top level · quota under q + caller]
+  QS -->|record consulting, pid, heartbeat| ST[(question-consults/id.json)]
+  QS --> FO[QuestionFanOut]
+  FO --> AD[QuestionAdmission<br/>prompt · QuestionRowResolver · QuestionResolution · ConfinementPlanner]
+  FO -->|web| SAN[WebQuestionSanitiser → QuestionPrompt — the question alone]
+  FO -->|none · disk| SC[SecretCheck → QuestionPrompt / ApiQuestionPrompt]
+  FO -->|none| OUT[FeatureOutlineBuilder.BuildAtHeadAsync — ONCE per question]
+  FO -->|disk roots| INV[FilesystemInvariant — one snapshot pair per fan-out]
+  FO --> RL[QuestionRowLaunch × N in parallel<br/>ReviewerExecutor.LaunchAsync · api follow-ups · ledger kind question]
+  RL -->|each row as it settles| ST
+  FO -->|heartbeat every 30 s| ST
+  ST --> DB[(question_consults · question_consult_rows — step 17)]
+  QS -->|ConsultationFence.Advice per row| AI
+```
+
+**What a row is given is decided in one place each, and the type is the guarantee where one can be.** A
+`web` row is given the question through `WebQuestionSanitiser` and nothing more — `QuestionPrompt.Compose`
+refuses a web input carrying a context, an outline or a root by name, so no later edit of the fan-out can add
+one (A2 as a contract). A `none` or `disk` row is given the context through `SecretCheck`, which refuses
+(never redacts) and never quotes what it found; a `none` row also gets the OUTLINE of the repository at HEAD
+— built ONCE per question whatever the row count, and timed in the log: on this checkout at `2d6dea41` it is
+1,997 files against the empty tree, 78 outlined under the file cap, 170 KB of section, **6.2 s** (the
+`QuestionOutlineTimingTests` measurement) — and an `api` row its source turns on top (A9, S1's
+`IAnsweringFollowUps`, the fan-out driving the loop under the row's deadline). A `disk` row is given its
+read-only roots, listed in the prompt, and stands in the first of them.
+
+**Every active row at once (D6).** No `BoundedScheduler`, no `RepositoryLock`: a cap of three would turn six
+rows into two waves and break the five-minute promise, and the rows READ. The record is written `consulting`
+with the pid and a heartbeat BEFORE the first launch, every row is persisted the moment it settles (so the
+sidebar — S4 — sees per-model progress), and a heartbeat is rewritten every thirty seconds while anything
+runs. Six rows settling at once write through one gate: the record in memory is replaced whole, the store's
+`Write` is the one road, and the projection sees every state. A row past its budget is `timed_out` and the
+others' answers still return — `partial` (A1); the launcher's own kill at the budget is the ordinary road,
+and a backstop deadline a grace past it (`ConsultationDeadline.For`) is told apart from the caller's
+cancellation by the token's state, never the exception's type.
+
+**The invariant guards the DISK rows' roots.** One snapshot pair per fan-out over each distinct root of the
+admitted disk rows that is a git checkout (a root that is not one is logged as unwatched); a breach withholds
+the disk rows' advice alone — their status `failed`, their advice emptied, the sentence on the record's
+`alert` — and the `none` and `web` rows' answers stand. Nothing is deleted and nothing is reverted, as the
+consultant's invariant never did.
+
+**The record is D5's own store, never a kind of `ConsultationRecord`.** `question-consults/<id>.json`,
+written whole under the turn, read with every accessor null-normalised; a row carries its vendor, model,
+runtime, prompt, capability, D13's `flag` (`unconfined` / `default-deny`), status (`consulting` →
+`answered` · `timed_out` · `failed` · `refused` · `blocked` · `disabled`), reason, seconds, tokens, cost,
+advice and note; the question carries status (`consulting` → `answered` · `partial` · `failed` ·
+`interrupted`) and outcome (`answered_by_consultants`, `quota_spent`, `none_available`; S3 adds
+`person_asked` and `production_risk`). **The sweep is D14 (d)**: a `consulting` record ends `interrupted`
+only when its heartbeat is older than two minutes AND its pid is dead — a recycled Windows pid alone cannot
+end a live question, a stale heartbeat alone cannot either (a live server settles its own record); a terminal
+record goes seven days after it ended; the directory is capped at 500 files, the oldest TERMINAL records
+going first and a consulting one never; the rows' answer files go on the same clock through
+`ConsultantArtefactSweep`, extracted from `ConsultationStore` rather than copied (one naming rule,
+`ConsultantArtefacts.Ours`, for both directories). Both sweeps run at startup and on `ConsultationSweeper`'s
+one-minute beat, and the log catches up with the files at startup (`Reproject`) for the consultation's
+reason: the projection is allowed to fail and a terminal record is never written again.
+
+**Schema step 17, `TheQuestionsAsked`**: `question_consults` (one row per question, upserted as it advances,
+totals over its rows, money NULL when no row reported any) and `question_consult_rows` (one per model row,
+advice cut at 16 KB — the file keeps the whole text). Written by `QuestionConsultTable` in its own file
+through `RoundsDb.Command()`, the one seam that class opens outward, because `RoundsDb.cs` is past the
+ceiling already. Nothing reads them yet; the Logs tab (S4) will, through `--log`.
+
+**The quota and the ledger.** Ten questions per caller session (`COAI_QCONSULT_QUESTIONS_PER_SESSION`),
+counted through the consultant's `ConsultCallCounter` under its own key (`q:` + caller) — the stuck
+consultant's cap and this one never spend each other — taken once per QUESTION, after the argument checks and
+the "no row on" check and before the launches, so a refused argument spends nothing. Every launch is a ledger
+line of kind `question`, role `question`, stage `Question`: a fourth `UsageKinds` entry, local-only like
+`consult`, so the Team server's vocabulary test still reads *known == wire ∪ local-only*.
+
+**The settings** are one record, `QuestionConsultSettings`, one property on `PanelSettings` (D12 — paid for
+inside that file: two orphaned duplicate doc blocks removed, a third moved to the member it describes; 1510 →
+1497 lines): `COAI_QCONSULT_ENABLED` (on), `COAI_QCONSULT_MODE` (`require`; read, acted on by S3),
+`COAI_QCONSULT_ROWS` (a JSON array of `{id, vendor, runtime, model, baseUrl, executablePath, key, prompt,
+enabled, acknowledged}`, at most six on — the seventh is switched OFF and said), `COAI_QCONSULT_PROMPTS` (a
+person's own `{id, title, capability, text}`, beside the three shipped in `shared/question-prompts.json` and
+embedded as `QuestionPromptSet.Shipped`; edited through the `RolePrompts` override layer, restored by deleting
+the override), `COAI_QCONSULT_ROOTS` (**D14 (c)**: a root that is a drive, the user profile itself, a system
+directory or anything inside one, inside the data directory, relative or missing is refused BY NAME into
+`Unrecognised` and never read), `COAI_QCONSULT_ROW_MINUTES` (5), `COAI_QCONSULT_QUESTIONS_PER_SESSION` (10),
+`COAI_QCONSULT_FREE_BATCHES` (2; S3's). A row's vendor is a definition of its own, or a reviewer row borrowed
+by id (its runtime, endpoint, path, dialect, price and per-model settings), or a runtime's own name
+(`QuestionRowResolver`, over the consultant resolver's three materialisers and the QUESTION allowlist, which
+admits `api`). D13's `acknowledged` is carried on the row since S2 and shown beside every answer; the UI that
+asks for it is S4's, and whether the server should refuse an unacknowledged flagged row is an open question
+for S3/S4 — the plan files D13 under S4.
+
+**`ask_human` moved first**, as a proved move (`prove-move.mjs` against `95bc7048`: the region alone 137 body
+lines, one contiguous run, zero residue; the whole file's 30 residue lines all scaffolding, listed in the
+commit) — `AskHumanService`, with the two helpers it called on the service forwarded under their names and
+`SessionAddress` moved to a file of its own because the refusal census rightly refuses an alias. Behaviour
+unchanged, its callers untouched; S3's gate lands there.
+
 ## The round engine is its own unit (2026-09-25)
 
 `PanelService` is the MCP surface — `open`, `status`, the three `review_*` entry points, `resolve`,
@@ -648,7 +755,7 @@ runner, which is the machine slow enough to lose the race.
 
 ## Escalation — reaching a person without a port
 
-`ask_human` writes `escalations/<id>.json` into the data directory the extension already reads for
+`ask_human` (`AskHumanService` since 2026-10-01 — the block moved out of `PanelService` as a proved move, with no change to what follows) writes `escalations/<id>.json` into the data directory the extension already reads for
 the rounds view, then polls for `<id>.answer.json` beside it. The round's still-gating findings ride
 with the question, because a person deciding "ship anyway?" should not have to go looking for what
 gates.

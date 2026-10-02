@@ -1,0 +1,372 @@
+using System.Diagnostics;
+using CoaiMcp.Core.Consultation;
+using CoaiMcp.Core.Context;
+using CoaiMcp.Core.Outlining;
+using CoaiMcp.Core.QuestionConsult;
+using CoaiMcp.Runners.Collecting;
+using CoaiMcp.Runners.Consultation;
+using CoaiMcp.Runners.Context;
+using CoaiMcp.Runners.Feature;
+using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Reviewers;
+
+namespace CoaiMcp.Server;
+
+/// <summary>Everything one fan-out is given beside the record it fills.</summary>
+/// <param name="HeadSha">The checkout's HEAD, for the outline and the api rows' source turns; empty on a repository with no commit.</param>
+/// <param name="FollowUps">How many source turns an api row may have (<c>COAI_FEATURE_SOURCE_FOLLOWUPS</c>).</param>
+/// <param name="Nonce">The question's fence nonce — one per question, on every row's material and every answer's fence.</param>
+public sealed record FanOutInput(
+    QuestionConsultSettings Settings,
+    IReadOnlyList<ProviderSettings> Reviewers,
+    Core.Api.ApiOverrides Overrides,
+    string Question,
+    string Context,
+    string Repo,
+    string HeadSha,
+    int FollowUps,
+    string Nonce);
+
+/// <summary>
+/// The fan-out (PLAN_question_consultant.md, §4 and S2): every active row admitted through the matrix,
+/// given what its capability allows and nothing more (D10), launched in PARALLEL under its own deadline
+/// — no scheduler cap, no repository lock (D6) — and persisted as it settles, so the sidebar sees
+/// per-model progress; a heartbeat every thirty seconds while anything runs (D14 d); the filesystem
+/// invariant around any disk row, a breach withholding the disk rows' advice alone.
+/// </summary>
+/// <remarks>
+/// <para><b>What each row is given</b> is decided here and in one place each: a <c>web</c> row the
+/// question through <see cref="WebQuestionSanitiser"/> and nothing else (A2 — <see cref="QuestionPrompt"/>
+/// refuses anything more by name); a <c>none</c> or <c>disk</c> row the context through
+/// <see cref="SecretCheck"/> (refused, never redacted); a <c>none</c> row the OUTLINE of what exists at
+/// HEAD, built ONCE per question and timed, since six rows would otherwise build six; an <c>api</c> row
+/// its source turns on top (A9).</para>
+/// <para><b>The record is written before the first launch</b> with the pid and a heartbeat, and the
+/// writes of six rows settling at once are serialised: the record in memory is replaced whole under one
+/// gate and written through the store's one road, so the projection sees every state.</para>
+/// </remarks>
+public sealed class QuestionFanOut(
+    IProcessLauncher launcher,
+    ReviewerExecutor executor,
+    QuestionConsultStore store,
+    RolePrompts prompts,
+    UsageLedger ledger,
+    VaultKeys keys,
+    PanelSettings panel,
+    ISourceOutliner outliner,
+    string schemaFile,
+    Func<string, string?> env,
+    Serilog.ILogger log)
+{
+    private readonly QuestionRowLaunch _launch = new(executor, ledger, log);
+    private readonly FilesystemInvariant _invariant = new(launcher);
+
+    /// <summary>Runs every row of <paramref name="consulting"/>'s question and answers the settled record.</summary>
+    public async Task<QuestionConsultRecord> RunAsync(QuestionConsultRecord consulting, FanOutInput input, CancellationToken ct)
+    {
+        var admissions = input.Settings.Rows.Select(row => QuestionAdmission.Admit(row, input.Settings, input.Reviewers, input.Overrides)).ToList();
+        var admitted = admissions.OfType<RowAdmission.Admitted>().ToList();
+        var outline = await OutlineAsync(admitted, input, ct);
+        var inputs = admitted.Select(row => RowInputFor(row, input, outline)).ToList();
+
+        var current = new Current(store, consulting with
+        {
+            Status = QuestionConsultStatuses.Consulting,
+            RunnerPid = Environment.ProcessId,
+            HeartbeatUtc = QuestionConsultStore.Stamp(DateTime.UtcNow),
+            UpdatedUtc = QuestionConsultStore.Stamp(DateTime.UtcNow),
+            Rows = [.. admissions.Select(a => StartingRow(a, inputs))],
+        });
+        // The record says `consulting`, with the pid, BEFORE anything is launched (S2 acceptance 3).
+        store.Write(current.Record);
+        // Where a codex row's -o file and the shims' prompt and answer files land — swept on the record's clock.
+        Directory.CreateDirectory(store.AnswersDir);
+
+        var launches = inputs.OfType<RowInput.Launch>().ToList();
+        var watched = await SnapshotsAsync(launches, ct);
+        await LaunchAllAsync(current, launches, ct);
+        var breach = await BreachAsync(watched, ct);
+
+        var settled = Settled(current.Record, launches, breach);
+        store.Write(settled);
+
+        return settled;
+    }
+
+    // ---------- admission → what each row is given ----------
+
+    /// <summary>The outline of what exists at HEAD, built once when any <c>none</c> row was admitted — and timed, in the log.</summary>
+    private async Task<string> OutlineAsync(IReadOnlyList<RowAdmission.Admitted> admitted, FanOutInput input, CancellationToken ct)
+    {
+        if (input.HeadSha.Length == 0 || !admitted.Any(a => a.Prompt.Capability == Capability.None))
+        {
+            return string.Empty;
+        }
+
+        var started = Stopwatch.StartNew();
+        try
+        {
+            var outline = await new FeatureOutlineBuilder(launcher, outliner).BuildAtHeadAsync(input.Repo, input.HeadSha, ct: ct);
+            log.Information("question outline of {Repo} at {Head}: {Files} file(s), {Bytes} bytes, built once in {Ms} ms",
+                input.Repo, input.HeadSha[..Math.Min(8, input.HeadSha.Length)], outline.Files.Count, outline.Section.Length, started.ElapsedMilliseconds);
+
+            return outline.Section;
+        }
+        catch (ContextException e)
+        {
+            // An outline is material, not a precondition: a git that refuses leaves the none rows the
+            // context and the question, and says so where a person reads.
+            log.Warning("question outline of {Repo} could not be built ({Reason}); the none rows answer without it", input.Repo, e.Message);
+
+            return string.Empty;
+        }
+    }
+
+    /// <summary>What one admitted row is given, by its capability — or the refusal that stops it before any launch.</summary>
+    private RowInput RowInputFor(RowAdmission.Admitted row, FanOutInput input, string outline)
+    {
+        var instruction = prompts.Written(row.Prompt.Id) is { Length: > 0 } written ? written : row.Prompt.Text;
+
+        return row.Prompt.Capability == Capability.Web
+            ? WebInput(row, input, instruction)
+            : CheckedInput(row, input, instruction, outline);
+    }
+
+    /// <summary>A web row: the sanitised question and NOTHING else (A2).</summary>
+    private static RowInput WebInput(RowAdmission.Admitted row, FanOutInput input, string instruction) =>
+        WebQuestionSanitiser.Check(input.Question, new WebQuestionContext(input.Repo, input.Settings.Roots)) switch
+        {
+            WebQuestion.Clean clean => new RowInput.Launch(row, QuestionPrompt.Compose(new QuestionPromptInput(
+                instruction, Capability.Web, clean.Text, CheckedContext.Empty, string.Empty, [], input.Nonce))),
+            WebQuestion.Refused refused => new RowInput.Refused(row, $"the web row was given nothing ({refused.Class}): {refused.Reason} — {refused.Cure}"),
+            _ => throw new InvalidOperationException("the union is closed"),
+        };
+
+    /// <summary>A none or disk row: the context after the secret check, the outline (none), the roots (disk) — the api row through its own composer (A9).</summary>
+    private RowInput CheckedInput(RowAdmission.Admitted row, FanOutInput input, string instruction, string outline)
+    {
+        if (SecretCheck.Inspect(input.Context) is not SecretCheckResult.Clean clean)
+        {
+            var refused = (SecretCheckResult.Refused)SecretCheck.Inspect(input.Context);
+
+            return new RowInput.Refused(row, $"the context was not sent ({refused.Class}): {refused.Reason} — {refused.Cure}");
+        }
+
+        var forThisRow = row.Prompt.Capability == Capability.None ? outline : string.Empty;
+
+        return row.Runtime is ApiConsultant api
+            ? new RowInput.Launch(
+                row with { Runtime = api.With(new QuestionMaterial(forThisRow, SourceTurnsFor(input))) },
+                ApiQuestionPrompt.Compose(new ApiQuestionInput(instruction, input.Question, clean.Context, forThisRow, input.FollowUps, input.Nonce)))
+            : new RowInput.Launch(row, QuestionPrompt.Compose(new QuestionPromptInput(
+                instruction, row.Prompt.Capability, input.Question, clean.Context, forThisRow,
+                row.Prompt.Capability == Capability.Disk ? input.Settings.Roots : [], input.Nonce)));
+    }
+
+    private SourceTurns SourceTurnsFor(FanOutInput input) =>
+        input.HeadSha.Length > 0 && input.FollowUps > 0
+            ? new SourceTurns.On(new SourceResolver(new GitHistory(launcher), outliner, input.Repo, input.HeadSha), input.FollowUps)
+            : SourceTurns.None;
+
+    /// <summary>The row as the record first carries it: consulting when it will launch, terminal with its word when it will not.</summary>
+    private static QuestionRowRecord StartingRow(RowAdmission admission, IReadOnlyList<RowInput> inputs)
+    {
+        var row = admission switch
+        {
+            RowAdmission.Admitted a => Shape(a.Row, a.Prompt, a.Provider, RuntimeResolution.NameOf(a.Provider.Identity()), a.Plan.Flag),
+            RowAdmission.Refused r => Shape(r.Row, r.Prompt, null, r.Row.Runtime, AdmissionFlag.None) with { Status = r.Status, Reason = r.Reason, EndedUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) },
+            _ => throw new InvalidOperationException("the union is closed"),
+        };
+
+        return inputs.OfType<RowInput.Refused>().FirstOrDefault(refused => refused.Row.Row.Id == row.RowId) is { } stopped
+            ? row with { Status = RowOutcomes.Refused, Reason = stopped.Reason, EndedUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) }
+            : row;
+    }
+
+    private static QuestionRowRecord Shape(QuestionRow row, QuestionPromptDefinition? prompt, ProviderSettings? provider, string runtime, AdmissionFlag flag) =>
+        new(row.Id, row.Vendor, provider?.Model ?? row.Model, runtime, row.Prompt, prompt?.Title ?? string.Empty,
+            prompt?.Capability.Spelled() ?? string.Empty, flag.Spelled());
+
+    // ---------- the launches, in parallel ----------
+
+    private async Task LaunchAllAsync(Current current, IReadOnlyList<RowInput.Launch> launches, CancellationToken ct)
+    {
+        if (launches.Count == 0)
+        {
+            return;
+        }
+
+        using var beating = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        var heartbeat = HeartbeatAsync(current, beating.Token);
+        try
+        {
+            // Every admitted row at once (D6): no BoundedScheduler, no RepositoryLock — the rows read, and a
+            // cap would turn six rows into two waves and break the five-minute promise.
+            await Task.WhenAll(launches.Select(launch => RunOneAsync(current, launch, ct)));
+        }
+        finally
+        {
+            await beating.CancelAsync();
+            await heartbeat;
+        }
+    }
+
+    private async Task RunOneAsync(Current current, RowInput.Launch launch, CancellationToken ct)
+    {
+        var start = current.Record.Rows.First(r => r.RowId == launch.Row.Row.Id);
+        var input = new RowLaunchInput(launch.Row, launch.Prompt, SettingsFor(launch.Row), current.Record.RepoPath, store.AnswersDir, schemaFile, panel.QuestionConsult.RowBudget);
+        var settled = await _launch.RunAsync(input, start, ct);
+        // Persisted as it settles, so the sidebar sees per-model progress (S2 acceptance 2).
+        await current.UpdateAsync(record => record.WithRow(settled) with { UpdatedUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) });
+        log.Information("question {Id}: row {Row} ({Vendor}, {Prompt}) ended {Status} in {Seconds}s", current.Record.Id, settled.RowId, settled.Vendor, settled.PromptId, settled.Status, settled.Seconds);
+    }
+
+    /// <summary>D14 (d): the heartbeat the sweep reads, rewritten every thirty seconds while anything runs.</summary>
+    private static async Task HeartbeatAsync(Current current, CancellationToken stop)
+    {
+        try
+        {
+            while (!stop.IsCancellationRequested)
+            {
+                await Task.Delay(QuestionConsultStore.HeartbeatEvery, stop);
+                await current.UpdateAsync(record => record with { HeartbeatUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) });
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // The rows settled, which is how the heartbeat ends.
+        }
+    }
+
+    /// <summary>One row's launch settings — the roster's shape (<c>RosterBuilder.SettingsFor</c>), with the row's own budget.</summary>
+    private ReviewerSettings SettingsFor(RowAdmission.Admitted row)
+    {
+        var provider = row.Provider;
+        var settings = new ReviewerSettings(provider.Provider)
+        {
+            ExecutablePath = provider.ExecutablePath,
+            Model = provider.Model,
+            // By the row's KEY NAME — its id unless it names another (S3.6); the api row's VaultKeyName is the same name.
+            ApiKey = keys.Keys.GetValueOrDefault(provider.KeyName, string.Empty),
+            Dialect = provider.Dialect,
+            Price = provider.Price,
+            Timeout = panel.QuestionConsult.RowBudget,
+            DataDir = panel.DataDir,
+            // A question row starts no MCP server either (issue #514).
+            McpServersToSwitchOff = NoMcpServers.CodexConfigured(env),
+        };
+        if (row.Runtime is not ApiConsultant)
+        {
+            return settings;
+        }
+
+        var api = ApiRowView.Of(provider, panel.ApiOverrides).Effective;
+
+        return settings with { ReasoningEffort = api.Effort, MaxTokens = api.MaxTokens, ThinkingOn = api.ThinkingOn };
+    }
+
+    // ---------- the invariant, around the disk rows ----------
+
+    /// <summary>One snapshot per distinct root of the disk rows that is a git checkout, taken before any launch. Taken once per fan-out.</summary>
+    private async Task<IReadOnlyList<Watched>> SnapshotsAsync(IReadOnlyList<RowInput.Launch> launches, CancellationToken ct)
+    {
+        var watched = new List<Watched>();
+        foreach (var root in launches.Where(l => l.Row.Plan.Grant.Capability == Capability.Disk).SelectMany(l => l.Row.Plan.Grant.Roots).Distinct(StringComparer.OrdinalIgnoreCase))
+        {
+            try
+            {
+                watched.Add(new Watched(root, await _invariant.SnapshotAsync(root, ct)));
+            }
+            catch (ContextException e)
+            {
+                // A root that is no git checkout cannot be fingerprinted by this invariant; said, not hidden.
+                log.Warning("question disk root {Root} is not watched by the filesystem invariant: {Reason}", root, e.Message);
+            }
+        }
+
+        return watched;
+    }
+
+    /// <summary>The second snapshot of every watched root, compared — the sentence when any changed, else empty.</summary>
+    private async Task<string> BreachAsync(IReadOnlyList<Watched> watched, CancellationToken ct)
+    {
+        var changes = new List<TreeChange>();
+        foreach (var one in watched)
+        {
+            try
+            {
+                changes.AddRange(FilesystemSnapshot.Compare(one.Before, await _invariant.SnapshotAsync(one.Root, ct))
+                    .Select(c => new TreeChange($"{one.Root}: {c.Path}", c.What)));
+            }
+            catch (ContextException e)
+            {
+                changes.Add(new TreeChange(one.Root, $"the second snapshot could not be taken: {e.Message}"));
+            }
+        }
+
+        return changes.Count == 0 ? string.Empty : FilesystemSnapshot.Sentence(changes);
+    }
+
+    // ---------- the settled record ----------
+
+    /// <summary>The record as the question ends: a breach withholds the DISK rows' advice alone; the status is what the rows came to.</summary>
+    private static QuestionConsultRecord Settled(QuestionConsultRecord record, IReadOnlyList<RowInput.Launch> launches, string breach)
+    {
+        var rows = breach.Length == 0 ? record.Rows : [.. record.Rows.Select(row => Withheld(row, launches, breach))];
+        var launched = rows.Where(row => launches.Any(l => l.Row.Row.Id == row.RowId)).ToList();
+        var answered = launched.Count(r => r.Answered);
+        var stamp = QuestionConsultStore.Stamp(DateTime.UtcNow);
+
+        return record with
+        {
+            Rows = rows,
+            Alert = breach,
+            Status = answered == 0 ? QuestionConsultStatuses.Failed
+                : answered == launched.Count ? QuestionConsultStatuses.Answered
+                : QuestionConsultStatuses.Partial,
+            Outcome = answered > 0 ? QuestionOutcomes.AnsweredByConsultants : string.Empty,
+            UpdatedUtc = stamp,
+            EndedUtc = stamp,
+        };
+    }
+
+    private static QuestionRowRecord Withheld(QuestionRowRecord row, IReadOnlyList<RowInput.Launch> launches, string breach) =>
+        row.Answered && launches.Any(l => l.Row.Row.Id == row.RowId && l.Row.Plan.Grant.Capability == Capability.Disk)
+            ? row with { Status = RowOutcomes.Failed, Advice = string.Empty, Reason = breach }
+            : row;
+
+    /// <summary>A root under the invariant, with its first snapshot.</summary>
+    private sealed record Watched(string Root, FilesystemSnapshot Before);
+
+    /// <summary>The record in memory, replaced whole under one gate and written through the store's one road — six rows settle at once.</summary>
+    private sealed class Current(QuestionConsultStore store, QuestionConsultRecord record)
+    {
+        private readonly SemaphoreSlim _gate = new(1, 1);
+
+        public QuestionConsultRecord Record { get; private set; } = record;
+
+        public async Task UpdateAsync(Func<QuestionConsultRecord, QuestionConsultRecord> change)
+        {
+            await _gate.WaitAsync();
+            try
+            {
+                Record = change(Record);
+                store.Write(Record);
+            }
+            finally
+            {
+                _gate.Release();
+            }
+        }
+    }
+}
+
+/// <summary>What one admitted row is given: a prompt to launch, or the refusal that stops it (the sanitiser's, the secret check's).</summary>
+public abstract record RowInput
+{
+    public sealed record Launch(RowAdmission.Admitted Row, string Prompt) : RowInput;
+
+    public sealed record Refused(RowAdmission.Admitted Row, string Reason) : RowInput;
+
+    private RowInput() { }
+}

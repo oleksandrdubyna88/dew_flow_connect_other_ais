@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The wire itself: a real <c>coai-mcp</c> process, real stdio, real JSON-RPC. What these prove
-/// no in-process test can — the handshake works, the eleven tools are advertised, and stdout
+/// no in-process test can — the handshake works, the twelve tools are advertised, and stdout
 /// carries nothing but protocol.
 /// </summary>
 [Collection("fakecli-env")] // the server child inherits our env; keep FAKECLI_* quiet around it
@@ -69,7 +69,7 @@ public sealed class McpContractTests : IDisposable
     }
 
     [Fact]
-    public async Task Initialize_ThenToolsList_NamesTheElevenTools_AndStdoutStaysPure()
+    public async Task Initialize_ThenToolsList_NamesTheTwelveTools_AndStdoutStaysPure()
     {
         using var server = Start();
         try
@@ -90,8 +90,8 @@ public sealed class McpContractTests : IDisposable
 
             names.Should().BeEquivalentTo(
                 ["providers", "open", "review_plan", "review_code", "review_document", "review_feature", "resolve",
-                 "status", "ask_human", "consult", "close_consult"],
-                "the eleven tools, unprefixed — the client's `coai` namespace is the only one");
+                 "status", "ask_human", "consult", "close_consult", "ask_consultants"],
+                "the twelve tools, unprefixed — the client's `coai` namespace is the only one");
         }
         finally
         {

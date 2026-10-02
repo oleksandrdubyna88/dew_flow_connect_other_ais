@@ -32,15 +32,23 @@ public static class UsageKinds
     /// </summary>
     public const string Consult = "consult";
 
+    /// <summary>
+    /// One row of the QUESTION consultant (PLAN_question_consultant.md, S2): the agent asking several
+    /// models a question before it asks the person. A fourth kind rather than a <see cref="Consult"/>,
+    /// because the operator's Logs tab asks "what did the question consultant cost" apart from "what
+    /// did being stuck cost" — and the Team server never runs one (out of scope), so it is local-only.
+    /// </summary>
+    public const string Question = "question";
+
     /// <summary>Every kind this build knows how to name. Order is the order a report reads best in.</summary>
-    public static IReadOnlyList<string> Known { get; } = [Review, Chat, Consult];
+    public static IReadOnlyList<string> Known { get; } = [Review, Chat, Consult, Question];
 
     /// <summary>
-    /// Kinds the Team server never produces: a consultation runs on this machine only. The server's
-    /// wire vocabulary is therefore <see cref="Known"/> minus these, and the test that holds the two
-    /// vocabularies level says so rather than asserting a false equality.
+    /// Kinds the Team server never produces: a consultation and a question row run on this machine
+    /// only. The server's wire vocabulary is therefore <see cref="Known"/> minus these, and the test
+    /// that holds the two vocabularies level says so rather than asserting a false equality.
     /// </summary>
-    public static IReadOnlyList<string> LocalOnly { get; } = [Consult];
+    public static IReadOnlyList<string> LocalOnly { get; } = [Consult, Question];
 
     /// <summary>Whether a non-empty kind is one this build knows. Empty is "not said", which is fine.</summary>
     public static bool IsKnown(string kind) =>

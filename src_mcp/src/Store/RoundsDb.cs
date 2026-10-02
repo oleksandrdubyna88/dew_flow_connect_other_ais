@@ -111,6 +111,16 @@ public sealed class RoundsDb : IDisposable
     private static void Migrate(SqliteConnection db) => SqliteMigrator.Migrate(db, Schema.Steps);
 
     /// <summary>
+    /// A command on this connection, for a table whose writer lives in its own file.
+    /// </summary>
+    /// <remarks>
+    /// The one seam this class opens outward (<see cref="QuestionConsultTable"/>, schema step 17): this
+    /// file is past the family's ceiling, and a table added to it as fifty more lines would be the
+    /// habit the ceiling exists to break. The connection stays private; what leaves is a command.
+    /// </remarks>
+    internal SqliteCommand Command() => _db.CreateCommand();
+
+    /// <summary>
     /// One finished round, with its reviewers and the findings it produced.
     /// </summary>
     /// <remarks>

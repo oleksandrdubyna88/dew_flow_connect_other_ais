@@ -11,7 +11,11 @@
     },
     {
       "file": "src_mcp/src/Server/PanelService.cs",
-      "refusals": 20
+      "refusals": 21
+    },
+    {
+      "file": "src_mcp/src/Server/QuestionConsult/QuestionConsultService.cs",
+      "refusals": 3
     },
     {
       "file": "src_mcp/src/Server/Rounds/RoundEngine.cs",

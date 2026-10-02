@@ -38,10 +38,19 @@ public static class ConsultationSweeper
     {
         try
         {
-            var swept = current().SweepConsultations();
+            var service = current();
+            var swept = service.SweepConsultations();
             if (swept > 0)
             {
                 log.Information("swept {Count} consultation(s): idle past their budget, interrupted by a dead process or a passed turn deadline, or expired", swept);
+            }
+
+            // The question consultant's records on the same beat (PLAN_question_consultant.md, S2): a
+            // `consulting` record whose heartbeat stopped and whose server is gone, and the long finished.
+            var questions = service.SweepQuestionConsults();
+            if (questions > 0)
+            {
+                log.Information("swept {Count} question consultation(s): interrupted by a dead server, past retention, or over the file cap", questions);
             }
         }
         catch (Exception failure)

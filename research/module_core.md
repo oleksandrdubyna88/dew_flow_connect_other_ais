@@ -826,3 +826,17 @@ adapter goldens, the structural subtraction, the AsShipped argv pinned byte for 
 `WebQuestionSanitiserTests` (one test per class, the class list pinned, a clean question unchanged),
 `SecretCheckTests` (a path and a fence pass, each class refused without quoting the value, the
 constructor absent).
+
+### The rows, the base prompts and the CLI prompt (2026-10-01, PLAN_question_consultant.md S2)
+
+Three more pure units beside the five above, for the fan-out that S2 built in the server:
+
+| Type | File | What it is |
+|---|---|---|
+| `QuestionRow`, `QuestionRows`, `QuestionRowsSetting` | `QuestionConsult/QuestionRow.cs` | the parser of `COAI_QCONSULT_ROWS`: a model and exactly one base prompt per row, on or off, D13's `acknowledged` carried; a row with no id, vendor or prompt dropped and said, a second row under one id dropped and said, the SEVENTH active row and after switched OFF and said (`MaxActive = 6`); the same prompt on several rows is ordinary; an unreadable value is `Unreadable`, and the tool then refuses by name |
+| `QuestionPromptSet`, `QuestionPromptDefinition`, `QuestionPromptsSetting` | `QuestionConsult/QuestionPromptSet.cs` | the three shipped base prompts (`question-disk` · `question-web` · `question-opinion`, one per capability), embedded from `shared/question-prompts.json` like the role seed and refused whole as a broken build; a person's own (`COAI_QCONSULT_PROMPTS`) checked row by row — the override-file id rule, no shipped id redefined, a capability of the three, a text — and joined after the shipped ones. Named `…Set` rather than the plan's `…Catalog`: the retired-name guard (`NothingReadsAnotherProgramsSourceTests`) forbids the substring `PromptCatalog` in source |
+| `QuestionPrompt`, `QuestionPromptInput` | `QuestionConsult/QuestionPrompt.cs` | the CLI rows' prompt by capability — the instruction, what the row has, the roots (disk), the outline (none) and the context fenced with the question's nonce, the question LAST; a WEB input carrying a context, an outline or a root is refused by name (A2 as a contract), a none input carrying a root too. The `api` row keeps `ApiQuestionPrompt`, which speaks its schema |
+
+`CoreJsonContext` gained the seed and the two wire shapes (every field nullable: an omitted field arrives
+null whatever a declaration says). Tests: `QuestionRowsTests`, `QuestionPromptSetTests`, `QuestionPromptTests`
+— each watched red (`CS0246`) against a tree without the types.

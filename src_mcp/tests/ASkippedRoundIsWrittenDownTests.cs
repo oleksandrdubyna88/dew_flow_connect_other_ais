@@ -43,8 +43,10 @@ public sealed class ASkippedRoundIsWrittenDownTests : IDisposable
     [Fact]
     public void TheNoteColumn_IsTheSixteenthStep()
     {
-        Schema.Steps.Length.Should().Be(16, "the cadence took step 15 on 2026-09-25, so the note is 16");
-        Schema.Steps[^1].Should().Contain("ALTER TABLE rounds ADD COLUMN note");
+        // By POSITION, not as the last step: the cadence took step 15 on 2026-09-25, so the note is 16 — and
+        // the question consultant appended 17 on 2026-10-01 (QuestionConsultProjectionTests pins that one last).
+        Schema.Steps.Length.Should().BeGreaterThanOrEqualTo(16);
+        Schema.Steps[15].Should().Contain("ALTER TABLE rounds ADD COLUMN note");
     }
 
     [Fact]
@@ -147,7 +149,7 @@ public sealed class ASkippedRoundIsWrittenDownTests : IDisposable
         check.Open();
         using var version = check.CreateCommand();
         version.CommandText = "PRAGMA user_version";
-        version.ExecuteScalar().Should().Be(16L);
+        version.ExecuteScalar().Should().Be((long)Schema.Steps.Length, "a migration runs to the head of the list, wherever it is today");
         RoundsQuery.Read(_dir).Rounds.Single().Note.Should().Be("why");
     }
 

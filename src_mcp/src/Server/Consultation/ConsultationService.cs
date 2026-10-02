@@ -958,7 +958,10 @@ public sealed class ConsultationService(
     /// whoever calls this may hold either spelling, and an identity that depends on which one is
     /// not an identity.</para>
     /// </remarks>
-    private string CallerOf(string repoPath) =>
+    private string CallerOf(string repoPath) => CallerOf(env, repoPath);
+
+    /// <summary>The same owner rule, for the question consultant (S2) — one line with no twin, as the remark above says.</summary>
+    internal static string CallerOf(Func<string, string?> env, string repoPath) =>
         CallerIdentity.From(env).Id is { Length: > 0 } id ? id : RepoIdentity(repoPath, DocumentReader.FollowLink);
 
     /// <summary>The owner a checkout is, told the same way from either spelling of it.</summary>
