@@ -72,6 +72,8 @@ import { ServerStatus, compareVersions } from './coaiInstall';
 import { ModelPrice } from './modelPrices';
 import { vaultKeyOf } from './vaultKey';
 import { reviewsDocuments, Vendor } from './vendors';
+import { qconsultBody } from './qconsultView';
+import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
 
 /**
  * The panel's HTML, as a pure function of what it shows.
@@ -149,6 +151,13 @@ export interface PanelState {
    * {@link consultations} is: absent means no line, which is what a panel with no plan in flight shows.
    */
   readonly cadence?: readonly CadenceLine[] | undefined;
+  /**
+   * The question consultant's shipped prompts' override files as they are ON DISK, by prompt id — read at paint
+   * time like {@link consultPrompt} (todo/PLAN_question_consultant.md, S4). Absent or empty = the shipped words.
+   */
+  readonly qconsultPromptOverrides?: Readonly<Record<string, string>> | undefined;
+  /** Where a disk root may not be on this machine — the data folder, the profile, the system folders (D14 c). */
+  readonly qconsultPlaces?: RootPlaces | undefined;
   readonly vendors: readonly Vendor[];
   readonly codexModels: readonly ModelChoice[];
   /** What `agy models` lists on this machine, or none when it could not be asked. */
@@ -430,6 +439,9 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // After the chat, because the two are one idea seen from opposite ends: there a PERSON asks
   // another vendor about a passage, here an AI asks one about the tree it is stuck in.
   { id: 'consultant', title: 'Consultant', surface: 'settings', body: (state) => consultantSection(state) },
+  // After the stuck consultant, because the two are the same idea for two moments: there an AI that is STUCK asks
+  // one vendor, here an AI with a QUESTION asks every row before it asks you (todo/PLAN_question_consultant.md, S4).
+  { id: 'questionconsultant', title: 'Question consultant', surface: 'settings', body: (state) => questionConsultantSection(state) },
   { id: 'prompts', title: 'Prompts per round', surface: 'settings', body: (state) => promptsBody(state) },
   { id: 'gate', title: 'The gate', surface: 'settings', body: (state) => gateBody(state) },
   { id: 'limits', title: 'Limits', surface: 'settings', body: (state) => limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length) },
@@ -467,6 +479,20 @@ function consultantSection(state: PanelState): string {
     // WHEN the consultant is asked without anybody being stuck, under WHO is asked
     // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
     + cadenceBlock(state.settings.cadence);
+}
+
+/** The Question consultant tab: the rows, the prompts, the folders, the mode and the limits. Its live questions are in the sidebar. */
+function questionConsultantSection(state: PanelState): string {
+  return qconsultBody(state.settings.qconsult, {
+    vendors: state.vendors,
+    codexModels: state.codexModels,
+    agyModels: state.agyModels,
+    claudeProbe: state.claudeProbe,
+    enginesByEndpoint: state.enginesByEndpoint,
+    serverVersion: state.server.version,
+    promptOverrides: state.qconsultPromptOverrides,
+    places: state.qconsultPlaces,
+  });
 }
 
 /** The Bugz section: the corpus, the ranking picker and the ingest server. */
@@ -3269,6 +3295,9 @@ export const PANEL_COMMANDS = [
   // database and a local git history, and uploading was a CLI invocation a person made by hand.
   'sendBugs',
   'setBugsKey',
+  // The Question consultant tab's buttons (todo/PLAN_question_consultant.md, S4), listed in `qconsultWrite.ts`
+  // beside the decisions they reach and handled as one group by the provider.
+  ...QCONSULT_COMMANDS,
 ] as const;
 
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];

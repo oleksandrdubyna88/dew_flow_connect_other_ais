@@ -179,8 +179,8 @@ export function qconsultOnServer(installedServerVersion: string): boolean {
 export function qconsultSkewNote(installedServerVersion: string): string {
   return qconsultOnServer(installedServerVersion)
     ? ''
-    : `The coai-mcp you have installed (${installedServerVersion}) has no question consultant: it does not know `
-      + `ask_consultants, so nothing set here is written to its settings file until you update it to ${QCONSULT_SINCE} `
+    : `The coai-mcp you have installed (${installedServerVersion}) has no question consultant — `
+      + `ask_consultants is not in it — so nothing set here is written to its settings file until you update it to ${QCONSULT_SINCE} `
       + 'or later — the MCP server tab.';
 }
 

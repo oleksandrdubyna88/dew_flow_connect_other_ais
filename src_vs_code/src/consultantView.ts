@@ -224,7 +224,7 @@ export function consultantRowView(
 }
 
 /** What a row may offer: the catalogue it can store, and the door to one of your own. */
-type Picker = ReturnType<typeof consultableVendors>;
+export type Picker = ReturnType<typeof consultableVendors>;
 
 /** A definition: the catalogue knows it, or it stays selected under its own name. */
 function placed(
@@ -321,10 +321,15 @@ function unplaceable(
 
 /** The catalogue as a person reads it — the labels *Add a reviewer* offers, not internal ids. */
 function offeredOptions(picker: Picker): readonly VendorOption[] {
-  return [
-    ...picker.offered.map((preset) => ({ value: preset.id, label: preset.label, hint: preset.hint })),
-    ...customOption(picker.custom),
-  ];
+  return [...catalogueOptions(picker), ...customOption(picker.custom)];
+}
+
+/**
+ * The catalogue's entries alone, without the door to one of your own — what the question consultant's rows
+ * offer (todo/PLAN_question_consultant.md, S4), whose picker takes no custom endpoint yet.
+ */
+export function catalogueOptions(picker: Picker): readonly VendorOption[] {
+  return picker.offered.map((preset) => ({ value: preset.id, label: preset.label, hint: preset.hint }));
 }
 
 /**

@@ -321,6 +321,23 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     },
   },
   {
+    id: 'the-question-consultant',
+    en: {
+      title:
+        "The question consultant: other models answer before you are asked",
+      whatItIs:
+        "Before an AI asks YOU a question it can put it to the question consultant — the tool `ask_consultants`. Every row you switched on in the **Question consultant** tab of Settings answers it at once, each one a model with exactly one base prompt — study the other projects on this disk, search the internet, or give the best developer’s opinion — and every answer goes back to the AI on its own, fenced as advice. While they work, and while a question then waits for you, it is in the sidebar under **Active questions**; every question that was asked is a row of the **Questions** tab of **Show review rounds**.",
+      why:
+        "An AI working on its own stops you for questions another model could have answered. Three models with three different lenses answer most of them in a few minutes, and you are asked only what they could not settle. When the AI is building a plan the gate makes this the rule rather than a habit; when a question could bring production down it reaches you at once, with the consultants running beside it.",
+      setup:
+        "**Let an AI ask the question consultant first** is the switch. **Before it asks you** decides what the gate in front of `ask_human` does with a question that skipped them: *Require* refuses it while a plan is being built — after the plan’s first batches of questions, until its stage release — *Remind* only says so, *Off* says nothing. A production risk with a reason is never held back.\n\n**Who answers** lists the rows. **Add a row** adds one switched off; pick its vendor from the same catalogue *Add a reviewer* offers — an API row too, such as Grok through OpenRouter with its vault key name — its model and its **Prompt**. At most six rows may be on at once, and the same prompt may sit on several rows. A prompt the row’s runtime cannot serve is listed but disabled, with the measured reason: Antigravity cannot browse the web, an API row reads no disk. A Codex row, and Antigravity on disk, **can read this machine** — no flag confines them — so the row says so and its switch waits for the tick **I accept that this row can read this machine**.\n\n**Base prompts** shows the three shipped prompts and any of your own, each with the capability it needs. Edit a shipped one in its box — **Restore default** puts the shipped words back — or **Add a prompt…** of your own. **Folders a disk row may read** are the only places a disk row reads, read-only: a drive root, your profile folder itself, a system folder or the data folder is refused. **Minutes one row may run**, **Questions per session** and **Question batches that reach you first** are the limits.",
+      usage:
+        "You do not press anything. The AI calls `ask_consultants` with its question and what it tried; **Active questions** in the sidebar shows the question with one line per model — *consulting*, then *answered*, *timed out* or *failed*, with how long it took — and the line advances as each model settles.\n\nIf the AI then asks you, the same question becomes a card in **Active questions** with every answer folded under it, the consultation it followed named, and a production risk marked with its reason. **Answer…** opens a box for your own words first, and the usual choices after it. A card nobody answers in fifteen minutes expires: the AI is told to ask in the chat, and the card leaves the sidebar.\n\nThe **Questions** tab of **Show review rounds** keeps one row per question — when, where, how many models answered, what it cost, how long it took and what happened next — and opens to one row per model with its prompt, its status and its advice.",
+      whatCanGoWrong:
+        "**An answer from a row that can read this machine carries that flag** in the sidebar and in the log, beside the answer itself. The rows are other vendors’ models and their answers are material, not instructions: the AI is told to verify them.\n\nA model that does not answer in its minutes is timed out and the others still answer. Nobody to ask — no row on, the session’s questions spent, the switch off — never blocks the AI: the gate lets the question through and says why. An older coai-mcp has no question consultant at all; the tab says so in a banner and writes none of its settings until the server is updated.",
+    },
+  },
+  {
     id: 'phrases',
     en: {
       title: "Phrases: the sentences you stopped retyping",
@@ -453,7 +470,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'A question waiting on you',
       whatItIs:
-        'When the gate needs a person, a card appears at the top of the panel with the question and the findings still gating. A modal opens, the status bar shows it, and the title-bar icon turns green.',
+        'When the gate needs a person, a card appears in **Active questions** at the top of the sidebar with the question and the findings still gating — the one card a question has, with any consultants’ answers folded under it. A modal opens, the status bar shows it, and the title-bar icon turns green.',
       why:
         'A round is BLOCKED behind that question. A notification that can be missed is the wrong shape for it, which is why there are three surfaces and dismissing the modal loses nothing.',
       setup:

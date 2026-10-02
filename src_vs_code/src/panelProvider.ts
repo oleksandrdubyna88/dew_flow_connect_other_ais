@@ -61,6 +61,8 @@ import { askVersion, capture } from './versionProbe';
 import { CADENCE_CAP_MS, CadenceProbes } from './cadenceProbe';
 import { ClaudeProbeCache } from './claudeProbeCache';
 import { ConsultPromptFile } from './consultPromptFile';
+import { QconsultHost, isQconsultCallerKey, type QconsultWriteHooks } from './qconsultHost';
+import { isQconsultCommand } from './qconsultWrite';
 import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
@@ -287,6 +289,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private readonly cadenceProbes: CadenceProbes;
 
   private readonly consultPrompt: ConsultPromptFile;
+  /** The Question consultant tab's host half — its buttons, its writes, its prompt files (todo/PLAN_question_consultant.md, S4). */
+  private readonly qconsult: QconsultHost;
   private readonly roundsLog_: RoundsLogCache;
 
 
@@ -425,6 +429,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // parameters are assigned, so `this.dataDir` is undefined at that point and `tsc` says so
     // (TS2729). `dataDir` is a readonly parameter and never changes, so the snapshot is the value.
     this.consultPrompt = new ConsultPromptFile(dataDir);
+    this.qconsult = new QconsultHost(dataDir);
     this.roundsLog_ = new RoundsLogCache(context);
     this.claudeProbes = new ClaudeProbeCache({
       dataDir,
@@ -1085,6 +1090,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       modelPrices: await this.modelPrices(vendors),
       snippetStatus: await pastedSnippetStatus(),
       consultPrompt: await this.consultPrompt.readConsultPrompt(),
+      qconsultPromptOverrides: await this.qconsult.overrides(),
+      qconsultPlaces: this.qconsult.places(),
       consultations: this.consultations?.running ?? [],
       // Read from the cache and NEVER awaited here; the look is started below, after the html
       // has gone out, so a slow disk delays the count and not the panel.
@@ -1745,6 +1752,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
 
     const config = vscode.workspace.getConfiguration('coai');
+    // The Question consultant's rows and prompt boxes ride the CALLER slot (a row id, a prompt id) and are not
+    // consultants: handed to their own host before the case below would merge them into `consultants`.
+    if (write.kind === 'caller' && isQconsultCallerKey(write.key)) {
+      await this.qconsult.write(write.key, write.caller, write.value, this.qconsultHooks(config, (key, value) => this.saveWrite(config, key, value, write, from), from));
+      return;
+    }
     switch (write.kind) {
       case 'vendor': {
         if (isApiSettingKey(write.key)) {
@@ -1984,6 +1997,28 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     return this.render();
   }
 
+  /** What the Question consultant's host is handed for one write or one button: the side-aware reader, the rows, how to store and refuse. */
+  private qconsultHooks(config: vscode.WorkspaceConfiguration, save: (key: string, value: unknown) => Promise<void>, from: SurfaceSlot): QconsultWriteHooks {
+    return {
+      read: this.read(config),
+      vendors: vendorsFrom(this.read(config)('vendors')),
+      save,
+      snapBack: afterTheWrite(() => this.snapBack(from)),
+    };
+  }
+
+  /** A Question consultant button: stored through the same queue and refusal path as every setting, then repainted. */
+  private async runQconsult(command: string, id: string, from: SurfaceSlot): Promise<void> {
+    if (!isQconsultCommand(command)) {
+      return;
+    }
+    const config = vscode.workspace.getConfiguration('coai');
+    await this.qconsult.run(command, id, this.qconsultHooks(config, async (key, value) => {
+      await this.save(config, key, value);
+    }, from));
+    await this.render();
+  }
+
   /** What follows a plain write that stands. */
   private async followPlain(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
     // Turning the per-side switch ON seeds this side with what it reads today, so nothing
@@ -2210,6 +2245,15 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         break;
       case 'setBugsKey':
         await this.setBugsKey();
+        break;
+      case 'qconsultAddRow':
+      case 'qconsultRemoveRow':
+      case 'qconsultAddPrompt':
+      case 'qconsultRemovePrompt':
+      case 'qconsultRestorePrompt':
+      case 'qconsultAddRoot':
+      case 'qconsultRemoveRoot':
+        await this.runQconsult(command, id ?? '', from);
         break;
       default: {
         // A PanelCommand with no case above lands here and fails to compile. That is the whole

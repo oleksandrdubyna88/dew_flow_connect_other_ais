@@ -176,6 +176,15 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.cadenceEvery': 'one consultation per this many epics',
   'coai.cadenceRiskThreshold': 'ask for the riskiest pieces from this many epics',
   'coai.cadenceRiskMax': 'riskiest pieces per plan, at most',
+  // The question consultant's eight (todo/PLAN_question_consultant.md, S4), by the tab's own labels.
+  'coai.qconsultEnabled': 'let an ai ask the question consultant first',
+  'coai.qconsultMode': 'before it asks you',
+  'coai.qconsultRows': 'who answers',
+  'coai.qconsultPrompts': 'base prompts',
+  'coai.qconsultRoots': 'folders a disk row may read',
+  'coai.qconsultRowMinutes': 'minutes one row may run',
+  'coai.qconsultQuestionsPerSession': 'questions per session',
+  'coai.qconsultFreeBatches': 'question batches that reach you first',
   // The storage pair (issue #115). Their article is the one a person reaches for after reinstalling
   // an operating system, which is the moment these two settings exist for.
   'coai.dataDirectory': 'where your data lives',

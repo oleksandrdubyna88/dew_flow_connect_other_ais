@@ -48,6 +48,26 @@ export const HELP = {
     'From how many epics the AI is also asked which epics or stories carry the most risk — five unless you change it. Below it, the groups alone are consulted on.',
   cadenceRiskMax:
     'The most risky pieces one plan may name — three unless you change it. Each one named gets a consultation of its own before its epic’s code round, so this bounds how many ordered consultations a large plan can add.',
+  qconsultEnabled:
+    'Lets an AI put a question to the question consultant — ask_consultants — before it asks you. Every row that is on answers it at once, each with its one prompt, and the answers go back to the AI separately, fenced as advice. Off: the tool answers that it is off, and the gate in front of ask_human stands down rather than refusing a question nobody could have consulted on.',
+  qconsultMode:
+    'What the gate in front of ask_human does about a question that was not put to the consultants first. REQUIRE refuses it — but only while a plan is being built: questions while the plan is formed and the first batches after it reached proceed go to you directly, and so does everything after the stage release. A question flagged as a production risk, with a reason, always reaches you at once, the consultants running beside it and their answers folded under the card. REMIND lets it through with a note to the AI; OFF says nothing.',
+  qconsultRows:
+    'Each row is one model with exactly ONE base prompt, switched on or off — at most six on, and every row that is on runs, always, in parallel. The same prompt may sit on several rows. A pair whose runtime cannot do what the prompt needs is disabled with the measured reason; a pair that can do it but cannot be confined (every Codex pair, Antigravity on disk) says it can read this machine and runs only after you tick its acknowledgement.',
+  qconsultRowPrompt:
+    'The one base prompt this row answers with. Each prompt needs a capability — none, disk or web — and a prompt this row’s runtime cannot serve is listed but disabled, with the reason from the measured capability table.',
+  qconsultRowAcknowledged:
+    'This runtime can serve the prompt but cannot be held inside the folders it is given — a shell is always there (Codex), or only a default nobody configured holds it (Antigravity on disk). Ticking says you accept that for this row; the server refuses the row without it, and the sidebar and the log show the flag beside every answer it gives.',
+  qconsultPrompts:
+    'The instructions a row is given ahead of the question. Three ship — projects on this disk, the internet, the best developer’s opinion — and you can edit their words (Restore default puts the shipped ones back) or add your own, each with the capability it needs.',
+  qconsultRoots:
+    'The folders a disk row may read, read-only. Never a drive root, your profile folder itself, a system folder or the data folder: each of those is refused here and by the server, by name.',
+  qconsultRowMinutes:
+    'How long one row may take on one question — five minutes unless you change it. A row past it is timed out and the others still answer; the AI gets what came back.',
+  qconsultQuestionsPerSession:
+    'How many questions one assistant session may put to the consultants — ten unless you change it. Past it ask_consultants answers that the quota is spent and the next question goes to you directly.',
+  qconsultFreeBatches:
+    'How many batches of questions after a plan reached proceed go to you directly before the consultants are required — two unless you change it. The same number is in the order the gate gives the AI.',
   stopLocalWhenQuiet:
     'When every cloud reviewer of a round has answered and they found at most one remark between them — any severity — the local reviewer finishes the launch it is on and starts no more. The round lists the local roles it did not start, with the reason, and the server log says the cloud found little and the local reviewer stood down. A cloud reviewer that failed keeps the local one running: its silence is not "found little". A round reads the switch when it STARTS, so turning it on or off takes effect from the next round. Off unless you turn it on.',
   splitWithFable:

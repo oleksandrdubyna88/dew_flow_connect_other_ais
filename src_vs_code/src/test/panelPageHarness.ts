@@ -42,7 +42,11 @@ export class PageEvent {
 export class PageOption {
   parentNode: Control | null = null;
 
-  constructor(readonly value: string, readonly text: string) {}
+  /**
+   * `disabled` and `title` as a DOM's option gives them — the Question consultant's prompt picker disables an
+   * incompatible pair with the table's reason in its title (S4, A3).
+   */
+  constructor(readonly value: string, readonly text: string, readonly disabled = false, readonly title = '') {}
 }
 
 /** The node a control sits in, as far as a page uses it: somewhere to insert a node BEFORE the control. */
@@ -224,7 +228,12 @@ function withChoice(control: Control, html: string, at: number): Control {
   }
   const body = html.slice(at, html.indexOf('</select>', at));
   for (const [, attributes, text] of body.matchAll(/<option\b([^>]*)>([^<]*)<\/option>/g)) {
-    control.appendChild(new PageOption(attribute(attributes!, 'value'), text!.trim()));
+    control.appendChild(new PageOption(
+      attribute(attributes!, 'value'),
+      text!.trim(),
+      /\sdisabled(?=[\s>]|$)/.test(attributes!),
+      attribute(attributes!, 'title'),
+    ));
   }
   control.value = /<option\b[^>]*\bvalue="([^"]*)"[^>]*\sselected(?=[\s>])/.exec(body)?.[1] ?? '';
 
