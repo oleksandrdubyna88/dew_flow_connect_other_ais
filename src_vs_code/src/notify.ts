@@ -5,6 +5,7 @@ import { Notice, answered, buttonsOf, gapRecord, gapSentence, noticeRecord } fro
 import { Gap, NO_GAP, settled, widened } from './writeGap';
 import { NotificationRecord } from './notifications';
 import { recordNotification } from './notificationsFile';
+import { askPerson } from './personWait';
 import { Suppressor, suppressor } from './suppression';
 
 /**
@@ -318,7 +319,8 @@ export async function notifyThen(
  */
 export async function notifyAndAsk(notice: Notice): Promise<string | undefined> {
   const { kept } = await record(notice, new Date());
-  const chosen = await show(notice);
+  // The person reading and deciding is not the panel working: a panel action asking this is paused meanwhile.
+  const chosen = await askPerson(() => show(notice));
   if (kept !== undefined && (buttonsOf(notice).length > 0 || notice.modal === true)) {
     await write(answered(kept, chosen));
   }

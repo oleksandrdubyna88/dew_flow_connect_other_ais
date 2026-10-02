@@ -54,7 +54,7 @@ export const BUSY_CSS = `
  * @param painted what the host had in flight when this document was built
  */
 export function busyMarkScript(painted: BusySnapshot): string {
-  return [busyStateScript(painted), busySendScript(), busyHostScript()].join('');
+  return [busyStateScript(painted), busySendScript(), busyWaitScript(), busyHostScript()].join('');
 }
 
 /** The constants, the two halves of the mark, and drawing the bar from them. */
@@ -98,19 +98,33 @@ function busySendScript(): string {
     }
     busySeq += 1;
     const seq = busySeq;
-    const entry = { control, due: false, timer: 0 };
-    entry.timer = setTimeout(() => {
-      entry.due = true;
-      if (control && typeof control.setAttribute === 'function') {
-        control.setAttribute('aria-busy', 'true');
-      }
-      drawBusy();
-    }, busyAfter);
-    busyLocal = new Map(busyLocal).set(seq, entry);
+    busyLocal = new Map(busyLocal).set(seq, { control, due: false, waiting: false, timer: setTimeout(() => { markDue(seq); }, busyAfter) });
     vscode.postMessage({ ...message, seq, doc: busyDoc });
   }
+  // Past its delay: the entry is replaced as due, and its control marked. Not for an entry waiting on the person.
+  function markDue(seq) {
+    const entry = busyLocal.get(seq);
+    if (entry === undefined || entry.waiting) {
+      return;
+    }
+    busyLocal = new Map(busyLocal).set(seq, { ...entry, due: true, timer: 0 });
+    if (entry.control && typeof entry.control.setAttribute === 'function') {
+      entry.control.setAttribute('aria-busy', 'true');
+    }
+    drawBusy();
+  }
+  // Another operation on the same control still past its delay keeps the mark (final E3 round, gemini).
+  function unmarkUnlessHeld(control) {
+    const held = Array.from(busyLocal.values()).some((other) => other.control === control && other.due);
+    if (!held && control && typeof control.removeAttribute === 'function') {
+      control.removeAttribute('aria-busy');
+    }
+  }
+  function ownBusy(seq, doc) {
+    return doc === busyDoc ? busyLocal.get(seq) : undefined;
+  }
   function settleBusy(seq, doc) {
-    const entry = doc === busyDoc ? busyLocal.get(seq) : undefined;
+    const entry = ownBusy(seq, doc);
     if (entry === undefined) {
       return;
     }
@@ -118,12 +132,39 @@ function busySendScript(): string {
     const next = new Map(busyLocal);
     next.delete(seq);
     busyLocal = next;
-    // Another operation on the same control still past its delay keeps the mark (final E3 round, gemini).
-    const stillMarked = Array.from(busyLocal.values()).some((other) => other.control === entry.control && other.due);
-    if (!stillMarked && entry.control && typeof entry.control.removeAttribute === 'function') {
-      entry.control.removeAttribute('aria-busy');
-    }
+    unmarkUnlessHeld(entry.control);
     drawBusy();
+  }
+`;
+}
+
+/**
+ * The person has a VS Code prompt of this work open, then answers it (todo/PLAN_busy_mark_pauses_while_you_type.md §3.4).
+ * Waiting on the person is not the host working: the entry stops its timer and drops its mark, and on the answer starts
+ * again from the time the host says the work has taken — the page keeps no clock of its own for the pause.
+ */
+function busyWaitScript(): string {
+  return `
+  function waitBusy(seq, doc) {
+    const entry = ownBusy(seq, doc);
+    if (entry === undefined) {
+      return;
+    }
+    clearTimeout(entry.timer);
+    busyLocal = new Map(busyLocal).set(seq, { ...entry, due: false, waiting: true, timer: 0 });
+    unmarkUnlessHeld(entry.control);
+    drawBusy();
+  }
+  function workBusy(seq, doc, spentMs) {
+    const entry = ownBusy(seq, doc);
+    if (entry === undefined || !entry.waiting) {
+      return;
+    }
+    const left = Math.max(0, busyAfter - spentMs);
+    busyLocal = new Map(busyLocal).set(seq, { ...entry, waiting: false, timer: left > 0 ? setTimeout(() => { markDue(seq); }, left) : 0 });
+    if (left === 0) {
+      markDue(seq);
+    }
   }
 `;
 }
@@ -150,6 +191,10 @@ function busyHostScript(): string {
       settleBusy(message.seq, message.doc);
     } else if (message?.type === 'busy') {
       hostBusy(Number(message.count) || 0, Number(message.oldestMs) || 0);
+    } else if (message?.type === 'waiting') {
+      waitBusy(message.seq, message.doc);
+    } else if (message?.type === 'working') {
+      workBusy(message.seq, message.doc, Number(message.spentMs) || 0);
     }
   });
 `;

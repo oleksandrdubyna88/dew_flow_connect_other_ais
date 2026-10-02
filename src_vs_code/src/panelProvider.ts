@@ -182,6 +182,7 @@ import {
   vendorTerminal,
   vendorUpdate,
 } from './vendorTerminal';
+import { askPerson } from './personWait';
 
 /**
  * The panel: what is happening now in the sidebar, and what is configured once in the Settings tab —
@@ -2397,11 +2398,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * routes to the translator's model; anything else names a vendor.
    */
   private async customModel(id: string, from: SurfaceSlot): Promise<void> {
-    const model = await vscode.window.showInputBox({
+    const model = await askPerson(() => vscode.window.showInputBox({
       title: `Model for ${id}`,
       prompt: "The exact model id the CLI should be given. Empty keeps the CLI's default.",
       placeHolder: 'e.g. gemini-2.5-flash, gpt-5.4-mini, haiku',
-    });
+    }));
     if (model === undefined) {
       return; // dismissed — the picker snaps back to the saved value on re-render
     }
@@ -2418,11 +2419,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     if (target === undefined) {
       return;
     }
-    const model = await vscode.window.showInputBox({
+    const model = await askPerson(() => vscode.window.showInputBox({
       title: `${SLOT_LABELS[target.slot]} model for ${target.label}`,
       prompt: 'The model name the split order should give this assistant. Empty goes back to the default.',
       placeHolder: 'e.g. fable, gpt-6-astra, gemini-pro-latest',
-    });
+    }));
     if (model === undefined) {
       return; // dismissed — the picker snaps back to the saved value on re-render
     }
@@ -2748,19 +2749,19 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
 
-    const chosen = await vscode.window.showQuickPick(
+    const chosen = await askPerson(() => vscode.window.showQuickPick(
       CLOSE_CHOICES.map((one) => ({ label: one.label, detail: one.detail, outcome: one.outcome })),
       { title: target.title, placeHolder: 'Escape leaves it open' },
-    );
+    ));
     if (chosen === undefined) {
       return; // cancelled, and a cancelled close changes nothing
     }
 
-    const note = await vscode.window.showInputBox({
+    const note = await askPerson(() => vscode.window.showInputBox({
       title: `Recording '${chosen.label}'`,
       prompt: 'One sentence for the log — what you did, or why it was dropped. Optional.',
       placeHolder: 'leave empty to record the outcome alone',
-    });
+    }));
     if (note === undefined) {
       return; // Escape on the note is Escape on the whole thing
     }
@@ -3095,12 +3096,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * which is why they share a module.</p>
    */
   private async setBugsKey(): Promise<void> {
-    const typed = await vscode.window.showInputBox({
+    const typed = await askPerson(() => vscode.window.showInputBox({
       title: 'The contributor key for the ingest server',
       prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
       password: true,
       ignoreFocusOut: true,
-    });
+    }));
     if (typed === undefined) {
       return;
     }
@@ -3110,7 +3111,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   private async setBugsServer(): Promise<void> {
-    const typed = await vscode.window.showInputBox({
+    const typed = await askPerson(() => vscode.window.showInputBox({
       title: 'Where collected pairs are sent',
       value: this.settings().bugzServer,
       prompt: 'The address of the bug ingest server. Leave empty to send nowhere.',
@@ -3132,7 +3133,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
           return 'That is not an address.';
         }
       },
-    });
+    }));
 
     if (typed === undefined) {
       return;
@@ -3146,22 +3147,22 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   private async addTeamServer(): Promise<void> {
-    const name = await vscode.window.showInputBox({
+    const name = await askPerson(() => vscode.window.showInputBox({
       title: 'Add a Team server',
       prompt: 'A short name for it — yours, and only for display',
       placeHolder: 'RemSoft Dev',
       validateInput: (v) => (v.trim().length === 0 ? 'A name is needed' : undefined),
-    });
+    }));
     if (name === undefined) {
       return;
     }
 
-    const url = await vscode.window.showInputBox({
+    const url = await askPerson(() => vscode.window.showInputBox({
       title: `Add ${name.trim()}`,
       prompt: 'Its address',
       placeHolder: 'https://coai.example.com',
       validateInput: (v) => (v.trim().startsWith('http') ? undefined : 'An https address is needed'),
-    });
+    }));
     if (url === undefined) {
       return;
     }
@@ -3533,10 +3534,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return undefined;
     }
 
-    const picked = await vscode.window.showQuickPick(
+    const picked = await askPerson(() => vscode.window.showQuickPick(
       offered.map((v) => ({ label: v.id, detail: slotSentence(v), vendor: v })),
       { title: `Add a reviewer from ${server.name}`, placeHolder: 'Which vendor should review?' },
-    );
+    ));
     if (picked === undefined) {
       return undefined;
     }
@@ -3579,7 +3580,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // now when there is none, because a pick opened before the first probe landed must not read as
     // an empty vault.
     const vaultItems = vaultKeyItems(...(await this.vaultKeysNow()), this.vendorsHere());
-    const picked = await vscode.window.showQuickPick(
+    const picked = await askPerson(() => vscode.window.showQuickPick(
       [
         ...items.map((p) => ({
           label: p.label,
@@ -3615,7 +3616,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         matchOnDetail: true,
         matchOnDescription: true,
       },
-    );
+    ));
     if (picked === undefined) {
       return;
     }
@@ -3713,12 +3714,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /** The base URL for a key whose name has no preset — empty when the box is dismissed. */
   private async askVaultEndpoint(keyName: string): Promise<string> {
-    const typed = await vscode.window.showInputBox({
+    const typed = await askPerson(() => vscode.window.showInputBox({
       title: `Add a reviewer: ${VAULT_KEY_MARK}${keyName}`,
       prompt: `The OpenAI-compatible base URL the key “${keyName}” is for`,
       placeHolder: 'https://api.example.com/v1',
       validateInput: (text) => badEndpoint(text),
-    });
+    }));
 
     return (typed ?? '').trim();
   }
@@ -3731,10 +3732,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     );
 
     return listed.ids.length > 0
-      ? vscode.window.showQuickPick([...listed.ids], {
+      ? askPerson(() => vscode.window.showQuickPick([...listed.ids], {
         title: `Add a reviewer: ${VAULT_KEY_MARK}${keyName}`,
         placeHolder: 'Which model should review? — the endpoint’s own list',
-      })
+      }))
       : this.typeVaultModel(keyName, listed.reason);
   }
 
@@ -3786,11 +3787,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /** A model id typed by hand, when the endpoint would not list its models — with the reason it would not. */
   private async typeVaultModel(keyName: string, reason: string): Promise<string | undefined> {
-    const typed = await vscode.window.showInputBox({
+    const typed = await askPerson(() => vscode.window.showInputBox({
       title: `Add a reviewer: ${VAULT_KEY_MARK}${keyName}`,
       prompt: `The endpoint did not list its models (${reason}). Type the model id exactly as the endpoint names it.`,
       validateInput: (text) => (text.trim().length === 0 ? 'A model id is needed' : undefined),
-    });
+    }));
 
     return typed?.trim();
   }
@@ -3813,22 +3814,22 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const config = vscode.workspace.getConfiguration('coai');
     const rows = vendorsFrom(this.read(config)('vendors'));
     const consultants = (this.read(config)('consultants') as Record<string, unknown> | undefined) ?? {};
-    const name = await vscode.window.showInputBox({
+    const name = await askPerson(() => vscode.window.showInputBox({
       title,
       prompt: 'A short name — it identifies the vendor and names its key in the vault entry',
       placeHolder: 'mistral',
       validateInput: (v) => (normaliseId(v).length === 0 ? 'A name is needed' : undefined),
-    });
+    }));
     if (name === undefined) {
       return undefined;
     }
 
-    const baseUrl = await vscode.window.showInputBox({
+    const baseUrl = await askPerson(() => vscode.window.showInputBox({
       title: `${title}: ${normaliseId(name)}`,
       prompt: 'Its OpenAI-compatible base URL',
       placeHolder: 'https://api.example.com/v1',
       validateInput: (v) => (badEndpoint(v) ?? (endpointConflict(name, v, rows, consultants, caller) || undefined)),
-    });
+    }));
 
     return endpointAnswer(name, baseUrl);
   }

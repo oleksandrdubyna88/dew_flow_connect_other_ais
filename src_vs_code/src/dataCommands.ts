@@ -12,6 +12,7 @@ import { reportRefusal, saveSetting, storageReadsThisSide } from './sideConfig';
 import { mcpServerBlock } from './mcpBlock';
 import { serverPath } from './installer';
 import { asText } from './asText';
+import { askPerson } from './personWait';
 
 /**
  * The three things a person can do to the data directory, and the dialogs that do them.
@@ -58,11 +59,11 @@ export async function askWhereDataLives(
 ): Promise<ChoiceOutcome> {
   const DEFAULT = installing ? 'Keep it in the default folder' : 'Put it back in the default folder';
   const CHOOSE = 'Choose a folder…';
-  const answer = await vscode.window.showQuickPick([DEFAULT, CHOOSE], {
+  const answer = await askPerson(() => vscode.window.showQuickPick([DEFAULT, CHOOSE], {
     title: 'Where should ConnectOtherAIs keep its data?',
     placeHolder: `${coaiDataDir()} — rounds, sessions, chats and spending`,
     ignoreFocusOut: true,
-  });
+  }));
   if (answer === undefined) {
     return 'unchanged';
   }
@@ -87,13 +88,13 @@ export async function askWhereDataLives(
     return reset;
   }
 
-  const picked = await vscode.window.showOpenDialog({
+  const picked = await askPerson(() => vscode.window.showOpenDialog({
     canSelectFolders: true,
     canSelectFiles: false,
     canSelectMany: false,
     openLabel: 'Keep my data here',
     title: 'A folder that survives reinstalling this machine — a network drive or a NAS',
-  });
+  }));
   const folder = picked?.[0];
   if (folder === undefined) {
     return 'unchanged';
@@ -287,7 +288,7 @@ async function askForSideName(found: FolderReport): Promise<string | undefined> 
     ? ` Already in this folder: ${found.sides.join(', ')}.`
     : '';
 
-  return vscode.window.showInputBox({
+  return askPerson(() => vscode.window.showInputBox({
     title: 'A name for this installation inside that folder',
     value: found.hasDatabase ? '' : offered,
     prompt: 'Two installations sharing one folder each keep their own database under their own name.'
@@ -298,7 +299,7 @@ async function askForSideName(found: FolderReport): Promise<string | undefined> 
 
       return refusal.length === 0 ? undefined : refusal;
     },
-  });
+  }));
 }
 
 /**
@@ -422,13 +423,13 @@ export async function moveDataDirectory(
     return;
   }
 
-  const picked = await vscode.window.showOpenDialog({
+  const picked = await askPerson(() => vscode.window.showOpenDialog({
     canSelectFolders: true,
     canSelectFiles: false,
     canSelectMany: false,
     openLabel: 'Move my data here',
     title: `Move everything in ${from} to another folder`,
-  });
+  }));
   const destination = picked?.[0];
   if (destination === undefined) {
     return;

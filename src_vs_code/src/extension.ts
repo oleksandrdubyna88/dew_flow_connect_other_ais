@@ -72,6 +72,7 @@ import { forgetTheDeletions, roleDeletions } from './roleDeletionsHost';
 import { ConfigReader, settingsFrom } from './settingsShape';
 import { readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
+import { askPerson } from './personWait';
 
 /**
  * ConnectOtherAIs — the human surface. Five commands, one directory watcher, and no port: the
@@ -466,12 +467,12 @@ export function activate(context: vscode.ExtensionContext): void {
     // must be able to remove either. A command as well as a button for the reason the admin key has
     // one: a door that exists only behind the thing it unlocks is not a door.
     vscode.commands.registerCommand('coai.setBugsContributorKey', async () => {
-      const typed = await vscode.window.showInputBox({
+      const typed = await askPerson(() => vscode.window.showInputBox({
         title: 'The contributor key for the ingest server',
         prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
         password: true,
         ignoreFocusOut: true,
-      });
+      }));
       if (typed !== undefined) {
         await setContributorKey(context.secrets, typed);
         await panel.render();
@@ -1386,11 +1387,11 @@ async function runExport(
     // a bridge message has, so the copy is what makes the two agree honestly.
     return { state: found.state, findings: found.findings.map((one) => ({ ...one })) };
   }, {
-    pickPath: async (name) => (await vscode.window.showSaveDialog({
+    pickPath: async (name) => (await askPerson(() => vscode.window.showSaveDialog({
       defaultUri: vscode.Uri.file(name),
       filters: { 'Comma-separated values': ['csv'] },
       saveLabel: 'Export',
-    }))?.fsPath,
+    })))?.fsPath,
     write: (path, text) => writeFileAtomically(path, text),
     report: (message) => void notify({
       as: 'information', class: 'outcome', source: 'roundsExport', code: 'rounds-exported', title: message,
@@ -1629,9 +1630,9 @@ function reviewTreeDeps(context: vscode.ExtensionContext): TreesDeps {
       ? { ok: false, tooOld: false, why: missing }
       : whileBusy('Giving the checkout back…', () => removeTree(server.fsPath, name, withIgnored))),
     open: (path) => openTreeFolder(path),
-    pick: async (choices, title) => vscode.window.showQuickPick(
+    pick: async (choices, title) => askPerson(() => vscode.window.showQuickPick(
       choices.map((one) => ({ ...one })),
-      { title, matchOnDetail: true, ignoreFocusOut: true }) as Promise<Choice | undefined>,
+      { title, matchOnDetail: true, ignoreFocusOut: true })) as Promise<Choice | undefined>,
     // Through the one funnel, never `showInformationMessage` directly: this extension counts
     // every place it speaks to a person, and the count only ever falls. The `code` is a literal
     // here because a scan enforces that; the SUBJECT is what makes two trees two counters.

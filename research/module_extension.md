@@ -10078,9 +10078,61 @@ in the compiled module: the tracker's five decisions → 1, 2, 1, 1, 1 red (time
 as cancelled, not failed); the page fragment's eight → 6, 1, 2, 3, 2, 2, 1, 4, and its document check → 1;
 `tracked`'s four → 2, 2, 2, 1; the settle order's two awaits → 1 each; the wiring guard's three lines → 1 each.
 
-**Known behaviour, by design.** A command stays in flight while VS Code waits on the person in an input box or a
-quick pick (`customModel`, `closeConsultation`), so the bar shows while they type there. That is what "a command
-settles when `run()` returns" means; whether to exclude a command's prompt time is an open question for the operator.
+**Waiting on the person is not work** (2026-10-02, extension 0.61.1). As first shipped, a command stayed in flight
+while VS Code waited on the person in an input box or a quick pick, so the bar ran over their typing. The operator
+ruled the question that note left open — "пока печатаю не считаем" — and it is closed by the next section.
+
+## The busy mark stops while the person answers VS Code (2026-10-02, PLAN_busy_mark_pauses_while_you_type)
+
+Design record: [PLAN_busy_mark_pauses_while_you_type.md](../todo/PLAN_busy_mark_pauses_while_you_type.md).
+
+- **The prompt finds its operation** (`personWait.ts`). `tracked()` runs the work inside `whileWorking(waiting, work)`,
+  an `AsyncLocalStorage` run, so an operation is carried through every `await` beneath it without passing it down —
+  prompts sit one to four calls below `run()`, in helpers commands outside the panel share. Every VS Code prompt in
+  `src` is opened through `askPerson(() => vscode.window.show…(…))`: it reads the operation before the box opens,
+  pauses it, and resumes it in a `finally`, so a refused or torn-down box never leaves the clock stopped. Outside a
+  panel operation it is a plain prompt. That is 32 sites (15 in `panelProvider.ts`) plus `notifyAndAsk`, the one door
+  that waits for an answer to a message — `notify`, `notifyOnce` and `notifyThen` do not wait and are not wrapped. The
+  conversation picker's `createQuickPick` is not wrapped: `switchConversations` shows it and returns, so nothing waits.
+- **The host stops the clock** (`InFlight.pause` / `resume`). An entry counts its open prompts (`waits`) and when the
+  first opened (`pausedAt`). The first prompt pauses it, and the snapshot leaves out every paused entry. The last answer moves `startedAt`
+  on by the wait and answers the time it has WORKED. A second prompt open at once, or an operation already finished,
+  changes nothing. `tracked` tells the poster `waiting {seq, doc}` and `working {seq, doc, spentMs}`, and announces the
+  new count to every page through `postTo`.
+- **The page stops its own half** (`busyMark.ts`). `waiting` clears the entry's timer and its `due`, and takes the
+  control's `aria-busy` away unless another due entry holds that control. `working` starts the timer again for
+  `max(0, 500 − spentMs)`, or marks it due at once. The page keeps no clock of its own for the pause: the host's is the
+  one measurement, and the one a test drives. Entries are replaced, never mutated — the timer calls `markDue(seq)`.
+
+**Tests.**
+- `personWait.test.ts` (4): no operation means a plain prompt. A prompt three awaits down pauses its operation before
+  the box shows and resumes it after. A refused box still resumes. Two operations side by side each pause only
+  themselves.
+- `inFlight.test.ts` (+6):
+  - a waiting entry leaves the count, and its wait is not in its age;
+  - two prompts open at once pause the operation once;
+  - two prompts in turn each leave their wait out (plan round, gemini);
+  - a finished operation cannot be paused back into the record;
+  - `tracked` posts `waiting`, then `working` with 150 ms after ten seconds of typing;
+  - a refused prompt resumes before it settles.
+- `busyMarkPage.test.ts` (+6), the page run on `PageClock`:
+  - ten seconds in a box show nothing;
+  - once answered, the bar comes at 500 ms of WORKING time;
+  - a bar already up goes while the box is open and is back at once after;
+  - another document's `waiting` changes nothing;
+  - one action waiting and another due on one control keep the mark, and only the waiting one left marks nothing;
+  - a `working` after `settled` revives nothing.
+- `promptsWaitForThePerson.test.ts` (6, structural, over comment-blanked source):
+  - every prompt is `askPerson(() => vscode.…`;
+  - `panelProvider.ts` has 15;
+  - no `void askPerson(` or `void notifyAndAsk(`;
+  - `notifyAndAsk` awaits `askPerson(() => show(notice))`, and it is the only wrapper in `notify.ts`;
+  - the one `createQuickPick` is the conversation picker;
+  - a companion feeds the scan an unwrapped prompt, a wrapped one and a comment, so a scan that matches nothing cannot pass (plan round, gemini).
+
+RED first against stubs of the new API: 3, 5, 4 and 2 red, each for the real symptom — nothing paused, the bar over
+ten seconds of typing, a prompt unwrapped. Teeth after GREEN: one panel prompt unwrapped → 1 red; the page ignoring
+`spentMs` → 2 red.
 
 **The tests that had to follow the change.** Posts now carry `seq` and `doc`, and every page posts `ready`: the
 harness's `lastWrite` and the new `work(page)` CHECK both and compare the rest (`withoutSeq`), and three tests with
