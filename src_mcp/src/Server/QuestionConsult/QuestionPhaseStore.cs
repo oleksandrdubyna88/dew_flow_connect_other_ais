@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -174,21 +173,10 @@ public sealed class QuestionPhaseStore(string dataDir)
         AtomicJson.WriteUnderTurn(file, JsonSerializer.Serialize(state, QuestionPhaseJsonContext.Default.QuestionPhaseState));
     }
 
-    private static bool Deleted(string file)
-    {
-        try
-        {
-            File.Delete(file);
+    /// <summary>The next sweep tries again; there is nobody to warn here — the phase store takes no log.</summary>
+    private static bool Deleted(string file) => RecordFiles.Delete(file, warn: null, Path.GetFileName(file));
 
-            return true;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            return false; // the next sweep tries again
-        }
-    }
-
-    private static string Stamp(DateTime utc) => utc.ToString("O", CultureInfo.InvariantCulture);
+    private static string Stamp(DateTime utc) => RecordFiles.Stamp(utc);
 }
 
 [JsonSourceGenerationOptions(PropertyNameCaseInsensitive = true, PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase, WriteIndented = true)]

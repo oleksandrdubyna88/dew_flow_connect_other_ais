@@ -66,7 +66,12 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
 
     private QuestionConsultStore Store() => new(_data);
 
-    private QuestionFanOut FanOut(ScriptedLauncher launcher, QuestionConsultSettings settings, TimeSpan? heartbeatEvery = null) => new(
+    private QuestionFanOut FanOut(
+        ScriptedLauncher launcher,
+        QuestionConsultSettings settings,
+        TimeSpan? heartbeatEvery = null,
+        QuestionOutlineCache? outlines = null,
+        Func<string, string, CancellationToken, Task<string>>? buildOutline = null) => new(
         launcher,
         new ReviewerExecutor(launcher),
         Store(),
@@ -78,7 +83,9 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
         ConsultSchemaFile.Ensure(Path.Combine(_data, "schemas"), QuestionAnswerSchema.Name, QuestionAnswerSchema.Json, "a test").Path,
         _ => null,
         Logger.None,
-        heartbeatEvery);
+        heartbeatEvery,
+        outlines ?? new QuestionOutlineCache(),
+        buildOutline);
 
     private FanOutInput Input(QuestionConsultSettings settings, string question = Question, string context = Context) =>
         new(settings, [], Core.Api.ApiOverrides.None, question, context, _repo.Path, _head, FollowUps: 3, Nonce: "n0nce");
@@ -214,6 +221,96 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
 
         settled.Rows.Should().OnlyContain(r => r.Status == RowOutcomes.Answered);
         settled.Rows.Single(r => r.RowId == "grok").Advice.Should().Be("A breaker. Three failures, then open for a minute.", "the api row's envelope is unwrapped by the one answer reader");
+    }
+
+    // ---------- S4b item 11: the outline only for an api none row, without delaying the others, cached ----------
+
+    /// <summary>An outline builder a test can count and hold: it waits on <see cref="Release"/> before it answers.</summary>
+    private sealed class HeldOutline
+    {
+        private readonly TaskCompletionSource _released = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _built;
+
+        public int Built => Volatile.Read(ref _built);
+
+        public void Release() => _released.TrySetResult();
+
+        public async Task<string> BuildAsync(string repo, string head, CancellationToken ct)
+        {
+            Interlocked.Increment(ref _built);
+            await _released.Task.WaitAsync(ct);
+
+            return $"## outline-of {Path.GetFileName(repo)} at {head[..8]}\n- src/Cart.cs: class Cart, Add(int)";
+        }
+    }
+
+    [Fact]
+    public async Task WithNoApiNoneRow_TheOutlineIsNeverBuilt()
+    {
+        var settings = Settings([Row("sonnet", "claude", "claude", "sonnet", "question-opinion"), Row("astra-disk", "codex", "codex", "gpt-6-astra", "question-disk")]);
+        var launcher = new ScriptedLauncher(_real, AnswersAtOnce);
+        var held = new HeldOutline();
+        held.Release();
+
+        var settled = await FanOut(launcher, settings, buildOutline: held.BuildAsync).RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+
+        held.Built.Should().Be(0, "A9: only an api none row is given the outline, so nothing else pays the six seconds it costs");
+        settled.Rows.Should().OnlyContain(r => r.Status == RowOutcomes.Answered);
+        launcher.Vendors.Single(l => l.Request.Executable == "claude").Prompt.Should().NotContain(QuestionPrompt.OutlineHeading);
+    }
+
+    [Fact]
+    public async Task TheOtherRowsLaunch_WhileTheApiRowsOutlineIsStillBuilding()
+    {
+        var settings = Settings([
+            Row("grok", "grok-openrouter", "api", "x-ai/grok-4.7", "question-opinion", baseUrl: "https://openrouter.ai/api/v1"),
+            Row("sonnet", "claude", "claude", "sonnet", "question-opinion"),
+        ]);
+        var launcher = new ScriptedLauncher(_real, AnswersAtOnce);
+        var held = new HeldOutline();
+
+        var running = FanOut(launcher, settings, buildOutline: held.BuildAsync).RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+        var sonnetLaunched = await Until(() => launcher.Vendors.Any(l => l.Request.Executable == "claude"), TimeSpan.FromSeconds(15));
+        var apiBeforeRelease = launcher.Vendors.Any(l => l.Request.Arguments.Contains("--ask-api"));
+        held.Release();
+        var settled = await running;
+
+        sonnetLaunched.Should().BeTrue("a row that needs no outline is not made to wait for one");
+        apiBeforeRelease.Should().BeFalse("the api row is composed WITH its outline, so it waits for it alone");
+        launcher.Vendors.Single(l => l.Request.Arguments.Contains("--ask-api")).Prompt.Should().Contain("outline-of");
+        settled.Rows.Should().OnlyContain(r => r.Status == RowOutcomes.Answered);
+    }
+
+    [Fact]
+    public async Task TheOutline_IsBuiltOncePerRepositoryAndHead_AcrossQuestions()
+    {
+        var settings = Settings([Row("grok", "grok-openrouter", "api", "x-ai/grok-4.7", "question-opinion", baseUrl: "https://openrouter.ai/api/v1")]);
+        var launcher = new ScriptedLauncher(_real, AnswersAtOnce);
+        var held = new HeldOutline();
+        held.Release();
+        var cache = new QuestionOutlineCache();
+
+        await FanOut(launcher, settings, outlines: cache, buildOutline: held.BuildAsync).RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+        await FanOut(launcher, settings, outlines: cache, buildOutline: held.BuildAsync).RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
+
+        held.Built.Should().Be(1, "the second question at the same HEAD is handed the outline the first built");
+        launcher.Vendors.Where(l => l.Request.Arguments.Contains("--ask-api")).Should().HaveCount(2).And.OnlyContain(l => l.Prompt.Contains("outline-of"));
+    }
+
+    private static async Task<bool> Until(Func<bool> seen, TimeSpan within)
+    {
+        var deadline = DateTime.UtcNow + within;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (seen())
+            {
+                return true;
+            }
+
+            await Task.Delay(50);
+        }
+
+        return seen();
     }
 
     [Fact]

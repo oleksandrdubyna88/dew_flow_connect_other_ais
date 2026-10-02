@@ -111,6 +111,17 @@ public static partial class RoleComposition
     /// </remarks>
     internal static IReadOnlyCollection<string> ReservedPromptNames => ReservedNames;
 
+    /// <summary>
+    /// Whether <paramref name="id"/> can name a prompt's override FILE (<c>&lt;dataDir&gt;/prompts/&lt;id&gt;.md</c>): the slug
+    /// shape and not a Windows device name — the whole rule, for every kind of prompt that becomes such a file.
+    /// </summary>
+    /// <remarks>
+    /// Exposed for the question consultant's prompts (S4b item 15), which kept a copy of the slug expression and not
+    /// of the device names, so <c>con</c> was a question prompt whose text could be neither written nor read. The role
+    /// rows keep their own two sentences (<see cref="WhyNot"/>); the decision is this one.
+    /// </remarks>
+    public static bool IsPromptId(string? id) => id is not null && PromptId.IsMatch(id) && !ReservedNames.Contains(id);
+
     /// <summary>A row's name in a refusal — what a person looks for in the file they wrote.</summary>
     private static string Label(string? id) =>
         string.IsNullOrWhiteSpace(id) ? "<a row with no id>" : id;

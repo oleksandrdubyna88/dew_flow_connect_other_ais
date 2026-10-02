@@ -80,6 +80,9 @@ public sealed class QuestionPromptSetTests : IDisposable
 
     [Theory]
     [InlineData("""[{"id":"Bad Id","title":"x","capability":"none","text":"t"}]""", "not one an override file can be named by")]
+    // S4b item 15: the role-prompt id rule WHOLE (RoleComposition.IsPromptId) — `con.md` is the console on Windows, not a file.
+    [InlineData("""[{"id":"con","title":"x","capability":"none","text":"t"}]""", "not one an override file can be named by")]
+    [InlineData("""[{"id":"nul","title":"x","capability":"none","text":"t"}]""", "not one an override file can be named by")]
     [InlineData("""[{"id":"question-web","title":"x","capability":"web","text":"t"}]""", "already taken")]
     [InlineData("""[{"id":"fine","title":"x","capability":"telepathy","text":"t"}]""", "not one of: none, disk, web")]
     [InlineData("""[{"id":"fine","title":"x","capability":"none","text":"   "}]""", "has no text")]

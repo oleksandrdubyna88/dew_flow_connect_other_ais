@@ -57,7 +57,9 @@ public sealed class QuestionFanOut(
     string schemaFile,
     Func<string, string?> env,
     Serilog.ILogger log,
-    TimeSpan? heartbeatEvery = null)
+    TimeSpan? heartbeatEvery = null,
+    QuestionOutlineCache? outlines = null,
+    Func<string, string, CancellationToken, Task<string>>? buildOutline = null)
 {
     private readonly QuestionRowLaunch _launch = new(executor, ledger, log);
 
@@ -65,13 +67,15 @@ public sealed class QuestionFanOut(
     private readonly TimeSpan _heartbeatEvery = heartbeatEvery ?? QuestionConsultStore.HeartbeatEvery;
     private readonly FilesystemInvariant _invariant = new(launcher);
 
+    /// <summary>Where outlines are kept — the process's one cache, or a test's (S4b item 11).</summary>
+    private readonly QuestionOutlineCache _outlines = outlines ?? QuestionOutlineCache.Shared;
+
     /// <summary>Runs every row of <paramref name="consulting"/>'s question and answers the settled record.</summary>
     public async Task<QuestionConsultRecord> RunAsync(QuestionConsultRecord consulting, FanOutInput input, CancellationToken ct)
     {
         var admissions = input.Settings.Rows.Select(row => QuestionAdmission.Admit(row, input.Settings, input.Reviewers, input.Overrides)).ToList();
         var admitted = admissions.OfType<RowAdmission.Admitted>().ToList();
-        var outline = await OutlineAsync(admitted, input, ct);
-        var inputs = admitted.Select(row => RowInputFor(row, input, outline)).ToList();
+        var inputs = admitted.Select(row => RowInputFor(row, input)).ToList();
 
         var current = new Current(store, consulting with
         {
@@ -86,9 +90,11 @@ public sealed class QuestionFanOut(
         // Where a codex row's -o file and the shims' prompt and answer files land — swept on the record's clock.
         Directory.CreateDirectory(store.AnswersDir);
 
-        var launches = inputs.OfType<RowInput.Launch>().ToList();
+        var launches = inputs.Where(i => i is not RowInput.Refused).ToList();
+        // Started now and awaited by the api none rows alone (S4b item 11): every other row launches without it.
+        var outline = launches.Any(i => i is RowInput.AfterOutline) ? OutlineAsync(input, ct) : Task.FromResult(string.Empty);
         var invariant = await SnapshotsAsync(launches, ct);
-        await LaunchAllAsync(current, launches, ct);
+        await LaunchAllAsync(current, launches, outline, ct);
         var breach = await BreachAsync(invariant.Watched, ct);
 
         var settled = Settled(current.Record, launches, breach, invariant.Unwatched);
@@ -99,10 +105,18 @@ public sealed class QuestionFanOut(
 
     // ---------- admission → what each row is given ----------
 
-    /// <summary>The outline of what exists at HEAD, built once when any <c>none</c> row was admitted — and timed, in the log.</summary>
-    private async Task<string> OutlineAsync(IReadOnlyList<RowAdmission.Admitted> admitted, FanOutInput input, CancellationToken ct)
+    /// <summary>
+    /// The outline of what exists at HEAD for the api <c>none</c> rows (A9) — from the cache when this repository and
+    /// HEAD were outlined already, built otherwise (S4b item 11) — and timed, in the log.
+    /// </summary>
+    /// <remarks>
+    /// <b>Material, not a precondition</b>, and awaited by nobody but the api rows: whatever stops it — a git that
+    /// refuses, a build another question started and its caller cancelled — leaves those rows the context and the
+    /// question, said in the log. Only this question's own cancellation travels on.
+    /// </remarks>
+    private async Task<string> OutlineAsync(FanOutInput input, CancellationToken ct)
     {
-        if (input.HeadSha.Length == 0 || !admitted.Any(a => a.Prompt.Capability == Capability.None))
+        if (input.HeadSha.Length == 0)
         {
             return string.Empty;
         }
@@ -110,30 +124,39 @@ public sealed class QuestionFanOut(
         var started = Stopwatch.StartNew();
         try
         {
-            var outline = await new FeatureOutlineBuilder(launcher, outliner).BuildAtHeadAsync(input.Repo, input.HeadSha, ct: ct);
-            log.Information("question outline of {Repo} at {Head}: {Files} file(s), {Bytes} bytes, built once in {Ms} ms",
-                input.Repo, input.HeadSha[..Math.Min(8, input.HeadSha.Length)], outline.Files.Count, outline.Section.Length, started.ElapsedMilliseconds);
+            var outline = await _outlines.GetAsync(input.Repo, input.HeadSha, () => (buildOutline ?? BuildOutlineAsync)(input.Repo, input.HeadSha, ct));
+            log.Information("question outline of {Repo} at {Head}: {Bytes} bytes, ready in {Ms} ms",
+                input.Repo, input.HeadSha[..Math.Min(8, input.HeadSha.Length)], outline.Length, started.ElapsedMilliseconds);
 
-            return outline.Section;
+            return outline;
         }
-        catch (ContextException e)
+        catch (Exception e) when (!ct.IsCancellationRequested)
         {
-            // An outline is material, not a precondition: a git that refuses leaves the none rows the
-            // context and the question, and says so where a person reads.
-            log.Warning("question outline of {Repo} could not be built ({Reason}); the none rows answer without it", input.Repo, e.Message);
+            log.Warning(e, "question outline of {Repo} could not be built; the api none rows answer without it", input.Repo);
 
             return string.Empty;
         }
     }
 
+    /// <summary>The outline of what exists at HEAD, as the feature gate's outline builder makes it — what the cache keeps.</summary>
+    private async Task<string> BuildOutlineAsync(string repo, string head, CancellationToken ct)
+    {
+        var started = Stopwatch.StartNew();
+        var outline = await new FeatureOutlineBuilder(launcher, outliner).BuildAtHeadAsync(repo, head, ct: ct);
+        log.Information("question outline of {Repo} at {Head}: {Files} file(s), {Bytes} bytes, built in {Ms} ms",
+            repo, head[..Math.Min(8, head.Length)], outline.Files.Count, outline.Section.Length, started.ElapsedMilliseconds);
+
+        return outline.Section;
+    }
+
     /// <summary>What one admitted row is given, by its capability — or the refusal that stops it before any launch.</summary>
-    private RowInput RowInputFor(RowAdmission.Admitted row, FanOutInput input, string outline)
+    private RowInput RowInputFor(RowAdmission.Admitted row, FanOutInput input)
     {
         var instruction = prompts.Written(row.Prompt.Id) is { Length: > 0 } written ? written : row.Prompt.Text;
 
         return row.Prompt.Capability == Capability.Web
             ? WebInput(row, input, instruction)
-            : CheckedInput(row, input, instruction, outline);
+            : CheckedInput(row, input, instruction);
     }
 
     /// <summary>A web row: the sanitised question and NOTHING else (A2).</summary>
@@ -148,9 +171,10 @@ public sealed class QuestionFanOut(
 
     /// <summary>
     /// A none or disk row: the question AND the context after the secret check (S4b item 1 — the question reaches
-    /// these rows too), the outline (none), the roots (disk) — the api row through its own composer (A9).
+    /// these rows too), the roots (disk) — and an api row through its own composer, a <c>none</c> one WITH the outline
+    /// of what exists, composed once that outline is ready (A9, S4b item 11).
     /// </summary>
-    private RowInput CheckedInput(RowAdmission.Admitted row, FanOutInput input, string instruction, string outline)
+    private RowInput CheckedInput(RowAdmission.Admitted row, FanOutInput input, string instruction)
     {
         if (SecretCheck.Inspect(input.Question, "question") is SecretCheckResult.Refused question)
         {
@@ -164,16 +188,24 @@ public sealed class QuestionFanOut(
             return new RowInput.Refused(row, $"the context was not sent ({refused.Class}): {refused.Reason} — {refused.Cure}");
         }
 
-        var forThisRow = row.Prompt.Capability == Capability.None ? outline : string.Empty;
+        if (row.Runtime is ApiConsultant api)
+        {
+            return row.Prompt.Capability == Capability.None
+                ? new RowInput.AfterOutline(row, outline => ApiLaunch(row, api, input, instruction, clean.Context, outline))
+                : ApiLaunch(row, api, input, instruction, clean.Context, string.Empty);
+        }
 
-        return row.Runtime is ApiConsultant api
-            ? new RowInput.Launch(
-                row with { Runtime = api.With(new QuestionMaterial(forThisRow, SourceTurnsFor(input))) },
-                ApiQuestionPrompt.Compose(new ApiQuestionInput(instruction, input.Question, clean.Context, forThisRow, input.FollowUps, input.Nonce)))
-            : new RowInput.Launch(row, QuestionPrompt.Compose(new QuestionPromptInput(
-                instruction, row.Prompt.Capability, input.Question, clean.Context, forThisRow,
-                row.Prompt.Capability == Capability.Disk ? input.Settings.Roots : [], input.Nonce)));
+        // A CLI row is given no outline (A9 names the api rows): building one cost every question six seconds before
+        // ANY row launched (S4b item 11).
+        return new RowInput.Launch(row, QuestionPrompt.Compose(new QuestionPromptInput(
+            instruction, row.Prompt.Capability, input.Question, clean.Context, string.Empty,
+            row.Prompt.Capability == Capability.Disk ? input.Settings.Roots : [], input.Nonce)));
     }
+
+    /// <summary>An api row's launch: its material (the outline, the source turns) on the runtime, and the prompt that names them.</summary>
+    private RowInput.Launch ApiLaunch(RowAdmission.Admitted row, ApiConsultant api, FanOutInput input, string instruction, CheckedContext context, string outline) =>
+        new(row with { Runtime = api.With(new QuestionMaterial(outline, SourceTurnsFor(input))) },
+            ApiQuestionPrompt.Compose(new ApiQuestionInput(instruction, input.Question, context, outline, input.FollowUps, input.Nonce)));
 
     private SourceTurns SourceTurnsFor(FanOutInput input) =>
         input.HeadSha.Length > 0 && input.FollowUps > 0
@@ -190,7 +222,7 @@ public sealed class QuestionFanOut(
             _ => throw new InvalidOperationException("the union is closed"),
         };
 
-        return inputs.OfType<RowInput.Refused>().FirstOrDefault(refused => refused.Row.Row.Id == row.RowId) is { } stopped
+        return inputs.OfType<RowInput.Refused>().FirstOrDefault(refused => refused.Admitted.Row.Id == row.RowId) is { } stopped
             ? row with { Status = RowOutcomes.Refused, Reason = stopped.Reason, EndedUtc = QuestionConsultStore.Stamp(DateTime.UtcNow) }
             : row;
     }
@@ -201,7 +233,7 @@ public sealed class QuestionFanOut(
 
     // ---------- the launches, in parallel ----------
 
-    private async Task LaunchAllAsync(Current current, IReadOnlyList<RowInput.Launch> launches, CancellationToken ct)
+    private async Task LaunchAllAsync(Current current, IReadOnlyList<RowInput> launches, Task<string> outline, CancellationToken ct)
     {
         if (launches.Count == 0)
         {
@@ -214,7 +246,7 @@ public sealed class QuestionFanOut(
         {
             // Every admitted row at once (D6): no BoundedScheduler, no RepositoryLock — the rows read, and a
             // cap would turn six rows into two waves and break the five-minute promise.
-            await Task.WhenAll(launches.Select(launch => RunOneAsync(current, launch, ct)));
+            await Task.WhenAll(launches.Select(launch => RunOneAsync(current, launch, outline, ct)));
         }
         finally
         {
@@ -223,8 +255,10 @@ public sealed class QuestionFanOut(
         }
     }
 
-    private async Task RunOneAsync(Current current, RowInput.Launch launch, CancellationToken ct)
+    private async Task RunOneAsync(Current current, RowInput planned, Task<string> outline, CancellationToken ct)
     {
+        // An api none row waits here, for its outline alone — the row's budget starts at its launch, as before.
+        var launch = planned is RowInput.AfterOutline after ? after.Compose(await outline) : (RowInput.Launch)planned;
         var start = current.Record.Rows.First(r => r.RowId == launch.Row.Row.Id);
         var input = new RowLaunchInput(launch.Row, launch.Prompt, SettingsFor(launch.Row), current.Record.RepoPath, store.AnswersDir, schemaFile, panel.QuestionConsult.RowBudget);
         var settled = await _launch.RunAsync(input, start, ct);
@@ -284,7 +318,7 @@ public sealed class QuestionFanOut(
     /// fan-out — and the roots that are NOT one, which the invariant cannot fingerprint (S4b item 5: said on every
     /// disk row that reads one, never only in the log).
     /// </summary>
-    private async Task<InvariantPlan> SnapshotsAsync(IReadOnlyList<RowInput.Launch> launches, CancellationToken ct)
+    private async Task<InvariantPlan> SnapshotsAsync(IReadOnlyList<RowInput> launches, CancellationToken ct)
     {
         var watched = new List<Watched>();
         var unwatched = new List<string>();
@@ -304,8 +338,8 @@ public sealed class QuestionFanOut(
         return new InvariantPlan(watched, unwatched);
     }
 
-    private static IEnumerable<string> DiskRoots(IEnumerable<RowInput.Launch> launches) =>
-        launches.Where(l => l.Row.Plan.Grant.Capability == Capability.Disk).SelectMany(l => l.Row.Plan.Grant.Roots);
+    private static IEnumerable<string> DiskRoots(IEnumerable<RowInput> launches) =>
+        launches.Where(l => l.Admitted.Plan.Grant.Capability == Capability.Disk).SelectMany(l => l.Admitted.Plan.Grant.Roots);
 
     /// <summary>The sentence a disk row carries for a root the invariant could not watch — on the row, so the record, the reply and the log say it beside the answer.</summary>
     public static string NotWatched(string root) => $"root {root} is not a git checkout: changes there are not watched";
@@ -336,11 +370,11 @@ public sealed class QuestionFanOut(
     /// The record as the question ends: a breach withholds the DISK rows' advice alone; a disk row over a root the
     /// invariant could not watch says so; the status is what the rows came to.
     /// </summary>
-    private static QuestionConsultRecord Settled(QuestionConsultRecord record, IReadOnlyList<RowInput.Launch> launches, string breach, IReadOnlyList<string> unwatched)
+    private static QuestionConsultRecord Settled(QuestionConsultRecord record, IReadOnlyList<RowInput> launches, string breach, IReadOnlyList<string> unwatched)
     {
         var rows = (breach.Length == 0 ? record.Rows : [.. record.Rows.Select(row => Withheld(row, launches, breach))])
             .Select(row => SaidUnwatched(row, launches, unwatched)).ToList();
-        var launched = rows.Where(row => launches.Any(l => l.Row.Row.Id == row.RowId)).ToList();
+        var launched = rows.Where(row => launches.Any(l => l.Admitted.Row.Id == row.RowId)).ToList();
         var answered = launched.Count(r => r.Answered);
         var stamp = QuestionConsultStore.Stamp(DateTime.UtcNow);
 
@@ -357,15 +391,15 @@ public sealed class QuestionFanOut(
         };
     }
 
-    private static QuestionRowRecord Withheld(QuestionRowRecord row, IReadOnlyList<RowInput.Launch> launches, string breach) =>
-        row.Answered && launches.Any(l => l.Row.Row.Id == row.RowId && l.Row.Plan.Grant.Capability == Capability.Disk)
+    private static QuestionRowRecord Withheld(QuestionRowRecord row, IReadOnlyList<RowInput> launches, string breach) =>
+        row.Answered && launches.Any(l => l.Admitted.Row.Id == row.RowId && l.Admitted.Plan.Grant.Capability == Capability.Disk)
             ? row with { Status = RowOutcomes.Failed, Advice = string.Empty, Reason = breach }
             : row;
 
     /// <summary>A disk row's note for every one of ITS roots the invariant could not watch — its answer is then never read as one the invariant stood behind.</summary>
-    private static QuestionRowRecord SaidUnwatched(QuestionRowRecord row, IReadOnlyList<RowInput.Launch> launches, IReadOnlyList<string> unwatched)
+    private static QuestionRowRecord SaidUnwatched(QuestionRowRecord row, IReadOnlyList<RowInput> launches, IReadOnlyList<string> unwatched)
     {
-        var said = DiskRoots(launches.Where(l => l.Row.Row.Id == row.RowId))
+        var said = DiskRoots(launches.Where(l => l.Admitted.Row.Id == row.RowId))
             .Where(root => unwatched.Contains(root, StringComparer.OrdinalIgnoreCase))
             .Select(NotWatched)
             .ToList();
@@ -402,12 +436,27 @@ public sealed class QuestionFanOut(
     }
 }
 
-/// <summary>What one admitted row is given: a prompt to launch, or the refusal that stops it (the sanitiser's, the secret check's).</summary>
+/// <summary>
+/// What one admitted row is given: a prompt to launch, a launch composed once the outline is ready (an api <c>none</c>
+/// row, S4b item 11), or the refusal that stops it (the sanitiser's, the secret check's).
+/// </summary>
 public abstract record RowInput
 {
     public sealed record Launch(RowAdmission.Admitted Row, string Prompt) : RowInput;
 
+    /// <summary>An api <c>none</c> row: composed with the outline when it arrives — the other rows do not wait for it.</summary>
+    public sealed record AfterOutline(RowAdmission.Admitted Row, Func<string, Launch> Compose) : RowInput;
+
     public sealed record Refused(RowAdmission.Admitted Row, string Reason) : RowInput;
 
     private RowInput() { }
+
+    /// <summary>The admitted row this input is for, whichever case it is.</summary>
+    public RowAdmission.Admitted Admitted => this switch
+    {
+        Launch launch => launch.Row,
+        AfterOutline after => after.Row,
+        Refused refused => refused.Row,
+        _ => throw new InvalidOperationException("the union is closed"),
+    };
 }
