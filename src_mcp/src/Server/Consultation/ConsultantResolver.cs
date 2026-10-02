@@ -183,7 +183,7 @@ public static class ConsultantResolver
     }
 
     /// <summary>A definition as the row the launch reads — the entry's own fields and nothing borrowed.</summary>
-    private static ProviderSettings AsProvider(ConsultantChoice choice) => new(choice.Vendor)
+    internal static ProviderSettings AsProvider(ConsultantChoice choice) => new(choice.Vendor)
     {
         Runtime = choice.Runtime,
         Model = choice.Model,
@@ -193,7 +193,7 @@ public static class ConsultantResolver
     };
 
     /// <summary>Rule (a): the row's runtime, endpoint and CLI path — its model only where the entry names none — under the entry's own id, enabled or not.</summary>
-    private static ProviderSettings FromRow(ConsultantChoice choice, ProviderSettings row) => new(choice.Vendor)
+    internal static ProviderSettings FromRow(ConsultantChoice choice, ProviderSettings row) => new(choice.Vendor)
     {
         Runtime = row.Runtime,
         Model = choice.Model.Length > 0 ? choice.Model : row.Model,
@@ -203,7 +203,7 @@ public static class ConsultantResolver
     };
 
     /// <summary>Rule (b): the runtime the id names, under that runtime's own name, borrowing nothing.</summary>
-    private static ProviderSettings FromRuntime(ConsultantChoice choice, string runtime) => new(runtime)
+    internal static ProviderSettings FromRuntime(ConsultantChoice choice, string runtime) => new(runtime)
     {
         Runtime = runtime,
         Model = choice.Model,
@@ -220,7 +220,7 @@ public static class ConsultantResolver
         Enabled = true,
     };
 
-    private static bool SameId(string one, string other) =>
+    internal static bool SameId(string one, string other) =>
         string.Equals(one, other, StringComparison.OrdinalIgnoreCase);
 
     private static string Allowlist => string.Join(", ", ConsultantResolution.Consulting);

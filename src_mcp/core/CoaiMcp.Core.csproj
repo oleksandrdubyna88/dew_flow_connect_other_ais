@@ -43,6 +43,11 @@
          confinement decided by a default arm is the thing the table exists to end. The extension
          generates runtimeCapabilities.generated.ts from the same file. -->
     <EmbeddedResource Include="..\..\shared\runtime-capabilities.json" LogicalName="CoaiMcp.Core.runtime-capabilities.json" />
+
+    <!-- The question consultant's three shipped base prompts (PLAN_question_consultant.md, S2): id, title,
+         capability and text, embedded so a published binary always has a prompt to pair a row with and a
+         default to restore to. The extension generates its copy from the same file (S4). -->
+    <EmbeddedResource Include="..\..\shared\question-prompts.json" LogicalName="CoaiMcp.Core.question-prompts.json" />
   </ItemGroup>
 
   <ItemGroup>

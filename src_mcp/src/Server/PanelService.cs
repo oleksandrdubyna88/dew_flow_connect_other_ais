@@ -38,6 +38,7 @@ public sealed class PanelService
     private readonly Runners.Processes.ProcessTracking _tracking;
     private readonly RemoteProbe _remote;
     private readonly ConsultationService _consultations;
+    private readonly QuestionConsultService _questions;
     private readonly CadenceDesk _cadence;
 
     public PanelService(
@@ -90,6 +91,10 @@ public sealed class PanelService
         _consultations = new ConsultationService(
             settings, launcher, executor, _context, prompts, ledger, log,
             Environment.GetEnvironmentVariable, noticing);
+        // The question consultant (todo/PLAN_question_consultant.md, S2): the `ask_consultants` tool's whole flow,
+        // its own record store and its fan-out — kept out of this file, as the consultation is.
+        _questions = new QuestionConsultService(
+            settings, launcher, executor, _context, prompts, ledger, keys, log, Environment.GetEnvironmentVariable, noticing);
         // The consultation cadence (research/PLAN_consult_on_a_cadence.md): its record, its gate over the
         // consultation records, and every decision a round makes about it — kept out of this file.
         _cadence = new CadenceDesk(
@@ -147,6 +152,17 @@ public sealed class PanelService
         // its record rather than accumulated. (codex, story 4's plan round.)
         var reprojected = _consultations.Reproject();
         _log.Debug("re-projected {Count} consultation(s) into the rounds database", reprojected);
+
+        // The question consultant's records on the same two roads (S2): a `consulting` record whose server
+        // died — its heartbeat stale AND its pid gone (D14 d) — ends `interrupted`, the long finished go, and
+        // the log catches up with the files for the same reason the consultations' does.
+        var questionsSwept = _questions.Sweep(ProcessIsAlive);
+        if (questionsSwept > 0)
+        {
+            _log.Warning("swept {Count} question consultation(s): interrupted by a dead server, past retention, or over the file cap", questionsSwept);
+        }
+
+        _log.Debug("re-projected {Count} question consultation(s) into the rounds database", _questions.Reproject());
 
         // And the reviewers those rounds left RUNNING, which is the more expensive half of the
         // same failure. The timeout kill is performed by the parent, so a server that dies takes
@@ -1668,6 +1684,35 @@ public sealed class PanelService
     /// server serves: without it an idle consultation read <c>open</c> until the next start.
     /// </summary>
     public int SweepConsultations() => _consultations.Sweep(ProcessIsAlive);
+
+    /// <summary>
+    /// The twelfth tool (todo/PLAN_question_consultant.md, S2): the question consultant — every active row answers
+    /// in parallel before the person is asked. A delegation, like `consult`; what this service adds is which
+    /// SESSION the question is filed under, which only it can resolve.
+    /// </summary>
+    public Task<string> AskConsultantsAsync(string repoPath, string question, string context, string document = "", string feature = "", CancellationToken ct = default)
+    {
+        if (Both(document, feature) is { Length: > 0 } both)
+        {
+            return Task.FromResult(Error(both));
+        }
+
+        return _questions.AskAsync(repoPath, question, context, document, feature, SessionIdOf, ct);
+    }
+
+    /// <summary>The session a question's arguments name, or <c>no-session</c> — the record's reference, never a precondition.</summary>
+    private string SessionIdOf(string repoPath, string branch, string document, string feature)
+    {
+        var at = AddressOf(repoPath, branch, document, feature);
+
+        return _store.Load(repoPath, at.Branch, at.Document, at.Feature)?.State.SessionId ?? "no-session";
+    }
+
+    /// <summary>The question consultant's sweep, for <see cref="ConsultationSweeper"/>'s beat beside the consultations'.</summary>
+    public int SweepQuestionConsults() => _questions.Sweep(ProcessIsAlive);
+
+    /// <summary>The question records, for the tests that read what was written.</summary>
+    public QuestionConsultStore QuestionConsults => _questions.Store;
 
     /// <summary>
     /// The tenth tool: how a consultation ENDED, recorded by whoever knows.

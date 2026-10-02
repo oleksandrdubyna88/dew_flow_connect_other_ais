@@ -1,6 +1,6 @@
 # PLAN — the question consultant: other models answer an AI's question before the person is asked
 
-> Status: **in progress — S1 (confinement) built 2026-10-01, S2–S5 open.** The capability facts it rests on were measured in
+> Status: **in progress — S1 (confinement) and S2 (the fan-out, `ask_consultants`, the proved move of `ask_human`) built 2026-10-01, S3–S5 open.** The capability facts it rests on were measured in
 > `dew_flow_benchmark · todo/PLAN_question_consultant_probes.md` (full run `01a0f8c7`, 105 cells, 2026-10-01) and are
 > written up in [RESULTS_question_consultant_capabilities.md](../research/RESULTS_question_consultant_capabilities.md). Scope:
 > `src_mcp` (a new tool `ask_consultants`, the phase-aware `ask_human` gate, a confinement layer, escalation
@@ -426,6 +426,53 @@ contract and `consult`'s annotations; both sweeps at startup and on the one-minu
 
 **Not in it.** No gate, no phase, no new `ask_human` argument, no order text; no UI (rows are configured by file until
 S4); no retention of `escalations/`.
+
+**Deviations (S2, 2026-10-01).** Built as the acceptance states — commit `2d6dea41` the move alone, then the fan-out —
+with these differences from the wording above:
+1. `QuestionPromptCatalog` is `QuestionPromptSet`: the retired-name guard (`NothingReadsAnotherProgramsSourceTests`)
+   forbids the substring `PromptCatalog` in source, rightly, and the type is a set of definitions.
+2. The reply's `status` has a sixth word beside §4's five — `failed`: every admitted row was launched and none
+   answered. That is a different fact from `none_available` (nobody to launch) and the sidebar will want to tell them apart.
+3. `SecretCheck` guards the `disk` rows' context as well as the `none` and `api` rows': a disk row's child can read a
+   disk, and the context travels to it. The `web` row gets no context at all, by the type: `QuestionPrompt.Compose`
+   throws for a web input carrying a context, an outline or a root (A2 as a contract, not a convention).
+4. The quota is spent once per QUESTION, after the argument checks and the "no row on" check and before any launch,
+   so a refused argument and an empty roster cost nothing. `quota_spent` and `none_available` write a terminal record
+   with the outcome named (the sidebar can show "asked, nobody there"); `off` and an argument fault write none.
+5. The invariant snapshots the DISK rows' roots — one pair per fan-out over the distinct roots that are git checkouts
+   — not the repository the question is about, because the roots are what a disk row reads. A root that is not a
+   checkout is logged as unwatched and its row still runs; a breach withholds the disk rows' advice alone.
+6. The sweep is D14 (d) exactly, not S2's shorter "dead pid → interrupted": `interrupted` needs a heartbeat older than
+   two minutes AND a dead pid; the fan-out rewrites the heartbeat every thirty seconds while a row runs. A terminal
+   record goes after seven days; the 500 cap deletes the oldest TERMINAL records and never a consulting one.
+7. The answer files a CLI row writes live under `question-consults/answers/` and are swept on the record's clock by
+   `ConsultantArtefactSweep` — extracted from `ConsultationStore.SweepAnswers` (which now calls it) rather than copied;
+   `ConsultationSweeper` drives both stores on its one beat. The scratch cwd of a `Scratch` launch is
+   `coai-question-*`, removed by the launch itself in `finally` and listed in `shared/temp-sweep.json` as never swept.
+8. `UsageKinds.Question` is a fourth kind, local-only like `consult`; `Known = wire ∪ LocalOnly`, so the Team server's
+   vocabulary test still holds without a wire change. Every row launch is one ledger line (role `question`, stage `Question`).
+9. The fake CLI reads its steering from `<temp>/fakecli-minimal.json` when `FAKECLI_MODE` is unset and the argv is a
+   vendor's shape: a PLANNED launch runs on the minimal environment (S1 acceptance 6), so the env-steered stand-in saw
+   nothing and fell through to its verb mode (`exit 64: fake-cli: unknown verb [exec …]`) on the scenario's first run.
+10. `SessionAddress` left `PanelService` for a file of its own: `AskHumanService` needed the record, and the refusal
+    census guard refuses a production file that imports a helper under an alias — correctly.
+11. Acceptance 6 by the numbers: `PanelService.cs` 1884 → 1736 after the move (−148, the block) → 1781 after the
+    fan-out's wiring (the field, the tool entry with the `Both` check, the session-id lookup, two sweep forwarders,
+    +45): shorter by 103 net, not by the whole block. `PanelSettings.cs` 1510 → 1497 with the property added — two
+    orphaned duplicate doc blocks removed, a third moved onto the member it describes.
+12. D13's `acknowledged` is parsed, carried on the row and on the record, and the `flag` is beside every answer, but
+    nothing REFUSES an unacknowledged flagged row: the plan files D13 under S4 (the UI that asks). Whether the server
+    should refuse rather than merely show is an open question for S3/S4.
+13. The outline a `none` row is given — built ONCE per question — costs **6.2 s** on this checkout (1,997 files
+    against the empty tree, 78 outlined under `FeatureOutlineLimits`' cap, 170 KB of section; `QuestionOutlineTimingTests`,
+    bound 60 s). A row's five minutes start after it.
+14. Nothing of the extension beyond `dataDir.ts` (the `question-consults/` directory joins the data-dir move, as the
+    inventory test demands): the help text still says "Eleven tools" and the Logs tab does not read step 17's two
+    tables — both S4's.
+15. Two existing tests (`ASkippedRoundIsWrittenDownTests`) pinned the note column as the LAST schema step and a
+    migrated database's `user_version` as 16; appending step 17 turned both red in the full run (`Expected
+    Schema.Steps.Length to be 16 … but found 17`). They now pin the note column by POSITION (`Steps[15]`) and the
+    migration to `Steps.Length` — the guarantee they meant; `QuestionConsultProjectionTests` pins step 17 as the last.
 
 ### S3 — The door to the person: the phase-aware gate, the 15-minute wait, escalation retention, the autonomy order — **Fable** (the gate policy: a wrong branch either interrupts the person on every question or hands the AI its own bypass)
 

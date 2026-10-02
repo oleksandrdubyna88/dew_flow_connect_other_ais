@@ -45,6 +45,13 @@ public sealed class ScenarioCoverageTests
         ["close_consult"] = "ConsultScenarioTests — a real consultation opened over the fake CLI and "
             + "then ENDED: the verdict on the record, a repeat that changes nothing, a conflicting "
             + "outcome refused, a cap-closed one lapsing and still taking a verdict",
+        ["ask_consultants"] = "QuestionConsultScenarioTests — the fake CLI as a codex row, a REAL child: the planner's "
+            + "argv reaches a process, its answer file is read back fenced, the record and the ledger line are on disk; "
+            + "a web question carrying a path refused before any launch. Beneath it: QuestionFanOutTests (one row past "
+            + "its deadline → partial; a blocked row never launched; a web row given the sanitised question alone; a none "
+            + "api row the context and outline, a disk row the context and its roots; the invariant once, a breach "
+            + "withholding disk advice alone; six rows in one tick) and QuestionConsultServiceTests (the argument "
+            + "refusals, off, none_available, the eleventh question quota_spent, every answer fenced and separate)",
     };
 
     /// <summary>

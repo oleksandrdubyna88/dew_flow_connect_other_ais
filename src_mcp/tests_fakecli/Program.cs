@@ -66,13 +66,19 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //                          — turn n's steering, each falling back to the un-numbered variable
 //   FAKECLI_TURN<n>_REPAIR_STDOUT / _OUTFILE_TEXT / _EXIT / _STDERR / _SLEEP_MS
 //                          — the same for turn n's repair launch, falling back to turn n's, then the bare one
-if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
+// A child started with the MINIMAL environment (a question row, PLAN_question_consultant.md S1 acceptance 6)
+// sees no FAKECLI_* variable at all — TEMP is on the list and nothing of a test's is — so the vendor mode
+// can also be steered by a FILE in the temp directory, read only when the environment says nothing and the
+// argv is a vendor's shape. The same names as the variables, so one test scripts both roads alike.
+var minimal = MinimalSteering.Load(args);
+Func<string, string?> read = minimal is { } fromFile ? name => fromFile.GetValueOrDefault(name) : Environment.GetEnvironmentVariable;
+if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is not null)
 {
     // Raw stdin, byte for byte, before any decoder can tidy it up. This exists because a
     // decoded string cannot answer "was there a byte-order mark in front of the prompt" — the
     // Console decoder strips it, which is exactly how three stray bytes went unnoticed for a
     // whole product.
-    if (Environment.GetEnvironmentVariable("FAKECLI_RECORD_STDIN_BYTES") is { Length: > 0 } bytesPath)
+    if (read("FAKECLI_RECORD_STDIN_BYTES") is { Length: > 0 } bytesPath)
     {
         using var input = Console.OpenStandardInput();
         using var file = File.Create(bytesPath);
@@ -83,7 +89,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
     // Read ONCE: the recorder and the turn family both want it, and stdin does not rewind.
     var prompt = PromptOf(args);
 
-    if (Environment.GetEnvironmentVariable("FAKECLI_RECORD_DIR") is { Length: > 0 } record)
+    if (read("FAKECLI_RECORD_DIR") is { Length: > 0 } record)
     {
         // NUL-joined, because a recorded field may be multiline (the prompt on stdin) — lines
         // cannot reconstruct an argv, a character no argv contains can. The stdin text is
@@ -93,7 +99,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
             string.Join('\0', args.Append(prompt.StdIn)));
     }
 
-    var steering = Steering.For(prompt.Text);
+    var steering = Steering.For(prompt.Text, read);
 
     // A vendor that takes its time. It exists for the health probe's timeout arm: a CLI that
     // never answers `--version` must be reported as silent rather than as whatever exit code the
@@ -131,7 +137,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor")
     // A vendor that writes where it was told not to. A consultant runs in the LIVE working tree
     // behind three read-only flags that are the VENDOR's promise rather than ours, so the filesystem
     // invariant has to be testable against a child that actually breaks one.
-    if (Environment.GetEnvironmentVariable("FAKECLI_SIDE_EFFECT") is { Length: > 0 } sideEffect)
+    if (read("FAKECLI_SIDE_EFFECT") is { Length: > 0 } sideEffect)
     {
         File.WriteAllText(sideEffect, "written by a CLI that promised to be read-only\n");
     }
@@ -317,30 +323,32 @@ static (string StdIn, string Text) PromptOf(string[] args)
 sealed class Steering
 {
     private readonly string[] _prefixes;
+    private readonly Func<string, string?> _read;
 
-    private Steering(string[] prefixes) => _prefixes = prefixes;
+    private Steering(string[] prefixes, Func<string, string?> read) => (_prefixes, _read) = (prefixes, read);
 
     /// <summary>The first of the prefixes that names a value — most specific first.</summary>
     public string? Get(string name) =>
-        _prefixes.Select(prefix => Environment.GetEnvironmentVariable(prefix + name)).FirstOrDefault(value => value is { Length: > 0 });
+        _prefixes.Select(prefix => _read(prefix + name)).FirstOrDefault(value => value is { Length: > 0 });
 
-    public static Steering For(string prompt)
+    /// <param name="read">Where a steering value comes from: the environment, or the minimal-environment file.</param>
+    public static Steering For(string prompt, Func<string, string?> read)
     {
-        var turn = TurnOf(prompt);
-        var repair = Environment.GetEnvironmentVariable("FAKECLI_REPAIR_MARKER") is { Length: > 0 } marker
+        var turn = TurnOf(prompt, read);
+        var repair = read("FAKECLI_REPAIR_MARKER") is { Length: > 0 } marker
                      && prompt.Contains(marker, StringComparison.Ordinal);
         // Turn 1 reads `FAKECLI_TURN1_*` too, so a test can script every turn the same way.
         string[] prefixes = repair
             ? [$"FAKECLI_TURN{turn}_REPAIR_", $"FAKECLI_TURN{turn}_", "FAKECLI_"]
             : [$"FAKECLI_TURN{turn}_", "FAKECLI_"];
 
-        return new Steering(prefixes);
+        return new Steering(prefixes, read);
     }
 
     /// <summary>Turn n when the prompt carries the marker with n filled in, for the smallest n from 2 up to 16; else 1.</summary>
-    private static int TurnOf(string prompt)
+    private static int TurnOf(string prompt, Func<string, string?> read)
     {
-        if (Environment.GetEnvironmentVariable("FAKECLI_TURN_MARKER") is not { Length: > 0 } template)
+        if (read("FAKECLI_TURN_MARKER") is not { Length: > 0 } template)
         {
             return 1;
         }
@@ -349,3 +357,41 @@ sealed class Steering
             .FirstOrDefault(n => prompt.Contains(template.Replace("{n}", n.ToString(), StringComparison.Ordinal), StringComparison.Ordinal), 1);
     }
 }
+
+/// <summary>
+/// The vendor mode's steering for a child that was started with a MINIMAL environment: a JSON object of
+/// the same `FAKECLI_*` names, in the temp directory — the one place such a child can still find.
+/// </summary>
+/// <remarks>
+/// Read ONLY when the environment carries no mode and the argv is a vendor's shape (codex's `exec` or
+/// `--search`, claude's `-p`, the api shim's `--ask-api`): a verb-mode launch is never redirected, and
+/// a vendor-mode launch steered by its environment never reads the file. The test that writes it deletes it.
+/// </remarks>
+static class MinimalSteering
+{
+    public const string FileName = "fakecli-minimal.json";
+
+    public static Dictionary<string, string>? Load(string[] args)
+    {
+        if (Environment.GetEnvironmentVariable("FAKECLI_MODE") is { Length: > 0 } || args.Length == 0 || !IsVendorShape(args))
+        {
+            return null;
+        }
+
+        var path = Path.Combine(Path.GetTempPath(), FileName);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        var parsed = System.Text.Json.JsonSerializer.Deserialize(File.ReadAllText(path), FakeCliJsonContext.Default.DictionaryStringString);
+
+        return parsed is null ? null : new Dictionary<string, string>(parsed, StringComparer.Ordinal);
+    }
+
+    private static bool IsVendorShape(string[] args) =>
+        args[0] is "exec" or "--search" or "-p" || args.Contains("--ask-api", StringComparer.Ordinal);
+}
+
+[System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, string>), TypeInfoPropertyName = "DictionaryStringString")]
+sealed partial class FakeCliJsonContext : System.Text.Json.Serialization.JsonSerializerContext;

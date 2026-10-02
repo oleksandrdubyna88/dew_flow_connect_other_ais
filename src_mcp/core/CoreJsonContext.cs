@@ -26,4 +26,9 @@ namespace CoaiMcp.Core;
 // role seed, and the shape an api consultant answers in — both read through this reflection-free context.
 [JsonSerializable(typeof(RuntimeCapabilitySeed))]
 [JsonSerializable(typeof(RawQuestionAnswer))]
+// S2 of the same plan: the shipped base prompts (embedded like the table), a person's own prompts
+// (COAI_QCONSULT_PROMPTS) and the rows (COAI_QCONSULT_ROWS) — every wire field nullable, read once here.
+[JsonSerializable(typeof(QuestionPromptSeed))]
+[JsonSerializable(typeof(List<QuestionPromptSeedRow?>), TypeInfoPropertyName = "ListQuestionPromptSeedRow")]
+[JsonSerializable(typeof(List<QuestionRowDto?>), TypeInfoPropertyName = "ListQuestionRowDto")]
 internal sealed partial class CoreJsonContext : JsonSerializerContext;

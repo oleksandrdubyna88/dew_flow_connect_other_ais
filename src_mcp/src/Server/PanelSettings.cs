@@ -568,6 +568,9 @@ public sealed record PanelSettings
     /// </remarks>
     public bool ConsultantsUnreadable { get; init; }
 
+    /// <summary>The question consultant's eight keys, in a record of their own (PLAN_question_consultant.md, D12).</summary>
+    public QuestionConsultSettings QuestionConsult { get; init; } = QuestionConsultSettings.Default;
+
     public static string DefaultDataDir => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "coai-mcp");
@@ -793,7 +796,8 @@ public sealed record PanelSettings
             env, roles, catalog, ResolveDataDir(env),
             ConsultantRouting.Parse(env("COAI_CONSULTANTS")),
             CommandModelsSetting.Parse(env(CommandModelsSetting.Key)),
-            CommandsSetting.Parse(env(CommandsSetting.Key)));
+            CommandsSetting.Parse(env(CommandsSetting.Key)),
+            QuestionConsultReader.Read(env, ResolveDataDir(env), SystemPlaces.Current));
 
     /// <remarks>
     /// The resolution is passed IN rather than computed twice. It was called once for `DataDir` and
@@ -810,7 +814,8 @@ public sealed record PanelSettings
         string dataDir,
         ConsultantsSetting consultants,
         CommandModelsSetting commandModels,
-        CommandsSetting customCommands) => new PanelSettings
+        CommandsSetting customCommands,
+        QuestionConsultSetting questions) => new PanelSettings
         {
             Rounds = Config(env, catalog),
             // The data directory's own notes ride here rather than in a channel of their own: this list
@@ -829,7 +834,9 @@ public sealed record PanelSettings
                     complaint => new UnrecognisedSetting(CommandModelsSetting.Key, complaint)),
                 .. customCommands.Complaints.Select(
                     complaint => new UnrecognisedSetting(CommandsSetting.Key, complaint)),
+                .. questions.Complaints,
             ],
+            QuestionConsult = questions.Settings,
             CommandModels = commandModels.Map,
             CustomCommands = customCommands.Commands,
             RoundTreeRoot = env("COAI_ROUND_WORKTREES") is { Length: > 0 } roundTrees
@@ -926,14 +933,6 @@ public sealed record PanelSettings
         _ => StagePolicy.Human,
     };
 
-    /// <summary>
-    /// The settings whose values this build does not understand, as sentences a person can act on.
-    /// </summary>
-    /// <remarks>
-    /// It names the setting, the value, what happened instead, and that updating the server is the
-    /// likely cure — because the likely cause is a panel newer than the server, and "unknown value"
-    /// alone sends somebody back into the settings file where the answer is not.
-    /// </remarks>
     /// <summary>
     /// The ladder this server climbs: the new setting, else the old one as a single step, else the
     /// shipped four.
@@ -1303,28 +1302,6 @@ public sealed record PanelSettings
     }
 
     /// <summary>
-    /// Every role's gate, read widest-first: the role's own keys, its stage's, then the legacy pair.
-    /// </summary>
-    /// <remarks>
-    /// <c>COAI_ROUNDS_ARCHITECTURE</c> / <c>COAI_THRESHOLD_SECURITYRELIABILITY</c> name a role;
-    /// <c>COAI_MAX_ROUNDS_CODE</c> / <c>COAI_THRESHOLD_PLAN</c> name a stage; <c>COAI_MAX_ROUNDS</c>
-    /// and <c>COAI_GATE_THRESHOLD</c> are the originals and still fill in for everything.
-    /// <c>COAI_ENABLED_ARCHITECTURE</c> switches one CODE role off, and only off — see
-    /// <see cref="NotSwitchedOff"/>.
-    /// </remarks>
-    /// <summary>
-    /// The roles a person configured, composed onto the shipped ones.
-    /// </summary>
-    /// <remarks>
-    /// <c>COAI_ROLES</c> is a JSON array of rows — id, name, stage, programmingTask, active and a
-    /// prompt list — and malformed JSON is NO custom roles rather than a half-applied list, the
-    /// reflex <c>COAI_VENDORS</c> and <c>COAI_PROMPTS_PER_ROUND</c> have had since they shipped.
-    /// What composition refuses row by row comes back in <see cref="RoleCatalog.Dropped"/> and joins
-    /// <see cref="Unrecognised"/>, so a person reads WHY the role they wrote is not running — and a
-    /// value this build cannot parse at ALL joins the same list from <see cref="UnknownValues"/>,
-    /// because a parse that never reached a row has no row to refuse.
-    /// </remarks>
-    /// <summary>
     /// What <c>COAI_ROLES</c> turned out to be: the rows, and a reason when there are none because
     /// this build could not read it.
     /// </summary>
@@ -1386,6 +1363,16 @@ public sealed record PanelSettings
     private static string Sentence(System.Text.Json.JsonException e) =>
         e.Message.Split(" LineNumber:")[0].Replace("Change the reader options.", string.Empty).Trim();
 
+    /// <summary>
+    /// Every role's gate, read widest-first: the role's own keys, its stage's, then the legacy pair.
+    /// </summary>
+    /// <remarks>
+    /// <c>COAI_ROUNDS_ARCHITECTURE</c> / <c>COAI_THRESHOLD_SECURITYRELIABILITY</c> name a role;
+    /// <c>COAI_MAX_ROUNDS_CODE</c> / <c>COAI_THRESHOLD_PLAN</c> name a stage; <c>COAI_MAX_ROUNDS</c>
+    /// and <c>COAI_GATE_THRESHOLD</c> are the originals and still fill in for everything.
+    /// <c>COAI_ENABLED_ARCHITECTURE</c> switches one CODE role off, and only off — see
+    /// <see cref="NotSwitchedOff"/>.
+    /// </remarks>
     private static Dictionary<string, RoleGate> RoleGates(Func<string, string?> env, RoleCatalog catalog)
     {
         var gates = new Dictionary<string, RoleGate>();
@@ -1474,10 +1461,10 @@ public sealed record PanelSettings
     /// a typo, a value some shell mangled — every one of them leaves the reviewer working. This is
     /// the parser half of "absent means on"; <see cref="RoleGate.Enabled"/> is the other half.</para>
     /// </remarks>
-    private static bool NotSwitchedOff(Func<string, string?> env, string name) =>
+    internal static bool NotSwitchedOff(Func<string, string?> env, string name) =>
         env(name) is not ("0" or "false" or "FALSE" or "False");
 
-    private static int IntVar(Func<string, string?> env, string name, int fallback) =>
+    internal static int IntVar(Func<string, string?> env, string name, int fallback) =>
         int.TryParse(env(name), out var value) && value > 0 ? value : fallback;
 
     /// <summary>

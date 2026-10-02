@@ -291,6 +291,8 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(CloseAnswer))]
 [JsonSerializable(typeof(HumanAnswer))]
 [JsonSerializable(typeof(ConsultAnswer))]
+// The question consultant (PLAN_question_consultant.md, S2): the `ask_consultants` reply.
+[JsonSerializable(typeof(AskConsultantsAnswer))]
 [JsonSerializable(typeof(List<DecisionDto>))]
 [JsonSerializable(typeof(List<string>), TypeInfoPropertyName = "ListString")]
 [JsonSerializable(typeof(Store.LoggedLog))]

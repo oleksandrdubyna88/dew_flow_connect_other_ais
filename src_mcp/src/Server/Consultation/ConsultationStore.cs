@@ -109,63 +109,11 @@ public sealed partial class ConsultationStore(
     }
 
     /// <summary>
-    /// The prompt and answer files a launch leaves behind, once they are older than any record.
+    /// The prompt and answer files a launch leaves behind, once they are older than any record —
+    /// <see cref="ConsultantArtefactSweep"/>, which the question consultant's store shares.
     /// </summary>
-    /// <remarks>
-    /// <para>Every turn writes at least one: codex its <c>-o</c> answer, the local shim a
-    /// <c>.prompt</c> and a <c>.json</c>. They hold the working-tree diff and the caller's problem —
-    /// somebody's source code — and nothing was deleting them. Named as a growth surface here rather
-    /// than discovered as a full disk: one turn is kilobytes, a busy week is a few hundred of them,
-    /// and they go on the same clock as the record they belong to. (gemini, this story's plan round.)</para>
-    /// <para>Deleted when it is OURS and old. A file cannot say which consultation it came from, so
-    /// the clock stands in for that — one older than the retention window belongs to a record that is
-    /// itself gone, and a file a running turn is still writing is younger than the window by
-    /// definition. But age is not ownership: <see cref="OurOwn"/> is what keeps a note somebody left
-    /// in this directory out of it. (codex, code round.)</para>
-    /// </remarks>
-    private int SweepAnswers(DateTime nowUtc, TimeSpan retention)
-    {
-        var answers = Path.Combine(Directory, "answers");
-        if (!System.IO.Directory.Exists(answers))
-        {
-            return 0;
-        }
-
-        var removed = 0;
-        foreach (var path in System.IO.Directory.EnumerateFiles(answers))
-        {
-            try
-            {
-                // OURS by name, as well as old. A person or another component putting a file under
-                // this directory would otherwise have it deleted on the retention clock, and a sweep
-                // that removes what it did not write is a sweep nobody can trust with a directory.
-                // (codex, code round.)
-                if (OurOwn(Path.GetFileName(path)) && nowUtc - File.GetLastWriteTimeUtc(path) > retention)
-                {
-                    File.Delete(path);
-                    removed++;
-                }
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                warn?.Invoke($"a consultation answer file at {path} is past retention and could not be removed: {e.Message}");
-            }
-        }
-
-        return removed;
-    }
-
-    /// <summary>
-    /// A file this product wrote into the answers directory: a consultant's answer, or the prompt the
-    /// local shim was handed.
-    /// </summary>
-    /// <remarks>
-    /// The rule lives with the adapters that NAME these files, not here: the writer and the deleter
-    /// are in different projects, and an ad-hoc check in the sweep would leak files the day an
-    /// adapter renamed its output. A sweep that removes what it did not write is a sweep nobody can
-    /// trust with a directory.
-    /// </remarks>
-    private static bool OurOwn(string name) => Runners.Consultation.ConsultantArtefacts.Ours(name);
+    private int SweepAnswers(DateTime nowUtc, TimeSpan retention) =>
+        ConsultantArtefactSweep.Sweep(Path.Combine(Directory, "answers"), nowUtc, retention, warn);
 
     /// <summary>
     /// One record's sweep: expired, orphaned by a dead process, or idle past its budget — decided while

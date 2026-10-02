@@ -9,7 +9,7 @@
     "minutes. Anything a concurrent session is using was touched more recently than that.",
     "",
     "neverSwept is what the PRODUCT makes at runtime under the same prefix: a round's answers, its repair",
-    "launch, a workspace-less review, an escalation's plan, a Team server job, and a chat's working",
+    "launch, a workspace-less review, an escalation's plan, a Team server job, a question row's scratch, and a chat's working",
     "directory. A live chat can sit for an hour writing nothing, so its directory is older than any",
     "window a test sweep could use; the product sweeps these itself, on its own clock. A downloaded",
     "server, coai-<version>, is a cache and is never swept either."
@@ -22,6 +22,7 @@
     "coai-noworkspace-",
     "coai-plan-",
     "coai-server-job-",
-    "coai-chat-"
+    "coai-chat-",
+    "coai-question-"
   ]
 }
