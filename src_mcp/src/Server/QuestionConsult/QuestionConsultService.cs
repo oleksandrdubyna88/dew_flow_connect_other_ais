@@ -201,11 +201,14 @@ public sealed class QuestionConsultService(
     /// D8: the consultants BESIDE a person's card. The question is the one the person was asked, the context the
     /// caller's declared risk, the record marked as such and bound to the card; the switch, unreadable rows and a
     /// path that is no repository answer nothing (null) rather than a refusal — the person was already asked.
+    /// A question or context past the tool's limits is CUT to them, marked <see cref="CutMarker"/>, and the record
+    /// says so in <see cref="QuestionConsultRecord.Truncated"/>: refusing it here meant no consultant ran at all.
     /// </summary>
     public async Task<QuestionConsultRecord?> BesideAsync(string repoPath, string question, string contextText, string sessionId, string escalationId, CancellationToken ct)
     {
         var options = settings.QuestionConsult;
-        if (!options.Enabled || options.RowsUnreadable || Arguments(question, contextText).Length > 0)
+        var fitted = Fitted.Of(question.Trim(), contextText.Trim());
+        if (!options.Enabled || options.RowsUnreadable || Arguments(fitted.Question, fitted.Context).Length > 0)
         {
             return null;
         }
@@ -217,11 +220,12 @@ public sealed class QuestionConsultService(
         }
 
         var (sha, branch) = await context.HeadAsync(repo, ct);
-        var record = NewRecord(repo, branch, sha, question.Trim(), contextText.Trim(), sessionId) with
+        var record = NewRecord(repo, branch, sha, fitted.Question, fitted.Context, sessionId) with
         {
             ProductionRisk = true,
             RiskReason = contextText.Trim(),
             EscalationId = escalationId,
+            Truncated = fitted.Truncated,
         };
         var consulted = await InTheRepositoryAsync(record, ct);
         // The outcome says how the question ENDED: beside the person's card, unless nobody could be asked at all.
@@ -242,6 +246,26 @@ public sealed class QuestionConsultService(
 
     /// <summary>What one question came to: the reply's parts, and the record as it ended.</summary>
     private sealed record Consulted(QuestionConsultRecord Record, string Status, IReadOnlyList<QuestionRowAnswer> Answers, int Left, string Next);
+
+    /// <summary>What ends a question or context cut to the limits beside a person's card.</summary>
+    public const string CutMarker = "[…truncated]";
+
+    /// <summary>A question and its context cut to <see cref="MaxQuestionBytes"/> and <see cref="MaxContextBytes"/>, and the sentence saying what was cut.</summary>
+    private sealed record Fitted(string Question, string Context, string Truncated)
+    {
+        public static Fitted Of(string question, string contextText)
+        {
+            var (q, questionCut) = Core.Feature.FeatureContext.Within(question, MaxQuestionBytes, CutMarker);
+            var (c, contextCut) = Core.Feature.FeatureContext.Within(contextText, MaxContextBytes, CutMarker);
+            string[] said =
+            [
+                .. questionCut ? [$"the question was {Encoding.UTF8.GetByteCount(question)} bytes, cut to {MaxQuestionBytes}"] : Array.Empty<string>(),
+                .. contextCut ? [$"the context was {Encoding.UTF8.GetByteCount(contextText)} bytes, cut to {MaxContextBytes}"] : Array.Empty<string>(),
+            ];
+
+            return new Fitted(q, c, string.Join("; ", said));
+        }
+    }
 
     /// <summary>The argument checks, each a sentence naming the cure: an empty context by NAME, the two sizes.</summary>
     internal static string Arguments(string question, string contextText)
