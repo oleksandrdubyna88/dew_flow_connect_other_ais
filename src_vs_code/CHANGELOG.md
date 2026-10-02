@@ -1,5 +1,14 @@
 # Changelog
 
+## Extension 0.61.1 — 2026-10-02
+
+**Typing into a box no longer counts as the panel working.** Some panel actions ask you something first: adding a
+reviewer or a Team server, a custom model, closing a consultation, the bugs key, moving the data folder. Each opens an
+input box, a list to pick from, a file dialog or a question. While that box is open, the progress bar from 0.61.0 no
+longer runs, and the control you pressed is no longer marked busy. Once you answer, the bar comes back only if the
+work still takes longer than half a second. Time spent before the box opened still counts; time you spend typing or
+deciding does not.
+
 ## Extension 0.61.0 — 2026-10-02
 
 **A long list can be searched.** Any dropdown in the panel or the Settings tab with fifteen or more choices — the two
