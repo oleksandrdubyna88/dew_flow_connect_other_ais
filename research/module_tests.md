@@ -2514,3 +2514,13 @@ key was committed anywhere, so what a real service-account file from a cloud con
 the round's notice does, and the panel was not run. The admitted-round-2 refusal is a sentence, not a
 `call_human`: nothing is written to the trail, by design, and the log page will not show that the round
 was owed until a reviewer runs it or a person decides.
+
+## An endpoint row's empty model and Vendor keys (2026-10-02, PLAN_model_search_and_busy_marks E1)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `endpointModelsCard.test.ts` (one more) | The reviewer card RUN through `panelPageHarness`: an OpenRouter row's empty choice reads *"no model yet — press ≡ and pick one this endpoint lists"*, a plain codex row's *"the CLI's default"* | `actual: "the CLI's default", expected: 'no model yet — press ≡ and pick one this endpoint lists'` |
+| `vendorKeys.test.ts` (new, 5) | The Settings tab's Vendor keys pane, narrowed to that pane: a switched-off OpenRouter row is named as needing a key once switched on; an enabled one keeps its sentence; no endpoint row → *Nothing to fill in yet* and the *not needed yet* placeholder; a switched-off `api` row is named; a `local` row with its engine's address is not asked for a key (the old count asked it) | `a row that cannot run without a key is not "nobody needs one"` — the pane read *Nothing to fill in yet* |
+
+**What this does NOT prove.** Nothing here runs a round: that an endpoint row with no model is refused by the
+endpoint is read from `ReviewerRuntime.cs` (no `-m` without a model), not observed in this task.

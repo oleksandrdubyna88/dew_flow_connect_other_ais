@@ -1267,6 +1267,7 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
     vendor.runtime, codexModels, vendor.model, localEngine, agyModels, allowedRemote.models, claudeProbe,
     executableFor(vendor), rowEndpoint,
   );
+  const words = modelWords(vendor.runtime, vendor.baseUrl);
   const endpoint = endpointField(vendor, id, local, remote, off);
   // The two stage boxes ride with the prices — `reviews plans` after the in rate, `reviews code`
   // after the out one (issue #124). They used to sit in a row of their own directly under the model,
@@ -1313,8 +1314,8 @@ function vendorCard(vendor: Vendor, context: CardContext): string {
     <button class="link" data-command="removeVendor" data-id="${id}">remove</button>
   </div>
   <div class="field">
-    <select data-setting="model" data-vendor="${id}" title="${escapeHtml(modelWords(vendor.runtime).title)}"${disabled}>
-      ${modelOptions(models, vendor.model, modelWords(vendor.runtime).empty)}
+    <select data-setting="model" data-vendor="${id}" title="${escapeHtml(words.title)}"${disabled}>
+      ${modelOptions(models, vendor.model, words.empty)}
     </select>
     <div class="hint">${claudeNote(vendor.runtime, askingClaude ?? false).length === 0 ? '' : LOOKING}${escapeHtml(vendor.runtime)} · ${escapeHtml(modelsProvenance(
       vendor.runtime, codexModels,
@@ -1385,15 +1386,25 @@ function cliButtons(vendor: Vendor, id: string, cli: CliStatus): string {
             aria-label="${escapeHtml(updateLabel(vendor.id, cli))}">⟳</button>`;
 }
 
-/** The model picker's tooltip and its empty-choice label, per runtime: three runtimes say three different things. */
-function modelWords(runtime: Runtime): { title: string; empty: string } {
+/**
+ * The model picker's tooltip and its empty-choice label, per KIND of row.
+ *
+ * <p>The kind is not the runtime alone. A `codex` row given a base URL is the Codex CLI pointed at somebody else's
+ * endpoint, and there an empty model is not "the CLI's default": with no `-m` the CLI sends ITS default id, which
+ * OpenRouter and its like do not serve. `asksAnEndpoint` is the one decision the model list already takes this from
+ * (PLAN_custom_endpoint_model_list); the label asks the same question, so the two can never disagree about a row
+ * (todo/PLAN_model_search_and_busy_marks.md, symptom 3).</p>
+ */
+function modelWords(runtime: Runtime, baseUrl: string): { title: string; empty: string } {
   switch (runtime) {
     case 'local':
       return { title: HELP.localModel, empty: 'whatever the engine answers with' };
     case 'api':
       return { title: HELP.apiModel, empty: 'no model yet — type the id the key can call' };
     default:
-      return { title: HELP.vendorModel, empty: "the CLI's default" };
+      return asksAnEndpoint(runtime, baseUrl)
+        ? { title: HELP.endpointModel, empty: 'no model yet — press ≡ and pick one this endpoint lists' }
+        : { title: HELP.vendorModel, empty: "the CLI's default" };
   }
 }
 
@@ -1625,22 +1636,48 @@ function limitsBody(s: CoaiSettings, enabledVendors: number): string {
  * gets filled in wrongly, so this one says it.</p>
  */
 function keysBody(state: PanelState): string {
-  const needy = state.vendors.filter((v) => v.enabled && v.baseUrl.length > 0);
+  // Every row whose models belong to an endpoint, by the same decision the model list and its label use. Counting only
+  // ENABLED rows said "none of them needs an API key" about a switched-off OpenRouter row that cannot run without one
+  // (todo/PLAN_model_search_and_busy_marks.md, symptom 4).
+  const endpoints = state.vendors.filter((v) => asksAnEndpoint(v.runtime, v.baseUrl));
   const field = `<div class="field">
   ${labelled('credsKey', 'CredsForDevs config key', 'credsKey')}
   <input type="text" id="credsKey" data-setting="credsKey" value="${escapeHtml(state.settings.credsKey)}"
-         placeholder="${needy.length === 0 ? 'not needed yet' : 'the key from Enable Code Access…'}">
+         placeholder="${endpoints.length === 0 ? 'not needed yet' : 'the key from Enable Code Access…'}">
 </div>`;
 
-  if (needy.length === 0) {
+  if (endpoints.length === 0) {
     return `<div class="hint"><b>Nothing to fill in yet.</b> Every reviewer you have signs in through its own CLI, so none of them needs an API key. This becomes necessary when you add a vendor that has no CLI of its own — DeepSeek, OpenRouter, any endpoint you give a URL to.</div>
 ${field}`;
   }
 
-  const names = needy.map((v) => escapeHtml(v.id)).join(', ');
-  const one = needy.length === 1;
-  return `<div class="hint">${names} ${one ? 'reaches an endpoint of its own, so it needs' : 'reach endpoints of their own, so they need'} an API key. Put the keys in ONE CredsForDevs entry of kind <code>config</code> — a JSON object keyed by vendor name — turn on <i>Enable Code Access…</i> for it, and paste the key it mints here.</div>
+  return `${keysNeededNow(endpoints.filter((v) => v.enabled))}${keysNeededLater(endpoints.filter((v) => !v.enabled))}
 ${field}`;
+}
+
+/** The sentence for the endpoint rows that run now — empty when none do. */
+function keysNeededNow(running: readonly Vendor[]): string {
+  if (running.length === 0) {
+    return '';
+  }
+  const one = running.length === 1;
+
+  return `<div class="hint">${vendorNames(running)} ${one ? 'reaches an endpoint of its own, so it needs' : 'reach endpoints of their own, so they need'} an API key. Put the keys in ONE CredsForDevs entry of kind <code>config</code> — a JSON object keyed by vendor name — turn on <i>Enable Code Access…</i> for it, and paste the key it mints here.</div>`;
+}
+
+/** The sentence for the endpoint rows that are switched off: no key is demanded now, and they are still named. */
+function keysNeededLater(off: readonly Vendor[]): string {
+  if (off.length === 0) {
+    return '';
+  }
+  const one = off.length === 1;
+
+  return `<div class="hint">${vendorNames(off)} ${one ? 'is switched off, and reaches an endpoint of its own: it needs an API key once it is switched on' : 'are switched off, and reach endpoints of their own: they need an API key once they are switched on'} — in a CredsForDevs entry of kind <code>config</code>, under ${one ? 'its' : 'each one’s'} name, with <i>Enable Code Access…</i> turned on for it.</div>`;
+}
+
+/** Row ids for a sentence — every one a person's string, so every one escaped. */
+function vendorNames(vendors: readonly Vendor[]): string {
+  return vendors.map((v) => escapeHtml(v.id)).join(', ');
 }
 
 /**

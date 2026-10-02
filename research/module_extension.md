@@ -9897,3 +9897,31 @@ the chat `gpt-5.2`, `gpt-5.2-mini`; the consultant `gpt-6-luna`. Teeth: with the
 removed, 7 + 4 + 2 + 1 tests went red and every "a plain codex row keeps the cache" test stayed green. NOT covered:
 `listEndpointModels` in the host (the in-flight guard) — the standing extension-host gap; the probe
 itself is `ProbeApiModeTests` and `apiKeyVendors.test.ts`.
+
+## An endpoint row's empty model and its key say what is true (2026-10-02, PLAN_model_search_and_busy_marks E1)
+
+Two more sites of the decision above, reported from screenshots after 0.60.2 shipped. Design record:
+[PLAN_model_search_and_busy_marks.md](../todo/PLAN_model_search_and_busy_marks.md).
+
+- **The empty model choice.** `modelWords(runtime, baseUrl)` — the reviewer card's tooltip and empty-choice label —
+  decided by runtime alone, so an OpenRouter card offered *"the CLI's default"*. That entry stores an empty model; a
+  codex row with no model passes no `-m` (`ReviewerRuntime.cs`), so the Codex CLI sends its OWN default id to an
+  endpoint that does not serve it. It now asks `asksAnEndpoint` too: such a row reads *"no model yet — press ≡ and pick
+  one this endpoint lists"* with its own tooltip (`HELP.endpointModel`); a plain codex/claude/gemini row keeps *"the
+  CLI's default"*, `api` and `local` keep their words. Nothing refuses a round for such a row yet — that is a server
+  change, recorded as the plan's follow-up.
+- **Vendor keys.** `keysBody` counted only ENABLED rows with a base URL, so with `openrouter` switched off the tab
+  said nobody needed a key. It now takes every `asksAnEndpoint` row: enabled ones get the sentence they had
+  (`keysNeededNow`), switched-off ones are NAMED as needing a key once switched on (`keysNeededLater`) without a key
+  being demanded now, and *"Nothing to fill in yet"* — with the box's *"not needed yet"* placeholder — is left for a
+  configuration with no endpoint row at all. An `api` row counts, enabled or not. A side effect, pinned by a test: a `local` row given the address its engine listens on was asked for a key by the old `enabled && baseUrl` count — a local engine needs none, and `asksAnEndpoint` never takes one. This reverses an older test's
+  decision (*"a reviewer that does not run needs nothing"*, `panelView.test.ts`), by the operator's choice on
+  2026-10-02; that test now asserts the new sentence.
+
+**Tests.** `endpointModelsCard.test.ts` (*an endpoint card with no model says so* — the page RUN, the options as
+drawn) and `vendorKeys.test.ts` (the Vendor keys pane of the Settings tab, narrowed to that pane: a switched-off
+OpenRouter row named, an enabled one's sentence unchanged, no endpoint row → nothing to fill in, a switched-off `api`
+row named, a local engine with an address not asked for one). RED first on `1056aed9` with the real symptoms — `actual: "the CLI's default"`, and the pane reading
+*"Nothing to fill in yet"* for both switched-off rows. Teeth: with the `asksAnEndpoint` arm of `modelWords` replaced
+by `false` the label test goes red; with `keysBody` filtering `enabled && baseUrl` again two of the four keys tests go
+red.

@@ -72,6 +72,23 @@ test('an OpenRouter card offers none of the Codex CLI cache', () => {
   assert.match(cardOf(page, 'openrouter'), /openrouter\.ai is not asked until you press ≡/u);
 });
 
+/** What the model dropdown of one row SAYS for each choice, as the page drew it. */
+function labels(page: Page, vendor: string): readonly string[] {
+  const select = page.controls.find((one) => one.dataset['setting'] === 'model' && one.dataset['vendor'] === vendor);
+  assert.ok(select !== undefined, `the page has no model dropdown for ${vendor}`);
+
+  return select.options.map((option) => option.text);
+}
+
+test('an endpoint card with no model says so, rather than offering the CLI’s default', () => {
+  // The empty choice stores no model, and a codex row with no model passes no -m: the Codex CLI then sends ITS
+  // default id to the endpoint, which OpenRouter does not serve (todo/PLAN_model_search_and_busy_marks.md, symptom 3).
+  const page = card([openrouter(), { ...openrouter(), id: 'codex', baseUrl: '' }]);
+
+  assert.equal(labels(page, 'openrouter')[0], 'no model yet — press ≡ and pick one this endpoint lists');
+  assert.equal(labels(page, 'codex')[0], "the CLI's default", 'a codex row on OpenAI keeps the CLI default it really has');
+});
+
 test('≡ on an endpoint card asks the host to list that endpoint’s models', () => {
   const page = card([openrouter()]);
 

@@ -97,6 +97,8 @@ export const HELP = {
     'Whether this reviewer takes part. Switching one off keeps its settings — the next round simply runs without it.',
   vendorModel:
     "Which model this vendor reviews with. Empty means the CLI's own default, which is usually its newest. A stronger model finds more and costs more; the panel exists so you can mix.",
+  endpointModel:
+    'Which model this endpoint reviews with, exactly as the endpoint names it. Press ≡ to ask the endpoint which models your key can call, then pick one. Leave none chosen and the Codex CLI sends its own default model id, which another endpoint does not serve, so every review on this row would be refused.',
   vendorBaseUrl:
     'The OpenAI-compatible endpoint this vendor is reached at. Its API key lives in the CredsForDevs config entry under this vendor’s name, never here.',
   apiModel:

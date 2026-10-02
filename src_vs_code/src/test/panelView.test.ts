@@ -398,7 +398,11 @@ test('a disabled vendor with an endpoint does not demand a key', () => {
     state({ vendors: [{ id: 'deepseek', runtime: 'codex', model: '', enabled: false, plan: true, code: true, baseUrl: 'https://x/v1', executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }] }),
     'n',
   );
-  assert.ok(html.includes('Nothing to fill in yet'), 'a reviewer that does not run needs nothing');
+  // It is not asked for a key NOW — but it is not "nothing to fill in" either: the operator ruled on 2026-10-02 that a
+  // switched-off endpoint row is named, because it cannot run without its key (PLAN_model_search_and_busy_marks.md, §3.16).
+  assert.ok(!html.includes('so it needs an API key.'), 'a reviewer that does not run is not asked for a key now');
+  assert.ok(html.includes('it needs an API key once it is switched on'), 'and is named as needing one when it runs');
+  assert.ok(!html.includes('Nothing to fill in yet'));
 });
 
 test('the server line is body text, not a footnote', () => {
