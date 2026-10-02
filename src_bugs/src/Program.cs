@@ -197,7 +197,9 @@ internal sealed class Program
         }
         catch (IOException taken) when (BindFailure.IsAddressInUse(taken))
         {
-            app.Logger.LogError(taken, "Cannot listen: {Reason}", taken.Message);
+            // stderr only. RunAsync has already disposed the host — and the Serilog logger with it — by
+            // the time it throws, so a log call here is silently dropped (measured on PR #636). The log
+            // FILE keeps the host framework's own "Hosting failed to start" record with the exception.
             await Console.Error.WriteLineAsync(BindFailure.Explained("coai-bugs", taken));
 
             return BindFailure.ExitCode;

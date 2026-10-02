@@ -262,6 +262,11 @@ public sealed partial class TheBuiltBinariesTests : IDisposable
                     $"127.0.0.1:{taken}", "the one line names the address it could not take");
                 LostToARace(said).Should().BeTrue(
                     $"and the harness's retry must still recognise it. It said: {said}");
+                // The server's OWN report is one line on stderr, said once and never with a stack appended
+                // (CodeRabbit, PR #636). The host framework's single "Hosting failed to start"
+                // record keeps its exception: that is the diagnostic trail, not a crash report.
+                Regex.Matches(said, Regex.Escape("cannot listen: ")).Count.Should().Be(
+                    1, $"one line, said once — never repeated per log sink. It said: {said}");
             }
             finally
             {

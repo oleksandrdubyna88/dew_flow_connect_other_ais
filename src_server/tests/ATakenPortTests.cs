@@ -40,6 +40,10 @@ public sealed class ATakenPortTests : IDisposable
                 $"a taken port is an expected failure and must not end in a crash. It said: {said}");
             code.Should().Be(75, $"EX_TEMPFAIL tells the restart policy to try again. It said: {said}");
             said.Should().Contain($"127.0.0.1:{taken}", "the one line names the address it could not take");
+            // The server's OWN report is one line on stderr, said once (CodeRabbit, PR #636); the
+            // host framework's single startup-fault record keeps its exception as the diagnostic trail.
+            System.Text.RegularExpressions.Regex.Matches(said, "cannot listen: ").Count.Should().Be(
+                1, $"one line, said once. It said: {said}");
         }
         finally
         {
