@@ -361,7 +361,11 @@ internal sealed class RoundEngine(
             // configured. It sits AFTER `stage.Begin` on purpose — a standing call_human from a
             // round whose reviewers all failed is a person's decision, and un-ticking every vendor
             // must not dissolve it (§4.4).
-            if (work.Count == 0)
+            //
+            // Except a round only the security lane's budget admitted: no ordinary role is due in it, so
+            // refusing or skipping it would meet every later call the same way. It runs empty instead and
+            // completes as a round nobody answered — recorded, with its reason, and a person's call.
+            if (work.Count == 0 && !RoundMachine.AdmittedOnlyForTheLane(session.State))
             {
                 // And if a role was dropped on the way here, the refusal says which and why. This
                 // path returns before any summary is built, so a round whose whole roster was
@@ -372,6 +376,8 @@ internal sealed class RoundEngine(
                     ? SkippedOrOwed(stage, loaded, number, sha, planText, _skips.NobodyFor(stage.Stage, roundWork), from)
                     : Error(_noReviewerRefusal(session.State.Stage, roundWork), from);
             }
+
+            roundWork = SecurityRound.NamingAnEmptyLaneRound(roundWork);
 
             // The round exists on disk BEFORE the first CLI starts: the panel shows "running" for
             // its whole duration instead of nothing at all, and a crash leaves something to sweep.
