@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CONSULT_PROMPT_PATH, consultPromptWrite } from './consultPrompt';
+import { CONSULT_PROMPT_PATH, type ConsultPromptWrite, consultPromptWrite } from './consultPrompt';
 import { notify } from './notify';
 
 /**
@@ -20,14 +20,19 @@ export class ConsultPromptFile {
 
   private readonly dataDir: vscode.Uri;
 
-  constructor(dataDir: vscode.Uri) {
+  /**
+   * Widened, not copied (todo/PLAN_question_consultant.md, S4): the question consultant's three shipped prompts
+   * are override files of exactly this kind, one per prompt id, so the file and the words its failure says are
+   * parameters. The consultant's own prompt is the default and nothing about it changed.
+   */
+  constructor(dataDir: vscode.Uri, private readonly path: readonly string[] = CONSULT_PROMPT_PATH, private readonly what = "The consultant's prompt") {
     this.dataDir = dataDir;
   }
 
   async readConsultPrompt(): Promise<string> {
     try {
       return new TextDecoder().decode(
-        await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, ...CONSULT_PROMPT_PATH)),
+        await vscode.workspace.fs.readFile(vscode.Uri.joinPath(this.dataDir, ...this.path)),
       );
     } catch {
       return ''; // no override, which is the ordinary state and means the shipped prompt
@@ -54,8 +59,12 @@ export class ConsultPromptFile {
    * the FILE, so a write that did not land shows as the words coming back on the next paint.</p>
    */
   async saveConsultPrompt(value: unknown): Promise<void> {
-    const write = consultPromptWrite(value);
-    const target = vscode.Uri.joinPath(this.dataDir, ...CONSULT_PROMPT_PATH);
+    await this.savePromptWrite(consultPromptWrite(value));
+  }
+
+  /** The write a caller has already DECIDED — the question prompts decide theirs against the shipped words. */
+  async savePromptWrite(write: ConsultPromptWrite): Promise<void> {
+    const target = vscode.Uri.joinPath(this.dataDir, ...this.path);
     try {
       if (write.kind === 'remove') {
         // Removing an override that was never written is the ORDINARY case, not an error — and it is
@@ -72,9 +81,9 @@ export class ConsultPromptFile {
         this.promptWriteFailed = '';
         return;
       }
-      const directory = vscode.Uri.joinPath(this.dataDir, CONSULT_PROMPT_PATH[0]!);
+      const directory = vscode.Uri.joinPath(this.dataDir, this.path[0]!);
       await vscode.workspace.fs.createDirectory(directory);
-      const temp = vscode.Uri.joinPath(directory, `${CONSULT_PROMPT_PATH[1]}.${process.pid}.tmp`);
+      const temp = vscode.Uri.joinPath(directory, `${this.path[1]}.${process.pid}.tmp`);
       await vscode.workspace.fs.writeFile(temp, new TextEncoder().encode(write.text));
       try {
         await vscode.workspace.fs.rename(temp, target, { overwrite: true });
@@ -112,7 +121,7 @@ export class ConsultPromptFile {
       class: 'failure',
       source: 'consultant',
       code: 'consultant-prompt-not-saved',
-      title: `The consultant's prompt could not be saved, so consultations still use the previous one: ${why}`,
+      title: `${this.what} could not be saved, so the previous one is still in use: ${why}`,
       detail: why,
     });
   }

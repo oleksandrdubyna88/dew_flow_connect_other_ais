@@ -608,8 +608,12 @@ export interface ConsultantPreset {
  * it is not a vendor somebody configured and cannot use. It is a REQUEST, carried by
  * {@link CUSTOM_ENDPOINT} and answered by the host, which asks for the name and the URL exactly as
  * *Add a reviewer* does.</p>
+ *
+ * <p><b>`runtimes` is the one widening</b> (todo/PLAN_question_consultant.md, S4): the question consultant
+ * offers the same catalogue under ITS runtimes — the `api` runtime included, which a stuck consultation cannot
+ * hold — rather than keeping a second picker beside this one.</p>
  */
-export function consultableVendors(): {
+export function consultableVendors(runtimes: readonly Runtime[] = CONSULTING_RUNTIMES): {
   readonly offered: readonly ConsultantPreset[];
   readonly refused: readonly { readonly id: string; readonly label: string; readonly why: string }[];
   /**
@@ -627,15 +631,15 @@ export function consultableVendors(): {
   const blank = VENDOR_PRESETS.find((preset) => preset.id.length === 0);
 
   return {
-    offered: named.filter((preset) => CONSULTING_RUNTIMES.includes(preset.runtime)),
+    offered: named.filter((preset) => runtimes.includes(preset.runtime)),
     refused: named
-      .filter((preset) => !CONSULTING_RUNTIMES.includes(preset.runtime))
+      .filter((preset) => !runtimes.includes(preset.runtime))
       .map((preset) => ({
         id: preset.id,
         label: preset.label,
         why: `it runs on '${preset.runtime}', which cannot hold a consultation`,
       })),
-    custom: blank === undefined || !CONSULTING_RUNTIMES.includes(blank.runtime)
+    custom: blank === undefined || !runtimes.includes(blank.runtime)
       ? undefined
       : { label: blank.label, hint: blank.hint, runtime: blank.runtime },
   };

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
+import { DEFAULTS } from '../settingsShape';
 import { click, controlFrom, createdElement, PageEvent, PageOption, panelState, runPanel, work } from './panelPageHarness';
 
 /** A select carrying these option values, built the way the harness builds one from a page. */
@@ -123,6 +124,23 @@ test('a dropdown carries the options the page drew, value and text, in order —
   assert.ok(model !== undefined && model.options.length > 0, 'the model dropdown came back with no options');
   assert.ok(model.options.some((one) => one.value === model.value), 'the selected value is not among the options read');
   assert.deepEqual(path?.options, []);
+});
+
+test('an option the page drew disabled reads disabled, with its title — and an ordinary one reads neither', () => {
+  // A DOM's `option.disabled` and `option.title`. Read from the BOOLEAN attribute, like a checkbox's
+  // `checked`: an option whose title merely mentions the word must not read as disabled. The Question
+  // consultant's prompt picker is the page that draws one of each (S4, A3).
+  const row = { id: 'agy-1', vendor: 'antigravity', runtime: 'antigravity', model: '', baseUrl: '', executablePath: '', key: '', prompt: 'question-opinion', enabled: false, acknowledged: false };
+  const page = runPanel(panelState('questionconsultant', { settings: { ...DEFAULTS, qconsult: { ...DEFAULTS.qconsult, rows: [row] } } }));
+  const prompt = page.controls.find((one) => one.dataset['setting'] === 'qconsultRowPrompt');
+  const web = prompt?.options.find((one) => one.value === 'question-web');
+  const opinion = prompt?.options.find((one) => one.value === 'question-opinion');
+
+  assert.ok(web !== undefined && opinion !== undefined, 'the prompt picker came back without its options');
+  assert.equal(web.disabled, true);
+  assert.ok(web.title.length > 0, 'a disabled option carries its reason');
+  assert.equal(opinion.disabled, false);
+  assert.equal(opinion.title, '');
 });
 
 test('a data-command button is bound by the page and a click posts exactly its command and id', () => {

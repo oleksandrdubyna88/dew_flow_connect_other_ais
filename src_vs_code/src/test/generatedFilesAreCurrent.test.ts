@@ -33,6 +33,9 @@ const SCRIPTS = [
   // incompatible model + prompt pair with (A3). A stale copy is a pair the panel lets a person save
   // and the server refuses — or admits — with nothing on either side saying so.
   'generate-runtime-capabilities.mjs',
+  // Added 2026-10-02, PLAN_question_consultant.md S4: the three shipped base prompts the Question consultant
+  // tab shows and restores. A stale copy is a Restore default that puts back words the server no longer ships.
+  'generate-question-prompts.mjs',
 ] as const;
 
 // out/test at run time, so two levels reach the package root.

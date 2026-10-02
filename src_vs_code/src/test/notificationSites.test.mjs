@@ -214,7 +214,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 140 → 141 on 2026-09-26, PLAN_feature_review S3.6: Add a reviewer lists the vault's API keys as `!name`, and
 // when it can list none it shows one row saying why; picking that row says the reason where a person reads it
 // (`vault-keys-not-listed`). One place, because it is one refusal.
-const PLACES_THIS_SPEAKS = 141;
+// 141 → 142 on 2026-10-02, PLAN_question_consultant S4: the Question consultant tab refuses a change it cannot
+// store — a prompt a row still runs, a title that makes no id, a folder that is a drive root or the data folder —
+// and says why (`question-consultant-change-refused`). One place, because every one of them is the same refusal.
+const PLACES_THIS_SPEAKS = 142;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this
