@@ -43,8 +43,17 @@ public sealed class ChildEnvironmentTests
     public void TheUnixList_IsWhatANodeCliNeedsToStart_AndNothingMore()
     {
         ProcessEnvironment.MinimalFor(isWindows: false).Should().BeEquivalentTo([
-            "PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR", "TMP", "TEMP",
+            "PATH", "HOME", "USER", "LOGNAME", "SHELL", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TMPDIR", "TMP", "TEMP", "DOTNET_ROOT",
         ]);
+    }
+
+    [Fact]
+    public void TheUnixList_CarriesDotnetRoot_SoAChildOnARuntimeOutsideTheDefaultPlaceStillStarts()
+    {
+        // macOS CI, PR #646: the runtime lives under the runner's home, the default probe finds nothing, and a
+        // framework-dependent child on the minimal list said "You must install .NET to run this application".
+        // Windows finds its runtime through the registry, so its list needs no such name.
+        ProcessEnvironment.MinimalFor(isWindows: false).Should().Contain("DOTNET_ROOT");
     }
 
     [Fact]
