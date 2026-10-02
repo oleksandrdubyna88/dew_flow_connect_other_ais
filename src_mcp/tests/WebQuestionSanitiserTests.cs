@@ -43,12 +43,14 @@ public sealed class WebQuestionSanitiserTests
     }
 
     [Fact]
-    public void TheRefusalClasses_AreTheElevenOfSection4_AndEachHasATestBelow()
+    public void TheRefusalClasses_AreTheElevenOfSection4_PlusTheTwoOfS4b_AndEachHasATestBelow()
     {
         // The checkout and the roots are asked BEFORE the generic path shapes, so a question naming the
-        // checkout is refused as `repository` — the more specific cure — rather than as a path.
+        // checkout is refused as `repository` — the more specific cure — rather than as a path. S4b added
+        // `invisible` (a Unicode format character, after the secret, which is found on the normalised text) and
+        // `scheme` (an address that is not http, https or ftp).
         WebQuestionSanitiser.RefusalClasses.Should().Equal(
-            "empty", "secret", "code-fence", "inline-code", "stack-trace", "config-line", "repository", "root", "path", "internal-host", "too-long");
+            "empty", "secret", "invisible", "code-fence", "inline-code", "stack-trace", "config-line", "repository", "root", "path", "scheme", "internal-host", "too-long");
     }
 
     [Theory]
@@ -172,6 +174,49 @@ public sealed class WebQuestionSanitiserTests
 
         WebQuestionSanitiser.Check(question, Here).Should().BeOfType<WebQuestion.Clean>();
     }
+
+    // ---------- S4b item 4: other schemes, invisible characters, compatibility forms ----------
+
+    [Theory]
+    [InlineData("Can the agent open vscode://settings/editor.fontSize from a link?")]
+    [InlineData("Does ssh://git@build-runner/repo need an agent forwarded?")]
+    [InlineData("Is smb://nas/projects mounted read-only by default?")]
+    [InlineData("Why does git+ssh://example.com/x.git ask for a password?")]
+    public void AnAddressOfAnyOtherScheme_IsRefused_OnlyHttpHttpsAndFtpAreSetAside(string question) =>
+        RefusedAs(question, "scheme").Cure.Should().Contain("http");
+
+    [Theory]
+    [InlineData("Which version of codex-cli first made --search a top-level flag? See https://github.com/openai/codex/releases")]
+    [InlineData("Is ftp://ftp.gnu.org/gnu/ still the canonical mirror?")]
+    [InlineData("Does HTTP://Example.COM/Path differ from the lower-case spelling?")]
+    public void AnHttpHttpsOrFtpLink_MayStillBeCited(string question) =>
+        WebQuestionSanitiser.Check(question, Here).Should().BeOfType<WebQuestion.Clean>();
+
+    [Theory]
+    [InlineData("Why does C:\u200B\\work\\app fail on the second attempt?")]
+    [InlineData("Is the \u202Eflag reversed\u202C in this output?")]
+    [InlineData("Which\u2060word joiner breaks the search?")]
+    [InlineData("A soft\u00ADhyphen in a question — is that fine?")]
+    public void AQuestionCarryingInvisibleFormatCharacters_IsRefused_NamingTheCure(string question)
+    {
+        var refused = RefusedAs(question, "invisible");
+
+        refused.Cure.Should().Contain("retype");
+    }
+
+    [Fact]
+    public void ASecretSplitByAZeroWidthSpace_IsStillASecret()
+    {
+        // The secret outranks the invisible character: it is found on the normalised text, where the split is gone.
+        RefusedAs("Why does sk-\u200Blive-0123456789abcdefghijklmnop answer 401?", "secret");
+    }
+
+    [Theory]
+    [InlineData("Why does \uFF23\uFF1A\uFF3C\uFF57\uFF4F\uFF52\uFF4B\uFF3C\uFF41\uFF50\uFF50 throw?", "path")]
+    [InlineData("Our Ollama is at \uFF11\uFF19\uFF12.\uFF11\uFF16\uFF18.1.20 — is that the right shape?", "internal-host")]
+    [InlineData("Is \uFF53\uFF4B-live-0123456789abcdefghijklmnop a valid key format?", "secret")]
+    public void ACompatibilityFormSpelling_IsCheckedAsTheTextItNormalisesTo(string question, string cls) =>
+        RefusedAs(question, cls);
 
     [Fact]
     public void TheFirstClassFound_IsTheOneNamed_AndTheOrderPutsASecretFirst()

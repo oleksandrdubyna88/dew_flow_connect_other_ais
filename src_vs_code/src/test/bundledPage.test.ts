@@ -1353,6 +1353,23 @@ test('the shipped Questions tab: one row per question, its models on expand, cos
   assert.equal(models[1]!.cells[5], 'past its five minutes', 'a row that did not answer says why');
 });
 
+test('a model row says what its note says — a disk root the invariant could not watch (S4b item 5)', () => {
+  const log = bundledLog();
+  const unwatched = 'root D:/notes is not a git checkout: changes there are not watched';
+  const withNote = {
+    ...QUESTIONS_LOG,
+    questionConsults: [{
+      asked: { id: 'q-n', repoPath: 'D:/rsd/shop', branch: 'main', question: 'Ladder or breaker?', status: 'answered', outcome: 'answered_by_consultants', startedUtc: '2026-10-02T11:00:00.000Z', rows: 1, answered: 1, seconds: 41 },
+      answers: [{ rowId: 'sonnet-disk', vendor: 'claude', model: 'sonnet', promptTitle: 'Projects on this disk', capability: 'disk', flag: '', status: 'answered', reason: '', seconds: 41, advice: 'A ladder.', note: unwatched }],
+    }],
+  };
+  const html = log.qconsultLogHtml(log.parseLog(JSON.stringify(withNote), true).questions ?? []);
+
+  const model = rowsWith(html, 'data-row').find((one) => one.key === 'sonnet-disk');
+  assert.ok(model, `the model row is drawn: ${html}`);
+  assert.ok(model.cells.some((cell) => cell.includes(unwatched)), `the row says its root was not watched: ${JSON.stringify(model.cells)}`);
+});
+
 test('a server too old for questionConsults is an empty Questions tab, saying why — never an error', () => {
   const log = bundledLog();
   const { questionConsults: _absent, ...older } = QUESTIONS_LOG;

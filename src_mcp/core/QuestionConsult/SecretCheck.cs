@@ -50,20 +50,39 @@ public static class SecretCheck
         "remove it, or replace it with a placeholder and say you did: the context leaves this machine for a hosted "
         + "model, and a consultation leaves a thread in the vendor's own store that nobody here can delete";
 
-    /// <summary>The class of the first secret shape in <paramref name="text"/>, or empty — <see cref="Redaction.FirstSecretClass"/>.</summary>
-    public static string WhichSecret(string text) => Redaction.FirstSecretClass(text);
+    /// <summary>
+    /// The class of the first secret shape in <paramref name="text"/>, or empty — <see cref="Redaction.FirstSecretClass"/>
+    /// over the text as it arrived and then over the text as a model reads it (<see cref="TextAsRead.Normalised"/>).
+    /// </summary>
+    /// <remarks>
+    /// BOTH readings, never only the folded one (S4b item 4): folding can also join what the raw text kept apart — a
+    /// ligature before <c>sk-</c> becomes ASCII letters, and the boundary the vendor pattern needs is gone — so a shape
+    /// either reading reveals is a secret.
+    /// </remarks>
+    public static string WhichSecret(string text) =>
+        Redaction.FirstSecretClass(text) is { Length: > 0 } raw ? raw : Redaction.FirstSecretClass(TextAsRead.Normalised(text));
 
     /// <summary>The context cleared for a hosted row, or refused naming the class of what it carries.</summary>
-    public static SecretCheckResult Inspect(string text)
+    public static SecretCheckResult Inspect(string text) => Inspect(text, "context");
+
+    /// <summary>
+    /// <paramref name="text"/> cleared for a hosted row, or refused naming the class of what it carries — and
+    /// <paramref name="what"/> it was (<c>context</c>, <c>question</c>), so the refusal says which text to fix.
+    /// </summary>
+    /// <remarks>
+    /// The QUESTION travels to a none, disk or api row as well as the context, so both are checked (S4b item 1): a web
+    /// row's question already passed this check inside <see cref="WebQuestionSanitiser"/>; the others were handed it raw.
+    /// </remarks>
+    public static SecretCheckResult Inspect(string text, string what)
     {
         var found = WhichSecret(text);
 
         return found.Length == 0
             ? new SecretCheckResult.Clean(new CheckedContext(text))
-            : new SecretCheckResult.Refused(found, Reason(found), Cure);
+            : new SecretCheckResult.Refused(found, Reason(found, what), Cure);
     }
 
-    private static string Reason(string found) => found == Redaction.Unredactable
-        ? "the context could not be checked for secrets in time, and a text nobody can vouch for does not leave this machine"
-        : $"the context carries a secret shape ({found}) — the same shape the notice redaction would take out";
+    private static string Reason(string found, string what) => found == Redaction.Unredactable
+        ? $"the {what} could not be checked for secrets in time, and a text nobody can vouch for does not leave this machine"
+        : $"the {what} carries a secret shape ({found}) — the same shape the notice redaction would take out";
 }

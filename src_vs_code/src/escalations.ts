@@ -26,6 +26,8 @@ export interface EscalationAdvice {
   readonly status: string;
   readonly reason: string;
   readonly advice: string;
+  /** The row's note — a disk root the invariant could not watch (S4b item 5). Absent from a server before it. */
+  readonly note?: string;
 }
 
 /** The one status word a question file can carry besides none: the server marked it after its wait ran out (A10). */

@@ -22,6 +22,7 @@ public sealed record AskConsultantsAnswer(
 
 /// <summary>One row's answer — fenced <c>advisory_only</c>, never merged with another's (D2) — or why it has none.</summary>
 /// <param name="Flag">D13's caveat on the pair (<c>unconfined</c>, <c>default-deny</c>) or empty — read it beside the advice.</param>
+/// <param name="Note">What the row's own record says beside its answer — a disk root the invariant could not watch (S4b), the api row's served sources.</param>
 public sealed record QuestionRowAnswer(
     string RowId,
     string Vendor,
@@ -33,6 +34,7 @@ public sealed record QuestionRowAnswer(
     double Seconds,
     double? CostUsd,
     string Reason,
+    string Note,
     string Advice);
 
 /// <summary>
@@ -345,7 +347,7 @@ public sealed class QuestionConsultService(
 
     /// <summary>One row's answer, fenced <c>advisory_only</c> with its own vendor and model — never merged (D2).</summary>
     private static QuestionRowAnswer Answer(QuestionRowRecord row, string nonce) => new(
-        row.RowId, row.Vendor, row.Model, row.PromptTitle, row.Capability, row.Flag, row.Status, row.Seconds, row.CostUsd, row.Reason,
+        row.RowId, row.Vendor, row.Model, row.PromptTitle, row.Capability, row.Flag, row.Status, row.Seconds, row.CostUsd, row.Reason, row.Note,
         row.Answered ? ConsultationFence.Advice(row.Vendor, row.Model, new TurnBudget(1, 0), nonce, row.Advice) : string.Empty);
 
     /// <summary>A question that ends before any launch: written down with its outcome, so the log says it went straight to the person.</summary>

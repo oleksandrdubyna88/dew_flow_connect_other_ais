@@ -20,7 +20,7 @@ const NOW = Date.parse('2026-10-02T12:10:00.000Z');
 function row(rowId: string, overrides: Partial<QuestionConsultRow> = {}): QuestionConsultRow {
   return {
     rowId, vendor: 'claude', model: 'sonnet', runtime: 'claude', promptTitle: 'The best developer\'s opinion', capability: 'none',
-    flag: '', status: 'consulting', reason: '', seconds: 0, advice: '', ...overrides,
+    flag: '', status: 'consulting', reason: '', seconds: 0, advice: '', note: '', ...overrides,
   };
 }
 
@@ -102,6 +102,22 @@ test('a card that followed a consultation folds THAT consultation\'s answers and
   assert.equal((region.match(/data-question=/g) ?? []).length, 1, 'one card per question');
 });
 
+test('an answer folded under a card says its row\'s note — a disk root nobody watched (S4b item 5), and a risk card\'s too', () => {
+  const unwatched = 'root D:/notes is not a git checkout: changes there are not watched';
+  const followed = record({ id: 'q-7', status: 'answered', rows: [row('sonnet-disk', { status: 'answered', advice: 'A ladder.', note: unwatched })] });
+  const fromTheRecord = runPanel(panelState('', { questions: [card({ consultId: 'q-7' })], qconsults: [followed] })).region('live-qconsults');
+  const beside = runPanel(panelState('', {
+    questions: [card({
+      productionRisk: true, riskReason: 'r',
+      consultantAnswers: [{ rowId: 'sonnet-disk', vendor: 'claude', model: 'sonnet', promptTitle: 'Projects on this disk', capability: 'disk', flag: '', status: 'answered', reason: '', advice: 'A ladder.', note: unwatched }],
+    })],
+  })).region('live-qconsults');
+
+  for (const region of [fromTheRecord, beside]) {
+    assert.ok(texts(region, 'qanswer').some((one) => one.includes(unwatched)), `the fold says the root was not watched: ${region}`);
+  }
+});
+
 test('an expired card leaves Active questions — the watcher keeps only open ones, and a push without it clears the region', () => {
   const expired = parseEscalation(JSON.stringify({ ...card(), status: 'expired', expiredUtc: '2026-10-02T12:25:00Z' }))!;
   assert.equal(isOpenEscalation(expired), false, 'the watcher would keep an expired card');
@@ -141,3 +157,4 @@ test('the record reader keeps a running question and one finished within the win
   assert.equal(parseQuestionConsult(JSON.stringify({ status: 'consulting' })), undefined, 'a file with no id is not a record');
   assert.deepEqual(parseQuestionConsult(JSON.stringify({ id: 'q', rows: 'nope' }))?.rows, [], 'an unreadable row list is no rows');
 });
+

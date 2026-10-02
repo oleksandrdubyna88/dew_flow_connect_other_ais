@@ -23,6 +23,8 @@ export interface QuestionConsultRow {
   readonly reason: string;
   readonly seconds: number;
   readonly advice: string;
+  /** What the row's record says beside its answer — a disk root the invariant could not watch (S4b), an api row's served sources. */
+  readonly note: string;
 }
 
 export interface QuestionConsult {
@@ -104,6 +106,7 @@ function rowFrom(value: unknown): readonly QuestionConsultRow[] {
     reason: text(row['reason']),
     seconds: finite(row['seconds']),
     advice: text(row['advice']),
+    note: text(row['note']),
   }];
 }
 

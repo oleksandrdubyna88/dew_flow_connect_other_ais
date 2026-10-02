@@ -219,5 +219,5 @@ public sealed class AskGateDesk(
     }
 
     private static EscalationAdvice Advice(QuestionRowRecord row) =>
-        new(row.RowId, row.Vendor, row.Model, row.PromptTitle, row.Capability, row.Flag, row.Status, row.Reason, row.Advice);
+        new(row.RowId, row.Vendor, row.Model, row.PromptTitle, row.Capability, row.Flag, row.Status, row.Reason, row.Advice) { Note = row.Note };
 }

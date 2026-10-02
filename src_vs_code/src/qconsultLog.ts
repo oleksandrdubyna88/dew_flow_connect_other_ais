@@ -25,6 +25,8 @@ export interface DbQuestionAnswer {
   readonly seconds: number;
   readonly costUsd: number | null;
   readonly advice: string;
+  /** The row's note — a disk root the invariant could not watch (S4b item 5). */
+  readonly note: string;
 }
 
 /** One question (the server's `QuestionConsultRow`), with its model rows. */
@@ -101,6 +103,7 @@ function answerFrom(value: unknown): DbQuestionAnswer {
     seconds: whole(row['seconds']),
     costUsd: price(row['costUsd']),
     advice: text(row['advice']),
+    note: text(row['note']),
   };
 }
 
@@ -170,8 +173,13 @@ function modelRow(answer: DbQuestionAnswer): string {
       <td>${escapeHtml(answer.status.replace(/_/g, ' '))}${answer.flag.length === 0 ? '' : ` <span class="flag" data-flag="${escapeHtml(answer.flag)}">can read this machine (${escapeHtml(answer.flag)})</span>`}</td>
       <td class="num">${escapeHtml(shortDuration(answer.seconds))}</td>
       <td class="num">${escapeHtml(money(answer.costUsd))}</td>
-      <td class="what">${folded(said, `${escapeHtml(answer.rowId)}:advice`)}</td>
+      <td class="what">${folded(said, `${escapeHtml(answer.rowId)}:advice`)}${noteOf(answer.note)}</td>
     </tr>`;
+}
+
+/** What the row's record says beside its answer — a disk root nobody watched (S4b item 5) is read WITH the advice it qualifies. */
+function noteOf(note: string): string {
+  return note.length === 0 ? '' : `<div class="hint" data-note>${escapeHtml(note)}</div>`;
 }
 
 function where(question: DbQuestion): string {

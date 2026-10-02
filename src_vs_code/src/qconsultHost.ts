@@ -1,3 +1,4 @@
+import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as vscode from 'vscode';
 import { ConsultPromptFile } from './consultPromptFile';
@@ -167,7 +168,10 @@ async function addPrompt(settings: QconsultSettings, hooks: QconsultWriteHooks):
   }
 }
 
-/** A folder from the system's own picker — so it exists — and refused by name when it is one of D14 (c)'s places. */
+/**
+ * A folder from the system's own picker — so it exists — and refused by name when it is one of D14 (c)'s places,
+ * judged at what its junctions and symlinks resolve to as well (S4b item 2: a link to the profile IS the profile).
+ */
 async function addRoot(host: QconsultHost, settings: QconsultSettings, hooks: QconsultWriteHooks): Promise<void> {
   const picked = await vscode.window.showOpenDialog({
     canSelectFiles: false, canSelectFolders: true, canSelectMany: false,
@@ -175,6 +179,8 @@ async function addRoot(host: QconsultHost, settings: QconsultSettings, hooks: Qc
   });
   const folder = picked?.[0];
   if (folder !== undefined) {
-    await settled(rootAdded(settings.roots, folder.fsPath, host.places()), 'qconsultRoots', (r) => r.roots, hooks);
+    // A folder whose links cannot be followed is judged as it was picked — the server walks them again, and refuses there.
+    const real = await fs.promises.realpath(folder.fsPath).catch(() => folder.fsPath);
+    await settled(rootAdded(settings.roots, folder.fsPath, host.places(), real), 'qconsultRoots', (r) => r.roots, hooks);
   }
 }

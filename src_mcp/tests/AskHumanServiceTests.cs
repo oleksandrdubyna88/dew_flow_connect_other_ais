@@ -66,7 +66,8 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
         TimeSpan? budget = null,
         IReadOnlyList<QuestionRow>? rows = null,
         bool enabled = true,
-        Func<ScriptedLaunch, Task<ScriptedAnswer?>>? script = null)
+        Func<ScriptedLaunch, Task<ScriptedAnswer?>>? script = null,
+        IReadOnlyList<string>? roots = null)
     {
         var settings = new PanelSettings
         {
@@ -78,6 +79,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
                 Enabled = enabled,
                 Mode = mode,
                 Rows = rows ?? [ClaudeRow],
+                Roots = roots ?? [],
                 RowBudget = TimeSpan.FromSeconds(30),
             },
         };
@@ -414,6 +416,53 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
         System.Text.Encoding.UTF8.GetByteCount(record.Question).Should().BeLessThanOrEqualTo(QuestionConsultService.MaxQuestionBytes);
         record.Question.Should().EndWith("[…truncated]");
         record.Truncated.Should().Contain("question").And.Contain(System.Text.Encoding.UTF8.GetByteCount(longQuestion).ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    /// <summary>
+    /// S4b item 1, the beside run: the person is asked the question as written, and the consultants beside the card
+    /// are not handed a secret in it — the row is refused naming the class, and the card says so under it.
+    /// </summary>
+    [Fact]
+    public async Task AProductionRiskQuestionCarryingASecret_ReachesThePerson_ButNoConsultant()
+    {
+        var h = Build(budget: TimeSpan.FromSeconds(2), script: launch => Task.FromResult<ScriptedAnswer?>(
+            launch.Request.Executable == "claude" ? ScriptedAnswer.Claude("Back the column up first.") : null));
+        Proceeded(h);
+        const string leaking = "The deploy key sk-live-0123456789abcdefghijklmnop is in the migration — may it run against production now?";
+
+        await Ask(h, leaking, string.Empty, true, "the migration drops a column nothing can restore");
+
+        var card = await Eventually(() => TheCards(h).FirstOrDefault(c => c.ProductionRisk && c.ConsultantAnswers.Count > 0), TimeSpan.FromSeconds(20));
+        card.Should().NotBeNull("the beside run still settles, and says why under the card");
+        card!.Question.Should().Be(leaking, "the PERSON is asked what the caller wrote");
+        var row = card.ConsultantAnswers.Single();
+        row.Status.Should().Be(RowOutcomes.Refused);
+        row.Reason.Should().Contain("question was not sent").And.Contain("vendor-key").And.NotContain("sk-live");
+        h.Launcher.Vendors.Should().BeEmpty("no consultant was handed the secret");
+    }
+
+    /// <summary>S4b item 5, under the card: a disk row's root that no invariant watched is said beside its answer there too.</summary>
+    [Fact]
+    public async Task ARiskCardsDiskAnswer_CarriesTheNoteThatItsRootWasNotWatched()
+    {
+        var plain = Directory.CreateTempSubdirectory("coai-askhuman-plain-").FullName;
+        try
+        {
+            var diskRow = new QuestionRow("astra-disk", "codex", "codex", "gpt-6-astra", string.Empty, string.Empty, string.Empty, "question-disk", Enabled: true, Acknowledged: true);
+            var h = Build(budget: TimeSpan.FromSeconds(2), rows: [diskRow], roots: [plain], script: launch => Task.FromResult<ScriptedAnswer?>(
+                launch.Request.Executable == "codex" ? ScriptedAnswer.Codex("Back the column up first.") : null));
+            Proceeded(h);
+
+            await Ask(h, Question, string.Empty, true, "the migration drops a column nothing can restore");
+
+            var card = await Eventually(() => TheCards(h).FirstOrDefault(c => c.ProductionRisk && c.ConsultantAnswers.Count > 0), TimeSpan.FromSeconds(20));
+            card.Should().NotBeNull();
+            card!.ConsultantAnswers.Single().Note.Should().Contain($"root {plain} is not a git checkout: changes there are not watched");
+        }
+        finally
+        {
+            Directory.Delete(plain, recursive: true);
+        }
     }
 
     private static async Task<T?> Eventually<T>(Func<T?> read, TimeSpan within)
