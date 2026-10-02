@@ -799,6 +799,9 @@ and the check re-run.
 
 ## 9. Tails — a separate plan, written when this one is promoted
 
+Written 2026-10-02: [PLAN_question_consultant_tails.md](PLAN_question_consultant_tails.md), which adds the flaky
+round-deadline test found while building S4.
+
 - Move the EXISTING stuck consultant (`ClaudeConsultant.Denied`) and confined reviewer (`ClaudeRuntime.ReachTools`)
   onto the `ConfinementPlanner` (F5) — a security release of its own.
 - agy `web` (needs a way to allow `read_url` headless without `--dangerously-skip-permissions`, then a measurement).
