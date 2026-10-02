@@ -18,6 +18,9 @@ public sealed class SecurityLaneCalibrationTests
     private static readonly string[] CalibrationPrompts = ["redteam-authz", "redteam-sql"];
     internal static string Model => Environment.GetEnvironmentVariable("COAI_SECURITY_CALIBRATION_MODEL")
         ?? "Qwen3.5-35B-A3B-Q5_vk128:latest";
+    /// <summary>The OpenAI-compatible endpoint of the local model; Ollama's default unless overridden.</summary>
+    internal static string Endpoint => Environment.GetEnvironmentVariable("COAI_SECURITY_CALIBRATION_ENDPOINT")
+        ?? "http://localhost:11434/v1";
     private const string Scope = """
         Review the committed invoice-search change. A caller must only read invoices belonging to
         the tenant in their authenticated claims, and search text must remain a SQL parameter.
@@ -44,7 +47,7 @@ public sealed class SecurityLaneCalibrationTests
         await File.WriteAllTextAsync(Path.Combine(output!, "manifest.json"), JsonSerializer.Serialize(new
         {
             model = Model,
-            endpoint = "http://localhost:11434/v1",
+            endpoint = Endpoint,
             contextTokens = 131072,
             maxOutputTokens = 8192,
             localConcurrency = 1,
@@ -94,7 +97,7 @@ public sealed class SecurityLaneCalibrationTests
     {
         ProviderSettings[] providers = [
             new("codex") { ExecutablePath = Path.Combine(AppContext.BaseDirectory, "FakeCli.exe") },
-            new("local-security") { Runtime = "local", Model = Model, BaseUrl = "http://localhost:11434/v1",
+            new("local-security") { Runtime = "local", Model = Model, BaseUrl = Endpoint,
                 Plan = false, Code = false, ExecutablePath = Path.Combine(AppContext.BaseDirectory, "coai-mcp.exe") },
         ];
         var lane = SecurityLaneSetting.Parse(JsonSerializer.Serialize(new

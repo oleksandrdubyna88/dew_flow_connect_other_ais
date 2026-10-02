@@ -21,13 +21,17 @@ public sealed class SecurityLaneAuditTests
         var output = Required("COAI_SECURITY_AUDIT_OUT");
         var contextTokens = int.Parse(Environment.GetEnvironmentVariable("COAI_SECURITY_AUDIT_CONTEXT_TOKENS") ?? "24000",
             System.Globalization.CultureInfo.InvariantCulture);
-        contextTokens.Should().BeInRange(1024, 131072, "the slice budget must fit this model's measured window");
+        // The model's window is an operator SETTING for this run, not something the audit measures.
+        var modelContextTokens = int.Parse(Environment.GetEnvironmentVariable(ModelContextTokensVariable) ?? "131072",
+            System.Globalization.CultureInfo.InvariantCulture);
+        contextTokens.Should().BeInRange(1024, modelContextTokens, "the slice budget must fit the model window configured for this run");
         var selected = Environment.GetEnvironmentVariable("COAI_SECURITY_AUDIT_PROMPTS")?.Split(',',
             StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         var modules = selected is null ? SecurityCatalog.Prompts.ToArray()
             : selected.Select(id => SecurityCatalog.Prompts.Single(p => p.Id == id)).DistinctBy(p => p.Id).ToArray();
         modules.Should().NotBeEmpty("select at least one known module before a hardware measurement");
-        var scope = await File.ReadAllTextAsync(Path.Combine(repo, "todo", "PLAN_a_security_lane_runs_beside_the_gate.md"));
+        var scopeFile = ScopeFile(repo);
+        var scope = await File.ReadAllTextAsync(scopeFile);
         Directory.CreateDirectory(output);
         var launcher = new ProcessLauncher();
         var head = await launcher.RunAsync(new("git", ["rev-parse", "HEAD"], repo));
@@ -39,7 +43,10 @@ public sealed class SecurityLaneAuditTests
             head = head.StdOut.Trim(),
             utc = DateTimeOffset.UtcNow,
             model = SecurityLaneCalibrationTests.Model,
-            modelContextTokens = 131072,
+            endpoint = SecurityLaneCalibrationTests.Endpoint,
+            configuredModelContextTokens = modelContextTokens,
+            modelContextTokensSource = $"{ModelContextTokensVariable} (default 131072); configured by the operator, not measured by this run",
+            scopeFile,
             contextTokens,
             ordinaryReviewer = "FakeCli clean response; this campaign measures only the local security lane",
             limitation = "One pass per module, no executed reproductions, input coverage unverified",
@@ -64,6 +71,28 @@ public sealed class SecurityLaneAuditTests
             }
         }
         failures.Should().BeEmpty("all selected module attempts must complete; individual failures were retained");
+    }
+
+    private const string ModelContextTokensVariable = "COAI_SECURITY_AUDIT_MODEL_CONTEXT_TOKENS";
+    private const string ScopePlan = "PLAN_a_security_lane_runs_beside_the_gate.md";
+
+    /// <summary>
+    /// The scope text the audited change is reviewed against: an explicit <c>COAI_SECURITY_AUDIT_SCOPE</c>
+    /// file, else the lane's plan wherever the audited checkout keeps it — <c>todo/</c> while open,
+    /// <c>research/</c> once promoted — so the audit survives the plan's promotion.
+    /// </summary>
+    private static string ScopeFile(string repo)
+    {
+        var explicitScope = Environment.GetEnvironmentVariable("COAI_SECURITY_AUDIT_SCOPE");
+        if (!string.IsNullOrWhiteSpace(explicitScope))
+        {
+            File.Exists(explicitScope).Should().BeTrue($"COAI_SECURITY_AUDIT_SCOPE names {explicitScope}, which must exist");
+            return explicitScope;
+        }
+        string[] candidates = [Path.Combine(repo, "todo", ScopePlan), Path.Combine(repo, "research", ScopePlan)];
+        var found = candidates.FirstOrDefault(File.Exists);
+        found.Should().NotBeNull($"set COAI_SECURITY_AUDIT_SCOPE, or keep {ScopePlan} in todo/ or research/ of the audited repo");
+        return found!;
     }
 
     private static string Required(string name)
