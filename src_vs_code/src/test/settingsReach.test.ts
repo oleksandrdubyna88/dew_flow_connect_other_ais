@@ -69,6 +69,18 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   // The consultation cadence (research/PLAN_consult_on_a_cadence.md): one setting holding four things,
   // every one of them changed, for the reason `consult` above gives.
   cadence: { mode: 'require', every: 4, riskThreshold: 6, riskMax: 2 },
+  // The question consultant (todo/PLAN_question_consultant.md, S4): eight settings in one, every one changed;
+  // `qconsultSettings.test.ts` changes each alone and checks its key.
+  qconsult: {
+    enabled: false,
+    mode: 'remind',
+    rows: [{ id: 'sonnet-disk', vendor: 'claude', runtime: 'claude', model: 'sonnet', baseUrl: '', executablePath: '', key: '', prompt: 'question-disk', enabled: true, acknowledged: false }],
+    prompts: [{ id: 'ask-the-docs', title: 'The docs', capability: 'web', text: 'Read the vendor docs.' }],
+    roots: ['D:/projects'],
+    rowMinutes: 3,
+    questionsPerSession: 4,
+    freeBatches: 1,
+  },
 };
 
 test('every setting, changed on its own, reaches the server file', () => {
