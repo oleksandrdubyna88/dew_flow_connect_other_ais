@@ -22,6 +22,7 @@ import {
   sameChoice,
 } from './consultSettings';
 import { CADENCE_SETTINGS, CadenceSettings, DEFAULT_CADENCE, cadenceEnv, cadenceSettingsFrom } from './cadenceSettings';
+import { DEFAULT_QCONSULT, QCONSULT_SETTINGS, QconsultSettings, qconsultEnv, qconsultSettingsFrom } from './qconsultSettings';
 import { CommandModels, commandModelsEnv, commandModelsFrom } from './commandModels';
 import { commandsFrom, type CommandRow } from './commands';
 
@@ -102,6 +103,13 @@ export interface CoaiSettings {
    * env block read it through ONE function.</p>
    */
   readonly cadence: CadenceSettings;
+
+  /**
+   * The question consultant — the models a question is put to before the person is asked
+   * (todo/PLAN_question_consultant.md, S4). Its own module (`qconsultSettings.ts`) for the reason the two
+   * above have one.
+   */
+  readonly qconsult: QconsultSettings;
 
   /**
    * Which local model a ranking pass over the collected corpus would use.
@@ -267,6 +275,7 @@ export const DEFAULTS: CoaiSettings = {
   commands: [],
   consult: DEFAULT_CONSULT,
   cadence: DEFAULT_CADENCE,
+  qconsult: DEFAULT_QCONSULT,
 };
 
 /** A raw configuration reader: `get(section)` returns whatever the host stored, if anything. */
@@ -304,6 +313,8 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   ...CONSULT_SETTINGS,
   // When the consultant is asked is a property of the work too, and spread for the same reason.
   ...CADENCE_SETTINGS,
+  // Who the question consultant asks, and the folders a disk row may read, are the work's too.
+  ...QCONSULT_SETTINGS,
 ];
 
 /**
@@ -391,6 +402,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     commands: commandsFrom(read('commands')),
     consult: consultSettingsFrom(read),
     cadence: cadenceSettingsFrom(read),
+    qconsult: qconsultSettingsFrom(read),
   };
 }
 
@@ -534,6 +546,9 @@ export function envBlock(
   }
   // Only the cadence values that differ from the server's own — a pristine panel adds nothing.
   Object.assign(env, cadenceEnv(settings.cadence));
+  // The question consultant's eight, each only when it differs — and none for a server known to be too old to
+  // read them (`QCONSULT_SINCE`), which the section then says in a banner.
+  Object.assign(env, qconsultEnv(settings.qconsult, installedServerVersion));
   if (settings.maxConcurrency !== DEFAULTS.maxConcurrency) {
     env['COAI_MAX_CONCURRENCY'] = String(settings.maxConcurrency);
   }

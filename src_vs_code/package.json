@@ -976,6 +976,68 @@
           "default": 3,
           "minimum": 1,
           "description": "The most risky epics and stories one plan may name for a consultation of their own."
+        },
+        "coai.qconsultEnabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Let an AI put a question to the question consultant (ask_consultants) before it asks you. Off: the tool answers off and the gate stands down."
+        },
+        "coai.qconsultMode": {
+          "type": "string",
+          "enum": [
+            "off",
+            "remind",
+            "require"
+          ],
+          "enumDescriptions": [
+            "ask_human never asks for the consultants first.",
+            "ask_human reminds the AI to ask the consultants first, and still asks you.",
+            "Once a plan is being built, ask_human refuses a question that was not put to the consultants first — unless it is a production risk with a reason."
+          ],
+          "default": "require",
+          "description": "What the gate in front of ask_human does about a question asked without the question consultant."
+        },
+        "coai.qconsultRows": {
+          "type": "array",
+          "default": [],
+          "description": "The question consultant's rows: each a model and exactly one base prompt, on or off — at most six on. Edited in ConnectOtherAIs > Settings > Question consultant.",
+          "items": {
+            "type": "object"
+          }
+        },
+        "coai.qconsultPrompts": {
+          "type": "array",
+          "default": [],
+          "description": "Base prompts you added beside the three shipped ones: an id, a title, the capability it needs (none, disk or web) and its text.",
+          "items": {
+            "type": "object"
+          }
+        },
+        "coai.qconsultRoots": {
+          "type": "array",
+          "default": [],
+          "description": "The folders a disk row may read, read-only — absolute and existing; never a drive root, your profile folder itself, a system folder or the data folder.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "coai.qconsultRowMinutes": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 1,
+          "description": "How long one consultant row may run on a question; past it that row is timed out and the others still answer."
+        },
+        "coai.qconsultQuestionsPerSession": {
+          "type": "integer",
+          "default": 10,
+          "minimum": 1,
+          "description": "Questions one session may put to the consultants; past it the question goes straight to you."
+        },
+        "coai.qconsultFreeBatches": {
+          "type": "integer",
+          "default": 2,
+          "minimum": 1,
+          "description": "How many batches of questions after a plan's proceed go to you directly before the consultants are required."
         }
       }
     },
