@@ -234,24 +234,68 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
 
     // ---------- D6: six rows at once ----------
 
+    /// <remarks>
+    /// The guarantee is ORDER, not speed: every one of the six launches has STARTED before any of them is
+    /// allowed to finish. Each scripted launch waits at a barrier that opens only when the sixth has arrived,
+    /// so a sequential fan-out — or a scheduler wave of three — can never open it: its first launch waits
+    /// out the generous timeout and the test fails naming how many had started. An earlier version bounded
+    /// the WALL clock (1.8 s for six 600 ms rows) and missed that bound by 138 ms on a loaded machine
+    /// (2026-10-02) while the fan-out was as parallel as ever; a barrier cannot be late.
+    /// </remarks>
     [Fact]
     public async Task SixRowsStartWithinOneTick_NoSchedulerWave_NoRepositoryLock()
     {
         var rows = Enumerable.Range(1, 6).Select(n => Row($"r{n}", "claude", "claude", $"model-{n}", "question-opinion")).ToList();
         var settings = Settings(rows);
-        var wait = TimeSpan.FromMilliseconds(600);
-        var launcher = new ScriptedLauncher(_real, launch => Task.FromResult<ScriptedAnswer?>(
-            launch.Request.Executable == "claude" ? ScriptedAnswer.Claude("A ladder.") with { Wait = wait } : null));
-        var started = Stopwatch.StartNew();
+        var barrier = new AllAtOnce(rows.Count, TimeSpan.FromSeconds(20));
+        var launcher = new ScriptedLauncher(_real, async launch =>
+        {
+            if (launch.Request.Executable != "claude")
+            {
+                return null;
+            }
+
+            await barrier.ArriveAsync(TestContext.Current.CancellationToken);
+
+            return ScriptedAnswer.Claude("A ladder.");
+        });
 
         var settled = await FanOut(launcher, settings).RunAsync(Fresh(), Input(settings), TestContext.Current.CancellationToken);
 
+        barrier.StartedBeforeTheFirstFinished.Should().Be(6, "every admitted row is launched in one go — a sequential fan-out or a wave never opens the barrier");
         settled.Rows.Should().HaveCount(6).And.OnlyContain(r => r.Status == RowOutcomes.Answered);
-        var starts = launcher.Vendors.Select(l => l.StartedUtc).OrderBy(t => t).ToList();
-        starts.Should().HaveCount(6);
-        (starts[^1] - starts[0]).Should().BeLessThan(TimeSpan.FromMilliseconds(400), "every admitted row is launched in one go — no wave");
-        started.Elapsed.Should().BeLessThan(wait * 3, "six rows waiting 600 ms each in sequence would be 3.6 s");
+        launcher.Vendors.Should().HaveCount(6);
         Directory.Exists(Path.Combine(_data, "consultations", "locks")).Should().BeFalse("no RepositoryLock is taken for a question");
+    }
+
+    /// <summary>A barrier for <c>count</c> launches: none passes until all have arrived, or the timeout lets everyone through (the failure).</summary>
+    private sealed class AllAtOnce(int count, TimeSpan timeout)
+    {
+        private readonly TaskCompletionSource _open = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private int _arrived;
+        private int _atFirstFinish = -1;
+
+        /// <summary>How many launches had arrived when the first one was let through — <c>count</c> when they ran at once.</summary>
+        public int StartedBeforeTheFirstFinished => Volatile.Read(ref _atFirstFinish);
+
+        public async Task ArriveAsync(CancellationToken ct)
+        {
+            if (Interlocked.Increment(ref _arrived) >= count)
+            {
+                _open.TrySetResult();
+            }
+
+            try
+            {
+                await _open.Task.WaitAsync(timeout, ct);
+            }
+            catch (TimeoutException)
+            {
+                _open.TrySetResult();
+            }
+
+            Interlocked.CompareExchange(ref _atFirstFinish, Volatile.Read(ref _arrived), -1);
+        }
     }
 
     // ---------- the record: before the first launch, and as each row settles ----------
