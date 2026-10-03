@@ -10370,5 +10370,10 @@ new document's `ready` is answered — both pages posted `ready` before, and bot
   - Not `fetchReal`: an automatic queue of up to four reads, each with its own pending state on its row.
   - The page's own queue helper was called `send(id)`, which would have shadowed the mark's door. It is `askReal(id)`
     now.
-  - In `bugzReviewPanel.ts`, each slow `case` goes through `slow(raw, work)`. `queue()` returns the link it adds, so a
-    decision is held until it is written and redrawn. `listen()` makes the `BusyHost` and settles it with the window.
+  - In `bugzReviewPanel.ts`, `received()` returns each case's work, and `listen()` passes EVERY message to `busy.track`, so
+    `askOf` alone decides what is numbered. The first version wrapped the slow cases one by one, and an `openCall` whose
+    reference did not parse skipped the wrapper and left its mark stuck (E2 code round). `queue()` returns the link it
+    adds, so a decision is held until it is written and redrawn. `listen()` makes the `BusyHost` and settles it with the
+    window.
+  - The key tab consumes `ready` in the busy host and starts no turn. It had always run a `ready` as a turn, and a turn
+    repaints the tab twice, so each repaint's `ready` could start another (E2 code round).

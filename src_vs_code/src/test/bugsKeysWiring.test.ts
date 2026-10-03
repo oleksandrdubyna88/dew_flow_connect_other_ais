@@ -90,3 +90,14 @@ test('discarding a key is confirmed, like every other revoke', () => {
   assert.ok(settling.indexOf('this.discard(') > asked, 'the key is discarded before the question is answered');
   assert.match(settling, /discard-a-pending-key/u, 'the question does not go through the notification funnel');
 });
+
+test('a page saying it is ready is answered with what is running, and starts no turn', () => {
+  // E2 code round (gemini, twice): `ready` went on into `turns.run`, as it had before the busy mark — and a turn
+  // repaints the tab as it starts and as it ends, so every repaint's `ready` could start another. The busy host
+  // consumes it now, and nothing else runs.
+  const panel = code(source('bugsKeysPanel.ts'));
+
+  assert.match(between(panel, 'onDidReceiveMessage', 'await this.turns'),
+    /if \(busy\.heard\(m\)\) \{\s*return;\s*\}\s*void busy\.track\(m, \(\) => this\.turns\.run\(/u,
+    'a ready is not consumed before the turn, so it starts one');
+});

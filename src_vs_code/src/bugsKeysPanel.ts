@@ -137,8 +137,12 @@ export class BugsKeysPanel {
       this.panel.webview.onDidReceiveMessage((m: { type?: string; id?: string }) => {
         // A press on a text control is the person's setting, not a turn of this page's flow.
         if (!appliedTextControl(m, 'key page')) {
-          // A numbered press is held under the mark until its turn ends; a fresh page's `ready` is told what is running.
-          busy.heard(m);
+          // A fresh page's `ready` is told what is running, and starts nothing: a turn repaints the tab as it starts and
+          // as it ends, so a `ready` run as a turn could beget the next one (E2 code round, gemini).
+          if (busy.heard(m)) {
+            return;
+          }
+          // A numbered press is held under the mark until its turn ends.
           void busy.track(m, () => this.turns.run(() => this.act(m.type ?? '', m.id ?? '')));
         }
       });

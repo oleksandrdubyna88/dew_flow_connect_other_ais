@@ -28,7 +28,11 @@ import { ALL, HeldTabs, reviewTabs } from './reviewTabs';
 import { asReviewMessage } from './bugzReviewMessages';
 import { BusyHost } from './busyHost';
 import { type BusySnapshot, IDLE } from './busySnapshot';
+
 import { BugChat, bugChat } from './reviewChoose';
+
+/** What a case that does its work at once answers with: nothing left to wait for. */
+const DONE: Promise<void> = Promise.resolve();
 
 /**
  * The window the review page lives in.
@@ -330,7 +334,7 @@ export class BugzReviewPanel {
     });
     panel.webview.onDidReceiveMessage((m: unknown) => {
       busy.heard(m as object);
-      this.received(m);
+      void busy.track(m as object, () => this.received(m));
     });
   }
 
@@ -341,26 +345,26 @@ export class BugzReviewPanel {
    * answers `handlers['__proto__']` with something truthy and uncallable, and a `switch` has no
    * prototype to inherit from. `asReviewMessage` has already made every field the type it claims.</p>
    */
-  private received(raw: unknown): void {
+  private received(raw: unknown): Promise<void> {
     const m = asReviewMessage(raw);
     if (m === undefined) {
-      return;
+      return DONE;
     }
 
+    // Every case answers with the work it started, and `listen` holds it under the busy mark when the page numbered
+    // the press — so no case can leave a numbered press unsettled (E2 code round, gemini).
     switch (m.type) {
       case 'decide':
-        this.slow(raw, () => this.queue(() => decisionsFor(m.ids, m.keep, this.held, this.drafts)));
-
-        return;
+        return this.queue(() => decisionsFor(m.ids, m.keep, this.held, this.drafts));
       case 'draft':
         this.drafts = new Map([...this.drafts, [m.id, m.text]]);
 
-        return;
+        return DONE;
       case 'comment':
         this.drafts = new Map([...this.drafts, [m.id, m.text]]);
         void this.queue(() => commentWrite(m.id, m.text, this.held));
 
-        return;
+        return DONE;
       case 'expand':
       case 'expandAll':
         if (!m.open) {
@@ -372,53 +376,40 @@ export class BugzReviewPanel {
         }
         this.remember(m.ids, m.open);
 
-        return;
+        return DONE;
       case 'tab':
         this.narrow(m.strip, m.key);
 
-        return;
+        return DONE;
       case 'realText':
         this.realText = m.on;
 
-        return;
+        return DONE;
       case 'fetchReal':
         void this.answerReal(m.id, m.generation);
 
-        return;
+        return DONE;
       case 'openAt':
-        this.slow(raw, () => this.opened(m.id, (pair) => this.revisions.openAt(pair, this.held)));
-
-        return;
+        return this.opened(m.id, (pair) => this.revisions.openAt(pair, this.held));
       case 'openCurrent':
-        this.slow(raw, () => this.opened(m.id, (pair) => this.revisions.openCurrent(pair, this.held)));
-        return;
-
+        return this.opened(m.id, (pair) => this.revisions.openCurrent(pair, this.held));
       case 'openTree':
-        this.slow(raw, () => this.opened(m.id, (pair) => this.revisions.openTree(pair, this.held)));
-        return;
-
+        return this.opened(m.id, (pair) => this.revisions.openTree(pair, this.held));
       case 'calls':
-        this.slow(raw, () => this.opened(m.id, (pair) => this.calls.ask(pair, this.held)));
-        return;
-
+        return this.opened(m.id, (pair) => this.calls.ask(pair, this.held));
       case 'choose':
-        this.slow(raw, () => this.opened(m.id, (pair) => this.hooks.choose(bugChat(pair, this.drafts))));
-        return;
-
+        return this.opened(m.id, (pair) => this.hooks.choose(bugChat(pair, this.drafts)));
       case 'openCall': {
         const named = calledOut(m.at);
-        if (named !== undefined) {
-          this.slow(raw, () => this.calls.open(named.id, named.which, named.at));
-        }
+        return named === undefined ? Promise.resolve() : this.calls.open(named.id, named.which, named.at);
       }
-
-        return;
       default:
         void settingWritten(
           m.type === 'zoom' ? applyZoomDelta(m.delta) : applyToneDelta(m.delta), 'bugzReview');
+
+        return DONE;
     }
   }
-
   /**
    * Write down which rows are showing their code. It does NOT redraw.
    *
@@ -612,15 +603,6 @@ export class BugzReviewPanel {
   }
 
   /** A press about one row, or nothing at all when that row is no longer on the page. */
-  /**
-   * A press that makes the host work, held under the window's busy mark until the work ends — numbered by the page
-   * (`BUGZ_TRACKED`), so a decision's write and redraw, or an editor being opened, past half a second shows the bar.
-   */
-  private slow(raw: unknown, work: () => Promise<void>): void {
-    const busy = this.busy;
-    void (busy === undefined ? work() : busy.track(raw as object, work));
-  }
-
   /** What a repaint paints as still running: nothing when no window is open to hold any. */
   private stillRunning(): BusySnapshot {
     return this.busy?.snapshot() ?? IDLE;
