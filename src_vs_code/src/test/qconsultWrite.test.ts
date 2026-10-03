@@ -31,7 +31,7 @@ const context = { prompts: questionPrompts([]), vendors: DEFAULT_VENDORS };
 function row(id: string, overrides: Partial<QuestionRowSetting> = {}): QuestionRowSetting {
   return {
     id, vendor: 'claude', runtime: 'claude', model: '', baseUrl: '', executablePath: '', key: '',
-    prompt: 'question-opinion', enabled: false, acknowledged: false, ...overrides,
+    prompt: 'question-opinion', enabled: false, ...overrides,
   };
 }
 
@@ -59,29 +59,28 @@ test('a row is never stored without a prompt, nor with one its runtime cannot ru
   assert.equal(rowEdited([row('r')], 'r', 'qconsultRowPrompt', 'question-disk', context)?.[0]?.prompt, 'question-disk');
 });
 
-test('a flagged row runs only once acknowledged, and taking the tick away switches it off (D13)', () => {
-  const codex = row('astra', { vendor: 'codex', runtime: 'codex', prompt: 'question-web' });
+test('a flagged row switches on with nothing to tick — the flag is enough (D13, revised 2026-10-03)', () => {
+  for (const prompt of ['question-web', 'question-disk', 'question-opinion']) {
+    const codex = row('astra', { vendor: 'codex', runtime: 'codex', prompt });
 
-  assert.equal(rowEdited([codex], 'astra', 'qconsultRowEnabled', true, context), undefined, 'switched on without the tick');
-  const ticked = rowEdited([codex], 'astra', 'qconsultRowAcknowledged', true, context)!;
-  assert.equal(ticked[0]!.acknowledged, true, 'the tick writes acknowledged: true into the row');
-  const running = rowEdited(ticked, 'astra', 'qconsultRowEnabled', true, context)!;
-  assert.equal(running[0]!.enabled, true);
-  assert.deepEqual(rowEdited(running, 'astra', 'qconsultRowAcknowledged', false, context)![0], { ...codex, acknowledged: false, enabled: false });
+    assert.equal(rowEdited([codex], 'astra', 'qconsultRowEnabled', true, context)?.[0]?.enabled, true, `codex × ${prompt} refused to switch on`);
+  }
+  const agy = row('agy', { vendor: 'antigravity', runtime: 'antigravity', prompt: 'question-disk' });
+  assert.equal(rowEdited([agy], 'agy', 'qconsultRowEnabled', true, context)?.[0]?.enabled, true, 'agy on disk is flagged too, and switches on the same way');
 });
 
-test('choosing another vendor or prompt takes the row off and drops the acknowledgement made for the old pair', () => {
-  const acknowledged = row('astra', { vendor: 'codex', runtime: 'codex', prompt: 'question-web', acknowledged: true, enabled: true });
+test('choosing another vendor or prompt takes the row off: it was switched on as another pair', () => {
+  const running = row('astra', { vendor: 'codex', runtime: 'codex', prompt: 'question-web', enabled: true });
 
   assert.deepEqual(
-    rowEdited([acknowledged], 'astra', 'qconsultRowVendor', 'claude', context)![0],
-    { ...acknowledged, vendor: 'claude', runtime: 'claude', model: 'haiku', enabled: false, acknowledged: false },
+    rowEdited([running], 'astra', 'qconsultRowVendor', 'claude', context)![0],
+    { ...running, vendor: 'claude', runtime: 'claude', model: 'haiku', enabled: false },
   );
   assert.deepEqual(
-    rowEdited([acknowledged], 'astra', 'qconsultRowPrompt', 'question-opinion', context)![0],
-    { ...acknowledged, prompt: 'question-opinion', enabled: false, acknowledged: false },
+    rowEdited([running], 'astra', 'qconsultRowPrompt', 'question-opinion', context)![0],
+    { ...running, prompt: 'question-opinion', enabled: false },
   );
-  assert.equal(rowEdited([acknowledged], 'astra', 'qconsultRowVendor', 'no-such-vendor', context), undefined);
+  assert.equal(rowEdited([running], 'astra', 'qconsultRowVendor', 'no-such-vendor', context), undefined);
 });
 
 test('a new row is added off, with a prompt its runtime admits, under an id no row holds', () => {

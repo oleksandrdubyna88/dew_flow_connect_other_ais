@@ -69,8 +69,8 @@ test('the modes the panel offers are the modes the server parses', () => {
 const CHANGED: readonly (readonly [Partial<typeof DEFAULT_QCONSULT>, string, string])[] = [
   [{ enabled: false }, 'COAI_QCONSULT_ENABLED', 'false'],
   [{ mode: 'remind' }, 'COAI_QCONSULT_MODE', 'remind'],
-  [{ rows: [{ id: 'sonnet-disk', vendor: 'claude', runtime: 'claude', model: 'sonnet', baseUrl: '', executablePath: '', key: '', prompt: 'question-disk', enabled: true, acknowledged: false }] },
-    'COAI_QCONSULT_ROWS', '[{"id":"sonnet-disk","vendor":"claude","runtime":"claude","model":"sonnet","baseUrl":"","executablePath":"","key":"","prompt":"question-disk","enabled":true,"acknowledged":false}]'],
+  [{ rows: [{ id: 'sonnet-disk', vendor: 'claude', runtime: 'claude', model: 'sonnet', baseUrl: '', executablePath: '', key: '', prompt: 'question-disk', enabled: true }] },
+    'COAI_QCONSULT_ROWS', '[{"id":"sonnet-disk","vendor":"claude","runtime":"claude","model":"sonnet","baseUrl":"","executablePath":"","key":"","prompt":"question-disk","enabled":true}]'],
   [{ prompts: [{ id: 'ask-the-docs', title: 'The docs', capability: 'web', text: 'Read the vendor docs.' }] },
     'COAI_QCONSULT_PROMPTS', '[{"id":"ask-the-docs","title":"The docs","capability":"web","text":"Read the vendor docs."}]'],
   [{ roots: ['D:/projects'] }, 'COAI_QCONSULT_ROOTS', '["D:/projects"]'],

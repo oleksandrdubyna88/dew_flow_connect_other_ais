@@ -19,7 +19,7 @@ public static class RowOutcomes
     /// <summary>The row's input was refused before any launch — a web question the sanitiser refused, a context carrying a secret.</summary>
     public const string Refused = "refused";
 
-    /// <summary>The row's runtime cannot do its prompt's capability (A3) — or may not, until the operator ticks the row's acknowledgement of a flagged pair (D13); never launched.</summary>
+    /// <summary>The row's runtime cannot do its prompt's capability (A3), or the vendor cannot answer in this build; never launched.</summary>
     public const string Blocked = "blocked";
 
     /// <summary>The row is switched off.</summary>
