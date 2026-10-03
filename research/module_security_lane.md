@@ -41,8 +41,12 @@ omissions, applies the existing credential-file guards and redaction, and fences
 fresh nonce. Coverage remains partial; local input coverage remains unverified even when reported
 token usage looks plausible. Neither the server nor the extension executes reproduction text.
 For slices, production/config paths rank ahead of known documentation and test paths, then focus
-signals rank within each tier. Both the sixteen-file reader and the context composer use this
-same hint. Supporting material is retained when it fits and labelled in the payload/omissions;
+signals rank within each tier. Both the sixteen-file reader and the context composer call the one
+`SecuritySignals.Rank`. The reader collects source only for the pairings `SecurityRoster.Due` says
+this round will ask — within the lane's round budget, free of configuration refusals, and on a
+reviewer row that can run — so a spent budget or a broken pairing reads nothing. A slice whose
+source window does not fit keeps its patch, listed as `(source omitted for budget; patch only)`.
+Supporting material is retained when it fits and labelled in the payload/omissions;
 the path hint never proves a file safe. The default local slice budget is 24000 tokens, independent
 of the model's configured context window. Explicit source start/end labels surround the nonce fence;
 all auditor instructions and the JSON schema stay above them.
@@ -56,7 +60,9 @@ includes configured lane work and engine queues, unless the operator supplied an
 preconditions, steps, expected and actual results, within 8000 characters. This precedes merging.
 `SecurityAnswerLimit` refuses answers exceeding 100 findings or 131072 evidence characters in aggregate.
 The security schema requires `status: SECURE` with no findings, or `FINDINGS` with findings. Every
-finding carries nonempty `trigger`, `mechanism` and `consequence` (8000 characters total), preserved
+finding carries nonempty `trigger`, `mechanism` and `consequence` (8000 characters total; the
+schema allows each field a third of that, because a schema cannot express a sum and must never
+admit an answer the validator refuses), preserved
 in history and per-pair sightings. Missing or inconsistent status/evidence refuses the answer.
 The security schema does not offer prose `notes`; the operator's source-only and JSON-hygiene
 block is embedded in every redteam prompt and precedes its output instructions.
@@ -69,7 +75,9 @@ semantic correctness: a schema-valid finding still needs its claimed execution p
 Ordinary ownership wins a duplicate; stronger severity survives, with per-pair sightings retained.
 Schema step 17 stores this evidence in `findings.security_evidence`. Finding queries use literal
 SQL and read columns by name; a missing optional evidence column in an older database yields no
-security projection. Ordinary findings with no security evidence keep an empty
+security projection. A damaged stored projection does not prevent reading the round and does not
+pass for "no evidence" either: it reads as `SecurityFindingDetails.Unreadable` with the reason,
+which the rounds log shows where the evidence would have been. Ordinary findings with no security evidence keep an empty
 column and no evidence disclosure in the extension.
 Persisted findings written before the lane have neither `alsoSeenBy` nor `capReason`.
 Their owning properties normalize the source generator's missing-field defaults to an empty
@@ -81,7 +89,19 @@ caps, ordering, omissions and evidence protocol. Schema keys and calibration ser
 are shared constants. Generated extension catalog data is excluded only from Sonar's duplication
 metric; its complete runtime value remains checked against the shared JSON by `securityLane.test.ts`.
 
-The lane has its own round budget and threshold. Missing, failed and unverified local answers
+The lane has its own round budget and threshold, read under `lane:security`, and it never
+extends the ordinary roles' budget: `PanelConfig.For(Stage)` is the ordinary roles alone. A code
+round past every ordinary role's budget runs only for the lane. A feature second round uses the
+lane's budget only when every blocking finding is the lane's and no ordinary reviewer failed; an
+ordinary reviewer's failure or blocking finding is judged on the ordinary budget, so a feature
+stage whose roles have one round answers `call_human` rather than buying a round only the lane
+could answer. A round only the lane's budget admitted, whose lane then has no work (its trigger is
+gone, it was switched off, composition refused), is not refused on every call: it runs empty and
+completes as a round nobody answered, recorded with `lane:security was not asked: …`, for a
+person to decide. In a round with lane work the ordinary decision summary keeps who could not run
+(`Excluded`, `NotAsked`) and whether the deadline ended it. A pairing whose own configuration is
+broken is `Excluded` with its reason — "configured pairings could not run" — never a skip that
+reads as "no pairing was due". Missing, failed and unverified local answers
 are named in the reply and persisted round summary; failed/unverified or excluded work also
 raises the existing durable notice. This optional lane does not make a clean ordinary round fail
 just because the lane did not answer. A clean response is never described as security coverage
@@ -97,7 +117,9 @@ reviewer and require a matching trigger. Empty preset triggers refuse execution.
 empty triggers to request an unconditional pass. Prompts are embedded by the server build. Edit those files and
 commit the changes to change shipped defaults. An optional `<dataDir>/prompts/<id>.md` overrides
 the corresponding default; the Settings button explicitly edits this local override. Custom
-prompt metadata is registered in the lane's prompt library. Empty or oversized text refuses the run.
+prompt metadata is registered in the lane's prompt library. An empty or blank override is no
+override — a shipped preset keeps its shipped text, as every ordinary role does — while a custom
+prompt with no text of its own, or any oversized text, refuses the run.
 
 At the operator's request, all thirteen prompts were shortened to approximately half their word
 count on 2026-10-01. The source/evidence and output sections remain, with the declared schema owning
@@ -111,7 +133,8 @@ including each pair's `context` (slice|diff), `contextTokens` (1024..200000) and
 (code/feature), is validated where the setting is read; a malformed value turns the lane off and
 the tab names the malformed part of `coai.securityLane` in settings JSON. The panel never saves
 over a malformed setting. The extension still sends it switched off, with the stored value under
-`invalidConfiguration`, so the server reports the refusal.
+`invalidConfiguration`, so the server reports the refusal — naming the setting as malformed, not
+asking for a newer server.
 Missing/disabled reviewers, missing prompt ids and presets without triggers carry visible repair
 instructions. Source collection only uses the focus tags of selected, triggered slice pairings;
 unchecked modules cannot consume their sixteen-file source budget.
@@ -140,7 +163,10 @@ validation, deadline and ordinary-failure independence. `securityLane.test.ts` a
 control, unknown trigger refused, malformed lane refused). `securityEvidenceLog.test.ts` covers
 evidence parsing and its escaped disclosure in the rounds log.
 `SecurityEvidenceOnAnOlderDatabaseTests` reads a history without the evidence column, and a damaged
-projection, through the read-only queries. The explicit local calibration test
+projection, through the read-only queries. `SecurityLaneBudgetTests` pins that the lane's budget
+never widens the ordinary roles' (feature budget of one → `call_human`), and `SecurityLaneBoundaryTests`
+with `SecurityLaneRoundTests` drive the real engine, roster, Git and SQLite through the empty
+lane-only round, blank overrides, broken pairings, patch-only slices and the schema's field limit. The explicit local calibration test
 is described in [module_tests.md](module_tests.md); it measures model behavior separately from
 these deterministic guarantees.
 `SecuritySessionCompatibilityTests` loads pre-lane finding shapes through the real `SessionStore`

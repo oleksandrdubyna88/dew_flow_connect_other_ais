@@ -13,7 +13,11 @@
 Security lane scenarios are in `SecurityLaneRoundTests` (real Git, engine and history; paid reviewers
 doubled), with settings/evidence/coverage cases in the other `Security*Tests`.
 `SecurityEvidenceOnAnOlderDatabaseTests` drops `findings.security_evidence` from a written history and
-reads it through every read-only finding query, and reads a damaged evidence projection as none.
+reads it through every read-only finding query, and reads a damaged evidence projection as an
+explicit `Unreadable` marker rather than as none. `SecurityLaneBudgetTests` and
+`SecurityLaneBoundaryTests` cover the lane's own round budget (it never widens the ordinary roles'),
+the empty lane-only round, blank overrides, broken pairings, patch-only slices and the schema's
+per-field limit.
 The extension's `securityLane.test.ts` and `securityLaneMalformed.test.ts` run the Settings page —
 the older-server switch, malformed pairs, and stored values that must stay inside their controls.
 The eighth leg of `npm run test:seam` (`scripts/seam-security.mjs`) sends the extension-serialized
