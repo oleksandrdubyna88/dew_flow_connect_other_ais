@@ -1,11 +1,12 @@
 # PLAN — ⟳ updates Codex with `codex update`, and the panel stops saying no CLI can update itself
 
-> Status: **plan only, nothing implemented yet (2026-10-03).** Plan gate proceed (1 of 1, gemini; 3 accepted, 1 rejected). Scope: `src_vs_code/src/vendorTerminal.ts` (`vendorUpdate`),
+> Status: **IMPLEMENTED, 2026-10-03.** Plan gate proceed (1 of 1, gemini; 3 accepted, 1 rejected); the code round's
+> outcome is in the pull request. Deviations in §7. The release (extension patch, CHANGELOG on the release PR) follows the merge. Scope: `src_vs_code/src/vendorTerminal.ts` (`vendorUpdate`),
 > `panelProvider.ts` (`updateVendorCli`), `helpContent.ts` + `helpRu/Uk/De/Es.ts` (one help sentence in five languages),
 > `src/test/vendorUpdate.test.ts`,
 > `research/module_extension.md`, `research/module_tests.md`.
 >
-> Related docs: [module_extension.md](../research/module_extension.md).
+> Related docs: [module_extension.md](module_extension.md).
 
 ## 1. Symptom
 
@@ -80,7 +81,6 @@ re-running the installer IS the update… and `agy` has no update subcommand at 
 | `vendorUpdate.test.ts`: codex at or above 0.126.0 | ⟳ types `codex update`, through the vendor's own path |
 | `vendorUpdate.test.ts`: codex below 0.126.0, or version unknown | ⟳ keeps the installer, which works on every version |
 | `vendorUpdate.test.ts`: help text | the help page no longer says no CLI can update itself |
-
 | `vendorUpdate.test.ts`: `updateFor` | the status the ⟳ colour came from picks the command; a vendor missing from it gets the installer |
 | `vendorUpdate.test.ts`: a version that is not `X.Y.Z` | banner text or garbage gets the installer, never `codex update` |
 
@@ -89,8 +89,19 @@ construct. There is no source-text assertion for it.
 
 ## 6. Definition of Done
 
-- [ ] Plan gate and code gate passed.
-- [ ] Every test RED first, then GREEN, teeth recorded.
+- [x] Plan gate passed; code gate — see the pull request.
+- [x] Every test RED first, then GREEN, teeth recorded (`research/module_tests.md`).
 - [ ] `npm test` green; lint clean; suppression file did not grow.
-- [ ] Help text, comments, `research/module_extension.md`, `research/module_tests.md` updated; plan promoted.
+- [x] Help text (five languages), comments, `research/module_extension.md`, `research/module_tests.md` updated; plan promoted.
 - [ ] Extension released (patch), CHANGELOG section on the release PR, Marketplace verified.
+
+## 7. Deviations — what shipped differently
+
+- **`updateFor(status)` instead of a lambda at the call site** (plan round, gemini). The version choice is a function a
+  test calls, so the per-row lookup is run rather than read; `PanelProvider` passes `updateFor(this.cliStatus)`.
+- **A version must be a plain `X.Y.Z`** (plan round, gemini). `updateAvailable` maps garbage to zeros, so negating it
+  could read banner text as new enough; anything else is unknown and gets the installer.
+- **`vendorUpdate` split into `selfUpdate` and `installAgain`.** The extra condition took it past the complexity limit
+  of 4; the two branches are now named functions and the suppression file did not grow.
+- **Rejected at the plan round**, with the reason recorded: replacing npm for the Gemini CLI with `agy update`. A `gemini`
+  runtime row still exists (`vendors.ts:233`) and npm is its update; Antigravity rows already get `agy update`.
