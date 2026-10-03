@@ -70,14 +70,16 @@ public sealed class QuestionConsultStore(
     /// out its attempts and would then go on WITHOUT it. A turn that cannot be had is refused (<see cref="SpendOutcome.Busy"/>),
     /// never spent without it.</para>
     /// </remarks>
-    public (SpendOutcome Outcome, string PreviousOutcome) Spend(string id, string escalationId)
+    /// <param name="spentAs">What the record says happened next — <see cref="QuestionOutcomes.PersonAsked"/> for a card,
+    /// <see cref="QuestionOutcomes.PersonAskedInConversation"/> when the AI asks in its own conversation and no card exists.</param>
+    public (SpendOutcome Outcome, string PreviousOutcome) Spend(string id, string escalationId, string spentAs = QuestionOutcomes.PersonAsked)
     {
         var previous = string.Empty;
         var outcome = Changed(id, record =>
         {
             previous = record.Outcome;
 
-            return record.EscalationId.Length > 0 ? null : record with { Outcome = QuestionOutcomes.PersonAsked, EscalationId = escalationId };
+            return record.EscalationId.Length > 0 ? null : record with { Outcome = spentAs, EscalationId = escalationId };
         });
 
         return (outcome, previous);

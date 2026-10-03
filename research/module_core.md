@@ -433,8 +433,12 @@ flowchart TD
   session after its first round while no hold stands, written by `RoundMachine.RecordQuestion(state, id)`
   — the one function that says where a question's answer may later count: on the current hold
   (`HoldQuestions`) when the gate is held, as a request question when the session is a feature session
-  with a round run, nowhere otherwise (a question asked BEFORE round 1 is about whatever it asked, and
-  binding the request to it was the clock rule in a new coat). `ApplyPersonsRequest` spends the list
+  that can still be asked for its second round (one round run, no ground, not held — narrowed from "a
+  round run" on 2026-10-03), nowhere otherwise (a question asked BEFORE round 1 is about whatever it
+  asked, and binding the request to it was the clock rule in a new coat). **Its predicate is
+  `RoundMachine.AsksForTheGate(state)`** (2026-10-03, `todo/PLAN_ask_human_is_for_the_gate.md`, G1) — the
+  same function the server asks whether an `ask_human` question becomes a CARD at all, so the binding and
+  the card are one decision; every other question is the AI's own and is asked in its conversation. `ApplyPersonsRequest` spends the list
   with the request; `CompleteFeatureRound` empties it (the questions that may request round 2 are the
   ones asked after round 1 completed), and so do `FreshFeatureReview` and a person's fresh set. Before
   this the newest `continue`/`fix` NEWER than round 1 was the request, so any question of the session

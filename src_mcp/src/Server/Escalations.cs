@@ -36,13 +36,31 @@ public sealed record EscalationQuestion(
     /// <summary>The <c>ask_consultants</c> reply this question followed, verified — so the sidebar can fold its answers under the card.</summary>
     public string ConsultId { get => field ?? string.Empty; init; } = string.Empty;
 
-    /// <summary>D8: the caller declared a production risk — the person was asked at once, the consultants ran beside.</summary>
+    /// <summary>D8: the caller declared a production risk on a held gate's question — the card at once, the consultants beside.</summary>
     public bool ProductionRisk { get; init; }
 
     public string RiskReason { get => field ?? string.Empty; init; } = string.Empty;
 
     /// <summary>The consultants' answers folded under the card, attached as the rows settle (D8). Raw advice: a person reads it, not a model.</summary>
     public IReadOnlyList<EscalationAdvice> ConsultantAnswers { get => field ?? []; init; } = [];
+
+    /// <summary>
+    /// Which producer wrote the card (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G4): <see cref="EscalationKinds.Notice"/>
+    /// for a round's <c>call_human</c>, <see cref="EscalationKinds.Question"/> for an <c>ask_human</c> asked on a held gate or a
+    /// feature review's second-round request.
+    /// Empty in a card an older server wrote — the extension then guesses as it always did.
+    /// </summary>
+    public string Kind { get => field ?? string.Empty; init; } = string.Empty;
+}
+
+/// <summary>The two producers of a card. A card is only ever the GATE's: the AI's own questions are asked in its conversation.</summary>
+public static class EscalationKinds
+{
+    /// <summary>A round's <c>call_human</c> notice — answered with a decision.</summary>
+    public const string Notice = "notice";
+
+    /// <summary>An <c>ask_human</c> question on a held gate (or a feature review's second-round request) — answered in words or with a decision.</summary>
+    public const string Question = "question";
 }
 
 /// <summary>The words a question file's <c>status</c> can hold — absent and empty are open.</summary>
@@ -233,48 +251,6 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
         }
     }
 
-    /// <summary>
-    /// This session's answered notice, if a person has answered one.
-    /// </summary>
-    /// <remarks>
-    /// The reason this exists: a <c>call_human</c> notice is written by a round that then RETURNS,
-    /// so nothing is polling for its answer the way <see cref="AskAsync"/> does. The panel wrote the
-    /// answer file and no code on either side ever read it — a person could type a decision, watch
-    /// the card disappear, and have changed nothing. That is a worse dead end than never being
-    /// asked, because it looks like it worked.
-    /// </remarks>
-    private EscalationAnswer? AnsweredFor(string sessionId)
-    {
-        if (!System.IO.Directory.Exists(Directory))
-        {
-            return null;
-        }
-
-        // Newest first: a session asked twice is answered about the round it is in now.
-        var questions = System.IO.Directory
-            .EnumerateFiles(Directory, "*.json")
-            .Where(p => !p.EndsWith(".answer.json", StringComparison.Ordinal))
-            .OrderByDescending(File.GetLastWriteTimeUtc);
-
-        foreach (var path in questions)
-        {
-            if (ReadQuestion(path) is not { } question || question.SessionId != sessionId)
-            {
-                continue;
-            }
-
-            if (ReadAnswer(question.Id) is { } answer)
-            {
-                return answer;
-            }
-        }
-
-        return null;
-    }
-
-    /// <summary>What the person chose for this session, or <see cref="HumanDecision.None"/>.</summary>
-    public HumanDecision DecisionFor(string sessionId) => DecisionOf(AnsweredFor(sessionId));
-
     /// <summary>The button an answer carries, as the decision it is — one parser for every reader of the file.</summary>
     internal static HumanDecision DecisionOf(EscalationAnswer? answer) =>
         // `?.Decision?` and not `?.Decision.`: a field absent from the JSON comes back NULL through
@@ -288,20 +264,6 @@ public sealed class Escalations(string dataDir, TimeSpan? pollInterval = null)
             "discuss" => HumanDecision.Discuss,
             _ => HumanDecision.None,
         };
-
-    /// <summary>Their own words, whether or not they pressed a button. Never discarded.</summary>
-    public string AnswerTextFor(string sessionId) => AnsweredFor(sessionId)?.Answer ?? string.Empty;
-
-    /// <summary>
-    /// The newest answer a person gave this session, WHOLE — the button and when it was pressed.
-    /// </summary>
-    /// <remarks>
-    /// For the one reader that needs the time: a feature review's second round is admitted on the
-    /// person's request only when the request is newer than the round it would follow (D23), and
-    /// <see cref="DecisionFor"/> answers "what" without "when". The same file, read once, through the
-    /// same turn.
-    /// </remarks>
-    public EscalationAnswer? LatestAnswerFor(string sessionId) => AnsweredFor(sessionId);
 
     private EscalationQuestion? ReadQuestion(string path)
     {

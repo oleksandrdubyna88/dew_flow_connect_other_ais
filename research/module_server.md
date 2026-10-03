@@ -15,7 +15,7 @@
 | `review_document` | `ReviewDocumentAsync` → `RunStageAsync` with the document roles | no branch session; no purpose; the document is outside the repo, not text, or too large; every document role off; the review has finished (`newReview`) |
 | `resolve` | `ResolveAsync` — reasoned decisions by finding index | bad index; reject without a reason |
 | `status` | persisted session + round trail | no session |
-| `ask_human` | `AskHumanService` (its own file since 2026-10-01, a proved move out of `PanelService` — S2 of the question consultant) over `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it; while the gate is HELD the question's id is recorded on the hold (`SessionState.HoldQuestions`, under the session's claim, 2026-09-26) so the person's answer to it is the hold's, and on a feature session after its first round it is recorded as a request question (`SessionState.RequestQuestions`, 2026-09-27) so the person's answer to it — and to nothing else — can be the second-round request; **since 2026-10-02 (S3) the GATE stands in front of it**: the phase rule inferred by the server, a `consultId` verified, a `productionRisk` asked at once with the consultants beside — see *The door to the person* below | an empty question; `document` and `feature` together; `productionRisk` without a `riskReason`; and, under `require`, a question the phase rule sends to the consultants first (named `ask_consultants`, with the count); otherwise it WAITS the budget (15 minutes by default), then answers `no_answer_yet` telling the model to ask in the chat and marks the card `expired` |
+| `ask_human` | `AskHumanService` (its own file since 2026-10-01, a proved move out of `PanelService` — S2 of the question consultant) over `Escalations` — a question FILE the extension watches; `document` (optional, since 2026-09-25) files it under the DOCUMENT's session with that session's open findings, as `resolve` and `status` take it; while the gate is HELD the question's id is recorded on the hold (`SessionState.HoldQuestions`, under the session's claim, 2026-09-26) so the person's answer to it is the hold's, and on a feature session that can still be asked for its second round (one round run, no ground, not held — narrowed 2026-10-03) it is recorded as a request question (`SessionState.RequestQuestions`, 2026-09-27) so the person's answer to it — and to nothing else — can be the second-round request; **since 2026-10-02 (S3) the GATE stands in front of it**: the phase rule inferred by the server, a `consultId` verified, a `productionRisk` asked at once with the consultants beside — see *The door to the person* below | an empty question; `document` and `feature` together; `productionRisk` without a `riskReason`; and, under `require`, a question the phase rule sends to the consultants first (named `ask_consultants`, with the count); otherwise it WAITS the budget (15 minutes by default), then answers `no_answer_yet` telling the model to ask in the chat and marks the card `expired`. **Since 2026-10-03 only the GATE's question becomes a card** — a held gate, or a feature review that can still be asked for its second round (`RoundMachine.AsksForTheGate`); every other question is the AI's own and is answered at once with `ask_in_conversation` (`ConversationAnswer`), no card, no wait; a production risk outside the gate asks the consultants FIRST and returns their fenced answers (*Two doors*). |
 | `consult` | `ConsultationService` — another vendor's model over the LIVE working tree | eleven ways, each a sentence naming its cure — see below |
 | `close_consult` | `CloseAsync` — how a consultation ENDED, recorded by whoever knows | not your consultation; a word outside the closed set; `lapsed`, which is the server's own; a consultation that FAILED and produced no advice; a different verdict over one already recorded |
 | `ask_consultants` | `QuestionConsultService` → `QuestionFanOut` — every active model × prompt row answers in PARALLEL before the person is asked (2026-10-01, `todo/PLAN_question_consultant.md` S2) | the switch off, nobody to ask and the quota are ANSWERS (`status`: `off` · `none_available` · `quota_spent`), not refusals; refused: an empty `context` by name, a question over 4 KB, a context over 8 KB, rows that cannot be read, `document` and `feature` together, a path that is no repository — see *The question consultant* below |
@@ -539,7 +539,8 @@ under a repository lock. `ask_consultants` is the other door: several models at 
 ONE base prompt — "study the other projects on this disk", "search the internet", "the best developer's
 opinion" — each given only what its capability allows (S1's planner and sanitisers, applied here), each
 under its own deadline, every answer fenced `advisory_only` and returned SEPARATELY (D2: no summariser).
-It is called before `ask_human`, which stays the only door to the person; the gate that makes it
+It is called before `ask_human`, which stays the one door the gate checks (since 2026-10-03 it shows only the gate's own
+question in VS Code and sends the AI's own back to its chat — *Two doors*, below); the gate that makes it
 MANDATORY by phase is S3's and lives in `AskHumanService`, which is why that block moved first.
 
 ```mermaid
@@ -646,7 +647,74 @@ commit) — `AskHumanService`, with the two helpers it called on the service for
 `SessionAddress` moved to a file of its own because the refusal census rightly refuses an alias. Behaviour
 unchanged, its callers untouched; S3's gate lands there.
 
+## Two doors — the gate's question on a card, the AI's own in its chat (2026-10-03, `todo/PLAN_ask_human_is_for_the_gate.md`)
+
+**The symptom.** The operator's sidebar showed *A review is waiting on you* over an AI's own A-or-B question about
+its work, and **Answer…** offered the gate's three decisions — *Keep going*, *Stop and act on the findings*, *Stop
+and talk to me* — none of which answers A or B. The operator pressed one; `status` then reported
+`humanDecision: "fix"` for the session, a gate decision nobody had made. Two logics had been mixed: a round's
+`call_human` notice and an AI's own question were the same `EscalationQuestion` file with nothing to tell them apart.
+
+**The rule now.** `ask_human` decides the DOOR before the gate decides anything (`AskGateDesk.Facts` →
+`AskGateInput.Door`), from one predicate, `RoundMachine.AsksForTheGate` — the same one `RecordQuestion` binds an
+answer by, so "which questions get a card" and "which answers the gate reads" are one decision:
+
+| the session the call names | door | what happens |
+|---|---|---|
+| held by `call_human` | **card** | as before: the card, the wait, the answer bound to the hold. The phase rule does NOT apply (G7 — the gate is asking, no consultant can release a hold, nothing is counted); a production risk keeps D8 (card at once, consultants beside) |
+| a feature review, one round run, no ground for a second, not held | **card** | the person's answer can be the request for round 2 |
+| anything else — no session, the plan stage, building, released, a feature review before round 1 or past its request window | **conversation** | the gate runs unchanged (phase rule, consultId verified and spent as `person_asked_in_conversation`, the batch counted) and the call answers AT ONCE `{status: "ask_in_conversation", instruction, note, consultId, consultantAnswers}` — the AI asks with its own question tool. A production risk in the building phase (mode not `off`) asks the consultants FIRST, inside the call (`AskGateDesk.ConsultFirstAsync` → `BesideAsync`, outcome `production_risk_consulted_first`), and returns their answers fenced exactly as `ask_consultants` does (`QuestionConsultService.Fenced`); the note says so, or that nobody could be asked, or that none answered (each row then says why) |
+
+**The order on the conversation door** (the gate's finding and the own reviewers', 2026-10-03): the proof is spent FIRST
+and atomically — a second call holding the same consultId is refused before it pays for a consultant; then a production
+risk's consultants, the proof GIVEN BACK if they throw or the call is cancelled (the `ask_human` lambda now takes the
+SDK's `CancellationToken`, and the path checks it after the fan-out because a fan-out may settle its rows rather than
+throw); the batch is counted last. A question that never reached the person spent and counted nothing.
+
+**Words never hide a decision.** A hold's question card offers "Type an answer…" first, so `CurrentAnswer` now picks the
+newest answer that carries a DECISION before the newest at all — a sentence typed after "Keep going" was pressed left
+the hold reading unanswered (found by the cadence consultation).
+
+The instruction names the one way an AI lands in the conversation by mistake — a held DOCUMENT or FEATURE review
+asked without `document` / `feature` — and `RoundMachine.GateHeld` says the same where the refusal lands.
+
+Every card now says which producer wrote it: `EscalationQuestion.Kind` is `notice` (`RoundEngine.HoldNotice`) or
+`question` (`AskHumanService.Card`); a card an older server wrote has none, and the extension falls back to its old
+guess. `status`'s `humanDecision` / `humanAnswer` come from `CurrentAnswer.TheGatesAnswer` — the hold's answer, else
+the feature request's — the third reader of the answer file moved onto the identity rule the other two already used;
+the session-wide `Escalations.DecisionFor` / `AnswerTextFor` / `LatestAnswerFor` went with it.
+
+```mermaid
+sequenceDiagram
+    participant AI as calling AI
+    participant H as AskHumanService
+    participant D as AskGateDesk
+    participant G as AskGate
+    participant Q as QuestionConsultService
+    participant E as escalations/{id}.json
+    AI->>H: ask_human(question, document?/feature?, consultId?, productionRisk?)
+    H->>D: Facts — Door = AsksForTheGate(session) ? Card : Conversation
+    H->>G: Decide(input)
+    alt Card — the gate's question
+        H->>E: Post(card, kind=question) · wait 15 min
+        E-->>AI: answered / no_answer_yet
+    else Conversation — the AI's own question
+        H->>D: Spend(proof, person_asked_in_conversation) — atomic, first
+        opt production risk
+            H->>D: ConsultFirstAsync
+            D->>Q: BesideAsync — rows to their budgets
+            Note over H,D: thrown or cancelled → GiveBack(proof)
+        end
+        H->>D: Count(batch)
+        H-->>AI: ask_in_conversation (+ fenced consultantAnswers)
+        AI->>AI: asks the person with its own question tool
+    end
+```
+
 ## The door to the person — the phase-aware gate, the fifteen-minute wait, the retention, the autonomy order (2026-10-02, `todo/PLAN_question_consultant.md` S3)
+
+> **Since 2026-10-03** the card half of what follows applies only to the GATE's question; the phase table still decides
+> every question, and the AI's own is then asked in its conversation (*Two doors*, above).
 
 S2 built the consultants; S3 decides WHEN the person is asked. `ask_human` now stands behind a gate that is
 pure (`AskGate.Decide`, core), fed by a desk that gathers every fact the server can infer and never takes a
@@ -977,6 +1045,10 @@ merely run out of time came back as an `ArgumentOutOfRangeException`. Seen on th
 runner, which is the machine slow enough to lose the race.
 
 ## Escalation — reaching a person without a port
+
+> Since 2026-10-03 only the GATE's question reaches this file — a `call_human` notice, or an `ask_human` asked on a held
+> gate or in a feature review's request window; every other `ask_human` is answered `ask_in_conversation` and writes
+> nothing here (*Two doors*, above).
 
 `ask_human` (`AskHumanService` since 2026-10-01 — the block moved out of `PanelService` as a proved move, with no change to what follows) writes `escalations/<id>.json` into the data directory the extension already reads for
 the rounds view, then polls for `<id>.answer.json` beside it. The round's still-gating findings ride

@@ -219,11 +219,13 @@ public sealed class McpContractTests : IDisposable
 
     /// <summary>
     /// With nobody at the keyboard, the escalation waits its budget and then tells the model to
-    /// ask in the chat — the family's `remote-ask` fallback, observed over the real wire.
+    /// ask in the chat — the family's `remote-ask` fallback, observed over the real wire. The question is the GATE's
+    /// (the session is held), the only kind that reaches VS Code (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G1).
     /// </summary>
     [Fact]
     public async Task AskHuman_WithNobodyListening_WaitsThenSaysToAskInTheChat()
     {
+        HeldGateAtNowhere();
         using var server = Start(escalationSeconds: 3);
         try
         {
@@ -251,9 +253,46 @@ public sealed class McpContractTests : IDisposable
         }
     }
 
+    /// <summary>A held gate on the path the two card tests ask about — the session a <c>call_human</c> leaves behind.</summary>
+    private void HeldGateAtNowhere() =>
+        new CoaiMcp.Server.SessionStore(_data).Save(new CoaiMcp.Server.PersistedSession(
+            new CoaiMcp.Core.Rounds.SessionState("s-held", "D:/nowhere", "main", CoaiMcp.Core.Rounds.PanelConfig.Uniform(3, 2)) { HumanGate = true }, []));
+
+    /// <summary>
+    /// The AI's own question, over the real wire: no card, no wait — the reply tells it to ask in its own conversation
+    /// (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G2).
+    /// </summary>
+    [Fact]
+    public async Task AskHuman_ForTheAisOwnQuestion_AnswersAtOnceToAskInTheConversation()
+    {
+        using var server = Start(escalationSeconds: 60);
+        try
+        {
+            await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"t","version":"0"}}}
+                """);
+            await server.StandardInput.WriteLineAsync("""{"jsonrpc":"2.0","method":"notifications/initialized"}""");
+            await server.StandardInput.FlushAsync();
+
+            var answer = await RoundTrip(server, """
+                {"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"ask_human","arguments":{"repoPath":"D:/nowhere","branch":"main","question":"A or B?"}}}
+                """, timeoutSeconds: 20);
+            var text = answer.RootElement.GetProperty("result").GetProperty("content")[0].GetProperty("text").GetString();
+
+            text.Should().Contain("ask_in_conversation", "the wait is 60 s and the read 20 s: only an answer that did not wait arrives");
+            Directory.Exists(Path.Combine(_data, "escalations")).Should().BeFalse("no card was written");
+        }
+        finally
+        {
+            server.Kill(entireProcessTree: true);
+            await server.WaitForExitAsync();
+        }
+    }
+
     [Fact]
     public async Task AskHuman_AnsweredInVsCode_ReturnsThePersonsWords()
     {
+        HeldGateAtNowhere();
         using var server = Start(escalationSeconds: 60);
         try
         {

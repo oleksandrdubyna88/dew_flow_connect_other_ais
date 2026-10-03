@@ -269,6 +269,23 @@ public sealed record HumanAnswer(string Status, string Answer, string AnswerOrig
     public string Note { get; init; } = string.Empty;
 }
 
+/// <summary>
+/// What <c>ask_human</c> answers when the question is the AI's own rather than the gate's — no card was written, and
+/// the AI asks the person in its own conversation (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G2/G3).
+/// </summary>
+/// <remarks>
+/// Its own record rather than three more members on <see cref="HumanAnswer"/>: the context writes no null and every
+/// member there has a default, so the person's <c>answered</c> reply would have grown two empty fields it never means.
+/// </remarks>
+/// <param name="Status">Always <see cref="AskInConversation"/>.</param>
+/// <param name="ConsultId">The consultation that ran first for a production risk; empty when none did.</param>
+/// <param name="ConsultantAnswers">Its rows, fenced <c>advisory_only</c> exactly as <c>ask_consultants</c> returns them.</param>
+public sealed record ConversationAnswer(
+    string Status, string Instruction, string Note, string ConsultId, IReadOnlyList<QuestionRowAnswer> ConsultantAnswers)
+{
+    public const string AskInConversation = "ask_in_conversation";
+}
+
 /// <summary>The wire shape of one decision passed to `resolve`.</summary>
 public sealed record DecisionDto(int Finding, string Action, string Reason = "");
 
@@ -294,6 +311,7 @@ public sealed record ConsultAnswer(string ConsultationId, int TurnIndex, int Max
 [JsonSerializable(typeof(ErrorAnswer))]
 [JsonSerializable(typeof(CloseAnswer))]
 [JsonSerializable(typeof(HumanAnswer))]
+[JsonSerializable(typeof(ConversationAnswer))]
 [JsonSerializable(typeof(ConsultAnswer))]
 // The question consultant (PLAN_question_consultant.md, S2): the `ask_consultants` reply.
 [JsonSerializable(typeof(AskConsultantsAnswer))]

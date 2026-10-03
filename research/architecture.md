@@ -995,7 +995,10 @@ and the tool, the record and the settings that will reach the extension are S2�
 
 `escalations/<id>.json` has been the one file neither container owns since escalation shipped: `coai-mcp`
 writes it, the extension watches it, and neither is the other's caller. S3 added to it, and only to it, what
-the gate in front of `ask_human` decides ([module_server.md](module_server.md), *The door to the person*): the
+the gate in front of `ask_human` decides ([module_server.md](module_server.md), *The door to the person*; since
+2026-10-03 only the GATE's own question is a card at all — a held gate, or a feature review's second-round
+request — and every card says which producer wrote it, `kind: notice | question`; the AI's own questions are
+answered `ask_in_conversation` and asked in its chat, *Two doors*): the
 server now marks a question nobody answered in fifteen minutes `status: "expired"` in its own file — the AI is
 told to ask in the chat, the card leaves the active set, the file stays for the log and the server's own
 retention takes it after seven days — and, when the AI declared a production risk, attaches every consultant

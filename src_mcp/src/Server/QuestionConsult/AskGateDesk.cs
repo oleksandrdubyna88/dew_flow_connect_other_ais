@@ -1,6 +1,7 @@
 using System.Globalization;
 using CoaiMcp.Core.Cadence;
 using CoaiMcp.Core.QuestionConsult;
+using CoaiMcp.Core.Rounds;
 
 namespace CoaiMcp.Server;
 
@@ -26,8 +27,9 @@ public sealed record AskFacts(AskGateInput Input, QuestionPhaseKey Key, bool Rel
 /// <summary>
 /// The server's half of the gate (<c>todo/PLAN_question_consultant.md</c>, S3): gathers the facts
 /// <see cref="AskGate"/> decides on — the phase from the session and the cadence record, the count from the phase
-/// store, the consultId VERIFIED (D14 (a)), whether a consultant can be had (D9) — and, once the card is written,
-/// records the batch, spends the proof, and runs the consultants beside a production risk (D8).
+/// store, the consultId VERIFIED (D14 (a)), whether a consultant can be had (D9), and the DOOR (G1 of
+/// <c>todo/PLAN_ask_human_is_for_the_gate.md</c>) — and afterwards spends the proof, records the batch, and runs a
+/// production risk's consultants: beside a held gate's card (D8), or first for the AI's own question (G3).
 /// </summary>
 /// <remarks>
 /// <para>Out of <see cref="AskHumanService"/> for the reason the cadence desk is out of <c>PanelService</c>: the
@@ -74,6 +76,7 @@ public sealed class AskGateDesk(
                 Proof = Proof(args.ConsultId, caller, repoPath, nowUtc),
                 Unavailable = questions.Preflight(caller, nowUtc),
                 PhaseUnreadable = !read.Readable,
+                Door = DoorFor(session),
             },
             key, released, caller);
     }
@@ -84,14 +87,15 @@ public sealed class AskGateDesk(
     /// there is nothing to spend; a refusal sentence when it could not be spent.
     /// </summary>
     /// <remarks>The verification in <see cref="Facts"/> stays the early answer; this is the one that decides.</remarks>
-    public ProofSpend Spend(AskFacts facts, string escalationId)
+    /// <param name="spentAs">What the consultation's record says happened next — a card, or the AI's own conversation.</param>
+    public ProofSpend Spend(AskFacts facts, string escalationId, string spentAs = QuestionOutcomes.PersonAsked)
     {
         if (facts.Input.Proof is not ConsultProof.Verified verified)
         {
             return ProofSpend.None;
         }
 
-        var (outcome, previous) = questions.Store.Spend(verified.ConsultId, escalationId);
+        var (outcome, previous) = questions.Store.Spend(verified.ConsultId, escalationId, spentAs);
 
         return new ProofSpend(verified.ConsultId, escalationId, previous, outcome switch
         {
@@ -117,10 +121,7 @@ public sealed class AskGateDesk(
     /// <summary>After the card is written: the batch counted, the consultants beside a production risk. The proof was spent before the post.</summary>
     public void AfterTheCard(AskFacts facts, EscalationQuestion card, AskDecision.Allowed allowed)
     {
-        if (allowed.Counted)
-        {
-            Counted(facts, card.Id, DateTime.UtcNow);
-        }
+        Count(facts, card.Id, allowed);
 
         if (allowed.ConsultBeside)
         {
@@ -128,10 +129,32 @@ public sealed class AskGateDesk(
         }
     }
 
+    /// <summary>The batch counted, when the gate said this question is one — on either door.</summary>
+    public void Count(AskFacts facts, string questionId, AskDecision.Allowed allowed)
+    {
+        if (allowed.Counted)
+        {
+            Counted(facts, questionId, DateTime.UtcNow);
+        }
+    }
+
+    /// <summary>
+    /// G3 (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>): a production risk outside a held gate has no card to fold
+    /// answers under, so the consultants are asked FIRST and the caller waits for them — the rows' own budgets bound
+    /// the wait, and the launcher kills a child at its budget. Null when nobody could be asked.
+    /// </summary>
+    /// <remarks>Awaited, not detached: there is a caller to report to, so no edge here is unobserved.</remarks>
+    public Task<QuestionConsultRecord?> ConsultFirstAsync(string repoPath, string question, string riskReason, string sessionId, string questionId, CancellationToken ct) =>
+        questions.BesideAsync(repoPath, question, RiskContext(riskReason), sessionId, questionId, ct, QuestionOutcomes.ProductionRiskConsultedFirst);
+
     /// <summary>The phase records on the startup sweep and the one-minute beat (§5: 30 days).</summary>
     public int Sweep(DateTime nowUtc) => phase.Sweep(nowUtc);
 
     // ---------- the facts ----------
+
+    /// <summary>G1: a card only for the gate's own question — the one rule the session's binding uses too.</summary>
+    private static AskDoor DoorFor(PersistedSession? session) =>
+        session is not null && RoundMachine.AsksForTheGate(session.State) ? AskDoor.Card : AskDoor.Conversation;
 
     private static QuestionPhaseKey KeyFor(PersistedSession? session, string caller) =>
         session is { Plan.Length: > 0, CadenceRepoId.Length: > 0 }
@@ -228,8 +251,7 @@ public sealed class AskGateDesk(
     {
         try
         {
-            var context = $"The caller declared a production risk: {card.RiskReason}";
-            var record = await questions.BesideAsync(card.RepoPath, card.Question, context, card.SessionId, card.Id, CancellationToken.None);
+            var record = await questions.BesideAsync(card.RepoPath, card.Question, RiskContext(card.RiskReason), card.SessionId, card.Id, CancellationToken.None);
             if (record is null)
             {
                 log.Information("question beside escalation {Id}: nothing could be asked", card.Id);
@@ -246,6 +268,9 @@ public sealed class AskGateDesk(
             log.Error(e, "the consultants beside escalation {Id} failed", card.Id);
         }
     }
+
+    /// <summary>What the consultants are told beside a production risk — the caller's own reason, on either door.</summary>
+    private static string RiskContext(string riskReason) => $"The caller declared a production risk: {riskReason}";
 
     private static EscalationAdvice Advice(QuestionRowRecord row) =>
         new(row.RowId, row.Vendor, row.Model, row.PromptTitle, row.Capability, row.Flag, row.Status, row.Reason, row.Advice) { Note = row.Note };
