@@ -6293,10 +6293,21 @@ A runtime this build does not know gets `undefined`, not a guess. An unknown run
 CLI for REVIEWS, which is deliberate — but reporting codex's version for a vendor that is not codex
 would be a confident lie.
 
-**There is no update COMMAND.** Every vendor here updates by re-running its own installer, which was
-established by reading their sites rather than assumed: OpenAI prints one line under both *Install
-Codex* and *Update Codex*, Anthropic's native install is the same script, `agy` has no `update`
-subcommand. So ⟳ runs exactly what ⤓ runs, and the only new knowledge is the pair of numbers.
+**Each CLI's own update command** (corrected 2026-10-03). This section first said there was no update
+command and that ⟳ runs exactly what ⤓ runs. It was read off vendors' install pages and help listings,
+and it was wrong three times out of four:
+- `claude update` and `agy update` exist. `agy --help` does not list `update`, and it answers anyway.
+- `codex update` exists from codex 0.126.0 (openai/codex #19933). It was missed the same way, and
+  [PLAN_codex_updates_itself.md](PLAN_codex_updates_itself.md) corrected it.
+
+Today ⟳ (`vendorUpdate` in `vendorTerminal.ts`) types:
+- `claude update`, `agy update`, and `codex update` for a codex at or above 0.126.0, through the
+  vendor's CLI path when one is set;
+- npm's `@latest` install for the Gemini CLI, and for a codex that is older or whose version is not a
+  plain `X.Y.Z`.
+
+The version comes from the same probe as the ⟳ colour (`updateFor(this.cliStatus)`), so the command
+matches the number the person was shown. The help article says the same in all five languages.
 
 Both reads are cached for half an hour — the panel repaints on every change, and uncached this would
 spawn a process and open a connection per vendor each time. Pressing the button clears the cache, so
