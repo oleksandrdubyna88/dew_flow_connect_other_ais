@@ -11,7 +11,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// The read-only history readers (<c>--log</c>, <c>--findings</c>, the batch read and the defended list)
-/// keep answering for a database whose last writer predates schema step 17.
+/// keep answering for a database whose last writer predates schema step 18.
 /// </summary>
 /// <remarks>
 /// <para>Those readers open the file <c>Mode=ReadOnly</c>, so the schema steps never run for them: a data
@@ -87,7 +87,7 @@ public sealed class SecurityEvidenceOnAnOlderDatabaseTests : IDisposable
 
         Execute("""
             ALTER TABLE findings DROP COLUMN security_evidence;
-            PRAGMA user_version = 16;
+            PRAGMA user_version = 17;
             """);
         SqliteConnection.ClearAllPools();
 

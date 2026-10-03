@@ -73,7 +73,9 @@ The local runtime already sends temperature zero and a seed derived from the com
 These settings do not prove
 semantic correctness: a schema-valid finding still needs its claimed execution path checked.
 Ordinary ownership wins a duplicate; stronger severity survives, with per-pair sightings retained.
-Schema step 17 stores this evidence in `findings.security_evidence`. Finding queries use literal
+Schema step 18 stores this evidence in `findings.security_evidence` (step 17 is the question
+consultant's; the preview build that numbered the evidence 17 is reconciled on open by
+`SecurityPreviewFork`). Finding queries use literal
 SQL and read columns by name; a missing optional evidence column in an older database yields no
 security projection. A damaged stored projection does not prevent reading the round and does not
 pass for "no evidence" either: it reads as `SecurityFindingDetails.Unreadable` with the reason,

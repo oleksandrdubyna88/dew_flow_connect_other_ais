@@ -518,7 +518,8 @@ public sealed class ThePairsThemselvesTests : IDisposable
         // Every column a step AFTER twelve added goes too, or the reopen re-runs a later step against a
         // column it already has: step 14 (issue #131) added two to `rounds`, step 15 (the consultation
         // cadence) three more and three to `consultations`, step 16 (the feature stage's skip reason)
-        // one more to `rounds`, and step 17 (the security lane's evidence projection) one to `findings`.
+        // one more to `rounds`, and step 18 (the security lane's evidence projection) one to `findings`. Step 17
+        // (the question consultant) only creates tables IF NOT EXISTS, so re-running it needs nothing dropped.
         Execute("""
             ALTER TABLE collect_pairs DROP COLUMN comment;
             ALTER TABLE collect_pairs DROP COLUMN comment_lost;
