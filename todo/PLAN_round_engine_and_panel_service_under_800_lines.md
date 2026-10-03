@@ -35,7 +35,7 @@ region is re-cut from the new main, never resolved by taking a side), `refusal-s
 
 ### Boundary with the security lane (2026-10-01)
 
-| Item | [Security lane plan](PLAN_a_security_lane_runs_beside_the_gate.md) | This plan |
+| Item | [Security lane plan](../research/PLAN_a_security_lane_runs_beside_the_gate.md) | This plan |
 |---|---|---|
 | Round deadline (R2) | Extracts and extends it for serial engines and extra pairings | Reuses that unit; does not repeat R2 |
 | Lane roster, findings and budget seams | Owns behavior changes | Keeps these intact during later moves |

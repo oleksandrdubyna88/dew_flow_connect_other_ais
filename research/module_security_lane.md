@@ -157,7 +157,7 @@ rounds and threshold zero; these remain conservative settings, not a claim of ca
 Scratch cleanup reuses the existing round cleanup. History is retained indefinitely in the operator's
 data directory without automatic pruning or a disk quota; its owner handles backups and removal.
 Aggregate reproduction caps limit each round's additional payload. See the growth table in
-[the design plan](../todo/PLAN_a_security_lane_runs_beside_the_gate.md) for the computed worst case.
+[the design plan](PLAN_a_security_lane_runs_beside_the_gate.md) for the computed worst case.
 
 `SecurityLaneRoundTests` drives the real engine, Git and SQLite with paid reviewers doubled.
 `SecurityEvidenceTests`, `SecurityLaneSettingsTests` and `SecurityCoverageTests` cover caps, routing,

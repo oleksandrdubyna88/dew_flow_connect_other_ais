@@ -110,7 +110,7 @@ not.
 ## 6. A prompt longer than `num_ctx` is truncated without a word
 
 **Partly addressed, §6 remains open, 2026-10-01:**
-[security lane §6.5](PLAN_a_security_lane_runs_beside_the_gate.md) annotates suspicious or unverified
+[security lane §6.5](../research/PLAN_a_security_lane_runs_beside_the_gate.md) annotates suspicious or unverified
 input coverage and retains findings as evidence. It does not refuse a truncated completion with
 the two sizes, so it does not satisfy this section's Definition of Done. This plan retains ownership
 of that refusal on the shared local completion path and its calibration.
