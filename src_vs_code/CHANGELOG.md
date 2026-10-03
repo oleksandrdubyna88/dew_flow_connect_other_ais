@@ -1,5 +1,17 @@
 # Changelog
 
+## Extension 0.63.0 — 2026-10-03
+
+**Settings → Consultant says whether each consultant can run.** With Server 0.42.0 every row shows:
+- its CLI, version and sign-in, and what the consultant cannot do on this platform;
+- its last failure, with what to do about it;
+- **Check** — one real, paid turn that proves the consultant answers and stays confined (it asks before it spends);
+- for an antigravity consultant on WSL, a `permissions.allow` rule to copy into agy's settings — coai never writes
+  them.
+
+A window that also watches a WSL data directory shows that side's rows as well. The tab reads and polls only while it
+is open on screen, and with an older server it says the server is too old.
+
 ## Server 0.41.1 — 2026-10-03
 
 **`ask_human` is for the gate's own question.** A round's `call_human` notice and an AI's own "A or B?" question
