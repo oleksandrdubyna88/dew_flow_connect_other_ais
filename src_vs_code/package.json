@@ -2,7 +2,7 @@
   "name": "connect-other-ais",
   "displayName": "ConnectOtherAIs",
   "description": "Your AI writes the code; other vendors' models review it — the plan before it is built, the diff after. A gate that holds until they agree, or until you decide.",
-  "version": "0.61.2",
+  "version": "0.62.0",
   "publisher": "remsoftdev",
   "license": "MIT",
   "repository": {
@@ -864,7 +864,11 @@
             }
           }
         },
-        "coai.securityLane": {"type":"object","default":{},"markdownDescription":"Additional security reviewer/prompt pairs. Configure in ConnectOtherAIs Settings → Security lane. Prompt bodies live in the MCP data directory."},
+        "coai.securityLane": {
+          "type": "object",
+          "default": {},
+          "markdownDescription": "Additional security reviewer/prompt pairs. Configure in ConnectOtherAIs Settings → Security lane. Prompt bodies live in the MCP data directory."
+        },
         "coai.consultants": {
           "type": "object",
           "default": {

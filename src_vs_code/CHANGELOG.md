@@ -1,5 +1,38 @@
 # Changelog
 
+## Extension 0.62.0 — 2026-10-03
+
+**The question consultant, in the panel.** Server 0.41.0 lets a stuck AI ask several models before it asks you;
+this release gives that a home:
+- **Settings → Question consultant.** Add up to six rows, each a model from the same list the Consultant offers
+  and one prompt. Pick the folders a disk row may read, the mode (*off*, *remind*, *require*) and the limits.
+  The three shipped prompts can be edited in place and restored. A prompt a runtime cannot run is greyed out
+  with the reason. A row that can read this machine needs your tick before it can be switched on.
+- **Active questions** heads the sidebar, where "A review is waiting on you" used to be. While the consultants
+  work, each model shows its status and time. When the question reaches you, their answers are folded under
+  its card. **Answer…** now offers a box for your own words first, so an AI's question can be answered in
+  words, not only with a review decision.
+- **Show review rounds → Questions.** One row per question put to the consultants, with its outcome, cost and
+  time. Expand it to see each model's answer, or why it gave none.
+
+**A malformed `coai.securityLane` no longer breaks the Settings page.** A value with a wrong member (one from a
+cloned repository's `.vscode/settings.json`, say) used to stop the page rendering or draw a stray switch onto
+it. Now the lane stays off, the Security lane tab names the bad part, and saving never overwrites what you wrote.
+
+**Every page that does slow work now says so.** The progress bar that 0.61.0 put on the panel and the Settings tab now
+appears on the other pages too, wherever an action takes longer than half a second:
+- **Review rounds:** every action, each of which reads the rounds database.
+- **Review bugs:** Keep, Drop, and every button that opens something.
+- **Who holds a key:** every trip to the bugs server.
+- **Review roles** and **Gate commands:** adding, removing, restoring or switching something.
+
+Typing never shows it. Pages that already say they are working (the chat, Notifications, a chat being restored) keep
+their own indicator.
+
+**A role's stage takes effect at once.** Picking a stage for a review role used to wait 300 ms as if it were being
+typed, and the role stayed drawn under its old stage until something else redrew the page. It now applies
+immediately and moves to its new place.
+
 ## Server 0.41.0 — 2026-10-03
 
 **A reviewer on another endpoint with no model is left out of the round, and says why.** A codex reviewer row
