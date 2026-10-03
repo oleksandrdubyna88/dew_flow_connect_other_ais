@@ -2566,3 +2566,14 @@ tested as values over fake slots; `PanelProvider.receive` itself is the standing
 into a command the panel delegates to (the data-directory moves) is reasoned — the store survives any awaited promise
 in one isolate — not run in a real extension host. If it did not, that prompt would only fall back to how 0.61.0
 behaved: the bar over the typing.
+
+## ⟳ updates Codex with `codex update` (2026-10-03, PLAN_codex_updates_itself)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `vendorUpdate.test.ts` (12, +5 replacing one) | Codex 0.156.1 and 0.126.0 → `codex update`; a pinned path → `"<path>" update`; 0.125.0, an empty version and none at all → npm's `@latest`; `codex-cli 0.156.1`, an error, `0.156`, `v0.156.1` and a prerelease → npm's `@latest`; `updateFor` picks per row from the ⟳ status, a row not yet probed gets the installer, and claude is unchanged; the ⟳ paragraph of the reviewers article names `claude update`, `agy update`, `codex update` and 0.126.0 in all five languages | RED against the old table: 4 (codex installed again; the English help named no self-update). Teeth on the compiled module: no version gate → 2, an unanchored version pattern → 1, codex out of `SELF_UPDATE` → 2 |
+
+**What this does NOT prove.** The one argument `updateFor(this.cliStatus)` in `PanelProvider.updateVendorCli` is
+not run: `PanelProvider` cannot be constructed here, and no source-text assertion was added for it (plan round,
+gemini). That `codex update` succeeds on Windows npm installs is the vendor's claim plus one Linux run on the Team
+server host, not a test here.

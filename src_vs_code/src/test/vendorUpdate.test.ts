@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { Runtime } from '../models';
 import { Vendor } from '../vendors';
-import { vendorInstall, vendorUpdate } from '../vendorTerminal';
+import { updateFor, vendorInstall, vendorUpdate } from '../vendorTerminal';
+import { bodyFor, HELP_LANGUAGES, helpArticle } from '../helpContent';
 
 /**
  * How each CLI is brought up to date — its own command, verified one at a time.
@@ -58,12 +59,61 @@ test('a path with a space survives being put on a command line', () => {
   assert.equal(vendorUpdate(pinned, 'win32').command, '"C:/Program Files/claude/claude.exe" update');
 });
 
-test('codex has no self-update, so it is installed again', () => {
-  // Confirmed against the full `codex --help` subcommand list, and OpenAI's own quickstart prints
-  // one command under both "Install Codex" and "Update Codex".
-  const command = vendorUpdate(vendor('codex'), 'linux').command;
+// ---- Codex updates itself from 0.126.0 (todo/PLAN_codex_updates_itself.md) ----
+// This used to say "codex has no self-update, so it is installed again", read off `codex --help`. It
+// was the agy mistake a second time: `codex --help` on codex-cli 0.156.1 lists `update  Update Codex
+// to the latest version`, and on the Team server host `codex update` took 0.153.4 to 0.160.0
+// (2026-10-02). openai/codex #19933 added it, and rust-v0.126.0 is the first release that has it.
 
-  assert.match(command, /@openai\/codex@latest/);
+test('a codex that has the update command is asked to update itself', () => {
+  assert.equal(vendorUpdate(vendor('codex'), 'linux', '0.156.1').command, 'codex update');
+  assert.equal(vendorUpdate(vendor('codex'), 'win32', '0.126.0').command, 'codex update', 'the first release that has it');
+});
+
+test('a pinned codex is updated through its own path', () => {
+  const pinned = vendor('codex', { executablePath: 'C:/Program Files/nodejs/codex.cmd' });
+
+  assert.equal(vendorUpdate(pinned, 'win32', '0.160.0').command, '"C:/Program Files/nodejs/codex.cmd" update');
+});
+
+test('a codex older than the update command, or one whose version is unknown, is installed again', () => {
+  // `codex update` on 0.125.0 is "unrecognized subcommand"; the installer works on every version.
+  assert.match(vendorUpdate(vendor('codex'), 'linux', '0.125.0').command, /npm install -g @openai\/codex@latest/);
+  assert.match(vendorUpdate(vendor('codex'), 'linux', '').command, /npm install -g @openai\/codex@latest/,
+    'a version that could not be read is not a version that has the command');
+  assert.match(vendorUpdate(vendor('codex'), 'linux').command, /npm install -g @openai\/codex@latest/);
+});
+
+test('a version that is not a plain X.Y.Z is unknown, and unknown is installed again', () => {
+  // Plan round, gemini: read as "not older than 0.126.0", garbage would have typed `codex update` on a codex that
+  // may not have it.
+  for (const unreadable of ['codex-cli 0.156.1', 'command not found', '0.156', 'v0.156.1', '0.156.1-alpha.2']) {
+    assert.match(vendorUpdate(vendor('codex'), 'linux', unreadable).command, /npm install -g @openai\/codex@latest/, unreadable);
+  }
+});
+
+test('the status the ⟳ colour came from decides the command', () => {
+  const status = { codex: { installed: '0.160.0', latest: '0.161.0' }, old: { installed: '0.120.0', latest: '0.161.0' } };
+  const choose = updateFor(status);
+
+  assert.equal(choose(vendor('codex'), 'linux').command, 'codex update');
+  assert.match(choose(vendor('codex', { id: 'old' }), 'linux').command, /npm install -g @openai\/codex@latest/, 'a second, older codex row');
+  assert.match(choose(vendor('codex', { id: 'never-probed' }), 'linux').command, /npm install -g @openai\/codex@latest/,
+    'a row the probe has not reached yet');
+  assert.equal(choose(vendor('claude'), 'linux').command, 'claude update', 'the others are unchanged');
+});
+
+test('the help page says each CLI’s own update, in every language', () => {
+  // It said "for every CLI here re-running the installer IS the update… agy has no update subcommand" in all five
+  // languages, while ⟳ already ran `claude update` and `agy update`.
+  const article = helpArticle('choose-reviewers');
+  assert.ok(article !== undefined, 'the reviewers article exists');
+  for (const language of HELP_LANGUAGES) {
+    const paragraph: string = bodyFor(article, language).body.usage;
+    for (const command of ['`claude update`', '`agy update`', '`codex update`', '0.126.0']) {
+      assert.ok(paragraph.includes(command), `${language}: the ⟳ paragraph names ${command}`);
+    }
+  }
 });
 
 test('gemini updates the way its README says', () => {

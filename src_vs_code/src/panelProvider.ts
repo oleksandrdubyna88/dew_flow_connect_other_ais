@@ -179,8 +179,8 @@ import {
   executableFor,
   VendorInstall,
   vendorInstall,
+  updateFor,
   vendorTerminal,
-  vendorUpdate,
 } from './vendorTerminal';
 import { askPerson } from './personWait';
 
@@ -1539,13 +1539,14 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /**
    * The vendor's own update command, in a terminal, typed and waiting.
    *
-   * <p>Not always the install command: `claude update` and `agy update` update themselves, while
-   * codex and gemini are updated by installing again. Which is which is in {@link vendorUpdate},
-   * verified per vendor — `agy update` was written down as not existing because `agy --help` does
-   * not list it, and it exists.</p>
+   * <p>Not always the install command: `claude update`, `agy update` and — from codex 0.126.0 —
+   * `codex update` update themselves, while gemini and an older codex are installed again. Which is
+   * which is in `vendorUpdate`, verified per vendor: `agy update` and `codex update` were both
+   * written down as not existing because a help listing seemed to say so, and both exist. The
+   * version comes from the same probe the ⟳ colour was drawn from ({@link updateFor}).</p>
    */
   private async updateVendorCli(id: string): Promise<void> {
-    await this.openCliTerminal(id, 'update', vendorUpdate);
+    await this.openCliTerminal(id, 'update', updateFor(this.cliStatus));
   }
 
   private async openCliTerminal(

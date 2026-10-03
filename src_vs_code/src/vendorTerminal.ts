@@ -1,3 +1,4 @@
+import { CliStatus, updateAvailable } from './cliVersions';
 import { Platform } from './hostSide';
 import { Vendor } from './vendors';
 
@@ -40,7 +41,7 @@ const EXECUTABLE: Record<string, string> = {
 /**
  * How to bring a vendor's CLI up to date — its OWN command, verified one by one.
  *
- * <p>Two of them can update themselves and two cannot, and the difference is not guessable:</p>
+ * <p>Three of them can update themselves and one cannot, and the difference is not guessable:</p>
  *
  * <ul>
  *   <li><b>claude</b>: `claude update`, which Anthropic's docs call "apply an update immediately".</li>
@@ -49,25 +50,40 @@ const EXECUTABLE: Record<string, string> = {
  *       subcommand at all" — in a comment, a changelog, a plan and a module doc. The command exists
  *       and answers; the help output is incomplete. Running it costs a second, and inferring its
  *       absence from a list cost a wrong claim in four places.</li>
- *   <li><b>codex</b>: no update subcommand in the full `codex --help`, and OpenAI's own quickstart
- *       prints the same line under <i>Install Codex</i> and <i>Update Codex</i> — so re-running the
- *       installer IS the update here.</li>
+ *   <li><b>codex</b>: `codex update`, from codex 0.126.0. <b>Got wrong the same way as agy.</b> This
+ *       said "no update subcommand in the full `codex --help`" until 2026-10-02, when codex-cli
+ *       0.156.1 listed `update  Update Codex to the latest version` and `codex update` took the Team
+ *       server host from 0.153.4 to 0.160.0. It arrived in openai/codex #19933 (2026-04-28), first
+ *       released in rust-v0.126.0, so an older codex — or one whose version could not be read — is
+ *       still installed again, which works on every version (research/PLAN_codex_updates_itself.md).</li>
  *   <li><b>gemini</b>: `npm install -g @google/gemini-cli@latest`, from its README.</li>
  * </ul>
  *
  * <p>A vendor whose CLI path is set gets that path, not the bare name: the update must touch the
  * binary the reviews actually run.</p>
+ *
+ * @param installed the version the probe read off the installed CLI, `''` when it could not
  */
-export function vendorUpdate(vendor: Vendor, platform: Platform): VendorInstall {
+export function vendorUpdate(vendor: Vendor, platform: Platform, installed = ''): VendorInstall {
   const self = SELF_UPDATE[vendor.runtime];
-  if (self !== undefined) {
-    return {
-      command: `${quoteIfNeeded(executableFor(vendor))} ${self}`,
-      prerequisite: '',
-      docs: DOCS[vendor.runtime] ?? DOCS['codex']!,
-      note: '',
-    };
-  }
+
+  return self !== undefined && updatesItself(vendor.runtime, installed)
+    ? selfUpdate(vendor, self)
+    : installAgain(vendor, platform);
+}
+
+/** The CLI's own update subcommand, run through the binary the reviews actually run. */
+function selfUpdate(vendor: Vendor, subcommand: string): VendorInstall {
+  return {
+    command: `${quoteIfNeeded(executableFor(vendor))} ${subcommand}`,
+    prerequisite: '',
+    docs: DOCS[vendor.runtime] ?? DOCS['codex']!,
+    note: '',
+  };
+}
+
+/** The installer, again — the update for a CLI that cannot update itself, or a version too old or unread to know. */
+function installAgain(vendor: Vendor, platform: Platform): VendorInstall {
   const install = vendorInstall(vendor, platform);
   const npmPackage = PACKAGE[vendor.runtime];
 
@@ -79,11 +95,42 @@ export function vendorUpdate(vendor: Vendor, platform: Platform): VendorInstall 
     : { ...install, command: `npm install -g ${npmPackage}@latest` };
 }
 
+/**
+ * The update command for each row, chosen by the version the probe read — the same status the ⟳
+ * button's colour was drawn from, so the command matches what the person was told. A row the probe
+ * has not reached yet is unknown, and unknown is installed again.
+ */
+export function updateFor(
+  status: Readonly<Record<string, CliStatus>>,
+): (vendor: Vendor, platform: Platform) => VendorInstall {
+  return (vendor, platform) => vendorUpdate(vendor, platform, status[vendor.id]?.installed ?? '');
+}
+
 /** The vendors whose CLI updates ITSELF, and the subcommand that does it. */
 const SELF_UPDATE: Record<string, string> = {
   claude: 'update',
   antigravity: 'update',
+  codex: 'update',
 };
+
+/** The first version that HAS that subcommand, where not every version does. */
+const SELF_UPDATE_SINCE: Record<string, string> = {
+  codex: '0.126.0',
+};
+
+/** A version as the probe reports it, and nothing else: banner text or an error is not a version. */
+const PLAIN_VERSION = /^\d+\.\d+\.\d+$/;
+
+/**
+ * Whether this runtime's installed CLI can run its own update: always, when every version can; else only a version
+ * read plainly and not older than the first that has it. Anything unread is unknown, and unknown is installed again
+ * (plan round, gemini: garbage compared as numbers would have read as new enough).
+ */
+function updatesItself(runtime: string, installed: string): boolean {
+  const since = SELF_UPDATE_SINCE[runtime];
+
+  return since === undefined || (PLAIN_VERSION.test(installed) && !updateAvailable(installed, since));
+}
 
 /**
  * Which binary this vendor actually is, on this machine.
