@@ -70,6 +70,15 @@ for 12–20 s and reports "not started … the round reached its limit" before t
 load-sensitive: the deadline is wall-clock. Make the clock injectable for that path, or derive the assertion from
 the deadline the test itself sets, then show it holding over 20 consecutive runs.
 
+Two more failed the same way on 2026-10-03, each once in a full local run and never alone (15 of 15 and 5 of 5).
+Both are wall-clock waits that a loaded machine overruns:
+- `ConsultationSweeperTests.TheLoop_LapsesAnIdleConsultation_AndKeepsDoingSoAfterASettingsReload`
+  (`src_mcp/tests/ConsultLimitsScenarioTests.cs:156`) — failed in 488 ms. Its loop now also sweeps question consults
+  and escalations on every 50 ms beat, so read the failure message before assuming it is load alone.
+- `AReviewerThatAsksForSourceIsAskedAgainTests.AConversationThatOutlivesItsCap_IsOneTerminalTimeout_WithEveryTurnsUsageKept`
+  (`src_mcp/tests/AReviewerThatAsksForSourceIsAskedAgainTests.cs:455`) — a 700 ms per-turn fake CLI. No turn finished
+  before the cap.
+
 ## 7. An api row's cost
 
 Found by the live check
