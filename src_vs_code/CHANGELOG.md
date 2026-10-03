@@ -1,5 +1,22 @@
 # Changelog
 
+## Server 0.42.0 — 2026-10-03
+
+**A consultant answers, or says why it did not.** An antigravity consultant used to answer nothing: headless agy
+refuses a shell command, and the turn ended with no text and no reason. Now:
+- a turn whose command was refused is continued once on the same conversation, told to read the files instead
+  (billed as both launches);
+- every failed consultation names one of fourteen reasons — quota, rate limited, CLI not found, command denied,
+  timeout and the rest — with what to do, keeps its transcript, and does not spend the call budget when the vendor
+  failed;
+- a claude consultant can only Read, Glob and Grep, with `--restricted` where the installed CLI has it (claude
+  2.1.197 has not, and is launched without it rather than refused);
+- `coai-mcp --consultants` reports each consultant's CLI, sign-in, confinement and known limitations on this
+  platform, and `coai-mcp --check-consultant` runs one real, paid turn to prove the consultant answers.
+
+The consultations table gains the failure columns (schema step 19). A database written by a preview build of this
+change still opens.
+
 ## Server 0.41.1 — 2026-10-03
 
 **`ask_human` is for the gate's own question.** A round's `call_human` notice and an AI's own "A or B?" question
