@@ -73,7 +73,7 @@ public static class VendorProbe
             "local" => LocalHealth(vendor, enabled, model),
             "api" => ApiHealth(vendor, enabled, model, hasVaultKey),
             "remote" => await RemoteHealthAsync(vendor, enabled, remoteHealth, ct),
-            _ => await CliHealthAsync(launcher, vendor, runtimeName, enabled, executablePath, hasVaultKey, timeout, ct),
+            _ => await CliHealthAsync(launcher, vendor, runtimeName, enabled, executablePath, model, hasVaultKey, timeout, ct),
         };
     }
 
@@ -125,11 +125,14 @@ public static class VendorProbe
         string runtimeName,
         bool enabled,
         string executablePath,
+        string model,
         bool hasVaultKey,
         TimeSpan? timeout,
         CancellationToken ct)
     {
-        var (auth, authNote) = RuntimeResolution.AuthOf(vendor, hasVaultKey);
+        // The model too: a codex row on somebody else's endpoint with none is refused by the round, and `providers` must
+        // say so first (todo/PLAN_refuse_an_endpoint_row_without_a_model.md).
+        var (auth, authNote) = RuntimeResolution.AuthOf(vendor, hasVaultKey, model: model);
         if (!enabled)
         {
             return new VendorHealth(false, false, "", auth, "disabled in settings");

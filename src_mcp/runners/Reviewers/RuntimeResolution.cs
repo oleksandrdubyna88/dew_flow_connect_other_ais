@@ -150,8 +150,23 @@ public static class RuntimeResolution
     /// Whether this machine has signed into the Team server this vendor points at. Only consulted
     /// for a <c>remote</c> vendor, and passed in rather than read here so this stays pure.
     /// </param>
+    /// <param name="model">
+    /// The row's chosen model — or <c>null</c> when the caller holds no row and so does not know it, in which case the
+    /// model is not checked. Empty is not unknown: it is the choice a codex row on somebody else's endpoint must not make
+    /// (todo/PLAN_refuse_an_endpoint_row_without_a_model.md). A parameter, as <paramref name="hasServerToken"/> is,
+    /// because a model belongs to a launch and <see cref="VendorIdentity"/> deliberately does not carry one.
+    /// </param>
     public static (string Auth, string Note) AuthOf(
-        VendorIdentity vendor, bool hasVaultKey, bool hasServerToken = false) =>
+        VendorIdentity vendor, bool hasVaultKey, bool hasServerToken = false, string? model = null)
+    {
+        var keyed = KeyedAuthOf(vendor, hasVaultKey, hasServerToken);
+
+        // AFTER the key: a row with neither is told about the key first, and about the model once the key is in.
+        return keyed.Auth != "unavailable" && NamesNoModel(vendor, model) ? ("unavailable", NoModelNote(vendor)) : keyed;
+    }
+
+    /// <summary>How a vendor authenticates, before any question about its model.</summary>
+    private static (string Auth, string Note) KeyedAuthOf(VendorIdentity vendor, bool hasVaultKey, bool hasServerToken) =>
         // `remote` is decided BEFORE the vault key, because a Team server's authentication is not
         // a key at all — it is a session this machine holds. Saying "vault key" for a vendor that
         // uses none would send somebody to configure the wrong thing entirely.
@@ -189,17 +204,36 @@ public static class RuntimeResolution
     /// <para>The full note is not lost: it is what `providers` answers and what the panel's card
     /// shows, both of which a PERSON reads. This is the sentence a MODEL reads.</para>
     /// </remarks>
-    public static string ExclusionReason(VendorIdentity vendor, bool hasVaultKey, bool hasServerToken)
+    public static string ExclusionReason(VendorIdentity vendor, bool hasVaultKey, bool hasServerToken, string? model = null)
     {
         if (NameOf(vendor) == "remote" && !hasServerToken)
         {
             return "this machine is not signed in to its Team server";
         }
 
+        if (KeyedAuthOf(vendor, hasVaultKey, hasServerToken).Auth != "unavailable" && NamesNoModel(vendor, model))
+        {
+            return "no model is chosen for its endpoint";
+        }
+
         return AuthOf(vendor, hasVaultKey, hasServerToken).Auth == "unavailable"
             ? "no credential for it on this machine"
             : "it cannot run here";
     }
+
+    /// <summary>
+    /// A codex row pointed at somebody else's endpoint with no model chosen — refused, because with no <c>-m</c> the Codex
+    /// CLI sends its OWN default model id there, which that endpoint does not serve (ReviewerRuntime.ModelArgs).
+    /// </summary>
+    /// <remarks>A plain codex row (no base URL) runs on the CLI's default, as it always has: that default is what its
+    /// own service serves. A <c>null</c> model is a caller that does not know it, and is never guessed at.</remarks>
+    private static bool NamesNoModel(VendorIdentity vendor, string? model) =>
+        model is not null && string.IsNullOrWhiteSpace(model) && NameOf(vendor) == "codex" && vendor.BaseUrl.Length > 0;
+
+    /// <summary>What a person reads on the card and in <c>providers</c>: the row, the endpoint, and the cure.</summary>
+    private static string NoModelNote(VendorIdentity vendor) =>
+        $"'{vendor.Provider}' points the Codex CLI at {vendor.BaseUrl} with no model — pick one that endpoint lists "
+        + "(≡ on its card); with none, the Codex CLI sends its own default model id, which that endpoint does not serve";
 
     /// <summary>
     /// An <c>api</c> vendor authenticates with a key under its own id in the vault — and needs an
