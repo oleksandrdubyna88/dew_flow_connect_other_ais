@@ -134,17 +134,6 @@ public sealed record PanelConfig(
     private static Dictionary<string, RoleGate> Defaults() =>
         AllRoles.ToDictionary(r => r, r => ShippedDefault(RoleCatalog.Builtin.ById(r)?.Stage ?? RoleStages.Result));
 
-    /// <summary>This role's numbers, falling back to its stage's default for an unknown name.</summary>
-    /// <remarks>
-    /// The fallback is what makes a role a person just created work with no settings at all: nobody
-    /// has written it a budget yet, so it takes its stage's shipped one.
-    /// </remarks>
-    public RoleGate For(string role)
-    {
-        if (role == Security.SecurityCatalog.Gate) return SecurityLane;
-        return Roles.TryGetValue(role, out var gate) ? gate : ShippedFor(role);
-    }
-
     /// <summary>The budget a role takes when nobody has written it one: its stage's shipped default.</summary>
     private RoleGate ShippedFor(string role) =>
         ShippedDefault(Catalog.ById(role)?.Stage ?? RoleStages.Result);
@@ -179,6 +168,17 @@ public sealed record PanelConfig(
     /// </remarks>
     public IReadOnlyList<string> EnabledRolesOf(Stage stage) =>
         [.. RolesOf(stage).Where(r => For(r).Enabled)];
+
+    /// <summary>This role's numbers, falling back to its stage's default for an unknown name.</summary>
+    /// <remarks>
+    /// The fallback is what makes a role a person just created work with no settings at all: nobody
+    /// has written it a budget yet, so it takes its stage's shipped one.
+    /// </remarks>
+    public RoleGate For(string role)
+    {
+        if (role == Security.SecurityCatalog.Gate) return SecurityLane;
+        return Roles.TryGetValue(role, out var gate) ? gate : ShippedFor(role);
+    }
 
     /// <summary>The stage's budget: its widest ENABLED role, because the stage counts rounds once.</summary>
     /// <remarks>

@@ -77,9 +77,9 @@ public static class SecurityContext
         // A spent budget fits nothing more: answer before composing an entry for every remaining file.
         if (budget <= 0) return Nothing;
         var whole = Entry(file, source, slice);
-        return Fits(whole, budget)
-            ? new(whole, slice && source.Length == 0 ? " (source body unavailable; patch only)" : string.Empty)
-            : PatchOnly(file, source, slice, budget);
+        if (!Fits(whole, budget)) return PatchOnly(file, source, slice, budget);
+        var note = slice && source.Length == 0 ? " (source body unavailable; patch only)" : string.Empty;
+        return new(whole, note);
     }
 
     // The patch is the change under review and the source only frames it: a source window too large
