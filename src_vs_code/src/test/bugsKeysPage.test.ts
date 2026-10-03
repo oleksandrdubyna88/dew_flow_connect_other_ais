@@ -3,6 +3,10 @@ import { test } from 'node:test';
 
 import { KeyRow } from '../bugsAdminApi';
 import { Users, View, lastSeen, live, safe, standing, usersPageHtml, withControls } from '../bugsKeysPage';
+import { BUSY_AFTER_MS } from '../busyMark';
+import { type BusySnapshot, IDLE } from '../busySnapshot';
+import { PLAIN_TEXT } from '../textControls';
+import { PageClock } from './panelPageHarness';
 
 /**
  * The Users tab, RUN — because a list with a Revoke button is exactly where wiring goes wrong.
@@ -67,9 +71,39 @@ function pageScript(html: string): string {
   return html.slice(start, end);
 }
 
+/**
+ * The busy bar as the page drew it, keeping the attributes the mark sets (todo/PLAN_busy_marks_on_every_webview.md, E2).
+ * Read out of the page's own markup — hidden when it was drawn hidden — so a page that draws no bar has none here.
+ */
+class Bar {
+  hidden: boolean;
+  private attributes: Readonly<Record<string, string>> = {};
+
+  constructor(html: string) {
+    const tag = /<div\b[^>]*\bid="busy-bar"[^>]*>/u.exec(html)?.[0] ?? '';
+    this.hidden = /\shidden(?=[\s>]|$)/u.test(tag);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes[name] ?? null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes = { ...this.attributes, [name]: value };
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes = Object.fromEntries(Object.entries(this.attributes).filter(([key]) => key !== name));
+  }
+}
+
 interface Page {
   readonly html: string;
   readonly posted: readonly Posted[];
+  /** The busy bar, or null when the page drew none. */
+  readonly bar: Bar | null;
+  /** A message from the host, as the page's own listeners receive it. */
+  deliver(message: unknown): void;
   /** One per row the page ACTUALLY rendered a revoke button for, in order. */
   readonly revokeButtons: readonly Control[];
   control(id: string): Control;
@@ -83,8 +117,10 @@ interface Page {
  * from the fixture. A shim handed the fixture's ids would pass with no button on the page at all,
  * and would pass just as well if every button carried the first row's id, which is the defect.</p>
  */
-function run(users: Users): Page {
-  const html = usersPageHtml(users, 'test-nonce');
+function run(users: Users, clock?: PageClock, painted: BusySnapshot = IDLE): Page {
+  const html = usersPageHtml(users, 'test-nonce', PLAIN_TEXT, painted);
+  const bar = html.includes('id="busy-bar"') ? new Bar(html) : null;
+  const heard: ((event: { data: unknown }) => void)[] = [];
   const revokeButtons = [...html.matchAll(/data-revoke="([^"]+)"/gu)]
     .map((m) => new Control('', m[1]!));
   const controls = new Map<string, Control>();
@@ -98,21 +134,30 @@ function run(users: Users): Page {
       }
     },
     querySelectorAll: (): readonly Control[] => [],
-    getElementById: (id: string): Control | undefined => controls.get(id),
+    getElementById: (id: string): Control | Bar | null | undefined => (id === 'busy-bar' ? bar : controls.get(id)),
   };
 
-   
-  // The text controls listen for the host's pushes on window; delivering those is the page census's job
-  // (everyPageHasBothTextControls), so here a listener is accepted and never fired.
-  const window = { addEventListener: (): void => undefined };
-  const body = new Function('acquireVsCodeApi', 'document', 'window', pageScript(html));
-  body(() => ({ postMessage: (m: Posted) => posted.push(m) }), document, window);
+  // The host's pushes arrive on window: the busy mark's `settled` and `busy` are delivered by a test; the text controls'
+  // are the page census's job (everyPageHasBothTextControls), and no test here sends one.
+  const window = {
+    addEventListener: (kind: string, listener: (event: { data: unknown }) => void): void => {
+      if (kind === 'message') {
+        heard.push(listener);
+      }
+    },
+  };
+  // The page's timers run on the test's clock when one is given, and on the real ones otherwise.
+  const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', pageScript(html));
+  body(() => ({ postMessage: (m: Posted) => posted.push(m) }), document, window,
+    clock?.setTimeout ?? setTimeout, clock?.clearTimeout ?? clearTimeout);
 
   assert.ok(onClick !== undefined, 'the page never attached a click listener');
 
   return {
     html,
     posted,
+    bar,
+    deliver: (message: unknown) => { heard.forEach((one) => { one({ data: message }); }); },
     revokeButtons,
     control: (id: string) => {
       assert.ok(html.includes(`id="${id}"`), `the page rendered no control with id ${id}`);
@@ -463,4 +508,60 @@ test('a refusal says the server answered and offers the way back', () => {
   assert.match(page.html, /refused that request/u);
   assert.match(page.html, /not a connection problem/u);
   assert.ok(page.html.includes("before is &#39;nonsense&#39;"), "the server's own words, escaped");
+});
+
+// ---- The busy mark (todo/PLAN_busy_marks_on_every_webview.md, E2) ----
+// Every action on this tab ends in a network round trip to the bugs server. `Turns` disables the buttons at once, which
+// says "wait"; the bar says "working", once the trip outlasts half a second.
+
+/** The last post of a type, as the page sent it. */
+function lastOf(page: Page, type: string): Readonly<Record<string, unknown>> {
+  const sent = page.posted.filter((m) => m.type === type).at(-1);
+  assert.ok(sent !== undefined, `the page posted no ${type}`);
+
+  return sent as unknown as Readonly<Record<string, unknown>>;
+}
+
+test('a press that goes to the server is numbered, and the bar shows from the half second on', () => {
+  const clock = new PageClock();
+  const page = run(listing([key('aaaa1111', 'alice')]), clock);
+  assert.ok(page.bar !== null, 'the page draws a busy bar');
+  assert.equal(page.bar.hidden, true, 'drawn hidden');
+
+  page.click(page.control('refresh'));
+  const sent = lastOf(page, 'refresh');
+  assert.equal(typeof sent['seq'], 'number');
+  assert.equal(typeof sent['doc'], 'string');
+  clock.advance(BUSY_AFTER_MS - 1);
+  assert.equal(page.bar.hidden, true, 'a server that answers in time shows nothing');
+  clock.advance(1);
+  assert.equal(page.bar.hidden, false);
+
+  page.deliver({ type: 'settled', seq: sent['seq'], doc: sent['doc'], ok: true });
+  assert.equal(page.bar.hidden, true, 'gone when the host settles it');
+});
+
+test('copy and dismiss stay on this machine, and are not numbered', () => {
+  const page = run(listing([key('aaaa1111', 'alice')]));
+  page.click(page.control('refresh'));
+
+  for (const local of ['copy', 'dismiss']) {
+    page.click(new Control(local));
+    const sent = page.posted.filter((m) => m.type === local).at(-1) as unknown as Readonly<Record<string, unknown>> | undefined;
+    assert.ok(sent !== undefined, `${local} was posted`);
+    assert.equal(sent['seq'], undefined, `${local} is a clipboard or secret-store write, not a trip to the server`);
+  }
+});
+
+test('a page repainted while an action runs shows the bar after what is LEFT of the delay', () => {
+  // `Turns` repaints the whole tab as an action starts, so the bar the press started dies with the old page; the host
+  // paints what is still running into the new one.
+  const clock = new PageClock();
+  const page = run(listing([]), clock, { count: 1, oldestMs: 300 });
+
+  clock.advance(BUSY_AFTER_MS - 300 - 1);
+  assert.equal(page.bar?.hidden, true);
+  clock.advance(1);
+  assert.equal(page.bar?.hidden, false, 'work already running is not given a fresh delay');
+  assert.deepEqual(page.posted.at(-1), { type: 'ready' }, 'and the page asks what is running, last');
 });

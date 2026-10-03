@@ -1,6 +1,8 @@
 import { KeyRow } from './bugsAdminApi';
 import { Pending } from './bugsAdminKey';
 import { PLAIN_TEXT, TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle, type TextSettings } from './textControls';
+import { type BusySnapshot, IDLE } from './busySnapshot';
+import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
 
 /**
  * The Users tab: every contributor key, what it has sent, and the one button that ends it.
@@ -157,8 +159,14 @@ export function safe(text: string): string {
   return text.replace(/[&<>"']/gu, (c) => escapes[c] ?? c);
 }
 
+/**
+ * The posts that make the host go to the bugs server — the ones the busy mark numbers. `copy` writes the clipboard and
+ * `dismiss` the secret store, both on this machine, so they are not here (plan round, gemini).
+ */
+export const BUGS_KEYS_TRACKED: readonly string[] = ['setkey', 'refresh', 'next', 'back', 'issue', 'revoke', 'discard'];
+
 /** The whole page. */
-export function usersPageHtml(users: Users, nonce: string, text: TextSettings = PLAIN_TEXT): string {
+export function usersPageHtml(users: Users, nonce: string, text: TextSettings = PLAIN_TEXT, busy: BusySnapshot = IDLE): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -208,9 +216,11 @@ export function usersPageHtml(users: Users, nonce: string, text: TextSettings = 
   }
   .empty { opacity: .7; padding: 24px 0; }
 ${TEXT_CONTROLS_CSS}
+${BUSY_CSS}
 </style>
 </head>
 <body>
+${BUSY_BAR}
 <header><h1>Who holds a key</h1>${textControlsHtml(text.size, text.tone)}</header>
 <p class="hint">
   A key is shown ONCE, when it is issued, and cannot be read back afterwards &mdash; this list holds
@@ -224,12 +234,15 @@ ${face(users.view, users.busy === true)}
 <script nonce="${nonce}">
 (function () {
   var vscode = acquireVsCodeApi();
+  // Every action that reaches the bugs server is numbered and settled by the host, so a trip that outlasts half a second
+  // shows the bar (todo/PLAN_busy_marks_on_every_webview.md, E2). Copy and dismiss stay on this machine and are not.
+  ${busyMarkScript(busy, BUGS_KEYS_TRACKED)}
   ${textControlsScript()}
 
-  function post(type, extra) {
+  function post(type, extra, control) {
     var message = { type: type };
     if (extra) { for (var k in extra) { if (Object.prototype.hasOwnProperty.call(extra, k)) { message[k] = extra[k]; } } }
-    vscode.postMessage(message);
+    send(message, control || null);
   }
 
   document.addEventListener('click', function (event) {
@@ -241,18 +254,18 @@ ${face(users.view, users.busy === true)}
     // only ever name the row it sits in.
     var revoking = target.closest ? target.closest('[data-revoke]') : null;
     if (revoking) {
-      post('revoke', { id: revoking.getAttribute('data-revoke') });
+      post('revoke', { id: revoking.getAttribute('data-revoke') }, revoking);
       return;
     }
 
-    if (target.id === 'issue') { post('issue'); return; }
-    if (target.id === 'setkey') { post('setkey'); return; }
-    if (target.id === 'refresh') { post('refresh'); return; }
-    if (target.id === 'next') { post('next'); return; }
-    if (target.id === 'back') { post('back'); return; }
-    if (target.id === 'copy') { post('copy'); return; }
-    if (target.id === 'discard') { post('discard'); return; }
-    if (target.id === 'dismiss') { post('dismiss'); return; }
+    if (target.id === 'issue') { post('issue', null, target); return; }
+    if (target.id === 'setkey') { post('setkey', null, target); return; }
+    if (target.id === 'refresh') { post('refresh', null, target); return; }
+    if (target.id === 'next') { post('next', null, target); return; }
+    if (target.id === 'back') { post('back', null, target); return; }
+    if (target.id === 'copy') { post('copy', null, target); return; }
+    if (target.id === 'discard') { post('discard', null, target); return; }
+    if (target.id === 'dismiss') { post('dismiss', null, target); return; }
   });
 
   post('ready');

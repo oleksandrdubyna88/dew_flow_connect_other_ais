@@ -29,6 +29,8 @@ import {
 } from './bugsKeysFlow';
 import { Users, usersPageHtml, withControls } from './bugsKeysPage';
 import { Turns } from './bugsKeysTurns';
+import { BusyHost } from './busyHost';
+import { IDLE } from './busySnapshot';
 import { notify, notifyAndAsk } from './notify';
 import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
@@ -57,6 +59,12 @@ import { askPerson } from './personWait';
  */
 export class BugsKeysPanel {
   private panel: vscode.WebviewPanel | undefined;
+
+  /**
+   * What the tab asked for and the host has not finished — its busy mark (todo/PLAN_busy_marks_on_every_webview.md, E2).
+   * One per open tab: made with it, painted into every repaint, settled when it closes.
+   */
+  private busy: BusyHost | undefined;
 
   /** Where in the listing we are, as cursors already used. */
   private trail: Trail = START;
@@ -116,7 +124,12 @@ export class BugsKeysPanel {
         vscode.ViewColumn.Active,
         { enableScripts: true, retainContextWhenHidden: true, enableFindWidget: true },
       );
+      const panel = this.panel;
+      const busy = new BusyHost({ post: (message) => { void panel.webview.postMessage(message); } });
+      this.busy = busy;
       this.panel.onDidDispose(() => {
+        busy.dispose();
+        this.busy = undefined;
         this.panel = undefined;
       });
       const text = pushTextControlsTo(this.panel.webview);
@@ -124,7 +137,9 @@ export class BugsKeysPanel {
       this.panel.webview.onDidReceiveMessage((m: { type?: string; id?: string }) => {
         // A press on a text control is the person's setting, not a turn of this page's flow.
         if (!appliedTextControl(m, 'key page')) {
-          void this.turns.run(() => this.act(m.type ?? '', m.id ?? ''));
+          // A numbered press is held under the mark until its turn ends; a fresh page's `ready` is told what is running.
+          busy.heard(m);
+          void busy.track(m, () => this.turns.run(() => this.act(m.type ?? '', m.id ?? '')));
         }
       });
     }
@@ -460,7 +475,8 @@ export class BugsKeysPanel {
       return;
     }
 
-    this.panel.webview.html = usersPageHtml(users, nonce(), { size: currentUiScale(), tone: currentTextTone() });
+    // What is still running is painted in, so a repaint mid-action — `Turns` repaints as every action starts — keeps the bar.
+    this.panel.webview.html = usersPageHtml(users, nonce(), { size: currentUiScale(), tone: currentTextTone() }, this.busy?.snapshot() ?? IDLE);
     this.lastPaint = users;
   }
 
