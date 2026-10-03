@@ -40,11 +40,24 @@ model may be described as qualified for it.
 1. Re-establish the harnesses on current `main` (schema step 18; `COAI_SECURITY_CALIBRATION_ENDPOINT`,
    `COAI_SECURITY_AUDIT_SCOPE`, `COAI_SECURITY_AUDIT_MODEL_CONTEXT_TOKENS`; see `module_tests.md`).
 2. Write the prediction for each measurement BEFORE running it (measurement rule 4).
-3. Fidelity: a second positive fixture besides the AuthZ/SQL one; three consecutive adequate answers per
-   prompt per model, hand-checked against a written adequacy criterion, raw answers retained.
-4. Campaign: rerun groups 2 and 5, then 6–10, grouped and inspected before advancing.
+3. Fidelity: a second positive fixture besides the AuthZ/SQL one. The adequacy criterion is WRITTEN into the
+   RESULTS document before the run (correct trigger and mechanism, an impact the fixture supports, complete
+   reproduction preconditions, no invented values). Decoding is pinned — the local runtime already sends
+   temperature 0 and a prompt-derived seed; the run records both. **Exactly three attempts per prompt per model per
+   fixture, 3/3 required** — no retries until a streak appears; a changed prompt is a new candidate with its own
+   three. Raw answers retained.
+3a. **Decision point after step 3:** if no prompt/model qualifies, the campaign is descoped (recorded, not run)
+   and the lane stays documented as unverified evidence. If one qualifies with a changed prompt, model or
+   configuration, ALL campaign groups (1–10) are rerun under that one configuration, so the dataset is uniform;
+   the earlier all-Gemma groups remain historical.
+4. Campaign (only if step 3a says so), grouped and inspected before advancing.
 5. Consultant discussion of the findings once its cap allows; verify every piece of advice.
-6. The final `review_feature`, then promote this plan.
+6. The final `review_feature`. Preflight first: `providers` shows every enabled vendor healthy, each model on its
+   own vendor's CLI per `local.common.vendor-routing`, and no reviewer known to be at its quota (the earlier
+   attempt answered 0/1 on cloud quota). Its findings are RESOLVED (accept/reject with reasons) in this plan;
+   accepted findings that need product code become follow-up plans and pull requests of their own — this plan
+   changes no product behaviour, and promotion waits for resolution, not for those fixes.
+7. Promote this plan.
 
 ## Test plan
 
@@ -54,9 +67,11 @@ pinned variables and what it does not settle. No prompt in Git changes without a
 
 ## Growth surfaces
 
-Retained raw requests/answers per run: tens of MB per campaign group on the operator's disk
-(`D:/rsd/_wt/security-lane-tools`), kept until this plan is promoted, then archived or deleted by the
-operator; nothing in the repository grows.
+Retained raw requests/answers per run: tens of MB per campaign group in the operator's retained-artifact folder
+(on this machine `D:/rsd/_wt/security-lane-tools`; the harnesses take their output directory as a setting), kept
+until this plan is promoted, then archived or deleted by the operator. Before a group is rerun, any partial
+artifacts of an interrupted run of that group are moved aside, so a result is never assembled from two runs.
+Nothing in the repository grows.
 
 ## Definition of Done
 
@@ -64,5 +79,6 @@ operator; nothing in the repository grows.
       record says plainly that none did and the lane stays documented as unverified evidence.
 - [ ] Campaign groups 2 and 5 rerun; groups 6–10 run or their omission recorded with the reason.
 - [ ] The consultant discussion held, or its unavailability recorded.
-- [ ] The final `review_feature` resolved; reviewer counts recorded.
+- [ ] The final `review_feature` run after a healthy-provider preflight; every finding resolved; accepted code
+      findings turned into their own plans; reviewer counts recorded.
 - [ ] RESULTS documents updated per run; this plan promoted.
