@@ -1,5 +1,35 @@
 # Changelog
 
+## [0.62.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.61.2...extension-v0.62.0) (2026-10-03)
+
+
+### Features
+
+* **extension:** Active questions in the sidebar; the three watchers debounced, the poll only for remote folders ([01f5442](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/01f5442b2f741d2e9aecb369110ba4700e67fb3f))
+* **extension:** every webview that does slow work shows the busy mark ([#653](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/653)) ([02db516](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/02db51685f4defc19e7f54a29f0d859ec9834afe))
+* **extension:** the Logs page's Questions tab — one row per question, its models on expand ([7933c81](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7933c816be71f52a7ab08821bf483b864aaa6bb6))
+* **extension:** the Question consultant settings tab — rows, prompts, folders, mode and limits ([6002fc1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/6002fc118f20062f81424a5f7a097aac41373409))
+* **extension:** the question consultant's eight settings, mirrored from the server and declared ([d43b2a5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d43b2a578c7e5904287fdb6aa0867af5eb6e37d5))
+* **question-consultant:** S1 — capabilities as data, one confinement planner, the sanitisers, the api answering runtime ([f8aaf26](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/f8aaf2662a47f786b27067d124e396e99da3676e))
+* **question-consultant:** S2 — ask_consultants, the fan-out, its record store, the twelfth tool ([f69e3ee](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/f69e3ee687ed7f5d67c26bf2576a2e850a061eee))
+* **question-consultant:** S3 — the door to the person: the phase-aware gate, the 15-minute wait, escalation retention, the autonomy order ([a53c1bc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a53c1bc1789a7f96e8fdbb1c72bb09b69117eeb7))
+* **security:** add twelve conditional review modules alongside the gate ([100b4b6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/100b4b675cc4f19a813f5c29e91f6c5713194870))
+
+
+### Bug Fixes
+
+* **extension:** the Question consultant tab's prompts wait for the person through askPerson ([c5f21c9](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/c5f21c9f6f5cd165a55e94a554ef0cbb34cea267))
+* **extension:** validate security lane pairs and name the malformed setting truthfully ([37688aa](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/37688aa8146c27161af234e0e481f9b961b60a9d))
+* **question-consultant:** a Codex row needs no acknowledgement — the flag is enough ([0d99477](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0d99477f88cac7c3a3209298313547520cd6eb11))
+* **question-consultant:** S4b correctness — one wait, held cards kept, the proof spent once, nothing consults for ever ([4c04ed4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4c04ed4c762ca444962ffba5f04e0a3314fd5ed9))
+* **question-consultant:** S4b security — the question is secret-checked, roots are judged at their target, advice is redacted ([4c03ab5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4c03ab56d78c630bc6d21e43ee4e309e02d922f4))
+* **security:** prioritize source and require concrete audit evidence ([4c905da](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4c905da1d8e179e20fd6447c649aff2ec92b3813))
+
+
+### Performance Improvements
+
+* **question-consultant:** S4b performance and reuse — the outline only for an api row, one record-directory helper, one prompt-id rule ([a4284cf](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a4284cf81281dc89e1981f2ed415b4f221ebf516))
+
 ## [0.61.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.61.1...extension-v0.61.2) (2026-10-03)
 
 
