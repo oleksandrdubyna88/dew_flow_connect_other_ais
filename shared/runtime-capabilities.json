@@ -12,7 +12,7 @@
     "`default-deny` - held only by a headless permission DEFAULT nobody configured, hand-checked, not",
     "instrument-confirmed; `unsupported` - the runtime cannot do the capability at all; `unmeasured` - no",
     "cell says either way. Admission (CapabilityMatrix / capabilityAdmission.ts): confined admits; unconfined",
-    "and default-deny admit FLAGGED (D13 - the operator acknowledges the flag per row); unsupported and",
+    "and default-deny admit FLAGGED (D13 - the flag is shown on the row and every answer); unsupported and",
     "unmeasured refuse. A row is never softened from here: a new measurement is a new cell in the record.",
     "",
     "Every cell id is from run 01a0f8c7-18db-739b-8b83-3165e82cd42c (105 cells, 2026-10-01), recorded in",

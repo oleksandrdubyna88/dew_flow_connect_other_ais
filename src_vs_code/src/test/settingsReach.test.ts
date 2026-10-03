@@ -75,7 +75,7 @@ const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
   qconsult: {
     enabled: false,
     mode: 'remind',
-    rows: [{ id: 'sonnet-disk', vendor: 'claude', runtime: 'claude', model: 'sonnet', baseUrl: '', executablePath: '', key: '', prompt: 'question-disk', enabled: true, acknowledged: false }],
+    rows: [{ id: 'sonnet-disk', vendor: 'claude', runtime: 'claude', model: 'sonnet', baseUrl: '', executablePath: '', key: '', prompt: 'question-disk', enabled: true }],
     prompts: [{ id: 'ask-the-docs', title: 'The docs', capability: 'web', text: 'Read the vendor docs.' }],
     roots: ['D:/projects'],
     rowMinutes: 3,

@@ -1,15 +1,15 @@
 namespace CoaiMcp.Core.QuestionConsult;
 
 /// <summary>
-/// What an ADMITTED pair carries beside its standing: nothing, or the caveat the operator must
-/// acknowledge before the row runs (PLAN_question_consultant.md, D13).
+/// What an ADMITTED pair carries beside its standing: nothing, or the caveat shown on the row and beside
+/// every answer it gives (PLAN_question_consultant.md, D13, revised 2026-10-03: nothing to acknowledge).
 /// </summary>
 public enum AdmissionFlag
 {
     /// <summary>Confined by a measured mechanism; nothing to acknowledge.</summary>
     None,
 
-    /// <summary>The runtime can read this machine whatever it is told — allowed, flagged, acknowledged per row.</summary>
+    /// <summary>The runtime can read this machine whatever it is told — allowed and flagged.</summary>
     Unconfined,
 
     /// <summary>Held only by the CLI's headless default, which nobody configured — allowed, flagged.</summary>

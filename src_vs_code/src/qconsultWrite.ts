@@ -62,7 +62,7 @@ function noPrompt(row: QuestionRowSetting): string {
 
 /**
  * Why a row that is OFF may not be switched on — or empty when it may. In the order a person would fix it:
- * the prompt, the pair, the acknowledgement (D13), the cap of six.
+ * the prompt, the pair, the cap of six. A flagged pair (D13) is no blocker: its flag is shown, and it runs.
  */
 export function enableBlocker(
   row: QuestionRowSetting,
@@ -71,12 +71,7 @@ export function enableBlocker(
   vendors: readonly Vendor[],
 ): string {
   const admission = rowAdmission(row, prompts, vendors);
-  if (!admission.admitted) {
-    return admission.reason;
-  }
-  return admission.flag.length > 0 && !row.acknowledged
-    ? 'this pair can read this machine — tick the acknowledgement below before switching it on'
-    : capBlocker(row, rows);
+  return admission.admitted ? capBlocker(row, rows) : admission.reason;
 }
 
 function capBlocker(row: QuestionRowSetting, rows: readonly QuestionRowSetting[]): string {
@@ -95,7 +90,7 @@ export function rowAdded(rows: readonly QuestionRowSetting[], prompts: readonly 
   return [...rows, {
     id: freeId(rows, preset.id),
     vendor: preset.id, runtime: preset.runtime, model: preset.model, baseUrl: preset.baseUrl, executablePath: '', key: '',
-    prompt: firstAdmitted(preset.runtime, prompts), enabled: false, acknowledged: false,
+    prompt: firstAdmitted(preset.runtime, prompts), enabled: false,
   }];
 }
 
@@ -132,7 +127,7 @@ export function isQconsultCommand(value: string): value is QconsultCommand {
 /** The keys a row's controls carry, and which field each one edits. */
 export const ROW_KEYS = [
   'qconsultRowVendor', 'qconsultRowModel', 'qconsultRowBaseUrl', 'qconsultRowExecutablePath', 'qconsultRowKey',
-  'qconsultRowPrompt', 'qconsultRowEnabled', 'qconsultRowAcknowledged',
+  'qconsultRowPrompt', 'qconsultRowEnabled',
 ] as const;
 
 export type RowKey = (typeof ROW_KEYS)[number];
@@ -180,12 +175,11 @@ const EDITS: Readonly<Record<RowKey, Edit>> = {
   qconsultRowKey: (row, value) => ({ ...row, key: text(value).toLowerCase() }),
   qconsultRowPrompt: (row, value, _rows, context) => promptChosen(row, text(value), context),
   qconsultRowEnabled: (row, value, rows, context) => switched(row, value === true, rows, context),
-  qconsultRowAcknowledged: (row, value) => acknowledged(row, value === true),
 };
 
 /**
  * A catalogue entry chosen: the row becomes that entry — runtime, model, endpoint — and stays OFF until it is
- * switched on again, unacknowledged, because the pair it was acknowledged for is gone.
+ * switched on again, because the pair it was switched on as is gone.
  */
 function vendorChosen(row: QuestionRowSetting, id: string): QuestionRowSetting | undefined {
   const preset = VENDOR_PRESETS.find((p) => p.id === id && p.id.length > 0);
@@ -195,18 +189,18 @@ function vendorChosen(row: QuestionRowSetting, id: string): QuestionRowSetting |
 
   return id === row.vendor ? row : {
     ...row, vendor: preset.id, runtime: preset.runtime, model: preset.model, baseUrl: preset.baseUrl, executablePath: '', key: '',
-    enabled: false, acknowledged: false,
+    enabled: false,
   };
 }
 
-/** A prompt chosen — never none, never one the pair cannot run (A3) — and the acknowledgement goes with the old pair. */
+/** A prompt chosen — never none, never one the pair cannot run (A3) — and the row goes off with the old pair. */
 function promptChosen(row: QuestionRowSetting, id: string, context: RowEditContext): QuestionRowSetting | undefined {
   const candidate = { ...row, prompt: id };
   if (id.length === 0 || !rowAdmission(candidate, context.prompts, context.vendors).admitted) {
     return undefined;
   }
 
-  return id === row.prompt ? row : { ...candidate, enabled: false, acknowledged: false };
+  return id === row.prompt ? row : { ...candidate, enabled: false };
 }
 
 function switched(row: QuestionRowSetting, on: boolean, rows: readonly QuestionRowSetting[], context: RowEditContext): QuestionRowSetting | undefined {
@@ -215,11 +209,6 @@ function switched(row: QuestionRowSetting, on: boolean, rows: readonly QuestionR
   }
 
   return enableBlocker(row, rows, context.prompts, context.vendors).length === 0 ? { ...row, enabled: true } : undefined;
-}
-
-/** The tick taken away switches the row off too: the server refuses a flagged row without it (S3), so it could not run. */
-function acknowledged(row: QuestionRowSetting, on: boolean): QuestionRowSetting {
-  return on ? { ...row, acknowledged: true } : { ...row, acknowledged: false, enabled: false };
 }
 
 // ---------- the prompts ----------

@@ -55,7 +55,7 @@ public sealed class QuestionFanOutTests : IAsyncLifetime
     // ---------- the harness ----------
 
     private static QuestionRow Row(string id, string vendor, string runtime, string model, string prompt, bool enabled = true, string baseUrl = "") =>
-        new(id, vendor, runtime, model, baseUrl, string.Empty, string.Empty, prompt, enabled, Acknowledged: true);
+        new(id, vendor, runtime, model, baseUrl, string.Empty, string.Empty, prompt, enabled);
 
     private QuestionConsultSettings Settings(IReadOnlyList<QuestionRow> rows, TimeSpan? budget = null, IReadOnlyList<string>? roots = null) => new()
     {

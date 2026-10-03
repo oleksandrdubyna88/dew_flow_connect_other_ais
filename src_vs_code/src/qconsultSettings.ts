@@ -23,9 +23,9 @@ export const QCONSULT_MODES: readonly QconsultMode[] = ['off', 'remind', 'requir
 /**
  * One row: a model and exactly ONE base prompt, on or off — the C# `QuestionRow`, field for field.
  *
- * <p>`acknowledged` is D13's tick: a pair whose runtime cannot be CONFINED (every codex pair; agy on disk)
- * runs only once the operator has said, on that row, that it may read this machine — and the server refuses
- * a flagged row without it (S3's deviation 1), so the tick is what this panel writes.</p>
+ * <p>A pair whose runtime cannot be CONFINED (every codex pair; agy on disk) runs FLAGGED. D13, revised by the
+ * operator on 2026-10-03, dropped the acknowledgement tick: codex has no setting that limits what it reads, so a
+ * tick would confine nothing. A row stored with the old `acknowledged` field is read past.</p>
  */
 export interface QuestionRowSetting {
   readonly id: string;
@@ -38,7 +38,6 @@ export interface QuestionRowSetting {
   readonly key: string;
   readonly prompt: string;
   readonly enabled: boolean;
-  readonly acknowledged: boolean;
 }
 
 /** A base prompt a person added — the C# `QuestionPromptSeedRow`. A shipped prompt is edited through its override file instead. */
@@ -148,7 +147,6 @@ function rowFrom(value: unknown): readonly QuestionRowSetting[] {
     key: text(row['key']).toLowerCase(),
     prompt: text(row['prompt']),
     enabled: row['enabled'] !== false,
-    acknowledged: row['acknowledged'] === true,
   }];
 }
 

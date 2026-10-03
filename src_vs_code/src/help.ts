@@ -53,11 +53,11 @@ export const HELP = {
   qconsultMode:
     'What the gate in front of ask_human does about a question that was not put to the consultants first. REQUIRE refuses it — but only while a plan is being built: questions while the plan is formed and the first batches after it reached proceed go to you directly, and so does everything after the stage release. A question flagged as a production risk, with a reason, always reaches you at once, the consultants running beside it and their answers folded under the card. REMIND lets it through with a note to the AI; OFF says nothing.',
   qconsultRows:
-    'Each row is one model with exactly ONE base prompt, switched on or off — at most six on, and every row that is on runs, always, in parallel. The same prompt may sit on several rows. A pair whose runtime cannot do what the prompt needs is disabled with the measured reason; a pair that can do it but cannot be confined (every Codex pair, Antigravity on disk) says it can read this machine and runs only after you tick its acknowledgement.',
+    'Each row is one model with exactly ONE base prompt, switched on or off — at most six on, and every row that is on runs, always, in parallel. The same prompt may sit on several rows. A pair whose runtime cannot do what the prompt needs is disabled with the measured reason; a pair that can do it but cannot be confined (every Codex pair, Antigravity on disk) says it can read this machine, and that mark stays on the row and beside every answer it gives.',
   qconsultRowPrompt:
     'The one base prompt this row answers with. Each prompt needs a capability — none, disk or web — and a prompt this row’s runtime cannot serve is listed but disabled, with the reason from the measured capability table.',
-  qconsultRowAcknowledged:
-    'This runtime can serve the prompt but cannot be held inside the folders it is given — a shell is always there (Codex), or only a default nobody configured holds it (Antigravity on disk). Ticking says you accept that for this row; the server refuses the row without it, and the sidebar and the log show the flag beside every answer it gives.',
+  qconsultRowCanRead:
+    'This runtime can serve the prompt but cannot be held inside the folders it is given. Codex has no setting that limits what it reads: even read-only, it read a file outside its folder through PowerShell in every measured run. Antigravity on disk is held only by its own default, which no setting fixes. The tick is always on and cannot be taken off, because nothing here would confine it; the sidebar and the log show the mark beside every answer the row gives.',
   qconsultPrompts:
     'The instructions a row is given ahead of the question. Three ship — projects on this disk, the internet, the best developer’s opinion — and you can edit their words (Restore default puts the shipped ones back) or add your own, each with the capability it needs.',
   qconsultRoots:
