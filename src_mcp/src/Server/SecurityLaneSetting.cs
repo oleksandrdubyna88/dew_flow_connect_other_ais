@@ -109,12 +109,9 @@ public sealed record SecurityLaneSetting
         return IsBooleanOrAbsent(root, "enabled") ? string.Empty : "enabled must be true or false";
     }
 
-    private static string ListProblem(JsonElement root)
-    {
-        foreach (var name in new[] { "prompts", "runs" })
-            if (IsPresentButNotArray(root, name)) return $"{name} must be an array; the lane is off";
-        return string.Empty;
-    }
+    private static string ListProblem(JsonElement root) =>
+        new[] { "prompts", "runs" }.Where(name => IsPresentButNotArray(root, name))
+            .Select(name => $"{name} must be an array; the lane is off").FirstOrDefault() ?? string.Empty;
 
     private static bool IsPresentButNotArray(JsonElement row, string name) =>
         row.TryGetProperty(name, out var list) && list.ValueKind != JsonValueKind.Array;
@@ -148,9 +145,11 @@ public sealed record SecurityLaneSetting
     }
 
     /// <summary>Why an entry cannot join the library at all; a valid slug is claimed even when the library is full.</summary>
-    private static string PromptEntryRefusal(string id, Dictionary<string, SecurityPrompt> library, HashSet<string> seen) =>
-        !IsNewSlug(id, seen) ? $"prompt '{id}' must have a unique redteam- slug"
-            : IsLibraryFull(id, library) ? $"prompt library is limited to {SecurityCatalog.MostPrompts}" : string.Empty;
+    private static string PromptEntryRefusal(string id, Dictionary<string, SecurityPrompt> library, HashSet<string> seen)
+    {
+        if (!IsNewSlug(id, seen)) return $"prompt '{id}' must have a unique redteam- slug";
+        return IsLibraryFull(id, library) ? $"prompt library is limited to {SecurityCatalog.MostPrompts}" : string.Empty;
+    }
 
     private static bool IsNewSlug(string id, HashSet<string> seen) => SecurityCatalog.IsPromptId(id) && seen.Add(id);
 
@@ -232,9 +231,11 @@ public sealed record SecurityLaneSetting
         return new(provider.Provider, prompt, context, tokens, stages) { Refusal = refusal };
     }
 
-    private static string ContextOf(JsonElement entry, ProviderSettings provider) =>
-        entry.TryGetProperty("context", out _) ? Text(entry, "context")
-            : provider.Runtime == "local" ? SecurityContextModes.Slice : SecurityContextModes.Diff;
+    private static string ContextOf(JsonElement entry, ProviderSettings provider)
+    {
+        if (entry.TryGetProperty("context", out _)) return Text(entry, "context");
+        return provider.Runtime == "local" ? SecurityContextModes.Slice : SecurityContextModes.Diff;
+    }
 
     private static int DefaultTokens(string context) => context == SecurityContextModes.Slice ? 24000 : 200000;
 

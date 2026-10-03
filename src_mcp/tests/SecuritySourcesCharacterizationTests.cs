@@ -24,7 +24,7 @@ namespace CoaiMcp.Tests;
 /// <para>The deadline arm waits out the real 30-second collection budget: the budget is a constant of the lane,
 /// and making it injectable to shorten this test would change the code under characterization.</para>
 /// </remarks>
-public sealed class SecuritySourcesCharacterizationTests : IAsyncLifetime
+public sealed partial class SecuritySourcesCharacterizationTests : IAsyncLifetime
 {
     private readonly ProcessLauncher _real = new();
     private TempGitRepo _git = null!;
@@ -74,8 +74,11 @@ public sealed class SecuritySourcesCharacterizationTests : IAsyncLifetime
     }
 
     /// <summary>Every entry in reading order, the fixture's commit id replaced: it changes with every run.</summary>
-    internal static string Render(IReadOnlyDictionary<string, string> sources) => System.Text.RegularExpressions.Regex.Replace(
-        string.Join("\n=====\n", sources.Select(pair => $"{pair.Key} =>\n{pair.Value}")), "[0-9a-f]{40}", "<sha>");
+    internal static string Render(IReadOnlyDictionary<string, string> sources) => CommitId().Replace(
+        string.Join("\n=====\n", sources.Select(pair => $"{pair.Key} =>\n{pair.Value}")), "<sha>");
+
+    [System.Text.RegularExpressions.GeneratedRegex("[0-9a-f]{40}")]
+    private static partial System.Text.RegularExpressions.Regex CommitId();
 
     [Fact]
     public async Task A_diff_pairing_reads_no_source()
