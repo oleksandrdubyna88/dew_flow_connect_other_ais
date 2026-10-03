@@ -104,7 +104,7 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
         Noticing.None);
 
     private static QuestionRow CodexRow(string prompt) =>
-        new("astra", "codex", "codex", "gpt-6-astra", string.Empty, FakeCliExe, string.Empty, prompt, Enabled: true, Acknowledged: true);
+        new("astra", "codex", "codex", "gpt-6-astra", string.Empty, FakeCliExe, string.Empty, prompt, Enabled: true);
 
     [Fact]
     public async Task AQuestionIsAnsweredByARealChild_FencedAndRecorded()

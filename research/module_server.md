@@ -624,7 +624,7 @@ line of kind `question`, role `question`, stage `Question`: a fourth `UsageKinds
 inside that file: two orphaned duplicate doc blocks removed, a third moved to the member it describes; 1510 →
 1497 lines): `COAI_QCONSULT_ENABLED` (on), `COAI_QCONSULT_MODE` (`require`; read, acted on by S3),
 `COAI_QCONSULT_ROWS` (a JSON array of `{id, vendor, runtime, model, baseUrl, executablePath, key, prompt,
-enabled, acknowledged}`, at most six on — the seventh is switched OFF and said), `COAI_QCONSULT_PROMPTS` (a
+enabled}`, at most six on — the seventh is switched OFF and said), `COAI_QCONSULT_PROMPTS` (a
 person's own `{id, title, capability, text}`, beside the three shipped in `shared/question-prompts.json` and
 embedded as `QuestionPromptSet.Shipped`; edited through the `RolePrompts` override layer, restored by deleting
 the override), `COAI_QCONSULT_ROOTS` (**D14 (c)**: a root that is a drive, the user profile itself, a system
@@ -636,9 +636,9 @@ junction or symlink resolves to), `COAI_QCONSULT_ROW_MINUTES` (5), `COAI_QCONSUL
 `COAI_QCONSULT_FREE_BATCHES` (2; S3's). A row's vendor is a definition of its own, or a reviewer row borrowed
 by id (its runtime, endpoint, path, dialect, price and per-model settings), or a runtime's own name
 (`QuestionRowResolver`, over the consultant resolver's three materialisers and the QUESTION allowlist, which
-admits `api`). D13's `acknowledged` is carried on the row since S2 and shown beside every answer; the UI that
-asks for it is S4's. Whether the server should refuse an unacknowledged flagged row was an open question for
-S3/S4 — **answered in S3: it refuses** (the coordinator's decision; *The door to the person* below).
+admits `api`). D13's flag is shown beside every answer. S3 made the server refuse a flagged row without an
+`acknowledged` tick; **the operator revised that on 2026-10-03** — the flag is enough, there is nothing to
+acknowledge (*The door to the person* below), and an old `acknowledged` field is read past.
 
 **`ask_human` moved first**, as a proved move (`prove-move.mjs` against `95bc7048`: the region alone 137 body
 lines, one contiguous run, zero residue; the whole file's 30 residue lines all scaffolding, listed in the
@@ -773,10 +773,10 @@ identity: since S4b (item 7) the hold is asked BEFORE the file is judged, so an 
 and a torn question of a held id are kept too (the answered pair used to go: the hold reads that very answer).
 Judged through `Escalations`' own readers, under the same turn.
 
-**D13 on the server too** (the coordinator's decision, over S2's deviation 12): `QuestionAdmission` refuses a
-pair the planner admits but FLAGS — codex on every capability, agy's disk read — unless the row carries
-`acknowledged: true`; the refusal is the `blocked` RowOutcome naming the tick and the section, so a row typed
-by hand with `"enabled": true` and nothing else never reads this machine. A picker is not an enforcement.
+**D13 on the server, revised by the operator on 2026-10-03.** `QuestionAdmission` ADMITS a pair the planner
+admits but FLAGS — codex on every capability, agy's disk read — and the flag travels with the answer, the record,
+the card and the log. S3 had made it refuse such a row unless it carried `acknowledged: true`; the operator
+dropped the tick, because codex has no setting that limits what it reads, so a tick would confine nothing.
 
 **The heartbeat, now proved to be WRITTEN.** S2 covered the sweep's reading of a stale beat; nothing ran a
 row past thirty seconds. `QuestionFanOut` takes the interval as a seam (`heartbeatEvery`, the store's thirty

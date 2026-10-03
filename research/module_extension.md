@@ -10230,12 +10230,13 @@ the markup only renders them (`qconsultView.ts`, the `consultantRowView` split):
   through the shared `modelsFor`, exactly one prompt, on/off. **Add a row** appends one OFF with a prompt its
   runtime admits under an id no row holds, so a row is never stored without a prompt and adding never breaks the
   cap. The switch of a row that is off is DISABLED, with the reason as its title, while the row has no prompt,
-  while its pair is refused, while a flagged pair is unacknowledged, or while six rows are on. A prompt the row's
+  while its pair is refused, or while six rows are on. A prompt the row's
   runtime cannot run is a DISABLED option with the capability table's own reason (A3 — every refused vector pair
-  is checked). A flagged pair (every codex pair; agy on disk) says **Can read this machine** with the caveat and
-  shows the tick **I accept that this row can read this machine**, which writes `acknowledged: true` into the row
-  — the server refuses a flagged row without it (S3). Changing a row's vendor or prompt switches it off and drops
-  the acknowledgement, which was for the old pair; taking the tick away switches it off too.
+  is checked). A flagged pair (every codex pair; agy on disk) says **Can read this machine** with the caveat, and
+  shows a tick that is ON and DISABLED, with the reason beside it — *Codex has no setting that limits what it
+  reads*, or for agy, that only its own default holds it. It is not a setting: no `data-setting`, nothing stored or
+  posted. D13 was revised by the operator on 2026-10-03: a flagged row switches on like any other, because a tick
+  would confine nothing. Changing a row's vendor or prompt switches it off.
 - *Base prompts* — the three shipped prompts (generated from `shared/question-prompts.json` by
   `scripts/generate-question-prompts.mjs`, `--check` in `generatedFilesAreCurrent`) and a person's own, each with
   its capability. A shipped prompt's box is written to its override file `<dataDir>/prompts/<id>.md` through

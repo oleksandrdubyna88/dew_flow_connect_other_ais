@@ -2749,3 +2749,19 @@ share it through the turn, which `SessionTurn`'s own measurement covers, not thi
 | `commandsBusyMark.test.ts` (new, 4) | Switching a command on is numbered and the bar follows the clock; add and remove are numbered; typing a text or a title is not; a repaint mid-change draws after what is left | RED: no bar. Teeth: `post()` bypassing `send` → 2, typing numbered → 1 |
 | `rolesPageHarness.ts` (widened) | `runPageHtml(html, inDocument, clock?)`: given a clock, the page's timers run on it and its bar is answered (the shared `busyBarOf`); `presses(page)` gives what the person's presses said, without the load-time `ready` and the numbers. `rolesPageScript`, `featureStageOnRolesPage` and `commandsPage` read through it | — |
 | `rolesFieldOf.test.ts` (new, 3) | Typing in a role or prompt field settles under its own key; a `stage` pick and a switch are not settled | RED: a stage pick settled as `R/stage` |
+
+## D13 revised — a flagged row needs no tick (2026-10-03, the operator, before the 0.41.0 / 0.62.0 release)
+
+The operator dropped the acknowledgement: a Codex row (and agy on disk) is shown as able to read this machine, with a
+tick that is ON and cannot be taken off, because Codex has no setting that limits what it reads. The field was never
+released, so it is removed rather than kept; a row written with it by the pre-release build is read past.
+
+| Suite | What it proves | RED observed |
+|---|---|---|
+| `QuestionAdmissionTests` (rewritten) | codex × web / disk / none ADMITTED with no tick and still `Unconfined`; agy on disk admitted and `DefaultDeny`; a confined pair unflagged; agy + web still blocked by A3's sentence, which names no tick | 4 of 6 failed against the S3 rule: `Expected type to be RowAdmission+Admitted … but found RowAdmission+Refused` (three codex prompts, agy disk) |
+| `QuestionRowsTests` | the operator's three rows, one of them carrying `"acknowledged": true`, parse with no complaint | — (kept green through the field's removal) |
+| `qconsultWrite.test.ts` | codex × each prompt and agy × disk switch ON with nothing to tick; a vendor or prompt change still switches the row off | `codex × question-web refused to switch on` |
+| `qconsultSection.test.ts` (panel harness) | a codex row's switch is enabled; its tick is drawn `checked disabled`, carries no `data-setting`, and the reason "Codex has no setting that limits what it reads" is beside it | `the row shows no tick for what it can read` |
+
+**What it does NOT prove.** That a disabled checkbox cannot be changed is the webview's DOM, not this harness's; the
+tick posts nothing because it carries no `data-setting`, which the harness does observe.

@@ -312,7 +312,7 @@ const SCENARIOS: readonly Scenario[] = [
       assert.ok(home.length > 0, 'the launcher did not give this host a data directory of its own');
       const file = path.join(home, 'settings.json');
       const config = (): vscode.WorkspaceConfiguration => vscode.workspace.getConfiguration('coai');
-      const row = { id: 'host-row', vendor: 'claude', runtime: 'claude', model: 'sonnet', baseUrl: '', executablePath: '', key: '', prompt: 'question-disk', enabled: true, acknowledged: false };
+      const row = { id: 'host-row', vendor: 'claude', runtime: 'claude', model: 'sonnet', baseUrl: '', executablePath: '', key: '', prompt: 'question-disk', enabled: true };
       try {
         await config().update('qconsultRows', [row], vscode.ConfigurationTarget.Global);
         await settingsUntil(file, (text) => text.includes('COAI_QCONSULT_ROWS') && text.includes('host-row'),

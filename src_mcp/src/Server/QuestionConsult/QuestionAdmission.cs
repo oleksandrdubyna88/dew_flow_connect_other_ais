@@ -79,16 +79,12 @@ public static class QuestionAdmission
     }
 
     /// <summary>
-    /// D13 on the SERVER (decided for S3): a pair the planner admits but FLAGS — the runtime can read this machine
-    /// whatever it is told — runs only once the operator ticked the row's acknowledgement. A picker is not an
-    /// enforcement: the rows file is written by hand as often as by the panel.
+    /// D13 on the SERVER, revised by the operator on 2026-10-03: a pair the planner admits but FLAGS — the runtime can
+    /// read this machine whatever it is told — is admitted with its flag. There is nothing to acknowledge: codex has no
+    /// setting that limits what it reads, so a tick would confine nothing. The flag travels with every answer.
     /// </summary>
-    private static RowAdmission Planned(QuestionRow row, QuestionPromptDefinition prompt, ProviderSettings provider, IAnsweringRuntime runtime, Confinement.Planned plan) =>
-        plan.Flag == AdmissionFlag.None || row.Acknowledged
-            ? new RowAdmission.Admitted(row, prompt, provider, runtime, plan)
-            : new RowAdmission.Refused(row, prompt, RowOutcomes.Blocked,
-                $"the row '{row.Id}' pairs {RuntimeResolution.NameOf(provider.Identity())} with '{prompt.Capability.Spelled()}', and that runtime can read this machine "
-                + $"whatever it is told ({plan.Flag.Spelled()}) — tick the acknowledgement for this row in {Section} to run it anyway");
+    private static RowAdmission.Admitted Planned(QuestionRow row, QuestionPromptDefinition prompt, ProviderSettings provider, IAnsweringRuntime runtime, Confinement.Planned plan) =>
+        new(row, prompt, provider, runtime, plan);
 
     /// <summary>The grant a prompt's capability is: the roots travel with <c>disk</c> alone (<see cref="CapabilityGrant"/>).</summary>
     private static CapabilityGrant Grant(Capability capability, IReadOnlyList<string> roots) => capability switch

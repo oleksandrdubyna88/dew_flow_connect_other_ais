@@ -20,12 +20,12 @@ export type { Capability, CapabilityStanding, RuntimeCapabilityRow };
  * `shared/capability-matrix-vectors.json`, which is what makes "blocked in the UI and refused by the
  * server" one rule rather than two copies. Pure: no VS Code, no I/O.</p>
  *
- * <p>Confined admits; unconfined and default-deny admit FLAGGED — the row runs only once the operator
- * has acknowledged the caveat (D13); unsupported and unmeasured refuse; a runtime or a capability the
- * table does not know refuses by name and never defaults.</p>
+ * <p>Confined admits; unconfined and default-deny admit FLAGGED — the row runs, and its flag is shown on the row
+ * and beside every answer (D13, revised 2026-10-03); unsupported and unmeasured refuse; a runtime or a capability
+ * the table does not know refuses by name and never defaults.</p>
  */
 
-/** What an admitted pair carries beside its standing: nothing, or the caveat a person acknowledges. */
+/** What an admitted pair carries beside its standing: nothing, or the caveat the row shows. */
 export type AdmissionFlag = '' | 'unconfined' | 'default-deny';
 
 export interface Admission {

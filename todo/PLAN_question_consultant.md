@@ -135,7 +135,7 @@ paths in [RESULTS_question_consultant_capabilities.md](../research/RESULTS_quest
 | D10 | Web rows get ONLY the sanitised question (`WebQuestionSanitiser`, refuse-never-redact); `none` rows on hosted runtimes get the context through a SECRET check (not the code ban) plus the AST outline; `disk` rows get context + read-only roots | A2 + A9 |
 | D11 | Waiting for the person: 15 minutes default (was 30), then `no_answer_yet` and the card `expired`; escalation files deleted after 7 days | A10 + A4 |
 | D12 | `PanelService.cs` (1884 lines) and `PanelSettings.cs` (1510) grow by zero net lines: the `ask_human` block is first MOVED out as a proved move (`todo/PLAN_round_engine_and_panel_service_under_800_lines.md` §2's method), new settings live in their own record | the 800-line ceiling; both files already have plans to shrink |
-| D13 | **Two different refusals, kept apart.** A pair whose runtime CANNOT do the capability (agy `web`, api `disk`/`web`, local `disk`/`web`) is **blocked** (A3). A pair whose runtime CAN do it but cannot be CONFINED (codex for every capability, F2; agy `disk`, confined only by its headless default, F7) is **allowed but flagged** — "can read this machine" — and the row is enabled only after the operator ticks an explicit acknowledgement on that row; the flag is shown in the sidebar and the log beside every answer it produced. A2 is still met in full, because what a web row is GIVEN (the sanitised question, a scratch cwd, no context) is ours to control. **Assumption, to confirm with the operator before S4** — the operator's own example puts Astra (codex) on the internet row | blocking codex would block the operator's example; calling it confined would be false (6 of 6 / 3 of 3 measured reads) |
+| D13 | **Two different refusals, kept apart.** A pair whose runtime CANNOT do the capability (agy `web`, api `disk`/`web`, local `disk`/`web`) is **blocked** (A3). A pair whose runtime CAN do it but cannot be CONFINED (codex for every capability, F2; agy `disk`, confined only by its headless default, F7) is **allowed but flagged** — "can read this machine" — and the flag is shown on the row, in the sidebar and in the log beside every answer it produced. **Confirmed and revised by the operator on 2026-10-03:** the flag is enough. There is no acknowledgement to tick: the row shows a tick that is ON and cannot be taken off, with the reason (Codex has no setting that limits what it reads). Codex stays allowed for `web`. A2 is still met in full, because what a web row is GIVEN (the sanitised question, a scratch cwd, no context) is ours to control. The operator's own example puts Astra (codex) on the internet row | blocking codex would block the operator's example; calling it confined would be false (6 of 6 / 3 of 3 measured reads) |
 | D14 | **Gate round 1 (2026-10-01, gemini; codex rate-limited until 2026-10-08), four findings accepted.** (a) A `consultId` passed to `ask_human` is VERIFIED, never trusted: it must exist in `QuestionConsultStore`, belong to the same caller session and repository, be terminal (not `consulting`), be younger than 30 minutes and not already used by another `ask_human` call (single use) — otherwise `require` refuses as if none were given. (b) The phase store's key is repo common-dir + plan key when a plan is known, else the caller SESSION; with no plan the release is never inferred (not released), and a plan key reused after its release starts a fresh count. (c) Disk roots are validated on both sides and refused when they are a drive root, the user profile directory itself, a system directory (Windows, Program Files, ProgramData) or inside the data directory. (d) A `consulting` record carries a heartbeat (rewritten every 30 s by the fan-out); the sweep acts only when the heartbeat is older than two minutes AND the pid is dead, so a recycled Windows pid cannot end a live consultation | the reviewer's scenarios are concrete: a fabricated id bypasses `require`; unplanned work has no plan key; a drive root is the whole disk; pids are reused |
 
 ## 4. Architecture
@@ -738,6 +738,14 @@ Differences from the findings' wording, each a decision:
     home) — `DOTNET_ROOT` joined the Unix list
     (`ChildEnvironmentTests.TheUnixList_CarriesDotnetRoot…`); Windows finds the runtime through the registry.
 
+11. **D13 revised by the operator, 2026-10-03, before the release** (fix/qconsult-codex-no-ack): the acknowledgement
+    tick is gone. A flagged pair (codex on every capability, agy on disk) is ADMITTED by `QuestionAdmission` and
+    switches on in the panel like any other row; the row shows "Can read this machine" and a tick drawn ON and
+    disabled, with the reason, that is not a setting. `QuestionRow.Acknowledged` / `acknowledged` was removed rather
+    than kept: it had never been released; an old row carrying it is read past. RED first: 4 of 6
+    `QuestionAdmissionTests` refused, `codex × question-web refused to switch on`, `the row shows no tick for what it
+    can read`.
+
 ### S5 — Release, the live check, the rule, the tails — **Opus** (procedural: every outward step is shown to the operator before it happens and the cascade follows a written recipe)
 
 **Goal.** A release the operator can test (A12), proven on the product path first.
@@ -789,7 +797,7 @@ and the check re-run.
 | D10 what each capability receives | S2 | acceptance 2 |
 | D11 15 minutes, 7 days | S3 | acceptance 3, 4 |
 | D12 zero net growth, the proved move first | S2 | acceptance 1, 6 |
-| D13 blocked vs flagged-unconfined, the operator's acknowledgement per row | S4 | acceptance 2 (the flags in the data: S1-1, S1-2) |
+| D13 blocked vs flagged-unconfined (revised 2026-10-03: the flag alone, no acknowledgement) | S4, revised before the release | acceptance 2 (the flags in the data: S1-1, S1-2) |
 | D14 (a) consultId verified · (b) phase key without a plan · (c) roots validated · (d) heartbeat sweep | (a)(b) S3, (c)(d) S2 | (a)(b) S3-1/2 · (c) S2-5 · (d) S2-3 |
 | §0 feature 1 the settings tab | S4 | acceptance 2 |
 | §0 feature 2 the autonomy order asks the consultant first | S3 | acceptance 5 |

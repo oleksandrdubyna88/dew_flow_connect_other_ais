@@ -130,7 +130,7 @@ test('an option the page drew disabled reads disabled, with its title — and an
   // A DOM's `option.disabled` and `option.title`. Read from the BOOLEAN attribute, like a checkbox's
   // `checked`: an option whose title merely mentions the word must not read as disabled. The Question
   // consultant's prompt picker is the page that draws one of each (S4, A3).
-  const row = { id: 'agy-1', vendor: 'antigravity', runtime: 'antigravity', model: '', baseUrl: '', executablePath: '', key: '', prompt: 'question-opinion', enabled: false, acknowledged: false };
+  const row = { id: 'agy-1', vendor: 'antigravity', runtime: 'antigravity', model: '', baseUrl: '', executablePath: '', key: '', prompt: 'question-opinion', enabled: false };
   const page = runPanel(panelState('questionconsultant', { settings: { ...DEFAULTS, qconsult: { ...DEFAULTS.qconsult, rows: [row] } } }));
   const prompt = page.controls.find((one) => one.dataset['setting'] === 'qconsultRowPrompt');
   const web = prompt?.options.find((one) => one.value === 'question-web');

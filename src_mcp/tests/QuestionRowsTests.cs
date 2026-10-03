@@ -30,7 +30,7 @@ public sealed class QuestionRowsTests
         astra.Vendor.Should().Be("codex");
         astra.Runtime.Should().Be("codex");
         astra.Prompt.Should().Be("question-web");
-        astra.Acknowledged.Should().BeTrue("D13's tick is carried on the row since S2");
+        // The row carries "acknowledged": true — a field the pre-release build wrote. It is read past without a complaint (D13, revised).
         astra.Enabled.Should().BeTrue("absent is on");
         var grok = setting.Rows.Single(r => r.Id == "grok");
         grok.Enabled.Should().BeFalse();
@@ -139,6 +139,5 @@ public sealed class QuestionRowsTests
         row.BaseUrl.Should().BeEmpty();
         row.ExecutablePath.Should().BeEmpty();
         row.Key.Should().BeEmpty();
-        row.Acknowledged.Should().BeFalse();
     }
 }
