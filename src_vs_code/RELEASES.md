@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.63.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.62.1...extension-v0.63.0) (2026-10-03)
+
+
+### Features
+
+* **consult:** the consultant works on every vendor, and says why when it cannot ([#662](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/662)) ([d8116bb](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/d8116bbdbaf94c563d069b80dd9f65bfa1206ae9))
+
 ## [0.62.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.62.0...extension-v0.62.1) (2026-10-03)
 
 
