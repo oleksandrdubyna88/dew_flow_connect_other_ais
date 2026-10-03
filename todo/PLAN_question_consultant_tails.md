@@ -11,7 +11,7 @@
 ## Goal
 
 The question consultant shipped (stories S1–S5 of its plan) with five things deliberately left out, plus one flaky test
-found while building it. Each is small, but none can be done well inside that plan. One of them is a security release in its own
+found while building it and one gap the live check found (item 7). Each is small, but none can be done well inside that plan. One of them is a security release in its own
 right: the deny list the **existing** consultant and reviewer rely on was measured leaking.
 
 ## 1. The shipped consultant and reviewer leave their deny lists — a security release
@@ -70,10 +70,19 @@ for 12–20 s and reports "not started … the round reached its limit" before t
 load-sensitive: the deadline is wall-clock. Make the clock injectable for that path, or derive the assertion from
 the deadline the test itself sets, then show it holding over 20 consecutive runs.
 
+## 7. An api row's cost
+
+Found by the live check
+([RESULTS §7](../research/RESULTS_question_consultant_capabilities.md#7-the-live-product-path-check-s5-2026-10-03)):
+the Grok row answered with no `costUsd`, while the claude rows reported theirs. The field is nullable, so nothing is
+wrong in the reply, but the cost can be known. OpenRouter returns usage, and the price is in the catalog the panel
+already reads. Find where the api runtime drops it, and fill it from the vendor's own figure when one exists, never
+from an estimate.
+
 ## Build order
 
-1 (security, its own release) → 6 (unblocks a trustworthy suite) → 5 → 4 → 2 and 3 (each starts with a measurement
-and may end blocked).
+1 (security, its own release) → 6 (unblocks a trustworthy suite) → 5 → 7 → 4 → 2 and 3 (each starts with a
+measurement and may end blocked).
 
 ## Test plan
 
@@ -89,4 +98,5 @@ capability row.
 - [ ] The operator's choice on uncommitted work is recorded and built.
 - [ ] `question_consults` has a retention, tested.
 - [ ] The round-deadline test passes 20 runs in a row.
+- [ ] An api row reports its cost when the vendor states it.
 - [ ] module docs updated; this plan promoted when done.
