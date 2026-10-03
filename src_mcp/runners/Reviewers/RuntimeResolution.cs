@@ -202,6 +202,46 @@ public static class RuntimeResolution
     }
 
     /// <summary>
+    /// Whether a CONFIGURED ROW can run: how it authenticates, and then — for a codex row on somebody else's endpoint —
+    /// whether it names a model (research/PLAN_refuse_an_endpoint_row_without_a_model.md).
+    /// </summary>
+    /// <remarks>
+    /// <para>Its own answer rather than a parameter on <see cref="AuthOf"/>: credentials and a launch's readiness are two
+    /// questions, and folding the second into the first made <see cref="ExclusionReason"/> reach around it (code round,
+    /// gemini). The model travels as a parameter because <see cref="VendorIdentity"/> deliberately carries none.</para>
+    /// <para>The key is answered first, so a row with neither is told about the key. A model that is null — a settings
+    /// field the file omitted arrives null under the source generator, whatever its initializer says (doctrine §4a) —
+    /// is no model, exactly as an empty one is.</para>
+    /// </remarks>
+    public static (string Auth, string Note) ReadinessOf(
+        VendorIdentity vendor, bool hasVaultKey, bool hasServerToken, string model)
+    {
+        var auth = AuthOf(vendor, hasVaultKey, hasServerToken);
+
+        return auth.Auth != "unavailable" && NamesNoModel(vendor, model) ? ("unavailable", NoModelNote(vendor)) : auth;
+    }
+
+    /// <summary>Why a configured row was left out of the round, in words this side wrote — its model included.</summary>
+    public static string ExclusionReason(VendorIdentity vendor, bool hasVaultKey, bool hasServerToken, string model) =>
+        AuthOf(vendor, hasVaultKey, hasServerToken).Auth != "unavailable" && NamesNoModel(vendor, model)
+            ? "no model is chosen for its endpoint"
+            : ExclusionReason(vendor, hasVaultKey, hasServerToken);
+
+    /// <summary>
+    /// A codex row pointed at somebody else's endpoint with no model chosen — refused, because with no <c>-m</c> the Codex
+    /// CLI sends its OWN default model id there, which that endpoint does not serve (ReviewerRuntime.ModelArgs).
+    /// </summary>
+    /// <remarks>A plain codex row (no base URL) runs on the CLI's default, as it always has: that default is what its
+    /// own service serves. Null, empty and whitespace are all no model; a null base URL is no endpoint (code round).</remarks>
+    private static bool NamesNoModel(VendorIdentity vendor, string model) =>
+        string.IsNullOrWhiteSpace(model) && !string.IsNullOrWhiteSpace(vendor.BaseUrl) && NameOf(vendor) == "codex";
+
+    /// <summary>What a person reads on the card and in <c>providers</c>: the row, the endpoint, and the cure.</summary>
+    private static string NoModelNote(VendorIdentity vendor) =>
+        $"'{vendor.Provider}' points the Codex CLI at {vendor.BaseUrl} with no model — pick one that endpoint lists "
+        + "(≡ on its card); with none, the Codex CLI sends its own default model id, which that endpoint does not serve";
+
+    /// <summary>
     /// An <c>api</c> vendor authenticates with a key under its own id in the vault — and needs an
     /// endpoint to send it to.
     /// </summary>

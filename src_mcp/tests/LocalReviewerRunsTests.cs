@@ -91,4 +91,23 @@ public class LocalReviewerRunsTests
 
         PanelService.AuthOf(codex, hasVaultKey: false).Auth.Should().Be("own auth");
     }
+
+    [Fact]
+    public void ACodexRowOnAnEndpointWithNoModel_IsLeftOutOfTheRound()
+    {
+        // research/PLAN_refuse_an_endpoint_row_without_a_model.md: the round's roster is CanRun -> AuthFor -> this, so the row's
+        // own model must reach the rule — an unavailable answer here is what removes it before launch.
+        var openrouter = new ProviderSettings("openrouter")
+        {
+            Enabled = true,
+            Runtime = "codex",
+            BaseUrl = "https://openrouter.ai/api/v1",
+        };
+
+        var (auth, note) = PanelService.AuthOf(openrouter, hasVaultKey: true);
+
+        auth.Should().Be("unavailable");
+        note.Should().Contain("no model");
+        PanelService.AuthOf(openrouter with { Model = "openai/gpt-6-astra" }, hasVaultKey: true).Auth.Should().Be("vault key");
+    }
 }

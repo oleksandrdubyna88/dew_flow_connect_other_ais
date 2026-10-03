@@ -6,7 +6,7 @@
 > on a measurement). E3: plan proceed (1/1, local; 1 accepted, 3 rejected), code proceed (4/4, local; 1 accepted, 10 rejected), final
 > code round proceed (8/8; 10 accepted, 4 rejected); own review (Opus) changed the shape — the render coalescer was withdrawn for a non-serialising tracker. Deviations in §8a. The open tails are
 > [PLAN_busy_marks_on_every_webview.md](../todo/PLAN_busy_marks_on_every_webview.md) and
-> [PLAN_refuse_an_endpoint_row_without_a_model.md](../todo/PLAN_refuse_an_endpoint_row_without_a_model.md).
+> [PLAN_refuse_an_endpoint_row_without_a_model.md](PLAN_refuse_an_endpoint_row_without_a_model.md).
 > Scope: the two pages built by `pageDocument` (the sidebar and the Settings tab) — `src_vs_code/src/panelView.ts`,
 > `panelProvider.ts`, `extension.ts` (one `dispose` registration), four new modules (`selectSearch.ts`, `busyMark.ts`,
 > `inFlight.ts`, `renderTracker.ts`), tests, `research/module_extension.md`, `research/module_tests.md`,
@@ -234,7 +234,7 @@ on `1056aed9` before any fix.
 
 Extracted on promotion into plans of their own: the same mark on the other webviews —
 [PLAN_busy_marks_on_every_webview.md](../todo/PLAN_busy_marks_on_every_webview.md) — and the server-side refusal of an
-endpoint row with no model (§4) — [PLAN_refuse_an_endpoint_row_without_a_model.md](../todo/PLAN_refuse_an_endpoint_row_without_a_model.md).
+endpoint row with no model (§4) — [PLAN_refuse_an_endpoint_row_without_a_model.md](PLAN_refuse_an_endpoint_row_without_a_model.md).
 
 ## 8a. What shipped differently (kept as each epic lands)
 
@@ -293,3 +293,11 @@ endpoint row with no model (§4) — [PLAN_refuse_an_endpoint_row_without_a_mode
 - [x] `research/module_extension.md`, `research/module_tests.md` and `research/architecture.md` describe what
       shipped; this plan promoted.
 - [ ] PR merged with every thread answered; extension release cut after E3.
+
+## Boundary with PLAN_refuse_an_endpoint_row_without_a_model.md
+
+| | this plan (E1) | [PLAN_refuse_an_endpoint_row_without_a_model.md](PLAN_refuse_an_endpoint_row_without_a_model.md) |
+|---|---|---|
+| the panel's label for an endpoint row with no model | "no model yet — press ≡ and pick one this endpoint lists" | not touched |
+| a round with such a row | not touched | refused before launch, by name (`RuntimeResolution.ReadinessOf`) |
+| `providers` for such a row | not touched | `unavailable`, with the same note; the card's existing badge shows it |

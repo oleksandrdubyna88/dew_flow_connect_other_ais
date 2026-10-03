@@ -1844,3 +1844,36 @@ sequenceDiagram
   `cacheReadInputTokens` as the cached subset beside counting it as billed input, `UsageParser` reads
   codex's `cached_input_tokens`; `RoundAudit`'s answered line says `over N turns`, `(N cached)` and
   `source: …`. That number, per turn, is what decides whether C3 gets its own plan (D25).
+
+## A codex row on an endpoint with no model is refused (2026-10-03, PLAN_refuse_an_endpoint_row_without_a_model)
+
+`RuntimeResolution.ReadinessOf(vendor, hasVaultKey, hasServerToken, model)` refuses a `codex` row that has a base URL, a key,
+and an empty (or whitespace) model. It answers `unavailable` with a note that names the row and the endpoint, and says
+to pick a model that endpoint lists (≡ on its card). With no `-m` (`ReviewerRuntime.ModelArgs`), the Codex CLI sends
+its own default model id to that endpoint, which does not serve it, so every review on the row failed there. The
+failure read as the endpoint's, not as the empty choice it was.
+
+- **It is the one predicate, read from both directions.** The round's roster (`PanelService.CanRun` → `AuthFor` →
+  `PanelService.AuthOf` → `ReadinessOf`, with `ProviderSettings.Model`) drops the row before launch, and `providers`
+  (`VendorProbe`'s CLI path, which now takes the model as its api path already did) reports the same note. The
+  extension's existing card badge then reads "openrouter cannot review: …", with no extension change.
+- **`AuthOf` is unchanged and answers credentials only.** `ReadinessOf` is the separate question: auth first (a row
+  with neither a key nor a model is told about the key), then the model. The first version put a nullable `model`
+  parameter on `AuthOf`. The code round rejected that: doctrine §4 allows no such nullable, and `ExclusionReason` had
+  to reach around it.
+- **Null is no model.** An omitted settings field can arrive null under the source generator (doctrine §4a).
+  `ParseVendors` already coalesces `Model` and `BaseUrl` to empty (`PanelSettings.cs:1182-1183`), and the rule treats
+  null, empty and whitespace alike anyway. The plan round's first answer claimed the model was never null, and that is
+  corrected here.
+- **The model stays out of `VendorIdentity`**, by that type's own rule: a model belongs to a launch. It travels as a
+  parameter, as `hasServerToken` does.
+- **The round's model-facing sentence** (the `ExclusionReason` overload that takes the model) is "no model is chosen for its endpoint", written by this
+  side, never the row's text.
+- **Unchanged:** a plain codex row (no base URL) still runs on the CLI's default. `api`, `local` and `remote` rows
+  have their own checks.
+
+Tests: `RuntimeResolutionTests` (+7), `LocalReviewerRunsTests` (+1, the round's predicate), `VendorProbeTests` (+1,
+`providers`). All were RED first. Teeth on the source, rebuilt each time:
+- the round not passing the model → 1 red;
+- the probe not passing it → 1 red;
+- the rule removed → 5 red.
