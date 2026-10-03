@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.9.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.9.0...server-v0.9.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* a port somebody else holds ends both HTTP hosts with exit 75 and one line, never a crash ([8cc4f49](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8cc4f49216f8e33da5b1fc4e8f5744ce36d524a5))
+* **mcp,server:** messages name ConnectOtherAIs &gt; Team servers / Consultant / MCP server (S4, part 1) ([7310aff](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7310affe3f45749e1def7d03a20c8d18611cf7b3))
+* the bind-failure line is one ASCII line on stderr, with no stack and no dropped log call ([e21d4bc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e21d4bc57d0515c82e706e9d769e81f265631b00))
+
 ## [0.9.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/server-v0.8.0...server-v0.9.0) (2026-09-26)
 
 
