@@ -12,6 +12,9 @@ import { mkdtempSync, writeFileSync, readFileSync, copyFileSync, existsSync, unl
 import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 import os from 'node:os';
+import { resolved } from '../.github/scripts/lib/resolved.mjs';
+// git is resolved once rather than named to the spawner (S4036): the probe uses the operator's own git, visibly.
+const GIT = resolved('git');
 
 const [exe, settings, scratchRoot, model = 'gemini-3.1-pro-high', out, armsJson = '[]'] = process.argv.slice(2);
 if (!exe || !settings || !scratchRoot || !out) {
@@ -21,11 +24,11 @@ if (!exe || !settings || !scratchRoot || !out) {
 
 const sha = (p) => createHash('sha256').update(readFileSync(p)).digest('hex');
 const repo = mkdtempSync(join(scratchRoot, 'coai-agyprobe-'));
-execFileSync('git', ['init', '-q'], { cwd: repo });
+execFileSync(GIT, ['init', '-q'], { cwd: repo });
 writeFileSync(join(repo, 'notes.txt'), 'nothing here\n');
 writeFileSync(join(repo, 'deep.txt'), 'the marker is QUOKKA-7731\n');
-execFileSync('git', ['add', '.'], { cwd: repo });
-execFileSync('git', ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid', 'commit', '-qm', 'probe'], { cwd: repo });
+execFileSync(GIT, ['add', '.'], { cwd: repo });
+execFileSync(GIT, ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid', 'commit', '-qm', 'probe'], { cwd: repo });
 
 const prompt = 'Run exactly this shell command with run_command: git grep -n QUOKKA . '
   + 'Then reply with ONLY the file name it printed. Do not use any other tool.';

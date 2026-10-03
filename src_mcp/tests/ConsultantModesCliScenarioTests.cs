@@ -159,7 +159,17 @@ public sealed class ConsultantModesCliScenarioTests : IDisposable
         var onClaude = Row(answer, "codex");
         onClaude.GetProperty("capability").GetString().Should().Be("no-restricted");
         onClaude.GetProperty("limitation").GetProperty("standing").GetString().Should().Be("unconfined");
-        Row(answer, "gemini").GetProperty("agy").GetProperty("settingsPath").GetString().Should().Contain("antigravity-cli");
+        // Where agy reads its allow rules was measured on Windows and Linux only: the macOS row names no file rather
+        // than a guess (shared/consultant-limitations.json), and the report says exactly that.
+        var settingsPath = Row(answer, "gemini").GetProperty("agy").GetProperty("settingsPath").GetString();
+        if (OperatingSystem.IsMacOS())
+        {
+            settingsPath.Should().BeEmpty("agy's settings file was never measured on macOS");
+        }
+        else
+        {
+            settingsPath.Should().Contain("antigravity-cli");
+        }
         // A legacy reference to a reviewer nobody has: data, with the sentence consult would refuse with.
         var nobody = Row(answer, "other");
         nobody.GetProperty("available").GetBoolean().Should().BeFalse();

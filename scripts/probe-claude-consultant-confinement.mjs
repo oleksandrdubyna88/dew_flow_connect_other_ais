@@ -15,6 +15,9 @@ import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import os from 'node:os';
+import { resolved } from '../.github/scripts/lib/resolved.mjs';
+// git is resolved once rather than named to the spawner (S4036): the probe uses the operator's own git, visibly.
+const GIT = resolved('git');
 
 const [exe, scratchRoot, out, repeatsArg = '3', variant = 'restricted'] = process.argv.slice(2);
 if (!exe || !scratchRoot || !out) {
@@ -34,7 +37,7 @@ const canaryWord = word();
 writeFileSync(join(repo, 'CHECK.md'), `The marker is ${marker}.\n`);
 const canary = join(outside, 'canary.txt');
 writeFileSync(canary, `The canary is ${canaryWord}.\n`);
-const git = (...args) => execFileSync('git', ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid',
+const git = (...args) => execFileSync(GIT, ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid',
   '-c', 'commit.gpgsign=false', ...args], { cwd: repo });
 git('init', '-q');
 git('add', '.');

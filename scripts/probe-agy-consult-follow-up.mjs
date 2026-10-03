@@ -11,6 +11,9 @@ import { spawnSync, execFileSync } from 'node:child_process';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import os from 'node:os';
+import { resolved } from '../.github/scripts/lib/resolved.mjs';
+// git is resolved once rather than named to the spawner (S4036): the probe uses the operator's own git, visibly.
+const GIT = resolved('git');
 
 const [exe, scratchRoot, model = 'gemini-3.1-pro-high', out, repeatsArg = '3', followUp] = process.argv.slice(2);
 if (!exe || !scratchRoot || !out || !followUp) {
@@ -20,7 +23,7 @@ if (!exe || !scratchRoot || !out || !followUp) {
 const repeats = Number.parseInt(repeatsArg, 10);
 
 const repo = mkdtempSync(join(scratchRoot, 'coai-agyfollow-'));
-const git = (...args) => execFileSync('git', ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid',
+const git = (...args) => execFileSync(GIT, ['-c', 'user.name=probe', '-c', 'user.email=probe@example.invalid',
   '-c', 'commit.gpgsign=false', ...args], { cwd: repo });
 git('init', '-q');
 writeFileSync(join(repo, 'notes.txt'), 'nothing here\n');
