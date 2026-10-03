@@ -1,5 +1,44 @@
 # Changelog
 
+## [0.41.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.5...mcp-v0.41.0) (2026-10-03)
+
+
+### Features
+
+* **question-consultant:** --log carries the questions, for the Logs page's Questions tab ([fb284d1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fb284d1c3c971b1f09df979f5205fb5eca8192d2))
+* **question-consultant:** S1 — capabilities as data, one confinement planner, the sanitisers, the api answering runtime ([f8aaf26](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/f8aaf2662a47f786b27067d124e396e99da3676e))
+* **question-consultant:** S2 — ask_consultants, the fan-out, its record store, the twelfth tool ([f69e3ee](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/f69e3ee687ed7f5d67c26bf2576a2e850a061eee))
+* **question-consultant:** S3 — the door to the person: the phase-aware gate, the 15-minute wait, escalation retention, the autonomy order ([a53c1bc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a53c1bc1789a7f96e8fdbb1c72bb09b69117eeb7))
+* **security:** add twelve conditional review modules alongside the gate ([100b4b6](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/100b4b675cc4f19a813f5c29e91f6c5713194870))
+
+
+### Bug Fixes
+
+* a port somebody else holds ends both HTTP hosts with exit 75 and one line, never a crash ([8cc4f49](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/8cc4f49216f8e33da5b1fc4e8f5744ce36d524a5))
+* **mcp:** a round refuses a codex row on an endpoint that names no model ([#655](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/655)) ([391c6f3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/391c6f3606da36d3c1422668bf13bdf0ff12da49))
+* **question-consultant:** a Codex row needs no acknowledgement — the flag is enough ([0d99477](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/0d99477f88cac7c3a3209298313547520cd6eb11))
+* **question-consultant:** a production-risk question past 4 KB still runs the consultants beside the card ([1bc1513](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/1bc1513f73cdd32743864b997077eef2294dbf27))
+* **question-consultant:** S4b correctness — one wait, held cards kept, the proof spent once, nothing consults for ever ([4c04ed4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4c04ed4c762ca444962ffba5f04e0a3314fd5ed9))
+* **question-consultant:** S4b security — the question is secret-checked, roots are judged at their target, advice is redacted ([4c03ab5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4c03ab56d78c630bc6d21e43ee4e309e02d922f4))
+* **question-consultant:** the retention count on an unordered listing, DOTNET_ROOT on the Unix list ([04126cc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/04126cc6eb2e77b1146dcd597f137c03d1746d49))
+* **security:** a lane-only round needs the lane's budget, and only two stages have a lane name ([6e615ce](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/6e615ce76793c10b02636522ee4a2781bc18989f))
+* **security:** align the local response schema and clarify evidence scope ([9ebfe7d](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9ebfe7d6d1a18902e45d1fc5caa42d9ac4c70a82))
+* **security:** isolate the audit target and require usable local replies ([a6215bd](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a6215bd91eddff3b1964436b0797f2df80675011))
+* **security:** preserve pre-lane findings when resuming sessions ([795c8dc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/795c8dc6f4952ac589bc36783e9e44017cccba15))
+* **security:** prioritize source and require concrete audit evidence ([4c905da](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4c905da1d8e179e20fd6447c649aff2ec92b3813))
+* **security:** prompt overrides, pairing refusals, source reads and boundaries ([9cda932](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/9cda9322a9a2c0d4ba981c5a2daa772287aa796b))
+* **security:** report uninspected trigger coverage and honor cancellation ([86fb6fb](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/86fb6fb7bc85d2101926335d87d8641e685118b5))
+* **security:** require SQL shapes instead of generic database prose ([fb3964f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fb3964ffdcd81fcafb0bc4352770a63299a293b4))
+* **security:** route audits from code signals instead of prose ([681eee4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/681eee4572e40dc6910e93dd9e3df6f8aba5f471))
+* **security:** the lane's budget never extends the ordinary roles' ([5b00a18](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/5b00a18dd70ffe41101c59d70c5cd3b750ee32d4))
+* **store:** the evidence column is schema step 18, and a preview database that numbered it 17 still opens ([dd6c51a](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/dd6c51a4da77eba64f29aa276f9c8e84692f3f2a))
+* the bind-failure line is one ASCII line on stderr, with no stack and no dropped log call ([e21d4bc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e21d4bc57d0515c82e706e9d769e81f265631b00))
+
+
+### Performance Improvements
+
+* **question-consultant:** S4b performance and reuse — the outline only for an api row, one record-directory helper, one prompt-id rule ([a4284cf](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/a4284cf81281dc89e1981f2ed415b4f221ebf516))
+
 ## [0.40.5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.4...mcp-v0.40.5) (2026-10-01)
 
 
