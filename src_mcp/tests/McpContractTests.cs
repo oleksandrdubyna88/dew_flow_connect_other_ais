@@ -220,7 +220,7 @@ public sealed class McpContractTests : IDisposable
     /// <summary>
     /// With nobody at the keyboard, the escalation waits its budget and then tells the model to
     /// ask in the chat — the family's `remote-ask` fallback, observed over the real wire. The question is the GATE's
-    /// (the session is held), the only kind that reaches VS Code (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G1).
+    /// (the session is held), the only kind that reaches VS Code (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G1).
     /// </summary>
     [Fact]
     public async Task AskHuman_WithNobodyListening_WaitsThenSaysToAskInTheChat()
@@ -260,7 +260,7 @@ public sealed class McpContractTests : IDisposable
 
     /// <summary>
     /// The AI's own question, over the real wire: no card, no wait — the reply tells it to ask in its own conversation
-    /// (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G2).
+    /// (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G2).
     /// </summary>
     [Fact]
     public async Task AskHuman_ForTheAisOwnQuestion_AnswersAtOnceToAskInTheConversation()

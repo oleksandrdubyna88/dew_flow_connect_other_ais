@@ -153,7 +153,7 @@ public sealed class ThePersonAsksForASecondFeatureRoundTests : IDisposable
 
     /// <summary>
     /// With a ground already set, round 2 is admitted without the person — no answer can request it, so the question is
-    /// not recorded (and it is no card either: <c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G1). It used to be
+    /// not recorded (and it is no card either: <c>research/PLAN_ask_human_is_for_the_gate.md</c>, G1). It used to be
     /// recorded "whatever the ground", leaving the request's own check to ignore it; the binding and the card are now
     /// one decision, <see cref="RoundMachine.AsksForTheGate"/>.
     /// </summary>

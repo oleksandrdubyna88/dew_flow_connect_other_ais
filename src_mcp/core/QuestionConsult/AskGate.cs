@@ -60,14 +60,14 @@ public sealed record AskGateInput
     public bool PhaseUnreadable { get; init; }
 
     /// <summary>
-    /// Where the person is asked — decided by the server from the session BEFORE the gate (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>,
+    /// Where the person is asked — decided by the server from the session BEFORE the gate (<c>research/PLAN_ask_human_is_for_the_gate.md</c>,
     /// G1): a held gate's question is a card, every other question is the AI's own and is asked in its conversation.
     /// The default is the AI's own question, as every other default here is the ordinary call.
     /// </summary>
     public AskDoor Door { get; init; } = AskDoor.Conversation;
 }
 
-/// <summary>The two places a question reaches the person (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>).</summary>
+/// <summary>The two places a question reaches the person (<c>research/PLAN_ask_human_is_for_the_gate.md</c>).</summary>
 public enum AskDoor
 {
     /// <summary>A card in VS Code — only for the GATE's question: a held gate, or a feature review that can still be asked for its second round.</summary>
@@ -99,14 +99,14 @@ public abstract record AskDecision
 /// <para>The table, in the order it is asked: a production risk with no reason is refused in every mode; <c>off</c>,
 /// the plan stage and the release let the question through silently; an unreadable phase record lets it through
 /// and says so; then, building — a production risk asks the consultants (beside a held gate's card, or FIRST for the AI's
-/// own question, <c>todo/PLAN_ask_human_is_for_the_gate.md</c> G3); a verified
+/// own question, <c>research/PLAN_ask_human_is_for_the_gate.md</c> G3); a verified
 /// consultId opens the door; the free batches go to the person, counted; and past them the gate refuses in
 /// <c>require</c>, reminds in <c>remind</c>, and stands down with a note whenever no consultant can be had (D9 —
 /// never a deadlock).</para>
 /// <para>Erring toward the consultant is the safe direction for an AI that would otherwise interrupt (D7), which is
 /// why unknown is not released, and why a rejected consultId counts as none rather than as a reason to let the
 /// question through.</para>
-/// <para><b>A held gate's question is not the AI's</b> (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G7): on the
+/// <para><b>A held gate's question is not the AI's</b> (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G7): on the
 /// card door the phase rule does not apply — the gate is asking the person, the consultants cannot release a hold,
 /// and the batches count the AI's own questions. Only a production risk keeps D8 there.</para>
 /// </remarks>

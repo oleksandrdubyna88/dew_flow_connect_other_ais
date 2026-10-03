@@ -208,7 +208,7 @@ public sealed class QuestionConsultService(
     /// </summary>
     /// <param name="endedAs">How the record says the question ended when somebody answered: <see cref="QuestionOutcomes.ProductionRisk"/>
     /// beside a held gate's card, <see cref="QuestionOutcomes.ProductionRiskConsultedFirst"/> when the consultants ran before
-    /// the AI asked in its conversation (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G3).</param>
+    /// the AI asked in its conversation (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G3).</param>
     public async Task<QuestionConsultRecord?> BesideAsync(
         string repoPath, string question, string contextText, string sessionId, string escalationId, CancellationToken ct,
         string endedAs = QuestionOutcomes.ProductionRisk)

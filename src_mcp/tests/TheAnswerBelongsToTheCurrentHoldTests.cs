@@ -117,7 +117,7 @@ public sealed class TheAnswerBelongsToTheCurrentHoldTests : IDisposable
 
     /// <summary>
     /// Words are not a decision — and they must not HIDE one either. A hold's question card offers "Type an answer…"
-    /// first (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G4); a person who pressed "Keep going" on the notice and then
+    /// first (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G4); a person who pressed "Keep going" on the notice and then
     /// typed a reply to the AI's question left the newest answer word-only, and the hold read as unanswered (found by the
     /// cadence consultation b6e9df3c, 2026-10-03).
     /// </summary>

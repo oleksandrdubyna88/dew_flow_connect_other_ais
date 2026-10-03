@@ -58,6 +58,12 @@ export interface Escalation {
   readonly riskReason?: string;
   readonly consultantAnswers?: readonly EscalationAdvice[];
   /**
+   * Which producer wrote the card (research/PLAN_ask_human_is_for_the_gate.md, G4): `notice` for a round's call_human,
+   * `question` for an ask_human asked while the gate was held (or for a feature review's second round). Absent in a card
+   * an older server wrote.
+   */
+  readonly kind?: 'notice' | 'question';
+  /**
    * The directory this question was READ from, so its answer goes back beside it.
    *
    * <p>Not a field the server writes — the file's content does not carry it. It is what the reader

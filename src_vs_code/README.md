@@ -68,12 +68,18 @@ Some verdicts are not the AI's to make. The question appears **in VS Code** — 
 item so a dismissed dialog loses nothing, and at the top of the panel — together with the findings
 that are still gating, so you are not deciding from a summary.
 
-The call blocks until you answer. After your timeout it comes back `no_answer_yet` and tells the AI
-to ask you in the chat instead; the question stays open either way. **Nothing is decided by your
-silence.**
+Only the review gate's own questions come here — a `call_human` verdict, or a question an AI asks
+while the gate is holding (or in a feature review's second-round window). An AI's own questions about
+its work are asked in its chat and never appear in VS Code.
 
-The question reaches you as **one fixed English sentence and three buttons**, and your answer goes
-back exactly as you gave it. There used to be a translator here — the question was prose an AI had
+An AI asking through `ask_human` waits until you answer. After your timeout it comes back
+`no_answer_yet` and tells the AI to ask you in the chat instead, and the card is marked expired.
+**Nothing is decided by your silence.**
+
+A `call_human` verdict reaches you as **one fixed English sentence and three buttons**; a question an
+AI asked offers a box for your own words first and the three decisions after it — your words go back
+to the AI and decide nothing for the review; only a decision does. Your answer goes back exactly as
+you gave it. There used to be a translator here — the question was prose an AI had
 written, and your words were rendered into another language by a third model before the asker saw
 them. Three buttons removed the need for it, along with the `COAI_LANGUAGE` and `COAI_TRANSLATOR_*`
 settings behind it: free text you type on a button reaches the AI unmediated, which is worth more
@@ -233,7 +239,9 @@ Then work as usual. Your AI opens a session, submits its plan, and the gate does
 
 ## The panel and the Settings tab
 
-**The sidebar is what is happening now.** Under any question waiting on you:
+**The sidebar is what is happening now.** Under any question waiting on you — only the review gate's own (a
+`call_human`, or a question asked while the gate is holding or in a feature review's second-round window); your AI's
+own questions are asked in its chat:
 
 - **Notifications** — how many messages are new since you last looked, and the page that keeps every
   one of them after its toast has gone.

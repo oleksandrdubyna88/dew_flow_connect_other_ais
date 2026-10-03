@@ -1,13 +1,15 @@
 # PLAN — `ask_human` puts a card in VS Code only for the review gate; the AI's own questions are asked in its own chat
 
-> Status: **in progress — epic 1 (the server) built 2026-10-03 on `fix/ask-human-is-not-a-gate-hold`, epic 2 (the extension, help, the rest of the docs) open.** Scope: `src_mcp` (`AskHumanService`, `AskGate`,
-> `AskGateDesk`, `Escalations`, `PanelService.SessionAnswerFor`, the `ask_human` / `ask_consultants` tool texts),
-> `src_vs_code` (`escalations.ts`, `escalationAnswer.ts`, help texts), `shared/commands/command-question-consult.md`,
-> the knowledge base.
+> Status: **IMPLEMENTED, 2026-10-03** — epic 1 (the server) and epic 2 (the extension, the help, the docs), each through
+> its own plan and code round of the gate. Scope: `src_mcp` (`AskHumanService`, `AskGate`, `AskGateDesk`, `Escalations`,
+> `CurrentAnswer`, `PanelService.SessionAnswerFor`, the tool texts), `src_vs_code` (`escalations.ts`,
+> `escalationAnswer.ts`, `qconsultLog.ts`, help in five languages), `shared/commands/command-question-consult.md`, the
+> knowledge base. **Open tail:** the release — `coai-mcp` and the extension — waits for the operator's OK on its notes;
+> the headless-run trade-off (§3) is theirs to revisit. Deviations from the plan as first written are in §11.
 >
-> Related: [PLAN_question_consultant.md](PLAN_question_consultant.md) (still open at S5 — this plan changes its
+> Related: [PLAN_question_consultant.md](../todo/PLAN_question_consultant.md) (still open at S5 — this plan changes its
 > D8 and the "waiting for you" stage; the boundary is written into both documents, §6),
-> [module_server.md](../research/module_server.md), [module_extension.md](../research/module_extension.md).
+> [module_server.md](module_server.md), [module_extension.md](module_extension.md).
 
 ## 1. The symptom (the operator, 2026-10-03)
 
@@ -51,7 +53,7 @@ What the files say (escalation `f42b5305a0f9`, session `3bbbd5b5`, branch `feat/
 | G7 | **A gate question is not subject to the question consultant's phase rule.** The rule (D7) is about the AI's own questions; a held gate's question is the gate asking the person, and `GateHeld` (`RoundMachine.cs:77-82`) tells the AI to call `ask_human` — under `require` past the free batches that call was refused with "ask the consultants first", and no consultant can release a hold (own review, finding 2). On `AskDoor.Card`: a production risk keeps D8 (card at once, consultants beside); anything else is `Allowed`, not counted, no note. A `consultId` passed anyway is still verified and spent | a pre-existing defect this plan would otherwise enshrine |
 | G2 | **Any other `ask_human` call writes no card.** The gate in front of the person runs unchanged (phase rule, consultId verified and spent, the batch counted), and the call returns AT ONCE with `status: "ask_in_conversation"` and an `instruction`: ask the person yourself, in this conversation, with your own question tool, offer the options you see, wait for the reply, never decide alone. The instruction also names the one way an AI lands here by mistake: a question about a DOCUMENT or FEATURE review the gate is holding must pass `document` / `feature`, because the branch's own session is not the held one (own review, finding 3) — and `GateHeld`'s instruction says the same. The reply is its own record, `ConversationAnswer` (status, instruction, note, consultId, consultantAnswers), registered in `ServerJsonContext`; `HumanAnswer` keeps its shape, so `answered` / `no_answer_yet` gain no empty fields. A spent proof marks its record `person_asked_in_conversation`, not `person_asked`, so the Logs tab does not claim a card was shown | the operator's choice ("В чат Claude") |
 | G3 | **A production risk outside the gate consults FIRST, then returns** — in the building phase only; in the plan stage, after the release and under `off`, `AskGate` asks no consultant, as today. The record's outcome is `production_risk_consulted_first`, so the Logs tab does not say "the person was asked at once". When nobody can be asked (`BesideAsync` answers null: switched off, unreadable rows, arguments refused) the reply carries no answers and a `note` saying so. The consultants run to their row budget (5 min by default) inside the call, and the reply carries their answers — fenced `advisory_only`, one per row, exactly as `ask_consultants` returns them — beside `ask_in_conversation`, so the AI shows them to the person with its question. Inside a held gate D8 is unchanged: card at once, consultants beside, answers folded under it | the operator's choice ("Сначала консультанты"), knowingly trading D8's "never delay the person" for one place to read everything |
-| G4 | **The card says which producer wrote it**: `kind` = `notice` (a round's `call_human`) or `question` (an `ask_human` on a held / requesting session). A `question` card always offers **Type an answer…** first, then the decisions. A typed answer carries no decision: it goes back to the asking AI as its `answer`, and it releases nothing — `Escalations.DecisionOf` reads it as `None`, so the hold stays held until a decision is pressed (the existing rule of `CurrentAnswer`, made explicit after gate round 1, finding 3, and pinned by a test). A `notice` keeps today's rule. A card with no `kind` (an older server) falls back to today's `openFindings` guess | the extension must not guess what the server knows; the fallback keeps a new extension correct against an old server |
+| G4 | **The card says which producer wrote it**: `kind` = `notice` (a round's `call_human`) or `question` (an `ask_human` on a held / requesting session). A `question` card always offers **Type an answer…** first, then the decisions. A typed answer carries no decision: it goes back to the asking AI as its `answer`, and it releases nothing — `Escalations.DecisionOf` reads it as `None`, so the hold stays held — or, in the request window, no second round is asked for — until a decision is pressed (the existing rule of `CurrentAnswer`, made explicit after gate round 1, finding 3, and pinned by a test). A `notice` offers the decisions ONLY — no AI waits on a notice for words, so a typed answer there went nowhere (the cadence consultation b6e9df3c, 2026-10-03; it changes today's rule, which offered the box on a notice with no findings). A card with no `kind` (an older server) falls back to today's `openFindings` guess | the extension must not guess what the server knows; the fallback keeps a new extension correct against an old server |
 | G5 | **`status` reports only the answer the gate would act on**: the current hold's (`CurrentAnswer.For`) or, failing that, the feature request's (`CurrentAnswer.ForRequest`). An answer to any other card no longer surfaces as `humanDecision` | §2.3 |
 | G6 | `ask_human`'s name, arguments and the `answered` / `no_answer_yet` replies are unchanged; `ask_in_conversation` is a third reply. No new tool | a caller that knows two replies sees a third with an `instruction` that says what to do |
 
@@ -68,7 +70,8 @@ a later plan (an opt-in "AI questions → card"), not a silent fallback here.
 
 **Server (`src_mcp`)**
 
-1. `core/Rounds/RoundMachine.cs` — `AsksForTheGate(SessionState)`; `RecordQuestion` keeps its behaviour, written over it.
+1. `core/Rounds/RoundMachine.cs` — `AsksForTheGate(SessionState)`; `RecordQuestion` calls it and records a request question
+   only in `ApplyPersonsRequest`'s window (the G1 narrowing).
 2. `core/QuestionConsult/AskGate.cs` — `AskGateInput.Door` (`AskDoor.Card` | `AskDoor.Conversation`, default
    `Conversation` — the AI's own question is the ordinary call every other default describes, so the existing table
    keeps its meaning); on `Card` the phase rule is skipped (G7) and a risk is not counted; the production-risk note reads it (`Risk`, `:146`): in the
@@ -105,7 +108,8 @@ a later plan (an opt-in "AI questions → card"), not a silent fallback here.
 **Extension (`src_vs_code`)**
 
 10. `escalations.ts` — `Escalation.kind?: 'notice' | 'question'`.
-11. `escalationAnswer.ts` — `answerChoices` reads `kind` first (G4), the `openFindings` guess only when it is absent
+11. `escalationAnswer.ts` — `answerChoices` reads `kind` first (G4: `question` → words first then the decisions,
+    `notice` → the decisions only), the `openFindings` guess only when it is absent
     (its one caller, `escalationWatcher.ts:189`, receives `kind` through `parseEscalation`'s spread unchanged).
     `qconsultLog.ts` — labels for the two new outcomes.
 12. Help (`helpContent.ts` + `helpRu/Uk/De/Es.ts`, keys `questions-waiting`, `the-question-consultant`,
@@ -212,13 +216,44 @@ Scenario: `research/module_tests.md` — the `ask_human` flow's entry updated (c
 
 ## 10. Definition of Done
 
-- [ ] An `ask_human` outside a held gate / feature request writes no card and replies `ask_in_conversation` (G2).
-- [ ] A production risk outside the gate returns the consultants' fenced answers in the reply (G3).
-- [ ] Every card carries `kind`; the picker offers the gate decisions only where they mean something (G4).
-- [ ] `status.humanDecision` comes only from the hold's or the request's own questions (G5).
-- [ ] One predicate decides "is this the gate's question" for the binding and for the card (G1).
-- [ ] Every defect test was watched RED for the real symptom, then GREEN; both suites, typecheck, lint, format,
+- [x] An `ask_human` outside a held gate / feature request writes no card and replies `ask_in_conversation` (G2).
+- [x] A production risk outside the gate returns the consultants' fenced answers in the reply (G3).
+- [x] Every card carries `kind`; the picker offers the gate decisions only where they mean something (G4).
+- [x] `status.humanDecision` comes only from the hold's or the request's own questions (G5).
+- [x] One predicate decides "is this the gate's question" for the binding and for the card (G1).
+- [x] Every defect test was watched RED for the real symptom, then GREEN; both suites, typecheck, lint, format,
       plan-lifecycle green.
-- [ ] Tool texts, the autonomy command text, help in five languages, module docs and architecture updated.
-- [ ] PLAN_question_consultant.md carries D15 with the boundary table.
-- [ ] Gate: plan round `proceed`, code round resolved; own reviewers run; PR merged; release per the operator's OK.
+- [x] Tool texts, the autonomy command text, help in five languages, module docs and architecture updated.
+- [x] PLAN_question_consultant.md carries D15 with the boundary table.
+- [x] Gate: plan round `proceed`, code round resolved, for both epics; own reviewers run.
+- [ ] PR merged; release per the operator's OK — the open tail.
+
+## 11. What shipped differently from the plan as first written
+
+- **Two epics** — the gate's split order. Every server text (tool descriptions, `Instructions`, `GateHeld`, the shared
+  order text and its generated TypeScript copy) went into epic 1, because a source and its generated copy are one
+  commit and the order is sent by the server.
+- **G7 was added** by the own plan review: a held gate's question used to be refused "ask the consultants first" past
+  the free batches, and no consultant can release a hold.
+- **G1 narrowed the binding**: `RecordQuestion` now records a request question only in `ApplyPersonsRequest`'s own
+  window, and calls `AsksForTheGate` itself.
+- **The reply is its own record**, `ConversationAnswer`, not new members on `HumanAnswer` (the context writes no
+  null, so `answered` would have grown empty fields).
+- **The order on the conversation door changed twice**: consult-then-spend (gate round 1), then spend-first with a
+  give-back on a throw or a cancel (the own code reviewers — a race would have paid for consultants twice). The
+  `ask_human` lambda now takes the SDK's `CancellationToken`; it passed none.
+- **Words never hide a decision**: `CurrentAnswer` prefers a decided answer — found by the cadence consultation while
+  checking a wrong claim of its own (that `RecordQuestion` overwrote the hold's question).
+- **A notice offers the decisions only** (the cadence consultation): the plan had kept the old guess for notices.
+- **A production risk is judged before an unreadable phase record** (own review), and the note distinguishes
+  answered / nobody could be asked / none answered.
+- **`status` reads `CurrentAnswer.TheGatesAnswer`**; the session-wide `Escalations.DecisionFor` / `AnswerTextFor` /
+  `LatestAnswerFor` were removed with their last reader.
+- **The outcome labels are checked from the server side**: `TheLogNamesEveryQuestionOutcomeTests` enumerates
+  `QuestionOutcomes` by reflection against `qconsultLog.ts` (the epic 2 plan round rejected a TypeScript mirror list).
+- **Tests re-staged**: the two-in-flight proof race now runs on the AI's own question (a held gate's question and a
+  production risk need no proof); the feature end-to-end test's early question leaves no card at all.
+- **An unknown `kind` falls back to the old guess** (the own epic 2 review): a newer server's kind must not take the
+  box away, which would bring back the symptom. A `question` card's box says words decide nothing for the review — only a decision
+  does (worded for a hold and for the request window alike, CodeRabbit on #656); the Logs labels say the AI was *sent back* to ask in its chat (the server cannot
+  know the person was asked); the help qualifies "the consultants first" to while a plan is being built.

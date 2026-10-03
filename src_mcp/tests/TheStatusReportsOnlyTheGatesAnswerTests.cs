@@ -9,7 +9,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// <c>status</c> reports the person's decision only when it is the answer the gate would act on
-/// (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G5).
+/// (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G5).
 /// </summary>
 /// <remarks>
 /// Found 2026-10-03 on the operator's own machine: an AI's A-or-B question had become a card, the operator pressed
@@ -96,23 +96,30 @@ public sealed class TheStatusReportsOnlyTheGatesAnswerTests : IAsyncLifetime
 
     /// <summary>
     /// The other half of what status reports: on a feature review with no hold, the person's answer to a question asked
-    /// for round 2 (<see cref="CurrentAnswer.ForRequest"/>) — the fallback <see cref="CurrentAnswer.TheGatesAnswer"/> takes.
+    /// for round 2 (<see cref="CurrentAnswer.ForRequest"/>) — through the real <c>status</c> call, addressed by the plan
+    /// path as a caller passes it, so the feature session's lookup and both reported fields are what is tested.
     /// </summary>
     [Fact]
-    public void OnAFeatureReview_TheRequestsAnswerIsTheGates()
+    public async Task OnAFeatureReview_TheRequestsAnswerIsWhatStatusReports()
     {
+        const string plan = "PLAN_x.md";
+        await _repo.WriteAsync(plan, "# PLAN — x\n");
+        await _repo.CommitAsync("the plan");
         var round = DateTime.UtcNow.AddMinutes(-10);
-        var feature = new PersistedSession(
+        new SessionStore(_data).Save(new PersistedSession(
             new SessionState("s-status", _repo.Path, SessionKey.FeatureBranch, PanelConfig.Uniform(2, 0))
             {
                 Stage = Stage.FeatureReview,
-                Feature = "todo/PLAN_x.md",
+                Feature = DocumentReader.IdentityOf(_repo.Path, plan, DocumentReader.FollowLink),
                 RoundsRunThisStage = 1,
                 RequestQuestions = ["request0001"],
             },
-            [new RoundRecord(nameof(Stage.FeatureReview), 1, "good_enough", 1, "all 1 reviewers answered", round)]);
+            [new RoundRecord(nameof(Stage.FeatureReview), 1, "good_enough", 1, "all 1 reviewers answered", round)]));
         Answered("request0001", "continue", "run it again");
 
-        CurrentAnswer.TheGatesAnswer(feature, new Escalations(_data))!.Decision.Should().Be("continue");
+        var status = JsonDocument.Parse(await Service().StatusAsync(_repo.Path, "any-branch", string.Empty, string.Empty, feature: plan)).RootElement;
+
+        status.GetProperty("humanDecision").GetString().Should().Be("continue", status.ToString());
+        status.GetProperty("humanAnswer").GetString().Should().Be("run it again");
     }
 }

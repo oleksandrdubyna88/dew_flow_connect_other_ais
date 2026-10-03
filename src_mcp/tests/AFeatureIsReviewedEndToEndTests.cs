@@ -941,7 +941,7 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     /// feature session after round 1. A question asked before round 1 — here, while the review was still
     /// skipped — and answered "continue" after it used to admit round 2 by the clock alone (the gate's
     /// finding #27). Since 2026-10-03 such a question is not the gate's at all, so it is no card the person
-    /// could press "continue" on: it is asked in the AI's conversation (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>,
+    /// could press "continue" on: it is asked in the AI's conversation (<c>research/PLAN_ask_human_is_for_the_gate.md</c>,
     /// G1/G2), and round 2 still waits for a question asked after round 1.
     /// </summary>
     [Fact]

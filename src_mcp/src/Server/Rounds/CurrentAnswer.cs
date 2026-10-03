@@ -57,7 +57,7 @@ internal static class CurrentAnswer
 
     /// <summary>
     /// The answer <c>status</c> reports: the current hold's, else the feature review's request — the only answers the
-    /// gate acts on (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G5). Null when the person has answered neither.
+    /// gate acts on (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G5). Null when the person has answered neither.
     /// </summary>
     /// <remarks>
     /// <c>status</c> used to read the newest answered card of the session, whatever it was, and a button pressed on an
@@ -82,7 +82,7 @@ internal static class CurrentAnswer
     /// </summary>
     /// <remarks>
     /// Words are not a decision, and they must not hide one either: a hold's question card offers "Type an answer…"
-    /// first (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G4), and a person who pressed "Keep going" on the notice and
+    /// first (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G4), and a person who pressed "Keep going" on the notice and
     /// then typed a reply to the AI's question left a word-only answer newest — the hold read as unanswered (the cadence
     /// consultation b6e9df3c, 2026-10-03).
     /// </remarks>

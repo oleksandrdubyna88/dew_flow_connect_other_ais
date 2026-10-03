@@ -33,7 +33,7 @@ public static class QuestionOutcomes
     /// <summary>S3: the person was asked at once, the consultants ran beside (D8).</summary>
     public const string ProductionRisk = "production_risk";
 
-    /// <summary>The person was asked after the consultants — in the AI's own conversation, not on a card (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G2).</summary>
+    /// <summary>The person was asked after the consultants — in the AI's own conversation, not on a card (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G2).</summary>
     public const string PersonAskedInConversation = "person_asked_in_conversation";
 
     /// <summary>A production risk outside a held gate: the consultants answered FIRST, then the AI asked the person in its conversation (G3).</summary>

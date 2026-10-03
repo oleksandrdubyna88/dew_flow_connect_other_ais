@@ -111,7 +111,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
 
     /// <summary>
     /// A session whose gate is HELD by <c>call_human</c> — where an <c>ask_human</c> question is the gate's own and becomes a
-    /// card (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G1; the other such place, a feature review's request window, is
+    /// card (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G1; the other such place, a feature review's request window, is
     /// the feature tests'). Every test about the card, the wait and the answers folded under it runs here.
     /// </summary>
     private void Held(Harness h) =>

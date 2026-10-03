@@ -10273,6 +10273,18 @@ model- and server-written word is escaped. `questionConsultWatcher.ts` keeps a r
 three review decisions, so an AI's question could not be answered in words at all. A gate verdict with findings
 still gating keeps exactly the three.
 
+**Since 2026-10-03 the card says which producer wrote it** (`Escalation.kind`, `research/PLAN_ask_human_is_for_the_gate.md`
+G4), and `answerChoices` reads it instead of guessing: `question` (an `ask_human` asked while the gate is holding, or
+in a feature review's second-round window — the only AI question the server still cards) → the free-text box first,
+then the three decisions, findings or not; `notice` (a round's `call_human`) → the three decisions ONLY, because no AI
+waits on a notice for words (the cadence consultation b6e9df3c found a typed answer there went nowhere); no `kind` (an
+older server) → the old guess from `openFindings`. Every other AI question never reaches the extension: the server
+answers it `ask_in_conversation` and the AI asks in its own chat. The Logs → Questions tab labels the two outcomes that
+came with it — `person_asked_in_conversation` ("then sent back to ask the person in the AI's chat" — the server cannot know the person was asked) and
+`production_risk_consulted_first` ("production risk — the consultants first, then sent back to ask in the AI's chat") —
+and `TheLogNamesEveryQuestionOutcomeTests` (C#) enumerates `QuestionOutcomes` by reflection against the `OUTCOMES`
+map, so a server outcome without a label is a red build rather than a raw word in the tab.
+
 **The watchers (A5)** — `debounced(refresh, 175)` with an injectable timer: one refresh 175 ms after the FIRST
 event of a burst, however many follow (a record rewritten per row, a temp renamed over its target), and the next
 event after it opens the next window. The consultation, escalation and question-consult watchers all take it;

@@ -45,7 +45,7 @@ public sealed record EscalationQuestion(
     public IReadOnlyList<EscalationAdvice> ConsultantAnswers { get => field ?? []; init; } = [];
 
     /// <summary>
-    /// Which producer wrote the card (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G4): <see cref="EscalationKinds.Notice"/>
+    /// Which producer wrote the card (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G4): <see cref="EscalationKinds.Notice"/>
     /// for a round's <c>call_human</c>, <see cref="EscalationKinds.Question"/> for an <c>ask_human</c> asked on a held gate or a
     /// feature review's second-round request.
     /// Empty in a card an older server wrote — the extension then guesses as it always did.

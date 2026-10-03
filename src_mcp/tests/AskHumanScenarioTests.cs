@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// plan's proceed and the two free batches, <c>ask_human</c> is refused naming <c>ask_consultants</c>; the consultants
 /// answer (the fake CLI as a codex row, a real child); and <c>ask_human</c> with the <c>consultId</c> is allowed. None of
 /// these questions is the gate's — the session is not held — so every allowed one is answered at once with
-/// <c>ask_in_conversation</c> and none becomes a card (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G2).
+/// <c>ask_in_conversation</c> and none becomes a card (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G2).
 /// </summary>
 /// <remarks>
 /// <para><c>ask_human</c> was <c>NotCovered</c> in <see cref="ScenarioCoverageTests"/> because the wait is the

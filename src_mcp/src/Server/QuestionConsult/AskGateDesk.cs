@@ -28,7 +28,7 @@ public sealed record AskFacts(AskGateInput Input, QuestionPhaseKey Key, bool Rel
 /// The server's half of the gate (<c>todo/PLAN_question_consultant.md</c>, S3): gathers the facts
 /// <see cref="AskGate"/> decides on — the phase from the session and the cadence record, the count from the phase
 /// store, the consultId VERIFIED (D14 (a)), whether a consultant can be had (D9), and the DOOR (G1 of
-/// <c>todo/PLAN_ask_human_is_for_the_gate.md</c>) — and afterwards spends the proof, records the batch, and runs a
+/// <c>research/PLAN_ask_human_is_for_the_gate.md</c>) — and afterwards spends the proof, records the batch, and runs a
 /// production risk's consultants: beside a held gate's card (D8), or first for the AI's own question (G3).
 /// </summary>
 /// <remarks>
@@ -139,7 +139,7 @@ public sealed class AskGateDesk(
     }
 
     /// <summary>
-    /// G3 (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>): a production risk outside a held gate has no card to fold
+    /// G3 (<c>research/PLAN_ask_human_is_for_the_gate.md</c>): a production risk outside a held gate has no card to fold
     /// answers under, so the consultants are asked FIRST and the caller waits for them — the rows' own budgets bound
     /// the wait, and the launcher kills a child at its budget. Null when nobody could be asked.
     /// </summary>

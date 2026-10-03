@@ -6,7 +6,7 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// Which <c>ask_human</c> questions are the GATE's (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G1, G7): the one
+/// Which <c>ask_human</c> questions are the GATE's (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G1, G7): the one
 /// predicate that decides both whether a question becomes a card and whether its answer binds to the session, and
 /// what the gate in front of the person does on each door.
 /// </summary>

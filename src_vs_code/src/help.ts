@@ -51,7 +51,7 @@ export const HELP = {
   qconsultEnabled:
     'Lets an AI put a question to the question consultant — ask_consultants — before it asks you. Every row that is on answers it at once, each with its one prompt, and the answers go back to the AI separately, fenced as advice. Off: the tool answers that it is off, and the gate in front of ask_human stands down rather than refusing a question nobody could have consulted on.',
   qconsultMode:
-    'What the gate in front of ask_human does about a question that was not put to the consultants first. REQUIRE refuses it — but only while a plan is being built: questions while the plan is formed and the first batches after it reached proceed go to you directly, and so does everything after the stage release. A question flagged as a production risk, with a reason, always reaches you at once, the consultants running beside it and their answers folded under the card. REMIND lets it through with a note to the AI; OFF says nothing.',
+    'What the gate in front of ask_human does about a question that was not put to the consultants first. REQUIRE refuses it — but only while a plan is being built: questions while the plan is formed and the first batches after it reached proceed go to you directly, and so does everything after the stage release. A question flagged as a production risk, with a reason, is never held back: while a plan is being built the consultants are asked first and their answers come with it; on a held gate the card comes at once with them beside it. The AI’s own questions are asked in its chat; only the gate’s reach VS Code. REMIND lets it through with a note to the AI; OFF says nothing.',
   qconsultRows:
     'Each row is one model with exactly ONE base prompt, switched on or off — at most six on, and every row that is on runs, always, in parallel. The same prompt may sit on several rows. A pair whose runtime cannot do what the prompt needs is disabled with the measured reason; a pair that can do it but cannot be confined (every Codex pair, Antigravity on disk) says it can read this machine, and that mark stays on the row and beside every answer it gives.',
   qconsultRowPrompt:
@@ -188,7 +188,7 @@ export const HELP = {
   roundTimeout:
     'How long a WHOLE round may take before the reviewers still running are cancelled and the round is gated on whatever answered. Leave it at 0 and it is worked out from the round itself: vendors x roles reviewers through the machine cap above, each wave allowed one reviewer timeout. At the defaults that is four waves, forty minutes. Lower it and you are cutting into reviewers that have not finished; their findings are lost, and the verdict is made without them.',
   escalationMinutes:
-    'How long a question waits for your answer before the AI is told to ask you in the chat instead. Then the card leaves Active questions and is kept on the Logs page as expired — nothing is decided by your silence.',
+    'How long the gate’s question — a call_human notice, or one asked while the gate is holding — waits for your answer before the AI is told to ask you in the chat instead. Then the card leaves Active questions and is kept on the Logs page as expired — nothing is decided by your silence.',
 
   credsKey:
     'The CredsForDevs config-entry key that unlocks the vendor API keys. It is a pass to one vault entry — revocable, and useless while VS Code is closed — not a secret itself. Vendors whose CLI is signed in need no key at all.',
