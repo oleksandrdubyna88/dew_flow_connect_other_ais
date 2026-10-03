@@ -6,6 +6,7 @@ import * as path from 'node:path';
 
 import {
   bundledPage, clickInRow, COMPLETED, firstRenderedKey, LOG, PRICED, ROOT, runningPage, STARTED,
+  stub, type Stub,
 } from './roundsLogPageHarness';
 
 /**
