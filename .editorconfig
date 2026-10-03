@@ -78,22 +78,23 @@ indent_size = 2
 # build check is, for now, the lane's.
 #
 # `CA1502: 4` in that file means a method of complexity 5 or more is reported; 4 is not (measured with one probe
-# method of each). `suggestion` while the inventory is worked through — the build treats warnings as errors —
-# and `error` once every scoped method is within the bound.
+# method of each). An `error`, so a method that grows past the bound fails the build that grew it. The count is
+# Roslyn's: each `if`, loop, `&&`, `||`, `?:`, `??` and `?.` adds one — inside a lambda too, charged to the method
+# that holds it — while `is`/`or` patterns and `catch` add none.
 [src_mcp/core/Security/*.cs]
-dotnet_diagnostic.CA1502.severity = suggestion
+dotnet_diagnostic.CA1502.severity = error
 
 [src_mcp/src/Server/Security*.cs]
-dotnet_diagnostic.CA1502.severity = suggestion
+dotnet_diagnostic.CA1502.severity = error
 
 [src_mcp/runners/Reviewers/SecurityAnswerLimit.cs]
-dotnet_diagnostic.CA1502.severity = suggestion
+dotnet_diagnostic.CA1502.severity = error
 
 [src_mcp/runners/Reviewers/InputCoverage.cs]
-dotnet_diagnostic.CA1502.severity = suggestion
+dotnet_diagnostic.CA1502.severity = error
 
 [src_mcp/src/Store/SecurityFindingStore.cs]
-dotnet_diagnostic.CA1502.severity = suggestion
+dotnet_diagnostic.CA1502.severity = error
 
 [src_mcp/src/Store/SecurityPreviewFork.cs]
-dotnet_diagnostic.CA1502.severity = suggestion
+dotnet_diagnostic.CA1502.severity = error
