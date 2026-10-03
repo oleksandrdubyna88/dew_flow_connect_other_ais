@@ -1,5 +1,30 @@
 # Changelog
 
+## Server 0.41.0 — 2026-10-03
+
+**A reviewer on another endpoint with no model is left out of the round, and says why.** A codex reviewer row
+with a base URL (OpenRouter, or any OpenAI-compatible endpoint) and no model ran the Codex CLI with no `-m`. The
+CLI then sent its own default model id to that endpoint, which does not serve it, so every review on the row
+failed there, and the failure read as the endpoint's. Now `providers` and the round mark that row *cannot review*,
+with a sentence naming the row and its endpoint. Pick a model with ≡ on the reviewer's card. A row with no key is
+still told about the key first. A plain codex row with no model still runs on the CLI's own default.
+
+**A stuck agent can ask several models at once before it asks you.** `ask_consultants` is the twelfth tool. Each
+row you configure pairs a model with one of three shipped prompts (it may read the folders you allow, search the
+web, or neither) and runs under its own time limit. Every answer comes back separately and marked as advice. In
+front of `ask_human`, after a plan's `proceed`, the first two batches of questions still reach you. The third is
+refused and points the agent at `ask_consultants`, unless no consultant is configured. A question flagged as a
+production risk reaches you at once, and the consultants answer beside it. A question waits 15 minutes for you
+(was 30). After that it is marked *expired*: it leaves the open set but stays in the log, and is cleaned up after
+seven days.
+
+**Optional security reviewers in code and feature rounds.** `COAI_SECURITY_LANE` pairs existing reviewer rows with
+twelve `redteam-*` review prompts, each run only when the diff shows its signals. It is off by default. When it is
+on, its findings join the ordinary reviewers', which must still answer.
+
+**A port that is already taken no longer crashes the server.** `coai-server` and `coai-bugs` exit with code 75 and
+one line on stderr naming the port, instead of an unhandled-exception dump and a Windows error report.
+
 ## Extension 0.61.2 — 2026-10-03
 
 **⟳ updates Codex with Codex's own command.** For a Codex reviewer, the update button now opens a terminal with
