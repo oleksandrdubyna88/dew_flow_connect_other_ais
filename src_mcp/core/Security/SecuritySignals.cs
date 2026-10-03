@@ -59,13 +59,19 @@ public static class SecuritySignals
 
     private static SecurityFile Classify(FileDiff file)
     {
-        var withheld = file.IsBinary || CredentialFiles.LooksLikeOne(file.Path);
-        var raw = file.Text.Length <= MaxFileCharacters ? file.Text : string.Empty;
-        var safe = withheld ? string.Empty : Redaction.SafeSource(raw);
+        var withheld = IsWithheld(file);
+        var safe = withheld ? string.Empty : Redaction.SafeSource(WithinLimit(file.Text));
         var text = IsProse(file.Path) ? string.Empty : file.Path + "\n" + safe;
         return new(file with { Text = safe }, [.. Terms.Where(pair => Matches(pair, text)).Select(pair => pair.Key)])
-        { DetectionIncomplete = !withheld && file.Text.Length > MaxFileCharacters };
+        { DetectionIncomplete = !withheld && IsOversized(file) };
     }
+
+    /// <summary>Binary content and credential files never reach a detector or a prompt.</summary>
+    private static bool IsWithheld(FileDiff file) => file.IsBinary || CredentialFiles.LooksLikeOne(file.Path);
+
+    private static bool IsOversized(FileDiff file) => file.Text.Length > MaxFileCharacters;
+
+    private static string WithinLimit(string text) => text.Length <= MaxFileCharacters ? text : string.Empty;
 
     private static bool Matches(KeyValuePair<string, string[]> group, string text) =>
         group.Value.Any(term => text.Contains(term, StringComparison.OrdinalIgnoreCase))
