@@ -10355,3 +10355,20 @@ What each command asks the host to do is now `workFor(command, hooks)` in `round
 `RoundsLogHooks` so it can be run in a test. It replaced eight `if`s in `received` that each `void`ed their hook.
 `ready` still goes to the push ledger as before; the busy host answers it as well. The page's "Reading what this round
 found…" stays beside the bar.
+
+**E2 — the key tab and the bugz review.** Both repaint by replacing the whole document, so each builder takes the host's
+snapshot (`usersPageHtml(…, busy)`, `ReviewView.busy`). A repaint in the middle of an action keeps the bar, and the
+new document's `ready` is answered — both pages posted `ready` before, and both hosts ignored it.
+
+- **Key tab** (`BUGS_KEYS_TRACKED`): the actions that go to the bugs server. Its `post()` helper now goes through
+  `send` with the pressed control. `copy` (clipboard) and `dismiss` (secret store) stay local and unnumbered.
+  `bugsKeysPanel.ts` tracks each press around its `Turns` run and paints the snapshot. `Turns` repaints the tab as
+  every action starts, so the painted snapshot is what carries the bar there.
+- **Bugz review** (`BUGZ_TRACKED`): `decide` and the presses that open something (`choose`, `openAt`, `openCurrent`,
+  `openTree`, `calls`, `openCall`).
+  - Not `comment`: it is saved as it is typed, and typing is not the panel working.
+  - Not `fetchReal`: an automatic queue of up to four reads, each with its own pending state on its row.
+  - The page's own queue helper was called `send(id)`, which would have shadowed the mark's door. It is `askReal(id)`
+    now.
+  - In `bugzReviewPanel.ts`, each slow `case` goes through `slow(raw, work)`. `queue()` returns the link it adds, so a
+    decision is held until it is written and redrawn. `listen()` makes the `BusyHost` and settles it with the window.

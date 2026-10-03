@@ -48,12 +48,12 @@ test('the panel records what the page opened, and both kinds of press reach the 
   // Resolved when the write RUNS, not when the press arrives: a thunk, evaluated after the previous
   // link's redraw has refreshed `this.held`. Evaluated eagerly, a comment queued behind a pending
   // Keep carried the OLD keep and quietly undid the decision. (CodeRabbit, the pull request.)
-  assert.match(text, /case 'decide':\s*this\.queue\(\(\) => decisionsFor\(m\.ids, m\.keep, this\.held, this\.drafts\)\);/u);
+  assert.match(text, /case 'decide':\s*this\.slow\(raw, \(\) => this\.queue\(\(\) => decisionsFor\(m\.ids, m\.keep, this\.held, this\.drafts\)\)\);/u);
   // And a comment is held as a draft BEFORE its write is queued, so a redraw while the write is in
   // the air still paints the words — pinned whole, the draft and the write in that order.
   assert.match(
     text,
-    /case 'comment':\s*this\.drafts = new Map\(\[\.\.\.this\.drafts, \[m\.id, m\.text\]\]\);\s*this\.queue\(\(\) => commentWrite\(m\.id, m\.text, this\.held\)\);/u,
+    /case 'comment':\s*this\.drafts = new Map\(\[\.\.\.this\.drafts, \[m\.id, m\.text\]\]\);\s*void this\.queue\(\(\) => commentWrite\(m\.id, m\.text, this\.held\)\);/u,
     'a comment must become a draft and then a write, or a redraw loses what was typed');
   // And a draft is let go ONLY when the write landed: a refused comment (65) or a binary too old
   // for comments (64) must leave the words in their box, with the reason on screen. Pinned whole —
@@ -70,7 +70,7 @@ test('the panel records what the page opened, and both kinds of press reach the 
     'a draft is held and never written on its own');
   assert.match(
     text,
-    /for \(const \[id, text\] of this\.drafts\) \{\s*this\.queue\(\(\) => unwritten\(new Map\(\[\[id, text\]\]\), this\.held\)\);\s*\}\s*this\.drafts = new Map<number, string>\(\);/u,
+    /for \(const \[id, text\] of this\.drafts\) \{\s*void this\.queue\(\(\) => unwritten\(new Map\(\[\[id, text\]\]\), this\.held\)\);\s*\}\s*this\.drafts = new Map<number, string>\(\);/u,
     'a panel closed inside a pause must write what it holds before it forgets it — ONE write per draft, '
     + 'because a batch with one refused comment is refused whole and would take the others with it');
 });
@@ -221,9 +221,9 @@ test('the provider wires the real-method hook to the real reader', () => {
 test('the panel routes both openers to the methods that answer them', () => {
   const text = code('bugzReviewPanel.ts');
 
-  assert.match(text, /case 'openAt':\s*void this\.opened\(m\.id, \(pair\) => this\.revisions\.openAt\(pair, this\.held\)\);/u,
+  assert.match(text, /case 'openAt':\s*this\.slow\(raw, \(\) => this\.opened\(m\.id, \(pair\) => this\.revisions\.openAt\(pair, this\.held\)\)\);/u,
     'a press on Open at <sha> must reach the method that asks the server, or the button does nothing');
-  assert.match(text, /case 'openCurrent':\s*void this\.opened\(m\.id, \(pair\) => this\.revisions\.openCurrent\(pair, this\.held\)\);/u,
+  assert.match(text, /case 'openCurrent':\s*this\.slow\(raw, \(\) => this\.opened\(m\.id, \(pair\) => this\.revisions\.openCurrent\(pair, this\.held\)\)\);/u,
     'a press on Open CURRENT must reach the method that guards and opens, or the button does nothing');
 });
 
@@ -341,7 +341,7 @@ test('every ending replaces the in-flight state, including one nobody wanted', (
 test('a checkout press reaches the one method that answers it', () => {
   const text = code('bugzReviewPanel.ts');
 
-  assert.match(text, /case 'openTree':\s*void this\.opened\(m\.id, \(pair\) => this\.revisions\.openTree\(pair, this\.held\)\);/u,
+  assert.match(text, /case 'openTree':\s*this\.slow\(raw, \(\) => this\.opened\(m\.id, \(pair\) => this\.revisions\.openTree\(pair, this\.held\)\)\);/u,
     'the third action must reach the panel, or the button is wired to nothing');
 });
 
@@ -398,11 +398,11 @@ test('the provider wires the checkout hooks to the reader and to the editor', ()
 test('a calls press reaches the one method that answers it, and an opened end goes by INDEX', () => {
   const text = code('bugzReviewPanel.ts');
 
-  assert.match(text, /case 'calls':\s*void this\.opened\(m\.id, \(pair\) => this\.calls\.ask\(pair, this\.held\)\);/u,
+  assert.match(text, /case 'calls':\s*this\.slow\(raw, \(\) => this\.opened\(m\.id, \(pair\) => this\.calls\.ask\(pair, this\.held\)\)\);/u,
     'the control must reach the panel, or it is wired to nothing');
   // The page holds no file names for this: it posts which row, which direction and which entry, and
   // the panel — which has the answer — opens it. A page that carried paths could be asked to open one.
-  assert.match(text, /void this\.calls\.open\(named\.id, named\.which, named\.at\);/u);
+  assert.match(text, /this\.slow\(raw, \(\) => this\.calls\.open\(named\.id, named\.which, named\.at\)\);/u);
 });
 
 test('the panel hands every row its calls block on every paint, and a closed window forgets them', () => {
@@ -452,7 +452,7 @@ test('the provider wires the calls hooks to the real editor, and opens only insi
 
 test('a press on a row\'s CoAI: choose hands the hook that row\'s pair and the words being typed about it', () => {
   assert.match(code('bugzReviewPanel.ts'),
-    /case 'choose':\s*void this\.opened\(m\.id, \(pair\) => this\.hooks\.choose\(bugChat\(pair, this\.drafts\)\)\);\s*return;/u,
+    /case 'choose':\s*this\.slow\(raw, \(\) => this\.opened\(m\.id, \(pair\) => this\.hooks\.choose\(bugChat\(pair, this\.drafts\)\)\)\);\s*return;/u,
     'the press must reach the hook with the DRAFTS, or the chat is handed a comment the person already changed');
 });
 

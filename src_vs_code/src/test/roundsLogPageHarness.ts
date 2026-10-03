@@ -1,6 +1,6 @@
 import { DbTotals } from '../roundsDb';
 import { LogRow, roundsLogHtml } from '../roundsLog';
-import { PageClock } from './panelPageHarness';
+import { busyBarOf, PageClock } from './panelPageHarness';
 
 /**
  * The rounds log page, RUN: its own script over a stub DOM built from the markup it really rendered.
@@ -9,23 +9,6 @@ import { PageClock } from './panelPageHarness';
  * controls (todo/PLAN_busy_marks_on_every_webview.md, E1) — a seventh private copy of a rounds-log runner was the
  * alternative, and six already exist. Unchanged except for the optional clock and the busy bar.</p>
  */
-
-/** The busy bar's id (busyMark.ts `BUSY_BAR`). */
-const BUSY_BAR_ID = 'busy-bar';
-
-/** The busy bar as the page drew it — hidden or not, per its markup — with attributes that are really kept. */
-function busyBar(stub: Stub, html: string): Stub {
-  const tag = /<div\b[^>]*\bid="busy-bar"[^>]*>/u.exec(html)?.[0] ?? '';
-  let attributes: Readonly<Record<string, string>> = {};
-
-  return {
-    ...stub,
-    hidden: /\shidden(?=[\s>]|$)/u.test(tag),
-    getAttribute: (name) => attributes[name] ?? null,
-    setAttribute: (name = '', value = '') => { attributes = { ...attributes, [name]: value }; },
-    removeAttribute: (name = '') => { attributes = Object.fromEntries(Object.entries(attributes).filter(([key]) => key !== name)); },
-  };
-}
 
 export const TOTALS: DbTotals = {
   rounds: 250, findings: 3484, accepted: 900, rejected: 2000, gating: 700,
@@ -87,7 +70,9 @@ export function open(rows: readonly LogRow[], totals: DbTotals = TOTALS, extra =
       removeAttribute: () => undefined,
       querySelectorAll: () => [],
     };
-    elements.set(id, id === BUSY_BAR_ID ? busyBar(fresh, html) : fresh);
+    // The busy bar is the panel harness's, read off this page's markup (busyMark.ts `BUSY_BAR`).
+    const bar = id === 'busy-bar' ? busyBarOf(html) : null;
+    elements.set(id, bar === null ? fresh : bar as unknown as Stub);
 
     return elements.get(id) as Stub;
   };

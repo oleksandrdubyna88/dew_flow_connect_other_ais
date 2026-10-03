@@ -11,6 +11,9 @@ import { revisionActions, RevisionState } from '../revisionActions';
 import { Tab } from '../tabStrip';
 import { readable, unescaped } from './readableHtml';
 import { COMMENT_MOST_CHARS } from '../commentContract';
+import { BUSY_AFTER_MS } from '../busyMark';
+import { type BusySnapshot } from '../busySnapshot';
+import { busyBarOf, type Control as PageControl, PageClock, withoutSeq } from './panelPageHarness';
 import { LEAVES_THE_MACHINE } from '../reviewComment';
 
 /**
@@ -51,6 +54,14 @@ const pair = (findingId: number, keep = UNDECIDED): ReviewPair => ({
   sentUtc: '',
   commentLost: '',
 });
+
+/**
+ * A press the page numbered, without its number — CHECKED first by `withoutSeq`. Presses that make the host work are
+ * numbered since the busy mark reached this page (todo/PLAN_busy_marks_on_every_webview.md, E2).
+ */
+function numbered(m: Posted): Record<string, unknown> {
+  return withoutSeq(m as unknown as Record<string, unknown>);
+}
 
 interface Posted {
   readonly type: string;
@@ -430,6 +441,8 @@ function pageScript(html: string): string {
 }
 
 interface Page {
+  /** The busy bar, or null when the page drew none. */
+  readonly bar: PageControl | null;
   /** The containers one row's call answer is painted into. */
   readonly callBoxes: readonly Note[];
   readonly posted: readonly Posted[];
@@ -492,6 +505,10 @@ interface Options {
   readonly calls?: ReadonlyMap<number, string>;
   readonly draw?: number;
   readonly comments?: ReadonlyMap<number, string>;
+  /** What the host had running when the page was drawn — its busy mark's painted half. */
+  readonly busy?: BusySnapshot;
+  /** A clock the test moves; without one, the page's timers are the pauses `waitOut` runs. */
+  readonly clock?: PageClock;
 }
 
 /**
@@ -504,7 +521,10 @@ interface Options {
  * argument makes the collapse tests read their initial state from the page rather than assume it.</p>
  */
 function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
-  const html = reviewPageHtml({ pairs, nonce: 'test-nonce', ...options });
+  const { clock, ...drawn } = options;
+  const html = reviewPageHtml({ pairs, nonce: 'test-nonce', ...drawn });
+  // The busy bar, read off the markup by the same fake every page runner shares.
+  const bar = busyBarOf(html);
   // One `<tr>` per pair, and the controls of a pair are INSIDE it — so `closest` walks the same
   // way it does in a browser and a branch that matches the row is visible to these tests.
   const rows = new Map([...html.matchAll(/data-row="(\d+)"/g)].map((m) => [m[1]!, new Row(m[1]!)]));
@@ -655,8 +675,8 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     // Tabs as well as controls, because the page looks one up BY ID to give the keyboard back
     // what it was on, and a shim that knew only the controls would be green through that being
     // wired to nothing.
-    getElementById: (id: string): Control | TabButton | undefined =>
-      controls[id] ?? tabs.find((one) => one.id === id),
+    getElementById: (id: string): Control | TabButton | PageControl | null | undefined =>
+      (id === 'busy-bar' ? bar : controls[id] ?? tabs.find((one) => one.id === id)),
     body: { style },
   };
 
@@ -665,23 +685,24 @@ function run(pairs: readonly ReviewPair[], options: Options = {}): Page {
     () => ({ postMessage: (m: Posted) => posted.push(m) }),
     document,
     host,
-    (then: () => void): number => {
+    clock?.setTimeout ?? ((then: () => void): number => {
       const id = nextPause;
       nextPause += 1;
       pauses.set(id, then);
 
       return id;
-    },
-    (id: number | undefined): void => {
+    }),
+    clock?.clearTimeout ?? ((id: number | undefined): void => {
       if (id !== undefined) {
         pauses.delete(id);
       }
-    },
+    }),
   );
 
   assert.ok(onClick !== undefined, 'the page never attached a click listener');
 
   return {
+    bar,
     callBoxes,
     posted,
     tabs,
@@ -1718,9 +1739,9 @@ test('a decision made while the real text is showing carries ids and nothing els
 
   const decided = page.posted.filter((m) => m.type === 'decide');
   assert.equal(decided.length, 1);
-  assert.deepEqual(Object.keys(decided[0]!).sort(), ['ids', 'keep', 'type'],
+  assert.deepEqual(Object.keys(numbered(decided[0]!)).sort(), ['ids', 'keep', 'type'],
     'a decision names pairs; it never carries what the page happened to be showing');
-  assert.deepEqual(decided[0], { type: 'decide', keep: KEPT, ids: [1] });
+  assert.deepEqual(numbered(decided[0]!), { type: 'decide', keep: KEPT, ids: [1] });
 });
 
 test('a focus the tabs cannot account for is not chased', () => {
@@ -1799,8 +1820,8 @@ test('a read that never reached the server can be asked for again', () => {
 // --------------------------------------------------------------------------------------------
 
 /** What the page asked the host to open, in order. */
-const opens = (page: Page, type: 'openAt' | 'openCurrent' | 'openTree'): readonly Posted[] =>
-  page.posted.filter((m) => m.type === type);
+const opens = (page: Page, type: 'openAt' | 'openCurrent' | 'openTree'): readonly Record<string, unknown>[] =>
+  page.posted.filter((m) => m.type === type).map(numbered);
 
 test('an open row offers the file at its revision and the CURRENT file, and pressing each names the row', () => {
   const page = run([pair(1), pair(2)], { expanded: new Set([1]) });
@@ -1982,7 +2003,7 @@ test('an open row offers to ask who calls its method, and pressing it names the 
 
   page.click(page.opener(1, 'data-calls'));
 
-  assert.deepEqual(page.posted.filter((m) => m.type === 'calls'), [{ type: 'calls', id: 1 }]);
+  assert.deepEqual(page.posted.filter((m) => m.type === 'calls').map(numbered), [{ type: 'calls', id: 1 }]);
 });
 
 /**
@@ -2197,7 +2218,7 @@ test('a decision still posts exactly its three fields — the words travel from 
   page.click(page.controls['keep']!);
 
   const decided = page.posted.filter((one) => one.type === 'decide');
-  assert.deepEqual(decided, [{ type: 'decide', keep: KEPT, ids: [1] }]);
+  assert.deepEqual(decided.map(numbered), [{ type: 'decide', keep: KEPT, ids: [1] }]);
 });
 
 test('a patch reaches the row the GENERATOR named, for both channels', () => {
@@ -2245,7 +2266,7 @@ test('pressing CoAI: choose names its row, once, and neither opens nor ticks it'
 
   page.click(page.choosers[1]!);
 
-  assert.deepEqual(page.posted.filter((m) => m.type === 'choose'), [{ type: 'choose', id: 2 }]);
+  assert.deepEqual(page.posted.filter((m) => m.type === 'choose').map(numbered), [{ type: 'choose', id: 2 }]);
   assert.equal(page.posted.filter((m) => m.type === 'expand').length, 0, 'the row did not open');
   assert.equal(page.showing(2), false);
   assert.ok(page.boxes.every((box) => !box.checked), 'and nothing was ticked');
@@ -2277,4 +2298,73 @@ test('the real method is numbered as the file is, from each side\'s own first li
 
   assert.deepEqual(lineNumbers(before), [120, 121, 122, 123], 'the before side counts from its line at the head commit');
   assert.deepEqual(lineNumbers(after), [131, 132, 133, 134], 'and the after side from its own line at the fix commit');
+});
+
+// ---- The busy mark (todo/PLAN_busy_marks_on_every_webview.md, E2) ----
+// A decision is a server write and a re-read through coai-mcp (0.7-0.9 s measured), and the page had no mark for it.
+
+/** The last post of a type, as the page sent it. */
+function lastPost(page: Page, type: string): Readonly<Record<string, unknown>> {
+  const sent = page.posted.filter((m) => m.type === type).at(-1);
+  assert.ok(sent !== undefined, `the page posted no ${type}`);
+
+  return sent as unknown as Readonly<Record<string, unknown>>;
+}
+
+test('a decision is numbered, and the bar shows from the half second until the host settles it', () => {
+  const clock = new PageClock();
+  const page = run([pair(1), pair(2)], { clock });
+  assert.ok(page.bar !== null, 'the page draws a busy bar');
+  assert.equal(page.bar.hidden, true, 'drawn hidden');
+  page.click(page.boxes[0]!);
+  page.click(page.controls['keep']!);
+
+  const sent = lastPost(page, 'decide');
+  assert.equal(typeof sent['seq'], 'number');
+  clock.advance(BUSY_AFTER_MS - 1);
+  assert.equal(page.bar.hidden, true);
+  clock.advance(1);
+  assert.equal(page.bar.hidden, false, 'a decision past half a second shows the bar');
+  page.host.push({ type: 'settled', seq: sent['seq'], doc: sent['doc'], ok: true });
+  assert.equal(page.bar.hidden, true);
+});
+
+test('choose, open and calls are numbered — each opens something for the person', () => {
+  const page = run([pair(1)], { expanded: new Set([1]), calls: new Map([[1, callsBlockFor(1)]]) });
+  page.click(page.choosers[0]!);
+  page.click(page.opener(1, 'data-open-at'));
+  page.click(page.opener(1, 'data-calls'));
+
+  for (const type of ['choose', 'openAt', 'calls']) {
+    assert.equal(typeof lastPost(page, type)['seq'], 'number', type);
+  }
+});
+
+test('a comment is saved as it is typed, and is never numbered — typing is not the panel working', () => {
+  const page = run([pair(1)]);
+  page.type(page.comment(1), 'this one is a false positive');
+  page.waitOut();
+
+  assert.equal(lastPost(page, 'comment')['seq'], undefined);
+});
+
+test('reading a row\'s real method is the row\'s own business, and is never numbered', () => {
+  const page = run([pair(1)]);
+  page.click(toggleFor(page, 1));
+  page.click(page.controls['realText']!);
+
+  assert.ok(asked(page).length > 0, 'a real method was asked for');
+  assert.ok(asked(page).every((m) => (m as unknown as Record<string, unknown>)['seq'] === undefined),
+    'up to four run at once, each with its own pending state on its row');
+});
+
+test('a page repainted while a decision runs shows the bar after what is LEFT of the delay', () => {
+  const clock = new PageClock();
+  const page = run([pair(1)], { clock, busy: { count: 1, oldestMs: 400 } });
+
+  clock.advance(BUSY_AFTER_MS - 400 - 1);
+  assert.equal(page.bar?.hidden, true);
+  clock.advance(1);
+  assert.equal(page.bar?.hidden, false);
+  assert.deepEqual(page.posted.at(-1), { type: 'ready' }, 'and the page asks what is running, last');
 });

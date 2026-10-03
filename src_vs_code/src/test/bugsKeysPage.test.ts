@@ -6,7 +6,7 @@ import { Users, View, lastSeen, live, safe, standing, usersPageHtml, withControl
 import { BUSY_AFTER_MS } from '../busyMark';
 import { type BusySnapshot, IDLE } from '../busySnapshot';
 import { PLAIN_TEXT } from '../textControls';
-import { PageClock } from './panelPageHarness';
+import { busyBarOf, type Control as PageControl, PageClock } from './panelPageHarness';
 
 /**
  * The Users tab, RUN — because a list with a Revoke button is exactly where wiring goes wrong.
@@ -71,37 +71,11 @@ function pageScript(html: string): string {
   return html.slice(start, end);
 }
 
-/**
- * The busy bar as the page drew it, keeping the attributes the mark sets (todo/PLAN_busy_marks_on_every_webview.md, E2).
- * Read out of the page's own markup — hidden when it was drawn hidden — so a page that draws no bar has none here.
- */
-class Bar {
-  hidden: boolean;
-  private attributes: Readonly<Record<string, string>> = {};
-
-  constructor(html: string) {
-    const tag = /<div\b[^>]*\bid="busy-bar"[^>]*>/u.exec(html)?.[0] ?? '';
-    this.hidden = /\shidden(?=[\s>]|$)/u.test(tag);
-  }
-
-  getAttribute(name: string): string | null {
-    return this.attributes[name] ?? null;
-  }
-
-  setAttribute(name: string, value: string): void {
-    this.attributes = { ...this.attributes, [name]: value };
-  }
-
-  removeAttribute(name: string): void {
-    this.attributes = Object.fromEntries(Object.entries(this.attributes).filter(([key]) => key !== name));
-  }
-}
-
 interface Page {
   readonly html: string;
   readonly posted: readonly Posted[];
   /** The busy bar, or null when the page drew none. */
-  readonly bar: Bar | null;
+  readonly bar: PageControl | null;
   /** A message from the host, as the page's own listeners receive it. */
   deliver(message: unknown): void;
   /** One per row the page ACTUALLY rendered a revoke button for, in order. */
@@ -119,7 +93,7 @@ interface Page {
  */
 function run(users: Users, clock?: PageClock, painted: BusySnapshot = IDLE): Page {
   const html = usersPageHtml(users, 'test-nonce', PLAIN_TEXT, painted);
-  const bar = html.includes('id="busy-bar"') ? new Bar(html) : null;
+  const bar = busyBarOf(html);
   const heard: ((event: { data: unknown }) => void)[] = [];
   const revokeButtons = [...html.matchAll(/data-revoke="([^"]+)"/gu)]
     .map((m) => new Control('', m[1]!));
@@ -134,7 +108,7 @@ function run(users: Users, clock?: PageClock, painted: BusySnapshot = IDLE): Pag
       }
     },
     querySelectorAll: (): readonly Control[] => [],
-    getElementById: (id: string): Control | Bar | null | undefined => (id === 'busy-bar' ? bar : controls.get(id)),
+    getElementById: (id: string): Control | PageControl | null | undefined => (id === 'busy-bar' ? bar : controls.get(id)),
   };
 
   // The host's pushes arrive on window: the busy mark's `settled` and `busy` are delivered by a test; the text controls'
