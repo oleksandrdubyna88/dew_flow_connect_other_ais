@@ -95,7 +95,9 @@ round past every ordinary role's budget runs only for the lane. A feature second
 lane's budget only when every blocking finding is the lane's and no ordinary reviewer failed; an
 ordinary reviewer's failure or blocking finding is judged on the ordinary budget, so a feature
 stage whose roles have one round answers `call_human` rather than buying a round only the lane
-could answer. A round only the lane's budget admitted, whose lane then has no work (its trigger is
+could answer. A round only the lane's budget admitted — past every ordinary budget and still within
+the lane's own; a round past both was admitted by nobody and keeps the ordinary refusal — whose lane
+then has no work (its trigger is
 gone, it was switched off, composition refused), is not refused on every call: it runs empty and
 completes as a round nobody answered, recorded with `lane:security was not asked: …`, for a
 person to decide. In a round with lane work the ordinary decision summary keeps who could not run
