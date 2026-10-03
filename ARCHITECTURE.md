@@ -45,10 +45,12 @@ once at the end of a plan of three or more epics over the whole feature; it need
 
 ## When it needs a person
 
-`ask_human` — and a `call_human` verdict — put the question in front of you **in VS Code**: a
-dialog, a status-bar item so a dismissed dialog loses nothing, and an open-questions section at the
-top of the rounds view. The call blocks until you answer; after 30 minutes it comes back
-`no_answer_yet` telling the AI to ask you in the chat instead, and the question stays open.
+A `call_human` verdict — and an `ask_human` question asked while the gate is held — put the question
+in front of you **in VS Code**: a dialog, a status-bar item so a dismissed dialog loses nothing, and an
+open-questions section at the top of the rounds view. The call blocks until you answer; after 15 minutes
+it comes back `no_answer_yet` telling the AI to ask you in the chat instead, and the card is marked
+expired. Every OTHER question an AI asks — its own choices about the work — never reaches VS Code:
+`ask_human` answers it with `ask_in_conversation`, and the AI asks you in its own chat.
 
 Still no port on either side: the server writes the question as a file into the data directory the
 extension already reads, and your answer is a file beside it.

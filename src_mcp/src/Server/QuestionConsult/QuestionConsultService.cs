@@ -206,7 +206,12 @@ public sealed class QuestionConsultService(
     /// A question or context past the tool's limits is CUT to them, marked <see cref="CutMarker"/>, and the record
     /// says so in <see cref="QuestionConsultRecord.Truncated"/>: refusing it here meant no consultant ran at all.
     /// </summary>
-    public async Task<QuestionConsultRecord?> BesideAsync(string repoPath, string question, string contextText, string sessionId, string escalationId, CancellationToken ct)
+    /// <param name="endedAs">How the record says the question ended when somebody answered: <see cref="QuestionOutcomes.ProductionRisk"/>
+    /// beside a held gate's card, <see cref="QuestionOutcomes.ProductionRiskConsultedFirst"/> when the consultants ran before
+    /// the AI asked in its conversation (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G3).</param>
+    public async Task<QuestionConsultRecord?> BesideAsync(
+        string repoPath, string question, string contextText, string sessionId, string escalationId, CancellationToken ct,
+        string endedAs = QuestionOutcomes.ProductionRisk)
     {
         var options = settings.QuestionConsult;
         var fitted = Fitted.Of(question.Trim(), contextText.Trim());
@@ -233,7 +238,7 @@ public sealed class QuestionConsultService(
         // The outcome says how the question ENDED: beside the person's card, unless nobody could be asked at all.
         var ended = consulted.Record.Outcome is QuestionOutcomes.QuotaSpent or QuestionOutcomes.NoneAvailable
             ? consulted.Record
-            : consulted.Record with { Outcome = QuestionOutcomes.ProductionRisk };
+            : consulted.Record with { Outcome = endedAs };
         _store.Write(ended);
 
         return ended;
@@ -343,6 +348,17 @@ public sealed class QuestionConsultService(
                 : $"{answered} of {launched} consultant(s) answered: verify each answer before acting on it, and ask the person with ask_human only if the answers do not settle the question";
 
         return counterNote.Length > 0 ? sentence + " (" + counterNote + ")" : sentence;
+    }
+
+    /// <summary>
+    /// Every row of a settled question as the AI reads it — the same fence <c>ask_consultants</c> answers with, under a
+    /// nonce of its own: the reply of an <c>ask_human</c> whose consultants ran first (G3) is another model's advice too.
+    /// </summary>
+    internal static IReadOnlyList<QuestionRowAnswer> Fenced(QuestionConsultRecord record)
+    {
+        var nonce = Guid.NewGuid().ToString("N")[..8];
+
+        return [.. record.Rows.Select(row => Answer(row, nonce))];
     }
 
     /// <summary>One row's answer, fenced <c>advisory_only</c> with its own vendor and model — never merged (D2).</summary>

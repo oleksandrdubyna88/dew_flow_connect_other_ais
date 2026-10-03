@@ -116,6 +116,24 @@ public sealed class TheAnswerBelongsToTheCurrentHoldTests : IDisposable
     }
 
     /// <summary>
+    /// Words are not a decision — and they must not HIDE one either. A hold's question card offers "Type an answer…"
+    /// first (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G4); a person who pressed "Keep going" on the notice and then
+    /// typed a reply to the AI's question left the newest answer word-only, and the hold read as unanswered (found by the
+    /// cadence consultation b6e9df3c, 2026-10-03).
+    /// </summary>
+    [Fact]
+    public void AWordOnlyAnswerGivenAfterADecision_DoesNotHideTheDecision()
+    {
+        Asked("n2", HoldTwo.AddMinutes(1));
+        Asked("q3", HoldTwo.AddMinutes(2));
+        AnswerTo("n2", "continue", HoldTwo.AddMinutes(4));
+        File.WriteAllText(Escalations().AnswerPath("q3"), $$"""{"id":"q3","answer":"and why did round 3 fail?","answeredUtc":"{{HoldTwo.AddMinutes(5):O}}"}""");
+
+        CurrentAnswer.DecisionFor(HeldOn(HoldTwo, "n2", "q3"), Escalations()).Should().Be(HumanDecision.Continue,
+            "the person pressed a decision; a sentence typed afterwards answers the AI, not the gate");
+    }
+
+    /// <summary>
     /// A hold an OLDER build raised recorded no question, so there is no id to bind an answer to — and
     /// until 2026-09-26 the round's clock decided instead, which is exactly the bypass the binding closed:
     /// an old question answered after such a hold's round released it (the gate's findings #24/#30). Now

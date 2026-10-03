@@ -1719,7 +1719,9 @@ public sealed class PanelService
 
     // ---------- plumbing ----------
 
-    private SessionAnswer SessionAnswerFor(PersistedSession session) => new(
+    private SessionAnswer SessionAnswerFor(PersistedSession session) => SessionAnswerFor(session, CurrentAnswer.TheGatesAnswer(session, _escalations));
+
+    private SessionAnswer SessionAnswerFor(PersistedSession session, EscalationAnswer? gatesAnswer) => new(
         session.State.SessionId,
         session.State.Stage.ToString(),
         session.State.RoundsRunThisStage,
@@ -1729,14 +1731,8 @@ public sealed class PanelService
         _settings.Rounds.For(session.State.Stage).MaxRounds,
         session.Rounds)
     {
-        HumanDecision = _escalations.DecisionFor(session.State.SessionId) switch
-        {
-            HumanDecision.Continue => "continue",
-            HumanDecision.Fix => "fix",
-            HumanDecision.Discuss => "discuss",
-            _ => string.Empty,
-        },
-        HumanAnswer = _escalations.AnswerTextFor(session.State.SessionId),
+        HumanDecision = CurrentAnswer.WordFor(Escalations.DecisionOf(gatesAnswer)),
+        HumanAnswer = gatesAnswer?.Answer ?? string.Empty,
         Consultations = _consultations.OpenIn(session.State.RepoPath),
         Pending = session.State.AwaitingResolve ? session.Pending : [],
     };

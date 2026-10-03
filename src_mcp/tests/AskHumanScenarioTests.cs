@@ -10,14 +10,15 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// The scenario S3 acceptance 6 names, against a REAL server build over real stdio: under <c>require</c>, after the
 /// plan's proceed and the two free batches, <c>ask_human</c> is refused naming <c>ask_consultants</c>; the consultants
-/// answer (the fake CLI as a codex row, a real child); and <c>ask_human</c> with the <c>consultId</c> is allowed —
-/// waiting its budget and marking the card <c>expired</c>.
+/// answer (the fake CLI as a codex row, a real child); and <c>ask_human</c> with the <c>consultId</c> is allowed. None of
+/// these questions is the gate's — the session is not held — so every allowed one is answered at once with
+/// <c>ask_in_conversation</c> and none becomes a card (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G2).
 /// </summary>
 /// <remarks>
 /// <para><c>ask_human</c> was <c>NotCovered</c> in <see cref="ScenarioCoverageTests"/> because the wait is the
 /// behaviour and a fake surface would exercise the fake. The gate changed that: the refusal does not wait at all,
-/// and the allowed path waits a budget this test sets to one second and asserts the expiry of — the file the
-/// person's surface reads, not a fake of the person.</para>
+/// and since 2026-10-03 neither does the AI's own question, which is asked in the AI's conversation. The card and
+/// its wait are covered over the wire by <see cref="McpContractTests"/> on a held session.</para>
 /// <para>In the <c>fakecli-env</c> collection, as every class that starts the fake CLI is; the row's child runs on
 /// the MINIMAL environment, so the fake CLI's steering is the file in the temp directory, as
 /// <see cref="QuestionConsultScenarioTests"/> explains.</para>
@@ -85,7 +86,7 @@ public sealed class AskHumanScenarioTests : IAsyncLifetime
 
             var first = await StdioServer.Call(server, 2, "ask_human", Arguments("Ship the parser?"));
             var second = await StdioServer.Call(server, 3, "ask_human", Arguments("Ship the parser now?"));
-            first.GetProperty("status").GetString().Should().Be("no_answer_yet", first.ToString());
+            first.GetProperty("status").GetString().Should().Be("ask_in_conversation", first.ToString());
             first.GetProperty("note").GetString().Should().Contain("free batch 1 of 2");
             second.GetProperty("note").GetString().Should().Contain("free batch 2 of 2");
 
@@ -99,17 +100,14 @@ public sealed class AskHumanScenarioTests : IAsyncLifetime
             var consultId = consulted.GetProperty("consultId").GetString()!;
 
             var opened = await StdioServer.Call(server, 6, "ask_human", Arguments("The consultants say a breaker. Agreed?", consultId));
-            opened.GetProperty("status").GetString().Should().Be("no_answer_yet", opened.ToString());
-            opened.GetProperty("instruction").GetString().Should().Contain("ask the person directly").And.Contain("expired");
+            opened.GetProperty("status").GetString().Should().Be("ask_in_conversation", opened.ToString());
+            opened.GetProperty("instruction").GetString().Should().Contain("this conversation");
 
-            var cards = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json").Where(f => !f.EndsWith(".answer.json")).ToList();
-            cards.Should().HaveCount(3, "two free batches and the one the consultants opened — the refused question wrote none");
-            var escalations = new Escalations(_data);
-            cards.Select(f => escalations.Read(Path.GetFileNameWithoutExtension(f))!.Status)
-                .Should().AllBe(EscalationStatuses.Expired, "every wait ran its one second out");
+            Directory.Exists(Path.Combine(_data, "escalations")).Should().BeFalse(
+                "none of these questions is the gate's — the session is not held — so none became a card in VS Code");
             var record = new QuestionConsultStore(_data).Read(consultId)!;
-            record.Outcome.Should().Be(Server.QuestionOutcomes.PersonAsked);
-            record.EscalationId.Should().NotBeEmpty();
+            record.Outcome.Should().Be("person_asked_in_conversation");
+            record.EscalationId.Should().NotBeEmpty("the proof was spent once");
         }
         finally
         {

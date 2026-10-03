@@ -251,7 +251,7 @@ public sealed class EscalationsTests : IDisposable
         {
             while (!stop.IsCancellationRequested)
             {
-                _escalations.DecisionFor("s-1");
+                _escalations.Read("q1");
             }
         });
 
@@ -288,7 +288,7 @@ public sealed class EscalationsTests : IDisposable
         {
             while (!stop.IsCancellationRequested)
             {
-                _escalations.DecisionFor("s-1");
+                _escalations.Read("q1");
             }
         });
 
@@ -375,6 +375,6 @@ public sealed class EscalationsTests : IDisposable
         using var held = new FileStream(
             _escalations.QuestionPath("q1"), FileMode.Open, FileAccess.Read, FileShare.None);
 
-        _escalations.DecisionFor("s-1").ToString().Should().Be("None", "and the walk over questions continues");
+        _escalations.Read("q1").Should().BeNull("a question file nobody can open is nothing yet, never a throw");
     }
 }

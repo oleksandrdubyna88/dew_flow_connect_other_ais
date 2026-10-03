@@ -367,30 +367,43 @@ internal static class Tools
             });
 
         yield return McpServerTool.Create(
-            // The three gate arguments carry defaults, so every client that predates them keeps calling with three.
+            // The three gate arguments carry defaults, so every client that predates them keeps calling with three. The
+            // token is the SDK's, bound per request and never part of the schema: a client that cancels — or whose own
+            // tool timeout fires first — stops a production risk's consultants rather than paying for answers nobody
+            // receives (todo/PLAN_ask_human_is_for_the_gate.md, the own review of 2026-10-03).
             async (string repoPath, string branch, string question, string? document = null, string? feature = null,
-                   string? consultId = null, bool productionRisk = false, string? riskReason = null) =>
+                   string? consultId = null, bool productionRisk = false, string? riskReason = null, CancellationToken cancellationToken = default) =>
                 await host.Current.AskHumanAsync(
                     repoPath, branch, question, document ?? string.Empty, feature ?? string.Empty,
-                    consultId ?? string.Empty, productionRisk, riskReason ?? string.Empty),
+                    consultId ?? string.Empty, productionRisk, riskReason ?? string.Empty, cancellationToken),
             new McpServerToolCreateOptions
             {
                 Name = "ask_human",
-                Title = "Escalate a decision to the person, and wait for their answer",
+                Title = "Put a question to the person — the gate's on a card in VS Code, your own back to your chat",
                 Description = """
-                    For a decision the gate says is a human's — a `call_human` verdict, or anything
-                    else only they can settle. The question appears in VS Code (a dialog, the status
-                    bar, and the open-questions list) together with the round's still-gating
-                    findings, and THIS CALL BLOCKS until they answer or the budget runs out
-                    (15 minutes by default).
+                    Two kinds of question, and the server tells them apart by the session you name.
 
-                    The phase rule, which the server enforces: a question asked while the plan is being
+                    THE GATE'S QUESTION — the session is held by a `call_human` verdict, or it is a
+                    feature review after its first round, where the person may ask for the second. It
+                    appears in VS Code (a dialog, the status bar, the open-questions list) with the
+                    round's still-gating findings, and THIS CALL BLOCKS until they answer or the
+                    budget runs out (15 minutes by default).
+
+                    YOUR OWN QUESTION — anything else: a choice about the work, a missing detail. No
+                    card is written and nothing waits: the reply is `status: "ask_in_conversation"`,
+                    and you ask the person yourself, in this conversation, with your own question
+                    tool, offering the options you see. Never decide alone because they have not
+                    answered yet.
+
+                    The phase rule, which the server enforces on your own questions: a question asked while the plan is being
                     formed, and the first 2 batches of questions after the plan's `proceed`, go to the person
                     directly; every question after that, until the work is released to the stage environment,
                     goes through `ask_consultants` first and reaches `ask_human` with the `consultId` it
                     returned — unless `productionRisk: true` with a `riskReason` says a wrong answer could
-                    take production down, which asks the person at once and runs the consultants beside the
-                    question. After the release, questions go to the person directly again. A `consultId` is VERIFIED,
+                    take production down, which makes `ask_human` ask the consultants first and return their
+                    answers in `consultantAnswers`. After the release, questions go to the person directly again.
+                    The gate's own question is never sent to the consultants; a production risk on it, in the
+                    building phase, puts the card up at once with the consultants beside it. A `consultId` is VERIFIED,
                     never trusted: a consultation this caller session asked in this repository, finished,
                     under 30 minutes old and not yet used — anything else counts as none. Under `require` a
                     question the rule sends to the consultants is refused naming `ask_consultants`; under
@@ -402,13 +415,16 @@ internal static class Tools
                     take it. A document review is its own session, and without it the question is
                     filed under the branch's session, carries the branch's findings, and the
                     person's answer never reaches the review that asked. A FEATURE review asks with
-                    `feature` — the `planPath` you gave `review_feature` — for the same reason.
+                    `feature` — the `planPath` you gave `review_feature` — for the same reason. Forgetting it on
+                    a held document or feature review is the one way the gate's question comes back as
+                    `ask_in_conversation`: the branch's own session is not the held one.
 
-                    Two possible replies. `status: "answered"` carries their words in `answer` — act
-                    on them. `status: "no_answer_yet"` means nobody was at the keyboard: ask the
+                    Three possible replies. `status: "ask_in_conversation"` — your own question: ask in
+                    this conversation, as above. `status: "answered"` carries their words in `answer` —
+                    act on them. `status: "no_answer_yet"` means nobody was at the keyboard: ask the
                     person directly in this conversation and wait for their reply. Never decide
                     alone because nobody answered. The question is then marked expired in VS Code —
-                    out of the active list, kept in the log for seven days — and either reply's `note`
+                    out of the active list, kept in the log for seven days — and every reply's `note`
                     carries what the gate said beside the door.
                     """,
                 ReadOnly = true,
@@ -527,7 +543,8 @@ internal static class Tools
                     parallel, each under its own deadline, and every answer comes back SEPARATELY, fenced
                     `<consultant_advice … status="advisory_only">`. No model summarises the others.
                     Call it before `ask_human` with a question another model could settle; `ask_human`
-                    stays the only door to the person.
+                    stays the one door the gate checks — it answers your own question with
+                    `ask_in_conversation`, and you then ask the person in this conversation.
 
                     `repoPath` is this checkout's own top level. `question` (at most 4 KB) is what you
                     would ask the person. `context` is REQUIRED (at most 8 KB): what you tried, what
@@ -552,13 +569,13 @@ internal static class Tools
                     question. `document` and `feature` file the question under that review's session, as
                     `ask_human` takes them.
 
-                    The phase rule, which the server enforces: a question asked while the plan is being
+                    The phase rule, which the server enforces on your own questions: a question asked while the plan is being
                     formed, and the first 2 batches of questions after the plan's `proceed`, go to the person
                     directly; every question after that, until the work is released to the stage environment,
                     goes through `ask_consultants` first and reaches `ask_human` with the `consultId` it
                     returned — unless `productionRisk: true` with a `riskReason` says a wrong answer could
-                    take production down, which asks the person at once and runs the consultants beside the
-                    question. After the release, questions go to the person directly again. Pass this reply's
+                    take production down, which makes `ask_human` ask the consultants first and return their
+                    answers in `consultantAnswers`. After the release, questions go to the person directly again. Pass this reply's
                     `consultId` to `ask_human` when the answers do not settle the question — that is how
                     the gate knows the consultants came first.
                     """,

@@ -149,8 +149,22 @@ public sealed class ThePersonAsksForASecondFeatureRoundTests : IDisposable
         var state = ClosedAfterOneRound(DateTime.UtcNow, "q1").State;
 
         RoundMachine.RecordQuestion(state, "q2").RequestQuestions.Should().Equal(["q1", "q2"]);
-        RoundMachine.RecordQuestion(state with { Stage = Stage.FeatureReview, SecondRound = SecondRoundGround.BlockingFinding }, "q2")
-            .RequestQuestions.Should().Equal(["q1", "q2"], "recorded whatever the ground; whether it may be applied is the request's own check");
+    }
+
+    /// <summary>
+    /// With a ground already set, round 2 is admitted without the person — no answer can request it, so the question is
+    /// not recorded (and it is no card either: <c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G1). It used to be
+    /// recorded "whatever the ground", leaving the request's own check to ignore it; the binding and the card are now
+    /// one decision, <see cref="RoundMachine.AsksForTheGate"/>.
+    /// </summary>
+    [Fact]
+    public void AQuestionAskedWhenAGroundIsAlreadySet_IsNotRecorded_NoAnswerCouldRequestAnything()
+    {
+        var grounded = ClosedAfterOneRound(DateTime.UtcNow, "q1").State with { Stage = Stage.FeatureReview, SecondRound = SecondRoundGround.BlockingFinding };
+
+        RoundMachine.RecordQuestion(grounded, "q2").Should().BeSameAs(grounded);
+        RoundMachine.ApplyPersonsRequest(grounded, HumanDecision.Continue).Should().BeSameAs(grounded,
+            "and the request it would have carried could not apply there anyway — nothing is lost");
     }
 
     [Fact]

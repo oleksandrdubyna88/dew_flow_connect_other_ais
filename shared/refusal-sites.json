@@ -3,7 +3,7 @@
   "callers": [
     {
       "file": "src_mcp/src/Server/AskHumanService.cs",
-      "refusals": 4
+      "refusals": 5
     },
     {
       "file": "src_mcp/src/Server/Consultation/ConsultationService.cs",

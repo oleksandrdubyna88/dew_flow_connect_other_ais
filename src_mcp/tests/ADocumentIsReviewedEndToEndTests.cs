@@ -113,7 +113,12 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
     /// How long <c>ask_human</c> waits for a person. The shipped thirty minutes for every test that
     /// never asks one; a test that DOES ask sets a budget nobody is expected to meet.
     /// </param>
-    private PanelService Service(TimeSpan? escalationBudget = null)
+    /// <param name="threshold">
+    /// The gating count a round must fall under. Zero makes any gating finding hold the gate — one round, then
+    /// <c>call_human</c> — which is how a test reaches a HELD document session, the only one whose
+    /// <c>ask_human</c> becomes a card.
+    /// </param>
+    private PanelService Service(TimeSpan? escalationBudget = null, int threshold = 5)
     {
         var catalog = RoleComposition.Compose([
             new RoleEntry(RoleCatalog.PlanRole, Active: false),
@@ -133,7 +138,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
             {
                 Providers = [new("codex") { ExecutablePath = FakeCliExe }],
                 Rounds = new PanelConfig(
-                    catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, 5)), StagePolicy.Human)
+                    catalog.Roles.ToDictionary(r => r.Id, _ => new RoleGate(1, threshold)), StagePolicy.Human)
                 {
                     Catalog = catalog,
                 },
@@ -502,14 +507,17 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
     /// It always loaded the branch session: for a document review it showed the wrong pending
     /// findings and filed the question under the branch session's id, so <c>Escalations.DecisionFor</c>
     /// — keyed by session id — never found the person's answer for the document session. (§9.3)
+    /// The document's gate is HELD here (one round, a threshold of zero): only a held gate's question becomes a
+    /// card (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G1).
     /// </remarks>
     [Fact]
     public async Task AskHumanForADocumentReview_FilesTheQuestionUnderTheDocumentsSession_WithItsFindings()
     {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
+        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200), threshold: 0);
         await service.OpenAsync(_repo, "main");
         Script(WithNotes);
-        await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument());
+        Parse(await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument()))
+            .GetProperty("verdict").GetString().Should().Be("call_human", "the fixture must hold the document's gate");
         var documentSession = Parse(await service.StatusAsync(_repo, "main", "docs/spec.md")).GetProperty("sessionId").GetString();
         var branchSession = Parse(await service.StatusAsync(_repo, "main")).GetProperty("sessionId").GetString();
         documentSession.Should().NotBe(branchSession, "the fixture holds two sessions, or the test proves nothing");
@@ -517,13 +525,14 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
         var reply = Parse(await service.AskHumanAsync(_repo, "main", "Ship the spec as it stands?", document: "docs/spec.md"));
 
         reply.GetProperty("status").GetString().Should().Be("no_answer_yet", "nobody is at the keyboard in a test");
-        var asked = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
-            .Single(f => !f.EndsWith(".answer.json", StringComparison.Ordinal));
-        var question = JsonDocument.Parse(await File.ReadAllTextAsync(asked)).RootElement;
+        var question = await TheCardAsking("Ship the spec");
         question.GetProperty("sessionId").GetString().Should().Be(documentSession,
             "the person's answer is looked up by session id, so a question filed under the branch's session is never answered");
         question.GetProperty("openFindings").GetArrayLength().Should().Be(1,
             "the document round's own gating finding rides with the question");
+        question.GetProperty("kind").GetString().Should().Be(EscalationKinds.Question);
+        (await TheCardAsking("The document review gate")).GetProperty("kind").GetString().Should().Be(EscalationKinds.Notice,
+            "the round's call_human notice says which producer wrote it, so the panel never has to guess");
     }
 
     /// <summary>
@@ -551,20 +560,40 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
         resolve.GetProperty("error").GetString().Should().Contain("no review of");
     }
 
-    /// <summary>And with no document named, the question is the BRANCH session's, exactly as before.</summary>
+    /// <summary>
+    /// And with no document named, the question is the BRANCH session's — which is not held, so it is the AI's own
+    /// question and is asked in its conversation. The reply names the mistake that lands an AI here: a question about
+    /// the held document review must pass <c>document</c> (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G2).
+    /// </summary>
     [Fact]
-    public async Task AskHumanWithNoDocument_StillFilesUnderTheBranchsSession()
+    public async Task AskHumanWithNoDocument_AsksAboutTheBranch_AndSaysToNameTheDocumentForItsHeldReview()
     {
-        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200));
+        var service = Service(escalationBudget: TimeSpan.FromMilliseconds(200), threshold: 0);
         await service.OpenAsync(_repo, "main");
-        var branchSession = Parse(await service.StatusAsync(_repo, "main")).GetProperty("sessionId").GetString();
+        Script(WithNotes);
+        await service.ReviewDocumentAsync(_repo, "main", Purpose, documentPath: WriteDocument());
+        var notices = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json").Count(f => !f.EndsWith(".answer.json", StringComparison.Ordinal));
 
         var reply = Parse(await service.AskHumanAsync(_repo, "main", "Ship it?"));
 
-        reply.GetProperty("status").GetString().Should().Be("no_answer_yet");
-        var asked = Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json")
-            .Single(f => !f.EndsWith(".answer.json", StringComparison.Ordinal));
-        JsonDocument.Parse(await File.ReadAllTextAsync(asked)).RootElement.GetProperty("sessionId").GetString()
-            .Should().Be(branchSession);
+        reply.GetProperty("status").GetString().Should().Be("ask_in_conversation", reply.ToString());
+        reply.GetProperty("instruction").GetString().Should().Contain("`document`");
+        Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json").Count(f => !f.EndsWith(".answer.json", StringComparison.Ordinal))
+            .Should().Be(notices, "the branch's question wrote no card beside the document's own call_human notice");
+    }
+
+    /// <summary>The card a question asked, found by its text — a held gate also carries its own call_human notice.</summary>
+    private async Task<JsonElement> TheCardAsking(string beginning)
+    {
+        foreach (var file in Directory.GetFiles(Path.Combine(_data, "escalations"), "*.json").Where(f => !f.EndsWith(".answer.json", StringComparison.Ordinal)))
+        {
+            var card = JsonDocument.Parse(await File.ReadAllTextAsync(file)).RootElement;
+            if (card.GetProperty("question").GetString()!.StartsWith(beginning, StringComparison.Ordinal))
+            {
+                return card;
+            }
+        }
+
+        throw new InvalidOperationException($"no card asks \"{beginning}\"");
     }
 }

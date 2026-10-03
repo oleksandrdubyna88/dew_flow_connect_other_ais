@@ -76,7 +76,9 @@ public static class RoundMachine
     /// </remarks>
     internal const string GateHeld =
         "the rounds for this stage are spent and the verdict was call_human — a person has to decide " +
-        "before another round runs. Ask them with ask_human: 'Keep going — more rounds' or 'Stop and " +
+        "before another round runs. Ask them with ask_human — passing `document` or `feature` exactly as " +
+        "you passed it to this review when it is a document's or a feature's, because only the held " +
+        "session's question reaches the person's card: 'Keep going — more rounds' or 'Stop and " +
         "act on the findings' each grant a fresh set of rounds, and 'Stop and talk to me' advances " +
         "nothing. If they would rather ship with the findings open, they say so and you pass " +
         "humanDecision: \"proceed\" to resolve. Running the review again is not one of your options.";
@@ -326,20 +328,40 @@ public static class RoundMachine
     };
 
     /// <summary>
+    /// Whether a question asked on this session is the GATE's — the one rule that decides both whether
+    /// <c>ask_human</c> puts a card in front of the person and whether <see cref="RecordQuestion"/> binds its
+    /// answer to the session (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G1).
+    /// </summary>
+    /// <remarks>
+    /// Two states, and only two: a held gate, whose question the person answers with a decision; and a feature
+    /// review in the one state where the person's answer can ask for its second round
+    /// (<see cref="ApplyPersonsRequest"/>'s own precondition). Every other question is the AI's own and is asked
+    /// in its conversation — a card there offered the gate's buttons on a question they could not answer.
+    /// </remarks>
+    public static bool AsksForTheGate(SessionState s) => s.HumanGate || CanBeAskedForASecondRound(s);
+
+    /// <summary>A feature session, one round run, no ground for a second yet, no hold — where a person's "again" means round 2.</summary>
+    private static bool CanBeAskedForASecondRound(SessionState s) =>
+        s is { IsFeatureSession: true, HumanGate: false, RoundsRunThisStage: 1, SecondRound: SecondRoundGround.None };
+
+    /// <summary>
     /// An <c>ask_human</c> question, recorded where its answer may later count: on the current hold
-    /// (<see cref="SessionState.HoldQuestions"/>), or — on a feature session with a round run and no hold —
-    /// as one whose answer may be the person's request for round 2 (<see cref="SessionState.RequestQuestions"/>).
+    /// (<see cref="SessionState.HoldQuestions"/>), or — on a feature session that can still be asked for its
+    /// second round — as one whose answer may be that request (<see cref="SessionState.RequestQuestions"/>).
     /// Any other question is asked and not recorded: its answer decides nothing here.
     /// </summary>
     /// <remarks>
-    /// A question asked BEFORE the first round is not a request question: an answer to it given after
-    /// round 1 is about whatever it asked, and binding the request to it was the clock rule in a new coat.
+    /// <para>A question asked BEFORE the first round is not a request question: an answer to it given after
+    /// round 1 is about whatever it asked, and binding the request to it was the clock rule in a new coat.</para>
+    /// <para>It used to bind every question on a feature session with a round run, two rounds or a ground
+    /// already set included — states in which no answer can admit anything. Narrowed to
+    /// <see cref="AsksForTheGate"/> so the binding and the card are one decision.</para>
     /// </remarks>
     public static SessionState RecordQuestion(SessionState s, string id) => s switch
     {
+        _ when !AsksForTheGate(s) => s,
         { HumanGate: true } => s with { HoldQuestions = [.. s.HoldQuestions, id] },
-        { IsFeatureSession: true, RoundsRunThisStage: >= 1 } => s with { RequestQuestions = [.. s.RequestQuestions, id] },
-        _ => s,
+        _ => s with { RequestQuestions = [.. s.RequestQuestions, id] },
     };
 
     /// <summary>
@@ -358,8 +380,7 @@ public static class RoundMachine
     /// round they admitted runs, and nothing asked before it can admit another.</para>
     /// </remarks>
     public static SessionState ApplyPersonsRequest(SessionState s, HumanDecision decision) =>
-        decision is HumanDecision.Continue or HumanDecision.Fix
-        && s is { IsFeatureSession: true, HumanGate: false, RoundsRunThisStage: 1, SecondRound: SecondRoundGround.None }
+        decision is HumanDecision.Continue or HumanDecision.Fix && CanBeAskedForASecondRound(s)
             ? s with { SecondRound = SecondRoundGround.PersonAsked, RequestQuestions = [] }
             : s;
 

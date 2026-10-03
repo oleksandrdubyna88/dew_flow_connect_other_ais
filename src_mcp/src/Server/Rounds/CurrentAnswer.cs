@@ -10,8 +10,8 @@ namespace CoaiMcp.Server;
 /// 2026-09-26; identity ALONE since epic 3's code round the same day).
 /// </summary>
 /// <remarks>
-/// <para><b>Why a rule at all.</b> <see cref="Escalations.AnsweredFor"/> answers the newest ANSWERED
-/// question of a session and walks past the unanswered ones — so a <c>call_human</c> notice nobody has
+/// <para><b>Why a rule at all.</b> The session-wide read (<c>Escalations.AnsweredFor</c>, removed 2026-10-03 with its
+/// last reader, <c>status</c>) answered the newest ANSWERED question of a session and walked past the unanswered ones — so a <c>call_human</c> notice nobody has
 /// answered yet is skipped and the "keep going" a person gave on an EARLIER hold is found instead. Three
 /// readers act on that file: the engine before a round (a held gate opened), <c>resolve</c> (a held gate's
 /// fresh count), and the feature stage's second-round admission (the person's request). Two of them
@@ -55,13 +55,44 @@ internal static class CurrentAnswer
             ? answer
             : null;
 
-    /// <summary>The newest answer among the questions, the one asked last first — or null while none is answered.</summary>
+    /// <summary>
+    /// The answer <c>status</c> reports: the current hold's, else the feature review's request — the only answers the
+    /// gate acts on (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G5). Null when the person has answered neither.
+    /// </summary>
+    /// <remarks>
+    /// <c>status</c> used to read the newest answered card of the session, whatever it was, and a button pressed on an
+    /// AI's own question surfaced as a gate decision nobody had made (2026-10-03). It is the third reader of the answer
+    /// file, moved onto the same rule as the other two.
+    /// </remarks>
+    public static EscalationAnswer? TheGatesAnswer(PersistedSession session, Escalations escalations) =>
+        For(session, escalations) ?? ForRequest(session, escalations);
+
+    /// <summary>A decision as <c>status</c> spells it — <c>continue</c>, <c>fix</c>, <c>discuss</c>, or empty.</summary>
+    public static string WordFor(HumanDecision decision) => decision switch
+    {
+        HumanDecision.Continue => "continue",
+        HumanDecision.Fix => "fix",
+        HumanDecision.Discuss => "discuss",
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// The newest answer among the questions that carries a DECISION, else the newest at all — or null while none is
+    /// answered.
+    /// </summary>
+    /// <remarks>
+    /// Words are not a decision, and they must not hide one either: a hold's question card offers "Type an answer…"
+    /// first (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G4), and a person who pressed "Keep going" on the notice and
+    /// then typed a reply to the AI's question left a word-only answer newest — the hold read as unanswered (the cadence
+    /// consultation b6e9df3c, 2026-10-03).
+    /// </remarks>
     private static EscalationAnswer? NewestAnswerAmong(IReadOnlyList<string> questions, Escalations escalations) =>
         questions
             .Reverse()
             .Select(escalations.ReadAnswer)
             .OfType<EscalationAnswer>()
-            .OrderByDescending(answer => AnsweredAt(answer) ?? DateTime.MinValue)
+            .OrderByDescending(answer => Escalations.DecisionOf(answer) != HumanDecision.None)
+            .ThenByDescending(answer => AnsweredAt(answer) ?? DateTime.MinValue)
             .FirstOrDefault();
 
     private static bool IsNewerThanTheLastRound(EscalationAnswer answer, PersistedSession session)

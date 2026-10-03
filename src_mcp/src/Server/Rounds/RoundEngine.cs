@@ -791,7 +791,10 @@ internal sealed class RoundEngine(
             "en",
             string.Empty,
             [.. gating],
-            DateTime.UtcNow.ToString("O"));
+            DateTime.UtcNow.ToString("O"))
+        {
+            Kind = EscalationKinds.Notice,
+        };
 
     /// <summary>
     /// How long this round may take: what was configured, or what its shape earns.

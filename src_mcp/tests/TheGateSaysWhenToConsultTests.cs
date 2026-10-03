@@ -141,12 +141,12 @@ public class TheGateSaysWhenToConsultTests
     /// <c>QuestionPolicy.FreeBatches</c> by <c>TheOrderTextAgreesWithThePolicyTests</c>.
     /// </remarks>
     private const string PhaseRule =
-        "The phase rule, which the server enforces: a question asked while the plan is being formed, and the first 2 "
-        + "batches of questions after the plan's `proceed`, go to the person directly; every question after that, until "
-        + "the work is released to the stage environment, goes through `ask_consultants` first and reaches `ask_human` "
-        + "with the `consultId` it returned — unless `productionRisk: true` with a `riskReason` says a wrong answer could "
-        + "take production down, which asks the person at once and runs the consultants beside the question. After the "
-        + "release, questions go to the person directly again.";
+        "The phase rule, which the server enforces on your own questions: a question asked while the plan is being formed, "
+        + "and the first 2 batches of questions after the plan's `proceed`, go to the person directly; every question after "
+        + "that, until the work is released to the stage environment, goes through `ask_consultants` first and reaches "
+        + "`ask_human` with the `consultId` it returned — unless `productionRisk: true` with a `riskReason` says a wrong "
+        + "answer could take production down, which makes `ask_human` ask the consultants first and return their answers "
+        + "in `consultantAnswers`. After the release, questions go to the person directly again.";
 
     /// <summary>Both doors carry the phase rule, whole — the gate's and the consultants'.</summary>
     [Fact]

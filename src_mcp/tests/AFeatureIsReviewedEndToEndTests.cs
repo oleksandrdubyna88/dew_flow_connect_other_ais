@@ -940,15 +940,17 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
     /// The person's second-round request is bound to a question asked FOR it: one the AI asked on the
     /// feature session after round 1. A question asked before round 1 — here, while the review was still
     /// skipped — and answered "continue" after it used to admit round 2 by the clock alone (the gate's
-    /// finding #27).
+    /// finding #27). Since 2026-10-03 such a question is not the gate's at all, so it is no card the person
+    /// could press "continue" on: it is asked in the AI's conversation (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>,
+    /// G1/G2), and round 2 still waits for a question asked after round 1.
     /// </summary>
     [Fact]
-    public async Task AQuestionAskedBeforeRoundOne_AnsweredAfterIt_IsNotThePersonsRequest_AndOneAskedAfterItIs()
+    public async Task AQuestionAskedBeforeRoundOne_IsNotThePersonsRequest_AndOneAskedAfterItIs()
     {
         var early = Service(ticked: false, gate: new RoleGate(2, 0), escalationBudget: TimeSpan.FromMilliseconds(200));
         Parse(await ReviewAsync(early)).GetProperty("verdict").GetString().Should().Be("skipped", "the session exists from the first call");
         Parse(await early.AskHumanAsync(_repo, "any-branch", "Shall I run the feature review now?", feature: PlanPath))
-            .GetProperty("status").GetString().Should().Be("no_answer_yet");
+            .GetProperty("status").GetString().Should().Be("ask_in_conversation", "before round 1 nothing can be requested — the question is the AI's own");
 
         var service = Service(gate: new RoleGate(2, 0), escalationBudget: TimeSpan.FromMilliseconds(200));
         Script(OneFinding);
@@ -956,7 +958,7 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
         await service.ResolveAsync(_repo, "any-branch", RejectTheFinding, feature: PlanPath);
         Write("src/Shop.cs", Shop("var total = n * 3;"));
         await Commit("the fix pull request");
-        ThePersonAnswers("continue", "yes, run it", question: "Shall I run");
+        Directory.Exists(Path.Combine(_data, "escalations")).Should().BeFalse("the early question left no card to answer");
 
         var refused = Parse(await ReviewAsync(service, again: true));
 

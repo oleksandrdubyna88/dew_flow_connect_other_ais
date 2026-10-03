@@ -38,24 +38,33 @@ public sealed class HumanDecisionTests : IDisposable
     private static EscalationQuestion Question(string id, string session) =>
         new(id, session, "D:/r", "main", "The plan review gate needs your decision", "", "en", "", [], "now");
 
-    [Fact]
-    public void ADecisionToCarryOn_IsReadableBySession_NotOnlyByAWaitingCall()
+    /// <summary>The answer file as the panel writes it, read back through the one reader the server has.</summary>
+    private static EscalationAnswer Answered(Escalations escalations, string id, string json)
     {
-        var escalations = Escalations();
-        escalations.Notify(Question("q1", "s1"));
-        File.WriteAllText(escalations.AnswerPath("q1"), """{"id":"q1","answer":"keep going","decision":"continue","answeredUtc":"now"}""");
+        escalations.Notify(Question(id, "s"));
+        File.WriteAllText(escalations.AnswerPath(id), json);
 
-        escalations.DecisionFor("s1").Should().Be(HumanDecision.Continue);
+        return escalations.ReadAnswer(id)!;
+    }
+
+    // Which session's answer counts — the hold's own questions, never the newest card of the session — is
+    // TheAnswerBelongsToTheCurrentHoldTests' subject, and status's is TheStatusReportsOnlyTheGatesAnswerTests'. The
+    // session-wide read these tests used to exercise (Escalations.DecisionFor) went with its last reader, 2026-10-03.
+
+    [Fact]
+    public void ADecisionToCarryOn_IsReadFromTheFile_NotOnlyByAWaitingCall()
+    {
+        var answer = Answered(Escalations(), "q1", """{"id":"q1","answer":"keep going","decision":"continue","answeredUtc":"now"}""");
+
+        CoaiMcp.Server.Escalations.DecisionOf(answer).Should().Be(HumanDecision.Continue);
     }
 
     [Fact]
     public void ADecisionToFixFirst_IsAlsoRecorded_BecauseSilenceAndRefusalAreDifferent()
     {
-        var escalations = Escalations();
-        escalations.Notify(Question("q2", "s2"));
-        File.WriteAllText(escalations.AnswerPath("q2"), """{"id":"q2","answer":"fix them first","decision":"fix","answeredUtc":"now"}""");
+        var answer = Answered(Escalations(), "q2", """{"id":"q2","answer":"fix them first","decision":"fix","answeredUtc":"now"}""");
 
-        escalations.DecisionFor("s2").Should().Be(HumanDecision.Fix);
+        CoaiMcp.Server.Escalations.DecisionOf(answer).Should().Be(HumanDecision.Fix);
     }
 
     [Fact]
@@ -64,17 +73,8 @@ public sealed class HumanDecisionTests : IDisposable
         var escalations = Escalations();
         escalations.Notify(Question("q3", "s3"));
 
-        escalations.DecisionFor("s3").Should().Be(HumanDecision.None);
-    }
-
-    [Fact]
-    public void ANoticeForAnotherSession_IsNotThisSessionsDecision()
-    {
-        var escalations = Escalations();
-        escalations.Notify(Question("q4", "other-session"));
-        File.WriteAllText(escalations.AnswerPath("q4"), """{"id":"q4","answer":"keep going","decision":"continue","answeredUtc":"now"}""");
-
-        escalations.DecisionFor("mine").Should().Be(HumanDecision.None);
+        escalations.ReadAnswer("q3").Should().BeNull();
+        CoaiMcp.Server.Escalations.DecisionOf(escalations.ReadAnswer("q3")).Should().Be(HumanDecision.None);
     }
 
     /// <summary>
@@ -82,18 +82,12 @@ public sealed class HumanDecisionTests : IDisposable
     /// answered, because an answer older than the round it would admit was about something else (D23).
     /// </summary>
     [Fact]
-    public void TheNewestAnswer_IsReadableWhole_WithWhenItWasGiven()
+    public void TheAnswer_IsReadableWhole_WithWhenItWasGiven()
     {
-        var escalations = Escalations();
-        escalations.Notify(Question("q6", "s6"));
-        File.WriteAllText(escalations.AnswerPath("q6"), """{"id":"q6","answer":"once more","decision":"continue","answeredUtc":"2026-09-26T10:00:00.000Z"}""");
+        var answer = Answered(Escalations(), "q6", """{"id":"q6","answer":"once more","decision":"continue","answeredUtc":"2026-09-26T10:00:00.000Z"}""");
 
-        var answer = escalations.LatestAnswerFor("s6");
-
-        answer.Should().NotBeNull();
-        answer!.Decision.Should().Be("continue");
+        answer.Decision.Should().Be("continue");
         answer.AnsweredUtc.Should().Be("2026-09-26T10:00:00.000Z");
-        escalations.LatestAnswerFor("nobody").Should().BeNull();
     }
 
     [Fact]
@@ -101,11 +95,9 @@ public sealed class HumanDecisionTests : IDisposable
     {
         // An older panel, or somebody typing a sentence: the text is still their answer and must
         // not be lost, but it is not a button press and must never advance a stage by itself.
-        var escalations = Escalations();
-        escalations.Notify(Question("q5", "s5"));
-        File.WriteAllText(escalations.AnswerPath("q5"), """{"id":"q5","answer":"looks fine to me","answeredUtc":"now"}""");
+        var answer = Answered(Escalations(), "q5", """{"id":"q5","answer":"looks fine to me","answeredUtc":"now"}""");
 
-        escalations.DecisionFor("s5").Should().Be(HumanDecision.None);
-        escalations.AnswerTextFor("s5").Should().Be("looks fine to me");
+        CoaiMcp.Server.Escalations.DecisionOf(answer).Should().Be(HumanDecision.None);
+        answer.Answer.Should().Be("looks fine to me");
     }
 }

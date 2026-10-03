@@ -109,6 +109,29 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
             CadenceRepoId = plan.Length > 0 ? "repo-id" : string.Empty,
         });
 
+    /// <summary>
+    /// A session whose gate is HELD by <c>call_human</c> — where an <c>ask_human</c> question is the gate's own and becomes a
+    /// card (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G1; the other such place, a feature review's request window, is
+    /// the feature tests'). Every test about the card, the wait and the answers folded under it runs here.
+    /// </summary>
+    private void Held(Harness h) =>
+        h.Sessions.Save(new PersistedSession(
+            new SessionState("s-1", _repo.Path, "main", PanelConfig.Uniform(3, 2)) { PlanProceeded = true, HumanGate = true, Stage = Stage.CodeReview }, []));
+
+    /// <summary>The cards in front of the person — none at all when the directory was never made.</summary>
+    private static int Cards(Harness h) =>
+        Directory.Exists(h.Escalations.Directory)
+            ? Directory.GetFiles(h.Escalations.Directory, "*.json").Count(f => !f.EndsWith(".answer.json", StringComparison.Ordinal))
+            : 0;
+
+    /// <summary>The AI's own question: no card, the reply tells it to ask in its own conversation (G2).</summary>
+    private static void AskedInTheConversation(JsonElement reply, Harness h)
+    {
+        reply.GetProperty("status").GetString().Should().Be("ask_in_conversation", reply.ToString());
+        reply.GetProperty("instruction").GetString().Should().Contain("this conversation");
+        Cards(h).Should().Be(0, "a question that is not the gate's is not shown in VS Code under 'a review is waiting on you'");
+    }
+
     private Task<JsonElement> Ask(Harness h, string consultId = "", bool productionRisk = false, string riskReason = "") =>
         Ask(h, Question, consultId, productionRisk, riskReason);
 
@@ -139,16 +162,15 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     // ---------- the phase ----------
 
     [Fact]
-    public async Task InThePlanStage_TheQuestionGoesToThePerson_AndNothingIsCounted()
+    public async Task InThePlanStage_TheQuestionIsAskedInTheConversation_AndNothingIsCounted()
     {
         var h = Build();
 
         var reply = await Ask(h);
 
-        reply.GetProperty("status").GetString().Should().Be("no_answer_yet");
+        AskedInTheConversation(reply, h);
         reply.GetProperty("note").GetString().Should().BeEmpty("the person is the right door while the plan is formed");
         Batches(h).Should().Be(0, "batches are counted from the plan's proceed");
-        Directory.GetFiles(h.Escalations.Directory, "*.json").Should().ContainSingle("the card was written");
     }
 
     [Fact]
@@ -161,13 +183,77 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
         var second = await Ask(h, Question + " (again)");
         var third = await Ask(h, Question + " (a third time)");
 
-        first.GetProperty("status").GetString().Should().Be("no_answer_yet");
+        AskedInTheConversation(first, h);
         first.GetProperty("note").GetString().Should().Contain("free batch 1 of 2");
         second.GetProperty("note").GetString().Should().Contain("free batch 2 of 2");
-        Batches(h).Should().Be(2, "both reached the person");
+        Batches(h).Should().Be(2, "both reached the person — in the conversation, which is still the person");
         third.GetProperty("error").GetString().Should().Contain("ask_consultants", "D7: the third batch goes through the consultant first")
             .And.Contain("productionRisk");
-        Directory.GetFiles(h.Escalations.Directory, "*.json").Should().HaveCount(2, "a refused question writes no card");
+        Cards(h).Should().Be(0);
+    }
+
+    /// <summary>
+    /// The symptom of 2026-10-03: an AI's own A-or-B question became a card under "a review is waiting on you", and
+    /// its Answer… offered the gate's three decisions. Outside a held gate there is no card at all.
+    /// </summary>
+    [Fact]
+    public async Task AnAiQuestionOutsideTheGate_WritesNoCard_AndIsAskedInTheConversation()
+    {
+        var h = Build(budget: TimeSpan.FromSeconds(5));
+        Proceeded(h);
+
+        var started = DateTime.UtcNow;
+        var reply = await Ask(h, "Should the api row read A) the working tree or B) the last commit?", string.Empty, false, string.Empty);
+
+        AskedInTheConversation(reply, h);
+        (DateTime.UtcNow - started).Should().BeLessThan(TimeSpan.FromSeconds(4), "nothing waits for a card nobody is shown");
+        reply.GetProperty("instruction").GetString().Should().Contain("document").And.Contain("feature",
+            "the one way to land here by mistake is a held document or feature review asked without naming it");
+    }
+
+    /// <summary>
+    /// G7: a held gate's question is the gate asking the person, not the AI's own — the phase rule does not send it
+    /// to the consultants, who cannot release a hold. It used to be refused under <c>require</c> past the free batches.
+    /// </summary>
+    [Fact]
+    public async Task AGateQuestionPastTheFreeBatches_IsNotSentToTheConsultants()
+    {
+        var h = Build();
+        Held(h);
+        h.Phase.Count(new QuestionPhaseKey.Caller(_caller), "earlier-1", DateTime.UtcNow);
+        h.Phase.Count(new QuestionPhaseKey.Caller(_caller), "earlier-2", DateTime.UtcNow);
+
+        var reply = await Ask(h, "The rounds are spent — keep going, act on the findings, or talk?", string.Empty, false, string.Empty);
+
+        reply.TryGetProperty("error", out _).Should().BeFalse($"the gate's own question is never sent to the consultants first: {reply}");
+        reply.GetProperty("status").GetString().Should().Be("no_answer_yet", $"the gate's question reaches the person's card: {reply}");
+        Cards(h).Should().Be(1);
+        TheCards(h).Single().Kind.Should().Be(EscalationKinds.Question, "the card says it is an ask_human question, so its Answer… offers words first");
+        Batches(h).Should().Be(2, "a gate question is not one of the AI's batches");
+    }
+
+    /// <summary>
+    /// G4: a typed answer to a hold's question goes back to the AI that asked and releases NOTHING — only a decision
+    /// opens a held gate (<see cref="CurrentAnswer"/>).
+    /// </summary>
+    [Fact]
+    public async Task ATypedAnswerToAHoldQuestion_ReachesTheAsker_AndReleasesNothing()
+    {
+        var h = Build(budget: TimeSpan.FromSeconds(10));
+        Held(h);
+        var asking = Ask(h);
+        var id = (await Eventually(() => Directory.Exists(h.Escalations.Directory)
+            ? Directory.GetFiles(h.Escalations.Directory, "*.json").Select(Path.GetFileNameWithoutExtension).FirstOrDefault()
+            : null, TimeSpan.FromSeconds(5)))!;
+        File.WriteAllText(h.Escalations.AnswerPath(id), JsonSerializer.Serialize(new { id, answer = "why did round 3 fail?", answeredUtc = DateTime.UtcNow.ToString("O") }));
+
+        var reply = await asking;
+
+        reply.GetProperty("answer").GetString().Should().Be("why did round 3 fail?");
+        var session = h.Sessions.Load(_repo.Path, "main")!;
+        session.State.HoldQuestions.Should().Contain(id, "the question was asked for the hold");
+        CurrentAnswer.DecisionFor(session, h.Escalations).Should().Be(HumanDecision.None, "words are not a decision");
+        session.State.HumanGate.Should().BeTrue("the gate stays held until a decision is pressed");
     }
 
     [Fact]
@@ -181,46 +267,46 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
 
         var opened = await Ask(h, consultId: consultId);
 
-        opened.GetProperty("status").GetString().Should().Be("no_answer_yet", opened.ToString());
+        AskedInTheConversation(opened, h);
         var record = h.Questions.Store.Read(consultId)!;
-        record.Outcome.Should().Be(QuestionOutcomes.PersonAsked, "the log says the person was asked after the consultants");
-        record.EscalationId.Should().NotBeEmpty("and which card it became");
-        TheCards(h).Should().Contain(card => card.Id == record.EscalationId && card.ConsultId == consultId,
-            "the card names the consultation it followed, so the sidebar can fold the answers under it");
+        record.Outcome.Should().Be("person_asked_in_conversation",
+            "the log says the person was asked after the consultants — in the conversation, not on a card");
+        record.EscalationId.Should().NotBeEmpty("the proof is spent under the question's id");
 
         var again = await Ask(h, Question + " (reused)", consultId, false, string.Empty);
         again.GetProperty("error").GetString().Should().Contain("already", "D14 (a): single use");
     }
 
     /// <summary>
-    /// S4b item 8: single use must hold for two calls IN FLIGHT at once, not only for one after another. Both calls
-    /// here verify the consultId before either posts: the gate is held, so each records its question on the session,
-    /// and the test holds the session's claim — both wait there, past their verification, before any card is written.
-    /// The proof was spent only AFTER the card, so both went through.
+    /// S4b item 8: single use must hold for two calls IN FLIGHT at once, not only for one after another — on the AI's own
+    /// question, the door a proof still opens (a held gate's question needs none since G7, and a production risk needs
+    /// none either). Whichever interleaving happens, exactly one gets through: the other fails the verification ("it was
+    /// already used by an earlier ask_human") or, past it, the atomic spend ("already used by another ask_human").
     /// </summary>
+    /// <remarks>
+    /// It used to FORCE both calls past their verification on a held session by holding its claim; the conversation path
+    /// has no await between the verification and the spend, so the interleaving is no longer staged — the atomic spend
+    /// stays the guard, and <c>QuestionConsultStore</c>'s own tests pin it.
+    /// </remarks>
     [Fact]
     public async Task TwoAskHumanCallsInFlightWithOneConsultId_OnlyOneGoesThrough()
     {
         var h = Build();
-        h.Sessions.Save(new PersistedSession(
-            new SessionState("s-1", _repo.Path, "main", PanelConfig.Uniform(3, 2)) { PlanProceeded = true, HumanGate = true, Stage = Stage.CodeReview }, []));
+        Proceeded(h);
         await Ask(h);
         await Ask(h);
         var consultId = await Consulted(h);
 
-        JsonElement[] replies;
-        using (SessionClaim.TryTake(_data, _repo.Path, "main") ?? throw new InvalidOperationException("the test could not hold the session's claim"))
-        {
-            replies = await Task.WhenAll(
-                Task.Run(() => Ask(h, Question + " (first)", consultId, false, string.Empty), TestContext.Current.CancellationToken),
-                Task.Run(() => Ask(h, Question + " (second)", consultId, false, string.Empty), TestContext.Current.CancellationToken));
-        }
+        var replies = await Task.WhenAll(
+            Task.Run(() => Ask(h, Question + " (first)", consultId, false, string.Empty), TestContext.Current.CancellationToken),
+            Task.Run(() => Ask(h, Question + " (second)", consultId, false, string.Empty), TestContext.Current.CancellationToken));
 
         replies.Count(r => r.TryGetProperty("status", out _)).Should().Be(1, $"one consultation opens the door ONCE: {string.Join(" | ", replies.Select(r => r.ToString()))}");
         replies.Count(r => r.TryGetProperty("error", out var e) && e.GetString()!.Contains("already", StringComparison.Ordinal)).Should().Be(1, "the other is refused as already used");
-        TheCards(h).Count(card => card.ConsultId == consultId).Should().Be(1, "one card follows the consultation");
         var spent = h.Questions.Store.Read(consultId)!;
-        TheCards(h).Should().Contain(card => card.Id == spent.EscalationId && card.ConsultId == consultId, "the record names the card that spent it");
+        spent.Outcome.Should().Be(QuestionOutcomes.PersonAskedInConversation);
+        spent.EscalationId.Should().NotBeEmpty("the record names the question that spent it");
+        Cards(h).Should().Be(0);
     }
 
     /// <summary>
@@ -231,7 +317,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     public async Task AConsultIdWhoseCardCouldNotBePosted_IsGivenBack_AndOpensTheDoorAfterwards()
     {
         var h = Build();
-        Proceeded(h);
+        Held(h);
         await Ask(h);
         await Ask(h);
         var consultId = await Consulted(h);
@@ -308,7 +394,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
 
         var third = await Ask(h, Question + " (third)", string.Empty, false, string.Empty);
 
-        third.GetProperty("status").GetString().Should().Be("no_answer_yet");
+        third.GetProperty("status").GetString().Should().Be("ask_in_conversation");
         third.GetProperty("note").GetString().Should().Contain("ask_consultants");
         Batches(h).Should().Be(3);
     }
@@ -321,7 +407,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
 
         var reply = await Ask(h);
 
-        reply.GetProperty("status").GetString().Should().Be("no_answer_yet");
+        reply.GetProperty("status").GetString().Should().Be("ask_in_conversation");
         reply.GetProperty("note").GetString().Should().BeEmpty();
         Batches(h).Should().Be(0);
     }
@@ -336,7 +422,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
 
         var third = await Ask(h, Question + " (third)", string.Empty, false, string.Empty);
 
-        third.GetProperty("status").GetString().Should().Be("no_answer_yet", third.ToString());
+        third.GetProperty("status").GetString().Should().Be("ask_in_conversation", third.ToString());
         third.GetProperty("note").GetString().Should().Contain("stood down").And.Contain("no question-consultant row", "D9: never a deadlock");
     }
 
@@ -350,7 +436,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
 
         var third = await Ask(h, Question + " (third)", string.Empty, false, string.Empty);
 
-        third.GetProperty("status").GetString().Should().Be("no_answer_yet", third.ToString());
+        third.GetProperty("status").GetString().Should().Be("ask_in_conversation", third.ToString());
         third.GetProperty("note").GetString().Should().Contain("stood down").And.Contain(QuestionConsultKeys.Enabled);
     }
 
@@ -363,7 +449,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
 
         var reply = await Ask(h);
 
-        reply.GetProperty("status").GetString().Should().Be("no_answer_yet", reply.ToString());
+        reply.GetProperty("status").GetString().Should().Be("ask_in_conversation", reply.ToString());
         reply.GetProperty("note").GetString().Should().BeEmpty();
         h.Phase.Observe(new QuestionPhaseKey.Plan("repo-id", "plan_x.md"), released: true, DateTime.UtcNow).Batches
             .Should().Be(0, "after the release nothing is counted");
@@ -393,7 +479,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
 
         var reply = await Ask(h);
 
-        reply.GetProperty("status").GetString().Should().Be("no_answer_yet", reply.ToString());
+        reply.GetProperty("status").GetString().Should().Be("ask_in_conversation", reply.ToString());
         reply.GetProperty("note").GetString().Should().Contain("could not be read");
     }
 
@@ -412,7 +498,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task AProductionRisk_WritesTheCardBeforeAnyLaunch_AndTheConsultantsAnswersArriveUnderIt()
+    public async Task AProductionRiskOnAHeldGate_WritesTheCardBeforeAnyLaunch_AndTheConsultantsAnswersArriveUnderIt()
     {
         var cardWasThereAtLaunch = false;
         var h = Build(budget: TimeSpan.FromSeconds(2), script: launch =>
@@ -427,9 +513,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
 
             return Task.FromResult<ScriptedAnswer?>(null);
         });
-        Proceeded(h);
-        await Ask(h);
-        await Ask(h);
+        Held(h);
 
         var reply = await Ask(h, Question + " (risk)", string.Empty, true, "the migration drops a column nothing can restore");
 
@@ -462,7 +546,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     {
         var h = Build(budget: TimeSpan.FromSeconds(2), script: launch => Task.FromResult<ScriptedAnswer?>(
             launch.Request.Executable == "claude" ? ScriptedAnswer.Claude("Back the column up first.") : null));
-        Proceeded(h);
+        Held(h);
         var longQuestion = "Is it safe to drop the legacy column now? " + string.Join(' ', Enumerable.Repeat("The table holds every invoice since 2019.", 150));
         System.Text.Encoding.UTF8.GetByteCount(longQuestion).Should().BeGreaterThan(QuestionConsultService.MaxQuestionBytes, "the fixture is past the limit");
 
@@ -488,7 +572,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     {
         var h = Build(budget: TimeSpan.FromSeconds(2), script: launch => Task.FromResult<ScriptedAnswer?>(
             launch.Request.Executable == "claude" ? ScriptedAnswer.Claude("Back the column up first.") : null));
-        Proceeded(h);
+        Held(h);
         const string leaking = "The deploy key sk-live-0123456789abcdefghijklmnop is in the migration — may it run against production now?";
 
         await Ask(h, leaking, string.Empty, true, "the migration drops a column nothing can restore");
@@ -512,7 +596,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
             var diskRow = new QuestionRow("astra-disk", "codex", "codex", "gpt-6-astra", string.Empty, string.Empty, string.Empty, "question-disk", Enabled: true);
             var h = Build(budget: TimeSpan.FromSeconds(2), rows: [diskRow], roots: [plain], script: launch => Task.FromResult<ScriptedAnswer?>(
                 launch.Request.Executable == "codex" ? ScriptedAnswer.Codex("Back the column up first.") : null));
-            Proceeded(h);
+            Held(h);
 
             await Ask(h, Question, string.Empty, true, "the migration drops a column nothing can restore");
 
@@ -524,6 +608,96 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
         {
             Directory.Delete(plain, recursive: true);
         }
+    }
+
+    // ---------- a production risk OUTSIDE the gate (G3) ----------
+
+    /// <summary>
+    /// G3, the operator's choice of 2026-10-03: outside a held gate there is no card to fold answers under, so the
+    /// consultants are asked FIRST and their answers come back in the reply — fenced, one per row — for the AI to show
+    /// the person beside its question.
+    /// </summary>
+    [Fact]
+    public async Task AProductionRiskOutsideTheGate_AsksTheConsultantsFirst_AndReturnsTheirAnswers()
+    {
+        var h = Build(script: launch => Task.FromResult<ScriptedAnswer?>(
+            launch.Request.Executable == "claude" ? ScriptedAnswer.Claude("Back the column up first.") : null));
+        Proceeded(h);
+
+        var reply = await Ask(h, Question + " (risk)", string.Empty, true, "the migration drops a column nothing can restore");
+
+        AskedInTheConversation(reply, h);
+        h.Launcher.Vendors.Should().NotBeEmpty("the consultants ran BEFORE the reply, not beside it");
+        var answers = reply.GetProperty("consultantAnswers");
+        answers.GetArrayLength().Should().Be(1, reply.ToString());
+        answers[0].GetProperty("advice").GetString().Should().Contain("Back the column up first.").And.Contain("advisory_only",
+            "another model's advice is fenced exactly as ask_consultants fences it");
+        reply.GetProperty("note").GetString().Should().ContainEquivalentOf("production risk").And.Contain("first");
+        var record = h.Questions.Store.All().Single(r => r.ProductionRisk);
+        record.Outcome.Should().Be("production_risk_consulted_first", "the log must not say the person was asked at once");
+        reply.GetProperty("consultId").GetString().Should().Be(record.Id);
+        Batches(h).Should().Be(1, "the person is asked — in the conversation");
+    }
+
+    /// <summary>
+    /// A client that gives up — the person presses Esc, or the client's own tool timeout fires before a five-minute row
+    /// budget — must not leave the proof spent and the batch counted for answers nobody receives. The token never reached
+    /// the service before (the own review of 2026-10-03): Tools.cs passed none.
+    /// </summary>
+    [Fact]
+    public async Task ACancelledProductionRiskOutsideTheGate_SpendsNothing_AndCountsNothing()
+    {
+        var launches = 0;
+        var h = Build(script: launch => Task.FromResult<ScriptedAnswer?>(launch.Request.Executable == "claude"
+            ? ScriptedAnswer.Claude("A ladder.") with { Wait = Interlocked.Increment(ref launches) == 1 ? TimeSpan.Zero : TimeSpan.FromSeconds(20) }
+            : null));
+        Proceeded(h);
+        var consultId = await Consulted(h);
+        using var giveUp = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        giveUp.CancelAfter(TimeSpan.FromMilliseconds(500));
+
+        var asking = async () => await h.Service.AskHumanAsync(
+            _repo.Path, "main", Question + " (risk)", consultId: consultId, productionRisk: true,
+            riskReason: "a wrong retry floods the vendor in production", ct: giveUp.Token);
+
+        await asking.Should().ThrowAsync<OperationCanceledException>("the caller gave up, and the call says so");
+        h.Questions.Store.Read(consultId)!.EscalationId.Should().BeEmpty("the proof was given back — it opens the door again");
+        Batches(h).Should().Be(0, "nothing reached the person, so nothing is counted");
+    }
+
+    /// <summary>S4b item 1 on the conversation path: the consultants are still never handed a secret, and the reply says why the row is empty.</summary>
+    [Fact]
+    public async Task AProductionRiskOutsideTheGateCarryingASecret_ReachesNoConsultant()
+    {
+        var h = Build(script: launch => Task.FromResult<ScriptedAnswer?>(
+            launch.Request.Executable == "claude" ? ScriptedAnswer.Claude("Back the column up first.") : null));
+        Proceeded(h);
+        const string leaking = "The deploy key sk-live-0123456789abcdefghijklmnop is in the migration — may it run against production now?";
+
+        var reply = await Ask(h, leaking, string.Empty, true, "the migration drops a column nothing can restore");
+
+        AskedInTheConversation(reply, h);
+        h.Launcher.Vendors.Should().BeEmpty("no consultant was handed the secret");
+        var row = reply.GetProperty("consultantAnswers")[0];
+        row.GetProperty("status").GetString().Should().Be(RowOutcomes.Refused);
+        row.GetProperty("reason").GetString().Should().Contain("question was not sent").And.NotContain("sk-live");
+        reply.GetProperty("note").GetString().Should().Contain("none answered",
+            "a refused row is no answer — the reply must not say the consultants' answers come with it");
+        reply.GetProperty("instruction").GetString().Should().NotContain("show the person what each said");
+    }
+
+    /// <summary>When the consultant is switched off nobody can be asked first — the reply says so rather than going quiet.</summary>
+    [Fact]
+    public async Task AProductionRiskOutsideTheGate_WithTheConsultantOff_SaysNobodyCouldBeAsked()
+    {
+        var h = Build(enabled: false);
+        Proceeded(h);
+
+        var reply = await Ask(h, Question + " (risk)", string.Empty, true, "the migration drops a column nothing can restore");
+
+        AskedInTheConversation(reply, h);
+        reply.GetProperty("consultantAnswers").GetArrayLength().Should().Be(0);
+        reply.GetProperty("note").GetString().Should().ContainEquivalentOf("no consultant");
     }
 
     private static async Task<T?> Eventually<T>(Func<T?> read, TimeSpan within)
@@ -548,6 +722,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     public async Task AtTheBudget_NoAnswerYet_AndTheFileReadsExpired_KeptForTheLog()
     {
         var h = Build(budget: TimeSpan.FromMilliseconds(300));
+        Held(h);
 
         var reply = await Ask(h);
 
@@ -563,6 +738,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
     public async Task AnAnsweredQuestion_IsNeverMarkedExpired()
     {
         var h = Build(budget: TimeSpan.FromSeconds(10));
+        Held(h);
         var asking = Ask(h);
         var id = (await Eventually(() => Directory.Exists(h.Escalations.Directory)
             ? Directory.GetFiles(h.Escalations.Directory, "*.json").Select(Path.GetFileNameWithoutExtension).FirstOrDefault()

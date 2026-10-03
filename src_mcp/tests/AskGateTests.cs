@@ -143,14 +143,41 @@ public sealed class AskGateTests
         }
     }
 
+    /// <summary>D8, on a held gate's card (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>): the person at once, the consultants beside, folded under the card — and not one of the AI's batches (G7).</summary>
     [Fact]
-    public void AProductionRisk_AsksThePersonAtOnce_AndRunsTheConsultantsBeside()
+    public void AProductionRiskOnAHeldGatesCard_AsksThePersonAtOnce_AndRunsTheConsultantsBeside()
+    {
+        var allowed = Allowed(Building(batches: 2) with { ProductionRisk = true, RiskReason = "the migration drops a column", Door = AskDoor.Card });
+
+        allowed.Counted.Should().BeFalse("a held gate's question is the gate asking, not one of the AI's batches");
+        allowed.ConsultBeside.Should().BeTrue("D8: the consultants still run, in the background, their answers folded under the card");
+        allowed.Note.Should().ContainEquivalentOf("production risk").And.Contain("folded under its card");
+    }
+
+    /// <summary>G3, the AI's own question: no card to fold answers under — the consultants FIRST, their answers in the reply, counted.</summary>
+    [Fact]
+    public void AProductionRiskOnTheAisOwnQuestion_AsksTheConsultantsFirst_AndIsCounted()
     {
         var allowed = Allowed(Building(batches: 2) with { ProductionRisk = true, RiskReason = "the migration drops a column" });
 
         allowed.Counted.Should().BeTrue();
-        allowed.ConsultBeside.Should().BeTrue("D8: the consultants still run, in the background, their answers folded under the card");
-        allowed.Note.Should().ContainEquivalentOf("production risk").And.Contain("beside");
+        allowed.ConsultBeside.Should().BeTrue();
+        allowed.Note.Should().ContainEquivalentOf("production risk").And.Contain("asked first").And.NotContain("card");
+    }
+
+    /// <summary>
+    /// A production risk needs no phase count, so an unreadable phase record must not cost it its consultants — it did,
+    /// because the unreadable record was judged first (the own review of 2026-10-03).
+    /// </summary>
+    [Fact]
+    public void AProductionRisk_WithAnUnreadablePhaseRecord_StillRunsItsConsultants_OnEitherDoor()
+    {
+        foreach (var door in new[] { AskDoor.Card, AskDoor.Conversation })
+        {
+            var allowed = Allowed(Building(batches: 0) with { ProductionRisk = true, RiskReason = "a rollback could not be undone", PhaseUnreadable = true, Door = door });
+
+            allowed.ConsultBeside.Should().BeTrue($"{door}: the risk is decided before the record nobody could read");
+        }
     }
 
     [Fact]
@@ -223,16 +250,20 @@ public sealed class AskGateTests
                         {
                             foreach (var unavailable in new[] { string.Empty, "no row is on" })
                             {
-                                everything.Add(Text(AskGate.Decide(new AskGateInput
+                                foreach (var door in new[] { AskDoor.Card, AskDoor.Conversation })
                                 {
-                                    Mode = mode,
-                                    Phase = phase,
-                                    BatchesAsked = batches,
-                                    ProductionRisk = risk,
-                                    RiskReason = risk ? "a reason" : string.Empty,
-                                    Proof = proof,
-                                    Unavailable = unavailable,
-                                })));
+                                    everything.Add(Text(AskGate.Decide(new AskGateInput
+                                    {
+                                        Mode = mode,
+                                        Phase = phase,
+                                        BatchesAsked = batches,
+                                        ProductionRisk = risk,
+                                        RiskReason = risk ? "a reason" : string.Empty,
+                                        Proof = proof,
+                                        Unavailable = unavailable,
+                                        Door = door,
+                                    })));
+                                }
                             }
                         }
                     }
@@ -240,7 +271,7 @@ public sealed class AskGateTests
             }
         }
 
-        everything.Should().HaveCount(3 * 3 * 4 * 3 * 2 * 2);
+        everything.Should().HaveCount(3 * 3 * 4 * 3 * 2 * 2 * 2, "every mode, phase, count, proof, risk, availability — and both doors");
         everything.Should().AllSatisfy(text => text.Should().NotContainEquivalentOf("critical",
             "A8: the canonical invented severity, forbidden in everything a caller reads"));
     }
