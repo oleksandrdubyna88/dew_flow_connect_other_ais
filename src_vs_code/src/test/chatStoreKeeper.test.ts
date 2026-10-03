@@ -663,18 +663,48 @@ test('a sweep whose claim cannot be written does not run — six windows that ca
   }
 });
 
-/** A store whose listing waits for the test to say go — a sweep held mid-way, its claim taken and its work not yet done. */
+/**
+ * A store whose listing waits for the test to say go — a sweep held mid-way, its claim taken and its work not yet done.
+ *
+ * <p>`reached` settles the moment a sweep ENTERS the listing, which `runSweep` does only after the state, the
+ * marker, the claim and the survey are behind it. That is the signal a test waits on; a fixed sleep was a guess
+ * about how fast this machine is, and under a loaded suite the guess lost.</p>
+ */
 class Gated extends ChatStoreFile {
   public open: () => void = () => undefined;
+
+  private arrived: () => void = () => undefined;
+
+  public readonly reached = new Promise<void>((resolve) => {
+    this.arrived = resolve;
+  });
 
   private readonly gate = new Promise<void>((resolve) => {
     this.open = resolve;
   });
 
   public override async listMeta(): Promise<Listing> {
+    this.arrived();
     await this.gate;
 
     return super.listMeta();
+  }
+}
+
+/**
+ * Waits for a gated sweep to be HELD at its listing — and fails, rather than hangs, when it never gets there:
+ * the sweep returned first (its report is in the message), or `ms` passed with it still on its way.
+ */
+async function heldAtListing(gated: Gated, sweep: Promise<{ readonly value: SweepReport }>, ms: number): Promise<void> {
+  let timer: NodeJS.Timeout | undefined;
+  const late = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`the first sweep did not reach its listing within ${ms} ms`)), ms);
+  });
+  const returned = sweep.then(({ value }) => assert.fail(`the first sweep returned before reaching its listing: ${JSON.stringify(value)}`));
+  try {
+    await Promise.race([gated.reached, returned, late]);
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -683,8 +713,8 @@ test('a second window arriving while the first is mid-sweep stands down, and aft
   try {
     const gated = new Gated(w.dir);
     const first = capturing(() => runSweep(deps(w, { store: gated })), 'info');
-    // Let the first sweep reach its listing: state, marker, claim and survey are behind it.
-    await new Promise<void>((resolve) => { setTimeout(resolve, 50); });
+    // Wait until the first sweep is HELD at its listing: state, marker, claim and survey are behind it.
+    await heldAtListing(gated, first, 10_000);
 
     const during = await runSweep(deps(w, { pid: 1, now: w.now + 1_000 }));
     assert.equal(during.kind, 'skipped', `a second window swept beside one that was mid-sweep: ${JSON.stringify(during)}`);
