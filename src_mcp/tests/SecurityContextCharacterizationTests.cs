@@ -13,7 +13,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// <para>Written against the code BEFORE the split and observed green there
-/// (todo/PLAN_security_lane_methods_within_complexity_4.md).</para>
+/// (research/PLAN_security_lane_methods_within_complexity_4.md).</para>
 /// <para>The render is the pack's refusal, its omissions, and its text with the fresh nonce replaced and the
 /// instruction block (operator text, schema) cut at the schema: the instruction block is asserted separately,
 /// once, because it is the same for every case and would otherwise be most of every expectation.</para>

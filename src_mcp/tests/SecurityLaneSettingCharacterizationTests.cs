@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// Written against the code BEFORE that split and observed green there
-/// (todo/PLAN_security_lane_methods_within_complexity_4.md). <see cref="SecurityLaneSettingsTests"/> asserts
+/// (research/PLAN_security_lane_methods_within_complexity_4.md). <see cref="SecurityLaneSettingsTests"/> asserts
 /// the lane's guarantees; this file asserts its exact present behaviour, which is what a behaviour-neutral
 /// refactor promises to keep.
 /// </remarks>

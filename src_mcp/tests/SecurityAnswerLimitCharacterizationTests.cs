@@ -14,7 +14,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// Written against the code BEFORE its methods were split to complexity 4 and observed green there
-/// (todo/PLAN_security_lane_methods_within_complexity_4.md). <see cref="SecurityProtocolTests"/> drives the
+/// (research/PLAN_security_lane_methods_within_complexity_4.md). <see cref="SecurityProtocolTests"/> drives the
 /// real parser and asserts refusal; this file builds reviews directly so every rule can be reached alone.
 /// </remarks>
 public sealed class SecurityAnswerLimitCharacterizationTests
