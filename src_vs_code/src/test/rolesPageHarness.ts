@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 
 import { rolesHtml, type RolesPageState } from '../rolesPage';
 import { busyBarOf, type Control, PageClock } from './panelPageHarness';
+import { camel } from './datasetName';
 
 /**
  * The roles page's own script, RUN — the harness two test files share.
@@ -125,10 +126,6 @@ export class Node {
   }
 }
 
-/** `data-remove-prompt` reaches the script as `dataset.removePrompt`, as a browser spells it. */
-export function camel(attribute: string): string {
-  return attribute.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
-}
 
 /** The `<script>` the page ships, cut out of its own html. */
 export function pageScript(html: string): string {

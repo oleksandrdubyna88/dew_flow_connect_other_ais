@@ -5,7 +5,7 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import { LIVE_REGION_IDS } from '../panelSurface';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
-import { camel } from './rolesPageHarness';
+import { camel } from './datasetName';
 
 /**
  * The panel's pages, RUN — their own script over their own markup, for a test of any section's controls,
