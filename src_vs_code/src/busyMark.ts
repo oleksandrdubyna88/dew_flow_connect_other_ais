@@ -50,7 +50,7 @@ export const BUSY_CSS = `
 /**
  * The page fragment. Defines `send(message, control)`, which every post that makes the host work goes through; any
  * other message passes through it unnumbered. Runs in a page script and uses `vscode` alone — the panel's two pages and,
- * since todo/PLAN_busy_marks_on_every_webview.md, the other webviews that do slow work, each with its own list.
+ * since research/PLAN_busy_marks_on_every_webview.md, the other webviews that do slow work, each with its own list.
  *
  * @param painted what the host had in flight when this document was built
  * @param tracked the message types this page numbers. A page that must post one of them unnumbered — a typed field,

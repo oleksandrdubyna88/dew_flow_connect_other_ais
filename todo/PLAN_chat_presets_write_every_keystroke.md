@@ -2,7 +2,7 @@
 
 > Status: **plan only, nothing implemented yet, 2026-10-03.** Scope: `src_vs_code/src/chatPresetsPage.ts`,
 > `chatPresetsPanel.ts`, tests. Found while surveying the webviews for
-> [PLAN_busy_marks_on_every_webview.md](PLAN_busy_marks_on_every_webview.md) (its §3).
+> [PLAN_busy_marks_on_every_webview.md](../research/PLAN_busy_marks_on_every_webview.md) (its §3).
 >
 > Related docs: [module_extension.md](../research/module_extension.md).
 

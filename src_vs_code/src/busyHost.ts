@@ -2,7 +2,7 @@ import { type BusySnapshot } from './busySnapshot';
 import { askOf, announce, InFlight, type Poster, settleEverything, tracked } from './inFlight';
 
 /**
- * The busy mark's host half for one webview that is not the panel (todo/PLAN_busy_marks_on_every_webview.md §4.2).
+ * The busy mark's host half for one webview that is not the panel (research/PLAN_busy_marks_on_every_webview.md §4.2).
  *
  * <p>The panel keeps its own `InFlight` because it paints two pages; every other webview is one page, so it gets one of
  * these. It is the panel's machinery, not a copy of it: `tracked()` numbers, settles and announces; `askOf()` decides what

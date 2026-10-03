@@ -86,7 +86,7 @@ export interface ReviewView {
    * where they were typed.</p>
    */
   readonly comments?: ReadonlyMap<number, string>;
-  /** What the host had running when this page was drawn: the busy mark's painted half (todo/PLAN_busy_marks_on_every_webview.md). */
+  /** What the host had running when this page was drawn: the busy mark's painted half (research/PLAN_busy_marks_on_every_webview.md). */
   readonly busy?: BusySnapshot;
   readonly uiScale?: number;
   readonly textTone?: number;
@@ -380,7 +380,7 @@ ${rows}
  */
 /**
  * The posts this page numbers: a decision (a server write and a re-read through coai-mcp, 0.7-0.9 s measured) and the
- * presses that open something for the person (todo/PLAN_busy_marks_on_every_webview.md, E2). Not `comment`, which is
+ * presses that open something for the person (research/PLAN_busy_marks_on_every_webview.md, E2). Not `comment`, which is
  * saved as it is typed — typing is not the panel working — and not `fetchReal`, an automatic queue of up to four reads
  * that each show their own pending state on their row.
  */

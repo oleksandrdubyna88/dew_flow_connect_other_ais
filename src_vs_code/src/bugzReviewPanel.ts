@@ -130,7 +130,7 @@ export class BugzReviewPanel {
   private panel: vscode.WebviewPanel | undefined;
 
   /**
-   * What the window asked for and the host has not finished — its busy mark (todo/PLAN_busy_marks_on_every_webview.md, E2).
+   * What the window asked for and the host has not finished — its busy mark (research/PLAN_busy_marks_on_every_webview.md, E2).
    * One per open window: made with it, painted into every repaint, settled when it closes.
    */
   private busy: BusyHost | undefined;
@@ -321,7 +321,7 @@ export class BugzReviewPanel {
   }
 
   /**
-   * Hears the window, and holds what it asks for under its busy mark (todo/PLAN_busy_marks_on_every_webview.md, E2).
+   * Hears the window, and holds what it asks for under its busy mark (research/PLAN_busy_marks_on_every_webview.md, E2).
    * One `BusyHost` per open window, settled when it closes; a fresh page's `ready` — which this panel used to ignore —
    * is told what is running.
    */

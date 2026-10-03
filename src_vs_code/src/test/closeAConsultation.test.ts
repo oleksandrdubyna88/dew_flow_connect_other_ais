@@ -213,7 +213,7 @@ test('pressing `record…` sends the consultation the person pointed at', () => 
   const before = posted.length; // the page posts `ready` when it loads; this is about the CLICK.
   click({ target: { closest: (selector: string) => (selector === '[data-command]' ? button : null) } });
 
-  // Numbered since the busy mark reached this page (todo/PLAN_busy_marks_on_every_webview.md): checked, then compared without.
+  // Numbered since the busy mark reached this page (research/PLAN_busy_marks_on_every_webview.md): checked, then compared without.
   assert.deepEqual(
     posted.slice(before).map((m) => withoutSeq(m as Record<string, unknown>)),
     [{

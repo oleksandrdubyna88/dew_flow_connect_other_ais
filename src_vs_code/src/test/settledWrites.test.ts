@@ -201,7 +201,7 @@ test('a redraw that reads from disk finishes before the next write begins', asyn
     'the redraw and the write after it overlapped');
 });
 
-// ---- When a write is DONE (todo/PLAN_busy_marks_on_every_webview.md §4.4, E3) ----
+// ---- When a write is DONE (research/PLAN_busy_marks_on_every_webview.md §4.4, E3) ----
 // The roles and commands tabs show a busy mark for a structural change, held until that change has been applied and
 // the tab redrawn. `queue` used to answer nothing, so the host could not know when that was.
 

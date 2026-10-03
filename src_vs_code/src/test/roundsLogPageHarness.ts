@@ -6,7 +6,7 @@ import { busyBarOf, PageClock } from './panelPageHarness';
  * The rounds log page, RUN: its own script over a stub DOM built from the markup it really rendered.
  *
  * <p>Extracted from `roundsLogPaging.test.ts` (2026-10-03) when the busy mark needed the same runner with a clock it
- * controls (todo/PLAN_busy_marks_on_every_webview.md, E1) — a seventh private copy of a rounds-log runner was the
+ * controls (research/PLAN_busy_marks_on_every_webview.md, E1) — a seventh private copy of a rounds-log runner was the
  * alternative, and six already exist. Unchanged except for the optional clock and the busy bar.</p>
  */
 
@@ -175,7 +175,7 @@ export function open(rows: readonly LogRow[], totals: DbTotals = TOTALS, extra =
   };
 
    
-  // The page's timers run on the test's clock when one is given (the busy mark's delay, todo/PLAN_busy_marks_on_every_webview.md),
+  // The page's timers run on the test's clock when one is given (the busy mark's delay, research/PLAN_busy_marks_on_every_webview.md),
   // and on the real ones otherwise, which is what every test written before it expects.
   new Function('document', 'window', 'acquireVsCodeApi', 'setTimeout', 'clearTimeout', body)(
     document_, window_, () => ({ postMessage: (m: unknown) => posted.push(m) }),

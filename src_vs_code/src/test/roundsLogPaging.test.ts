@@ -154,7 +154,7 @@ test('the request carries the round\u0027s identity, so the host looks nothing u
     foundState: 'unasked', foundCount: 3, dbKey: { sessionId: 'sX', stage: 'PlanReview', number: 7 },
   }));
 
-  // Numbered since the busy mark reached this page (todo/PLAN_busy_marks_on_every_webview.md): CHECKED, then compared without.
+  // Numbered since the busy mark reached this page (research/PLAN_busy_marks_on_every_webview.md): CHECKED, then compared without.
   assert.deepEqual(posted.filter((m) => (m as { command?: string }).command === 'findings').map((m) => withoutSeq(m as Record<string, unknown>)), [{
     type: 'command', command: 'findings', id: 'k1', session: 'sX', stage: 'PlanReview', number: 7,
   }]);

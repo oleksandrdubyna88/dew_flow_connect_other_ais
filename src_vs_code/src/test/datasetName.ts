@@ -3,7 +3,7 @@
  *
  * <p>Its own module so the two page runners share it without importing each other: `panelPageHarness.ts` used to take
  * it from `rolesPageHarness.ts`, and once the roles runner needed the panel runner's clock and busy bar
- * (todo/PLAN_busy_marks_on_every_webview.md, E3) that was an import cycle (`importCycles.test.mjs`).</p>
+ * (research/PLAN_busy_marks_on_every_webview.md, E3) that was an import cycle (`importCycles.test.mjs`).</p>
  */
 
 /** `data-remove-prompt` reaches the script as `dataset.removePrompt`, as a browser spells it. */

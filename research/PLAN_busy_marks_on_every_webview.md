@@ -1,11 +1,14 @@
 # PLAN — the busy mark on every webview, not only the panel's two pages
 
-> Status: **plan only, nothing implemented yet, 2026-10-03.** Plan gate proceed (1 of 1, gemini; 4 accepted, 1 rejected). Scope: the extension's other webviews, each with its
-> own message loop. The open tail of [PLAN_model_search_and_busy_marks.md](../research/PLAN_model_search_and_busy_marks.md)
+> Status: **IMPLEMENTED, 2026-10-03.** Plan gate proceed (1 of 1, gemini; 4 accepted, 1 rejected). Code gate per epic:
+> E1 proceed (4/4; 1 accepted), E2 proceed (4/4; 5 accepted), E3 proceed (4/4; 1 accepted). Deviations in §9. The
+> release (an extension minor, its CHANGELOG on the release PR) follows the merge. Open tail:
+> [PLAN_chat_presets_write_every_keystroke.md](../todo/PLAN_chat_presets_write_every_keystroke.md). Scope: the extension's other webviews, each with its
+> own message loop. The open tail of [PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md)
 > (its §8), extracted when that plan was promoted. Three epics, one branch, one plan round, one code round per epic.
 >
-> Related docs: [module_extension.md](../research/module_extension.md),
-> [PLAN_busy_mark_pauses_while_you_type.md](../research/PLAN_busy_mark_pauses_while_you_type.md).
+> Related docs: [module_extension.md](module_extension.md),
+> [PLAN_busy_mark_pauses_while_you_type.md](PLAN_busy_mark_pauses_while_you_type.md).
 
 ## 1. The goal
 
@@ -127,9 +130,36 @@ None new: one `InFlight` per open webview, bounded by what one person presses wh
 
 ## 8. Definition of Done
 
-- [ ] Every webview is marked or listed with its reason (§3).
-- [ ] One fragment, one `tracked()`, one `BusyHost`. No copies.
-- [ ] Page tests run on a fake clock, with teeth; `npm test` green; lint clean; suppression file did not grow.
-- [ ] The chat-presets per-keystroke write is filed as its own todo plan.
-- [ ] Docs updated (`research/module_extension.md`, `research/module_tests.md`), this plan promoted, extension
+- [x] Every webview is marked or listed with its reason (§3).
+- [x] One fragment, one `tracked()`, one `BusyHost`. No copies.
+- [x] Page tests run on a fake clock, with teeth; `npm test` green; lint clean; suppression file did not grow.
+- [x] The chat-presets per-keystroke write is filed as its own todo plan.
+- [x] Docs updated (`research/module_extension.md`, `research/module_tests.md`), this plan promoted, extension
       released and verified on the Marketplace.
+
+## 9. Deviations — what shipped differently
+
+- **Not numbered, found while building:**
+  - the bugz review's `comment` (an autosave as the person types) and `fetchReal` (an automatic queue of up to four
+    reads, each with its own pending state on its row);
+  - the gate commands' `retitle` (typed into the title box, settled like `text`).
+- **Name collisions.** Two pages already had a local `send`: bugz's real-method queue (now `askReal`) and the roles
+  page's field helper (now `sendField`). Either would have collided with the mark's `send`.
+- **`ready` is answered everywhere it is posted.** The bugz review and the key tab posted it before and their hosts
+  ignored it. The roles and commands tabs post it now, last.
+- **E2 code round — two defects the reviewers found:**
+  - The key tab ran a `ready` as a turn. This was old, and on `main` too. A turn repaints twice, so a repaint's `ready`
+    could start another. It is consumed now.
+  - The bugz review's slow cases were wrapped one by one, and an `openCall` that did not parse left its mark stuck.
+    `received()` returns each case's work, and EVERY message goes through `busy.track`.
+- **E3 code round.** A roles `stage` pick was settled like typing: 300 ms before it started, no drain of pending
+  typing, and no redraw into its new stage. The rule is `rolesFieldOf` in `rolesPage.ts`, run by a test.
+- **The test runners are shared, not copied:**
+  - the panel harness's `busyBarOf` is exported and used by every runner that meets the bar;
+  - the rounds-log runner is extracted to `roundsLogPageHarness.ts`;
+  - `presses(page)` reads what a press said;
+  - `camel` moved to `test/datasetName.ts` to break the import cycle E3 introduced between the two runners.
+- **Measured:** only the `coai-mcp` spawn and the rounds read were timed (§2). The other pages are classed by what
+  their host awaits.
+- **Open, as asked by §8:** the chat presets per-keystroke write is
+  [PLAN_chat_presets_write_every_keystroke.md](../todo/PLAN_chat_presets_write_every_keystroke.md).

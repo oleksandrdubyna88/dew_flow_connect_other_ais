@@ -484,7 +484,7 @@ test('a refusal says the server answered and offers the way back', () => {
   assert.ok(page.html.includes("before is &#39;nonsense&#39;"), "the server's own words, escaped");
 });
 
-// ---- The busy mark (todo/PLAN_busy_marks_on_every_webview.md, E2) ----
+// ---- The busy mark (research/PLAN_busy_marks_on_every_webview.md, E2) ----
 // Every action on this tab ends in a network round trip to the bugs server. `Turns` disables the buttons at once, which
 // says "wait"; the bar says "working", once the trip outlasts half a second.
 

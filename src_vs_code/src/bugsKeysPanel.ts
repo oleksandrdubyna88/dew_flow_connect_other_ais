@@ -61,7 +61,7 @@ export class BugsKeysPanel {
   private panel: vscode.WebviewPanel | undefined;
 
   /**
-   * What the tab asked for and the host has not finished — its busy mark (todo/PLAN_busy_marks_on_every_webview.md, E2).
+   * What the tab asked for and the host has not finished — its busy mark (research/PLAN_busy_marks_on_every_webview.md, E2).
    * One per open tab: made with it, painted into every repaint, settled when it closes.
    */
   private busy: BusyHost | undefined;

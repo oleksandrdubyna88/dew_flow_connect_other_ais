@@ -9,7 +9,7 @@ import { PageClock } from './panelPageHarness';
 import { Node, type Page, runPageHtml } from './rolesPageHarness';
 
 /**
- * The gate commands tab shows that a structural change is working (todo/PLAN_busy_marks_on_every_webview.md, E3).
+ * The gate commands tab shows that a structural change is working (research/PLAN_busy_marks_on_every_webview.md, E3).
  *
  * <p>Adding, removing, switching or restaging a command — and restoring a shipped text — re-reads every command file
  * (`texts()`) and redraws the tab. Typing a text or a title is not marked: both settle on their own for 300 ms, and a bar

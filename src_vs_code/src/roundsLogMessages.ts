@@ -226,7 +226,7 @@ const WORK: { readonly [K in Exclude<LogCommand['kind'], 'ready' | 'ignore'>]: (
 
 /**
  * The work a command asks the host for, or nothing when it asks for none — what the page's busy mark is held for
- * (todo/PLAN_busy_marks_on_every_webview.md, E1). Extracted from `RoundsLogPanel.received`, which cannot be built in a
+ * (research/PLAN_busy_marks_on_every_webview.md, E1). Extracted from `RoundsLogPanel.received`, which cannot be built in a
  * test, so that the mapping is run rather than read; it was eight `if`s there, each `void`ing its hook.
  */
 export function workFor(command: LogCommand, hooks: RoundsLogHooks): (() => Promise<void>) | undefined {

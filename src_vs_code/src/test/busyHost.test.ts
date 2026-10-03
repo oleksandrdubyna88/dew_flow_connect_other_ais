@@ -5,7 +5,7 @@ import { BusyHost } from '../busyHost';
 import { askPerson } from '../personWait';
 
 /**
- * The busy mark's host half for a webview that is not the panel (todo/PLAN_busy_marks_on_every_webview.md §4.2).
+ * The busy mark's host half for a webview that is not the panel (research/PLAN_busy_marks_on_every_webview.md §4.2).
  *
  * <p>Asked for on 2026-10-02 — a progress mark everywhere an action takes longer than half a second — and built on
  * 2026-10-03 for the other webviews. One `BusyHost` per webview: the same `InFlight`, `tracked()` and `askOf()` the panel

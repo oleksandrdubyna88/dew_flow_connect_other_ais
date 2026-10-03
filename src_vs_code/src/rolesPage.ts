@@ -87,7 +87,7 @@ export interface RolesPageState {
   /** The rows as stored — a person's own roles and their edits to the shipped ones. */
   readonly rows: readonly RoleRow[];
 
-  /** What the host had running when this tab was drawn: the busy mark's painted half (todo/PLAN_busy_marks_on_every_webview.md). */
+  /** What the host had running when this tab was drawn: the busy mark's painted half (research/PLAN_busy_marks_on_every_webview.md). */
   readonly busy?: BusySnapshot;
 
   /**
@@ -540,7 +540,7 @@ function strandedHtml(stranded: readonly Tombstone[]): string {
 
 /**
  * The posts this tab numbers: the structural changes, each of which re-reads every prompt file and redraws the tab
- * (todo/PLAN_busy_marks_on_every_webview.md, E3). `edit` and `editPrompt` are numbered only from a checkbox or a
+ * (research/PLAN_busy_marks_on_every_webview.md, E3). `edit` and `editPrompt` are numbered only from a checkbox or a
  * select — switching a role on reads every prompt — and never from typing, which settles on its own for 300 ms.
  */
 export const ROLES_TRACKED: readonly string[] = ['edit', 'editPrompt', 'add', 'addPrompt', 'removePrompt', 'restorePrompt', 'remove', 'finishDeletion'];

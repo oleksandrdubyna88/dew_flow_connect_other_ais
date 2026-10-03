@@ -9,7 +9,7 @@ import { PageClock } from './panelPageHarness';
 import { Node, type Page, runRolesPage } from './rolesPageHarness';
 
 /**
- * The roles tab shows that a structural change is working (todo/PLAN_busy_marks_on_every_webview.md, E3).
+ * The roles tab shows that a structural change is working (research/PLAN_busy_marks_on_every_webview.md, E3).
  *
  * <p>Adding or removing a role or a prompt, restoring one, or switching a role on re-reads every prompt file and redraws
  * the tab — with nothing on screen meanwhile. Typing is not marked: a field settles for 300 ms by design, and a bar over

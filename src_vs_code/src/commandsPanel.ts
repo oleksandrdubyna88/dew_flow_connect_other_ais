@@ -30,7 +30,7 @@ const KEY = 'commands';
 let panel: vscode.WebviewPanel | undefined;
 
 /**
- * What the tab asked for and the host has not finished — its busy mark (todo/PLAN_busy_marks_on_every_webview.md, E3).
+ * What the tab asked for and the host has not finished — its busy mark (research/PLAN_busy_marks_on_every_webview.md, E3).
  * One per open tab: made with it, painted into every redraw, settled when it closes.
  */
 let busy: BusyHost | undefined;
@@ -55,7 +55,7 @@ function rows(): readonly CommandRow[] {
 }
 
 /**
- * Hears the tab, and holds each structural change under its busy mark (todo/PLAN_busy_marks_on_every_webview.md, E3).
+ * Hears the tab, and holds each structural change under its busy mark (research/PLAN_busy_marks_on_every_webview.md, E3).
  * One `BusyHost` per open tab, settled by the caller when it closes.
  */
 function listen(opened: vscode.WebviewPanel): BusyHost {

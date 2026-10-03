@@ -235,7 +235,7 @@ ${face(users.view, users.busy === true)}
 (function () {
   var vscode = acquireVsCodeApi();
   // Every action that reaches the bugs server is numbered and settled by the host, so a trip that outlasts half a second
-  // shows the bar (todo/PLAN_busy_marks_on_every_webview.md, E2). Copy and dismiss stay on this machine and are not.
+  // shows the bar (research/PLAN_busy_marks_on_every_webview.md, E2). Copy and dismiss stay on this machine and are not.
   ${busyMarkScript(busy, BUGS_KEYS_TRACKED)}
   ${textControlsScript()}
 

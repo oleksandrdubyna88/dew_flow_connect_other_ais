@@ -23,7 +23,7 @@ export interface CommandsPageState {
   /** The text size and tone the page is drawn in; absent is the theme's own, as on the help page. */
   readonly uiScale?: number;
   readonly textTone?: number;
-  /** What the host had running when this tab was drawn: the busy mark's painted half (todo/PLAN_busy_marks_on_every_webview.md). */
+  /** What the host had running when this tab was drawn: the busy mark's painted half (research/PLAN_busy_marks_on_every_webview.md). */
   readonly busy?: BusySnapshot;
 }
 
@@ -84,7 +84,7 @@ export function commandsSkewNote(serverVersion: string): string {
 
 /**
  * The posts this tab numbers: the structural changes, each of which re-reads every command file and redraws the tab
- * (todo/PLAN_busy_marks_on_every_webview.md, E3). Not `text` or `retitle`: both are typing, settled for 300 ms.
+ * (research/PLAN_busy_marks_on_every_webview.md, E3). Not `text` or `retitle`: both are typing, settled for 300 ms.
  */
 export const COMMANDS_TRACKED: readonly string[] = ['switch', 'restage', 'add', 'remove', 'restore'];
 

@@ -57,7 +57,7 @@ const pair = (findingId: number, keep = UNDECIDED): ReviewPair => ({
 
 /**
  * A press the page numbered, without its number — CHECKED first by `withoutSeq`. Presses that make the host work are
- * numbered since the busy mark reached this page (todo/PLAN_busy_marks_on_every_webview.md, E2).
+ * numbered since the busy mark reached this page (research/PLAN_busy_marks_on_every_webview.md, E2).
  */
 function numbered(m: Posted): Record<string, unknown> {
   return withoutSeq(m as unknown as Record<string, unknown>);
@@ -2300,7 +2300,7 @@ test('the real method is numbered as the file is, from each side\'s own first li
   assert.deepEqual(lineNumbers(after), [131, 132, 133, 134], 'and the after side from its own line at the fix commit');
 });
 
-// ---- The busy mark (todo/PLAN_busy_marks_on_every_webview.md, E2) ----
+// ---- The busy mark (research/PLAN_busy_marks_on_every_webview.md, E2) ----
 // A decision is a server write and a re-read through coai-mcp (0.7-0.9 s measured), and the page had no mark for it.
 
 /** The last post of a type, as the page sent it. */

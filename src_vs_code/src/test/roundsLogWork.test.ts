@@ -5,7 +5,7 @@ import { type LogCommand, type RoundsLogHooks, workFor } from '../roundsLogMessa
 
 /**
  * What each rounds-log command makes the host do — the work its busy mark is held for
- * (todo/PLAN_busy_marks_on_every_webview.md, E1).
+ * (research/PLAN_busy_marks_on_every_webview.md, E1).
  *
  * <p>Extracted from `RoundsLogPanel.received`, which imports `vscode` and cannot be built here, so that the mapping a
  * busy mark depends on is RUN: a command whose work is not returned would settle at once and show no bar, and one

@@ -127,7 +127,7 @@ export class RoundsLogPanel {
 
   /**
    * Hears the page, and answers it with what is running: the page's busy mark
-   * (todo/PLAN_busy_marks_on_every_webview.md, E1). One `BusyHost` per open page, made with it and settled — by the
+   * (research/PLAN_busy_marks_on_every_webview.md, E1). One `BusyHost` per open page, made with it and settled — by the
    * caller's dispose — when it closes.
    */
   private listen(panel: vscode.WebviewPanel): BusyHost {
@@ -201,7 +201,7 @@ export class RoundsLogPanel {
       return;
     }
     // Every other command is work the host does for the page — under its busy mark, which settles when the work ends
-    // (`workFor` says which hook; todo/PLAN_busy_marks_on_every_webview.md, E1).
+    // (`workFor` says which hook; research/PLAN_busy_marks_on_every_webview.md, E1).
     const work = workFor(command, this.hooks);
     if (work !== undefined) {
       void track(work);

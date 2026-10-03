@@ -7,7 +7,7 @@ import { PageClock } from './panelPageHarness';
 import { open, type Page, TOTALS } from './roundsLogPageHarness';
 
 /**
- * The rounds log shows that it is working (todo/PLAN_busy_marks_on_every_webview.md, E1).
+ * The rounds log shows that it is working (research/PLAN_busy_marks_on_every_webview.md, E1).
  *
  * <p>Every action on this page reads the rounds database through `coai-mcp`, measured at 694–930 ms a read on
  * 2026-10-03 — so every press crossed the half second the operator asked to see marked, with nothing on screen.

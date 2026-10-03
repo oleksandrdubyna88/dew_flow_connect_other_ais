@@ -5,7 +5,7 @@ import { rolesFieldOf } from '../rolesPage';
 
 /**
  * Which roles commands are typing — debounced by `settledWrites` — and which are a pick, applied at once
- * (todo/PLAN_busy_marks_on_every_webview.md, E3 code round).
+ * (research/PLAN_busy_marks_on_every_webview.md, E3 code round).
  *
  * <p>A pick is numbered for the busy mark. Settled like typing, a stage pick waited 300 ms before it even started, which
  * the bar then counted, and it skipped the drain that stores pending typing first.</p>

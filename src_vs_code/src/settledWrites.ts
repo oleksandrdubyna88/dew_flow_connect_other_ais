@@ -31,7 +31,7 @@ export interface SettledWrites<C> {
   /**
    * One message from the page: a typed field waits to settle, anything else goes straight through. Answers when THAT
    * command has been applied and the redraw it asked for has returned — never rejecting, because a failure is reported —
-   * so a host can hold a busy mark exactly that long (todo/PLAN_busy_marks_on_every_webview.md §4.4). A typed field
+   * so a host can hold a busy mark exactly that long (research/PLAN_busy_marks_on_every_webview.md §4.4). A typed field
    * answers when the write that finally carries it lands, later keystrokes included.
    */
   queue(command: C): Promise<void>;

@@ -167,14 +167,14 @@ export interface Page {
   readonly body: Style;
   /** What the page wrote to `document.documentElement.style` — the root, which `rem` is measured from. */
   readonly root: Style;
-  /** The busy bar, when the page was run on a clock and drew one (todo/PLAN_busy_marks_on_every_webview.md, E3). */
+  /** The busy bar, when the page was run on a clock and drew one (research/PLAN_busy_marks_on_every_webview.md, E3). */
   readonly bar: Control | null;
 }
 
 /**
  * What the person's presses posted: every post but the page's own load-time `ready`, without the busy mark's `seq` and
  * `doc`. Whether a press is NUMBERED is rolesBusyMark.test.ts's question; these tests ask what it SAYS
- * (todo/PLAN_busy_marks_on_every_webview.md, E3).
+ * (research/PLAN_busy_marks_on_every_webview.md, E3).
  */
 export function presses(page: Page): readonly Record<string, unknown>[] {
   return page.posted.filter((one) => one['type'] !== 'ready').map(({ seq: _seq, doc: _doc, ...rest }) => rest);

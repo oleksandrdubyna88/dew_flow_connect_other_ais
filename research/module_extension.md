@@ -10332,7 +10332,7 @@ eight keys and says so.
 
 ## The busy mark on the other webviews (2026-10-03, PLAN_busy_marks_on_every_webview)
 
-Design record: [PLAN_busy_marks_on_every_webview.md](../todo/PLAN_busy_marks_on_every_webview.md) — every webview is
+Design record: [PLAN_busy_marks_on_every_webview.md](PLAN_busy_marks_on_every_webview.md) — every webview is
 either marked or listed there with the reason it is not (its §3). The machinery is the panel's, included rather than
 copied:
 
