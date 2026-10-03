@@ -48,9 +48,7 @@ internal static class SecurityRound
     internal static void Notice(IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results,
         RoundWork work, Noticing noticing)
     {
-        var lane = results.Where(r => IsLane(r.Invocation, work.Reviewers)).ToArray();
-        if (!work.SecurityActive || lane.Any(r => r.Outcome is ReviewerOutcome.Ok && !r.Invocation.IsOnEngine)) return;
-        if (lane.Length == 0 && !work.Excluded.Any(r => SecurityCatalog.IsPromptId(r.Role))) return;
+        if (!NeedsNotice(results, work)) return;
         noticing.Offer(new Core.Notices.ServerNotice
         {
             Utc = Core.Notices.ServerNotice.Iso(TimeProvider.System.GetUtcNow()),
@@ -63,17 +61,47 @@ internal static class SecurityRound
         });
     }
 
+    /// <summary>
+    /// A durable notice is owed when the lane was active, no lane pairing gave a complete answer, and the lane
+    /// either ran or had a pairing it could not run — never for a lane with nothing due.
+    /// </summary>
+    private static bool NeedsNotice(IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results, RoundWork work)
+    {
+        if (!work.SecurityActive) return false;
+        var lane = LaneResults(results, work);
+        if (lane.Any(IsComplete)) return false;
+        return lane.Length > 0 || HasBrokenPairing(work);
+    }
+
     internal static string Clause(IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results, RoundWork work)
     {
         if (!work.SecurityActive) return string.Empty;
-        var lane = results.Where(r => IsLane(r.Invocation, work.Reviewers)).ToArray();
-        if (lane.Length == 0) return work.Excluded.Any(r => SecurityCatalog.IsPromptId(r.Role))
-            ? "Security lane incomplete: configured pairings could not run. "
-            : "Security lane skipped: no pairing was due (conditions, stage selection or round budget). ";
-        var complete = lane.Count(r => r.Outcome is ReviewerOutcome.Ok && !r.Invocation.IsOnEngine);
-        var prefix = complete == 0 ? "Security lane incomplete: no complete answer. " : $"Security lane: {complete}/{lane.Length} complete answers. ";
-        return prefix + string.Join("; ", lane.Where(r => r.Outcome is not ReviewerOutcome.Ok || r.Invocation.IsOnEngine)
-            .Select(r => $"{r.Invocation.Provider}/{r.Invocation.Role}: " + (r.Invocation.IsOnEngine && r.Outcome is ReviewerOutcome.Ok
-                ? "input coverage unverified; findings retained as evidence" : ReviewerSummaryFactory.Describe(r.Outcome)))) + " ";
+        var lane = LaneResults(results, work);
+        if (lane.Length == 0) return NoLaneAnswer(work);
+        return Answered(lane) + string.Join("; ", lane.Where(r => !IsComplete(r)).Select(Unfinished)) + " ";
     }
+
+    private static (ReviewerInvocation Invocation, ReviewerOutcome Outcome)[] LaneResults(
+        IReadOnlyList<(ReviewerInvocation Invocation, ReviewerOutcome Outcome)> results, RoundWork work) =>
+        [.. results.Where(r => IsLane(r.Invocation, work.Reviewers))];
+
+    /// <summary>A complete lane answer: answered, and not by a local engine, whose input coverage stays unverified.</summary>
+    private static bool IsComplete((ReviewerInvocation Invocation, ReviewerOutcome Outcome) result) =>
+        result.Outcome is ReviewerOutcome.Ok && !result.Invocation.IsOnEngine;
+
+    private static bool HasBrokenPairing(RoundWork work) => work.Excluded.Any(r => SecurityCatalog.IsPromptId(r.Role));
+
+    private static string NoLaneAnswer(RoundWork work) => HasBrokenPairing(work)
+        ? "Security lane incomplete: configured pairings could not run. "
+        : "Security lane skipped: no pairing was due (conditions, stage selection or round budget). ";
+
+    private static string Answered((ReviewerInvocation Invocation, ReviewerOutcome Outcome)[] lane)
+    {
+        var complete = lane.Count(IsComplete);
+        return complete == 0 ? "Security lane incomplete: no complete answer. " : $"Security lane: {complete}/{lane.Length} complete answers. ";
+    }
+
+    private static string Unfinished((ReviewerInvocation Invocation, ReviewerOutcome Outcome) result) =>
+        $"{result.Invocation.Provider}/{result.Invocation.Role}: " + (result.Invocation.IsOnEngine && result.Outcome is ReviewerOutcome.Ok
+            ? "input coverage unverified; findings retained as evidence" : ReviewerSummaryFactory.Describe(result.Outcome));
 }

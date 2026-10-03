@@ -20,16 +20,25 @@ public static class SecurityContext
         var reserve = (long)Math.Max(ResponseReserve, limits.ResponseTokens) * 4;
         var budget = (long)limits.Tokens * 4 - Encoding.UTF8.GetByteCount(instruction) - reserve - 4096;
         if (budget <= 0) return new(string.Empty, "instructions and response reserve exceed the context budget", []);
-        var ranked = mode == SecurityContextModes.Slice ? SecuritySignals.Rank(files, prompt.Focus) : files.AsEnumerable();
-        var material = Collect(ranked, sources, mode == SecurityContextModes.Slice, budget, limits.ExcludedFiles);
-        if (material.Text.Length == 0) return material with
-        {
-            Refusal = files.Any(f => f.DetectionIncomplete)
-                ? "no usable source; diffs exceeding the detector character limit were withheld"
-                : "no source fits the budget or all source was withheld",
-        };
+        var slice = mode == SecurityContextModes.Slice;
+        var material = Collect(Ordered(files, prompt, slice), sources, slice, budget, limits.ExcludedFiles);
+        if (material.Text.Length == 0) return material with { Refusal = NothingUsable(files) };
+        return Framed(instruction, mode, material, reserve, limits.Tokens);
+    }
+
+    /// <summary>A slice reads files in the one ranked order; a diff keeps the order it was given.</summary>
+    private static IEnumerable<SecurityFile> Ordered(IReadOnlyList<SecurityFile> files, SecurityPrompt prompt, bool slice) =>
+        slice ? SecuritySignals.Rank(files, prompt.Focus) : files.AsEnumerable();
+
+    private static string NothingUsable(IReadOnlyList<SecurityFile> files) => files.Any(f => f.DetectionIncomplete)
+        ? "no usable source; diffs exceeding the detector character limit were withheld"
+        : "no source fits the budget or all source was withheld";
+
+    /// <summary>The material fenced under the instructions, unless the framing itself breaks the token budget.</summary>
+    private static SecurityPack Framed(string instruction, string mode, SecurityPack material, long reserve, int tokens)
+    {
         var packed = Frame(instruction, mode, material);
-        return Encoding.UTF8.GetByteCount(packed) + reserve > (long)limits.Tokens * 4
+        return Encoding.UTF8.GetByteCount(packed) + reserve > (long)tokens * 4
             ? material with { Text = string.Empty, Refusal = "framing and omission metadata exceed the context budget" }
             : material with { Text = packed };
     }
@@ -47,24 +56,33 @@ public static class SecurityContext
         bool slice, long budget, int excludedFiles)
     {
         var text = new StringBuilder();
-        var omitted = new List<string>();
-        if (excludedFiles > 0) omitted.Add($"{excludedFiles} files beyond the detector file cap were not inspected");
+        List<string> omitted = excludedFiles > 0 ? [$"{excludedFiles} files beyond the detector file cap were not inspected"] : [];
         foreach (var file in files)
-        {
-            var label = Label(file);
-            if (file.Diff.Text.Length == 0)
-            {
-                omitted.Add(WithheldLabel(file, label));
-                continue;
-            }
-            var source = sources?.GetValueOrDefault(file.Diff.Path, string.Empty) ?? string.Empty;
-            var placed = Place(file, source, slice, budget);
-            if (placed.Text.Length == 0) { omitted.Add(label); continue; }
-            text.Append(placed.Text);
-            budget -= Encoding.UTF8.GetByteCount(placed.Text);
-            if (placed.Note.Length > 0) omitted.Add(label + placed.Note);
-        }
+            budget -= Add(file, SourceOf(sources, file), slice, budget, text, omitted);
         return new(text.ToString(), string.Empty, omitted);
+    }
+
+    private static string SourceOf(IReadOnlyDictionary<string, string>? sources, SecurityFile file) =>
+        sources?.GetValueOrDefault(file.Diff.Path, string.Empty) ?? string.Empty;
+
+    /// <summary>One file into the pack or onto the omission list; answers the bytes of budget it spent.</summary>
+    private static long Add(SecurityFile file, string source, bool slice, long budget, StringBuilder text, List<string> omitted)
+    {
+        var label = Label(file);
+        if (file.Diff.Text.Length == 0)
+        {
+            omitted.Add(WithheldLabel(file, label));
+            return 0;
+        }
+        var placed = Place(file, source, slice, budget);
+        if (placed.Text.Length == 0)
+        {
+            omitted.Add(label);
+            return 0;
+        }
+        text.Append(placed.Text);
+        if (placed.Note.Length > 0) omitted.Add(label + placed.Note);
+        return Encoding.UTF8.GetByteCount(placed.Text);
     }
 
     /// <summary>One file's entry as it fits — whole, or (for a slice) its patch without the source.</summary>
@@ -77,10 +95,11 @@ public static class SecurityContext
         // A spent budget fits nothing more: answer before composing an entry for every remaining file.
         if (budget <= 0) return Nothing;
         var whole = Entry(file, source, slice);
-        if (!Fits(whole, budget)) return PatchOnly(file, source, slice, budget);
-        var note = slice && source.Length == 0 ? " (source body unavailable; patch only)" : string.Empty;
-        return new(whole, note);
+        return Fits(whole, budget) ? new(whole, WholeNote(source, slice)) : PatchOnly(file, source, slice, budget);
     }
+
+    private static string WholeNote(string source, bool slice) =>
+        slice && source.Length == 0 ? " (source body unavailable; patch only)" : string.Empty;
 
     // The patch is the change under review and the source only frames it: a source window too large
     // for the budget must not take the patch out with it.

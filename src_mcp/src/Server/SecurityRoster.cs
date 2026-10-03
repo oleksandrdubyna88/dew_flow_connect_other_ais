@@ -32,33 +32,45 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
     {
         if (!Applies(stage)) return ordinary;
         var facts = SecuritySignals.Classify(files);
-        var work = new List<ReviewerWork>();
-        var skipped = new List<SkippedRole>();
-        var excluded = new List<ExcludedRole>();
+        var decided = new Decided([], [], []);
         foreach (var run in settings.SecurityLane.Runs.Where(r => r.Serves(stage)))
-        {
-            try
-            {
-                if (!WithinBudget(round)) { skipped.Add(new($"{run.Vendor}/{run.Prompt}", BudgetSpent)); continue; }
-                if (settings.SecurityLane.ConfigurationRefusal(run) is { Length: > 0 } broken) { excluded.Add(new(run.Vendor, run.Prompt, broken)); continue; }
-                var prompt = PromptOf(run);
-                if (!SecuritySignals.Triggered(prompt, facts))
-                { RecordUnmatched(run, facts, files.Count - facts.Count, skipped, excluded); continue; }
-                Prepare(run, prompt, facts, sources, files.Count - facts.Count, work, excluded);
-            }
-            catch (Exception e)
-            {
-                log.Warning(e, "Could not prepare security review {Vendor}/{Prompt}", run.Vendor, run.Prompt);
-                excluded.Add(new(run.Vendor, run.Prompt, $"could not prepare security review ({e.GetType().Name})"));
-            }
-        }
+            AppendPairing(run, facts, files.Count - facts.Count, round, sources, decided);
         return ordinary with
         {
-            Reviewers = RosterBuilder.LocalRowsFirst([.. ordinary.Reviewers, .. work]),
-            NotAsked = [.. ordinary.NotAsked, .. skipped],
-            Excluded = [.. ordinary.Excluded, .. excluded],
+            Reviewers = RosterBuilder.LocalRowsFirst([.. ordinary.Reviewers, .. decided.Work]),
+            NotAsked = [.. ordinary.NotAsked, .. decided.Skipped],
+            Excluded = [.. ordinary.Excluded, .. decided.Excluded],
             SecurityActive = true,
         };
+    }
+
+    /// <summary>What the pairings of one round became: work, not asked, or unable to run.</summary>
+    private sealed record Decided(List<ReviewerWork> Work, List<SkippedRole> Skipped, List<ExcludedRole> Excluded);
+
+    /// <summary>One pairing is one unit: a failure while preparing it is recorded on it, and the next one still runs.</summary>
+    private void AppendPairing(SecurityRun run, IReadOnlyList<SecurityFile> facts, int omitted, int round,
+        IReadOnlyDictionary<string, string>? sources, Decided decided)
+    {
+        try
+        {
+            Route(run, facts, omitted, round, sources, decided);
+        }
+        catch (Exception e)
+        {
+            log.Warning(e, "Could not prepare security review {Vendor}/{Prompt}", run.Vendor, run.Prompt);
+            decided.Excluded.Add(new(run.Vendor, run.Prompt, $"could not prepare security review ({e.GetType().Name})"));
+        }
+    }
+
+    private void Route(SecurityRun run, IReadOnlyList<SecurityFile> facts, int omitted, int round,
+        IReadOnlyDictionary<string, string>? sources, Decided decided)
+    {
+        if (!WithinBudget(round)) { decided.Skipped.Add(new($"{run.Vendor}/{run.Prompt}", BudgetSpent)); return; }
+        if (settings.SecurityLane.ConfigurationRefusal(run) is { Length: > 0 } broken) { decided.Excluded.Add(new(run.Vendor, run.Prompt, broken)); return; }
+        var prompt = PromptOf(run);
+        if (!SecuritySignals.Triggered(prompt, facts))
+        { RecordUnmatched(run, facts, omitted, decided.Skipped, decided.Excluded); return; }
+        Prepare(run, prompt, facts, sources, omitted, decided.Work, decided.Excluded);
     }
 
     private const string BudgetSpent = "security lane round budget spent";
@@ -109,14 +121,22 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
 
     private string ReadPrompt(string id)
     {
-        var path = prompts.FileToWrite(id);
-        if (File.Exists(path) && new FileInfo(path).Length > SecurityContext.MaxPromptBytes) return string.Empty;
+        if (IsOversizedFile(prompts.FileToWrite(id))) return string.Empty;
         // An empty or blank override is no override — the shipped text stands, as it does for every other role.
         var text = prompts.ForOptional(id);
-        if (Encoding.UTF8.GetByteCount(text) > SecurityContext.MaxPromptBytes) return string.Empty;
+        return IsOversizedText(text) || IsOnlyThePlaceholder(text) ? string.Empty : text;
+    }
+
+    private static bool IsOversizedFile(string path) => File.Exists(path) && new FileInfo(path).Length > SecurityContext.MaxPromptBytes;
+
+    private static bool IsOversizedText(string text) => Encoding.UTF8.GetByteCount(text) > SecurityContext.MaxPromptBytes;
+
+    /// <summary>The operator's unfilled template: one <c>&lt;!-- OPERATOR: … --&gt;</c> comment and nothing after it.</summary>
+    private static bool IsOnlyThePlaceholder(string text)
+    {
         var trimmed = text.Trim();
         return trimmed.StartsWith("<!-- OPERATOR:", StringComparison.Ordinal)
-            && trimmed.IndexOf("-->", StringComparison.Ordinal) == trimmed.Length - 3 ? string.Empty : text;
+            && trimmed.IndexOf("-->", StringComparison.Ordinal) == trimmed.Length - 3;
     }
 
     private ReviewerWork Build(ProviderSettings provider, SecurityRun run, string prompt)
