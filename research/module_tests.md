@@ -10,6 +10,53 @@
 
 ## Where the harness is
 
+Security lane scenarios are in `SecurityLaneRoundTests` (real Git, engine and history; paid reviewers
+doubled), with settings/evidence/coverage cases in the other `Security*Tests`.
+`SecurityEvidenceOnAnOlderDatabaseTests` drops `findings.security_evidence` from a written history and
+reads it through every read-only finding query, and reads a damaged evidence projection as an
+explicit `Unreadable` marker rather than as none.
+`ASecurityPreviewDatabaseKeepsBothStepsTests` opens a database the security preview stamped 17
+(evidence column, no question tables) and a database main stamped 17, and both reach the head of
+the schema. `SecurityLaneBudgetTests` and
+`SecurityLaneBoundaryTests` cover the lane's own round budget (it never widens the ordinary roles'),
+the empty lane-only round, blank overrides, broken pairings, patch-only slices and the schema's
+per-field limit.
+The extension's `securityLane.test.ts` and `securityLaneMalformed.test.ts` run the Settings page —
+the older-server switch, malformed pairs, and stored values that must stay inside their controls.
+The eighth leg of `npm run test:seam` (`scripts/seam-security.mjs`) sends the extension-serialized
+lane to the built server: a valid lane draws no complaint, an unknown trigger and a malformed lane
+each do. `securityEvidenceLog.test.ts` parses evidence and runs the rounds-log page (through
+`roundsLogPageHarness.ts`) to check its disclosure appears only on security findings, as text.
+`SecuritySessionCompatibilityTests` exercises the real session store and source-generated JSON
+serializer with pre-lane pending/rejected findings, both omitted and null cap reasons, and a
+nonempty new-evidence control. It verifies save/reload without losing findings or rejection
+reasons, and the ordinary finding's empty SQLite evidence projection. It does not invoke a paid
+reviewer or establish model accuracy.
+`SecurityLaneCalibrationTests` is an explicit Windows/Ollama test, excluded from ordinary CI.
+It runs three code rounds with the operator's embedded prompts and retains requests, responses,
+hashes and session history after each cell. The command and current measurement status are in
+[RESULTS_security_lane_qwen_windows.md](RESULTS_security_lane_qwen_windows.md). Run it before a
+security-lane release or when changing these prompts, the model or its runtime; the implementing
+agent/operator owns that run. Deterministic tests do not establish model quality or prove that
+Ollama consumed the full input; the live run does not execute reproductions.
+`SecurityLaneAuditTests` separately runs all twelve modules against an explicitly selected committed
+feature, one at a time, preserving every request, response and failure for consultant triage. Its
+ordinary reviewer is a clean test double; the campaign does not replace the COAI code/feature gates.
+Both hardware harnesses accept `COAI_SECURITY_CALIBRATION_MODEL` to select the installed Ollama
+model; if unset they retain the original Qwen default. `COAI_SECURITY_CALIBRATION_ENDPOINT` names
+the OpenAI-compatible endpoint (default `http://localhost:11434/v1`). The audit also reads
+`COAI_SECURITY_AUDIT_SCOPE` (else the design plan in `todo/`, then `research/`) and
+`COAI_SECURITY_AUDIT_MODEL_CONTEXT_TOKENS` (default 131072), which its manifest records as
+configured by the operator, not measured. Their manifests record the selected model and endpoint,
+and the reviewer vendor ID is `local-security` independently of the model family.
+The calibration fixture includes written repository rules so its Conventions reviewer participates.
+Passing these hardware tests establishes usable replies and wiring; semantic accuracy of each
+finding and reproduction is inspected separately in the [Windows results](RESULTS_security_lane_qwen_windows.md).
+`SecurityPresetTests` also covers the historical-PR routing regressions: prose-only changes do not
+activate application audits, UI words and DOM/command APIs do not count as SQL, and real query calls,
+removed controls, SQL scripts and configuration still participate. Source files under `research/`
+remain eligible. These tests check routing behavior; they do not establish semantic model accuracy.
+
 Shared-rule adoption adds real filesystem scenarios: `RuleFilesTests` exercises neutral
 PROJECT/local/shared discovery, ordering and missing mount bodies while retaining legacy cases.
 `snippetDiscovery.test.ts` calls the same reader the panel uses, against temporary files:
@@ -173,6 +220,7 @@ real and named here rather than implied:
 | Add a reviewer from the CATALOGUE | decisions, plus the two API flags structurally | `vendors.test.ts` — that the entry a person searching for *Claude Code* filters on carries those words **selected by `id === 'claude'`**, because an assertion that some label contains them stays green while that entry keeps its old name; that `presetsOffered` returns the catalogue WHOLE whatever is already configured, giving a taken id the next free `<id>-2` and marking it a second row, with the un-taken case asserted in the same test so it cannot pass against a function that marks everything; that a blank base stays blank, which is what keeps the custom-endpoint flow asking for a name; and that `reviewerPickItems` puts the new id in the `description` and leaves it empty otherwise. `addAReviewerFilters.test.ts` covers what no pure test can reach — `matchOnDetail` **and** `matchOnDescription` on the pick's options object, matched as a whole object rather than as two loose substrings, and the old `VENDOR_PRESETS.filter(` asserted GONE rather than the new call asserted present. NOT covered: the quick pick itself. Nobody has driven the real list, so that a person typing into VS Code's filter box sees the entry is inferred from the flags, not observed — an extension host is the standing gap named at the end of this file |
 | Add a reviewer FROM the vault (`!name`, S3.6) | decisions only | `apiKeyVendors.test.ts` — only NAMES survive the providers parse (a map of names to values keeps nothing), the `!` rows are exactly the vault's names, a key already used still listed with the id the second row takes, an unreadable vault or a server too old to name its keys is ONE row saying why, choosing `!qwen` writes `runtime: 'api'` with `vaultKey: 'qwen'` that survives `vendorsFrom` and crosses as `key`, the two presets, and the probe's `GET /models` ids read or a reason given. NOT covered: the quick pick itself and the `--probe-api` spawn behind it — an extension host is the standing gap |
 | An api reviewer's own settings on its card (thinking, effort, review limit, S3.8) | decisions, the card RUN, the SEAM, and the released halves | `apiSettings.test.ts` — the providers report parsed defensively, the three fields stored only when said, the wire (api rows only, held back for a server known older than `API_SETTINGS_SINCE`), a value equal to the reported default stored as nothing, refusals, the reset id; `apiSettingsCard.test.ts` — the panel RUN from reports the binary printed: the effort options are exactly the module's levels, the default marked, the switch present or replaced by a sentence, the minutes box, the writes the page posts, a reset click, the refusal and set-aside note, both hidden states; `apiSettingsHelp.test.ts`; `npm run test:seam`'s seventh leg (the row's values come back from the real binary as `effective`); `scripts/live-api-settings-compat.mjs` against the released halves (run by hand, not in CI). NOT covered: the host's `writeApiSetting` / `resetApiSetting` — an extension host is the standing gap |
+| The Security lane's settings, across the seam | decisions, the page RUN, and the SEAM | `securityLane.test.ts`, `securityLaneMalformed.test.ts` run the Settings page: an older server cannot switch the lane on, malformed pairs leave it off and the page rendering, stored values stay inside their controls. The eighth leg of `npm run test:seam` (`scripts/seam-security.mjs`) hands the extension-serialized lane to the built server and asserts its `--providers` complaints: none for a valid lane, one for an unknown trigger, one for a malformed lane. Not covered: a paid reviewer answering a lane prompt — that is `SecurityLaneCalibrationTests`, explicit and hardware-bound. |
 | Add a reviewer FROM a Team server | decisions only | `remoteVendorRow.test.ts`, `remoteVendorCard.test.ts` — the row shape, the catalog-fed model list, the canonical server match, and the fields a remote row must not show. The quick-pick itself needs an extension host |
 | A reviewer the server cannot run, badged on its card | decisions only | `providersBadge.test.ts` — the three states and that only `unavailable` draws anything, the parser against every shape a different build could hand it, and a row the server did not mention reading as UNKNOWN rather than as fine. The spawn of `--providers` itself is the row below |
 | Team-server spending, and *Company* | decisions only | `teamUsage.test.ts` — the per-server block, the admin gate, and what a server that has not answered renders as |

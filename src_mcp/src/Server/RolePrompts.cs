@@ -93,8 +93,14 @@ public sealed class RolePrompts(string dataDir)
     /// the real text — and for a shipped prompt the way to go back is deleting the file, which this
     /// now treats an empty one as. (Found beside the same defect in <see cref="Has"/>.)
     /// </remarks>
-    private string Text(string promptId) =>
-        Override(promptId) is var text && !string.IsNullOrWhiteSpace(text) ? text : Embedded(FileOf(promptId));
+    private string Text(string promptId, bool optional = false) =>
+        Override(promptId) is var text && !string.IsNullOrWhiteSpace(text) ? text : Embedded(FileOf(promptId), optional);
+
+    /// <summary>
+    /// <see cref="For"/> for a prompt the binary may not ship — a person's own security prompt —
+    /// answering empty instead of throwing when there is neither an override with text nor shipped text.
+    /// </summary>
+    public string ForOptional(string promptId) => Text(promptId, optional: true);
 
     /// <summary>
     /// The one place a prompt id becomes a file name — read, write and restore alike.
@@ -110,14 +116,18 @@ public sealed class RolePrompts(string dataDir)
     private static string FileOf(string promptId) => $"{FileName.Safe(promptId ?? string.Empty)}.md";
 
     /// <summary>The text compiled into this binary. Static: it depends on nothing on disk.</summary>
-    public static string ShippedDefaultFor(string promptId) => Embedded(FileOf(promptId));
+    public static string ShippedDefaultFor(string promptId, bool optional = false) => Embedded(FileOf(promptId), optional);
 
-    private static string Embedded(string file)
+    private static string Embedded(string file, bool optional = false)
     {
         var name = $"CoaiMcp.prompts.{file}";
-        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name)
-            ?? throw new InvalidOperationException(
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(name);
+        if (stream is null)
+        {
+            if (optional) return string.Empty;
+            throw new InvalidOperationException(
                 $"the prompt '{name}' is not embedded in this build — check the EmbeddedResource item in CoaiMcp.csproj");
+        }
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
     }

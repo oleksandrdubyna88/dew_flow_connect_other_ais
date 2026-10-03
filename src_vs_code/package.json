@@ -864,6 +864,7 @@
             }
           }
         },
+        "coai.securityLane": {"type":"object","default":{},"markdownDescription":"Additional security reviewer/prompt pairs. Configure in ConnectOtherAIs Settings → Security lane. Prompt bodies live in the MCP data directory."},
         "coai.consultants": {
           "type": "object",
           "default": {
@@ -1216,7 +1217,7 @@
     ]
   },
   "scripts": {
-    "prepare:gate": "node scripts/prepare-gate.mjs",
+    "prepare:gate": "node scripts/prepare-gate.mjs && node scripts/generate-security-lane.mjs",
     "precompile": "npm run prepare:gate",
     "pretypecheck": "npm run prepare:gate",
     "prebundle": "npm run prepare:gate",
@@ -1239,6 +1240,7 @@
     "test:claude-models": "npm run compile && node scripts/live-claude-models.mjs",
     "test:close-compat": "node scripts/live-close-consult-compat.mjs",
     "test:feature-compat": "node scripts/live-feature-schema-compat.mjs",
+    "test:security-compat": "npm run compile && node scripts/live-security-settings-compat.mjs",
     "test:feature-vendor-compat": "npm run compile && node scripts/live-feature-vendor-compat.mjs",
     "test:api-settings-compat": "npm run compile && node scripts/live-api-settings-compat.mjs",
     "measure:stream": "npm run compile && node scripts/measure-stream.mjs",

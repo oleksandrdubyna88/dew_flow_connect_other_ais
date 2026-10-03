@@ -109,6 +109,20 @@ not.
 
 ## 6. A prompt longer than `num_ctx` is truncated without a word
 
+**Partly addressed, §6 remains open, 2026-10-01:**
+[security lane §6.5](../research/PLAN_a_security_lane_runs_beside_the_gate.md) annotates suspicious or unverified
+input coverage and retains findings as evidence. It does not refuse a truncated completion with
+the two sizes, so it does not satisfy this section's Definition of Done. This plan retains ownership
+of that refusal on the shared local completion path and its calibration.
+
+| Item | Security lane plan | This plan |
+|---|---|---|
+| Local prompt truncation | Partial coverage annotations and bounded lane input | §6 stays open: shared refusal with sizes and calibration |
+| Origin consent, authentication, streaming, probe races | Reuses the reviewer runtime without relaxing trust | Owns §§1–4 |
+
+The refusal should extend the shared completion path and reuse the lane's coverage observations.
+Consent and streaming remain independent of lane trigger, slicing and gate semantics.
+
 Ollama cuts the prompt to the model's context and reviews what is left, reporting it as a review.
 The hosted code-stage prompt is ~205k tokens against a 64k model, so a local code round would
 silently review the first third of the diff. The shim can detect it: `usage.prompt_tokens` coming

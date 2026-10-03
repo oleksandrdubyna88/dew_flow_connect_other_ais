@@ -106,7 +106,7 @@ internal sealed class FeatureStage(
         return await new FeatureRefs(launcher).ResolveAsync(request.RepoPath, request.BaseRef, request.Head, skip.Length > 0, ct) switch
         {
             FeatureInput<FeatureRange>.Accepted { Value: var range } =>
-                await engine.RunStageAsync(request.RepoPath, SessionKey.FeatureBranch, call.Plan.Text, Run(request, call, range, skip, ct), ct),
+                await engine.RunStageAsync(request.RepoPath, SessionKey.FeatureBranch, call.Plan.Text, Run(request, call, range, skip), ct),
             FeatureInput<FeatureRange>.Refused refused => Refused(refused.Sentence),
             _ => throw new InvalidOperationException("the union is closed"),
         };
@@ -133,10 +133,10 @@ internal sealed class FeatureStage(
         };
 
     /// <summary>The run the engine is handed: this stage's begin, session, head, skip policy and work.</summary>
-    private StageRun Run(FeatureRequest request, FeatureCall call, FeatureRange range, string skip, CancellationToken ct) =>
+    private StageRun Run(FeatureRequest request, FeatureCall call, FeatureRange range, string skip) =>
         new(request.Again ? RoundMachine.BeginFeatureRoundAgain : RoundMachine.BeginFeatureRound,
             NeedsWorktree: false, Stage: Stage.FeatureReview, ReadsCheckout: false,
-            (session, workingDir, sha) => WorkAsync(request.RepoPath, call, range.Base, session, workingDir, sha, ct))
+            (session, workingDir, sha, roundToken) => WorkAsync(request.RepoPath, call, range.Base, session, workingDir, sha, roundToken))
         {
             Feature = call.Plan.Identity,
             // A full id, resolved once by the ref checks: the commit they passed is the commit read.
@@ -236,10 +236,16 @@ internal sealed class FeatureStage(
         var source = settings.FeatureSourceFollowUps > 0
             ? new SourceTurns.On(new SourceResolver(new GitHistory(launcher), outliner, repoPath, sha), settings.FeatureSourceFollowUps)
             : SourceTurns.None;
+        var securityDiff = settings.SecurityLane.Applies(Stage.FeatureReview)
+            && settings.SecurityLane.Runs.Any(r => r.Serves(Stage.FeatureReview))
+            ? (await new ContextAssembler(launcher).CollectAsync(repoPath, baseSha, sha, ct: ct)).Files : [];
+        var securitySources = await SecuritySources.ReadAsync(settings.SecurityLane,
+            roster.Security().Due(Stage.FeatureReview, round), securityDiff,
+            new SourceResolver(new GitHistory(launcher), outliner, repoPath, sha), ct);
         var work = roster.BuildWork(
             settings.Rounds.RolesForRound(Stage.FeatureReview, round), workingDir, context, round,
             stage: Stage.FeatureReview, readsCheckout: false, seed: PanelService.StableSeed(session.State.SessionId, round),
-            source: source);
+            source: source, securityFiles: securityDiff, securitySources: securitySources);
 
         // A retry asks ONLY the reviewers that failed in round 1 (D23); every other round is the work as built.
         // The RESOLVED base, as the code stage records it: what the outline was actually compared against.

@@ -66,6 +66,23 @@ public sealed class SourceResolver(GitHistory git, ISourceOutliner outliner, str
 
     private readonly ConcurrentDictionary<string, Lazy<Task<CachedFile>>> _files = new(StringComparer.Ordinal);
 
+    /// <summary>Serves the smallest enclosing declaration at a changed line, or a bounded line window.
+    /// Uses the same pinned, redacted, credential-refusing read as feature follow-ups.</summary>
+    public async Task<ServedTurn> ServeChangeAsync(string path, int line, CancellationToken ct = default)
+    {
+        line = Math.Max(1, line);
+        var request = new SourceRequest(path, string.Empty, Math.Max(1, line - 30),
+            (int)Math.Min(int.MaxValue, (long)line + 90), "changed code; partial source context");
+        if (RefusedBeforeReading(request, 0).Length > 0)
+            return await ServeAsync([request], SourceSpend.None, ct);
+        var file = await ReadAsync(path, ct);
+        if (file.IsRefused) return new([], [new SourceRefusal(path, string.Empty, file.Refusal)], SourceSpend.None);
+        var entry = file.Outline.Value.Entries.Where(e => e.StartLine <= line && e.EndLine >= line)
+            .OrderBy(e => e.EndLine - e.StartLine).FirstOrDefault();
+        if (entry is not null) request = request with { StartLine = entry.StartLine, EndLine = entry.EndLine };
+        return await ServeAsync([request], SourceSpend.None, ct);
+    }
+
     /// <summary>
     /// One turn's requests, served or refused, in order — and the reviewer's spend after them.
     /// </summary>

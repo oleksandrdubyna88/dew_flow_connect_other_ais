@@ -21,6 +21,7 @@ public static class ServerNoticeCodes
     public const string Refused = "refused";
 
     public const string ReviewerTimedOut = "reviewer-timed-out";
+    public const string SecurityLaneIncomplete = "security-lane-incomplete";
 
     public const string ReviewerRateLimited = "reviewer-rate-limited";
 
@@ -60,6 +61,7 @@ public static class ServerNoticeCodes
     [
         Refused,
         ReviewerTimedOut,
+        SecurityLaneIncomplete,
         ReviewerRateLimited,
         ReviewerExit,
         ReviewerNotStarted,

@@ -1281,6 +1281,7 @@ function defendedHtml(defended: readonly DbFinding[]): string {
     .map((f) => `<div class="finding declined"><span class="sev">${escapeHtml(f.severity)}</span> `
       + `<span class="where">${escapeHtml(f.file ? `${f.file}:${f.line}` : 'no file')}</span> `
       + `<b>${escapeHtml(f.title)}</b><div class="why">${escapeHtml(f.why)}</div>`
+      + (f.securityEvidence ? `<details><summary>Security evidence (unverified)</summary><pre>${escapeHtml(JSON.stringify(f.securityEvidence, null, 2))}</pre></details>` : '')
       + `<div class="verdict">${escapeHtml(f.providers)} / ${escapeHtml(f.role)}`
       + `${f.reason ? ` &middot; the standing reason: ${escapeHtml(f.reason)}` : ''}</div></div>`)
     .join('');
@@ -1768,6 +1769,7 @@ ${TEXT_CONTROLS_CSS}
         + '<b>' + esc(f.title) + '</b>'
         + (f.reRaised ? ' <span class="again">raised again</span>' : '')
         + '<div class="why">' + esc(f.why) + '</div>'
+        + (f.securityEvidence ? '<details><summary>Security evidence (unverified)</summary><pre>' + esc(JSON.stringify(f.securityEvidence, null, 2)) + '</pre></details>' : '')
         + (f.fix ? '<div class="why"><i>fix:</i> ' + esc(f.fix) + '</div>' : '')
         + '<div class="verdict">' + esc(f.providers) + ' / ' + esc(f.role) + ' &middot; <b>' + esc(mark) + '</b>'
         + (f.reason ? ': ' + esc(f.reason) : '') + '</div>'

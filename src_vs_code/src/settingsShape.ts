@@ -25,6 +25,7 @@ import { CADENCE_SETTINGS, CadenceSettings, DEFAULT_CADENCE, cadenceEnv, cadence
 import { DEFAULT_QCONSULT, QCONSULT_SETTINGS, QconsultSettings, qconsultEnv, qconsultSettingsFrom } from './qconsultSettings';
 import { CommandModels, commandModelsEnv, commandModelsFrom } from './commandModels';
 import { commandsFrom, type CommandRow } from './commands';
+import { DEFAULT_SECURITY, securityEnv, securityLaneFrom, type SecurityLane } from './securityLane';
 
 export type OnExhausted = 'continue' | 'escalate' | 'human' | 'good_enough';
 
@@ -94,6 +95,7 @@ export interface CoaiSettings {
    * answers and it enforces the caps.</p>
    */
   readonly consult: ConsultSettings;
+  readonly securityLane: SecurityLane;
 
   /**
    * When the consultant is asked without anybody being stuck — once per group of epics, and on the
@@ -275,6 +277,7 @@ export const DEFAULTS: CoaiSettings = {
   roles: [],
   commands: [],
   consult: DEFAULT_CONSULT,
+  securityLane: DEFAULT_SECURITY,
   cadence: DEFAULT_CADENCE,
   qconsult: DEFAULT_QCONSULT,
 };
@@ -304,6 +307,7 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   // A person's own gate commands, beside their roles and for the same reason; their TEXTS, like the
   // prompt bodies, live in the one data directory.
   'commands',
+  'securityLane',
   // The Bugz pair, per side for the reason every row above is: a side is the WORK. Two sides of one
   // machine can face different companies, and the local engine that may read their findings — and
   // the server those pairs would be sent to — are not the same question on both.
@@ -402,6 +406,7 @@ export function settingsFrom(read: ConfigReader): CoaiSettings {
     roles: rolesFrom(read('roles')),
     commands: commandsFrom(read('commands')),
     consult: consultSettingsFrom(read),
+    securityLane: securityLaneFrom(read('securityLane')),
     cadence: cadenceSettingsFrom(read),
     qconsult: qconsultSettingsFrom(read),
   };
@@ -423,7 +428,7 @@ export function envBlock(
   /** An `api` row's list price, so it can cross with the row (S3.7). Absent prices nothing. */
   priceOf: RowPriceLookup = () => undefined,
 ): Record<string, string> {
-  const env: Record<string, string> = {};
+  const env: Record<string, string> = securityEnv(settings.securityLane, installedServerVersion);
   // "Differs from the shipped list" is asked of what CROSSES — both lists as the server would read
   // them — not of a hand-kept subset of fields. The subset missed the plan / code / document boxes, the
   // CLI path and (until S3.3a) the feature tick, so a change to a shipped row never reached the server.

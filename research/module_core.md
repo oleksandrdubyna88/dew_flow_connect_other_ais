@@ -9,6 +9,14 @@
 Everything that decides whether a round passes, isolated from everything that runs a round. The
 runners (epic 03) and the server (epic 04) carry data to and from this module; they add no rules.
 
+The optional security lane's pure classifiers and evidence contracts live in `Security/`.
+`SecuritySignals` classifies bounded committed patches, including removed code. Markdown and
+reStructuredText cannot alone activate an application audit; executable source in a documentation
+or test folder still can. SQL routing combines database terms with bounded, non-backtracking matches
+for query/execution calls and SQL statements, rather than generic prose words such as `where` or
+`update`. These are routing hints, not vulnerability claims. `SecurityContext` retains supporting
+material when another file activates a module, fences it as data, and reports omitted coverage.
+
 ## Flow
 
 ```mermaid

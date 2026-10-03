@@ -22,6 +22,7 @@ const CHANGED_CALLERS: Readonly<Record<string, ConsultantChoice>> = {
 };
 
 const CHANGED: { readonly [K in keyof CoaiSettings]: CoaiSettings[K] } = {
+  securityLane: { ...DEFAULTS.securityLane, enabled: true },
   bugzModel: 'local/qwen',
   bugzServer: 'https://bugs.example/',
   rounds: { PlanCritique: 5, Architecture: 4, SecurityReliability: 4, UxDxPerformance: 4 },
