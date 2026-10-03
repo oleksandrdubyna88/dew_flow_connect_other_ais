@@ -508,7 +508,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
     /// findings and filed the question under the branch session's id, so <c>Escalations.DecisionFor</c>
     /// — keyed by session id — never found the person's answer for the document session. (§9.3)
     /// The document's gate is HELD here (one round, a threshold of zero): only a held gate's question becomes a
-    /// card (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G1).
+    /// card (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G1).
     /// </remarks>
     [Fact]
     public async Task AskHumanForADocumentReview_FilesTheQuestionUnderTheDocumentsSession_WithItsFindings()
@@ -563,7 +563,7 @@ public sealed class ADocumentIsReviewedEndToEndTests : IAsyncLifetime
     /// <summary>
     /// And with no document named, the question is the BRANCH session's — which is not held, so it is the AI's own
     /// question and is asked in its conversation. The reply names the mistake that lands an AI here: a question about
-    /// the held document review must pass <c>document</c> (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G2).
+    /// the held document review must pass <c>document</c> (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G2).
     /// </summary>
     [Fact]
     public async Task AskHumanWithNoDocument_AsksAboutTheBranch_AndSaysToNameTheDocumentForItsHeldReview()

@@ -19,7 +19,7 @@ namespace CoaiMcp.Server;
 /// the facts <see cref="AskGateDesk"/> gathers): the phase rule (D7), the consultId verified (D14 (a)), a production
 /// risk's consultants (D8 beside a held gate's card; FIRST for the AI's own question since 2026-10-03, G3), the
 /// stand-down when none can be had (D9). Since 2026-10-03 only the GATE's question becomes a card at all
-/// (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>); the AI's own is answered <c>ask_in_conversation</c>. The wait is the
+/// (<c>research/PLAN_ask_human_is_for_the_gate.md</c>); the AI's own is answered <c>ask_in_conversation</c>. The wait is the
 /// settings' budget — fifteen minutes by default since S3 (A10) — and a question nobody answered is marked
 /// <c>expired</c> in its own file: out of the active set, kept for the log, taken by <see cref="EscalationRetention"/>
 /// after seven days.</para>
@@ -115,7 +115,7 @@ public sealed class AskHumanService
             : InTheConversationAsync(session, repoPath, text, facts, allowed, ct);
 
     /// <summary>
-    /// The AI's own question (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G2/G3): no card, no wait — the reply tells
+    /// The AI's own question (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G2/G3): no card, no wait — the reply tells
     /// it to ask the person in its own conversation. The operator, 2026-10-03: an A-or-B question about the work had
     /// become a card under "a review is waiting on you", answered with the gate's three buttons.
     /// </summary>

@@ -80,15 +80,43 @@ export const TYPE_AN_ANSWER: DecisionChoice = {
 };
 
 /**
- * What the Answer… button offers for one card (todo/PLAN_question_consultant.md, S4).
- *
- * <p>An AI's QUESTION — no findings gating, which is every question that went through the question consultant —
- * is answered in words, so the box for them comes FIRST, and the decisions after it. It used to offer only the three
- * decisions, so a person could not type an answer to a question at all. A gate verdict with findings still gating
- * is a CHOICE, as the module comment says, and keeps exactly the three.</p>
+ * The same box on the GATE's question — asked while the gate is held, or in a feature review's second-round window: the
+ * words reach the AI and decide nothing for the review, and saying so is the difference between an answer and the dead
+ * end the module comment describes — the card leaves and nothing changed (the own review of 2026-10-03). Worded for both
+ * cases, because the request window is not a hold (CodeRabbit on PR #656).
  */
-export function answerChoices(escalation: { readonly branch: string; readonly openFindings: readonly unknown[] }): readonly DecisionChoice[] {
-  return escalation.openFindings.length === 0
-    ? [TYPE_AN_ANSWER, ...decisionChoices(escalation.branch)]
-    : decisionChoices(escalation.branch);
+export const TYPE_AN_ANSWER_FOR_THE_GATE: DecisionChoice = {
+  decision: '',
+  label: 'Type an answer…',
+  detail: 'Your own words go back to the AI that asked. They decide nothing for the review — only one of the decisions below does.',
+};
+
+/**
+ * What the Answer… button offers for one card (todo/PLAN_question_consultant.md, S4; research/PLAN_ask_human_is_for_the_gate.md, G4).
+ *
+ * <p>The card says which producer wrote it, so nothing here guesses. An AI's QUESTION — asked while the gate was held, or
+ * in a feature review's second-round window, the only kinds that become a card since the server stopped carding the AI's
+ * own questions — is answered in words, so the box for them comes FIRST, and the decisions after it, because only a
+ * decision decides: it releases a hold, or asks for the second round. A round's call_human
+ * NOTICE is a CHOICE, as the module comment says: the three decisions only, since no AI waits on a notice for words (the
+ * cadence consultation b6e9df3c, 2026-10-03, found a typed answer there went nowhere).</p>
+ *
+ * <p>A card with no kind — an older server — or with a kind this build does not know — a newer one — is judged as cards
+ * always were: no findings gating meant a question. Taking the box away from a kind nobody here knows would bring back
+ * the very symptom this answers.</p>
+ */
+export function answerChoices(escalation: {
+  readonly branch: string;
+  readonly openFindings: readonly unknown[];
+  readonly kind?: string;
+}): readonly DecisionChoice[] {
+  const decisions = decisionChoices(escalation.branch);
+  switch (escalation.kind) {
+    case 'question':
+      return [TYPE_AN_ANSWER_FOR_THE_GATE, ...decisions];
+    case 'notice':
+      return decisions;
+    default:
+      return escalation.openFindings.length === 0 ? [TYPE_AN_ANSWER, ...decisions] : decisions;
+  }
 }

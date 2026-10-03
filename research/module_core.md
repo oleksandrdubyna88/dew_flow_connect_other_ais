@@ -436,7 +436,7 @@ flowchart TD
   that can still be asked for its second round (one round run, no ground, not held — narrowed from "a
   round run" on 2026-10-03), nowhere otherwise (a question asked BEFORE round 1 is about whatever it
   asked, and binding the request to it was the clock rule in a new coat). **Its predicate is
-  `RoundMachine.AsksForTheGate(state)`** (2026-10-03, `todo/PLAN_ask_human_is_for_the_gate.md`, G1) — the
+  `RoundMachine.AsksForTheGate(state)`** (2026-10-03, `research/PLAN_ask_human_is_for_the_gate.md`, G1) — the
   same function the server asks whether an `ask_human` question becomes a CARD at all, so the binding and
   the card are one decision; every other question is the AI's own and is asked in its conversation. `ApplyPersonsRequest` spends the list
   with the request; `CompleteFeatureRound` empties it (the questions that may request round 2 are the

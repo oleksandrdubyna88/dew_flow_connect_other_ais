@@ -330,7 +330,7 @@ public static class RoundMachine
     /// <summary>
     /// Whether a question asked on this session is the GATE's — the one rule that decides both whether
     /// <c>ask_human</c> puts a card in front of the person and whether <see cref="RecordQuestion"/> binds its
-    /// answer to the session (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G1).
+    /// answer to the session (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G1).
     /// </summary>
     /// <remarks>
     /// Two states, and only two: a held gate, whose question the person answers with a decision; and a feature

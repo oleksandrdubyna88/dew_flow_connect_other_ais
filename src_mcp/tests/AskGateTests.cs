@@ -143,7 +143,7 @@ public sealed class AskGateTests
         }
     }
 
-    /// <summary>D8, on a held gate's card (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>): the person at once, the consultants beside, folded under the card — and not one of the AI's batches (G7).</summary>
+    /// <summary>D8, on a held gate's card (<c>research/PLAN_ask_human_is_for_the_gate.md</c>): the person at once, the consultants beside, folded under the card — and not one of the AI's batches (G7).</summary>
     [Fact]
     public void AProductionRiskOnAHeldGatesCard_AsksThePersonAtOnce_AndRunsTheConsultantsBeside()
     {

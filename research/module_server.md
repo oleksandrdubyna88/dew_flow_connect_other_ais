@@ -647,7 +647,7 @@ commit) — `AskHumanService`, with the two helpers it called on the service for
 `SessionAddress` moved to a file of its own because the refusal census rightly refuses an alias. Behaviour
 unchanged, its callers untouched; S3's gate lands there.
 
-## Two doors — the gate's question on a card, the AI's own in its chat (2026-10-03, `todo/PLAN_ask_human_is_for_the_gate.md`)
+## Two doors — the gate's question on a card, the AI's own in its chat (2026-10-03, `research/PLAN_ask_human_is_for_the_gate.md`)
 
 **The symptom.** The operator's sidebar showed *A review is waiting on you* over an AI's own A-or-B question about
 its work, and **Answer…** offered the gate's three decisions — *Keep going*, *Stop and act on the findings*, *Stop

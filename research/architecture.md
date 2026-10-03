@@ -2,7 +2,8 @@
 
 > The system **as it is**. All six epics and the escalation tail shipped on 2026-08-31: the server
 > runs the loop from any MCP client, the extension installs it, and `ask_human` reaches a person in
-> VS Code ([PLAN_escalation_loopback.md](PLAN_escalation_loopback.md)) — observed end to end, a
+> VS Code ([PLAN_escalation_loopback.md](PLAN_escalation_loopback.md); since 2026-10-03 only for the GATE's own question —
+> the AI's own come back `ask_in_conversation`, [module_server.md](module_server.md) *Two doors*) — observed end to end, a
 > question asked by the installed binary and answered in the installed extension.
 
 ## What this is

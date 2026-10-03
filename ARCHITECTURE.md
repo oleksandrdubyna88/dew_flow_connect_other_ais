@@ -45,7 +45,8 @@ once at the end of a plan of three or more epics over the whole feature; it need
 
 ## When it needs a person
 
-A `call_human` verdict — and an `ask_human` question asked while the gate is held — put the question
+A `call_human` verdict — and an `ask_human` question asked while the gate is held, or in a feature
+review's second-round window — put the question
 in front of you **in VS Code**: a dialog, a status-bar item so a dismissed dialog loses nothing, and an
 open-questions section at the top of the rounds view. The call blocks until you answer; after 15 minutes
 it comes back `no_answer_yet` telling the AI to ask you in the chat instead, and the card is marked

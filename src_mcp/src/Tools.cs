@@ -370,7 +370,7 @@ internal static class Tools
             // The three gate arguments carry defaults, so every client that predates them keeps calling with three. The
             // token is the SDK's, bound per request and never part of the schema: a client that cancels — or whose own
             // tool timeout fires first — stops a production risk's consultants rather than paying for answers nobody
-            // receives (todo/PLAN_ask_human_is_for_the_gate.md, the own review of 2026-10-03).
+            // receives (research/PLAN_ask_human_is_for_the_gate.md, the own review of 2026-10-03).
             async (string repoPath, string branch, string question, string? document = null, string? feature = null,
                    string? consultId = null, bool productionRisk = false, string? riskReason = null, CancellationToken cancellationToken = default) =>
                 await host.Current.AskHumanAsync(

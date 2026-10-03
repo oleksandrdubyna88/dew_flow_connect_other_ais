@@ -271,7 +271,7 @@ public sealed record HumanAnswer(string Status, string Answer, string AnswerOrig
 
 /// <summary>
 /// What <c>ask_human</c> answers when the question is the AI's own rather than the gate's — no card was written, and
-/// the AI asks the person in its own conversation (<c>todo/PLAN_ask_human_is_for_the_gate.md</c>, G2/G3).
+/// the AI asks the person in its own conversation (<c>research/PLAN_ask_human_is_for_the_gate.md</c>, G2/G3).
 /// </summary>
 /// <remarks>
 /// Its own record rather than three more members on <see cref="HumanAnswer"/>: the context writes no null and every

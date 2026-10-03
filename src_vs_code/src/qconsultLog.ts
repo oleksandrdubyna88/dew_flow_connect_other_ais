@@ -125,6 +125,9 @@ const OUTCOMES: Readonly<Record<string, string>> = {
   answered_by_consultants: 'answered by the consultants',
   person_asked: 'then asked the person',
   production_risk: 'production risk — the person was asked at once',
+  // research/PLAN_ask_human_is_for_the_gate.md: the AI's own questions are asked in its chat, not on a card.
+  person_asked_in_conversation: 'then sent back to ask the person in the AI’s chat',
+  production_risk_consulted_first: 'production risk — the consultants first, then sent back to ask in the AI’s chat',
   quota_spent: 'the session’s questions were spent',
   none_available: 'nobody to ask',
 };
