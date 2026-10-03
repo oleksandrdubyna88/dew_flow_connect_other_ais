@@ -33,7 +33,7 @@ internal static class Schema
         Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
-        WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence,
+        WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence, WhyAConsultationFailed,
     ];
 
     internal const string SecurityEvidence = """
@@ -547,5 +547,28 @@ internal static class Schema
             note         TEXT NOT NULL DEFAULT '',
             PRIMARY KEY (consult_id, row_id)
         );
+        """;
+
+    /// <summary>
+    /// Step 19: why a consultation turn FAILED — the classified kind, its cure, and where the transcript was
+    /// kept (epic 2 of PLAN_the_consultant_works_on_every_vendor.md).
+    /// </summary>
+    /// <remarks>
+    /// <para>Until this step a failed consultation's row said only its status and a sentence; the log page
+    /// could not tell a denied shell command from a spent quota without reading English. The words are those
+    /// of <c>shared/consult-failure-kinds.json</c>.</para>
+    /// <para><b>Empty means "no failure recorded"</b> — a consultation that answered, one still running, and
+    /// every row written before this step. An answered turn clears them on the record, so the row follows.</para>
+    /// <para>Appended last, numbered at merge time per the plan: it was 17 on its branch, and <c>main</c> gave 17
+    /// to the question consultant and 18 to the security evidence first, so it is 19. A preview build of the
+    /// branch stamped 17 for THESE columns on real data directories; <see cref="ConsultantPreviewFork"/>
+    /// reconciles those files before the migrator runs. A database that has run eighteen steps records
+    /// eighteen, and widening an earlier step would leave it without these columns while believing it had run
+    /// every one.</para>
+    /// </remarks>
+    internal const string WhyAConsultationFailed = """
+        ALTER TABLE consultations ADD COLUMN failure_kind TEXT NOT NULL DEFAULT '';
+        ALTER TABLE consultations ADD COLUMN failure_cure TEXT NOT NULL DEFAULT '';
+        ALTER TABLE consultations ADD COLUMN evidence     TEXT NOT NULL DEFAULT '';
         """;
 }

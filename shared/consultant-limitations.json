@@ -1,0 +1,240 @@
+{
+  "why": [
+    "What each consultant runtime can and cannot be kept from doing, per platform, in a sentence a person reads",
+    "under the consultant's row (the Consultant tab, and coai-mcp --consultants). Requirement 12 of",
+    "PLAN_the_consultant_works_on_every_vendor.md: a limitation never claims more than was measured. So every",
+    "row carries EITHER `measured` (date, CLI version, the cells, the document that records them) OR `source`",
+    "(a sentence saying it was not measured here and why we believe what the row says) - never neither.",
+    "",
+    "One row per runtime x platform (windows | linux | wsl | macos), and for claude also per capability:",
+    "`restricted` when the installed CLI declares --restricted, `no-restricted` when it does not",
+    "(ClaudeCapability reads it off `claude --help` before every launch). No platform inherits another's row:",
+    "a platform nobody measured gets an `unmeasured` row of its own, and a platform this file does not name at",
+    "all is answered `unmeasured` by the lookup, never with the nearest platform's text.",
+    "",
+    "`standing` is one of: confined (cannot read outside the repository), unconfined (can), default-deny (the",
+    "CLI refuses what it would have to ask a person about), unmeasured.",
+    "",
+    "antigravity rows also carry `settingsPath` (where agy reads permissions.allow on that side) and, on",
+    "linux/wsl ONLY, `snippet`: a permissions.allow rule measured to work there (research/RESULTS_agy_allow_rule.md), always with its `snippetWarning` (the loader refuses one without the other, or either off linux/wsl).",
+    "On Windows agy honoured only exact command lines, so no snippet is offered. coai never writes agy's settings.",
+    "",
+    "Embedded in coai-mcp (CoaiMcp.Runners) and read through a source-generated JSON context; the extension",
+    "reads the same rows through --consultants."
+  ],
+  "rows": [
+    {
+      "runtime": "codex",
+      "platform": "windows",
+      "standing": "unconfined",
+      "text": "-s read-only stops writes but not reads: through its shell this consultant can read any file this user can, outside the repository included.",
+      "measured": {
+        "date": "2026-10-01",
+        "cliVersion": "codex-cli 0.156.1",
+        "cells": "outside reads 6 of 6 (two models, 3 repeats each, through pwsh Get-Content)",
+        "document": "research/RESULTS_question_consultant_capabilities.md on branch feat/question-consultant"
+      }
+    },
+    {
+      "runtime": "codex",
+      "platform": "linux",
+      "standing": "unconfined",
+      "text": "-s read-only stops writes but not reads: on Linux its sandbox grants read access to the whole filesystem, so this consultant can read any file this user can.",
+      "source": "Not measured here. openai/codex#7657 documents that the Linux sandbox (Landlock) grants read on /, and nothing measured since says otherwise."
+    },
+    {
+      "runtime": "codex",
+      "platform": "wsl",
+      "standing": "unconfined",
+      "text": "-s read-only stops writes but not reads: its sandbox grants read on /, which in WSL includes the Windows drives under /mnt/c, so this consultant can read any file this user can on either side.",
+      "source": "Not measured here. openai/codex#7657 documents that the Linux sandbox (Landlock) grants read on /; in WSL the Windows drives are mounted under /mnt/c, inside /."
+    },
+    {
+      "runtime": "codex",
+      "platform": "macos",
+      "standing": "unmeasured",
+      "text": "Not measured on macOS: nothing is claimed about what this consultant can read here.",
+      "source": "No macOS machine has run a codex consultant for this product, and the Windows and Linux results describe other sandboxes."
+    },
+    {
+      "runtime": "claude",
+      "platform": "windows",
+      "capability": "restricted",
+      "standing": "confined",
+      "text": "Confined to the repository: --restricted with --tools Read,Glob,Grep offers only the three read tools, and reads outside the working directories are refused - measured on claude 2.1.258 with its default model.",
+      "measured": {
+        "date": "2026-10-02",
+        "cliVersion": "claude 2.1.258",
+        "cells": "9 of 9: read inside 3/3, outside read refused 3/3, a resumed session's outside read refused 3/3",
+        "document": "research/RESULTS_claude_consultant_confinement.md"
+      }
+    },
+    {
+      "runtime": "claude",
+      "platform": "linux",
+      "capability": "restricted",
+      "standing": "unmeasured",
+      "text": "Sent the same flags that confined claude on Windows (--restricted --tools Read,Glob,Grep); not measured on this platform, so confinement is not claimed.",
+      "source": "Not measured: the flags were measured on Windows 2.1.258 only (research/RESULTS_claude_consultant_confinement.md), and no Linux claude with --restricted was available then."
+    },
+    {
+      "runtime": "claude",
+      "platform": "wsl",
+      "capability": "restricted",
+      "standing": "unmeasured",
+      "text": "Sent the same flags that confined claude on Windows (--restricted --tools Read,Glob,Grep); not measured on this platform, so confinement is not claimed.",
+      "source": "Not measured: the WSL claude measured on 2026-10-02 was 2.1.197, which has no --restricted (research/RESULTS_claude_consultant_confinement.md)."
+    },
+    {
+      "runtime": "claude",
+      "platform": "macos",
+      "capability": "restricted",
+      "standing": "unmeasured",
+      "text": "Sent the same flags that confined claude on Windows (--restricted --tools Read,Glob,Grep); not measured on this platform, so confinement is not claimed.",
+      "source": "Not measured: no macOS machine has run a claude consultant for this product."
+    },
+    {
+      "runtime": "claude",
+      "platform": "windows",
+      "capability": "no-restricted",
+      "standing": "unconfined",
+      "text": "This claude has no --restricted, so it cannot be confined to the repository: reads outside it were refused in one measurement (WSL 2.1.197) but leaked in another (Windows 2.1.258 without --restricted). Update claude.",
+      "source": "An inference, not a measurement of this argv: on 2026-10-01 claude 2.1.258 - a version that HAS --restricted - run with --tools and without --restricted read outside the working directory 3 of 3 on Windows (research/RESULTS_question_consultant_capabilities.md on branch feat/question-consultant). No Windows claude that lacks the flag has been measured; nothing better than unconfined is claimed for one."
+    },
+    {
+      "runtime": "claude",
+      "platform": "linux",
+      "capability": "no-restricted",
+      "standing": "unconfined",
+      "text": "This claude has no --restricted, so it cannot be confined to the repository: reads outside it were refused in one measurement (WSL 2.1.197) but leaked in another (Windows 2.1.258 without --restricted). Update claude.",
+      "source": "Not measured on native Linux. Without --restricted the read boundary depended on the version and platform in the two measurements we have (refused in WSL 2.1.197 on 2026-10-02, leaked on Windows 2.1.258 on 2026-10-01), so nothing better than unconfined is claimed."
+    },
+    {
+      "runtime": "claude",
+      "platform": "wsl",
+      "capability": "no-restricted",
+      "standing": "unconfined",
+      "text": "This claude has no --restricted, so it cannot be confined to the repository: reads outside it were refused in one measurement (WSL 2.1.197) but leaked in another (Windows 2.1.258 without --restricted). Update claude.",
+      "measured": {
+        "date": "2026-10-02",
+        "cliVersion": "claude 2.1.197",
+        "cells": "outside read refused 9 of 9 with --tools alone; not claimed as confinement, because the same argv leaked on Windows 2.1.258",
+        "document": "research/RESULTS_claude_consultant_confinement.md"
+      }
+    },
+    {
+      "runtime": "claude",
+      "platform": "macos",
+      "capability": "no-restricted",
+      "standing": "unconfined",
+      "text": "This claude has no --restricted, so it cannot be confined to the repository: reads outside it were refused in one measurement (WSL 2.1.197) but leaked in another (Windows 2.1.258 without --restricted). Update claude.",
+      "source": "Not measured on macOS. Without --restricted the read boundary depended on the version and platform in the two measurements we have, so nothing better than unconfined is claimed."
+    },
+    {
+      "runtime": "antigravity",
+      "platform": "windows",
+      "standing": "default-deny",
+      "text": "Headless agy refuses anything it would have to ask a person about - a shell command above all; coai then continues the conversation once, and the consultant reads with view_file only. On Windows agy honours only exact command lines in permissions.allow, so there is no rule to paste.",
+      "measured": {
+        "date": "2026-10-02",
+        "cliVersion": "agy 1.2.15",
+        "cells": "denied command, follow-up answered 3 of 3; allow rule command(git grep) denied 2 of 2, the exact command line ran 1 of 1",
+        "document": "research/RESULTS_agy_consult_follow_up.md, research/RESULTS_agy_allow_rule.md"
+      },
+      "settingsPath": "%USERPROFILE%\\.gemini\\antigravity-cli\\settings.json"
+    },
+    {
+      "runtime": "antigravity",
+      "platform": "linux",
+      "standing": "default-deny",
+      "text": "Headless agy refuses anything it would have to ask a person about - a shell command above all; coai then continues the conversation once, and the consultant reads with view_file only. A prefix rule in permissions.allow works here if you paste it yourself, but it is not read-only: git grep -O<cmd> runs a program and git log --output= writes a file.",
+      "measured": {
+        "date": "2026-10-02",
+        "cliVersion": "agy 1.2.15",
+        "cells": "in WSL2 Ubuntu, the Linux agy: denied command, follow-up answered 3 of 3; allow rule command(git grep) ran 2 of 2",
+        "document": "research/RESULTS_agy_consult_follow_up.md, research/RESULTS_agy_allow_rule.md"
+      },
+      "settingsPath": "~/.gemini/antigravity-cli/settings.json",
+      "snippet": "{\"permissions\":{\"allow\":[\"command(git grep)\"]}}",
+      "snippetWarning": "This rule is not read-only: a prefix rule lets git grep -O<cmd> run a program and git log --output= write a file. Paste it only if you accept that; coai never writes this file."
+    },
+    {
+      "runtime": "antigravity",
+      "platform": "wsl",
+      "standing": "default-deny",
+      "text": "Headless agy refuses anything it would have to ask a person about - a shell command above all; coai then continues the conversation once, and the consultant reads with view_file only. A prefix rule in permissions.allow works here if you paste it yourself, but it is not read-only: git grep -O<cmd> runs a program and git log --output= writes a file.",
+      "measured": {
+        "date": "2026-10-02",
+        "cliVersion": "agy 1.2.15",
+        "cells": "denied command, follow-up answered 3 of 3; allow rule command(git grep) ran 2 of 2",
+        "document": "research/RESULTS_agy_consult_follow_up.md, research/RESULTS_agy_allow_rule.md"
+      },
+      "settingsPath": "~/.gemini/antigravity-cli/settings.json",
+      "snippet": "{\"permissions\":{\"allow\":[\"command(git grep)\"]}}",
+      "snippetWarning": "This rule is not read-only: a prefix rule lets git grep -O<cmd> run a program and git log --output= write a file. Paste it only if you accept that; coai never writes this file."
+    },
+    {
+      "runtime": "antigravity",
+      "platform": "macos",
+      "standing": "unmeasured",
+      "text": "Not measured on macOS: nothing is claimed about what headless agy refuses or allows here.",
+      "source": "No macOS machine has run an antigravity consultant for this product."
+    },
+    {
+      "runtime": "local",
+      "platform": "windows",
+      "standing": "confined",
+      "text": "No tools: it reads only what coai sends.",
+      "source": "By construction: the local engine is a completion request over HTTP carrying the prompt coai composed - the working tree's diff and the files named - and it has no tool to read anything else."
+    },
+    {
+      "runtime": "local",
+      "platform": "linux",
+      "standing": "confined",
+      "text": "No tools: it reads only what coai sends.",
+      "source": "By construction: the local engine is a completion request over HTTP carrying the prompt coai composed - the working tree's diff and the files named - and it has no tool to read anything else."
+    },
+    {
+      "runtime": "local",
+      "platform": "wsl",
+      "standing": "confined",
+      "text": "No tools: it reads only what coai sends.",
+      "source": "By construction: the local engine is a completion request over HTTP carrying the prompt coai composed - the working tree's diff and the files named - and it has no tool to read anything else."
+    },
+    {
+      "runtime": "local",
+      "platform": "macos",
+      "standing": "confined",
+      "text": "No tools: it reads only what coai sends.",
+      "source": "By construction: the local engine is a completion request over HTTP carrying the prompt coai composed - the working tree's diff and the files named - and it has no tool to read anything else."
+    },
+    {
+      "runtime": "api",
+      "platform": "windows",
+      "standing": "confined",
+      "text": "No tools: it reads only what coai sends.",
+      "source": "By construction: an api vendor is a completion request to an OpenAI-compatible endpoint carrying the prompt coai composed, and it has no tool to read anything else."
+    },
+    {
+      "runtime": "api",
+      "platform": "linux",
+      "standing": "confined",
+      "text": "No tools: it reads only what coai sends.",
+      "source": "By construction: an api vendor is a completion request to an OpenAI-compatible endpoint carrying the prompt coai composed, and it has no tool to read anything else."
+    },
+    {
+      "runtime": "api",
+      "platform": "wsl",
+      "standing": "confined",
+      "text": "No tools: it reads only what coai sends.",
+      "source": "By construction: an api vendor is a completion request to an OpenAI-compatible endpoint carrying the prompt coai composed, and it has no tool to read anything else."
+    },
+    {
+      "runtime": "api",
+      "platform": "macos",
+      "standing": "confined",
+      "text": "No tools: it reads only what coai sends.",
+      "source": "By construction: an api vendor is a completion request to an OpenAI-compatible endpoint carrying the prompt coai composed, and it has no tool to read anything else."
+    }
+  ]
+}

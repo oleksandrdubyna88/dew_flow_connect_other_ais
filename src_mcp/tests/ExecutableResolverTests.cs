@@ -80,4 +80,16 @@ public sealed class ExecutableResolverTests
             File.Exists(resolved).Should().BeTrue();
         }
     }
+
+    [Fact]
+    public void OnAPosixPath_TheFirstDirectoryHoldingTheCommandIsFound_OrNothing()
+    {
+        // Separated by `:` and `/` whatever the host, so a Windows runner tests the Linux answer.
+        var present = new HashSet<string>(StringComparer.Ordinal) { "/opt/agy/bin/agy", "/usr/bin/agy" };
+
+        ExecutableResolver.OnPosixPath("agy", "/usr/local/bin:/opt/agy/bin/:/usr/bin", present.Contains).Should().Be("/opt/agy/bin/agy");
+        ExecutableResolver.OnPosixPath("agy", "/usr/local/bin:/bin", present.Contains).Should().BeEmpty();
+        ExecutableResolver.OnPosixPath("agy", null, present.Contains).Should().BeEmpty();
+        ExecutableResolver.OnPosixPath("agy", "::", present.Contains).Should().BeEmpty("empty entries are skipped, never read as the current directory");
+    }
 }

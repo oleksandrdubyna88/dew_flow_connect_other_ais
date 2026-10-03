@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using CoaiMcp.Core.Consultation;
+using CoaiMcp.Core.Findings;
 
 namespace CoaiMcp.Server;
 
@@ -33,6 +34,18 @@ public static class ConsultationMemories
 }
 
 /// <summary>One answered turn, as the record keeps it.</summary>
+/// <param name="FollowedUp">
+/// The answer came from a SECOND launch that continued the first in the same conversation, because the
+/// first answered nothing past a denied permission (<c>ConsultantTurn</c>, PLAN_the_consultant_works_on_every_vendor.md
+/// E1.3). Trailing and defaulted, so every record already on disk reads as the one launch it was.
+/// </param>
+/// <param name="Confinement">
+/// What the turn was SENT — see <see cref="ConsultationRecord.Confinement"/>. Trailing and defaulted like
+/// <paramref name="FollowedUp"/>: a turn an older build wrote reads as <c>""</c>, because the source-generated
+/// deserializer passes a missing constructor parameter its DECLARED default — measured by
+/// <c>ConsultOnClaudeScenarioTests.ARecordWrittenBeforeTheConfinementWasRecorded_ReadsAsEmpty_NotNull</c>, which stayed
+/// green with an accessor-level <c>?? ""</c> removed here, and went null when the record's own property lost its.
+/// </param>
 public sealed record ConsultationTurn(
     string Utc,
     string Problem,
@@ -40,7 +53,9 @@ public sealed record ConsultationTurn(
     double Seconds,
     long TokensIn,
     long TokensOut,
-    double? CostUsd);
+    double? CostUsd,
+    bool FollowedUp = false,
+    string Confinement = "");
 
 /// <summary>
 /// One consultation, as it sits in <c>&lt;dataDir&gt;/consultations/&lt;id&gt;.json</c>.
@@ -152,6 +167,61 @@ public sealed record ConsultationRecord(
     /// keeps the conversation itself, and for a record written before this field existed.
     /// </summary>
     public int CarryBudget { get; init; }
+
+    /// <summary>
+    /// What the LAST failed turn was, as a word of <c>shared/consult-failure-kinds.json</c> — empty while
+    /// nothing has failed, and cleared by a turn that answers.
+    /// </summary>
+    /// <remarks>
+    /// <para>Three fields beside <see cref="Reason"/> rather than inside it, because a sentence is for a
+    /// person and these are for a reader: the panel draws the kind's label and the cure, an export counts
+    /// kinds, and none of them should parse English to do it (PLAN_the_consultant_works_on_every_vendor.md,
+    /// E2.4). An old record has none of them and reads empty — the null-normalising accessor, like every
+    /// field here.</para>
+    /// </remarks>
+    public string FailureKind { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>What a person can do about <see cref="FailureKind"/>; empty with it.</summary>
+    public string FailureCure { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>Where the failed turn's transcript was kept, or empty when nothing was.</summary>
+    public string Evidence { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
+    /// The confinement the LATEST launched turn was SENT — <c>restricted</c> or <c>no-restricted</c> for claude
+    /// (<c>ConsultantPreparation.Ready.Confinement</c>), empty for a vendor whose confinement does not depend on its
+    /// CLI, and empty again for a turn refused before it launched.
+    /// </summary>
+    /// <remarks>
+    /// Set on the <c>asking</c> record, so every ending derived from it — answered, failed, interrupted — carries it.
+    /// What a reader such as <c>--consultants</c> shows is then what RAN, not what a fresh probe says now: a claude
+    /// upgraded since the turn would otherwise be credited with a confinement that turn never had (epic 3's review).
+    /// </remarks>
+    public string Confinement { get => field ?? string.Empty; init; } = string.Empty;
+
+    /// <summary>
+    /// What this conversation has been BILLED so far, over every turn that billed — answered, failed and
+    /// interrupted alike.
+    /// </summary>
+    /// <remarks>
+    /// <para>A vendor that reports the conversation's RUNNING total (antigravity) is billed each turn's
+    /// share: what it said, less what was already billed. That used to be "less the answered turns' own
+    /// figures", and a turn that broke after the vendor billed it — interrupted, keeping the conversation
+    /// but adding no turn — was billed again inside the next answer's share (epic 1's review). The running
+    /// total lives here and every billing outcome advances it.</para>
+    /// <para><b>A record written before this field</b> reads as the sum of its answered turns, which is
+    /// exactly what the old rule had billed — zero for a consultation with none, and never less than what
+    /// was billed, so an open consultation is not charged its whole history again on its next turn.</para>
+    /// </remarks>
+    public ConsultationBilled Billed
+    {
+        get => field ?? BilledBy(Turns);
+        init;
+    }
+
+    /// <summary>What the old rule had billed: the answered turns' own figures.</summary>
+    private static ConsultationBilled BilledBy(IReadOnlyList<ConsultationTurn> turns) =>
+        new(turns.Sum(t => t.TokensIn), turns.Sum(t => t.TokensOut), turns.Sum(t => t.CostUsd ?? 0));
 
     [JsonIgnore]
     public TurnBudget Budget => new(MaxTurns, Turns.Count);

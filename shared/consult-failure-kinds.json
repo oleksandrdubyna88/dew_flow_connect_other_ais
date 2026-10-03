@@ -1,0 +1,33 @@
+{
+  "why": [
+    "Why a consultation turn produced no advice, as a word. The server classifies every failed turn into",
+    "exactly one of these (ConsultFailure / ConsultFailures.Classify) and writes the word to the record,",
+    "the database (consultations.failure_kind), the caller kind's health file and the answer to the",
+    "calling AI; the panel's Consultant tab draws the label. The two halves ship separately, so a word",
+    "added to one and not the other is a failure the other side cannot name.",
+    "",
+    "Neither half owns this file. The server's test reads its own catalogue by REFLECTION over the",
+    "ConsultFailure cases and ConsultFailureKinds and compares both with this list; the extension asserts",
+    "its labels against it from its own side (epic 5 of PLAN_the_consultant_works_on_every_vendor.md).",
+    "",
+    "`givesTheCallBack` is the plan round's rule: every failure that was not the caller's doing hands its",
+    "consult call back — bounded per window — except `cancelled` (the caller's own choice) and",
+    "`tree-changed` (the consultant ran and broke the read-only promise)."
+  ],
+  "kinds": [
+    { "word": "command-denied", "label": "Shell command denied", "givesTheCallBack": true },
+    { "word": "read-denied", "label": "Read outside the checkout denied", "givesTheCallBack": true },
+    { "word": "empty", "label": "Answered nothing", "givesTheCallBack": true },
+    { "word": "quota", "label": "Quota spent", "givesTheCallBack": true },
+    { "word": "rate-limited", "label": "Rate limited", "givesTheCallBack": true },
+    { "word": "vendor-refused", "label": "Refused by the vendor's CLI", "givesTheCallBack": true },
+    { "word": "cli-not-found", "label": "CLI not found", "givesTheCallBack": true },
+    { "word": "timeout", "label": "Timed out", "givesTheCallBack": true },
+    { "word": "deadline", "label": "Turn deadline passed", "givesTheCallBack": true },
+    { "word": "exit", "label": "CLI exited with an error", "givesTheCallBack": true },
+    { "word": "tree-changed", "label": "Working tree changed", "givesTheCallBack": false },
+    { "word": "conversation-dropped", "label": "Conversation dropped by the vendor", "givesTheCallBack": true },
+    { "word": "record-failed", "label": "Answer could not be recorded", "givesTheCallBack": true },
+    { "word": "cancelled", "label": "Cancelled by the caller", "givesTheCallBack": false }
+  ]
+}

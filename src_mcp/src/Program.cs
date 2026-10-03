@@ -182,6 +182,18 @@ internal static class Program
         Cadence,
 
         /// <summary>
+        /// Print, per caller kind, the consultant it resolves to and what is known of it — and write the same answer
+        /// to <c>consultations/health/consultants.json</c>. See <see cref="Server.ConsultantsReadMode"/>.
+        /// </summary>
+        Consultants,
+
+        /// <summary>
+        /// One real, paid turn of a caller kind's consultant in a scratch repository, and one JSON document saying what
+        /// came of it. See <see cref="Server.ConsultantCheckMode"/>.
+        /// </summary>
+        CheckConsultant,
+
+        /// <summary>
         /// Print ONE round's findings as JSON and leave — what an opened row of the log asks for.
         /// </summary>
         /// <remarks>
@@ -271,6 +283,8 @@ internal static class Program
                 "--providers" => Startup.Providers,
                 "--close-consult" => Startup.CloseConsult,
                 "--cadence" => Startup.Cadence,
+                "--consultants" => Startup.Consultants,
+                "--check-consultant" => Startup.CheckConsultant,
                 _ => Startup.Usage,
             };
 
@@ -389,6 +403,12 @@ internal static class Program
             case Startup.Cadence:
                 // A one-shot answers on stdout and exits; a writer thread here is one nobody drains.
                 return await Server.CadenceReadMode.RunAsync(args, Server.Noticing.None);
+
+            case Startup.Consultants:
+                return await Server.ConsultantsReadMode.RunAsync(args, Server.Noticing.None);
+
+            case Startup.CheckConsultant:
+                return await Server.ConsultantCheckMode.RunAsync(args, Server.Noticing.None);
 
             default:
                 return await ServeAsync();
@@ -1908,6 +1928,10 @@ internal static class Program
             // cancelled when serving ends however it ends — a client closing stdin sends no signal.
             using var serving = CancellationTokenSource.CreateLinkedTokenSource(stopping.Token);
             var sweeping = ConsultationSweeper.RunAsync(() => host.Current, ConsultationSweeper.Every, log, serving.Token);
+            // What `--consultants` would answer, written ONCE for the other side to read (epic 4, E4.1): fire-and-forget on
+            // the thread pool, its own catch-all inside, never awaited — startup does not wait on four CLIs' versions, and
+            // nothing it does touches stdout. Cancelled with serving, which kills a probe still running.
+            _ = ConsultantsReadMode.WriteInBackground(settings, launcher, log, noticing, serving.Token);
             try
             {
                 await server.RunAsync(stopping.Token);
@@ -2152,6 +2176,16 @@ internal static class Program
         its commits; `--file-at --id <findingId>` prints the pair's whole file as it was at the commit
         the reviewers read. Both answer every way the repository can have changed since as a reason
         on the document, exit 0; a bad `--id` is 65.
+        `--consultants` prints, per caller kind (claude, codex, gemini, other), the consultant it resolves
+        to: its CLI (found, version, auth source — never a sign-in check), what it can be kept from reading
+        on this platform, the last answer and failure, and the last check; the same answer is written to
+        consultations/health/consultants.json. No model is called. 74 when the data directory cannot be read.
+        `--check-consultant --caller <kind>` runs ONE real, paid turn of that consultant in a scratch git
+        repository — a marker inside it, a canary outside it — and prints one JSON document at the end:
+        answered, marker read, canary read / denied-by-cli / denied-by-cli-unattributed / not-attempted
+        (only denied-by-cli is observed confinement), or the classified failure. Exits 0 for every
+        outcome (already-checking included), 65 without a known --caller, 74 when the data directory or
+        the check's lock cannot be opened.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

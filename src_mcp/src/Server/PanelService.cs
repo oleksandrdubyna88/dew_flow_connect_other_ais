@@ -1239,29 +1239,8 @@ public sealed class PanelService
     private static readonly string[] ScratchPrefixes =
         ["coai-answers-*", "coai-repair-*", "coai-noworkspace-*"];
 
-    /// <summary>
-    /// Deletes a directory that git has been in.
-    /// </summary>
-    /// <remarks>
-    /// <c>Directory.Delete(recursive: true)</c> refuses a READ-ONLY file with
-    /// <c>UnauthorizedAccessException</c>, and git marks every object file read-only — so a scratch
-    /// directory that ever held a clone could not be swept, the exception was caught, and the
-    /// leftovers accumulated in silence. Measured 2026-09-05: 5,476 undeletable directories, almost
-    /// all of them a test's clone, the oldest five days old.
-    /// </remarks>
-    private static void DeleteEvenIfReadOnly(string dir)
-    {
-        foreach (var file in Directory.EnumerateFiles(dir, "*", SearchOption.AllDirectories))
-        {
-            var attributes = File.GetAttributes(file);
-            if ((attributes & FileAttributes.ReadOnly) != 0)
-            {
-                File.SetAttributes(file, attributes & ~FileAttributes.ReadOnly);
-            }
-        }
-
-        Directory.Delete(dir, recursive: true);
-    }
+    /// <summary>Deletes a directory that git has been in — <see cref="Runners.Files.GitScratch"/> says why that needs care.</summary>
+    private static void DeleteEvenIfReadOnly(string dir) => Runners.Files.GitScratch.DeleteEvenIfReadOnly(dir);
 
     /// <summary>A downloaded server kept under its version — not scratch, and not ours to remove.</summary>
     private static bool VersionCache(string dir) =>

@@ -286,18 +286,20 @@ public sealed class ConsultScenarioTests : ConsultScenarioBase
         var refused = await Consult(Service(), "why");
 
         Refusal(refused).Should().Contain("answered nothing").And.Contain("unparseable");
-        Directory.EnumerateFiles(Path.Combine(_data, "unparseable")).Should().NotBeEmpty();
+        Directory.EnumerateFiles(Path.Combine(_data, "unparseable"), "*", SearchOption.AllDirectories).Should().NotBeEmpty();
     }
 
     [Fact]
     public async Task AnInterruptedTurn_IsResumableAndIsNotCountedAgainstTheCap()
     {
         // The vendor accepted the turn — its thread id is on the stream — and the answer never
-        // arrived. Paying for it twice is what the interrupted state exists to prevent.
+        // arrived. Paying for it twice is what the interrupted state exists to prevent. A TRANSIENT
+        // failure (a throttle here): since epic 2's review only those are resumed — a CLI that exited on
+        // an error of its own ends the consultation instead.
         Environment.SetEnvironmentVariable("FAKECLI_OUTFILE_TEXT", null);
         Environment.SetEnvironmentVariable("FAKECLI_STDOUT", "{\"type\":\"thread.started\",\"thread_id\":\"0198-kept\"}\n");
-        Environment.SetEnvironmentVariable("FAKECLI_STDERR", "killed");
-        Environment.SetEnvironmentVariable("FAKECLI_EXIT", "137");
+        Environment.SetEnvironmentVariable("FAKECLI_STDERR", "codex: rate limit reached, try again in 2s");
+        Environment.SetEnvironmentVariable("FAKECLI_EXIT", "1");
         var service = Service();
 
         var interrupted = await Consult(service, "the count is wrong");

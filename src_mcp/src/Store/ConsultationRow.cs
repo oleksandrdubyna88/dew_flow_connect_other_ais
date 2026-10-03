@@ -41,4 +41,10 @@ public sealed record ConsultationRow(
     /// <summary>The plan a cadence or risk consultation was about; empty for a stuck one.</summary>
     string Plan = "",
     /// <summary>The group or risk item it covers; empty for a stuck one.</summary>
-    string Epics = "");
+    string Epics = "",
+    /// <summary>Why the last turn failed, a word of shared/consult-failure-kinds.json; empty when nothing failed.</summary>
+    string FailureKind = "",
+    /// <summary>What a person can do about it; empty with it.</summary>
+    string FailureCure = "",
+    /// <summary>Where the failed turn's transcript was kept; empty when nothing was.</summary>
+    string Evidence = "");

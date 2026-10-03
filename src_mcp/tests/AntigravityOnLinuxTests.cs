@@ -1,3 +1,4 @@
+using CoaiMcp.Runners.Platform;
 using Xunit;
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Runners.Processes;
@@ -95,5 +96,69 @@ public class AntigravityOnLinuxTests
         ];
 
         everything.Should().OnlyContain(s => s == null || !s.Contains("agy.exe"));
+    }
+
+    // ---------- where the installer put it ----------
+
+    private const string Home = "/home/somebody";
+
+    /// <summary>Where Google's install.sh puts agy — the path the WSL side of every 2026-10-02 measurement ran.</summary>
+    private const string InstalledOnLinux = Home + "/.local/bin/agy";
+
+    /// <summary>A PATH without the home bin — a server an editor started, or one started before the installer ran.</summary>
+    private const string PathWithout = "/usr/local/bin:/usr/bin:/bin";
+
+    /// <summary>A PATH with an agy of its own — a system package, or a person's chosen install.</summary>
+    private const string PathWith = "/usr/local/bin:/opt/agy/bin:/usr/bin";
+
+    private const string OnThePath = "/opt/agy/bin/agy";
+
+    [Theory]
+    [InlineData(HostKind.Linux)]
+    [InlineData(HostKind.Wsl)]
+    public void OnLinux_AnInstalledAgyIsFoundInTheHomeBin_WhenPathHasNone(HostKind host)
+    {
+        // A server started by an editor or a session that began before the installer ran has a PATH without
+        // ~/.local/bin, and bare `agy` then fails to start although the CLI is right there.
+        AntigravityStream.InstalledExecutableFor(host, "unused", Home, PathWithout, path => path == InstalledOnLinux)
+            .Should().Be(InstalledOnLinux);
+    }
+
+    [Theory]
+    [InlineData(HostKind.Linux)]
+    [InlineData(HostKind.Wsl)]
+    public void OnLinux_TheAgyOnThePath_WinsOverTheHomeBin(HostKind host)
+    {
+        // epic 3's code round: the PATH is the person's choice. ~/.local/bin/agy is a fallback for a PATH that has
+        // none, never an override of one that has its own — that would run a stale install behind a newer one.
+        AntigravityStream.InstalledExecutableFor(host, "unused", Home, PathWith, path => path is InstalledOnLinux or OnThePath)
+            .Should().Be("agy", "bare, for the PATH to resolve, as before the fallback existed");
+    }
+
+    [Fact]
+    public void OnLinux_WithNothingInstalledAnywhere_ItIsLeftToThePath()
+    {
+        AntigravityStream.InstalledExecutableFor(HostKind.Linux, "unused", Home, PathWithout, _ => false).Should().Be("agy");
+    }
+
+    [Fact]
+    public void OnWindows_TheInstallersOwnFolderStillWins_AndTheHomeBinIsNeverAsked()
+    {
+        var localAppData = @"C:\Users\somebody\AppData\Local";
+        var installed = Path.Combine(localAppData, "agy", "bin", "agy.exe");
+        var asked = new List<string>();
+
+        AntigravityStream.InstalledExecutableFor(HostKind.Windows, localAppData, Home, PathWithout, path => { asked.Add(path); return path == installed; })
+            .Should().Be(installed);
+        asked.Should().NotContain(path => path.Contains(".local/bin", StringComparison.Ordinal),
+            "the Linux installer's path means nothing on Windows");
+    }
+
+    [Fact]
+    public void OnAnotherPlatform_NothingIsGuessed()
+    {
+        // macOS has the same install.sh, but nothing here has run agy on a Mac — so no path is claimed for it.
+        AntigravityStream.InstalledExecutableFor(HostKind.MacOs, "unused", Home, PathWithout, _ => true).Should().Be("agy");
+        AntigravityStream.InstalledExecutableFor(HostKind.Other, "unused", Home, PathWithout, _ => true).Should().Be("agy");
     }
 }

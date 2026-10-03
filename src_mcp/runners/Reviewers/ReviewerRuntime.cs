@@ -111,6 +111,25 @@ public sealed record ReviewerSettings(string Provider)
     /// operating system's to bound, and <c>PLAN_team_server_unprivileged.md</c> owns that.</para>
     /// </remarks>
     public bool Confined { get; init; }
+
+    /// <summary>
+    /// For a <c>claude</c> vendor only: what the INSTALLED CLI can be asked to do — read off its own
+    /// <c>--help</c> by <see cref="ClaudeCapability.ProbeAsync"/> before the launch is built.
+    /// </summary>
+    /// <remarks>
+    /// <para>Launch data, like <see cref="Dialect"/> and <see cref="Price"/>: it changes what is SENT, not
+    /// what the vendor is. It sits here rather than on the consultant's launch so the claude REVIEWER can
+    /// read the same fact when it moves to an allowlist
+    /// (todo/PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md) — one field both builders read, not
+    /// one each.</para>
+    /// <para>Defaults to <see cref="ClaudeCapability.Unprobed"/>, which <c>ClaudeConsultant.Build</c> REFUSES with an
+    /// <see cref="ArgumentException"/>. Neither real answer is a safe default: "declared" fails every launch on a claude
+    /// that lacks the flag (2.1.197: <c>error: unknown option '--restricted'</c>, measured 2026-10-02), and "not
+    /// declared" would launch a claude that HAS it unconfined. So a new call site that forgets
+    /// <c>PrepareAsync</c> fails loudly in its first test instead of running unconfined in the field (epic 3's
+    /// review). The claude REVIEWER does not read this field yet.</para>
+    /// </remarks>
+    public ClaudeCapability ClaudeCli { get; init; } = ClaudeCapability.Unprobed;
 }
 
 /// <summary>One reviewer launch, fully described: the process, and where its answer lands.</summary>

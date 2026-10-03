@@ -394,7 +394,8 @@ public sealed class ConsultCallCounterTests : IDisposable
 
         for (var i = 1; i <= 3; i++)
         {
-            counter.TryTake("caller-a", 3, now).Should().Be(new CounterOutcome(true, i, string.Empty));
+            var taken = counter.TryTake("caller-a", 3, now);
+            (taken.Allowed, taken.Used, taken.Note).Should().Be((true, i, string.Empty));
         }
 
         counter.TryTake("caller-a", 3, now).Allowed.Should().BeFalse();

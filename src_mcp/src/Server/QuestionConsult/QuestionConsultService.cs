@@ -138,7 +138,9 @@ public sealed class QuestionConsultService(
 
         var peeked = _counter.Peek(QuotaKey(caller), options.QuestionsPerSession, nowUtc);
 
-        return peeked.Allowed ? string.Empty : $"this caller session has asked the consultants {peeked.Used} questions, the cap ({QuestionConsultKeys.QuestionsPerSession} = {options.QuestionsPerSession})";
+        // A counter file that exists but cannot be read holds the caller at its cap with a sentence naming the file;
+        // that sentence is the reason, not a count of questions nobody can read.
+        return peeked.Allowed ? string.Empty : peeked.Note.Length > 0 ? peeked.Note : $"this caller session has asked the consultants {peeked.Used} questions, the cap ({QuestionConsultKeys.QuestionsPerSession} = {options.QuestionsPerSession})";
     }
 
     public int Sweep(Func<int, bool> isAlive) => _store.Sweep(isAlive, DateTime.UtcNow, settings.QuestionConsult.RowBudget);

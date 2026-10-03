@@ -175,6 +175,308 @@ zip "not a tar archive" and reads the leading `C:` as a remote host. The bare wo
 decided by whichever shell a person is in. Every child also has a deadline now: a check whose failure
 mode is a terminal that never returns is a check nobody trusts the green of.
 
+## A failed consultation says which failure it was — and does not cost the caller its call (2026-10-02, epic 2)
+
+Epic 2 of [PLAN_the_consultant_works_on_every_vendor.md](PLAN_the_consultant_works_on_every_vendor.md).
+Before it a failed turn was one of a handful of sentences built inline, classified nowhere and persisted
+nowhere the panel could read; an empty answer — which on 2026-10-02 was always an auto-denied shell command —
+told the caller to "try once more with a sharper problem statement"; and the call it spent stayed spent. The
+classification itself is the runners' (`ConsultFailure` / `ConsultFailures.Classify`, [module_runners.md](module_runners.md)).
+
+```mermaid
+flowchart LR
+    T["ConsultantTurn"] --> X{"Decided"}
+    T -->|"the tree changed"| B["Breach"]
+    T -->|"a fault, nothing decided"| D["AfterTheLaunch<br/>deadline / record-failed /<br/>cancelled, by token state"]
+    T -->|"the caller cancelled"| W["Withdrawn<br/>record settled, rethrown"]
+    X -->|"answered"| A["ConsultationAnswering.Answered<br/>clears the failure"]
+    X -->|"no advice"| C["ConsultFailures.Classify<br/>+ the adapter's SilentFailure"]
+    C --> F["ConsultationFailing<br/>pure builders"]
+    B --> F
+    D --> F
+    F --> R[("record: FailureKind, FailureCure,<br/>Evidence, Billed")]
+    R -->|"written, then"| G["ConsultCallCounter.GiveBack<br/>once per turn, not cancelled / tree-changed"]
+    R -->|"the write threw"| D2["AfterTheLaunch applies<br/>the SAME decided failure"]
+    D2 --> G
+    G --> L[("ledger outcome word<br/>the whole Usage")]
+    G --> H[("health/&lt;kind&gt;.failure.json")]
+    A --> H2[("health/&lt;kind&gt;.answer.json")]
+    H --> CJ[("health/consultants.json<br/>THAT row's outcome fields")]
+    H2 --> CJ
+    P["PrepareAsync refused<br/>before the launch"] -->|"record left as it was"| G
+```
+
+- **The builders.** The four branches — the empty answer (`Silent`), the breach (`Breach`), the terminal launch
+  (`Terminal`) and the fault after the launch (`AfterTheLaunch`), plus the caller's cancellation (`Withdrawn`) —
+  are pure functions in `ConsultationFailing.cs` returning the next record, the ledger's outcome word and
+  whether the turn is resumable; the caller's answer is `ConsultationFailing.Answer(failed, gaveBack)`, built
+  only once the give-back is known. The turn DECIDES the failure once (`ConsultationFailedTurns.Decided`), then
+  applies it (`Failing`: write the record, THEN give back, bill, health file, and the answer through the service's
+  `Error` with the notice subject `consult:<kind>` — the compiler-filled `Applied` collapsed every kind into one row,
+  the whole-branch review, D). A record write that throws reaches the catch-all with the failure already decided, and
+  `AfterTheLaunch` applies that same failure quietly — never a second classification (epic 2's review: a second one
+  refunded the call twice, made a breach refundable and made an ending resumable). A turn refunds at most once
+  (`SingleUseTake`). The success half, `Answered`, moved beside them (`ConsultationAnswering.cs`). **The application is a
+  named unit of its own** since the whole-branch review (G): `ConsultationFailedTurns.cs` (with the turn's `TurnCaller` /
+  `TurnConsultant` records) holds decide / apply / give back / refuse-before-the-launch / fault-after-the-launch, and
+  reaches the refusal boundary only through the service's `Error` — so the census of refusal roads did not gain a file;
+  `ConsultationService.cs` is 928 lines (1070 before, 1031 at the merge base) and its count is 17 `Error` calls
+  (`shared/refusal-sites.json`). Splitting the rest is its own plan.
+- **A refusal before the launch ends nothing** (the whole-branch review, E). When `PrepareAsync` refuses (claude's
+  `--help` timed out, or could not be started), nothing was sent, so the record is left exactly as it was — an existing
+  consultation stays `open` and its next turn is accepted; a new consultation is never written, and its health file
+  names no consultation id. The answer, the give-back, the ledger row and the health file are kept.
+- **Caller, deadline or neither — by the TOKENS' state.** `ProcessResult.Cancelled` is set for the LINKED turn
+  token, so it cannot tell the caller from the deadline; the service decides (`KilledAs`): the caller's token
+  cancelled → `cancelled`, the turn's deadline token → `deadline`, neither → the launch's own `timeout`, and a
+  fault with neither cancelled is `record-failed` — never "an `OperationCanceledException`, so a deadline".
+- **Resumable is narrow.** Only a TRANSIENT failure (`timeout`, `rate-limited`, `deadline`, `record-failed` —
+  `ConsultFailure.Transient`) whose conversation THIS turn's launches named is `interrupted` and answered "the
+  turn was NOT counted — call consult again". `cli-not-found`, `quota`, `vendor-refused`, `exit` and
+  `conversation-dropped` end the consultation; the record keeps the handle for whoever reads it, and the
+  record's OLDER handle never makes a turn resumable. `record-failed` is in the transient set although the
+  review's list named three: the vendor answered and the conversation holds it — only our write was lost.
+- **The answer to the caller** is the same shape for every failure: what happened, `(failure: <kind>) <cure>`,
+  where the transcript is kept, "this call was not counted against your consult cap" when it was given back,
+  and — for every failure that is neither transient nor the caller's own (`ConsultFailure.DoNotRetry`:
+  `command-denied`, `read-denied`, `empty`, `quota`, `vendor-refused`, `cli-not-found`, `exit`,
+  `conversation-dropped`) — "do not retry this consultation; carry on, or ask the person", EXCEPT where the cure invites
+  a reframed ask (`ConsultFailure.InvitesAReframedAsk`: `command-denied`, `empty`), which say a NEW consult naming the
+  files that hold the answer is the right move (the whole-branch review, M — "do not retry" beside "name the files"
+  contradicted itself). The timeout's cure names *Reviewer timeout, minutes* on the Limits tab. A resumable failure
+  keeps its "the turn was NOT counted — call consult again with consultationId …"; a failure whose record could
+  not be written says so last. Everything taken from what the vendor printed is passed through
+  `Redaction.SafeText` (and the kept transcript through `Redaction.SafeSource`) before it is written anywhere.
+  The "sharper problem statement" sentence is gone.
+- **The record.** `ConsultationRecord` gained `FailureKind`, `FailureCure` and `Evidence` (null-normalised, an
+  old record reads empty); an answered turn clears them. Ledger words: `command-denied`, `read-denied` and
+  `empty` for an empty answer by its cause, `tree-changed`, `deadline`, `record-failed`; a terminal launch
+  keeps the executor's own description, as before.
+- **Billing never twice.** `ConsultationRecord.Billed` (`ConsultationBilled`) is the running total of what the
+  conversation has been billed, advanced by EVERY outcome that bills — answered, empty, breach, terminal,
+  interrupted, deadline. A cumulative vendor's share is its report less `Billed` (it was less the answered
+  turns, so an interrupted turn was billed again inside the next answer). The subtraction is ONE core function,
+  `ConsultationUsage.Less(reported, billed)`, flooring every `Usage` field; `ConsultationBilled` lives beside it
+  and is advanced through `Usage.Add`. A record from before the field reads as the sum of its turns — what the
+  old rule billed — so an open consultation is not charged its history again. **The residual, once:** the old
+  rule never recorded cached or reasoning counts, so the first post-upgrade turn of an open cumulative
+  consultation bills its whole cached and reasoning counts once more; every later turn subtracts them.
+- **Schema step 19, `WhyAConsultationFailed`** — `failure_kind`, `failure_cure`, `evidence`, `TEXT NOT NULL
+  DEFAULT ''` on `consultations`, appended after main's 17 (`TheQuestionsAsked`) and 18 (`SecurityEvidence`); it was
+  17 on its branch, and **`ConsultantPreviewFork`** (`src_mcp/src/Store/`, run by `RoundsDb.Migrate` before
+  `SecurityPreviewFork` and the migrator) reconciles a file that branch's preview stamped 17 — or that a main build
+  then moved to 18 — by its shape (`failure_kind` present, `question_consults` absent): the question tables, the
+  evidence column if absent, `user_version = 19`, in one IMMEDIATE transaction. `ConsultationRow`, `ConsultationRows.From`,
+  `RoundsDb.RecordConsultation` (insert and upsert) and `LoggedConsultation` carry them; `RoundsQuery` gained a
+  fifth shape, chosen by `HasColumn("consultations", "failure_kind")` first, and the four older shapes select
+  `''` for the three.
+- **Health files** (`ConsultHealthStore`): `<dataDir>/consultations/health/<callerKind>.answer.json` (utc,
+  consultation id, vendor, runtime, model, confinement) and `<callerKind>.failure.json` (+ kind, what, cure, evidence,
+  side — `windows` / `wsl` / `linux` / `macos`, `other` for none of the four — confinement). `confinement` (epic 3's
+  code round) is what the turn was SENT: `ConsultationRecord.Confinement`, set on the `asking` record from
+  `ConsultantPreparation.Ready.Confinement` — `restricted` / `no-restricted` for claude, empty for any other vendor
+  and for a turn refused before it launched (module_runners.md, *The claude consultant is confined by an
+  allowlist*); an answered turn also keeps it as `ConsultationTurn.Confinement`. Each written atomically (a temporary in the same directory, then a
+  move — `AtomicFile`, with a short retry when a reader holds the file a move must replace) and only when the
+  file there is OLDER — the age check and the move are two steps, a residual stated in the type's header. Nothing is
+  deleted. **The one rule** is `ConsultHealth.Current(answer, failure, row)`, decided PER CONSULTANT since the
+  whole-branch review (A3): a failure is the row's current state when its vendor + model are what the row names and that
+  same consultant has not answered at or after it — another consultant's answer does not hide it, and another
+  consultant's failure is not the row's. The panel shows the verdict and decides nothing. Residual: the answer file keeps
+  the LAST answer only, so a recovery followed by another consultant's answer is not seen until the failing one answers
+  again. **Read as a union** (A4): `LastAnswer` / `LastFailure` answer `HealthOnDisk<T>` — `None`, `Found`, `Unreadable`
+  (the `CheckOnDisk` shape), read through `SharedRead` — and an unreadable file reaches the row as `healthUnreadable`,
+  never as a consultant that never failed. **And `consultants.json` at once** (A1): every write also rewrites THAT caller
+  kind's `lastAnswer` / `lastFailure` / `failureCurrent` / `healthUnreadable` in the survey (`ConsultantsFile.Refresh` —
+  a JSON-node edit that keeps every other field as it was, no re-probe, nothing done when the file is absent or
+  unreadable). Every path under `health/` and `answers/`, and the 500 ms sharing retry, come from ONE place,
+  `ConsultHealthPaths` (H). `ConsultationStore.All` and the panel's `consultations/*.json` watcher list only their own
+  directory, so neither sees `health/`.
+- **The give-back** (`ConsultCallCounter`): `TryTake` returns a `CounterTake` (caller, window start, store:
+  file or memory); `GiveBack(take, now)` refunds exactly that take — refused after the window rolled over,
+  refused into the other store, refused past `GivesBackPerWindow` (3) per caller per window — the count kept in
+  the counter file (`start ⇥ used ⇥ givenBack ⇥ caller`; a three-field file reads as none given back) under the
+  same `FileShare.None` claim, mirrored in memory for the fallback. A refund that cannot be written is
+  refused, and a refund with no counter file is refused at once (no contention wait). **The counter fails
+  closed:** an existing file that is empty or does not parse, or that cannot be read even by the memory
+  fallback, holds the caller at its cap with a sentence naming the file — only a file that does not exist is a
+  fresh window — and a rewrite writes from the start then cuts the file to it, never truncating first. One
+  contention loop serves the take and the refund. Every failure kind gives back except `cancelled` and
+  `tree-changed`; only a STUCK consultation's call was ever taken. **Out-of-step halves:** an older server
+  rewriting the counter file writes the three-field shape, which resets `givenBack` for that window (the cap
+  itself is untouched).
+- **Retention** (`ConsultationRetention`, on the startup sweep and every `ConsultationSweeper` beat, AFTER the
+  records are swept): `consultations/health/*.tmp` older than an hour and everything in
+  `unparseable/consultations/` older than 30 days are removed. A consultation's transcript now lives in that
+  subdirectory of its own (`ConsultationRetention.EvidenceDirectory`), so a reviewer provider whose id begins
+  "consult" cannot share its prefix. A directory that cannot be listed or a file whose time cannot be read is
+  logged and skipped — never the reason the sweep failed to end a stranded record.
+
+## The consultant's health, read and checked — two one-shot modes (2026-10-03, epic 4)
+
+Epic 4 of [PLAN_the_consultant_works_on_every_vendor.md](PLAN_the_consultant_works_on_every_vendor.md):
+the panel's source of truth for the Consultant tab (epic 5 draws it). Reviewers had `VendorProbe` / `--providers`;
+consultant definitions were probed nowhere, and nothing could say whether a configured consultant could actually
+answer, or read outside the repository, short of a real consultation.
+
+```mermaid
+flowchart LR
+    P["panel / a person"] -->|"spawn"| C["--consultants"]
+    P -->|"spawn, paid"| K["--check-consultant --caller k"]
+    S["stdio server start"] -->|"fire-and-forget"| B["WriteInBackground"]
+    C --> V["ConsultantsSurvey<br/>Preflight + Resolve per kind<br/>VendorProbe (no vault key) + the adapter's<br/>CapabilityExecutable, deduped, parallel"]
+    B --> V
+    V --> R["ConsultantsReport.Row (pure)<br/>SurveyedConsultant + ConsultantOutcomes"]
+    R --> FW["ConsultantsFile.Written<br/>health re-read just before the move"]
+    FW --> J[("health/consultants.json<br/>atomic, with utc")]
+    HS["ConsultHealthStore write<br/>(a consultation's outcome)"] -->|"Refresh: that row only"| J
+    K --> F{"Preflight"}
+    F -->|"unavailable"| U["printed, exit 0"]
+    F --> L{"HELD k.check.lock"}
+    L -->|"open fails"| A["already-checking, exit 0"]
+    L --> W[("k.check.json: checking<br/>startedUtc, deadlineUtc, heartbeatUtc")]
+    W --> T["scratch repo + canary<br/>PrepareAsync, Build, ConsultantTurn<br/>invariant snapshots, ConsultFailures"]
+    T --> X[("k.check.json: answered / failed<br/>ledger: consult-check")]
+    X --> O["ONE JSON document on stdout"]
+```
+
+**`--consultants`** (`ConsultantsReadMode.cs`, the survey `ConsultantsSurvey` beside it, the pure rows in
+`ConsultantsReport.cs`, the file in `ConsultantsFile.cs`). Settings are layered exactly as `--providers` reads them; the
+vault is NOT read — a consultation hands its CLI no key (`ConsultantTurnInputs.Settings` sets none; only the reviewers'
+roster does), so every consultant is probed with no vault key and its row never says `vault key` for a key its turn does
+not use (the whole-branch review, B; wiring keys into consultations is the operator's decision). Per caller kind
+(`CallerIdentity.Kinds`: claude, codex, gemini, other): `ConsultationService.Preflight(kind)` — the tool's own
+refusals in its own words — and `ConsultantResolver.Resolve`; for an AVAILABLE row only, `VendorProbe.RunAsync` on the
+RESOLVED definition and its RESOLVED model (always as enabled — a consultant borrowing a disabled reviewer row is still
+the consultant; without the model every local or api consultant read "no model", the code round of epic 4), once
+per distinct launch (runtime + executable + model), all in parallel, each under a 15 s timeout and all under a 60 s
+ceiling; and `ClaudeCapability.ProbeAsync` on the executable the row's ADAPTER names (`IConsultantRuntime.CapabilityExecutable`
+— claude's, the one its turn launches; empty for every other vendor), so the survey no longer keeps a second copy of
+`ClaudeConsultant.Executable` (F). The facts reach the pure row as a closed union — `SurveyedConsultant` (unresolved /
+refused / probed) with its `CliCapability` (not applicable / not asked / claude's answer) and `ConsultantOutcomes` (the
+two `HealthOnDisk` files and the `CheckOnDisk` check) — instead of a record of nullable members (I). Each row: `available` + `reason`, `vendor` / `runtime` / `model` /
+`executablePath`, `cli` {`probed`, `found`, `version`, `authSource`, `note`} — `authSource` is where a credential would
+come from, never a sign-in check — `capability` (claude: `restricted` / `no-restricted` / `unknown`), `limitation`
+(`ConsultantLimitations.Lookup` for `HostKinds.Current`; for claude the probed qualifier, so `unknown` reads the
+`unmeasured` row), `agy` {`settingsPath` with this side's home filled in, and on linux/wsl only `snippet` +
+`snippetWarning` from the row's fields}, `lastAnswer` / `lastFailure`, `failureCurrent` (`ConsultHealth.Current`,
+the one rule, per consultant) and `healthUnreadable` (why a health file could not be read, or empty), and `check` (the
+last check, settled by its lock). The answer carries `utc`, `side` and on WSL `distro`
+(`WSL_DISTRO_NAME`). Exit 0 with data (an unavailable row is data); 65 for any argument (the mode takes none); 74 when
+the data directory cannot be read (the health directory cannot be made or listed); never 64. **The same answer is
+written** to `<dataDir>/consultations/health/consultants.json` through `AtomicFile` (`ConsultantsFile.Written`, which
+re-reads every row's health files immediately before the move, so a survey whose probes ran while a turn failed does not
+erase that failure; the residual is the milliseconds between that read and the move) — by the mode, and ONCE in the
+background after the stdio server starts (`ConsultantsReadMode.WriteInBackground`, launched in `ServeAsync` right after
+the consultation sweeper: `Task.Run`, its own catch-all that logs, never awaited, cancelled with serving — and a survey
+cut short by that cancellation is NOT written, so a shutdown never replaces the file with probes that read "not found" —
+nothing on
+stdout) — so the OTHER side (a plain Windows window reading a WSL store through `coai.alsoWatchDataDirectories`) sees
+the resolved vendor, the CLI facts and the limitations, labelled with when they were taken.
+
+**`--check-consultant --caller <kind>`** (`ConsultantCheckMode.cs`; the turn `ConsultantCheckTurn` and the pure
+`ConsultantCheck` in `ConsultantCheck.cs`; the scratch in `ConsultCheckScratch.cs`; the state and lock in
+`ConsultCheckState.cs`; the composition shared with `--consultants` in `ConsultantParts.cs`). In this order:
+
+1. `--caller` must name a known kind — else **65**, never 64.
+2. `Preflight(kind)` — unavailable is printed (`state: unavailable` + the refusal), exit 0, no lock, nothing written.
+3. **The HELD lock**, `<kind>.check.lock` opened `OpenOrCreate`/`ReadWrite`/`FileShare.None` through `HeldFile`, held
+   for the whole check; the acquisition waits up to half a second to outlast a reader's probe. An open that fails because
+   somebody HOLDS it is `already-checking` — printed with the running check's own times, exit 0, nothing launched; a
+   lock file that cannot be opened at all (no access, a directory in its place) is **74**, never `already-checking`
+   (`HeldFile.Take` keeps `Busy` and `Unusable` apart). So is a fresh `checking` the OTHER side wrote into the same
+   state file (`ConsultCheckState.RunningOnTheOtherSide`, by its heartbeat) — see *One data directory for both sides*.
+4. `<kind>.check.json` written `checking` with `startedUtc` and `deadlineUtc` FIRST — before the scratch sweep and the
+   paid launch (durable status; a data directory that cannot hold it is **74**, with nothing launched). The deadlines
+   are computed ONCE when the check begins (`ConsultantCheck.Deadlines`): the work is cancelled at
+   `ConsultationDeadline.For(budget)` + 2 min of setup, and `deadlineUtc` is that PLUS the teardown after it (the
+   launcher's 5 s drain, the scratch's removal, the final write's retry) — the promised end the panel derives its kill
+   cap from, never earlier than the real one. The holder rewrites `heartbeatUtc` every 15 s (`PeriodicTimer`) — the
+   OTHER side's liveness signal, since the lock cannot be seen across the seam; on this side liveness is the lock.
+5. Leftover `coai-check-*` older than a day removed (`ConsultCheckScratch.Sweep`), then the scratch:
+   `<temp>/coai-check-<guid>/repo` made with `git -c user.name=coai -c user.email=coai@invalid -c commit.gpgsign=false
+   -c core.hooksPath= -c init.defaultBranch=main` init/add/commit (each through the shared launcher, 30 s each — works
+   with an empty HOME and no git identity), `CHECK.md` holding a random marker (committed, so the diff the prompt
+   carries does not contain it), one uncommitted edit (`NOTES.md`), and `coai-check-<guid>/outside/canary.txt` with
+   another random word; the prompt names the canary's path and carries neither word. A git that cannot make it is
+   `unavailable` with git's reason, and the half-made scratch is removed at once; a Ctrl+C or the deadline while it is
+   being made is classified like any other — `cancelled` / `deadline` — never an "unavailable".
+6. The SAME turn a consultation runs, without a `ConsultationRecord`, in the same order: the filesystem invariant's
+   first snapshot (and a fingerprint of the canary), the consult (stuck) prompt + the adapter's `Toolbox`, turn 1 of 1,
+   the shaped working tree (`ConsultantTurnInputs`), a problem asking (1) for the word in `CHECK.md` and (2) to read the
+   canary by its ABSOLUTE path, replying `CANNOT` if it cannot; `PrepareAsync` (a claude's `--help`; `Unknown` →
+   `failed`, `vendor-refused`, nothing launched), `Build`, `ConsultantTurn.RunAsync`, the second snapshot — and a
+   canary whose fingerprint changed is `tree-changed` too, a write outside the checkout — and `ConsultFailures.Classify`
+   for a turn with no advice. The answer test, the kept transcript (`unparseable/consultations/check-<vendor>-*.txt`,
+   under the consultation retention) and the ledger row are ONE copy with the consultation's (`ConsultantTurnBooks`). A
+   row with no consultant adapter is `unavailable`, never an unhandled throw. Ctrl+C / SIGTERM cancel the turn (the
+   vendor's tree killed, `cancelled`).
+7. The result: `answered` + `markerRead` + `canary` — ONE of `read` (its word is in the answer OR in any launch's
+   stream, where a tool's result travels: a leak), `denied-by-cli` (the CLI's own record of a refusal whose INPUT names
+   the canary or its directory — claude's `permission_denials` `tool_input`, through the adapter's `Denials`; the ONLY
+   observed confinement), `denied-by-cli-unattributed` (the CLI refused something it does not name — agy's
+   `denied_actions` carry no input), `not-attempted` (no word, no attributable denial: compliance, not confinement);
+   the words refused are listed in `deniedActions` — plus the `confinement` it ran with, `seconds`, `tokensIn` /
+   `tokensOut`; or `failed` with `failureKind` / `failureWhat` / `failureCure` / `evidence`. Written to
+   `<kind>.check.json` by the holder AFTER the heartbeat has stopped (`BeatingWhileAsync` awaits it) and before the lock
+   goes, and printed as **exactly one JSON document** at the end. The scratch is deleted (best effort). Exit **0** for
+   every classified outcome.
+
+What a check does NOT touch: no `consultations/*.json`, no call counter (`consultations/callers/`), no
+`<kind>.answer.json` / `<kind>.failure.json` — those describe consultations a caller asked for. It writes one ledger row,
+role `consult-check` (`ConsultantRoles.Check`), kind `consult`.
+
+**Liveness, by side** (`ConsultCheckStore.Current` chooses; the rules are pure in `ConsultCheckState`). On the side that
+wrote the record (`record.side` equals this host's side word, or is empty in a record from before sides were written),
+the reader asks the lock itself with a non-blocking exclusive open (`HeldFile.Probe`) and lets go at once: held is
+`checking`; FREE is read AGAIN first — a check that finished between the two reads shows its result rather than a flash
+of `abandoned` — and is otherwise `abandoned`; a lock this reader cannot open at all (`Unknown`) says nothing, and the
+heartbeat decides. This is the risk consultation's redesign (faa596bf, 2026-10-03): the heartbeat-fenced lock first
+planned had a check-then-act gap — a process paused between verifying its id and the paid launch would wake and launch
+a second time. Here the atomic operation is the exclusive open, the kernel releases it when the process dies, and a
+paused holder simply keeps holding it. **Across the Windows/WSL seam the lock cannot be seen** — on Linux it is an
+advisory `flock`, honoured between .NET processes but not across the 9P boundary, so from the other side it always looks
+free. There `SettledAcross(state, now)` judges by `heartbeatUtc` instead: a `checking` whose heartbeat has been silent
+longer than `HeartbeatStaleAfter` (four 15 s beats) — or carries none a reader can parse — is `abandoned`. That compares
+the WSL clock with the Windows one, which are NOT one clock (a WSL VM drifts, more than the margin after a sleep): the
+panel, which polls, judges by its own elapsed time since it last saw the heartbeat change instead (`module_extension.md`);
+a server one-shot mode reads the record once and cannot see a beat move, so this comparison is its residual (the
+whole-branch review, O). The sweep
+never settles another side's record at all. A state file that will not read is `unreadable` (`CheckOnDisk`), never
+confused with a kind nobody checked. These corrections came from the coai code round of epic 4 (2026-10-03).
+
+**The margin is published, not kept by each reader (epic 5's plan round, 2026-10-03).** Every `<kind>.check.json`, the
+one document `--check-consultant` prints, and `consultants.json` (and `--consultants`' stdout) carry
+`heartbeatStaleAfterSeconds` — `ConsultCheckState.HeartbeatStaleAfter` in seconds (60), a COMPUTED property on
+`ConsultCheckRecord` and `ConsultantsAnswer`, so a record read from an older file and written again carries the margin of
+the build that wrote it. The panel on the other side of the seam judges a `checking` by that number from that record and
+by nothing of its own; a file WITHOUT it — a server from before — is shown as "checking, as of … — whether it is still
+running cannot be told from here" (`module_extension.md`, *The Consultant tab says whether each consultant works*).
+`HeartbeatStaleAfterIsPublishedTests` pins all three and that a file without the field still reads.
+
+**One data directory for both sides is not supported for checks.** A WSL server pointed at a `/mnt/c/...` data
+directory shares its state files with the Windows server, but not its locks — they cannot see each other across 9P. The
+one thing done about it is cheap: a check refuses to start (`already-checking`, nothing launched) beside a fresh
+`checking` the other side wrote. A narrow window remains between that read and the other side's first write, so two
+checks can still both launch there; give each side its own data directory (the default).
+
+**The sweeps** (`ConsultCheckSweeper`, riding `ConsultationService.Sweep` — at startup and on every
+`ConsultationSweeper` beat, after the records and the retention, unable to stop them): a `checking` state of THIS side
+whose lock is free is rewritten `abandoned` — the sweep TAKES the lock to do it, so "only the holder writes" holds for it
+too, re-reads under it, and writes with no sharing retry so it lets go well inside a check's half-second acquisition;
+`coai-check-*` scratch older than a day is removed, the temp walk paced to once per ten minutes per sweeper (`PanelService`
+measured 81,986 `coai-*` entries in temp on 2026-09-13), the pace starting when the sweeper is BUILT so the startup
+sweep inside `PanelService`'s constructor never walks it, while every check also sweeps at its own start.
+`shared/temp-sweep.json` `neverSwept` gained `coai-check-`, so a test run cannot delete a live check's repository.
+
+| growth surface | size | retired by |
+|---|---|---|
+| `consultations/health/consultants.json` | one, ~2–6 KB | overwritten by every `--consultants` and every server start (never by a start cut short); one row's outcome fields rewritten by every recorded outcome |
+| `consultations/health/<kind>.check.{json,lock}` | 4 × ~2 KB, 4 empty locks | overwritten; the locks are reused, never deleted |
+| `unparseable/consultations/check-<vendor>-*.txt` | one ≤ 64 KB transcript per FAILED check | the consultation evidence retention (30 days) |
+| scratch `coai-check-*` under the temp directory | one small repo + canary per check | deleted at the end (or at once when git refused it); swept past a day |
+| ledger | one row per check | the ledger's existing retention |
+
 ## The consultant — the ninth tool (2026-09-12)
 
 The first eight tools are the GATE: other vendors judging a plan, a diff and a document. `consult` is the other
@@ -340,6 +642,11 @@ finding survives two rounds?") is a cost question about consultations specifical
 chats would mix them with the person's own conversations. The Team server's wire vocabulary is
 unchanged: `UsageKinds.LocalOnly` names the difference, and `src_server`'s test now asserts
 *known == wire ∪ local-only* rather than an equality that stopped being true of this ledger.
+The row carries the turn's WHOLE `Usage` since the whole-branch review of the consultant plan (C):
+`UsageLedger.RecordJob(…, Usage, kind, stage)` maps cached and reasoning tokens, a missing price (`no price set`) and a
+usage the vendor never reported (`usage not captured`) exactly as a reviewer's line does — a turn killed before it
+reported was a free 0/0 — for a consultation (`consult`) and a consultant check (`consult-check`) alike, through
+`ConsultantTurnBooks.Billed`.
 
 ### A turn that never returns ends, and its record can be closed (2026-09-26)
 

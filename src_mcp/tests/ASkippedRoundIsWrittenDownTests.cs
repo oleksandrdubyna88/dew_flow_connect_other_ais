@@ -44,7 +44,8 @@ public sealed class ASkippedRoundIsWrittenDownTests : IDisposable
     public void TheNoteColumn_IsTheSixteenthStep()
     {
         // By POSITION, not as the last step: the cadence took step 15 on 2026-09-25, so the note is 16 — and
-        // the question consultant appended 17 on 2026-10-01 (QuestionConsultProjectionTests pins that one last).
+        // the question consultant appended 17 on 2026-10-01, the security evidence 18, and why a consultation
+        // failed 19 (each pinned by position in its own tests). The append-only rule is what keeps the note 16.
         Schema.Steps.Length.Should().BeGreaterThanOrEqualTo(16);
         Schema.Steps[15].Should().Contain("ALTER TABLE rounds ADD COLUMN note");
     }

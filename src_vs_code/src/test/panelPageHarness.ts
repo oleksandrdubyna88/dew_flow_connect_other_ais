@@ -80,6 +80,8 @@ export class Control {
   className = '';
   /** A DOM's `hidden` — the busy bar is drawn hidden and shown by the page (`busyMark.ts`). */
   hidden = false;
+  /** What the control says — a button's label as the page drew it, and as its script relabels it. A DOM's `textContent`. */
+  textContent = '';
   /** The node the control sits in: what a page calls `insertBefore` on. Set when the control joins a running page. */
   parentNode: PageParent = NO_PARENT;
   /**
@@ -245,10 +247,20 @@ function withChoice(control: Control, html: string, at: number): Control {
  * binds a click to. A button is not a `data-setting` control, so it is not in `controlsOf`.
  */
 function commandsOf(html: string): readonly Control[] {
-  return [...html.matchAll(/<button\b([^>]*)>/g)]
+  return [...html.matchAll(/<button\b([^>]*)>([^<]*)/g)]
     .filter(([, attributes]) => attributes!.includes('data-command="'))
-    .map(([, attributes]) => controlFrom('button', attributes!));
+    .map(([, attributes, label]) => labelled(controlFrom('button', attributes!), label!));
 }
+
+/** A button with the text it was drawn with — what a page reads back before it relabels one (a copy's *Copied*). */
+function labelled(button: Control, label: string): Control {
+  button.textContent = label.trim();
+
+  return button;
+}
+
+/** `[data-command="name"]`: one command's buttons, matched whole, as a DOM's attribute selector matches. */
+const ONE_COMMAND = /^\[data-command="([A-Za-z]+)"\]$/;
 
 /** A panel state with nothing configured, one section open, and whatever a test changes laid over it. */
 export function panelState(openSection: string, overrides: Partial<PanelState> = {}, focus?: PanelFocus): PanelState {
@@ -527,7 +539,7 @@ export function runPanel(state: PanelState, options: RunOptions = {}): Page {
  * What the fake document answers for a selector: the setting controls, the command buttons, and nothing
  * for any other selector — stricter than a DOM, never more permissive (`generated-code-tests.md` §3).
  */
-function selected(
+export function selected(
   selector: string, controls: readonly Control[], commands: readonly Control[], prompts: readonly Control[],
 ): readonly Control[] {
   switch (selector) {
@@ -541,8 +553,15 @@ function selected(
       // Every dropdown the page drew, a setting's and a prompt picker's alike — as `querySelectorAll('select')` does.
       return [...controls.filter((one) => one.tagName === 'SELECT'), ...prompts];
     default:
-      return [];
+      return oneCommand(selector, commands);
   }
+}
+
+/** The buttons of the one command an attribute selector names — and nothing for any other selector. */
+function oneCommand(selector: string, commands: readonly Control[]): readonly Control[] {
+  const named = ONE_COMMAND.exec(selector)?.[1];
+
+  return named === undefined ? [] : commands.filter((one) => one.dataset['command'] === named);
 }
 
 /** The button for one command and id, clicked as a person clicks it — what the page then posted is in `posted`. */

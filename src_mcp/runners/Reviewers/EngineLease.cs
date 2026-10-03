@@ -232,33 +232,10 @@ public sealed class EngineLease : IDisposable
         }
     }
 
-    /// <summary>Open a file exclusively, or nothing when somebody already holds it.</summary>
-    private static FileStream? TryOpen(string path)
-    {
-        try
-        {
-            return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
-        }
-    }
+    /// <summary>Open a file exclusively, or nothing when somebody already holds it — the shared primitive.</summary>
+    private static FileStream? TryOpen(string path) => Files.HeldFile.TryHold(path);
 
-    private static bool Busy(string path)
-    {
-        if (!File.Exists(path))
-        {
-            return false;
-        }
-        using var probe = TryOpen(path);
-
-        return probe is null;
-    }
+    private static bool Busy(string path) => Files.HeldFile.IsHeld(path);
 
     private static void Forget(string path)
     {

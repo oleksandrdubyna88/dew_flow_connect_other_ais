@@ -313,15 +313,22 @@ public sealed class ConfinementPlannerTests
     }
 
     /// <summary>The regression guard (acceptance 5): today's argv, byte for byte, with the defaulted confinement.</summary>
+    /// <remarks>
+    /// The claude row moved when PLAN_the_consultant_works_on_every_vendor.md merged second, as that plan's §7 said it
+    /// must: the stuck consultant is confined by the planner's own disk allowlist (<see cref="ConfinementPlanner.ClaudeDiskTools"/>)
+    /// plus <c>--restricted</c> where the installed CLI declares it — never the deny list. Its launch is PREPARED first
+    /// (<c>IConsultantRuntime.PrepareAsync</c> reads the CLI's help), which is what <c>ClaudeCli</c> stands for here;
+    /// the CLI without the flag is <c>ClaudeConsultantArgvTests</c>' business.
+    /// </remarks>
     [Fact]
     public void TheShippedConsultants_StillBuildTodaysArgv_ByteForByte()
     {
-        var launch = new ConsultantLaunch(Repo, "help me", string.Empty, Answers, new ReviewerSettings("v") { Model = "m" });
+        var launch = new ConsultantLaunch(Repo, "help me", string.Empty, Answers, new ReviewerSettings("v") { Model = "m", ClaudeCli = ClaudeCapability.WithRestricted });
         launch.Confinement.Should().Be(LaunchConfinement.AsShipped, "the default is the stuck consultant as it ships");
 
         new ClaudeConsultant(new ClaudeRuntime()).Build(launch).Request.Arguments.Should().Equal(
             "-p", "--output-format", "json", "--permission-mode", "plan",
-            "--disallowedTools", "Edit", "Write", "NotebookEdit", "Bash", "WebFetch", "WebSearch", "Task", "Agent",
+            "--restricted", "--tools", string.Join(',', ConfinementPlanner.ClaudeDiskTools),
             NoMcpServers.ClaudeFlag, "--add-dir", Repo, "--model", "m");
 
         var codex = new CodexConsultant(new CodexRuntime()).Build(launch).Request.Arguments.ToList();

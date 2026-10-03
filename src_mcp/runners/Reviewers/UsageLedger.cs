@@ -204,10 +204,10 @@ public sealed class UsageLedger(string dataDir)
             usage.CostUsd,
             outcome,
             TokensCached: usage.TokensCached,
-            CostNote: usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty,
+            CostNote: CostNoteOf(usage),
             TokensReasoning: usage.TokensReasoning,
             // Unknown, in words, when the launch ended before its vendor reported anything — never a bare zero.
-            UsageNote: usage.NotCaptured ? CostText.UsageNotCaptured : string.Empty);
+            UsageNote: UsageNoteOf(usage));
 
     /// <summary>Records one job a Team server ran on somebody's behalf.</summary>
     /// <remarks>
@@ -245,6 +245,40 @@ public sealed class UsageLedger(string dataDir)
             outcome,
             email,
             kind));
+
+    /// <summary>
+    /// Records one job from its whole <see cref="Usage"/> — the cached and reasoning tokens, a missing price and a usage
+    /// the vendor never reported mapped exactly as a reviewer's line maps them (<see cref="Entry"/>).
+    /// </summary>
+    /// <remarks>
+    /// The whole-branch review of PLAN_the_consultant_works_on_every_vendor.md (2026-10-03), finding C: a consultation
+    /// and a consultant check wrote their rows through the bare-counts overload above, so a turn killed before its vendor
+    /// reported anything was filed as a free 0/0, and the cache and reasoning counts never reached the ledger.
+    /// </remarks>
+    public void RecordJob(string email, string provider, string model, string role, string outcome, TimeSpan elapsed, Usage usage, string kind, string stage) =>
+        Append(new UsageEntry(
+            DateTime.UtcNow.ToString("O"),
+            provider,
+            model,
+            role,
+            stage,
+            Math.Round(elapsed.TotalSeconds, 1),
+            usage.TokensIn,
+            usage.TokensOut,
+            usage.CostUsd,
+            outcome,
+            email,
+            kind,
+            TokensCached: usage.TokensCached,
+            CostNote: CostNoteOf(usage),
+            TokensReasoning: usage.TokensReasoning,
+            UsageNote: UsageNoteOf(usage)));
+
+    /// <summary><c>no price set</c> for a metered run whose row carried no rate — never a zero, which would say it was free.</summary>
+    private static string CostNoteOf(Usage usage) => usage.CostUsd is null && usage.NoPriceSet ? CostText.NoPriceSet : string.Empty;
+
+    /// <summary><c>usage not captured</c> when the launch ended before its vendor reported anything — never a bare zero.</summary>
+    private static string UsageNoteOf(Usage usage) => usage.NotCaptured ? CostText.UsageNotCaptured : string.Empty;
 
     /// <summary>Never throws: a spending record that can fail a review is worse than one with a gap.</summary>
     /// <remarks>

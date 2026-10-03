@@ -8,6 +8,11 @@ namespace CoaiMcp.Core.Consultation;
 /// <param name="TreeUnchangedSinceTurnOne">A remembering vendor's later turn: say the tree has not moved instead of re-sending it.</param>
 /// <param name="CarriedTranscript">A forgetful vendor's earlier turns, already bounded. Empty otherwise.</param>
 /// <param name="PreviousAnswerLost">The previous turn was interrupted after the vendor accepted it.</param>
+/// <param name="Toolbox">
+/// What THIS vendor's launch actually lets it read with, said under "## What you have" — empty to say
+/// nothing. The adapter's fact (<c>IConsultantRuntime.Toolbox</c>), stated by us rather than written into the
+/// prompt file, for the reason this class gives about the launch: the file is a person's to edit.
+/// </param>
 public sealed record ConsultantPromptInput(
     string Instruction,
     TurnBudget Budget,
@@ -19,7 +24,8 @@ public sealed record ConsultantPromptInput(
     string WorkingTree = "",
     bool TreeUnchangedSinceTurnOne = false,
     string CarriedTranscript = "",
-    bool PreviousAnswerLost = false);
+    bool PreviousAnswerLost = false,
+    string Toolbox = "");
 
 /// <summary>
 /// Composes the prompt a consultant reads, in an order that is a rule rather than a habit.
@@ -194,6 +200,11 @@ public static class ConsultantPrompt
         text.AppendLine("## What you have");
         text.AppendLine("A READ-ONLY checkout in your working directory, and the uncommitted change below. "
                         + "Do not edit anything. The AI asking is blocked on your answer.");
+        if (input.Toolbox.Length > 0)
+        {
+            text.AppendLine(input.Toolbox.Trim());
+        }
+
         text.AppendLine();
         text.AppendLine("## The budget");
         text.AppendLine(input.Budget.Line());

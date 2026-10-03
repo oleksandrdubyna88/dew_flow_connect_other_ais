@@ -64,6 +64,22 @@ public static class ExecutableResolver
         return command;
     }
 
+    /// <summary>
+    /// Where a bare command is found on a POSIX <c>PATH</c> (<c>:</c>-separated) — the first directory holding it — or
+    /// empty when none does.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="Resolve(string, bool, string?, Func{string, bool})"/> returns a POSIX name unchanged because the OS
+    /// resolves it; this is for the caller that must know WHETHER it will, before choosing a fallback (agy on Linux:
+    /// the PATH's agy wins, <c>~/.local/bin/agy</c> only when there is none). Pure apart from the injected probe,
+    /// and separated by <c>:</c> and <c>/</c> whatever the host, like the Windows branch above.
+    /// </remarks>
+    public static string OnPosixPath(string command, string? pathVariable, Func<string, bool> fileExists) =>
+        (pathVariable ?? string.Empty)
+            .Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(directory => $"{directory.TrimEnd('/')}/{command}")
+            .FirstOrDefault(fileExists) ?? string.Empty;
+
     /// <summary>The same, against this machine.</summary>
     public static string Resolve(string command) =>
         Resolve(command, OperatingSystem.IsWindows(), Environment.GetEnvironmentVariable("PATH"), File.Exists);

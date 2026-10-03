@@ -30,6 +30,8 @@ import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
 import { securityLaneBody } from './securityLaneView';
+import type { ConsultantHealthState } from './consultantHealthState';
+import { CONSULTANT_HEALTH_CSS, COPY_COMMANDS } from './consultantHealthView';
 import { CALLER_KINDS, CUSTOM_ENDPOINT, consultantSkewNote, vaultKeyNote } from './consultSettings';
 import {
   COMMAND_MODEL_RUNTIMES,
@@ -162,6 +164,12 @@ export interface PanelState {
   readonly qconsultPlaces?: RootPlaces | undefined;
   /** The questions the consultants are answering, and those finished a short while ago — Active questions' first stage. */
   readonly qconsults?: readonly QuestionConsult[] | undefined;
+  /**
+   * What the server says about each caller's consultant, here and on every other side named — the Consultant tab's
+   * health blocks (PLAN_the_consultant_works_on_every_vendor.md, epic 5). Built by `consultantHealthPanel.ts`; optional
+   * for the reason {@link teamServers} is.
+   */
+  readonly consultantHealth?: ConsultantHealthState | undefined;
   readonly vendors: readonly Vendor[];
   readonly codexModels: readonly ModelChoice[];
   /** What `agy models` lists on this machine, or none when it could not be asked. */
@@ -480,6 +488,8 @@ function consultantSection(state: PanelState): string {
       // when no reviewer is configured: the anchored ids answer regardless, which is what an
       // anchor is for.
       palette: vendorPalette(state.vendors.map((v) => v.id)),
+      // Each row's health block: the server's facts, this side's Check, other sides read-only (epic 5).
+      health: state.consultantHealth,
     })
     // WHEN the consultant is asked without anybody being stuck, under WHO is asked
     // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
@@ -762,6 +772,8 @@ ${selectSearchScript(['', '__other__', CUSTOM_ENDPOINT])}
   // ONE loop over the regions the host declares, written into the script as a literal — it was four
   // copied blocks, one per region, and a fifth region would have been a fifth copy (2026-09-29).
   const liveRegionIds = ${jsonForScript(LIVE_REGION_IDS)};
+  // The copy controls a copied message may relabel — a phrase, and the consultant's allow rule (epic 5).
+  const copyCommands = ${jsonForScript(COPY_COMMANDS)};
   // Replaced, never mutated in place: each change makes a new record of what the regions show.
   let lastLive = {};
   for (const id of liveRegionIds) {
@@ -778,7 +790,13 @@ ${selectSearchScript(['', '__other__', CUSTOM_ENDPOINT])}
       // and misses on a quote, and the sanitising that was there to prevent that was itself a broken
       // regex that swallowed the rest of this handler. Four reviewers, one root cause.
       const wanted = String(message.id ?? '');
-      const all = document.querySelectorAll('[data-command="copyPhrase"]');
+      // WHICH copy: a message naming no command is the phrase one, as every host before the consultant's snippet
+      // sent it. Only a copy command on the list may be named — a selector is built from it, and from nothing else.
+      const command = message.command === undefined ? 'copyPhrase' : String(message.command);
+      if (!copyCommands.includes(command)) {
+        return;
+      }
+      const all = document.querySelectorAll('[data-command="' + command + '"]');
       for (const pressed of Array.prototype.slice.call(all)) {
         if (pressed.dataset.id !== wanted || pressed.dataset.said === '1') {
           continue;
@@ -3139,6 +3157,7 @@ const CSS = `
      colour arrives inline, per caller; the width and the fallback are here, so a row without a
      colour is still a deliberate box rather than a bare one. */
   .consultant-row { border: 1px solid var(--vscode-widget-border); border-left: 3px solid var(--vscode-widget-border); border-radius: 3px; padding: 6px 8px 2px; margin: 0 0 8px; }
+${CONSULTANT_HEALTH_CSS}
   .role-group { border: 1px solid var(--vscode-widget-border); border-radius: 4px; padding: 6px 8px 2px; margin: 0 0 10px; }
   /* One assistant's two model boxes, side by side: the sidebar is narrow, so a three-column table
      would squeeze the names it exists to show. Each box keeps its own label above it. */
@@ -3235,6 +3254,10 @@ export const PANEL_COMMANDS = [
   // one. Carries the CALLER as its id — four rows share the control.
   'customConsultant',
   'editSecurityPrompt',
+  // The Consultant tab's health block (PLAN_the_consultant_works_on_every_vendor.md, epic 5): one real, paid check of a
+  // caller kind's consultant, confirmed first; and agy's allow rule onto the clipboard. Both carry the CALLER KIND as id.
+  'checkConsultant',
+  'copyConsultantSnippet',
   // And by a split-order model picker (issue #117): "another model…" asks for a name. Its id is
   // `<caller kind>:<slot>` — eight pickers share the control.
   'customCommandModel',

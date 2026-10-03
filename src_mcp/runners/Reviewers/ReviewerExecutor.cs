@@ -1,6 +1,7 @@
 using CoaiMcp.Core.Rounds;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Processes;
+using CoaiMcp.Runners.Files;
 
 namespace CoaiMcp.Runners.Reviewers;
 
@@ -419,83 +420,19 @@ public sealed class ReviewerExecutor(
     /// and the same cure; it is not shared code because that one also retries a `Replace` against a
     /// reader holding the destination, and here the destination is a name nothing else knows.</para>
     /// </remarks>
-    private string? KeepIn(string? directory, ReviewerInvocation invocation, string? raw)
-    {
-        if (directory is null || raw is null)
-        {
-            return null;
-        }
-
-        var pending = string.Empty;
-        try
-        {
-            Directory.CreateDirectory(directory);
-            var file = Path.Combine(
+    private string? KeepIn(string? directory, ReviewerInvocation invocation, string? raw) =>
+        directory is null || raw is null
+            ? null
+            // Bounded, atomic and never fatal — `EvidenceFile`, which the consultation's evidence uses too.
+            // The note goes to the caller because this class has no logger of its own and should not grow one.
+            : Kept(EvidenceFile.Keep(
                 directory,
-                $"{FileName.Safe(invocation.Provider)}-{FileName.Safe(invocation.Role)}"
-                    + $"-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.txt");
-            pending = file + ".writing";
-            File.WriteAllText(pending, Bounded(raw));
-            File.Move(pending, file, overwrite: true);
-            return file;
-        }
-        // The whole expected filesystem set, not the two that were obvious. Keeping evidence may
-        // never be what fails a round, and `Directory.CreateDirectory` on a path that is really a
-        // file, an invalid character reaching `Path.Combine`, or a policy refusing the write are
-        // each a way to turn a review the vendor answered perfectly into a failed one. Raised by
-        // four reviewers on the code round; `IOException` already covered the disk-full and
-        // path-too-long cases, and these are the rest.
-        catch (Exception e) when (e is IOException
-                                      or UnauthorizedAccessException
-                                      or System.Security.SecurityException
-                                      or ArgumentException
-                                      or NotSupportedException)
-        {
-            // Never silently: a round that could not keep its evidence must say so, or the empty
-            // directory later reads as "nothing was ever silent here". The note goes to the caller
-            // because this class has no logger of its own and should not grow one.
-            note?.Invoke($"the answer could not be kept in {directory}: {e.Message}");
+                $"{FileName.Safe(invocation.Provider)}-{FileName.Safe(invocation.Role)}-{DateTime.UtcNow:yyyyMMdd-HHmmss-fff}.txt",
+                raw,
+                e => note?.Invoke($"the answer could not be kept in {directory}: {e.Message}")));
 
-            // The sibling, if the write got that far. A `.writing` file left in an evidence
-            // directory is neither an answer nor an absence, and repeated failures accumulate them.
-            Discard(pending);
-            return null;
-        }
-    }
-
-    /// <summary>
-    /// The cap on ONE kept answer.
-    /// </summary>
-    /// <remarks>
-    /// The answers this directory collects are 40 to 90 output tokens — a few hundred bytes — so the
-    /// cap never fires on the case it was written for. It exists for the case it was NOT: a vendor
-    /// that returns a megabyte of prose around an empty findings array is a different animal, and
-    /// evidence is for reading rather than for archiving whatever arrives.
-    /// </remarks>
-    private const int EvidenceCap = 64 * 1024;
-
-    private static string Bounded(string raw) =>
-        raw.Length <= EvidenceCap
-            ? raw
-            : raw[..EvidenceCap] + $"{Environment.NewLine}{Environment.NewLine}"
-                + $"[truncated at {EvidenceCap} characters]";
-
-    private static void Discard(string pending)
-    {
-        if (pending.Length == 0)
-        {
-            return;
-        }
-
-        try
-        {
-            File.Delete(pending);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            // Nothing further to do: this is the cleanup path of a failure that is already reported.
-        }
-    }
+    /// <summary>The kept path, or null where this class has always said "nothing was kept".</summary>
+    private static string? Kept(string path) => path.Length > 0 ? path : null;
 
     /// <summary>
     /// Why there is no second launch to make, or null when there is one.
@@ -591,10 +528,9 @@ public sealed class ReviewerExecutor(
         // The LESSER of the two, not whichever was computed last. The scheduler may already have
         // shortened this repair on a retry, and overwriting that with the executor's own remainder
         // would hand it back time the ladder had taken away. Raised on the code round.
-        var repairBudget = left < repair!.Request.Timeout ? left : repair.Request.Timeout;
-        var second = await RunOnceAsync(repair with { Request = repair.Request with { Timeout = repairBudget } }, ct);
+        var second = await RunOnceAsync(RetryLadder.Lesser(left, repair!), ct);
 
-        return AfterTheRepair(repair, (usage, answer, evidence), second);
+        return AfterTheRepair(repair!, (usage, answer, evidence), second);
     }
 
     /// <summary>

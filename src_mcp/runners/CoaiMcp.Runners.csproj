@@ -20,6 +20,11 @@
   <ItemGroup>
     <!-- CA1502's threshold. The rule is switched on only for the security lane's files, in .editorconfig. -->
     <AdditionalFiles Include="..\CodeMetricsConfig.txt" />
+    <!-- What each consultant runtime can be kept from reading, per platform, with the measurement or the
+         source behind every row (PLAN_the_consultant_works_on_every_vendor.md, E3.3). Embedded for the reason
+         Core's shared files are: a published Native-AOT binary runs where no shared/ directory exists, and
+         ConsultantLimitations refuses to load without it rather than showing a row with no evidence. -->
+    <EmbeddedResource Include="..\..\shared\consultant-limitations.json" LogicalName="CoaiMcp.Runners.consultant-limitations.json" />
   </ItemGroup>
 
   <ItemGroup>

@@ -6,6 +6,7 @@ using CoaiMcp.Core.Context;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Context;
+using CoaiMcp.Runners.Files;
 using CoaiMcp.Runners.Processes;
 using CoaiMcp.Runners.Reviewers;
 
@@ -47,6 +48,15 @@ public sealed class ConsultationService(
         // A consultation must never refuse somebody who is stuck over a view of itself.
         record => Project(settings, log, record));
     private readonly ConsultCallCounter _counter = new(settings.DataDir);
+    private readonly ConsultHealthStore _health = new(settings.DataDir, problem => log.Warning("{Problem}", problem));
+    private readonly ConsultCheckSweeper _checks = new(settings.DataDir, Path.GetTempPath(), DateTime.UtcNow);
+
+    /// <summary>
+    /// A failed turn, applied (<see cref="ConsultationFailedTurns"/>) — built on first use, since a primary
+    /// constructor's field initialisers cannot reach the store and counter above; its answer leaves through
+    /// <see cref="Error"/>, so the refusal roads stay counted where they were.
+    /// </summary>
+    private ConsultationFailedTurns FailedTurns => field ??= new(_store, _counter, _health, ledger, settings.DataDir, log, Error);
 
     /// <summary>
     /// The answer schema, on disk once when this service is built rather than on every launch.
@@ -236,8 +246,31 @@ public sealed class ConsultationService(
             ? $"{(byPerson ? "closed by hand" : "closed by the caller")} as {outcome}: {note.Trim()}"
             : $"{(byPerson ? "closed by hand" : "closed by the caller")} as {outcome}";
 
-    public int Sweep(Func<int, bool> isAlive) =>
-        _store.Sweep(isAlive, DateTime.UtcNow, settings.ConsultIdle, ConsultationStore.Retention);
+    /// <remarks>
+    /// The retention of what a consultation leaves beside its record — orphaned health temporaries, month-old
+    /// transcripts — rides the same beat (<see cref="ConsultationRetention"/>); its count is not the
+    /// records', so it is logged here rather than returned.
+    /// </remarks>
+    public int Sweep(Func<int, bool> isAlive)
+    {
+        // The records FIRST: ending a stranded `asking` record is the sweep's job, and a retention pass
+        // that cannot list a directory must never be the reason it did not happen (epic 2's review).
+        var swept = _store.Sweep(isAlive, DateTime.UtcNow, settings.ConsultIdle, ConsultationStore.Retention);
+        var expired = ConsultationRetention.Sweep(settings.DataDir, DateTime.UtcNow, problem => log.Warning("{Problem}", problem));
+        if (expired > 0)
+        {
+            log.Information("consultations: removed {Count} file(s) past their retention", expired);
+        }
+
+        // The consultant check's share (E4.4), last and unable to stop the rest: abandoned states, stale scratch.
+        var (abandoned, scratch) = _checks.Sweep(DateTime.UtcNow, problem => log.Warning("{Problem}", problem));
+        if (abandoned + scratch > 0)
+        {
+            log.Information("consultant checks: {Abandoned} abandoned state(s) settled, {Scratch} leftover scratch director(y/ies) removed", abandoned, scratch);
+        }
+
+        return swept;
+    }
 
     /// <summary>
     /// Re-projects every record the store still holds, and answers how many.
@@ -419,10 +452,10 @@ public sealed class ConsultationService(
             return Error($"another consultation is running in {repo} right now (waited {RepositoryLock.DefaultWait.TotalSeconds:0} s) — try again in a moment");
         }
 
-        return await UnderTheLockAsync(new Caller(kind, caller, string.Empty), repo, problem, files, consultationId, new Aimed(aim, repoId), ct);
+        return await UnderTheLockAsync(new TurnCaller(kind, caller, string.Empty), repo, problem, files, consultationId, new Aimed(aim, repoId), ct);
     }
 
-    private async Task<string> UnderTheLockAsync(Caller caller, string repo, string problem, IReadOnlyList<string> files, string consultationId, Aimed aimed, CancellationToken ct)
+    private async Task<string> UnderTheLockAsync(TurnCaller caller, string repo, string problem, IReadOnlyList<string> files, string consultationId, Aimed aimed, CancellationToken ct)
     {
         var (record, refusal) = consultationId.Length == 0
             ? (null, Duplicate(aimed))
@@ -499,7 +532,7 @@ public sealed class ConsultationService(
     /// and nothing about how it was built: the same checks for a definition, a legacy reference and a
     /// resumed record.
     /// </remarks>
-    private async Task<string> OnTheVendorAsync(ProviderSettings row, Caller caller, ConsultationRecord? record, string repo, string problem, IReadOnlyList<string> files, Aimed aimed, CancellationToken ct)
+    private async Task<string> OnTheVendorAsync(ProviderSettings row, TurnCaller caller, ConsultationRecord? record, string repo, string problem, IReadOnlyList<string> files, Aimed aimed, CancellationToken ct)
     {
         // The same two refusals the preflight gives, from the same method — so the cadence gate stands
         // down on exactly the sentences this tool refuses with.
@@ -527,14 +560,15 @@ public sealed class ConsultationService(
         if (!counted.Allowed)
         {
             return Error($"this caller session has made {counted.Used} consult calls, the cap (COAI_CONSULT_CALLS_PER_SESSION = {settings.ConsultCallsPerSession}) — "
-                         + $"the window is {ConsultCallCounter.Window.TotalHours:0} hours from the first call; if you are still stuck, this is the moment to ask the person");
+                         + $"the window is {ConsultCallCounter.Window.TotalHours:0} hours from the first call; if you are still stuck, this is the moment to ask the person"
+                         + (counted.Note.Length > 0 ? $" ({counted.Note})" : string.Empty));
         }
 
         // The model is already MATERIALISED on the row — the definition's own, the reviewer row's where
         // a legacy reference names none, the record's frozen one on a follow-up — so nothing is decided
         // about it here. The line that used to fall back to the CURRENT row's model on a resumed
         // consultation is the leak the record's "frozen" claim never allowed.
-        var consultant = new Consultant(runtime, row, row.Model, caller with { CounterNote = counted.Note });
+        var consultant = new TurnConsultant(runtime, row, row.Model, caller with { CounterNote = counted.Note, Take = counted.Take });
 
         return await RunTurnAsync(consultant, record ?? await NewRecordAsync(consultant, repo, aimed, DateTime.UtcNow, ct), repo, problem, files, ct);
     }
@@ -561,7 +595,7 @@ public sealed class ConsultationService(
             : (record, null);
     }
 
-    private async Task<ConsultationRecord> NewRecordAsync(Consultant consultant, string repo, Aimed aimed, DateTime now, CancellationToken ct)
+    private async Task<ConsultationRecord> NewRecordAsync(TurnConsultant consultant, string repo, Aimed aimed, DateTime now, CancellationToken ct)
     {
         var (sha, branch) = await context.HeadAsync(repo, ct);
 
@@ -595,18 +629,32 @@ public sealed class ConsultationService(
 
     // ---------- the turn ----------
 
-    private async Task<string> RunTurnAsync(Consultant consultant, ConsultationRecord record, string repo, string problem, IReadOnlyList<string> files, CancellationToken ct)
+    private async Task<string> RunTurnAsync(TurnConsultant consultant, ConsultationRecord record, string repo, string problem, IReadOnlyList<string> files, CancellationToken ct)
     {
         var nonce = Guid.NewGuid().ToString("N")[..8];
         var before = await _invariant.SnapshotAsync(repo, ct);
-        var launch = consultant.Runtime.Build(new ConsultantLaunch(
+        // Prepared before it is built: the adapter learns what the INSTALLED CLI accepts (claude: --restricted or
+        // not), every turn, so Build stays pure — and may REFUSE when it could not learn it (IConsultantRuntime.PrepareAsync).
+        var prepared = await consultant.Runtime.PrepareAsync(new ConsultantLaunch(
             repo,
-            await PromptAsync(record, problem, files, nonce, repo, ct),
+            await PromptAsync(record, consultant.Runtime.Toolbox, problem, files, nonce, repo, ct),
             record.Handle,
             AnswersDir,
             Settings(consultant),
-            _answerSchema.Path));
-        var asking = record with { Status = ConsultationStatuses.Asking, RunnerPid = Environment.ProcessId, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow) };
+            _answerSchema.Path), launcher, ct);
+        if (prepared is ConsultantPreparation.Refused refused)
+        {
+            return FailedTurns.RefusedBeforeTheLaunch(record, consultant, refused.Failure);
+        }
+
+        var ready = (ConsultantPreparation.Ready)prepared;
+        var launch = consultant.Runtime.Build(ready.Launch);
+        // What the turn is SENT rides the record from here on, so every ending — answered or failed — carries it.
+        var asking = record with { Status = ConsultationStatuses.Asking, RunnerPid = Environment.ProcessId, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow), Confinement = ready.Confinement };
+        if (ready.Note.Length > 0)
+        {
+            log.Information("{Kind} consultation {Id}: {Vendor} launches {Note}", record.Kind, record.Id, consultant.Row.Provider, ready.Note);
+        }
         _store.Write(asking);
         log.Information("{Kind} consultation {Id}: turn {Turn}/{Cap} on {Vendor} in {Repo}", record.Kind, record.Id, record.Budget.Turn, record.MaxTurns, consultant.Row.Provider, repo);
 
@@ -628,60 +676,43 @@ public sealed class ConsultationService(
         turn.CancelAfter(deadline);
 
         var started = Stopwatch.StartNew();
-        ReviewerLaunch? launched = null;
+        List<ReviewerLaunch> launched = [];
+        // The failure this turn DECIDED, once it has — so a record write that throws while applying it
+        // does not get the turn classified a second time (epic 2's review: a second classification gave a
+        // second refund, made a breach refundable and made an ending resumable). Null until then: absence
+        // is the fact, "nothing decided yet".
+        ConsultationFailed? decided = null;
         try
         {
-            launched = await executor.LaunchAsync(launch, turn.Token);
-            var changes = FilesystemSnapshot.Compare(before, await _invariant.SnapshotAsync(repo, turn.Token));
+            // One launch, or two: a follow-up in the SAME conversation when the first answered nothing in
+            // a way the vendor can cure by being told (ConsultantTurn — the consultation's half of #504).
+            // Each launch lands in `launched` the moment it returns, so the failure path below reads the
+            // handle and the usage of whatever exists. The tree is asked once more before a follow-up;
+            // a turn that stopped there reports THOSE changes, any other takes the final comparison —
+            // which is what sees a write by the LAST launch.
+            var result = await ConsultantTurn.RunAsync(executor, consultant.Runtime, launch, t => ChangesSinceAsync(before, repo, t), launched.Add, turn.Token);
+            var changes = await ChangesOverTheTurnAsync(result, () => ChangesSinceAsync(before, repo, turn.Token));
+            decided = FailedTurns.Decided(asking, consultant, result, changes, ConsultationFailing.KilledAs(ct.IsCancellationRequested, turn.IsCancellationRequested, deadline));
 
-            return changes.Count > 0
-                ? Breach(asking, changes, consultant, launched, started.Elapsed)
-                : Settle(asking, consultant, launched, problem, nonce, started.Elapsed);
+            return decided is null
+                ? Settle(asking, consultant, result, problem, nonce, started.Elapsed)
+                : FailedTurns.Failing(consultant, started.Elapsed, decided);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             // The CALLER withdrew the job — not a failure of the consultant, and told apart from our
             // own deadline by the token's STATE, never the exception's type (reliability.md). Settle so
             // the record cannot stick at `asking`, then let the cancellation fly as it always did.
-            Quietly(() => _store.Write(Ended(asking, ConsultationStatuses.Failed, Interrupted(new OperationCanceledException()))));
+            FailedTurns.Quietly(() => _store.Write(ConsultationFailing.Withdrawn(
+                ConsultationFailedTurns.Facts(asking, consultant, ConsultantTurn.SurvivingHandle(consultant.Runtime, launched), Usage.None))));
 
             throw;
         }
         catch (Exception e) when (e is not OutOfMemoryException)
         {
-            return AfterTheLaunch(asking, consultant, launched, started.Elapsed, deadline, e);
+            return FailedTurns.AfterTheLaunch(consultant, started.Elapsed, decided ?? ConsultationFailedTurns.Undecided(asking, consultant, launched, e,
+                ConsultationFailing.KilledAs(ct.IsCancellationRequested, turn.IsCancellationRequested, deadline)), decided is null ? string.Empty : e.Message);
         }
-    }
-
-    /// <summary>
-    /// The turn faulted after the record was marked <c>asking</c> — the deadline fired, a snapshot
-    /// threw, or the record write did. Settle the record and answer a sentence; never let it stick at
-    /// <c>asking</c>, and never throw a protocol error up the stdio stack.
-    /// </summary>
-    /// <remarks>
-    /// A turn the vendor may already have ACCEPTED stays resumable: the handle is read off whatever the
-    /// launch captured, and with one the record becomes <c>interrupted</c> and the turn is not counted,
-    /// exactly as a launch failure with a handle already did. The write is best-effort because the
-    /// fault may itself be that the record cannot be written — but a record left <c>asking</c> is now
-    /// swept once its deadline passes and its lock is free, so it can no longer stick for ever.
-    /// (2026-09-26.)
-    /// </remarks>
-    private string AfterTheLaunch(ConsultationRecord asking, Consultant consultant, ReviewerLaunch? launched, TimeSpan elapsed, TimeSpan deadlineBudget, Exception fault)
-    {
-        var deadline = fault is OperationCanceledException;
-        var handle = launched is { } completed ? HandleOf(consultant, completed, asking.Handle) : asking.Handle;
-        var reason = deadline
-            ? $"the turn ran past its {deadlineBudget.TotalMinutes:0.#}-minute deadline without an answer being recorded"
-            : $"the answer could not be recorded: {fault.Message}";
-
-        Quietly(() => _store.Write(handle.Length > 0
-            ? asking with { Status = ConsultationStatuses.Interrupted, Handle = handle, Reason = reason, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow) }
-            : Ended(asking, ConsultationStatuses.Failed, reason)));
-        Record(consultant, deadline ? "deadline" : "record-failed", elapsed, launched?.Usage ?? Usage.None);
-
-        return handle.Length > 0
-            ? Error($"the consultant ({consultant.Row.Provider}) accepted the turn but {reason}; the turn was NOT counted — call consult again with consultationId {asking.Id} and the consultant will pick the conversation up")
-            : Error($"the consultant ({consultant.Row.Provider}) {reason} — check `providers`, then start a new consultation");
     }
 
     /// <summary>The turn's prompt, composed from the RECORD alone.</summary>
@@ -691,7 +722,14 @@ public sealed class ConsultationService(
     /// absence is now the statement: nothing about the vendor as it is configured TODAY may
     /// reach a conversation that was opened yesterday. (SonarCloud, Major, on the pull request.)
     /// </remarks>
-    private async Task<string> PromptAsync(ConsultationRecord record, string problem, IReadOnlyList<string> files, string nonce, string repo, CancellationToken ct)
+    /// <param name="toolbox">
+    /// What the adapter says its launch can read with (<see cref="IConsultantRuntime.Toolbox"/>) — the one
+    /// fact about the vendor this method is handed, and it is the FROZEN runtime's: on a follow-up the
+    /// consultant was resolved by <c>ConsultantResolver.Resumed</c>, which refuses unless today's
+    /// definition runs on the runtime the record froze, so the adapter asked here is the one the
+    /// conversation was opened on — never whatever the panel now names.
+    /// </param>
+    private async Task<string> PromptAsync(ConsultationRecord record, string toolbox, string problem, IReadOnlyList<string> files, string nonce, string repo, CancellationToken ct)
     {
         var resuming = record.Turns.Count > 0 || record.Status == ConsultationStatuses.Interrupted;
         // The RECORD's frozen mode, not the runtime's current one. An upgrade that changed an
@@ -717,208 +755,67 @@ public sealed class ConsultationService(
             CarriedTranscript: resuming && !remembers
                 ? ConsultantPrompt.Transcript([.. record.Turns.Select(t => (t.Problem, t.Advice))], record.CarryBudget)
                 : string.Empty,
-            PreviousAnswerLost: record.Status == ConsultationStatuses.Interrupted));
+            PreviousAnswerLost: record.Status == ConsultationStatuses.Interrupted,
+            Toolbox: toolbox));
     }
 
-    private string Breach(ConsultationRecord record, IReadOnlyList<TreeChange> changes, Consultant consultant, ReviewerLaunch launched, TimeSpan elapsed)
+    private string Settle(ConsultationRecord record, TurnConsultant consultant, ConsultantTurnResult turned, string problem, string nonce, TimeSpan elapsed)
     {
-        var sentence = FilesystemSnapshot.Sentence(changes);
-        log.Error("{Kind} consultation {Id}: {Alert}", record.Kind, record.Id, sentence);
-        _store.Write(Ended(record, ConsultationStatuses.Failed, "the working tree changed while the consultant was running") with
-        {
-            Alert = sentence,
-            Handle = HandleOf(consultant, launched, record.Handle),
-        });
-        Record(consultant, "tree-changed", elapsed, launched.Usage);
-
-        return Error(sentence);
-    }
-
-    private string Settle(ConsultationRecord record, Consultant consultant, ReviewerLaunch launched, string problem, string nonce, TimeSpan elapsed)
-    {
-        var handle = HandleOf(consultant, launched, record.Handle);
-        if (launched.Terminal is { } terminal)
-        {
-            return Terminal(record, consultant, launched, terminal, handle, elapsed);
-        }
-
-        if (string.IsNullOrWhiteSpace(launched.Answer))
-        {
-            var kept = KeepEvidence(consultant, launched.Evidence);
-            _store.Write(Ended(record, ConsultationStatuses.Failed, "the consultant answered nothing") with { Handle = handle });
-            Record(consultant, "empty", elapsed, launched.Usage);
-
-            return Error($"the consultant ({consultant.Row.Provider}) exited cleanly but answered nothing; its transcript is kept at {kept} — try once more with a sharper problem statement");
-        }
+        var handle = HandleOf(turned.SurvivingHandle, record.Handle);
+        var launched = turned.Final;
 
         // The ADAPTER reads its own shape: prose for every CLI, an envelope for the one schema-bound
         // route. Unwrapping every answer here mangled a CLI's prose that happened to be JSON with an
         // `answer` property, which a consultant asked about a configuration file could return.
-        var advised = consultant.Runtime.ReadAdvice(launched.Answer).Trim();
-        var spent = ThisTurnsShare(consultant, record, launched.Usage);
-        var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), spent.TokensIn, spent.TokensOut, spent.CostUsd);
-        _store.Write(Answered(record, turn, handle));
-        Record(consultant, "ok", elapsed, spent);
+        var advised = consultant.Runtime.ReadAdvice(launched.Answer ?? string.Empty).Trim();
+        var spent = consultant.ShareOf(record, turned.TurnUsage);
+        var turn = new ConsultationTurn(ConsultationStore.Stamp(DateTime.UtcNow), problem, advised, Math.Round(elapsed.TotalSeconds, 1), spent.TokensIn, spent.TokensOut, spent.CostUsd, turned.FollowedUp, record.Confinement);
+        _store.Write(ConsultationAnswering.Answered(ConsultationBilling.Billing(record, spent), turn, handle));
+        ConsultantTurnBooks.Billed(ledger, consultant.Row, consultant.Model, ConsultantRoles.Consult, "ok", elapsed, spent);
+        _health.Answered(ConsultHealth.AnswerOf(record, turn.Utc));
         log.Information("{Kind} consultation {Id}: answered turn {Turn} in {Seconds}s ({TokensIn}/{TokensOut} tokens)", record.Kind, record.Id, record.Budget.Turn, turn.Seconds, turn.TokensIn, turn.TokensOut);
 
         var advice = ConsultationFence.Advice(consultant.Row.Provider, consultant.Model, record.Budget, nonce, advised);
         var note = consultant.Caller.CounterNote;
 
         return Json(
-            new ConsultAnswer(record.Id, record.Budget.Turn, record.MaxTurns, note.Length > 0 ? advice + "\n(" + note + ")" : advice, launched.Usage.CostUsd),
+            new ConsultAnswer(record.Id, record.Budget.Turn, record.MaxTurns, note.Length > 0 ? advice + "\n(" + note + ")" : advice,
+                ConsultationBilling.ReplyCost(consultant.Runtime.UsageIsCumulative, record, turned)),
             ServerJsonContext.Default.ConsultAnswer);
-    }
-
-    private string Terminal(ConsultationRecord record, Consultant consultant, ReviewerLaunch launched, ReviewerOutcome terminal, string handle, TimeSpan elapsed)
-    {
-        var reason = ReviewerSummaryFactory.Describe(terminal);
-        Record(consultant, reason, elapsed, launched.Usage);
-        if (launched.Process is { } process && consultant.Runtime.DroppedTheConversation(process))
-        {
-            _store.Write(Ended(record, ConsultationStatuses.Failed, "the vendor no longer holds this conversation") with { Handle = string.Empty });
-            return Error($"the consultant ({consultant.Row.Provider}) no longer holds conversation {record.Id} — its own store dropped the thread; start a new consultation");
-        }
-
-        if (handle.Length > 0)
-        {
-            _store.Write(record with { Status = ConsultationStatuses.Interrupted, Handle = handle, Reason = reason, UpdatedUtc = ConsultationStore.Stamp(DateTime.UtcNow) });
-            return Error($"the consultant ({consultant.Row.Provider}) accepted the turn but the answer did not arrive ({reason}); the turn was NOT counted — call consult again with consultationId {record.Id} and the consultant will pick the conversation up");
-        }
-
-        _store.Write(Ended(record, ConsultationStatuses.Failed, reason));
-        return Error($"the consultant ({consultant.Row.Provider}) did not answer: {reason} — check `providers`, then start a new consultation");
     }
 
     // ---------- plumbing ----------
 
-    /// <param name="CounterNote">Empty ordinarily; a sentence when the call cap is being held in memory.</param>
-    private sealed record Caller(string Kind, string Id, string CounterNote);
+    private string AnswersDir => ConsultHealthPaths.AnswersDirectory(settings.DataDir);
 
-    private sealed record Consultant(IConsultantRuntime Runtime, ProviderSettings Row, string Model, Caller Caller);
-
-    private string AnswersDir => Path.Combine(settings.DataDir, "consultations", "answers");
-
-    private ReviewerSettings Settings(Consultant consultant) => new(consultant.Row.Provider)
-    {
-        ExecutablePath = consultant.Row.ExecutablePath,
-        Model = consultant.Model,
-        Timeout = settings.ReviewerTimeout,
-        DataDir = settings.DataDir,
-        // A consultant starts no MCP server either (issue #514).
-        McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
-    };
+    private ReviewerSettings Settings(TurnConsultant consultant) =>
+        ConsultantTurnInputs.Settings(consultant.Row, consultant.Model, settings.ReviewerTimeout, settings.DataDir);
 
     private async Task<string> ShapedTreeAsync(string repo, CancellationToken ct)
     {
         Directory.CreateDirectory(AnswersDir);
-        var files = await context.CollectWorkingTreeAsync(repo, ct: ct);
 
-        return files.Count == 0
-            ? "(the working tree has no uncommitted change — everything is committed at HEAD)"
-            : DiffShaper.Shape(files, ConsultantPrompt.DiffBudget).Text;
+        return await ConsultantTurnInputs.ShapedTreeAsync(context, repo, ct);
     }
 
-    /// <summary>The record this turn leaves behind — closed when the budget is spent, open otherwise.</summary>
-    /// <remarks>
-    /// Pure, and its own method because the three <c>IsLast</c> decisions are ONE decision wearing
-    /// three hats: whether this was the last turn. Reading them apart, inside an object initialiser
-    /// inside a method that also launches and logs, was the complexity the gate objected to.
-    /// (CodeRabbit, on the pull request.)
-    /// </remarks>
-    private static ConsultationRecord Answered(ConsultationRecord record, ConsultationTurn turn, string handle)
-    {
-        var last = record.Budget.IsLast;
-
-        // The LAST turn ends the consultation with nobody having said whether it worked, which is
-        // what `lapsed` records; an earlier turn leaves the outcome untouched. (issue #309.)
-        return (last ? ConsultationClosing.Lapse(record) : record) with
-        {
-            Turns = [.. record.Turns, turn],
-            Handle = handle,
-            Status = last ? ConsultationStatuses.Closed : ConsultationStatuses.Open,
-            // The sentence a LATER call is refused with is this one, so it carries the cure — the
-            // setting's name — rather than leaving the caller to find it.
-            Reason = last ? $"all {record.MaxTurns} of its turns are used (COAI_CONSULT_TURNS sets the cap)" : string.Empty,
-            EndedUtc = last ? turn.Utc : string.Empty,
-            UpdatedUtc = turn.Utc,
-        };
-    }
+    /// <summary>The working tree's changes since <paramref name="before"/> — the filesystem invariant, asked once.</summary>
+    private async Task<IReadOnlyList<TreeChange>> ChangesSinceAsync(FilesystemSnapshot before, string repo, CancellationToken ct) =>
+        FilesystemSnapshot.Compare(before, await _invariant.SnapshotAsync(repo, ct));
 
     /// <summary>
-    /// What THIS turn consumed, for a vendor that reports the whole conversation's total every time.
+    /// What changed over the whole turn: the changes that stopped its follow-up, or else the final comparison.
     /// </summary>
     /// <remarks>
-    /// The running total lives on the RECORD, which is why the subtraction happens here and the
-    /// adapter only declares that it reports cumulatively. The arithmetic itself is
-    /// <see cref="ConsultationUsage"/>, in the core, so the test exercises the rule rather than a
-    /// copy of it.
+    /// A turn stopped at the tree check already holds the changes that stopped it, and a second snapshot could
+    /// only disagree by losing one that was reverted in between — so it is not taken. Every other turn asks
+    /// once more, because its last launch ran after anything was asked.
     /// </remarks>
-    private static Usage ThisTurnsShare(Consultant consultant, ConsultationRecord record, Usage reported)
-    {
-        if (!consultant.Runtime.UsageIsCumulative)
-        {
-            return reported;
-        }
+    private static async Task<IReadOnlyList<TreeChange>> ChangesOverTheTurnAsync(ConsultantTurnResult turned, Func<Task<IReadOnlyList<TreeChange>>> finalComparison) =>
+        turned.Breached ? turned.ChangesBeforeFollowUp : await finalComparison();
 
-        var share = ConsultationUsage.ThisTurnsShare(
-            [.. record.Turns.Select(t => (t.TokensIn, t.TokensOut, t.CostUsd))],
-            (reported.TokensIn, reported.TokensOut, reported.CostUsd));
-
-        return new Usage(share.TokensIn, share.TokensOut, share.CostUsd);
-    }
-
-    private static string HandleOf(Consultant consultant, ReviewerLaunch launched, string known)
-    {
-        var read = launched.Process is { } process ? consultant.Runtime.ReadHandle(process) : string.Empty;
-
-        return read.Length > 0 ? read : known;
-    }
-
-    private static string Interrupted(Exception e) =>
-        e is OperationCanceledException
-            ? "the call was cancelled while the consultant was running"
-            : $"the launch failed: {e.Message}";
-
-    private static ConsultationRecord Ended(ConsultationRecord record, string status, string reason)
-    {
-        var now = ConsultationStore.Stamp(DateTime.UtcNow);
-
-        return record with { Status = status, Reason = reason, EndedUtc = now, UpdatedUtc = now };
-    }
-
-    /// <summary>A best-effort write on a path that is already failing — it must not mask what failed.</summary>
-    private void Quietly(Action write)
-    {
-        try
-        {
-            write();
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            log.Warning("consultations: the record could not be updated on the failure path: {Reason}", e.Message);
-        }
-    }
-
-    private void Record(Consultant consultant, string outcome, TimeSpan elapsed, Usage usage) =>
-        ledger.RecordJob(string.Empty, consultant.Row.Provider, consultant.Model, ConsultantRoles.Consult, outcome, elapsed,
-            usage.TokensIn, usage.TokensOut, usage.CostUsd, UsageKinds.Consult, stage: "Consultation");
-
-    private string KeepEvidence(Consultant consultant, string evidence)
-    {
-        var dir = Path.Combine(settings.DataDir, "unparseable");
-        var path = Path.Combine(dir, $"consult-{Core.Rounds.FileName.Safe(consultant.Row.Provider)}-{DateTime.UtcNow:yyyyMMdd-HHmmss}.txt");
-        try
-        {
-            Directory.CreateDirectory(dir);
-            File.WriteAllText(path, evidence);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            log.Warning("evidence: could not keep the consultant's transcript at {Path}: {Reason}", path, e.Message);
-        }
-
-        return path;
-    }
+    /// <summary>The handle the turn's launches left (<see cref="ConsultantTurn.SurvivingHandle"/>), else the one already known.</summary>
+    private static string HandleOf(string surviving, string known) =>
+        surviving.Length > 0 ? surviving : known;
 
     /// <summary>
     /// Two spellings of one checkout, or not.

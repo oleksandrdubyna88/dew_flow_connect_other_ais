@@ -25,36 +25,6 @@ namespace CoaiMcp.Tests;
 [Collection("fakecli-env")]
 public sealed class ATurnThatNeverReturnsTests : ConsultScenarioBase
 {
-    /// <summary>The real launcher, with one seam: what happens around the CONSULTANT's own launch.</summary>
-    private sealed class TurnLauncher(IProcessLauncher inner) : IProcessLauncher
-    {
-        /// <summary>Runs INSTEAD of the consultant's launch; null runs the fake CLI as usual.</summary>
-        public Func<ProcessRequest, CancellationToken, Task<ProcessResult>>? Consultant { get; init; }
-
-        /// <summary>Runs just before the consultant is launched — after the record says <c>asking</c>.</summary>
-        public Action? BeforeConsultant { get; set; }
-
-        /// <summary>While set, every git command after the consultant ran is refused.</summary>
-        public bool GitRefused { get; set; }
-
-        public bool ConsultantRan { get; private set; }
-
-        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
-        {
-            if (!string.Equals(request.Executable, FakeCliExe, StringComparison.OrdinalIgnoreCase))
-            {
-                return ConsultantRan && GitRefused
-                    ? new ProcessResult(128, string.Empty, "fatal: the test made git refuse after the consultant ran", TimedOut: false)
-                    : await inner.RunAsync(request, ct);
-            }
-
-            BeforeConsultant?.Invoke();
-            ConsultantRan = true;
-
-            return Consultant is { } consultant ? await consultant(request, ct) : await inner.RunAsync(request, ct);
-        }
-    }
-
     /// <summary>
     /// Makes the record's atomic replacement fail, the way something on the operator's machine did.
     /// </summary>
@@ -274,5 +244,87 @@ public sealed class ATurnThatNeverReturnsTests : ConsultScenarioBase
         var record = new ConsultationStore(_data).All().Single();
         record.Status.Should().Be(ConsultationStatuses.Failed);
         record.Reason.Should().Contain("cancelled");
+    }
+
+    /// <summary>How many calls this caller has been handed back in the current window — the counter file's third field.</summary>
+    private int GivenBack()
+    {
+        var file = Directory.EnumerateFiles(Path.Combine(_data, "consultations", "callers")).Single();
+
+        return int.Parse(File.ReadAllText(file).Split('\t')[2], System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
+    /// A failure that gives its call back, and then a record write that fails: the call comes back ONCE.
+    /// </summary>
+    /// <remarks>
+    /// Epic 2's review (two reviewers, independently): the give-back ran before the record was written, the
+    /// write threw, and the catch-all classified the same turn again as <c>record-failed</c> — which gives
+    /// back too, with the same take. One call refunded twice is the cap growing by a side door.
+    /// </remarks>
+    [Fact]
+    public async Task ARefundedFailure_WhoseRecordWriteFails_IsRefundedOnce()
+    {
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        using var blocker = new RecordBlocker(Path.Combine(_data, "consultations"));
+        var launcher = new TurnLauncher(_launcher);
+        var service = Service(launcher: launcher);
+        // One answered call first, so a second refund would have a call to take back and could not hide.
+        var id = (await Consult(service, "the parser returns 3 where 4 is expected")).GetProperty("consultationId").GetString()!;
+        Environment.SetEnvironmentVariable("FAKECLI_OUTFILE_TEXT", null);
+        Environment.SetEnvironmentVariable("FAKECLI_STDOUT", null);
+        Environment.SetEnvironmentVariable("FAKECLI_STDERR", "codex: something went wrong");
+        Environment.SetEnvironmentVariable("FAKECLI_EXIT", "3");
+        launcher.BeforeConsultant = blocker.Apply;
+
+        await Consult(service, "and the lock?", id);
+        blocker.Release();
+
+        GivenBack().Should().Be(1, "one failed call, one refund — whatever happened to the record afterwards");
+    }
+
+    /// <summary>A breach keeps its call even when its record cannot be written: a failed write is not a refund.</summary>
+    [Fact]
+    public async Task ABreachWhoseRecordWriteFails_GivesNothingBack()
+    {
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        using var blocker = new RecordBlocker(Path.Combine(_data, "consultations"));
+        var launcher = new TurnLauncher(_launcher) { BeforeConsultant = blocker.Apply };
+        var service = Service(launcher: launcher);
+        Environment.SetEnvironmentVariable("FAKECLI_SIDE_EFFECT", Path.Combine(_repo, "the-consultant-wrote-this.txt"));
+        try
+        {
+            await Consult(service, "the parser returns 3 where 4 is expected");
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("FAKECLI_SIDE_EFFECT", null);
+            blocker.Release();
+        }
+
+        GivenBack().Should().Be(0, "the consultant broke the read-only promise; the record failing to say so changes nothing");
+    }
+
+    /// <summary>
+    /// A cancellation nobody asked for — the launcher's own, a library's timeout — is not the turn's deadline.
+    /// </summary>
+    /// <remarks>
+    /// Caller versus deadline is decided by the TOKENS' state, never by the exception's type
+    /// (<c>reliability.md</c>): neither the caller's token nor the turn's was cancelled here, so this is a
+    /// launch that failed on its own, and calling it a deadline would send the person after a budget that
+    /// was never spent.
+    /// </remarks>
+    [Fact]
+    public async Task ACancellationNeitherTokenAskedFor_IsNotADeadline()
+    {
+        using var calling = CallingAs("CLAUDE_CODE_SESSION_ID");
+        var launcher = new TurnLauncher(_launcher)
+        {
+            Consultant = (_, _) => throw new OperationCanceledException("a library gave up on its own"),
+        };
+
+        var refused = Refusal(await Consult(Service(launcher: launcher), "the parser returns 3 where 4 is expected"));
+
+        refused.Should().Contain("(failure: record-failed)").And.NotContain("deadline");
     }
 }

@@ -167,4 +167,19 @@ public static class RetryLadder
         {
             Request = invocation.Request with { Timeout = Remaining(elapsed, budget) },
         };
+
+    /// <summary>The same launch, allowed the LESSER of <paramref name="left"/> and its own timeout.</summary>
+    /// <remarks>
+    /// <para>Not <see cref="WithinRemaining"/>, which REPLACES the timeout with the remainder: a second launch
+    /// may already have been shortened — the scheduler shortens a repair on a retry — and overwriting that
+    /// with the remainder would hand back time the ladder had taken away (the reviewer repair's code round).</para>
+    /// <para>Two callers, one copy: the reviewer's repair (<c>ReviewerExecutor.RunAsync</c>) and the
+    /// consultation's follow-up (<c>ConsultantTurn.RunAsync</c>). It was an inline ternary in the first and
+    /// a private helper in the second until epic 1's review counted them.</para>
+    /// </remarks>
+    public static ReviewerInvocation Lesser(TimeSpan left, ReviewerInvocation invocation) =>
+        invocation with
+        {
+            Request = invocation.Request with { Timeout = left < invocation.Request.Timeout ? left : invocation.Request.Timeout },
+        };
 }

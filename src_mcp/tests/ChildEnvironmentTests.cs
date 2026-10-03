@@ -135,7 +135,9 @@ public sealed class ChildEnvironmentTests
                     $"{runtime}: the vendor key is the only variable a launch hands over, joined last");
             }
 
-            var shipped = new ConsultantLaunch("D:/repo", "q", string.Empty, answers, new ReviewerSettings("claude"));
+            // Prepared, as every shipped claude launch is before it is built (IConsultantRuntime.PrepareAsync reads the
+            // CLI's help; an unprepared one is a contract violation since PLAN_the_consultant_works_on_every_vendor.md).
+            var shipped = new ConsultantLaunch("D:/repo", "q", string.Empty, answers, new ReviewerSettings("claude") { ClaudeCli = ClaudeCapability.WithRestricted });
             new ClaudeConsultant(new ClaudeRuntime()).Build(shipped).Request.InheritsEnvironment.Should().BeTrue(
                 "the stuck consultant runs the developer's own CLI in the developer's own environment, as before (A12)");
         }
