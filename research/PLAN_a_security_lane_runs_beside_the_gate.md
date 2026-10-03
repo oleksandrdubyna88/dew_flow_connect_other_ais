@@ -1,17 +1,17 @@
 # PLAN — a security lane runs beside the gate: prompts and models a person pairs, switched on by what the change contains
 
-> Status: **implementation in progress, 2026-10-02.** E1–E4 implemented and reviewed; Gemma completed three adequate feature replies and the twelve-module audit. E5 explanation/reproduction fidelity remains open; Qwen has not qualified. See [live results](../research/RESULTS_security_lane_qwen_windows.md); final gate outcomes are tracked in draft PR #634. Issue #587. Scope: `src_mcp/core`
+> Status: **IMPLEMENTED, 2026-10-03** (E1–E4, PR #634, merged `5c9fecd2`). E5 calibration, the frozen-PR campaign and the final feature gate did not ship; they are extracted to [the calibration tail](../todo/PLAN_security_lane_calibration_tail.md). Deviations are recorded in §16. Measurements: [live results](RESULTS_security_lane_qwen_windows.md). Issue #587. Scope: `src_mcp/core`
 > (findings, gate, rounds, a new `Security/` folder), `src_mcp/runners` (scheduler, stand-down, feature
 > outline), `src_mcp/src` (settings, roster, round engine, stages, store, prompts), `shared/` (one new
 > seed), `src_vs_code/src` (a new Settings section, the rounds log, export/import), `src_bench` (the
 > calibration; the explicit product-round harness is in `src_mcp/tests`). No Team server change. No new MCP tool, no new one-shot mode.
 >
-> Related docs: [architecture.md](../research/architecture.md), [module_core.md](../research/module_core.md),
-> [module_runners.md](../research/module_runners.md), [module_server.md](../research/module_server.md),
-> [module_extension.md](../research/module_extension.md), [module_bench.md](../research/module_bench.md),
-> [module_tests.md](../research/module_tests.md).
-> Boundaries, named on both sides (§12): [PLAN_round_engine_and_panel_service_under_800_lines.md](PLAN_round_engine_and_panel_service_under_800_lines.md),
-> [PLAN_local_trust_and_vllm.md](PLAN_local_trust_and_vllm.md).
+> Related docs: [architecture.md](architecture.md), [module_core.md](module_core.md),
+> [module_runners.md](module_runners.md), [module_server.md](module_server.md),
+> [module_extension.md](module_extension.md), [module_bench.md](module_bench.md),
+> [module_tests.md](module_tests.md).
+> Boundaries, named on both sides (§12): [PLAN_round_engine_and_panel_service_under_800_lines.md](../todo/PLAN_round_engine_and_panel_service_under_800_lines.md),
+> [PLAN_local_trust_and_vllm.md](../todo/PLAN_local_trust_and_vllm.md).
 >
 > Every `file:line` below was read at `origin/main` = `f87dba63` (`mcp-v0.40.4`, `extension-v0.60.1`).
 > Line numbers move; re-read before cutting.
@@ -553,14 +553,22 @@ Local queues lengthen rounds; deadline and not-started states must remain honest
 cross persistence and UI boundaries; test old/new records. Missing author text is unfinished operator
 content, not a fabricated successful check.
 
+## 16. Deviations — what shipped differently (2026-10-03)
+
+- **The lane's budget never widens the ordinary roles'.** The plan let the lane's round budget join the stage budget; an independent review of the branch found that a feature stage whose ordinary roles had one round then got a second round for an ORDINARY reviewer's failure, which only the lane could answer. `PanelConfig.For(Stage)` is the ordinary roles alone; a lane-only round is admitted only within the lane's own budget and, when it has no work, completes for a person instead of being refused on every call.
+- **Schema step 18, not 17.** `main` gave 17 to the question consultant while this work was open; the evidence column is 18, and `SecurityPreviewFork` reconciles a database the preview build had already stamped 17.
+- **Validation and safety found in review:** blank prompt overrides keep the shipped preset; broken pairings are `Excluded`, never "not due"; source is read only for pairings due this round; a slice keeps its patch when its source does not fit; the schema allows each evidence field a third of the 8000-character total; damaged stored evidence reads as `Unreadable`; the extension validates every lane member where the setting is read (closing a markup injection through `contextTokens`) and never saves over a malformed setting.
+- **Gate record:** code rounds 1–6 (Codex session) proceeded; round 7 failed on gemini quota (`call_human`, the person answered *fix*); round 8 over the whole branch passed but its diff was cut at the 192 KB budget before any code; rounds 9–10 over the fix range proceeded (gemini 4/4; 3 + 1 findings accepted and fixed). CodeRabbit skipped the PR (124 files over its 100-file limit).
+- **Not shipped:** E5, the campaign and the final feature gate — see the calibration tail.
+
 ## Definition of Done
 
-- [ ] E1–E4 implemented with behavioral tests and compatibility scenarios.
-- [ ] Plan and committed-code COAI rounds resolved; reviewer counts and failures recorded.
-- [ ] Every pairing is accounted for: answer, trigger skip, unavailable, failure or budget exhaustion.
-- [ ] Missing reproduction cannot gate; ordinary duplicates retain ownership and severity.
-- [ ] Serial local work receives time and is never stood down by cloud quietness.
-- [ ] Settings survive reload and export/import; old servers are shown as unsupported.
-- [ ] E5 completed with operator-authored prompts, or its exact remaining work recorded honestly.
-- [ ] Both boundary documents and todo index updated in the same commit as the plan.
-- [ ] Module docs describe shipped behavior; completed scope promoted and open tail extracted.
+- [x] E1–E4 implemented with behavioral tests and compatibility scenarios.
+- [x] Plan and committed-code COAI rounds resolved; reviewer counts and failures recorded.
+- [x] Every pairing is accounted for: answer, trigger skip, unavailable, failure or budget exhaustion.
+- [x] Missing reproduction cannot gate; ordinary duplicates retain ownership and severity.
+- [x] Serial local work receives time and is never stood down by cloud quietness.
+- [x] Settings survive reload and export/import; old servers are shown as unsupported.
+- [x] E5 completed with operator-authored prompts, or its exact remaining work recorded honestly — recorded in [the calibration tail](../todo/PLAN_security_lane_calibration_tail.md).
+- [x] Both boundary documents and todo index updated in the same commit as the plan.
+- [x] Module docs describe shipped behavior; completed scope promoted and open tail extracted.
