@@ -142,7 +142,11 @@ export function stub(): Stub {
   return {
     innerHTML: '', textContent: '', hidden: false, value: '', className: '',
     disabled: false, indeterminate: false, checked: false, listeners,
-    addEventListener(type: string, fn: () => void) { (listeners[type] ??= []).push(fn); },
+    addEventListener(type: string, fn: () => void) {
+      const registered = listeners[type] ?? [];
+      listeners[type] = registered;
+      registered.push(fn);
+    },
     getAttribute: () => null,
     setAttribute() { /* the page sets attributes it never reads back here */ },
     querySelectorAll: () => [],
