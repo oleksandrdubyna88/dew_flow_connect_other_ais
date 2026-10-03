@@ -101,3 +101,16 @@ test('closing the webview settles everything still running as not done', () => {
   assert.deepEqual(page.posted.at(-1), { type: 'settled', seq: 5, doc: 'd', ok: false });
   assert.deepEqual(host.snapshot(), { count: 0, oldestMs: 0 });
 });
+
+test('a message that is not an object is not a ready, and does not throw', async () => {
+  // E1 code round (gemini): the webview boundary can deliver null or a primitive, and a throw here would abort the
+  // listener before the page's own handlers ran.
+  const page = new Webview();
+  const host = new BusyHost(page, clock().now);
+
+  for (const odd of [null, undefined, 'ready', 7]) {
+    assert.equal(host.heard(odd as unknown as object), false, String(odd));
+    await host.track(odd as unknown as object, () => Promise.resolve());
+  }
+  assert.deepEqual(page.posted, [], 'nothing announced, nothing settled');
+});

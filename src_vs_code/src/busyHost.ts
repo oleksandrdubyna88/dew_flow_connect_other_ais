@@ -22,6 +22,14 @@ export type PageMessage = object;
 /** The three fields of a page message the mark reads; anything else on it is the page's own business. */
 type MarkFields = { readonly type?: unknown; readonly seq?: unknown; readonly doc?: unknown };
 
+/**
+ * A page message's mark fields — or none, when what arrived is not an object. The webview boundary can deliver `null`
+ * or a primitive, and a throw here would abort the listener before the page's own handlers ran (E1 code round, gemini).
+ */
+function fieldsOf(message: unknown): MarkFields {
+  return typeof message === 'object' && message !== null ? message as MarkFields : {};
+}
+
 /** What a failure inside a tracked action is reported through when the panel names nothing better. */
 const SAY_IT = (error: unknown): void => { console.error('ConnectOtherAIs: a page action failed', error); };
 
@@ -42,7 +50,7 @@ export class BusyHost {
    * failure is reported and settled `ok: false`; an untracked one's is reported.
    */
   async track(message: PageMessage, work: () => Promise<void>): Promise<void> {
-    const ask = askOf(message as MarkFields);
+    const ask = askOf(fieldsOf(message));
     if (ask !== undefined) {
       await tracked(this.flight, [this.page], this.page, ask, work, this.report);
 
@@ -60,7 +68,7 @@ export class BusyHost {
    * while it was being built reached the document it replaced; this answer supersedes what it was painted with.
    */
   heard(message: PageMessage): boolean {
-    if ((message as MarkFields).type !== 'ready') {
+    if (fieldsOf(message).type !== 'ready') {
       return false;
     }
     announce(this.flight, [this.page], this.report);
