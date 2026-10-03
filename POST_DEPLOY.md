@@ -19,12 +19,12 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-03 · extension **0.62.0** / mcp **0.41.0** / server 0.9.0 · all five automated items PASS.
-Extension and MCP released together: the busy mark on every slow page, the question consultant's panel half, and
-the server refusing a codex endpoint row with no model. `mcp-v0.41.0` published all six platform archives with
-their SHA-256. The Marketplace served 0.62.0 about seven minutes after the publish. Server 0.9.0 is unchanged since
-the 0.61.1 deploy, whose canary observed items 7 and 12. Run with `MCP_VERSION` and `SERVER_VERSION` set to the
-newest tags: unset, items 1, 9 and 10 fail on any extension-only release.
+Last verified: 2026-10-03 · extension **0.62.1** / mcp **0.41.1** / server 0.9.0 · all five automated items PASS.
+Extension and MCP released together: `ask_human` cards only the gate's own question and the AI's own questions go
+back to its chat, and the security lane's methods held within cyclomatic complexity 4 (no behaviour change).
+`mcp-v0.41.1` published all six platform archives with their SHA-256; the Marketplace served 0.62.1 when checked.
+Server 0.9.0 is unchanged since the 0.61.1 deploy, whose canary observed items 7 and 12. Run with `MCP_VERSION` and
+`SERVER_VERSION` set to the newest tags: unset, items 1, 9 and 10 fail on any extension-only release.
 
 Previously verified: 2026-09-11 · extension 0.33.1 / mcp 0.18.17 / **server 0.5.7** · all five automated items PASS. **Item 12 observed for the first time, and it is the reason this release exists**: the release script's canary ran one real review per configured vendor on the box — `codex: done`, `antigravity: done`, `claude: done` — so the INSTALLED claude (2.1.261, not the 2.1.258 the flags were read against) accepts both halves of the confinement: the eleven `--disallowedTools` names and an allowlisted environment. Until that ran, both were asserted as SENT and nothing had observed them being taken.
 
