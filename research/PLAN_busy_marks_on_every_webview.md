@@ -134,8 +134,8 @@ None new: one `InFlight` per open webview, bounded by what one person presses wh
 - [x] One fragment, one `tracked()`, one `BusyHost`. No copies.
 - [x] Page tests run on a fake clock, with teeth; `npm test` green; lint clean; suppression file did not grow.
 - [x] The chat-presets per-keystroke write is filed as its own todo plan.
-- [x] Docs updated (`research/module_extension.md`, `research/module_tests.md`), this plan promoted, extension
-      released and verified on the Marketplace.
+- [x] Docs updated (`research/module_extension.md`, `research/module_tests.md`), this plan promoted.
+- [ ] Extension released and verified on the Marketplace — after the merge, on the release-please PR.
 
 ## 9. Deviations — what shipped differently
 
