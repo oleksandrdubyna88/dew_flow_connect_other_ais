@@ -10394,3 +10394,10 @@ the tab. Typing is never numbered: those fields settle for 300 ms by design.
   consumed, each message tracked around `writes.queue`) and a `stillRunning()` for the redraw.
 
 Help, phrases, notifications, chat, chat restore and chat presets stay unmarked, each with the reason in the plan's §3.
+
+**The E3 code round** found that a roles `stage` pick was settled like typing. `fieldOf` keyed every string `edit`, so
+a pick waited 300 ms before it started, which the bar then counted, and skipped the drain of pending typing. Because a
+settled edit does not redraw, the role also stayed drawn in its old stage. The rule is `rolesFieldOf` in
+`rolesPage.ts` now, run by `rolesFieldOf.test.ts`: `stage` is a pick (`PICKED_ROLE_FIELDS`), applied at once and
+redrawn. The same round's suite found an import cycle between the two page runners; `camel` moved to
+`test/datasetName.ts`.

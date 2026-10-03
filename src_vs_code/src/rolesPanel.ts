@@ -7,7 +7,7 @@ import { coaiDataDir } from './dataDir';
 import { notify, notifyAndAsk } from './notify';
 import { composed, isBuiltIn, promptIdsInUse, rolesFrom, type RoleRow } from './roles';
 import { promptBelongsTo, rowsAfter } from './rolesEdit';
-import { DEFAULT_ROLE_TAB, nextTab, roleEdit, rolesHtml, type RolesCommand } from './rolesPage';
+import { DEFAULT_ROLE_TAB, nextTab, roleEdit, rolesFieldOf, rolesHtml, type RolesCommand } from './rolesPage';
 import { promptFile, promptsDir } from './rolesPrompts';
 import { settledWrites } from './settledWrites';
 import { serverOnThisSide } from './installer';
@@ -313,23 +313,12 @@ const writes = settledWrites<RolesCommand>({
   // sentence, which would leave somebody with nothing to do about it. Every other failure keeps the
   // sentence: see the argument on `report` below about where an errno belongs.
   report: (error) => { reportRefusal(side(), KEY, error, { ordinary: 'ConnectOtherAIs could not save that change to your roles.' }); },
-  fieldOf,
+  fieldOf: rolesFieldOf,
 });
 
 const queue = (command: RolesCommand): Promise<void> => writes.queue(command);
 const flush = (): Promise<void> => writes.flush();
 
-/** The key a typed field settles under, or nothing for a command that is not typing. */
-function fieldOf(command: RolesCommand): string | undefined {
-  if (command.kind === 'edit' && typeof command.value === 'string') {
-    return `${command.id}/${command.field}`;
-  }
-  if (command.kind === 'editPrompt') {
-    return `${command.id}/${command.promptId}/${command.field}`;
-  }
-
-  return undefined;
-}
 
 /**
  * One command, applied. Answers whether the page must be redrawn.
@@ -443,7 +432,7 @@ async function store(command: RolesCommand): Promise<boolean> {
   // label were not, so storing them replaced the document under the person and put the caret at the
   // end of whatever they were half-way through writing. The summary line above the field catches up
   // with the name at the next structural change, which is a stale word against an unusable field.
-  return fieldOf(command) === undefined;
+  return rolesFieldOf(command) === undefined;
 }
 
 /**

@@ -159,6 +159,30 @@ function idOf(value: unknown): string {
 }
 
 /**
+ * The key a typed field settles under, or nothing for a command that is not typing — what `settledWrites` debounces.
+ * Moved here from `rolesPanel.ts`, which cannot be built in a test, so the rule is run (E3 code round).
+ */
+export function rolesFieldOf(command: RolesCommand): string | undefined {
+  if (command.kind === 'editPrompt') {
+    return `${command.id}/${command.promptId}/${command.field}`;
+  }
+
+  return typedEdit(command) ? `${command.id}/${command.field}` : undefined;
+}
+
+/**
+ * The role fields drawn as a `<select>`: a pick, applied at once like a switch, never settled like typing. Settled, a
+ * stage pick waited 300 ms before it started — time the busy mark then counted — skipped the drain that stores pending
+ * typing first, and was not redrawn into its new stage (E3 code round, gemini).
+ */
+const PICKED_ROLE_FIELDS: ReadonlySet<string> = new Set(['stage']);
+
+/** A role edit that is somebody typing: a text value, in a field that is not a pick. */
+function typedEdit(command: RolesCommand): command is Extract<RolesCommand, { readonly kind: 'edit' }> {
+  return command.kind === 'edit' && typeof command.value === 'string' && !PICKED_ROLE_FIELDS.has(command.field);
+}
+
+/**
  * One message from the page, as a command — or `ignore`.
  *
  * <p>Pure, and separate from the host, so every shape a webview can post is reachable from a test.
