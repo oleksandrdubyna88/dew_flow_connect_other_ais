@@ -23,7 +23,8 @@ public sealed class SecuritySessionCompatibilityTests
         using var directory = TempDir.For("coai-security-old-session-");
         var store = new SessionStore(directory);
         var session = new PersistedSession(new SessionState("old", "D:/fixture", "main", new PanelConfig())
-        { Rejections = [new(Defect, "Verified rejection")] }, []) { Pending = [Defect] };
+        { Rejections = [new(Defect, "Verified rejection")] }, [])
+        { Pending = [Defect] };
         var json = JsonNode.Parse(JsonSerializer.Serialize(session, ServerJsonContext.Default.PersistedSession))!;
         foreach (var finding in new[] { json["pending"]![0]!, json["state"]!["rejections"]![0]!["finding"]! })
         {

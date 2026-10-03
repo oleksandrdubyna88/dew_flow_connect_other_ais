@@ -23,7 +23,8 @@ public sealed class SecurityLaneBoundaryTests
         var work = Ordinary();
         (ReviewerInvocation, ReviewerOutcome)[] results = [(work.Invocation, new ReviewerOutcome.NonZeroExit(7, "fixture failure"))];
         var all = ReviewerSummaryFactory.From(results, ["gemini: credentials unavailable"],
-            [new SkippedRole("conventions", "no written rules")]) with { EndedByDeadline = TimeSpan.FromMinutes(5) };
+            [new SkippedRole("conventions", "no written rules")]) with
+        { EndedByDeadline = TimeSpan.FromMinutes(5) };
 
         var summary = SecurityRound.DecisionSummary(results, new RoundWork([work], []) { OrdinaryDue = true }, all);
 
