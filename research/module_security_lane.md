@@ -159,6 +159,12 @@ data directory without automatic pruning or a disk quota; its owner handles back
 Aggregate reproduction caps limit each round's additional payload. See the growth table in
 [the design plan](PLAN_a_security_lane_runs_beside_the_gate.md) for the computed worst case.
 
+Every method in the lane's own files is held at cyclomatic complexity 4 or less by CA1502 as a build
+error scoped to those files alone: the threshold is `src_mcp/CodeMetricsConfig.txt` (`CA1502: 4`, an
+`AdditionalFiles` item of the Core, Runners and server projects) and the scope is the `.editorconfig`
+path sections for `core/Security/*.cs`, `src/Server/Security*.cs`, `SecurityAnswerLimit.cs`,
+`InputCoverage.cs`, `SecurityFindingStore.cs` and `SecurityPreviewFork.cs`.
+
 `SecurityLaneRoundTests` drives the real engine, Git and SQLite with paid reviewers doubled.
 `SecurityEvidenceTests`, `SecurityLaneSettingsTests` and `SecurityCoverageTests` cover caps, routing,
 validation, deadline and ordinary-failure independence. `securityLane.test.ts` and
