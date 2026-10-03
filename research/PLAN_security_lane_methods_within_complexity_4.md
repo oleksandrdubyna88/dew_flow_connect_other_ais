@@ -1,10 +1,10 @@
 # PLAN — the security lane's methods within cyclomatic complexity 4
 
-> Status: **plan only, nothing implemented yet, 2026-10-03.** Scope: the security lane's own C# files
+> Status: **IMPLEMENTED, 2026-10-03.** Every method in the scoped files is at cyclomatic complexity ≤ 4, held there by CA1502 as a build error for exactly those files; deviations in the section below. Scope: the security lane's own C# files
 > (`src_mcp/core/Security/*`, `src_mcp/src/Server/Security*.cs`, `src_mcp/runners/Reviewers/SecurityAnswerLimit.cs`,
 > `InputCoverage.cs`, `src_mcp/src/Store/SecurityFindingStore.cs`). Behaviour-neutral refactor.
 >
-> Related docs: [module_security_lane.md](../research/module_security_lane.md), [architecture.md](../research/architecture.md).
+> Related docs: [module_security_lane.md](module_security_lane.md), [architecture.md](architecture.md).
 
 ## Goal
 
@@ -90,11 +90,20 @@ The gate runs once, over the whole diff, after S4 is committed.
 
 None. No table, file, cache or process is added.
 
+## Deviations — what shipped differently (2026-10-03)
+
+- **One more file:** `SecurityRound.cs` (`Clause` 9, `Notice` 6) was in scope but missing from the candidate table; it was refactored with the rest. The offender list was **20 methods** (from 5 to 10), measured by CA1502 itself, not by the rough count above.
+- **How CA1502 counts, measured:** every `if`, loop, `&&`, `||`, `?:`, `??` and `?.` adds one — including inside a lambda, charged to the method that holds it; `is`/`or` patterns and `catch` add nothing. `CodeMetricsConfig.txt` `CA1502: 4` reports complexity 5 and above (probed with a 4 and a 5).
+- **Characterization tests: 178** in nine new files, each observed green against the unrefactored code; teeth shown by deliberately breaking refusal priority, the source reader's deadline `break`, the slice note and the local-engine turn count (10 tests went red, restored).
+- **Refusal priority kept by reversal:** where a later `if` used to overwrite an earlier refusal (`ReadPrompt`, `ReadRun`), the new rule lists are evaluated in reverse so the same refusal wins.
+- **A slow test, on purpose:** the source reader's deadline characterization waits out the real 30-second budget — making the budget injectable would have changed the code under test.
+- Full Release suite 7196, 0 failed; the guard's teeth: one extra `if` in `InputCoverage.Of` fails the build with `error CA1502`.
+
 ## Definition of Done
 
-- [ ] Every scoped method ≤ 4, enforced by `CA1502` as an error for the scoped files; before/after table in the PR.
-- [ ] No existing test edited; full Release suite green together (a failure only acquitted by the same failure on clean main).
-- [ ] Characterization tests added for every newly-split branch that lacked one.
-- [ ] `dotnet format --verify-no-changes` clean; Release build 0 warnings.
-- [ ] `module_security_lane.md` updated; this plan promoted to `research/` with its deviations.
+- [x] Every scoped method ≤ 4, enforced by `CA1502` as an error for the scoped files; before/after table in the PR.
+- [x] No existing test edited; full Release suite green together (a failure only acquitted by the same failure on clean main).
+- [x] Characterization tests added for every newly-split branch that lacked one.
+- [x] `dotnet format --verify-no-changes` clean; Release build 0 warnings.
+- [x] `module_security_lane.md` updated; this plan promoted to `research/` with its deviations.
 - [ ] Code gate run over the diff; PR merged after CI and review comments are handled.

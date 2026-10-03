@@ -14,7 +14,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// Written against the code BEFORE their expressions were split to complexity 4 and observed green there
-/// (todo/PLAN_security_lane_methods_within_complexity_4.md). Each field is varied ALONE, because the original
+/// (research/PLAN_security_lane_methods_within_complexity_4.md). Each field is varied ALONE, because the original
 /// is one chain of <c>&amp;&amp;</c> and a dropped term would only show when that term is the one that differs.
 /// </remarks>
 public sealed class SecurityEvidenceProjectionCharacterizationTests

@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// Written against the code BEFORE the split and observed green there
-/// (todo/PLAN_security_lane_methods_within_complexity_4.md). <see cref="SecurityCoverageTests"/> asserts the
+/// (research/PLAN_security_lane_methods_within_complexity_4.md). <see cref="SecurityCoverageTests"/> asserts the
 /// guarantee (usage never proves coverage); this file asserts the exact texts and the half-estimate edge.
 /// </remarks>
 public sealed class InputCoverageCharacterizationTests

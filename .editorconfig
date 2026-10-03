@@ -70,7 +70,7 @@ dotnet_style_prefer_collection_expression = true:suggestion
 [*.{csproj,props,targets,slnx}]
 indent_size = 2
 
-# THE SECURITY LANE'S METHODS STAY WITHIN CYCLOMATIC COMPLEXITY 4 (todo/PLAN_security_lane_methods_within_complexity_4.md).
+# THE SECURITY LANE'S METHODS STAY WITHIN CYCLOMATIC COMPLEXITY 4 (research/PLAN_security_lane_methods_within_complexity_4.md).
 #
 # CA1502 reads its threshold from src_mcp/CodeMetricsConfig.txt (an AdditionalFiles item of Core, Runners and the
 # server project) and is OFF everywhere else: these sections switch it on for the lane's own files only, so a

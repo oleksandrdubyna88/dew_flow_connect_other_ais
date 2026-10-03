@@ -15,7 +15,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// <para>Written against the code BEFORE the split and observed green there
-/// (todo/PLAN_security_lane_methods_within_complexity_4.md).</para>
+/// (research/PLAN_security_lane_methods_within_complexity_4.md).</para>
 /// <para>The roster is built directly with a runtime lookup that finds nothing and a launch lookup that throws,
 /// so every arm is reached without a vendor: an exclusion is decided before the launch is looked up, and a
 /// pairing that gets as far as the launch lands in the per-pairing <c>catch</c> — the arm no other test

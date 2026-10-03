@@ -12,7 +12,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// Written against the code BEFORE the split and observed green there
-/// (todo/PLAN_security_lane_methods_within_complexity_4.md). Each render is the whole classified file: its
+/// (research/PLAN_security_lane_methods_within_complexity_4.md). Each render is the whole classified file: its
 /// path, the text kept, every signal in order, and both flags.
 /// </remarks>
 public sealed class SecuritySignalsCharacterizationTests

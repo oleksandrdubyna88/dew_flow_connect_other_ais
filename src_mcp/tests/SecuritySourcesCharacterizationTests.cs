@@ -18,7 +18,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// <para>Written against the code BEFORE the split and observed green there
-/// (todo/PLAN_security_lane_methods_within_complexity_4.md).</para>
+/// (research/PLAN_security_lane_methods_within_complexity_4.md).</para>
 /// <para>Real git, as <see cref="ASourceRequestIsServedOrRefusedTests"/> uses, so a served window is git's answer
 /// and not a belief about it; a wrapping launcher only intervenes for the arms about giving up.</para>
 /// <para>The deadline arm waits out the real 30-second collection budget: the budget is a constant of the lane,

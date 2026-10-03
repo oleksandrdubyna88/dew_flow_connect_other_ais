@@ -16,7 +16,7 @@ namespace CoaiMcp.Tests;
 /// </summary>
 /// <remarks>
 /// Written against the code BEFORE the split and observed green there
-/// (todo/PLAN_security_lane_methods_within_complexity_4.md). The existing tests assert how a clause STARTS;
+/// (research/PLAN_security_lane_methods_within_complexity_4.md). The existing tests assert how a clause STARTS;
 /// this file asserts it whole — the counts, the per-pair tail, and the trailing space the reply relies on.
 /// </remarks>
 public sealed class SecurityRoundCharacterizationTests
