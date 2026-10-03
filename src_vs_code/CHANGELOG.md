@@ -1,5 +1,22 @@
 # Changelog
 
+## Server 0.41.1 — 2026-10-03
+
+**`ask_human` is for the gate's own question.** A round's `call_human` notice and an AI's own "A or B?" question
+used to be one shape, so the sidebar showed the AI's question as "A review is waiting on you", offered the gate's
+three decisions for it, and `status` then reported the press as the gate's decision. Now:
+- a question the gate is holding still becomes a card in VS Code, marked as a question, and waits for you;
+- an AI's own question outside the gate does not: `ask_human` answers `ask_in_conversation` at once, and the AI asks
+  you in its chat;
+- a production-risk question outside the gate runs the question consultants first and hands their answers back
+  with that instruction;
+- `status` reports the gate's own answer, and a sentence typed after a pressed decision can no longer hide it;
+- `ask_human` stops when the call is cancelled.
+
+**The security lane's code is held to the family's complexity bound.** Twenty of its methods were split so that
+none exceeds a cyclomatic complexity of 4, and a build check now fails any that grows past it. Nothing it does
+changed: 178 characterization tests pinned every refusal, ordering and text before the split.
+
 ## Extension 0.62.1 — 2026-10-03
 
 **Only the gate's own questions reach VS Code.** An AI's own question — "A or B?" — used to arrive in the sidebar
