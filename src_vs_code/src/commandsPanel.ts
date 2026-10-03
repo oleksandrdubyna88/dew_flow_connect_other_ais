@@ -15,6 +15,8 @@ import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
+import { BusyHost } from './busyHost';
+import { type BusySnapshot, IDLE } from './busySnapshot';
 
 /**
  * The tab that edits the gate's commands — issue #467, Epic B. A thin host over `commands.ts`,
@@ -26,6 +28,12 @@ const SECTION = 'coai';
 const KEY = 'commands';
 
 let panel: vscode.WebviewPanel | undefined;
+
+/**
+ * What the tab asked for and the host has not finished — its busy mark (research/PLAN_busy_marks_on_every_webview.md, E3).
+ * One per open tab: made with it, painted into every redraw, settled when it closes.
+ */
+let busy: BusyHost | undefined;
 let context: vscode.ExtensionContext | undefined;
 let serverVersion = '';
 
@@ -46,6 +54,34 @@ function rows(): readonly CommandRow[] {
   return commandsFrom(readerFor(side(), config())(KEY));
 }
 
+/**
+ * Hears the tab, and holds each structural change under its busy mark (research/PLAN_busy_marks_on_every_webview.md, E3).
+ * One `BusyHost` per open tab, settled by the caller when it closes.
+ */
+function listen(opened: vscode.WebviewPanel): BusyHost {
+  const marks = new BusyHost({ post: (message) => { void opened.webview.postMessage(message); } });
+  busy = marks;
+  opened.webview.onDidReceiveMessage((message: unknown) => {
+    // A press on a text control is a setting of the person's, not an edit of the commands: it never
+    // enters the write queue.
+    if (!appliedTextControl(message, 'gate commands page')) {
+      // A fresh tab's `ready` is told what is running; a numbered change is held until it has been written and the
+      // tab redrawn. Typing posts unnumbered and settles on its own.
+      if (marks.heard(message as object)) {
+        return;
+      }
+      void marks.track(message as object, () => writes.queue(commandEdit(message)));
+    }
+  });
+
+  return marks;
+}
+
+/** What a redraw paints as still running: nothing when no tab is open to hold any. */
+function stillRunning(): BusySnapshot {
+  return busy?.snapshot() ?? IDLE;
+}
+
 export function openCommands(extension: vscode.ExtensionContext): void {
   context = extension;
   if (panel !== undefined) {
@@ -61,14 +97,10 @@ export function openCommands(extension: vscode.ExtensionContext): void {
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [], enableFindWidget: true },
   );
   const text = pushTextControlsTo(panel.webview);
-  panel.webview.onDidReceiveMessage((message: unknown) => {
-    // A press on a text control is a setting of the person's, not an edit of the commands: it never
-    // enters the write queue.
-    if (!appliedTextControl(message, 'gate commands page')) {
-      writes.queue(commandEdit(message));
-    }
-  });
+  const marks = listen(panel);
   panel.onDidDispose(() => {
+    marks.dispose();
+    busy = undefined;
     text.dispose();
     panel = undefined;
     // Whatever is still settling is somebody's typing; closing the tab must not lose it.
@@ -92,7 +124,7 @@ async function render(): Promise<void> {
     return;
   }
   const html = commandsHtml(
-    { rows: rows(), texts: await texts(), serverVersion, perSide: config().get('perSideSettings') === true, uiScale: currentUiScale(), textTone: currentTextTone() },
+    { rows: rows(), texts: await texts(), serverVersion, perSide: config().get('perSideSettings') === true, uiScale: currentUiScale(), textTone: currentTextTone(), busy: stillRunning() },
     randomBytes(16).toString('hex'),
   );
   // Re-checked: `await texts()` is a suspension point, and the tab can close across it.

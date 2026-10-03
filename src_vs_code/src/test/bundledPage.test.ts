@@ -53,7 +53,7 @@ test('the page script the bundle produces parses and runs', () => {
   const seen: Record<string, { innerHTML: string; textContent: string; hidden: boolean }> = {};
   const element = () => ({
     innerHTML: '', textContent: '', hidden: false, value: '', className: '',
-    addEventListener() {}, getAttribute: () => null, setAttribute() {}, querySelectorAll: () => [],
+    addEventListener() {}, getAttribute: () => null, setAttribute() {}, removeAttribute() {}, querySelectorAll: () => [],
   });
   const document_ = {
     getElementById: (id: string) => (seen[id] ??= element() as never),

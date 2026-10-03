@@ -108,7 +108,7 @@ none today (checked: no `void` before a prompt or `notifyAndAsk`), and the guard
 
 ### 3.6 Not in scope
 
-- The other webviews' busy marks — still [PLAN_busy_marks_on_every_webview.md](../todo/PLAN_busy_marks_on_every_webview.md).
+- The other webviews' busy marks — still [PLAN_busy_marks_on_every_webview.md](PLAN_busy_marks_on_every_webview.md).
 - A VS Code progress notification during work — separate, not asked for.
 
 ## 4. Build order

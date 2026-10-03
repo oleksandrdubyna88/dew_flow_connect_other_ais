@@ -26,7 +26,13 @@ import { RealRead, realView } from './realMethodView';
 import { RevisionPanel } from './revisionPanel';
 import { ALL, HeldTabs, reviewTabs } from './reviewTabs';
 import { asReviewMessage } from './bugzReviewMessages';
+import { BusyHost } from './busyHost';
+import { type BusySnapshot, IDLE } from './busySnapshot';
+
 import { BugChat, bugChat } from './reviewChoose';
+
+/** What a case that does its work at once answers with: nothing left to wait for. */
+const DONE: Promise<void> = Promise.resolve();
 
 /**
  * The window the review page lives in.
@@ -122,6 +128,12 @@ function inFlightKey(pair: ReviewPair): string {
 
 export class BugzReviewPanel {
   private panel: vscode.WebviewPanel | undefined;
+
+  /**
+   * What the window asked for and the host has not finished — its busy mark (research/PLAN_busy_marks_on_every_webview.md, E2).
+   * One per open window: made with it, painted into every repaint, settled when it closes.
+   */
+  private busy: BusyHost | undefined;
 
   /** Posts and redraws, in order — two decisions in flight would race the redraw between them. */
   private inFlight: Promise<void> = Promise.resolve();
@@ -298,7 +310,7 @@ export class BugzReviewPanel {
         this.calls.forget();
         this.panel = undefined;
       });
-      this.panel.webview.onDidReceiveMessage((m: unknown) => this.received(m));
+      this.listen(this.panel);
     }
 
     await this.draw();
@@ -309,32 +321,50 @@ export class BugzReviewPanel {
   }
 
   /**
+   * Hears the window, and holds what it asks for under its busy mark (research/PLAN_busy_marks_on_every_webview.md, E2).
+   * One `BusyHost` per open window, settled when it closes; a fresh page's `ready` — which this panel used to ignore —
+   * is told what is running.
+   */
+  private listen(panel: vscode.WebviewPanel): void {
+    const busy = new BusyHost({ post: (message) => { void panel.webview.postMessage(message); } });
+    this.busy = busy;
+    panel.onDidDispose(() => {
+      busy.dispose();
+      this.busy = undefined;
+    });
+    panel.webview.onDidReceiveMessage((m: unknown) => {
+      busy.heard(m as object);
+      void busy.track(m as object, () => this.received(m));
+    });
+  }
+
+  /**
    * What the page pressed, once it has been shown to be one of the things this panel understands.
    *
    * <p>A `switch` over the union rather than a lookup table: a plain object's prototype chain
    * answers `handlers['__proto__']` with something truthy and uncallable, and a `switch` has no
    * prototype to inherit from. `asReviewMessage` has already made every field the type it claims.</p>
    */
-  private received(raw: unknown): void {
+  private received(raw: unknown): Promise<void> {
     const m = asReviewMessage(raw);
     if (m === undefined) {
-      return;
+      return DONE;
     }
 
+    // Every case answers with the work it started, and `listen` holds it under the busy mark when the page numbered
+    // the press — so no case can leave a numbered press unsettled (E2 code round, gemini).
     switch (m.type) {
       case 'decide':
-        this.queue(() => decisionsFor(m.ids, m.keep, this.held, this.drafts));
-
-        return;
+        return this.queue(() => decisionsFor(m.ids, m.keep, this.held, this.drafts));
       case 'draft':
         this.drafts = new Map([...this.drafts, [m.id, m.text]]);
 
-        return;
+        return DONE;
       case 'comment':
         this.drafts = new Map([...this.drafts, [m.id, m.text]]);
-        this.queue(() => commentWrite(m.id, m.text, this.held));
+        void this.queue(() => commentWrite(m.id, m.text, this.held));
 
-        return;
+        return DONE;
       case 'expand':
       case 'expandAll':
         if (!m.open) {
@@ -346,53 +376,40 @@ export class BugzReviewPanel {
         }
         this.remember(m.ids, m.open);
 
-        return;
+        return DONE;
       case 'tab':
         this.narrow(m.strip, m.key);
 
-        return;
+        return DONE;
       case 'realText':
         this.realText = m.on;
 
-        return;
+        return DONE;
       case 'fetchReal':
         void this.answerReal(m.id, m.generation);
 
-        return;
+        return DONE;
       case 'openAt':
-        void this.opened(m.id, (pair) => this.revisions.openAt(pair, this.held));
-
-        return;
+        return this.opened(m.id, (pair) => this.revisions.openAt(pair, this.held));
       case 'openCurrent':
-        void this.opened(m.id, (pair) => this.revisions.openCurrent(pair, this.held));
-        return;
-
+        return this.opened(m.id, (pair) => this.revisions.openCurrent(pair, this.held));
       case 'openTree':
-        void this.opened(m.id, (pair) => this.revisions.openTree(pair, this.held));
-        return;
-
+        return this.opened(m.id, (pair) => this.revisions.openTree(pair, this.held));
       case 'calls':
-        void this.opened(m.id, (pair) => this.calls.ask(pair, this.held));
-        return;
-
+        return this.opened(m.id, (pair) => this.calls.ask(pair, this.held));
       case 'choose':
-        void this.opened(m.id, (pair) => this.hooks.choose(bugChat(pair, this.drafts)));
-        return;
-
+        return this.opened(m.id, (pair) => this.hooks.choose(bugChat(pair, this.drafts)));
       case 'openCall': {
         const named = calledOut(m.at);
-        if (named !== undefined) {
-          void this.calls.open(named.id, named.which, named.at);
-        }
+        return named === undefined ? Promise.resolve() : this.calls.open(named.id, named.which, named.at);
       }
-
-        return;
       default:
         void settingWritten(
           m.type === 'zoom' ? applyZoomDelta(m.delta) : applyToneDelta(m.delta), 'bugzReview');
+
+        return DONE;
     }
   }
-
   /**
    * Write down which rows are showing their code. It does NOT redraw.
    *
@@ -450,7 +467,7 @@ export class BugzReviewPanel {
    */
   private flushDrafts(): void {
     for (const [id, text] of this.drafts) {
-      this.queue(() => unwritten(new Map([[id, text]]), this.held));
+      void this.queue(() => unwritten(new Map([[id, text]]), this.held));
     }
     this.drafts = new Map<number, string>();
   }
@@ -462,7 +479,7 @@ export class BugzReviewPanel {
    * a write completes, and two redraws racing would leave the page showing whichever finished last
    * rather than what is true.</p>
    */
-  private queue(asked: () => readonly Decision[]): void {
+  private queue(asked: () => readonly Decision[]): Promise<void> {
     this.inFlight = this.inFlight.then(async () => {
       // Resolved HERE, when the write runs, and not when the press arrived: the previous link has
       // redrawn by now, so `this.held` carries the keep it wrote. Resolved at the press, a comment
@@ -497,6 +514,8 @@ export class BugzReviewPanel {
       });
       await this.draw();
     });
+
+    return this.inFlight;
   }
 
   /**
@@ -584,6 +603,11 @@ export class BugzReviewPanel {
   }
 
   /** A press about one row, or nothing at all when that row is no longer on the page. */
+  /** What a repaint paints as still running: nothing when no window is open to hold any. */
+  private stillRunning(): BusySnapshot {
+    return this.busy?.snapshot() ?? IDLE;
+  }
+
   private async opened(id: number, act: (pair: ReviewPair) => Promise<void>): Promise<void> {
     const pair = this.held.find((one) => one.findingId === id);
 
@@ -668,6 +692,8 @@ export class BugzReviewPanel {
       trouble: this.trouble,
       expanded: this.keptOpen(this.held),
       comments: this.drafts,
+      // What is still running, so the repaint a decision ends with does not drop a bar for work still going.
+      busy: this.stillRunning(),
       realText: this.realText,
       real: this.realFor(found.shown),
       revisions: this.revisions.stateFor(found.shown),

@@ -5,6 +5,8 @@ import { compareVersions } from './coaiInstall';
 import { FORM_FIELDS_CSS, FORM_HEAD_CSS, formCardCss, formFrameCss } from './formPageStyle';
 import { textControlsHtml, textControlsScript, textOf } from './textControls';
 import { escapeHtml } from './webviewHtml';
+import { type BusySnapshot, IDLE } from './busySnapshot';
+import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
 
 /**
  * The Edit commands page — issue #467, Epic B. Pure: the markup, its script and the parser of what the
@@ -21,6 +23,8 @@ export interface CommandsPageState {
   /** The text size and tone the page is drawn in; absent is the theme's own, as on the help page. */
   readonly uiScale?: number;
   readonly textTone?: number;
+  /** What the host had running when this tab was drawn: the busy mark's painted half (research/PLAN_busy_marks_on_every_webview.md). */
+  readonly busy?: BusySnapshot;
 }
 
 /** What the page can ask the host for: an edit of the rows, or a text written or restored. */
@@ -78,6 +82,12 @@ export function commandsSkewNote(serverVersion: string): string {
       + `Update it to ${COMMAND_MODELS_SINCE} or later.`;
 }
 
+/**
+ * The posts this tab numbers: the structural changes, each of which re-reads every command file and redraws the tab
+ * (research/PLAN_busy_marks_on_every_webview.md, E3). Not `text` or `retitle`: both are typing, settled for 300 ms.
+ */
+export const COMMANDS_TRACKED: readonly string[] = ['switch', 'restage', 'add', 'remove', 'restore'];
+
 export function commandsHtml(state: CommandsPageState, nonce: string): string {
   const note = commandsSkewNote(state.serverVersion);
 
@@ -91,6 +101,7 @@ export function commandsHtml(state: CommandsPageState, nonce: string): string {
 ${styles(textOf(state).size, textOf(state).tone)}
 </head>
 <body>
+${BUSY_BAR}
 <header><h1>Gate commands</h1>${textControlsHtml(textOf(state).size, textOf(state).tone)}</header>
 <p class="lead">The orders the gate hands the AI that called it. Everything here is saved as you type${state.perSide ? ', for this side of the machine' : ''}.</p>
 ${note.length > 0 ? `<div class="stale" role="status">${escapeHtml(note)}</div>` : ''}
@@ -101,7 +112,7 @@ ${state.rows.map((row) => customBlock(row, state.texts)).join('\n')}
 <h2>Shipped</h2>
 <p class="note">The words the built-in orders are made of. Write your own to replace them; an empty box is the shipped text, shown faintly. The words in <code>bold</code> before a box are kept by the server — they are how an order is recognised.</p>
 ${SHIPPED_COMMANDS.map((one) => shippedBlock(one, state.texts)).join('\n')}
-${script(nonce)}
+${script(nonce, state.busy ?? IDLE)}
 </body>
 </html>`;
 }
@@ -171,6 +182,7 @@ textarea { font-family: var(--vscode-editor-font-family); }
 .command > button { margin-top: 6px; }
 .marker { margin: 4px 0; }
 .badge { font-size: 0.8em; color: var(--vscode-textLink-foreground); }
+${BUSY_CSS}
 </style>`;
 }
 
@@ -179,12 +191,14 @@ textarea { font-family: var(--vscode-editor-font-family); }
  * checkbox and a select post on `change` ONLY — one press, one message (issue #338 found the roles page
  * sending two).
  */
-function script(nonce: string): string {
+function script(nonce: string, busy: BusySnapshot): string {
   return `<script nonce="${nonce}">
 (function () {
   const vscode = acquireVsCodeApi();
   ${textControlsScript()}
-  const post = (message) => { vscode.postMessage(message); };
+  ${busyMarkScript(busy, COMMANDS_TRACKED)}
+  // Through the busy mark: a structural change is numbered, typing passes through it unnumbered.
+  const post = (message, control) => { send(message, control || null); };
   const idOf = (el) => { const row = el.closest('[data-id]'); return row ? row.dataset.id : ''; };
   document.addEventListener('input', (event) => {
     const t = event.target;
@@ -194,17 +208,19 @@ function script(nonce: string): string {
   });
   document.addEventListener('change', (event) => {
     const t = event.target;
-    if (t.dataset.field === 'enabled') { post({ type: 'switch', id: idOf(t), value: t.checked }); }
-    if (t.dataset.field === 'stage') { post({ type: 'restage', id: idOf(t), value: t.value }); }
+    if (t.dataset.field === 'enabled') { post({ type: 'switch', id: idOf(t), value: t.checked }, t); }
+    if (t.dataset.field === 'stage') { post({ type: 'restage', id: idOf(t), value: t.value }, t); }
   });
   document.addEventListener('click', (event) => {
     const t = event.target;
-    if (t.closest('[data-add]')) { post({ type: 'add' }); return; }
+    if (t.closest('[data-add]')) { post({ type: 'add' }, t); return; }
     const remove = t.closest('[data-remove]');
-    if (remove) { post({ type: 'remove', id: idOf(remove) }); return; }
+    if (remove) { post({ type: 'remove', id: idOf(remove) }, remove); return; }
     const restore = t.closest('[data-restore]');
-    if (restore) { post({ type: 'restore', fileId: restore.dataset.restore }); }
+    if (restore) { post({ type: 'restore', fileId: restore.dataset.restore }, restore); }
   });
+  // LAST: this tab is ready to hear what is running (busyMark.ts).
+  vscode.postMessage({ type: 'ready' });
 })();
 </script>`;
 }

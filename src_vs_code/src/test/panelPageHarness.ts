@@ -5,7 +5,7 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import { LIVE_REGION_IDS } from '../panelSurface';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
-import { camel } from './rolesPageHarness';
+import { camel } from './datasetName';
 
 /**
  * The panel's pages, RUN — their own script over their own markup, for a test of any section's controls,
@@ -424,8 +424,11 @@ export class PageClock {
   }
 }
 
-/** The page's busy bar, read off its markup — drawn hidden, as the page draws it — or `null` when it has none. */
-function busyBarOf(html: string): Control | null {
+/**
+ * The page's busy bar, read off its markup — drawn hidden, as the page draws it — or `null` when it has none.
+ * Shared by every page runner that meets the bar: the rounds log's, the key tab's and the bugz review's.
+ */
+export function busyBarOf(html: string): Control | null {
   const tag = /<div\b([^>]*\bid="busy-bar"[^>]*)>/.exec(html);
   if (tag === null) {
     return null;

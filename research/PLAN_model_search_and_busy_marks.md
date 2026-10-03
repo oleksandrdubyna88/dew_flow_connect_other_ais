@@ -5,7 +5,7 @@
 > proceed (4 of 8 — codex rate-limited). E2: plan proceed (1 of 2), code proceed (4/4, local; 1 accepted, 8 rejected
 > on a measurement). E3: plan proceed (1/1, local; 1 accepted, 3 rejected), code proceed (4/4, local; 1 accepted, 10 rejected), final
 > code round proceed (8/8; 10 accepted, 4 rejected); own review (Opus) changed the shape — the render coalescer was withdrawn for a non-serialising tracker. Deviations in §8a. The open tails are
-> [PLAN_busy_marks_on_every_webview.md](../todo/PLAN_busy_marks_on_every_webview.md) and
+> [PLAN_busy_marks_on_every_webview.md](PLAN_busy_marks_on_every_webview.md) and
 > [PLAN_refuse_an_endpoint_row_without_a_model.md](PLAN_refuse_an_endpoint_row_without_a_model.md).
 > Scope: the two pages built by `pageDocument` (the sidebar and the Settings tab) — `src_vs_code/src/panelView.ts`,
 > `panelProvider.ts`, `extension.ts` (one `dispose` registration), four new modules (`selectSearch.ts`, `busyMark.ts`,
@@ -233,7 +233,7 @@ on `1056aed9` before any fix.
 ## 8. Follow-up, not built here
 
 Extracted on promotion into plans of their own: the same mark on the other webviews —
-[PLAN_busy_marks_on_every_webview.md](../todo/PLAN_busy_marks_on_every_webview.md) — and the server-side refusal of an
+[PLAN_busy_marks_on_every_webview.md](PLAN_busy_marks_on_every_webview.md) — and the server-side refusal of an
 endpoint row with no model (§4) — [PLAN_refuse_an_endpoint_row_without_a_model.md](PLAN_refuse_an_endpoint_row_without_a_model.md).
 
 ## 8a. What shipped differently (kept as each epic lands)
