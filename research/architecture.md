@@ -272,7 +272,7 @@ per vendor rather than one this product takes for them.
 | `coai-mcp` server | [module_server.md](module_server.md) | **shipped 2026-08-31** |
 | VS Code extension | [module_extension.md](module_extension.md) | **shipped 2026-08-31** (escalation loopback deferred) |
 | The panel ASKS which models exist | [module_extension.md](module_extension.md) · [PLAN_the_models_are_asked_rather_than_listed.md](PLAN_the_models_are_asked_rather_than_listed.md) | **shipped 2026-09-16** (issue #301). The panel now has a fifth discovery, and the first one whose peer is a CLI rather than a file or an HTTP catalogue: `panelProvider` → `claudeCli` (which binary, from reviewer rows AND consultant definitions) → `claudeProbe` → `versionProbe.capture` → the Claude CLI, with the answer kept in `<dataDir>/claude-models.json` for a week and keyed to that CLI's `--version`. It crosses into the CHAT as well: the discovery snapshot under `coai.chatDiscoveredModels` carries the probe, so a conversation's Claude list says what the panel's says. **The boundary is two-sided and the CLI ships on its own clock** — a family this build does not list is not offered, a candidate the CLI has never heard of stays UNVERIFIED rather than absent, and a version it no longer matches is withheld rather than presented as confirmed. The table is in the plan |
-| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the panel's *Team servers* section, add-a-reviewer and spending block are in; a sign-in belongs to a SIDE of the machine, and the *Server* section shows the address read-only with the server's version beside it. The container, the host edge and the release are epic 4 — and since 2026-09-08 a `server-v*` tag publishes six Native AOT binaries on a GitHub Release beside the image, with [deploy-server.yml](../.github/workflows/deploy-server.yml) driving `deploy/systemd-release.sh` on the host; the per-PERSON spending view is [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) |
+| Team server (`coai-server`) | [module_team_server.md](module_team_server.md) · [PLAN_team_server.md](PLAN_team_server.md) | **epics 1–3 complete, 2026-09-06** — the host, company sign-in, sessions, the vendor catalog, the account slots, `login`, the job queue with the review endpoints, and per-person usage with the admin company view; every route has an `http/` contract. The client runtime (`remote`, `--ask-remote`) and the *Team servers* settings (a tab of the Settings editor tab since 2026-09-28), add-a-reviewer and spending block are in; a sign-in belongs to a SIDE of the machine, and the *MCP server* tab shows the address read-only with the server's version beside it. The container, the host edge and the release are epic 4 — and since 2026-09-08 a `server-v*` tag publishes six Native AOT binaries on a GitHub Release beside the image, with [deploy-server.yml](../.github/workflows/deploy-server.yml) driving `deploy/systemd-release.sh` on the host; the per-PERSON spending view is [../todo/PLAN_team_usage_by_person.md](../todo/PLAN_team_usage_by_person.md) |
 | Measurement bench (`coai-bench`) | [module_bench.md](module_bench.md) · [../src_bench/README.md](../src_bench/README.md) | **shipped 2026-09-04** — drives the published server over stdio, records whole, judges separately |
 | Tests: the harness, its flows, its gaps | [module_tests.md](module_tests.md) | **recorded 2026-09-06** — three suites in-repo, the flow catalogue derived from the tool registry, and the two gaps named (no extension host, no real vendor in CI) |
 | One migration runner for both databases (`CoaiMcp.Storage`) | [module_server.md](module_server.md) · [PLAN_who_holds_a_key.md](PLAN_who_holds_a_key.md) | **story 1 shipped 2026-09-17.** `SqliteMigrator` — ordered steps, `user_version`, one transaction per step, WAL and a busy timeout — moved out of `RoundsDb` into a project BOTH binaries reference, because `coai-bugs.db` reached a host at `user_version = 0` and the gate ruled against a second copy. Deliberately not in `CoaiMcp.Core`, which is declared pure and holds no filesystem. `coai-bugs` gained `CorpusSchema.Steps` with step 1 frozen against the released SQL, `last_seen_month` and `admin_audit`, a per-KEY rate limit that is a setting, and one-server-per-directory enforced by a lock file; the promise it makes about contributors is now scoped and rewritten in `module_server.md` and `deploy/bugs/README.md` |
@@ -381,6 +381,45 @@ and not the columns, and the page asks `pragma_table_info` which shape it is loo
 assuming the newest. The other direction — the older BINARY reading a database this build has
 migrated — is checked against the real released artefact rather than argued, because a migration is
 one-way and getting it wrong strands a person until they update.
+
+## The panel is two surfaces: the sidebar and a Settings tab (2026-09-28)
+
+The sidebar `coai.panel` shows what is happening now — the open question, **Notifications**, **Active
+rounds** (running rounds and the consultations being had), **Phrases**, **Bugz** — and everything
+configured once moved into a **Settings** editor tab, opened by a `$(gear)` beside the help button
+(`coai.openSettings`): Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor
+keys, Team servers, This side, MCP server. Plan: [PLAN_settings_page.md](PLAN_settings_page.md).
+
+```mermaid
+flowchart LR
+  P["PanelProvider<br/>one state, one write queue,<br/>numbered renders, side by side"] --> S["SurfaceSlot sidebar<br/>WebviewView coai.panel"]
+  P --> T["SurfaceSlot settings<br/>WebviewPanel coaiSettings"]
+  R["PANEL_SECTIONS<br/>id · title · surface · body"] --> P
+  S -->|setting · command · focus · ready| P
+  T -->|setting · command · focus · tab · ready| P
+  P -->|settled · busy| S
+  P -->|settled · busy| T
+```
+
+**A posted setting, prompt or command is numbered, and the host settles the number** (2026-10-02,
+[PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md)). The page's `send()` stamps a `seq` and
+its document's id; `PanelProvider` keeps the operation in an `InFlight` record until its work and a render that started
+after it are done, posts `settled` to the page that asked and `busy {count, oldestMs}` to both, writes the same
+snapshot into every document it paints (never into the paint key), and answers a fresh document's `ready`. Renders are
+counted by a `RenderTracker` and still run side by side, so a render stalled on a slow fetch never holds up the next
+paint. All of it is inside the extension: nothing new crosses to coai-mcp or the Team server.
+
+**Nothing crosses a container that did not before**, and that is the point worth stating at this level:
+both webviews are painted by the SAME provider from the same state and write through the same queue, so
+the server sees the same settings file, the same `env` block and the same one-shot spawns whichever
+surface a person edited. The one thing that crossed was WORDING: coai-mcp and coai-server messages that
+sent a person to "the panel's Team servers section" now say **ConnectOtherAIs > Team servers** (and
+> Consultant, > MCP server) — plain ASCII on purpose: a real child's stderr carried a `→` as nothing at
+all, the same console path that already turns an em dash into `-`. That is deliberate phrasing rather than a new name, because the two halves
+ship on their own clocks: a new server paired with an extension that still draws a sidebar section, and
+an old server paired with one that draws a tab, both send the person somewhere that exists. The stale
+*Server* section those messages named has been called *MCP server* since 2026-09-07, and the old
+*Server-section Team-server block* the module-map row above describes was removed the same day.
 
 ## The extension gained two arrows of its own (2026-09-09)
 

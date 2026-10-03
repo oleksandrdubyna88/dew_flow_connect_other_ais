@@ -1,3 +1,4 @@
+import { asksAnEndpoint, endpointModels, endpointNote, NO_ENDPOINT, RowEndpoint } from './endpointModels';
 import { engineNote, LocalEngine } from './localEngines';
 import { ASKING_CLAUDE, ProbeResult, claudeModels } from './claudeModels';
 import { canonicalTeamServerUrl } from './teamServers';
@@ -15,10 +16,10 @@ import { Vendor } from './vendors';
  * overridden is a list that goes stale in front of someone who knows better.</p>
  */
 
-export interface ModelChoice {
-  readonly id: string;
-  readonly label: string;
-}
+// Declared in its own module so `endpointModels.ts` can name it without a ring back to this file; it is
+// re-exported here, where every existing importer looks for it.
+export type { ModelChoice } from './modelChoice';
+import type { ModelChoice } from './modelChoice';
 
 /** The shape of a vendor's CLI — what argv to build, not who the vendor is. */
 /**
@@ -121,6 +122,12 @@ export function modelsFor(
    * does not know is not second-guessed. (CodeRabbit, PR #335.)</p>
    */
   claudeExecutable = '',
+  /**
+   * The endpoint this ROW talks to, when it talks to one — and whatever that endpoint answered when it
+   * was last asked. The runtime alone cannot say: a `codex` row is the Codex CLI pointed at OpenAI, or
+   * at somebody else's endpoint, and only the second must never be offered the Codex cache.
+   */
+  endpoint: RowEndpoint = NO_ENDPOINT,
 ): ModelChoice[] {
   // A Team server's allowlist is as authoritative as an installed-model list, and for the same
   // reason: it is what this server will actually accept THIS minute. So the dropdown is discovered,
@@ -135,13 +142,13 @@ export function modelsFor(
       : offered;
   }
 
-  // A hosted API's list is neither discovered here nor curated: the panel does not spend a paid call
-  // per repaint, and a list shipped with this extension would be wrong for every vendor a person
-  // can point the row at. `coai-mcp --probe-api` prints the ids the key can call; the person types
-  // one, and the one they typed is the whole dropdown — never the Codex cache, which this arm's
-  // absence would have fallen through to (PLAN_feature_review.md, S1.2).
-  if (runtime === 'api') {
-    return current.length > 0 ? [{ id: current, label: current }] : [];
+  // A hosted endpoint's list is neither discovered on every repaint nor curated: the panel does not
+  // spend a call per repaint, and a list shipped with this extension would be wrong for every vendor a
+  // person can point the row at. What the endpoint listed when the person pressed ≡, else the one they
+  // typed — never the Codex cache (PLAN_feature_review.md, S1.2). This arm used to ask `runtime ===
+  // 'api'` alone, so a `codex` row on OpenRouter fell through to that cache (2026-10-01).
+  if (asksAnEndpoint(runtime, endpoint.baseUrl)) {
+    return endpointModels(current, endpoint);
   }
 
   // A local engine's list is DISCOVERED, and that is the whole difference from the others: what can
@@ -254,7 +261,7 @@ export const NO_REMOTE_CATALOG: RemoteProvenance = { models: [], named: '', cata
  * longer lists it. Accepted findings, this story's plan and code rounds.</p>
  */
 const CATALOG_NOT_HERE: Readonly<Record<Exclude<CatalogState, 'here'>, string>> = {
-  waiting: "this Team server's catalog has not arrived — the Team servers section says why.",
+  waiting: "this Team server's catalog has not arrived — the Team servers tab of Settings says why.",
   'no-server': 'no Team server on this side matches this reviewer — add it under Team servers, or remove the row.',
 };
 
@@ -295,15 +302,30 @@ export function probeFor(probe: ProbeResult | undefined, executable: string): Pr
   return probe.executable === executable ? probe : undefined;
 }
 
+/**
+ * What a caption may draw on beside the runtime and the Codex cache — each one optional, and passed by NAME.
+ *
+ * <p>They were five trailing positional parameters, and the row's endpoint made a sixth (SonarCloud S107, on
+ * the pull request that added it): a caller had to pad with `undefined`s to reach the one it held, and two
+ * neighbouring parameters of one type could be swapped without a compile error.</p>
+ */
+export interface ProvenanceFacts {
+  readonly localEngine?: LocalEngine | undefined;
+  readonly discoveredAgy?: readonly ModelChoice[] | undefined;
+  readonly remote?: RemoteProvenance | undefined;
+  readonly claudeProbe?: ProbeResult | undefined;
+  readonly askingClaude?: boolean | undefined;
+  /** The row's endpoint and any answer kept for it — what `modelsFor` was handed, so the caption describes that list. */
+  readonly endpoint?: RowEndpoint | undefined;
+}
+
 export function modelsProvenance(
   runtime: Runtime,
   discoveredCodex: readonly ModelChoice[],
-  localEngine?: LocalEngine,
-  discoveredAgy: readonly ModelChoice[] = [],
-  remote: RemoteProvenance = NO_REMOTE_CATALOG,
-  claudeProbe?: ProbeResult,
-  askingClaude = false,
+  facts: ProvenanceFacts = {},
 ): string {
+  const { localEngine, discoveredAgy = [], remote = NO_REMOTE_CATALOG, claudeProbe, askingClaude = false } = facts;
+  const endpoint = facts.endpoint ?? NO_ENDPOINT;
   // A Team-server row runs no CLI on this machine and has no cache here: its list came over HTTP
   // from a server's catalog. Without this arm the function fell through to the codex sentence, so a
   // Team-server reviewer was captioned "8 models the Codex CLI has cached for this machine" — a
@@ -321,10 +343,11 @@ export function modelsProvenance(
     // exists for: an empty dropdown with no explanation reads as "you have no models".
     return localEngine === undefined ? 'no engine probed yet.' : engineNote(localEngine);
   }
-  if (runtime === 'api') {
-    // Not asked from here, and the caption says how to ask: the probe is the product's own key path,
-    // and its `models` block is the list this key can actually call today.
-    return 'the endpoint is not asked from here — `coai-mcp --probe-api --vendor <id>` lists the model ids this key can call; type the exact id.';
+  if (asksAnEndpoint(runtime, endpoint.baseUrl)) {
+    // An `api` row AND a `codex` row on somebody else's endpoint: the caption is about that endpoint —
+    // never the Codex CLI's cache, which is what an OpenRouter row was captioned with until 2026-10-01.
+    // It used to send the person to a terminal for `coai-mcp --probe-api`; the ≡ on the card asks it.
+    return endpointNote(endpoint);
   }
   if (runtime === 'gemini') {
     return 'a curated list — the Gemini CLI publishes none. Any other model can be typed in.';

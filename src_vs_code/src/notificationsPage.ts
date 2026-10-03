@@ -3,6 +3,7 @@ import { Grouped } from './notificationsRead';
 import { PAGE_SIZE, asInstant, compareRows } from './pageTables';
 import { PAGE_STYLE } from './notificationsPageStyle';
 import { OPENS_SORTED_BY, TABS, firstTab, tabStrip, tableHtml } from './notificationsRows';
+import { PLAIN_TEXT, TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle, textOf, type TextSettings } from './textControls';
 
 /**
  * The notifications page: every message this product showed a person, and what to do about it.
@@ -46,6 +47,9 @@ export interface PageState {
   readonly notice?: string;
   /** Set when the ledgers could not be read at all — never rendered as an empty table. */
   readonly unreadable?: string;
+  /** The text size and tone the page is drawn in; absent is the theme's own, as on the help page. */
+  readonly uiScale?: number;
+  readonly textTone?: number;
 }
 
 /**
@@ -131,8 +135,15 @@ function noticeLine(state: PageState): string {
     + `${escapeHtml(said)}</p>`;
 }
 
-/** The shell every page here shares, so the failure page and the real one cannot drift apart. */
-function shell(nonce: string, body: string, script: string): string {
+/**
+ * The shell every page here shares, so the failure page and the real one cannot drift apart.
+ *
+ * <p>The text controls are drawn only on a page that HAS a script: the waiting and unreadable pages have
+ * none, and a control with nothing behind it is a dead control. Their size and tone come after the
+ * shared sheet, whose `body` rule roots the text in the theme's size, so the later rule wins.</p>
+ */
+function shell(nonce: string, body: string, script: string, text: TextSettings = PLAIN_TEXT): string {
+  const controls = script === '' ? '' : textControlsHtml(text.size, text.tone);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -140,10 +151,15 @@ function shell(nonce: string, body: string, script: string): string {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Notifications</title>
-<style>${PAGE_STYLE}</style>
+<style>${PAGE_STYLE}
+${TEXT_CONTROLS_CSS}
+  body { ${textControlsStyle(text.size, text.tone)} }
+  /* The title's own margin moves to the header that now holds it beside its controls. */
+  header { display: flex; align-items: baseline; gap: 12px; margin: 16px 0 8px; }
+  header h1 { margin: 0; }</style>
 </head>
 <body>
-<h1>Notifications</h1>
+<header><h1>Notifications</h1>${controls}</header>
 ${body}
 ${script === '' ? '' : `<script nonce="${nonce}">
 ${script}
@@ -159,12 +175,13 @@ ${script}
  * webview that failed. It says which directory it is reading, because that is the one fact that
  * makes a slow open diagnosable. (codex, the S5 code round.)</p>
  */
-export function waitingPageHtml(dataDir: string, nonce: string): string {
+export function waitingPageHtml(dataDir: string, nonce: string, text: TextSettings = PLAIN_TEXT): string {
   return shell(
     nonce,
     `<p class="scope">Reading <code>${escapeHtml(dataDir)}</code>…</p>`
     + '<p class="quiet">If this directory is on a network share, the first read can take a moment.</p>',
     '',
+    text,
   );
 }
 
@@ -178,6 +195,7 @@ export function notificationsPageHtml(state: PageState, nonce: string): string {
       `<p class="failed">The notifications could not be read: ${escapeHtml(state.unreadable)}</p>`
       + `<p class="quiet">Nothing was marked read. Reading <code>${escapeHtml(state.dataDir)}</code>.</p>`,
       '',
+      textOf(state),
     );
   }
   const open = firstTab(state.rows);
@@ -187,7 +205,7 @@ export function notificationsPageHtml(state: PageState, nonce: string): string {
   <span id="where"></span>
   <button type="button" id="next">Next</button></p>`;
 
-  return shell(nonce, body, pageScript(state.generation));
+  return shell(nonce, body, pageScript(state.generation), textOf(state));
 }
 
 /**
@@ -226,6 +244,7 @@ function pageScript(generation: number): string {
   // Acquired ONCE: acquireVsCodeApi throws the second time it is called in a webview, so acquiring
   // it inside a handler would work until somebody pressed the button twice.
   var api = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+  ${textControlsScript('api')}
   var markAll = document.getElementById('mark-all');
 
   function sectionOf(tab) {

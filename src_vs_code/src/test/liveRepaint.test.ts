@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
-import { PANEL_COMMANDS, panelHtml, PanelState, staticKey } from '../panelView';
+import { PANEL_COMMANDS, PanelState } from '../panelView';
+import { everyPanelPage, paintKeys } from './panelPages';
 
 /**
  * What has to repaint, and what must not.
@@ -40,16 +41,25 @@ const state = (over: Partial<PanelState> = {}): PanelState => ({
   ...over,
 });
 
-test('choosing a different window is a repaint, not a silent preference', () => {
-  assert.notEqual(
-    staticKey(state({ usageWindow: 'month' })),
-    staticKey(state()),
-    'the click changed the state and the panel would have painted the same HTML',
+/**
+ * The spending window is drawn on the rounds-log page now, not in the panel.
+ *
+ * <p>This test used to assert the opposite, and it was right while the spending chart was a section
+ * of the panel: a click on Today, Month or Year that produced the same key repainted nothing. The chart
+ * moved to the rounds log's second tab on 2026-09-05, and the key is now built from what the PANEL draws
+ * (`research/PLAN_settings_page.md`, F1) — so a window change must no longer reload the sidebar, whose
+ * markup it does not touch. The chart's own repaint is the rounds log's.</p>
+ */
+test('choosing a spending window does not reload the panel, which no longer draws the chart', () => {
+  assert.equal(
+    paintKeys(state({ usageWindow: 'month' })),
+    paintKeys(state()),
+    'a key that moved here would reload the sidebar for a chart it does not show',
   );
 });
 
 test('a newly published server version repaints the Server section', () => {
-  assert.notEqual(staticKey(state({ latestServerVersion: '0.7.0' })), staticKey(state()));
+  assert.notEqual(paintKeys(state({ latestServerVersion: '0.7.0' })), paintKeys(state()));
 });
 
 /**
@@ -75,8 +85,8 @@ test('choosing a different data directory repaints the section that says so', ()
   const elsewhere = { ...here, directory: '/mnt/nas/coai', side: '', env: { COAI_DATA_DIR: '/mnt/nas/coai' } };
 
   assert.notEqual(
-    staticKey(state({ storage: here })),
-    staticKey(state({ storage: elsewhere })),
+    paintKeys(state({ storage: here })),
+    paintKeys(state({ storage: elsewhere })),
     'the directory changed and the panel would paint the same HTML — which a person reads as a '
     + 'button that did nothing',
   );
@@ -91,8 +101,9 @@ test('choosing a different data directory repaints the section that says so', ()
  * nothing for a day.</p>
  */
 test('every button in the panel posts a command the panel declares', () => {
-  const html = panelHtml(state({ latestServerVersion: '9.9.9' }), 'n0nce');
-  const posted = [...html.matchAll(/data-command="([a-zA-Z]+)"/g)].map((m) => m[1]!);
+  // Every page: a button that moves to another page must stay in this scan.
+  const posted = everyPanelPage(state({ latestServerVersion: '9.9.9' }))
+    .flatMap((page) => [...page.html.matchAll(/data-command="([a-zA-Z]+)"/g)].map((m) => m[1]!));
 
   assert.ok(posted.includes('installServer'), 'the Update button is the one this test exists for');
   for (const command of posted) {

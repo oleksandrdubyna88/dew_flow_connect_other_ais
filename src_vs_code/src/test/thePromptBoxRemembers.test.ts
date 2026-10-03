@@ -2,11 +2,13 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { PanelState, REPAINT_HOLD_MS, panelHtml, staticKey, withholdsRepaint } from '../panelView';
+import { PanelState, REPAINT_HOLD_MS, withholdsRepaint } from '../panelView';
+import { everyPageHtml, paintKeys } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import { ChatSettings } from '../chatSettings';
+import { withoutSeq } from './panelPageHarness';
 
 /**
  * What is typed into *What to ask about the selection* stays typed.
@@ -181,12 +183,17 @@ function run(elements: readonly FakeElement[], over: Partial<PanelState> = {}): 
     timers.delete(id);
   };
 
-  const script = pageScript(panelHtml(state(over), 'test-nonce'));
+  const script = pageScript(everyPageHtml(state(over), 'test-nonce'));
    
   // its text is what the code round refused.
   const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', script);
   body(
-    () => ({ postMessage: (message: Record<string, unknown>) => { posted.push(message); } }),
+    // A webview always has its state API; this one has nothing saved, which is a first load.
+    () => ({
+      postMessage: (message: Record<string, unknown>) => { posted.push(message); },
+      getState: (): unknown => undefined,
+      setState: (): void => undefined,
+    }),
     fakeDocument,
     fakeWindow,
     later,
@@ -217,8 +224,9 @@ const promptBox = (): FakeElement => new FakeElement('TEXTAREA', { setting: 'cha
 const languagePicker = (): FakeElement => new FakeElement('SELECT', { setting: 'chatLanguage' }, 'en');
 /** Two controls that share a setting name and are told apart only by their role. */
 const roundsFor = (role: string): FakeElement => new FakeElement('INPUT', { setting: 'rounds', role }, '2', 'number');
+/** The writes, each checked for and stripped of its sequence number (`withoutSeq`, the busy mark's numbering). */
 const settings = (page: Page): Record<string, unknown>[] =>
-  page.posted.filter((message) => message.type === 'setting');
+  page.posted.filter((message) => message.type === 'setting').map(withoutSeq);
 const focusMessages = (page: Page): Record<string, unknown>[] =>
   page.posted.filter((message) => message.type === 'focus');
 
@@ -298,7 +306,10 @@ test('leaving the box writes what was typed, before it says the box is free', ()
   page.fire(0, 'input');
   page.fire(0, 'focusout', { relatedTarget: null });
 
-  const order = page.posted.map((message) => `${String(message.type)}:${String(message.value ?? message.editing)}`);
+  // `ready` is the page announcing it loaded (busyMark.ts) — before any of this, and not part of the order guarded here.
+  const order = page.posted
+    .filter((message) => message.type !== 'ready')
+    .map((message) => `${String(message.type)}:${String(message.value ?? message.editing)}`);
   assert.deepEqual(order, ['focus:true', 'setting:поясни', 'focus:false'],
     'the value must be written before the panel is told it may repaint');
 });
@@ -350,14 +361,14 @@ test('an ordinary paint takes nobody’s focus', () => {
 });
 
 test('a focus name that is not a setting name never reaches the page', () => {
-  const hostile = panelHtml(
+  const hostile = everyPageHtml(
     state({ focus: { id: '</script><script>alert(1)', start: 0, end: 0 } }), 'test-nonce');
 
   assert.ok(!hostile.includes('alert(1)'), 'a value echoed from the webview was written into its own script');
   assert.match(hostile, /const focusOn = null;/, 'the id was escaped rather than refused');
 
   // And a caret that is not two ordered whole numbers is coerced rather than carried.
-  const silly = panelHtml(
+  const silly = everyPageHtml(
     state({ focus: { id: 'chatPrompt|||', start: -5, end: Number.NaN } }), 'test-nonce');
 
   assert.match(silly, /const focusOn = \{"id":"chatPrompt\|\|\|","start":0,"end":0\};/);
@@ -373,14 +384,14 @@ test('a chat setting repaints the panel now, because there is no longer a box to
   // has to re-fill the models beside it — which a section the paint decision cannot see never does.
   const chosen: ChatSettings = { ...chat, model: 'antigravity' };
 
-  assert.notEqual(staticKey(state({ chat: chosen })), staticKey(state()),
+  assert.notEqual(paintKeys(state({ chat: chosen })), paintKeys(state()),
     'choosing a provider does not move the repaint key, so the model select beside it never re-fills');
 });
 
 test('the free-text hazard the old rule guarded is gone with the box, not merely overruled', () => {
   // The rule above is only safe while the section has nothing a person types INTO. This asserts
   // that, so re-introducing a textarea here fails with this sentence rather than by flickering.
-  const body = panelHtml(state(), 'n0nce');
+  const body = everyPageHtml(state(), 'n0nce');
   // Ends at whatever section comes NEXT rather than at a named one: the consultant was inserted
   // between the chat and the prompts, and a hard-coded end would have quietly swallowed it — this
   // assertion would then have been failing about somebody else's controls.
@@ -407,10 +418,12 @@ test('the host never renders from a configuration it has not finished writing', 
   const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
 
   const awaits = source.indexOf('await this.writes.settled();');
-  const paints = source.indexOf('const key = staticKey(state);');
+  const paints = source.indexOf('paintEach(this.slots, (slot) => this.pageFor(slot, state), live);');
   assert.ok(awaits > 0 && paints > awaits, 'render must await the write queue before it decides what to paint');
 
-  assert.match(source, /if \(key !== this\.paintedKey && !withholdsRepaint\(this\.editingSince, Date\.now\(\)\)\)/,
+  // Whether a control is being edited is decided per page by `SurfaceSlot.paint`, reached through
+  // `paintEach` — both RUN in `surfaceSlot.test.ts`; what is read here is only that the render uses it.
+  assert.match(source, /paintEach\(this\.slots, \(slot\) => this\.pageFor\(slot, state\), live\)/,
     'the paint no longer consults whether a control is being edited');
   // That a rejected write does not poison the queue is RUN in `snapBackQueue.test.ts`, on `WriteQueue`.
   assert.match(source, /private enqueue\(work: \(\) => Promise<void>\): void \{\s*this\.writes\.enqueue\(work\);/,
@@ -436,13 +449,15 @@ test('leaving a box the pause already saved does not write it a second time', ()
 test('the hold is not renewed by moving between controls, and disposal forgets it', () => {
   const source = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'panelProvider.ts'), 'utf8');
 
-  assert.match(source, /if \(this\.editingSince === 0\) \{\s*\n\s*this\.editingSince = Date\.now\(\);/,
-    'every focus restarts the clock again, so tabbing between controls withholds a paint forever');
-  assert.match(source, /onDidDispose\(\(\) => \{[\s\S]{0,120}this\.forgetEditing\(\);/,
+  // Both halves moved into `SurfaceSlot` and are RUN in `surfaceSlot.test.ts`: 'moving between controls does
+  // not renew the hold' and 'disposing the view it holds lets go of it and of its edit hold'. Read here only:
+  // the sidebar's disposal reaches its slot.
+  assert.match(source, /onDidDispose\(\(\) => \{ this\.sidebar\.detach\(view\); \}\)/,
     'a sidebar closed mid-sentence leaves the host believing a control is still being edited');
   // The wait itself moved into `WriteQueue` and is RUN in `snapBackQueue.test.ts` — a write appended while
-  // it waited is waited for too. What stays read here is only that render is the one that waits.
-  assert.match(source, /async render\(\): Promise<void> \{[\s\S]{0,900}await this\.writes\.settled\(\);/,
+  // it waited is waited for too. What stays read here is only that render is the one that waits — in `renderNow`, the
+  // body every counted `render()` call runs (renderTracker.ts, research/PLAN_model_search_and_busy_marks.md §3.14).
+  assert.match(source, /async renderNow\(number: number\): Promise<void> \{[\s\S]{0,900}await this\.writes\.settled\(\);/,
     'render no longer waits for the write queue, so it paints a configuration it has not finished writing');
 });
 

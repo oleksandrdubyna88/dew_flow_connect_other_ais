@@ -38,7 +38,28 @@ public sealed class KeyVault(IProcessLauncher launcher, string executable = Cred
     public static KeyVault ForThisMachine(IProcessLauncher launcher, Func<string, string?> env) =>
         new(launcher, CredsCli.OnPath, CredsCli.Present(env, CredsCli.ThisOs, File.Exists));
 
-    public async Task<VaultKeys> ReadAsync(string? configKey, CancellationToken ct = default)
+    /// <summary>
+    /// The vault, unlocked with the <see cref="KeyVariable"/> the LAYERED configuration holds — the
+    /// production road for every mode that reads it.
+    /// </summary>
+    /// <remarks>
+    /// <para><b>Layered, not the environment.</b> The panel writes the config key into the settings
+    /// file and nowhere else, so <paramref name="configuration"/> is what <see cref="SettingsFile.Layer"/>
+    /// returns: the file, with the client's environment outranking it key by key. Every vault read took
+    /// the key from the raw environment until 2026-10-01, three lines after building that layer for every
+    /// other setting — a key saved in the panel was never seen, and every vendor needing one was dropped
+    /// from every round. <c>TheVaultKeyIsReadWhereThePanelWritesItTests</c> forbids the raw lookup.</para>
+    /// <para>It is the ONLY public read: the key-taking one below is private, so a caller cannot hand the
+    /// vault a key it looked up for itself — which is the shape the defect had, at all three sites.</para>
+    /// <para>Where the <c>creds</c> CLI is found is still the environment's business — that is a fact
+    /// about this machine, not a setting — which is why <see cref="ForThisMachine"/> keeps taking it.</para>
+    /// </remarks>
+    public Task<VaultKeys> ReadFromConfigurationAsync(Func<string, string?> configuration, CancellationToken ct = default) =>
+        // Qualified on purpose: this is the one sanctioned lookup, and the scan that forbids every other
+        // one proves it is still alive by finding THIS line.
+        ReadAsync(configuration(KeyVault.KeyVariable), ct);
+
+    private async Task<VaultKeys> ReadAsync(string? configKey, CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(configKey))
         {

@@ -1,5 +1,6 @@
 import { FEATURE_CODE, FEATURE_DOCUMENT, FEATURE_STAGE, MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, builtInFor, composed, isActive, isBuiltIn, isProgramming, stageOf, whyNotAskable, type RoleRow } from './roles';
-import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
+import { formBodyCss } from './formPageStyle';
+import { TEXT_CONTROLS_CSS, textControlFrom, textControlsHtml, textControlsScript, textOf } from './textControls';
 import { STOOD_DOWN, type Tombstone } from './roleDeletion';
 import { escapeHtml } from './webviewHtml';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
@@ -102,6 +103,9 @@ export interface RolesPageState {
 
   readonly uiScale: number;
 
+  /** How far the text is from the theme's own colour; absent is the theme's own, as on the help page. */
+  readonly textTone?: number;
+
   /**
    * Which of the three tabs is open, held by the HOST rather than by the page.
    *
@@ -123,6 +127,7 @@ export type RolesCommand =
   | { readonly kind: 'editPrompt'; readonly id: string; readonly promptId: string; readonly field: PromptField; readonly value: string }
   | { readonly kind: 'restorePrompt'; readonly id: string; readonly promptId: string }
   | { readonly kind: 'zoom'; readonly delta: number }
+  | { readonly kind: 'tone'; readonly delta: number }
   /** Which of the three sections is open — decided on the page, remembered by the host. */
   | { readonly kind: 'tab'; readonly id: string }
   /** A deletion the mirror could not carry, finished locally with the cost accepted. */
@@ -162,12 +167,8 @@ export function roleEdit(message: unknown): RolesCommand {
 
   const said = message as Record<string, unknown>;
   const type = said['type'];
-  if (type === 'zoom') {
-    const delta = said['delta'];
-
-    return typeof delta === 'number' && Number.isFinite(delta)
-      ? { kind: 'zoom', delta: Math.max(-1, Math.min(1, Math.trunc(delta))) }
-      : IGNORE;
+  if (type === 'zoom' || type === 'tone') {
+    return textControlFrom(said) ?? IGNORE;
   }
   if (type === 'add') {
     return { kind: 'add' };
@@ -390,7 +391,7 @@ export function tooOldFor(serverVersion: string, rows: readonly RoleRow[]): stri
 
   return `<div class="stale">The coai-mcp you have installed (${escapeHtml(serverVersion)}) does not read `
     + `roles at all, so nothing on this page will run. Update it to ${escapeHtml(CUSTOM_ROLES_SINCE)} `
-    + `or later — the <b>MCP server</b> section of the panel.</div>`;
+    + `or later — the <b>MCP server</b> tab of ConnectOtherAIs Settings.</div>`;
 }
 
 /**
@@ -534,10 +535,10 @@ export function rolesHtml(state: RolesPageState, nonce: string): string {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Review roles</title>
-${styles(state.uiScale)}
+${styles(textOf(state).size, textOf(state).tone)}
 </head>
 <body>
-<header><h1>Review roles</h1>${zoomControlHtml(state.uiScale)}</header>
+<header><h1>Review roles</h1>${textControlsHtml(textOf(state).size, textOf(state).tone)}</header>
 <p class="lead">The question each reviewer asks. Everything here is saved as you type${state.perSide ? ', for this side of the machine' : ''}.</p>
 ${strandedHtml(state.stranded ?? [])}
 ${tooOldFor(state.serverVersion, state.rows)}${unknownServerNote(state.serverVersion, state.rows)}
@@ -574,12 +575,13 @@ ${script(nonce)}
 </html>`;
 }
 
-function styles(uiScale: number): string {
+function styles(uiScale: number, textTone: number): string {
+  // The size and the tone INSIDE the body rule: written loose at the top of the sheet, as they once were,
+  // a browser read them and the next rule as one invalid selector, and dropped both.
   return `<style>
-${zoomStyle(uiScale)}
-${ZOOM_CSS}
-body { font-family: var(--vscode-font-family); color: var(--vscode-foreground);
-  background: var(--vscode-editor-background); padding: 0 16px 24px; }
+${TEXT_CONTROLS_CSS}
+/* The Chat presets column (formPageStyle.ts), the operator's ask of 2026-09-29. */
+${formBodyCss(uiScale, textTone)}
 header { display: flex; align-items: baseline; gap: 12px; }
 h1 { font-size: 1.4em; }
 h2 { font-size: 1.1em; margin: 20px 0 2px; }
@@ -633,7 +635,7 @@ function script(nonce: string): string {
   return `<script nonce="${nonce}">
 (function () {
   const vscode = acquireVsCodeApi();
-  ${zoomScript()}
+  ${textControlsScript()}
   // Delegated on the document: every block is replaced whenever the rows change, and a listener
   // bound to one field would die with the block it was bound to.
   const roleOf = (el) => el.closest('[data-id]');

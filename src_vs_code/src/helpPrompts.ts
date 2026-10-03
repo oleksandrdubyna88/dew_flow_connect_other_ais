@@ -44,12 +44,12 @@ export const PROMPT_TEXTS: Readonly<Record<string, string>> = {
 };
 
 /**
- * How the page groups them. The conventions pass stands on its own: it is not a lens on one role's
- * question, it is a different question that all three code roles ask in round 1.
+ * How the page groups them. Conventions stands on its own: it is a code role of its own with ONE
+ * question and no lenses, not a lens on another role's question.
  */
 export const PROMPT_GROUPS: readonly { readonly role: string; readonly ids: readonly string[] }[] = [
   { role: "Plan review", ids: ['plan-critique', 'plan-assumptions', 'plan-human-path', 'plan-data-loss', 'plan-operability', 'plan-scope-creep'] },
-  { role: "Conventions (all three code roles, round 1)", ids: ['conventions'] },
+  { role: "Conventions (a code role of its own)", ids: ['conventions'] },
   { role: "Architecture", ids: ['architecture', 'arch-boundaries', 'arch-evolution', 'arch-coupling', 'arch-naming', 'arch-testability'] },
   { role: "Security & reliability", ids: ['security-reliability', 'sec-memory-leaks', 'sec-attack', 'sec-blast-radius', 'sec-concurrency', 'sec-supply-chain'] },
   { role: "Performance & UX-DX", ids: ['uxdx-performance', 'perf-scale', 'dx-ergonomics', 'perf-first-run', 'perf-wasted-work', 'ux-undo'] },

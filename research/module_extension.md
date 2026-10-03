@@ -402,7 +402,7 @@ roles. The comment was reworded. A comment in this stylesheet is not a private n
 ### Each Consultant row is a framed group in its client's own colour (2026-09-15)
 
 **REVIEWERS** draws one bordered card per vendor with a 3px left edge in that vendor's colour, and
-the same colour follows it into *Active rounds* and the rounds log — a vendor can be walked from its
+the same colour follows it into *Active gates* and the rounds log — a vendor can be walked from its
 settings to its running round without reading. **CONSULTANT** drew four flat `.field` blocks: no
 frame, nothing grouping a caller's controls, no colour. `.consultant-row` existed as a *data* hook
 with no CSS rule anywhere in the panel (issue #291).
@@ -2504,8 +2504,8 @@ was for. The server half is `module_server.md`, *epic 4*.
 |---|---|
 | **Four settings** in the *Consultant* section, under who is asked: the mode (Off / Remind / Require, a segmented control) and three counts. Read the way the server reads them — a mode matched without case, anything else `remind`; a count a positive whole number the server can hold, or the default — and crossing as `COAI_CADENCE_*` only when they differ. Declared in `package.json`, kept per side, described in the consultant article in all five languages. | `cadenceSettings.ts`, `settingsShape.ts` (`CoaiSettings.cadence`), `panelView.ts` |
 | **The defaults are the server's**: `cadenceSettings.test.ts` reads `CadenceRule.cs` for every number, the enum for the modes, and `PanelSettings.cs` for the keys and the mode's fallback. | `src/test/cadenceSettings.test.ts` |
-| **The line in *Active rounds***: `PLAN_x.md · epics closed 4/14 · consultation for epics 4-6: due · branch epic-1` — the branch labelled and set off with the sentence's own separator (bare, it read as the sentence's last word, "due epic-1" — the operator, from the plan's live check, 2026-09-26); the current group is the one holding the first epic not yet closed; `taken` once consulted; in `require`, `due — the code round waits for it`; the risky pieces counted when named; a whole plan closed says so; an unreadable record is said and nothing else. Marked `stale` when it asks something of the reader. | `cadenceLine.ts` (`cadenceSaid`, `cadenceLinesHtml`) |
-| **One body for the first paint and the live push** (`activeRounds`), in the `#live-rounds` region rather than a new one, so the two cannot disagree about whether the line is there. | `panelView.ts` |
+| **The line in *Consultation cadence*** (in *Active rounds* until 2026-09-29, a section of its own since): `PLAN_x.md · epics closed 4/14 · consultation for epics 4-6: due · branch epic-1` — the branch labelled and set off with the sentence's own separator (bare, it read as the sentence's last word, "due epic-1" — the operator, from the plan's live check, 2026-09-26); the current group is the one holding the first epic not yet closed; `taken` once consulted; in `require`, `due — the code round waits for it`; the risky pieces counted when named; a whole plan closed says so; an unreadable record is said and nothing else. Marked `stale` when it asks something of the reader. | `cadenceLine.ts` (`cadenceSaid`, `cadenceLinesHtml`) |
+| **One body for the first paint and the live push** (`cadenceBody`), in the `#live-cadence` region of the sidebar's own *Consultation cadence* section (in `#live-rounds` until 2026-09-29), so the two cannot disagree about whether the line is there — and, empty, it says why: the cadence is off, or nothing has been read yet. | `panelView.ts` |
 | **The probes are bounded** (the risk consultation for story 4.2, point 3): only sessions that moved in the last day and hold a plan; one `--cadence` at a time; a 30 s TTL; never awaited by a render; a repaint only when an answer CHANGED, which with the TTL is what stops the loop; the last answer kept on a timeout, a 65 or a body that is not an answer, and the 65 logged once; a 64 ends probing for the window's life; no probing at all while the cadence is off. The consultation watcher resets the TTL; an outcome recorded on a LAPSED consultation, which the watcher does not see, is picked up by the TTL. | `cadenceProbe.ts`, `panelProvider.ts`, `extension.ts` |
 | **The log's *For* column**: `stuck`, `cadence · epics 4-6`, `risk · story 7.2`, the plan by its file name with the path on hover; a kind this build does not know is shown as written. `DbConsultation.kind` defaults to `stuck` at the boundary — before the kinds, that was every consultation. | `roundsLog.ts` (`forCell`), `roundsDb.ts` |
 | **Two pieces moved to leaves** rather than copied: `segmentedRadio` and `help` from `panelView.ts` to `panelControls.ts` (a section in another module draws the same markup); `repoNameOf` from `roundsLog.ts` to `pathTail.ts` (the cadence line needs it, and importing `roundsLog` would have closed a cycle through `panelView`). | `panelControls.ts`, `pathTail.ts` |
@@ -4113,6 +4113,7 @@ panel with no Team servers has.
 | `coai.copyClaudeSnippet` | The CLAUDE.md text teaching a target repo's main AI the tool order |
 | `coai.showRounds` | Writes `<dataDir>/rounds.md` from the server's own session files and opens it — a REAL file, so closing it never asks to save, and it is rewritten in place while a round runs |
 | `coai.editPhrases` | Opens the **Phrases** tab: the sentences a person keeps, one button each in the panel. Add, rename, rewrite, remove; saved a moment after the last keystroke |
+| `coai.openSettings` | The `$(gear)` beside help in the panel's title bar (`navigation@1`; the rounds list moved to `@2`), and *ConnectOtherAIs: Settings* in the palette: opens ONE **Settings** editor tab per window, or reveals it. An argument that names a tab opens it on that tab; anything else — the title bar and the palette pass nothing — changes nothing |
 
 ## How settings reach the server
 
@@ -4169,7 +4170,7 @@ flowchart LR
 |---|---|
 | `settingsShape.ts` | config → validated `CoaiSettings`; `envBlock`; the defaults pinned to the master plan's table |
 | `consultantWrite.ts` | what an edit in the *Consultant* section STORES — the vendor picker, the three per-caller fields, and a custom endpoint's name and URL with the one-name-one-vault-key check. The write half of `consultSettings.ts`, lifted out of `settingsShape.ts` on 2026-09-15 when that file passed the 800-line rule |
-| `coaiInstall.ts` | pure install decisions: RID (macOS honestly absent), asset/entry names, version compare, the per-side state key (`installedKey`), the side's label, and `serverStatus` — what the Server section states |
+| `coaiInstall.ts` | pure install decisions: RID (macOS honestly absent), asset/entry names, version compare, the per-side state key (`installedKey`), the side's label, and `serverStatus` — what the MCP server tab states |
 | `installer.ts` | the impure half: fetch, sha256, `tar`, chmod, and `serverOnThisSide` — `stat` every call, the `--version` probe cached against `mtime`+`size` |
 | `versionProbe.ts` | one `askVersion`, 8-second cap, stdout only — used for the vendor CLIs and for the server binary |
 | `mcpBlock.ts` | the `mcpServers` block (server id `coai`), client targets, install message |
@@ -4182,7 +4183,16 @@ flowchart LR
 | `phrasesPanel.ts` | the thin host: read the setting, write it through `saveSetting`, repaint, and post a failed save to the page rather than redrawing over it |
 | `settledWrites.ts` | one write at a time, and a typed field waits to settle — extracted out of `rolesPanel.ts` when the phrases tab needed the same two rules |
 | `settingRefused.ts` | why a `coai.*` write was refused, in words, pure: VS Code's own reason verbatim, and the ONE recognised refusal — `declaresSetting` separating a stale window (reload cures it) from a key this build never declared (it does not) |
-| `panelView.ts` | the sidebar's HTML, pure: sections, vendor cards with the green run button, the two live regions (`live-questions`, `live-rounds`) |
+| `panelView.ts` | the sidebar's HTML, pure: the section registry `PANEL_SECTIONS`, vendor cards with the green run button, the live regions (`live-questions`, `live-rounds`, `live-consultations`, `live-cadence`, `live-notifications`) |
+| `settingsPanel.ts` | the thin `vscode` host of the Settings tab: create or reveal the one panel, a loading page until the first paint, and the held tab (a module variable, as `rolesPanel.ts` holds its own). The provider attaches it as its second surface |
+| `settingsPage.ts` | pure: what the Settings tab adds to the panel's shared document — its CSS (a wrapping strip, `[hidden]` that wins, a readable width), its script (open the held tab, switch on a press or `showTab`, tell the host), `nextSettingsTab` and the loading page |
+| `tabKeys.ts` | pure: the keyboard half of a tab strip as a page-script fragment — Left/Right wrap, Home/End, focus moved and the tab CLICKED, so the page's own click handler stays the one place a tab is selected. Step 1 of `PLAN_the_tabs_announce_themselves.md`; the Settings tab is its first consumer |
+| `surfaceSlot.ts` | pure: one webview the panel paints — its held view, its painted key, its edit hold — and `anyHeld`; the provider paints a list of these |
+| `textControls.ts` | pure: the text-size and text-tone controls as ONE unit — their markup, CSS, script (with the page's own handle name), `textControlFrom` (one step of one control, clamped), `isTextControl`, `textOf` |
+| `textControlsHost.ts` | the host half: `pushTextControlsTo` (both settings, one disposable), `applyTextControl`, and `appliedTextControl` for the hosts whose pages post raw messages |
+| `questionLayout.ts` | pure: the sidebar's *A review is waiting on you* card for a round nobody could review — the server's sentence laid out as the lead, a line per failed reviewer (a vendor's JSON error body as its message) and the question; any other question drawn exactly as the server wrote it |
+| `formPageStyle.ts` | pure: the form pages' look, written once — the 900px column, the header and headings, a card, the head row, the themed fields — taken by Chat presets, Phrases, Gate commands and (the column only) Review roles |
+| `panelSurface.ts` | pure: how a list of sections becomes a page body and its paint KEY — the body with every live region blank and every section closed; which surface a section is drawn on (`SURFACE_IDS`) |
 | `panelProvider.ts` | the wiring: repaint ONLY when a control changed, live regions posted instead; vendor add/remove (confirmed)/run-in-terminal |
 | `vendorTerminal.ts` | pure: which CLI a vendor is, its own usage command (`/usage`, `/status`, `/stats`), and the provider overrides a custom endpoint needs |
 | `escalations.ts` | pure: parse a question, the answer file's shape, status-bar text, prompt-once, modal body, the open-questions section |
@@ -4246,6 +4256,82 @@ validated IS the question a person is waiting to answer, so dropping it because 
 leaves the round gated with nothing on screen — a crash traded for a hang, which is worse, because a
 crash at least says that something happened. `id` and `question` remain the only two that decide
 whether a question can be shown; the rest is metadata, and metadata is rendered, not adjudicated.
+
+### One provider, several surfaces (2026-09-28)
+
+`PanelProvider` now paints a LIST of webviews, each a `SurfaceSlot` (`surfaceSlot.ts`, no `vscode`
+import): the held view, what was last painted into it, and its edit hold. The list holds the sidebar
+and the Settings tab of [PLAN_settings_page.md](PLAN_settings_page.md), and `paintEach` walks it. A render builds ONE state and lets each slot decide for itself — paint, patch, or
+nothing because its view is gone — with that page's own caret, so a caret recorded on one page is
+never put back into another. A message is received with the slot it came from bound at attach time,
+so a `copied` confirmation and a snap-back after a refused write go to that page alone, and the page
+cannot claim to be another.
+
+Moving the three fields into the slot closed two defects the single fields carried: a view VS Code
+created again was matched against the painted key of the view it replaced and could be posted live
+regions into an empty document (`attach` forgets the key — F2), and a late disposal of a replaced
+view cleared the LIVE view's edit hold (`detach` is ownership-checked — F3). Both are run in
+`surfaceSlot.test.ts`, each proved to go red when its fix is taken out. The Claude probe is asked
+"is any page still watching" instead of being handed the sidebar's handle (F8), so a probe the
+Settings tab asked for is not cancelled because the sidebar is hidden.
+
+**And a queued write that awaited its own repaint (F9).** A refused setting on an `api` reviewer's
+card did `await this.snapBack()` inside the write queue, which `render()` waits for — the #561 freeze,
+at the one site `afterTheWrite` had not reached. `aQueuedWriteNeverWaitsOnItself.test.ts` now follows
+every chain of AWAITED or RETURNED calls from each method the dispatcher enqueues and fails, naming the
+line, on any that reaches `render`; it found exactly that one site before the fix. The source blanker
+it needs moved out of `panelsAreSearchable.test.ts` into `test/blankedSource.ts`, so the two scans share
+one.
+
+### The Settings tab (2026-09-28)
+
+The sidebar keeps what is happening now — the open question, **Notifications**, **Active gates** (the
+running rounds), **Active consultations** (the running consultation cards; one section with the rounds
+until 2026-09-29), **Consultation cadence** (each followed plan's cadence line, its own live region `cadence`),
+**Phrases**, **Bugz** — and the
+ten sections configured once are tabs of one **ConnectOtherAIs — Settings** editor tab. Which section is
+where is one field on the registry entry (`surface` in `PANEL_SECTIONS`); a section's body is the same
+builder on either page, so a control stores exactly what it stored before, on the same layer.
+
+```mermaid
+flowchart TB
+  G["$(gear) coai.openSettings"] --> H[settingsPanel.ts: create or reveal, hold the tab]
+  H --> A[PanelProvider.attachSettings]
+  A --> SL[SurfaceSlot: settingsTab]
+  SL -->|paint key: settingsKey — the panes as drawn| K{changed?}
+  K -->|yes| D["settingsHtml: pageDocument(panes, SETTINGS_CSS, settingsScript(heldTab))"]
+  K -->|no| L[live message — ignored, the tab holds no live region]
+  D --> W[webview: tab strip + ten panes]
+  W -->|tab press / arrow key| M["{type:'tab'}"] --> H
+  H -->|showTab| W
+```
+
+- **One document, extended rather than copied.** `pageDocument(body, nonce, focus, extra)` is the panel's
+  CSP, stylesheet and script; the Settings tab passes its own CSS and script (`settingsPage.ts`) and gets
+  every `data-setting` / `data-command` / focus binding the sidebar has.
+- **The held tab is never in the markup.** Panes are drawn tab-neutral — every pane `hidden`, no tab
+  chosen — and the page's script opens the held tab from a literal beside the caret's. The markup IS the
+  paint key, so a tab drawn into it would reload the page a few seconds after every press. A press posts
+  `{type:'tab'}`; the host holds it and answers `showTab`, which a page already showing it ignores and a
+  page repainted mid-press uses to catch up.
+- **A pane is a `<section role="tabpanel">` with `data-section`**, so every reader of a section by that
+  attribute finds it on either page, and without the `section` class or an `open` attribute, so the
+  accordion's binding and the open-sections scan never mistake it for a disclosure. The strip is the
+  shared `tabStrip` with its new opt-in `roving` `tabindex`, neutral in colour (D5: two pages of tabs that
+  looked different would be two products); the panel's dead segmented `.tabs` rules, which would have
+  turned it into ten stacked bars, are gone.
+- **No serializer**: after a window reload the tab does not come back by itself, as with every other page
+  here but the chat tab.
+
+**What the tests hold, and how the move was proved not to hollow them out.** `settingsPage.test.ts` runs
+the page: the held tab opens alone, a press shows exactly its pane and tells the host, `showTab` selects
+without an echo, the arrow keys wrap, Home/End go to the ends, an unowned key is left alone, and the ARIA
+wiring points both ways; two mutations of the script turned six of its nine red. `bundledPage.test.ts`
+runs the MINIFIED page. A real-editor scenario presses the gear twice at once and finds one tab, and
+presses it again after closing. Twenty-six test files that read the panel through `panelHtml` moved to
+`everyPageHtml` (every page joined, a strict superset of what `panelHtml` returned), and the move was
+checked mechanically: with the ten moved sections' bodies blanked, 195 tests failed at the commit before
+the move and the SAME 195 failed after it — no test that read a moved section went quietly green.
 
 ## Every page can be searched (2026-09-09)
 
@@ -4355,6 +4441,55 @@ BESIDE it. That was the whole shape of the step: the store is filled for a versi
 reads it, so the cut-over that empties the memento runs against a store that has already been correct
 for a while rather than one created in the same commit. It is the only step in this feature that can
 destroy a person's history, and it is the one that follows.
+
+### Every page reads alike (2026-09-29)
+
+Asked by the operator after the Settings tab shipped (`research/PLAN_every_page_reads_alike.md`).
+
+**The two text controls are one unit, on every page.** Of the eleven pages, three carried the size and
+the tone, three the size only, and five — the Settings tab among them — neither, because every page wired
+the controls' twelve pieces by hand. `textControls.ts` (page) and `textControlsHost.ts` (host) are the
+unit now; the eight pages that lacked a control take it, and Chat, Help and Review bugs keep the wiring
+they already had. Every render path carries both values, because a host PUSHES a setting once and the
+four pages that redraw (Gate commands, Notifications, Review rounds, Who holds a key) would otherwise lose
+it on their next draw. The Settings tab draws the controls in a header OUTSIDE its paint key, so a press
+never reloads it. `everyPageHasBothTextControls.test.ts` RUNS each page's own script in the shared shim.
+
+```mermaid
+flowchart LR
+  press["a press on a page<br/>(zoom / tone, ±1)"] --> parse["textControlFrom<br/>one clamped step"]
+  parse --> apply["applyTextControl<br/>coai.uiScale / coai.textTone"]
+  apply --> config[("the setting<br/>(global, synced)")]
+  config --> push["pushTextControlsTo<br/>every open page"]
+  push --> page["the page's script<br/>body size and tone; the Settings tab its root too"]
+  config -. the next draw .-> html["each builder draws<br/>in the current values"]
+```
+
+**The Settings tab's small print is measured from the root.** The shared stylesheet sized it in pixels
+(22 font sizes), which a size control cannot reach; it is `calc(<n>rem / 13)` now, with
+`html { font-size: var(--vscode-font-size) }` in the sidebar — so at the default 13px every line is the
+size it was — and the control's value on the Settings tab. `rem`, not `em`, because `em` compounds
+through nested sizes. The MCP server pane is `zoom: 1.5`: one and a half times the size (`zoom: 2` in 0.60.0 read far larger
+than the tabs beside it, and the operator asked for the middle), and `zoom` reaches the `rem`-sized notes
+where a parent's `font-size` would not.
+
+**Gate commands and Review roles sit in Chat presets' column.** `formPageStyle.ts` is that page's look,
+written once; Gate commands takes it whole (it had the browser's white fields and no column), Review roles
+the 900px column. A live defect went on the way: Review roles wrote its size loose at the top of its
+stylesheet, which a browser reads with the next rule as one invalid selector — the page opened at the
+theme's size with an unstyled control.
+
+**The sidebar's Active rounds is three sections.** *Active gates* (id `rounds`: the running rounds only),
+*Active consultations* (id `consultations`, in the Consultant section's hue) and *Consultation cadence*
+(id `cadence`, its own live region: each followed plan's cadence line, or why there is none — the cadence
+is off, or no round has named a plan). The cadence lines moved out of the gates on the operator's word
+(`research/PLAN_the_cadence_has_its_own_section.md`). Open sections are held in memory by id, so no new one
+needs a migration; the page script patches every live region through ONE loop over `LIVE_REGION_IDS`,
+written into the script as a literal, where it had a copied block per region.
+
+**How a page is looked at.** `scripts/render-page.mjs` renders a page's real html and its own script with
+demo state and a Dark Modern token set in headless Chromium (`browserLayout.mjs`'s `screenshot`); the
+README's pictures of the sidebar and the Settings tab are made with it.
 
 ### Where it lives, and what a conversation is on disk
 
@@ -5472,6 +5607,26 @@ repainted nothing — the section sat on Week for good and the buttons read as b
 were. `usageWindow` and `latestServerVersion` are now in the key; the spending ROWS are a live
 region, so they advance mid-round without closing a dropdown. The window tabs deliberately sit
 OUTSIDE that region: a button inside a patched region loses its click listener on the next tick.
+
+### The key is the markup, not a list of fields (2026-09-28)
+
+**Superseding the field list above.** `staticKey` is now the panel's body as drawn, with every live
+region blank and every section closed (`panelSurface.ts`, `sidebarKey`), built from the same section
+registry the page is (`PANEL_SECTIONS` in `panelView.ts`: id, title, surface, body). The list had
+drifted exactly the way the paragraph above warns: on 2026-09-28 ten drawn fields were missing from it
+— the server's *cannot review* verdict, the CLI update button, the Claude and Antigravity model lists,
+the price tables, the snippet status, the per-side switch among them — so a probe that answered after
+the first paint landed in the state and waited for something unrelated to repaint.
+`aProbeThatLandsRepaints.test.ts` holds it both ways round: every probe's answer moves the key, and a
+question, a caret, an opened section or the same answer built in another order does not.
+
+Two things the list had that the markup does not, both on purpose: `usageWindow`/`usageScope`, which
+the panel stopped drawing when the spending chart moved to the rounds log, and `openSections`. A
+toggle is made BY the page, so a key that moved with it reloaded the webview a few seconds later to
+show what was already on screen, dropping the scroll position and any open dropdown; a repaint made
+for another reason still draws the person's open sections. The key is built on every render (a string
+over the panel's own builders, no I/O); the page with its live regions filled is built only when the
+key moved. Plan: [PLAN_settings_page.md](PLAN_settings_page.md), F1 and F10.
 
 ### A third answer beside repaint and patch: WITHHOLD (2026-09-09)
 
@@ -9499,8 +9654,9 @@ curated gemini list. What shipped:
   Unknown is not old (`apiRuntimeOnServer('')` is true), like every other skew gate here. Teeth: with the
   filter removed, three tests went red with `grok` in the emitted rows.
 - **The card** (`panelView.ts`): no ▶ ⤓ ⟳ (`headButtons` returns nothing for `api`), the endpoint field
-  with an `https://api.x.ai/v1` placeholder, a model the person TYPES (`modelsFor('api')` offers only what
-  was typed; `modelsProvenance` says `coai-mcp --probe-api --vendor <id>` lists the ids the key can call), a
+  with an `https://api.x.ai/v1` placeholder, a model the person TYPES — or, since 2026-10-01, one from the
+  endpoint's own list after pressing ≡ (*An endpoint row is offered its endpoint's models* below; the caption
+  no longer sends anyone to a terminal for `coai-mcp --probe-api`), a
   `dialect` picker (`dialectField`, `dialectChoices()` = the shared file's rows minus `local`). Against an
   older server every control is `disabled` and a `.stale` line names the row and the release
   (`apiRuntimeSkewNote`, per card through `CardContext.apiNote`); teeth: with `off` forced false the RUN
@@ -9685,3 +9841,304 @@ sequenceDiagram
   seventh leg: the row's three values reach the real binary and come back as `effective` — watched red with the
   wire line removed. NOT covered: `writeApiSetting` / `resetApiSetting` in `panelProvider.ts` — thin wiring over
   the tested pure functions; an extension host is the standing gap.
+
+## An endpoint row is offered its endpoint's models, never the Codex cache (2026-10-01, PLAN_custom_endpoint_model_list)
+
+Reported from a screenshot: an `openrouter` reviewer — runtime `codex`, base URL `https://openrouter.ai/api/v1` —
+offered *"10 models the Codex CLI has cached for this machine"*, OpenAI's own slugs, none of which OpenRouter accepts,
+and nothing that said where a working id would come from. `modelsFor` chose a list by RUNTIME alone, so a `codex` row
+pointed at somebody else's endpoint fell through to the Codex cache. The `api` runtime had already decided *"never the
+Codex cache"*; the decision lived at one of its two sites. Design record:
+[PLAN_custom_endpoint_model_list.md](PLAN_custom_endpoint_model_list.md).
+
+- **One predicate, one decision** (`endpointModels.ts`). `asksAnEndpoint(runtime, baseUrl)` — every `api` row, and a
+  `codex` row given a non-blank base URL. `modelsFor` and `modelsProvenance` take a trailing `RowEndpoint`
+  (`{ baseUrl, keyName, listed?, asking? }`, `NO_ENDPOINT` when a caller holds none) and hand every such row to
+  `endpointModels` / `endpointNote`; the old `api` arm is that same arm now. The list is what the endpoint listed when
+  asked, with a saved model it did not list kept and marked *"not in what <host> listed"*; else the saved model alone.
+  The caption has four states: *not asked until you press ≡*, *asking…*, *N models <host> listed for the key under
+  '<key>', asked HH:MM UTC*, and *<host> did not list its models: <reason>*.
+- **Every caller passes the endpoint it holds**: the reviewer card, both chat lists (`chatProvidersFrom`,
+  `chatProvidersFromPresets`), the preset wizard's model step and the consultant picker. `commandModelChoices` holds
+  none. Only the card has ≡; the others offer the saved model, honestly captioned.
+- **≡ asks on demand, never per repaint** (`listEndpointModels`, in `PANEL_COMMANDS`). `PanelProvider` runs
+  `modelsForKey(serverExecutable(), vaultKeyOf(vendor), baseUrl)` — the vault flow's own probe, `coai-mcp --probe-api` —
+  under a progress notification. The key NAME is the row's (`vaultKeyOf` = `vaultKeyName ?? id`, in its own
+  `vaultKey.ts`, the twin of the server's `KeyName`): `--probe-api` finds its row in the settings file, which
+  carries only enabled rows, so a switched-off row filed under another key would be asked under the wrong name. One
+  ask per row at a time: the button is `disabled` while it runs, and a second press — or a message for a row that asks
+  no endpoint — is ignored. A refusal is kept like an answer (`listingOf`) so the card says why, and that includes an
+  ask that THREW: `askedOrRefused` turns the error into a refusal carrying its words. Answers live in memory per row id —
+  at most one per row, gone on reload — and `listingFor` uses one only while the row still has the base URL AND the
+  key name it was asked with.
+
+```mermaid
+sequenceDiagram
+  participant C as Reviewer card (webview)
+  participant P as PanelProvider
+  participant M as coai-mcp --probe-api
+  participant E as Endpoint
+  C->>P: command listEndpointModels (row id)
+  P->>P: ignore if the row asks no endpoint or is already asking; render "asking…"
+  P->>M: --vendor vaultKeyOf(row) --endpoint baseUrl --timeout-seconds 30 (45 s cap)
+  M->>E: GET /models with the vault's key
+  E-->>M: ids, or a refusal
+  M-->>P: report (ids or reason)
+  P->>P: keep listingOf(asked, askedOrRefused(probe), now)
+  P->>C: render: endpointModels + endpointNote for that row
+```
+
+**Tests.** `endpointModels.test.ts` (the decision, the marked saved model, the stale answer dropped by base URL and
+by key, a kept refusal, a probe that THREW kept as a refusal, the four captions, a plain `codex` row keeping its cache), `endpointModelsCard.test.ts` (the
+panel RUN through `panelPageHarness`: no `gpt-*` options on an OpenRouter card, ≡ posting `listEndpointModels`, a
+listed answer offered and captioned, the asking state, no ≡ on a plain codex card), `chatProviders.test.ts` and
+`consultant.test.ts` (each caller). RED first with the real symptom — the card offered `gpt-6-luna`, `gpt-6-astra`;
+the chat `gpt-5.2`, `gpt-5.2-mini`; the consultant `gpt-6-luna`. Teeth: with the codex arm of `asksAnEndpoint`
+removed, 7 + 4 + 2 + 1 tests went red and every "a plain codex row keeps the cache" test stayed green. NOT covered:
+`listEndpointModels` in the host (the in-flight guard) — the standing extension-host gap; the probe
+itself is `ProbeApiModeTests` and `apiKeyVendors.test.ts`.
+
+## An endpoint row's empty model and its key say what is true (2026-10-02, PLAN_model_search_and_busy_marks E1)
+
+Two more sites of the decision above, reported from screenshots after 0.60.2 shipped. Design record:
+[PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md).
+
+- **The empty model choice.** `modelWords(runtime, baseUrl)` — the reviewer card's tooltip and empty-choice label —
+  decided by runtime alone, so an OpenRouter card offered *"the CLI's default"*. That entry stores an empty model; a
+  codex row with no model passes no `-m` (`ReviewerRuntime.cs`), so the Codex CLI sends its OWN default id to an
+  endpoint that does not serve it. It now asks `asksAnEndpoint` too: such a row reads *"no model yet — press ≡ and pick
+  one this endpoint lists"* with its own tooltip (`HELP.endpointModel`); a plain codex/claude/gemini row keeps *"the
+  CLI's default"*, `api` and `local` keep their words. Nothing refuses a round for such a row yet — that is a server
+  change, recorded as the plan's follow-up.
+- **Vendor keys.** `keysBody` counted only ENABLED rows with a base URL, so with `openrouter` switched off the tab
+  said nobody needed a key. It now takes every `asksAnEndpoint` row: enabled ones get the sentence they had
+  (`keysNeededNow`), switched-off ones are NAMED as needing a key once switched on (`keysNeededLater`) without a key
+  being demanded now, and *"Nothing to fill in yet"* — with the box's *"not needed yet"* placeholder — is left for a
+  configuration with no endpoint row at all. The switched-off sentence names the KEY each row reads (`vaultKeyOf` —
+  `vaultKeyName` when the row names one, else its id; CodeRabbit on #637). An `api` row counts, enabled or not. A side effect, pinned by a test: a `local` row given the address its engine listens on was asked for a key by the old `enabled && baseUrl` count — a local engine needs none, and `asksAnEndpoint` never takes one. This reverses an older test's
+  decision (*"a reviewer that does not run needs nothing"*, `panelView.test.ts`), by the operator's choice on
+  2026-10-02; that test now asserts the new sentence.
+
+**Tests.** `endpointModelsCard.test.ts` (*an endpoint card with no model says so* — the page RUN, the options as
+drawn) and `vendorKeys.test.ts` (the Vendor keys pane of the Settings tab, narrowed to that pane: a switched-off
+OpenRouter row named, an enabled one's sentence unchanged, no endpoint row → nothing to fill in, a switched-off `api`
+row named, a local engine with an address not asked for one). RED first on `1056aed9` with the real symptoms — `actual: "the CLI's default"`, and the pane reading
+*"Nothing to fill in yet"* for both switched-off rows. Teeth: with the `asksAnEndpoint` arm of `modelWords` replaced
+by `false` the label test goes red; with `keysBody` filtering `enabled && baseUrl` again three of the five keys tests go
+red.
+
+## A long list has a search box (2026-10-02, PLAN_model_search_and_busy_marks E2)
+
+Reported after ≡ filled an OpenRouter card with two hundred `vendor/model` ids in the endpoint's own order: the only
+way to find one was to scroll. The operator asked for a field above the list that filters and sorts as one types, on
+every long list rather than only endpoint rows. Design record:
+[PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md).
+
+- **One road in** (`selectSearch.ts`). `selectSearchScript(sentinels)` runs once in the shared page script
+  (`pageDocument`), over `document.querySelectorAll('select')`, on both the sidebar and the Settings tab. Every select
+  with `SEARCH_FROM_OPTIONS` (15) or more options gets an `<input type="search" class="select-search">` inserted before
+  it, labelled with how many choices it searches; a disabled select gets a disabled box. No select builder was edited.
+  The box is styled by the shared input rule (`input[type="search"]` joined it).
+- **The ranking is one pure function**, `rankChoices(query, choices)` → indices in rank order: every word must occur
+  in the value or the label, ignoring case; the first word decides the tier — starts with it, then a segment after
+  `/ - . :` or a space starts with it, then merely contains it; inside a tier the list keeps its order. It is EMBEDDED
+  into the page by its source text (`var rankChoices = ${rankChoices.toString()}`), the rounds log's pattern, so the
+  unit-tested function is the one that runs.
+- **Non-matches are DETACHED, not hidden** — an `option hidden` is not honoured by every native dropdown and stays
+  reachable by the arrow keys (E2 plan round, gemini). The original order is recorded once at attach, and is what an
+  emptied box and Escape restore. Sentinels (`''`, `__other__`, `CUSTOM_ENDPOINT`) are never ranked or removed and keep
+  their end of the list; the chosen option stays, right after the leading sentinels, even when it does not match; the
+  select's value is re-applied after every pass.
+- **Enter** commits the first MATCH by setting the select's value and dispatching the select's OWN `change` — so a
+  setting select runs `save()` and its focus release, and a prompt picker its prompt handler, exactly as a mouse pick
+  (cadence consultation, codex gpt-6-astra). A blank box, no match, a disabled select, or an Enter that confirms an
+  input method's composition (`isComposing` / keyCode 229 — CJK input; CodeRabbit on #637): nothing. **Escape** empties;
+  **ArrowDown** moves to the select.
+- **A query survives a repaint.** The box reports a focus hold through the same `focus` message the settings send,
+  under `search|` + the select's identity (a prompt picker's is `prompt|role|round|`); the host keeps it as an opaque
+  string (`SurfaceSlot.edited`). Tabbing between a box and a control is no release (the setting `focusout` guard
+  recognises `data-search-for`). The query is kept in `vscode.setState` keyed by the select's identity and re-applied
+  on the next document; a held box gets its caret back. `FOCUS_ID`, the guard that lets a focus id into the script,
+  gained an optional literal `search|` prefix — without it the caret could never come back (the page test went red
+  with *"the caret is back in the box"* first). A stored query whose list no longer has a box is dropped on load.
+- **Enter keeps the caret in the box.** A pick releases the hold exactly as a mouse pick does, so the repaint it
+  causes carried no caret (own review of E2). Enter now leaves a note in the webview state — `searchFocus` with the
+  box's identity and the time — and the next document puts the caret back at the end of the query when the note is
+  younger than `RETURN_TO_BOX_MS` (15 s), then spends it either way, so a repaint minutes later never takes the caret.
+  No repaint hold is used for it: a hold would delay the very repaint the pick asked for.
+- **A keystroke that leaves the answer unchanged moves nothing** (E2 code round): when the computed order is the
+  list already shown, no option is removed or re-added. Measured before rejecting the round's other performance
+  findings: `rankChoices` over 200 choices costs 20–160 µs per keystroke.
+
+**Tests.** `selectSearch.test.ts` (11: the tiers, the segment separators, order inside a tier, all words, case, the
+label, a blank query, no match, regex characters as text, the threshold, and the function run from its own TEXT in an
+empty scope), `selectSearchPage.test.ts` (17, the page RUN — five added after review: an unchanged answer moves no
+option, Escape's empty box survives the next document, select→box is no release, the caret back after Enter, an old
+note ignored; and: 15 options → a box and 14 → none; ranking and detaching
+with the sentinels in place; the chosen model kept and still chosen; Enter posting exactly what a mouse pick posts;
+no match, a blank box and a disabled card posting nothing; Escape and ArrowDown; the focus hold's id and the
+box→select tab; the query re-applied on a second page from the saved state; the caret back; an orphaned query
+dropped), `bundledPage.test.ts` (the minified Settings page embeds `rankChoices` calling nothing the minifier renamed,
+and the minified text ranks as the source does). Teeth, each by deleting the line in the compiled fragment: no
+`removeChild` → 3 red; no `dispatchEvent` → the Enter test; no value re-applied → the chosen-model test; no stored
+query → 2; no `disabled` check → the disabled test. NOT covered by a page test: Enter on a PROMPT picker — the shipped
+prompt catalog gives no role 15 prompts, so no prompt picker gets a box; its routing is the select's own `change`,
+which the setting case proves is what Enter dispatches.
+
+**The harness grew** (`panelPageHarness.ts`), stricter than a DOM and never more permissive, each widening with its
+own test in `panelPageHarness.test.ts`: live `PageOption`s; `appendChild` MOVES; `removeChild` refuses a stranger
+(`NotFoundError`) and, removing the chosen option, moves the choice to the first one left as a DOM's selectedness does
+(found by the teeth check: without it, deleting the value re-apply stayed green); a select refuses a value no option
+carries; `dispatchEvent` and a `PageEvent` with `key`, `relatedTarget` and `preventDefault`; `createElement` for
+`input` only; prompt pickers parsed and answered for `[data-prompt]` and `select`, never `[data-setting]`; a seedable
+`getState`/`setState`. `gateModelPickers.test.ts` had been picking a model no picker offered — the stricter select
+refused it, and it now picks an option the page drew. `rolesPageHarness.ts` gained the state API every webview has.
+
+## A panel action that takes time says so (2026-10-02, PLAN_model_search_and_busy_marks E3)
+
+Reported on the consultant's model picker: a setting change froze the panel for seconds with nothing on screen. The
+operator asked for a progress bar or a spinner wherever an action takes longer than half a second, and accepted that
+the work itself takes time. Design record: [PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md).
+
+- **The page numbers its work** (`busyMark.ts`, one fragment in `pageDocument`). Every setting, prompt and command
+  post goes through `send(message, control)`, which stamps a `seq`; `focus`, `section` and `tab` pass unnumbered. A
+  number not settled after `BUSY_AFTER_MS` (500 ms) shows a 2 px indeterminate bar at the top of the page
+  (`#busy-bar`, `role="progressbar"`, labelled, `aria-busy` while shown) and marks the control that started it
+  `aria-busy="true"`. Settled sooner, nothing is drawn. A reduced-motion viewer gets a still bar.
+- **The host owns the truth** (`inFlight.ts`). `InFlight` keeps one entry per operation — the page's `seq`, the slot
+  that posted it, its start — removed in a `finally`. `tracked()` announces `busy {count, oldestMs}` to every slot
+  as the work starts and again as it ends, and posts `settled {seq, doc, ok}` to the poster alone. `doc` is the
+  sending document's own id (random, minted once per document): every document numbers from 1 and a settle reaches
+  the slot's CURRENT document, so without it a predecessor's seq 1 finishing cleared the new page's mark (own review
+  of E3). `askOf` decides what counts as numbered: a positive whole `seq` and a non-empty `doc`. A command settles when
+  `run()` returns; a write when the queue has written it AND a render that started after it was queued has finished
+  (`settleQueued`, beside the queue, never in it — the self-wait `afterTheWrite` exists to avoid). The queue swallows
+  a failed write (its refusal is already reported), so a write settles `ok` once done; only a failed render, or a
+  command that threw, settles `ok: false`. `PanelProvider.dispose()` settles everything still running as not done.
+- **A repaint does not lose it.** The paint carries the host's snapshot beside the caret (`withCaret`), read when
+  the page is BUILT and never put into `staticKey`/`settingsKey`; the page shows the bar after
+  `max(0, 500 − oldestMs)` of it, so work already running neither flashes nor waits a fresh delay. Every document
+  posts `ready` as its script's last statement and the host answers that slot with the snapshot. A replaced document
+  owns nothing: a `settled` for a number it never sent changes nothing; the host's count reaching 0 clears its bar.
+- **Renders are numbered, not serialised** (`renderTracker.ts`). `render()` runs `renderNow()` through a
+  `RenderTracker`, which counts renders and runs them side by side exactly as before. A write takes `mark()` when it is
+  queued and its settle awaits `runAfter(mark)` (`settleAfterWrite` in `inFlight.ts`): at once if a render numbered
+  after the mark finished, the earliest such render if one is in flight — usually the configuration listener's own,
+  which is how no second render is asked for — and a new one otherwise. Only a FINISHED render counts; a write waiting
+  on a failed one settles `ok: false`. The plan's first version ran renders one at a time with a shared trailing run;
+  the E3 review found that `renderNow` awaits an un-timed fetch to GitHub (`publishedVersion`) and the price tables, so
+  one stalled render then held up every paint after it — the reported freeze, made longer by its fix. It was withdrawn
+  before it shipped; concurrent renders are as they were. A work that throws before its first `await` is a failed
+  render, never one recorded as running for good. The final E3 round (8 of 8 reviewers) added three rules: a waiting
+  write is released by ANY render after its mark that finishes well, never bound to the oldest (which may be the
+  stalled one); a write that finds no such render waits `SETTLE_GRACE_MS` (250 ms) for the configuration listener's
+  before starting its own, so a write costs one render, not two; and `renderNow(number)` skips its paint when
+  `superseded(number)` — a newer render already painted — so a slow older render never puts stale state back, a race
+  that predates this work. A failed render rejects a waiting write only when no other render after its mark still runs.
+- **Posting cannot strand a page.** `tracked()` posts through `postTo`, which reports a page that refuses (a Settings
+  tab closed mid-action) and goes on, so the surviving pages still hear the count fall; `settleEverything` the same.
+  On the page, settling one operation keeps a control's `aria-busy` while another operation on it is past its delay.
+
+```mermaid
+sequenceDiagram
+  participant W as Page (send)
+  participant P as PanelProvider
+  participant Q as WriteQueue
+  participant C as RenderTracker
+  W->>P: setting {seq, doc}
+  P->>Q: enqueue(write)
+  P->>P: InFlight.start, mark = C.mark()
+  P-->>W: busy {count 1, oldestMs 0} (every slot)
+  Note over W: 500 ms unsettled -> bar + aria-busy
+  Q-->>P: written (settled())
+  P->>C: runAfter(mark) - shares the config listener's render
+  C-->>P: a render that started after the mark finished
+  P-->>W: settled {seq, doc, ok}
+  P-->>W: busy {count 0} (every slot)
+  Note over W: bar and mark cleared
+```
+
+**Tests.** `renderTracker.test.ts` (6: a slow render never holds up the next — RED against the withdrawn
+serialising version; `runAfter` sharing a render started after the mark and answering at once after a finished one;
+a render begun BEFORE the mark not counted; nothing in flight starts one; a failed render rejects its callers and a
+later one still counts; a synchronous throw never wedges it — RED: the old version hung), `inFlight.test.ts` (8: idle; the
+count and the OLDEST age; start and end announced to every slot, `settled` with its `doc` to the poster only; a
+throwing work settles `ok: false` and is reported; dispose settles all; a double finish never goes below zero; the
+settle order — mark when queued, then the queue, then a render after the mark; what `askOf` accepts),
+`busyMarkWiring.test.ts` (4, structural, for the reason `bothPagesWriteThroughOneQueue.test.ts` gives: each write is
+followed by its settle in the same turn, a command is tracked, `ready` is answered, `withCaret` carries the snapshot,
+the extension disposes the panel — each proven by deleting the line), `busyMarkPage.test.ts` (11,
+the page RUN on `PageClock`, a clock that moves only when the test moves it: nothing at 499 ms, bar + `aria-busy` at
+500; settled — `ok` true or false — clears both; settled at 300 ms never shows; a command numbered, a focus report
+not; painted age 400 → bar 100 ms later, 900 → at once, 0 → never; a host-only state marks no control; `ready` is the
+last post and an answer replaces the painted timer; a replaced page ignores its predecessor's `seq` and clears on
+count 0; a new document's own seq 1 survives its predecessor's seq 1 finishing — RED: the posts named no document;
+two writes keep the bar until both settle; the snapshot never changes the paint key). Teeth, each by deleting the line
+in the compiled module: the tracker's five decisions → 1, 2, 1, 1, 1 red (timed-out tests counted, which node reports
+as cancelled, not failed); the page fragment's eight → 6, 1, 2, 3, 2, 2, 1, 4, and its document check → 1;
+`tracked`'s four → 2, 2, 2, 1; the settle order's two awaits → 1 each; the wiring guard's three lines → 1 each.
+
+**Waiting on the person is not work** (2026-10-02, extension 0.61.1). As first shipped, a command stayed in flight
+while VS Code waited on the person in an input box or a quick pick, so the bar ran over their typing. The operator
+ruled the question that note left open — "пока печатаю не считаем" — and it is closed by the next section.
+
+## The busy mark stops while the person answers VS Code (2026-10-02, PLAN_busy_mark_pauses_while_you_type)
+
+Design record: [PLAN_busy_mark_pauses_while_you_type.md](PLAN_busy_mark_pauses_while_you_type.md).
+
+- **The prompt finds its operation** (`personWait.ts`). `tracked()` runs the work inside `whileWorking(waiting, work)`,
+  an `AsyncLocalStorage` run, so an operation is carried through every `await` beneath it without passing it down —
+  prompts sit one to four calls below `run()`, in helpers commands outside the panel share. Every VS Code prompt in
+  `src` is opened through `askPerson(() => vscode.window.show…(…))`: it reads the operation before the box opens,
+  pauses it, and resumes it in a `finally`, so a refused or torn-down box never leaves the clock stopped. Outside a
+  panel operation it is a plain prompt. That is 32 sites (15 in `panelProvider.ts`) plus `notifyAndAsk`, the one door
+  that waits for an answer to a message — `notify`, `notifyOnce` and `notifyThen` do not wait and are not wrapped. The
+  conversation picker's `createQuickPick` is not wrapped: `switchConversations` shows it and returns, so nothing waits.
+- **The host stops the clock** (`InFlight.pause` / `resume`). An entry counts its open prompts (`waits`) and when the
+  first opened (`pausedAt`). The first prompt pauses it, and the snapshot leaves out every paused entry. The last answer moves `startedAt`
+  on by the wait and answers the time it has WORKED. A second prompt open at once, or an operation already finished,
+  changes nothing. `tracked` tells the poster `waiting {seq, doc}` and `working {seq, doc, spentMs}`, and announces the
+  new count to every page through `postTo`.
+- **The page stops its own half** (`busyMark.ts`). `waiting` clears the entry's timer and its `due`, and takes the
+  control's `aria-busy` away unless another due entry holds that control. `working` starts the timer again for
+  `max(0, 500 − spentMs)`, or marks it due at once. The page keeps no clock of its own for the pause: the host's is the
+  one measurement, and the one a test drives. Entries are replaced, never mutated — the timer calls `markDue(seq)`.
+- **The pages import nothing from Node** (`busySnapshot.ts`). `BusySnapshot` and `IDLE` moved out of `inFlight.ts`
+  into a module with no imports, because `panelView.ts` and `busyMark.ts` are bundled into webview pages that run with
+  no `require`. Reached through `inFlight.ts`, the module-level `AsyncLocalStorage` kept `require('node:async_hooks')`
+  in those bundles — nine `bundledPage.test.ts` tests went red with *require is not defined* until it moved.
+
+**Tests.**
+- `personWait.test.ts` (4): no operation means a plain prompt. A prompt three awaits down pauses its operation before
+  the box shows and resumes it after. A refused box still resumes. Two operations side by side each pause only
+  themselves.
+- `inFlight.test.ts` (+6):
+  - a waiting entry leaves the count, and its wait is not in its age;
+  - two prompts open at once pause the operation once;
+  - two prompts in turn each leave their wait out (plan round, gemini);
+  - a finished operation cannot be paused back into the record;
+  - `tracked` posts `waiting`, then `working` with 150 ms after ten seconds of typing;
+  - a refused prompt resumes before it settles.
+- `busyMarkPage.test.ts` (+6), the page run on `PageClock`:
+  - ten seconds in a box show nothing;
+  - once answered, the bar comes at 500 ms of WORKING time;
+  - a bar already up goes while the box is open and is back at once after;
+  - another document's `waiting` changes nothing;
+  - one action waiting and another due on one control keep the mark, and only the waiting one left marks nothing;
+  - a `working` after `settled` revives nothing.
+- `promptsWaitForThePerson.test.ts` (6, structural, over comment-blanked source):
+  - every prompt is `askPerson(() => vscode.…`;
+  - `panelProvider.ts` has 15;
+  - no `void askPerson(` or `void notifyAndAsk(`;
+  - `notifyAndAsk` awaits `askPerson(() => show(notice))`, and it is the only wrapper in `notify.ts`;
+  - the one `createQuickPick` is the conversation picker;
+  - a companion feeds the scan an unwrapped prompt, a wrapped one and a comment, so a scan that matches nothing cannot pass (plan round, gemini).
+
+RED first against stubs of the new API: 3, 5, 4 and 2 red, each for the real symptom — nothing paused, the bar over
+ten seconds of typing, a prompt unwrapped. Teeth after GREEN: one panel prompt unwrapped → 1 red; the page ignoring
+`spentMs` → 2 red.
+
+**The tests that had to follow the change.** Posts now carry `seq` and `doc`, and every page posts `ready`: the
+harness's `lastWrite` and the new `work(page)` CHECK both and compare the rest (`withoutSeq`), and three tests with
+fakes of their own compare through the same helper. One structural guard followed the render body into `renderNow`;
+the `pageFor` guard's 800-character window is why the snapshot rides in `withCaret` rather than in each call.

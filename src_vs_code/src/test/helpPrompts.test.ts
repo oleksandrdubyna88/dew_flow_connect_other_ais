@@ -55,7 +55,7 @@ test('each role leads with its universal prompt', () => {
   // The lens is the deliberate pick; the universal one is what a round uses when nobody chose.
   // Printing a lens first would read as the default.
   // Two groups of ONE, and each is a role that asks a single question rather than a question with
-  // lenses on it: the conventions pass, which all the code roles ask in round 1, and the document
+  // lenses on it: Conventions, a code role of its own with one prompt, and the document
   // summary, whose whole product is the account it writes.
   const sizes = Object.fromEntries(PROMPT_GROUPS.map((g) => [g.ids[0], g.ids.length]));
   assert.deepEqual(sizes, {

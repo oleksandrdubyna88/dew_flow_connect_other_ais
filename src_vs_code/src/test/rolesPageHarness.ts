@@ -30,6 +30,14 @@ export class Node {
   readonly attributes: Record<string, string>;
   hidden: boolean;
   parent: Node | undefined;
+  /** Whether the page moved focus here — the arrow keys of a tab strip must. */
+  focused: boolean;
+  /**
+   * What a click on this node does: dispatch through the document's listeners, as a browser's
+   * `element.click()` bubbles to a delegated handler. Wired by {@link runPageHtml} for the nodes it is
+   * handed; a node nobody wired has no click, which fails loudly rather than doing nothing.
+   */
+  dispatchClick: ((node: Node) => void) | undefined;
 
   constructor(dataset: Record<string, string> = {}, tagName = 'INPUT') {
     this.dataset = dataset;
@@ -40,6 +48,51 @@ export class Node {
     this.className = '';
     this.attributes = {};
     this.hidden = false;
+    this.focused = false;
+    this.dispatchClick = undefined;
+  }
+
+  /**
+   * Focus, refused under a hidden ancestor — as a browser refuses it for an element that is not rendered.
+   * Stricter than a permissive fake on purpose: the Settings page once restored a caret into a pane the
+   * page had not shown yet, and a fake that accepted that focus would have passed the test for it.
+   */
+  focus(): void {
+    if (this.rendered()) {
+      this.focused = true;
+    }
+  }
+
+  /** Neither this node nor any ancestor is hidden. */
+  private rendered(): boolean {
+    return !this.hidden && (this.parent?.rendered() ?? true);
+  }
+
+  /** The kinds of the listeners a page bound to this element, in order. */
+  readonly listeners: string[] = [];
+
+  /** The listeners themselves: a click runs this element's own before it bubbles to the document's. */
+  private readonly handlers: { readonly kind: string; readonly run: (event: unknown) => void }[] = [];
+
+  addEventListener(kind: string, run?: (event: unknown) => void): void {
+    this.listeners.push(kind);
+    if (run !== undefined) {
+      this.handlers.push({ kind, run });
+    }
+  }
+
+  /**
+   * A click: this element's own click listeners first, then the document's, as a browser bubbles it.
+   * The text-size and text-tone controls bind each button directly, so a shim that only bubbled would
+   * never reach them. A node with neither is not in the running page, and says so.
+   */
+  click(): void {
+    const own = this.handlers.filter((handler) => handler.kind === 'click');
+    assert.ok(own.length > 0 || this.dispatchClick !== undefined, 'this node was clicked but is not in the running page');
+    for (const handler of own) {
+      handler.run({ target: this, currentTarget: this, preventDefault: (): void => undefined });
+    }
+    this.dispatchClick?.(this);
   }
 
   /** The chain upwards, matching `[data-x]` and `[data-x="y"]` — the only two shapes the page uses. */
@@ -86,10 +139,36 @@ export function pageScript(html: string): string {
   return html.slice(start, end);
 }
 
-/** What the running page offers a test: what it has posted, and a way to press something. */
+/**
+ * An element's `style`, recording what the page writes: the two properties the text controls set by name,
+ * and every custom property through `setProperty` — the tone is two of those.
+ */
+export class Style {
+  fontSize = '';
+  color = '';
+  readonly custom: Record<string, string> = {};
+
+  setProperty(name: string, value: string): void {
+    this.custom[name] = value;
+  }
+}
+
+/** An event as the page's handlers receive it, with the one thing a test reads back. */
+export interface FiredEvent {
+  readonly defaultPrevented: boolean;
+}
+
+/** What the running page offers a test: what it has posted, a way to press something, and the host's voice. */
 export interface Page {
   readonly posted: readonly Record<string, unknown>[];
-  fire(kind: string, target: Node): void;
+  /** An event at `target`, carrying `extra` (a key, say) — returned so a test can see `preventDefault`. */
+  fire(kind: string, target: Node, extra?: Readonly<Record<string, unknown>>): FiredEvent;
+  /** A message from the host, delivered to every `window` message listener, as `postMessage` does. */
+  message(data: unknown): void;
+  /** What the page wrote to `document.body.style`. */
+  readonly body: Style;
+  /** What the page wrote to `document.documentElement.style` — the root, which `rem` is measured from. */
+  readonly root: Style;
 }
 
 /**
@@ -117,15 +196,35 @@ export function runPageHtml(
   inDocument: Readonly<Record<string, readonly Node[]>> = {},
 ): Page {
   const posted: Record<string, unknown>[] = [];
-  const listeners = new Map<string, ((event: { target: Node }) => void)[]>();
-  const add = (kind: string, handler: (event: { target: Node }) => void): void => {
+  const listeners = new Map<string, ((event: unknown) => void)[]>();
+  const heard: ((event: { data: unknown }) => void)[] = [];
+  const add = (kind: string, handler: (event: unknown) => void): void => {
     listeners.set(kind, [...(listeners.get(kind) ?? []), handler]);
   };
+  const fire = (kind: string, target: Node, extra: Readonly<Record<string, unknown>> = {}): FiredEvent => {
+    let prevented = false;
+    const event = { ...extra, target, preventDefault: (): void => { prevented = true; } };
+    for (const handler of listeners.get(kind) ?? []) {
+      handler(event);
+    }
+
+    return { defaultPrevented: prevented };
+  };
+  for (const nodes of Object.values(inDocument)) {
+    for (const node of nodes) {
+      node.dispatchClick = (clicked) => { fire('click', clicked); };
+    }
+  }
   const fakeDocument = {
     addEventListener: add,
     querySelectorAll: (selector: string): readonly Node[] => inDocument[selector] ?? [],
-    getElementById: (): null => null,
-    body: { style: { fontSize: '' } },
+    // The first node a test put in the document under that selector, or nothing — never a stand-in.
+    querySelector: (selector: string): Node | null => inDocument[selector]?.[0] ?? null,
+    // An id answers only with the node a test put in the document under `#id` — never an inert stand-in,
+    // which would let a page that looks up an element it never draws run as if it worked.
+    getElementById: (id: string): Node | null => inDocument[`#${id}`]?.[0] ?? null,
+    body: { style: new Style() },
+    documentElement: { style: new Style() },
   };
 
   const script = pageScript(html);
@@ -133,19 +232,34 @@ export function runPageHtml(
   // whole point: a scan of its text cannot tell a matching selector from one that matches nothing.
   const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', script);
   body(
-    () => ({ postMessage: (message: Record<string, unknown>) => { posted.push(message); } }),
+    // A webview always has its state API; this one has nothing saved, which is a first load.
+    () => ({
+      postMessage: (message: Record<string, unknown>) => { posted.push(message); },
+      getState: (): unknown => undefined,
+      setState: (): void => undefined,
+    }),
     fakeDocument,
-    { addEventListener: add },
+    {
+      addEventListener: (kind: string, handler: (event: unknown) => void): void => {
+        if (kind === 'message') {
+          heard.push(handler);
+        }
+        add(kind, handler);
+      },
+    },
     (fn: () => void): number => { fn(); return 0; },
     (): void => undefined,
   );
 
   return {
     posted,
-    fire: (kind, target) => {
-      for (const handler of listeners.get(kind) ?? []) {
-        handler({ target });
+    fire,
+    message: (data) => {
+      for (const handler of heard) {
+        handler({ data });
       }
     },
+    body: fakeDocument.body.style,
+    root: fakeDocument.documentElement.style,
   };
 }

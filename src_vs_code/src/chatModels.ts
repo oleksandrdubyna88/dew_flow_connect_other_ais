@@ -6,6 +6,7 @@ import { executableFor } from './vendorTerminal';
 import { allowedModelsFor, ModelChoice, modelsFor } from './models';
 import { REMOTE_TURNS } from './remoteAsk';
 import { TeamServerState } from './teamServerView';
+import { vaultKeyOf } from './vaultKey';
 import { Vendor } from './vendors';
 import { ModelPreset, chatRunSpec } from './chatPresets';
 
@@ -305,6 +306,9 @@ export function chatProvidersFrom(
       // The binary THIS row runs. Without it a row on one Claude installation wore the labels of
       // another's account, and picking an alias it does not know runs its default in silence.
       executableFor(vendor),
+      // And the endpoint it talks to: a codex row on OpenRouter is offered its saved model, never the
+      // Codex CLI's cache (PLAN_custom_endpoint_model_list). The chat has no ≡, so nothing listed.
+      { baseUrl: vendor.baseUrl, keyName: vaultKeyOf(vendor) },
     ).filter((model) => routableOn(vendor.runtime, model.id)),
   }));
   const refused = enabled.filter((vendor) => !canChat(vendor)).map((vendor): RefusedModel => ({
@@ -361,14 +365,14 @@ export function resolveChatPick(
         ok: false,
         refusal: list.providers.length === 0
           ? 'There is no saved model to send this to yet — add one with Edit chat presets.'
-          : 'No saved model is chosen — pick one in the panel, or add one with Edit chat presets.',
+          : 'No saved model is chosen — pick one in Settings → Chat other AIs, or add one with Edit chat presets.',
       };
     }
 
     return {
       ok: false,
       refusal: disabled !== undefined
-        ? `${providerId} is switched off in the panel — turn it back on to send a chat to it`
+        ? `${providerId} is switched off in Settings → Reviewers — turn it back on to send a chat to it`
         : `${providerId} is not a model this conversation can be sent to any more`,
     };
   }
@@ -561,6 +565,8 @@ export function chatProvidersFromPresets(
         allowedModelsFor(spec, catalog.teamServers).models,
         catalog.claudeProbe,
         executableFor(spec),
+        // A preset on somebody else's endpoint: its saved model, never the Codex CLI's cache.
+        { baseUrl: preset.baseUrl, keyName: vaultKeyOf(spec) },
       ).filter((model) => routableOn(preset.runtime, model.id)),
     };
   });

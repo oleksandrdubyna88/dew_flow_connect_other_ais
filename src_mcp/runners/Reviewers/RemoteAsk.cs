@@ -142,11 +142,11 @@ public static class RemoteAsk
 
     /// <summary>Not signed in at all — there is no token file for this server.</summary>
     public static string NotSignedInMessage(string serverUrl) =>
-        $"not signed in to the Team server at {serverUrl} — sign in from the panel's Team servers section";
+        $"not signed in to the Team server at {serverUrl} — sign in from ConnectOtherAIs > Team servers";
 
     /// <summary>Signed in once, but the server will not take this token any more.</summary>
     public static string RejectedMessage(string serverUrl) =>
-        $"the Team server at {serverUrl} rejected this token — sign in again from the panel's Team servers section";
+        $"the Team server at {serverUrl} rejected this token — sign in again from ConnectOtherAIs > Team servers";
 
     /// <summary>Authenticated, and not welcome.</summary>
     /// <remarks>
@@ -157,8 +157,8 @@ public static class RemoteAsk
         $"the Team server at {serverUrl} refused this account — it is outside the allowed company domain";
 
     public static string TooOldMessage(string serverUrl, string serverSaid) =>
-        $"coai-mcp is older than the Team server at {serverUrl} requires — update it from the panel's "
-        + $"Server section. The server said: {Trim(serverSaid, 200)}";
+        $"coai-mcp is older than the Team server at {serverUrl} requires — update it from "
+        + $"ConnectOtherAIs > MCP server. The server said: {Trim(serverSaid, 200)}";
 
     public static string UnreachableMessage(string serverUrl, string detail) =>
         $"the Team server at {serverUrl} could not be reached: {Trim(detail, 200)}";
@@ -197,7 +197,7 @@ public static class RemoteAsk
     /// <summary>A status from a server this client is too old to understand.</summary>
     public static string UnknownStateMessage(string serverUrl, string status) =>
         $"the Team server at {serverUrl} reported a review status this client does not know "
-        + $"('{Trim(status, 60)}') — update coai-mcp from the panel's Server section";
+        + $"('{Trim(status, 60)}') — update coai-mcp from ConnectOtherAIs > MCP server";
 
     /// <summary>The vendor itself failed, in its own words.</summary>
     public static string FailedMessage(string vendor, string failure, string reason) =>

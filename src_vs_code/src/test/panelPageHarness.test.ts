@@ -1,7 +1,88 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { click, controlFrom, panelState, runPanel } from './panelPageHarness';
+import { click, controlFrom, createdElement, PageEvent, PageOption, panelState, runPanel, work } from './panelPageHarness';
+
+/** A select carrying these option values, built the way the harness builds one from a page. */
+function selectOf(...values: string[]): ReturnType<typeof controlFrom> {
+  const select = controlFrom('select', ' data-setting="model"');
+  for (const value of values) {
+    select.appendChild(new PageOption(value, value));
+  }
+
+  return select;
+}
+
+test('a select refuses a value none of its options carries, as a DOM does — it selects nothing', () => {
+  // Widened for the list search box (research/PLAN_model_search_and_busy_marks.md, Epic 2). Before, any string was
+  // accepted, so a test could "pick" a model the page never offered and pass.
+  const select = selectOf('', 'a', 'b');
+  select.value = 'b';
+  assert.equal(select.value, 'b');
+  select.value = 'not-offered';
+  assert.equal(select.value, '');
+});
+
+test('appendChild MOVES an option — taken out of where it was, never copied — and removeChild refuses a stranger', () => {
+  const select = selectOf('a', 'b', 'c');
+  const [first] = select.options;
+  select.appendChild(first!);
+  assert.deepEqual(select.options.map((one) => one.value), ['b', 'c', 'a'], 'moved to the end, still three');
+
+  const other = selectOf('x');
+  other.appendChild(first!);
+  assert.deepEqual(select.options.map((one) => one.value), ['b', 'c'], 'and gone from the list it left');
+  assert.equal(first!.parentNode, other);
+
+  select.removeChild(select.options[0]!);
+  assert.throws(() => select.removeChild(new PageOption('z', 'z')), /NotFoundError/u);
+});
+
+test('removing the CHOSEN option moves the choice to the first one left, as a DOM’s selectedness does', () => {
+  const select = selectOf('a', 'b', 'c');
+  select.value = 'b';
+  select.removeChild(select.options[1]!);
+  assert.equal(select.value, 'a');
+
+  select.removeChild(select.options[1]!);
+  assert.equal(select.value, 'a', 'removing another option leaves the choice alone');
+});
+
+test('a dispatched event runs the control’s own listeners with that event, and says whether it was stopped', () => {
+  const select = selectOf('a');
+  const seen: string[] = [];
+  select.addEventListener('change', (event) => { seen.push(event.type); });
+  select.addEventListener('keydown', (event) => { event.preventDefault(); });
+
+  assert.equal(select.dispatchEvent(new PageEvent('change')), true);
+  assert.deepEqual(seen, ['change']);
+  assert.equal(select.dispatchEvent(new PageEvent('keydown', 'Enter')), false);
+});
+
+test('the fake document creates only the tags it models, and refuses any other loudly', () => {
+  assert.equal(createdElement('input').tagName, 'INPUT');
+  assert.throws(() => createdElement('div'), /does not model/u);
+});
+
+test('a control outside a running page has nowhere to insert anything', () => {
+  assert.throws(() => controlFrom('select', ' data-setting="model"').parentNode.insertBefore(createdElement('input'), selectOf()),
+    /not in a running page/u);
+});
+
+test('a prompt picker answers [data-prompt] and select, and never [data-setting]', () => {
+  const page = runPanel(panelState('prompts'));
+
+  assert.ok(page.prompts.length > 0, 'the prompts section draws prompt pickers');
+  assert.ok(page.prompts.every((one) => one.tagName === 'SELECT' && one.dataset['prompt'] !== undefined));
+  assert.ok(page.controls.every((one) => one.dataset['prompt'] === undefined), 'a setting query must not answer a prompt picker');
+});
+
+test('the webview state a run starts from is what getState answers, and what the page saves is kept as a copy', () => {
+  const page = runPanel(panelState('reviewers'), { saved: { search: { kept: 'opus' } } });
+
+  // The page writes its search state back on load; with no list long enough for a box, the stored query is dropped.
+  assert.deepEqual(page.saved(), { search: {} });
+});
 
 /**
  * The panel harness is code under test (`generated-code-tests.md` §3): a fake more permissive — or,
@@ -50,7 +131,7 @@ test('a data-command button is bound by the page and a click posts exactly its c
   assert.ok(page.commands.some((one) => one.dataset['command'] === 'removeVendor'), 'no command button was read off the page');
   click(page, 'removeVendor', 'codex');
 
-  assert.deepEqual(page.posted.at(-1), { type: 'command', command: 'removeVendor', id: 'codex' });
+  assert.deepEqual(work(page).at(-1), { type: 'command', command: 'removeVendor', id: 'codex' });
   assert.throws(() => click(page, 'removeVendor', 'nobody'), /no removeVendor button for nobody/u);
 });
 

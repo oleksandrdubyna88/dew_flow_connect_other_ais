@@ -1,6 +1,6 @@
 # PLAN — The tabs announce themselves, and answer the arrow keys
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/roundsLog.ts` (the rounds
+> Status: **in progress — step 1 (`tabKeys.ts` and the `roving` flag on `tabStrip`) shipped 2026-09-28 with the Settings-page plan; steps 2–4 are open.** Scope: `src_vs_code/src/roundsLog.ts` (the rounds
 > log's tab strip and its window filter) and `src_vs_code/src/rolesPage.ts` (the keyboard half it
 > shipped without).
 >
@@ -122,7 +122,7 @@ back as fresh HTML), so `aria-pressed` needs no script — the render is the upd
 - **`panelView.ts:2516-2517` defines `.tabs`/`.tab` CSS that nothing uses** — `class="tabs"` appears
   zero times in that file. Noticed while surveying every tab strip in the product; **not in scope**,
   because deleting dead CSS in the panel is a different change with a different diff. Recorded here so
-  the next person does not have to find it again.
+  the next person does not have to find it again. **Deleted 2026-09-28** by the Settings-page plan, which drew the panel's first real strip.
 
 ## The boundary with the facet plan (MANDATORY, both sides)
 
@@ -135,6 +135,19 @@ Both plans touch `src_vs_code/src/roundsLog.ts`, so the division is named here a
 
 **Disjoint**: one plan is about the control that switches views, the other about the controls beside
 it. They share a file and no function; whichever lands second rebases without conflict.
+
+## The boundary with the Settings-page plan (MANDATORY, both sides)
+
+Reciprocal of the *Boundaries* table in [PLAN_settings_page.md](../research/PLAN_settings_page.md), whose new
+Settings tab is a third tablist.
+
+| Item | Which plan builds it | The other plan's part | Order |
+|---|---|---|---|
+| Step 1 of the build order below — `tabKeys.ts` and its tests — plus an opt-in `roving` flag on `tabStrip` (absent = every existing page byte-identical) | the Settings-page plan (story S3), to the design in § *What ships* B — **shipped 2026-09-28** | this plan consumes it unchanged | Settings-page plan first |
+| Steps 2–4: the roles page, the rounds log's strip, the window filter | **this plan** | none | after |
+
+**Disjoint** beyond that: the Settings page is the first CONSUMER of `tabKeys.ts`, not a rewrite of
+either page this plan converts.
 
 ## Build order
 

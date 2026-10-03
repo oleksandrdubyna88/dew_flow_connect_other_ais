@@ -197,7 +197,7 @@ public sealed class RemoteAskTests
     [Fact]
     public void TheNotSignedInSentenceSaysWhereToGo() =>
         RemoteAsk.NotSignedInMessage("https://coai.example.com")
-            .Should().Contain("Team servers section").And.Contain("coai.example.com");
+            .Should().Contain("ConnectOtherAIs > Team servers").And.Contain("coai.example.com");
 
     [Fact]
     public void BeingRejectedAndBeingForbiddenAreDifferentSentences()
@@ -496,7 +496,7 @@ public sealed class RemoteRegistryTests
         RuntimeResolution.AuthOf(vendor, hasVaultKey: true, hasServerToken: true).Auth.Should().Be("server token");
         RuntimeResolution.AuthOf(vendor, hasVaultKey: true, hasServerToken: false).Auth.Should().Be("unavailable");
         RuntimeResolution.AuthOf(vendor, hasVaultKey: false, hasServerToken: false).Note
-            .Should().Contain("Team servers section");
+            .Should().Contain("ConnectOtherAIs > Team servers");
     }
 
     [Fact]

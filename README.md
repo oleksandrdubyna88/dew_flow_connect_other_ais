@@ -87,7 +87,7 @@ two of its seventy code-stage findings were worth having.
 
 ## Reviewers you can use
 
-![The Reviewers section: codex, gemini and a local model, each with its model, price and CLI path](assets/reviewers-three-vendors.png)
+![Reviewers: codex, gemini and a local model, each with its model, price and CLI path](assets/reviewers-three-vendors.png)
 
 - **Codex CLI**, **Antigravity** (Gemini / Claude / GPT-OSS) — signed in as themselves, no API key.
 - **A model on your own machine** — Ollama, vLLM, or **any OpenAI-compatible endpoint (DeepSeek,
@@ -124,7 +124,15 @@ code --install-extension remsoftdev.connect-other-ais
 3. **Tell your agent the gate exists.** Command Palette → **Copy the CLAUDE.md snippet**, paste it
    into `CLAUDE.md`, `AGENTS.md` or your rules file. That paragraph is what makes the agent call the
    gate on its own.
-4. **Pick your reviewers** in the panel, and set what happens when the rounds run out.
+4. **Pick your reviewers** in the Settings tab — the gear in the panel's title bar — and set what happens
+   when the rounds run out.
+
+![The Settings tab: one tab for each thing you set up once, with the text size and tone beside its title](assets/the-settings-tab.png)
+
+The sidebar keeps only what is happening now: the gates running, the consultations being had, where each
+plan's consultation cadence stands, your phrases and the bug corpus.
+
+![The sidebar: Notifications, Active gates, Active consultations, Consultation cadence, Phrases and Bugz](assets/the-sidebar.png)
 
 ![The gate: what happens when the rounds run out, and the three orders it hands back](assets/the-gate-and-its-orders.png)
 

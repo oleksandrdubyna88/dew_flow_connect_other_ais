@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { CALLER_KINDS } from '../consultSettings';
 import { commandModelsFrom } from '../commandModels';
 import { DEFAULTS, settingMessageFrom, settingWrite } from '../settingsShape';
-import { type Control, type Page, lastWrite, panelState, runPanel } from './panelPageHarness';
+import { type Control, type Page, lastWrite, panelState, runPanel, work } from './panelPageHarness';
 
 /**
  * The gate section's split-order model pickers (issue #117), RUN — the panel's own script over the
@@ -40,11 +40,16 @@ test('every caller kind has both pickers, and each writes for its own kind', () 
   for (const { id } of CALLER_KINDS) {
     for (const slot of ['strongest', 'implementation']) {
       const control = picker(page, id, slot);
-      control.value = `${id}-${slot}-model`;
+      // An option the page DREW: a select takes no other value, and the harness now refuses one as a DOM does.
+      // A kind with no list of its own (`other`) offers only its default, which is then the choice to make.
+      const model = (control.options.find((option) => option.value !== '' && option.value !== '__other__')
+        ?? control.options.find((option) => option.value === ''))?.value;
+      assert.ok(model !== undefined, `the ${id} ${slot} picker offers a choice`);
+      control.value = model;
       control.fire('change');
 
       assert.deepEqual(lastWrite(page), {
-        type: 'setting', key: slot, value: `${id}-${slot}-model`,
+        type: 'setting', key: slot, value: model,
         vendor: undefined, role: undefined, caller: undefined, commandModel: id, control: 'select',
       }, 'eight pickers share two slot names, so a write with no kind lands in whichever the host guesses');
     }
@@ -84,7 +89,7 @@ test('"another model…" asks the host for a name for THAT kind and slot, and wr
   control.value = '__other__';
   control.fire('change');
 
-  assert.deepEqual(page.posted.filter((one) => one['type'] === 'command'), [
+  assert.deepEqual(work(page).filter((one) => one['type'] === 'command'), [
     { type: 'command', command: 'customCommandModel', id: 'gemini:implementation' },
   ]);
   assert.equal(page.posted.filter((one) => one['type'] === 'setting').length, 0);

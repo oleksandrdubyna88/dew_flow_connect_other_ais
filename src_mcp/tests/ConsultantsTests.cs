@@ -367,7 +367,7 @@ public sealed class ConsultantResolutionAfterStoryTwoTests : IDisposable
         var identity = new VendorIdentity(provider, runtime, baseUrl);
 
         ConsultantResolution.For(identity).Should().BeNull();
-        ConsultantResolution.CannotConsult(identity).Should().Contain(provider).And.Contain("Consultant section");
+        ConsultantResolution.CannotConsult(identity).Should().Contain(provider).And.Contain("ConnectOtherAIs > Consultant");
     }
 
     /// <summary>

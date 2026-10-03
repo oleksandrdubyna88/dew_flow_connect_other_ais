@@ -2,7 +2,8 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CliStatus } from '../cliVersions';
-import { panelHtml, PANEL_COMMANDS } from '../panelView';
+import { PANEL_COMMANDS, PANEL_SECTIONS } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
 import { Runtime } from '../models';
 import { Vendor } from '../vendors';
@@ -32,7 +33,7 @@ function vendor(id: string, runtime = id as Runtime): Vendor {
 }
 
 function html(vendors: readonly Vendor[], cliStatus: Record<string, CliStatus>): string {
-  return panelHtml({
+  return everyPageHtml({
     settings: DEFAULTS,
     vendors,
     codexModels: [], agyModels: [],
@@ -123,8 +124,10 @@ test('every collapsible header carries a tone, and no section is left grey', () 
   const page = html([vendor('codex')], {});
   const sections = [...page.matchAll(/<details class="section sec-([a-z]+)"/g)].map((m) => m[1]!);
 
-  // Seven since 2026-09-05: the spending section moved to the rounds log page.
-  assert.ok(sections.length >= 7, `only ${sections.length} sections found`);
+  // Every SIDEBAR section, counted from the registry rather than typed: seven was the floor here until
+  // 2026-09-28, when ten sections became tabs of the Settings page, which wear the neutral strip (D5).
+  const sidebar = PANEL_SECTIONS.filter((section) => section.surface === 'sidebar').map((section) => section.id);
+  assert.deepEqual(sections, sidebar, 'a sidebar section is not drawn as a disclosure');
   for (const id of sections) {
     assert.match(
       page,

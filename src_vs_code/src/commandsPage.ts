@@ -2,6 +2,8 @@ import { COMMAND_MODELS_SINCE } from './commandModels';
 import { SHIPPED_COMMANDS, fileIdOf, hasText, shippedTextOf, type CommandRow, type CommandStageName, type ShippedCommand } from './commands';
 import type { RowCommand } from './commandsEdit';
 import { compareVersions } from './coaiInstall';
+import { FORM_FIELDS_CSS, FORM_HEAD_CSS, formCardCss, formFrameCss } from './formPageStyle';
+import { textControlsHtml, textControlsScript, textOf } from './textControls';
 import { escapeHtml } from './webviewHtml';
 
 /**
@@ -16,6 +18,9 @@ export interface CommandsPageState {
   /** The installed server's version, or empty when it is not known. */
   readonly serverVersion: string;
   readonly perSide: boolean;
+  /** The text size and tone the page is drawn in; absent is the theme's own, as on the help page. */
+  readonly uiScale?: number;
+  readonly textTone?: number;
 }
 
 /** What the page can ask the host for: an edit of the rows, or a text written or restored. */
@@ -83,10 +88,10 @@ export function commandsHtml(state: CommandsPageState, nonce: string): string {
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Gate commands</title>
-${STYLES}
+${styles(textOf(state).size, textOf(state).tone)}
 </head>
 <body>
-<header><h1>Gate commands</h1></header>
+<header><h1>Gate commands</h1>${textControlsHtml(textOf(state).size, textOf(state).tone)}</header>
 <p class="lead">The orders the gate hands the AI that called it. Everything here is saved as you type${state.perSide ? ', for this side of the machine' : ''}.</p>
 ${note.length > 0 ? `<div class="stale" role="status">${escapeHtml(note)}</div>` : ''}
 <h2>Yours</h2>
@@ -109,7 +114,7 @@ function customBlock(row: CommandRow, texts: Readonly<Record<string, string>>): 
 <input type="text" data-field="title" aria-label="Title" value="${escapeHtml(row.title)}">
 <select data-field="stage" aria-label="Rounds">${STAGE_NAMES.map((stage) => stageOption(stage, row.stage)).join('')}</select>
 <label><input type="checkbox" data-field="enabled"${row.enabled ? ' checked' : ''}> On</label>
-<button type="button" data-remove>Remove</button>
+<button type="button" class="remove" data-remove>Remove</button>
 </div>
 <textarea data-text="${escapeHtml(fileId)}" aria-label="What it tells the AI" rows="3">${escapeHtml(texts[fileId] ?? '')}</textarea>
 </section>`;
@@ -147,16 +152,27 @@ function placeholderNote(one: ShippedCommand): string {
     : `<p class="note">The server fills in ${one.placeholders.map((p) => `<code>${escapeHtml(p)}</code>`).join(', ')}.</p>`;
 }
 
-const STYLES = `<style>
-body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); padding: 0 16px 24px; }
+function styles(size: number, tone: number): string {
+  // The Chat presets look (formPageStyle.ts), the operator's ask of 2026-09-29: this page had drifted
+  // furthest, with the browser's white fields and no column. Its own rules come AFTER the fields.
+  return `<style>
+${formFrameCss(size, tone)}
+${formCardCss('.command')}
+  .command { border-left-color: var(--vscode-textLink-foreground); }
+  .command h3 { font-size: 1em; margin: 0 0 6px; }
+${FORM_HEAD_CSS}
+${FORM_FIELDS_CSS}
 .lead, .note { color: var(--vscode-descriptionForeground); }
 .stale { border-left: 3px solid var(--vscode-editorWarning-foreground); padding: 4px 8px; margin: 8px 0; }
-.command { border-top: 1px solid var(--vscode-panel-border); padding: 8px 0; }
-.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-textarea { width: 100%; box-sizing: border-box; font-family: var(--vscode-editor-font-family); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+.row input[type="text"] { flex: 1 1 12rem; min-width: 0; }
+/* After the fields, whose font: inherit would reset it: a command is read as the AI will read it. */
+textarea { font-family: var(--vscode-editor-font-family); }
+.command > button { margin-top: 6px; }
 .marker { margin: 4px 0; }
 .badge { font-size: 0.8em; color: var(--vscode-textLink-foreground); }
 </style>`;
+}
 
 /**
  * Delegated on the document, as the roles page's: a block is replaced whenever the rows change. A
@@ -167,6 +183,7 @@ function script(nonce: string): string {
   return `<script nonce="${nonce}">
 (function () {
   const vscode = acquireVsCodeApi();
+  ${textControlsScript()}
   const post = (message) => { vscode.postMessage(message); };
   const idOf = (el) => { const row = el.closest('[data-id]'); return row ? row.dataset.id : ''; };
   document.addEventListener('input', (event) => {

@@ -1,7 +1,7 @@
 import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { panelHtml } from '../panelView';
+
 import { ROLES } from '../prompts';
 import {
   DEFAULTS,
@@ -14,6 +14,7 @@ import {
   settingsFrom,
 } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
+import { everyPageHtml } from './panelPages';
 
 /**
  * A setting reaches the place it is kept.
@@ -60,7 +61,7 @@ test('no control that writes a role-keyed setting is labelled as a vendor', () =
   // The regression, stated as the panel's own markup. `rounds` and `thresholds` are records keyed
   // by ROLE; every id in the panel that writes one must arrive as a role, because a role id in the
   // vendor slot silently addresses a vendor that cannot exist.
-  const html = panelHtml({
+  const html = everyPageHtml({
     settings: DEFAULTS,
     vendors: DEFAULT_VENDORS,
     codexModels: [], agyModels: [],
@@ -94,7 +95,7 @@ test('no control that writes a role-keyed setting is labelled as a vendor', () =
 });
 
 test('every role id the panel writes to is a role, and no vendor shares the name', () => {
-  const html = panelHtml({
+  const html = everyPageHtml({
     settings: DEFAULTS,
     vendors: DEFAULT_VENDORS,
     codexModels: [], agyModels: [],
@@ -141,7 +142,7 @@ test('the number of prompt pickers follows that role\u2019s rounds', () => {
   // rendering was always right — it sized the pickers from `settings.rounds[role]` — and it was
   // reading a value nothing could change. Asserted here so it is guarded rather than inferred.
   const html = (rounds: Record<string, number>): string =>
-    panelHtml({
+    everyPageHtml({
       settings: { ...DEFAULTS, rounds },
       vendors: DEFAULT_VENDORS,
       codexModels: [], agyModels: [],

@@ -10,6 +10,7 @@ import { coaiDataDir } from './dataDir';
 import { notify, notifyAndAsk } from './notify';
 import { oneAtATime } from './oneAtATime';
 import { promptFile, promptsDir } from './rolesPrompts';
+import { askPerson } from './personWait';
 
 /**
  * Export config / Import config, the `…` menu's pair — issue #467. Only VS Code here: what travels is
@@ -39,7 +40,7 @@ function suggestedFile(): vscode.Uri {
 }
 
 async function exportConfig(context: vscode.ExtensionContext): Promise<void> {
-  const target = await vscode.window.showSaveDialog({ defaultUri: suggestedFile(), filters: JSON_FILTER, saveLabel: 'Export' });
+  const target = await askPerson(() => vscode.window.showSaveDialog({ defaultUri: suggestedFile(), filters: JSON_FILTER, saveLabel: 'Export' }));
   if (target === undefined) {
     return;
   }
@@ -61,7 +62,7 @@ async function exportConfig(context: vscode.ExtensionContext): Promise<void> {
 }
 
 async function importConfig(context: vscode.ExtensionContext): Promise<void> {
-  const picked = await vscode.window.showOpenDialog({ canSelectMany: false, filters: JSON_FILTER, openLabel: IMPORT });
+  const picked = await askPerson(() => vscode.window.showOpenDialog({ canSelectMany: false, filters: JSON_FILTER, openLabel: IMPORT }));
   const file = picked?.[0];
   if (file === undefined) {
     return;

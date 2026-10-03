@@ -2,7 +2,8 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { discoverEngine, LocalEngine, noEngine } from '../localEngines';
-import { panelHtml, PanelState, staticKey } from '../panelView';
+import { PanelState } from '../panelView';
+import { everyPageHtml, paintKeys } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 
@@ -54,15 +55,15 @@ test('a reprobe that finds different models repaints the panel', () => {
   // defect class `liveRepaint.test.ts` was written for, in the one field added after it.
   //
   // RED: Expected the key to change when the model list did, but both were identical.
-  const before = staticKey(state({ localEngines: {} }));
-  const after = staticKey(state({ localEngines: { local: engine() } }));
+  const before = paintKeys(state({ localEngines: {} }));
+  const after = paintKeys(state({ localEngines: { local: engine() } }));
 
   assert.notEqual(before, after, 'a new model list must repaint, or the picker is frozen');
 });
 
 test('an engine that went away also repaints', () => {
-  const up = staticKey(state({ localEngines: { local: engine() } }));
-  const down = staticKey(state({ localEngines: { local: noEngine('connection refused') } }));
+  const up = paintKeys(state({ localEngines: { local: engine() } }));
+  const down = paintKeys(state({ localEngines: { local: noEngine('connection refused') } }));
 
   assert.notEqual(up, down);
 });
@@ -93,7 +94,7 @@ test('a vendor somebody named themselves can be given the endpoint it exists for
   // cannot be filled.
   //
   // RED: Expected the HTML to contain a baseUrl input for "mycompany", found none.
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({
       vendors: [{ id: 'mycompany', runtime: 'codex', model: '', enabled: true, plan: true, code: true, baseUrl: '',
                   executablePath: '', pricePerMillionIn: 0, pricePerMillionOut: 0 }],
@@ -107,7 +108,7 @@ test('a vendor somebody named themselves can be given the endpoint it exists for
 test('the shipped vendors that need no endpoint are not asked for one', () => {
   // The other half of the rule: codex, claude, gemini and antigravity know where they go, and a
   // blank URL box under each of them is four invitations to break a working reviewer.
-  const html = panelHtml(state(), 'n0nce');
+  const html = everyPageHtml(state(), 'n0nce');
 
   for (const id of ['codex', 'claude']) {
     assert.ok(
@@ -125,7 +126,7 @@ test('two local reviewers on two engines show two different model lists', () => 
   // and picking one of them sent a model the second engine does not have.
   //
   // RED: Expected the card for "local-b" to offer gpt-oss:120b, found qwen3.5:35b.
-  const html = panelHtml(
+  const html = everyPageHtml(
     state({
       vendors: [
         { id: 'local-a', runtime: 'local', model: '', enabled: true, plan: true, code: true, baseUrl: 'http://127.0.0.1:11434/v1',

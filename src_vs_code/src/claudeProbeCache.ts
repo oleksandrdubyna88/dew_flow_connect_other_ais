@@ -7,7 +7,6 @@ import { claudeExecutableFor, claudeIsWanted, mayAsk } from './claudeCli';
 import { ConsultSettings } from './consultSettings';
 import { Vendor } from './vendors';
 import { unquoted } from './cliVersions';
-import { ViewHandle } from './viewHandle';
 import { writeFileAtomically } from './atomicFile';
 
 /**
@@ -42,17 +41,20 @@ import { writeFileAtomically } from './atomicFile';
  * <p><b>Named exactly as the panel names them</b>, which is not laziness: it is what keeps every line
  * that uses them a proven MOVE. `scripts/prove-move.mjs` matches whole lines against the file they
  * came from, so reaching them through an `around` object would have made eight lines residue for a
- * reviewer to check by hand; these names make them byte-identical. The `held` handle is
- * SHARED rather than copied — it is the same `ViewHandle` the panel holds, so a window that goes is
- * gone here at the same instant.</p>
+ * reviewer to check by hand; these names make them byte-identical.</p>
+ *
+ * <p><b>`watched` replaced the panel's view handle on 2026-09-28</b>, when the panel came to paint more
+ * than one webview (`research/PLAN_settings_page.md`, F8). The handle was the SIDEBAR's, so a probe asked for
+ * by a Settings tab with the sidebar hidden would have cancelled itself before it answered. What the probe
+ * needs to know is whether ANY page is still there to read it, and that is what it is asked.</p>
  */
 export interface ProbeSurroundings {
   /** Where the kept answer lives. */
   readonly dataDir: vscode.Uri;
   /** Repaint — the panel says what it is doing while a probe runs, and says the answer when it lands. */
   readonly render: () => Promise<void>;
-  /** The panel's own view handle. Four candidates is up to a hundred seconds of BILLED requests. */
-  readonly held: ViewHandle<vscode.WebviewView>;
+  /** Whether any page is still there to read the answer. Four candidates is up to a hundred seconds of BILLED requests. */
+  readonly watched: () => boolean;
 }
 
 export class ClaudeProbeCache {
@@ -74,12 +76,12 @@ export class ClaudeProbeCache {
 
   private readonly render: () => Promise<void>;
 
-  private readonly held: ViewHandle<vscode.WebviewView>;
+  private readonly watched: () => boolean;
 
   constructor(around: ProbeSurroundings) {
     this.dataDir = around.dataDir;
     this.render = around.render;
-    this.held = around.held;
+    this.watched = around.watched;
   }
 
   /** Whether a probe is running, for the sentence the panel shows while it is. */
@@ -178,7 +180,7 @@ export class ClaudeProbeCache {
       await this.render();
       const found = await probeClaudeModels(
         {
-          run: (args) => capture(unquoted(executable), args, false, PROBE_CAP_MS, () => this.held.view === undefined),
+          run: (args) => capture(unquoted(executable), args, false, PROBE_CAP_MS, () => !this.watched()),
           cliVersion: async () => cliVersion,
           executable,
           now: () => Date.now(),
@@ -186,7 +188,7 @@ export class ClaudeProbeCache {
         undefined,
         // Asked before each candidate. Four of them is up to a hundred seconds of BILLED requests,
         // and a window that has gone will not read the answer. (gemini, this round.)
-        () => this.held.view === undefined,
+        () => !this.watched(),
       );
       // A run that learned nothing keeps the previous answer: an account whose allowance is spent
       // is a state this installation is really in, and it must not empty anybody's dropdown.

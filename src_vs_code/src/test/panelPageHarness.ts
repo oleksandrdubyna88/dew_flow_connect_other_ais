@@ -1,13 +1,15 @@
 import assert from 'node:assert/strict';
 
-import { panelHtml, type PanelFocus, type PanelState } from '../panelView';
+import { panelHtml, type PanelFocus, type PanelState, settingsHtml, settingsSections } from '../panelView';
 import { SNIPPET_VERSION } from '../claudeSnippet';
+import { LIVE_REGION_IDS } from '../panelSurface';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 import { camel } from './rolesPageHarness';
 
 /**
- * The sidebar panel, RUN — its own script over its own markup, for a test of any section's controls.
+ * The panel's pages, RUN — their own script over their own markup, for a test of any section's controls,
+ * on the sidebar or in the Settings tab.
  *
  * <p>Extracted from `consultantSectionScript.test.ts` when the gate section gained controls of its own
  * (issue #117): a second copy of this harness beside the first is the duplication `reuse-first.md`
@@ -17,10 +19,52 @@ import { camel } from './rolesPageHarness';
  * still matches.</p>
  */
 
-/** Just enough of a control for the script's `dataset`, `value` and caret reads. */
+/** An event as a page's listener meets it: its type, a key for a keyboard event, where focus went, and whether it was stopped. */
+export class PageEvent {
+  defaultPrevented = false;
+
+  /**
+   * @param isComposing a keyboard event inside an input method's composition (CJK candidates) — a DOM's `isComposing`
+   */
+  constructor(
+    readonly type: string, readonly key = '', readonly relatedTarget: Control | null = null, readonly isComposing = false,
+  ) {}
+
+  preventDefault(): void {
+    this.defaultPrevented = true;
+  }
+}
+
+/**
+ * One `<option>` of a dropdown, as a DOM holds it: a value, its visible text, and the select it is IN — `null` once
+ * it has been removed, which is how a page that detaches non-matches leaves it (the list's search box, Epic 2).
+ */
+export class PageOption {
+  parentNode: Control | null = null;
+
+  constructor(readonly value: string, readonly text: string) {}
+}
+
+/** The node a control sits in, as far as a page uses it: somewhere to insert a node BEFORE the control. */
+export interface PageParent {
+  insertBefore: (node: Control, before: Control) => void;
+}
+
+/** A parent that refuses: a control nobody placed in a running page has nowhere to insert anything. */
+const NO_PARENT: PageParent = {
+  insertBefore: () => { throw new Error('this control is not in a running page, so nothing can be inserted beside it'); },
+};
+
+/**
+ * Just enough of a control for the script's `dataset`, `value` and caret reads — and, since the list search box
+ * (research/PLAN_model_search_and_busy_marks.md, Epic 2), for a select's options to be moved, removed and re-added.
+ *
+ * <p>Stricter than a DOM wherever the two can differ, never more permissive (`generated-code-tests.md` §3): a select
+ * refuses a value none of its options carries (a DOM selects nothing and answers `''`), `removeChild` of a node that is
+ * not a child throws (a DOM throws `NotFoundError`), and `appendChild` MOVES a node rather than copying it.</p>
+ */
 export class Control {
   readonly dataset: Record<string, string> = {};
-  value = '';
   /** What an empty box says it stands for, as the page drew it — a DOM's `placeholder`. */
   placeholder = '';
   /** A checkbox's state, which the script reads instead of `value` (issue #485's switch). */
@@ -29,24 +73,51 @@ export class Control {
   disabled = false;
   focused = false;
   selection: readonly [number, number] = [-1, -1];
+  className = '';
+  /** A DOM's `hidden` — the busy bar is drawn hidden and shown by the page (`busyMark.ts`). */
+  hidden = false;
+  /** The node the control sits in: what a page calls `insertBefore` on. Set when the control joins a running page. */
+  parentNode: PageParent = NO_PARENT;
   /**
    * A dropdown's choices as the page drew them — value and visible text, in document order — as a DOM's
    * `options` gives them. Empty for every other control. So a test can ask what a person is OFFERED, not
-   * only what was selected (S3.8: the effort list is the module's and nothing else).
+   * only what was selected (S3.8: the effort list is the module's and nothing else). LIVE: a page that moves or
+   * removes options changes this list, exactly as it changes a DOM's.
    */
-  options: readonly { readonly value: string; readonly text: string }[] = [];
-  private readonly handlers = new Map<string, (() => void)[]>();
+  options: PageOption[] = [];
+  private current = '';
+  private readonly attributes = new Map<string, string>();
+  private readonly handlers = new Map<string, ((event: PageEvent) => void)[]>();
 
-  constructor(readonly tagName: string, readonly type: string) {}
+  constructor(readonly tagName: string, public type: string) {}
 
-  addEventListener(kind: string, handler: () => void): void {
+  get value(): string {
+    return this.current;
+  }
+
+  /** A select takes only a value one of its options carries; anything else selects nothing, as a DOM does. */
+  set value(next: string) {
+    const refused = this.tagName === 'SELECT' && this.options.length > 0 && !this.options.some((one) => one.value === next);
+    this.current = refused ? '' : next;
+  }
+
+  addEventListener(kind: string, handler: (event: PageEvent) => void): void {
     this.handlers.set(kind, [...(this.handlers.get(kind) ?? []), handler]);
   }
 
-  fire(kind: string): void {
+  fire(kind: string, event: PageEvent = new PageEvent(kind)): PageEvent {
     for (const handler of this.handlers.get(kind) ?? []) {
-      handler();
+      handler(event);
     }
+
+    return event;
+  }
+
+  /** What a page's `dispatchEvent` does: run this control's listeners for that event's type. */
+  dispatchEvent(event: PageEvent): boolean {
+    this.fire(event.type, event);
+
+    return !event.defaultPrevented;
   }
 
   focus(): void {
@@ -55,6 +126,45 @@ export class Control {
 
   setSelectionRange(start: number, end: number): void {
     this.selection = [start, end];
+  }
+
+  setAttribute(name: string, value: string): void {
+    this.attributes.set(name, value);
+  }
+
+  getAttribute(name: string): string | null {
+    return this.attributes.get(name) ?? null;
+  }
+
+  removeAttribute(name: string): void {
+    this.attributes.delete(name);
+  }
+
+  /** A select's option moved to its end — taken out of wherever it was first, never copied. */
+  appendChild(option: PageOption): PageOption {
+    assert.equal(this.tagName, 'SELECT', 'only a select holds options in this harness');
+    if (option.parentNode !== null) {
+      option.parentNode.removeChild(option);
+    }
+    this.options = [...this.options, option];
+    option.parentNode = this;
+
+    return option;
+  }
+
+  removeChild(option: PageOption): PageOption {
+    if (!this.options.includes(option)) {
+      throw new Error('NotFoundError: the node to be removed is not a child of this node');
+    }
+    this.options = this.options.filter((one) => one !== option);
+    option.parentNode = null;
+    // Removing the CHOSEN option re-runs a DOM's selectedness: a single-row select then holds its first remaining
+    // option, or nothing. Keeping the old value here would let a page that moves options lose its choice and pass.
+    if (option.value === this.current) {
+      this.current = this.options[0]?.value ?? '';
+    }
+
+    return option;
   }
 }
 
@@ -95,6 +205,16 @@ function controlsOf(html: string): readonly Control[] {
 }
 
 /**
+ * Every prompt picker the page carries — a `select` routed on `data-prompt`, not on a setting name. Kept apart from
+ * {@link controlsOf}: a `[data-setting]` query must not answer it, as a DOM's would not.
+ */
+function promptsOf(html: string): readonly Control[] {
+  return [...html.matchAll(/<select\b([^>]*)>/g)]
+    .filter(([, attributes]) => attributes!.includes('data-prompt="'))
+    .map((match) => withChoice(controlFrom('select', match[1]!), html, match.index));
+}
+
+/**
  * A dropdown holds the option the page marked `selected`, as a DOM gives it — so a test can see which
  * choice a page was DRAWN on (the follow-up to PR #561), rather than every select starting empty.
  */
@@ -103,9 +223,10 @@ function withChoice(control: Control, html: string, at: number): Control {
     return control;
   }
   const body = html.slice(at, html.indexOf('</select>', at));
+  for (const [, attributes, text] of body.matchAll(/<option\b([^>]*)>([^<]*)<\/option>/g)) {
+    control.appendChild(new PageOption(attribute(attributes!, 'value'), text!.trim()));
+  }
   control.value = /<option\b[^>]*\bvalue="([^"]*)"[^>]*\sselected(?=[\s>])/.exec(body)?.[1] ?? '';
-  control.options = [...body.matchAll(/<option\b([^>]*)>([^<]*)<\/option>/g)]
-    .map(([, attributes, text]) => ({ value: attribute(attributes!, 'value'), text: text!.trim() }));
 
   return control;
 }
@@ -155,9 +276,25 @@ function pageScript(html: string): string {
   return html.slice(start, end);
 }
 
+/** Where the page inserted a node before one of its controls — the search box before its select. */
+export interface Inserted {
+  readonly node: Control;
+  readonly before: Control;
+}
+
 export interface Page {
   readonly html: string;
   readonly controls: readonly Control[];
+  /** Every prompt picker (`data-prompt`) — a dropdown, but not a setting. */
+  readonly prompts: readonly Control[];
+  /** Every node the page inserted beside a control, in the order it did it. */
+  readonly inserted: () => readonly Inserted[];
+  /** What the page last saved with `vscode.setState` — what a replaced document of the same webview will be handed. */
+  readonly saved: () => unknown;
+  /** The page's clock: its timers run only when a test advances it. */
+  readonly clock: PageClock;
+  /** The busy bar as the page drew it (`busyMark.ts`), or `null` when this page has none. */
+  readonly bar: Control | null;
   /** Every `data-command` button, bound by the page's own script — `fire('click')` is a person clicking it. */
   readonly commands: readonly Control[];
   readonly posted: readonly Record<string, unknown>[];
@@ -165,14 +302,28 @@ export interface Page {
   readonly region: (id: string) => string;
   /** Hand the page's own message listener what the host posts, as `webview.postMessage` does. */
   readonly deliver: (data: Record<string, unknown>) => void;
+  /** How many times the page REPLACED a live region's content — an identical push must replace nothing. */
+  readonly regionWrites: (id: string) => number;
 }
 
-/** The regions the host's live push replaces, by id. */
-const LIVE_REGIONS: readonly string[] = ['live-questions', 'live-rounds', 'live-consultations', 'live-notifications'];
+/** The regions the host's live push replaces, by id — read from the declaration, so a new region cannot be missed here. */
+const LIVE_REGIONS: readonly string[] = LIVE_REGION_IDS.map((id) => `live-${id}`);
 
 /** A live region as the script meets it: content it can read and replace, and no controls of its own. */
 class Region {
-  constructor(public innerHTML: string) {}
+  /** How many times the page assigned its content. */
+  writes = 0;
+
+  constructor(private content: string) {}
+
+  get innerHTML(): string {
+    return this.content;
+  }
+
+  set innerHTML(value: string) {
+    this.content = value;
+    this.writes += 1;
+  }
 
   querySelectorAll(): readonly Control[] {
     return [];
@@ -209,53 +360,153 @@ function regionsOf(html: string): Map<string, Region> {
   }));
 }
 
-/** Render the panel, parse its controls, and run its own script over them. */
-export function runPanel(state: PanelState): Page {
-  const html = panelHtml(state, 'test-nonce');
+/**
+ * The page that holds the section a fixture opens: the Settings tab, opened on that section, when the
+ * section moved there (`research/PLAN_settings_page.md`) — the sidebar otherwise.
+ */
+function pageHolding(state: PanelState): string {
+  const opened = state.openSections[0] ?? '';
+
+  return settingsSections().some((section) => section.id === opened)
+    ? settingsHtml(state, 'test-nonce', opened)
+    : panelHtml(state, 'test-nonce');
+}
+
+/** What a run starts from beyond the panel state: the webview's own saved state, as `vscode.getState()` answers it. */
+export interface RunOptions {
+  /** What a previous document of the same webview saved with `setState` — `undefined` for a first load. */
+  readonly saved?: unknown;
+}
+
+/**
+ * The page's clock: a timer runs only when a test ADVANCES it past the timer's time — never on its own, never early.
+ * Every test that never advances sees what it saw before this existed: no timer ever firing.
+ */
+export class PageClock {
+  private now = 0;
+  private next = 0;
+  private timers: ReadonlyMap<number, { readonly at: number; readonly run: () => void }> = new Map();
+
+  readonly setTimeout = (run: () => void, ms = 0): number => {
+    this.next += 1;
+    this.timers = new Map([...this.timers, [this.next, { at: this.now + Math.max(0, ms), run }]]);
+
+    return this.next;
+  };
+
+  readonly clearTimeout = (id: number): void => {
+    this.timers = new Map([...this.timers].filter(([key]) => key !== id));
+  };
+
+  /** Moves time on by `ms`, running every timer due on the way, in the order they fall due. */
+  advance(ms: number): void {
+    const until = this.now + ms;
+    for (let due = this.earliest(until); due !== undefined; due = this.earliest(until)) {
+      const [id, timer] = due;
+      this.clearTimeout(id);
+      this.now = timer.at;
+      timer.run();
+    }
+    this.now = until;
+  }
+
+  private earliest(until: number): [number, { readonly at: number; readonly run: () => void }] | undefined {
+    return [...this.timers].filter(([, timer]) => timer.at <= until).sort((a, b) => a[1].at - b[1].at || a[0] - b[0])[0];
+  }
+}
+
+/** The page's busy bar, read off its markup — drawn hidden, as the page draws it — or `null` when it has none. */
+function busyBarOf(html: string): Control | null {
+  const tag = /<div\b([^>]*\bid="busy-bar"[^>]*)>/.exec(html);
+  if (tag === null) {
+    return null;
+  }
+  const bar = new Control('DIV', '');
+  bar.hidden = /\shidden(?=[\s>]|$)/.test(tag[1]!);
+
+  return bar;
+}
+
+/** The tags a page may create here. Anything else refuses, so a page that builds what this harness cannot see fails loudly. */
+const CREATABLE: readonly string[] = ['input'];
+
+/** What the fake document's `createElement` answers: a control for a tag this harness models, a refusal for any other. */
+export function createdElement(tag: string): Control {
+  assert.ok(CREATABLE.includes(tag), `the page created a <${tag}>, which this harness does not model`);
+
+  return new Control(tag.toUpperCase(), '');
+}
+
+/** Render the page holding the fixture's section, parse its controls, and run its own script over them. */
+export function runPanel(state: PanelState, options: RunOptions = {}): Page {
+  const html = pageHolding(state);
   const controls = controlsOf(html);
+  const prompts = promptsOf(html);
   const commands = commandsOf(html);
   const posted: Record<string, unknown>[] = [];
   const regions = regionsOf(html);
-  let listener: ((event: { data: unknown }) => void) | undefined;
+  const inserted: Inserted[] = [];
+  let saved = options.saved;
+  const parent: PageParent = { insertBefore: (node, before) => { inserted.push({ node, before }); node.parentNode = parent; } };
+  for (const control of [...controls, ...prompts, ...commands]) {
+    control.parentNode = parent;
+  }
+  // EVERY message listener: the Settings page adds its own (the tab it is told to show) after the shared
+  // script's, and keeping only the last one would hand a live push to the listener that ignores it.
+  const listeners: ((event: { data: unknown }) => void)[] = [];
+  const clock = new PageClock();
+  const bar = busyBarOf(html);
   const fakeDocument = {
     addEventListener: () => undefined,
-    querySelectorAll: (selector: string): readonly Control[] => selected(selector, controls, commands),
+    querySelectorAll: (selector: string): readonly Control[] => selected(selector, controls, commands, prompts),
     querySelector: (): null => null,
     // The live regions answer, so the script's live push can be watched landing — widened when the
-    // cadence line joined Active rounds (PR #556, CodeRabbit). Every other id is absent, as before.
-    getElementById: (id: string): Region | null => regions.get(id) ?? null,
+    // cadence line joined Active rounds, now Active gates (PR #556, CodeRabbit). And the busy bar, when the page
+    // drew one (`busyMark.ts`). Every other id is absent, as before.
+    getElementById: (id: string): Region | Control | null => (id === 'busy-bar' ? bar : regions.get(id) ?? null),
+    createElement: createdElement,
     body: { style: { fontSize: '' } },
     documentElement: { style: { setProperty: () => undefined } },
   };
 
-  const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', pageScript(html));
+  const body = new Function('acquireVsCodeApi', 'document', 'window', 'setTimeout', 'clearTimeout', 'Event', pageScript(html));
   body(
     () => ({
       postMessage: (message: Record<string, unknown>): void => { posted.push(message); },
-      getState: () => undefined,
-      setState: () => undefined,
+      getState: (): unknown => saved,
+      // Kept as given, as a webview keeps it — a copy, so a page cannot change what it saved by mutating it after.
+      setState: (next: unknown): void => { saved = structuredClone(next); },
     }),
     fakeDocument,
     {
       addEventListener: (kind: string, handler: (event: { data: unknown }) => void): void => {
         if (kind === 'message') {
-          listener = handler;
+          listeners.push(handler);
         }
       },
     },
-    (): number => 0,
-    (): void => undefined,
+    clock.setTimeout,
+    clock.clearTimeout,
+    PageEvent,
   );
 
   return {
     html,
     controls,
+    prompts,
     commands,
     posted,
+    clock,
+    bar,
+    inserted: () => inserted.map((one) => one),
+    saved: () => saved,
     region: (id) => regions.get(id)?.innerHTML ?? '',
+    regionWrites: (id) => regions.get(id)?.writes ?? 0,
     deliver: (data) => {
-      assert.ok(listener !== undefined, 'the panel registers no message listener, so a live push drives nothing');
-      listener({ data });
+      assert.ok(listeners.length > 0, 'the panel registers no message listener, so a live push drives nothing');
+      for (const listener of listeners) {
+        listener({ data });
+      }
     },
   };
 }
@@ -264,12 +515,22 @@ export function runPanel(state: PanelState): Page {
  * What the fake document answers for a selector: the setting controls, the command buttons, and nothing
  * for any other selector — stricter than a DOM, never more permissive (`generated-code-tests.md` §3).
  */
-function selected(selector: string, controls: readonly Control[], commands: readonly Control[]): readonly Control[] {
-  if (selector === '[data-setting]') {
-    return controls;
+function selected(
+  selector: string, controls: readonly Control[], commands: readonly Control[], prompts: readonly Control[],
+): readonly Control[] {
+  switch (selector) {
+    case '[data-setting]':
+      return controls;
+    case '[data-command]':
+      return commands;
+    case '[data-prompt]':
+      return prompts;
+    case 'select':
+      // Every dropdown the page drew, a setting's and a prompt picker's alike — as `querySelectorAll('select')` does.
+      return [...controls.filter((one) => one.tagName === 'SELECT'), ...prompts];
+    default:
+      return [];
   }
-
-  return selector === '[data-command]' ? commands : [];
 }
 
 /** The button for one command and id, clicked as a person clicks it — what the page then posted is in `posted`. */
@@ -279,10 +540,29 @@ export function click(page: Page, command: string, id: string): void {
   button.fire('click');
 }
 
-/** Whatever the script last sent as a setting write. */
+/**
+ * A numbered post — a setting, a prompt or a command — as the host's contract reads it: its number and the id of
+ * the document that numbered it are CHECKED (a positive integer and a non-empty string, which the busy mark settles
+ * it under, `busyMark.ts`) and then left out, so an assertion about what was asked for is not also an assertion about
+ * how many posts came before it, or about which document of the webview sent it.
+ */
+export function withoutSeq(message: Record<string, unknown>): Record<string, unknown> {
+  const { seq, doc, ...rest } = message;
+  assert.ok(Number.isInteger(seq) && (seq as number) > 0, `a ${String(message['type'])} post carries no sequence number`);
+  assert.ok(typeof doc === 'string' && doc.length > 0, `a ${String(message['type'])} post names no document`);
+
+  return rest;
+}
+
+/** The work a page asked for — every setting, prompt and command it posted, in order, each through {@link withoutSeq}. */
+export function work(page: Page): readonly Record<string, unknown>[] {
+  return page.posted.filter((one) => ['setting', 'prompt', 'command'].includes(String(one['type']))).map(withoutSeq);
+}
+
+/** Whatever the script last sent as a setting write — numbered, which is checked, and compared without the number. */
 export function lastWrite(page: Page): Record<string, unknown> {
   const writes = page.posted.filter((one) => one['type'] === 'setting');
   assert.ok(writes.length > 0, 'the control was changed and the page wrote nothing');
 
-  return writes.at(-1)!;
+  return withoutSeq(writes.at(-1)!);
 }

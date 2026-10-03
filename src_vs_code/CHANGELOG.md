@@ -1,5 +1,130 @@
 # Changelog
 
+## Extension 0.61.1 — 2026-10-02
+
+**Typing into a box no longer counts as the panel working.** Some panel actions ask you something first: adding a
+reviewer or a Team server, a custom model, closing a consultation, the bugs key, moving the data folder. Each opens an
+input box, a list to pick from, a file dialog or a question. While that box is open, the progress bar from 0.61.0 no
+longer runs, and the control you pressed is no longer marked busy. Once you answer, the bar comes back only if the
+work still takes longer than half a second. Time spent before the box opened still counts; time you spend typing or
+deciding does not.
+
+## Extension 0.61.0 — 2026-10-02
+
+**A long list can be searched.** Any dropdown in the panel or the Settings tab with fifteen or more choices — the two
+hundred models an OpenRouter reviewer lists after ≡, for one — now has a search box above it. Type part of a name and
+the list narrows to what matches, names that start with what you typed first, then names where a part does. Several
+words must all match. Enter picks the first match, Escape puts the whole list back, ↓ moves into the list, and the
+search and the cursor survive the panel redrawing itself. The model you have chosen stays in the list while you search.
+
+**An action that takes time says so.** A setting you changed, a prompt you chose or a button you pressed that the
+extension has not finished within half a second now shows a thin progress bar at the top of the panel and marks the
+control you used, until the work and the redraw it causes are done. A quick change shows nothing at all. The bar
+carries over when the panel redraws itself mid-action, and is gone when nothing is running. While a command waits on
+you in an input box, the bar shows too.
+
+**A reviewer on another endpoint with no model says so.** Its empty choice now reads *"no model yet — press ≡ and pick
+one this endpoint lists"* instead of *"the CLI's default"*: with no model, the Codex CLI sends its own model name, which
+OpenRouter and its like do not serve. **Vendor keys** now names every reviewer that needs a key from the vault,
+including a switched-off one (by the key name it reads), and no longer asks a local engine for a key.
+
+## Extension 0.60.2 — 2026-10-01
+
+**A reviewer on someone else's endpoint offers that endpoint's models.** A reviewer pointed at OpenRouter, or at any
+other OpenAI-compatible base URL, used to list the models the Codex CLI keeps for OpenAI, captioned *"models the Codex
+CLI has cached for this machine"*. Those are names that endpoint refuses, so there was nothing on the list you could
+use. Such a card now shows its saved model, and a **≡** button beside the card's other buttons asks the endpoint itself
+which models your key can call, using the key in your vault, and fills the list with them. It asks only when you press
+it, says when it asked, and says why when the endpoint refuses. The same reviewer no longer offers OpenAI's names in
+the chat, in a new chat preset or as a consultant either. Hosted `api` reviewers get the same ≡ instead of a command
+to run in a terminal.
+
+## Server 0.40.5 — 2026-10-01
+
+**The CredsForDevs config key you enter in the panel is used now.** The panel saves that key in the settings
+file it shares with the server, but the server only looked for it in its own environment, where the panel never
+puts it. So the vault was never read: `providers` answered *no COAI_CREDS_KEY configured* however often the
+server was restarted, and every reviewer that needs a key from the vault (an OpenAI-compatible endpoint such as
+OpenRouter or DeepSeek, or an `api` row) was badged **cannot review** and left out of every round. The server now
+reads the key from the settings file, as it does every other setting. A `COAI_CREDS_KEY` in your MCP client's own
+`env` block still takes precedence. The model probe behind *Add a reviewer* reads the key the same way.
+
+## Server 0.40.4 — 2026-09-30
+
+**A Claude CLI reviewer that fails now says why.** The Claude CLI puts its failure reason in the JSON it writes
+to stdout, not on stderr. Until now a round showed only `exit 1 (the CLI said nothing on stderr)`, which is how a
+spent monthly limit looked. The round now quotes the CLI's own reason and its HTTP status, for example
+`exit 1: You've hit your monthly spend limit. Switch to another model to continue. (HTTP 429)`.
+
+## Extension 0.60.1 — 2026-09-29
+
+**The MCP server tab is one and a half times the size, not twice.** At twice the size it read far larger
+than the tabs beside it; it is now halfway between them and the size 0.60.0 gave it.
+
+## Extension 0.60.0 — 2026-09-29
+
+**Every page now has the text size and the text brightness.** The two ± pairs beside a page's title — one
+for the size, one for the tone, brighter or dimmer and warmer — are now on every ConnectOtherAIs page that
+opens as a tab: the Settings tab, Gate commands, Notifications, Review rounds and Who holds a key had
+neither, and Chat presets, Phrases and Review roles had only the size. A press on any page changes the
+text on every page that is open, and a page that redraws keeps what you chose.
+
+**In the Settings tab every line follows the size.** Its small print — the notes under a setting, the
+badges, the `?` circles — used to stay put while the headings grew. It follows the size control now. At
+the default size the sidebar's text is exactly the size it was.
+
+**The MCP server tab's text is twice the size.** It is the tab you read rather than set, and the Settings tab
+has the room.
+
+**Gate commands and Review roles look like Chat presets.** Both sit in the same centred column, and
+Gate commands' boxes are drawn in the theme's colours instead of white, with each command in a card of
+its own.
+
+**Active rounds is three sections.** The sidebar shows **Active gates** — the rounds running now —,
+**Active consultations** — the consultations being had — and **Consultation cadence**, a line per plan
+saying how many of its epics are closed and whether the consultation it owes was taken.
+
+**A review that is waiting on you reads as a list.** When a round could not be reviewed, its card in the
+sidebar is laid out: what happened, one line for each reviewer that failed and what it said — a vendor's
+raw error shown as its message — and the question on its own line.
+
+**Review roles opens at the text size you chose.** It opened at the theme's size and caught up only when
+the size was pushed to it afterwards.
+
+## Extension 0.59.0 · Server 0.40.3 — 2026-09-29
+
+**Settings have a tab of their own.** The sidebar now shows only what is happening now: a question waiting
+on you, **Notifications**, **Active rounds** (the rounds and the consultations running this minute),
+**Phrases** and **Bugz**. Everything you set up once is in a **Settings** editor tab. Open it with the gear
+beside the help button in the panel's title bar, or with **ConnectOtherAIs: Settings** in the command
+palette. It has one tab each
+for Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor keys, Team servers,
+This side and MCP server, with exactly the controls those sections had, saved exactly where they were saved
+before. There is one Settings tab per window, so pressing the gear again brings it back, and until the
+window is reloaded it reopens on the tab you last had. The tabs answer the keyboard: Left and Right move along the strip and Home and End go
+to its ends. Like every title-bar button in VS Code, the gear shows while the panel is hovered or focused.
+
+**An answer the panel was waiting for now appears when it arrives.** The server's *cannot review* verdict,
+a CLI update, a model list or a price that came in after the panel was first drawn stayed off the screen
+until something unrelated redrew it. It is shown as soon as it lands.
+
+**Opening a section no longer reloads the sidebar a few seconds later.** That reload used to drop the
+scroll position and close any dropdown you had open.
+
+**A refused setting on an API reviewer's card no longer freezes the panel.** After one, every later change
+in the panel waited until the window was reloaded.
+
+**Two smaller fixes.** The sidebar could come back blank after VS Code re-created it, and a late clean-up
+of a replaced view could lose the caret in the box you were typing in.
+
+**The help is current again, in all five languages.** Every article was checked against what the extension
+shows. There are four new ones (Team servers, the rounds log, the review bugs page and who holds a key) and
+one for the Settings tab, and every sentence that sent you to a section that moved now names its tab.
+
+**coai-mcp's messages name the place they send you.** They say `ConnectOtherAIs > Team servers`,
+`> Consultant` or `> MCP server` instead of "the panel's … section", which is true of this extension and of
+an older one. The old wording "the Server section" had been wrong since that section became MCP server.
+
 ## Extension 0.58.0 · Server 0.40.2 — 2026-09-28
 
 *Server 0.40.0 and 0.40.1 were tagged and never shipped, and 0.40.2 carries exactly the same code. 0.40.0's

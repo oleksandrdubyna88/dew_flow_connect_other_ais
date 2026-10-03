@@ -41,10 +41,10 @@ import { escapeHtml } from './escapeHtml';
  * would have moved a strip on a page this story does not touch. Widening beats moving here: the
  * shape is shared, the spacing stays each page's own.</p>
  *
- * <p><b>The other two strips are NOT this design and are left alone.</b> `panelView`'s is a
- * segmented control (`flex: 1`, button backgrounds) and `notificationsPageStyle`'s wraps; they are
- * different designs rather than drifted copies, and converting them would be a visual change to two
- * more pages under cover of a refactor.</p>
+ * <p><b>`notificationsPageStyle`'s strip is NOT this design and is left alone:</b> it wraps, which makes
+ * it a different design rather than a drifted copy, and converting it would be a visual change to one
+ * more page under cover of a refactor. (`panelView` had a segmented strip too; it went when the
+ * sidebar's tabs did, and the Settings tab draws this one.)</p>
  */
 export function tabCss(margin: string): string {
   return [
@@ -107,6 +107,14 @@ export interface StripNames {
    * converted pages byte-identical.</p>
    */
   readonly strip?: string;
+
+  /**
+   * Roving `tabindex`: the open tab `0`, every other `-1`, so Tab enters the strip once and the arrow
+   * keys (`tabKeys.ts`) move inside it — the WAI-ARIA tab pattern. Opt-in, and absent on every page that
+   * existed before it, which keeps those byte-identical; a page that turns it on keeps the attribute in
+   * step when a tab is chosen.
+   */
+  readonly roving?: boolean;
 }
 
 function attribute(name: string, value: string | undefined): string {
@@ -142,7 +150,15 @@ function button(tab: Tab, open: string, names: StripNames): string {
 
   return `<button type="button" role="tab" id="${id}" aria-controls="${controls}"`
     + ` aria-selected="${on ? 'true' : 'false'}" class="tab${on ? ' on' : ''}"`
-    + ` data-tab="${escapeHtml(tab.key)}"${attribute('title', tab.title)}>${escapeHtml(tab.label)}</button>`;
+    + ` data-tab="${escapeHtml(tab.key)}"${attribute('title', tab.title)}${rovingIndex(names, on)}>${escapeHtml(tab.label)}</button>`;
+}
+
+function rovingIndex(names: StripNames, on: boolean): string {
+  if (names.roving !== true) {
+    return '';
+  }
+
+  return ` tabindex="${on ? '0' : '-1'}"`;
 }
 
 /**

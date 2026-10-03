@@ -456,6 +456,9 @@ RestartSec=5
 # 78 is EX_CONFIG: a missing secret or an unusable keyword list. Those do not get better by trying
 # again, and `Restart=always` would otherwise restart the same broken binary every five seconds for
 # ever while the operator reads a crash loop instead of one clear line.
+# 75 is EX_TEMPFAIL — the port in --urls is held by another process. That one DOES get better, so
+# it is deliberately not listed here: the unit retries every five seconds; each try leaves one line
+# naming the address (beside the host framework's own startup-fault record), never a crash report.
 RestartPreventExitStatus=78
 User=coai-bugs
 Group=coai-bugs

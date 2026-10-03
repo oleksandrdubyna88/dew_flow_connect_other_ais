@@ -1,6 +1,7 @@
 import { ChatProvider } from './chatModels';
 import { ModelPreset, PromptPreset } from './chatPresets';
-import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
+import { FORM_FIELDS_CSS, FORM_HEAD_CSS, formCardCss, formFrameCss } from './formPageStyle';
+import { textControlFrom, textControlsHtml, textControlsScript, textOf } from './textControls';
 import { escapeHtml } from './webviewHtml';
 
 /**
@@ -34,6 +35,8 @@ export interface PresetsPageState {
    */
   readonly unreadable: readonly string[];
   readonly uiScale: number;
+  /** How far the text is from the theme's own colour; absent is the theme's own, as on the help page. */
+  readonly textTone?: number;
 }
 
 /** Every message this page can send, decided without a host so a test can reach the decision. */
@@ -42,6 +45,7 @@ export type PresetCommand =
   | { readonly kind: 'add'; readonly list: 'prompt' | 'model' }
   | { readonly kind: 'remove'; readonly list: 'prompt' | 'model'; readonly id: string }
   | { readonly kind: 'zoom'; readonly delta: number }
+  | { readonly kind: 'tone'; readonly delta: number }
   | { readonly kind: 'ignore' };
 
 const IGNORE: PresetCommand = { kind: 'ignore' };
@@ -118,12 +122,8 @@ export function presetEdit(message: unknown): PresetCommand {
   }
   const said = message as Record<string, unknown>;
   const list = listOf(said['list']);
-  if (said['type'] === 'zoom') {
-    const delta = said['delta'];
-
-    return typeof delta === 'number' && Number.isFinite(delta)
-      ? { kind: 'zoom', delta: Math.max(-1, Math.min(1, Math.trunc(delta))) }
-      : IGNORE;
+  if (said['type'] === 'zoom' || said['type'] === 'tone') {
+    return textControlFrom(said) ?? IGNORE;
   }
   if (list === undefined) {
     return IGNORE;
@@ -195,32 +195,21 @@ function modelRow(preset: ModelPreset, providers: readonly ChatProvider[]): stri
 </div>`;
 }
 
-function styles(uiScale: number): string {
-  return `  body { font-family: var(--vscode-font-family); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 16px 24px; max-width: 900px; margin: 0 auto; ${zoomStyle(uiScale)} }
-  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 8px; }
-  h1 { font-size: 1.2em; margin: 0; }
-  h2 { font-size: 1em; margin: 24px 0 4px; }
-  .lead { opacity: .8; margin: 0 0 12px; }
-  .preset { border: 1px solid var(--vscode-panel-border); border-left-width: 3px; border-radius: 4px; padding: 10px 12px; margin: 0 0 10px; }
+function styles(uiScale: number, textTone: number): string {
+  return `${formFrameCss(uiScale, textTone)}
+${formCardCss('.preset')}
   .preset.prompt-row { border-left-color: var(--vscode-textLink-foreground); }
-  .head { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; flex-wrap: wrap; }
-  .head input[type="text"] { flex: 1 1 12rem; min-width: 0; }
-  input, select, textarea { font: inherit; color: var(--vscode-input-foreground); background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 3px; padding: 4px 6px; }
-  /* The box a person READS a prompt in. It also grows with its content where the engine can do it;
-     the rows attribute is the floor for every engine that cannot. */
-  textarea { width: 100%; box-sizing: border-box; field-sizing: content; max-height: 60vh; }
+${FORM_HEAD_CSS}
+${FORM_FIELDS_CSS}
   .main { display: inline-flex; align-items: center; gap: 4px; opacity: .85; }
-  .refused { font-size: .9em; opacity: .8; margin: 0 0 10px; }
-  button { font: inherit; color: var(--vscode-button-foreground); background: var(--vscode-button-background); border: none; border-radius: 3px; padding: 4px 12px; cursor: pointer; }
-  button.remove { color: var(--vscode-foreground); background: none; border: 1px solid var(--vscode-panel-border); }
-${ZOOM_CSS}`;
+  .refused { font-size: .9em; opacity: .8; margin: 0 0 10px; }`;
 }
 
 function script(nonce: string): string {
   return `<script nonce="${nonce}">
 (function () {
   const vscode = acquireVsCodeApi();
-  ${zoomScript()}
+  ${textControlsScript()}
   // Delegated on the document: every row is replaced whenever the lists change, and a listener bound
   // to a field would die with the row it was bound to.
   document.addEventListener('input', function (event) {
@@ -283,11 +272,11 @@ export function chatPresetsHtml(state: PresetsPageState, nonce: string): string 
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chat presets</title>
 <style>
-${styles(state.uiScale)}
+${styles(textOf(state).size, textOf(state).tone)}
 </style>
 </head>
 <body>
-<header><h1>Chat presets</h1>${zoomControlHtml(state.uiScale)}</header>
+<header><h1>Chat presets</h1>${textControlsHtml(textOf(state).size, textOf(state).tone)}</header>
 <p class="lead">The prompts and the models you keep as buttons above the composer. Everything here is saved as you type.</p>
 <h2>Prompts</h2>
 <p class="lead">The one marked <b>main</b> is used when a capture sends by itself.</p>

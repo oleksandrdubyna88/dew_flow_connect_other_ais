@@ -378,7 +378,7 @@ async function refusedForWrongAccount(
 
   return `${server.name}: the Microsoft account active on this side is ${session.email}, not `
     + `${expectedEmail} — nothing was signed in here. Sign in explicitly to use ${session.email} on `
-    + `this side, or separate the sides in the panel to keep an account per side.${stranded}`;
+    + `this side, or separate the sides (Settings → This side) to keep an account per side.${stranded}`;
 }
 
 /**

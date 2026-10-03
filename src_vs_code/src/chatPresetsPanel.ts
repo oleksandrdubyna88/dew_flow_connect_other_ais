@@ -16,11 +16,15 @@ import {
   unreadableModels,
 } from './chatPresets';
 import { PresetCommand, chatPresetsHtml, editRepaints, editedRows, presetEdit } from './chatPresetsPage';
-import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
+import { isTextControl } from './textControls';
+import { applyTextControl, pushTextControlsTo } from './textControlsHost';
+import { currentTextTone } from './textToneHost';
+import { currentUiScale } from './uiScaleHost';
 import { CHAT_RUNTIMES } from './cliChatLaunch';
 import { allowedModelsFor, modelsFor } from './models';
 import { teamServersFrom } from './teamServers';
 import { VENDOR_PRESETS } from './vendors';
+import { askPerson } from './personWait';
 
 /**
  * The presets tab: one webview, reused while open.
@@ -109,8 +113,8 @@ function promptRowsToWrite(): Record<string, unknown>[] {
 }
 
 async function apply(command: PresetCommand): Promise<boolean> {
-  if (command.kind === 'zoom') {
-    await applyZoomDelta(command.delta);
+  if (isTextControl(command)) {
+    await applyTextControl(command);
 
     return false;
   }
@@ -169,6 +173,7 @@ function render(): void {
       providers: providers(),
       unreadable: unreadableModels(config().get(MODELS_KEY)),
       uiScale: currentUiScale(),
+      textTone: currentTextTone(),
     },
     crypto.randomBytes(16).toString('hex'),
   );
@@ -216,12 +221,14 @@ function openPanel(): void {
     vscode.ViewColumn.Active,
     { enableScripts: true, retainContextWhenHidden: true, localResourceRoots: [], enableFindWidget: true },
   );
-  const scale = pushUiScaleTo(panel.webview);
+  const scale = pushTextControlsTo(panel.webview);
   panel.webview.onDidReceiveMessage((message: unknown) => {
     void apply(presetEdit(message)).then((again) => {
       if (again) {
         render();
       }
+    }).catch((error: unknown) => {
+      console.error('[coai] chat presets page: a change could not be saved', error);
     });
   });
   panel.onDidDispose(() => {
@@ -296,22 +303,22 @@ async function askForAModel(): Promise<
   if (model === undefined) {
     return undefined;
   }
-  const name = await vscode.window.showInputBox({
+  const name = await askPerson(() => vscode.window.showInputBox({
     title: 'Add a model — step 3 of 4',
     prompt: 'A name for this preset — it is what the button above the composer says',
     value: model.label.length > 0 ? model.label : chosen.label,
-  });
+  }));
   if (name === undefined) {
     return undefined;
   }
   // The LAST step is optional, and escaping it means "none" rather than "throw the other three
   // away". Escape is how a person skips an optional field in every other VS Code dialog, and
   // discarding a finished preset for using it is the wizard punishing the ordinary gesture.
-  const startingPrompt = await vscode.window.showInputBox({
+  const startingPrompt = await askPerson(() => vscode.window.showInputBox({
     title: 'Add a model — step 4 of 4, optional',
     prompt: 'What the composer opens with when this model is chosen. Leave it empty for none.',
     placeHolder: 'You are a business analyst…',
-  });
+  }));
 
   return { vendor: chosen.vendor, model: model.id, name, startingPrompt: startingPrompt ?? '' };
 }
@@ -344,10 +351,10 @@ async function askWhichVendor(): Promise<{ label: string; vendor: ChatVendorChoi
       vendor: { runtime: 'remote', teamServerId: server.id, remoteVendor: name } as ChatVendorChoice,
     })));
 
-  return vscode.window.showQuickPick(
+  return askPerson(() => vscode.window.showQuickPick(
     [...local, ...remote],
     { title: 'Add a model — step 1 of 4', placeHolder: 'Which vendor should answer?' },
-  );
+  ));
 }
 
 /** What a Team server said it hosts, from the catalog the panel last fetched. */
@@ -394,13 +401,18 @@ Promise<{ id: string; label: string } | undefined> {
     catalog.localEngine,
     catalog.discoveredAgy,
     allowedModelsFor(spec, catalog.teamServers).models,
+    undefined,
+    '',
+    // A vendor on somebody else's endpoint offers nothing here rather than the Codex CLI's cache, so the
+    // step answers "whatever that vendor is set to" (PLAN_custom_endpoint_model_list).
+    { baseUrl: vendor.baseUrl ?? '', keyName: '' },
   );
   if (offered.length === 0) {
     return { id: '', label: '' };
   }
 
-  return vscode.window.showQuickPick(
+  return askPerson(() => vscode.window.showQuickPick(
     offered.map((one) => ({ label: one.label, id: one.id })),
     { title: 'Add a model — step 2 of 4', placeHolder: 'Which of ' + label + ' models?' },
-  );
+  ));
 }

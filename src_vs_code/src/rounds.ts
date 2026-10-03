@@ -401,7 +401,7 @@ function restOf(state: ReviewerState, model: string, detail: readonly string[]):
   const brackets = detail.length > 0 ? ` (${detail.join(', ')})` : '';
   // Normalised exactly as the model is, and for the same reason: an interface is not runtime
   // validation. A session file that omits `status`, or carries a number, reached `.length` here and
-  // threw while the panel was being built — one malformed reviewer blanking the whole Active rounds
+  // threw while the panel was being built — one malformed reviewer blanking the whole Active gates
   // view. Whitespace is not a status either. Raised on the code round of the two-line row.
   const status = usableString(state.status);
 

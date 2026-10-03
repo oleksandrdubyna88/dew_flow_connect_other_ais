@@ -552,27 +552,33 @@ internal static class Program
         }
     }
 
-    private static async Task<int> ProvidersJsonCoreAsync()
+    private static Task<int> ProvidersJsonCoreAsync() =>
+        ProvidersJsonCoreAsync(
+            Environment.GetEnvironmentVariable, new Runners.Processes.ProcessLauncher(), Console.Out, Note);
+
+    /// <summary>The mode with its collaborators passed in, so a test can hand it a settings file, a fake vault and a writer.</summary>
+    internal static async Task<int> ProvidersJsonCoreAsync(
+        Func<string, string?> env, Runners.Processes.IProcessLauncher launcher, TextWriter output, Action<string> note)
     {
         // Layered exactly as `ServeAsync` layers it. Reading the ENVIRONMENT alone was the first
         // version, and the seam check caught it in one run: the panel's own settings file was
         // ignored, so this mode answered about the DEFAULT vendors and would have badged a
         // configuration nobody has. The variable still outranks the file, key by key, as everywhere.
         var configuration = Server.SettingsFile.Layer(
-            Server.SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path,
-            Environment.GetEnvironmentVariable,
+            Server.SettingsFile.DataDirFrom(env).Path,
+            env,
             // Same rule: this mode prints JSON on stdout and a person's migration is told on stderr.
-            Note);
+            note);
         var settings = Server.PanelSettings.FromEnvironment(configuration);
-        var launcher = new Runners.Processes.ProcessLauncher();
         // The same read `ServeAsync` does, so a vendor whose key is in the vault is reported as
         // runnable here too — otherwise this mode would badge half a configuration as unavailable.
-        var keys = await Server.KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable)
-            .ReadAsync(Environment.GetEnvironmentVariable(Server.KeyVault.KeyVariable));
+        // The key comes from the LAYER, where the panel wrote it; the environment still outranks it.
+        var keys = await Server.KeyVault.ForThisMachine(launcher, env)
+            .ReadFromConfigurationAsync(configuration);
         var service = new Server.PanelService(
             settings, keys, DateTime.UtcNow, launcher, Serilog.Core.Logger.None, Server.Noticing.None);
 
-        await Console.Out.WriteLineAsync(await service.ProvidersAsync());
+        await output.WriteLineAsync(await service.ProvidersAsync());
 
         return 0;
     }
@@ -1837,7 +1843,9 @@ internal static class Program
                 settings.DataDir,
                 message => log.Warning("process tracking: {Detail}", message));
             var launcher = new ProcessLauncher(tracking);
-            var keys = await KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable).ReadAsync(Environment.GetEnvironmentVariable(KeyVault.KeyVariable));
+            // The key from the layered configuration above, where the panel wrote it — not the raw
+            // environment, which no spawn of the extension's puts it in (2026-10-01).
+            var keys = await KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable).ReadFromConfigurationAsync(configuration);
             var vaultReadUtc = keys.Available ? DateTime.UtcNow : default;
             log.Information("starting: {Providers} enabled, vault: {Vault}",
                 string.Join(",", settings.Providers.Where(p => p.Enabled).Select(p => p.Provider)),
@@ -1858,7 +1866,7 @@ internal static class Program
             StartupNotices.Record(settings, storage, noticing, log);
 
             // The file the panel writes is re-read per call, so a vendor or a threshold changed
-            // in the sidebar reaches the NEXT round without restarting the MCP client.
+            // in the Settings tab reaches the NEXT round without restarting the MCP client.
             // ONE composition, handed to the host, which holds it and gives it to every service it
             // builds — the rebuild on a settings change included. A defaulted parameter anywhere on
             // that road is the trap the plan round named: production takes the quiet path while

@@ -61,10 +61,10 @@ export function rowsAfter(
    */
   texts: Readonly<Record<string, string>> = {},
 ): RowsOutcome {
-  // `text` is a FILE and `restorePrompt` deletes one; zoom is a different setting entirely; and
+  // `text` is a FILE and `restorePrompt` deletes one; zoom and tone are different settings entirely; and
   // `finishDeletion` and `reloadWindow` are about a deletion that has already left the rows. All of
   // them are the host's, and none touches a row.
-  if (command.kind === 'ignore' || command.kind === 'zoom' || command.kind === 'restorePrompt'
+  if (command.kind === 'ignore' || command.kind === 'zoom' || command.kind === 'tone' || command.kind === 'restorePrompt'
       || command.kind === 'tab' || command.kind === 'finishDeletion' || command.kind === 'reloadWindow') {
     return UNCHANGED;
   }
@@ -133,7 +133,7 @@ function removed(current: readonly RoleRow[], id: string): RowsOutcome {
 function onRow(
   current: readonly RoleRow[],
   command: Exclude<RolesCommand, {
-    kind: 'ignore' | 'zoom' | 'tab' | 'add' | 'remove' | 'restorePrompt' | 'finishDeletion' | 'reloadWindow';
+    kind: 'ignore' | 'zoom' | 'tone' | 'tab' | 'add' | 'remove' | 'restorePrompt' | 'finishDeletion' | 'reloadWindow';
   }>,
   texts: Readonly<Record<string, string>>,
 ): RowsOutcome {
@@ -160,7 +160,7 @@ function onRow(
 function changed(
   row: RoleRow,
   command: Exclude<RolesCommand, {
-    kind: 'ignore' | 'zoom' | 'tab' | 'add' | 'remove' | 'restorePrompt' | 'finishDeletion' | 'reloadWindow';
+    kind: 'ignore' | 'zoom' | 'tone' | 'tab' | 'add' | 'remove' | 'restorePrompt' | 'finishDeletion' | 'reloadWindow';
   }>,
   all: readonly RoleRow[],
   texts: Readonly<Record<string, string>>,

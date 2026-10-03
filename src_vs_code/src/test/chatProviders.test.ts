@@ -538,3 +538,31 @@ test('with no saved models at all the chat says so, rather than refusing a blank
   assert.strictEqual(answer.ok, false);
   assert.match(answer.ok === false ? answer.refusal : '', /Edit chat presets/i, 'nobody is told where to add one');
 });
+
+/**
+ * A chat partner on somebody else's endpoint is offered its own saved model, never the Codex CLI cache —
+ * the same decision the reviewer card takes (research/PLAN_custom_endpoint_model_list.md, 2026-10-01).
+ */
+test('a codex row on another endpoint is not offered the Codex CLI cache in the chat', () => {
+  const list = chatProvidersFrom(
+    [vendor({ id: 'openrouter', runtime: 'codex', baseUrl: 'https://openrouter.ai/api/v1', model: 'deepseek/deepseek-chat' })],
+    CATALOG,
+  );
+
+  assert.deepStrictEqual(list.providers[0]?.models.map((m) => m.id), ['deepseek/deepseek-chat']);
+});
+
+test('a codex preset on another endpoint is not offered the Codex CLI cache either', () => {
+  const presets = [{
+    id: 'p1', name: 'Router', main: false, runtime: 'codex' as const, model: 'openai/gpt-5', executablePath: '',
+    baseUrl: 'https://openrouter.ai/api/v1',
+  }];
+
+  assert.deepStrictEqual(chatProvidersFromPresets(presets, CATALOG).providers[0]?.models.map((m) => m.id), ['openai/gpt-5']);
+});
+
+test('a plain codex row still gets the Codex CLI list in the chat', () => {
+  const list = chatProvidersFrom([vendor({ id: 'codex', runtime: 'codex', model: '' })], CATALOG);
+
+  assert.deepStrictEqual(list.providers[0]?.models.map((m) => m.id), ['gpt-5.2', 'gpt-5.2-mini']);
+});

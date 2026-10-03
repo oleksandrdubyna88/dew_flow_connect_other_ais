@@ -43,7 +43,7 @@ public sealed class TheVaultIsFoundWhereCredsForDevsInstallsItTests : IDisposabl
     {
         var vault = new KeyVault(new ProcessLauncher(), "creds-binary-that-is-not-on-path", [FakeCliExe]);
 
-        var keys = await vault.ReadAsync("cfg-live-abc", TestContext.Current.CancellationToken);
+        var keys = await vault.ReadFromConfigurationAsync(VaultConfiguration.Holding("cfg-live-abc"), TestContext.Current.CancellationToken);
 
         keys.Unavailability.Should().BeEmpty("the CLI the extension installed answers when PATH has none");
         keys.Keys["grok"].Should().Be("sk-live");
@@ -55,7 +55,7 @@ public sealed class TheVaultIsFoundWhereCredsForDevsInstallsItTests : IDisposabl
         // The fallback would fail if it ran: it does not exist. PATH's answer is the one taken.
         var vault = new KeyVault(new ProcessLauncher(), FakeCliExe, ["a-fallback-that-must-not-run"]);
 
-        var keys = await vault.ReadAsync("cfg-live-abc", TestContext.Current.CancellationToken);
+        var keys = await vault.ReadFromConfigurationAsync(VaultConfiguration.Holding("cfg-live-abc"), TestContext.Current.CancellationToken);
 
         keys.Available.Should().BeTrue();
     }
@@ -66,7 +66,7 @@ public sealed class TheVaultIsFoundWhereCredsForDevsInstallsItTests : IDisposabl
         var elsewhere = Path.Combine(Path.GetTempPath(), "coai-no-such-dir", "creds.exe");
         var vault = new KeyVault(new ProcessLauncher(), "creds-binary-that-is-not-on-path", [elsewhere]);
 
-        var keys = await vault.ReadAsync("cfg-live-abc", TestContext.Current.CancellationToken);
+        var keys = await vault.ReadFromConfigurationAsync(VaultConfiguration.Holding("cfg-live-abc"), TestContext.Current.CancellationToken);
 
         keys.Available.Should().BeFalse();
         keys.Unavailability.Should().Contain("not installed").And.Contain("CredsForDevs");

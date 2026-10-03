@@ -1337,7 +1337,7 @@ test('an emptied prompt box removes the override rather than writing a prompt th
 // ---------- each row is a framed group in its client's own colour (issue #291) ----------
 //
 // REVIEWERS draws one bordered card per vendor with a 3px left edge in that vendor's colour, and
-// the same colour follows it into Active rounds and the rounds log. CONSULTANT drew four flat
+// the same colour follows it into Active gates and the rounds log. CONSULTANT drew four flat
 // `.field` blocks: no frame, nothing grouping a caller's controls, no colour. `.consultant-row`
 // existed as a data hook with no CSS rule anywhere.
 //
@@ -1484,4 +1484,23 @@ test('a consultant on another runtime says nothing about a Claude probe', () => 
     viewWith(definition('codex', 'codex'), { askingClaude: true }).modelNote, '',
     'the probe asks the Claude CLI; a codex row is not waiting for it',
   );
+});
+
+// ---------------------------------------------------------------------------------------------
+// A consultant on somebody else's endpoint (research/PLAN_custom_endpoint_model_list.md, 2026-10-01)
+
+test('a codex consultant on another endpoint is offered its saved model, never the Codex CLI cache', () => {
+  const view = viewWith(
+    definition('openrouter', 'codex', 'deepseek/deepseek-chat', 'https://openrouter.ai/api/v1'),
+    { codexModels: [{ id: 'gpt-6-luna', label: 'GPT-6 Luna' }] },
+  );
+
+  assert.deepEqual(view.models.map((m) => m.id), ['deepseek/deepseek-chat'],
+    'OpenAI slugs from the Codex cache are not names that endpoint accepts');
+});
+
+test('a codex consultant on the Codex CLI’s own endpoint still gets the cache', () => {
+  const view = viewWith(definition('codex', 'codex', ''), { codexModels: [{ id: 'gpt-6-luna', label: 'GPT-6 Luna' }] });
+
+  assert.ok(view.models.some((m) => m.id === 'gpt-6-luna'));
 });

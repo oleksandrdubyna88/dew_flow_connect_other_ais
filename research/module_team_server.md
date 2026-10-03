@@ -966,6 +966,13 @@ arrives via `docker compose exec`. Both lock tests were confirmed to have teeth 
 `FileShare.None` to `FileShare.ReadWrite`: the in-process one then reported the second acquire
 succeeding, and the cross-process one reported `login` walking past the lock.
 
+**A taken port is proved by the real binary too** (2026-10-02). `ATakenPortTests` holds a port and
+starts the built `coai-server --urls` on it: the server must exit **75** (EX_TEMPFAIL) with one line
+naming the address, never an unhandled exception — `TestServer` binds no socket, so only a process can
+see this. Before the fix Kestrel's bind error escaped `RunAsync` as a crash; the decision now lives in
+`BindFailure` (`src_mcp/service_defaults`), shared with `coai-bugs`, and the container's restart policy
+retries a 75 like any transient failure.
+
 **The endpoint filter changed no behaviour, and story 2.1's tests prove it** — all 37 of them pass
 UNEDITED against the refactor, as do they against `SessionStore` moving onto the shared
 `JsonFileStore`. That is what makes those two refactors checkable rather than asserted.

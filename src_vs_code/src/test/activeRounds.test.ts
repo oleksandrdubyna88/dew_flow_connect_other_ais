@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { liveRegions, panelHtml, PanelState, roundsBody, statusMark } from '../panelView';
+import { liveRegions, PanelState, roundsBody, statusMark } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { panelState, runPanel } from './panelPageHarness';
+import { LIVE_REGION_IDS } from '../panelSurface';
+import type { CadenceLine } from '../cadenceLine';
 import { RoundRecord, SessionFile } from '../rounds';
 import { DEFAULTS } from '../settingsShape';
 import { SNIPPET_VERSION } from '../claudeSnippet';
@@ -186,7 +189,7 @@ test('each mark wears the colour its status means, from a theme variable', () =>
   // The exact mapping, not "some charts variable": an implementation that painted done red and
   // failed green would pass a test that only looked for the prefix, and would ship inverted status
   // indicators under a green suite. (codex and gemini, the plan round.)
-  const css = panelHtml(state([]), 'n0nce', NOW).split('<style>')[1]!.split('</style>')[0]!;
+  const css = everyPageHtml(state([]), 'n0nce', NOW).split('<style>')[1]!.split('</style>')[0]!;
 
   const expected: readonly (readonly [string, string])[] = [
     ['mark-done', 'green'],
@@ -271,7 +274,7 @@ test('two running rounds are both shown, newest first', () => {
 });
 
 test('there is nothing to open: no card is a disclosure and the page never reports a toggle', () => {
-  const html = panelHtml(state([session([round()])]), 'n', NOW);
+  const html = everyPageHtml(state([session([round()])]), 'n', NOW);
 
   assert.ok(!html.includes('<details class="round"'), 'a running round is a block, not a disclosure');
   assert.ok(!html.includes("type: 'round'"), 'the toggle listener that fed the loop is gone');
@@ -289,26 +292,36 @@ test('the card head is three lines, so a narrow sidebar never cuts the branch of
 });
 
 test('the section is called what it shows', () => {
-  const html = panelHtml(state([]), 'n', NOW);
+  const html = everyPageHtml(state([]), 'n', NOW);
 
-  assert.ok(html.includes('Active rounds'));
+  // Active rounds until 2026-09-29, when the consultations got a section of their own beside it.
+  assert.ok(html.includes('<summary>Active gates</summary>'));
+  assert.ok(!html.includes('Active rounds'));
   assert.ok(!html.includes('Recent rounds'));
 });
 
 test('a live patch that carries the same HTML as last time does not touch the DOM', () => {
   // Replacing identical markup is not free: it recreates every element and drops scroll position,
-  // and nothing changed is the common case on a five-second tick.
-  const script = panelHtml(state([]), 'n', NOW).split('</style>')[1] ?? '';
+  // and nothing changed is the common case on a five-second tick. RUN, not matched: the page script's
+  // per-region blocks became one loop over the regions (2026-09-29), and a source pin on the old names
+  // could not follow it.
+  const pushed = panelState('rounds', { cadence });
+  const page = runPanel(pushed);
 
-  assert.match(script, /message\.rounds !== lastRounds/, 'the rounds region is compared before it is replaced');
-  assert.match(script, /message\.questions !== lastQuestions/);
+  page.deliver({ type: 'live', ...liveRegions(pushed, NOW) });
+
+  for (const region of LIVE_REGION_IDS) {
+    assert.equal(page.regionWrites(`live-${region}`), 0, `an identical push rebuilt the ${region} region`);
+  }
+  page.deliver({ type: 'live', ...liveRegions(panelState('rounds', { cadence: [] }), NOW) });
+  assert.equal(page.regionWrites('live-cadence'), 1, 'a push that changed the cadence did not replace its region');
 });
 
 // ---------------------------------------------------------------------------------------------
 // The cadence line (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.2)
 // ---------------------------------------------------------------------------------------------
 
-const cadence = [{
+const cadence: readonly CadenceLine[] = [{
   repoPath: 'D:/repo',
   branch: 'feat/epic-4',
   answer: {
@@ -318,23 +331,25 @@ const cadence = [{
   },
 }];
 
-test('the cadence line is in Active rounds as the page renders it, and a live push to the page replaces it', () => {
+test('the cadence line is in its own section as the page renders it, and a live push to the page replaces it', () => {
   // RUN, not matched (PR #556, CodeRabbit; `.agents/PROJECT.md`): the panel's own script receives each
   // live push and replaces the region, so what is on screen is what this watches.
   const page = runPanel(panelState('rounds', { cadence }));
-  assert.ok(page.region('live-rounds').includes('PLAN_x.md · epics closed 4/14 · consultation for epics 4-6: due'),
+  assert.ok(page.region('live-cadence').includes('PLAN_x.md · epics closed 4/14 · consultation for epics 4-6: due'),
     'the first paint does not draw the line');
 
   const moved = [{ ...cadence[0]!, answer: { ...cadence[0]!.answer, epicsClosed: [1, 2, 3, 4, 5] } }];
   page.deliver({ type: 'live', ...liveRegions(panelState('rounds', { cadence: moved }), NOW) });
-  assert.ok(page.region('live-rounds').includes('epics closed 5/14'), 'a live push did not bring the new line');
+  assert.ok(page.region('live-cadence').includes('epics closed 5/14'), 'a live push did not bring the new line');
 
   page.deliver({ type: 'live', ...liveRegions(panelState('rounds', { cadence: [] }), NOW) });
-  assert.ok(!page.region('live-rounds').includes('PLAN_x.md'), 'the line stayed on screen after the cadence went');
+  assert.ok(!page.region('live-cadence').includes('PLAN_x.md'), 'the line stayed on screen after the cadence went');
 });
 
-test('with no cadence line the region is exactly the running rounds, as before', () => {
+test('the rounds region is exactly the running rounds, with a cadence line or without one', () => {
   const plain = state([session([round()])]);
+  const followed: PanelState = { ...plain, cadence };
 
   assert.equal(liveRegions(plain, NOW).rounds, roundsBody(plain.sessions, NOW, []));
+  assert.equal(liveRegions(followed, NOW).rounds, roundsBody(plain.sessions, NOW, []), 'a cadence line is still drawn with the rounds');
 });

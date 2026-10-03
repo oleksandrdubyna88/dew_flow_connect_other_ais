@@ -165,7 +165,7 @@ test('a Claude dropdown says it is being asked, and only while it is', () => {
 // What the caption under the dropdown is allowed to claim
 
 test('the caption says it is asking while the probe runs', () => {
-  assert.equal(modelsProvenance('claude', [], undefined, [], undefined, undefined, true), ASKING_CLAUDE);
+  assert.equal(modelsProvenance('claude', [], { askingClaude: true }), ASKING_CLAUDE);
 });
 
 test('the caption reports what the CLI answered, not what this build believes', () => {
@@ -179,13 +179,13 @@ test('the caption reports what the CLI answered, not what this build believes', 
     ],
   };
 
-  const said = modelsProvenance('claude', [], undefined, [], undefined, probe);
+  const said = modelsProvenance('claude', [], { claudeProbe: probe });
   assert.match(said, /2 families/, `the caption did not count what answered; it said "${said}"`);
   assert.match(said, /2026-09-16/, 'a week-old answer must say when it was taken');
 });
 
 test('a caption with no probe behind it does not claim the CLI was asked', () => {
-  const said = modelsProvenance('claude', [], undefined, [], undefined, undefined);
+  const said = modelsProvenance('claude', []);
 
   assert.ok(!said.includes('answered'), `nothing was asked; it said "${said}"`);
   assert.match(said, /not been asked/, 'so it says so, rather than stating a resolution as fact');
@@ -202,7 +202,7 @@ test('a probe that confirmed nothing is not reported as never asked', () => {
       { asked: 'sonnet', answered: '', verified: false },
     ],
   };
-  const said = modelsProvenance('claude', [], undefined, [], undefined, spent);
+  const said = modelsProvenance('claude', [], { claudeProbe: spent });
 
   assert.ok(!said.includes('not been asked'), `the CLI was asked; it said "${said}"`);
   assert.match(said, /2026-09-16/, 'and when it was asked is the fact a person acts on');

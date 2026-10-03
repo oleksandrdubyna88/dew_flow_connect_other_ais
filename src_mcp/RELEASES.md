@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.40.5](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.4...mcp-v0.40.5) (2026-10-01)
+
+
+### Bug Fixes
+
+* **mcp:** read the vault key from the settings file the panel writes ([3b7faa0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/3b7faa0bc9dfc864d99cf355781421bd978779d7))
+
+## [0.40.4](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.3...mcp-v0.40.4) (2026-09-30)
+
+
+### Bug Fixes
+
+* **mcp:** a failing Claude CLI reviewer says why — the reason in its JSON envelope ([fc129a1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/fc129a188be62373e8ec4438658c701c6b162d8d))
+
+## [0.40.3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.2...mcp-v0.40.3) (2026-09-29)
+
+
+### Bug Fixes
+
+* **extension:** the code round's fixes; the Settings-page plan is promoted ([e91b207](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/e91b2078d8863e3d9592cc60d8fe41dbbe5d31d8))
+* **mcp,server:** messages name ConnectOtherAIs &gt; Team servers / Consultant / MCP server (S4, part 1) ([7310aff](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/7310affe3f45749e1def7d03a20c8d18611cf7b3))
+
 ## [0.40.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.40.1...mcp-v0.40.2) (2026-09-28)
 
 

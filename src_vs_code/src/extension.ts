@@ -49,6 +49,7 @@ import { EscalationWatcher } from './escalationWatcher';
 import { ConsultationWatcher } from './consultationWatcher';
 import { PanelProvider } from './panelProvider';
 import { showHelp } from './helpPanel';
+import { openSettings } from './settingsPanel';
 import { parseSession, SessionFile } from './rounds';
 import { blindSpotsHtml, chatRows, LogRow, mergedRows, rowsFrom } from './roundsLog';
 import { ASK_ABOVE, ExportOutcome, ExportPorts, oneAtATime, readAndExport } from './roundsExport';
@@ -71,6 +72,7 @@ import { forgetTheDeletions, roleDeletions } from './roleDeletionsHost';
 import { ConfigReader, settingsFrom } from './settingsShape';
 import { readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
+import { askPerson } from './personWait';
 
 /**
  * ConnectOtherAIs — the human surface. Five commands, one directory watcher, and no port: the
@@ -237,6 +239,8 @@ export function activate(context: vscode.ExtensionContext): void {
       mirrorSettings(mirroring);
     }
   });
+  // Whatever a page is still waiting on is settled as not done when the window goes away (inFlight.ts).
+  context.subscriptions.push({ dispose: () => { panel.dispose(); } });
   // The panel repaints whenever the watcher's state moves, so a question answered in the modal
   // disappears from the sidebar without anyone asking it to.
   watcher.onChanged = () => {
@@ -463,12 +467,12 @@ export function activate(context: vscode.ExtensionContext): void {
     // must be able to remove either. A command as well as a button for the reason the admin key has
     // one: a door that exists only behind the thing it unlocks is not a door.
     vscode.commands.registerCommand('coai.setBugsContributorKey', async () => {
-      const typed = await vscode.window.showInputBox({
+      const typed = await askPerson(() => vscode.window.showInputBox({
         title: 'The contributor key for the ingest server',
         prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
         password: true,
         ignoreFocusOut: true,
-      });
+      }));
       if (typed !== undefined) {
         await setContributorKey(context.secrets, typed);
         await panel.render();
@@ -511,6 +515,10 @@ export function activate(context: vscode.ExtensionContext): void {
       await panel.render();
     }),
     vscode.commands.registerCommand('coai.help', showHelp),
+    // The gear in the panel's title bar: everything configured once, in an editor tab of its own, painted by
+    // the same provider as the sidebar (research/PLAN_settings_page.md). The argument, when there is one, is a
+    // tab id; the title bar and the palette pass none, and anything that is not a tab changes nothing.
+    vscode.commands.registerCommand('coai.openSettings', (tab?: unknown) => { openSettings(panel, tab); }),
     // Chat with another vendor about a passage. Two doors reach it — this keybinding and the
     // 'Chat with other AI' item in Claude Code's own right-click menu — and the command tells them
     // apart by what VS Code hands it, because only one of them can copy the selection itself.
@@ -658,7 +666,7 @@ export function activate(context: vscode.ExtensionContext): void {
         }),
     }),
     // Both doors repaint. The panel's own button used to be the only path that did — it awaits
-    // the command and then renders — so an update started from THIS menu left the Server section
+    // the command and then renders — so an update started from THIS menu left the MCP server tab
     // showing the version it had replaced, which is the very symptom the button was fixed for.
     vscode.commands.registerCommand('coai.installServer', async () => {
       await installServer(context);
@@ -1379,11 +1387,11 @@ async function runExport(
     // a bridge message has, so the copy is what makes the two agree honestly.
     return { state: found.state, findings: found.findings.map((one) => ({ ...one })) };
   }, {
-    pickPath: async (name) => (await vscode.window.showSaveDialog({
+    pickPath: async (name) => (await askPerson(() => vscode.window.showSaveDialog({
       defaultUri: vscode.Uri.file(name),
       filters: { 'Comma-separated values': ['csv'] },
       saveLabel: 'Export',
-    }))?.fsPath,
+    })))?.fsPath,
     write: (path, text) => writeFileAtomically(path, text),
     report: (message) => void notify({
       as: 'information', class: 'outcome', source: 'roundsExport', code: 'rounds-exported', title: message,
@@ -1622,9 +1630,9 @@ function reviewTreeDeps(context: vscode.ExtensionContext): TreesDeps {
       ? { ok: false, tooOld: false, why: missing }
       : whileBusy('Giving the checkout back…', () => removeTree(server.fsPath, name, withIgnored))),
     open: (path) => openTreeFolder(path),
-    pick: async (choices, title) => vscode.window.showQuickPick(
+    pick: async (choices, title) => askPerson(() => vscode.window.showQuickPick(
       choices.map((one) => ({ ...one })),
-      { title, matchOnDetail: true, ignoreFocusOut: true }) as Promise<Choice | undefined>,
+      { title, matchOnDetail: true, ignoreFocusOut: true })) as Promise<Choice | undefined>,
     // Through the one funnel, never `showInformationMessage` directly: this extension counts
     // every place it speaks to a person, and the count only ever falls. The `code` is a literal
     // here because a scan enforces that; the SUBJECT is what makes two trees two counters.

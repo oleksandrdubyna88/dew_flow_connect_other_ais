@@ -667,6 +667,23 @@ Environment until the extension arrives: `COAI_PROVIDERS`, `COAI_MODEL_*`, `COAI
 startup; missing binary / no key / 401 / malformed body are named per-vendor unavailabilities in
 `providers`, never crashes, never partial applies, never logged values.
 
+**The key is read from the LAYERED configuration, like every other setting (2026-10-01).** The panel
+writes `COAI_CREDS_KEY` into the settings file and nowhere else — `envBlock` puts it there, and no spawn of
+the extension's (`serverEnv()`) carries it in the environment. Every vault read took it from the raw
+process environment instead — serve, `--providers` and `--probe-api` alike, each a few lines after
+building `SettingsFile.Layer` for everything else — so a key saved in the panel was never seen:
+`providers` answered "no COAI_CREDS_KEY configured" after a reconnect, and every vendor needing a vault key
+(an OpenAI-compatible endpoint, an `api` row) was badged *cannot review* and dropped from every round.
+`KeyVault.ReadFromConfigurationAsync(configuration)` is now the one road — and the only PUBLIC read, the
+key-taking `ReadAsync` is private, so no caller can hand the vault a key it looked up itself; all three
+modes hand it their layer, so the client's `env` block still outranks the file key by key. `ForThisMachine` keeps the raw
+environment — where `creds` is installed is a fact about the machine, not a setting.
+`TheVaultKeyIsReadWhereThePanelWritesItTests` (the `--providers` answer, plus a scan refusing a raw
+`KeyVault.KeyVariable` lookup outside `KeyVault.cs` and any read not handed `configuration` — the serve
+path is guarded that way because driving the real binary would read the person's real vault) and
+`ProbeApiModeTests.TheVaultKeyInTheSettingsFile_IsTheOneTheProbeUses`; RED first: `vaultRead` False /
+exit 78, "no COAI_CREDS_KEY configured".
+
 **`creds` is looked for where CredsForDevs installs it, after PATH (2026-09-26, PLAN_feature_review §9.10).**
 The CredsForDevs extension downloads its CLI into its own global storage —
 `<editor data>/User/globalStorage/remsoftdev.creds-for-devs/bin/creds[.exe]` — and the folder it adds to PATH
@@ -904,6 +921,24 @@ this may read a file it named rather than stdout at all.
 wrong kind, so a complete line of `{"type":123}`, or a `turn.failed` whose `error` is a string,
 would have escaped a `JsonException` catch and taken down the code path that exists to explain a
 failure. Three reviewers across two vendors found it, and reverting the guard reproduces it.
+
+**Claude, the second adapter to implement it (2026-09-29).** The same defect, one vendor over: a Claude CLI reviewer
+failed as `exit 1 (the CLI said nothing on stderr)`. The benchmark lost 44 Fable 5.1 cells that way in one day, while the
+CLI's `--output-format json` envelope, on stdout, said *"You've hit your monthly spend limit"* (HTTP 429). An old CLI
+refusing a newer model says so the same way (*"… does not support this model; version 2.1.280 or newer is required"*,
+HTTP 400). `ClaudeRuntime.WhyItFailed` reads that ONE envelope.
+
+- **What counts as a reason:** only a root object whose `is_error` is the boolean `true` and whose `result` is a
+  non-blank string. Both measured envelopes say `"subtype":"success"` beside the error, so `subtype` is never read. A
+  successful review's own text cannot become its failure.
+- **How it reads:** the sentence is collapsed to one line (the round line is one line), and `(HTTP n)` is appended when
+  `api_error_status` is an integer.
+- **Every other shape** is not a reason, and never throws: no JSON, a torn object, `is_error` as a string, `result` of
+  another kind.
+- **Precedence** is `Because`'s, unchanged. The old CLI also writes a `[claude-code:unrecognized_model] {…}` tag to
+  stderr, which announces nothing, so the envelope's sentence is what the round line says.
+
+The tests are `AClaudeReasonInItsEnvelopeTests`, over both captured envelopes, end to end through `ReviewerExecutor`.
 
 ## A local reviewer is told not to think (2026-09-02)
 
@@ -4318,7 +4353,13 @@ minute-sweep never evicts a window that just gained a stamp — both raced by th
 (`revoked_utc` non-empty) is refused before the limiter and before any write, and a test proves
 revoking actually stops an ingest. The limiter is one process's memory and resets on restart by
 design; `ServeLock` makes "one process" enforced rather than assumed — a second server on the same
-data directory exits 78, while the one-shots never take it. `/admin/*` has its own limiter identity
+data directory exits 78, while the one-shots never take it. **A port somebody else holds exits 75**
+(EX_TEMPFAIL) with one stderr line naming the address — `BindFailure` in `src_mcp/service_defaults`,
+shared with the Team server — and the unit's `Restart=always` retries it. Until 2026-10-02 it escaped
+`RunAsync` as an unhandled `IOException`, so every collision, including this suite's own deliberate
+ones, was a crash and on Windows a `.NET Runtime 1026` event (415 on one machine in two weeks);
+`TheBuiltBinariesTests.APortSomebodyHolds_EndsTheServerWithTempfailAndOneLine_NotACrash` pins it.
+`/admin/*` has its own limiter identity
 (`LimiterSubject.Administrator(AdminId)` → `admin-<8 hex>`) so an admin route cannot land in the
 contributor bucket.
 

@@ -76,10 +76,12 @@ test('the catalogue offers the generic api preset and the two MEASURED vendor pr
   }
 });
 
-test('an api row’s model list is what the person typed — the endpoint is not asked from here', () => {
+test('an api row’s model list is what the person typed until the endpoint is asked', () => {
   assert.deepEqual(modelsFor(API, [{ id: 'gpt-5', label: 'GPT-5' }], 'grok-4').map((m) => m.id), ['grok-4'],
     'the Codex cache is not an API vendor’s list');
   assert.deepEqual(modelsFor(API, [{ id: 'gpt-5', label: 'GPT-5' }], ''), []);
-  assert.match(modelsProvenance(API, [{ id: 'gpt-5', label: 'GPT-5' }]), /probe-api/u,
+  // It used to say "run coai-mcp --probe-api in a terminal"; the card's ≡ asks the endpoint now
+  // (research/PLAN_custom_endpoint_model_list.md), and the caption still says how to learn the ids.
+  assert.match(modelsProvenance(API, [{ id: 'gpt-5', label: 'GPT-5' }]), /press ≡/u,
     'the caption tells a person how to learn the ids the key can call');
 });

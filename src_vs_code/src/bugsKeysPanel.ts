@@ -30,6 +30,10 @@ import {
 import { Users, usersPageHtml, withControls } from './bugsKeysPage';
 import { Turns } from './bugsKeysTurns';
 import { notify, notifyAndAsk } from './notify';
+import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
+import { currentTextTone } from './textToneHost';
+import { currentUiScale } from './uiScaleHost';
+import { askPerson } from './personWait';
 
 /**
  * The window the Users tab lives in.
@@ -115,8 +119,13 @@ export class BugsKeysPanel {
       this.panel.onDidDispose(() => {
         this.panel = undefined;
       });
+      const text = pushTextControlsTo(this.panel.webview);
+      this.panel.onDidDispose(() => { text.dispose(); });
       this.panel.webview.onDidReceiveMessage((m: { type?: string; id?: string }) => {
-        void this.turns.run(() => this.act(m.type ?? '', m.id ?? ''));
+        // A press on a text control is the person's setting, not a turn of this page's flow.
+        if (!appliedTextControl(m, 'key page')) {
+          void this.turns.run(() => this.act(m.type ?? '', m.id ?? ''));
+        }
       });
     }
 
@@ -148,12 +157,12 @@ export class BugsKeysPanel {
    * order. (Code round 2, gemini.)</p>
    */
   private async askForKeyNow(): Promise<void> {
-    const typed = await vscode.window.showInputBox({
+    const typed = await askPerson(() => vscode.window.showInputBox({
       title: 'The bugs admin key',
       prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
       password: true,
       ignoreFocusOut: true,
-    });
+    }));
     if (typed === undefined) {
       return;
     }
@@ -229,11 +238,11 @@ export class BugsKeysPanel {
       return;
     }
 
-    const note = await vscode.window.showInputBox({
+    const note = await askPerson(() => vscode.window.showInputBox({
       title: 'What is this key for?',
       prompt: 'Our record of why it exists — "the tuesday workshop". Never the holder\'s name or address.',
       ignoreFocusOut: true,
-    });
+    }));
     if (note === undefined) {
       return;
     }
@@ -451,7 +460,7 @@ export class BugsKeysPanel {
       return;
     }
 
-    this.panel.webview.html = usersPageHtml(users, nonce());
+    this.panel.webview.html = usersPageHtml(users, nonce(), { size: currentUiScale(), tone: currentTextTone() });
     this.lastPaint = users;
   }
 

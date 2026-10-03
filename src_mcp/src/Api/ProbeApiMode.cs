@@ -17,8 +17,9 @@ namespace CoaiMcp.Api;
 /// <remarks>
 /// <para><b>Why it exists.</b> A dialect row in <c>shared/api-dialects.json</c> is written from what
 /// a vendor ANSWERED, never from its documentation (PLAN_feature_review.md §4.10, §6 S0.5). This mode
-/// is the product's own key path used as the instrument: it reads the vault exactly as
-/// <see cref="KeyVault.ReadAsync"/> does — <c>COAI_CREDS_KEY</c> from its own environment — runs
+/// is the product's own key path used as the instrument: it reads the vault exactly as every mode does,
+/// through <see cref="KeyVault.ReadFromConfigurationAsync"/> — <c>COAI_CREDS_KEY</c> from the settings
+/// file the panel writes, with this process's environment outranking it — runs
 /// <c>GET /models</c> and then the S0.5 request matrix against the row's endpoint, and prints what
 /// the endpoint said in a shape a person can copy into the table.</para>
 /// <para><b>What it prints is an ALLOWLIST</b>, decided on the plan round: status codes, model ids,
@@ -80,7 +81,10 @@ internal static class ProbeApiMode
             return BadRequest;
         }
 
-        var row = RowFor(vendor, env, note);
+        // ONE layer for the row and the vault key: the settings file under the environment. The key used
+        // to come from `env` alone while the row came from here, so a key saved in the panel was never seen.
+        var configuration = SettingsFile.Layer(SettingsFile.DataDirFrom(env).Path, env, note);
+        var row = RowFor(vendor, configuration);
         var endpoint = flags.GetValueOrDefault("--endpoint", row?.BaseUrl ?? string.Empty);
         if (!IsHttpUrl(endpoint))
         {
@@ -99,7 +103,7 @@ internal static class ProbeApiMode
             return BadRequest;
         }
 
-        var keys = await KeyVault.ForThisMachine(launcher, env).ReadAsync(env(KeyVault.KeyVariable));
+        var keys = await KeyVault.ForThisMachine(launcher, env).ReadFromConfigurationAsync(configuration);
         if (!keys.Available)
         {
             note($"the vault could not be read: {keys.Unavailability}");
@@ -131,9 +135,8 @@ internal static class ProbeApiMode
     }
 
     /// <summary>The configured row, read the way every other one-shot reads settings — file under environment.</summary>
-    private static ProviderSettings? RowFor(string vendor, Func<string, string?> env, Action<string> note)
+    private static ProviderSettings? RowFor(string vendor, Func<string, string?> configuration)
     {
-        var configuration = SettingsFile.Layer(SettingsFile.DataDirFrom(env).Path, env, note);
         var settings = PanelSettings.FromEnvironment(configuration);
 
         return settings.Providers.FirstOrDefault(p => string.Equals(p.Provider, vendor, StringComparison.OrdinalIgnoreCase));

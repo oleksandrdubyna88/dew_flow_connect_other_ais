@@ -1,7 +1,8 @@
 import assert from 'node:assert';
 import { test } from 'node:test';
 import { availabilityOf, NO_NOTES, parseProviderNotes, parseProviders, ProviderHealth } from '../providers';
-import { PanelState, panelHtml } from '../panelView';
+import { PanelState } from '../panelView';
+import { everyPageHtml } from './panelPages';
 import { DEFAULTS } from '../settingsShape';
 import { Vendor } from '../vendors';
 
@@ -68,7 +69,7 @@ function page(over: Partial<PanelState> = {}): string {
     ...over,
   };
 
-  return panelHtml(state, 'nonce');
+  return everyPageHtml(state, 'nonce');
 }
 
 const UNAVAILABLE: Record<string, ProviderHealth> = {
