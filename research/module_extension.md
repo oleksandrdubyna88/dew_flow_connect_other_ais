@@ -10329,3 +10329,29 @@ eight keys and says so.
   whose link resolves to one of those, storing the folder as it was picked.
 - **A prompt of your own named like a device (item 15's twin).** **Add a prompt…** refuses a title whose id is a
   Windows device name (`RESERVED_FILE_NAMES`), as the server's `RoleComposition.IsPromptId` now does.
+
+## The busy mark on the other webviews (2026-10-03, PLAN_busy_marks_on_every_webview)
+
+Design record: [PLAN_busy_marks_on_every_webview.md](../todo/PLAN_busy_marks_on_every_webview.md) — every webview is
+either marked or listed there with the reason it is not (its §3). The machinery is the panel's, included rather than
+copied:
+
+- **`busyMarkScript(painted, tracked)`** takes the message `type`s a page numbers. The panel's default is
+  `PANEL_TRACKED` (`setting`, `prompt`, `command`). A page posting a tracked type that must not be numbered (a typed
+  field) posts it through `vscode.postMessage` directly.
+- **`BusyHost`** (`busyHost.ts`) is one per open webview: an `InFlight`, with the webview as its only `Poster`.
+  - `track(message, work)` runs `tracked()` when `askOf` finds a number, and runs the work plainly otherwise.
+  - `heard(message)` answers a `ready` with the current count, which supersedes whatever the document was painted with.
+  - `snapshot()` gives what a full repaint paints.
+  - `dispose()` settles everything still running.
+  - A VS Code prompt opened by the work pauses the mark, as on the panel (`personWait.ts`).
+
+**E1 — the rounds log.** Every action on the page reads the rounds database through `coai-mcp`, measured at 694–930 ms
+a read. The page includes `BUSY_BAR`, `BUSY_CSS` and `busyMarkScript(IDLE, ['command'])`, and its three command posts
+go through `send` (the `[data-command]` buttons, export, findings). The host makes a `BusyHost` per open page
+(`RoundsLogPanel.listen`).
+
+What each command asks the host to do is now `workFor(command, hooks)` in `roundsLogMessages.ts`, moved there with
+`RoundsLogHooks` so it can be run in a test. It replaced eight `if`s in `received` that each `void`ed their hook.
+`ready` still goes to the push ledger as before; the busy host answers it as well. The page's "Reading what this round
+found…" stays beside the bar.

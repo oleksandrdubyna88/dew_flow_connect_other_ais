@@ -48,14 +48,20 @@ export const BUSY_CSS = `
   [aria-busy="true"] { cursor: progress; }`;
 
 /**
- * The page fragment. Defines `send(message, control)`, which every setting, prompt and command post goes through;
- * any other message passes through it unnumbered. Runs in the shared page script and uses `vscode` alone.
+ * The page fragment. Defines `send(message, control)`, which every post that makes the host work goes through; any
+ * other message passes through it unnumbered. Runs in a page script and uses `vscode` alone — the panel's two pages and,
+ * since todo/PLAN_busy_marks_on_every_webview.md, the other webviews that do slow work, each with its own list.
  *
  * @param painted what the host had in flight when this document was built
+ * @param tracked the message types this page numbers. A page that must post one of them unnumbered — a typed field,
+ *   which settles on its own — posts it through `vscode.postMessage` directly.
  */
-export function busyMarkScript(painted: BusySnapshot): string {
-  return [busyStateScript(painted), busySendScript(), busyWaitScript(), busyHostScript()].join('');
+export function busyMarkScript(painted: BusySnapshot, tracked: readonly string[] = PANEL_TRACKED): string {
+  return [busyStateScript(painted), busySendScript(tracked), busyWaitScript(), busyHostScript()].join('');
 }
+
+/** What the panel's two pages number (research/PLAN_model_search_and_busy_marks.md §3.7). */
+export const PANEL_TRACKED: readonly string[] = ['setting', 'prompt', 'command'];
 
 /** The constants, the two halves of the mark, and drawing the bar from them. */
 function busyStateScript(painted: BusySnapshot): string {
@@ -88,9 +94,9 @@ function busyStateScript(painted: BusySnapshot): string {
 }
 
 /** Numbering a post, marking its control once the delay passes, and clearing both when the host settles it. */
-function busySendScript(): string {
+function busySendScript(tracked: readonly string[]): string {
   return `
-  const busyTracked = ['setting', 'prompt', 'command'];
+  const busyTracked = ${jsonForScript(tracked)};
   function send(message, control) {
     if (busyTracked.indexOf(message.type) < 0) {
       vscode.postMessage(message);

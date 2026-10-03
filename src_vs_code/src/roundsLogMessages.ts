@@ -173,3 +173,67 @@ export function logCommandOf(message: LogPageMessage | undefined | null): LogCom
       return IGNORE;
   }
 }
+
+export interface RoundsLogHooks {
+  /** Answer… under an open question. */
+  readonly onAnswer: (id: string) => Promise<void>;
+  /** Today / Week / Month / Year on the spending tab. */
+  readonly onUsageWindow: (window: string) => Promise<void>;
+  /** Today … All on *What it keeps missing*, which the server counts, so the host is asked. */
+  readonly onSpotsPeriod: (period: LogPeriod) => Promise<void>;
+  /** ✕ beside a vendor on the spending tab. */
+  readonly onForget: (provider: string) => Promise<void>;
+  /** Record how a consultation ended — the log is where every one of them is, lapsed included. */
+  readonly onCloseConsultation: (id: string) => Promise<void>;
+  /** The ✕ beside a CHAT row on the spending tab — a vendor and a model, not a vendor. */
+  readonly onForgetChat: (provider: string, model: string) => Promise<void>;
+  /**
+   * A row was opened, and wants to know what that round found.
+   *
+   * <p>The list stopped carrying findings — measured at 3.78 MB of a 3.83 MB payload, for rounds
+   * nobody had opened — so this is the read that replaces them, for the one round somebody clicked
+   * on. It answers with the state as well as the findings, because an empty list and a failed read
+   * are different things to say about a round.</p>
+   */
+  /**
+   * The person asked for these rounds as a file.
+   *
+   * <p>The rows travel WITH the request rather than being looked up here, for the same reason the
+   * findings request carries its round's identity: `latest.rows` is the unfiltered set as of the
+   * last tick, and a row somebody selected may already have left it.</p>
+   */
+  readonly onExport: (rows: readonly ExportedRow[]) => Promise<void>;
+  readonly onFindings: (
+    key: string,
+    round: { readonly sessionId: string; readonly stage: string; readonly number: number },
+  ) => Promise<void>;
+}
+
+/** A command of one kind, as the table below receives it. */
+type CommandOf<K extends LogCommand['kind']> = Extract<LogCommand, { readonly kind: K }>;
+
+/** What each kind of command asks the host to do. `ready` and `ignore` ask for nothing, so they are not here. */
+const WORK: { readonly [K in Exclude<LogCommand['kind'], 'ready' | 'ignore'>]: (command: CommandOf<K>, hooks: RoundsLogHooks) => Promise<void> } = {
+  answer: (command, hooks) => hooks.onAnswer(command.id),
+  usageWindow: (command, hooks) => hooks.onUsageWindow(command.window),
+  spotsPeriod: (command, hooks) => hooks.onSpotsPeriod(command.period),
+  forget: (command, hooks) => hooks.onForget(command.provider),
+  closeConsultation: (command, hooks) => hooks.onCloseConsultation(command.id),
+  forgetChat: (command, hooks) => hooks.onForgetChat(command.provider, command.model),
+  export: (command, hooks) => hooks.onExport(command.rows),
+  findings: (command, hooks) => hooks.onFindings(command.key, { sessionId: command.sessionId, stage: command.stage, number: command.number }),
+};
+
+/**
+ * The work a command asks the host for, or nothing when it asks for none — what the page's busy mark is held for
+ * (todo/PLAN_busy_marks_on_every_webview.md, E1). Extracted from `RoundsLogPanel.received`, which cannot be built in a
+ * test, so that the mapping is run rather than read; it was eight `if`s there, each `void`ing its hook.
+ */
+export function workFor(command: LogCommand, hooks: RoundsLogHooks): (() => Promise<void>) | undefined {
+  if (command.kind === 'ready' || command.kind === 'ignore') {
+    return undefined;
+  }
+  const run = WORK[command.kind] as (one: LogCommand, hooks: RoundsLogHooks) => Promise<void>;
+
+  return () => run(command, hooks);
+}

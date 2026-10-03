@@ -2683,3 +2683,13 @@ build saw them).
 link on a network share. The watcher's recheck timer and file events are `vscode`-bound and read, not run; the
 snapshot beneath them is the test. The atomic spend is proved for two calls of ONE process; two server processes
 share it through the turn, which `SessionTurn`'s own measurement covers, not this suite.
+
+## The busy mark on the other webviews (2026-10-03, PLAN_busy_marks_on_every_webview)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `busyHost.test.ts` (new, 6) | A numbered post is announced, run, settled to its page and the count falls; an unnumbered one runs and marks nothing; a throw settles `ok: false` and is said; `ready` is answered with the count and the age, and nothing else is consumed; a prompt pauses it; dispose settles all | RED against a stub that only ran the work → 5. Teeth: `tracked` not called → 5, the `ready` answer removed → 1 |
+| `roundsLogBusyMark.test.ts` (new, 3) | The rounds log RUN on `PageClock`: a pressed command is numbered, nothing at 499 ms, the bar and the button's `aria-busy` at 500; settled clears both; `ready` is the last post, and the host's count draws after what is LEFT of the delay | RED: the page had no bar. Teeth: the command posted through `vscode.postMessage` → 1 |
+| `roundsLogWork.test.ts` (new, 2) | Each of the eight commands maps to its own hook, and the work returned is what is awaited; `ready` and `ignore` ask for none | RED against a stub returning nothing → 1. Teeth: the same → 1 |
+| `roundsLogPageHarness.ts` (new, extracted) | The runner from `roundsLogPaging.test.ts`, moved unchanged apart from an optional `PageClock` and a busy bar that keeps its attributes — six private rounds-log runners already existed, and this one is now shared | — |
+| changed for the numbered posts | `roundsLogPaging`, `closeAConsultation` and `forgetAChatRow` compare the posts through `withoutSeq`, which checks the number first. The stub elements in `bundledPage`, `closeAConsultation`, `consultationFold`, `forgetAChatRow` and `theLogLosesItsFirstPush` gained `removeAttribute`, which a real element has and the bar calls on load | — |

@@ -155,7 +155,7 @@ test('the page script the bundle produces parses and runs', () => {
   const seen: Record<string, { innerHTML: string; textContent: string; hidden: boolean }> = {};
   const element = () => ({
     innerHTML: '', textContent: '', hidden: false, value: '', className: '',
-    addEventListener() {}, getAttribute: () => null, setAttribute() {}, querySelectorAll: () => [],
+    addEventListener() {}, getAttribute: () => null, setAttribute() {}, removeAttribute() {}, querySelectorAll: () => [],
   });
   const document_ = {
     getElementById: (id: string) => (seen[id] ??= element() as never),
@@ -203,6 +203,7 @@ interface Stub {
   addEventListener: (type: string, fn: () => void) => void;
   getAttribute: () => null;
   setAttribute: () => void;
+  removeAttribute: () => void;
   querySelectorAll: () => never[];
 }
 
@@ -215,6 +216,7 @@ function stub(): Stub {
     addEventListener(type: string, fn: () => void) { (listeners[type] ??= []).push(fn); },
     getAttribute: () => null,
     setAttribute() { /* the page sets attributes it never reads back here */ },
+    removeAttribute() { /* nor removes any it reads back */ },
     querySelectorAll: () => [],
   };
 }

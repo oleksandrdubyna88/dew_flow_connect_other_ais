@@ -25,6 +25,8 @@ import {
 } from './roundsDb';
 import { PLAIN_TEXT, TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsStyle, type TextSettings } from './textControls';
 import { escapeHtml, jsonForScript } from './webviewHtml';
+import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
+import { IDLE } from './busySnapshot';
 
 /**
  * The rounds log: every round of every session, as rows a table can sort, filter and search.
@@ -1514,9 +1516,11 @@ ${TEXT_CONTROLS_CSS}
   .view-conversations .facet-stage, .view-conversations .facet-verdict,
   .view-conversations #exportpicked, .view-conversations #clearpicked,
   .view-conversations #recorded { display: none; }
+${BUSY_CSS}
 </style>
 </head>
 <body>
+${BUSY_BAR}
 <header><h1>Review rounds</h1>${textControlsHtml(text.size, text.tone)}</header>
 <div id="failed" class="failed" hidden></div>
 <div id="questions">${questionsHtml(questions)}</div>
@@ -1570,6 +1574,9 @@ ${TEXT_CONTROLS_CSS}
     failed(String(message) + ' (line ' + line + ':' + column + ')');
   };
   var vscode = acquireVsCodeApi();
+  // Every command this page posts reads or writes the rounds database through coai-mcp (0.7-0.9 s measured,
+  // 2026-10-03), so each is numbered and settled by the host: the bar past half a second, the pressed button marked.
+  ${busyMarkScript(IDLE, ['command'])}
   ${textControlsScript()}
   // Which sections opened on the "Reading the log…" placeholder, stated by the render rather than
   // read back out of the DOM: what a section CONTAINS is HTML from the database, and searching it
@@ -1951,7 +1958,7 @@ ${TEXT_CONTROLS_CSS}
       // What it keeps missing's period is counted by the server, which takes a spawn to answer: the
       // press marks itself now and the push confirms it. (Our own code reviewer.)
       if (button.getAttribute('data-command') === 'spotsPeriod') { markPeriod('spots', button.getAttribute('data-id')); }
-      vscode.postMessage({ type: 'command', command: button.getAttribute('data-command'), id: button.getAttribute('data-id'), model: button.getAttribute('data-model') });
+      send({ type: 'command', command: button.getAttribute('data-command'), id: button.getAttribute('data-id'), model: button.getAttribute('data-model') }, button);
       return;
     }
     var th = target.closest('th[data-sort]');
@@ -2004,7 +2011,7 @@ ${TEXT_CONTROLS_CSS}
       if (keys.indexOf(ROWS[i].key) >= 0) { chosen.push(ROWS[i]); }
     }
     if (chosen.length === 0) { return; }
-    vscode.postMessage({ type: 'command', command: 'export', id: chosen[0].key, rounds: chosen });
+    send({ type: 'command', command: 'export', id: chosen[0].key, rounds: chosen }, null);
   }
 
   // Asked ONCE. A row keeps what it was told, so closing and reopening costs nothing — except after
@@ -2022,10 +2029,10 @@ ${TEXT_CONTROLS_CSS}
       // The dbKey travels WITH the request. The extension host used to look the row up in a
       // module-level copy of the last rows it built, which is a shared mutable global three
       // reviewers objected to and which answers wrongly for any row a later refresh dropped.
-      vscode.postMessage({
+      send({
         type: 'command', command: 'findings', id: key,
         session: ROWS[i].dbKey.sessionId, stage: ROWS[i].dbKey.stage, number: ROWS[i].dbKey.number,
-      });
+      }, null);
       render();
       return;
     }
