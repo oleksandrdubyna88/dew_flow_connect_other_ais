@@ -1,5 +1,18 @@
 # Changelog
 
+## Extension 0.62.1 — 2026-10-03
+
+**Only the gate's own questions reach VS Code.** An AI's own question — "A or B?" — used to arrive in the sidebar
+as "A review is waiting on you", and **Answer…** offered the gate's three decisions for it. With Server 0.41.1 such
+a question is asked in the AI's chat instead and never becomes a card. A card now says which kind it is:
+- a question asked while the gate is holding offers the box for your own words first, then the decisions;
+- a `call_human` notice offers the three decisions only — nobody is waiting on it for words;
+- a card from an older server keeps the previous behaviour.
+
+**Show review rounds → Questions** names two new outcomes: a question that was asked in the AI's conversation, and
+a production-risk question whose consultants were asked first. The help (in all five languages), the tooltips of the
+question consultant's mode and wait, and the README say the same.
+
 ## Extension 0.62.0 — 2026-10-03
 
 **The question consultant, in the panel.** Server 0.41.0 lets a stuck AI ask several models before it asks you;
