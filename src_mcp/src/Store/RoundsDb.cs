@@ -108,7 +108,12 @@ public sealed class RoundsDb : IDisposable
     /// that cannot be expressed as one is a reason to delete the file instead — it is a projection,
     /// and the sessions it projects are still on disk.</para>
     /// </remarks>
-    private static void Migrate(SqliteConnection db) => SqliteMigrator.Migrate(db, Schema.Steps);
+    private static void Migrate(SqliteConnection db)
+    {
+        // Before the runner: a file the security lane's preview numbered differently (see the type).
+        SecurityPreviewFork.Repair(db);
+        SqliteMigrator.Migrate(db, Schema.Steps);
+    }
 
     /// <summary>
     /// A command on this connection, for a table whose writer lives in its own file.

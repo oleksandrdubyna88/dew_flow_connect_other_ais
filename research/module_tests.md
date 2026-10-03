@@ -15,6 +15,7 @@ doubled), with settings/evidence/coverage cases in the other `Security*Tests`.
 `SecurityEvidenceOnAnOlderDatabaseTests` drops `findings.security_evidence` from a written history and
 reads it through every read-only finding query, and reads a damaged evidence projection as an
 explicit `Unreadable` marker rather than as none. `SecurityLaneBudgetTests` and
+`ASecurityPreviewDatabaseKeepsBothStepsTests` opens a database the security preview stamped 17 (evidence column, no question tables) and a database main stamped 17, and both reach the head of the schema. `SecurityLaneBudgetTests` and
 `SecurityLaneBoundaryTests` cover the lane's own round budget (it never widens the ordinary roles'),
 the empty lane-only round, blank overrides, broken pairings, patch-only slices and the schema's
 per-field limit.
