@@ -54,6 +54,16 @@ AppDomain.CurrentDomain.UnhandledException += (_, e) =>
 //   FAKECLI_SLEEP_MS     — answer only after this long (the probe's timeout arm)
 //   FAKECLI_SIDE_EFFECT  — write a file at this path: a vendor breaking its own read-only promise
 //   FAKECLI_RECORD_DIR   — write each launch's full argv into <guid>.argv there
+//   FAKECLI_HELP_STDOUT / FAKECLI_HELP_EXIT
+//                        — what a bare `--help` prints and exits with (a claude's capability probe); stdin is
+//                          not read for it. Unset: the help prints nothing useful and exits 0
+//
+// Two placeholders are filled in FAKECLI_STDOUT and FAKECLI_OUTFILE_TEXT (the consultant check, epic 4 — its
+// marker and canary are random, so the answer cannot be scripted in advance):
+//   {{cwd-file:NAME}}      — the trimmed text of NAME in the working directory (a file the consultant READ)
+//   {{path-in-prompt:SUFFIX}} — that absolute path itself, with forward slashes (FAKECLI_SIDE_EFFECT takes it too)
+//   {{prompt-path:SUFFIX}} — the trimmed text of the absolute path in the prompt that ends in SUFFIX (a read
+//                            OUTSIDE the repository — the leak a confined CLI must refuse)
 //
 // The TURN family (S3.2 of the feature-review plan) — a reviewer that is asked again with its source
 // served must answer differently the second time, and which turn a launch IS can only be read off
@@ -74,6 +84,13 @@ var minimal = MinimalSteering.Load(args);
 Func<string, string?> read = minimal is { } fromFile ? name => fromFile.GetValueOrDefault(name) : Environment.GetEnvironmentVariable;
 if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is not null)
 {
+    // A claude consultant asks its CLI's --help before every turn; this answers it without touching stdin.
+    if (args is ["--help"])
+    {
+        Console.Out.Write(read("FAKECLI_HELP_STDOUT") ?? "Usage: fake [options]\n");
+        return int.TryParse(read("FAKECLI_HELP_EXIT"), out var helpExit) ? helpExit : 0;
+    }
+
     // Raw stdin, byte for byte, before any decoder can tidy it up. This exists because a
     // decoded string cannot answer "was there a byte-order mark in front of the prompt" — the
     // Console decoder strips it, which is exactly how three stray bytes went unnoticed for a
@@ -126,12 +143,12 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     if (outIndex >= 0 && outIndex + 1 < args.Length && Path.IsPathRooted(args[outIndex + 1]) &&
         steering.Get("OUTFILE_TEXT") is { Length: > 0 } fileText)
     {
-        File.WriteAllText(args[outIndex + 1], fileText);
+        File.WriteAllText(args[outIndex + 1], Placeholders.Fill(fileText, prompt.Text));
     }
 
     if (steering.Get("STDOUT") is { Length: > 0 } stdoutText)
     {
-        Console.Out.Write(stdoutText);
+        Console.Out.Write(Placeholders.Fill(stdoutText, prompt.Text));
     }
 
     // A vendor that writes where it was told not to. A consultant runs in the LIVE working tree
@@ -139,7 +156,7 @@ if (Environment.GetEnvironmentVariable("FAKECLI_MODE") == "vendor" || minimal is
     // invariant has to be testable against a child that actually breaks one.
     if (read("FAKECLI_SIDE_EFFECT") is { Length: > 0 } sideEffect)
     {
-        File.WriteAllText(sideEffect, "written by a CLI that promised to be read-only\n");
+        File.WriteAllText(Placeholders.Fill(sideEffect, prompt.Text), "written by a CLI that promised to be read-only\n");
     }
 
     return int.TryParse(steering.Get("EXIT"), out var exit) ? exit : 0;
@@ -395,3 +412,33 @@ static class MinimalSteering
 
 [System.Text.Json.Serialization.JsonSerializable(typeof(Dictionary<string, string>), TypeInfoPropertyName = "DictionaryStringString")]
 sealed partial class FakeCliJsonContext : System.Text.Json.Serialization.JsonSerializerContext;
+
+/// <summary>
+/// The three placeholders a scripted answer may carry: a file in the working directory, a file the PROMPT names by
+/// an absolute path, and that path itself — so a check whose words are random can still be answered by a stand-in that
+/// "read" them, or wrote one.
+/// </summary>
+static class Placeholders
+{
+    public static string Fill(string text, string prompt) =>
+        System.Text.RegularExpressions.Regex.Replace(
+            text,
+            @"\{\{(cwd-file|prompt-path|path-in-prompt):([^}]+)\}\}",
+            match => match.Groups[1].Value switch
+            {
+                "cwd-file" => Read(Path.Combine(Environment.CurrentDirectory, match.Groups[2].Value)),
+                "prompt-path" => Read(NamedIn(prompt, match.Groups[2].Value)),
+                // The PATH itself, with forward slashes, so it sits in a JSON string unescaped on any platform.
+                _ => NamedIn(prompt, match.Groups[2].Value).Replace('\\', '/'),
+            },
+            System.Text.RegularExpressions.RegexOptions.None,
+            TimeSpan.FromSeconds(1));
+
+    /// <summary>The first rooted path in the prompt that ends in <paramref name="suffix"/> — or empty.</summary>
+    private static string NamedIn(string prompt, string suffix) =>
+        prompt.Split([' ', '\n', '\r', '\t', '`', '"', '\''], StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => token.TrimEnd('.', ',', ';', ')'))
+            .FirstOrDefault(token => Path.IsPathRooted(token) && token.EndsWith(suffix, StringComparison.Ordinal)) ?? string.Empty;
+
+    private static string Read(string path) => path.Length > 0 && File.Exists(path) ? File.ReadAllText(path).Trim() : string.Empty;
+}

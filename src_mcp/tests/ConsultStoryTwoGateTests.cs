@@ -1,4 +1,5 @@
 using CoaiMcp.Core.Consultation;
+using CoaiMcp.Core.Findings;
 using CoaiMcp.Runners.Consultation;
 using CoaiMcp.Runners.Reviewers;
 using CoaiMcp.Server;
@@ -21,25 +22,8 @@ public sealed class ConsultStoryTwoGateTests : IDisposable
         catch (IOException) { }
     }
 
-    [Fact]
-    public void AConsultantMayREADTheTree_AndMayNotRunAShellInIt()
-    {
-        // `--permission-mode plan` is the CLI's promise; a shell is a way around it, since rm, mv and
-        // `sed -i` change a tree no edit tool was ever asked for. The gate's security reviewer named
-        // it, and the filesystem invariant would have caught it AFTER the fact — which is the worse
-        // half of a pair, not a substitute for the better one.
-        var args = new ClaudeConsultant(new ClaudeRuntime())
-            .Build(new ConsultantLaunch("D:/repo", "p", string.Empty, "D:/out", new ReviewerSettings("claude")))
-            .Request.Arguments;
-
-        args.Should().Contain("Bash", "a consultant has no reason to run a command");
-        args.Should().Contain("Edit").And.Contain("Write").And.Contain("NotebookEdit");
-        args.Should().Contain("WebFetch").And.Contain("WebSearch");
-        args.Should().Contain("Task").And.Contain("Agent");
-
-        // And the half that must NOT be denied: reading the tree is the whole job.
-        args.Should().NotContain("Read").And.NotContain("Glob").And.NotContain("Grep");
-    }
+    // Story 2's finding that a consultant may read the tree and may not run a shell in it is now asserted by
+    // ClaudeConsultantArgvTests, whose goldens own the whole claude argv (an allowlist since epic 3).
 
     [Fact]
     public void OnlyTheVendorThatReportsCumulativelySaysSo()
@@ -184,15 +168,22 @@ public sealed class ConsultStoryTwoSecondRoundTests : IDisposable
 }
 
 /// <summary>The cumulative-usage rule itself, in the core, where the service reads it from.</summary>
+/// <remarks>
+/// Against the running total the record keeps (<see cref="ConsultationBilled"/>) since epic 2 of
+/// PLAN_the_consultant_works_on_every_vendor.md — it was a list of the answered turns, which billed a failed
+/// or interrupted turn again inside the next answer — and through the one subtraction, <c>Less</c>.
+/// </remarks>
 public sealed class CumulativeUsageTests
 {
+    private static Usage Reported(long tokensIn, long tokensOut, double? cost = null) => new(tokensIn, tokensOut, cost);
+
     [Fact]
     public void TheRunningTotalIsWhatGetsSubtracted()
     {
         // The REAL numbers, from the live check: turn 1 reported 14 138 in / 1 342 out and turn 2
         // reported 30 843 / 1 393, which is turn 1 plus turn 2. Left alone the ledger counts turn 1
         // again on every later turn.
-        var share = ConsultationUsage.ThisTurnsShare([(14_138, 1_342, null)], (30_843, 1_393, null));
+        var share = ConsultationUsage.Less(Reported(30_843, 1_393), new ConsultationBilled(14_138, 1_342));
 
         share.TokensIn.Should().Be(16_705);
         share.TokensOut.Should().Be(51);
@@ -201,30 +192,40 @@ public sealed class CumulativeUsageTests
     [Fact]
     public void TheFirstTurnIsWhatTheVendorSaid()
     {
-        ConsultationUsage.ThisTurnsShare([], (14_138, 1_342, null)).TokensIn.Should().Be(14_138);
+        ConsultationUsage.Less(Reported(14_138, 1_342), new ConsultationBilled()).TokensIn.Should().Be(14_138);
     }
 
     [Fact]
     public void ItKeepsSubtractingAcrossThreeTurns()
     {
-        ConsultationUsage.ThisTurnsShare([(100, 10, null), (250, 25, null)], (600, 60, null))
-            .Should().Be((250L, 25L, (double?)null));
+        var billed = new ConsultationBilled().Plus(Reported(100, 10)).Plus(Reported(250, 25));
+
+        ConsultationUsage.Less(Reported(600, 60), billed).Should().Be(Reported(250, 25));
     }
 
     [Fact]
     public void AVendorReportingLESSThanBeforeFloorsAtZero_NeverNegative()
     {
         // A number this arithmetic does not understand; a negative spending row would be worse than
-        // a flat one.
-        ConsultationUsage.ThisTurnsShare([(9_000, 100, null)], (500, 10, null)).TokensIn.Should().Be(0);
+        // a flat one — and every field is floored, the cached and reasoning counts included.
+        var share = ConsultationUsage.Less(new Usage(500, 10, null, TokensCached: 3, TokensReasoning: 1), new ConsultationBilled(9_000, 100, 0, 40, 5));
+
+        share.Should().Be(new Usage(0, 0, null));
     }
 
     [Fact]
-    public void MoneyIsSubtractedOnlyWhenBothSidesNameIt()
+    public void MoneyIsSubtractedOnlyWhenThisReportNamesIt()
     {
-        ConsultationUsage.ThisTurnsShare([(10, 1, 0.40)], (20, 2, 0.45)).CostUsd.Should().BeApproximately(0.05, 0.0001);
-        ConsultationUsage.ThisTurnsShare([(10, 1, null)], (20, 2, null)).CostUsd.Should().BeNull();
-        ConsultationUsage.ThisTurnsShare([(10, 1, null)], (20, 2, 0.3)).CostUsd.Should().Be(0.3,
-            "a vendor that priced only this turn is not reporting cumulatively about money");
+        ConsultationUsage.Less(Reported(20, 2, 0.45), new ConsultationBilled(10, 1, 0.40)).CostUsd.Should().BeApproximately(0.05, 0.0001);
+        ConsultationUsage.Less(Reported(20, 2), new ConsultationBilled(10, 1)).CostUsd.Should().BeNull("an unpriced report stays unpriced");
+        ConsultationUsage.Less(Reported(20, 2, 0.3), new ConsultationBilled(10, 1)).CostUsd.Should().Be(0.3,
+            "a total in which no turn was priced subtracts nothing from the first price named");
+    }
+
+    [Fact]
+    public void TheTotalIsSummedByUsageAdd_SoItLosesNothing()
+    {
+        new ConsultationBilled(1, 2, 0.5, 3, 4).Plus(new Usage(10, 20, null, TokensCached: 30, TokensReasoning: 40))
+            .Should().Be(new ConsultationBilled(11, 22, 0.5, 33, 44));
     }
 }

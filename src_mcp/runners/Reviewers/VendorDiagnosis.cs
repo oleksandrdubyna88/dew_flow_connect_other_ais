@@ -1,5 +1,36 @@
 namespace CoaiMcp.Runners.Reviewers;
 
+/// <summary>What KIND of door a recognised vendor sentence says is closed.</summary>
+/// <remarks>
+/// A column beside the cure, added when the consultation began CLASSIFYING its failures
+/// (PLAN_the_consultant_works_on_every_vendor.md, E2.1): "not on the PATH" is a missing CLI and every other
+/// row is the vendor refusing the call for a reason a person can fix — and the classification needs to
+/// tell those apart without re-matching the text a second way.
+/// </remarks>
+public enum DiagnosisKind
+{
+    /// <summary>The runtime itself is closed — Google retired the Gemini CLI's tier.</summary>
+    Retired,
+
+    /// <summary>The account or the directory is refused: ineligible, untrusted, not signed in.</summary>
+    Refused,
+
+    /// <summary>The CLI is installed wrong — a missing platform binary.</summary>
+    BrokenInstall,
+
+    /// <summary>The CLI is not on this machine's PATH.</summary>
+    NotOnPath,
+
+    /// <summary>The local engine is not listening where the row points.</summary>
+    EngineUnreachable,
+
+    /// <summary>The CLI does not know an option this product sends — it is older than this product.</summary>
+    UnknownOption,
+}
+
+/// <summary>A recognised vendor sentence: what kind of failure it is, and what to do about it.</summary>
+public sealed record Diagnosis(DiagnosisKind Kind, string Cure);
+
 /// <summary>
 /// Failures a vendor CLI reports in its own words, translated into what to DO about them.
 /// </summary>
@@ -13,22 +44,26 @@ namespace CoaiMcp.Runners.Reviewers;
 /// </remarks>
 public static class VendorDiagnosis
 {
-    private static readonly (string Marker, string Sentence)[] Known =
+    private static readonly (string Marker, string Sentence, DiagnosisKind Kind)[] Known =
     [
         // Google retired Gemini Code Assist for individuals on 2026-08-31. The CLI fails inside
         // `_doSetupUser`, BEFORE any model is reached, so it looks like anything you please.
         ("migrate to the Antigravity suite",
             "Google has retired Gemini Code Assist for individuals — this CLI can no longer review. " +
-            "Install the Antigravity CLI and switch this vendor's runtime to 'antigravity'."),
+            "Install the Antigravity CLI and switch this vendor's runtime to 'antigravity'.",
+            DiagnosisKind.Retired),
         ("throwIneligibleOrProjectIdError",
             "the Gemini CLI reports this account as ineligible for its Code Assist tier — " +
-            "switch this vendor's runtime to 'antigravity', which is Google's replacement."),
+            "switch this vendor's runtime to 'antigravity', which is Google's replacement.",
+            DiagnosisKind.Refused),
         ("not running in a trusted directory",
             "the CLI refused an untrusted working directory — a review runs in a fresh worktree, " +
-            "so it needs --skip-trust or GEMINI_CLI_TRUST_WORKSPACE=true."),
+            "so it needs --skip-trust or GEMINI_CLI_TRUST_WORKSPACE=true.",
+            DiagnosisKind.Refused),
         ("Missing optional dependency",
             "the CLI is installed without the binary for this platform — reinstall it " +
-            "(npm install -g <the package>) and run it once by hand."),
+            "(npm install -g <the package>) and run it once by hand.",
+            DiagnosisKind.BrokenInstall),
         // Measured in WSL 2026-09-01: a freshly installed codex answers a review with five reconnect
         // attempts and two 401s, and nothing in that wall says the one thing to do. The CLI is
         // there, the binary runs, the account simply has no session in THIS home directory — which
@@ -36,16 +71,28 @@ public static class VendorDiagnosis
         // Windows install.
         ("Missing bearer or basic authentication",
             "the CLI is installed but not signed in on this machine — run its login once " +
-            "(`codex login`, `claude`, `gemini`) in the same user account the server runs as."),
+            "(`codex login`, `claude`, `gemini`) in the same user account the server runs as.",
+            DiagnosisKind.Refused),
         ("401 Unauthorized",
             "the vendor refused the credentials: the CLI is installed but not signed in here — " +
-            "run its login once, or set this vendor's key in the vault entry."),
+            "run its login once, or set this vendor's key in the vault entry.",
+            DiagnosisKind.Refused),
         ("has not been trusted",
             "the CLI refuses a directory nobody has accepted a trust dialog for, and a review runs " +
             "in a fresh worktree every round — accept it once interactively, or set this project's " +
-            "trust flag in the CLI's own config."),
+            "trust flag in the CLI's own config.",
+            DiagnosisKind.Refused),
         ("command not found",
-            "the CLI is not on this machine's PATH — set an explicit executable path for this vendor."),
+            "the CLI is not on this machine's PATH — set an explicit executable path for this vendor.",
+            DiagnosisKind.NotOnPath),
+        // Measured 2026-10-02 (research/RESULTS_claude_consultant_confinement.md): claude 2.1.197, handed the
+        // confined consultant argv, answered `error: unknown option '--restricted'` and exit 1 — a CLI older
+        // than the flags this product sends. It is not a model failure and not a sign-in: the cure is the
+        // CLI's own update.
+        ("unknown option",
+            "the CLI does not know an option this product sends — it is older than this product expects: " +
+            "update the CLI, then run it once by hand.",
+            DiagnosisKind.UnknownOption),
     ];
 
     /// <summary>
@@ -56,11 +103,34 @@ public static class VendorDiagnosis
     /// kernel; the tests pass it, because a cure must be checkable on a machine that is not the one
     /// it is about.
     /// </param>
-    public static string? For(string text, bool? wsl = null) =>
-        string.IsNullOrWhiteSpace(text)
-            ? null
-            : UnreachableLocalEngine(text, wsl ?? UnderWsl.Value)
-              ?? Known.FirstOrDefault(k => text.Contains(k.Marker, StringComparison.OrdinalIgnoreCase)).Sentence;
+    public static string? For(string text, bool? wsl = null) => Classify(text, wsl)?.Cure;
+
+    /// <summary>
+    /// What kind of failure the vendor's sentence is, with its cure — or null when it is not one we recognise.
+    /// </summary>
+    /// <remarks>
+    /// The same table and the same order as <see cref="For"/>, which is now this and nothing else: two
+    /// readings of one sentence that could disagree are how a cure and a classification would drift.
+    /// </remarks>
+    public static Diagnosis? Classify(string text, bool? wsl = null)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return null;
+        }
+
+        if (UnreachableLocalEngine(text, wsl ?? UnderWsl.Value) is { } engine)
+        {
+            return new Diagnosis(DiagnosisKind.EngineUnreachable, engine);
+        }
+
+        var known = Known.FirstOrDefault(k => text.Contains(k.Marker, StringComparison.OrdinalIgnoreCase));
+
+        return known.Sentence is { } sentence ? new Diagnosis(known.Kind, sentence) : null;
+    }
+
+    /// <summary>Whether this server runs inside a WSL distro — the side a consultation's health file names.</summary>
+    public static bool OnWsl => UnderWsl.Value;
 
     /// <summary>
     /// The local engine refused the connection — what to do about it, on this kind of machine.

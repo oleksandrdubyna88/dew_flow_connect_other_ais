@@ -368,15 +368,13 @@ internal sealed class SessionTurn : IDisposable
         var lockFile = LockFileFor(sessionFile);
         for (var attempt = 0; attempt < 40; attempt++)
         {
-            try
+            // The exclusive open itself is the shared primitive (HeldFile); the forty tries are this turn's own.
+            if (Runners.Files.HeldFile.TryHold(lockFile) is { } held)
             {
-                return new SessionTurn(new FileStream(
-                    lockFile, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None));
+                return new SessionTurn(held);
             }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                Thread.Sleep(Random.Shared.Next(2, 8));
-            }
+
+            Thread.Sleep(Random.Shared.Next(2, 8));
         }
 
         return new SessionTurn(null);

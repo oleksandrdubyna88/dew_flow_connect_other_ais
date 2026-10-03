@@ -21,6 +21,8 @@ import {
   sameVendorNote,
 } from './consultSettings';
 import { ProbeResult, claudeNote } from './claudeModels';
+import { type ConsultantHealthState, type RowHealth, rowHealth } from './consultantHealthState';
+import { healthBlock } from './consultantHealthView';
 import { escapeHtml } from './escapeHtml';
 import { help } from './panelControls';
 import { LOOKING } from './lookingSpinner';
@@ -65,6 +67,14 @@ export interface ConsultantViewState {
    * one, including the empty-vendor case, where the anchored ids still answer.</p>
    */
   readonly palette?: VendorPalette;
+  /**
+   * What the server says about each caller's consultant, on this side and on every other side named — the health
+   * block under each row (E5.2 of PLAN_the_consultant_works_on_every_vendor.md).
+   *
+   * <p>Optional for the reason the fields above are: a fixture that does not care draws rows with no block, which is
+   * also what a panel draws before its first probe has been started.</p>
+   */
+  readonly health?: ConsultantHealthState | undefined;
 }
 
 /**
@@ -163,6 +173,11 @@ export interface ConsultantRowView {
   readonly takesExecutablePath: boolean;
   /** What to think about this pair — said, never decided for the person. */
   readonly hints: readonly string[];
+  /**
+   * The row's health, decided (`consultantHealthState.ts`) — absent when the section was handed none. Drawn after the
+   * hints; a failure of a vendor or model this row no longer names was already left out of it.
+   */
+  readonly health?: RowHealth;
 }
 
 /** The empty model option, in the two cases it means genuinely different things. */
@@ -210,6 +225,24 @@ ${promptField(state.consultPrompt ?? '')}
  * to what it means fails a test that never looked at a tag.</p>
  */
 export function consultantRowView(
+  caller: { id: string; label: string },
+  consult: ConsultSettings,
+  state: ConsultantViewState,
+): ConsultantRowView {
+  return withHealth(settledRow(caller, consult, state), caller.id, state.health);
+}
+
+/**
+ * The row with its health block decided against the consultant it NAMES — so a failure of another vendor or model is
+ * never drawn under it. No key at all when the section was handed no health: a row value tests compare whole must not
+ * grow a field nobody set.
+ */
+function withHealth(view: ConsultantRowView, kind: string, health: ConsultantHealthState | undefined): ConsultantRowView {
+  return health === undefined ? view : { ...view, health: rowHealth(kind, { vendor: view.vendor, model: view.model }, health) };
+}
+
+/** Which of the three states the row is in, and everything that follows from it. */
+function settledRow(
   caller: { id: string; label: string },
   consult: ConsultSettings,
   state: ConsultantViewState,
@@ -428,6 +461,7 @@ ${view.takesBaseUrl ? field(caller, 'consultBaseUrl', 'Endpoint', view.baseUrl, 
 ${view.takesExecutablePath ? field(caller, 'consultExecutablePath', 'Where its CLI is', view.executablePath, 'leave empty to look it up on PATH') : ''}
 ${view.modelNote.length === 0 ? '' : `  <div class="hint">${LOOKING}${escapeHtml(view.modelNote)}</div>`}
 ${view.hints.map((hint) => `  <div class="hint">${escapeHtml(hint)}</div>`).join('\n')}
+${healthBlock(view.health)}
 </div>`;
 }
 

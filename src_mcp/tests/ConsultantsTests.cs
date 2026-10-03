@@ -39,8 +39,12 @@ public sealed class ConsultantsTests : IDisposable
         catch (IOException) { }
     }
 
+    /// <remarks>
+    /// The claude capability is set as <c>PrepareAsync</c> would have set it: a claude launch nobody prepared is
+    /// refused by <c>Build</c> (epic 3's code round). The whole claude argv is <c>ClaudeConsultantArgvTests</c>'.
+    /// </remarks>
     private ConsultantLaunch Launch(string handle = "", string model = "", string prompt = "help me") =>
-        new(Repo, prompt, handle, Answers, new ReviewerSettings("v") { Model = model });
+        new(Repo, prompt, handle, Answers, new ReviewerSettings("v") { Model = model, ClaudeCli = ClaudeCapability.WithRestricted });
 
     private static ProcessResult Said(string stdout, string stderr = "", int exit = 0) =>
         new(exit, stdout, stderr, TimedOut: false);
@@ -48,23 +52,6 @@ public sealed class ConsultantsTests : IDisposable
     // ---------- claude ----------
 
     private static ClaudeConsultant Claude() => new(new ClaudeRuntime());
-
-    [Fact]
-    public void ClaudeIsReadOnly_AndCanSTILLReadTheTree()
-    {
-        var args = Claude().Build(Launch()).Request.Arguments;
-
-        args.Should().ContainInOrder(["-p", "--output-format", "json"]);
-        args.Should().ContainInOrder(["--permission-mode", "plan"]);
-        args.Should().Contain("Edit").And.Contain("Write").And.Contain("NotebookEdit");
-        // The consultant was asked here to READ the tree; denying Read as a confined REVIEWER does
-        // would leave it judging the prompt alone, which is the thing it exists not to do.
-        args.Should().NotContain("Read").And.NotContain("Glob").And.NotContain("Grep");
-        // `Bash` was allowed until this story's plan round: `--permission-mode plan` is the CLI's
-        // promise and a shell is a way around it. See ConsultStoryTwoGateTests for the full list.
-        args.Should().Contain("Bash");
-        args.Should().ContainInOrder(["--add-dir", Repo]);
-    }
 
     [Fact]
     public void ClaudeResumesBySessionId()
@@ -177,7 +164,7 @@ public sealed class ConsultantsTests : IDisposable
 
         foreach (var consultant in Consultants())
         {
-            consultant.Build(new ConsultantLaunch(Repo, "p", string.Empty, AnswersIn(consultant.Vendor), new ReviewerSettings("v"), Path.Combine(untouched, "schema.json")));
+            consultant.Build(new ConsultantLaunch(Repo, "p", string.Empty, AnswersIn(consultant.Vendor), new ReviewerSettings("v") { ClaudeCli = ClaudeCapability.WithRestricted }, Path.Combine(untouched, "schema.json")));
         }
 
         Directory.Exists(untouched).Should().BeFalse("no adapter may provision the schema while describing a launch");
@@ -198,7 +185,7 @@ public sealed class ConsultantsTests : IDisposable
         foreach (var consultant in Consultants().Where(c => c.Vendor != "local"))
         {
             var dir = AnswersIn(consultant.Vendor);
-            consultant.Build(new ConsultantLaunch(Repo, "p", string.Empty, dir, new ReviewerSettings("v"), Schema()));
+            consultant.Build(new ConsultantLaunch(Repo, "p", string.Empty, dir, new ReviewerSettings("v") { ClaudeCli = ClaudeCapability.WithRestricted }, Schema()));
 
             Directory.Exists(dir).Should().BeFalse($"{consultant.Vendor} describes a launch and writes nothing");
         }
@@ -422,7 +409,7 @@ public sealed class ConsultantResolutionAfterStoryTwoTests : IDisposable
         var consultant = ConsultantResolution.For(new VendorIdentity("claude", "claude", string.Empty));
 
         consultant.Should().BeOfType<ClaudeConsultant>();
-        consultant!.Build(new ConsultantLaunch("D:/repo", "p", string.Empty, "D:/out", new ReviewerSettings("claude")))
+        consultant!.Build(new ConsultantLaunch("D:/repo", "p", string.Empty, "D:/out", new ReviewerSettings("claude") { ClaudeCli = ClaudeCapability.NoRestricted }))
             .Request.Executable.Should().Be("claude");
     }
 }

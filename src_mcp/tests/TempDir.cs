@@ -15,7 +15,7 @@ namespace CoaiMcp.Tests;
 /// <para><b>Read-only files are cleared first.</b> Git marks every object file read-only and
 /// <c>Directory.Delete(recursive: true)</c> refuses one with <c>UnauthorizedAccessException</c> — so
 /// a directory that ever held a clone could not be removed at all, which is how 5,476 of them
-/// accumulated before anybody looked (see <c>PanelService.DeleteEvenIfReadOnly</c>, which learned
+/// accumulated before anybody looked (see <c>GitScratch.DeleteEvenIfReadOnly</c>, which learned
 /// this first).</para>
 /// </remarks>
 public sealed class TempDir : IDisposable

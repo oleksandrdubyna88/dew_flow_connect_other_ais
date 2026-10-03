@@ -43,7 +43,7 @@ internal sealed class RepositoryLock : IDisposable
         var deadline = DateTime.UtcNow + wait;
         while (true)
         {
-            if (TryOpen(path) is { } held)
+            if (Runners.Files.HeldFile.TryHold(path) is { } held)
             {
                 return new RepositoryLock(held);
             }
@@ -54,22 +54,6 @@ internal sealed class RepositoryLock : IDisposable
             }
 
             await Task.Delay(Poll, ct);
-        }
-    }
-
-    private static FileStream? TryOpen(string path)
-    {
-        try
-        {
-            return new FileStream(path, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
-        }
-        catch (IOException)
-        {
-            return null;
-        }
-        catch (UnauthorizedAccessException)
-        {
-            return null;
         }
     }
 

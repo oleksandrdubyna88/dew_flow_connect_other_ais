@@ -45,5 +45,8 @@ public static class ConsultationRows
         record.Alert,
         Kind: record.Kind,
         Plan: record.Plan,
-        Epics: record.Epics);
+        Epics: record.Epics,
+        FailureKind: record.FailureKind,
+        FailureCure: record.FailureCure,
+        Evidence: record.Evidence);
 }

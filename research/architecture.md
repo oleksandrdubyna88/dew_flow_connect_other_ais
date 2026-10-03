@@ -47,7 +47,7 @@ C4Container
   Rel(ext, codex, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, gem, "spawn — a CHAT, in an empty directory of its own")
   Rel(ext, mcp, "writes the Team server token file the shim reads")
-  Rel(ext, mcp, "one-shot spawns: --providers, --log, --findings, --findings-many, --pairs-json, --real-method, --file-at, --tree-at, --trees, --tree-remove")
+  Rel(ext, mcp, "one-shot spawns: --providers, --log, --findings, --findings-many, --pairs-json, --real-method, --file-at, --tree-at, --trees, --tree-remove, --close-consult, --cadence, --consultants and --check-consultant (served since epic 4, spawned by the Consultant tab from epic 5)")
   Rel(mcp, srv, "a review, when the reviewer is a Team server's")
   Rel(mcp, srv, "and first: which review roles do you run?")
   Rel(ext, srv, "the same question, for the panel's own picture")
@@ -388,6 +388,39 @@ and not the columns, and the page asks `pragma_table_info` which shape it is loo
 assuming the newest. The other direction — the older BINARY reading a database this build has
 migrated — is checked against the real released artefact rather than argued, because a migration is
 one-way and getting it wrong strands a person until they update.
+
+### The consultant's health crosses the seam as two modes and four files (2026-10-03)
+
+Epic 4 of [PLAN_the_consultant_works_on_every_vendor.md](PLAN_the_consultant_works_on_every_vendor.md) added
+two more doors of the same kind, for the Consultant tab: **`--consultants`** (per caller kind, the consultant it
+resolves to, its CLI's version and auth source, what it can be kept from reading on this platform, the last answer,
+failure and check — no model called) and **`--check-consultant --caller <kind>`** (ONE real, paid turn in a scratch
+repository with a marker inside and a canary outside, and one JSON document at the end). Both answer 0 for every
+classified outcome, 65 for a bad request, 74 for a data directory they cannot use, and never 64. Details:
+[module_server.md](module_server.md), *The consultant's health, read and checked*.
+
+What the other side can READ without running this side's binary lives in `<dataDir>/consultations/health/`: the two
+outcome files per caller kind (epic 2), **`consultants.json`** — the `--consultants` answer with its time and side,
+written by the mode and once in the background at every stdio-server start, and since the whole-branch review (A1) one
+row's outcome fields rewritten by every recorded outcome, so a failure reaches the other side at once — and
+**`<kind>.check.json`** beside a
+`<kind>.check.lock` the running check HOLDS open. On its own side a reader decides whether a check is alive by trying
+that lock. Across the seam it cannot — on Linux the lock is an advisory `flock`, invisible through 9P — so a plain
+Windows window reading a WSL store judges a `checking` state by its heartbeat instead — by how long THIS window has
+seen the heartbeat stand still, on its own clock, against the published four-beat margin, because a WSL clock drifts from
+its Windows host's (the whole-branch review, O; a server one-shot mode cannot see a beat move and keeps the clock
+comparison as its residual) — and a sweep never settles another side's record. ONE data directory shared by both sides (a WSL server
+writing a `/mnt/c` path) is not supported for checks — the two sides' locks cannot see each other; a check only refuses
+to start beside a fresh `checking` the other side wrote.
+
+Epic 5 put the Consultant tab on top of it: each caller's row shows this side's facts from `--consultants` (spawned by a
+render, never awaited by one), a Check button that runs `--check-consultant` after a paid-call confirmation, and every
+other side named in `coai.alsoWatchDataDirectories` READ-ONLY from its `consultants.json` and `<kind>.check.json`. The
+staleness that other side judges a heartbeat by is PUBLISHED by the server in those files (`heartbeatStaleAfterSeconds`),
+never a constant in the extension. The server is the ONE source of truth for whether a failure is current — decided per
+consultant (`ConsultHealth.Current`), shown by the panel as `failureCurrent` without a second rule — and the check's
+vocabulary is a shared catalogue like the failure kinds (`shared/consult-check-words.json`). Details:
+[module_extension.md](module_extension.md), *The Consultant tab says whether each consultant works*.
 
 ## The panel is two surfaces: the sidebar and a Settings tab (2026-09-28)
 

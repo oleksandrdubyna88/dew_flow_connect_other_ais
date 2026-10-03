@@ -27,7 +27,7 @@ public sealed class AReviewerStartsNoMcpServersTests
 
     private static IReadOnlyList<string> ClaudeConsultant() =>
         new ClaudeConsultant(new ClaudeRuntime())
-            .Build(new ConsultantLaunch(Repo, "help me", string.Empty, "D:/answers", new ReviewerSettings("claude")))
+            .Build(new ConsultantLaunch(Repo, "help me", string.Empty, "D:/answers", new ReviewerSettings("claude") { ClaudeCli = ClaudeCapability.WithRestricted }))
             .Request.Arguments;
 
     private static IReadOnlyList<string> CodexReviewer(IReadOnlyList<string> off) =>

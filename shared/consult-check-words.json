@@ -1,0 +1,32 @@
+{
+  "why": [
+    "The words a consultant check is written in: the STATE of <kind>.check.json and of the one document",
+    "`coai-mcp --check-consultant` prints, and what became of the CANARY outside the scratch repository.",
+    "The server writes them (ConsultCheckStates / CanaryReadings); the panel's Consultant tab words them.",
+    "The two halves ship separately, so a word added to one and not the other is a check the other side",
+    "cannot describe.",
+    "",
+    "Neither half owns this file. The server's test reads its own catalogue by REFLECTION over the public",
+    "constants of ConsultCheckStates and CanaryReadings and compares both with these lists; the extension",
+    "asserts from its own side that every state here is worded and that its canary wording covers exactly",
+    "these readings (the whole-branch review of PLAN_the_consultant_works_on_every_vendor.md, 2026-10-03, J).",
+    "",
+    "`observedConfinement`: only a refusal the CLI recorded against the canary's own path is observed",
+    "confinement (cadence consultation 435b1b25). Every other reading must not be worded as if it were."
+  ],
+  "states": [
+    { "word": "checking", "meaning": "a check holds the lock and is running — only ever on disk" },
+    { "word": "answered", "meaning": "the consultant answered; the record says whether it read the marker and what became of the canary" },
+    { "word": "failed", "meaning": "the turn produced no advice, classified by a word of consult-failure-kinds.json" },
+    { "word": "unavailable", "meaning": "no turn could be had: not configured or runnable, or the scratch repository could not be made" },
+    { "word": "already-checking", "meaning": "another check of this caller kind holds the lock; nothing was launched" },
+    { "word": "abandoned", "meaning": "a checking state nobody is running any more" },
+    { "word": "unreadable", "meaning": "a state file exists and cannot be read" }
+  ],
+  "canaryReadings": [
+    { "word": "read", "observedConfinement": false },
+    { "word": "denied-by-cli", "observedConfinement": true },
+    { "word": "denied-by-cli-unattributed", "observedConfinement": false },
+    { "word": "not-attempted", "observedConfinement": false }
+  ]
+}

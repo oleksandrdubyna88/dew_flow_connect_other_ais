@@ -110,7 +110,10 @@ public sealed class RoundsDb : IDisposable
     /// </remarks>
     private static void Migrate(SqliteConnection db)
     {
-        // Before the runner: a file the security lane's preview numbered differently (see the type).
+        // Before the runner: files two preview builds numbered differently (see each type). The consultant's
+        // first — its shapes carry the failure columns, which the security fork's never do, so a file is at most
+        // one of them; and once repaired it stands at 19, where the security fork's version test cannot match.
+        ConsultantPreviewFork.Repair(db);
         SecurityPreviewFork.Repair(db);
         SqliteMigrator.Migrate(db, Schema.Steps);
     }
@@ -167,18 +170,20 @@ public sealed class RoundsDb : IDisposable
             INSERT INTO consultations (
                 id, caller, caller_kind, repo_path, branch, head_sha, vendor, model, turns, status,
                 reason, outcome, outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd, problem, advice, alert,
-                kind, plan, epics)
+                kind, plan, epics, failure_kind, failure_cure, evidence)
             VALUES (
                 $id, $caller, $kind, $repo, $branch, $sha, $vendor, $model, $turns, $status,
                 $reason, $outcome, $outcomeBy, $started, $ended, $seconds, $in, $out, $cost, $problem, $advice, $alert,
-                $consultKind, $consultPlan, $consultEpics)
+                $consultKind, $consultPlan, $consultEpics, $failureKind, $failureCure, $evidence)
             ON CONFLICT(id) DO UPDATE SET
                 turns = excluded.turns, status = excluded.status, reason = excluded.reason,
                 outcome = excluded.outcome, outcome_by = excluded.outcome_by,
                 ended_utc = excluded.ended_utc, seconds = excluded.seconds,
                 tokens_in = excluded.tokens_in, tokens_out = excluded.tokens_out,
                 cost_usd = excluded.cost_usd, problem = excluded.problem,
-                advice = excluded.advice, alert = excluded.alert
+                advice = excluded.advice, alert = excluded.alert,
+                failure_kind = excluded.failure_kind, failure_cure = excluded.failure_cure,
+                evidence = excluded.evidence
             """;
         Bind(write, "$id", row.Id);
         Bind(write, "$caller", row.Caller);
@@ -205,6 +210,9 @@ public sealed class RoundsDb : IDisposable
         Bind(write, "$consultKind", row.Kind);
         Bind(write, "$consultPlan", row.Plan);
         Bind(write, "$consultEpics", row.Epics);
+        Bind(write, "$failureKind", row.FailureKind);
+        Bind(write, "$failureCure", row.FailureCure);
+        Bind(write, "$evidence", row.Evidence);
         write.ExecuteNonQuery();
     }
 

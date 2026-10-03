@@ -217,7 +217,13 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 141 → 142 on 2026-10-02, PLAN_question_consultant S4: the Question consultant tab refuses a change it cannot
 // store — a prompt a row still runs, a title that makes no id, a folder that is a drive root or the data folder —
 // and says why (`question-consultant-change-refused`). One place, because every one of them is the same refusal.
-const PLACES_THIS_SPEAKS = 142;
+// 142 → 143 on 2026-10-03, PLAN_the_consultant_works_on_every_vendor epic 5: the Consultant tab's Check runs one real,
+// PAID turn, so it asks first in a modal naming the vendor, the scratch folder and the session it leaves
+// (`paid-consultant-check`). One place, because it is one confirmation.
+// 143 → 144 on 2026-10-03, the whole-branch review of that plan (P): a landed Check is announced through the funnel
+// (`consultant-check-landed`, subject the caller kind) — the page's check lines are rebuilt with every repaint and so
+// can never be a live region a screen reader hears. One place, because it is one outcome.
+const PLACES_THIS_SPEAKS = 144;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

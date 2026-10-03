@@ -7,7 +7,7 @@
     },
     {
       "file": "src_mcp/src/Server/Consultation/ConsultationService.cs",
-      "refusals": 24
+      "refusals": 17
     },
     {
       "file": "src_mcp/src/Server/PanelService.cs",

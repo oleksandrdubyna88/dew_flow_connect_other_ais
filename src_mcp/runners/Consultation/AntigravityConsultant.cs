@@ -40,6 +40,47 @@ public sealed class AntigravityConsultant(IReviewerRuntime inner, string vendor 
     /// </remarks>
     public bool UsageIsCumulative => true;
 
+    /// <summary>The one read tool observed working headless in <c>--mode plan</c>, and the shell's standing.</summary>
+    public string Toolbox => AntigravityFollowUps.Toolbox;
+
+    /// <summary>The permission words this launch was denied — the stream's list, and the stderr sentence's.</summary>
+    public IReadOnlyList<string> DeniedActions(ReviewerLaunch launched) =>
+        launched.Process is { } process ? AntigravityStream.DeniedActions(process.StdOut, process.StdErr) : [];
+
+    /// <summary>A silent launch read by agy's permission words — a denied command, a denied read, or the empty answer.</summary>
+    public ConsultFailure SilentFailure(ReviewerLaunch launched, ConsultFailure unexplained) =>
+        AntigravityFollowUps.Failure(DeniedActions(launched), unexplained);
+
+    /// <summary>
+    /// The same conversation, told the denied permission will not come — when a permission a follow-up can
+    /// cure WAS denied, and the stream named the conversation to continue.
+    /// </summary>
+    /// <remarks>
+    /// <para>Both, because each absence means something different. Nothing curable denied is an empty turn
+    /// for another reason — or a denial no follow-up was measured against (<see cref="AntigravityFollowUps.For"/>
+    /// answers empty for it) — which telling it about permissions would not cure. No id is a conversation
+    /// that cannot be continued — a fresh launch would only meet the same denial.</para>
+    /// <para>Whether the launch ANSWERED is not asked here. <c>ConsultantTurn</c> asks it before it asks this,
+    /// and it is the one place that decides whether a follow-up runs at all; asking twice was two copies of
+    /// one decision, waiting to disagree.</para>
+    /// <para>The id comes from <see cref="ReadHandle"/>, the scan this adapter already trusts for a resume,
+    /// so the conversation continued and the conversation recorded are one reading of one stream; and
+    /// <see cref="AntigravityStream.Continue"/> REPLACES the <c>--conversation</c> a resumed turn already
+    /// carries rather than adding a second.</para>
+    /// </remarks>
+    public ReviewerInvocation? FollowUp(ReviewerInvocation first, ReviewerLaunch launched)
+    {
+        var said = AntigravityFollowUps.For(DeniedActions(launched));
+        var conversation = ConversationOf(launched);
+
+        return said.Length > 0 && conversation.Length > 0
+            ? AntigravityStream.Continue(first, conversation, said)
+            : null;
+    }
+
+    private string ConversationOf(ReviewerLaunch launched) =>
+        launched.Process is { } process ? ReadHandle(process) : string.Empty;
+
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);

@@ -67,10 +67,26 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
     /// </remarks>
     private const long HashUpTo = 1024 * 1024;
 
+    /// <remarks>
+    /// <b>A cancelled token is a cancellation, never a git failure.</b> The launcher does not throw on a
+    /// cancelled token — it kills the tree and reports <c>TimedOut: true, Cancelled: true</c> — so a
+    /// <c>git status</c> killed by the consultation turn's deadline used to surface as a
+    /// <see cref="ContextException"/>, and the turn told its caller "the answer could not be recorded: git
+    /// status:" about a turn that had simply run out of time (PLAN_the_consultant_works_on_every_vendor.md,
+    /// E2.3). And a token cancelled before the call still started a process and returned a full snapshot,
+    /// a wait nobody asked for. Both now throw <see cref="OperationCanceledException"/>, so the caller's
+    /// own arms decide — by the token's STATE — whether it was the caller or the deadline.
+    /// </remarks>
     public async Task<FilesystemSnapshot> SnapshotAsync(string repoPath, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var status = await launcher.RunAsync(
             new ProcessRequest("git", ["status", "--porcelain=v1", "-z", "--untracked-files=all", "--ignored=matching"], repoPath), ct);
+        if (status.Cancelled || ct.IsCancellationRequested)
+        {
+            throw new OperationCanceledException("the snapshot's git status was cancelled", ct);
+        }
+
         if (status.ExitCode != 0)
         {
             throw new ContextException("status", status.StdErr.Trim());
@@ -87,6 +103,10 @@ public sealed class FilesystemInvariant(IProcessLauncher launcher)
             var fingerprint = byMeaning ? await ConfigFingerprintAsync(full, ct) : Fingerprint(full);
             entries["<git>/" + name] = new TreeEntry("git", fingerprint);
         }
+
+        // The config reads above run git too; one killed by the token returns no meaning, and a snapshot
+        // built from it would compare as a change that never happened.
+        ct.ThrowIfCancellationRequested();
 
         return new FilesystemSnapshot(entries.ToImmutable());
     }

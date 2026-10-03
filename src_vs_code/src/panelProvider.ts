@@ -59,6 +59,8 @@ import {
 } from './cliVersions';
 import { askVersion, capture } from './versionProbe';
 import { CADENCE_CAP_MS, CadenceProbes } from './cadenceProbe';
+import { ConsultantHealthPanel } from './consultantHealthPanel';
+import { consultantTabShowing } from './consultantHealthWatcher';
 import { ClaudeProbeCache } from './claudeProbeCache';
 import { ConsultPromptFile } from './consultPromptFile';
 import { QconsultHost, isQconsultCallerKey, type QconsultWriteHooks } from './qconsultHost';
@@ -292,6 +294,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** Each recent plan's consultation cadence, asked of `coai-mcp --cadence` and never awaited by a render. */
   private readonly cadenceProbes: CadenceProbes;
 
+  /** The Consultant tab's health blocks — probe, watcher, Check and Copy — composed in `consultantHealthPanel.ts`. */
+  private readonly consultantHealth: ConsultantHealthPanel;
+
   private readonly consultPrompt: ConsultPromptFile;
   /** The Question consultant tab's host half — its buttons, its writes, its prompt files (todo/PLAN_question_consultant.md, S4). */
   /**
@@ -454,6 +459,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       render: () => { void this.render(); },
       log: (message) => console.warn(message),
     });
+    this.consultantHealth = new ConsultantHealthPanel({ dataDir, storage: this.context.globalStorageUri, render: () => { void this.render(); } });
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -943,7 +949,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** The Settings tab was opened: it is painted like the sidebar, and heard like it. */
   attachSettings(panel: vscode.WebviewPanel): void {
     this.settingsTab.attach(panel);
-    panel.onDidDispose(() => { this.settingsTab.detach(panel); });
+    // The Consultant tab's watcher pauses with the tab: nobody is reading its stores (epic 5's review).
+    panel.onDidDispose(() => { this.settingsTab.detach(panel); this.consultantHealth.pause(); });
+    // Hidden behind another editor tab: nobody is reading the Consultant tab, so its watcher pauses; shown again, a render
+    // decides whether it resumes (the whole-branch review, N2).
+    panel.onDidChangeViewState(() => { if (panel.visible) { void this.render(); } else { this.consultantHealth.pause(); } });
     panel.webview.onDidReceiveMessage((m: PanelMessage) => { this.receive(this.settingsTab, m); });
     void this.render();
   }
@@ -989,7 +999,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // Held by the host, never drawn into the markup (D6), and answered with the tab now held: a page
       // that was repainted while the press was on its way shows the tab the person chose, and a page
       // that already shows it re-selects it, which changes nothing.
-      from.post({ type: 'showTab', id: chooseSettingsTab(m.id) });
+      const before = heldSettingsTab();
+      const shown = chooseSettingsTab(m.id);
+      from.post({ type: 'showTab', id: shown });
+      // Onto or off the Consultant tab: a render decides whether its health is watched (the whole-branch review, N2).
+      if (consultantTabShowing(true, before) !== consultantTabShowing(true, shown)) {
+        void this.render();
+      }
     }
   }
 
@@ -1041,6 +1057,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** The panel is going away: whatever is still in flight is settled as not done, so no page is left marked busy. */
   dispose(): void {
     settleEverything(this.inFlight);
+    this.consultantHealth.dispose();
   }
 
   /**
@@ -1090,6 +1107,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       sessions,
       // Not asked at all while the cadence is off: the server would answer `null` for every session.
       cadence: settings.cadence.mode === 'off' ? [] : this.cadenceProbes.lines(sessions),
+      // Never awaited: the probe and the watcher land on their own and repaint (epic 5 of the consultant plan). Only while
+      // the Consultant tab is SHOWING — --consultants asks every CLI its version — and paused otherwise (the review, N2).
+      consultantHealth: this.consultantHealth.stateWhile(consultantTabShowing(this.settingsTab.view?.visible === true, heldSettingsTab())),
       usage: this.remembered(await this.readUsage()),
       usageWindow: this.usageWindow,
       latestServerVersion: published,
@@ -2221,6 +2241,15 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         break;
       case 'copyPhrase':
         await this.copyPhrase(id, from);
+        break;
+      case 'checkConsultant':
+        // Confirmed first and run detached (`consultantHealthHost.ts`): the press returns before the paid turn ends.
+        await this.consultantHealth.check(id ?? '');
+        break;
+      case 'copyConsultantSnippet':
+        // The page that was pressed is told, and only when the write resolved — the phrase copy's rule.
+        await this.consultantHealth.copySnippet(id ?? '', (kind) =>
+          from.post({ type: 'copied', command: 'copyConsultantSnippet', id: kind }, 'the panel could not be told that an allow rule was copied'));
         break;
       case 'addTeamServer':
         await this.addTeamServer();

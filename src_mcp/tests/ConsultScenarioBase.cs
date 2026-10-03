@@ -32,6 +32,41 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
     protected static string FakeCliExe => Path.Combine(
         AppContext.BaseDirectory, OperatingSystem.IsWindows() ? "FakeCli.exe" : "FakeCli");
 
+    /// <summary>The real launcher, with one seam: what happens around the CONSULTANT's own launch.</summary>
+    /// <remarks>
+    /// Moved here from <c>ATurnThatNeverReturnsTests</c> when the antigravity scenarios needed the same seam — a
+    /// turn whose answer arrived and whose bookkeeping then failed (epic 2's review); a second copy would have
+    /// been the duplicate the reuse rule forbids.
+    /// </remarks>
+    protected sealed class TurnLauncher(IProcessLauncher inner) : IProcessLauncher
+    {
+        /// <summary>Runs INSTEAD of the consultant's launch; null runs the fake CLI as usual.</summary>
+        public Func<ProcessRequest, CancellationToken, Task<ProcessResult>>? Consultant { get; init; }
+
+        /// <summary>Runs just before the consultant is launched — after the record says <c>asking</c>.</summary>
+        public Action? BeforeConsultant { get; set; }
+
+        /// <summary>While set, every git command after the consultant ran is refused.</summary>
+        public bool GitRefused { get; set; }
+
+        public bool ConsultantRan { get; private set; }
+
+        public async Task<ProcessResult> RunAsync(ProcessRequest request, CancellationToken ct = default)
+        {
+            if (!string.Equals(request.Executable, FakeCliExe, StringComparison.OrdinalIgnoreCase))
+            {
+                return ConsultantRan && GitRefused
+                    ? new ProcessResult(128, string.Empty, "fatal: the test made git refuse after the consultant ran", TimedOut: false)
+                    : await inner.RunAsync(request, ct);
+            }
+
+            BeforeConsultant?.Invoke();
+            ConsultantRan = true;
+
+            return Consultant is { } consultant ? await consultant(request, ct) : await inner.RunAsync(request, ct);
+        }
+    }
+
     public async ValueTask InitializeAsync()
     {
         _repo = Directory.CreateTempSubdirectory("coai-consult-repo-").FullName;
@@ -92,6 +127,7 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
     /// hands in a decorator of the real one; that seam is the only deterministic way to that moment.
     /// </param>
     /// <param name="reviewerTimeout">The launch's own deadline, which the turn's is derived from.</param>
+    /// <param name="noticing">Where the refusals' notices go — by default nowhere.</param>
     protected PanelService Service(
         int turns = 5,
         int callsPerSession = 10,
@@ -100,7 +136,8 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
         IReadOnlyDictionary<string, ConsultantChoice>? consultants = null,
         Serilog.ILogger? log = null,
         IProcessLauncher? launcher = null,
-        TimeSpan? reviewerTimeout = null) => new(
+        TimeSpan? reviewerTimeout = null,
+        Noticing? noticing = null) => new(
         new PanelSettings
         {
             Providers = providers ?? [new("codex") { ExecutablePath = FakeCliExe }],
@@ -115,7 +152,7 @@ public abstract class ConsultScenarioBase : IAsyncLifetime
         VaultKeys.None("no vault in tests"),
         default,
         launcher ?? _launcher,
-        log ?? Logger.None, Noticing.None);
+        log ?? Logger.None, noticing ?? Noticing.None);
 
     protected static readonly string[] CallerVariables =
         ["COAI_CALLER_SESSION", "CLAUDE_CODE_SESSION_ID", "CODEX_SESSION_ID", "GEMINI_CLI_SESSION_ID"];

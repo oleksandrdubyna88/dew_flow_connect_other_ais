@@ -139,7 +139,13 @@ public sealed record LoggedConsultation(
     /// <summary>The plan a cadence or risk consultation was about, as the caller wrote it; empty for a stuck one.</summary>
     string Plan = "",
     /// <summary>The group (<c>4-6</c>) or the item (<c>7/7.2</c>) it covered; empty for a stuck one.</summary>
-    string Epics = "");
+    string Epics = "",
+    /// <summary>Why its last turn failed (shared/consult-failure-kinds.json); empty when nothing failed, or for a row from before step 19.</summary>
+    string FailureKind = "",
+    /// <summary>What a person can do about it; empty with it.</summary>
+    string FailureCure = "",
+    /// <summary>Where the failed turn's transcript was kept — a path on the side that ran it; empty when nothing was.</summary>
+    string Evidence = "");
 
 /// <summary>How often one kind of thing was accepted — a category, a role, or a vendor.</summary>
 public sealed record BlindSpot(string Kind, string Name, int Accepted, int Total);
@@ -686,7 +692,8 @@ public static class RoundsQuery
                     Real(rows, "seconds"), Big(rows, "tokens_in"), Big(rows, "tokens_out"),
                     MaybeReal(rows, "cost_usd"),
                     Text(rows, "problem"), Text(rows, "advice"), Text(rows, "alert"),
-                    Text(rows, "kind"), Text(rows, "plan"), Text(rows, "epics")));
+                    Text(rows, "kind"), Text(rows, "plan"), Text(rows, "epics"),
+                    Text(rows, "failure_kind"), Text(rows, "failure_cure"), Text(rows, "evidence")));
             }
         }
         catch (SqliteException e) when (e.SqliteErrorCode == SqliteNoSuchTable && Missing(e))
@@ -708,29 +715,40 @@ public static class RoundsQuery
 
     /// <summary>The newest shape this file has, asked rather than assumed — the steps are ordered, so one column each tells.</summary>
     private static string ConsultationsShape(SqliteConnection db) =>
-        HasColumn(db, "consultations", "kind") ? SqlConsultationsKinded
+        HasColumn(db, "consultations", "failure_kind") ? SqlConsultationsClassified
+        : HasColumn(db, "consultations", "kind") ? SqlConsultationsKinded
         : HasColumn(db, "consultations", "outcome_by") ? SqlConsultationsAuthored
         : HasColumn(db, "consultations", "outcome") ? SqlConsultationsEnded
         : SqlConsultationsPlain;
 
     /// <summary>
-    /// The consultations page, in the four shapes a database can be in — written out, not composed.
+    /// The consultations page, in the five shapes a database can be in — written out, not composed.
     /// </summary>
     /// <remarks>
     /// <para>Three literals for the same reason the rounds page has two, and the reason is in the
     /// comment above those: one text with the columns spliced in reads as SQL built at runtime to
     /// every scanner and to a person skimming, and a query that needs a paragraph to prove it is
     /// safe costs more than the duplicated lines that need none.</para>
-    /// <para>Four rather than eight, because the steps are ORDERED: a file with <c>outcome_by</c>
+    /// <para>Five rather than sixteen, because the steps are ORDERED: a file with <c>outcome_by</c>
     /// has <c>outcome</c>, since the step that adds the second ran after the step that adds the
-    /// first, and a file with <c>kind</c> has both. The missing columns are substituted as what they
-    /// mean — nobody recorded a verdict, and nobody is not <c>solved</c>; and before the kinds every
-    /// consultation was an agent that was stuck, so <c>stuck</c> is the truth, not a guess.</para>
+    /// first, a file with <c>kind</c> has both, and a file with <c>failure_kind</c> has all three. The
+    /// missing columns are substituted as what they mean — nobody recorded a verdict, and nobody is not
+    /// <c>solved</c>; before the kinds every consultation was an agent that was stuck, so <c>stuck</c> is
+    /// the truth, not a guess; and before step 19 no failure was ever classified, which is the empty string
+    /// a classified row uses for "nothing failed".</para>
     /// </remarks>
+    private const string SqlConsultationsClassified = """
+        SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
+               outcome, outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
+               problem, advice, alert, kind, plan, epics, failure_kind, failure_cure, evidence
+        FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
+        """;
+
+    /// <summary>The same page against a file written before a failure could be classified.</summary>
     private const string SqlConsultationsKinded = """
         SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
                outcome, outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
-               problem, advice, alert, kind, plan, epics
+               problem, advice, alert, kind, plan, epics, '' AS failure_kind, '' AS failure_cure, '' AS evidence
         FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
         """;
 
@@ -738,7 +756,8 @@ public static class RoundsQuery
     private const string SqlConsultationsAuthored = """
         SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
                outcome, outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
-               problem, advice, alert, 'stuck' AS kind, '' AS plan, '' AS epics
+               problem, advice, alert, 'stuck' AS kind, '' AS plan, '' AS epics,
+               '' AS failure_kind, '' AS failure_cure, '' AS evidence
         FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
         """;
 
@@ -746,7 +765,8 @@ public static class RoundsQuery
     private const string SqlConsultationsEnded = """
         SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
                outcome, '' AS outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
-               problem, advice, alert, 'stuck' AS kind, '' AS plan, '' AS epics
+               problem, advice, alert, 'stuck' AS kind, '' AS plan, '' AS epics,
+               '' AS failure_kind, '' AS failure_cure, '' AS evidence
         FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
         """;
 
@@ -754,7 +774,8 @@ public static class RoundsQuery
     private const string SqlConsultationsPlain = """
         SELECT id, caller_kind, repo_path, branch, vendor, model, turns, status, reason,
                '' AS outcome, '' AS outcome_by, started_utc, ended_utc, seconds, tokens_in, tokens_out, cost_usd,
-               problem, advice, alert, 'stuck' AS kind, '' AS plan, '' AS epics
+               problem, advice, alert, 'stuck' AS kind, '' AS plan, '' AS epics,
+               '' AS failure_kind, '' AS failure_cure, '' AS evidence
         FROM consultations ORDER BY started_utc DESC, id DESC LIMIT $limit
         """;
 

@@ -71,6 +71,10 @@ sequenceDiagram
 | `ProcessEnvironment.Minimal`, `ProcessRequest.Passthrough` | `Processes/ProcessEnvironment.cs`, `ProcessLauncher.cs` | the measured minimal list a question child starts from (S2c), chosen per request: the launcher's filter took its allowlist from the request rather than growing a second flag |
 | `FeatureOutlineBuilder.BuildAtHeadAsync` | `Feature/FeatureOutlineBuilder.cs` | the outline of what EXISTS at a commit — against the repository's empty tree, no member hunks — what an api question row is shown of the code |
 | `RetryLadder` | `Reviewers/RetryLadder.cs` | the waits and when to stop: four steps, jittered, bounded by the reviewer's own deadline; pure, so the jitter is a table rather than a stopwatch |
+| `ClaudeCapability`, `RestrictedSupport` | `Reviewers/ClaudeCapability.cs` | what the INSTALLED claude's own `--help` says about `--restricted` — `Declared`, `NotDeclared`, `Unknown` (the help did not come back), or `Unprobed` — read through the launcher (10 s per ask, tree-killed, one retry on `Unknown`) on every launch, never cached. Carried into a pure `Build` on `ReviewerSettings.ClaudeCli` (default `Unprobed`, which the consultant's `Build` refuses); the reviewer is planned to read it too (the section *The claude consultant is confined by an allowlist*) |
+| `ConsultantPreparation` (`Ready` / `Refused`) | `Consultation/IConsultantRuntime.cs` | what `IConsultantRuntime.PrepareAsync` concluded before `Build`: a launch with the confinement it will be SENT and a log note, or a classified refusal the service applies like any failure |
+| `HostKind`, `HostKinds` | `Platform/HostKind.cs` | `Windows / Linux / Wsl / MacOs / Other` from `OperatingSystem` + `VendorDiagnosis.OnWsl`; the one answer to "which platform" for the limitations and the health files' `side` |
+| `ConsultantLimitations`, `ConsultantLimitation`, `LimitationEvidence` | `Consultation/ConsultantLimitations.cs` | `shared/consultant-limitations.json`, embedded and read through a source-generated context; fails closed on a row without exactly one kind of evidence; `Lookup(host, runtime, capability = "")` takes a qualifier WORD (a claude overload passes `ClaudeCapability.Qualifier`) and never answers with another platform's row |
 
 ## The decisions a reader needs
 
@@ -1182,6 +1186,278 @@ a fresh launch — met the same denial.
 `first.Adapter?.FollowUp(first, transcript) ?? repair`, inside the same remaining deadline, billed like any
 repair; its answer is parsed like any repair's. On the real CLI the continued conversation answered with the
 schema's JSON in turn 2. A Team-server reviewer is not covered — its conversation lives on the server (#515).
+
+## A CONSULTANT whose permission was denied is continued once too (2026-10-02)
+
+The #504 fix above never reached a consultation: `ConsultationService.RunTurnAsync` called
+`ReviewerExecutor.LaunchAsync`, which makes exactly one launch, so an antigravity consultant that reached for
+`run_command` ended EMPTY and the caller was told to sharpen its problem (twice, on 2026-10-02, with the
+transcripts kept). Reusing the reviewer's `FollowUp` as it was would have been wrong twice: its `NoCommands`
+asks for the schema's JSON, and it APPENDED `--conversation`, which a resumed consultation turn already
+carries.
+
+- **`AntigravityStream.Continue(first, conversation, message)`** is the one way to continue a conversation:
+  it REPLACES an existing `--conversation` value or appends the flag, and swaps stdin. It checks what it
+  writes where it writes it: the id must pass `ConsultantHandle.IsWellFormed` (a `--x` would read as a flag)
+  and the argv it returns must pass `ConsultantLaunches.MustCarryNoLineBreak`; a violation throws
+  `ArgumentException` — a contract violation, as `MustBeLaunchable` treats a handle. The reviewer's
+  `FollowUp` calls it with its unchanged `NoCommands` after asking `IsWellFormed` itself (an id that check
+  refuses gets no follow-up, so no exception reaches the executor's failure path) — its argv has no
+  `--conversation`, so its bytes did not move (`ADeniedCommandIsAskedAgainTests` unchanged).
+- **`AntigravityStream.DeniedActions(stdout, stderr)`** reads the permission ACTION words out of
+  `result.denied_actions` (parsed as JSON; only `^[a-z][a-z_]{0,39}$` words, since the word is put into text
+  the model reads) and out of the stderr `auto-denied` sentence — stderr only, because stdout carries the
+  model's own tool parameters. A step's `state` is never a signal: a denied step reported `DONE` in the
+  measurements. `WasDenied` is untouched, for the reviewer.
+- **`IConsultantRuntime`** gained defaulted `FollowUp(first, launched)`, `DeniedActions(launched)` and
+  `Toolbox`. `AntigravityConsultant` offers a follow-up only when a permission on the ALLOWLIST was denied
+  and its own `ReadHandle` names the conversation; whether the launch answered is `ConsultantTurn`'s
+  question alone. The allowlist is `AntigravityFollowUps.For`: `command` gets the measured text —
+  *"…run_command was denied and will stay denied. Do not call it again, and do not plan, schedule or
+  delegate the work. Read the files you need with view_file, then answer now, in plain prose…"* — and
+  `read_file` / `read_url` the same shape naming the permission (not measured). ANY other word
+  (`write_file`, `mcp`, …) gets no follow-up and the turn ends on its empty answer: a word earns a follow-up
+  by being measured, not by being seen.
+- **`ConsultantTurn.RunAsync`** makes one launch or two, never three. The second only when the first
+  answered nothing AND a follow-up is offered AND the launch budget has time left AND the tree is still
+  clean (the service's `changesSoFar` re-snapshots through the filesystem invariant) AND time STILL remains
+  once that snapshot is done — the remainder is measured again after it, and a zero remainder spawns
+  nothing (`ReviewerExecutor.NoRepairToRun`'s rule for the repair). The follow-up's timeout is
+  `RetryLadder.Lesser(left, next)` — the lesser of what remains and its own, the ONE copy of that arithmetic,
+  which the reviewer's repair now calls too — so the LAUNCHER kills a hung follow-up before the turn's own
+  `ConsultationDeadline` (T + T/4) does, and the turn stays resumable. `ConsultantTurnResult` is
+  `Launches` (one or two — the same shape the service's failure path collects through `landed`, read by the
+  same `SurvivingHandle` / `UsageOf`; `Final` and `FollowedUp` derive from it), `ChangesBeforeFollowUp`
+  (`Breached` is that list being non-empty — the service reports a breach from THESE changes and takes no
+  second snapshot; any other turn gets the final comparison), `SurvivingHandle` (the last launch that named
+  one — a killed follow-up does not lose the conversation) and `TurnUsage`.
+- **Billing.** `ConsultationUsage.OfTwoLaunches(cumulative, first, second)`: antigravity reports usage per
+  CONVERSATION, so a two-launch turn is the field-wise MAXIMUM of the two reports (a timed-out follow-up
+  reports `Usage.None` and must not erase the first launch's tokens); any other vendor, the sum. The
+  service's `ThisTurnsShare` — which subtracts the conversation's earlier turns, now
+  `ConsultationBilling.ThisTurnsShare` — runs on EVERY path that records usage (tree-changed, empty,
+  terminal, deadline, success), not only on success; and the caller's answer reports that same share
+  (`ConsultationBilling.ReplyCost`), where it used to report the turn's whole usage — invisible through any
+  shipped vendor, since antigravity reports no money, so it is a unit test (`ConsultationBillingTests`).
+- **The prompt.** `ConsultantPromptInput.Toolbox`, under "## What you have", from the adapter of the
+  record's frozen runtime: for antigravity, that `view_file` is its only read tool and shell commands are
+  refused automatically. Measured: in `--mode plan` the model does NOT have `grep_search`, `find_by_name` or
+  `list_dir`, although `init` declares them ([RESULTS_agy_consult_follow_up.md](RESULTS_agy_consult_follow_up.md)).
+  `ConsultationTurn.FollowedUp` records a turn that needed the second launch.
+
+Measured before it was built (agy 1.2.15, Windows and WSL): the prose follow-up answered **6 of 6** without
+reaching for the shell again. What the turn's FAILURES are called, and what the caller and the panel are told,
+is the section below — epic 2 of [PLAN_the_consultant_works_on_every_vendor.md](PLAN_the_consultant_works_on_every_vendor.md).
+
+## A failed consultation turn is classified, and its evidence is bounded (2026-10-02, epic 2)
+
+Epic 2 of [PLAN_the_consultant_works_on_every_vendor.md](PLAN_the_consultant_works_on_every_vendor.md).
+The runners' half: the classification and the evidence. The record, the database, the health files and the
+give-back are the server's half ([module_server.md](module_server.md)).
+
+- **`ConsultFailure`** (`runners/Consultation/ConsultFailure.cs`) is a closed record hierarchy, one case per
+  thing a person would do differently: `command-denied`, `read-denied`, `empty`, `quota`, `rate-limited`,
+  `vendor-refused`, `cli-not-found`, `timeout`, `deadline`, `exit`, `tree-changed`, `conversation-dropped`,
+  `record-failed`, `cancelled`. Each carries its `What(vendor)` and its `Cure`, so the sentence and the remedy
+  cannot be written apart again; `GivesTheCallBack` (every kind but `cancelled` and `tree-changed`) and
+  `DoNotRetry` (`command-denied`, `empty`) are properties of the case. `ConsultFailureKinds` holds the words;
+  `shared/consult-failure-kinds.json` is the vocabulary both halves of the product hold, and
+  `ConsultFailureTests` compares it with the cases and the constants BY REFLECTION.
+- **`ConsultFailures.Classify(consultant, final, runtime)`** reads the launch the turn stands on with what
+  already reads a vendor's words: the executor's `ReviewerOutcome` (`NotStarted` → `cli-not-found` with
+  `VendorDiagnosis.InstallCure`; `TimedOut` → `timeout`, or `cancelled` when the launch's new `Cancelled` flag —
+  `ProcessResult.Cancelled`, read off `ReviewerLaunch.Process` — says the caller's token killed it (since epic
+  2's review the SERVICE decides that from the tokens' state and passes it in as `killedAs`: the launcher flags
+  `Cancelled` for the linked turn token, so the launch alone cannot tell caller from deadline);
+  `RateLimited` → `quota` / `rate-limited` by `RateLimit.Hopeless`; `NonZeroExit` → the diagnosis), the
+  ADAPTER's own reading of a clean empty exit (`IConsultantRuntime.SilentFailure(launched, unexplained)`, since the
+  whole-branch review of 2026-10-03, F — it read agy's words for every vendor before): antigravity maps `command` →
+  `command-denied` and `read_file`/`read_url` → `read-denied` (`AntigravityFollowUps.Failure`, the same allowlist its
+  follow-up answers from); claude maps a refused `Read`/`Glob`/`Grep` in its envelope's `permission_denials` →
+  `read-denied` naming the tool (never `command-denied`: it is offered no shell, and that kind's sentence describes agy's
+  follow-up); every other vendor says nothing, and the answer is `empty` with `ReviewerExecutor.Complaint` — read from
+  the kept transcript, or from the process's own stderr when there is none), and `DroppedTheConversation`. An ending that is no exit
+  (`Unparseable`, `StoodDown`) is `empty` with its description, never an invented "exit 0". Every word taken
+  from the vendor goes through `Redaction.SafeText` (`ConsultFailures.Safe`) before it is part of a failure.
+  `Transient` (`timeout`, `rate-limited`, `deadline`, `record-failed`) is what may be resumed, and `DoNotRetry`
+  is every kind that is neither transient nor `tree-changed` / `cancelled`. `InvitesAReframedAsk` (`command-denied`,
+  `empty`) marks the two whose cure is to ask differently, so the caller is told a NEW consult naming the files is the
+  move instead of "do not retry" (the whole-branch review, M); the timeout's cure names *Reviewer timeout, minutes* on
+  the Limits tab, where the panel shows it. `ConsultFailures.InstallCureFor(runtime)` is public now, for the claude
+  refusal below.
+  The agy quota stream (`AGY_ERROR … RESOURCE_EXHAUSTED (code 429): Individual quota reached`, exit 3) reads as
+  `quota`.
+- **`VendorDiagnosis`** gained a `DiagnosisKind` column and `Classify(text)` returning `Diagnosis(Kind, Cure)`;
+  `For(text)` is now `Classify(text)?.Cure` — the same table in the same order, so a cure and a classification
+  cannot drift. One row was added: `unknown option` (claude 2.1.197 refusing `--restricted`, measured
+  2026-10-02) → `UnknownOption`, "update the CLI" — which a reviewer meeting that sentence now reads too.
+  `NotOnPath` classifies as `cli-not-found`; every other kind as `vendor-refused`.
+- **`EvidenceFile.Keep(directory, fileName, text, failed)`** (`runners/Files/EvidenceFile.cs`) is the reviewers'
+  `KeepIn`/`Bounded`/`Discard`, extracted: written through `AtomicFile` (a GUID temp moved over the name, the
+  temp removed when the move fails — `AtomicFile` gained that cleanup and an optional sharing retry), capped at
+  64 KB, never fatal, and answering `string.Empty` rather than null when nothing was kept. `ReviewerExecutor.KeepIn` calls it with the same name and note as before; the consultation's
+  `KeepEvidence` — which wrote unbounded and non-atomically — calls it too, now for every failed launch with a
+  transcript, not only an empty answer.
+- **`FilesystemInvariant.SnapshotAsync`** throws `OperationCanceledException` for a cancelled token. The
+  launcher never throws on cancellation (it reports `TimedOut: true, Cancelled: true`), so a `git status` killed
+  by the turn's deadline surfaced as a `ContextException` and the turn said "the answer could not be recorded";
+  and a token already cancelled still ran git. Now the service's arms decide by the token's state: the
+  caller's cancellation → `cancelled`, the turn's own deadline → `deadline`.
+
+## The claude consultant is confined by an allowlist, and every limitation says where it was measured (2026-10-03, epic 3)
+
+Epic 3 of [PLAN_the_consultant_works_on_every_vendor.md](PLAN_the_consultant_works_on_every_vendor.md),
+E3.2 and E3.3; E3.1 is the measurement, [RESULTS_claude_consultant_confinement.md](RESULTS_claude_consultant_confinement.md).
+
+**The claude consultant's argv, chosen by the installed CLI.** The deny-list (`--disallowedTools Edit Write
+NotebookEdit Bash WebFetch WebSearch Task Agent`) is gone: it never named PowerShell, and on Windows it leaked a
+canary outside the repository 6 of 6 while offering the user's whole tool set (2026-10-01,
+`RESULTS_question_consultant_capabilities.md` on branch `feat/question-consultant`). `ClaudeConsultant.Build` now
+sends exactly
+
+```
+-p --output-format json --permission-mode plan [--restricted] --tools Read,Glob,Grep --strict-mcp-config --add-dir <repo> [--resume <h>] [--model <m>]
+```
+
+`--tools` takes ONE argument, `Read,Glob,Grep` — an allowlist, so a shell, an edit tool, the network or a
+sub-agent is absent rather than denied. `--restricted` (it confines the file tools to the working directories
+and `--add-dir`) is sent only when the installed CLI declares it: Windows 2.1.258 was confined 9 of 9 with it,
+fresh and resumed, sign-in intact; WSL 2.1.197 refuses any launch carrying it (`error: unknown option
+'--restricted'`, exit 1). Without it the allowlist held 9 of 9 in WSL but leaked on Windows on 2026-10-01, so it is
+never called confinement. The golden argv tests (`ClaudeConsultantArgvTests`, supported/unsupported × fresh,
+resumed, model) assert what is SENT; the evidence of effect is the committed probe,
+`scripts/probe-claude-consultant-confinement.mjs`. The claude REVIEWER (`ClaudeRuntime`) did not change — its own
+allowlist is [PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md](../todo/PLAN_the_claude_reviewer_is_confined_by_an_allowlist.md).
+
+- **`ClaudeCapability`** (`runners/Reviewers/ClaudeCapability.cs`, a record `(RestrictedSupport Support, string
+  Reason, bool CouldNotStart = false)`). Since the whole-branch review (L): a help the launcher cut short (`Truncated`)
+  is `Unknown` before anything is read from it — fail closed, a `--restricted` line further down is simply not in the
+  head — and an executable that could not be STARTED is `Unknown` with `CouldNotStart`, which
+  `ClaudeConsultant.PrepareAsync` refuses as `cli-not-found` with the install cure rather than `vendor-refused`. `ProbeAsync(launcher, executable, workingDirectory, ct)` — the one public probe — runs `<claude> --help`
+  through the shared `ProcessLauncher` under a 10 s `ProbeTimeout` (the launcher kills the tree past it) and keeps
+  **three answers apart** (epic 3's code round, security): `Declared` (the help came back and lists the flag),
+  `NotDeclared` (it came back without it), `Unknown` (a timeout, a non-zero exit, an empty help, or a CLI that
+  could not be started — `Win32Exception`, `IOException`, `InvalidOperationException`, as `VendorProbe`). The first
+  build read every failure as "no", which LAUNCHED the consultant without `--restricted` — so a hung help on a
+  claude that has the flag ran an unconfined consultant. `Unknown` is asked ONCE more; a second `Unknown` refuses
+  the turn (below). The caller's cancellation is rethrown, never read as an answer. `Unprobed` is the fourth state:
+  nobody asked. `RestrictedIn(helpText)` is the pure parse: ANSI colour is stripped first (a CLI forced into colour
+  prints `\e[36m--restricted\e[39m`); a line counts only in the option column format — option tokens and value
+  placeholders, then two or more spaces before the description, or nothing after them (a header whose description
+  wraps below) — at an option's indentation (under column 8: commander wraps descriptions at column 40, and
+  2.1.258's own table has a continuation line BEGINNING `--tools names them, …`); EVERY long name on the line is read
+  (`--sandbox, --restricted`); and a declaration with a REQUIRED value (`--restricted <mode>`,
+  `--restricted=<mode>`) is NOT support — sent bare before `--tools`, it would swallow `--tools` as its value. So prose,
+  `--restricted-mode` and a value-taking flag all read as not declared. **Asked on every turn, never cached** (risk
+  consultation 264fbcf2, 2026-10-03): a long-lived server's remembered answer survives an in-place upgrade of the
+  CLI; measured cost 0.26–0.86 s on Windows and 0.35–0.49 s in WSL. In `Reviewers` rather than `Consultation`
+  because the reviewer plan reuses it. The two real help texts are fixtures
+  (`tests/fixtures/claude/help-2.1.258-windows.txt`, `help-2.1.197-wsl.txt`); the coloured cases colour those.
+- **The seam.** `ReviewerSettings.ClaudeCli` carries the fact into `Build`, which stays pure — a field on the shared
+  settings rather than on `ConsultantLaunch`, because the reviewer's `ClaudeRuntime.Build` takes `ReviewerSettings`
+  and will read the same field; `Dialect` and `Price` are the precedent for vendor-specific launch data there. It
+  defaults to `Unprobed`, which `ClaudeConsultant.Build` REFUSES with an `ArgumentException` (as
+  `MustBeLaunchable` refuses a malformed handle), and so does `Unknown`: a call site that builds a claude consultant
+  without preparing it fails in its first test instead of shipping an unconfined argv — the guard caught two test
+  call sites on the day it landed. `IConsultantRuntime.PrepareAsync(launch, launcher, ct)` is a defaulted member
+  returning `ConsultantPreparation.Ready(launch, "", "")`; `ClaudeConsultant` overrides it to probe its CLI (the same
+  `Executable(settings)` the launch uses, so the two cannot be different programs) and answers
+  `Ready(launch, qualifier, "qualifier: reason")` for `Declared`/`NotDeclared` and
+  `Refused(VendorRefused(reason, NoAnswerCure))` for `Unknown`. The service calls `PrepareAsync` for EVERY consultant
+  just before `Build` (`ConsultationService.RunTurnAsync`) — no branch on the vendor in a file already past the
+  ceiling, and E4's Check reuses the same seam.
+- **A refusal before the launch.** `RefusedBeforeTheLaunch` applies `ConsultationFailing.BeforeTheLaunch` (a
+  non-transient `vendor-refused`, so the consultation ENDS, as every non-transient failure does since epic 2) through
+  the ordinary failure path — record, give-back, ledger, health file, answer — with the cure *"claude --help did not
+  answer, so coai cannot tell whether --restricted is supported and will not launch it unconfined — check the CLI
+  (`claude --help`) or choose another consultant"*, logged at Warning. Nothing is launched and nothing is billed.
+- **What was SENT is recorded.** `Ready.Confinement` (`restricted` / `no-restricted` for claude, empty for every
+  other vendor) is put on the `asking` record as `ConsultationRecord.Confinement`, so every ending derived from it
+  carries it; an answered turn copies it into `ConsultationTurn.Confinement`, and both health files
+  (`ConsultHealthAnswer`, `ConsultHealthFailure`) carry it. A refusal records it empty — nothing was sent. E4 shows
+  this word rather than its own fresh probe, because a claude upgraded since the turn would otherwise be credited
+  with a confinement that turn never had. Every turn's `qualifier: reason` is logged at Information.
+- **A claude that still refuses** — a shim resolving to another install, a downgrade between the probe and the
+  launch — fails with `unknown option`, which epic 2's `VendorDiagnosis` row already classifies `vendor-refused`
+  with "update the CLI" (`ConsultOnClaudeScenarioTests`).
+
+**The limitations, as data.** `shared/consultant-limitations.json`, embedded in `CoaiMcp.Runners`
+(`CoaiMcp.Runners.consultant-limitations.json`) and read through a source-generated context
+(`ConsultantLimitationsJson`) — no reflection for the AOT trimmer. One row per runtime × platform
+(`windows|linux|wsl|macos`), for claude also per capability (`restricted` / `no-restricted`), each with a
+`standing` (`confined|unconfined|default-deny|unmeasured`), an English `text`, and EXACTLY one of `measured`
+{date, cliVersion, cells, document} or `source` (why we believe a row nobody measured here). Antigravity rows
+carry `settingsPath` (`%USERPROFILE%\.gemini\antigravity-cli\settings.json` on Windows,
+`~/.gemini/antigravity-cli/settings.json` on Linux/WSL), and the Linux and WSL rows alone carry `snippet` — the
+`command(git grep)` prefix rule measured to work there, with the warning that a prefix rule is not read-only
+([RESULTS_agy_allow_rule.md](RESULTS_agy_allow_rule.md)); on Windows agy honoured only exact command lines.
+`ConsultantLimitations` (`runners/Consultation/ConsultantLimitations.cs`) fails CLOSED: a missing resource, an
+unknown platform/standing/capability or a row with neither or both kinds of evidence throws on first use, naming
+the row and what is legal. `Lookup(host, runtime, capability = "")` is pure over the table and takes a qualifier
+WORD, decoupled from `ClaudeCapability` (epic 3's code round) so no other runtime's caller has to invent a claude
+value and a caller holding a turn's RECORDED confinement passes that word; a claude overload passes
+`ClaudeCapability.Qualifier`. It answers the row for that runtime ON THAT PLATFORM whose capability is empty or
+matches — so a claude without `--restricted` gets the not-confined row on Windows too, never the 9-of-9 row measured
+with the flag — else a synthesized `unmeasured` row; an empty word (a claude nobody could probe) matches no claude
+row. No platform inherits another's row; `HostKind.Other` and an unknown runtime are `unmeasured`. The rows the
+plan named are all there: codex unconfined (Windows measured, Linux/WSL from openai/codex#7657, macOS
+unmeasured), claude by capability — the Windows `restricted` row saying it was measured on 2.1.258 with its default
+model, the Windows `no-restricted` row a `source` (an inference from 2.1.258 run without the flag, not a measurement
+of a claude that lacks it) — antigravity default-deny (Linux measured in WSL2 Ubuntu, said in its cells), local and
+api confined by construction. E4's `--consultants` is the first reader.
+
+**`HostKind`** (`runners/Platform/HostKind.cs`, namespace `CoaiMcp.Runners.Platform` — moved out of `Reviewers`
+in the code round): `Windows | Linux | Wsl | MacOs | Other`, from
+`OperatingSystem` and `VendorDiagnosis.OnWsl` through the pure `HostKinds.Of(windows, linux, macOs, wsl)`;
+`HostKinds.Word` is the spelling. `ConsultHealth.Side()` now delegates to it, so a health file and the limitation
+beside it name one platform; a platform that is none of the four reads `other` (it used to fall through to
+`linux`).
+
+**The Linux agy path.** `AntigravityStream.InstalledExecutable` delegates to the pure
+`InstalledExecutableFor(host, localAppData, home, pathVariable, exists)`: `%LOCALAPPDATA%\agy\bin\agy.exe` on
+Windows (as before); on Linux and WSL an `agy` the PATH already has WINS (bare `agy`, found by the new
+`ExecutableResolver.OnPosixPath(command, path, exists)` — `:`/`/`-separated whatever the host, empty entries
+skipped), and only a PATH with none falls back to `$HOME/.local/bin/agy` when it exists — where `install.sh` puts
+it, and the binary every WSL measurement ran; so a server whose PATH lacks `~/.local/bin` no longer fails to start
+an `agy` that is right there, and the person's own install is never overridden by a stale one — and bare `agy`
+otherwise, macOS included (nothing here has run agy on a Mac).
+
+## The consultant's health is read and checked — the runners' half (2026-10-03, epic 4)
+
+Epic 4 of [PLAN_the_consultant_works_on_every_vendor.md](PLAN_the_consultant_works_on_every_vendor.md)
+built two one-shot modes in the server, `--consultants` and `--check-consultant` ([module_server.md](module_server.md),
+*The consultant's health, read and checked*). What they needed from this library:
+
+- **`ClaudeConsultant.DeniedActions` and `Denials`** — the claude twin of the antigravity adapter's: each entry of the
+  JSON envelope's top-level `permission_denials`, its `tool_name` (`Read`, `Glob`…) kept as claude spells it and — new
+  in epic 4's code round, `IConsultantRuntime.Denials` returning `DeniedAction(Action, Target)` — what the refused tool
+  was asked for (`tool_input.file_path`, `path` or `pattern`), so the check counts a refusal as the canary's only when it
+  names the canary. Read from that field and nowhere else — the `result` is the model speaking, and a model quoting the
+  field name has refused nothing; a torn envelope (a killed turn) and stderr are no record. The default `Denials` wraps
+  `DeniedActions` with empty targets, which is agy's case (its `denied_actions` carry no input) and the check's
+  `denied-by-cli-unattributed`. Since the whole-branch review (F) an empty claude turn whose envelope refused a read
+  tool classifies `read-denied` (`ClaudeConsultant.SilentFailure`); one that refused nothing is `empty` as before
+  (`ClaudeConsultantDeniedActionsTests`). `ClaudeConsultant.CapabilityExecutable` is the one copy of the executable its
+  `--help` is asked of — the survey asks the adapter instead of keeping its own.
+- **`HeldFile`** (`runners/Files/HeldFile.cs`) — the cross-process lock primitive, EXTRACTED: a file held open with
+  `FileShare.None`. `Take` answers a closed `Hold` — `Taken(stream)`, `Busy` (somebody holds it), `Unusable(cause)` (no
+  access, a directory in its place, no directory) — because "busy" and "cannot open" are different facts: the check
+  answered `already-checking` for a lock it could never take until epic 4's code round. `TryHold` keeps the old
+  null-for-both for its three older callers, which treat both as "not now"; `IsHeld` is unchanged; `Probe` answers
+  `Free` / `Held` / `Unknown` for a reader that must not read "cannot open" as "held"; `TakeWithin` waits out a reader's
+  momentary probe while the file is merely busy. `EngineLease`, `SessionTurn` and the server's `RepositoryLock` each held
+  their own copy of that open and its two catches; they now call this, and the consultant check's lock is built on it
+  rather than as a fourth copy. Its header states the residual: on Unix .NET implements `FileShare.None` as an advisory
+  `flock` — honoured between .NET processes, not across the WSL/Windows 9P boundary.
+- **`GitScratch.DeleteEvenIfReadOnly`** (`runners/Files/GitScratch.cs`) — moved out of `PanelService` (git marks
+  object files read-only, and `Directory.Delete` refuses them); the check deletes and sweeps its scratch repositories
+  with it.
+- **`ConsultantRoles.Check`** = `consult-check`, the LEDGER role of a check; the launch itself still carries `consult`
+  — it is the same turn a consultation makes.
+- **`ConsultantLimitation.SnippetWarning`** — the agy allow-rule snippet's warning (a prefix rule is not read-only)
+  as a FIELD of the row, so `--consultants` hands the panel both rather than prose to mine. The loader now refuses a
+  row with one of `snippet` / `snippetWarning` and not the other, and a snippet on any platform but linux/wsl
+  (requirement 13), naming the row.
 
 ## A failed repair still counts the malformed attempt (2026-09-26)
 

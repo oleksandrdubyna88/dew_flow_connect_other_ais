@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import { DEFAULTS } from '../settingsShape';
-import { click, controlFrom, createdElement, PageEvent, PageOption, panelState, runPanel, work } from './panelPageHarness';
+import { click, controlFrom, createdElement, PageEvent, PageOption, panelState, runPanel, selected, work } from './panelPageHarness';
 
 /** A select carrying these option values, built the way the harness builds one from a page. */
 function selectOf(...values: string[]): ReturnType<typeof controlFrom> {
@@ -156,4 +156,21 @@ test('a data-command button is bound by the page and a click posts exactly its c
 test('a box carries the placeholder the page drew, and a data attribute naming it is not one', () => {
   assert.equal(controlFrom('input', ' type="number" data-setting="reviewMinutes" placeholder="20 — calibrated default"').placeholder, '20 — calibrated default');
   assert.equal(controlFrom('input', ' type="number" data-setting="reviewMinutes" data-placeholder="x"').placeholder, '');
+});
+
+test('a command button carries the text it was drawn with, as a DOM’s textContent does', () => {
+  const page = runPanel(panelState('phrases', { phrases: [{ id: 'a', name: 'Ship it', text: 'make a pr' }] }));
+  const button = page.commands.find((one) => one.dataset['command'] === 'copyPhrase' && one.dataset['id'] === 'a');
+
+  assert.equal(button?.textContent, 'Ship it', 'a page that relabels a button could not be watched doing it');
+});
+
+test('an attribute selector naming ONE command answers that command’s buttons and no other', () => {
+  const copy = controlFrom('button', ' data-command="copyPhrase" data-id="a"');
+  const check = controlFrom('button', ' data-command="checkConsultant" data-id="claude"');
+
+  assert.deepEqual(selected('[data-command="copyPhrase"]', [], [copy, check], []), [copy]);
+  assert.deepEqual(selected('[data-command="checkConsultant"]', [], [copy, check], []), [check]);
+  assert.deepEqual(selected('[data-command="copy"]', [], [copy, check], []), [], 'a prefix is not the name, as a DOM’s exact match is not');
+  assert.deepEqual(selected('[data-command]', [], [copy, check], []), [copy, check]);
 });

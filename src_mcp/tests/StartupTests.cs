@@ -65,4 +65,19 @@ public sealed class StartupTests
     [Fact]
     public void HelpText_NamesTheClientConfigKey() =>
         Program.HelpText.Should().Contain("\"coai\"");
+
+    /// <summary>The whole-branch review, K: the help named three of the canary's four readings and none of its exits but 0 and 65.</summary>
+    [Fact]
+    public void HelpText_NamesEveryCanaryReading_AndTheCheckModesUnreadableExit()
+    {
+        var check = Program.HelpText[Program.HelpText.IndexOf("`--check-consultant", StringComparison.Ordinal)..];
+        check = check[..check.IndexOf("Configure it", StringComparison.Ordinal)];
+
+        foreach (var reading in (string[])[Server.CanaryReadings.Read, Server.CanaryReadings.DeniedByCli, Server.CanaryReadings.DeniedByCliUnattributed, Server.CanaryReadings.NotAttempted])
+        {
+            check.Should().Contain(reading);
+        }
+
+        check.Should().Contain("74");
+    }
 }
