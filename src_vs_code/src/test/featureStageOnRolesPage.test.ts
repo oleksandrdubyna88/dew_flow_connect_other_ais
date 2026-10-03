@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { FEATURE_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
 import { rowsAfter } from '../rolesEdit';
 import { CUSTOM_ROLES_SINCE, roleEdit, rolesHtml, type RolesPageState } from '../rolesPage';
-import { Node, runRolesPage } from './rolesPageHarness';
+import { Node, runRolesPage, presses } from './rolesPageHarness';
 
 /**
  * A role of one's own can be put in the FEATURE stage from the roles page (story S3.3 of
@@ -76,8 +76,8 @@ test('choosing it on the page moves the role to the feature stage, and the page 
   select.value = offered.find((value) => value === FEATURE_STAGE)!;
   page.fire('change', select);
 
-  assert.equal(page.posted.length, 1, 'one change is one edit');
-  const outcome = rowsAfter(before, roleEdit(page.posted[0]), new Set(), state(before).texts);
+  assert.equal(presses(page).length, 1, 'one change is one edit');
+  const outcome = rowsAfter(before, roleEdit(presses(page)[0]), new Set(), state(before).texts);
   assert.equal(outcome.kind, 'rows', `the host refused the move: ${JSON.stringify(outcome)}`);
   const after = outcome.kind === 'rows' ? outcome.rows : [];
   assert.equal(after.find((row) => row.id === 'Requirements')?.stage, FEATURE_STAGE);

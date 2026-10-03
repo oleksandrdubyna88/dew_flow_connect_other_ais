@@ -10330,3 +10330,75 @@ eight keys and says so.
   whose link resolves to one of those, storing the folder as it was picked.
 - **A prompt of your own named like a device (item 15's twin).** **Add a prompt…** refuses a title whose id is a
   Windows device name (`RESERVED_FILE_NAMES`), as the server's `RoleComposition.IsPromptId` now does.
+
+## The busy mark on the other webviews (2026-10-03, PLAN_busy_marks_on_every_webview)
+
+Design record: [PLAN_busy_marks_on_every_webview.md](PLAN_busy_marks_on_every_webview.md) — every webview is
+either marked or listed there with the reason it is not (its §3). The machinery is the panel's, included rather than
+copied:
+
+- **`busyMarkScript(painted, tracked)`** takes the message `type`s a page numbers. The panel's default is
+  `PANEL_TRACKED` (`setting`, `prompt`, `command`). A page posting a tracked type that must not be numbered (a typed
+  field) posts it through `vscode.postMessage` directly.
+- **`BusyHost`** (`busyHost.ts`) is one per open webview: an `InFlight`, with the webview as its only `Poster`.
+  - `track(message, work)` runs `tracked()` when `askOf` finds a number, and runs the work plainly otherwise.
+  - `heard(message)` answers a `ready` with the current count, which supersedes whatever the document was painted with.
+  - `snapshot()` gives what a full repaint paints.
+  - `dispose()` settles everything still running.
+  - A VS Code prompt opened by the work pauses the mark, as on the panel (`personWait.ts`).
+
+**E1 — the rounds log.** Every action on the page reads the rounds database through `coai-mcp`, measured at 694–930 ms
+a read. The page includes `BUSY_BAR`, `BUSY_CSS` and `busyMarkScript(IDLE, ['command'])`, and its three command posts
+go through `send` (the `[data-command]` buttons, export, findings). The host makes a `BusyHost` per open page
+(`RoundsLogPanel.listen`).
+
+What each command asks the host to do is now `workFor(command, hooks)` in `roundsLogMessages.ts`, moved there with
+`RoundsLogHooks` so it can be run in a test. It replaced eight `if`s in `received` that each `void`ed their hook.
+`ready` still goes to the push ledger as before; the busy host answers it as well. The page's "Reading what this round
+found…" stays beside the bar.
+
+**E2 — the key tab and the bugz review.** Both repaint by replacing the whole document, so each builder takes the host's
+snapshot (`usersPageHtml(…, busy)`, `ReviewView.busy`). A repaint in the middle of an action keeps the bar, and the
+new document's `ready` is answered — both pages posted `ready` before, and both hosts ignored it.
+
+- **Key tab** (`BUGS_KEYS_TRACKED`): the actions that go to the bugs server. Its `post()` helper now goes through
+  `send` with the pressed control. `copy` (clipboard) and `dismiss` (secret store) stay local and unnumbered.
+  `bugsKeysPanel.ts` tracks each press around its `Turns` run and paints the snapshot. `Turns` repaints the tab as
+  every action starts, so the painted snapshot is what carries the bar there.
+- **Bugz review** (`BUGZ_TRACKED`): `decide` and the presses that open something (`choose`, `openAt`, `openCurrent`,
+  `openTree`, `calls`, `openCall`).
+  - Not `comment`: it is saved as it is typed, and typing is not the panel working.
+  - Not `fetchReal`: an automatic queue of up to four reads, each with its own pending state on its row.
+  - The page's own queue helper was called `send(id)`, which would have shadowed the mark's door. It is `askReal(id)`
+    now.
+  - In `bugzReviewPanel.ts`, `received()` returns each case's work, and `listen()` passes EVERY message to `busy.track`, so
+    `askOf` alone decides what is numbered. The first version wrapped the slow cases one by one, and an `openCall` whose
+    reference did not parse skipped the wrapper and left its mark stuck (E2 code round). `queue()` returns the link it
+    adds, so a decision is held until it is written and redrawn. `listen()` makes the `BusyHost` and settles it with the
+    window.
+  - The key tab consumes `ready` in the busy host and starts no turn. It had always run a `ready` as a turn, and a turn
+    repaints the tab twice, so each repaint's `ready` could start another (E2 code round).
+
+**E3 — the roles and gate-commands tabs.** Each structural change re-reads every prompt or command file and redraws
+the tab. Typing is never numbered: those fields settle for 300 ms by design.
+
+- `settledWrites.queue` now answers when THAT command has been applied and the host's render has returned, and it never
+  rejects. A typed field answers when the write that finally carries it lands, keystrokes it replaced included. This
+  widens the module rather than adding a second queue.
+- **Roles** (`ROLES_TRACKED`): `add`, `addPrompt`, `removePrompt`, `restorePrompt`, `remove`, `finishDeletion`, and an
+  `edit` or `editPrompt` from a checkbox or select. Switching a role on reads every prompt. The page's field helper was
+  called `send`, which would have collided with the mark's door; it is `sendField` now, and a pick goes through `send`
+  while typing posts plainly.
+- **Commands** (`COMMANDS_TRACKED`): `switch`, `restage`, `add`, `remove`, `restore`. Not `text` or `retitle`, which are
+  both typing. Its one `post` helper goes through `send`, so untracked types pass straight through it.
+- Both pages post `ready` last and paint the host's snapshot. Both hosts get a `listen()` (one `BusyHost`, `ready`
+  consumed, each message tracked around `writes.queue`) and a `stillRunning()` for the redraw.
+
+Help, phrases, notifications, chat, chat restore and chat presets stay unmarked, each with the reason in the plan's §3.
+
+**The E3 code round** found that a roles `stage` pick was settled like typing. `fieldOf` keyed every string `edit`, so
+a pick waited 300 ms before it started, which the bar then counted, and skipped the drain of pending typing. Because a
+settled edit does not redraw, the role also stayed drawn in its old stage. The rule is `rolesFieldOf` in
+`rolesPage.ts` now, run by `rolesFieldOf.test.ts`: `stage` is a pick (`PICKED_ROLE_FIELDS`), applied at once and
+redrawn. The same round's suite found an import cycle between the two page runners; `camel` moved to
+`test/datasetName.ts`.

@@ -178,7 +178,7 @@ export function openPhrases(extension: vscode.ExtensionContext): void {
     // A text press is the person's setting, not an edit: in the queue it would flush a half-typed phrase,
     // and a failed save of it would read as "your text was not saved".
     if (!appliedTextControl(message, 'phrases page')) {
-      writes.queue(phraseEdit(message));
+      void writes.queue(phraseEdit(message));
     }
   });
   panel.onDidDispose(() => {

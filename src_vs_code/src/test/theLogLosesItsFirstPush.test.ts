@@ -188,7 +188,7 @@ function runPage(usageHtml = '', spotsHtml = ''): RunPage {
   const listeners: ((event: { data: unknown }) => void)[] = [];
   const element = () => ({
     innerHTML: '', textContent: '', hidden: false, value: '', className: '',
-    addEventListener() {}, getAttribute: () => null, setAttribute() {}, querySelectorAll: () => [],
+    addEventListener() {}, getAttribute: () => null, setAttribute() {}, removeAttribute() {}, querySelectorAll: () => [],
   });
   const seen: Record<string, ReturnType<typeof element>> = {};
   const document_ = {

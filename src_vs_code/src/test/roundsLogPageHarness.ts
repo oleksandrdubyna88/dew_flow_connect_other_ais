@@ -133,6 +133,7 @@ export interface Stub {
   addEventListener: (type: string, fn: () => void) => void;
   getAttribute: () => null;
   setAttribute: () => void;
+  removeAttribute: () => void;
   querySelectorAll: () => never[];
 }
 
@@ -149,6 +150,8 @@ export function stub(): Stub {
     },
     getAttribute: () => null,
     setAttribute() { /* the page sets attributes it never reads back here */ },
+    // A real element has one, and the busy bar calls it as the page loads (research/PLAN_busy_marks_on_every_webview.md).
+    removeAttribute() { /* nor removes any it reads back */ },
     querySelectorAll: () => [],
   };
 }

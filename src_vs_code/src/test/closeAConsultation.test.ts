@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { withoutSeq } from './panelPageHarness';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
@@ -176,7 +177,7 @@ function pageClickListener(): RunningPage {
   let click: ((event: { target: unknown }) => void) | undefined;
   const element = (): Record<string, unknown> => ({
     innerHTML: '', textContent: '', hidden: false, value: '', className: '',
-    addEventListener() {}, getAttribute: () => null, setAttribute() {}, querySelectorAll: () => [],
+    addEventListener() {}, getAttribute: () => null, setAttribute() {}, removeAttribute() {}, querySelectorAll: () => [],
   });
   const document_ = {
     addEventListener(kind: string, fn: (event: { target: unknown }) => void) {
@@ -212,8 +213,9 @@ test('pressing `record…` sends the consultation the person pointed at', () => 
   const before = posted.length; // the page posts `ready` when it loads; this is about the CLICK.
   click({ target: { closest: (selector: string) => (selector === '[data-command]' ? button : null) } });
 
+  // Numbered since the busy mark reached this page (research/PLAN_busy_marks_on_every_webview.md): checked, then compared without.
   assert.deepEqual(
-    posted.slice(before),
+    posted.slice(before).map((m) => withoutSeq(m as Record<string, unknown>)),
     [{
       type: 'command',
       command: 'closeConsultation',

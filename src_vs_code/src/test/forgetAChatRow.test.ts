@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { withoutSeq } from './panelPageHarness';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PANEL_COMMANDS } from '../panelView';
@@ -71,7 +72,7 @@ function pageClickListener(): RunningPage {
   let click: ((event: { target: unknown }) => void) | undefined;
   const element = (): Record<string, unknown> => ({
     innerHTML: '', textContent: '', hidden: false, value: '', className: '',
-    addEventListener() {}, getAttribute: () => null, setAttribute() {}, querySelectorAll: () => [],
+    addEventListener() {}, getAttribute: () => null, setAttribute() {}, removeAttribute() {}, querySelectorAll: () => [],
   });
   const document_ = {
     addEventListener(kind: string, fn: (event: { target: unknown }) => void) {
@@ -110,8 +111,9 @@ test('pressing the ✕ on a chat row sends the model as well as the vendor', () 
   const before = posted.length; // the page posts `ready` when it loads; this is about the CLICK.
   click({ target: { closest: (selector: string) => (selector === '[data-command]' ? button : null) } });
 
+  // Numbered since the busy mark reached this page (research/PLAN_busy_marks_on_every_webview.md): checked, then compared without.
   assert.deepEqual(
-    posted.slice(before),
+    posted.slice(before).map((m) => withoutSeq(m as Record<string, unknown>)),
     [{ type: 'command', command: 'forgetChat', id: 'codex', model: 'gpt-5.4' }],
     'the press did not send the vendor and the model as one message',
   );

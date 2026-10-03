@@ -155,7 +155,7 @@ function runPage() {
   let click: ((event: { target: unknown }) => void) | undefined;
   const element = (): Record<string, unknown> => ({
     innerHTML: '', textContent: '', hidden: false, value: '', className: '',
-    addEventListener() {}, getAttribute: () => null, setAttribute() {}, querySelectorAll: () => [],
+    addEventListener() {}, getAttribute: () => null, setAttribute() {}, removeAttribute() {}, querySelectorAll: () => [],
   });
   const document_ = {
     addEventListener(kind: string, fn: (event: { target: unknown }) => void) {

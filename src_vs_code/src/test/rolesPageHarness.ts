@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 
 import { rolesHtml, type RolesPageState } from '../rolesPage';
+import { busyBarOf, type Control, PageClock } from './panelPageHarness';
+import { camel } from './datasetName';
 
 /**
  * The roles page's own script, RUN — the harness two test files share.
@@ -124,10 +126,6 @@ export class Node {
   }
 }
 
-/** `data-remove-prompt` reaches the script as `dataset.removePrompt`, as a browser spells it. */
-export function camel(attribute: string): string {
-  return attribute.replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
-}
 
 /** The `<script>` the page ships, cut out of its own html. */
 export function pageScript(html: string): string {
@@ -169,6 +167,17 @@ export interface Page {
   readonly body: Style;
   /** What the page wrote to `document.documentElement.style` — the root, which `rem` is measured from. */
   readonly root: Style;
+  /** The busy bar, when the page was run on a clock and drew one (research/PLAN_busy_marks_on_every_webview.md, E3). */
+  readonly bar: Control | null;
+}
+
+/**
+ * What the person's presses posted: every post but the page's own load-time `ready`, without the busy mark's `seq` and
+ * `doc`. Whether a press is NUMBERED is rolesBusyMark.test.ts's question; these tests ask what it SAYS
+ * (research/PLAN_busy_marks_on_every_webview.md, E3).
+ */
+export function presses(page: Page): readonly Record<string, unknown>[] {
+  return page.posted.filter((one) => one['type'] !== 'ready').map(({ seq: _seq, doc: _doc, ...rest }) => rest);
 }
 
 /**
@@ -182,8 +191,9 @@ export interface Page {
 export function runRolesPage(
   state: RolesPageState,
   inDocument: Readonly<Record<string, readonly Node[]>> = {},
+  clock?: PageClock,
 ): Page {
-  return runPageHtml(rolesHtml(state, 'test-nonce'), inDocument);
+  return runPageHtml(rolesHtml(state, 'test-nonce'), inDocument, clock);
 }
 
 /**
@@ -194,7 +204,13 @@ export function runRolesPage(
 export function runPageHtml(
   html: string,
   inDocument: Readonly<Record<string, readonly Node[]>> = {},
+  /**
+   * A clock the test moves. Given, the page's timers run on it and the page's busy bar is answered by id; without it
+   * every timer runs at once and no bar is found, which is what every test written before the busy mark expects.
+   */
+  clock?: PageClock,
 ): Page {
+  const bar = clock === undefined ? null : busyBarOf(html);
   const posted: Record<string, unknown>[] = [];
   const listeners = new Map<string, ((event: unknown) => void)[]>();
   const heard: ((event: { data: unknown }) => void)[] = [];
@@ -222,7 +238,7 @@ export function runPageHtml(
     querySelector: (selector: string): Node | null => inDocument[selector]?.[0] ?? null,
     // An id answers only with the node a test put in the document under `#id` — never an inert stand-in,
     // which would let a page that looks up an element it never draws run as if it worked.
-    getElementById: (id: string): Node | null => inDocument[`#${id}`]?.[0] ?? null,
+    getElementById: (id: string): Node | Control | null => (id === 'busy-bar' && bar !== null ? bar : inDocument[`#${id}`]?.[0] ?? null),
     body: { style: new Style() },
     documentElement: { style: new Style() },
   };
@@ -247,8 +263,8 @@ export function runPageHtml(
         add(kind, handler);
       },
     },
-    (fn: () => void): number => { fn(); return 0; },
-    (): void => undefined,
+    clock?.setTimeout ?? ((fn: () => void): number => { fn(); return 0; }),
+    clock?.clearTimeout ?? ((): void => undefined),
   );
 
   return {
@@ -261,5 +277,6 @@ export function runPageHtml(
     },
     body: fakeDocument.body.style,
     root: fakeDocument.documentElement.style,
+    bar,
   };
 }

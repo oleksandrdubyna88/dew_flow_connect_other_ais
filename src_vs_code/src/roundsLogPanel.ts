@@ -3,48 +3,14 @@ import * as vscode from 'vscode';
 import { Escalation } from './escalations';
 import { LogRow, questionsHtml, roundsLogHtml } from './roundsLog';
 import { DbTotals, EMPTY_TOTALS } from './roundsDb';
-import { LogPeriod } from './logPeriod';
+import { BusyHost } from './busyHost';
 import { Push, PushLedger, Region } from './pushLedger';
-import { ExportedRow, LogCommand, logCommandOf, LogPageMessage } from './roundsLogMessages';
+import { LogCommand, logCommandOf, LogPageMessage, RoundsLogHooks, workFor } from './roundsLogMessages';
 import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
 
 /** What the page can ask the extension to do. Everything else is page state and never comes back. */
-export interface RoundsLogHooks {
-  /** Answer… under an open question. */
-  readonly onAnswer: (id: string) => Promise<void>;
-  /** Today / Week / Month / Year on the spending tab. */
-  readonly onUsageWindow: (window: string) => Promise<void>;
-  /** Today … All on *What it keeps missing*, which the server counts, so the host is asked. */
-  readonly onSpotsPeriod: (period: LogPeriod) => Promise<void>;
-  /** ✕ beside a vendor on the spending tab. */
-  readonly onForget: (provider: string) => Promise<void>;
-  /** Record how a consultation ended — the log is where every one of them is, lapsed included. */
-  readonly onCloseConsultation: (id: string) => Promise<void>;
-  /** The ✕ beside a CHAT row on the spending tab — a vendor and a model, not a vendor. */
-  readonly onForgetChat: (provider: string, model: string) => Promise<void>;
-  /**
-   * A row was opened, and wants to know what that round found.
-   *
-   * <p>The list stopped carrying findings — measured at 3.78 MB of a 3.83 MB payload, for rounds
-   * nobody had opened — so this is the read that replaces them, for the one round somebody clicked
-   * on. It answers with the state as well as the findings, because an empty list and a failed read
-   * are different things to say about a round.</p>
-   */
-  /**
-   * The person asked for these rounds as a file.
-   *
-   * <p>The rows travel WITH the request rather than being looked up here, for the same reason the
-   * findings request carries its round's identity: `latest.rows` is the unfiltered set as of the
-   * last tick, and a row somebody selected may already have left it.</p>
-   */
-  readonly onExport: (rows: readonly ExportedRow[]) => Promise<void>;
-  readonly onFindings: (
-    key: string,
-    round: { readonly sessionId: string; readonly stage: string; readonly number: number },
-  ) => Promise<void>;
-}
 
 /**
  * How long the panel waits for the page to say it is listening before assuming it is.
@@ -149,18 +115,32 @@ export class RoundsLogPanel {
     this.rebuilt();
 
     const text = pushTextControlsTo(panel.webview);
-    panel.webview.onDidReceiveMessage((message: LogPageMessage) => {
-      if (!appliedTextControl(message, 'review rounds page')) {
-        this.received(logCommandOf(message));
-      }
-    });
-
+    const busy = this.listen(panel);
     panel.onDidDispose(() => {
+      busy.dispose();
       text.dispose();
       this.panel = undefined;
       this.clearAssumption();
       this.ledger.rebuilt();
     });
+  }
+
+  /**
+   * Hears the page, and answers it with what is running: the page's busy mark
+   * (research/PLAN_busy_marks_on_every_webview.md, E1). One `BusyHost` per open page, made with it and settled — by the
+   * caller's dispose — when it closes.
+   */
+  private listen(panel: vscode.WebviewPanel): BusyHost {
+    const busy = new BusyHost({ post: (message) => { void panel.webview.postMessage(message); } });
+    panel.webview.onDidReceiveMessage((message: LogPageMessage) => {
+      if (!appliedTextControl(message, 'review rounds page')) {
+        // `ready` is answered with what is running AND goes on to the ledger, which needs it as much.
+        busy.heard(message);
+        this.received(logCommandOf(message), (work) => busy.track(message, work));
+      }
+    });
+
+    return busy;
   }
 
   /** Pushes what changed — the rows, the spending region, or both — and nothing when nothing did. */
@@ -212,7 +192,7 @@ export class RoundsLogPanel {
    * to nobody — `postMessage` answers true for a webview that merely exists, and one exists from the
    * moment `webview.html` is assigned.</p>
    */
-  private received(command: LogCommand): void {
+  private received(command: LogCommand, track: (work: () => Promise<void>) => Promise<void>): void {
     if (command.kind === 'ready') {
       this.ledger.ready();
       this.clearAssumption();
@@ -220,30 +200,11 @@ export class RoundsLogPanel {
 
       return;
     }
-    if (command.kind === 'answer') {
-      void this.hooks.onAnswer(command.id);
-    }
-    if (command.kind === 'usageWindow') {
-      void this.hooks.onUsageWindow(command.window);
-    }
-    if (command.kind === 'spotsPeriod') {
-      void this.hooks.onSpotsPeriod(command.period);
-    }
-    if (command.kind === 'closeConsultation') {
-      void this.hooks.onCloseConsultation(command.id);
-    }
-    if (command.kind === 'forget') {
-      void this.hooks.onForget(command.provider);
-    }
-    if (command.kind === 'forgetChat') {
-      void this.hooks.onForgetChat(command.provider, command.model);
-    }
-    if (command.kind === 'export') {
-      void this.hooks.onExport(command.rows);
-    }
-    if (command.kind === 'findings') {
-      const { key, sessionId, stage, number } = command;
-      void this.hooks.onFindings(key, { sessionId, stage, number });
+    // Every other command is work the host does for the page — under its busy mark, which settles when the work ends
+    // (`workFor` says which hook; research/PLAN_busy_marks_on_every_webview.md, E1).
+    const work = workFor(command, this.hooks);
+    if (work !== undefined) {
+      void track(work);
     }
   }
 

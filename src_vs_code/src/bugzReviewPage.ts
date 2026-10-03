@@ -1,4 +1,6 @@
 import { highlight } from './codeHighlight';
+import { type BusySnapshot, IDLE } from './busySnapshot';
+import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
 import { pairDiff } from './lineDiff';
 import { RealRead, realView } from './realMethodView';
 import { about } from './reviewAbout';
@@ -84,6 +86,8 @@ export interface ReviewView {
    * where they were typed.</p>
    */
   readonly comments?: ReadonlyMap<number, string>;
+  /** What the host had running when this page was drawn: the busy mark's painted half (research/PLAN_busy_marks_on_every_webview.md). */
+  readonly busy?: BusySnapshot;
   readonly uiScale?: number;
   readonly textTone?: number;
 
@@ -374,6 +378,14 @@ ${rows}
  * timed out sends them somewhere else entirely. Four reviewers of the code round found the first
  * version saying the former for both.</p>
  */
+/**
+ * The posts this page numbers: a decision (a server write and a re-read through coai-mcp, 0.7-0.9 s measured) and the
+ * presses that open something for the person (research/PLAN_busy_marks_on_every_webview.md, E2). Not `comment`, which is
+ * saved as it is typed — typing is not the panel working — and not `fetchReal`, an automatic queue of up to four reads
+ * that each show their own pending state on their row.
+ */
+export const BUGZ_TRACKED: readonly string[] = ['decide', 'choose', 'openAt', 'openCurrent', 'openTree', 'calls', 'openCall'];
+
 export function reviewPageHtml(view: ReviewView): string {
   const { pairs, nonce, trouble = '', uiScale = 0, textTone = 0 } = view;
   const strips = filterStrips(view);
@@ -398,9 +410,11 @@ export function reviewPageHtml(view: ReviewView): string {
       content="default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <style>
 ${reviewPageCss(uiScale, textTone)}
+${BUSY_CSS}
 </style>
 </head>
 <body>
+${BUSY_BAR}
 <h1>Review bugs</h1>
 ${strips}
 <p class="hint" id="waiting">${waiting} of ${pairs.length} still waiting on you.</p>
@@ -420,6 +434,7 @@ ${body(pairs, rows, trouble)}
 <script nonce="${nonce}">
 (function () {
   var vscode = acquireVsCodeApi();
+  ${busyMarkScript(view.busy ?? IDLE, BUGZ_TRACKED)}
   var selected = {};
 
   function count() { return Object.keys(selected).length; }
@@ -447,7 +462,7 @@ ${body(pairs, rows, trouble)}
     // The page does NOT paint the new state itself. The decision is written by the extension and
     // the page is redrawn from what the database then says — a page that congratulated itself and
     // was wrong is exactly the failure this whole column exists to prevent.
-    vscode.postMessage({ type: 'decide', keep: keep, ids: ids });
+    send({ type: 'decide', keep: keep, ids: ids }, null);
     selected = {};
     paint();
   }
@@ -481,7 +496,7 @@ ${body(pairs, rows, trouble)}
   var queued = [];
   var outNow = 0;
 
-  function send(id) {
+  function askReal(id) {
     outNow += 1;
     vscode.postMessage({ type: 'fetchReal', id: Number(id), generation: pending[id] });
   }
@@ -491,7 +506,7 @@ ${body(pairs, rows, trouble)}
     outNow -= 1;
     while (queued.length > 0) {
       var id = queued.shift();
-      if (pending[id] !== undefined) { send(id); return; }
+      if (pending[id] !== undefined) { askReal(id); return; }
     }
   }
 
@@ -500,7 +515,7 @@ ${body(pairs, rows, trouble)}
     seq += 1;
     pending[id] = draw + '/' + seq;
     real.innerHTML = '<p class="realNote">Fetching the real method…</p>';
-    if (outNow < MOST_AT_ONCE) { send(id); } else { queued.push(id); }
+    if (outNow < MOST_AT_ONCE) { askReal(id); } else { queued.push(id); }
   }
 
   // The one render of a row's code: reads the CURRENT toggle and what the row already holds.
@@ -631,22 +646,22 @@ ${COMMENT_SCRIPT}
     // every control on a row, so a press never also opens or ticks it.
     var choosing = target.closest ? target.closest('[data-choose]') : null;
     if (choosing) {
-      vscode.postMessage({ type: 'choose', id: Number(choosing.getAttribute('data-choose')) });
+      send({ type: 'choose', id: Number(choosing.getAttribute('data-choose')) }, choosing);
       return;
     }
     var openingAt = target.closest ? target.closest('[data-open-at]') : null;
     if (openingAt) {
-      vscode.postMessage({ type: 'openAt', id: Number(openingAt.getAttribute('data-open-at')) });
+      send({ type: 'openAt', id: Number(openingAt.getAttribute('data-open-at')) }, openingAt);
       return;
     }
     var openingNow = target.closest ? target.closest('[data-open-current]') : null;
     if (openingNow) {
-      vscode.postMessage({ type: 'openCurrent', id: Number(openingNow.getAttribute('data-open-current')) });
+      send({ type: 'openCurrent', id: Number(openingNow.getAttribute('data-open-current')) }, openingNow);
       return;
     }
     var openingTree = target.closest ? target.closest('[data-open-tree]') : null;
     if (openingTree) {
-      vscode.postMessage({ type: 'openTree', id: Number(openingTree.getAttribute('data-open-tree')) });
+      send({ type: 'openTree', id: Number(openingTree.getAttribute('data-open-tree')) }, openingTree);
       return;
     }
     // Story 3.3. Each RETURNS, for the reason the tick-box does: a control inside a row also opens
@@ -654,12 +669,12 @@ ${COMMENT_SCRIPT}
     // assertion can see. The page test presses it and asserts the row did NOT change.
     var asking = target.closest ? target.closest('[data-calls]') : null;
     if (asking) {
-      vscode.postMessage({ type: 'calls', id: Number(asking.getAttribute('data-calls')) });
+      send({ type: 'calls', id: Number(asking.getAttribute('data-calls')) }, asking);
       return;
     }
     var goingTo = target.closest ? target.closest('[data-open-call]') : null;
     if (goingTo) {
-      vscode.postMessage({ type: 'openCall', at: goingTo.getAttribute('data-open-call') });
+      send({ type: 'openCall', at: goingTo.getAttribute('data-open-call') }, goingTo);
       return;
     }
     // A filter press, and this page does NOT paint it: the host holds the choice, because the

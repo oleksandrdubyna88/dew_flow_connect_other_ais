@@ -4,7 +4,7 @@ import { EMPTY_LOG, parseLog } from '../roundsDb';
 import type { DbLog } from '../roundsDb';
 import { DEFAULT_LIMIT, readLog } from '../roundsDbRead';
 import { blindSpotsHtml } from '../roundsLog';
-import { logCommandOf } from '../roundsLogMessages';
+import { logCommandOf, type RoundsLogHooks, workFor } from '../roundsLogMessages';
 
 /**
  * *What it keeps missing*, over a period — the half the SERVER counts (operator, 2026-09-25).
@@ -102,9 +102,15 @@ test('a press reaches the server: the page command, the hook, a fresh read over 
   const { join } = await import('node:path');
   const read = (name: string) => readFileSync(join(process.cwd(), 'src', name), 'utf8');
 
+  // The press's hook is RUN, since the mapping left the panel for `workFor` (the busy mark, E1); the panel's one link to
+  // it is what stays read, because the panel cannot be built here.
+  const periods: string[] = [];
+  const hooks = { onSpotsPeriod: (period: string) => { periods.push(period); return Promise.resolve(); } } as unknown as RoundsLogHooks;
+  await workFor({ kind: 'spotsPeriod', period: 'month' }, hooks)?.();
+  assert.deepEqual(periods, ['month'], 'a spots press no longer reaches its hook');
   assert.match(read('roundsLogPanel.ts'),
-    /if \(command\.kind === 'spotsPeriod'\) \{\s*void this\.hooks\.onSpotsPeriod\(command\.period\);/,
-    'the panel no longer hands a spots press to its hook');
+    /const work = workFor\(command, this\.hooks\);\s*if \(work !== undefined\) \{\s*void track\(work\);/,
+    'the panel no longer hands a press to its hook');
   assert.match(read('extension.ts'),
     /onSpotsPeriod: async \(period\) => \{\s*panelRef\.setSpotsPeriod\(period\);\s*await refreshRoundsLog\(roundsLog, watcher, panelRef, true\);/,
     'a spots press no longer stores the period and forces a fresh read');

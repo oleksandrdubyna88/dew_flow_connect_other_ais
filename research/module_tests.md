@@ -26,7 +26,7 @@ the older-server switch, malformed pairs, and stored values that must stay insid
 The eighth leg of `npm run test:seam` (`scripts/seam-security.mjs`) sends the extension-serialized
 lane to the built server: a valid lane draws no complaint, an unknown trigger and a malformed lane
 each do. `securityEvidenceLog.test.ts` parses evidence and runs the rounds-log page (through
-`roundsLogPageHarness.ts`) to check its disclosure appears only on security findings, as text.
+`roundsLogPagingHarness.ts`) to check its disclosure appears only on security findings, as text.
 `SecuritySessionCompatibilityTests` exercises the real session store and source-generated JSON
 serializer with pre-lane pending/rejected findings, both omitted and null cap reasons, and a
 nonempty new-evidence control. It verifies save/reload without losing findings or rejection
@@ -2731,6 +2731,24 @@ build saw them).
 link on a network share. The watcher's recheck timer and file events are `vscode`-bound and read, not run; the
 snapshot beneath them is the test. The atomic spend is proved for two calls of ONE process; two server processes
 share it through the turn, which `SessionTurn`'s own measurement covers, not this suite.
+
+## The busy mark on the other webviews (2026-10-03, PLAN_busy_marks_on_every_webview)
+
+| Suite | What it holds | Seen red as |
+|---|---|---|
+| `busyHost.test.ts` (new, 6) | A numbered post is announced, run, settled to its page and the count falls; an unnumbered one runs and marks nothing; a throw settles `ok: false` and is said; `ready` is answered with the count and the age, and nothing else is consumed; a prompt pauses it; dispose settles all | RED against a stub that only ran the work → 5. Teeth: `tracked` not called → 5, the `ready` answer removed → 1 |
+| `roundsLogBusyMark.test.ts` (new, 3) | The rounds log RUN on `PageClock`: a pressed command is numbered, nothing at 499 ms, the bar and the button's `aria-busy` at 500; settled clears both; `ready` is the last post, and the host's count draws after what is LEFT of the delay | RED: the page had no bar. Teeth: the command posted through `vscode.postMessage` → 1 |
+| `roundsLogWork.test.ts` (new, 2) | Each of the eight commands maps to its own hook, and the work returned is what is awaited; `ready` and `ignore` ask for none | RED against a stub returning nothing → 1. Teeth: the same → 1 |
+| `roundsLogPagingHarness.ts` (new, extracted) | The runner from `roundsLogPaging.test.ts`, moved unchanged apart from an optional `PageClock` and a busy bar that keeps its attributes — six private rounds-log runners already existed, and this one is now shared | — |
+| changed for the numbered posts | `roundsLogPaging`, `closeAConsultation` and `forgetAChatRow` compare the posts through `withoutSeq`, which checks the number first. The stub elements in `bundledPage`, `closeAConsultation`, `consultationFold`, `forgetAChatRow` and `theLogLosesItsFirstPush` gained `removeAttribute`, which a real element has and the bar calls on load | — |
+| `bugsKeysPage.test.ts` (+3) | A server action is numbered: nothing at 499 ms, the bar at 500, gone on `settled`; `copy` and `dismiss` are not numbered; a page painted mid-action draws after what is LEFT of the delay and posts `ready` last | RED: no bar. Teeth: `post()` bypassing `send` → 1, `copy`/`dismiss` numbered → 1, the painted snapshot ignored → 1 |
+| `bugzReviewPage.test.ts` (+5) | A decision is numbered and the bar follows the clock until settled; `choose`, `openAt` and `calls` are numbered; a typed comment and a real-method read are never numbered; a repaint mid-decision draws after what is left | RED: no bar, `choose` unnumbered. Teeth: decide bypassing `send` → 3, `choose` untracked → 2, a comment through `send` → 3, a real-method read through `send` → 1, the painted snapshot ignored → 1 |
+| runners widened for E2 | The key tab's runner and the bugz review's take an optional `PageClock` and answer the bar's id with the panel harness's `busyBarOf` — exported and now shared by every page runner that meets the bar (the rounds-log harness dropped its own copy). Six bugz tests compare numbered presses through `withoutSeq`; `bugzReviewWiring.test.ts`'s host patterns follow `slow(raw, …)` and `void this.queue(…)` | — |
+| `settledWrites.test.ts` (+4) | A structural command answers after its apply AND its redraw; a failure still answers, and is reported; a typed field answers when the write carrying it lands, keystrokes it replaced included; a structural command drains the typing first and answers after its own write | RED against a stub answering at once → 4. Teeth: `run()` answering at once → 3, a replaced keystroke dropped → 1 |
+| `rolesBusyMark.test.ts` (new, 4) | Adding a role is numbered and the bar follows the clock until settled; switching a role on is numbered; typing is not; a repaint mid-change draws after what is left and posts `ready` last | RED: no bar, the switch unnumbered. Teeth: a pick unnumbered → 1, typing numbered → 1, add unnumbered → 1 |
+| `commandsBusyMark.test.ts` (new, 4) | Switching a command on is numbered and the bar follows the clock; add and remove are numbered; typing a text or a title is not; a repaint mid-change draws after what is left | RED: no bar. Teeth: `post()` bypassing `send` → 2, typing numbered → 1 |
+| `rolesPageHarness.ts` (widened) | `runPageHtml(html, inDocument, clock?)`: given a clock, the page's timers run on it and its bar is answered (the shared `busyBarOf`); `presses(page)` gives what the person's presses said, without the load-time `ready` and the numbers. `rolesPageScript`, `featureStageOnRolesPage` and `commandsPage` read through it | — |
+| `rolesFieldOf.test.ts` (new, 3) | Typing in a role or prompt field settles under its own key; a `stage` pick and a switch are not settled | RED: a stage pick settled as `R/stage` |
 
 ## D13 revised — a flagged row needs no tick (2026-10-03, the operator, before the 0.41.0 / 0.62.0 release)
 
