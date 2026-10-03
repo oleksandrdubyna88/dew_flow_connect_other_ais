@@ -308,7 +308,7 @@ public sealed class PanelService
     /// </param>
     internal static (string Auth, string Note) AuthOf(
         ProviderSettings provider, bool hasVaultKey, bool hasServerToken = false) =>
-        RuntimeResolution.AuthOf(provider.Identity(), hasVaultKey, hasServerToken, provider.Model);
+        RuntimeResolution.ReadinessOf(provider.Identity(), hasVaultKey, hasServerToken, provider.Model);
 
     /// <summary>Has this machine signed into the Team server this vendor points at?</summary>
     /// <remarks>

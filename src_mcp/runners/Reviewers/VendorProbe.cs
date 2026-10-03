@@ -131,8 +131,8 @@ public static class VendorProbe
         CancellationToken ct)
     {
         // The model too: a codex row on somebody else's endpoint with none is refused by the round, and `providers` must
-        // say so first (todo/PLAN_refuse_an_endpoint_row_without_a_model.md).
-        var (auth, authNote) = RuntimeResolution.AuthOf(vendor, hasVaultKey, model: model);
+        // say so first (research/PLAN_refuse_an_endpoint_row_without_a_model.md).
+        var (auth, authNote) = RuntimeResolution.ReadinessOf(vendor, hasVaultKey, hasServerToken: false, model);
         if (!enabled)
         {
             return new VendorHealth(false, false, "", auth, "disabled in settings");

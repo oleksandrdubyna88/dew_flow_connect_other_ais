@@ -1,10 +1,12 @@
 # PLAN — a round refuses an endpoint row that names no model, instead of sending the Codex CLI's default
 
-> Status: **plan only, nothing implemented yet (2026-10-03).** Plan gate proceed (1 of 1, gemini; 2 accepted, 3 rejected). Scope: `src_mcp` (the reviewer runtime that builds a
+> Status: **IMPLEMENTED, 2026-10-03.** Plan gate proceed (1 of 1, gemini; 2 accepted, 3 rejected — one of them wrongly,
+> see §8). Code gate proceed (4 of 4; 6 accepted, 1 partly). Deviations in §8. The server release (`mcp`, its CHANGELOG
+> section on the release PR) follows the merge; no extension release is needed. Scope: `src_mcp` (the reviewer runtime that builds a
 > codex row on somebody else's endpoint) and the round's refusal text. Extracted from
-> [PLAN_model_search_and_busy_marks.md](../research/PLAN_model_search_and_busy_marks.md) §4 when it was promoted.
+> [PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md) §4 when it was promoted.
 >
-> Related docs: [module_server.md](../research/module_server.md), [module_extension.md](../research/module_extension.md).
+> Related docs: [module_server.md](module_server.md), [module_extension.md](module_extension.md).
 
 ## 1. The symptom
 
@@ -23,7 +25,7 @@ only stopped the panel from *labelling* that choice "the CLI's default"; nothing
 
 ## 1a. Boundary with the plan this came from
 
-| | [PLAN_model_search_and_busy_marks.md](../research/PLAN_model_search_and_busy_marks.md) (E1, shipped) | this plan |
+| | [PLAN_model_search_and_busy_marks.md](PLAN_model_search_and_busy_marks.md) (E1, shipped) | this plan |
 |---|---|---|
 | the panel's label for an endpoint row with no model | built: "no model yet — press ≡ and pick one this endpoint lists" | not touched |
 | a round with such a row | not touched | refused before launch, by name |
@@ -79,7 +81,20 @@ None.
 
 ## 6. Definition of Done
 
-- [ ] RED first, then GREEN, teeth checked; the whole MTP suite green.
-- [ ] `providers` and the round agree.
-- [ ] Docs updated; a server release cut; this plan promoted.
-- [ ] The reciprocal boundary table is in `research/PLAN_model_search_and_busy_marks.md` (after PR #653, which edits its links).
+- [x] RED first, then GREEN, teeth checked; the whole MTP suite green.
+- [x] `providers` and the round agree.
+- [x] Docs updated; this plan promoted.
+- [ ] A server release cut and verified — after the merge, on the release-please PR.
+- [x] The reciprocal boundary table is in `research/PLAN_model_search_and_busy_marks.md`.
+
+## 8. Deviations — what shipped differently
+
+- **`ReadinessOf`, not a parameter on `AuthOf`.** §2a put a nullable `model` on `AuthOf`. The code round rejected it:
+  doctrine §4 allows no such nullable, and `ExclusionReason` had to reach around `AuthOf` to tell the two reasons
+  apart. `AuthOf` is unchanged (credentials only). `ReadinessOf(vendor, hasVaultKey, hasServerToken, string model)`
+  answers for a configured row, and an `ExclusionReason` overload takes the model.
+- **Null is no model.** The plan round's finding that an omitted field arrives null was REJECTED with "Model is never
+  null", and that rejection was wrong: doctrine §4a measured exactly this. The boundary (`ParseVendors`,
+  `PanelSettings.cs:1182-1183`) does coalesce to empty, and the rule now treats null, empty and whitespace alike. A
+  test pins it.
+- **No extension change.** The card already badges any `unavailable` row with its note (§2a).

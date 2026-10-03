@@ -181,7 +181,7 @@ public sealed class RuntimeResolutionTests
         RuntimeResolution.AuthOf(Vendor("codex"), hasVaultKey: false).Auth.Should().Be("own auth");
     }
 
-    // ---------- an endpoint row with no model (todo/PLAN_refuse_an_endpoint_row_without_a_model.md) ----------
+    // ---------- an endpoint row with no model (research/PLAN_refuse_an_endpoint_row_without_a_model.md) ----------
     // With no `-m`, the Codex CLI sends ITS OWN default model id to somebody else's endpoint, which does not serve it, and
     // every review on the row fails there — a failure that reads as the endpoint's, not as the empty choice it is.
 
@@ -190,8 +190,8 @@ public sealed class RuntimeResolutionTests
     [InlineData("   ")]
     public void ACodexRowOnAnEndpointWithNoModel_CannotReview_AndIsToldWhy(string model)
     {
-        var (auth, note) = RuntimeResolution.AuthOf(
-            Vendor("openrouter", "codex", "https://openrouter.ai/api/v1"), hasVaultKey: true, model: model);
+        var (auth, note) = RuntimeResolution.ReadinessOf(
+            Vendor("openrouter", "codex", "https://openrouter.ai/api/v1"), hasVaultKey: true, hasServerToken: false, model);
 
         auth.Should().Be("unavailable", "an unavailable answer removes the vendor from the round, before launch");
         note.Should().Contain("openrouter").And.Contain("https://openrouter.ai/api/v1").And.Contain("no model");
@@ -200,33 +200,45 @@ public sealed class RuntimeResolutionTests
     [Fact]
     public void ACodexRowOnAnEndpointWithAModel_StillReviews()
     {
-        RuntimeResolution.AuthOf(
-            Vendor("openrouter", "codex", "https://openrouter.ai/api/v1"), hasVaultKey: true, model: "openai/gpt-6-astra")
+        RuntimeResolution.ReadinessOf(
+            Vendor("openrouter", "codex", "https://openrouter.ai/api/v1"), hasVaultKey: true, hasServerToken: false, "openai/gpt-6-astra")
             .Auth.Should().Be("vault key");
     }
 
     [Fact]
     public void APlainCodexRowWithNoModel_StillRunsOnTheCliDefault()
     {
-        RuntimeResolution.AuthOf(Vendor("codex"), hasVaultKey: false, model: string.Empty).Auth.Should().Be("own auth");
+        RuntimeResolution.ReadinessOf(Vendor("codex"), hasVaultKey: false, hasServerToken: false, string.Empty).Auth.Should().Be("own auth");
     }
 
     [Fact]
     public void AnEndpointRowWithNeitherKeyNorModel_IsToldAboutTheKeyFirst()
     {
-        var (auth, note) = RuntimeResolution.AuthOf(
-            Vendor("mistral", "codex", "https://api.mistral.ai/v1"), hasVaultKey: false, model: string.Empty);
+        var (auth, note) = RuntimeResolution.ReadinessOf(
+            Vendor("mistral", "codex", "https://api.mistral.ai/v1"), hasVaultKey: false, hasServerToken: false, string.Empty);
 
         auth.Should().Be("unavailable");
         note.Should().Contain("key").And.NotContain("no model");
     }
 
     [Fact]
-    public void ACallerThatDoesNotKnowTheModel_IsAnsweredAsBefore()
+    public void AuthenticationAlone_NeverAsksAboutAModel()
     {
+        // Credentials and a launch's readiness are two questions (code round, gemini): AuthOf is the first, unchanged.
         RuntimeResolution.AuthOf(Vendor("openrouter", "codex", "https://openrouter.ai/api/v1"), hasVaultKey: true)
-            .Auth.Should().Be("vault key", "null is not empty: the check is skipped, never guessed");
+            .Auth.Should().Be("vault key");
     }
+
+    [Fact]
+    public void AModelTheSettingsFileOmitted_IsNoModel()
+    {
+        // Doctrine §4a: under the source generator an omitted field arrives null, whatever its initializer says — so a
+        // row written with no "model" key must be refused exactly as an empty one is, never waved through (code round).
+        RuntimeResolution.ReadinessOf(
+                Vendor("openrouter", "codex", "https://openrouter.ai/api/v1"), hasVaultKey: true, hasServerToken: false, null!)
+            .Auth.Should().Be("unavailable");
+    }
+
 
     [Fact]
     public void TheRoundSaysWhyInItsOwnWords()

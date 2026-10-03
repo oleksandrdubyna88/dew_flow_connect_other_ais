@@ -95,7 +95,7 @@ public class LocalReviewerRunsTests
     [Fact]
     public void ACodexRowOnAnEndpointWithNoModel_IsLeftOutOfTheRound()
     {
-        // todo/PLAN_refuse_an_endpoint_row_without_a_model.md: the round's roster is CanRun -> AuthFor -> this, so the row's
+        // research/PLAN_refuse_an_endpoint_row_without_a_model.md: the round's roster is CanRun -> AuthFor -> this, so the row's
         // own model must reach the rule — an unavailable answer here is what removes it before launch.
         var openrouter = new ProviderSettings("openrouter")
         {
