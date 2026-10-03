@@ -1,6 +1,6 @@
 # RESULTS — what each CLI and the api path can do for the question consultant
 
-> Status: **measured 2026-10-01.** Instrument: `dew_flow_benchmark · research/PLAN_question_consultant_probes.md`
+> Status: **measured 2026-10-01; the live product-path check (§7) 2026-10-03.** Instrument: `dew_flow_benchmark · research/PLAN_question_consultant_probes.md`
 > (the probes module, branch `feat/qconsult-capabilities`, instrument commit `6fa8c2b`). Consumer:
 > [PLAN_question_consultant.md](../todo/PLAN_question_consultant.md), whose capability rows (§2 F1–F8,
 > `shared/runtime-capabilities.json`) cite the cells below.
@@ -184,6 +184,52 @@ Two consequences the plan must carry:
 - **Other machines / Linux**: every fact is for Windows 11, this user profile, on 2026-10-01; claude's `--restricted`
   ignores user settings, the other modes inherit `~/.claude/settings.json` (here: `permissions.additionalDirectories`
   naming a benchmark checkout — the canary was not under it).
+
+## 7. The live product-path check (S5, 2026-10-03)
+
+The plan's S5 acceptance 1, approved by the operator on 2026-10-03 with Claude on the `web` row in place of Astra
+(codex is out of quota until 2026-10-08). Run through the product path: the branch's `coai-mcp` (Release build at
+`534b8538`) over stdio, the operator's real data folder, `COAI_QCONSULT_MODE=require`, the rows and roots from the
+environment only (the operator's `settings.json` untouched; the vault key from it as usual).
+
+**The question** — a real one, tails item 4: should an api row read the uncommitted working tree, through the secret
+check, or only `HEAD` with a note of what is dirty? The context named `FeatureRefs.cs` and the two options.
+
+**Rows** (roots `D:/rsd/dew_flow_benchmark`, `D:/rsd/dew_flow_mcp` — the coai checkout itself NOT among them):
+
+| Row | Runtime · model | Prompt · capability | Status | Seconds | Cost |
+|---|---|---|---|---|---|
+| `sonnet-disk` | claude · sonnet | Projects on this disk · `disk` | answered | 128 | $0.41 |
+| `claude-web` | claude · sonnet | The internet · `web` | answered | 220 | $0.70 |
+| `grok` | api · OpenRouter `x-ai/grok-4.7` | The best developer's opinion · `none` | answered | 49 | not reported |
+
+`ask_consultants` answered `complete` (consult `6a7af222f164496b9f6aff6e75e85b24`, 3 min 41 s from start to end in the record, the rows in
+parallel), every answer fenced `advisory_only` with its nonce and the verify-first footer.
+
+**What the answers show about confinement**:
+- The `disk` row read only its roots. It found no `FeatureRefs.cs` and said why: that file "lives in a project I
+  wasn't given". It cited real files and line ranges in both roots (`dew_flow_mcp` `SandboxedFileReader.cs`,
+  `module_workspace_tools.md:127-128`; the benchmark's `GitCheckoutProvider.cs`, `Worktree.cs`).
+- The `web` row answered from the question alone and cited public sources (aider, Claude Code docs, a GitHub
+  discussion). No local path appears in its answer.
+- The `api` row answered from the context it was given, without any tool.
+
+**The card.** `ask_human` with that `consultId` was accepted. The record became `outcome: person_asked`, bound to
+escalation `f42b5305a0f9`, so the id was verified and spent once. The card carries the `consultId`, and its
+`consultantAnswers` is empty, as designed: a card folds answers itself only for a production risk, and otherwise the
+extension shows the rows of the consultation it followed.
+
+**The person's side: the wait ran out, by the operator's own setting.** Nobody answered. After 10 minutes (the
+operator's `COAI_ESCALATION_MINUTES=10`, under the 15-minute ceiling of A10) `ask_human` answered `no_answer_yet`,
+with the instruction to ask in the conversation. The card file became `status: expired`
+(`expiredUtc 2026-10-03T09:27:52Z`) and is kept for the log. That is the A10 path, observed live. An *answered* card
+on the product path was not observed in this run. The person's answer is covered by
+`AskHumanScenarioTests`, and the operator sees it first-hand when testing the release; the release's
+post-deploy check records it.
+
+**Found.** The `api` row reports no cost (`costUsd` absent). The field is nullable by design, but OpenRouter
+returns usage, so the cost can be known. This is a new item in
+[PLAN_question_consultant_tails.md](../todo/PLAN_question_consultant_tails.md).
 
 ## Appendix — every cell of the full run `01a0f8c7-18db-739b-8b83-3165e82cd42c`
 
