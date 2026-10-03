@@ -17,6 +17,8 @@ import { isTextControl } from './textControls';
 import { applyTextControl, appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
+import { BusyHost } from './busyHost';
+import { type BusySnapshot, IDLE } from './busySnapshot';
 
 /**
  * The tab that edits review roles — a thin host over pure modules, the arrangement this extension
@@ -32,6 +34,12 @@ const SECTION = 'coai';
 const KEY = 'roles';
 
 let panel: vscode.WebviewPanel | undefined;
+
+/**
+ * What the tab asked for and the host has not finished — its busy mark (todo/PLAN_busy_marks_on_every_webview.md, E3).
+ * One per open tab: made with it, painted into every redraw, settled when it closes.
+ */
+let busy: BusyHost | undefined;
 
 /**
  * Which of the three sections is open.
@@ -125,6 +133,33 @@ async function bodyOf(file: string): Promise<string | undefined> {
   }
 }
 
+/**
+ * Hears the tab, and holds each structural change under its busy mark (todo/PLAN_busy_marks_on_every_webview.md, E3).
+ * One `BusyHost` per open tab, settled by the caller when it closes.
+ */
+function listen(opened: vscode.WebviewPanel): BusyHost {
+  const marks = new BusyHost({ post: (message) => { void opened.webview.postMessage(message); } });
+  busy = marks;
+  opened.webview.onDidReceiveMessage((message: unknown) => {
+    // A text press is the person's setting, not an edit of the roles, and never waits behind one.
+    if (!appliedTextControl(message, 'roles page')) {
+      // A fresh tab's `ready` is told what is running; a numbered change is held under the mark until it has been
+      // written and the tab redrawn. Typing posts unnumbered and settles on its own.
+      if (marks.heard(message as object)) {
+        return;
+      }
+      void marks.track(message as object, () => queue(roleEdit(message)));
+    }
+  });
+
+  return marks;
+}
+
+/** What a redraw paints as still running: nothing when no tab is open to hold any. */
+function stillRunning(): BusySnapshot {
+  return busy?.snapshot() ?? IDLE;
+}
+
 export function openRoles(extension: vscode.ExtensionContext): void {
   context = extension;
   if (panel !== undefined) {
@@ -154,13 +189,10 @@ export function openRoles(extension: vscode.ExtensionContext): void {
     // is a no-op once it has.
     setTimeout(redrawSoon, inMs).unref?.();
   });
-  panel.webview.onDidReceiveMessage((message: unknown) => {
-    // A text press is the person's setting, not an edit of the roles, and never waits behind one.
-    if (!appliedTextControl(message, 'roles page')) {
-      queue(roleEdit(message));
-    }
-  });
+  const marks = listen(panel);
   panel.onDidDispose(() => {
+    marks.dispose();
+    busy = undefined;
     scale.dispose();
     deletionsChanged.dispose();
     panel = undefined;
@@ -242,6 +274,8 @@ async function render(): Promise<void> {
       stranded: await roleDeletions(side()).stranded(),
       // After the awaits: a press made while they ran is the one this page must be drawn in.
       uiScale: currentUiScale(),
+      // What is still running, so a redraw in the middle of a change keeps its bar.
+      busy: stillRunning(),
       textTone: currentTextTone(),
     },
     nonce(),
@@ -282,7 +316,7 @@ const writes = settledWrites<RolesCommand>({
   fieldOf,
 });
 
-const queue = (command: RolesCommand): void => { writes.queue(command); };
+const queue = (command: RolesCommand): Promise<void> => writes.queue(command);
 const flush = (): Promise<void> => writes.flush();
 
 /** The key a typed field settles under, or nothing for a command that is not typing. */

@@ -28,8 +28,13 @@
 export const SETTLE_MS = 300;
 
 export interface SettledWrites<C> {
-  /** One message from the page: a typed field waits to settle, anything else goes straight through. */
-  queue(command: C): void;
+  /**
+   * One message from the page: a typed field waits to settle, anything else goes straight through. Answers when THAT
+   * command has been applied and the redraw it asked for has returned — never rejecting, because a failure is reported —
+   * so a host can hold a busy mark exactly that long (todo/PLAN_busy_marks_on_every_webview.md §4.4). A typed field
+   * answers when the write that finally carries it lands, later keystrokes included.
+   */
+  queue(command: C): Promise<void>;
   /** Drained, and waited for — the tab is closing and nothing else will carry these. */
   flush(): Promise<void>;
 }
@@ -63,26 +68,44 @@ export function settledWrites<C>(options: SettledWritesOptions<C>): SettledWrite
   const settleMs = options.settleMs ?? SETTLE_MS;
   const setTimer = options.setTimer ?? ((run, ms): unknown => setTimeout(run, ms));
   const clearTimer = options.clearTimer ?? ((timer): void => { clearTimeout(timer as NodeJS.Timeout); });
-  const settling = new Map<string, { readonly command: C; readonly timer: unknown }>();
+  /**
+   * A field still settling: its newest command, its timer, and everyone waiting on it — each keystroke it replaced
+   * included, because every one of them is carried by the write that finally lands.
+   */
+  const settling = new Map<string, { readonly command: C; readonly timer: unknown; readonly waiting: readonly (() => void)[] }>();
   let working: Promise<void> = Promise.resolve();
 
-  function run(command: C): void {
+  /** One write and the redraw it asks for, after every write before it. Answers when both are done; never rejects. */
+  function run(command: C): Promise<void> {
     working = working
       .then(() => options.apply(command))
       // AWAITED, by returning it: a host whose redraw reads files (the roles tab does) would
       // otherwise have the next write start while the redraw was still reading.
       .then((again) => (again ? options.render() : undefined))
       .catch((error: unknown) => { options.report(error); });
+
+    return working;
   }
 
-  function settle(field: string, command: C): void {
-    clearTimer(settling.get(field)?.timer);
-    settling.set(field, {
-      command,
-      timer: setTimer(() => {
-        settling.delete(field);
-        run(command);
-      }, settleMs),
+  /** A settled field's write, and then everyone who was waiting on it is told. */
+  function land(command: C, waiting: readonly (() => void)[]): void {
+    void run(command).then(() => { waiting.forEach((told) => { told(); }); });
+  }
+
+  function settle(field: string, command: C): Promise<void> {
+    const before = settling.get(field);
+    clearTimer(before?.timer);
+
+    return new Promise<void>((told) => {
+      const waiting = [...(before?.waiting ?? []), told];
+      settling.set(field, {
+        command,
+        waiting,
+        timer: setTimer(() => {
+          settling.delete(field);
+          land(command, waiting);
+        }, settleMs),
+      });
     });
   }
 
@@ -90,22 +113,21 @@ export function settledWrites<C>(options: SettledWritesOptions<C>): SettledWrite
   function drain(): void {
     const pending = [...settling.values()];
     settling.clear();
-    for (const { command, timer } of pending) {
+    for (const { command, timer, waiting } of pending) {
       clearTimer(timer);
-      run(command);
+      land(command, waiting);
     }
   }
 
   return {
-    queue(command: C): void {
+    queue(command: C): Promise<void> {
       const field = options.fieldOf(command);
       if (field !== undefined) {
-        settle(field, command);
-
-        return;
+        return settle(field, command);
       }
       drain();
-      run(command);
+
+      return run(command);
     },
     async flush(): Promise<void> {
       drain();

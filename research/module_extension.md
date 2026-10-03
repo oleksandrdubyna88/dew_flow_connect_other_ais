@@ -10377,3 +10377,20 @@ new document's `ready` is answered — both pages posted `ready` before, and bot
     window.
   - The key tab consumes `ready` in the busy host and starts no turn. It had always run a `ready` as a turn, and a turn
     repaints the tab twice, so each repaint's `ready` could start another (E2 code round).
+
+**E3 — the roles and gate-commands tabs.** Each structural change re-reads every prompt or command file and redraws
+the tab. Typing is never numbered: those fields settle for 300 ms by design.
+
+- `settledWrites.queue` now answers when THAT command has been applied and the host's render has returned, and it never
+  rejects. A typed field answers when the write that finally carries it lands, keystrokes it replaced included. This
+  widens the module rather than adding a second queue.
+- **Roles** (`ROLES_TRACKED`): `add`, `addPrompt`, `removePrompt`, `restorePrompt`, `remove`, `finishDeletion`, and an
+  `edit` or `editPrompt` from a checkbox or select. Switching a role on reads every prompt. The page's field helper was
+  called `send`, which would have collided with the mark's door; it is `sendField` now, and a pick goes through `send`
+  while typing posts plainly.
+- **Commands** (`COMMANDS_TRACKED`): `switch`, `restage`, `add`, `remove`, `restore`. Not `text` or `retitle`, which are
+  both typing. Its one `post` helper goes through `send`, so untracked types pass straight through it.
+- Both pages post `ready` last and paint the host's snapshot. Both hosts get a `listen()` (one `BusyHost`, `ready`
+  consumed, each message tracked around `writes.queue`) and a `stillRunning()` for the redraw.
+
+Help, phrases, notifications, chat, chat restore and chat presets stay unmarked, each with the reason in the plan's §3.

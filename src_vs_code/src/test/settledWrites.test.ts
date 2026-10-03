@@ -71,7 +71,7 @@ test('a field somebody is typing in is stored once, when they stop — not once 
   const { writes, recorded } = harness();
 
   for (const value of ['d', 'de', 'dep', 'depl', 'deplo', 'deploy']) {
-    writes.queue(`type:text=${value}`);
+    void writes.queue(`type:text=${value}`);
   }
 
   assert.deepStrictEqual(recorded.applied, [], 'a keystroke was stored while the person was still typing');
@@ -84,8 +84,8 @@ test('a field somebody is typing in is stored once, when they stop — not once 
 test('two fields both survive — the settling is keyed by field, not by the last thing typed', async () => {
   const { writes, recorded } = harness();
 
-  writes.queue('type:name=Ship');
-  writes.queue('type:text=make a pr');
+  void writes.queue('type:name=Ship');
+  void writes.queue('type:text=make a pr');
   recorded.fire();
   await writes.flush();
 
@@ -96,9 +96,9 @@ test('two fields both survive — the settling is keyed by field, not by the las
 test('a structural command stores what is still settling first, in the order it was typed', async () => {
   const { writes, recorded } = harness();
 
-  writes.queue('type:name=Ship');
-  writes.queue('type:text=deploy');
-  writes.queue('remove');
+  void writes.queue('type:name=Ship');
+  void writes.queue('type:text=deploy');
+  void writes.queue('remove');
   await writes.flush();
 
   assert.deepStrictEqual(recorded.applied, ['type:name=Ship', 'type:text=deploy', 'remove'],
@@ -124,8 +124,8 @@ test('writes land one at a time, so an earlier keystroke cannot overwrite a late
     },
   });
 
-  writes.queue('first');
-  writes.queue('second');
+  void writes.queue('first');
+  void writes.queue('second');
   await new Promise<void>((resolve) => { setImmediate(resolve); });
   assert.deepStrictEqual(order, ['start first'], 'the second write began while the first was still in flight');
   release();
@@ -138,7 +138,7 @@ test('writes land one at a time, so an earlier keystroke cannot overwrite a late
 test('closing the tab stores what was still settling, rather than dropping it', async () => {
   const { writes, recorded } = harness();
 
-  writes.queue('type:text=half a sentence');
+  void writes.queue('type:text=half a sentence');
   await writes.flush();
 
   assert.deepStrictEqual(recorded.applied, ['type:text=half a sentence'],
@@ -156,8 +156,8 @@ test('a write that fails is reported, and the next one still runs', async () => 
     },
   });
 
-  writes.queue('bad');
-  writes.queue('good');
+  void writes.queue('bad');
+  void writes.queue('good');
   await writes.flush();
 
   assert.equal(recorded.reported().length, 1, 'a failed save was swallowed');
@@ -167,12 +167,12 @@ test('a write that fails is reported, and the next one still runs', async () => 
 test('the page is redrawn only when the command asked for it', async () => {
   const { writes, recorded } = harness({ apply: async (command) => command === 'add' });
 
-  writes.queue('type:text=typing');
+  void writes.queue('type:text=typing');
   recorded.fire();
   await writes.flush();
   assert.equal(recorded.rendered(), 0, 'typing redrew the page, which moves the caret out of the box');
 
-  writes.queue('add');
+  void writes.queue('add');
   await writes.flush();
   assert.equal(recorded.rendered(), 1, 'adding a row did not redraw the list it changed');
 });
@@ -189,9 +189,9 @@ test('a redraw that reads from disk finishes before the next write begins', asyn
     render: async () => { order.push('render start'); await drawing; order.push('render end'); },
   });
 
-  writes.queue('add');
+  void writes.queue('add');
   await new Promise<void>((resolve) => { setImmediate(resolve); });
-  writes.queue('remove');
+  void writes.queue('remove');
   await new Promise<void>((resolve) => { setImmediate(resolve); });
   assert.ok(!order.includes('apply remove'), 'a write began while the redraw before it was still reading');
   finish();
@@ -199,4 +199,56 @@ test('a redraw that reads from disk finishes before the next write begins', asyn
 
   assert.deepStrictEqual(order, ['apply add', 'render start', 'render end', 'apply remove'],
     'the redraw and the write after it overlapped');
+});
+
+// ---- When a write is DONE (todo/PLAN_busy_marks_on_every_webview.md §4.4, E3) ----
+// The roles and commands tabs show a busy mark for a structural change, held until that change has been applied and
+// the tab redrawn. `queue` used to answer nothing, so the host could not know when that was.
+
+test('a structural command answers when IT has been applied and the tab redrawn', async () => {
+  let finishRender: () => void = () => undefined;
+  const { writes, recorded } = harness({ render: () => new Promise<void>((done) => { finishRender = done; }) });
+  let landed = false;
+
+  const done = writes.queue('add').then(() => { landed = true; });
+  await new Promise((resolve) => { setImmediate(resolve); });
+  assert.deepStrictEqual(recorded.applied, ['add']);
+  assert.equal(landed, false, 'applied is not done: the redraw is still reading');
+  finishRender();
+  await done;
+  assert.equal(landed, true);
+});
+
+test('a write that fails still answers — reported, never left hanging', async () => {
+  const { writes, recorded } = harness({ apply: () => Promise.reject(new Error('the settings file is read-only')) });
+
+  await writes.queue('remove');
+
+  assert.match(String(recorded.reported()[0]), /read-only/u, 'the failure is said');
+});
+
+test('a typed field answers when the write that carries it lands, even after later keystrokes replaced it', async () => {
+  const { writes, recorded } = harness();
+  let first = false;
+  let last = false;
+
+  void writes.queue('type:text=d').then(() => { first = true; });
+  const carried = writes.queue('type:text=deploy').then(() => { last = true; });
+  await new Promise((resolve) => { setImmediate(resolve); });
+  assert.equal(first, false, 'nothing is written while the person is typing');
+  recorded.fire();
+  await carried;
+
+  assert.deepStrictEqual(recorded.applied, ['type:text=deploy'], 'still one write for the field');
+  assert.equal(first, true, 'the earlier keystroke landed with the write that replaced it');
+  assert.equal(last, true);
+});
+
+test('a structural command drains what is settling, and answers after its own write, not theirs', async () => {
+  const { writes, recorded } = harness();
+  void writes.queue('type:text=deploy');
+
+  await writes.queue('add');
+
+  assert.deepStrictEqual(recorded.applied, ['type:text=deploy', 'add'], 'the typing is stored first, in order');
 });

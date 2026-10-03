@@ -5,7 +5,7 @@ import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { CUSTOM_ROLES_SINCE, type RolesPageState } from '../rolesPage';
 import { RESULT_STAGE, type RoleRow } from '../roles';
 import { STOOD_DOWN } from '../roleDeletion';
-import { Node, type Page, runRolesPage } from './rolesPageHarness';
+import { Node, type Page, runRolesPage, presses } from './rolesPageHarness';
 
 /**
  * The roles page's own script, RUN.
@@ -80,7 +80,7 @@ test('pressing Finish the deletion anyway posts it for THAT role', () => {
 
   page.fire('click', pressed);
 
-  assert.deepEqual(page.posted, [{ type: 'finishDeletion', id: 'Role2' }],
+  assert.deepEqual(presses(page), [{ type: 'finishDeletion', id: 'Role2' }],
     'the control is drawn and pressing it reaches nobody');
 });
 
@@ -89,7 +89,7 @@ test('pressing Reload Window posts the reload, and nothing about a role', () => 
 
   page.fire('click', new Node({ reload: '1' }, 'BUTTON'));
 
-  assert.deepEqual(page.posted, [{ type: 'reloadWindow' }]);
+  assert.deepEqual(presses(page), [{ type: 'reloadWindow' }]);
 });
 
 test('a press somewhere else in the section posts nothing at all', () => {
@@ -99,7 +99,7 @@ test('a press somewhere else in the section posts nothing at all', () => {
 
   page.fire('click', new Node({}, 'B'));
 
-  assert.deepEqual(page.posted, []);
+  assert.deepEqual(presses(page), []);
 });
 
 // ---------- the buttons ----------
@@ -113,7 +113,7 @@ test('clicking Remove on a role posts a remove for THAT role', () => {
 
   page.fire('click', button);
 
-  assert.deepStrictEqual(page.posted, [{ type: 'remove', id: 'Requirements' }]);
+  assert.deepStrictEqual(presses(page), [{ type: 'remove', id: 'Requirements' }]);
 });
 
 test('clicking Add a role posts an add and nothing else', () => {
@@ -121,7 +121,7 @@ test('clicking Add a role posts an add and nothing else', () => {
 
   page.fire('click', new Node({ add: 'role' }, 'BUTTON'));
 
-  assert.deepStrictEqual(page.posted, [{ type: 'add' }]);
+  assert.deepStrictEqual(presses(page), [{ type: 'add' }]);
 });
 
 test('clicking Add a prompt names the role it was pressed in', () => {
@@ -130,7 +130,7 @@ test('clicking Add a prompt names the role it was pressed in', () => {
 
   page.fire('click', new Node({ addPrompt: 'Requirements' }, 'BUTTON').under(role));
 
-  assert.deepStrictEqual(page.posted, [{ type: 'addPrompt', id: 'Requirements' }]);
+  assert.deepStrictEqual(presses(page), [{ type: 'addPrompt', id: 'Requirements' }]);
 });
 
 test('clicking Remove on a prompt names the role AND the prompt', () => {
@@ -140,7 +140,7 @@ test('clicking Remove on a prompt names the role AND the prompt', () => {
 
   page.fire('click', new Node({ removePrompt: 'requirements-general' }, 'BUTTON').under(prompt));
 
-  assert.deepStrictEqual(page.posted, [
+  assert.deepStrictEqual(presses(page), [
     { type: 'removePrompt', id: 'Requirements', promptId: 'requirements-general' },
   ]);
 });
@@ -152,7 +152,7 @@ test('clicking Restore on a shipped prompt names the role AND the prompt', () =>
 
   page.fire('click', new Node({ restore: shipped.prompts[0]!.id }, 'BUTTON').under(prompt));
 
-  assert.deepStrictEqual(page.posted, [
+  assert.deepStrictEqual(presses(page), [
     { type: 'restorePrompt', id: shipped.id, promptId: shipped.prompts[0]!.id },
   ]);
 });
@@ -167,7 +167,7 @@ test('typing a role name posts an edit carrying the text', () => {
 
   page.fire('input', input);
 
-  assert.deepStrictEqual(page.posted, [
+  assert.deepStrictEqual(presses(page), [
     { type: 'edit', id: 'Requirements', field: 'name', value: 'Requirements we wrote' },
   ]);
 });
@@ -182,7 +182,7 @@ test('typing in a prompt body posts an editPrompt, not an edit', () => {
 
   page.fire('input', box);
 
-  assert.deepStrictEqual(page.posted, [{
+  assert.deepStrictEqual(presses(page), [{
     type: 'editPrompt', id: 'Requirements', promptId: 'requirements-general',
     field: 'text', value: 'Whether the requirements are met.',
   }]);
@@ -199,7 +199,7 @@ test('ticking Active posts a BOOLEAN, which is what the parser will accept', () 
 
   page.fire('change', box);
 
-  assert.deepStrictEqual(page.posted, [
+  assert.deepStrictEqual(presses(page), [
     { type: 'edit', id: 'Requirements', field: 'active', value: false },
   ]);
 });
@@ -212,7 +212,7 @@ test('choosing a stage posts the value the select holds', () => {
 
   page.fire('change', select);
 
-  assert.deepStrictEqual(page.posted, [
+  assert.deepStrictEqual(presses(page), [
     { type: 'edit', id: 'Requirements', field: 'stage', value: 'plan' },
   ]);
 });
@@ -224,7 +224,7 @@ test('a control outside every role posts nothing at all', () => {
 
   page.fire('input', new Node({ field: 'name' }));
 
-  assert.deepStrictEqual(page.posted, [], 'there is no role for it to belong to');
+  assert.deepStrictEqual(presses(page), [], 'there is no role for it to belong to');
 });
 
 test('typing in a checkbox-less control does not fire on change', () => {
@@ -235,5 +235,5 @@ test('typing in a checkbox-less control does not fire on change', () => {
 
   page.fire('change', input);
 
-  assert.deepStrictEqual(page.posted, []);
+  assert.deepStrictEqual(presses(page), []);
 });

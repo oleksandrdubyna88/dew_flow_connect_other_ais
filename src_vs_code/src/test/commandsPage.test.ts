@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { CommandRow } from '../commands';
 import { commandEdit, commandsHtml, commandsSkewNote, type CommandsPageState } from '../commandsPage';
-import { Node, runPageHtml } from './rolesPageHarness';
+import { Node, presses, runPageHtml } from './rolesPageHarness';
 
 /**
  * The Edit commands page, RUN — issue #467, Epic B. Its script is executed against the roles page's DOM
@@ -27,7 +27,7 @@ test('typing an override of a shipped text posts that text, and the host reads i
 
   page.fire('input', box);
 
-  assert.deepEqual(parsed(page.posted), [{ kind: 'text', fileId: 'command-autonomy', value: 'Work without asking.' }]);
+  assert.deepEqual(parsed(presses(page)), [{ kind: 'text', fileId: 'command-autonomy', value: 'Work without asking.' }]);
 });
 
 test('restoring, adding and removing post what the host acts on', () => {
@@ -38,7 +38,7 @@ test('restoring, adding and removing post what the host acts on', () => {
   page.fire('click', new Node({ add: '' }, 'BUTTON'));
   page.fire('click', new Node({ remove: '' }, 'BUTTON').under(row));
 
-  assert.deepEqual(parsed(page.posted), [
+  assert.deepEqual(parsed(presses(page)), [
     { kind: 'restore', fileId: 'command-autonomy' },
     { kind: 'add', token: '' },
     { kind: 'remove', id: 'custom-1' },
@@ -59,7 +59,7 @@ test('a tick and a stage post ONCE each, on change — never again on input', ()
   page.fire('input', stage);
   page.fire('change', stage);
 
-  assert.deepEqual(parsed(page.posted), [
+  assert.deepEqual(parsed(presses(page)), [
     { kind: 'switch', id: 'custom-1', value: true },
     { kind: 'restage', id: 'custom-1', value: 'code' },
   ]);
@@ -76,7 +76,7 @@ test('retitling posts the title, and the command’s own text box posts its file
   page.fire('input', title);
   page.fire('input', body);
 
-  assert.deepEqual(parsed(page.posted), [
+  assert.deepEqual(parsed(presses(page)), [
     { kind: 'retitle', id: 'custom-1', value: 'Module docs' },
     { kind: 'text', fileId: 'command-custom-1', value: 'Update the module docs.' },
   ]);

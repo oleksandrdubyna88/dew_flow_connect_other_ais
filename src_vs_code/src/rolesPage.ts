@@ -5,6 +5,8 @@ import { STOOD_DOWN, type Tombstone } from './roleDeletion';
 import { escapeHtml } from './webviewHtml';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
 import { tabCss, tabStrip } from './tabStrip';
+import { type BusySnapshot, IDLE } from './busySnapshot';
+import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
 
 /**
  * The tab where a person writes a review role.
@@ -84,6 +86,9 @@ export interface RolesPageState {
 
   /** The rows as stored — a person's own roles and their edits to the shipped ones. */
   readonly rows: readonly RoleRow[];
+
+  /** What the host had running when this tab was drawn: the busy mark's painted half (todo/PLAN_busy_marks_on_every_webview.md). */
+  readonly busy?: BusySnapshot;
 
   /**
    * The TEXT of each prompt, by prompt id.
@@ -509,6 +514,13 @@ function strandedHtml(stranded: readonly Tombstone[]): string {
   return `<section class="stranded" aria-label="Deletions the server has not been told about"><ul>${rows}</ul></section>`;
 }
 
+/**
+ * The posts this tab numbers: the structural changes, each of which re-reads every prompt file and redraws the tab
+ * (todo/PLAN_busy_marks_on_every_webview.md, E3). `edit` and `editPrompt` are numbered only from a checkbox or a
+ * select — switching a role on reads every prompt — and never from typing, which settles on its own for 300 ms.
+ */
+export const ROLES_TRACKED: readonly string[] = ['edit', 'editPrompt', 'add', 'addPrompt', 'removePrompt', 'restorePrompt', 'remove', 'finishDeletion'];
+
 export function rolesHtml(state: RolesPageState, nonce: string): string {
   const all = composed(state.rows);
   const openTab = tabShown(state.tab ?? DEFAULT_ROLE_TAB);
@@ -538,6 +550,7 @@ export function rolesHtml(state: RolesPageState, nonce: string): string {
 ${styles(textOf(state).size, textOf(state).tone)}
 </head>
 <body>
+${BUSY_BAR}
 <header><h1>Review roles</h1>${textControlsHtml(textOf(state).size, textOf(state).tone)}</header>
 <p class="lead">The question each reviewer asks. Everything here is saved as you type${state.perSide ? ', for this side of the machine' : ''}.</p>
 ${strandedHtml(state.stranded ?? [])}
@@ -570,7 +583,7 @@ ${documents.map((r) => roleBlock(all, r, state.texts)).join('\n')}
 ${features.map((r) => roleBlock(all, r, state.texts)).join('\n')}
 </section>
 
-${script(nonce)}
+${script(nonce, state.busy ?? IDLE)}
 </body>
 </html>`;
 }
@@ -628,40 +641,45 @@ button.remove { background: var(--vscode-button-secondaryBackground); color: var
 button.role { margin-top: 10px; }
 .stale { border-left: 3px solid var(--vscode-charts-yellow, #cca700); background: var(--vscode-textBlockQuote-background);
   padding: 6px 8px; font-size: 0.9em; margin: 8px 0; }
+${BUSY_CSS}
 </style>`;
 }
 
-function script(nonce: string): string {
+function script(nonce: string, busy: BusySnapshot): string {
   return `<script nonce="${nonce}">
 (function () {
   const vscode = acquireVsCodeApi();
+  ${busyMarkScript(busy, ROLES_TRACKED)}
   ${textControlsScript()}
   // Delegated on the document: every block is replaced whenever the rows change, and a listener
   // bound to one field would die with the block it was bound to.
   const roleOf = (el) => el.closest('[data-id]');
   const promptOf = (el) => el.closest('[data-prompt]');
-  const send = (field) => {
+  const sendField = (field) => {
     const role = roleOf(field);
     if (!role || !role.dataset || typeof field.dataset.field !== 'string') { return; }
     const prompt = promptOf(field);
     const value = field.type === 'checkbox' ? field.checked : field.value;
+    // A pick is a change that makes the host work (switching a role on reads every prompt); typing settles on its own and
+    // is never marked.
+    const post = (message) => (field.type === 'checkbox' || field.tagName === 'SELECT' ? send(message, field) : vscode.postMessage(message));
     if (prompt && prompt.dataset) {
-      vscode.postMessage({ type: 'editPrompt', id: role.dataset.id, promptId: prompt.dataset.prompt,
+      post({ type: 'editPrompt', id: role.dataset.id, promptId: prompt.dataset.prompt,
                            field: field.dataset.field, value: value });
       return;
     }
-    vscode.postMessage({ type: 'edit', id: role.dataset.id, field: field.dataset.field, value: value });
+    post({ type: 'edit', id: role.dataset.id, field: field.dataset.field, value: value });
   };
   // A checkbox and a select are sent by 'change' below. The browser fires 'input' for them TOO, and
   // sending from both made one press two commands - two reads of every prompt and two refusals for one
   // click once switching a role on could be refused. (Our own code review of issue #338.)
   document.addEventListener('input', function (event) {
     const typed = event.target;
-    if (typed && typed.dataset && typed.type !== 'checkbox' && typed.tagName !== 'SELECT') { send(typed); }
+    if (typed && typed.dataset && typed.type !== 'checkbox' && typed.tagName !== 'SELECT') { sendField(typed); }
   });
   document.addEventListener('change', function (event) {
     const field = event.target;
-    if (field && field.dataset && (field.type === 'checkbox' || field.tagName === 'SELECT')) { send(field); }
+    if (field && field.dataset && (field.type === 'checkbox' || field.tagName === 'SELECT')) { sendField(field); }
   });
   document.addEventListener('click', function (event) {
     const pressed = event.target;
@@ -689,27 +707,29 @@ function script(nonce: string): string {
     }
     if (pressed.closest('[data-reload]')) { vscode.postMessage({ type: 'reloadWindow' }); return; }
     const finish = pressed.closest('[data-finish]');
-    if (finish) { vscode.postMessage({ type: 'finishDeletion', id: finish.dataset.finish }); return; }
-    if (pressed.closest('[data-add="role"]')) { vscode.postMessage({ type: 'add' }); return; }
+    if (finish) { send({ type: 'finishDeletion', id: finish.dataset.finish }, finish); return; }
+    if (pressed.closest('[data-add="role"]')) { send({ type: 'add' }, pressed); return; }
     const addPrompt = pressed.closest('[data-add-prompt]');
-    if (addPrompt) { vscode.postMessage({ type: 'addPrompt', id: addPrompt.dataset.addPrompt }); return; }
+    if (addPrompt) { send({ type: 'addPrompt', id: addPrompt.dataset.addPrompt }, addPrompt); return; }
     const removePrompt = pressed.closest('[data-remove-prompt]');
     if (removePrompt) {
       const role = roleOf(removePrompt);
-      vscode.postMessage({ type: 'removePrompt', id: role ? role.dataset.id : '',
-                           promptId: removePrompt.dataset.removePrompt });
+      send({ type: 'removePrompt', id: role ? role.dataset.id : '',
+                           promptId: removePrompt.dataset.removePrompt }, removePrompt);
       return;
     }
     const restore = pressed.closest('[data-restore]');
     if (restore) {
       const role = roleOf(restore);
-      vscode.postMessage({ type: 'restorePrompt', id: role ? role.dataset.id : '',
-                           promptId: restore.dataset.restore });
+      send({ type: 'restorePrompt', id: role ? role.dataset.id : '',
+                           promptId: restore.dataset.restore }, restore);
       return;
     }
     const remove = pressed.closest('[data-remove]');
-    if (remove && remove.dataset) { vscode.postMessage({ type: 'remove', id: remove.dataset.remove }); }
+    if (remove && remove.dataset) { send({ type: 'remove', id: remove.dataset.remove }, remove); }
   });
+  // LAST: this tab is ready to hear what is running (busyMark.ts).
+  vscode.postMessage({ type: 'ready' });
 }());
 </script>`;
 }
