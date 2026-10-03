@@ -8,9 +8,11 @@ namespace CoaiMcp.Store;
 internal static class SecurityFindingStore
 {
     internal static string Write(Core.Findings.Finding finding) =>
-        finding.Reproduction is null && finding.AttackEvidence is null && finding.CapReason.Length == 0 && finding.AlsoSeenBy.IsDefaultOrEmpty
-            ? string.Empty : JsonSerializer.Serialize(SecurityFindingDetails.Of(finding),
-                ServerJsonContext.Default.SecurityFindingDetails);
+        HasNoSecurityPart(finding) ? string.Empty : JsonSerializer.Serialize(SecurityFindingDetails.Of(finding),
+            ServerJsonContext.Default.SecurityFindingDetails);
+
+    private static bool HasNoSecurityPart(Core.Findings.Finding finding) =>
+        finding.Reproduction is null && finding.AttackEvidence is null && finding.CapReason.Length == 0 && finding.AlsoSeenBy.IsDefaultOrEmpty;
 
     internal static SecurityFindingDetails? Read(SqliteDataReader rows)
     {

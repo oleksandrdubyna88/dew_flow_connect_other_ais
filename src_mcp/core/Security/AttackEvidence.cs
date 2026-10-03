@@ -19,7 +19,12 @@ public sealed record AttackEvidence(string Trigger, string Mechanism, string Con
     public bool Complete => Characters <= Reproduction.MaxCharacters
         && new[] { Trigger, Mechanism, Consequence }.All(s => !string.IsNullOrWhiteSpace(s));
 
+    /// <summary>No evidence when the reviewer sent none of the three fields; otherwise each one trimmed, a missing one empty.</summary>
     public static AttackEvidence? Read(string? trigger, string? mechanism, string? consequence) =>
-        trigger is null && mechanism is null && consequence is null ? null
-            : new(trigger?.Trim() ?? string.Empty, mechanism?.Trim() ?? string.Empty, consequence?.Trim() ?? string.Empty);
+        IsAbsent(trigger, mechanism, consequence) ? null : new(Clean(trigger), Clean(mechanism), Clean(consequence));
+
+    private static bool IsAbsent(string? trigger, string? mechanism, string? consequence) =>
+        trigger is null && mechanism is null && consequence is null;
+
+    private static string Clean(string? field) => field?.Trim() ?? string.Empty;
 }
