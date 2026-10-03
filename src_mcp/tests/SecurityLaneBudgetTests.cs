@@ -108,10 +108,9 @@ public sealed class SecurityLaneBudgetTests
         var both = new CoaiMcp.Server.SecurityRun("codex", "redteam-sql", SecurityContextModes.Diff, 200000,
             [SecurityStages.Code, SecurityStages.Feature]);
 
-        both.Serves(Stage.CodeReview).Should().BeTrue();
-        both.Serves(Stage.FeatureReview).Should().BeTrue();
-        both.Serves(Stage.PlanReview).Should().BeFalse("a stage the lane does not serve must not read as the feature stage");
-        both.Serves(Stage.Done).Should().BeFalse();
+        // Derived from the enum, so a stage added later is checked without anyone editing this test.
+        Enum.GetValues<Stage>().Where(both.Serves).Should().Equal(
+            [Stage.CodeReview, Stage.FeatureReview], "a stage the lane does not serve must not read as the feature stage");
     }
 
     [Fact]
