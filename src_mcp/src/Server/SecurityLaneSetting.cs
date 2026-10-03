@@ -109,8 +109,11 @@ public sealed record SecurityLaneSetting
         return IsBooleanOrAbsent(root, "enabled") ? string.Empty : "enabled must be true or false";
     }
 
+    /// <summary>The members that must be arrays when present, in the order a refusal names them.</summary>
+    private static readonly string[] ListMembers = ["prompts", "runs"];
+
     private static string ListProblem(JsonElement root) =>
-        new[] { "prompts", "runs" }.Where(name => IsPresentButNotArray(root, name))
+        ListMembers.Where(name => IsPresentButNotArray(root, name))
             .Select(name => $"{name} must be an array; the lane is off").FirstOrDefault() ?? string.Empty;
 
     private static bool IsPresentButNotArray(JsonElement row, string name) =>
