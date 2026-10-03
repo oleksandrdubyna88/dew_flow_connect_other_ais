@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.62.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.62.0...extension-v0.62.1) (2026-10-03)
+
+
+### Bug Fixes
+
+* **extension:** the card says who wrote it; the AI's own questions leave the panel ([b17cabf](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/b17cabf92378fc46e8598b010f8f0993787458a2))
+* **mcp:** ask_human cards only the gate's question; the AI's own questions go back to its chat ([07d20c3](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/07d20c34530860234607e562053e856d1f48abf3))
+
 ## [0.62.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.61.2...extension-v0.62.0) (2026-10-03)
 
 
