@@ -91,6 +91,30 @@ public sealed class SecurityLaneBudgetTests
     }
 
     [Fact]
+    public void A_round_past_the_lanes_own_budget_is_not_the_lanes_either()
+    {
+        // Round three is past the ordinary budget of one AND the lane's budget of two: nobody's budget
+        // admitted it, so it must keep the ordinary "nobody to ask" refusal rather than run empty in the
+        // lane's name. (coai code round 9, gemini Architecture/SecurityReliability.)
+        var code = new SessionState("code", "repo", "main", OneOrdinaryRoundTwoLaneRounds)
+        { Stage = Stage.CodeReview, PlanProceeded = true, RoundsRunThisStage = 2 };
+
+        RoundMachine.AdmittedOnlyForTheLane(code).Should().BeFalse();
+    }
+
+    [Fact]
+    public void A_pairing_serves_the_code_and_feature_stages_and_no_other()
+    {
+        var both = new CoaiMcp.Server.SecurityRun("codex", "redteam-sql", SecurityContextModes.Diff, 200000,
+            [SecurityStages.Code, SecurityStages.Feature]);
+
+        both.Serves(Stage.CodeReview).Should().BeTrue();
+        both.Serves(Stage.FeatureReview).Should().BeTrue();
+        both.Serves(Stage.PlanReview).Should().BeFalse("a stage the lane does not serve must not read as the feature stage");
+        both.Serves(Stage.Done).Should().BeFalse();
+    }
+
+    [Fact]
     public void A_feature_round_two_on_a_failure_or_a_request_is_not_the_lanes()
     {
         var round2 = FeatureRoundOne() with { RoundsRunThisStage = 1 };

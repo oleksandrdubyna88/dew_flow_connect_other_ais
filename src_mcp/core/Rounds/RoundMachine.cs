@@ -486,11 +486,14 @@ public static class RoundMachine
     /// round past the ordinary budget only on a blocking lane finding (<see cref="FeatureBudgetFor"/>);
     /// its other grounds stay the ordinary roles' own. Round one is never the lane's alone.</para>
     /// <para>Read from the state rather than from the lane's settings on purpose: a lane switched off
-    /// after admitting the round has still admitted it.</para>
+    /// after admitting the round has still admitted it — which is why its <c>Enabled</c> is not asked.
+    /// Its BUDGET is: a round past the lane's own budget as well was admitted by nobody's, and keeps the
+    /// ordinary "nobody to ask" answer rather than running empty in the lane's name. (coai code round 9.)</para>
     /// </remarks>
     public static bool AdmittedOnlyForTheLane(SessionState s) =>
         s.RoundsRunThisStage > 0
         && s.RoundsRunThisStage >= s.Config.For(s.Stage).MaxRounds
+        && s.RoundsRunThisStage < s.Config.SecurityLane.MaxRounds
         && LaneCanAdmit(s);
 
     private static bool LaneCanAdmit(SessionState s) => s.Stage switch

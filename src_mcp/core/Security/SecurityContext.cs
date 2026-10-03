@@ -74,6 +74,8 @@ public static class SecurityContext
 
     private static Placed Place(SecurityFile file, string source, bool slice, long budget)
     {
+        // A spent budget fits nothing more: answer before composing an entry for every remaining file.
+        if (budget <= 0) return Nothing;
         var whole = Entry(file, source, slice);
         return Fits(whole, budget)
             ? new(whole, slice && source.Length == 0 ? " (source body unavailable; patch only)" : string.Empty)
