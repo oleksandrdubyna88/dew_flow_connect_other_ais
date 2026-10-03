@@ -52,6 +52,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- CA1502's threshold. The rule is switched on only for the security lane's files, in .editorconfig. -->
+    <AdditionalFiles Include="..\CodeMetricsConfig.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
     <InternalsVisibleTo Include="CoaiMcp.Tests" />
 
     <!-- The parity check drives `Redaction` and `ServerNoticeLine` from a process node can start,
