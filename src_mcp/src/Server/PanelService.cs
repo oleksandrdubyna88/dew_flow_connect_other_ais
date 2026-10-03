@@ -308,7 +308,7 @@ public sealed class PanelService
     /// </param>
     internal static (string Auth, string Note) AuthOf(
         ProviderSettings provider, bool hasVaultKey, bool hasServerToken = false) =>
-        RuntimeResolution.AuthOf(provider.Identity(), hasVaultKey, hasServerToken);
+        RuntimeResolution.ReadinessOf(provider.Identity(), hasVaultKey, hasServerToken, provider.Model);
 
     /// <summary>Has this machine signed into the Team server this vendor points at?</summary>
     /// <remarks>
@@ -368,7 +368,7 @@ public sealed class PanelService
         RuntimeFor(provider) is null
             ? $"no adapter for a runtime called '{provider.Runtime}'"
             : RuntimeResolution.ExclusionReason(
-                provider.Identity(), _keys.Keys.ContainsKey(provider.KeyName), HasServerToken(provider));
+                provider.Identity(), _keys.Keys.ContainsKey(provider.KeyName), HasServerToken(provider), provider.Model);
 
     // ---------- open / status ----------
 

@@ -237,4 +237,16 @@ public sealed class VendorProbeTests : IDisposable
         health.Auth.Should().Be("unavailable");
         health.Note.Should().Contain("no model").And.Contain("Model");
     }
+
+    [Fact]
+    public async Task ACodexRowOnAnEndpointWithNoModel_IsReportedUnavailable_BeforeAnyRound()
+    {
+        // `providers` says what the round will do (research/PLAN_refuse_an_endpoint_row_without_a_model.md), so the panel can
+        // badge the row before somebody waits for a round to fail at the endpoint.
+        var health = await Probe(
+            Vendor("openrouter", "codex", "https://openrouter.ai/api/v1"), exe: FakeCliInvocations.Exe, model: "", hasKey: true);
+
+        health.Auth.Should().Be("unavailable");
+        health.Note.Should().Contain("no model");
+    }
 }
