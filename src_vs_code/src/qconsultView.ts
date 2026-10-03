@@ -28,7 +28,8 @@ import type { Vendor } from './vendors';
  * <p>The `consultantView.ts` split: {@link questionRowView} DECIDES what a row offers and whether its switch
  * may be turned on, and the markup only renders that value — so a test asserts the decision, and the page test
  * runs the page. An incompatible pair is DISABLED with the capability table's own reason (A3); a pair that can
- * read this machine (D13) is shown so, and its switch waits for the row's acknowledgement.</p>
+ * read this machine (D13) is shown so — with a tick that is ON and cannot be taken off, because no setting of that
+ * runtime confines what it reads (revised by the operator on 2026-10-03; there is no acknowledgement to give).</p>
  */
 
 /** What the section needs beyond the settings. */
@@ -68,7 +69,6 @@ export interface QuestionRowView {
   readonly enabled: boolean;
   /** Why the switch of a row that is OFF may not be turned on — empty when it may. */
   readonly blocked: string;
-  readonly acknowledged: boolean;
   readonly takesBaseUrl: boolean;
   readonly takesKey: boolean;
   readonly takesExecutablePath: boolean;
@@ -99,7 +99,6 @@ export function questionRowView(row: QuestionRowSetting, settings: QconsultSetti
     admission: rowAdmission(row, prompts, state.vendors),
     enabled: row.enabled,
     blocked: row.enabled ? '' : enableBlocker(row, settings.rows, prompts, state.vendors),
-    acknowledged: row.acknowledged,
     ...fieldsOf(row, runtime),
   };
 }
@@ -254,7 +253,10 @@ function promptOptionHtml(p: PromptOption, current: string): string {
   return `    <option value="${escapeHtml(p.value)}"${p.value === current ? ' selected' : ''}${refused}>${escapeHtml(label)}</option>`;
 }
 
-/** D13: a pair that can read this machine says so, and its tick is what lets the row run. */
+/**
+ * D13, revised 2026-10-03: a pair that can read this machine says so, with a tick that is ON and cannot be taken off.
+ * It is not a setting — nothing is stored, nothing posted — because no setting of the runtime would confine it.
+ */
 function flagBlock(view: QuestionRowView): string {
   if (!view.admission.admitted || view.admission.flag.length === 0) {
     return '';
@@ -262,7 +264,16 @@ function flagBlock(view: QuestionRowView): string {
   const id = escapeHtml(view.id);
 
   return `  <div class="hint stale" data-flag="${escapeHtml(view.admission.flag)}">Can read this machine — ${escapeHtml(view.admission.caveat)}.</div>
-  <div class="check-row"><label for="qconsultRowAcknowledged-${id}"><input type="checkbox" id="qconsultRowAcknowledged-${id}" data-setting="qconsultRowAcknowledged" data-caller="${id}"${view.acknowledged ? ' checked' : ''}> I accept that this row can read this machine</label>${help('qconsultRowAcknowledged')}</div>`;
+  <div class="check-row"><label for="qconsultRowCanRead-${id}"><input type="checkbox" id="qconsultRowCanRead-${id}" checked disabled> Can read this machine — ${escapeHtml(whyItStaysOn(view.runtime, view.admission.flag))}</label>${help('qconsultRowCanRead')}</div>`;
+}
+
+/** Why the tick cannot be taken off, per flag — the measured fact, in the runtime's own name. */
+function whyItStaysOn(runtime: string, flag: string): string {
+  const name = runtime.charAt(0).toUpperCase() + runtime.slice(1);
+
+  return flag === 'default-deny'
+    ? `${name} has no setting that holds it to these folders; only its own default refuses a read outside them`
+    : `${name} has no setting that limits what it reads, so this cannot be switched off`;
 }
 
 /** A row that is ON with a pair the table refuses — a hand edit — says why the server will not run it. */

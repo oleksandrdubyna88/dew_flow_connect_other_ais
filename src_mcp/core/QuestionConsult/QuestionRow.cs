@@ -16,10 +16,6 @@ namespace CoaiMcp.Core.QuestionConsult;
 /// <param name="Key">The vault entry an <c>api</c> row's key is filed under, when not its vendor id (S3.6). A name, never a value.</param>
 /// <param name="Prompt">The id of the ONE base prompt this row runs — the same prompt may sit on several rows.</param>
 /// <param name="Enabled">Whether the row runs. At most <see cref="QuestionRows.MaxActive"/> rows may be on.</param>
-/// <param name="Acknowledged">
-/// D13: the operator's tick that a flagged pair (an unconfined or default-deny runtime) may run anyway.
-/// Carried on the row since S2; the UI that asks for it is S4's.
-/// </param>
 public sealed record QuestionRow(
     string Id,
     string Vendor,
@@ -29,8 +25,7 @@ public sealed record QuestionRow(
     string ExecutablePath,
     string Key,
     string Prompt,
-    bool Enabled,
-    bool Acknowledged);
+    bool Enabled);
 
 /// <summary>What <c>COAI_QCONSULT_ROWS</c> turned out to be: the rows, the complaints, and whether it could be read at all.</summary>
 /// <param name="Unreadable">The whole value could not be parsed — the tool refuses by name rather than running nobody.</param>
@@ -53,8 +48,7 @@ internal sealed record QuestionRowDto(
     string? ExecutablePath = null,
     string? Key = null,
     string? Prompt = null,
-    bool? Enabled = null,
-    bool? Acknowledged = null);
+    bool? Enabled = null);
 
 /// <summary>
 /// The parser of <c>COAI_QCONSULT_ROWS</c>: a JSON array of rows, at most <see cref="MaxActive"/> of them on.
@@ -151,8 +145,7 @@ public static partial class QuestionRows
             dto.ExecutablePath?.Trim() ?? string.Empty,
             dto.Key?.Trim().ToLowerInvariant() ?? string.Empty,
             prompt,
-            Enabled: dto.Enabled != false,
-            Acknowledged: dto.Acknowledged == true), string.Empty);
+            Enabled: dto.Enabled != false), string.Empty);
     }
 
     /// <summary>The seventh active row and after are switched off, and the complaint names them.</summary>

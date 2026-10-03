@@ -20,7 +20,7 @@ const repo = (...parts: string[]): string => path.join(__dirname, '..', '..', '.
 function row(id: string, overrides: Partial<QuestionRowSetting> = {}): QuestionRowSetting {
   return {
     id, vendor: 'claude', runtime: 'claude', model: '', baseUrl: '', executablePath: '', key: '',
-    prompt: 'question-opinion', enabled: false, acknowledged: false, ...overrides,
+    prompt: 'question-opinion', enabled: false, ...overrides,
   };
 }
 
@@ -106,21 +106,16 @@ test('every pair the vectors refuse is DISABLED in that runtime\'s picker, with 
   }
 });
 
-test('a codex row says it can read this machine and cannot be switched on until its acknowledgement is ticked (D13)', () => {
-  const unticked = page([row('astra-web', { vendor: 'codex', runtime: 'codex', prompt: 'question-web' })]);
+test('a codex row says it can read this machine, its tick is on and cannot be taken off, and it switches on (D13, revised)', () => {
+  const on = page([row('astra-web', { vendor: 'codex', runtime: 'codex', prompt: 'question-web' })]);
 
-  assert.equal(controlOf(unticked, 'qconsultRowEnabled', 'astra-web').disabled, true, 'a flagged row could be switched on without the tick');
-  const tick = controlOf(unticked, 'qconsultRowAcknowledged', 'astra-web');
-  assert.equal(tick.checked, false);
-
-  tick.checked = true;
-  tick.fire('change');
-  const written = unticked.posted.filter((one) => one['type'] === 'setting').at(-1);
-  assert.deepEqual({ key: written?.['key'], value: written?.['value'], caller: written?.['caller'] },
-    { key: 'qconsultRowAcknowledged', value: true, caller: 'astra-web' }, 'the tick does not write acknowledged into the row');
-
-  const ticked = page([row('astra-web', { vendor: 'codex', runtime: 'codex', prompt: 'question-web', acknowledged: true })]);
-  assert.equal(controlOf(ticked, 'qconsultRowEnabled', 'astra-web').disabled, false, 'once ticked, the row may run');
+  assert.equal(controlOf(on, 'qconsultRowEnabled', 'astra-web').disabled, false, 'the flag is enough: nothing stands between the row and its switch');
+  const tick = /<input type="checkbox" id="qconsultRowCanRead-astra-web"([^>]*)>/.exec(on.html)?.[1];
+  assert.ok(tick !== undefined, 'the row shows no tick for what it can read');
+  assert.match(tick, /\bchecked\b/, 'the tick is shown ON');
+  assert.match(tick, /\bdisabled\b/, 'and cannot be taken off');
+  assert.doesNotMatch(tick, /data-setting=/, 'it is not a setting: nothing a person does to it is stored');
+  assert.match(on.html, /Codex has no setting that limits what it reads/, 'the reason is written beside the tick');
 });
 
 test('a confined pair asks for no acknowledgement at all', () => {

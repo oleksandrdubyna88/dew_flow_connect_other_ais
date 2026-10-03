@@ -43,7 +43,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
     }
 
     private static QuestionRow Row(string id, string vendor, string model) =>
-        new(id, vendor, vendor, model, string.Empty, string.Empty, string.Empty, "question-opinion", Enabled: true, Acknowledged: true);
+        new(id, vendor, vendor, model, string.Empty, string.Empty, string.Empty, "question-opinion", Enabled: true);
 
     private static readonly IReadOnlyList<QuestionRow> TwoRows = [Row("sonnet", "claude", "sonnet"), Row("astra", "codex", "gpt-6-astra")];
 
@@ -256,7 +256,7 @@ public sealed class QuestionConsultServiceTests : IAsyncLifetime
                 Providers = [],
                 QuestionConsult = new QuestionConsultSettings
                 {
-                    Rows = [new QuestionRow("astra-disk", "codex", "codex", "gpt-6-astra", string.Empty, string.Empty, string.Empty, "question-disk", Enabled: true, Acknowledged: true)],
+                    Rows = [new QuestionRow("astra-disk", "codex", "codex", "gpt-6-astra", string.Empty, string.Empty, string.Empty, "question-disk", Enabled: true)],
                     Roots = [plain],
                     RowBudget = TimeSpan.FromSeconds(30),
                 },

@@ -56,7 +56,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
         ScriptedLauncher Launcher);
 
     private static readonly QuestionRow ClaudeRow =
-        new("sonnet", "claude", "claude", "sonnet", string.Empty, string.Empty, string.Empty, "question-opinion", Enabled: true, Acknowledged: true);
+        new("sonnet", "claude", "claude", "sonnet", string.Empty, string.Empty, string.Empty, "question-opinion", Enabled: true);
 
     private static Task<ScriptedAnswer?> Answers(ScriptedLaunch launch) => Task.FromResult<ScriptedAnswer?>(
         launch.Request.Executable == "claude" ? ScriptedAnswer.Claude("A ladder: 5, 30, 60, 120 seconds.") : null);
@@ -509,7 +509,7 @@ public sealed class AskHumanServiceTests : IAsyncLifetime
         var plain = Directory.CreateTempSubdirectory("coai-askhuman-plain-").FullName;
         try
         {
-            var diskRow = new QuestionRow("astra-disk", "codex", "codex", "gpt-6-astra", string.Empty, string.Empty, string.Empty, "question-disk", Enabled: true, Acknowledged: true);
+            var diskRow = new QuestionRow("astra-disk", "codex", "codex", "gpt-6-astra", string.Empty, string.Empty, string.Empty, "question-disk", Enabled: true);
             var h = Build(budget: TimeSpan.FromSeconds(2), rows: [diskRow], roots: [plain], script: launch => Task.FromResult<ScriptedAnswer?>(
                 launch.Request.Executable == "codex" ? ScriptedAnswer.Codex("Back the column up first.") : null));
             Proceeded(h);
