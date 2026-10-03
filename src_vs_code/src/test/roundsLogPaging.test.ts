@@ -4,7 +4,7 @@ import { EMPTY_TOTALS } from '../roundsDb';
 import { LogRow, PAGE_SIZE, roundsLogHtml } from '../roundsLog';
 import { Element, Rule, couldMatch, painters, stylesheet } from './cssRules';
 import { withoutSeq } from './panelPageHarness';
-import { open, type Page, type Stub, TOTALS } from './roundsLogPageHarness';
+import { open, type Page, type Stub, TOTALS } from './roundsLogPagingHarness';
 
 /**
  * The page holds a PAGE, and the numbers under it come from SQL.

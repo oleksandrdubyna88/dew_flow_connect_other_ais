@@ -81,6 +81,26 @@ public sealed class TheLocalReviewerStandsDownTests
         summary.Sentence.Should().Contain("not asked");
     }
 
+    [Fact]
+    public async Task AQuietCloud_StillRunsTheQueuedSecurityLane()
+    {
+        var results = await Run([.. Round(Cloud("codex", RoleCatalog.ArchitectureRole)),
+            Local("redteam-general") with { IsSecurity = true }]);
+
+        StoodDownRoles(results).Should().BeEquivalentTo([RoleCatalog.SecurityRole, RoleCatalog.UxDxRole]);
+        results.Single(r => r.Invocation.Role == "redteam-general").Outcome.Should().BeOfType<ReviewerOutcome.Ok>();
+    }
+
+    [Fact]
+    public async Task SecurityLaneRemarks_DoNotChangeTheOrdinaryCloudStandDownDecision()
+    {
+        var results = await Run(Round(Cloud("codex", RoleCatalog.ArchitectureRole),
+            Cloud("gemini", "redteam-general", remarks: 2) with { IsSecurity = true }));
+
+        StoodDownRoles(results).Should().BeEquivalentTo([RoleCatalog.SecurityRole, RoleCatalog.UxDxRole]);
+        results.Single(r => r.Invocation.Role == "redteam-general").Outcome.Should().BeOfType<ReviewerOutcome.Ok>();
+    }
+
     [Theory]
     [InlineData(2, false, true, "two remarks are not almost nothing")]
     [InlineData(0, true, true, "a failed cloud reviewer's zero is not 'found little'")]
@@ -176,9 +196,9 @@ public sealed class TheLocalReviewerStandsDownTests
         private static string Answer(string argument)
         {
             var remarks = argument.StartsWith("--remarks=", StringComparison.Ordinal) ? int.Parse(argument["--remarks=".Length..]) : 0;
-            var one = """{"severity":"minor","category":"clarity","file":null,"line":null,"title":"t","why":"w","fix":"f"}""";
+            var one = """{"severity":"minor","category":"clarity","file":null,"line":null,"title":"t","why":"w","fix":"f","trigger":"input","mechanism":"missing check","consequence":"unintended output"}""";
 
-            return $$"""{"findings":[{{string.Join(",", Enumerable.Repeat(one, remarks))}}]}""";
+            return $$"""{"status":"{{(remarks == 0 ? "SECURE" : "FINDINGS")}}","findings":[{{string.Join(",", Enumerable.Repeat(one, remarks))}}]}""";
         }
     }
 }

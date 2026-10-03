@@ -14,6 +14,12 @@ until implemented, then promoted here.
 
 ## Containers
 
+The optional [security lane](module_security_lane.md) adds provider/prompt pairs to existing code
+and feature rounds. It reuses runtime scheduling and committed source resolution, applies a
+reproduction cap before deduplication, and carries security evidence through the session, SQLite
+and extension. It introduces no separate stage or ordinary-role flag. Local coverage is explicitly
+unverified, and a lane answer cannot substitute for a failed ordinary reviewer.
+
 ```mermaid
 C4Container
   title ConnectOtherAIs — containers

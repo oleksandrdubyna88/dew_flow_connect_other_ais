@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { BUSY_AFTER_MS } from '../busyMark';
 import { LogRow } from '../roundsLog';
 import { PageClock } from './panelPageHarness';
-import { open, type Page, TOTALS } from './roundsLogPageHarness';
+import { open, type Page, TOTALS } from './roundsLogPagingHarness';
 
 /**
  * The rounds log shows that it is working (research/PLAN_busy_marks_on_every_webview.md, E1).

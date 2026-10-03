@@ -39,7 +39,7 @@ internal sealed record StageRun(
     bool NeedsWorktree,
     Stage Stage,
     bool ReadsCheckout,
-    Func<PersistedSession, string, string, Task<RoundWork>> MakeWork)
+    Func<PersistedSession, string, string, CancellationToken, Task<RoundWork>> MakeWork)
 {
     /// <summary>
     /// Which session this run is about: empty for the branch's own, the document's identity for a

@@ -1,15 +1,9 @@
 /**
  * The rounds database, read through the server that owns it.
  *
- * <p><b>Why not SQLite in here.</b> The alternative was a WebAssembly build of SQLite in the VSIX or
- * a native module per platform, to ask questions of a file the server already writes and whose
- * schema it owns. The server answers `--log` with JSON instead: no dependency, no platform build,
- * and every query stays beside its table.</p>
- *
- * <p><b>Version skew is normal and is not an error.</b> A server older than the database answers
- * `unknown argument` and exit 64; one that has never run a round answers an empty log. Both mean the
- * same thing to the page — no findings to show — and the page keeps rendering everything it builds
- * from the session files, which is what it always had.</p>
+ * The owning server answers `--log` with JSON, keeping SQLite dependencies and queries beside its schema.
+ * An older server may answer `unknown argument` and exit 64; an unused server answers an empty log.
+ * Both leave the page showing its session-file information without database findings.
  */
 
 import { type DbQuestion, questionsOf } from './qconsultLog';
@@ -33,6 +27,8 @@ export interface DbFinding {
   readonly reason: string;
   /** The caller had already rejected this, and a reviewer raised it again. */
   readonly reRaised: boolean;
+  /** Optional on old server/database versions. Displayed as escaped, untrusted evidence. */
+  readonly securityEvidence?: Readonly<Record<string, unknown>>;
 }
 
 export interface DbRound {
@@ -451,6 +447,8 @@ function finding(raw: Partial<DbFinding>): DbFinding {
     resolution: raw.resolution ?? '',
     reason: raw.reason ?? '',
     reRaised: raw.reRaised === true,
+    ...(raw.securityEvidence && typeof raw.securityEvidence === 'object'
+      ? { securityEvidence: raw.securityEvidence } : {}),
   };
 }
 

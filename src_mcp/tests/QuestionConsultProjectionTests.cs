@@ -70,7 +70,8 @@ public sealed class QuestionConsultProjectionTests : IDisposable
     [Fact]
     public void TheStepIsAppendedLast_AndADatabaseAtTheStepBefore_GainsTheTwoTablesOnOpen()
     {
-        Schema.Steps[^1].Should().Be(Schema.TheQuestionsAsked, "appended after WhyARoundDidNotRun, never inserted");
+        // By POSITION, not as the last step: the security lane appended 18 after it on 2026-10-03.
+        Schema.Steps[16].Should().Be(Schema.TheQuestionsAsked, "appended after WhyARoundDidNotRun, never inserted");
         Directory.CreateDirectory(_dir);
         using (var db = new SqliteConnection($"Data Source={Database};Pooling=False"))
         {
@@ -78,7 +79,7 @@ public sealed class QuestionConsultProjectionTests : IDisposable
             using var make = db.CreateCommand();
             // Every step BEFORE the one that creates the tables, found by asking which step that is.
             var creates = Array.FindIndex(Schema.Steps, step => step.Contains("question_consults", StringComparison.Ordinal));
-            creates.Should().Be(Schema.Steps.Length - 1);
+            creates.Should().Be(16);
             var before = Schema.Steps[..creates];
             make.CommandText = string.Join(";\n", before) + $"; PRAGMA user_version={before.Length}";
             make.ExecuteNonQuery();

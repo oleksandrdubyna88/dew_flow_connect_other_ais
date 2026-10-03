@@ -28,6 +28,8 @@ internal sealed record RoundWork(
     /// compares nothing.
     /// </remarks>
     public string BaseRef { get; init; } = string.Empty;
+    public bool SecurityActive { get; init; }
+    public bool OrdinaryDue { get; init; }
 
     /// <summary>
     /// What the round did NOT look at and must say so, appended to its reviewer line — today the

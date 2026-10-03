@@ -33,8 +33,12 @@ internal static class Schema
         Tables, Search, WhoCalled, Consultations, WhatItWasAgainst, TheCollectorsState,
         TheRunsThemselves, ThePairsThemselves, WhatWasSent, HowItEnded, WhoSaidSo,
         TheSendsThemselves, WhatAPersonSaid, WhatItWasTold, WhatTheCadenceCounts,
-        WhyARoundDidNotRun, TheQuestionsAsked,
+        WhyARoundDidNotRun, TheQuestionsAsked, SecurityEvidence,
     ];
+
+    internal const string SecurityEvidence = """
+        ALTER TABLE findings ADD COLUMN security_evidence TEXT NOT NULL DEFAULT '';
+        """;
 
     internal const string Tables = """
         CREATE TABLE IF NOT EXISTS sessions (

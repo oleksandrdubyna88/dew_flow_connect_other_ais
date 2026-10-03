@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Xunit;
 using CoaiMcp.Core.Findings;
+using CoaiMcp.Core.Security;
 using FluentAssertions;
 
 namespace CoaiMcp.Tests;
@@ -20,13 +21,14 @@ namespace CoaiMcp.Tests;
 /// </remarks>
 public sealed class FindingSchemaTests
 {
-    /// <summary>Both shapes the product hands a vendor — every rule below holds for each.</summary>
-    public static TheoryData<string> Schemas => [nameof(FindingSchema.Json), nameof(FindingSchema.FeatureJson)];
+    /// <summary>Every shape the product hands a vendor — every rule below holds for each.</summary>
+    public static TheoryData<string> Schemas => [nameof(FindingSchema.Json), nameof(FindingSchema.FeatureJson), nameof(SecuritySchema)];
 
     private static string Schema(string name) => name switch
     {
         nameof(FindingSchema.Json) => FindingSchema.Json,
         nameof(FindingSchema.FeatureJson) => FindingSchema.FeatureJson,
+        nameof(SecuritySchema) => SecuritySchema.Json,
         _ => throw new ArgumentOutOfRangeException(nameof(name), name, "not a schema this product ships"),
     };
 

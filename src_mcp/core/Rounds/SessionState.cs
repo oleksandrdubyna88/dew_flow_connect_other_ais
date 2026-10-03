@@ -127,18 +127,12 @@ public sealed record PanelConfig(
     [System.Text.Json.Serialization.JsonIgnore]
     public RoleCatalog Catalog { get; init; } = RoleCatalog.Builtin;
 
+    public RoleGate SecurityLane { get; init; } = new(2, 0, false);
+
     public IReadOnlyDictionary<string, RoleGate> Roles { get; init; } = Roles ?? Defaults();
 
     private static Dictionary<string, RoleGate> Defaults() =>
         AllRoles.ToDictionary(r => r, r => ShippedDefault(RoleCatalog.Builtin.ById(r)?.Stage ?? RoleStages.Result));
-
-    /// <summary>This role's numbers, falling back to its stage's default for an unknown name.</summary>
-    /// <remarks>
-    /// The fallback is what makes a role a person just created work with no settings at all: nobody
-    /// has written it a budget yet, so it takes its stage's shipped one.
-    /// </remarks>
-    public RoleGate For(string role) =>
-        Roles.TryGetValue(role, out var gate) ? gate : ShippedFor(role);
 
     /// <summary>The budget a role takes when nobody has written it one: its stage's shipped default.</summary>
     private RoleGate ShippedFor(string role) =>
@@ -175,19 +169,34 @@ public sealed record PanelConfig(
     public IReadOnlyList<string> EnabledRolesOf(Stage stage) =>
         [.. RolesOf(stage).Where(r => For(r).Enabled)];
 
+    /// <summary>This role's numbers, falling back to its stage's default for an unknown name.</summary>
+    /// <remarks>
+    /// The fallback is what makes a role a person just created work with no settings at all: nobody
+    /// has written it a budget yet, so it takes its stage's shipped one.
+    /// </remarks>
+    public RoleGate For(string role)
+    {
+        if (role == Security.SecurityCatalog.Gate) return SecurityLane;
+        return Roles.TryGetValue(role, out var gate) ? gate : ShippedFor(role);
+    }
+
     /// <summary>The stage's budget: its widest ENABLED role, because the stage counts rounds once.</summary>
     /// <remarks>
     /// A role that is switched off lends the stage neither its rounds nor its threshold. Leaving
     /// either in would keep the stage running rounds nobody reviews, or hold the gate open against a
     /// number no reviewer can bring down. With every role off the answer is <c>(0, 0)</c> — a stage
     /// that may run no round — rather than an exception from <c>Max</c> over an empty sequence.
+    /// <para><b>The ordinary roles only.</b> The security lane keeps its own budget
+    /// (<see cref="SecurityLane"/>, read through <see cref="For(string)"/> under
+    /// <see cref="Security.SecurityCatalog.Gate"/>). Folding it in here let a lane of two rounds buy a
+    /// feature stage whose roles have one a second round for an ORDINARY reviewer's failure — a round
+    /// only the lane would then have answered.</para>
     /// </remarks>
     public StageGate For(Stage stage)
     {
         var roles = EnabledRolesOf(stage);
-        return roles.Count == 0
-            ? NoEnabledRoles
-            : new StageGate(roles.Max(r => For(r).MaxRounds), roles.Max(r => For(r).Threshold));
+        if (roles.Count == 0) return NoEnabledRoles;
+        return new StageGate(roles.Max(r => For(r).MaxRounds), roles.Max(r => For(r).Threshold));
     }
 
     /// <summary>What a stage whose every role is switched off is worth: no round, nothing open.</summary>

@@ -10,6 +10,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="..\..\shared\security-lane.json" LogicalName="CoaiMcp.Core.security-lane.json" />
     <!-- The built-in role catalog: one file, read by both halves. This assembly embeds it — a
          default that lives beside the executable is a default that can go missing, which is how
          the first real run died on every review_plan — and the extension generates its copy

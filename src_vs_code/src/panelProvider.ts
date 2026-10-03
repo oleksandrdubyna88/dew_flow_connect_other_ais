@@ -64,6 +64,8 @@ import { ConsultPromptFile } from './consultPromptFile';
 import { QconsultHost, isQconsultCallerKey, type QconsultWriteHooks } from './qconsultHost';
 import { isQconsultCommand } from './qconsultWrite';
 import type { QuestionConsult } from './questionConsults';
+import { securityLaneFrom, securityLaneSave } from './securityLane';
+import { editSecurityPrompt } from './securityPromptEditor';
 import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
@@ -239,6 +241,7 @@ interface PanelMessage {
   readonly id?: string;
   readonly open?: boolean;
   readonly role?: string;
+  readonly securityField?: string;
   readonly caller?: string;
   readonly commandModel?: string;
   readonly round?: number;
@@ -1746,6 +1749,17 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   private async write(message: SettingMessage, from: SurfaceSlot): Promise<void> {
+    if (message.key === 'securityLane' && message.securityField) {
+      const config = vscode.workspace.getConfiguration('coai');
+      const read = this.read(config);
+      // Nothing is saved against a malformed setting: writing the panel's stand-in would replace
+      // what the person wrote in settings JSON, which is the one place they are told to correct it.
+      const next = securityLaneSave(read('securityLane'), message.securityField, message.value, vendorsFrom(read('vendors')));
+      if (next !== undefined) {
+        await this.save(config, 'securityLane', next);
+      }
+      return;
+    }
     const write = settingWrite(message);
     if (write === undefined) {
       return;
@@ -2109,6 +2123,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         if (id !== undefined) {
           await this.customConsultant(id);
         }
+        break;
+      case 'editSecurityPrompt':
+        if (id !== undefined) await editSecurityPrompt(this.dataDir, id,
+          securityLaneFrom(this.read(vscode.workspace.getConfiguration('coai'))('securityLane')));
         break;
       case 'customCommandModel':
         if (id !== undefined) {

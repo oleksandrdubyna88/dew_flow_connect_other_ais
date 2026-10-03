@@ -35,10 +35,19 @@ public static class FindingDedup
             // is one role's budget, so the same defect seen by two roles is counted once, against
             // whoever saw it first. With prompts dealt across vendors this is rare by design.
             var existing = merged[index];
+            var evidence = existing.Role == Security.SecurityCatalog.Gate && finding.Severity < existing.Severity
+                ? finding : existing;
             merged[index] = existing with
             {
                 Severity = (Severity)Math.Min((int)existing.Severity, (int)finding.Severity),
+                Reproduction = evidence.Reproduction,
+                AttackEvidence = evidence.AttackEvidence,
+                CapReason = evidence.CapReason,
                 Providers = [.. existing.Providers.Union(finding.Providers, StringComparer.OrdinalIgnoreCase)],
+                AlsoSeenBy = [.. (existing.AlsoSeenBy.IsDefault ? [] : existing.AlsoSeenBy)
+                    .Concat(finding.AlsoSeenBy.IsDefault ? [] : finding.AlsoSeenBy)
+                    .GroupBy(s => (s.Provider, s.Prompt)).Select(g => g.MinBy(s => s.Severity)!)
+                    .Take(Security.SecurityCatalog.MostRuns)],
             };
         }
 

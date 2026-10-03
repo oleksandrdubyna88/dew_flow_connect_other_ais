@@ -448,6 +448,7 @@ public sealed class TheRefusalsAreWrittenDownTests : IDisposable
                 "src_mcp/src/Server/ReviewerNotices.cs",
                 // Epic 3's death record: the unclean-exit a start writes about a run that never finished.
                 "src_mcp/src/Server/RunMarkers.cs",
+                "src_mcp/src/Server/SecurityRound.cs",
                 "src_mcp/src/Server/StartupNotices.cs",
             ],
             "every road that builds a notice goes through the one cut");

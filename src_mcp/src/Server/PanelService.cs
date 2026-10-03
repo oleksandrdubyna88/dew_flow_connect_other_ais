@@ -119,7 +119,7 @@ public sealed class PanelService
         // The roster is dealt from the same settings, keys and prompts, and asks this service only
         // what it also answers for the round's exclusion sentence: can a vendor run, and on what.
         _roster = new RosterBuilder(
-            settings, keys, prompts, new ReviewerPrompt(prompts), _remote, CanRun, RuntimeFor, PruneOldAnswerDirs);
+            settings, keys, prompts, new ReviewerPrompt(prompts), _remote, CanRun, RuntimeFor, PruneOldAnswerDirs, log);
 
         // The orders a round carries, read by the engine for its reply and by the cadence check before a
         // code round; and the engine every stage runs through. The engine is handed what only this service
@@ -551,7 +551,7 @@ public sealed class PanelService
         // something to be checked against.
         return _engine.RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound,
             NeedsWorktree: false, Stage: Stage.PlanReview, ReadsCheckout: false,
-            (session, workingDir, _) =>
+            (session, workingDir, _, _) =>
             {
                 // The rules a PLAN is judged against, from `repoPath` and never from `workingDir` —
                 // this stage runs `NeedsWorktree: false`, so its working directory is an empty
@@ -663,9 +663,9 @@ public sealed class PanelService
         return _engine.RunStageAsync(repoPath, branch, scope, new StageRun(
             again ? RoundMachine.BeginCodeRoundAgain : RoundMachine.BeginCodeRound,
             NeedsWorktree: true, Stage: Stage.CodeReview, ReadsCheckout: true,
-            async (session, workingDir, sha) =>
+            async (session, workingDir, sha, roundToken) =>
             {
-                var collected = await _context.CollectAsync(repoPath, baseRef, sha, ct: ct);
+                var collected = await _context.CollectAsync(repoPath, baseRef, sha, ct: roundToken);
                 var shaped = DiffShaper.Shape(collected.Files);
                 var bundle = new ReviewBundle(scope, branch, baseRef, sha, shaped);
 
@@ -754,11 +754,15 @@ public sealed class PanelService
                         round, RosterBuilder.NoWrittenRules, string.Join(", ", RuleFiles.SourceNames));
                 }
                 _log.Information("round {Round} runs {Count} role(s): {Roles}", round, roles.Count, string.Join(", ", roles));
+                var securitySources = await SecuritySources.ReadAsync(_settings.SecurityLane,
+                    _roster.Security().Due(Stage.CodeReview, round), collected.Files,
+                    new Runners.Feature.SourceResolver(new Runners.Collecting.GitHistory(_launcher),
+                        new Normalizer.TreeSitterOutliner(), repoPath, sha), roundToken);
                 var built = WithSkippedByRule(
                     _roster.BuildWork(roles, workingDir, context, round,
                         stage: Stage.CodeReview, readsCheckout: true,
                         seed: StableSeed(session.State.SessionId, round),
-                        deal: _settings.DealCodeLenses),
+                        deal: _settings.DealCodeLenses, securityFiles: collected.Files, securitySources: securitySources),
                     notAsked);
 
                 // The RESOLVED base, not `baseRef`: when the two differ the reviewers are told so a
@@ -768,7 +772,7 @@ public sealed class PanelService
                 return built with
                 {
                     BaseRef = collected.ComparedAgainst,
-                    Unreviewed = NothingToReview.UnreviewedTail(await _context.UncommittedAsync(repoPath, sha, ct)),
+                    Unreviewed = NothingToReview.UnreviewedTail(await _context.UncommittedAsync(repoPath, sha, roundToken)),
                 };
             })
         {
@@ -1079,7 +1083,7 @@ public sealed class PanelService
             // because its job is the document it was given. Neither says it is the plan stage.
             new StageRun(RoundMachine.BeginDocumentRound,
                 NeedsWorktree: false, Stage: Stage.DocumentReview, ReadsCheckout: false,
-                (running, workingDir, _) =>
+                (running, workingDir, _, _) =>
                 {
                     // From `repoPath`, not `workingDir` — this stage is handed no checkout on
                     // purpose, so its working directory is empty and collecting there would gather

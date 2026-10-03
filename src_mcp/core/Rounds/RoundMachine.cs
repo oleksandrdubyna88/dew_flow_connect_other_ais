@@ -447,7 +447,7 @@ public static class RoundMachine
                 gate.Passed ? new RoundVerdict.Proceed(gate, reviewers) : new RoundVerdict.GoodEnough(gate, reviewers));
         }
 
-        if (roundsRun < Math.Min(FeatureRoundCap, s.Config.For(s.Stage).MaxRounds))
+        if (roundsRun < Math.Min(FeatureRoundCap, FeatureBudgetFor(s, gate, reviewers, ground)))
         {
             return new Transition.Ok(next with { SecondRound = ground }, new RoundVerdict.Revise(gate, reviewers, 1));
         }
@@ -456,6 +456,61 @@ public static class RoundMachine
             next with { HumanGate = true, SecondRound = SecondRoundGround.None },
             new RoundVerdict.CallHuman(gate, reviewers, FeatureCallHumanReason(ground, gate, reviewers, roundsRun)));
     }
+
+    /// <summary>
+    /// The feature budget a second round is measured against: the ordinary roles' own, widened to the
+    /// security lane's only when the lane ALONE needs the round.
+    /// </summary>
+    /// <remarks>
+    /// The lane's budget is the lane's. A ground an ordinary reviewer gave — its failure, its blocking
+    /// finding — is judged on the ordinary roles' budget alone, even beside a lane finding, because the
+    /// round the lane's budget would buy runs without them: it could not retry the reviewer that failed
+    /// or re-read the ordinary finding, and a lane answer in their place would be the lane standing in
+    /// for an ordinary reviewer.
+    /// </remarks>
+    private static int FeatureBudgetFor(SessionState s, GateResult gate, ReviewerSummary reviewers, SecondRoundGround ground)
+    {
+        var ordinary = s.Config.For(s.Stage).MaxRounds;
+        return ground == SecondRoundGround.BlockingFinding && OnlyTheLaneNeedsARound(s, gate, reviewers)
+            ? Math.Max(ordinary, s.Config.SecurityLane.MaxRounds)
+            : ordinary;
+    }
+
+    /// <summary>
+    /// The round about to begin lies past every ordinary role's budget, so only the security lane's
+    /// budget can have admitted it.
+    /// </summary>
+    /// <remarks>
+    /// <para>The code stage revises for the roles over their threshold (<see cref="BudgetOfRolesWithWorkLeft"/>),
+    /// and only the lane's budget reaches past the widest ordinary role's. The feature stage admits a
+    /// round past the ordinary budget only on a blocking lane finding (<see cref="FeatureBudgetFor"/>);
+    /// its other grounds stay the ordinary roles' own. Round one is never the lane's alone.</para>
+    /// <para>Read from the state rather than from the lane's settings on purpose: a lane switched off
+    /// after admitting the round has still admitted it — which is why its <c>Enabled</c> is not asked.
+    /// Its BUDGET is: a round past the lane's own budget as well was admitted by nobody's, and keeps the
+    /// ordinary "nobody to ask" answer rather than running empty in the lane's name. (coai code round 9.)</para>
+    /// </remarks>
+    public static bool AdmittedOnlyForTheLane(SessionState s) =>
+        s.RoundsRunThisStage > 0
+        && s.RoundsRunThisStage >= s.Config.For(s.Stage).MaxRounds
+        && s.RoundsRunThisStage < s.Config.SecurityLane.MaxRounds
+        && LaneCanAdmit(s);
+
+    private static bool LaneCanAdmit(SessionState s) => s.Stage switch
+    {
+        Stage.CodeReview => true,
+        Stage.FeatureReview => s.SecondRound == SecondRoundGround.BlockingFinding,
+        _ => false,
+    };
+
+    /// <summary>Every blocking finding is the switched-on lane's own, and no ordinary reviewer failed.</summary>
+    private static bool OnlyTheLaneNeedsARound(SessionState s, GateResult gate, ReviewerSummary reviewers) =>
+        s.Config.SecurityLane.Enabled
+        && reviewers.Failures.IsDefaultOrEmpty
+        && BlockingFindingsAreTheLanes(gate);
+
+    private static bool BlockingFindingsAreTheLanes(GateResult gate) =>
+        gate.Gating.Where(f => f.Severity == Severity.Blocking).All(f => f.Role == Security.SecurityCatalog.Gate);
 
     /// <summary>Why a feature round needs another — or <see cref="SecondRoundGround.None"/>.</summary>
     private static SecondRoundGround GroundFor(GateResult gate, ReviewerSummary reviewers) =>

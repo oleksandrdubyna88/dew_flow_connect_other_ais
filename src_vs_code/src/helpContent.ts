@@ -2,6 +2,7 @@ import { DE } from './helpDe';
 import { ES } from './helpEs';
 import { RU } from './helpRu';
 import { UK } from './helpUk';
+import { SECURITY_HELP } from './securityHelp';
 
 /**
  * The help catalog: every article, in one fixed shape — what it is → why → how to set it up →
@@ -167,6 +168,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
         'A server older than 0.33.0 ignores all of this and gives the shipped orders; the page says so. A command switched on without text — written by hand in the settings — is left out of the round, and the reply names the file to write.',
     },
   },
+  SECURITY_HELP,
   {
     id: 'a-local-model',
     en: {
@@ -522,7 +524,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: "The panel and the Settings tab",
       whatItIs:
-        "The sidebar is what is happening now: **Active questions** — what the question consultant is answering, and any question waiting on you — then **Notifications**, **Active gates** — the rounds running this minute — **Active consultations** — the consultations being had — **Consultation cadence** — where each plan the cadence follows stands — **Phrases** and **Bugz**. Everything you configure once is in the **Settings** tab, which the gear beside the help button in the panel title bar opens: one tab each for Reviewers, Chat other AIs, Consultant, Prompts per round, The gate, Limits, Vendor keys, Team servers, This side and MCP server.",
+        "The sidebar is what is happening now: **Active questions** — what the question consultant is answering, and any question waiting on you — then **Notifications**, **Active gates** — the rounds running this minute — **Active consultations** — the consultations being had — **Consultation cadence** — where each plan the cadence follows stands — **Phrases** and **Bugz**. Everything you configure once is in the **Settings** tab, which the gear beside the help button in the panel title bar opens: one tab each for Reviewers, Chat other AIs, Consultant, Question consultant, Security lane, Prompts per round, The gate, Limits, Vendor keys, Team servers, This side and MCP server.",
       why:
         "Fourteen folded sections in one narrow column meant scrolling past ten things you set up once to reach the four you come back for. The tabs hold the same controls as the sections did, with the same effect — only where they are drawn changed — so a choice made in a tab is stored exactly as the same choice made in the sidebar was.",
       setup:

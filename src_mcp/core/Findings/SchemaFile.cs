@@ -66,6 +66,7 @@ public static class SchemaFile
     {
         SchemaShape.Finding => (Name, FindingSchema.Json),
         SchemaShape.Feature => (FeatureName, FindingSchema.FeatureJson),
+        SchemaShape.Security => ("finding-schema-security.json", Security.SecuritySchema.Json),
     };
 #pragma warning restore CS8524
 
@@ -95,4 +96,5 @@ public enum SchemaShape
 
     /// <summary><see cref="FindingSchema.FeatureJson"/> — the feature review, which may ask for source.</summary>
     Feature,
+    Security,
 }

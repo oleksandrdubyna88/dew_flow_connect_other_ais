@@ -235,6 +235,11 @@ internal sealed class RoundEngine(
         }
 
         session = ApplyAnyHumanDecision(session);
+        session = session with
+        {
+            State = session.State with
+            { Config = session.State.Config with { SecurityLane = _settings.SecurityLane.Gate } }
+        };
         // And the person's request for a feature review's second round (D23), read from the same road —
         // the answer file — and from nothing a caller passes. Nothing is saved for it here.
         session = PersonsRequest.Apply(session, _escalations, _log);
@@ -277,7 +282,7 @@ internal sealed class RoundEngine(
         // conversation may take `reviewerTimeout × (1 + follow-ups)`, and that is what the derivation is
         // handed — not `roles × turns` as the reviewer count, which buys nothing when the turns fit in one
         // wave (plan §4.9). Every other stage's follow-ups are zero, so nothing changes for it by a second.
-        var budget = RoundDeadlineFor(ConfiguredReviewers(stage.Stage, stage.RolesPerVendor), _settings.ReviewerTimeout * (1 + stage.FollowUps));
+        var budget = RoundDeadline.For(_settings, stage.Stage, stage.RolesPerVendor, stage.FollowUps, _log);
         using var clock = new CancellationTokenSource(budget);
         using var roundClock = CancellationTokenSource.CreateLinkedTokenSource(ct, clock.Token);
 
@@ -342,7 +347,7 @@ internal sealed class RoundEngine(
                 : null;
             using var scratch = stage.NeedsWorktree ? null : new ScratchDirectory();
             var workingDir = lease?.Path ?? scratch!.Path;
-            var roundWork = await stage.MakeWork(session, workingDir, sha);
+            var roundWork = await stage.MakeWork(session, workingDir, sha, roundClock.Token);
             var work = roundWork.Reviewers;
 
             // A stage nobody serves is a REFUSAL, not an empty round. With no reviewer the round
@@ -356,7 +361,11 @@ internal sealed class RoundEngine(
             // configured. It sits AFTER `stage.Begin` on purpose — a standing call_human from a
             // round whose reviewers all failed is a person's decision, and un-ticking every vendor
             // must not dissolve it (§4.4).
-            if (work.Count == 0)
+            //
+            // Except a round only the security lane's budget admitted: no ordinary role is due in it, so
+            // refusing or skipping it would meet every later call the same way. It runs empty instead and
+            // completes as a round nobody answered — recorded, with its reason, and a person's call.
+            if (work.Count == 0 && !RoundMachine.AdmittedOnlyForTheLane(session.State))
             {
                 // And if a role was dropped on the way here, the refusal says which and why. This
                 // path returns before any summary is built, so a round whose whole roster was
@@ -367,6 +376,8 @@ internal sealed class RoundEngine(
                     ? SkippedOrOwed(stage, loaded, number, sha, planText, _skips.NobodyFor(stage.Stage, roundWork), from)
                     : Error(_noReviewerRefusal(session.State.Stage, roundWork), from);
             }
+
+            roundWork = SecurityRound.NamingAnEmptyLaneRound(roundWork);
 
             // The round exists on disk BEFORE the first CLI starts: the panel shows "running" for
             // its whole duration instead of nothing at all, and a crash leaves something to sweep.
@@ -423,16 +434,15 @@ internal sealed class RoundEngine(
             var reviews = results.Select(r => r.Outcome).OfType<ReviewerOutcome.Ok>().Select(o => o.Review).ToList();
             // The ROLE is stamped here because this is the only place that holds both the invocation
             // and its answer. A threshold belongs to a role, so a finding has to remember whose it is.
-            var merged = FindingDedup.Merge(results
-                .Where(r => r.Outcome is ReviewerOutcome.Ok)
-                .SelectMany(r => ((ReviewerOutcome.Ok)r.Outcome).Review.Findings
-                    .Select(f => f with { Role = r.Invocation.Role.ToString() })));
+            var merged = SecurityRound.Merge(results, work);
             var gate = GateRule.Evaluate(
                 merged,
                 session.State.Rejections,
-                role => _settings.Rounds.For(role).Threshold);
+                role => role == Core.Security.SecurityCatalog.Gate ? _settings.SecurityLane.Threshold : _settings.Rounds.For(role).Threshold);
 
-            if (RoundMachine.CompleteRound(session.State, gate, summary) is not Transition.Ok completed)
+            var decisionSummary = SecurityRound.DecisionSummary(results, roundWork, summary);
+            SecurityRound.Notice(results, roundWork, _noticing);
+            if (RoundMachine.CompleteRound(session.State, gate, decisionSummary) is not Transition.Ok completed)
             {
                 return Error("the round could not complete — this is a bug, report it", from);
             }
@@ -443,7 +453,7 @@ internal sealed class RoundEngine(
             if (stage.Stage == Stage.FeatureReview)
             {
                 answer = FeatureSecondRound.Apply(
-                    answer, completed.Verdict, summary, completed.State, FeatureSecondRound.IsSecondRound(session.State) ? session.Carried : []);
+                    answer, completed.Verdict, decisionSummary, completed.State, FeatureSecondRound.IsSecondRound(session.State) ? session.Carried : []);
             }
             // And, on a document round whose work reached a Team server, where the document went.
             // Appended to the reviewer line rather than given a field of its own: it is a fact about
@@ -451,6 +461,7 @@ internal sealed class RoundEngine(
             // new field. Empty for every other round, so nothing else changes by a byte.
             answer = answer with
             {
+                Instruction = SecurityRound.Clause(results, roundWork) + answer.Instruction,
                 Reviewers = answer.Reviewers
                     + WhereTheDocumentWent(stage.Stage, work.Select(w => w.Invocation.Provider))
                     // And what the round did not look at: a `proceed` must not cover an uncommitted
@@ -458,7 +469,7 @@ internal sealed class RoundEngine(
                     + roundWork.Unreviewed,
             };
             // The commit it reviewed, kept with the round: what a later `again` compares the branch to.
-            var record = live.Finish(answer.Verdict, gate.GatingCount, summary.Sentence, results) with
+            var record = live.Finish(answer.Verdict, gate.GatingCount, SecurityRound.Clause(results, roundWork) + summary.Sentence, results) with
             {
                 Sha = Stages.Of(stage.Stage).RecordsSha ? sha : string.Empty,
                 // What the consultation cadence said about this round: met, or stood down and why.
@@ -812,46 +823,6 @@ internal sealed class RoundEngine(
     /// loses its Conventions reviewers, and dealing sends each lens to one vendor — and an upper
     /// bound is the right direction for a deadline to be wrong in.
     /// </remarks>
-    private int ConfiguredReviewers(Stage stage, int rolesPerVendor) =>
-        _settings.Providers.Count(p => p.Serves(stage)) * rolesPerVendor;
-
-    /// <param name="reviewers">How many reviewers the stage is configured to run.</param>
-    /// <param name="perReviewer">What ONE reviewer may take — its timeout, times its turns (S3.2).</param>
-    private TimeSpan RoundDeadlineFor(int reviewers, TimeSpan perReviewer)
-    {
-        // `Expressible` on the explicit path too: a `CancellationTokenSource` takes an int of
-        // milliseconds and refuses anything past about 24.8 days, so 80,000 minutes would have
-        // thrown before a reviewer started. A number the timer cannot hold is not a longer deadline,
-        // it is no deadline at all. Raised on the code round.
-        var whole = RoundBudget.Expressible(_settings.RoundTimeout > TimeSpan.Zero
-            ? _settings.RoundTimeout
-            : RoundBudget.For(perReviewer, reviewers, _settings.GlobalConcurrency));
-
-        // An explicit setting below one reviewer's own deadline cannot be honoured without
-        // cancelling a reviewer that has not finished its FIRST attempt. Said out loud rather than
-        // silently obeyed: a person who set five minutes against a ten-minute reviewer has made a
-        // configuration mistake, and the round that follows would look like a bug in the gate.
-        if (whole < perReviewer)
-        {
-            _log.Warning(
-                "the round limit of {Limit:0} minute(s) is shorter than one reviewer's own "
-                + "{Reviewer:0} — reviewers will be cancelled before they can finish",
-                whole.TotalMinutes, perReviewer.TotalMinutes);
-        }
-
-        // NOT floored at a reviewer's own deadline. The first draft floored everything, which
-        // quietly turned an explicit five minutes into ten while warning that reviewers would be cut
-        // off: a setting ignored and a warning that lied about the same number. Two reviewers caught
-        // it. The derived path has its floor already, inside `RoundBudget`, where it belongs — a
-        // DERIVATION should never produce a budget too small to finish one reviewer, while a person
-        // who types a smaller number has said what they want and is told what it costs.
-        //
-        // Nothing is subtracted here any more either. The timer is armed before the setup now, so
-        // the setup spends the budget by simply taking time — which is what a deadline on a ROUND
-        // has to mean, and is what subtracting-after-the-fact only approximated.
-        return whole;
-    }
-
     /// <param name="stage">
     /// Whose round this is: a <c>revise</c> verdict's instruction ends with what THIS stage does
     /// with accepted findings, read off the stage's own row.

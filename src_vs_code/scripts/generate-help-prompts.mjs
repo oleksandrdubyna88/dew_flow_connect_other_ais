@@ -66,6 +66,10 @@ for (const [role, label] of Object.entries(ROLE_LABELS)) {
   }
 }
 
+const security = JSON.parse(readFileSync(join(here, '..', '..', 'shared', 'security-lane.json'), 'utf8'));
+groups.push({ role: 'Security lane', ids: security.prompts.map(p => p.id) });
+const extraSecurity = shipped.filter(id => id.startsWith('redteam-') && !security.prompts.some(p => p.id === id));
+if (extraSecurity.length > 0) groups.push({ role: 'Additional security prompts', ids: extraSecurity });
 const ordered = groups.flatMap((g) => g.ids);
 const missing = shipped.filter((id) => !ordered.includes(id));
 const absent = ordered.filter((id) => !shipped.includes(id));

@@ -120,6 +120,7 @@ const SELF_EVIDENT: Record<string, string> = {
 };
 
 const SETTING_ALIAS: Record<string, string> = {
+  'coai.securityLane': 'security lane',
   'coai.bugzModel': 'ranking model',
   'coai.bugzServer': 'review bugs',
   'coai.chatPrompt': 'the prompt the passage travels with',

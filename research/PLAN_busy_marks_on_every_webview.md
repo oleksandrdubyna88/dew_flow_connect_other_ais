@@ -120,7 +120,7 @@ command with `busy.track(message, () => writes.queue(command))`.
 | `settledWrites.test.ts` (extended) | the queue's promise settles after apply and redraw, on failure, and for a typed field after it settles |
 
 The runners, budgeted per epic (plan round, gemini). The rounds log's runner in `roundsLogPaging.test.ts` is
-extracted to a shared `roundsLogPageHarness.ts` (E1). `bugzReviewPage.test.ts`, `bugsKeysPage.test.ts` (E2),
+extracted to a shared `roundsLogPagingHarness.ts` (E1). `bugzReviewPage.test.ts`, `bugsKeysPage.test.ts` (E2),
 `rolesPageHarness.ts` and `commandsPage.test.ts` (E3) already run their scripts. Each gains the panel's exported
 `PageClock` as its `setTimeout`/`clearTimeout`, which is reused, not copied.
 
@@ -156,7 +156,7 @@ None new: one `InFlight` per open webview, bounded by what one person presses wh
   typing, and no redraw into its new stage. The rule is `rolesFieldOf` in `rolesPage.ts`, run by a test.
 - **The test runners are shared, not copied:**
   - the panel harness's `busyBarOf` is exported and used by every runner that meets the bar;
-  - the rounds-log runner is extracted to `roundsLogPageHarness.ts`;
+  - the rounds-log runner is extracted to `roundsLogPagingHarness.ts`;
   - `presses(page)` reads what a press said;
   - `camel` moved to `test/datasetName.ts` to break the import cycle E3 introduced between the two runners.
 - **Measured:** only the `coai-mcp` spawn and the rounds read were timed (§2). The other pages are classed by what
