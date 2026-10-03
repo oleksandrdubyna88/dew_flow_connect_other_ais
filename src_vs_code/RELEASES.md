@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.61.2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.61.1...extension-v0.61.2) (2026-10-03)
+
+
+### Bug Fixes
+
+* **extension:** ⟳ updates Codex with codex update, and the help names each CLI's own update ([#647](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/647)) ([575b212](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/575b2127ba0bfcf6ba1ce3e2838a14a103e4aa01))
+
 ## [0.61.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.61.0...extension-v0.61.1) (2026-10-02)
 
 

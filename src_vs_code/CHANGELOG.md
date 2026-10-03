@@ -1,5 +1,13 @@
 # Changelog
 
+## Extension 0.61.2 — 2026-10-03
+
+**⟳ updates Codex with Codex's own command.** For a Codex reviewer, the update button now opens a terminal with
+`codex update` (from Codex 0.126.0), the same way it already used `claude update` and `agy update`. A Codex older than
+0.126.0, or one whose version could not be read, still gets the npm installer, which works on every version. The help
+page described this wrongly in all five languages, saying no CLI here could update itself; it now names each CLI's
+own update.
+
 ## Extension 0.61.1 — 2026-10-02
 
 **Typing into a box no longer counts as the panel working.** Some panel actions ask you something first: adding a
