@@ -99,10 +99,10 @@ test('every ending of a send is reported through the funnel', () => {
 
 /** The contributor key is stored where settings cannot sync it. */
 test('the contributor key goes to secret storage, never to a setting', () => {
-  // One flow for the sidebar button and the command since research/PLAN_bugz_keys_per_server.md: the keys host's
+  // One flow for the sidebar button and the command since research/PLAN_bugz_keys_per_server.md: bugzKeyFlows'
   // askForContributorKey. Both halves pinned — the sidebar delegates, and the flow stores the key in secret storage.
   const sidebar = code(between(source('panelProvider.ts'), 'private async setBugsKey(', 'private async setBugsServer('));
-  const asking = code(between(source('bugsKeysPanel.ts'), 'export async function askForContributorKey(', 'const ADOPT'));
+  const asking = code(between(source('bugzKeyFlows.ts'), 'export async function askForContributorKey(', '/** The keys page'));
 
   assert.match(sidebar, /askForContributorKey\(this\.context\.secrets, bugzServerThisSide\(this\.context\)\)/u,
     'the sidebar asks for the key some other way, or for another side\'s server');

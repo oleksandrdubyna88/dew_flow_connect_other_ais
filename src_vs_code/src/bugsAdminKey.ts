@@ -31,8 +31,12 @@ import { canonicalTeamServerUrl } from './teamServers';
  * </ul>
  */
 
-/** The three things this extension keeps for the bugs admin surface. */
-export const ADMIN_KEY = 'coai.bugs.adminKey';
+/**
+ * The PREFIX of every admin key's name — the key itself is filed under `<prefix>:<server>` ({@link keyName}). The old
+ * fixed name that held one key for every server is {@link LEGACY} below, a separate constant on purpose: renaming the
+ * prefix must never move what the legacy check reads.
+ */
+const ADMIN_KEY = 'coai.bugs.adminKey';
 
 /**
  * The CONTRIBUTOR key — what this machine sends its own pairs with.
@@ -42,7 +46,14 @@ export const ADMIN_KEY = 'coai.bugs.adminKey';
  * storage for the same reason — `settings.json` syncs, and a key that follows somebody to another
  * machine is a key nobody can account for.</p>
  */
-export const CONTRIBUTOR_KEY = 'coai.bugs.contributorKey';
+const CONTRIBUTOR_KEY = 'coai.bugs.contributorKey';
+
+/**
+ * The names the two keys were stored under before they were filed per server — literals, not the prefixes above, and
+ * not exported: nothing outside this module may read a key that no server has been vouched for.
+ */
+const LEGACY_ADMIN_KEY = 'coai.bugs.adminKey';
+const LEGACY_CONTRIBUTOR_KEY = 'coai.bugs.contributorKey';
 export const PENDING_ISSUANCE = 'coai.bugs.pendingIssuance';
 export const ISSUANCE_ATTEMPT = 'coai.bugs.issuanceAttempt';
 
@@ -111,12 +122,23 @@ export async function adminKey(secrets: Secrets, server: string): Promise<string
 }
 
 /**
- * The admin credentials for a request to `server`: the server and its own key from the ONE value given, so the key
+ * The ADMIN credentials for a request to `server`: the server and its own key from the ONE value given, so the key
  * looked up and the address the request goes to can never be two different reads of a setting that changed between
- * them (plan round, session d5cdb1b2).
+ * them (plan round, session d5cdb1b2). Named for its kind: an admin key sent as a contributor's is a key in the wrong
+ * server's logs.
  */
-export async function credentialsFor(secrets: Secrets, server: string): Promise<Credentials> {
+export async function adminCredentialsFor(secrets: Secrets, server: string): Promise<Credentials> {
   return { server, key: await adminKey(secrets, server) };
+}
+
+/** The CONTRIBUTOR credentials for a request to `server` — what the pair upload sends, by the same one-value rule. */
+export async function contributorCredentialsFor(secrets: Secrets, server: string): Promise<Credentials> {
+  return { server, key: await contributorKey(secrets, server) };
+}
+
+/** Whether a server is one a key can be filed under — the key module's own test, for every caller that must decide it. */
+export function hasServer(server: string): boolean {
+  return keyName('admin', server).length > 0;
 }
 
 /** Sets it for this server. An empty value CLEARS it; with no server nothing is stored, and that is the answer. */
@@ -141,7 +163,7 @@ async function held(secrets: Secrets, name: string): Promise<string> {
 // ---------------------------------------------------------------- the keys from before they were filed per server
 
 /** The old fixed names, and the kind each one was. */
-const LEGACY: readonly (readonly [string, 'admin' | 'contributor'])[] = [[ADMIN_KEY, 'admin'], [CONTRIBUTOR_KEY, 'contributor']];
+const LEGACY: readonly (readonly [string, 'admin' | 'contributor'])[] = [[LEGACY_ADMIN_KEY, 'admin'], [LEGACY_CONTRIBUTOR_KEY, 'contributor']];
 
 /**
  * Whether keys from before the per-server names are still held. They are NEVER filed automatically: nothing proves
@@ -164,7 +186,7 @@ export async function adoptLegacyKeys(secrets: Secrets, server: string): Promise
   if (!(await legacyKeysHeld(secrets))) {
     return 'none';
   }
-  if (keyName('admin', server).length === 0) {
+  if (!hasServer(server)) {
     return 'no-server';
   }
   const kept = await Promise.all(LEGACY.map(([old, kind]) => adoptOne(secrets, old, keyName(kind, server))));
@@ -183,13 +205,19 @@ async function adoptOne(secrets: Secrets, old: string, now: string): Promise<boo
   return proven;
 }
 
-/** `value` held under `now` — written unless a newer key is there already — and proven by reading it back. */
+/**
+ * `value` held under `now` — written unless a real newer key is there already — and proven by reading back THAT value.
+ * An empty string under the new name is no key at all; a read-back that differs from what was written (a lossy store,
+ * a writer racing this one) is not proof, so the old key stays where it was.
+ */
 async function filed(secrets: Secrets, now: string, value: string): Promise<boolean> {
-  if ((await secrets.get(now)) === undefined) {
-    await secrets.store(now, value);
+  const newer = (await secrets.get(now)) ?? '';
+  if (newer.length > 0) {
+    return true;
   }
+  await secrets.store(now, value);
 
-  return (await secrets.get(now)) !== undefined;
+  return (await secrets.get(now)) === value;
 }
 
 /** The old keys removed, filed nowhere — what a person chooses when they cannot vouch for where they came from. */

@@ -7,7 +7,9 @@
 >   value may have changed), and filing one under the wrong server is the replay itself. The old keys are held aside,
 >   sent nowhere, and the person is asked once per window to ADOPT them for this side's server (only if it issued
 >   them) or DISCARD them, with the advice to revoke and re-issue if their sides ever named different servers.
->   Adopting writes the new name, reads it back, and only then deletes the old one.
+>   The choice is a command (*ConnectOtherAIs: Settle old Bugz keys*), offered by a toast whose one button only opens
+>   it, and pointed to by the keys page; a modal names the server and what each answer costs, and every outcome is
+>   said. Adopting writes the new name, reads back THE VALUE, and only then deletes the old one (code round).
 > - `credentialsFor(secrets, server)` is the one road to a request: the server and its key from one value. A discard
 >   whose record names no issuing server is refused and the record kept, never revoked against this side's server.
 >   A key typed with no server set is refused out loud (`bugz-key-needs-a-server`), never dropped behind a success.

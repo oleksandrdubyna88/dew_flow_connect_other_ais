@@ -96,10 +96,11 @@ import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPath
 import { currentFileIn, folderHolding } from './openAtRevision';
 import { askCalls } from './callHierarchyAsk';
 import { callHierarchyEditor } from './callHierarchyVsCode';
-import { contributorKey } from './bugsAdminKey';
+import { contributorCredentialsFor } from './bugsAdminKey';
 import { mayStart, outcomeOf } from './bugsSend';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
-import { askForContributorKey, usersPanel } from './bugsKeysPanel';
+import { usersPanel } from './bugsKeysPanel';
+import { askForContributorKey } from './bugzKeyFlows';
 import { BugzReviewPanel } from './bugzReviewPanel';
 import { BugChat } from './reviewChoose';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
@@ -3159,8 +3160,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
 
-    const where = this.settings().bugzServer.trim();
-    const key = await contributorKey(this.context.secrets, where);
+    // The server and its key from ONE value, read the way the key was filed (bugzServerThisSide).
+    const { server: where, key } = await contributorCredentialsFor(this.context.secrets, bugzServerThisSide(this.context));
     const refusal = mayStart({ server: where, key, corpus: this.bugzCache });
     if (refusal !== undefined) {
       await notify({

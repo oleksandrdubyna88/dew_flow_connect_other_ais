@@ -6,7 +6,8 @@ import {
   adminKey,
   adoptLegacyKeys,
   contributorKey,
-  credentialsFor,
+  adminCredentialsFor,
+  contributorCredentialsFor,
   discardLegacyKeys,
   keyName,
   legacyKeysHeld,
@@ -58,12 +59,14 @@ test('a key set for one server is never read for another', async () => {
   assert.equal(await contributorKey(store, STAGING), '');
 });
 
-test('the credentials for a request carry the key of the very server the request goes to', async () => {
+test('the credentials for a request carry the key of the very server the request goes to, of the right kind', async () => {
   const store = new Store();
   await setAdminKey(store, PROD, 'prod-admin');
+  await setContributorKey(store, PROD, 'prod-contributor');
 
-  assert.deepEqual(await credentialsFor(store, PROD), { server: PROD, key: 'prod-admin' });
-  assert.deepEqual(await credentialsFor(store, STAGING), { server: STAGING, key: '' });
+  assert.deepEqual(await adminCredentialsFor(store, PROD), { server: PROD, key: 'prod-admin' });
+  assert.deepEqual(await adminCredentialsFor(store, STAGING), { server: STAGING, key: '' });
+  assert.deepEqual(await contributorCredentialsFor(store, PROD), { server: PROD, key: 'prod-contributor' });
 });
 
 test('the names keys are filed under are pinned, so a change to the normaliser cannot orphan a stored key', () => {
@@ -132,6 +135,25 @@ test('a write that does not read back leaves the old key in place', async () => 
   assert.equal(store.held.get('coai.bugs.adminKey'), 'old-admin', 'deleted only once the new one is proven held');
 });
 
+test('a read-back that is not the value written is no proof, and the old key stays', async () => {
+  const store = new Store();
+  store.held.set('coai.bugs.adminKey', 'old-admin');
+  // A store that keeps SOMETHING under the new name, but not what was written: a racing writer, a lossy keychain.
+  const garbling: Secrets = { get: (k) => store.get(k), store: (k) => store.store(k, 'something-else'), delete: (k) => store.delete(k) };
+
+  assert.equal(await adoptLegacyKeys(garbling, PROD), 'not-kept');
+  assert.equal(store.held.get('coai.bugs.adminKey'), 'old-admin');
+});
+
+test('an empty value under the new name is no key, so adopting fills it rather than deleting the only real copy', async () => {
+  const store = new Store();
+  store.held.set(keyName('admin', PROD), '');
+  store.held.set('coai.bugs.adminKey', 'old-admin');
+
+  assert.equal(await adoptLegacyKeys(store, PROD), 'adopted');
+  assert.equal(await adminKey(store, PROD), 'old-admin');
+});
+
 test('discarding removes the old keys and files nothing', async () => {
   const store = new Store();
   store.held.set('coai.bugs.adminKey', 'old-admin');
@@ -144,9 +166,14 @@ test('discarding removes the old keys and files nothing', async () => {
 
 test('the old fixed names appear in the key module alone — no other file reads a key around the server', () => {
   const src = path.join(__dirname, '..', '..', 'src');
-  const files = fs.readdirSync(src).filter((name) => name.endsWith('.ts') && name !== 'bugsAdminKey.ts');
-  const OLD = /['"\x60]coai\.bugs\.(?:adminKey|contributorKey)['"\x60:]/u;
+  // Every production file, in every folder — tests excluded, the key module set apart as the one sanctioned place.
+  const files = (fs.readdirSync(src, { recursive: true }) as string[])
+    .map((name) => name.replaceAll('\\', '/'))
+    .filter((name) => name.endsWith('.ts') && !name.startsWith('test/'));
+  const OLD = /['"\x60]coai\.bugs\.(?:adminKey|contributorKey)['"\x60]/u;
+  const read = (name: string): string => fs.readFileSync(path.join(src, name), 'utf8');
 
-  assert.match("const k = 'coai.bugs.adminKey';", OLD, 'the scan would miss the plain spelling');
-  assert.deepEqual(files.filter((name) => OLD.test(fs.readFileSync(path.join(src, name), 'utf8'))), []);
+  assert.ok(files.length > 100, `the scan read ${files.length} files — it is not reading the source`);
+  assert.match(read('bugsAdminKey.ts'), OLD, 'the scan no longer finds the old names where they legitimately live');
+  assert.deepEqual(files.filter((name) => name !== 'bugsAdminKey.ts' && OLD.test(read(name))), []);
 });

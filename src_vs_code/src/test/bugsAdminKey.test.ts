@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  ADMIN_KEY,
-  CONTRIBUTOR_KEY,
   ISSUANCE_ATTEMPT,
   PENDING_ISSUANCE,
   Secrets,
@@ -250,7 +248,7 @@ test('the contributor key is stored, read back, and lives apart from the admin k
   assert.equal(await contributorKey(store, SERVER), 'contributor-key');
   assert.equal(await adminKey(store, SERVER), 'admin-key');
   assert.equal(store.raw(keyName('contributor', SERVER)), 'contributor-key');
-  assert.notEqual(CONTRIBUTOR_KEY, ADMIN_KEY, 'one box for both would be one key for both');
+  assert.notEqual(keyName('contributor', SERVER), keyName('admin', SERVER), 'one box for both would be one key for both');
 });
 
 test('clearing the contributor key removes it rather than storing an empty one', async () => {

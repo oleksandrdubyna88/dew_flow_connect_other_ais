@@ -7,7 +7,8 @@ import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { askForContributorKey, offerLegacyBugzKeys, usersPanel } from './bugsKeysPanel';
+import { usersPanel } from './bugsKeysPanel';
+import { askForContributorKey, offerOldBugzKeys, settleOldBugzKeys } from './bugzKeyFlows';
 import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
@@ -95,11 +96,6 @@ export function activate(context: vscode.ExtensionContext): void {
   // this has run it answers the DEFAULT directory. A window that read the choice late would watch
   // the wrong directory for escalations and write a Team-server token where nothing reads it.
   storageReadsThisSide(context);
-  // Bugz keys saved before they were filed per server are asked about, never filed by guessing which server issued
-  // them (research/PLAN_bugz_keys_per_server.md); until the person answers they are sent nowhere.
-  void offerLegacyBugzKeys(context.secrets, bugzServerThisSide(context)).catch((error: unknown) => {
-    console.error('ConnectOtherAIs: the old Bugz keys could not be read', error);
-  });
   // FIRST, before anything is constructed and long before a command can be invoked: the side whose
   // settings the chat reads. Its reader falls back to the shared configuration while unbound, which
   // is the behaviour this branch exists to end — so the window in which that fallback could be
@@ -313,6 +309,10 @@ export function activate(context: vscode.ExtensionContext): void {
     () => (vendor) => PRICE_BOOK.priceOf(vendor.model, vendor.baseUrl),
   );
   mirrorSettings(settingsSync);
+  // Old Bugz keys waiting to be adopted or discarded: offered once per window, never filed by guessing.
+  void offerOldBugzKeys(context.secrets, () => bugzServerThisSide(context)).catch((error: unknown) => {
+    console.error('ConnectOtherAIs: the old Bugz keys could not be read', error);
+  });
   // The lists are fetched here only when an api reviewer needs pricing — the one row whose cost the
   // SERVER works out — and the file is written again once they land. Nobody else pays for a download.
   if (readCoaiConfiguration(context).vendors.some((vendor) => vendor.enabled && vendor.runtime === 'api')) {
@@ -477,6 +477,9 @@ export function activate(context: vscode.ExtensionContext): void {
     // from the admin one: one issues and revokes, the other uploads, and a person who holds both
     // must be able to remove either. A command as well as a button for the reason the admin key has
     // one: a door that exists only behind the thing it unlocks is not a door.
+    // Bugz keys saved before they were filed per server: the way back to them is this command, which the toast below
+    // only opens — nothing is filed by guessing which server issued them (research/PLAN_bugz_keys_per_server.md).
+    vscode.commands.registerCommand('coai.settleOldBugzKeys', () => settleOldBugzKeys(context.secrets, () => bugzServerThisSide(context))),
     vscode.commands.registerCommand('coai.setBugsContributorKey', async () => {
       await askForContributorKey(context.secrets, bugzServerThisSide(context));
       await panel.render();

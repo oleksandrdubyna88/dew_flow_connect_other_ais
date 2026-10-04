@@ -227,11 +227,11 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // press did nothing or less than asked (`security-lane-command` — a pair that moved, a prompt that was not added, a file
 // that could not be deleted) and ask before they delete or drop anything (`security-lane-confirm` — Restore default over
 // a file holding text, Remove custom prompt). Two places: one refusal, one confirmation.
-// 146 → 148 on 2026-10-04, research/PLAN_bugz_keys_per_server.md: a contributor key typed while this side names no
-// Bugz server is refused out loud (`bugz-key-needs-a-server`) instead of dropped behind a success, and keys saved before
-// they were filed per server are asked about once per window (`bugz-legacy-keys`: adopt for this side's server, or
-// discard) rather than filed by guessing. One refusal, one offer.
-const PLACES_THIS_SPEAKS = 148;
+// 146 → 150 on 2026-10-04, research/PLAN_bugz_keys_per_server.md: a key typed while this side names no Bugz server is
+// refused before the box opens (`bugz-key-needs-a-server`); keys saved before they were filed per server are offered once
+// per window (`bugz-legacy-keys`, whose one button only OPENS the choice), settled in a modal that names the server
+// and what each answer costs (`bugz-settle-old-keys`), and every outcome is said (`bugz-old-keys-settled`).
+const PLACES_THIS_SPEAKS = 150;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this
