@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { signatureOf } from './codeUnitOrder';
+import { sortedJoin } from './codeUnitOrder';
 import { Consultation, isLive, parseConsultation } from './consultations';
 import { type JsonDirectoryShape, jsonRecordFiles } from './jsonDirectory';
 import { JsonDirectoryWatcher } from './jsonDirectoryWatcher';
@@ -9,7 +9,7 @@ import { JsonDirectoryWatcher } from './jsonDirectoryWatcher';
  *
  * <p><b>What a person can see, as one string.</b> The turn count and the status are in it because those are what the
  * card SHOWS; the timestamps are not, because the card's "3 min ago" is computed at paint time and would make every
- * read a change. Ordered by `signatureOf`, never `localeCompare`: any TOTAL order would do here, and collation is not
+ * read a change. Ordered by `sortedJoin`, never `localeCompare`: any TOTAL order would do here, and collation is not
  * one — it calls two distinct ids equal (`é` as one code point and `e` plus an accent), leaves them in the order the
  * directory listed them, and an unchanged snapshot then reads as a change.</p>
  */
@@ -21,7 +21,7 @@ export const CONSULTATIONS: JsonDirectoryShape<vscode.Uri, Consultation> = {
   keep: (one) => isLive(one),
   // A consultation file is named by its id, which is how a failed read still knows what it lost.
   fileOf: (one) => `${one.id}.json`,
-  signature: (consultations) => signatureOf(consultations.map((one) => `${one.id}:${one.status}:${one.turns.length}:${one.alert}`), '|'),
+  signature: (consultations) => sortedJoin(consultations.map((one) => `${one.id}:${one.status}:${one.turns.length}:${one.alert}`), '|'),
 };
 
 /**

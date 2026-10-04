@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
-import { signatureOf } from '../codeUnitOrder';
+import { sortedJoin } from '../codeUnitOrder';
 import { type QuestionConsult, parseQuestionConsult, questionsSignature } from '../questionConsults';
 
 /**
@@ -34,27 +34,38 @@ test('the question signature is the same whatever order the records arrive in, e
 });
 
 test('a set’s signature is its parts in code-unit order, whatever order they arrive in', () => {
-  assert.equal(signatureOf([decomposed, composed], '|'), signatureOf([composed, decomposed], '|'));
-  assert.equal(signatureOf(['b', 'a', 'B'], '|'), 'B|a|b', 'code units put every capital before every lower case');
+  assert.equal(sortedJoin([decomposed, composed], '|'), sortedJoin([composed, decomposed], '|'));
+  assert.equal(sortedJoin(['b', 'a', 'B'], '|'), 'B|a|b', 'code units put every capital before every lower case');
 });
 
 // ---------------------------------------------------------------------------------------------
-// The escalation and consultation watchers import `vscode`, so their shapes can only be read.
+// The record watchers import `vscode`, so their shapes can only be read.
 // ---------------------------------------------------------------------------------------------
 
-/** Every `signature:` of a directory shape in the shipped sources, with the file it is in. */
+/**
+ * Every `signature:` VALUE of a directory shape in the shipped sources, with the file it is in — inline or a named
+ * function alike. Read only in files that declare a `JsonDirectoryShape<`, so a `signature: string` field elsewhere is
+ * not one; the interface's own `readonly signature:` is a type, not a value, and is skipped.
+ */
 function signatureLines(): readonly string[] {
   const src = path.join(__dirname, '..', '..', 'src');
 
   return fs.readdirSync(src)
     .filter((one) => one.endsWith('.ts'))
-    .flatMap((one) => fs.readFileSync(path.join(src, one), 'utf8').split('\n')
-      .filter((line) => /^\s*signature: \(/.test(line))
+    .map((one) => ({ one, text: fs.readFileSync(path.join(src, one), 'utf8') }))
+    .filter(({ text }) => text.includes('JsonDirectoryShape<'))
+    .flatMap(({ one, text }) => text.split(/\r?\n/)
+      .filter((line) => /^\s*signature:\s*\S/.test(line))
       .map((line) => `${one}: ${line.trim()}`));
 }
 
-test('every directory shape builds its signature through signatureOf, never a sort of its own', () => {
-  const own = signatureLines().filter((line) => !line.includes('signatureOf('));
+/** Signatures that are named functions, each held by a behavioural test of its own in this file. */
+const TESTED_BY_NAME = ['signature: questionsSignature,'];
+
+test('every directory shape builds its signature through sortedJoin, never a sort of its own', () => {
+  const own = signatureLines()
+    .filter((line) => !line.includes('sortedJoin('))
+    .filter((line) => !TESTED_BY_NAME.some((named) => line.endsWith(named)));
 
   assert.deepEqual(own, [], 'a signature sorts by itself, where a collation can tie two different parts');
 });
@@ -81,9 +92,10 @@ test('the collation scan still finds a call where collation is right', () => {
 });
 
 test('the signature scan still finds the watchers it guards', () => {
-  // A scan that matches nothing passes forever; the escalation and consultation shapes are the known instances.
+  // A scan that matches nothing passes forever; the three record watchers are the known instances.
   const found = signatureLines().map((line) => line.slice(0, line.indexOf(':')));
 
   assert.ok(found.includes('escalationWatcher.ts'), `the scan found no escalation signature: ${found.join(', ')}`);
   assert.ok(found.includes('consultationWatcher.ts'), `the scan found no consultation signature: ${found.join(', ')}`);
+  assert.ok(found.includes('questionConsultWatcher.ts'), `the scan found no question signature: ${found.join(', ')}`);
 });

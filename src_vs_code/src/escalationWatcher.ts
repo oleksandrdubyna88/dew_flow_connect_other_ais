@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { signatureOf } from './codeUnitOrder';
+import { sortedJoin } from './codeUnitOrder';
 import { answerChoices, answerJson } from './escalationAnswer';
 import {
   Escalation,
@@ -63,7 +63,7 @@ export const ESCALATIONS: JsonDirectoryShape<vscode.Uri, Escalation> = {
   parse: (text, root) => parseEscalation(text, root.fsPath),
   keep: (one) => isOpenEscalation(one),
   fileOf: (one) => `${one.id}.json`,
-  signature: (cards) => signatureOf(cards.map((one) => JSON.stringify(one)), '\n'),
+  signature: (cards) => sortedJoin(cards.map((one) => JSON.stringify(one)), '\n'),
 };
 
 /**
