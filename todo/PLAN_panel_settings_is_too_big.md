@@ -88,3 +88,9 @@ One commit per step, each proved on its own: the build is green, the full suites
 - [ ] `CoaiMcp.Tests` and `npm test` green after every step; `dotnet format` clean on the touched files.
 - [ ] `research/module_server.md` names the new files; this plan promoted to `research/`.
 - [ ] `PanelService.cs` is NOT in this plan's diff. Its tail stays with steps 5–7 of the round-engine plan.
+
+## Boundary with the model catalog (2026-10-04)
+
+| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+|---|---|---|
+| `VendorDto` and its parsing in `PanelSettings.cs` | as written above | adds row fields in its E2 and no new section; whichever lands second rebases onto the other |

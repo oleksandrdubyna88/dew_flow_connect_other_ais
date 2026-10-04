@@ -142,3 +142,9 @@ When this plan ships, the notification text becomes part of what it covers.
       translated*.
 - [ ] `helpCoverage.test.ts` keeps every check it has — this adds a check, it replaces none.
 - [ ] The module doc records the mechanism, and this plan is promoted with what shipped differently.
+
+## Boundary with the model catalog (2026-10-04)
+
+| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+|---|---|---|
+| help texts that name Settings tabs | as written above | moves every help article with the tabs in five languages; this plan owns detecting staleness |

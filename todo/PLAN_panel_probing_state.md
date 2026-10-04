@@ -141,3 +141,9 @@ server), so its "Server section" wording means the MCP server TAB, since that pl
 - [ ] The four statements above hold, each with a test that was watched fail first.
 - [ ] `npm test` passes.
 - [ ] `research/module_extension.md` records the state and what clears it.
+
+## Boundary with the model catalog (2026-10-04)
+
+| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+|---|---|---|
+| how a probe says it is working | as written above | uses it on the Models tab; this plan owns it |

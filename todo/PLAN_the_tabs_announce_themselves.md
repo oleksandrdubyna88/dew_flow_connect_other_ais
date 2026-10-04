@@ -222,3 +222,9 @@ this plan settles on differs, the new page follows it rather than keeping its ow
   because a tab is a thing with a standard contract that the code already half-claims; a general
   accessibility pass over the panel, the chat page and the help page is a larger piece of work and
   should be scoped on its own.
+
+## Boundary with the model catalog (2026-10-04)
+
+| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+|---|---|---|
+| `tabKeys` on the new Settings page | as written above | consumes `tabKeys` (its E3.1); this plan keeps steps 2–4 |

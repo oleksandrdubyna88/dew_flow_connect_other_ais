@@ -215,3 +215,9 @@ Every range here is stale after it and is re-measured, which this plan already r
 - **It does not rewrite the neighbouring code it moves.** `reuse-first.md` is explicit that
   rewriting code you were not asked to change turns a small diff into one nobody can review. A
   badly-written function moves as it is, and is named in the summary if it should be redone.
+
+## Boundary with the model catalog (2026-10-04)
+
+| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+|---|---|---|
+| the settings half of `panelView.ts` | as written above | deletes it in its E5; this plan keeps the sidebar half and `roundsLog.ts` |

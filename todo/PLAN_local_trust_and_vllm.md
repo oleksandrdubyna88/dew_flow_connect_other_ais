@@ -173,3 +173,9 @@ is addressed at `.../v1`), and only the model-list PROBE is not, which is what i
       `RESULTS_model_comparison.md`.
 - [ ] The panel exposes `COAI_LOCAL_REASONING_EFFORT` beside the local row; it is env-only today.
 - [ ] A prompt truncated to `num_ctx` refuses the round with the two sizes, never reviews a fragment.
+
+## Boundary with the model catalog (2026-10-04)
+
+| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+|---|---|---|
+| exposing the local reasoning effort | as written above | exposes it per instance (its E2/E3); this plan keeps per-origin acknowledgement, vLLM keys, 401 reading and the `num_ctx` refusal |

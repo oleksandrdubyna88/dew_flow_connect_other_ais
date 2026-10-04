@@ -4,10 +4,13 @@
 > [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
 > checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
-> (`src_server`), help in five languages, and the docs. The sidebar and the Review rounds page are out of scope.
+> (`src_server`), help in five languages, and the docs. The sidebar and the Review rounds page are out of scope, with
+> ONE stated exception: the sidebar's Bugz ranking picker reads the catalog (E5.1).
 >
-> Every `file:line` below was read at `origin/main` = `e193822a` (extension 0.63.0, coai-mcp 0.43.0) on 2026-10-04.
-> Line numbers move; re-read before cutting.
+> Reviewed 2026-10-04 before any code: the coai plan round (session `652ef774`, 2 reviewers, `good_enough`, 15
+> findings, all accepted) and two of the session's own reviewers (an architecture critic and a fact-checker). What
+> they changed is in *What the review changed* at the end. Every `file:line` was read at `origin/main` = `e193822a`
+> (extension 0.63.0, coai-mcp 0.43.0). Line numbers move; re-read before cutting.
 >
 > Related docs: [architecture.md](../research/architecture.md), [PLAN_settings_page.md](../research/PLAN_settings_page.md),
 > [PLAN_the_consultant_has_its_own_vendors.md](../research/PLAN_the_consultant_has_its_own_vendors.md),
@@ -28,8 +31,7 @@
 7. **Effort for every vendor except Antigravity** (whose effort is part of the model name).
 8. **Two columns on a wide screen, one on a narrow one; blocks side by side are one height; every page keeps text
    size and brightness;** a control's "new" tag shows only in the first week after the update that brought it.
-9. **Nothing the system does today may be lost.** Verified twice (§ *What is true today*, and the coverage audit in
-   the mockup's Design notes § 7).
+9. **Nothing the system does today may be lost** — the mockup's Design notes § 7 is the audited list.
 
 ## The operator's rulings (2026-10-04)
 
@@ -39,234 +41,325 @@
 | A different-vendor consultant | Ideal, **never blocked** — the page says when the caller and the consultant share a vendor. |
 | A different effort for one model | **A second instance**, no per-feature override. |
 | A key per instance | **Yes** — two instances may share a key or use two accounts. |
-| Scope | **The Settings page only.** The sidebar and the Review rounds page are not touched. |
+| Scope | **The Settings page only.** The sidebar and the Review rounds page are not touched (one stated exception above). |
 | Tabs | **Six**: Models · Reviews · Consultants · Security lane · Chat · Setup; Reviews, Consultants and Setup have sub-tabs. |
 | coai-mcp | Changes once the UI is accepted (it is). |
 | Work order | Mockup → operator review → this plan → implementation. **The redesign first; the tails after.** |
 | Security lane triggers | On each card under the prompt text: the signals as **two columns of checkboxes**, plus the card's **own words** (a word, a phrase, a piece of code, or a `/regex/`). |
+| Review | The coai gate (back since 2026-10-04 evening), with the session's own reviewers alongside. |
 
 ## What is true today (verified at `e193822a`)
 
 | Fact | Where | Consequence for this plan |
 |---|---|---|
-| A reviewer is a `Vendor` row: id, runtime, model, enabled, stage flags, baseUrl, remoteVendor, teamServerId, executablePath, prices, vaultKeyName, dialect, effort/thinking/reviewMinutes (api rows only). | `src_vs_code/src/vendors.ts:16` | The catalog entry is a superset of this row — the row is what migrates most directly. |
-| The rows reach coai-mcp as `COAI_VENDORS` inside `<dataDir>/settings.json`. | `vendors.ts:640` (`vendorsEnv`), `settingsShape.ts:419` (`envBlock`); read by `src_mcp/src/Server/PanelSettings.cs:1139` | An older coai-mcp reads only these keys — the extension must keep writing them (D3). |
-| The consultant is one definition per caller kind, with its own vendor/model/endpoint/CLI path. | `consultSettings.ts:48-59`; caller kinds `:23-28` | Replaced by a caller → instance map. |
-| Consulting runtimes: codex (no endpoint), claude, antigravity, local — in BOTH halves. | `consultSettings.ts:118`; `src_mcp/runners/Consultation/ConsultantResolution.cs:17` | A consultant on an API key, or the Codex CLI with an endpoint, is NEW server work (E2). |
-| Question-consultant rows: model + one prompt, at most 6 on; runtimes = consulting + api. | `qconsultSettings.ts:77`, `:92`; `QuestionResolution.cs:21` | Rows reference an instance instead of carrying a model. |
-| Chat model presets carry their own runtime/model; they are NOT per side and NOT sent to the server. | `chatPresets.ts:69`; runtimes `cliChatLaunch.ts:56` | Chat models become per side with the catalog (D8). |
-| The Bugz ranking model is one string `rowId/model`, filtered by the row id `local`. | `bugzView.ts:46` | A second local instance is invisible today; the catalog fixes it by construction. |
-| Every model list comes from one function. | `models.ts:105` (`modelsFor`); runtimes `models.ts:35` | Reused unchanged by the Models tab. |
-| Per-side overlay: the settings listed are stored per side; data folder and side are ALWAYS per side. | `settingsShape.ts:298`, `:342` | `coai.models` joins the overlay list. |
-| Effort exists only for API rows; Antigravity encodes it in the model id; Claude and Codex runners pass none; local is ONE env value. | `src_mcp/core/Api/ApiRowSettings.cs:23`; `PanelSettings.cs:471`; `ClaudeRuntime.cs:63`; the codex adapter in `ReviewerRuntime.cs` | Effort per instance needs runner work (E2), measured before any default changes. |
-| The Team server's review request has no effort and no system prompt. | `src_server/src/ServerJsonContext.cs:91`; `ContractVersion.cs:32` | A contract bump (E3). |
-| Security signals are fixed word lists compiled into the server. | `src_mcp/core/Security/SecuritySignals.cs:37` | Editable words and a card's own words are NEW (E2). |
-| In Full code mode, API and local reviewers are told they hold a checkout they cannot read. | `src_mcp/src/Server/Rounds/ReviewerPrompt.cs:89` | Fixed while touching the runners (E2, story 2.6). |
-| **A second instance of a CLI vendor cannot run today.** Observed 2026-10-04 on the operator's install: coai-mcp's `providers` answers for the row `claude-2` *"'claude-2' was not found on this machine — install it with: npm install -g @anthropic-ai/claude-code"* — it looks for an executable named after the row's ID. | `RuntimeResolution.NameOf`, `src_mcp/runners/Reviewers/RuntimeResolution.cs:94` (an explicit runtime outranks the id; a row without one falls back to it) | The catalog stores the vendor kind on every instance, so the id never names a program (E1 migration fills it; E2 story 1 refuses an instance without one). RED test first in E2: a `claude-2` row with no runtime field. |
-| The MCP server tab says settings apply "when your MCP client next starts it" — false since `PanelServiceHost` rebuilds on every settings-file change. | `panelView.ts:1864`; `src_mcp/src/Server/PanelServiceHost.cs:10-23` | Tail T1. |
-| Export/import is format version 1 with an EXACT version check; it reads the base layer only. | `configTransfer.ts:121`, `:191` | A format version 2 with a real migration of v1 (E1). |
-| The Settings page: 12 tabs registered as sections, one strip, one stylesheet shared with the sidebar. | `panelView.ts:441` (`PANEL_SECTIONS`), `:3244` (`PANEL_COMMANDS`); `panelSurface.ts:117`; `settingsPanel.ts:53` | Rebuilt as its own page module (E4); the sidebar keeps its own sections. |
-| Version gates the page must keep honouring. | `apiRuntime.ts:34` (0.37.0), `apiSettings.ts:26` (0.40.0), `consultSettings.ts:438` (0.23.0), `qconsultSettings.ts:92` (0.41.0), `securityLane.ts:26` (0.41.0), and the role/gate gates (`prompts.ts:120`, `:131`; `rolesPage.ts:449`; `gateScope.ts:18`, `:41`; `commandModels.ts:185`) | One `skew(since, what)` road on the new page (E4). |
-| Sizes today: `panelView.ts` 3,398 lines, `panelProvider.ts` 4,297. | — | The new page is new modules; the old sections are deleted, not edited (E10), so the two size plans shrink rather than collide. |
+| A reviewer is a `Vendor` row: id, runtime, model, enabled, plan/code/document/feature flags (`document` is THREE-way: absent means "follows plan, but NO for a Team server"), baseUrl, remoteVendor, teamServerId, executablePath, prices, vaultKeyName, dialect, effort/thinking/reviewMinutes (api rows only). | `src_vs_code/src/vendors.ts:16-135`, three-way `:34-47` | **This row already IS an instance list** (`codex`, `codex-2`…). It is widened, not replaced (D1). |
+| The rows reach coai-mcp as `COAI_VENDORS` inside `<dataDir>/settings.json`; process env outranks the file key by key. | `vendors.ts:640`; `settingsShape.ts:419`; `PanelSettings.cs:1139`; `SettingsFile.cs:57` | The wire stays these keys (D3) — no new key, so no new precedence rule. |
+| **coai-mcp ignores JSON fields it does not know** — no `UnmappedMemberHandling` anywhere in `src_mcp` or `src_server`. | `src_mcp/src/Server/SettingsJsonContext.cs:30` (`VendorDto`) | A widened row is read by 0.43.0 as today's row: old servers keep working without a second wire. |
+| The consultant is one definition per caller kind; a definition with `runtime: ''` is a *reference* to a reviewer row (resolution (a) row with that id, (b) a runtime of that name, (c) refused); an ABSENT caller means the shipped pair. | `consultSettings.ts:48-59`, `:139-144`; resolver `ConsultantResolver.cs:76` | Storage becomes references to rows; the wire carries resolved definitions (every server ≥ 0.23.0 reads them). "Unset → shipped" stays absent, so a pristine install still writes nothing. |
+| Consulting runtimes: codex (no endpoint), claude, antigravity, local — in BOTH halves. | `consultSettings.ts:118`; `ConsultantResolution.cs:17`, codex-endpoint arm `:30` | A consultant on an API key or through the Codex CLI with an endpoint is NEW server work (E2.3). |
+| Question-consultant rows have their own id, ONE prompt, enabled; at most 6 on; a row with no runtime borrows the reviewer row of that name. | `qconsultSettings.ts:30-41`, `:77`, `:92`; `QuestionAdmission.cs:134-135`; `QuestionResolution.cs:21` | Rows keep their id, prompt and switch and refer to an instance; several rows may refer to one instance. |
+| Chat model presets carry their own runtime/model, `main` and `startingPrompt`; they are NOT per side and NOT sent to the server. | `chatPresets.ts:69-94`; `cliChatLaunch.ts:56`; absent from `settingsShape.ts:298-323` | Chat models become rows ticked Chat (per side, D8); the old preset key is frozen, never rewritten, so a downgrade still has it. |
+| The Bugz ranking model is one string `rowId/model`, and both halves match the ROW ID `local`. | `bugzView.ts:46`; `panelView.ts:529-534`; `src_mcp/…/RankingModels.cs:41` | A second local instance is refused by 0.43.0 — fixed by runtime in E2.1, said as "ignored" before. The picker lives in the SIDEBAR (E5.1). |
+| Every model list comes from one function; the runtimes include the retired `gemini`. | `models.ts:105`, `:35` | Reused unchanged; `gemini` rows still parse (they are migrated to antigravity as today, `vendors.ts:429-441`). |
+| Per-side overlay stores whole values per key; data folder and side are ALWAYS per side; reads merge WORKSPACE values. | `settingsShape.ts:298`, `:342`, `:356-359`; `sideConfig.ts:30`, `:80` | **A cloned repository's `.vscode/settings.json` can set `coai.vendors` today** — and with system prompts, endpoints and regexes it would steer more. E1.1 reads model-bearing keys from the user layer and the side overlay only. |
+| Effort exists only for API rows; local is ONE env value (`COAI_LOCAL_REASONING_EFFORT`) though `LocalRuntime` already passes a per-call value; Antigravity encodes effort in the model id; Claude and Codex pass none. | `ApiRowSettings.cs:23`; `PanelSettings.cs:354`, `:899`; `LocalRuntime.cs:152`; `AntigravityRuntime.cs:21-23`; `ClaudeRuntime.cs:63-94`; codex `ReviewerRuntime.cs:336-366` | Effort per instance is plumbing for local, new flags for codex and claude (E2.2), measured before any default changes. |
+| The Team server's review request has no effort, system prompt or timeout; a v1 server SILENTLY ignores unknown fields and serves a client claiming a newer contract. | `src_server/src/ServerJsonContext.cs:91-98`; `ContractVersion.cs:41`, `:93` | Contract v2 (E2.5); the CLIENT reads `X-Coai-Contract` and says when a v1 server would drop a field. |
+| Security signals are fixed word lists; a NonBacktracking regex with a 1 s timeout already exists for SQL shapes. | `SecuritySignals.cs:32-55` | Editable words and a card's own words are NEW (E2.4), on the same engine. |
+| In Full code mode, API and local reviewers are told they hold a checkout they cannot read: the material is decided once per ROUND. | sentence `ReviewerPrompt.cs:89`; decision `RosterBuilder.cs:181-183` | Fixed per runtime in `RosterBuilder` (E2.1). |
+| **The health probe of a second instance of a CLI vendor runs the ROW ID as the program.** Observed 2026-10-04: `providers` reports `claude-2` *"was not found — install it with npm …"* while the same row answered the plan round. | `VendorProbe.cs:143` → `IReviewerRuntime.DefaultExecutable => Provider` (`ReviewerRuntime.cs:226`); only Antigravity overrides it (`AntigravityRuntime.cs:126`); launches use the literal CLI (`ClaudeRuntime.cs:72`) | Every second instance looks broken in `providers`, the consultant health check and the Team server catalog. RED test first in E2.1: a `claude-2` row WITH `runtime: claude` probes `claude`. |
+| The MCP server tab says settings apply "when your MCP client next starts it" — false since `PanelServiceHost` rebuilds on every settings-file change. | `panelView.ts:1864`; `PanelServiceHost.cs:5-23` | Tail T1; the new page says the true sentence. |
+| Export/import is format version 1 with an EXACT check; it reads the base layer only and strips `executablePath`. | `configTransfer.ts:15`, `:27`, `:121`, `:191` | Format v2 with v1 migrated on import (E1.5). |
+| An older extension refuses to overwrite a settings file stamped by a newer one. | `serverSettingsSync.ts:241-280` | A downgraded extension's edits never reach coai-mcp — said in POST_DEPLOY's downgrade path, tested. |
+| The Settings page: 12 sections on one strip, the sidebar's whole document (`pageDocument` bundles the sidebar CSS and script with the CSP/nonce). | `panelView.ts:441-474`, `:566`, `:3244`; `panelSurface.ts:117`; `settingsPanel.ts:53` | The new page EXTRACTS the CSP/nonce part rather than reusing `pageDocument` whole (E3.1). |
+| Version gates on the page. | `apiRuntime.ts:34` (0.37.0), `apiSettings.ts:26` (0.40.0), `featureGate.ts:28` (0.39.0), `consultSettings.ts:438` (0.23.0), `qconsultSettings.ts:92` (0.41.0), `securityLane.ts:26` (0.41.0), `prompts.ts:120` (0.18.10), `:131` (0.18.13), `rolesPage.ts:449` (0.19.0), `gateScope.ts:18` (0.33.0), `:41` (0.34.0), `commandModels.ts:185` (0.33.0) | One `skew(since, what)` road (E3.1). Each new capability gets its OWN constant (E2), not one "0.44.0". |
+| Screenshots: `render-page.mjs` is Dark Modern only and knows the existing pages. | `src_vs_code/scripts/render-page.mjs:11-13`, `:125-157` | E3.1 adds the new page and a light theme. |
+| Sizes: `panelView.ts` 3,398 lines, `panelProvider.ts` 4,297. | — | The new page is new modules; the old sections and pages are deleted in E5. |
 
 ## The design
 
 The accepted mockup is the specification for every screen; this section fixes what the mockup cannot show.
 
-### The catalog entry
+### D1 — The catalog IS `coai.vendors`, widened
 
-```ts
-// src_vs_code/src/modelCatalog.ts — the one shape, written to `coai.models` and sent as COAI_MODELS.
-interface ModelInstance {
-  readonly id: string;              // stable; keys the vault, the ledger, history, colour — today's row id, migrated as is
-  readonly name: string;            // display name, the person's
-  readonly vendor: VendorKind;      // claude | codex | antigravity | dashscope | xai | deepseek | openrouter | compat | local | remote
-  readonly model: string;
-  readonly enabled: boolean;
-  readonly features: readonly Feature[]; // plan | code | document | feature | security | consultant | qconsult | chat | bugz
-  readonly effort?: string;         // the vendor's own spelling; absent = the vendor's / module's default
-  readonly thinking?: boolean;      // API modules that can switch it
-  readonly systemPrompt?: string;   // absent or empty = none
-  readonly timeoutMinutes?: number; // absent = Limits › Reviewer timeout
-  readonly connection: Connection;  // cliPath | endpoint + vaultKeyName + dialect | teamServerId + remoteVendor — by vendor kind
-  readonly prices?: Prices;         // in / out / cached per 1M; never for remote
-}
-```
+The reuse-first answer to the question "where do instances live": in the list that already holds them. A row gains:
 
-Access (CLI · reads this machine / API key / local engine / Team server) and every "Not offered" reason are DERIVED
-from the vendor kind and `shared/runtime-capabilities.json` — never stored, so they cannot disagree with the server.
+| Field | Meaning | Absent means |
+|---|---|---|
+| `name` | The display name, the person's | the id |
+| `uses` | The non-review features: `security`, `consultant`, `qconsult`, `chat`, `bugz` | none |
+| `effort` | Every runtime but Antigravity, in the vendor's own spelling, validated against the shared levels (D4) | the vendor's or module's default |
+| `systemPrompt` | ≤ 8 KiB | none |
+| `timeoutMinutes` | Non-API rows (API rows keep `reviewMinutes`, whose absence is the module's calibrated value) | Limits › Reviewer timeout |
+| `chatStartingPrompt` | What the composer opens with for this model | none |
 
-### Decisions (the operator may overrule any of them)
+The review features stay the existing flags — `plan`, `code`, `feature`, and the three-way `document` — so nothing
+that reads a row today changes meaning. The page's "Use for" ticks are those flags plus `uses`. `vaultKeyName` stays
+the key's name (absent = the id), so two instances share a key by naming it, Duplicate copies it, and removing an
+instance never deletes a vault entry (coai never writes the vault).
+
+### D2 — Everything else refers to a row by id
+
+| Feature | Stored | On the wire (unchanged keys) |
+|---|---|---|
+| Consultant | per caller: a reference `{ vendor: <row id>, runtime: '' }`; ABSENT = the shipped pair | `COAI_CONSULTANTS` with the reference RESOLVED to a definition (every server ≥ 0.23.0), plus the row's new fields, which 0.43.0 ignores |
+| Question consultant | rows keep `id`, `prompt`, `enabled`; `vendor` = row id, `runtime: ''` | `COAI_QCONSULT_ROWS` resolved the same way (≥ 0.41.0) |
+| Security lane | `runs[].vendor` = row id (already) | unchanged |
+| Bugz | `bugzModel` = `<row id>/<model>` (already) | unchanged; the row-id-`local` match becomes a runtime match (E2.1) |
+| Chat | `coai.chatModel` = row id (the key exists); the instances are rows with `uses: chat` | extension only |
+
+### D3 — One write road, one migration, no dual store
+
+- **Every write of a model-bearing setting goes through `sideConfig.saveSetting`** — including the OLD page's
+  consultant, question-consultant and chat writes, switched in E1.4 to write rows and references. The two blocking
+  findings (the old page writing keys the catalog never sees; a later catalog write silently reverting them)
+  disappear because there is nothing to keep in sync: one list, one road.
+- **Migration** (E1.3) runs once per settings LAYER (the user layer and each side overlay, each on its own), only
+  where a definition is not yet a reference. Deterministic ids, never random: a consultant definition becomes row
+  `consult-<caller>`, a question row's own definition `ask-<rowId>`, a chat preset `chat-<presetId>`, a Bugz model
+  that differs from its row's model `bugz-<rowId>`. **Merge rule:** a definition joins an EXISTING row only when
+  runtime, model, baseUrl, executablePath, dialect and vaultKeyName are all equal; otherwise it gets its own row. An id
+  clash takes the next free `-N` (the existing `freeVendorId`, `vendors.ts:503`) and the fixture says so. The new row
+  keeps the definition's key by setting `vaultKeyName` to the name it was stored under, so its vault entry and
+  ledger name do not move. Running it twice changes nothing.
+- **Backup and restore:** before rewriting, the four old values are copied to `coai.migratedFrom` (one copy, a few KB),
+  and a command *ConnectOtherAIs: Restore settings from before the catalog* puts them back. Kept until one release after
+  the switch-over (T5).
+- **Downgrade:** an older extension reads the rows (unknown fields ignored) and the references (legacy (a) resolution),
+  but a row it rewrites loses the new fields, and its server-file writes stand down (`serverSettingsSync.ts`). Tested
+  new → old (edit) → new; written into POST_DEPLOY.
+
+### D4 — One shared file says what each runtime can do
+
+`shared/feature-availability.json` — generated for TS, loaded by C#, both suites asserting against it (the
+`runtime-capabilities.json` pattern) — holds: which runtimes serve which feature (replacing `CONSULTING_RUNTIMES`,
+`Answering`, `CHAT_RUNTIMES`, `RANKING_VENDORS`), and the legal effort levels per runtime and API model. A write of an
+effort the file does not list is refused naming the legal values.
+
+### D5 — The new page is built behind a preview switch
+
+`coai.settingsPreview` (user scope, never overlaid) makes *Open Settings* open the NEW page instead of the old one —
+never both, so two webviews never write the same keys at once. The preview is offered only from E3 (Models) on.
+
+### D6 — Effort defaults stay empty
+
+The vendor's or module's own default, for every runtime that gains effort, until a measurement of ≥ 3 runs per vendor
+on the product path says otherwise (`RESULTS_model_comparison.md`: agy Flash Low beat High; a local model with thinking
+on never answered). Each runtime's flag is pinned in argv AND observed taking effect once, recorded beside the code.
+
+### D7–D11
 
 | # | Decision | Why |
 |---|---|---|
-| D1 | **A new setting `coai.models`; the old keys are migrated once and then DERIVED from it.** | One source of truth, and an older coai-mcp (or a downgraded extension) still reads exactly the keys it knows. |
-| D2 | **Migration keeps every id** (`codex`, `codex-2`, `<server>-<vendor>`…) and is idempotent: it runs only when `coai.models` is absent, writes it, and touches no old key. | Ids key the vault, the spending ledger, round history and colours. A crash mid-migration re-runs it. |
-| D3 | **Dual write until the tail.** Every catalog change also rewrites the derived legacy keys (`vendors`, `consultants`, `qconsultRows`, `chatModelPresets`, `bugzModel`, security `runs[].vendor`). For coai-mcp ≥ 0.44.0 the extension also writes `COAI_MODELS`; coai-mcp reads it first and falls back to the legacy keys. | An old coai-mcp keeps working, unchanged; the new one gets the fields the legacy keys cannot carry (effort for CLIs, system prompt, timeout). |
-| D4 | **Feature availability is ONE shared file**, `shared/feature-availability.json`, read by both halves — replacing `CONSULTING_RUNTIMES`, `Answering`, `CHAT_RUNTIMES` and the Bugz filter. | Four lists in two languages is how the consultant picker came to offer choices the server refuses. |
-| D5 | **The new page is built behind `coai.settingsPreview`** (off by default) until every tab is done; then it becomes the Settings page and the old sections are deleted (E10). | Half a new page beside half an old one is worse than either; a preview switch lets each epic ship and be tried. |
-| D6 | **Effort defaults stay empty** (the vendor's or module's own default) for every runtime that gains effort. A default is changed only after a measurement of ≥ 3 runs per vendor on the product path. | Measured: higher effort is not better (`RESULTS_model_comparison.md`, agy Flash Low beat High); a local model with thinking on never answered. |
-| D7 | **Bugz has one ranking model** — ticking it moves it. | Today's setting is one model; several ticks would be ambiguous. |
-| D8 | **Chat models become per side**, like every catalog entry; chat PROMPT presets stay shared. | The catalog is per side; a chat on WSL opens a WSL CLI. |
-| D9 | **Consultant over an API key** is a multi-turn API runner whose transcript coai-mcp keeps (the vendor keeps none). | The operator's own example (GLM high as consultant) needs it; prompt-only is shown as a limit, never hidden. |
-| D10 | **A check of any instance** (✓ Check) is a coai-mcp one-shot mode, `--check-model <id>` — one short paid turn in a scratch folder, confirmed first. | The consultant's Check already proved the shape; a mode on the binary keeps the page and the server from disagreeing. |
-| D11 | **The page's "?" texts and every help article move with the tabs**, in all five languages, in the same epic that moves a control. | A help article naming a tab that no longer exists is the stale translation the family already measured. |
+| D7 | **Bugz has one ranking model** — ticking it moves it. | Today's setting is one model. |
+| D8 | **Chat models become per side**; chat PROMPT presets stay shared. A model's effort and system prompt apply to chat too (chat runs in the extension). | The catalog is per side; a chat on WSL opens a WSL CLI. |
+| D9 | **A consultant on an API key** is a multi-turn API runner; coai-mcp keeps its transcript (the vendor keeps none), retired with the consultation. | The operator's own example (GLM high as consultant). |
+| D10 | **✓ Check of any instance** is a coai-mcp one-shot mode `--check-model <id>`, built on `ConsultCheckState`'s durable record (exclusive open, owner = pid + process start time, `already-checking`, a startup sweep, never settled from another side, the config hash stamped so an edit mid-check is not credited), one at a time per instance, a hard timeout that kills the process tree, the scratch folder removed in `finally`, confirmed first as a paid turn. | The consultant's Check proved the shape; generalising it is reuse, not a second mechanism. |
+| D11 | **Help moves with the tabs**, in all five languages, in the epic that moves a control; `coai.openSettings` maps every OLD tab id to its new place. | A help article naming a tab that no longer exists is the stale translation already measured. |
+
+### What the legacy wire cannot carry, and what the page says
+
+| Catalog fact | coai-mcp 0.43.0 sees | The page says (until 0.44.0 is installed) |
+|---|---|---|
+| Effort on a CLI row, a system prompt, a non-API timeout | the row without them | "this coai-mcp ignores: its effort, its system prompt, its own time limit" on the card |
+| A consultant on an API key or through the Codex CLI with an endpoint | a definition it refuses by name | on the Consultants tab, "needs coai-mcp 0.44.0" |
+| A Bugz model on a second local instance | refused (row id ≠ `local`) | "needs coai-mcp 0.44.0" on the card |
+| Editable signal words, a card's own words | the shipped words only | on the routing table and the card |
+| A model used only for the consultant | a row serving no stage — included in `providers`, in no round | nothing; it is correct |
 
 ### Growth surfaces
 
 | Surface | Projected size | Who retires it | Interrupted |
 |---|---|---|---|
-| `coai.models` | ≤ 64 instances (refused past it, saying why) × ≤ 1 KB, plus system prompts capped at 8 KiB each → realistically < 20 KB, worst 0.5 MB in `settings.json` | the person, per instance | written whole; a failed write keeps the old value (the existing refused-write snap-back) |
-| `COAI_MODELS` in `<dataDir>/settings.json` | same as above | rewritten on every change | coai-mcp keeps the last good file (existing stamp check) |
-| First-seen version per "new" control (`globalState`) | one entry per release that adds controls, ~10 bytes | entries older than 60 days are pruned on activation | none — a missing entry means "not new" |
-| ✓ Check results and transcripts | one record + one transcript per instance, overwritten | removed with the instance | a Check is detached and stamped `running` before it starts; a startup sweep marks a dead owner's record `interrupted` (durable-status rule) |
-| Migration backup `coai.migratedFrom` | one copy of the old keys, a few KB | Tail T5, when dual write ends | — |
-| `new_design/` and its Sonar exclusion | ~6,000 lines, never shipped | E10 deletes both | — |
+| Rows in `coai.vendors` | ≤ 64 (refused past it), each ≤ 1 KB + a system prompt ≤ 8 KiB → realistic < 20 KB, worst ~0.6 MB of `settings.json` | the person | written whole by `saveSetting`; a refused write snaps back |
+| Migration backup `coai.migratedFrom` | one copy per layer, a few KB | T5 | the migration is idempotent; the backup is written BEFORE the rewrite |
+| First-seen version per "new" control (`globalState`) | one entry per release with new controls, ~10 bytes | pruned after 60 days on activation | — |
+| ✓ Check records, transcripts, scratch folders | one record + one transcript per instance, overwritten; a scratch folder only while a check runs | removed with the instance; scratch removed in `finally` and swept at startup | D10's sweep ends a dead owner's record as `interrupted` |
+| API-consultant transcripts | ~2–20 KB per turn × ≤ 5 turns × ≤ 10 consultations per session ≈ ≤ 1 MB per session | deleted when the consultation is closed or idle-closed; anything older than 14 days swept on start | the existing consultation sweep marks it interrupted |
+| `new_design/` and its Sonar exclusion | ~6,000 lines, never shipped | E5.3 | — |
 
-## Build order — ten epics, one pull request each, one gate round each
+## Build order — five epics, one pull request and one gate round each
 
-Each epic ships on its own: the old page keeps working until E10, and every coai-mcp/Team-server change is read
-behind a version gate in both directions.
+Each epic ships on its own; the old page works until E5. Every coai-mcp/Team-server change is read behind its own
+version gate in both directions.
 
-### E1 — The catalog as data (extension; nothing visible changes)
-1. `modelCatalog.ts`: the type, parsing with "absent means the shipped value", and validation (unknown vendor,
-   duplicate id, > 64 instances — each refused naming the legal values).
-2. `catalogMigration.ts`: `catalogFrom(settings)` from every legacy key, ids kept; `legacyFrom(catalog)` back.
-   Property tests: `legacyFrom(catalogFrom(x))` equals `x` for every fixture shape seen today (taken from the
-   repo's existing settings fixtures and the operator's current settings, ids anonymised).
-3. `shared/feature-availability.json` + its generator for TS and its loader for C# (the runtime-capabilities
-   pattern); both halves' suites assert against it.
-4. Per-side overlay: `coai.models` joins `OVERLAID_SETTINGS`; every catalog write goes through
-   `sideConfig.saveSetting` (no direct `config.update(…, Global)` — the defect class this page had six times).
-5. `envBlock` writes the derived legacy keys always and `COAI_MODELS` for coai-mcp ≥ 0.44.0.
-6. Export/import format v2 carries `models`; v1 files are MIGRATED on import (the first real migration), never refused.
+### E1 — The instance list grows into the catalog (extension + shared; nothing visible changes)
+1. **Widen the row** (D1): the new fields, parsing with "absent means the shipped value", validation (> 64 rows,
+   prompt > 8 KiB, unknown effort — each refused naming the legal values), and model-bearing keys read from the user
+   layer and the side overlay only, never a workspace or folder value. RED test: a workspace `.vscode/settings.json`
+   carrying `coai.vendors` changes nothing.
+2. **`shared/feature-availability.json`** (D4) with its TS generator and C# loader; the four runtime lists in the
+   extension replaced by it (the C# side follows in E2.1).
+3. **The per-layer migration** (D3): deterministic ids, the merge rule, the clash rule, backup and restore command.
+   Fixtures: today's shapes from the repo's settings fixtures and the operator's own settings (anonymised) — overlapping
+   reviewer, consultant, question and chat entries, a forked side whose overlay predates migration, a `gemini` row, a
+   codex row with an endpoint; migrate twice = once.
+4. **One write road**: the old page's consultant, question-consultant and chat writes switched to rows + references
+   through `saveSetting`; the env block resolves references to definitions. RED test per surface: an edit on the old
+   page after migration changes the env block coai-mcp reads. The env block for an unchanged, migrated setup is
+   byte-identical to today's (the three-way `document` kept, pristine still writes nothing).
+5. **Export/import v2** (rows + references; `executablePath` stripped as today); a v1 file is migrated on import and
+   REPLACES the current models only after a confirmation that names what it will change.
 
-### E2 — coai-mcp reads the catalog and gains the new capabilities (release mcp 0.44.0)
-1. `PanelSettings` reads `COAI_MODELS` first, legacy keys otherwise; an unknown vendor kind is REFUSED by name,
-   never mapped to codex.
-2. Per-instance timeout for every runtime; system prompt per instance, prepended by every runner (review, consult,
-   question consult); `EveryAdapterRecordsWhatItLaunchedTests` extended to pin both.
-3. Effort: codex `-c model_reasoning_effort=<level>`, claude's effort flag (verify the CLI's flag and levels before
-   writing — a measured cell, not documentation), local per instance (`LocalAsk`), remote passes it (E3). Defaults
-   stay empty (D6).
-4. Consultant on an API key and on the Codex CLI with an endpoint (D9); `ConsultantResolution.Consulting` and the TS
-   mirror replaced by the shared file (D4).
-5. Security lane: signal words from settings (shipped words when absent), a card's own words and `/regex/` with a
-   bounded, non-backtracking matcher and a timeout; refused patterns are reported by name.
-6. `ReviewerPrompt` tells each reviewer what IT holds (checkout or diff), per runtime, not per round
-   (`ReviewerPrompt.cs:89`). RED test first.
-7. `--check-model <id>` one-shot mode (D10). **Added to the one-shot list in `.agents/PROJECT.md`** in the same
-   change, exit codes per that rule (never 64 for a known mode).
+### E2 — coai-mcp and the Team server honour the new fields (release mcp 0.44.0; Team server contract v2)
+1. **Probe and routing fixes**: the probe runs the runtime's CLI, not the row id (RED: `claude-2` with
+   `runtime: claude`); Bugz ranking matches the runtime, not the id `local`; an unknown runtime refused by name; the
+   material told to each reviewer decided per runtime in `RosterBuilder.cs:181-183`; the C# side reads
+   `feature-availability.json`.
+2. **Per-row system prompt, timeout and effort in every runner** (review, consult, question consult): the prompt
+   delivered inside the prompt body (stdin or the prompt file the runner already uses), NEVER argv, never logged
+   (length and hash only — a test asserts no launch record contains it); refused by name past a runtime's limit.
+   Effort: codex `-c model_reasoning_effort=…`; claude's flag verified against the installed CLI first; local per call
+   (`LocalRuntime.cs:152` already takes it); levels from D4. Each pinned in argv/body AND observed once. Gates
+   `SYSTEM_PROMPT_SINCE`, `TIMEOUT_SINCE`, `CLI_EFFORT_SINCE`.
+3. **A consultant on an API key and through the Codex CLI with an endpoint** (D9): the shared list replaces
+   `ConsultantResolution.Consulting`; transcripts kept and retired as in *Growth surfaces*. Gate `API_CONSULTANT_SINCE`.
+4. **Security words, a card's own words, and two one-shot modes**: words and patterns read from the lane setting
+   (shipped words when absent); patterns run on `RegexOptions.NonBacktracking` with a match timeout, ≤ 32 patterns of
+   ≤ 200 characters, a refused pattern reported by name. RED tests with catastrophic patterns over a 1 MB diff: the
+   round completes and the pattern is reported. `--check-security <text>` (what "Try it" calls) and `--check-model <id>`
+   (D10) — **both added to the one-shot list in `.agents/PROJECT.md`**, never exit 64. Gate `SECURITY_WORDS_SINCE`.
+5. **Team server contract v2**: `ReviewRequestDto` gains `Effort`, `SystemPrompt` and `TimeoutSeconds` is honoured per
+   model; a client system prompt is accepted only when the operator's switch allows it (off by default), capped, never
+   logged; the operator can cap effort. The client reads `X-Coai-Contract` and, against a v1 server, says which fields
+   that server drops. Measured both ways. Deploy is manual and needs the operator's go-ahead.
 
-### E3 — The Team server carries effort and a system prompt (contract v2)
-1. `ReviewRequestDto` gains `Effort` and `SystemPrompt`; `ContractVersion.Current = 2`.
-2. Measured against the OLD other side both ways: a v1 client against a v2 server and a v2 client against a v1
-   server, each with a sentence the person sees (never a silent drop). Deploy is manual and needs the operator's
-   go-ahead (task-lifecycle § 3).
+### E3 — The new Settings page: the shell and Models (behind the preview switch)
+1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
+   shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;
+   six tabs with sub-tabs, remembered by the host; the deep-link map (D11); two columns from 1100 px with
+   side-by-side blocks one height (CSS subgrid); `help(key)`, `skew(since, what)`, `newTag(controlId)` and one confirm
+   dialog; `coai.settingsPreview` (D5); `render-page.mjs` gains the page and a light theme.
+2. **Models — cards and editing**: every card part of the mockup; add (grouped by where a model runs), duplicate
+   (copies `vaultKeyName`), remove (lists every reference; the last switched-on plan or code model cannot leave), on/off,
+   the filter rows.
+3. **Models — the world-facing parts**: the CLI's ▶ open / ⤓ install / ⟳ update, coai-mcp's verdict, where a list came
+   from and "ask again", the API "runs it at", the off-machine endpoint warning and the WSL fix, ✓ Check (D10), the
+   per-card "this coai-mcp ignores…" note.
 
-### E4 — The new Settings page shell (behind `coai.settingsPreview`)
-1. A page module of its own (pure page + thin host, the roles-page pattern), reusing `pageDocument`'s CSP and nonce,
-   `tabStrip` + `tabKeys` (roving tabindex), `selectSearch`, the busy marks, focus restore and the refused-write
-   snap-back — none of it rewritten.
-2. Six tabs with sub-tabs; the open tab and sub-tab remembered by the host; `coai.openSettings` maps every OLD tab id
-   to its new place (deep links in help and in server messages keep working).
-3. Layout: two columns from 1100 px, one below; side-by-side blocks one height (CSS subgrid for cards).
-4. Shared helpers: `help(key)` from `HELP`; `skew(since, what)` — every `*_SINCE` gate on the page goes through it;
-   `newTag(controlId)` from the first-seen record; one confirm dialog.
+### E4 — The feature tabs use the catalog
+1. **Reviews**: Stages; Roles & prompts (replacing `rolesPage.ts`) with ONE switch per role — `roleEnabled` and the
+   catalog's `active` merged, `COAI_ROLES` still written for servers under `ROLE_SWITCH_SINCE`; deletion's confirmation
+   and reserved ids; a role off until it has a question; Prompts per round; The gate; Commands (replacing
+   `commandsPage.ts`); Limits.
+2. **Consultants**: callers refer to instances ticked Consultant (absent = shipped pair; same vendor shown, never
+   refused; stranded picks shown); health per side; the paid Check confirmed; agy's allow rule; the question
+   consultant's rows, prompts, folders and limits.
+3. **Security lane and Chat**: pairs from instances ticked Security lane; on each card the signals in two columns, own
+   words, prompt text in place; the routing table with editable words; Try it through `--check-security` (never a
+   JavaScript copy of the matcher). Chat from instances ticked Chat, per side, the starting text and the model's effort
+   and system prompt applied; prompt presets inline (replacing `chatPresetsPage.ts`).
+4. **Setup**: keys counted across every row; the CLI table; Team servers with every state; the MCP server's states and
+   clients (another program's config is READ only, never written, and no secret from it is shown); the data folder's
+   Change and Move flows on today's `dataCommands.ts` logic, the "moved from" record surviving a reload; This side with
+   the export note.
 
-### E5 — Models
-Cards, the add dialog grouped by where a model runs, duplicate, remove (listing every reference; the last plan or code
-model cannot leave), on/off, the three filter rows (use, effort, vendor) plus access and text, the CLI's
-▶ open / ⤓ install / ⟳ update, coai-mcp's verdict, where a list came from and ask again, the API "runs it at", the
-local-engine warning and WSL fix, per-card "this coai-mcp ignores…" notes. Everything as in the mockup's Models tab.
-
-### E6 — Reviews
-Stages; **Roles & prompts** replacing the Review roles page, with ONE switch per role (migrating `roleEnabled` and the
-catalog's `active`, D-row in E1's migration), deletion's confirmation and reserved ids, a role off until it has a
-question; Prompts per round; The gate; **Commands** replacing the Gate commands page; Limits.
-
-### E7 — Consultants
-The consultant per caller from instances ticked "Consultant" (same-vendor shown, never refused; stranded picks shown);
-health per side, the paid Check confirmed, agy's allow rule; the question consultant's rows referencing instances,
-prompts, folders and limits.
-
-### E8 — Security lane and Chat
-Pairs from instances ticked "Security lane"; on each card the signals in two columns, own words, prompt text in place;
-the routing table with editable words; Try it — the matcher is the SAME code as the server's, through
-`--check-security` or a shared module, so the page cannot disagree with a round. Chat from instances ticked "Chat",
-per side (D8); prompt presets inline.
-
-### E9 — Setup
-Vendor keys counting every instance's key; the CLI table; Team servers with every state; the MCP server's states and
-clients; the data folder's Change and Move flows rebuilt on today's `dataCommands.ts` logic (unchanged), with the
-"moved from" record surviving a reload; This side with the export note.
-
-### E10 — The switch-over, docs and release
-1. `coai.settingsPreview` removed; the new page IS Settings; the twelve old section builders and their commands
-   deleted (the size plans' targets shrink — see *Boundaries*).
-2. Help in five languages, `research/module_extension.md`, `research/module_server.md`, `architecture.md`, CHANGELOG,
-   POST_DEPLOY (one item: "a migrated install opens on Models with every old reviewer, consultant and chat model").
-3. `new_design/` and its Sonar exclusion deleted.
-4. Release: mcp 0.44.0 first (E2), the Team server deploy when the operator says (E3), then the extension.
+### E5 — The switch-over, docs and release
+1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
+   three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the
+   sidebar's Bugz picker reads the rows ticked Bugz (the one sidebar change).
+2. **Help and docs**: help in five languages (≈ 70 `HELP` keys and the articles that name tabs — written by the
+   implementer in all five, as today); `research/module_extension.md`, `research/module_server.md`, `architecture.md`,
+   CHANGELOG; POST_DEPLOY gains "a migrated install opens on Models with every old reviewer, consultant and chat model"
+   and the downgrade path.
+3. **Clean-up**: `new_design/` and its Sonar exclusion deleted; the restore command kept one more release (T5).
+4. **Releases**: mcp 0.44.0 first (E2), the Team server deploy when the operator says, then the extension; post-deploy
+   checks against the installed builds.
 
 ## Test plan
 
-- **Every epic: RED first** for each behaviour, then GREEN; the extension suite (`npm test`), `test:contract`,
-  `test:seam`, the C# suites as MTP executables — never `dotnet test`.
-- **Migration (E1):** fixture round-trips; idempotence (run twice = once); a crash between write and mark re-runs
-  cleanly; ids, prices, keys, endpoints, CLI paths and remote fields survive; the env block for an unchanged setup is
-  byte-identical to today's.
-- **Skew (E1–E3):** new extension + mcp 0.43.0 (legacy keys only, new controls show "ignored" notes); new mcp + old
-  extension (legacy keys read); Team server v1 ⇄ v2 both directions — each with the sentence the person sees.
-- **Pages (E4–E9): tested by RUNNING them** (`bundledPage.test.ts`, the page harnesses) — no new behavioural
-  assertion over page source text (PROJECT.md). The mockup's `check.mjs` flows are the acceptance list: every one of
-  its 61 checks has a counterpart page test.
-- **Layout:** `scripts/render-page.mjs` screenshots of every tab at 1920 and 900 px, dark and light, read before
-  each PR; equal heights asserted structurally (the subgrid rule), the pictures attached to the PR.
-- **Runners (E2):** each runtime's argv/body pinned with effort, system prompt and timeout; the matcher's timeout and
-  refused patterns; `--check-model` exit codes.
-- **The real editor harness** (`npm run test:host`) for opening the page, a deep link, and a write that survives a
-  reload.
+- **Every story: RED first**, then GREEN; `npm test`, `test:contract`, `test:seam`, `test:host`, the C# suites as MTP
+  executables — never `dotnet test`. Before a release, ALL suites.
+- **Migration and the write road (E1):** the fixtures above; idempotence; the byte-identical env block; an old-page edit
+  reaching the env block; a two-side test (a change on side A leaves side B's env block alone); the workspace-value
+  refusal.
+- **Skew, every direction:**
+  - new extension + coai-mcp 0.43.0 with a catalog it cannot fully express (two CLI instances, multi-use rows,
+    effort): parsed by the REAL 0.43.0 binary (`--providers` over the written file, in `test:seam`), and the page's
+    "ignored" notes;
+  - coai-mcp 0.44.0 + the old extension;
+  - an old extension against a file stamped by a newer build;
+  - a forked side whose overlay predates the migration;
+  - a process-env `COAI_VENDORS` beside the file's;
+  - coai-mcp 0.44.0 against a Team server v1 with a non-empty system prompt;
+  - a v1 export imported after migration.
+- **Runners (E2):** each runtime's argv/body pinned with effort, system prompt and timeout; no launch record holds a
+  system prompt; catastrophic regexes; both one-shot modes' exit codes.
+- **Pages (E3–E4): tested by RUNNING them** (`bundledPage.test.ts` and the page harnesses), never by asserting page
+  source text; every one of the mockup's 61 `check.mjs` flows has a counterpart page test.
+- **Layout:** `render-page.mjs` screenshots of every tab at 1920 and 900 px in both themes, read before each PR and
+  attached to it; equal heights asserted structurally.
 
 ## Boundaries with other plans
 
 | Item | This plan | The other plan's part |
 |---|---|---|
-| Splitting `panelProvider.ts` | Removes the twelve settings sections' handlers in E10 instead of moving them | [PLAN_the_panel_provider_is_too_big.md](PLAN_the_panel_provider_is_too_big.md) keeps its sidebar clusters; its settings clusters (vendors, Team servers, local engines, prices) are superseded — **this plan goes first** |
-| Splitting `panelView.ts` / `roundsLog.ts` | The settings half of `panelView.ts` is deleted in E10 | [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md) keeps the sidebar half and `roundsLog.ts` |
-| Local effort in the panel | E2/E5 expose it per instance | [PLAN_local_trust_and_vllm.md](PLAN_local_trust_and_vllm.md) keeps per-origin acknowledgement, vLLM keys, 401 reading, `num_ctx` refusal |
-| A model's liveness | E5 shows coai-mcp's verdict and ✓ Check | [PLAN_provider_liveness.md](PLAN_provider_liveness.md) owns the three liveness states and their cache; E5 draws them |
-| How a probe says it is working | E5 uses it | [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md) owns it |
-| Arrow keys on tab strips | E4 consumes `tabKeys` | [PLAN_the_tabs_announce_themselves.md](PLAN_the_tabs_announce_themselves.md) steps 2–4 |
-| The chat presets page writing on every keystroke | E8 replaces the page | [PLAN_chat_presets_write_every_keystroke.md](PLAN_chat_presets_write_every_keystroke.md) is superseded once E8 lands |
-| Which vendor answers which caller by default | E7 keeps the shipped map byte-identical | [PLAN_consultant_defaults_from_phase_0.md](PLAN_consultant_defaults_from_phase_0.md) owns the measurement |
+| Splitting `panelProvider.ts` | Deletes the settings handlers in E5 instead of moving them | [PLAN_the_panel_provider_is_too_big.md](PLAN_the_panel_provider_is_too_big.md) keeps its sidebar clusters; its vendor, Team-server, local-engine and price clusters are superseded — **this plan goes first** |
+| Splitting `panelView.ts` / `roundsLog.ts` | Deletes the settings half of `panelView.ts` in E5 | [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md) keeps the sidebar half and `roundsLog.ts` |
+| Splitting `PanelSettings.cs` | E2 adds fields to `VendorDto` and its parsing | [PLAN_panel_settings_is_too_big.md](PLAN_panel_settings_is_too_big.md) moves the parsing — whichever lands second rebases onto the other; E2 adds no new section to the file |
+| Local effort in the panel | E2/E3 expose it per instance | [PLAN_local_trust_and_vllm.md](PLAN_local_trust_and_vllm.md) keeps per-origin acknowledgement, vLLM keys, 401 reading, `num_ctx` refusal |
+| A model's liveness | E2.1 fixes the probe's program; E3 draws the verdict and ✓ Check | [PLAN_provider_liveness.md](PLAN_provider_liveness.md) owns the three liveness states and their cache |
+| How a probe says it is working | E3 uses it | [PLAN_panel_probing_state.md](PLAN_panel_probing_state.md) owns it |
+| Arrow keys on tab strips | E3.1 consumes `tabKeys` | [PLAN_the_tabs_announce_themselves.md](PLAN_the_tabs_announce_themselves.md) steps 2–4 |
+| The chat presets page writing on every keystroke | E4.3 replaces the page | [PLAN_chat_presets_write_every_keystroke.md](PLAN_chat_presets_write_every_keystroke.md) is superseded once E4.3 lands |
+| Which vendor answers which caller by default | E4.2 keeps the shipped map (absent = shipped) | [PLAN_consultant_defaults_from_phase_0.md](PLAN_consultant_defaults_from_phase_0.md) owns the measurement |
+| Checking a WSL consultant from Windows | D10 generalises the check record | [PLAN_a_wsl_consultant_is_checked_from_windows.md](PLAN_a_wsl_consultant_is_checked_from_windows.md) keeps the cross-side launch |
+| The question consultant's API and web tails | E2.3 adds the API consultant; D4 the shared file | [PLAN_question_consultant_tails.md](PLAN_question_consultant_tails.md) keeps agy web and api web |
+| Translations that go stale | D11 moves help with the tabs | [PLAN_a_stale_translation_is_invisible.md](PLAN_a_stale_translation_is_invisible.md) owns detecting staleness |
+| Page tests that run the page | E3–E4 write only run-the-page tests | [PLAN_the_page_tests_run_the_page.md](PLAN_the_page_tests_run_the_page.md) owns the existing source-assertion backlog |
 | The Security lane's calibration | none | [PLAN_security_lane_calibration_tail.md](PLAN_security_lane_calibration_tail.md) |
 
-Disjoint from everything else in `todo/`. Each plan in the table gets the same row, pointing back here.
+Disjoint from the rest of `todo/`. Each plan in the table gets the same row, pointing back here.
 
 ## Tails — after the redesign
 
 | # | Tail | Why it waits |
 |---|---|---|
-| T1 | The MCP server tab's sentence "reads them when your MCP client next starts it" (`panelView.ts:1864`) is false since `PanelServiceHost` rebuilds on every settings-file change | E9 writes the true sentence on the new page; T1 fixes the old page only if E10 slips |
+| T1 | The old MCP server tab's sentence "reads them when your MCP client next starts it" (`panelView.ts:1864`) | The new page says the true one; T1 touches the old page only if E5 slips |
 | T2 | **No security check triggers on `crypto`** — the signal is detected, no preset runs on it | A catalog change and a measurement; the routing table makes it visible first |
-| T3 | Export writes the shared settings only; a side's own models are not in the file | Export v2 (E1) carries the catalog of the side that exports; per-side export of the REST is a separate decision |
-| T4 | The mockup's own files (`app.js`, `reviews.js`, `setup.js`) are over 800 lines | The mockup is deleted in E10; the product modules are born under the limit |
-| T5 | Dual write (D3) ends, `coai.migratedFrom` is dropped | Once coai-mcp < 0.44.0 is no longer supported |
+| T3 | Export writes the shared settings only; a side's own rows are not in the file | v2 (E1.5) exports the exporting side's rows; per-side export of the rest is its own decision |
+| T4 | The mockup's own files are over 800 lines | The mockup is deleted in E5; product modules are born under the limit |
+| T5 | `coai.migratedFrom` and the restore command dropped | One release after E5 |
 
 ## Definition of Done
 
-- [ ] `coai.models` is the only place a model is added, edited or removed; every feature picks from it.
+- [ ] Models is the only place a model is added, edited or removed; every feature refers to a row by id.
 - [ ] A migrated install shows every reviewer, consultant, question-consultant row, chat model, Bugz model and
-      security pair it had, with the same ids, keys, prices and paths — proved by fixtures and on the operator's
-      own install.
-- [ ] coai-mcp 0.43.0 keeps working with the new extension (legacy keys), and the page says which controls it ignores.
-- [ ] Effort per instance reaches every runtime but Antigravity; system prompt and timeout reach every runner; the
-      Team server carries both at contract v2 — each pinned by a test, each measured against the old other side.
-- [ ] Every control and state the coverage audit listed (the mockup's Design notes § 7) exists on the new page.
-- [ ] Two columns from 1100 px, one below; side-by-side blocks one height; size and brightness on every page; "new"
-      for 7 days — checked in screenshots at both widths, both themes.
-- [ ] Help, `research/`, CHANGELOG and POST_DEPLOY describe the new page; `new_design/` and its Sonar exclusion gone.
-- [ ] Every epic went through a review round (the coai gate, or the operator's own-reviewer substitute while its
-      vendors are out of quota — said in the PR) before its pull request; every reviewer thread resolved.
+      security pair it had, with the same keys, prices and paths — proved by fixtures, by the real 0.43.0 binary, and
+      on the operator's own install; the restore command puts the old settings back.
+- [ ] coai-mcp 0.43.0 keeps working with the new extension, and the page says which controls it ignores.
+- [ ] Effort reaches every runtime but Antigravity; system prompt and timeout reach every runner without ever touching
+      argv or a log; the Team server carries them at contract v2 — each pinned by a test and observed once.
+- [ ] A second instance of a CLI vendor probes the right program.
+- [ ] Every control and state of the coverage audit (Design notes § 7) exists on the new page.
+- [ ] Two columns from 1100 px, one below; side-by-side blocks one height; size and brightness on every page; "new" for
+      7 days — screenshots at both widths, both themes.
+- [ ] Help in five languages, `research/`, CHANGELOG and POST_DEPLOY describe the new page; `new_design/` gone.
+- [ ] Every epic went through a coai plan round and code round with every finding resolved, and the session's own
+      reviewers alongside; every pull-request thread resolved; the cadence consultations taken.
 - [ ] Releases cut from tags after merge; post-deploy checks run against the installed builds.
+
+## What the review changed (2026-10-04)
+
+| Finding (who) | What changed |
+|---|---|
+| The old page's writes never reach the catalog; a later catalog write reverts them (gate ×2, blocking; own critic, blocking) | **The architecture.** No second store: the catalog IS `coai.vendors`, widened (D1), everything else refers by id (D2), one write road (D3). Nothing to keep in sync. |
+| Downgrade/Sync edits silently overwritten (gate) | Same root, same fix; the downgrade path is tested and written down. |
+| Migration ids for sources without an id; "keep every id" collides (gate; own critic) | Deterministic ids, an exact merge rule, a clash rule, fixtures (D3). |
+| Which layer the derived keys go to (gate; own critic) | Migration per layer; no derived keys left to place. |
+| `ModelInstance` could not round-trip today's rows: runtime, three-way `document`, chat `main`/`startingPrompt`, question rows, the shipped consultant pair (own critic) | The row is kept and widened; references keep the rest; absent = shipped stays. |
+| The legacy wire cannot express the catalog (gate; own critic) | The table *What the legacy wire cannot carry*, with the note the page shows. |
+| API-consultant transcripts not budgeted (gate) | A growth row with size, retirement and sweep. |
+| The vault keyed by id vs a shared key (gate) | `vaultKeyName` is the key; Duplicate copies it; removal never deletes a key. |
+| "Try it" and `--check-security`; a JavaScript matcher (gate; own critic) | `--check-security` in E2.4 and PROJECT.md; no JavaScript copy. |
+| Regex safety unverified (gate) | NonBacktracking + timeout + caps, catastrophic-pattern RED tests. |
+| System prompt on argv, in logs, to the Team server (gate; own critic) | Never argv, never logged, a cap; on the Team server behind an operator switch. |
+| Effort is a free string (gate) | Levels in the shared file, validated on write, observed once per runtime. |
+| ✓ Check: cost, concurrency, durable status (gate; own critic) | D10 built on `ConsultCheckState`. |
+| No rollback (gate) | Backup + restore command, kept one release after the switch-over. |
+| E2 too big; one coarse version gate (own critic) | Five stories, each with its own `*_SINCE`. |
+| A workspace can set the model settings (own critic) | E1.1 reads the user layer and the side overlay only. |
+| `COAI_MODELS` precedence and pristine output (own critic) | No new wire key at all. |
+| The Team server needs a timeout too; client prompts on a shared box (own critic) | E2.5. |
+| The claude-2 cause stated wrongly (fact-checker) | Rewritten: the probe runs the row id (`ReviewerRuntime.cs:226`), launches are fine. |
+| Wrong line for local effort, missing `FEATURE_SINCE`, the fix site for the checkout sentence, `pageDocument`, `render-page.mjs` limits, five missing boundaries, the sidebar Bugz picker, the three replaced pages (fact-checker) | Each corrected in place. |
+| The gate's commands: 4–5 epics of 3–5 stories, one gate per epic, consult on a cadence | Ten epics became five. The split was done on Opus — Fable is at its monthly spend limit (2026-10-02) — and is said so here. |
