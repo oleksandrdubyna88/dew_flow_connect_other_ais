@@ -38,6 +38,16 @@ function send(method, params = {}) {
   return new Promise((res, rej) => pending.set(id, { res, rej }));
 }
 
+/**
+ * A value as a JavaScript literal inside an expression the page evaluates. JSON.stringify alone leaves `<`, `>`, `/`
+ * and the two line separators raw, so text carrying `</script>` or U+2028 could change the code it is spliced into
+ * (CodeQL js/bad-code-sanitization, PR #679) — each is written as its \u escape instead.
+ */
+const UNSAFE = { '<': '\\u003C', '>': '\\u003E', '/': '\\u002F', '\u2028': '\\u2028', '\u2029': '\\u2029' };
+function literal(value) {
+  return JSON.stringify(value).replace(/[<>/\u2028\u2029]/gu, (c) => UNSAFE[c]);
+}
+
 async function js(expr) {
   const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true });
   if (r.exceptionDetails) throw new Error(`${expr}\n${JSON.stringify(r.exceptionDetails)}`);
@@ -213,7 +223,7 @@ try {
 
   // the data folder: a move refuses the current folder, then runs every step and switches; a change applies
   const dataDir = () => js('JSON.parse(localStorage.getItem("coai-settings-mockup-v1")).setup.data');
-  const setTarget = (v) => js(`(() => { const i = document.querySelector('[data-flow=target]'); i.value = ${JSON.stringify(v)}; i.dispatchEvent(new Event('input', {bubbles:true})); })()`);
+  const setTarget = (v) => js(`(() => { const i = document.querySelector('[data-flow=target]'); i.value = ${literal(v)}; i.dispatchEvent(new Event('input', {bubbles:true})); })()`);
   await js('document.querySelector("[data-setup=move-dir]").click()');
   await sleep(150);
   await setTarget('E:\\coai-data');
@@ -347,7 +357,7 @@ try {
   check('ticking a model on a card adds a pair', pairsAfter === pairsBefore + 1, `${pairsBefore} → ${pairsAfter}`);
   // the prompt text is edited in place: shipped → edited → Restore → shipped; a custom prompt loses its red line
   const typeText = (id, text) => js(`(() => { const c = document.querySelector('[data-sp=${id}]'); c.querySelector('details[data-text-open]').open = true;
-    const t = c.querySelector('textarea[data-sl-text]'); t.value = ${JSON.stringify(text)};
+    const t = c.querySelector('textarea[data-sl-text]'); t.value = ${literal(text)};
     t.dispatchEvent(new Event('input', {bubbles:true})); t.dispatchEvent(new Event('change', {bubbles:true})); })()`);
   await typeText('redteam-general', 'Look for anything an attacker could reach from outside.');
   await sleep(150);
@@ -369,7 +379,7 @@ try {
   const sqlStarts = await js('document.querySelector("[data-signal=sql]").textContent.includes("redteam-sql")');
   check('the routing table says sql starts redteam-sql', sqlStarts);
   const tryIt = async (text) => {
-    await js(`(() => { const t = document.querySelector('[data-sl-try]'); t.value = ${JSON.stringify(text)}; t.dispatchEvent(new Event('input', {bubbles:true})); })()`);
+    await js(`(() => { const t = document.querySelector('[data-sl-try]'); t.value = ${literal(text)}; t.dispatchEvent(new Event('input', {bubbles:true})); })()`);
     return js('document.querySelector("[data-try-result]").innerText');
   };
   const sqlTry = await tryIt('var rows = db.Query<Order>("SELECT * FROM orders WHERE id = " + id);');
@@ -406,7 +416,7 @@ try {
   check('cards say shipped / edited / custom', kinds.includes('edited') && kinds.includes('mine') && kinds.includes('shipped'), kinds);
 
   // an old coai-mcp: the page says where a control is ignored; the Commands editor lists the shipped orders
-  const setMcp = (v) => js(`(() => { const s = document.querySelector('#mcp'); s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event('change')); })()`);
+  const setMcp = (v) => js(`(() => { const s = document.querySelector('#mcp'); s.value = ${literal(v)}; s.dispatchEvent(new Event('change')); })()`);
   await setMcp('0.36.0');
   await js('document.querySelector("[data-tab=models]").click()');
   await sleep(200);
