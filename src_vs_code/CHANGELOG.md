@@ -1,5 +1,12 @@
 # Changelog
 
+## Server 0.42.1 — 2026-10-04
+
+**The first release of everything in 0.42.0**, which was never published: its Windows builds failed in one test whose
+fixture — a directory the runner's own account is denied — cannot be set up on the release workflow's Windows
+runners. That test now skips there and says why. Nothing else changed; see 0.42.0 below for what this release
+brings.
+
 ## Server 0.42.0 — 2026-10-03
 
 **A consultant answers, or says why it did not.** An antigravity consultant used to answer nothing: headless agy
