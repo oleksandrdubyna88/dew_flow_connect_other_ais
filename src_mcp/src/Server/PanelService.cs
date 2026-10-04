@@ -366,7 +366,7 @@ public sealed class PanelService
     /// </remarks>
     private string ReasonFor(ProviderSettings provider) =>
         RuntimeFor(provider) is null
-            ? $"no adapter for a runtime called '{provider.Runtime}'"
+            ? RuntimeResolution.NoAdapterFor(provider.Identity())
             : RuntimeResolution.ExclusionReason(
                 provider.Identity(), _keys.Keys.ContainsKey(provider.KeyName), HasServerToken(provider), provider.Model);
 

@@ -1286,21 +1286,12 @@ public sealed record PanelSettings
     {
         // Unset stays unset, and that is the whole distinction: the id then decides, so a vendor
         // called `gemini` with no runtime field is still a gemini.
-        var name = runtime?.Trim().ToLowerInvariant() ?? string.Empty;
-        if (name.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        // Membership, not a hand-written list. This WAS a hand-written list — gemini, claude,
-        // antigravity, else codex — and `local` never got added to it, so a local vendor became a
-        // codex vendor with a base URL, failed the key check that base URLs imply, and was dropped
-        // from every round. The panel showed a configured reviewer; the round opened with zero.
-        // The extension had the identical defect in its own copy of this set, days earlier.
         //
-        // An unknown runtime is still a custom vendor riding the Codex CLI against its own base
-        // URL — a deliberate decision kept from the vendor-settings tests, not a fallthrough.
-        return Runners.Reviewers.ReviewerRuntimeSelector.RuntimeNames.Contains(name) ? name : "codex";
+        // An unknown runtime is KEPT, not turned into codex. It used to be, so that "a name from a newer panel still
+        // launches something" — and what it launched was the Codex CLI on the person's own account, for a row set to
+        // something else: the shape `api` was once the example of. Kept, it reaches RuntimeResolution, which has no
+        // adapter for it and refuses the row by that name (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+        return runtime?.Trim().ToLowerInvariant() ?? string.Empty;
     }
 
     /// <summary>

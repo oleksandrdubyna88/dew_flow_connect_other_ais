@@ -63,13 +63,13 @@ public class CodeWorkspaceTests
             .Unrecognised.Should().BeEmpty();
     }
 
-    private static PanelService Service(string workspace, string dataDir = "")
+    private static PanelService Service(string workspace, string dataDir = "", string runtime = "local")
     {
         var settings = new PanelSettings
         {
             DataDir = dataDir.Length > 0 ? dataDir : Path.Combine(Path.GetTempPath(), $"coai-ws-{Guid.NewGuid():N}"),
             CodeWorkspace = workspace,
-            Providers = [new ProviderSettings("local") { Enabled = true, Runtime = "local", Model = "m" }],
+            Providers = [new ProviderSettings(runtime) { Enabled = true, Runtime = runtime, Model = "m" }],
         };
         return new PanelService(settings, VaultKeys.None("no vault"), default,
             new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
@@ -125,13 +125,20 @@ public class CodeWorkspaceTests
         // code says the opposite: the repair never has one.
         var worktree = Worktree();
 
-        var work = Service("worktree").Roster.BuildWork([RoleCatalog.ArchitectureRole], worktree, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+        // A CLI reviewer: only a reviewer that can READ a checkout is told it has one (PLAN_one_model_catalog.md E2.1,
+        // ReviewerMaterial). This test used a local model, which is one HTTP request with no tools — telling it about a
+        // checkout was the defect E2.1 removed, not the guarantee this test is about.
+        var work = Service("worktree", runtime: "codex").Roster.BuildWork([RoleCatalog.ArchitectureRole], worktree, "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
 
         Sent(work[0].Repair!).Should().Contain("no tool you can call",
             "the repair launch runs in an empty temp directory whatever the review got");
         Sent(work[0].Repair!).Should().NotContain("READ-ONLY checkout");
         Sent(work[0].Invocation).Should().Contain("READ-ONLY checkout",
             "the REVIEW launch really was given the tree, and must still be told so");
+
+        var local = Service("worktree").Roster.BuildWork([RoleCatalog.ArchitectureRole], Worktree(), "ctx", round: 1, stage: Stage.CodeReview, readsCheckout: true).Reviewers;
+        Sent(local[0].Invocation).Should().NotContain("READ-ONLY checkout",
+            "a local model is sent the change in its prompt and has no tool to open a file with");
     }
 
     [Fact]

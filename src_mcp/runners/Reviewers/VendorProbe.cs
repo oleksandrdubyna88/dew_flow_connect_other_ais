@@ -91,8 +91,7 @@ public static class VendorProbe
     {
         if (RuntimeResolution.For(vendor) is null)
         {
-            return new VendorHealth(enabled, false, "", "unavailable",
-                ReviewerRuntimeSelector.Default.RefusalFor(vendor.Provider));
+            return new VendorHealth(enabled, false, "", "unavailable", RuntimeResolution.NoAdapterFor(vendor));
         }
 
         return VendorDiagnosis.ForRuntime(runtimeName) is { } retired

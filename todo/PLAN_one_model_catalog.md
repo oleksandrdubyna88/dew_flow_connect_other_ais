@@ -326,6 +326,31 @@ override the stories above where they differ:
 - **Scope.** Five stories, two release lines and a manual deploy: built as one epic per the operator's rule, released
   as mcp 0.44.0 with whatever stories have landed — the `--features` list, not a version, tells the extension which.
 
+#### E2.1 as built (branch `feat/catalog-e2`)
+
+- **Probe.** `ClaudeRuntime`, `CodexRuntime`, `GeminiRuntime` name their CLI in `DefaultExecutable`; launch and probe
+  both use it, so a `claude-2` row probes `claude` (`ARowIdIsNotAProgramTests`).
+- **Material per reviewer.** `IReviewerRuntime.ReadsTheCheckout` (false for api, local, remote) and
+  `ReviewerMaterial.For` decide per reviewer in `RosterBuilder`; only a reviewer that can read a checkout is told it has
+  one (`AReviewerIsToldOnlyWhatItCanReadTests`). `CodeWorkspaceTests`' repair-launch test had pinned the old lie on a
+  local reviewer; it now asserts the guarantee on a CLI reviewer and the absence on a local one.
+- **The shared file.** `core/Catalog/FeatureAvailability.cs` embeds `shared/feature-availability.json`
+  (`FeatureAvailabilitySeed` in `CoreJsonContext`), refuses a feature list that names no runtime or an undeclared one,
+  and `ConsultantResolution.Consulting` IS `FeatureAvailability.Builtin.Consultant` — RED first on "equal but a copy".
+- **Unknown runtime — a reversed decision.** Both halves turned an unknown runtime into `codex` ("a name from a newer
+  panel still launches something"); what it launched was the Codex CLI on the person's own account, the shape `api`
+  was once the example of. The server now KEEPS the name (`PanelSettings.RuntimeOf`), `RuntimeResolution.NameOf`
+  answers it before the base-URL arm, `For` no longer falls back to the row id when a runtime was named (a row `claude`
+  with runtime `llama.cpp` ran the claude CLI), and the probe and the round's exclusion both say
+  `RuntimeResolution.NoAdapterFor` — the runtime by name and the runtimes this build runs. Two tests that pinned the
+  old coercion were rewritten. **Not done here:** the extension's `vendorsFrom` still coerces an unknown runtime to
+  `codex` when an OLDER panel reads a newer one's rows (and would re-save it so); that is an extension change, tail T6.
+- **Bugz ranking by runtime.** `RankingModels.IsAllowed(model, runtime)` / `Refusal(model, runtime)`; `--collect-bugs`
+  takes `--runtime` (the catalog row's runtime, which the extension resolves — Bugz never crosses in `COAI_VENDORS`, so
+  the collector cannot look it up). Without it the row id stands in, so `local/<model>` from a terminal or an older
+  extension means what it did. A row CALLED `local` on a cloud runtime is now refused. The extension passes
+  `--runtime` once `--features` lists it (E2.2), and the Bugz migration (`bugz-<rowId>`) follows that.
+
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
    shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;
@@ -424,6 +449,7 @@ Disjoint from the rest of `todo/`. Each plan in the table gets the same row, poi
 | T3 | Export writes the shared settings only; a side's own rows are not in the file | v2 (E1.5) exports the exporting side's rows; per-side export of the rest is its own decision |
 | T4 | The mockup's own files are over 800 lines | The mockup is deleted in E5; product modules are born under the limit |
 | T5 | `coai.migratedFrom` and the restore command dropped | One release after E5 |
+| T6 | The extension's `vendorsFrom` turns a runtime it does not know into `codex` — an older panel reading a newer one's rows, and re-saving them so | coai-mcp refuses it by name since E2.1; the extension should keep the row and show it unrunnable, which widens the `Runtime` type |
 
 ## Definition of Done
 

@@ -25,6 +25,8 @@ namespace CoaiMcp.Core;
 // The question consultant (PLAN_question_consultant.md): its capability table, embedded like the
 // role seed, and the shape an api consultant answers in — both read through this reflection-free context.
 [JsonSerializable(typeof(RuntimeCapabilitySeed))]
+// PLAN_one_model_catalog.md D4: which runtime serves which feature, and the efforts each accepts.
+[JsonSerializable(typeof(CoaiMcp.Core.Catalog.FeatureAvailabilitySeed))]
 [JsonSerializable(typeof(RawQuestionAnswer))]
 // S2 of the same plan: the shipped base prompts (embedded like the table), a person's own prompts
 // (COAI_QCONSULT_PROMPTS) and the rows (COAI_QCONSULT_ROWS) — every wire field nullable, read once here.

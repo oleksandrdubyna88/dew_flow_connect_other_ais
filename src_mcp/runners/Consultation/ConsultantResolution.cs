@@ -1,3 +1,4 @@
+using CoaiMcp.Core.Catalog;
 using CoaiMcp.Runners.Reviewers;
 
 namespace CoaiMcp.Runners.Consultation;
@@ -13,8 +14,11 @@ namespace CoaiMcp.Runners.Consultation;
 /// </remarks>
 public static class ConsultantResolution
 {
-    /// <summary>The runtimes this build can hold a consultation with, in the order the stories added them.</summary>
-    public static IReadOnlyList<string> Consulting { get; } = ["codex", "claude", "antigravity", "local"];
+    /// <summary>
+    /// The runtimes this build can hold a consultation with — the shared file's list itself, not a copy of it
+    /// (todo/PLAN_one_model_catalog.md D4), so the panel offers exactly what this answers.
+    /// </summary>
+    public static IReadOnlyList<string> Consulting => FeatureAvailability.Builtin.Consultant;
 
     /// <remarks>
     /// It takes a vendor identity and nothing else. A <c>dataDir</c> parameter lived here for one

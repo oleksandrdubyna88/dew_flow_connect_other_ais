@@ -1,4 +1,5 @@
 using System.Text.Json;
+using CoaiMcp.Core.Catalog;
 using CoaiMcp.Runners.Consultation;
 using FluentAssertions;
 using Xunit;
@@ -6,14 +7,13 @@ using Xunit;
 namespace CoaiMcp.Tests;
 
 /// <summary>
-/// coai-mcp's own consultant list is held to <c>shared/feature-availability.json</c>, the file the extension
-/// generates its picker from (PLAN_one_model_catalog.md D4, E1.2).
+/// coai-mcp reads <c>shared/feature-availability.json</c> itself — the file the extension generates its pickers from
+/// (todo/PLAN_one_model_catalog.md D4; epic 1 story 2 made the file, epic 2 story 1 makes this half read it).
 /// </summary>
 /// <remarks>
-/// Until E2.1 has coai-mcp read the file itself, <see cref="ConsultantResolution.Consulting"/> is a second copy,
-/// and the extension's copy is generated from the file. This is the one test that compares the two halves —
-/// before it, each half pinned its own literal, and a runtime added to one would have been offered by the panel
-/// and refused by the server with every test green.
+/// Until epic 2, <see cref="ConsultantResolution.Consulting"/> was a literal held level with the file by this test. Now it
+/// IS the file's list: the server and the panel answer "which runtime can consult" from one source, so a runtime added to
+/// the file is offered by one and run by the other on the same day.
 /// </remarks>
 public sealed class FeatureAvailabilityTests
 {
@@ -25,14 +25,52 @@ public sealed class FeatureAvailabilityTests
         return parsed.RootElement.Clone();
     }
 
-    [Fact]
-    public void TheConsultingRuntimes_AreTheSharedFilesConsultantList_InItsOrder()
-    {
-        var shared = Shared().GetProperty("features").GetProperty("consultant")
-            .EnumerateArray().Select(runtime => runtime.GetString()!).ToList();
+    private static IReadOnlyList<string> Words(JsonElement list) => [.. list.EnumerateArray().Select(one => one.GetString()!)];
 
-        shared.Should().NotBeEmpty("a file that did not load names no runtime");
-        ConsultantResolution.Consulting.Should().Equal(shared,
-            "the panel offers exactly the file's list, so the server must run exactly that list");
+    [Fact]
+    public void TheEmbeddedFile_IsTheSharedFile_FeatureForFeature()
+    {
+        var features = Shared().GetProperty("features");
+
+        FeatureAvailability.Builtin.Consultant.Should().Equal(Words(features.GetProperty("consultant")));
+        FeatureAvailability.Builtin.Chat.Should().Equal(Words(features.GetProperty("chat")));
+        FeatureAvailability.Builtin.Effort.Select(row => row.Runtime)
+            .Should().Equal(Shared().GetProperty("effort").EnumerateArray().Select(row => row.GetProperty("runtime").GetString()));
+    }
+
+    [Fact]
+    public void TheConsultingRuntimes_AreTheLoadedList_NotACopyOfIt()
+    {
+        ConsultantResolution.Consulting.Should().BeSameAs(FeatureAvailability.Builtin.Consultant,
+            "a second list is a second place to forget a runtime");
+        ConsultantResolution.Consulting.Should().Equal(Words(Shared().GetProperty("features").GetProperty("consultant")));
+    }
+
+    [Fact]
+    public void TheEffortLevels_ComeFromTheFile_ClaudeListedAndAntigravityNone()
+    {
+        FeatureAvailability.Builtin.EffortOf("claude").Levels.Should().Equal("low", "medium", "high", "xhigh", "max");
+        FeatureAvailability.Builtin.EffortOf("antigravity").Source.Should().Be("none");
+        FeatureAvailability.Builtin.EffortOf("codex").Source.Should().Be("unmeasured");
+    }
+
+    [Fact]
+    public void AFileThatNamesNoConsultingRuntime_IsRefusedByName()
+    {
+        var broken = new FeatureAvailabilitySeed(["codex"], new FeatureListsSeed([], ["codex"]), []);
+
+        var act = () => FeatureAvailability.FromSeed(broken);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*consultant*");
+    }
+
+    [Fact]
+    public void AFeatureRuntimeOutsideTheRuntimes_IsRefusedByName()
+    {
+        var broken = new FeatureAvailabilitySeed(["codex"], new FeatureListsSeed(["codex", "emacs"], ["codex"]), []);
+
+        var act = () => FeatureAvailability.FromSeed(broken);
+
+        act.Should().Throw<InvalidOperationException>().WithMessage("*emacs*");
     }
 }

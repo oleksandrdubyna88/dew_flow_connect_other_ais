@@ -719,13 +719,17 @@ internal static class Program
 
         var flags = Flags(args);
         flags.TryGetValue("--model", out var model);
+        // The runtime of the row the model names, resolved by the extension from the catalog — what the allowlist matches
+        // (todo/PLAN_one_model_catalog.md, epic 2, story 1). Absent, the row id stands in, as it always did.
+        flags.TryGetValue("--runtime", out var runtime);
 
         var summary = await run.RunAsync(
             settings.DataDir,
             db,
             Limit(args, Store.BugsQuery.DefaultLimit),
             all: Array.IndexOf(args, "--all") >= 0,
-            model: model ?? string.Empty);
+            model: model ?? string.Empty,
+            runtime: runtime ?? string.Empty);
 
         if (summary.Refusal.Length > 0)
         {
@@ -2177,8 +2181,10 @@ internal static class Program
         `--outline <file> [--json]` prints one source file's declarations — signatures up to their bodies,
         with lines — as the feature review would outline it; `--json` for the structured form. A file it
         does not outline (language, over 1 MB, parse failure) is a reason on stdout, exit 0; no file is 65.
-        `--collect-bugs [--limit 200] [--all] [--model local/<name>]` decides what became of every unprocessed candidate — the fix
-        commit, or the reason there is none — and writes it to the findings rows. Prints the funnel on
+        `--collect-bugs [--limit 200] [--all] [--model <row>/<name> [--runtime <runtime>]]` decides what became of
+        every unprocessed candidate — the fix commit, or the reason there is none — and writes it to the findings rows.
+        The ranking model must be on a local runtime: `--runtime` says which the row runs on, and without it the row id
+        stands in (`local/<name>`). Prints the funnel on
         stdout and its progress on stderr. `--all` revisits candidates an earlier run handled.
         `--bugs-json [--limit 200] [--all]` prints the accepted findings as corpus material, with the
         funnel that narrowed to them. `--all` includes the ones a collector run has already handled.

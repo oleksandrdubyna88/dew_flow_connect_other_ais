@@ -865,3 +865,21 @@ Three more pure units beside the five above, for the fan-out that S2 built in th
 `CoreJsonContext` gained the seed and the two wire shapes (every field nullable: an omitted field arrives
 null whatever a declaration says). Tests: `QuestionRowsTests`, `QuestionPromptSetTests`, `QuestionPromptTests`
 — each watched red (`CS0246`) against a tree without the types.
+
+## Feature availability, read from the shared file (2026-10-04, PLAN_one_model_catalog.md E2.1)
+
+`Catalog/FeatureAvailability.cs` embeds `shared/feature-availability.json` — the file the extension generates its
+pickers from — as `CoaiMcp.Core.feature-availability.json`, read through `CoreJsonContext` (`FeatureAvailabilitySeed`,
+`FeatureListsSeed`, `EffortRowSeed`). `Builtin.Consultant`, `.Chat`, `.Effort` and `EffortOf(runtime)`; `FromSeed`
+refuses (by `InvalidOperationException` naming the problem — a broken embedded file is a build defect) a feature that
+names no runtime or one the file does not declare, and an effort row with an unknown runtime or source.
+`ConsultantResolution.Consulting` IS `Builtin.Consultant`: the server and the panel answer "which runtime can
+consult" from one list (`FeatureAvailabilityTests`, red first on "equal, but a copy").
+
+## Bugz ranking is allowed by runtime (2026-10-04, PLAN_one_model_catalog.md E2.1)
+
+`Collecting/RankingModels.IsAllowed(model, runtime)` matches `Local` (`shared/ranking-vendors.txt`, now a list of
+RUNTIMES) against the runtime of the row the model names, which `--collect-bugs --runtime` supplies; without it the
+row id stands in, so `local/<model>` means what it did. A second local instance (`local-2`, the migration's
+`bugz-local`) is allowed, and a row merely called `local` on a cloud runtime is refused, its runtime named in
+`Refusal(model, runtime)` (`BugzRankingMatchesTheRuntimeTests`, `CollectRunTests`).

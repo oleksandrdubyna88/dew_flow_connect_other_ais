@@ -1,4 +1,8 @@
-# The vendors that may be shown a finding's OWN WORDS.
+# The RUNTIMES whose models may be shown a finding's OWN WORDS.
+#
+# A runtime, not a row id (todo/PLAN_one_model_catalog.md, epic 2, story 1): a Bugz model is `rowId/model`, and the
+# id is a name a person chose — `local-2`, `bugz-local` — while the runtime decides where the text goes. The caller
+# says the row's runtime (`--collect-bugs --runtime`); without it the row id stands in, as it always did.
 #
 # A finding's `title`, `why` and `fix` are the reviewers' prose about somebody's code — class names,
 # product names, the shape of a private system — and they are NOT anonymised. The normaliser runs

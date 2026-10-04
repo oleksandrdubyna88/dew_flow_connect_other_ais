@@ -45,6 +45,11 @@
          generates runtimeCapabilities.generated.ts from the same file. -->
     <EmbeddedResource Include="..\..\shared\runtime-capabilities.json" LogicalName="CoaiMcp.Core.runtime-capabilities.json" />
 
+    <!-- Which runtime serves which feature, and the efforts each accepts (PLAN_one_model_catalog.md D4).
+         The extension generates featureAvailability.generated.ts from the same file; FeatureAvailability
+         refuses one whose lists name a runtime it does not declare. -->
+    <EmbeddedResource Include="..\..\shared\feature-availability.json" LogicalName="CoaiMcp.Core.feature-availability.json" />
+
     <!-- The question consultant's three shipped base prompts (PLAN_question_consultant.md, S2): id, title,
          capability and text, embedded so a published binary always has a prompt to pair a row with and a
          default to restore to. The extension generates its copy from the same file (S4). -->

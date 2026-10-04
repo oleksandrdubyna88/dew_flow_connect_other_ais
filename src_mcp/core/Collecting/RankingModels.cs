@@ -26,12 +26,12 @@ namespace CoaiMcp.Core.Collecting;
 /// </remarks>
 public static class RankingModels
 {
-    /// <summary>The vendor prefixes whose engines run on the machine that asks them.</summary>
+    /// <summary>The RUNTIMES whose engines run on the machine that asks them.</summary>
     /// <remarks>
-    /// Prefixes rather than whole model names, because the model half changes whenever somebody pulls
-    /// a new one and a list of exact names would refuse a model the person installed this morning.
-    /// The vendor half is what decides whether the text leaves the machine, and it is the half this
-    /// is allowed to care about.
+    /// A runtime rather than a whole model name, because the model half changes whenever somebody pulls a new one and a
+    /// list of exact names would refuse a model the person installed this morning. And a runtime rather than the row id
+    /// it used to be (todo/PLAN_one_model_catalog.md, epic 2, story 1): the id is a name a person chose — `local-2`, the
+    /// migration's `bugz-local` — while the runtime is what decides whether the text leaves the machine.
     /// </remarks>
     /// <remarks>
     /// <c>IReadOnlyList</c> rather than an array: a public <c>string[]</c> protects the reference
@@ -40,14 +40,24 @@ public static class RankingModels
     /// </remarks>
     public static readonly IReadOnlyList<string> Local = ["local"];
 
-    /// <summary>Whether this model may be shown un-anonymised finding text.</summary>
+    /// <summary>Whether this model, on this runtime, may be shown un-anonymised finding text.</summary>
     /// <remarks>
     /// An EMPTY model is allowed and means "no ranking pass": the collector does not call a model at
     /// all, and refusing the absence of one would make `--collect-bugs` impossible to run from a
     /// terminal. What is refused is a model that was NAMED and is not local.
     /// </remarks>
-    public static bool IsAllowed(string model) =>
-        model.Length == 0 || Local.Contains(VendorOf(model), StringComparer.Ordinal);
+    /// <param name="model"><c>rowId/model</c>, as the Bugz setting holds it.</param>
+    /// <param name="runtime">
+    /// The runtime of the row the model names, as the caller resolved it from the catalog (`--runtime`). Empty when the
+    /// caller did not say — a terminal, or an extension from before the catalog — and then the row id stands in for it,
+    /// which is what <c>local/qwen</c> has always meant.
+    /// </param>
+    public static bool IsAllowed(string model, string runtime) =>
+        model.Length == 0 || Local.Contains(RuntimeOf(model, runtime), StringComparer.Ordinal);
+
+    /// <summary>The runtime said, lower case — or, when none was, the row id that stood in for it.</summary>
+    private static string RuntimeOf(string model, string runtime) =>
+        runtime.Trim().Length > 0 ? runtime.Trim().ToLowerInvariant() : VendorOf(model);
 
     /// <summary>The vendor half of <c>vendor/model</c>, lower case.</summary>
     /// <remarks>
@@ -62,9 +72,9 @@ public static class RankingModels
         return (slash < 0 ? model : model[..slash]).ToLowerInvariant();
     }
 
-    /// <summary>Why a model was refused, in the words the person needs to fix it.</summary>
-    public static string Refusal(string model) =>
-        $"'{model}' is not a local model. A finding's title, why and fix are not anonymised — the "
-        + "normaliser runs later and only on source — so the ranking pass reads them on this machine "
-        + $"or not at all. Allowed vendors: {string.Join(", ", Local)}.";
+    /// <summary>Why a model was refused, in the words the person needs to fix it — its runtime named.</summary>
+    public static string Refusal(string model, string runtime) =>
+        $"'{model}' is not a local model: it runs on '{RuntimeOf(model, runtime)}'. A finding's title, why and fix "
+        + "are not anonymised — the normaliser runs later and only on source — so the ranking pass reads them on this "
+        + $"machine or not at all. Allowed runtimes: {string.Join(", ", Local)}.";
 }

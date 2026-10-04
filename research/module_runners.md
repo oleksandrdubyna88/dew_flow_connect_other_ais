@@ -2153,3 +2153,34 @@ Tests: `RuntimeResolutionTests` (+7), `LocalReviewerRunsTests` (+1, the round's 
 - the round not passing the model → 1 red;
 - the probe not passing it → 1 red;
 - the rule removed → 5 red.
+
+## A row is run by its runtime — never by its id (2026-10-04, PLAN_one_model_catalog.md E2.1)
+
+The catalog makes several rows on one runtime ordinary (`claude`, `claude-2`), so three places that read the row id
+as if it were a program or a runtime were corrected:
+
+- **The probe runs the runtime's CLI.** `ClaudeRuntime`, `CodexRuntime` and `GeminiRuntime` declare
+  `DefaultExecutable` (`claude`/`codex`/`gemini`); the interface default was the row id, so `providers` started a
+  program called `claude-2`. Launch and probe read the one property (`ARowIdIsNotAProgramTests`).
+- **What a reviewer is told it holds is decided per reviewer.** `IReviewerRuntime.ReadsTheCheckout` (default true;
+  false for `ApiRuntime`, `LocalRuntime`, `RemoteRuntime`, which get the change in the prompt and nothing else) and
+  `Server/Rounds/ReviewerMaterial.For(hasCheckout, runtime, stageReads)`, called per item in `RosterBuilder`. A code
+  round with a worktree had told an api row, a local model and a Team server "you have the checkout read-only".
+- **An unknown runtime is refused by name.** `PanelSettings.RuntimeOf` keeps a name it does not know (it was coerced
+  to `codex`, which ran the Codex CLI on the person's account for a row set to something else); `NameOf` answers it
+  before the base-URL arm; `For` falls back to the row id only when the row names NO runtime. The probe and the
+  round's exclusion both say `RuntimeResolution.NoAdapterFor(vendor)`: the runtime by name and every runtime this
+  build runs (`AnUnknownRuntimeIsRefusedByNameTests`).
+
+```mermaid
+flowchart LR
+  R["row: id, runtime, baseUrl"] --> N{NameOf}
+  N -->|local / remote / api| A[that adapter]
+  N -->|"named, unknown"| X["no adapter → NoAdapterFor: 'llama.cpp' is not one this build runs"]
+  N -->|baseUrl| C[CustomCodexRuntime]
+  N -->|named runtime| B[Named runtime, row id travels with it]
+  N -->|"no runtime"| I["the id decides (Named ?? Default.Find)"]
+  A & C & B & I --> M{"ReadsTheCheckout?"}
+  M -->|yes, worktree mounted| K[told: checkout]
+  M -->|no| S["told: what the stage gives (change / outline)"]
+```
