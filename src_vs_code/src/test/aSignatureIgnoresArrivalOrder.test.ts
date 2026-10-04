@@ -70,10 +70,22 @@ test('every directory shape builds its signature through sortedJoin, never a sor
 /** The four places whose text is compared with its own previous value — none may collate. */
 const COMPARED_WITH_ITSELF = ['chatStoreHeartbeat.ts', 'consultationWatcher.ts', 'escalationWatcher.ts', 'questionConsults.ts'];
 
-/** Every `.localeCompare(` CALL in a shipped source — the defect's own shape; a comment naming it has no parenthesis. */
-function collatingCalls(file: string): readonly string[] {
-  return sourceOf(file).split(/\r?\n/).filter((line) => line.includes('.localeCompare('));
+/** Every line of `text` that CALLS `.localeCompare(` — the defect's own shape; a comment naming it has no parenthesis. */
+function collatingLines(text: string): readonly string[] {
+  return text.split(/\r?\n/).filter((line) => line.includes('.localeCompare('));
 }
+
+/** {@link collatingLines} over one shipped source file. */
+function collatingCalls(file: string): readonly string[] {
+  return collatingLines(sourceOf(file));
+}
+
+test('the collation scan counts a call and never a comment that only names localeCompare', () => {
+  // The scanner's own positive and negative control, on text it is handed — independent of any module's code.
+  const sample = ['// ordered by code unit, never `localeCompare`', 'names.sort((a, b) => a.localeCompare(b));', 'names.sort(byCodeUnit);'].join('\r\n');
+
+  assert.deepEqual(collatingLines(sample), ['names.sort((a, b) => a.localeCompare(b));']);
+});
 
 test('nothing whose text is compared with its own previous value sorts by collation', () => {
   const found = COMPARED_WITH_ITSELF.flatMap((file) => collatingCalls(file).map((line) => `${file}: ${line.trim()}`));
@@ -82,7 +94,8 @@ test('nothing whose text is compared with its own previous value sorts by collat
 });
 
 test('the collation scan still finds a call where collation is right', () => {
-  // A scan that matches nothing passes forever; the notifications page's source list is a display order, sorted for a person.
+  // testing.md: a scan's companion must find a KNOWN instance in the tree, because only real code shows the pattern still
+  // matches how calls are actually written. The notifications page's source list is a display order, sorted for a person.
   assert.ok(collatingCalls('notificationsPage.ts').length > 0, 'the scan no longer matches a .localeCompare( call it should see');
 });
 
