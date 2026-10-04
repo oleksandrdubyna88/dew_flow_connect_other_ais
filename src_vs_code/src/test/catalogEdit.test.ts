@@ -121,3 +121,14 @@ test('an edit of an entry that never referred to the catalog passes through unto
 
   assert.deepEqual(fold, { value: { codex: GLM } });
 });
+
+test('a rewritten row is the definition\'s launch, whole: a dialect the definition never carried is not kept', () => {
+  const state = migrated({ vendors: REVIEWERS, consultants: { codex: GLM } });
+  // A person hand-gave the consultant's row a dialect; the old page's definition has no field for one.
+  const withDialect = { ...state, vendors: (state.vendors as Record<string, unknown>[]).map((raw) => (raw['id'] === 'consult-codex' ? { ...raw, dialect: 'anthropic' } : raw)) };
+  const edited = consultantRecordUpdate(withDialect.consultants as Record<string, unknown>, 'codex', 'consultModel', 'glm-6', vendorsFrom(withDialect.vendors));
+  const row = vendorsFrom(saved(withDialect, 'consultants', edited).vendors).find((one) => one.id === 'consult-codex');
+
+  assert.equal(row?.model, 'glm-6');
+  assert.equal(row?.dialect, undefined, 'the launch is compared and written as ONE set of fields (catalogLaunch.ts), dialect included');
+});

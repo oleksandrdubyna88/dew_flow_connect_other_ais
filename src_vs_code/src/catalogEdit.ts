@@ -3,6 +3,7 @@ import { reviewsAnything } from './catalogRules';
 import { CALLER_KINDS, ConsultantChoice, consultantChoiceFrom } from './consultSettings';
 import { questionRowFrom, QuestionRowSetting } from './qconsultSettings';
 import { normaliseId, Vendor, vendorsFrom } from './vendors';
+import { asRecord, isRecord, Launch, listOf, RawRow, rawId, sameLaunch, withLaunch } from './catalogLaunch';
 
 /**
  * The old Settings page writes through the catalog (PLAN_one_model_catalog.md E1.4, "one write road").
@@ -31,17 +32,6 @@ export interface CatalogFold {
   readonly value: unknown;
   /** The rows to save first — absent when no row changed. */
   readonly vendors?: readonly RawRow[];
-}
-
-type RawRow = Record<string, unknown>;
-
-/** A definition's launch fields and the name its key is filed under. */
-interface Launch {
-  readonly runtime: string;
-  readonly model: string;
-  readonly baseUrl: string;
-  readonly executablePath: string;
-  readonly vault: string;
 }
 
 /**
@@ -186,45 +176,12 @@ function referenceCounts(state: CatalogState): ReadonlyMap<string, number> {
   return names.reduce((counts, name) => counts.set(name, (counts.get(name) ?? 0) + 1), new Map<string, number>());
 }
 
-function sameLaunch(row: Vendor, launch: Launch): boolean {
-  return [row.runtime, row.model, row.baseUrl, row.executablePath, row.vaultKeyName ?? row.id]
-    .every((field, index) => field === [launch.runtime, launch.model, launch.baseUrl, launch.executablePath, launch.vault][index]);
-}
-
 /** The raw row with its launch fields and key name replaced; everything else it holds kept. */
 function rewritten(rows: readonly RawRow[], id: string, launch: Launch): readonly RawRow[] {
   return rows.map((raw) => (rawId(raw) === id ? withLaunch(raw, id, launch) : raw));
-}
-
-function withLaunch(raw: RawRow, id: string, launch: Launch): RawRow {
-  const { vaultKeyName: _old, ...rest } = raw;
-
-  return {
-    ...rest,
-    runtime: launch.runtime,
-    model: launch.model,
-    baseUrl: launch.baseUrl,
-    executablePath: launch.executablePath,
-    ...(launch.vault === id ? {} : { vaultKeyName: launch.vault }),
-  };
 }
 
 function rawRows(raw: unknown): readonly RawRow[] {
   return listOf(raw).filter((row): row is RawRow => isRecord(row));
 }
 
-function rawId(raw: RawRow): string {
-  return typeof raw['id'] === 'string' ? raw['id'].trim().toLowerCase() : '';
-}
-
-function listOf(value: unknown): readonly unknown[] {
-  return Array.isArray(value) ? value : [];
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}

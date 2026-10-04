@@ -3,6 +3,7 @@ import { catalogRefusal, reviewsAnything } from './catalogRules';
 import { CALLER_KINDS, consultantChoiceFrom, DEFAULT_CONSULT, sameChoice } from './consultSettings';
 import { questionRowFrom } from './qconsultSettings';
 import { DEFAULT_VENDORS, freeVendorId, normaliseId, Vendor, vendorsFrom } from './vendors';
+import { asRecord, isRecord, Launch, RawRow, rawId, sameLaunch } from './catalogLaunch';
 
 /**
  * The one-time move of every model DEFINITION into the catalog (PLAN_one_model_catalog.md D3, E1.3).
@@ -53,15 +54,8 @@ export type MigrationOutcome =
   | { readonly kind: 'refused'; readonly why: string }
   | { readonly kind: 'migrate'; readonly writes: readonly LayerWrite[]; readonly skipped: readonly string[] };
 
-/** What a definition needs of a row: its launch fields, and the name its key is filed under. */
-interface Definition {
-  readonly runtime: string;
-  readonly model: string;
-  readonly baseUrl: string;
-  readonly executablePath: string;
-  /** The definition's `vendor` — the vault and ledger name the row must keep. */
-  readonly vault: string;
-}
+/** What a definition needs of a row — one {@link Launch}, the shape the old page's save compares with too. */
+type Definition = Launch;
 
 /** A definition found in the layer, the row id it would like, and the reference that must not equal its shipped pair. */
 interface Found {
@@ -72,7 +66,6 @@ interface Found {
   readonly question?: number;
 }
 
-type RawRow = Record<string, unknown>;
 
 /** What this layer needs done, or why nothing is. */
 export function migrateLayer(layer: CatalogLayer): MigrationOutcome {
@@ -168,11 +161,12 @@ function placeAll(base: readonly RawRow[], found: readonly Found[]): Placed {
 }
 
 function placeOne(rows: readonly RawRow[], one: Found): { rows: readonly RawRow[]; id: string; changed: boolean } {
-  const match = matchingRow(vendorsFrom([...rows]), one);
+  const parsed = vendorsFrom([...rows]);
+  const match = matchingRow(parsed, one);
   if (match !== undefined) {
     return withUse(rows, match, one.use);
   }
-  const id = freeVendorId(one.desired, new Set(vendorsFrom([...rows]).map((row) => row.id)));
+  const id = freeVendorId(one.desired, new Set(parsed.map((row) => row.id)));
 
   return { rows: [...rows, newRow(id, one)], id, changed: true };
 }
@@ -182,17 +176,6 @@ function matchingRow(rows: readonly Vendor[], one: Found): Vendor | undefined {
   const candidates = rows.filter((row) => sameLaunch(row, one.definition) && mayRefer(row.id, one));
 
   return candidates.find((row) => row.id === one.desired) ?? candidates[0];
-}
-
-function sameLaunch(row: Vendor, definition: Definition): boolean {
-  const theirs = [definition.runtime, definition.model, definition.baseUrl, definition.executablePath, '', definition.vault];
-
-  return launchOf(row).every((field, index) => field === theirs[index]);
-}
-
-/** A row's launch fields in {@link sameLaunch}'s order — a definition carries no dialect, so a row with one never matches. */
-function launchOf(row: Vendor): readonly string[] {
-  return [row.runtime, row.model, row.baseUrl, row.executablePath, row.dialect ?? '', vaultOf(row)];
 }
 
 /** A consultant reference equal to its caller's shipped pair is not sent at all, so it may never be written. */
@@ -235,10 +218,6 @@ function withUse(rows: readonly RawRow[], match: Vendor, use: CatalogUse): { row
 
 function addUse(raw: RawRow, use: CatalogUse): RawRow {
   return { ...raw, uses: usesFrom([...usesFrom(raw['uses']), use]) };
-}
-
-function rawId(raw: RawRow): string {
-  return typeof raw['id'] === 'string' ? raw['id'].trim().toLowerCase() : '';
 }
 
 // ---------------------------------------------------------------- an older build's rewrite
@@ -377,12 +356,4 @@ export function restoreLayer(layer: CatalogLayer): RestoreOutcome {
   };
 }
 
-// ---------------------------------------------------------------- small readers
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return isRecord(value) ? value : {};
-}

@@ -150,7 +150,8 @@ export function bugzServerThisSide(context: vscode.ExtensionContext): string {
  *       notification button is caught and reported, never thrown out of the button's callback.</li>
  * </ul>
  *
- * <p>A sixth caller must pick one of those two shapes. There is no third.</p>
+ * <p>A seventh caller must pick one of those two shapes — catch and report, or let a chain with its own `.catch`
+ * report it. There is no third, and a caller that neither catches nor sits in such a chain is an unhandled rejection.</p>
  */
 export async function saveSetting(
   context: vscode.ExtensionContext,

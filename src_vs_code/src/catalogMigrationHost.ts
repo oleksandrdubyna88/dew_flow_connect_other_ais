@@ -4,7 +4,7 @@ import { overlayKey } from './coaiInstall';
 import { thisSide } from './installer';
 import { notify, notifyAndAsk } from './notify';
 import { readOverlay } from './sideSettings';
-import { WriteQueue } from './writeQueue';
+import { CatalogTurns } from './catalogTurns';
 
 /**
  * The host half of the move into the catalog (PLAN_one_model_catalog.md E1.3): read each settings layer, run
@@ -14,8 +14,9 @@ import { WriteQueue } from './writeQueue';
  * <p>Two layers per window: the user layer (`settings.json`, read through `inspect().globalValue` so a
  * workspace value is never migrated into it) and, when this side keeps its own settings, this side's overlay.
  * Another side's overlay is migrated by a window on that side. Runs are queued, never concurrent: activation,
- * a configuration change, and a save of a model key each enqueue one, and the writes of one run are what the
- * next run reads.</p>
+ * a configuration change, and a save of a model key each ask for one, and the writes of one run are what the
+ * next run reads. They share the catalog's turns with the old page's save ({@link inCatalogTurn}), so neither
+ * reads the other half-written; a request before a run starts joins it ({@link CatalogTurns}).</p>
  */
 
 /** The settings whose change may leave a definition to move. */
@@ -28,7 +29,7 @@ interface Layer {
   readonly write: (write: LayerWrite) => Promise<void>;
 }
 
-const queue = new WriteQueue();
+const turns = new CatalogTurns();
 
 /** What to do once a run has written anything — the activation's mirror of the server settings file. */
 let afterMigration: () => void = () => undefined;
@@ -42,7 +43,15 @@ export function startCatalogMigration(context: vscode.ExtensionContext, after: (
 
 /** One more run, after any that is under way. Never throws: a failed layer is reported and the other goes on. */
 export function scheduleCatalogMigration(context: vscode.ExtensionContext): Promise<void> {
-  return queue.run(() => migrateEveryLayer(context));
+  return turns.migrate(() => migrateEveryLayer(context));
+}
+
+/**
+ * A write of the catalog's keys that reads them first — the old page's save — taken as one turn, so no migration
+ * reads between its read and its last write. Its work must not await a migration (the triggers it fires are `void`).
+ */
+export function inCatalogTurn<T>(work: () => Promise<T>): Promise<T> {
+  return turns.edit(work);
 }
 
 async function migrateEveryLayer(context: vscode.ExtensionContext): Promise<void> {
@@ -56,13 +65,30 @@ async function migrateEveryLayer(context: vscode.ExtensionContext): Promise<void
 }
 
 async function migrateOne(layer: Layer): Promise<boolean> {
-  const outcome = migrateLayer(layer.read());
+  const outcome = readAndPlan(layer);
+  if (outcome instanceof Error) {
+    await migrationStopped(layer, outcome);
+
+    return false;
+  }
   await sayWhatWasLeft(layer, outcome);
   if (outcome.kind !== 'migrate') {
     return false;
   }
 
   return applyWrites(layer, outcome.writes, migrationStopped);
+}
+
+/**
+ * The layer read and the plan — or the error a read threw (a corrupted overlay, a settings-store fault), which used to
+ * escape every `void` caller unheard and repeat silently on each start (PR #681's code round).
+ */
+function readAndPlan(layer: Layer): MigrationOutcome | Error {
+  try {
+    return migrateLayer(layer.read());
+  } catch (error: unknown) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
 }
 
 /** In order, stopping at the first refusal — the order is what makes a stopped run safe to finish later. */
@@ -212,7 +238,7 @@ export async function restoreFromBeforeTheCatalog(context: vscode.ExtensionConte
   if (!(await confirmed(layers.map(({ layer }) => layer.name)))) {
     return;
   }
-  await queue.run(async () => {
+  await turns.edit(async () => {
     for (const { layer, outcome } of layers) {
       await applyWrites(layer, outcome.writes, restoreStopped);
     }

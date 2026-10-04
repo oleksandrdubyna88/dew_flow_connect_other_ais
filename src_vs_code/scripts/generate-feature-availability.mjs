@@ -55,6 +55,23 @@ const EFFORT_FIELDS = ['runtime', 'source', 'levels', 'measuredWith', 'note'];
 const SOURCES = ['list', 'probe', 'unmeasured', 'none'];
 const LEVEL = /^[a-z][a-z0-9-]{0,31}$/u;
 
+/**
+ * The effort rules, in the order they are checked: what must hold, and what is said when it does not. A table rather
+ * than a run of ifs so the check stays one decision however many rules it gains (PR #681's code round); the first
+ * rule that fails is the refusal, as before — `refuse` exits — so a later rule may rely on an earlier one.
+ */
+const EFFORT_RULES = [
+  [(row) => unknown(row, EFFORT_FIELDS) === undefined, (row) => ` has a field this generator does not know: '${unknown(row, EFFORT_FIELDS)}'`],
+  [(row) => runtimes.includes(row.runtime), () => ` is not one of the runtimes (${runtimes.join(', ')})`],
+  [(row) => SOURCES.includes(row.source), (row) => ` has source '${row.source}'; the sources are ${SOURCES.join(', ')}`],
+  [(row) => strings(row.levels) && row.levels.every((level) => LEVEL.test(level)), () => ': levels is not a list of lower-case words'],
+  [(row) => typeof row.measuredWith === 'string' && typeof row.note === 'string', () => ': measuredWith and note are strings'],
+  [(row) => (row.source === 'list') === (row.levels.length > 0), () => ": a 'list' source carries its levels, and every other source carries none"],
+  [(row) => row.source !== 'list' || row.measuredWith.length > 0, () => ': a listed effort says where it was read (measuredWith)'],
+  [(row) => row.source === 'list' || row.note.length > 0, () => ': a runtime with no list says why (note)'],
+  [(row) => row.runtime !== 'antigravity' || row.source === 'none', () => ": antigravity takes no effort (the operator's ruling, 2026-10-04)"],
+];
+
 const unknown = (fields, known) => Object.keys(fields).find((field) => !known.includes(field));
 const strings = (list) => Array.isArray(list) && list.every((one) => typeof one === 'string');
 
@@ -97,35 +114,11 @@ for (const runtime of runtimes) {
 }
 
 /** One effort row: known fields, a known source, levels only for `list`, and a reason where there are none. */
+
 function checkEffortRow(row) {
-  const where = `effort row '${row.runtime}'`;
-  const extra = unknown(row, EFFORT_FIELDS);
-  if (extra !== undefined) {
-    refuse(`${where} has a field this generator does not know: '${extra}'`);
-  }
-  if (!runtimes.includes(row.runtime)) {
-    refuse(`${where} is not one of the runtimes (${runtimes.join(', ')})`);
-  }
-  if (!SOURCES.includes(row.source)) {
-    refuse(`${where} has source '${row.source}'; the sources are ${SOURCES.join(', ')}`);
-  }
-  if (!strings(row.levels) || row.levels.some((level) => !LEVEL.test(level))) {
-    refuse(`${where}: levels is not a list of lower-case words`);
-  }
-  if (typeof row.measuredWith !== 'string' || typeof row.note !== 'string') {
-    refuse(`${where}: measuredWith and note are strings`);
-  }
-  if ((row.source === 'list') !== (row.levels.length > 0)) {
-    refuse(`${where}: a 'list' source carries its levels, and every other source carries none`);
-  }
-  if (row.source === 'list' && row.measuredWith.length === 0) {
-    refuse(`${where}: a listed effort says where it was read (measuredWith)`);
-  }
-  if (row.source !== 'list' && row.note.length === 0) {
-    refuse(`${where}: a runtime with no list says why (note)`);
-  }
-  if (row.runtime === 'antigravity' && row.source !== 'none') {
-    refuse(`${where}: antigravity takes no effort (the operator's ruling, 2026-10-04)`);
+  const broken = EFFORT_RULES.find(([holds]) => !holds(row));
+  if (broken !== undefined) {
+    refuse(`effort row '${row.runtime}'${broken[1](row)}`);
   }
 }
 

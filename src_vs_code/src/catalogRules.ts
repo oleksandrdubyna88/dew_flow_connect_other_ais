@@ -38,8 +38,10 @@ function promptRefusal(row: Vendor): string {
     : `${row.id}'s ${long[0]} is ${bytesOf(long[1])} bytes — at most ${MAX_PROMPT_BYTES} bytes; shorten it.`;
 }
 
+const ENCODER = new TextEncoder();
+
 function bytesOf(text: string | undefined): number {
-  return new TextEncoder().encode(text ?? '').length;
+  return ENCODER.encode(text ?? '').length;
 }
 
 /**

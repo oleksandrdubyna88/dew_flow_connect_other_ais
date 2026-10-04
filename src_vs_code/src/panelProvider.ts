@@ -78,6 +78,7 @@ import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
 import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer } from './sideConfig';
 import { foldedWrite } from './catalogEdit';
+import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { shownOnTheOldPage } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
 import { hostPlatform, Platform } from './hostSide';
@@ -2144,19 +2145,26 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // notification or a banner is the right surface — this panel has no banner, so it is the toast.
     // A consultant or question row is folded through the catalog first (PLAN_one_model_catalog.md E1.4): an edit
     // of an entry that refers to a catalog row rewrites that row, so the old page never forks or orphans one.
-    // The rows are saved FIRST, so a refusal between the two leaves a row nobody refers to yet.
-    const fold = foldedWrite(key, value, this.read(config));
+    // The rows are saved FIRST, so a refusal between the two leaves a row nobody refers to yet. A catalog key is
+    // read and written in ONE turn of the catalog, so a migration never reads it half-saved (PR #681's code round).
     try {
-      if (fold.vendors !== undefined) {
-        await saveSetting(this.context, config, 'vendors', fold.vendors);
-      }
-      await saveSetting(this.context, config, key, fold.value);
+      const write = (): Promise<void> => this.foldAndWrite(config, key, value);
+      await (MIGRATION_TRIGGERS.includes(key) ? inCatalogTurn(write) : write());
 
       return true;
     } catch (error: unknown) {
       reportRefusal(this.context, key, error);
       return false;
     }
+  }
+
+  /** The fold and its writes — the rows first, then the entry. */
+  private async foldAndWrite(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
+    const fold = foldedWrite(key, value, this.read(config));
+    if (fold.vendors !== undefined) {
+      await saveSetting(this.context, config, 'vendors', fold.vendors);
+    }
+    await saveSetting(this.context, config, key, fold.value);
   }
 
   /**
