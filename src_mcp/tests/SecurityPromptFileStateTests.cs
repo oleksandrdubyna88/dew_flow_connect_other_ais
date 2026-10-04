@@ -38,6 +38,17 @@ public sealed class SecurityPromptFileStateTests : IDisposable
         StateOf("redteam-u8", Encoding.UTF8.GetBytes("Review the change.")).Should().Be("written");
     }
 
+    [Theory]
+    [InlineData("--security-prompt-text")]
+    [InlineData("--security-prompt-text --ids")]
+    [InlineData("--security-prompt-text --ids ,,")]
+    public async Task A_request_naming_no_prompt_is_refused_as_bad_data_not_answered_with_an_empty_object(string line)
+    {
+        // CodeRabbit on #675: with no ids the mode printed {} and exited 0, so a malformed request read as a
+        // successful empty answer. 65, never 64, because the seam reads 64 as a binary that predates the mode.
+        (await SecurityPromptTextReadMode.RunAsync(line.Split(' '))).Should().Be(65);
+    }
+
     [Fact]
     public void No_file_is_none_and_a_file_over_the_limit_is_oversized_before_it_is_read()
     {

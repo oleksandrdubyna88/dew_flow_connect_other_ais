@@ -33,6 +33,12 @@ const utf32le = (text) => {
   return out;
 };
 
+/** Said beside a refusal nobody declared: how to run the seam against a server from before the mode, on purpose. */
+const OLDER_HINT = ' — if COAI_MCP_DLL names a server from before MCP 0.43.0, set COAI_SEAM_OLDER_SERVER=1 to skip this leg';
+
+/** Raw UTF-32LE code units, valid or not — what a damaged or hand-made file holds. */
+const u32le = (...units) => Buffer.concat(units.map((u) => { const b = Buffer.alloc(4); b.writeUInt32LE(u); return b; }));
+
 /** Every kind of file a person or a tool may leave, by the prompt id it is written under; `null` = no file. */
 const FILES = {
   'redteam-none': null,
@@ -53,23 +59,28 @@ const FILES = {
   'redteam-u16le-blank': utf16le('\r\n'),
   'redteam-u16be-written': utf16be('Review it.'),
   'redteam-u32le-placeholder': utf32le(PLACEHOLDER),
+  // Not cleanly decodable: .NET reads each as U+FFFD, text (CodeRabbit on #675, measured on the binary).
+  'redteam-u32le-beyond': u32le(0xfeff, 0x110000),
+  'redteam-u32le-surrogate': u32le(0xfeff, 0xd800),
+  'redteam-u32le-partial': Buffer.concat([u32le(0xfeff), Buffer.from([0x20, 0x00])]),
+  'redteam-u32le-space-partial': Buffer.concat([u32le(0xfeff, 0x20), Buffer.from([0x20])]),
 };
 
 /**
  * Run the leg. Answers how many files were compared when every one agreed; ends the process through `fail` when one did
  * not, or when the server could not answer.
  *
- * @param {{binary: string, named: boolean, fail: Function, timeoutMs: number}} runner the binary under test, whether
- *   `COAI_MCP_DLL` named it, and the runner's failure road
- * @returns {Promise<{compared: number, older: boolean}>} `older` when a named binary predates the mode and nothing was compared
+ * @param {{binary: string, olderExpected: boolean, fail: Function, timeoutMs: number}} runner the binary under test,
+ *   whether the run declared it older than the mode, and the runner's failure road
+ * @returns {Promise<{compared: number, older: boolean}>} `older` when a declared-older binary refused the mode
  */
-export async function securityTextSeam({ binary, named, fail, timeoutMs }) {
+export async function securityTextSeam({ binary, olderExpected, fail, timeoutMs }) {
   const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-security-text-'));
   try {
     writeFiles(dataDir);
     const ids = Object.keys(FILES);
     const extension = await new SecurityPromptTextCache().states(dataDir, ids);
-    const server = await serverStates(binary, named, ids, dataDir, timeoutMs, fail);
+    const server = await serverStates(binary, olderExpected, ids, dataDir, timeoutMs, fail);
     return server === undefined ? { compared: 0, older: true } : compared(ids, extension, server, fail);
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
@@ -102,23 +113,24 @@ function compared(ids, extension, server, fail) {
 }
 
 /**
- * What a `--security-prompt-text` exit means. The mode is new in MCP 0.43.0, so a binary `COAI_MCP_DLL` NAMES — the
- * mixed-version run against a released server — may refuse it as an unknown argument, and that is `older`: the leg
- * has nothing to compare and the seam goes on to the legs after it. The binary this repository just built has no such
- * excuse; the same refusal from it is a regression, and so is any other failure from either.
+ * What a `--security-prompt-text` exit means. The mode is new in MCP 0.43.0, so the mixed-version run against a
+ * released server — `COAI_MCP_DLL` naming it AND `COAI_SEAM_OLDER_SERVER=1` saying it predates the mode — may see it
+ * refused as an unknown argument, and that is `older`: nothing to compare, and the seam goes on to the legs after it.
+ * Without that declaration the same refusal is a regression — from this repository's own build, or from a named
+ * binary that should have the mode and lost it (CodeRabbit on #675) — and so is any other failure.
  *
- * @param {{named: boolean, code: number | null, stderr: string}} exit
+ * @param {{olderExpected: boolean, code: number | null, stderr: string}} exit
  * @returns {'ok' | 'older' | 'fail'}
  */
-export function textLegVerdict({ named, code, stderr }) {
+export function textLegVerdict({ olderExpected, code, stderr }) {
   if (code === 0) return 'ok';
-  return predatesTheMode(named, code, stderr) ? 'older' : 'fail';
+  return olderExpected && refusedAsUnknown(code, stderr) ? 'older' : 'fail';
 }
-/** A binary COAI_MCP_DLL named, refusing the mode as an argument it does not know (exit 64, the usage error). */
-const predatesTheMode = (named, code, stderr) => named && code === 64 && stderr.includes("unknown argument '--security-prompt-text'");
+/** The refusal a binary from before the mode gives: an argument it does not know (exit 64, the usage error). */
+const refusedAsUnknown = (code, stderr) => code === 64 && stderr.includes("unknown argument '--security-prompt-text'");
 
-/** The server's own reading, through a data directory nothing else shares; `undefined` when a named binary predates it. */
-function serverStates(binary, named, ids, dataDir, timeoutMs, fail) {
+/** The server's own reading, through a data directory nothing else shares; `undefined` when a declared-older binary refused it. */
+function serverStates(binary, olderExpected, ids, dataDir, timeoutMs, fail) {
   const env = {
     ...Object.fromEntries(Object.keys(process.env).filter((key) => key.startsWith('COAI_')).map((key) => [key, ''])),
     COAI_DATA_DIR: dataDir,
@@ -135,8 +147,8 @@ function serverStates(binary, named, ids, dataDir, timeoutMs, fail) {
     child.on('error', (e) => { clearTimeout(deadline); fail(`--security-prompt-text could not start: ${e.message}`); });
     child.on('close', (code) => {
       clearTimeout(deadline);
-      const verdict = textLegVerdict({ named, code, stderr: err });
-      if (verdict === 'fail') fail(`--security-prompt-text exited ${code}: ${err}`);
+      const verdict = textLegVerdict({ olderExpected, code, stderr: err });
+      if (verdict === 'fail') fail(`--security-prompt-text exited ${code}: ${err}${refusedAsUnknown(code, err) ? OLDER_HINT : ''}`);
       done(verdict === 'older' ? undefined : readingOf(out, fail));
     });
   });

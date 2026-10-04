@@ -17,8 +17,16 @@ internal static class SecurityPromptTextReadMode
 {
     internal static async Task<int> RunAsync(string[] args)
     {
+        var ids = IdsOf(args);
+        if (ids.Length == 0)
+        {
+            // A request naming no prompt is malformed, not an empty answer (CodeRabbit, #675).
+            Program.Note("--security-prompt-text needs --ids and at least one prompt id, such as --ids redteam-authz,redteam-sql.");
+
+            return 65; // EX_DATAERR — never 64, which the seam reads as a binary that predates this mode
+        }
         var prompts = new RolePrompts(SettingsFile.DataDirFrom(Environment.GetEnvironmentVariable).Path);
-        await Console.Out.WriteLineAsync(Answer(prompts, IdsOf(args)));
+        await Console.Out.WriteLineAsync(Answer(prompts, ids));
         return 0;
     }
 

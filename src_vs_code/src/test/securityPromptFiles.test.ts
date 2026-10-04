@@ -50,6 +50,26 @@ test('a file is decoded the way the server reads it: its byte-order mark picks t
   }
 });
 
+test('a UTF-32 file the server cannot decode cleanly is still text to it, and so to the card', async () => {
+  // CodeRabbit on #675, then measured on the real binary: .NET decodes a scalar beyond U+10FFFF, a surrogate, and a
+  // trailing sequence shorter than four bytes as U+FFFD — text, so "written" — while this decoder dropped them and
+  // called three of the four files blank. The seam's text leg carries the same four files.
+  const u32 = (...points: number[]): Buffer => Buffer.concat(points.map(p => { const b = Buffer.alloc(4); b.writeUInt32LE(p); return b; }));
+  const dataDir = withPromptFiles({
+    'redteam-beyond': u32(0xfeff, 0x110000),
+    'redteam-surrogate': u32(0xfeff, 0xd800),
+    'redteam-partial': Buffer.concat([u32(0xfeff), Buffer.from([0x20, 0x00])]),
+    'redteam-space-partial': Buffer.concat([u32(0xfeff, 0x20), Buffer.from([0x20])]),
+  });
+  try {
+    assert.deepEqual(await securityTextStates(dataDir, ['redteam-beyond', 'redteam-surrogate', 'redteam-partial', 'redteam-space-partial']), {
+      'redteam-beyond': 'written', 'redteam-surrogate': 'written', 'redteam-partial': 'written', 'redteam-space-partial': 'written',
+    });
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test('an unchanged file is not read again, and a changed one is', async () => {
   const dataDir = withPromptFiles({ 'redteam-x': Buffer.from(PLACEHOLDER) });
   try {
