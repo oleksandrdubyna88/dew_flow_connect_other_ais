@@ -185,6 +185,7 @@ test('a value equal to its default is the default whatever its key order, even w
   const decomposed = 'café';
   const withDefault: Declared = { thing: { default: { [composed]: 1, [decomposed]: 2 } } };
 
+  assert.notEqual(composed, decomposed, 'the fixture lost its point: the two keys are one string');
   assert.equal(canonical({ [decomposed]: 2, [composed]: 1 }), canonical({ [composed]: 1, [decomposed]: 2 }));
   assert.deepEqual(exportedSettings(withDefault, base({ thing: { [decomposed]: 2, [composed]: 1 } })), {}, 'the default was exported');
 });
