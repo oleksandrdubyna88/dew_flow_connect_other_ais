@@ -8,7 +8,7 @@ import { SECURITY_SEED } from '../securityLane.generated';
 /** Every trigger-capable signal, from the catalogue itself — so a sixteenth signal cannot leave "all ticked" short of all. */
 const EVERY_TRIGGER: readonly string[] = SECURITY_SEED.signals.filter(s => s.trigger).map(s => s.id);
 
-// The model the Security lane tab draws its cards from (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2):
+// The model the Security lane tab draws its cards from (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 2):
 // which state a card is in, the order cards come in, what a collapsed block says, and what every button writes.
 
 const sql = (over: Partial<SecurityPrompt> = {}): SecurityPrompt => ({ id: 'redteam-sql', triggers: ['sql'], focus: ['sql', 'entry-point'], ...over });

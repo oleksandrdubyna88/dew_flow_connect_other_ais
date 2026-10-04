@@ -12,7 +12,7 @@ export interface SecurityLane {
 /**
  * The shipped prompts as the wire carries them: `id`, `triggers`, `focus` and nothing else. The catalogue's
  * `always` flag is a catalogue fact, never a settings member — a 0.41/0.42 server refuses a prompt entry that
- * carries one, and a saved lane would keep it in settings.json for good (todo/PLAN_the_security_tab_reads_at_a_glance.md).
+ * carries one, and a saved lane would keep it in settings.json for good (research/PLAN_the_security_tab_reads_at_a_glance.md).
  */
 const SEED_PROMPTS: readonly SecurityPrompt[] = SECURITY_SEED.prompts.map(({ id, triggers, focus }) => ({ id, triggers, focus }));
 export const DEFAULT_SECURITY: SecurityLane = { enabled: false, threshold: 0, maxRounds: 2, prompts: SEED_PROMPTS, runs: [] };
@@ -155,7 +155,7 @@ export const SECURITY_MOST_RUNS: number = SECURITY_SEED.limits.mostRuns;
  *
  * <p>Why: every save used to write the whole merged list back, freezing a snapshot of every preset's conditions
  * into settings.json, so the day the catalogue changed an untouched preset would read as "edited" and never receive
- * the shipped update (todo/PLAN_the_security_tab_reads_at_a_glance.md, D2).</p>
+ * the shipped update (research/PLAN_the_security_tab_reads_at_a_glance.md, D2).</p>
  */
 export function compactPrompts(lane: SecurityLane): SecurityLane {
   if ('invalidConfiguration' in lane) return lane;

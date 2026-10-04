@@ -10,7 +10,7 @@ import type { SecurityTextState } from './securityPromptFiles';
 import type { Vendor } from './vendors';
 
 /**
- * The Security lane tab (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 3): the switches, the tag legend in two
+ * The Security lane tab (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 3): the switches, the tag legend in two
  * columns, one card per prompt in the order the person reads them, and the reviewer / prompt pairs with real buttons.
  */
 

@@ -13,7 +13,7 @@ public sealed class SecurityPresetTests
     private const string IgnoredConditions = "redteam-general runs on every change; the conditions stored for it are ignored";
 
     /// <summary>
-    /// The operator's ruling of 2026-10-04 (todo/PLAN_the_security_tab_reads_at_a_glance.md, D1): general is a
+    /// The operator's ruling of 2026-10-04 (research/PLAN_the_security_tab_reads_at_a_glance.md, D1): general is a
     /// SHIPPED prompt, first in the list, and only on or off — it carries no conditions of its own. The twelve
     /// conditional presets keep theirs.
     /// </summary>

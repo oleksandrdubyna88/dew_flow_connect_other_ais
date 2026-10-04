@@ -10484,7 +10484,7 @@ redrawn. The same round's suite found an import cycle between the two page runne
 
 ## The Security lane tab reads at a glance (2026-10-04)
 
-[PLAN_the_security_tab_reads_at_a_glance.md](../todo/PLAN_the_security_tab_reads_at_a_glance.md), epics 1–3. The
+[PLAN_the_security_tab_reads_at_a_glance.md](PLAN_the_security_tab_reads_at_a_glance.md), epics 1–4. The
 tab's behaviour is documented in [module_security_lane.md](module_security_lane.md) ("The Security lane tab"); what
 belongs to the extension as a whole:
 

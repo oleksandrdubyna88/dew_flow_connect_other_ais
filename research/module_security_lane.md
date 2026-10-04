@@ -119,7 +119,7 @@ auth tokens, SSRF, webhooks, files, commands, deserialization, secrets, prompt i
 reviewer and require a matching trigger. Empty preset triggers refuse execution.
 
 **`redteam-general` is a shipped "always" prompt, first in the catalogue** (since 2026-10-04,
-[PLAN_the_security_tab_reads_at_a_glance.md](../todo/PLAN_the_security_tab_reads_at_a_glance.md); until then it
+[PLAN_the_security_tab_reads_at_a_glance.md](PLAN_the_security_tab_reads_at_a_glance.md); until then it
 was a custom prompt outside the twelve).
 - **What "always" means:** it is only on or off. Paired with a reviewer, it is due on every change that has
   readable code: a path that is not prose (`.md`/`.markdown`/`.rst`) with a diff that is not withheld (binary,
@@ -155,8 +155,11 @@ prompt with no text of its own, or any oversized text, refuses the run.
 - **The reading of files, checked live.** The extension decodes a file as `File.ReadAllText` does: its byte-order
   mark picks UTF-8, UTF-16 or UTF-32, exactly one mark is dropped, and a file it cannot read is `unreadable`. The
   server prints its own reading through `--security-prompt-text --ids …` (read only), and the seam's ninth leg
-  (`scripts/seam-security-text.mjs`) writes eighteen real files and fails on any the two read differently. It found
-  one on its first run: a file of two byte-order marks.
+  (`scripts/seam-security-text.mjs`) compares eighteen prompt ids — seventeen real files and one absent — and fails on any
+  the two read differently. It found
+  one on its first run: a file of two byte-order marks. Against a binary named by `COAI_MCP_DLL` that predates the mode
+  (before MCP 0.43.0) the leg is skipped, saying so, and the legs after it still run; against this repository's own build
+  the same refusal fails (`textLegVerdict`, tested in `seamLegs.test.mjs`).
 - **When it is read.** The extension reads each lane prompt's file at render (`PanelState.securityPromptText`), only
   while the Settings page exists, through a cache that re-reads a file only when its size or modification time changed.
   It reads in the data directory that "Edit local prompt override" uses. A watcher on `prompts/redteam-*.md` under

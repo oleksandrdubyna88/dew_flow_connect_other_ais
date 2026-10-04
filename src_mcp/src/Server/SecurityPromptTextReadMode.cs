@@ -8,7 +8,7 @@ namespace CoaiMcp.Server;
 /// state of the file it would send — printed as one JSON object, and leave.
 /// </summary>
 /// <remarks>
-/// The live half of a contract with two implementations (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2):
+/// The live half of a contract with two implementations (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 2):
 /// the extension's Security lane tab draws each card from its own reading of the same files, and the seam writes real
 /// files and compares the two answers, file by file. The shared vectors pin the RULE; this pins the READING — the
 /// encoding, the byte-order mark, the size check — which only the real binary can answer for.

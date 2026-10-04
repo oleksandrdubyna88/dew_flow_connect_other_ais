@@ -399,8 +399,10 @@ const security = await securitySeam({ providersIn, fail });
 console.log(`  ok  the security lane crosses the seam; the unknown trigger was refused: "${security.refusal}"`);
 
 // The NINTH leg: real prompt override files read by the extension and by the server, compared file by file.
-const text = await securityTextSeam({ binary, fail, timeoutMs: TIMEOUT_MS });
-console.log(`  ok  ${text.compared} prompt files read alike by the Security lane tab and the server`);
+const text = await securityTextSeam({ binary, named: (process.env['COAI_MCP_DLL'] ?? '').length > 0, fail, timeoutMs: TIMEOUT_MS });
+console.log(text.older
+  ? '  skip the named server predates --security-prompt-text (MCP 0.43.0); run the seam without COAI_MCP_DLL to compare this repository\'s own build'
+  : `  ok  ${text.compared} prompt ids (every fixture file, and one with none) read alike by the Security lane tab and the server`);
 
 // The SIXTH leg: a real refusal over stdio, its secret taken out, read back by the extension.
 const refusal = await refusalSeam({ serverSession, resolvedFor, answerOf, fail, timeoutMs: TIMEOUT_MS });

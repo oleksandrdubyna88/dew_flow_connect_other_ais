@@ -35,6 +35,12 @@ model may be described as qualified for it.
 4. **The final `review_feature`**, run LAST over the two review epics (`COAI_FEATURE_MIN_EPICS=2` for that
    invocation). Its earlier attempt answered 0/1 on cloud quota and is not a pass.
 
+> **Boundary, 2026-10-04.** [PLAN_the_security_tab_reads_at_a_glance.md](../research/PLAN_the_security_tab_reads_at_a_glance.md)
+> made `redteam-general` a thirteenth shipped prompt, of a new "always" kind. For this campaign it is one more row it
+> *may* pair; no prompt text changed there, so nothing measured here is invalidated. An audit run without
+> `COAI_SECURITY_AUDIT_PROMPTS` now runs it as the first of thirteen modules — set the variable to keep runs comparable
+> with the recorded ones.
+
 ## Build order
 
 1. Re-establish the harnesses on current `main` (schema step 18; `COAI_SECURITY_CALIBRATION_ENDPOINT`,

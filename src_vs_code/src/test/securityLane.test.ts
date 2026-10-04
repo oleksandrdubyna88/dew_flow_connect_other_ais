@@ -215,7 +215,7 @@ test('a removed reviewer stays visible with a repair instruction, and choosing o
   assert.doesNotMatch(lanePane(pageWith(repaired)), /Reviewer removed-reviewer is unavailable/);
 });
 
-// General is a shipped "always" prompt (todo/PLAN_the_security_tab_reads_at_a_glance.md, D1): first in the
+// General is a shipped "always" prompt (research/PLAN_the_security_tab_reads_at_a_glance.md, D1): first in the
 // list, only on or off, and its `always` flag is a catalogue fact that never reaches the wire.
 
 const GENERAL = 'redteam-general';

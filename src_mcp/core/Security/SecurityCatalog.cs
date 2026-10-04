@@ -28,7 +28,7 @@ public static class SecurityCatalog
 
     /// <summary>
     /// A shipped prompt that is only on or off: paired with a reviewer, it runs on every change and carries no
-    /// conditions (todo/PLAN_the_security_tab_reads_at_a_glance.md, D1). A catalogue fact, looked up by id — it
+    /// conditions (research/PLAN_the_security_tab_reads_at_a_glance.md, D1). A catalogue fact, looked up by id — it
     /// is never a settings member, because a 0.41/0.42 server refuses a prompt entry carrying one.
     /// </summary>
     public static bool IsAlways(string id) => AlwaysIds.Contains(id);

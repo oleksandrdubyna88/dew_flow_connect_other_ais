@@ -5,7 +5,7 @@ import { runSecurityCommand, type SecurityFlowHost } from '../securityFlows';
 import type { SecurityTextState } from '../securityPromptFiles';
 import { DEFAULT_VENDORS } from '../vendors';
 
-// The Security lane tab's host flows with every effect faked (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 3):
+// The Security lane tab's host flows with every effect faked (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 3):
 // these are the paths that delete a person's text, so the order and the refusals are pinned here, not trusted.
 
 interface World {

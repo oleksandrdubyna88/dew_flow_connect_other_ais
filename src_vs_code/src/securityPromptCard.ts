@@ -7,7 +7,7 @@ import type { SecurityTextState } from './securityPromptFiles';
 import type { Vendor } from './vendors';
 
 /**
- * One prompt card on the Security lane tab (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 3, sections B–D):
+ * One prompt card on the Security lane tab (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 3, sections B–D):
  * its name and state, why the server would not send it, the reviewers it is paired with, its buttons, and its
  * conditions folded away — conditions are fine-tuning, needed rarely.
  */

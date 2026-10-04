@@ -29,7 +29,7 @@ schema with the four reproduction fields. Optional private overrides use the sam
 
 `redteam-general.md` is a **shipped "always" prompt**, the first entry of the catalogue (since 2026-10-04). It is only on
 or off: paired with a reviewer, it is due on every change that touches a code file, and it has no triggers or focus
-to set. Until 2026-10-04 it was a custom prompt outside the twelve; a hand-registered entry keeps running every time,
+to set. Until 2026-10-04 it was a custom prompt outside the twelve; a hand-registered entry keeps running on every change that touches code; a change of prose or withheld files only is now a plain skip,
 and stored triggers on it are ignored with one complaint. Custom prompts may explicitly use an empty trigger list;
 the twelve conditional presets may not. An absent signal means only that this detector did not find its lexical evidence in the bounded
 change. Binary files, credential files and material outside the context budget are not fully reviewed.
