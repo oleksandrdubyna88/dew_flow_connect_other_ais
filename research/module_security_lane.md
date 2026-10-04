@@ -116,9 +116,30 @@ when no complete lane answer exists.
 The twelve operator-authored presets are Git files under `src_mcp/src/prompts/`, listed with their
 conditions in [security_prompt_catalog.md](security_prompt_catalog.md). Authorization, SQL, concurrency,
 auth tokens, SSRF, webhooks, files, commands, deserialization, secrets, prompt injection and XSS each have a checkbox per
-reviewer and require a matching trigger. Empty preset triggers refuse execution. The additional
-`redteam-general.md` remains available as a custom prompt outside the twelve; custom prompts may use
-empty triggers to request an unconditional pass. Prompts are embedded by the server build. Edit those files and
+reviewer and require a matching trigger. Empty preset triggers refuse execution.
+
+**`redteam-general` is a shipped "always" prompt, first in the catalogue** (since 2026-10-04,
+[PLAN_the_security_tab_reads_at_a_glance.md](../todo/PLAN_the_security_tab_reads_at_a_glance.md); until then it
+was a custom prompt outside the twelve).
+- **What "always" means:** it is only on or off. Paired with a reviewer, it is due on every change that has
+  readable code: a path that is not prose (`.md`/`.markdown`/`.rst`) with a diff that is not withheld (binary,
+  credential file), wherever it lives (test, docs and research folders included). A docs-only change is a plain
+  skip for it, never "incomplete coverage", unless files lay beyond the detector cap.
+- **No conditions:** the extension refuses trigger and focus writes on it.
+- **Where the flag lives:** `always` is a catalogue fact (`SecurityCatalog.IsAlways`, the `always` member of
+  `shared/security-lane.json`) and never a settings member. A 0.41/0.42 server refuses a prompt entry with any
+  member besides `id`, `triggers` and `focus`, so the extension projects the seed to those three. An old server
+  reads general as a custom prompt with empty triggers, which it already runs every time. This was checked by
+  running `npm run test:seam` by hand against servers built from the `mcp-v0.41.0` and `mcp-v0.42.0` tags
+  (`COAI_MCP_DLL`). CI runs the seam only against the binary it just built.
+- **A general registered by hand earlier:** stored triggers on it are ignored with one complaint (*"runs on every
+  change; the conditions stored for it are ignored"*) and never refuse it. A stored focus is replaced silently.
+  General's card says so while stored triggers remain, because an older server still runs it only when they
+  match, and its **Clear stored conditions** button (command `clearSecurityConditions`, a queued lane write of
+  `prompt:redteam-general:restore`) clears them.
+- **Add pair never pairs it,** because it costs a reviewer on every round.
+
+Custom prompts may still use empty triggers to request an unconditional pass. Prompts are embedded by the server build. Edit those files and
 commit the changes to change shipped defaults. An optional `<dataDir>/prompts/<id>.md` overrides
 the corresponding default; the Settings button explicitly edits this local override. Custom
 prompt metadata is registered in the lane's prompt library. An empty or blank override is no

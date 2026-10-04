@@ -88,7 +88,23 @@ public static class SecuritySignals
         return files.OrderBy(f => f.SupportingMaterial).ThenByDescending(f => f.Signals.Count(wanted.Contains));
     }
 
+    /// <summary>
+    /// Whether a prompt is due for these files. An "always" prompt is due on every change with readable CODE — the
+    /// operator's "on all code" — and not on prose alone, which cannot assert an application surface. Any other
+    /// prompt with no triggers is due only when it is custom: an empty CONDITIONAL preset never becomes unconditional.
+    /// </summary>
     public static bool Triggered(SecurityPrompt prompt, IReadOnlyList<SecurityFile> files) =>
+        SecurityCatalog.IsAlways(prompt.Id) ? files.Any(IsReadableCode) : ByTriggers(prompt, files);
+
+    /// <summary>
+    /// Code a reviewer can be given: not prose, and not withheld (binary, credential file) — an oversized diff still
+    /// counts, because it is code the detector could not finish. Decided by path and content, never by
+    /// <see cref="IsSupportingMaterial"/>: test, docs and research folders hold code too, and that hint only ranks.
+    /// </summary>
+    public static bool IsReadableCode(SecurityFile file) =>
+        !IsProse(file.Diff.Path) && (file.Diff.Text.Length > 0 || file.DetectionIncomplete);
+
+    private static bool ByTriggers(SecurityPrompt prompt, IReadOnlyList<SecurityFile> files) =>
         prompt.Triggers.Count == 0 ? !SecurityCatalog.IsPreset(prompt.Id)
             : files.Any(f => f.Signals.Intersect(prompt.Triggers).Any());
 }

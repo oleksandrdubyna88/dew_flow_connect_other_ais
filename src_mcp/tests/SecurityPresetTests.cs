@@ -9,11 +9,98 @@ namespace CoaiMcp.Tests;
 
 public sealed class SecurityPresetTests
 {
+    private const string General = "redteam-general";
+    private const string IgnoredConditions = "redteam-general runs on every change; the conditions stored for it are ignored";
+
+    /// <summary>
+    /// The operator's ruling of 2026-10-04 (todo/PLAN_the_security_tab_reads_at_a_glance.md, D1): general is a
+    /// SHIPPED prompt, first in the list, and only on or off — it carries no conditions of its own. The twelve
+    /// conditional presets keep theirs.
+    /// </summary>
     [Fact]
-    public void Twelve_shipped_presets_have_conditions_and_general_stays_custom()
+    public void Twelve_conditional_presets_and_general_always_runs_first()
     {
-        SecurityCatalog.Prompts.Should().HaveCount(12);
-        SecurityCatalog.Prompts.Should().OnlyContain(p => p.Triggers.Count > 0 && p.Id != "redteam-general");
+        SecurityCatalog.Prompts.Should().HaveCount(13);
+        SecurityCatalog.Prompts[0].Id.Should().Be(General);
+        SecurityCatalog.IsAlways(General).Should().BeTrue();
+        SecurityCatalog.Prompts[0].Triggers.Should().BeEmpty();
+        SecurityCatalog.Prompts.Skip(1).Should().OnlyContain(p => p.Triggers.Count > 0 && !SecurityCatalog.IsAlways(p.Id));
+    }
+
+    /// <summary>"On all code": any change with a code file is enough, signals or not; prose alone is not code.</summary>
+    [Fact]
+    public void General_runs_on_any_code_change_and_not_on_prose_alone()
+    {
+        var general = SecurityCatalog.Prompts.Single(p => p.Id == General);
+        SecuritySignals.Triggered(general, SecuritySignals.Classify([new("sample.cs", "+return 42;")])).Should().BeTrue();
+        SecuritySignals.Triggered(general, SecuritySignals.Classify([new("CHANGELOG.md", "+fixed"), new("sample.cs", "+return 42;")]))
+            .Should().BeTrue();
+        SecuritySignals.Triggered(general, SecuritySignals.Classify([new("CHANGELOG.md", "+fixed a credential leak")])).Should().BeFalse();
+    }
+
+    /// <summary>
+    /// "Code" is a path that is not prose AND a diff a reviewer can read. Test, docs and research FOLDERS hold code
+    /// too — supporting-material folders are a ranking hint, never a reason to skip — while a binary or a
+    /// credential file is withheld from every prompt, so a change of only those leaves general nothing to read.
+    /// </summary>
+    [Theory]
+    [InlineData("tests/AuthTests.cs", false, true)]
+    [InlineData("research/example.cs", false, true)]
+    [InlineData("docs/api/login.ts", false, true)]
+    [InlineData("logo.png", true, false)]
+    public void General_is_due_on_readable_code_wherever_it_lives(string path, bool binary, bool due)
+    {
+        var general = SecurityCatalog.Prompts.Single(p => p.Id == General);
+        var file = new FileDiff(path, binary ? string.Empty : "+return 42;", binary, binary ? 1024 : 0);
+        SecuritySignals.Triggered(general, SecuritySignals.Classify([file])).Should().Be(due);
+    }
+
+    [Fact]
+    public void Unknown_members_on_general_are_still_refused_while_malformed_triggers_only_complain()
+    {
+        var future = SecurityLaneSetting.Parse("""{"enabled":true,"prompts":[{"id":"redteam-general","future":1}]}""", []);
+        future.Prompts.Single(p => p.Id == General).Refusal.Should().Contain("unknown members future");
+
+        var claimed = SecurityLaneSetting.Parse("""{"enabled":true,"prompts":[{"id":"redteam-general","always":true}]}""", []);
+        claimed.Prompts.Single(p => p.Id == General).Refusal.Should().Contain("unknown members always");
+
+        var malformed = SecurityLaneSetting.Parse("""{"enabled":true,"prompts":[{"id":"redteam-general","triggers":"sql"}]}""", []);
+        malformed.Prompts.Single(p => p.Id == General).Refusal.Should().BeEmpty();
+        malformed.Complaints.Should().ContainSingle().Which.Should().EndWith(IgnoredConditions);
+    }
+
+    /// <summary>
+    /// A general registered by hand before it shipped may carry conditions. They no longer mean anything, and an
+    /// old leftover must never stop general running: the prompt is kept, its stored conditions are replaced by
+    /// the shipped ones, and the person is told once.
+    /// </summary>
+    [Fact]
+    public void Stored_conditions_on_general_are_ignored_with_one_complaint_and_never_refuse_it()
+    {
+        var lane = SecurityLaneSetting.Parse(
+            """{"enabled":true,"prompts":[{"id":"redteam-general","triggers":["sql"],"focus":["xss"]}]}""", []);
+
+        var general = lane.Prompts.Single(p => p.Id == General);
+        general.Refusal.Should().BeEmpty();
+        general.Triggers.Should().BeEmpty();
+        general.Focus.Should().Equal(SecurityCatalog.Prompts[0].Focus);
+        lane.Complaints.Should().ContainSingle().Which.Should().EndWith(IgnoredConditions);
+        SecuritySignals.Triggered(general, SecuritySignals.Classify([new("sample.cs", "+return 42;")])).Should().BeTrue();
+    }
+
+    [Theory]
+    [InlineData("""{"enabled":true,"prompts":[{"id":"redteam-general"}]}""")]
+    [InlineData("""{"enabled":true,"prompts":[{"id":"redteam-general","triggers":[]}]}""")]
+    [InlineData("""{"enabled":true,"prompts":[{"id":"redteam-general","triggers":[],"focus":["entry-point"]}]}""")]
+    [InlineData("""{"enabled":true,"prompts":[{"id":"redteam-general","triggers":[],"focus":[]}]}""")]
+    [InlineData("""{"enabled":true,"prompts":[{"id":"redteam-general","triggers":[],"focus":["sql","xss"]}]}""")]
+    public void General_as_the_extension_sends_it_raises_no_complaint(string json)
+    {
+        var lane = SecurityLaneSetting.Parse(json, []);
+        lane.Prompts.Single(p => p.Id == General).Focus.Should().Equal(SecurityCatalog.Prompts[0].Focus,
+            "a stored focus on an always prompt is replaced by the shipped one, silently");
+        lane.Complaints.Should().BeEmpty();
+        lane.Prompts.Single(p => p.Id == General).Refusal.Should().BeEmpty();
     }
 
     [Theory]
@@ -38,6 +125,19 @@ public sealed class SecurityPresetTests
                 .Should().BeTrue("removed controls require review too");
         SecuritySignals.Triggered(prompt, SecuritySignals.Classify([new("sample.cs", "+return 42;")]))
             .Should().BeFalse();
+    }
+
+    /// <summary>
+    /// "Always" is a catalogue fact the server never takes from settings: a 0.42 server refuses the member, and a
+    /// conditional preset that arrives claiming it must not get past its triggers.
+    /// </summary>
+    [Fact]
+    public void An_always_member_in_settings_never_makes_a_preset_unconditional()
+    {
+        var lane = SecurityLaneSetting.Parse("""{"enabled":true,"prompts":[{"id":"redteam-sql","always":true,"triggers":["sql"]}]}""", []);
+        var sql = lane.Prompts.Single(p => p.Id == "redteam-sql");
+        sql.Refusal.Should().NotBeEmpty();
+        SecuritySignals.Triggered(sql, SecuritySignals.Classify([new("sample.cs", "+return 42;")])).Should().BeFalse();
     }
 
     [Fact]

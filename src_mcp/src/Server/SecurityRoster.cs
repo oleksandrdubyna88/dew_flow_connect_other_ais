@@ -69,8 +69,21 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
         if (settings.SecurityLane.ConfigurationRefusal(run) is { Length: > 0 } broken) { decided.Excluded.Add(new(run.Vendor, run.Prompt, broken)); return; }
         var prompt = PromptOf(run);
         if (!SecuritySignals.Triggered(prompt, facts))
-        { RecordUnmatched(run, facts, omitted, decided.Skipped, decided.Excluded); return; }
+        { RecordNotDue(run, facts, omitted, decided.Skipped, decided.Excluded); return; }
         Prepare(run, prompt, facts, sources, omitted, decided.Work, decided.Excluded);
+    }
+
+    /// <summary>
+    /// A pairing that is not due. An "always" prompt is decided by paths alone, so an oversized PROSE file says
+    /// nothing about it: a change with no code is a plain skip. Only files past the detector cap — never looked at,
+    /// possibly code — leave it as incomplete as any other pairing.
+    /// </summary>
+    private static void RecordNotDue(SecurityRun run, IReadOnlyList<SecurityFile> facts, int omitted,
+        List<SkippedRole> skipped, List<ExcludedRole> excluded)
+    {
+        if (SecurityCatalog.IsAlways(run.Prompt) && omitted == 0)
+            skipped.Add(new($"{run.Vendor}/{run.Prompt}", $"no code file in this committed change; {run.Prompt} reviews code only"));
+        else RecordUnmatched(run, facts, omitted, skipped, excluded);
     }
 
     private const string BudgetSpent = "security lane round budget spent";

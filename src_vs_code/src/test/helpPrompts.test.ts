@@ -68,8 +68,8 @@ test('each role leads with its universal prompt', () => {
     'document-summary': 1,
     // The feature stage's one role asks one question (S2.1 of the feature-review plan).
     'feature-review': 1,
-    'redteam-authz': 12,
-    'redteam-general': 1,
+    // General is the first shipped security prompt since 2026-10-04, no longer an "additional" one.
+    'redteam-general': 13,
   }, 'a role leads with its universal prompt, and its lenses follow');
 });
 

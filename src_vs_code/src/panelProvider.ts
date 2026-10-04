@@ -2148,6 +2148,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         if (id !== undefined) await editSecurityPrompt(this.dataDir, id,
           securityLaneFrom(this.read(vscode.workspace.getConfiguration('coai'))('securityLane')));
         break;
+      case 'clearSecurityConditions':
+        // A lane write like any other, so it is serialised with the setting writes rather than racing them.
+        if (id !== undefined) this.enqueue(() => this.write({ key: 'securityLane', securityField: `prompt:${id}:restore`, value: true }, from));
+        break;
       case 'customCommandModel':
         if (id !== undefined) {
           await this.customCommandModel(id, from);

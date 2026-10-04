@@ -3254,6 +3254,8 @@ export const PANEL_COMMANDS = [
   // one. Carries the CALLER as its id — four rows share the control.
   'customConsultant',
   'editSecurityPrompt',
+  // A hand-registered general's leftover conditions, cleared in one press (todo/PLAN_the_security_tab_reads_at_a_glance.md, D6).
+  'clearSecurityConditions',
   // The Consultant tab's health block (PLAN_the_consultant_works_on_every_vendor.md, epic 5): one real, paid check of a
   // caller kind's consultant, confirmed first; and agy's allow rule onto the clipboard. Both carry the CALLER KIND as id.
   'checkConsultant',

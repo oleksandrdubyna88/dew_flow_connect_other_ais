@@ -18,6 +18,7 @@
     { "id": "entry-point", "label": "Entry points and middleware", "trigger": false }
   ],
   "prompts": [
+    { "id": "redteam-general", "always": true, "triggers": [], "focus": ["entry-point"] },
     { "id": "redteam-authz", "triggers": ["authz"], "focus": ["authz", "entry-point", "sql"] },
     { "id": "redteam-sql", "triggers": ["sql"], "focus": ["sql", "entry-point"] },
     { "id": "redteam-concurrency", "triggers": ["concurrency"], "focus": ["concurrency", "sql", "entry-point"] },

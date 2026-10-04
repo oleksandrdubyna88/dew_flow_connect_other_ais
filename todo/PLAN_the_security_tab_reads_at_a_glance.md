@@ -99,16 +99,16 @@
 
 | # | Decision | Why |
 |---|---|---|
-| D1 | **General is an "always" prompt** (operator ruling). Its catalogue entry is `{ "id": "redteam-general", "always": true, "triggers": [], "focus": ["entry-point"] }`. "On" means it is paired with at least one reviewer by the existing checkboxes on its card, and then it runs on every change. Its card has **no conditions block**, and its focus is the shipped one and is not editable. | The operator's reason: 15 lexical triggers never cover 100 % of the code. The cost is one more reviewer call on every round while it is on. That is the person's choice, and the card says so in one line ("runs on every change"). |
+| D1 | **General is an "always" prompt** (operator ruling). Its catalogue entry is `{ "id": "redteam-general", "always": true, "triggers": [], "focus": ["entry-point"] }`. "On" means it is paired with at least one reviewer by the existing checkboxes on its card, and then it is due on every change that has **readable code**. That means a path that is not prose (`.md`/`.markdown`/`.rst`) and a diff that is not withheld (binary, credential file). It is decided by paths, wherever the code lives (test, docs and research folders included), so a docs-only commit is a plain skip for it and never "incomplete coverage" (shipped in E1, after the own review found the first cut used the supporting-material hint). Its card has **no conditions block**, and its focus is the shipped one and is not editable. | The operator's reason: 15 lexical triggers never cover 100 % of the code. The cost is one more reviewer call on every round while it is on. That is the person's choice, and the card says so in one line ("runs on every change"). |
 | D2 | **"Edited" means:** the override has *usable* text (by the server's rule above), OR the triggers/focus differ from the shipped ones as **sets**. For general, only the text counts, because it has no conditions. **Unknown members do not count.** **Storage is compacted on every write:** a shipped preset whose triggers and focus equal the shipped ones and that has no unknown members is left out of the stored `prompts`. | Then orange means *the person changed it*, and a future catalogue change reaches untouched presets instead of freezing them. Compaction is invisible on the wire (`securityEnv` sends the merged lane). If unknown members counted, a card could never turn green again, because Restore keeps them. |
 | D3 | **Colour is never the only signal.** Each card carries a full-strength text badge: `default`, `edited`, `custom`. | WCAG 1.4.1. High-contrast themes flatten the charts tokens. |
 | D4 | **Restore default asks first only when it would delete usable text.** The modal names the file. It also says if that file is open with unsaved changes; in that case Restore refuses, because saving the buffer would bring the file back. | Deleting prompt text is the only irreversible step here. Roles restores without asking because its text is on the page; this text is not. |
 | D5 | **Remove pair carries the row's identity, not just its index.** The button's `data-id` is the JSON triple `[index, vendor, prompt]`. The queued write applies `run:<index>:remove` only when row *index* still holds that vendor (compared case-insensitively, as `uniqueRuns` and the server do) and that prompt, and refuses otherwise. | An index can shift between paint and click (another window, a removal above). No new field grammar is needed. Vendor ids come from user settings and are not proven free of `:` or `/`. |
-| D6 | **A hand-added `redteam-general` from before this change** (operator ruling: a visible warning plus a one-click fix). With `triggers: []` or no `triggers` member, it already means "always", so nothing is shown. With **non-empty** stored triggers or a stored focus, its card shows *"General runs on every change; the conditions stored for it are ignored"* and a **Clear stored conditions** button (`prompt:redteam-general:restore`). The server ignores those members on an always prompt and reports the same sentence once, as a complaint. It does not refuse. | The person sees why the stored value no longer matters and fixes it in one click. The lane never stops running general because of an old leftover. |
+| D6 | **A hand-added `redteam-general` from before this change** (operator ruling: a visible warning plus a one-click fix). With `triggers: []` or no `triggers` member, it already means "always", so nothing is shown. With **non-empty** stored triggers (a stored focus is replaced silently, because every hand-added general was stored with `focus: []`), its card shows *"General runs on every change; the conditions stored for it are ignored"* and a **Clear stored conditions** button (`prompt:redteam-general:restore`). The server ignores those members on an always prompt and reports the same sentence once, as a complaint. It does not refuse. | The person sees why the stored value no longer matters and fixes it in one click. The lane never stops running general because of an old leftover. |
 | D7 | **"Remove custom prompt" becomes a button, and the file stays on disk.** The confirmation names the file and says how many pairs go with the prompt. | The prompt text is the person's work. |
 | D8 | **The collapsed block has a one-line summary**, e.g. `Conditions — runs on: SQL · Authorization; focus: SQL, Entry points`. When every trigger is ticked it says `runs on: any security signal (15)`. | Collapsed must not mean hidden, and a 15-label summary is unreadable. |
 | D9 | **Order: shipped in catalogue order (general first), then custom in stored order.** The same order is used for the cards and the pair's Prompt options. | A rendering rule. It never rewrites storage on its own. |
-| D10 | **Enabling the lane still auto-pairs `redteam-authz`, and general starts OFF.** **`addRun` picks the first unpaired prompt in D9 order**, so on a fresh lane the second "+ Add pair" pairs general. | General costs a reviewer on every round, so it is never switched on without the person asking. The first draft did not state the `addRun` order; the review found it. A test pins it. |
+| D10 | **Enabling the lane still auto-pairs `redteam-authz`, and general starts OFF.** **`addRun` picks the first unpaired prompt in D9 order but never an "always" prompt**: general is switched on only from its own card. | General costs a reviewer on every round, so it is never switched on without the person asking. The first draft let "Add pair" pair general second; the E1 cadence critique caught it, and E1 ships "never", pinned by a test. |
 | D11 | **Release order: MCP first, then the extension.** Either order is safe (§F); MCP first means the server already knows `always` when the first extension draws the card. | A new extension with an old server sends general as a custom prompt with `triggers: []`, which an old server already runs every time. An old extension with a new server shows no general card. |
 
 ## The design
@@ -244,13 +244,18 @@ The steps for `newSecurityPrompt`:
   `generate-security-lane.mjs` regenerates the TS copy, and the parity test at `securityLane.test.ts:88` keeps
   them honest.
 - **C#, the new kind:**
-  - `SecurityCatalog` reads `always`. The prompt record gains `Always`.
-  - `SecuritySignals.Triggered` (`:91-92`) answers `true` for an always prompt.
-  - `IsPresetWithoutTrigger` (`SecurityLaneSetting.cs:185`) exempts it.
-  - `ReadPrompts` drops stored triggers/focus on an always prompt with the D6 complaint and keeps the prompt.
+  - `SecurityCatalog` reads `always` into an id set, `SecurityCatalog.IsAlways(id)`. *As shipped in E1:* the
+    `SecurityPrompt` record is NOT widened, because always-ness is a catalogue fact looked up by id.
+  - `SecuritySignals.Triggered` answers for an always prompt by "any readable code file" (D1).
+  - *As shipped in E1:* `IsPresetWithoutTrigger` is unchanged. `AddPrompt` routes an always prompt to a separate
+    `ReadAlwaysPrompt`, which never reaches it. `ReadAlwaysPrompt` keeps the catalogue's conditions, raises the D6
+    complaint for stored triggers only, and still refuses unknown members.
+  - `SecurityRoster` records an always prompt that is not due as a plain skip ("no code file in this committed
+    change"), unless files lay beyond the detector cap.
   - Every method stays within cyclomatic complexity 4 (CA1502 is an error for these files).
 - **TS, the new kind:**
-  - `SecurityPrompt` gains an optional `always`.
+  - `securityAlways(id)` answers from the catalogue. *As shipped in E1:* `SecurityPrompt` is NOT widened, and the
+    seed is projected to `id`/`triggers`/`focus`, so `always` never reaches the wire.
   - `triggerWarning` (`securityLaneView.ts:75-76`) and the seeded-trigger check (`securityLane.test.ts:81`) exempt it.
   - `trigger:`/`focus:` writes on an always prompt are refused. The refusal is **by field prefix**, not by prompt
     kind: `prompt:<id>:restore` is exempt, because it is how D6's **Clear stored conditions** button removes a
@@ -365,7 +370,7 @@ made over page source text (`.agents/PROJECT.md:100-110`).
 | S2 | `promptsInOrder` with stored custom first puts general first and custom last; the pair select uses the same order | general drawn last (`securityLane.ts:60`) |
 | S2 | `prompt:<id>:restore` resets triggers/focus to the seed and keeps an unknown member | the member dropped (the property `securityLane.test.ts:67` protects) |
 | S2 | `securityCommandWrite('removeSecurityRun', [1,'codex','redteam-sql'])` refuses when row 1 holds another pair, and accepts `CODEX` against `codex` | the wrong pair removed |
-| S2 | `addRun` on a fresh lane (authz already paired) pairs `redteam-general` next | D10 unpinned |
+| S1 (E1) | sixteen `addRun` writes on a fresh lane never pair `redteam-general` | general switched on by Add pair |
 | S2 | `newPromptProblem`: bad pattern, over 80 characters, duplicate, and the cap at **13 shipped + 19 custom** | an invalid id written; the cap off by one |
 | S3 | `textStates` (temp dir): absent → `none`, whitespace → `blank`, placeholder → `placeholder`, 64 KiB + 1 → `oversized`, text → `written` | Edit alone turning a card orange; a placeholder shown as fine |
 | S3 | `newSecurityPrompt`: success registers, creates (`wx`) and opens. When the cap is reached between ask and write, nothing is written and the person is told. When the save is shadowed, the editor is not opened. | a prompt opened that the lane does not have |
@@ -397,11 +402,12 @@ made over page source text (`.agents/PROJECT.md:100-110`).
 | A stored general goes from always-run to refused or on-signal. | design | Overtaken by the operator ruling the same day: general is an "always" prompt, so an old hand-added general keeps its meaning; D6 now covers only a leftover with stored conditions (warning + one-click fix). D11 is MCP first, either order safe. |
 | Five C# test files and two TS files used general as an always-run fixture. | both | With general "always", they keep their meaning and run unchanged as a check; only the catalogue tests and the seam leg change (S1). |
 | The sentinel was missing from select-search; it is the third sentinel, not the second; the identity is needed on the pair select. | both | All three are in §D. |
-| `addRun` now pairs general second. | fact-check | D10 states it, and a test pins it. |
+| `addRun` would pair general second. | fact-check, then the E1 cadence critique | E1 ships "never": D10 states it, and a test pins it. |
 | The seam proves only "no complaint". | both | §F reworded; a live round against 0.42 added. |
 | `.badge` and `sec-*` are taken; a `rem` breakpoint ignores text size. | design | The `seclane-` prefix, a scoped badge, column-width CSS. |
 | The text state did not match the server (placeholder, oversized). | design | Five states mirroring `SecurityRoster.cs:120-140`. |
 | The DoD claimed `panelView.ts` barely changes. | design | The DoD lists the exact hooks. |
+| E1 code round (coai, 4 reviewers): the card claimed "runs on every code change" while a leftover kept general conditional on an older server, and restore had no control. | coai | E1 ships D6's warning and **Clear stored conditions** button early (command `clearSecurityConditions`, a queued write); the condition-free card text shows only once nothing is stored. E3 restyles the button; it does not add it. |
 | Wrong cites: `settingsScript` (`settingsPage.ts:70`), `.prompt.mine` (`rolesPage.ts:654`), "45" files (it is 32). | fact-check | Fixed or removed. |
 
 ## Growth surfaces

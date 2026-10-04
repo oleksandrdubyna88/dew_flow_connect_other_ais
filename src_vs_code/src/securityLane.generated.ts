@@ -84,6 +84,14 @@ export const SECURITY_SEED = {
   ],
   "prompts": [
     {
+      "id": "redteam-general",
+      "always": true,
+      "triggers": [],
+      "focus": [
+        "entry-point"
+      ]
+    },
+    {
       "id": "redteam-authz",
       "triggers": [
         "authz"

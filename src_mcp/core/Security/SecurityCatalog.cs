@@ -26,6 +26,17 @@ public static class SecurityCatalog
 
     public static bool IsPreset(string id) => Prompts.Any(p => p.Id == id);
 
+    /// <summary>
+    /// A shipped prompt that is only on or off: paired with a reviewer, it runs on every change and carries no
+    /// conditions (todo/PLAN_the_security_tab_reads_at_a_glance.md, D1). A catalogue fact, looked up by id — it
+    /// is never a settings member, because a 0.41/0.42 server refuses a prompt entry carrying one.
+    /// </summary>
+    public static bool IsAlways(string id) => AlwaysIds.Contains(id);
+
+    private static readonly HashSet<string> AlwaysIds = [.. Seed.GetProperty("prompts").EnumerateArray()
+        .Where(p => p.TryGetProperty("always", out var always) && always.ValueKind == JsonValueKind.True)
+        .Select(p => p.GetProperty("id").GetString()!)];
+
     private static IReadOnlyList<string> Strings(JsonElement row, string field) =>
         [.. row.GetProperty(field).EnumerateArray().Select(x => x.GetString()!)];
 
