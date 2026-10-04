@@ -72,7 +72,7 @@ import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
 import { RoleDeletions, STOOD_DOWN } from './roleDeletion';
 import { forgetTheDeletions, roleDeletions } from './roleDeletionsHost';
 import { ConfigReader, settingsFrom } from './settingsShape';
-import { readerFor, storageReadsThisSide } from './sideConfig';
+import { bugzServerThisSide, readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
 import { askPerson } from './personWait';
 
@@ -467,10 +467,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('coai.setBugsAdminKey', async () => {
       // The SAME panel the section button opens, so a key set here redraws a tab that is already
       // open instead of leaving it on the face it had before the key existed.
-      await usersPanel(
-        context.secrets,
-        () => vscode.workspace.getConfiguration('coai').get<string>('bugzServer', '').trim(),
-      ).askForKey();
+      await usersPanel(context.secrets, () => bugzServerThisSide(context)).askForKey();
     }),
     // The CONTRIBUTOR key — what this machine sends its own pairs with, and a different credential
     // from the admin one: one issues and revokes, the other uploads, and a person who holds both

@@ -36,6 +36,16 @@ export function readerFor(
 }
 
 /**
+ * This side's Bugz server — `bugzServer` is a per-side setting — for the two places that open the Bugz keys pages
+ * (the sidebar's button and the *Set Bugz admin key* command), so both always ask the same server.
+ */
+export function bugzServerThisSide(context: vscode.ExtensionContext): string {
+  const value = readerFor(context, vscode.workspace.getConfiguration('coai'))('bugzServer');
+
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
  * The ONE write of a `coai.*` setting, and the mirror of {@link readerFor}.
  *
  * <p>Here for the same reason the reader is: a write that decides for itself which layer it belongs

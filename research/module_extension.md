@@ -10504,3 +10504,33 @@ belongs to the extension as a whole:
 - **Guards it met.** The notification funnel: the tab's buttons speak through `notify`/`notifyAndAsk`, and the
   population constant rose 144 → 146 with its reason. Sonar's coverage exclusions gained `fileWatch.ts` and
   `securityCommands.ts`, which import `vscode`.
+
+## The sidebar reads and writes THIS side's settings (2026-10-04)
+
+With *separate settings for each side* on, `PanelProvider` drew the page from `settingsFrom((section) =>
+config.get(section))` — the shared layer — so every overlaid setting it shows (rounds, thresholds, the role switches,
+the consultant, prompts per round …) read the shared value rather than the one this side runs with; only the vendors
+went through the side-aware reader. The prompt-per-round picker also wrote with a direct global update, so one side's
+choice landed on every side. Now:
+
+- `renderNow` and `settings()` read `settingsFrom(this.read(config))` — the same `readerFor` the vendors and the env
+  block use.
+- `choosePrompt` reads through it and writes through `this.save` (→ `sideConfig.saveSetting`, which picks the
+  overlay or the user layer and reports a refusal); a refused pick is put back with the repaint started, not
+  awaited. The merge is the pure `promptsPerRound.promptChosen` (pads earlier rounds with `''`, never mutates).
+- The same bypass, found by sweeping every host file rather than from memory (plan round, session `1e7363d0`): add a
+  reviewer, remove a reviewer, remove a Team server's rows and the Bugz server box wrote `vendors` / `bugzServer` to
+  the global layer, and the Bugz keys pages read `bugzServer` from it. All go through `this.save` / the side-aware
+  reader now — once the page reads this side, a write around it would snap back in front of the person.
+- `thePanelReadsThisSide.test.ts` is a SCAN of every host file for a read or write of an overlaid setting by name
+  (multi-line) and for a shared-only reader, with two named exemptions (the door in `sideConfig.ts`; the seeding read
+  that copies the shared values when the switch is turned on). It was red on the six sites and is shown to find the
+  shapes it looks for; `refusedSelect.test.ts` pins the picker's new refusal shape.
+- The code round (session `1e7363d0`) widened the scan to the OPERATION rather than a receiver's name: any
+  `.get`/`.update`/`.inspect` of an overlaid name (either quote, with or without `coai.`), any one-parameter reader
+  that forwards to `.get`, and every `ConfigurationTarget.Global` — each sanctioned site named with its reason and
+  pinned to a COUNT. One `sideConfig.bugzServerThisSide` serves both doors to the Bugz keys pages. Add and remove a
+  reviewer redraw after their save (an overlay write raises no configuration event). On a per-side setup, removing a
+  Team server says its reviewers go on this side only. `promptChosen` refuses a round the role does not have and
+  reads the role as an own key. The Bugz keys themselves are still filed under fixed names, which per-side servers
+  make wrong: [PLAN_bugz_keys_per_server.md](../todo/PLAN_bugz_keys_per_server.md).
