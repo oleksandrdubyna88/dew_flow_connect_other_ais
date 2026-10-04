@@ -131,7 +131,8 @@ was a custom prompt outside the twelve).
   member besides `id`, `triggers` and `focus`, so the extension projects the seed to those three. An old server
   reads general as a custom prompt with empty triggers, which it already runs every time. This was checked by
   running `npm run test:seam` by hand against servers built from the `mcp-v0.41.0` and `mcp-v0.42.0` tags
-  (`COAI_MCP_DLL`). CI runs the seam only against the binary it just built.
+  (`COAI_MCP_DLL`, and `COAI_SEAM_OLDER_SERVER=1` so the prompt-text leg those servers predate is skipped). CI runs
+  the seam only against the binary it just built.
 - **A general registered by hand earlier:** stored triggers on it are ignored with one complaint (*"runs on every
   change; the conditions stored for it are ignored"*) and never refuse it. A stored focus is replaced silently.
   General's card says so while stored triggers remain, because an older server still runs it only when they
@@ -155,11 +156,13 @@ prompt with no text of its own, or any oversized text, refuses the run.
 - **The reading of files, checked live.** The extension decodes a file as `File.ReadAllText` does: its byte-order
   mark picks UTF-8, UTF-16 or UTF-32, exactly one mark is dropped, and a file it cannot read is `unreadable`. The
   server prints its own reading through `--security-prompt-text --ids …` (read only), and the seam's ninth leg
-  (`scripts/seam-security-text.mjs`) compares eighteen prompt ids — seventeen real files and one absent — and fails on any
+  (`scripts/seam-security-text.mjs`) compares twenty-two prompt ids — twenty-one real files and one absent — and fails on any
   the two read differently. It found
-  one on its first run: a file of two byte-order marks. Against a binary named by `COAI_MCP_DLL` that predates the mode
-  (before MCP 0.43.0) the leg is skipped, saying so, and the legs after it still run; against this repository's own build
-  the same refusal fails (`textLegVerdict`, tested in `seamLegs.test.mjs`).
+  one on its first run: a file of two byte-order marks. Against a binary named by `COAI_MCP_DLL` AND declared older by
+  `COAI_SEAM_OLDER_SERVER=1` (before MCP 0.43.0) the leg is skipped, saying so, and the legs after it still run; without
+  that declaration the same refusal fails, from this repository's own build or from a named binary that lost the mode
+  (`textLegVerdict`, tested in `seamLegs.test.mjs`). UTF-32 a decoder cannot read cleanly — a value beyond U+10FFFF, a
+  surrogate, a trailing sequence under four bytes — is U+FFFD to .NET, so text, and the extension reads it the same way.
 - **When it is read.** The extension reads each lane prompt's file at render (`PanelState.securityPromptText`), only
   while the Settings page exists, through a cache that re-reads a file only when its size or modification time changed.
   It reads in the data directory that "Edit local prompt override" uses. A watcher on `prompts/redteam-*.md` under

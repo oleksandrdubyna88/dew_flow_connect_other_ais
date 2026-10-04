@@ -53,10 +53,13 @@ function presentState(text: string): SecurityTextState {
   if (Buffer.byteLength(text, 'utf8') > SECURITY_PROMPT_MAX_BYTES) return 'oversized';
   return onlyThePlaceholder(text) ? 'placeholder' : 'written';
 }
-/** The operator's unfilled template: one `<!-- OPERATOR: … -->` comment and nothing after it. */
+/**
+ * The operator's unfilled template: one `<!-- OPERATOR: … -->` comment and nothing after it — the text ends in the
+ * FIRST `-->` (`SecurityPromptText.IsOnlyThePlaceholder` on the server; `endsWith` makes a missing marker plainly false).
+ */
 function onlyThePlaceholder(text: string): boolean {
   const trimmed = dotnetTrim(text);
-  return trimmed.startsWith('<!-- OPERATOR:') && trimmed.indexOf('-->') === trimmed.length - 3;
+  return trimmed.startsWith('<!-- OPERATOR:') && trimmed.endsWith('-->') && trimmed.indexOf('-->') === trimmed.length - 3;
 }
 
 /**
@@ -80,12 +83,20 @@ function byteOrderOf(bytes: Uint8Array): readonly [Encoding, number] {
   const mark = MARKS.find(([, prefix]) => prefix.every((b, i) => bytes[i] === b));
   return mark === undefined ? ['utf-8', 0] : [mark[0], mark[1].length];
 }
+/**
+ * UTF-32 as .NET decodes it: a value that is not a Unicode scalar (beyond U+10FFFF, or a surrogate) and a trailing
+ * sequence shorter than four bytes each become U+FFFD — text — never nothing (CodeRabbit on #675, measured on the binary).
+ */
 function decodeUtf32(body: Uint8Array, little: boolean): string {
-  const view = new DataView(body.buffer, body.byteOffset, body.byteLength - (body.byteLength % 4));
+  const whole = body.byteLength - (body.byteLength % 4);
+  const view = new DataView(body.buffer, body.byteOffset, whole);
   const points: number[] = [];
-  for (let at = 0; at < view.byteLength; at += 4) points.push(view.getUint32(at, little));
-  return String.fromCodePoint(...points.filter(p => p <= 0x10ffff));
+  for (let at = 0; at < whole; at += 4) points.push(scalarOr(view.getUint32(at, little)));
+  if (whole < body.byteLength) points.push(REPLACEMENT);
+  return String.fromCodePoint(...points);
 }
+const REPLACEMENT = 0xfffd;
+const scalarOr = (p: number): number => (p > 0x10ffff || (p >= 0xd800 && p <= 0xdfff) ? REPLACEMENT : p);
 
 /** What a stat answered for one file. */
 interface FileFacts { readonly mtimeMs: number; readonly size: number }

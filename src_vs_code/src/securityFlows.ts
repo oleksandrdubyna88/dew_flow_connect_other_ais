@@ -45,7 +45,11 @@ export async function runSecurityCommand(command: string, id: string | undefined
     restoreSecurityPrompt: () => restore(id ?? '', host),
     removeSecurityPrompt: () => removePrompt(id, host),
   };
-  await (Object.hasOwn(flows, command) ? flows[command]!() : Promise.resolve(written(command, id, host)));
+  if (Object.hasOwn(flows, command)) {
+    await flows[command]!();
+    return;
+  }
+  written(command, id, host);
 }
 
 /** A command that needs no question: decided inside the queue, against the setting as it is then. */
