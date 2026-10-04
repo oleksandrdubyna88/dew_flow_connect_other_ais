@@ -3119,10 +3119,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * stale copy would ask the wrong host and blame the key.</p>
    */
   private async bugsKeys(): Promise<void> {
-    await usersPanel(
-      this.context.secrets,
-      () => vscode.workspace.getConfiguration('coai').get<string>('bugzServer', '').trim(),
-    ).show();
+    // This side's Bugz server: `bugzServer` is a per-side setting, and its keys belong to the server this side uses.
+    await usersPanel(this.context.secrets, () => this.settings().bugzServer.trim()).show();
   }
 
   /**
@@ -3279,9 +3277,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
 
     // To configuration, like every other control here: a value kept on this object would be lost
-    // on reload and invisible to the Settings UI.
-    await vscode.workspace.getConfiguration('coai').update(
-      'bugzServer', typed.trim(), vscode.ConfigurationTarget.Global);
+    // on reload and invisible to the Settings UI. Through the one save, so a side that keeps its own
+    // settings keeps its own server, and a refusal is said.
+    await this.save(vscode.workspace.getConfiguration('coai'), 'bugzServer', typed.trim());
     await this.render();
   }
 
@@ -3478,7 +3476,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     if (answer === both) {
       const ids = new Set(rows.map((r) => r.id));
       const kept = vendorsFrom(this.read(config)('vendors')).filter((v) => !ids.has(v.id));
-      await config.update('vendors', kept, vscode.ConfigurationTarget.Global);
+      await this.save(config, 'vendors', kept);
     }
 
     await this.render();
@@ -4012,7 +4010,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
 
-    await config.update('vendors', [...vendors, vendor], vscode.ConfigurationTarget.Global);
+    // Through the one save, so a side that keeps its own settings gets the row, and a refusal is said.
+    await this.save(config, 'vendors', [...vendors, vendor]);
   }
 
   /**
@@ -4049,11 +4048,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
 
-    await config.update(
-      'vendors',
-      vendors.filter((v) => v.id !== id),
-      vscode.ConfigurationTarget.Global,
-    );
+    await this.save(config, 'vendors', vendors.filter((v) => v.id !== id));
   }
 
   /**

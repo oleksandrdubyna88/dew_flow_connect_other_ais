@@ -10518,5 +10518,11 @@ choice landed on every side. Now:
 - `choosePrompt` reads through it and writes through `this.save` (→ `sideConfig.saveSetting`, which picks the
   overlay or the user layer and reports a refusal); a refused pick is put back with the repaint started, not
   awaited. The merge is the pure `promptsPerRound.promptChosen` (pads earlier rounds with `''`, never mutates).
-- `thePanelReadsThisSide.test.ts` pins both halves (the side-aware read present, the shared read and the direct
-  update absent) and was red on the defect; `refusedSelect.test.ts` pins the picker's new refusal shape.
+- The same bypass, found by sweeping every host file rather than from memory (plan round, session `1e7363d0`): add a
+  reviewer, remove a reviewer, remove a Team server's rows and the Bugz server box wrote `vendors` / `bugzServer` to
+  the global layer, and the Bugz keys pages read `bugzServer` from it. All go through `this.save` / the side-aware
+  reader now — once the page reads this side, a write around it would snap back in front of the person.
+- `thePanelReadsThisSide.test.ts` is a SCAN of every host file for a read or write of an overlaid setting by name
+  (multi-line) and for a shared-only reader, with two named exemptions (the door in `sideConfig.ts`; the seeding read
+  that copies the shared values when the switch is turned on). It was red on the six sites and is shown to find the
+  shapes it looks for; `refusedSelect.test.ts` pins the picker's new refusal shape.

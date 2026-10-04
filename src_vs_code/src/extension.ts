@@ -467,9 +467,10 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand('coai.setBugsAdminKey', async () => {
       // The SAME panel the section button opens, so a key set here redraws a tab that is already
       // open instead of leaving it on the face it had before the key existed.
+      // THIS side's Bugz server, through the side-aware reader: `bugzServer` is a per-side setting.
       await usersPanel(
         context.secrets,
-        () => vscode.workspace.getConfiguration('coai').get<string>('bugzServer', '').trim(),
+        () => settingsFrom(readerFor(context, vscode.workspace.getConfiguration('coai'))).bugzServer.trim(),
       ).askForKey();
     }),
     // The CONTRIBUTOR key — what this machine sends its own pairs with, and a different credential
