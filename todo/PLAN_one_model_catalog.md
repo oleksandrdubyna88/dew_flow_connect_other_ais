@@ -1,6 +1,6 @@
 # PLAN — One model catalog: the Settings page rebuilt around models you add once
 
-> Status: **in progress, 2026-10-04 — E1 is built (PR #681); E2–E5 are open.** The design is accepted: the clickable mockup in
+> Status: **in progress, 2026-10-04 — E1 merged (PR #681); E2 story 1 built on `feat/catalog-e2`; E2.2–E5 open.** The design is accepted: the clickable mockup in
 > [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
 > checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
