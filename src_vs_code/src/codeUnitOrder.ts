@@ -1,0 +1,22 @@
+/**
+ * Total order over strings, by UTF-16 code unit — and deliberately NOT `localeCompare`.
+ *
+ * <p>The analyser asks for `localeCompare` whenever strings are sorted, and for an order that must be the
+ * SAME everywhere that advice is backwards. `localeCompare` is collation: it depends on the runtime's locale
+ * and on how much of ICU that runtime was built with, and it calls some distinct strings equal — `é` as one
+ * code point and `e` plus a combining accent — so a stable sort leaves those in whatever order they arrived.
+ * Code units do not vary and never tie two different strings.</p>
+ *
+ * <p>Two callers need exactly that. `vendorPalette` decides which of two colliding vendors gets first pick of
+ * a colour, so two people looking at one Team server must order the names alike. `canonical` in
+ * `configTransfer.ts` is an equality test, so one value must give one text whatever its key order — a
+ * collating sort once canonicalised one object two ways and exported a setting equal to its default (qwen,
+ * code round). Display orders a person reads are `localeCompare`'s job, not this one's.</p>
+ */
+export function byCodeUnit(left: string, right: string): number {
+  if (left === right) {
+    return 0;
+  }
+
+  return left < right ? -1 : 1;
+}

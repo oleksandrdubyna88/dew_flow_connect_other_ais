@@ -1,3 +1,4 @@
+import { byCodeUnit } from './codeUnitOrder';
 import { promptFile } from './rolesPrompts';
 import { sectionsOf } from './settingRefused';
 
@@ -333,24 +334,10 @@ function sortedKeys(value: unknown): unknown {
   }
 
   return isRecord(value)
+    // Code units, never `byName`: this is an equality test, and a collation both reads the machine's locale and
+    // ties distinct keys, which kept them in insertion order — one value, two texts (see `byCodeUnit`).
     ? Object.fromEntries(Object.keys(value).sort(byCodeUnit).map((key) => [key, sortedKeys(value[key])]))
     : value;
-}
-
-/**
- * The order `canonical` sorts keys in — UTF-16 code units, never a collation.
- *
- * <p>`canonical` is an equality test, not a display order, and {@link byName} cannot serve it twice over: it
- * reads the machine's locale, and it calls distinct keys equal (`é` as one code point and `e` plus a combining
- * accent), which left those keys in insertion order — so one object canonicalised two ways and a setting equal
- * to its default was exported (qwen, code round). Code units are a total order and the same everywhere.</p>
- */
-function byCodeUnit(left: string, right: string): number {
-  if (left === right) {
-    return 0;
-  }
-
-  return left < right ? -1 : 1;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

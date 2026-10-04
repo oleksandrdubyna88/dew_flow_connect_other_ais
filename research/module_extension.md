@@ -9476,7 +9476,8 @@ decision is a unit test and only VS Code is left untested:
   default from `contributes.configuration` through `settingRefused.sectionsOf` (exported for it, not
   copied). `exportedSettings(declared, baseValueOf)` keeps a setting whose BASE value
   (`config.inspect(key).globalValue`) differs from its default as canonical JSON (keys sorted by UTF-16
-  code unit, so a reordered object is still the default — never by `byName`/`localeCompare`, which reads
+  code unit through `codeUnitOrder.ts`'s `byCodeUnit` — the one order `vendorPalette` also uses for colour
+  picks — so a reordered object is still the default; never by `byName`/`localeCompare`, which reads
   the machine's locale and calls `é` and `e`+combining accent equal, leaving them in insertion order;
   fixed 2026-10-04 after the qwen code round found it), drops the `NEVER_TRANSFERRED` keys (`credsKey`,
   `dataDirectory`, `dataSide`, `alsoWatchDataDirectories`, `perSideSettings` — each with the reason an
