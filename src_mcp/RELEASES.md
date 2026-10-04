@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.42.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.42.0...mcp-v0.42.1) (2026-10-04)
+
+
+### Bug Fixes
+
+* **release:** the mcp release builds on its Windows runners ([#667](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/667)) ([ab193f9](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/ab193f98b8e1cda4410a55bf4e62684fdc5cd64a))
+
 ## [0.42.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.41.1...mcp-v0.42.0) (2026-10-03)
 
 
