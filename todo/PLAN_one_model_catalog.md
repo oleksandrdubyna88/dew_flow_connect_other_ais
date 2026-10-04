@@ -215,7 +215,7 @@ on never answered). Each runtime's flag is pinned in argv AND observed taking ef
 Each epic ships on its own; the old page works until E5. Every coai-mcp/Team-server change is read behind its own
 version gate in both directions.
 
-### E1 — The instance list grows into the catalog (extension + shared; nothing visible changes)
+### Epic 1 — The instance list grows into the catalog (extension + shared; nothing visible changes)
 1. **Widen the row** (D1): the new fields, parsing with "absent means the shipped value", validation (> 64 rows,
    prompt > 8 KiB, unknown effort — each refused naming the legal values), and model-bearing keys read from the user
    layer and the side overlay only, never a workspace or folder value. RED test: a workspace `.vscode/settings.json`
@@ -258,7 +258,7 @@ version gate in both directions.
    not known yet when nobody has asked. A v1 file's definitions are moved into rows by the migration that runs on
    the configuration change the import makes.
 
-### E2 — coai-mcp and the Team server honour the new fields (release mcp 0.44.0; Team server contract v2)
+### Epic 2 — coai-mcp and the Team server honour the new fields (release mcp 0.44.0; Team server contract v2)
 1. **Probe and routing fixes**: the probe runs the runtime's CLI, not the row id (RED: `claude-2` with
    `runtime: claude`); Bugz ranking matches the runtime, not the id `local`; an unknown runtime refused by name; the
    material told to each reviewer decided per runtime in `RosterBuilder.cs:181-183`; the C# side reads
@@ -282,7 +282,7 @@ version gate in both directions.
    logged; the operator can cap effort. The client reads `X-Coai-Contract` and, against a v1 server, says which fields
    that server drops. Measured both ways. Deploy is manual and needs the operator's go-ahead.
 
-### E3 — The new Settings page: the shell and Models (behind the preview switch)
+### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
    shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;
    six tabs with sub-tabs, remembered by the host; the deep-link map (D11); two columns from 1100 px with
@@ -295,7 +295,7 @@ version gate in both directions.
    from and "ask again", the API "runs it at", the off-machine endpoint warning and the WSL fix, ✓ Check (D10), the
    per-card "this coai-mcp ignores…" note.
 
-### E4 — The feature tabs use the catalog
+### Epic 4 — The feature tabs use the catalog
 1. **Reviews**: Stages; Roles & prompts (replacing `rolesPage.ts`) with ONE switch per role — `roleEnabled` and the
    catalog's `active` merged, `COAI_ROLES` still written for servers under `ROLE_SWITCH_SINCE`; deletion's confirmation
    and reserved ids; a role off until it has a question; Prompts per round; The gate; Commands (replacing
@@ -314,7 +314,7 @@ version gate in both directions.
    Change and Move flows on today's `dataCommands.ts` logic, the "moved from" record surviving a reload; This side with
    the export note.
 
-### E5 — The switch-over, docs and release
+### Epic 5 — The switch-over, docs and release
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
    three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the
    sidebar's Bugz picker reads the rows ticked Bugz (the one sidebar change).
@@ -425,7 +425,7 @@ Disjoint from the rest of `todo/`. Each plan in the table gets the same row, poi
 | Wrong line for local effort, missing `FEATURE_SINCE`, the fix site for the checkout sentence, `pageDocument`, `render-page.mjs` limits, five missing boundaries, the sidebar Bugz picker, the three replaced pages (fact-checker) | Each corrected in place. |
 | The gate's commands: 4–5 epics of 3–5 stories, one gate per epic, consult on a cadence | Ten epics became five. The split was done on Opus — Fable is at its monthly spend limit (2026-10-02) — and is said so here. |
 
-### Epic 1's plan round (session `ac973900`, 2026-10-04, good_enough, 14 findings accepted)
+### The plan round of epic 1 (session `ac973900`, 2026-10-04, good_enough, 14 findings accepted)
 
 | Finding | What changed |
 |---|---|
