@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.43.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.42.1...mcp-v0.43.0) (2026-10-04)
+
+
+### Features
+
+* **security:** redteam-general is a shipped "always" prompt, first in the catalogue ([15bf55a](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/15bf55afa87c8e5686f1c6272da24a91f05207f3))
+* **security:** the card model, the prompt files and a lane that stores only what changed ([4fa0cb0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4fa0cb0391797541aaa85ce2ded77ae834075b67))
+
+
+### Bug Fixes
+
+* **security:** the prompt-text reading and its seam, as the PR review asked ([3bf52c2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/3bf52c26bb5038bb8af6cc1f074f3782321fb714))
+
 ## [0.42.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.42.0...mcp-v0.42.1) (2026-10-04)
 
 
