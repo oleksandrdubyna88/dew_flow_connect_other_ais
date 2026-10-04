@@ -186,7 +186,7 @@ export class BugsKeysPanel {
       return;
     }
 
-    await setAdminKey(this.secrets, typed);
+    await setAdminKey(this.secrets, this.server(), typed);
     await this.draw();
   }
 
@@ -269,7 +269,7 @@ export class BugsKeysPanel {
     // BEFORE the request leaves. Everything after this line can die and the next open still knows
     // that a key may exist.
     await beginIssuance(this.secrets, { server, note });
-    const answer = await issue({ server, key: await adminKey(this.secrets) }, note);
+    const answer = await issue({ server, key: await adminKey(this.secrets, server) }, note);
     if (answer.kind !== 'ok') {
       await this.failedIssue(answer);
 
@@ -379,7 +379,7 @@ export class BugsKeysPanel {
    */
   private async discard(pending: Pending): Promise<void> {
     const issuer = pending.server.length > 0 ? pending.server : this.server();
-    const answer = await revoke({ server: issuer, key: await adminKey(this.secrets) }, pending.id);
+    const answer = await revoke({ server: issuer, key: await adminKey(this.secrets, issuer) }, pending.id);
     if (answer.kind === 'ok' || answer.kind === 'missing') {
       await releaseIssuance(this.secrets);
       this.said = 'The key was discarded and revoked, so nothing is left alive that nobody holds.';
@@ -402,7 +402,7 @@ export class BugsKeysPanel {
   }
 
   private async admin(): Promise<Admin> {
-    return { server: this.server(), key: await adminKey(this.secrets) };
+    return { server: this.server(), key: await adminKey(this.secrets, this.server()) };
   }
 
   /**
@@ -434,7 +434,7 @@ export class BugsKeysPanel {
   private async users(wanted: Trail): Promise<Users> {
     const pending = await pendingIssuance(this.secrets);
     const attempt = pending === undefined ? await issuanceAttempt(this.secrets) : undefined;
-    const held = await adminKey(this.secrets);
+    const held = await adminKey(this.secrets, this.server());
     const around = {
       ...(pending === undefined ? {} : { pending }),
       ...(attempt === undefined ? {} : { orphaned: attempt }),

@@ -10533,4 +10533,15 @@ choice landed on every side. Now:
   reviewer redraw after their save (an overlay write raises no configuration event). On a per-side setup, removing a
   Team server says its reviewers go on this side only. `promptChosen` refuses a round the role does not have and
   reads the role as an own key. The Bugz keys themselves are still filed under fixed names, which per-side servers
-  make wrong: [PLAN_bugz_keys_per_server.md](../todo/PLAN_bugz_keys_per_server.md).
+  make wrong: [PLAN_bugz_keys_per_server.md](PLAN_bugz_keys_per_server.md) (implemented).
+
+## A Bugz key is filed under the server that issued it (2026-10-04, research/PLAN_bugz_keys_per_server.md)
+
+`coai.bugzServer` is per side, and the admin and contributor keys were stored under two fixed secret names, so one
+key could be sent to whichever server a side named. `bugsAdminKey.keyName(kind, server)` files each under
+`coai.bugs.<kind>Key:<canonicalTeamServerUrl(server)>`; `adminKey`/`contributorKey` and their setters REQUIRE the server
+(a call without one does not compile), and with no server there is no key and nothing is stored. A discard revokes
+with the ISSUING server's admin key. On activation `migrateLegacyKeys` moves the old fixed-name keys once to the server
+the shared setting names (`sideConfig.bugzServerShared`, user layer only) — a key already filed there wins; with no
+shared server they stay put and are sent nowhere. Tests: `bugzKeysPerServer.test.ts` (red on the shared-key symptom),
+`bugsAdminKey.test.ts` per server.

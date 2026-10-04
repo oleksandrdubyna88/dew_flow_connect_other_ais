@@ -46,6 +46,17 @@ export function bugzServerThisSide(context: vscode.ExtensionContext): string {
 }
 
 /**
+ * The Bugz server every side SHARED before the per-side fix — the one the old fixed-name Bugz keys can only have been
+ * issued by, so it is where `bugsAdminKey.migrateLegacyKeys` files them (research/PLAN_bugz_keys_per_server.md). The user
+ * layer only, never a workspace value.
+ */
+export function bugzServerShared(): string {
+  const value = vscode.workspace.getConfiguration('coai').inspect('bugzServer')?.globalValue;
+
+  return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
  * The ONE write of a `coai.*` setting, and the mirror of {@link readerFor}.
  *
  * <p>Here for the same reason the reader is: a write that decides for itself which layer it belongs

@@ -3160,7 +3160,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
 
     const where = this.settings().bugzServer.trim();
-    const key = await contributorKey(this.context.secrets);
+    const key = await contributorKey(this.context.secrets, where);
     const refusal = mayStart({ server: where, key, corpus: this.bugzCache });
     if (refusal !== undefined) {
       await notify({
@@ -3253,7 +3253,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
 
-    await setContributorKey(this.context.secrets, typed);
+    await setContributorKey(this.context.secrets, bugzServerThisSide(this.context), typed);
     await this.render();
   }
 

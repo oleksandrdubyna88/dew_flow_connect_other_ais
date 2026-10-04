@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { usersPanel } from './bugsKeysPanel';
-import { setContributorKey } from './bugsAdminKey';
+import { setContributorKey, migrateLegacyKeys } from './bugsAdminKey';
 import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
@@ -72,7 +72,7 @@ import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
 import { RoleDeletions, STOOD_DOWN } from './roleDeletion';
 import { forgetTheDeletions, roleDeletions } from './roleDeletionsHost';
 import { ConfigReader, settingsFrom } from './settingsShape';
-import { bugzServerThisSide, readerFor, storageReadsThisSide } from './sideConfig';
+import { bugzServerShared, bugzServerThisSide, readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
 import { askPerson } from './personWait';
 
@@ -96,6 +96,11 @@ export function activate(context: vscode.ExtensionContext): void {
   // this has run it answers the DEFAULT directory. A window that read the choice late would watch
   // the wrong directory for escalations and write a Team-server token where nothing reads it.
   storageReadsThisSide(context);
+  // The Bugz keys filed under the old fixed names move to the server they were issued by, once — every reader now asks
+  // for a key BY SERVER, so until this has run they are simply not sent anywhere (research/PLAN_bugz_keys_per_server.md).
+  void migrateLegacyKeys(context.secrets, bugzServerShared()).catch((error: unknown) => {
+    console.error('ConnectOtherAIs: the Bugz keys could not be moved to their server', error);
+  });
   // FIRST, before anything is constructed and long before a command can be invoked: the side whose
   // settings the chat reads. Its reader falls back to the shared configuration while unbound, which
   // is the behaviour this branch exists to end — so the window in which that fallback could be
@@ -481,7 +486,7 @@ export function activate(context: vscode.ExtensionContext): void {
         ignoreFocusOut: true,
       }));
       if (typed !== undefined) {
-        await setContributorKey(context.secrets, typed);
+        await setContributorKey(context.secrets, bugzServerThisSide(context), typed);
         await panel.render();
       }
     }),

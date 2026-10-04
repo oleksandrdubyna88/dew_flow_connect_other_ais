@@ -1,3 +1,5 @@
+import { canonicalTeamServerUrl } from './teamServers';
+
 /**
  * Where the bugs admin key lives, and where a key that was issued but never copied waits.
  *
@@ -80,24 +82,73 @@ export interface Secrets {
   delete(key: string): Thenable<void>;
 }
 
-/** The admin key, or empty when none has been set. */
-export async function adminKey(secrets: Secrets): Promise<string> {
-  return (await secrets.get(ADMIN_KEY)) ?? '';
+/**
+ * The name a key is filed under: its kind and the server that issued it (research/PLAN_bugz_keys_per_server.md).
+ *
+ * <p>`coai.bugzServer` is a per-side setting, and a key filed under one fixed name was sent to whichever server a side
+ * named — so a host that never issued it received it, and could replay it against the one that did. The server is
+ * written the way `canonicalTeamServerUrl` writes it, so one server spelt two ways is one name. No server, no name:
+ * `''`, which every reader below treats as "no key".</p>
+ */
+export function keyName(kind: 'admin' | 'contributor', server: string): string {
+  const where = canonicalTeamServerUrl(server);
+
+  return where.length === 0 ? '' : `${kind === 'admin' ? ADMIN_KEY : CONTRIBUTOR_KEY}:${where}`;
 }
 
-/** Sets it. An empty value CLEARS it rather than storing nothing under a key that then reads as set. */
-export async function setAdminKey(secrets: Secrets, key: string): Promise<void> {
-  await put(secrets, ADMIN_KEY, key);
+/** The admin key for this server, or empty when none has been set for it. */
+export async function adminKey(secrets: Secrets, server: string): Promise<string> {
+  return held(secrets, keyName('admin', server));
 }
 
-/** The contributor key, or empty when none has been set. */
-export async function contributorKey(secrets: Secrets): Promise<string> {
-  return (await secrets.get(CONTRIBUTOR_KEY)) ?? '';
+/** Sets it for this server. An empty value CLEARS it; with no server nothing is stored at all. */
+export async function setAdminKey(secrets: Secrets, server: string, key: string): Promise<void> {
+  await put(secrets, keyName('admin', server), key);
 }
 
-/** Sets it, with the same clear-on-empty rule the admin key has. */
-export async function setContributorKey(secrets: Secrets, key: string): Promise<void> {
-  await put(secrets, CONTRIBUTOR_KEY, key);
+/** The contributor key for this server, or empty when none has been set for it. */
+export async function contributorKey(secrets: Secrets, server: string): Promise<string> {
+  return held(secrets, keyName('contributor', server));
+}
+
+/** Sets it for this server, with the same clear-on-empty rule the admin key has. */
+export async function setContributorKey(secrets: Secrets, server: string, key: string): Promise<void> {
+  await put(secrets, keyName('contributor', server), key);
+}
+
+async function held(secrets: Secrets, name: string): Promise<string> {
+  return name.length === 0 ? '' : (await secrets.get(name)) ?? '';
+}
+
+/**
+ * The keys filed under the old fixed names, moved once to the server they can only have been issued by: the one the
+ * SHARED `coai.bugzServer` names, which every side read before the per-side fix. A key already filed for that server
+ * is newer and wins; the old name is deleted either way. With no shared server there is nothing to tie the old keys to,
+ * so they stay where they are — and since every reader now asks for a server, they are sent nowhere.
+ */
+export async function migrateLegacyKeys(secrets: Secrets, sharedServer: string): Promise<'moved' | 'none' | 'no-server'> {
+  const legacy = [[ADMIN_KEY, keyName('admin', sharedServer)], [CONTRIBUTOR_KEY, keyName('contributor', sharedServer)]] as const;
+  const found = (await Promise.all(legacy.map(async ([old]) => (await secrets.get(old)) !== undefined))).some(Boolean);
+  if (!found) {
+    return 'none';
+  }
+  if (keyName('admin', sharedServer).length === 0) {
+    return 'no-server';
+  }
+  for (const [old, now] of legacy) {
+    await moved(secrets, old, now);
+  }
+
+  return 'moved';
+}
+
+/** One old key to its new name, unless the new name already holds one; the old name is removed either way. */
+async function moved(secrets: Secrets, old: string, now: string): Promise<void> {
+  const value = await secrets.get(old);
+  if (value !== undefined && (await secrets.get(now)) === undefined) {
+    await secrets.store(now, value);
+  }
+  await secrets.delete(old);
 }
 
 /**
@@ -109,6 +160,9 @@ export async function setContributorKey(secrets: Secrets, key: string): Promise<
  */
 async function put(secrets: Secrets, name: string, key: string): Promise<void> {
   const trimmed = key.trim();
+  if (name.length === 0) {
+    return;
+  }
   if (trimmed.length === 0) {
     await secrets.delete(name);
 

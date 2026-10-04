@@ -73,6 +73,7 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
   // the storage choice reads where data lives before any side is known.
   'sideConfig.ts forwarding reader': { count: 2, why: 'readerFor / userLayer and the storage choice — the door' },
   'sideConfig.ts global write': { count: 1, why: 'saveSetting, when this side keeps no settings of its own' },
+  'sideConfig.ts by-name': { count: 1, why: 'bugzServerShared — the server the old fixed-name Bugz keys were issued by' },
   'panelProvider.ts forwarding reader': { count: 1, why: 'seeding the overlay copies what this side reads TODAY' },
   'panelProvider.ts global write': { count: 2, why: 'coai.teamServers — one list every side shares, by design' },
   'chatPresetsPanel.ts global write': { count: 1, why: 'coai.chatModelPresets — not a per-side setting' },

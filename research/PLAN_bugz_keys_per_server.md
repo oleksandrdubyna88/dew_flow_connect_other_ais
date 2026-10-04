@@ -1,9 +1,14 @@
 # PLAN — A Bugz key is filed under the server it was issued by
 
-> Status: **plan only, nothing implemented yet.** Scope: `src_vs_code/src/bugsAdminKey.ts` and its callers (the Bugz
-> keys pages, the pair upload in `panelProvider.ts`).
+> Status: **IMPLEMENTED, 2026-10-04.** Scope: `src_vs_code/src/bugsAdminKey.ts` and its callers (the Bugz keys pages,
+> the pair upload in `panelProvider.ts`, the contributor-key commands). Deviations, recorded:
+> - "No shared server: the page says it cannot tell" was not built: with no shared server the old keys stay under
+>   their old names and, since every reader now asks BY server, are sent nowhere; setting the shared server and
+>   restarting moves them. A sentence on the page is left to whoever next touches the keys page.
+> - The wiring scan in the test plan became compile-time: `adminKey`/`contributorKey` and their setters REQUIRE the
+>   server argument, so a call without one does not build — stronger than a scan, and nothing to keep in step.
 >
-> Related docs: [module_extension.md](../research/module_extension.md). Found on the code round of the per-side fix
+> Related docs: [module_extension.md](module_extension.md). Found on the code round of the per-side fix
 > (`fix/prompts-per-round-per-side`, coai session `1e7363d0`, 2026-10-04).
 
 ## The symptom
