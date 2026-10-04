@@ -294,31 +294,43 @@ public sealed class ConsultFailureScenarioTests : ConsultScenarioBase
                 var acl = info.GetAccessControl();
                 acl.AddAccessRule(rule);
                 info.SetAccessControl(acl);
-                Proves(dir);
 
-                return new Unreadable(dir, rule);
+                return Proven(new Unreadable(dir, rule));
             }
 
             File.SetUnixFileMode(dir, UnixFileMode.None);
-            Proves(dir);
 
-            return new Unreadable(dir, null);
+            return Proven(new Unreadable(dir, null));
         }
 
-        /// <summary>A fixture the code does not reject proves nothing: as root a mode bites nobody.</summary>
-        private static void Proves(string dir)
+        /// <summary>
+        /// A fixture the code does not reject proves nothing, so a machine where the denial does not bite SKIPS the test
+        /// rather than passing it or failing it: as root a mode bites nobody, and the release workflow's Windows runners
+        /// list a directory their own account was denied (mcp-v0.42.0's build, 2026-10-03). The denial is undone first.
+        /// </summary>
+        private static Unreadable Proven(Unreadable made)
         {
-            var bites = false;
+            if (!Bites(made._dir))
+            {
+                made.Dispose();
+                Assert.Skip("this machine lists a directory its own account was denied (root, or an elevated runner), so the fixture cannot bite");
+            }
+
+            return made;
+        }
+
+        private static bool Bites(string dir)
+        {
             try
             {
                 _ = Directory.EnumerateFiles(dir).ToList();
+
+                return false;
             }
             catch (UnauthorizedAccessException)
             {
-                bites = true;
+                return true;
             }
-
-            bites.Should().BeTrue("the directory must refuse a listing for this test to mean anything — is the suite running as root?");
         }
 
         public void Dispose()
