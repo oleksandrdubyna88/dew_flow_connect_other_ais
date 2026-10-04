@@ -25,6 +25,13 @@ namespace CoaiMcp.Runners.Reviewers;
 /// </remarks>
 public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
 {
+    /// <summary>The claude CLI — what a launch starts when no path is configured, and what the probe asks.</summary>
+    /// <remarks>
+    /// Not the row id, which the interface's default would have been: a second claude row (`claude-2`) made the probe start
+    /// a program of that name and report a working reviewer as missing (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+    /// </remarks>
+    public string DefaultExecutable => "claude";
+
     /// <summary>The tools no reviewer ever gets: the ones that change the tree it is reviewing.</summary>
     private static readonly string[] WriteTools = ["Edit", "Write", "NotebookEdit"];
 
@@ -69,7 +76,7 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
         ReviewerSettings settings)
     {
         var request = new ProcessRequest(
-            settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : "claude",
+            settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable,
             [
                 "-p",
                 "--output-format", "json",

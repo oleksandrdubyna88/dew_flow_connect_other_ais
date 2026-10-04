@@ -325,6 +325,13 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
 {
     public virtual string Provider => id;
 
+    /// <summary>The codex CLI — what a launch starts when no path is configured, and what the probe asks.</summary>
+    /// <remarks>
+    /// Not the row id, which the interface's default would have been: a second codex row (`codex-2`) made the probe start
+    /// a program of that name and report a working reviewer as missing (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+    /// </remarks>
+    public string DefaultExecutable => "codex";
+
     private protected virtual string KeyVariable => "OPENAI_API_KEY";
 
     private protected virtual IEnumerable<string> ProviderOverrides => [];
@@ -333,7 +340,7 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
     {
         var outputFile = Path.Combine(outputDir, $"{FileName.Safe(Provider)}-{FileName.Safe(role)}.json");
         var request = new ProcessRequest(
-            Executable(settings, "codex"),
+            Executable(settings, DefaultExecutable),
             [
                 "exec",
                 "-s", "read-only",
@@ -508,10 +515,17 @@ public sealed class GeminiRuntime(string id = "gemini") : IReviewerRuntime
 {
     public string Provider => id;
 
+    /// <summary>The gemini CLI — what a launch starts when no path is configured, and what the probe asks.</summary>
+    /// <remarks>
+    /// Not the row id, which the interface's default would have been: a second gemini row (`gemini-2`) made the probe start
+    /// a program of that name and report a working reviewer as missing (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+    /// </remarks>
+    public string DefaultExecutable => "gemini";
+
     public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
         var request = new ProcessRequest(
-            settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : "gemini",
+            settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable,
             [
                 // The review itself arrives on stdin, which gemini appends its `-p` text to — so
                 // `-p` carries only this one short line. Same reason as codex: the Windows shim
