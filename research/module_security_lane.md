@@ -146,6 +146,33 @@ prompt metadata is registered in the lane's prompt library. An empty or blank ov
 override — a shipped preset keeps its shipped text, as every ordinary role does — while a custom
 prompt with no text of its own, or any oversized text, refuses the run.
 
+**What an override's text counts as is one shared rule** (since 2026-10-04).
+- **The rule on text.** `shared/security-prompt-text-vectors.json` declares the 64 KiB limit and eighteen vectors
+  (text → `none`, `blank`, `placeholder`, `oversized` or `written`), including .NET's whitespace set: U+0085 is
+  whitespace, U+FEFF is not; JavaScript's `trim` gets both wrong, so the extension uses neither. The server's
+  `SecurityPromptText.Classify` (used by `SecurityRoster.ReadPrompt`) and the extension's `securityPromptFiles.ts`
+  both answer them, in `SecurityPromptTextVectorsTests` and `securityPromptFiles.test.ts`.
+- **The reading of files, checked live.** The extension decodes a file as `File.ReadAllText` does: its byte-order
+  mark picks UTF-8, UTF-16 or UTF-32, exactly one mark is dropped, and a file it cannot read is `unreadable`. The
+  server prints its own reading through `--security-prompt-text --ids …` (read only), and the seam's ninth leg
+  (`scripts/seam-security-text.mjs`) writes eighteen real files and fails on any the two read differently. It found
+  one on its first run: a file of two byte-order marks.
+- **When it is read.** The extension reads each lane prompt's file at render (`PanelState.securityPromptText`), only
+  while the Settings page exists, through a cache that re-reads a file only when its size or modification time changed.
+  It reads in the data directory that "Edit local prompt override" uses. A watcher on `prompts/redteam-*.md` under
+  that directory repaints the Settings page when one changes (`watchGlob`, extracted from the consultant health panel).
+- **The lane's caps.** 32 prompts (the 13 shipped included) and 16 pairs are declared once, under `limits` in
+  `shared/security-lane.json`. The extension derives them from it; the server's constants are tested against it.
+
+**The stored setting holds only what the person changed.** `securityLaneSave` compacts every save:
+- A shipped prompt whose triggers and focus equal the shipped ones as sets, and that has no unknown member, is
+  left out. For general, it is left out when it has no stored triggers.
+- `securityLaneFrom` merges it back, so the lane the server receives and the tab draws is unchanged.
+- Before this, every save froze a snapshot of every preset into settings.json, so a catalogue change would never
+  have reached a preset nobody touched.
+- `securityLaneState.ts` holds the card model the tab is drawn from: `promptState`, `promptsInOrder`,
+  `conditionsSummary`, `newPromptProblem`, and `securityCommandWrite` (the one mapping from a button to its write).
+
 At the operator's request, all thirteen prompts were shortened to approximately half their word
 count on 2026-10-01. The source/evidence and output sections remain, with the declared schema owning
 the exact required keys. Qwen did not pass the three-consecutive-answer quality preflight. Gemma

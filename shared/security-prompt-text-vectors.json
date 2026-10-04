@@ -1,0 +1,100 @@
+{
+  "about": "What a security prompt's override text counts as. The server decides whether a pairing can run from it (SecurityPromptText.Classify, used by SecurityRoster.ReadPrompt); the extension's Security lane tab draws each card from it (securityPromptFiles.ts). Both halves answer these vectors, so the two copies cannot drift. text null = no file; repeat/count builds a long text.",
+  "maxBytes": 65536,
+  "vectors": [
+    {
+      "name": "no file",
+      "text": null,
+      "state": "none"
+    },
+    {
+      "name": "an empty file, as Edit creates it",
+      "text": "",
+      "state": "blank"
+    },
+    {
+      "name": "whitespace only",
+      "text": "  \n\t\r\n ",
+      "state": "blank"
+    },
+    {
+      "name": "the operator placeholder alone",
+      "text": "<!-- OPERATOR: write the review prompt here -->",
+      "state": "placeholder"
+    },
+    {
+      "name": "the placeholder with surrounding whitespace",
+      "text": "\n  <!-- OPERATOR: x -->  \n",
+      "state": "placeholder"
+    },
+    {
+      "name": "the placeholder followed by text",
+      "text": "<!-- OPERATOR: x -->\nReview the change.",
+      "state": "written"
+    },
+    {
+      "name": "text before the placeholder",
+      "text": "Review it.\n<!-- OPERATOR: x -->",
+      "state": "written"
+    },
+    {
+      "name": "ordinary text",
+      "text": "Review the change for exploitable failures.",
+      "state": "written"
+    },
+    {
+      "name": "exactly the limit",
+      "repeat": "a",
+      "count": 65536,
+      "state": "written"
+    },
+    {
+      "name": "one byte over the limit",
+      "repeat": "a",
+      "count": 65537,
+      "state": "oversized"
+    },
+    {
+      "name": "two-byte characters exactly at the limit",
+      "repeat": "\u00e9",
+      "count": 32768,
+      "state": "written"
+    },
+    {
+      "name": "two-byte characters one character over",
+      "repeat": "\u00e9",
+      "count": 32769,
+      "state": "oversized"
+    },
+    {
+      "name": "no-break spaces only",
+      "text": "\u00a0\u00a0",
+      "state": "blank"
+    },
+    {
+      "name": "a next-line character only (U+0085, whitespace to .NET)",
+      "text": "\u0085",
+      "state": "blank"
+    },
+    {
+      "name": "an ideographic space only",
+      "text": "\u3000",
+      "state": "blank"
+    },
+    {
+      "name": "a zero-width space only (whitespace to neither side)",
+      "text": "\u200b",
+      "state": "written"
+    },
+    {
+      "name": "a byte-order mark only, as text (not whitespace to .NET; a FILE starting with one is read without it)",
+      "text": "\ufeff",
+      "state": "written"
+    },
+    {
+      "name": "the placeholder wrapped in next-line characters",
+      "text": "\u0085<!-- OPERATOR: x -->\u0085",
+      "state": "placeholder"
+    }
+  ]
+}

@@ -71,6 +71,8 @@ const { refusalSeam } = await import('./seam-refusal.mjs');
 const { answerOf, sessionsFor } = await import('./seam-session.mjs');
 // The security lane's leg, in a module of its own for the same reason as the sixth.
 const { securitySeam } = await import('./seam-security.mjs');
+// The security prompt text leg: the tab's reading of real prompt files against the server's (epic 2).
+const { securityTextSeam } = await import('./seam-security-text.mjs');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -395,6 +397,10 @@ console.log('  ok  an api row\'s effort, thinking switch and review limit reach 
 // complaint, its unknown trigger is refused by name, and its malformed form is refused, not ignored.
 const security = await securitySeam({ providersIn, fail });
 console.log(`  ok  the security lane crosses the seam; the unknown trigger was refused: "${security.refusal}"`);
+
+// The NINTH leg: real prompt override files read by the extension and by the server, compared file by file.
+const text = await securityTextSeam({ binary, fail, timeoutMs: TIMEOUT_MS });
+console.log(`  ok  ${text.compared} prompt files read alike by the Security lane tab and the server`);
 
 // The SIXTH leg: a real refusal over stdio, its secret taken out, read back by the extension.
 const refusal = await refusalSeam({ serverSession, resolvedFor, answerOf, fail, timeoutMs: TIMEOUT_MS });

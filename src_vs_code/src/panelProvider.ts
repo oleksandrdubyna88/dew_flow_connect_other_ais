@@ -68,6 +68,9 @@ import { isQconsultCommand } from './qconsultWrite';
 import type { QuestionConsult } from './questionConsults';
 import { securityLaneFrom, securityLaneSave } from './securityLane';
 import { editSecurityPrompt } from './securityPromptEditor';
+import { SECURITY_PROMPT_WATCH, SecurityPromptTextCache } from './securityPromptFiles';
+import { watchGlob } from './fileWatch';
+import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
@@ -297,6 +300,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** The Consultant tab's health blocks — probe, watcher, Check and Copy — composed in `consultantHealthPanel.ts`. */
   private readonly consultantHealth: ConsultantHealthPanel;
 
+  /** Repaints the Security lane tab when a prompt override file changes (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2). */
+  private readonly securityPromptWatch: { readonly changed: Debounced; readonly stop: () => void };
+  /** The prompt files' states, re-read only for a file whose size or modification time changed. */
+  private readonly securityPromptText = new SecurityPromptTextCache();
+
   private readonly consultPrompt: ConsultPromptFile;
   /** The Question consultant tab's host half — its buttons, its writes, its prompt files (todo/PLAN_question_consultant.md, S4). */
   /**
@@ -460,6 +468,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       log: (message) => console.warn(message),
     });
     this.consultantHealth = new ConsultantHealthPanel({ dataDir, storage: this.context.globalStorageUri, render: () => { void this.render(); } });
+    this.securityPromptWatch = this.watchSecurityPrompts(dataDir.fsPath);
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -1058,6 +1067,21 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   dispose(): void {
     settleEverything(this.inFlight);
     this.consultantHealth.dispose();
+    // Stop first, then cancel: both are synchronous, so no file event can re-arm the debounce in between.
+    this.securityPromptWatch.stop();
+    this.securityPromptWatch.changed.cancel();
+  }
+
+  /**
+   * A prompt's text is edited in an ordinary editor, so nothing on the page knows it changed: watch the files the server
+   * reads, and repaint only while the Settings page is open. Based at the data directory, as the health watcher is,
+   * because `prompts/` may not exist until the first override is written.
+   */
+  private watchSecurityPrompts(dataDir: string): { readonly changed: Debounced; readonly stop: () => void } {
+    const changed = debounced(() => {
+      if (this.settingsTab.view !== undefined) void this.render();
+    }, WATCH_DEBOUNCE_MS);
+    return { changed, stop: watchGlob(dataDir, SECURITY_PROMPT_WATCH, changed) };
   }
 
   /**
@@ -1120,6 +1144,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       snippetStatus: await pastedSnippetStatus(),
       consultPrompt: await this.consultPrompt.readConsultPrompt(),
       qconsultPromptOverrides: await this.qconsult.overrides(),
+      // Read only while the Settings page exists: the sidebar never draws a prompt card.
+      securityPromptText: this.settingsTab.view === undefined ? undefined
+        : await this.securityPromptText.states(this.dataDir.fsPath, settings.securityLane.prompts.map(p => p.id)),
       qconsultPlaces: this.qconsult.places(),
       qconsults: this.questionConsults?.questions ?? [],
       consultations: this.consultations?.running ?? [],

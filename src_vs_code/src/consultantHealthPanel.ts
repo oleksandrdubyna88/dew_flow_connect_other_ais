@@ -10,6 +10,7 @@ import { CONSULTANTS_CAP_MS, ConsultantsProbe } from './consultantsProbe';
 import { type HealthSide, healthSides, thisSideLabel } from './consultantSides';
 import { textCopier } from './copyText';
 import { alsoWatchDataDirectories } from './escalationWatcher';
+import { watchGlob } from './fileWatch';
 import { serverPath } from './installer';
 import { notify, notifyAndAsk } from './notify';
 import { serverRun } from './roundsDbRead';
@@ -183,14 +184,7 @@ async function ownCheck(dir: string, kind: string): Promise<CheckRecord | undefi
 
 /** A glob over the data directory rather than a handle on a folder: `health/` may not exist until the first write. */
 function watchHealth(dir: string, changed: () => void): () => void {
-  const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(vscode.Uri.file(dir), 'consultations/health/*.json'));
-  const subscriptions = [watcher, watcher.onDidCreate(changed), watcher.onDidChange(changed), watcher.onDidDelete(changed)];
-
-  return () => {
-    for (const one of subscriptions) {
-      one.dispose();
-    }
-  };
+  return watchGlob(dir, 'consultations/health/*.json', changed);
 }
 
 function everyMs(ms: number, tick: () => void): () => void {

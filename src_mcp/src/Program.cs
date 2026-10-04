@@ -194,6 +194,12 @@ internal static class Program
         CheckConsultant,
 
         /// <summary>
+        /// Each named security prompt's override file as this server reads it, as JSON. Read only; for the seam that
+        /// checks the Security lane tab draws what the server sends. See <see cref="Server.SecurityPromptTextReadMode"/>.
+        /// </summary>
+        SecurityPromptText,
+
+        /// <summary>
         /// Print ONE round's findings as JSON and leave — what an opened row of the log asks for.
         /// </summary>
         /// <remarks>
@@ -285,6 +291,7 @@ internal static class Program
                 "--cadence" => Startup.Cadence,
                 "--consultants" => Startup.Consultants,
                 "--check-consultant" => Startup.CheckConsultant,
+                "--security-prompt-text" => Startup.SecurityPromptText,
                 _ => Startup.Usage,
             };
 
@@ -409,6 +416,9 @@ internal static class Program
 
             case Startup.CheckConsultant:
                 return await Server.ConsultantCheckMode.RunAsync(args, Server.Noticing.None);
+
+            case Startup.SecurityPromptText:
+                return await Server.SecurityPromptTextReadMode.RunAsync(args);
 
             default:
                 return await ServeAsync();
@@ -2186,6 +2196,9 @@ internal static class Program
         (only denied-by-cli is observed confinement), or the classified failure. Exits 0 for every
         outcome (already-checking included), 65 without a known --caller, 74 when the data directory or
         the check's lock cannot be opened.
+        `--security-prompt-text --ids <id,id>` prints, per security prompt id, what its override file in the
+        data directory counts as when this server reads it: none, blank, placeholder, oversized, unreadable or
+        written. Read only; no model is called.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

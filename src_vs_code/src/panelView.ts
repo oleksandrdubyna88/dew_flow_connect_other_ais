@@ -30,6 +30,7 @@ import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
 import { securityLaneBody } from './securityLaneView';
+import type { SecurityTextState } from './securityPromptFiles';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { CONSULTANT_HEALTH_CSS, COPY_COMMANDS } from './consultantHealthView';
 import { CALLER_KINDS, CUSTOM_ENDPOINT, consultantSkewNote, vaultKeyNote } from './consultSettings';
@@ -160,6 +161,11 @@ export interface PanelState {
    * time like {@link consultPrompt} (todo/PLAN_question_consultant.md, S4). Absent or empty = the shipped words.
    */
   readonly qconsultPromptOverrides?: Readonly<Record<string, string>> | undefined;
+  /**
+   * Each Security lane prompt's override file as the server will read it, by prompt id — read at paint time like
+   * {@link qconsultPromptOverrides} (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2). Absent = not read yet.
+   */
+  readonly securityPromptText?: Readonly<Record<string, SecurityTextState>> | undefined;
   /** Where a disk root may not be on this machine — the data folder, the profile, the system folders (D14 c). */
   readonly qconsultPlaces?: RootPlaces | undefined;
   /** The questions the consultants are answering, and those finished a short while ago — Active questions' first stage. */

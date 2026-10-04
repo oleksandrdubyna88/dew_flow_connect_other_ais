@@ -1,5 +1,9 @@
 // Generated from shared/security-lane.json; run scripts/generate-security-lane.mjs.
 export const SECURITY_SEED = {
+  "limits": {
+    "mostPrompts": 32,
+    "mostRuns": 16
+  },
   "signals": [
     {
       "id": "sql",

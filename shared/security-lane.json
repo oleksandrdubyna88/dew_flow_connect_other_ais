@@ -1,4 +1,5 @@
 {
+  "limits": { "mostPrompts": 32, "mostRuns": 16 },
   "signals": [
     { "id": "sql", "label": "SQL and raw queries", "trigger": true },
     { "id": "auth-token", "label": "Tokens and sessions", "trigger": true },

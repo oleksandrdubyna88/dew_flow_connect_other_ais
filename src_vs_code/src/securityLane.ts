@@ -134,13 +134,58 @@ export const securityTokenBudget = (r: SecurityRun, context: string): number =>
 /**
  * What the host saves for one control's write against the STORED setting — nothing when that setting is
  * malformed. Saving the panel's stand-in would overwrite what the person wrote in settings JSON, which is
- * exactly where the Security lane tab tells them to correct it.
+ * exactly where the Security lane tab tells them to correct it. What is saved is COMPACTED: see
+ * {@link compactPrompts}.
  */
 export function securityLaneSave(stored: unknown, field: string, value: unknown, vendors: readonly Vendor[]): SecurityLane | undefined {
   const lane = securityLaneFrom(stored);
-  return 'invalidConfiguration' in lane ? undefined : securityWrite(lane, field, value, vendors);
+  return 'invalidConfiguration' in lane ? undefined : compactPrompts(securityWrite(lane, field, value, vendors));
 }
 
+/** The library's size, shipped prompts included — the server's `SecurityCatalog.MostPrompts`. */
+export const SECURITY_MOST_PROMPTS: number = SECURITY_SEED.limits.mostPrompts;
+/** The pairs one lane holds — the server's `SecurityCatalog.MostRuns`, from the same shared catalogue. */
+export const SECURITY_MOST_RUNS: number = SECURITY_SEED.limits.mostRuns;
+
+/**
+ * The lane as it should be STORED: a shipped prompt the person never changed is left out. The merged lane — what
+ * `securityEnv` sends and the tab draws — is the same either way, because {@link securityLaneFrom} merges every
+ * missing shipped prompt back in. Kept is everything else: a custom prompt, an edited preset, and any entry with a
+ * member this version does not know, which travels on for the server to refuse.
+ *
+ * <p>Why: every save used to write the whole merged list back, freezing a snapshot of every preset's conditions
+ * into settings.json, so the day the catalogue changed an untouched preset would read as "edited" and never receive
+ * the shipped update (todo/PLAN_the_security_tab_reads_at_a_glance.md, D2).</p>
+ */
+export function compactPrompts(lane: SecurityLane): SecurityLane {
+  if ('invalidConfiguration' in lane) return lane;
+  const once = (id: string): boolean => lane.prompts.filter(p => p.id === id).length === 1;
+  return { ...lane, prompts: lane.prompts.filter(p => !(once(p.id) && untouchedShipped(p))) };
+}
+/**
+ * A shipped prompt exactly as it ships, with nothing beside id, triggers and focus. Only an id stored ONCE is dropped:
+ * the server reads the first entry of an id and complains about the rest, so dropping an untouched first entry would
+ * quietly promote the second (own review, epic 2).
+ */
+function untouchedShipped(prompt: SecurityPrompt): boolean {
+  const seed = SEED_PROMPTS.find(s => s.id === prompt.id);
+  return seed !== undefined && Object.keys(prompt).every(key => PROMPT_MEMBERS.has(key)) && !conditionsDiffer(prompt, seed);
+}
+const PROMPT_MEMBERS: ReadonlySet<string> = new Set(['id', 'triggers', 'focus']);
+
+/**
+ * Whether a shipped prompt's conditions are no longer the shipped ones, compared AS SETS. For an "always" prompt only
+ * stored triggers count: its focus is replaced on both sides, and every hand-added general was stored with `focus: []`.
+ */
+export function conditionsDiffer(prompt: SecurityPrompt, seed: SecurityPrompt): boolean {
+  if (securityAlways(prompt.id)) return prompt.triggers.length > 0;
+  return !sameSet(prompt.triggers, seed.triggers) || !sameSet(prompt.focus, seed.focus);
+}
+function sameSet(a: readonly string[], b: readonly string[]): boolean {
+  const left = new Set(a);
+  const right = new Set(b);
+  return left.size === right.size && [...left].every(x => right.has(x));
+}
 /** One control edits one field; all other pairs and forward-compatible metadata survive. */
 export function securityWrite(lane: SecurityLane, field: string, value: unknown, vendors: readonly Vendor[]): SecurityLane {
   if ('invalidConfiguration' in lane || refusedForAlways(field)) return lane;
@@ -164,13 +209,13 @@ function addPrompt(lane: SecurityLane, value: unknown): SecurityLane {
   return { ...lane, prompts: [...lane.prompts, { id: value, triggers: [], focus: [] }] };
 }
 const hasPromptRoom = (lane: SecurityLane, id: string): boolean =>
-  lane.prompts.length < 32 && !lane.prompts.some(p => p.id === id);
+  lane.prompts.length < SECURITY_MOST_PROMPTS && !lane.prompts.some(p => p.id === id);
 /**
  * A pair for the first enabled reviewer and the first prompt it is not paired with yet. Never an "always"
  * prompt: it costs a reviewer on every change, so it is switched on only from its own card.
  */
 function addRun(lane: SecurityLane, value: unknown, vendors: readonly Vendor[]): SecurityLane {
-  if (value !== true || lane.runs.length >= 16) return lane;
+  if (value !== true || lane.runs.length >= SECURITY_MOST_RUNS) return lane;
   const candidates = lane.prompts.filter(p => !securityAlways(p.id));
   const vendor = vendors.find(v => v.enabled && candidates.some(p => !lane.runs.some(r => r.vendor === v.id && r.prompt === p.id)));
   const p = candidates.find(p => !lane.runs.some(r => r.vendor === vendor?.id && r.prompt === p.id));
@@ -213,7 +258,7 @@ function uniqueRuns(lane: SecurityLane, runs: readonly SecurityRun[]): SecurityL
 }
 function pairWrite(lane: SecurityLane, vendor: string, prompt: string, value: unknown, vendors: readonly Vendor[]): SecurityLane {
   if (value === false) return { ...lane, runs: lane.runs.filter(r => r.vendor !== vendor || r.prompt !== prompt) };
-  if (value !== true || lane.runs.length >= 16) return lane;
+  if (value !== true || lane.runs.length >= SECURITY_MOST_RUNS) return lane;
   return addKnownPair(lane, vendor, prompt, vendors);
 }
 function addKnownPair(lane: SecurityLane, vendor: string, prompt: string, vendors: readonly Vendor[]): SecurityLane {

@@ -136,21 +136,13 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
     {
         if (IsOversizedFile(prompts.FileToWrite(id))) return string.Empty;
         // An empty or blank override is no override — the shipped text stands, as it does for every other role.
+        // The shared rule the Security lane tab answers too (shared/security-prompt-text-vectors.json): only WRITTEN
+        // text is sent — a blank custom prompt, the bare placeholder and an oversized text all refuse the pairing.
         var text = prompts.ForOptional(id);
-        return IsOversizedText(text) || IsOnlyThePlaceholder(text) ? string.Empty : text;
+        return SecurityPromptText.Classify(text) == SecurityPromptTextState.Written ? text : string.Empty;
     }
 
     private static bool IsOversizedFile(string path) => File.Exists(path) && new FileInfo(path).Length > SecurityContext.MaxPromptBytes;
-
-    private static bool IsOversizedText(string text) => Encoding.UTF8.GetByteCount(text) > SecurityContext.MaxPromptBytes;
-
-    /// <summary>The operator's unfilled template: one <c>&lt;!-- OPERATOR: … --&gt;</c> comment and nothing after it.</summary>
-    private static bool IsOnlyThePlaceholder(string text)
-    {
-        var trimmed = text.Trim();
-        return trimmed.StartsWith("<!-- OPERATOR:", StringComparison.Ordinal)
-            && trimmed.IndexOf("-->", StringComparison.Ordinal) == trimmed.Length - 3;
-    }
 
     private ReviewerWork Build(ProviderSettings provider, SecurityRun run, string prompt)
     {
