@@ -71,3 +71,13 @@ function ignoredIn(key: string, inspected: Inspected = {}): readonly IgnoredValu
     ? []
     : [{ key, layer: held[0], value: inspected[held[1]], userHasOne: inspected.globalValue !== undefined }];
 }
+
+/**
+ * Whether copying an ignored value would REPLACE something the person set — judged where the copy LANDS: this side's
+ * own settings when it keeps them and the key is one of theirs (`overlay` given), else the person's user layer. It
+ * was judged on the user layer alone, so on a side with its own settings Copy overwrote that side's models
+ * (PR #681's review).
+ */
+export function copyWouldReplace(ignored: IgnoredValue, overlay: Readonly<Record<string, unknown>> | undefined): boolean {
+  return overlay === undefined ? ignored.userHasOne : overlay[ignored.key] !== undefined;
+}

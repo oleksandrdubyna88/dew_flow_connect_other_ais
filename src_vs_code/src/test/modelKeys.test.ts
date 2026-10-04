@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { ignoredWorkspaceValues, Inspected, MODEL_KEYS, userLayerReader } from '../modelKeys';
+import { copyWouldReplace, ignoredWorkspaceValues, Inspected, MODEL_KEYS, userLayerReader } from '../modelKeys';
 
 /**
  * The settings that name a model — and therefore a program to run — are read from the person's own
@@ -76,4 +76,15 @@ test('the notice names each ignored key with the layer that held it, and nothing
 
 test('a key with no workspace or folder value raises no notice', () => {
   assert.deepEqual(ignoredWorkspaceValues(inspector({ vendors: { globalValue: OWN } })), []);
+});
+
+test('Copy is offered only where it would replace nothing — this side\'s own settings when it keeps them', () => {
+  const ignored = { key: 'vendors', layer: 'workspace' as const, value: [{ id: 'x' }], userHasOne: false };
+
+  assert.equal(copyWouldReplace(ignored, undefined), false, 'no overlay: the copy lands in the user layer, which is empty');
+  assert.equal(copyWouldReplace({ ...ignored, userHasOne: true }, undefined), true);
+  assert.equal(copyWouldReplace(ignored, { vendors: [{ id: 'mine' }] }), true,
+    'this side keeps its own settings and already holds vendors: a copy there would replace them (PR #681 review)');
+  assert.equal(copyWouldReplace({ ...ignored, userHasOne: true }, {}), false,
+    'the copy lands in the overlay, which holds nothing; the user layer is not where it goes');
 });

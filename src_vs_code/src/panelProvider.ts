@@ -1134,11 +1134,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // both belong to the side this extension host is running on, never to "the machine".
     const published = await this.publishedVersion();
     const sessions = await this.readSessions();
+    // Display only (PLAN_one_model_catalog.md E1.4): a row that exists for its catalog uses alone is not a reviewer on
+    // this page. Every write reads the rows afresh, so a hidden row is never dropped by one. Drawn AND priced from this
+    // one list: priced from every row, a hidden api consultant put its endpoint's rate on a reviewer's card.
+    const shown = vendors.filter(shownOnTheOldPage);
     const state = {
       settings,
-      // Display only (PLAN_one_model_catalog.md E1.4): a row that exists for its catalog uses alone is not a
-      // reviewer on this page. Every write reads the rows afresh, so a hidden row is never dropped by one.
-      vendors: vendors.filter(shownOnTheOldPage),
+      vendors: shown,
       codexModels: this.codexModels,
       agyModels: this.agyModels,
       // Never awaited. The probe is four real requests to a real CLI; a render that waited for one
@@ -1162,7 +1164,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       latestTeamServerVersion: this.latestTeamServer,
       storage: await whereThisWindowKeepsItsData(),
       cliStatus: await this.vendorCliStatus(vendors),
-      modelPrices: await this.modelPrices(vendors),
+      modelPrices: await this.modelPrices(shown),
       snippetStatus: await pastedSnippetStatus(),
       consultPrompt: await this.consultPrompt.readConsultPrompt(),
       qconsultPromptOverrides: await this.qconsult.overrides(),

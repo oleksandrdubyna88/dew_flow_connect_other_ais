@@ -10535,7 +10535,10 @@ Epic 1 changes the DATA and nothing a person sees. Its stories, as they land:
   the per-side seeding (`vendors`) — all five now pass `userLayer(config)` (PR #681 review).
 - On activation, `sideConfig.noticeIgnoredWorkspaceModels` says once per window which key a workspace or folder
   tried to set (`model-setting-from-workspace`, a refusal), and offers *Copy to my settings* only when the person's
-  own layer holds nothing — so it never overwrites what they set.
+  own layer holds nothing — so it never overwrites what they set. "Holds" is judged where the copy LANDS
+  (`modelKeys.copyWouldReplace`): this side's own settings when it keeps them and `saveSetting` writes the key there
+  (`writesTheOverlay`, the one rule both use), else the user layer — asked when the notice is shown and again at the
+  click (PR #681 review).
 
 ```mermaid
 flowchart LR
@@ -10631,7 +10634,9 @@ sequenceDiagram
   rows are saved FIRST, so a refusal between the two writes leaves a row nobody refers to yet.
 - `catalogRules.shownOnTheOldPage`: the panel's render state lists a row only when it reviews a stage or has no
   `uses` — a migrated consultant is no reviewer on the old page, and "the last reviewer stays" counts the same way.
-  Display only; every write reads the rows afresh.
+  Display only; every write reads the rows afresh. The page is drawn AND priced from that one list: priced from every
+  row, a hidden `api` consultant with a reviewer's model put its endpoint's rate on the reviewer's card
+  (`theOldPagePricesWhatItShows.test.ts`). The spending and consultation tabs keep every row — a consultant's runs are billed.
 - The three reviewer-list writes that went around the side overlay (add a reviewer, remove a reviewer, remove a
   Team server's rows) go through `save`, so a side that keeps its own settings gets them and a refusal is said.
 - `scripts/seam-catalog.mjs`, the seam's tenth leg: a multi-instance catalog (two `claude` rows, a consultant and a
