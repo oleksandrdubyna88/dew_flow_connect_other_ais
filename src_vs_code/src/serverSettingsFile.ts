@@ -1,5 +1,6 @@
 import { CoaiSettings, envBlock } from './settingsShape';
-import { RowPriceLookup, Vendor } from './vendors';
+import { Vendor } from './vendors';
+import { RowPriceLookup } from './vendorsWire';
 
 /** The key that records which build wrote the file. Read by the next writer, ignored by the server. */
 export const WRITTEN_BY = 'COAI_WRITTEN_BY';

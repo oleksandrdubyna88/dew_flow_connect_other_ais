@@ -10,7 +10,8 @@
  * configuration crosses over, regenerated whenever the person copies it again.</p>
  */
 
-import { DEFAULT_VENDORS, RowPriceLookup, Vendor, vendorsEnv } from './vendors';
+import { DEFAULT_VENDORS, Vendor } from './vendors';
+import { RowPriceLookup, vendorsEnv } from './vendorsWire';
 import { RESULT_CODE, bucketOf, composed, isActive, rolesFrom, type RoleRow } from './roles';
 import {
   CALLER_KINDS,

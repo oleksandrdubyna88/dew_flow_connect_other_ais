@@ -4,12 +4,12 @@
     "The plan, the todo/README row and the Definition of Done quote THIS file, so that a call",
     "site added tomorrow turns a test red instead of making three documents quietly wrong."
   ],
-  "sites": 146,
+  "sites": 147,
   "direct": 0,
   "modal": 23,
-  "events": 123,
+  "events": 124,
   "inTheFunnel": 3,
-  "routed": 146,
+  "routed": 147,
   "byApi": {
     "showInformationMessage": 0,
     "showWarningMessage": 0,
@@ -82,6 +82,7 @@
     "mcp-block-copied",
     "mirrored-is-already-written",
     "model-preset-gone",
+    "model-setting-from-workspace",
     "model-switch-failed",
     "model-switch-queued",
     "model-switched",

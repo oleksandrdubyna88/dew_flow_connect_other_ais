@@ -10504,3 +10504,40 @@ belongs to the extension as a whole:
 - **Guards it met.** The notification funnel: the tab's buttons speak through `notify`/`notifyAndAsk`, and the
   population constant rose 144 → 146 with its reason. Sonar's coverage exclusions gained `fileWatch.ts` and
   `securityCommands.ts`, which import `vscode`.
+
+## The reviewer list grows into the model catalog (2026-10-04, `todo/PLAN_one_model_catalog.md` E1)
+
+Epic 1 changes the DATA and nothing a person sees. Its stories, as they land:
+
+**E1.1 — the row widens, and the model keys are read from the person's own layer.**
+
+- `coai.vendors` rows gain `name`, `uses` (`security`, `consultant`, `qconsult`, `chat`, `bugz` — the review
+  stages stay `plan`/`code`/`document`/`feature`), `systemPrompt`, `timeoutMinutes` (CLI rows; api rows keep
+  `reviewMinutes`) and `chatStartingPrompt`. Each is absent unless said, so a row written before the catalog parses
+  to exactly what it did. Parsed in `catalogFields.ts` (free of `vendors.ts`, so the import graph gains no cycle);
+  `effort` was already parsed on every row by `storedApiSettings`.
+- `catalogRules.ts` judges a catalog: more than `MAX_ROWS` (64) rows, or a system or chat starting prompt over
+  `MAX_PROMPT_BYTES` (8192, counted in UTF-8 bytes because bytes are what crosses), is refused with a sentence
+  naming the limit. `reviewsAnything(row)` is the test E1.4 uses to leave a row that reviews no stage out of
+  `COAI_VENDORS`.
+- None of the new fields crosses: `vendorsWire.ts` — the wire half of `vendors.ts`, split out because that file was
+  at the 800-line limit — writes a whitelist of fields, never the stored row. `saidText.ts` is the one trimmed-text
+  reader both halves use.
+- `modelKeys.ts`: the seven model-bearing keys (`vendors`, `consultants`, `qconsultRows`, `chatModel`,
+  `chatModelPresets`, `bugzModel`, `securityLane`) are read from the user layer (then the manifest default) via
+  `inspect()`, never from a workspace or folder. None of `coai.*` declares a manifest scope, so VS Code merged a
+  repository's `.vscode/settings.json` over the user's — a cloned repository could choose an `executablePath` the
+  next review ran. A manifest `scope` was not used because it also changes which layer a remote (WSL) window reads.
+  `sideConfig.userLayer(config)` is the one door; `readerFor` builds on it; `modelKeysAreReadOnce.test.ts` refuses
+  any other direct read (shown red on a planted `config.get('chatModelPresets')`).
+- On activation, `sideConfig.noticeIgnoredWorkspaceModels` says once per window which key a workspace or folder
+  tried to set (`model-setting-from-workspace`, a refusal), and offers *Copy to my settings* only when the person's
+  own layer holds nothing — so it never overwrites what they set.
+
+```mermaid
+flowchart LR
+  WS[".vscode/settings.json<br/>coai.vendors"] -. ignored, noticed .-> N[noticeIgnoredWorkspaceModels]
+  U["user settings<br/>coai.vendors"] --> UL["sideConfig.userLayer<br/>(modelKeys.userLayerReader)"]
+  UL --> R[readerFor] --> O[side overlay first] --> V[vendorsFrom + catalogFields]
+  V --> W["vendorsWire.vendorsEnv<br/>(whitelist)"] --> F["settings.json in the data dir<br/>COAI_VENDORS"]
+```

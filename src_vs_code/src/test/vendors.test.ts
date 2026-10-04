@@ -1,15 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  DEFAULT_VENDORS,
-  freeVendorId,
-  normaliseId,
-  presetsOffered,
-  reviewerPickItems,
-  VENDOR_PRESETS,
-  vendorsEnv,
-  vendorsFrom,
+  DEFAULT_VENDORS, freeVendorId, normaliseId, presetsOffered, reviewerPickItems, VENDOR_PRESETS, vendorsFrom,
 } from '../vendors';
+import { vendorsEnv } from '../vendorsWire';
 
 test('every default vendor can be added back after being removed', () => {
   // The one-way door the operator walked through: gemini shipped as a default but was missing

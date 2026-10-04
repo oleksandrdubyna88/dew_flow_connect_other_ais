@@ -186,8 +186,8 @@ function wordOf(raw: unknown): string {
   return typeof raw === 'string' ? raw.trim().toLowerCase() : '';
 }
 
-/** A whole number of minutes the box accepts: at least one, at most a day. */
-function isMinutes(raw: unknown): raw is number {
+/** A whole number of minutes the box accepts: at least one, at most a day. Also a CLI row's `timeoutMinutes`. */
+export function isMinutes(raw: unknown): raw is number {
   return isWholeMinutes(raw) && raw <= MAX_REVIEW_MINUTES;
 }
 

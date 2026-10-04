@@ -6,6 +6,8 @@ import { asText } from './asText';
 import { storageChoiceFrom, useStorageSettings } from './dataDir';
 import { thisSide } from './installer';
 import { notify, notifyThen } from './notify';
+import { ignoredWorkspaceValues, IgnoredValue, userLayerReader } from './modelKeys';
+import { Notice } from './notice';
 
 /**
  * The ONE construction of this side's settings reader.
@@ -28,11 +30,60 @@ export function readerFor(
   config: vscode.WorkspaceConfiguration,
 ): ConfigReader {
   return sideConfigReader(
-    (section) => config.get(section),
+    userLayer(config),
     config.get<boolean>('perSideSettings') === true,
     context.globalState,
     thisSide(context.globalStorageUri),
   );
+}
+
+/**
+ * The shared settings as this side may read them: a model-bearing key from the person's own layer
+ * only, never from a workspace or folder (`modelKeys.ts`, PLAN_one_model_catalog.md E1.1). The only
+ * door to those keys — {@link readerFor} builds on it, and a setting no side overlays (the chat's model
+ * presets) is read through it directly.
+ */
+export function userLayer(config: vscode.WorkspaceConfiguration): ConfigReader {
+  return userLayerReader((section) => config.get(section), (section) => config.inspect(section));
+}
+
+/**
+ * Tell the person that a workspace or folder tried to set a model and was not applied — with the one
+ * action that carries their intent over when their own layer holds nothing. Called once, on activation.
+ */
+export function noticeIgnoredWorkspaceModels(
+  context: vscode.ExtensionContext,
+  config: vscode.WorkspaceConfiguration,
+): void {
+  for (const ignored of ignoredWorkspaceValues((section) => config.inspect(section))) {
+    void notifyThen(ignoredNotice(ignored), (choice) => {
+      if (choice === COPY) {
+        saveSetting(context, config, ignored.key, ignored.value).catch((error: unknown) =>
+          reportRefusal(context, ignored.key, error));
+      }
+    });
+  }
+}
+
+const COPY = 'Copy to my settings';
+
+/** The sentence, and the copy offered only when it would not overwrite what the person set. */
+function ignoredNotice(ignored: IgnoredValue): Notice {
+  const where = ignored.layer === 'folder' ? 'a folder' : 'this workspace';
+
+  return {
+    as: 'warning',
+    class: 'refusal',
+    source: 'sideConfig',
+    code: 'model-setting-from-workspace',
+    subject: ignored.key,
+    title: `coai.${ignored.key} in ${where}'s settings was not applied: the models a review runs are read `
+      + 'from your own settings only, so a repository cannot choose a program for you to run.',
+    cure: ignored.userHasOne
+      ? `Your own coai.${ignored.key} is the one in use; remove the ${ignored.layer} value to stop this notice.`
+      : 'Copy it to your own settings if you meant it.',
+    ...(ignored.userHasOne ? {} : { action: COPY }),
+  };
 }
 
 /**
@@ -73,9 +124,11 @@ export function readerFor(
  *       continuing: the next thing that flow does is copy a client-entry block built from the
  *       choice, so a refusal walked past would hand somebody a directory this window is not
  *       using.</li>
+ *   <li><b>`noticeIgnoredWorkspaceModels`</b> — the panel's shape: the copy a person asked for from a
+ *       notification button is caught and reported, never thrown out of the button's callback.</li>
  * </ul>
  *
- * <p>A fifth caller must pick one of those two shapes. There is no third.</p>
+ * <p>A sixth caller must pick one of those two shapes. There is no third.</p>
  */
 export async function saveSetting(
   context: vscode.ExtensionContext,

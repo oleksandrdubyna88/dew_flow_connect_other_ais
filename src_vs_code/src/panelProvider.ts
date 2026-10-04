@@ -76,7 +76,7 @@ import { watchGlob } from './fileWatch';
 import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
-import { readerFor, reportRefusal, saveSetting } from './sideConfig';
+import { readerFor, reportRefusal, saveSetting, userLayer } from './sideConfig';
 import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
@@ -1364,7 +1364,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // chat card read "no rate set for this model" for a model the published table prices perfectly
     // well. The two lists are asked the same question and answered from the same table.
     // (CodeRabbit, PR #209.)
-    const presets = chatModelPresetsFrom(vscode.workspace.getConfiguration('coai').get('chatModelPresets'));
+    const presets = chatModelPresetsFrom(userLayer(vscode.workspace.getConfiguration('coai'))('chatModelPresets'));
     const wanted = [...vendors.map((one) => one.model), ...presets.map((one) => one.model)];
     // An empty model is "the CLI's default" — we do not know which model that is, so the book does not
     // guess and answers nothing for it.
@@ -1492,7 +1492,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private async chatLedgers(): Promise<ChatLedgers> {
     const marks = this.chatForgottenBefore();
     const vendorOf = vendorOfPreset(chatModelPresetsFrom(
-      vscode.workspace.getConfiguration('coai').get('chatModelPresets'),
+      userLayer(vscode.workspace.getConfiguration('coai'))('chatModelPresets'),
     ));
 
     return {

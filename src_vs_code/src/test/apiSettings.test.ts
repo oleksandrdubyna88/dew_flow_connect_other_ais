@@ -15,7 +15,8 @@ import { parseProviders } from '../providers';
 import { QWEN_ANSWER, XAI_ANSWER } from './apiReportFixtures';
 import { serverSettingsJson } from '../serverSettingsFile';
 import { DEFAULTS } from '../settingsShape';
-import { DEFAULT_VENDORS, Vendor, vendorsEnv, vendorsFrom } from '../vendors';
+import { DEFAULT_VENDORS, Vendor, vendorsFrom } from '../vendors';
+import { vendorsEnv } from '../vendorsWire';
 
 /**
  * Per-model settings on an `api` row (story S3.8 of `todo/PLAN_feature_review.md`, the extension half):

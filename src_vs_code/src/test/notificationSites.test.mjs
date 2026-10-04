@@ -227,7 +227,10 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // press did nothing or less than asked (`security-lane-command` — a pair that moved, a prompt that was not added, a file
 // that could not be deleted) and ask before they delete or drop anything (`security-lane-confirm` — Restore default over
 // a file holding text, Remove custom prompt). Two places: one refusal, one confirmation.
-const PLACES_THIS_SPEAKS = 146;
+// 146 → 147 on 2026-10-04, PLAN_one_model_catalog.md E1.1: a model-bearing setting a workspace or folder tried to
+// set is no longer applied, and `model-setting-from-workspace` says so once per window, offering to copy it to the
+// person's own settings — so a team setup in `.vscode/settings.json` is not lost without a word. One refusal.
+const PLACES_THIS_SPEAKS = 147;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

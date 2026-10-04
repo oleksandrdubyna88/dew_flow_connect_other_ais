@@ -72,7 +72,7 @@ import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
 import { RoleDeletions, STOOD_DOWN } from './roleDeletion';
 import { forgetTheDeletions, roleDeletions } from './roleDeletionsHost';
 import { ConfigReader, settingsFrom } from './settingsShape';
-import { readerFor, storageReadsThisSide } from './sideConfig';
+import { noticeIgnoredWorkspaceModels, readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
 import { askPerson } from './personWait';
 
@@ -96,6 +96,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // this has run it answers the DEFAULT directory. A window that read the choice late would watch
   // the wrong directory for escalations and write a Team-server token where nothing reads it.
   storageReadsThisSide(context);
+  // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
+  // once per window, so a team setup in `.vscode/settings.json` is not lost without a word.
+  noticeIgnoredWorkspaceModels(context, vscode.workspace.getConfiguration('coai'));
   // FIRST, before anything is constructed and long before a command can be invoked: the side whose
   // settings the chat reads. Its reader falls back to the shared configuration while unbound, which
   // is the behaviour this branch exists to end — so the window in which that fallback could be

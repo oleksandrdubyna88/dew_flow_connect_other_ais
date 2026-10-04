@@ -3,7 +3,8 @@ import { test } from 'node:test';
 
 import { API_KEY_PRESETS, presetEndpoint, probeModels, vaultKeyItems, vaultKeyRow } from '../apiKeyVendors';
 import { parseProviderNotes } from '../providers';
-import { Vendor, vendorsEnv, vendorsFrom } from '../vendors';
+import { Vendor, vendorsFrom } from '../vendors';
+import { vendorsEnv } from '../vendorsWire';
 
 /**
  * S3.6 of PLAN_feature_review.md: the vault's keys are vendors in "Add a reviewer".

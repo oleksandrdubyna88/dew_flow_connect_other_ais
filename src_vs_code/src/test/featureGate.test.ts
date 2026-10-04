@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { FEATURE_SINCE, featureNote, featureOnServer, reviewsFeatures } from '../featureGate';
 import { serverSettingsJson } from '../serverSettingsFile';
 import { DEFAULTS, envBlock, settingMessageFrom, settingWrite } from '../settingsShape';
-import { DEFAULT_VENDORS, Vendor, vendorsEnv, vendorsFrom } from '../vendors';
+import { DEFAULT_VENDORS, Vendor, vendorsFrom } from '../vendors';
+import { vendorsEnv } from '../vendorsWire';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
 
 /**
