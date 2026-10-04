@@ -173,6 +173,28 @@ prompt with no text of its own, or any oversized text, refuses the run.
 - `securityLaneState.ts` holds the card model the tab is drawn from: `promptState`, `promptsInOrder`,
   `conditionsSummary`, `newPromptProblem`, and `securityCommandWrite` (the one mapping from a button to its write).
 
+**The Security lane tab** (Settings → Security lane, since 2026-10-04; `securityLaneView.ts`, `securityPromptCard.ts`,
+`securityLaneStyle.ts`, `securityLaneScript.ts`, `securityFlows.ts`, `securityCommands.ts`):
+- **Legend and cards.** The tag legend is a two-column list. Each prompt is a card: its name large, its state in words
+  and in colour — green `default`, purple `custom`, orange `edited` (text or conditions changed) — general first, then
+  the shipped presets, then the person's own. A card says when the server will not send its text, and names the file
+  to write in.
+- **Conditions** fold into a closed `<details>` with a one-line summary; inside, two columns ("Run when code matches",
+  "Prioritize source"). A missing-trigger warning stays outside the fold.
+- **Buttons.** + Add reviewer / prompt pair, Remove pair (by `[index, vendor, prompt]` identity), Restore default,
+  Remove custom prompt, Clear stored conditions, and + New custom prompt — also offered as the last option of each
+  pair's Prompt select. Caps show as text (`Pairs: N of 16`, `Prompts: N of 32 (13 shipped)`).
+- **Flows** (`securityFlows.ts`, every effect handed in and faked in `securityFlows.test.ts`; `securityCommands.ts` binds
+  them to VS Code): a question to the person is asked outside the provider's write queue, and the write
+  is queued and re-decided there. Restore asks whenever the file holds anything (an unusable override offers Restore
+  too), refuses over unsaved edits, re-checks both inside the queue, writes
+  the conditions first and then deletes the file; it is idempotent, so pressing again retries a failed delete. Remove
+  custom prompt leaves the file on disk. A new prompt is opened in the editor only once the re-read setting holds it,
+  and a pair that moved while the person typed is not re-pointed — the person is told. Every message goes through the
+  `notify()` funnel.
+- **Page-local state** (`setState`, as `selectSearch.ts` does): an opened fold stays open across the repaint a write
+  causes, and focus returns to the control just used, or to the button that replaces one that removed itself.
+
 At the operator's request, all thirteen prompts were shortened to approximately half their word
 count on 2026-10-01. The source/evidence and output sections remain, with the declared schema owning
 the exact required keys. Qwen did not pass the three-consecutive-answer quality preflight. Gemma

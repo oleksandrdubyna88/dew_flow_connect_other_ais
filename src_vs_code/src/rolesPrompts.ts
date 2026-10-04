@@ -57,9 +57,14 @@ export function promptFilesGlob(idPrefix: string): string {
  * came from somewhere it should not have, and quietly writing `....escaped.md` would hide that.</p>
  */
 export function promptFile(dataDir: string, promptId: string): string | undefined {
+  return promptFileIn(promptsDir(dataDir), promptId);
+}
+
+/** {@link promptFile} for a caller that already holds the prompts folder — the same rule, never a second copy of it. */
+export function promptFileIn(folder: string, promptId: string): string | undefined {
   if (!PROMPT_ID.test(promptId) || RESERVED_FILE_NAMES.has(promptId)) {
     return undefined;
   }
 
-  return `${promptsDir(dataDir)}/${promptId}.md`;
+  return `${folder}/${promptId}.md`;
 }

@@ -29,7 +29,7 @@ import { ROLE_TONE_CSS, roleTone } from './roleTone';
 import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
-import { securityLaneBody } from './securityLaneView';
+import { NEW_PROMPT_SENTINEL, securityLaneBody } from './securityLaneView';
 import type { SecurityTextState } from './securityPromptFiles';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { CONSULTANT_HEALTH_CSS, COPY_COMMANDS } from './consultantHealthView';
@@ -79,6 +79,7 @@ import { vaultKeyOf } from './vaultKey';
 import { reviewsDocuments, Vendor } from './vendors';
 import { qconsultBody } from './qconsultView';
 import { QCONSULT_COMMANDS, type RootPlaces } from './qconsultWrite';
+import { SECURITY_COMMANDS } from './securityLaneState';
 
 /**
  * The panel's HTML, as a pure function of what it shows.
@@ -166,6 +167,8 @@ export interface PanelState {
    * {@link qconsultPromptOverrides} (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2). Absent = not read yet.
    */
   readonly securityPromptText?: Readonly<Record<string, SecurityTextState>> | undefined;
+  /** The folder those files live in, so a card can name the file a person writes in. */
+  readonly securityPromptDir?: string | undefined;
   /** Where a disk root may not be on this machine — the data folder, the profile, the system folders (D14 c). */
   readonly qconsultPlaces?: RootPlaces | undefined;
   /** The questions the consultants are answering, and those finished a short while ago — Active questions' first stage. */
@@ -405,7 +408,7 @@ export const OPEN_BY_DEFAULT: readonly string[] = [];
  * search box's caret was forgotten here the same way a third time, and its page test went red with
  * "the caret is back in the box" before this prefix existed (research/PLAN_model_search_and_busy_marks.md).</p>
  */
-const FOCUS_ID = /^(search\|)?[A-Za-z0-9_.-]+\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*(\|[A-Za-z0-9_.-]+)?$/;
+const FOCUS_ID = /^(search\|)?[A-Za-z0-9_.-]+\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*\|[A-Za-z0-9_.-]*(\|[A-Za-z0-9_.:-]+)?$/;
 
 /**
  * {@link PanelState.focus} as a literal the page's own script can hold, or `null`.
@@ -460,7 +463,7 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // After the stuck consultant, because the two are the same idea for two moments: there an AI that is STUCK asks
   // one vendor, here an AI with a QUESTION asks every row before it asks you (todo/PLAN_question_consultant.md, S4).
   { id: 'questionconsultant', title: 'Question consultant', surface: 'settings', body: (state) => questionConsultantSection(state) },
-  { id: 'securityLane', title: 'Security lane', surface: 'settings', body: (state) => securityLaneBody(state.settings.securityLane, state.vendors, state.server.kind === 'absent' ? '' : state.server.version) },
+  { id: 'securityLane', title: 'Security lane', surface: 'settings', body: (state) => securityLaneBody(state.settings.securityLane, state.vendors, state.server.kind === 'absent' ? '' : state.server.version, { text: state.securityPromptText ?? {}, promptsDir: state.securityPromptDir ?? '' }) },
   { id: 'prompts', title: 'Prompts per round', surface: 'settings', body: (state) => promptsBody(state) },
   { id: 'gate', title: 'The gate', surface: 'settings', body: (state) => gateBody(state) },
   { id: 'limits', title: 'Limits', surface: 'settings', body: (state) => limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length) },
@@ -597,6 +600,13 @@ ${busyMarkScript(busy)}
   const real = new Map();
   const save = (el) => {
     const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
+    if (value === '${NEW_PROMPT_SENTINEL}') {
+      // Not a prompt — a request to make one (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 3). The select goes
+      // back to the prompt it showed, and the host is told which pair asked, by identity.
+      el.value = real.get(el) || '';
+      send({ type: 'command', command: 'newSecurityPrompt', id: el.dataset.seclaneRun }, el);
+      return;
+    }
     if (value === '__other__') {
       // Not a model — a request to type one; the input box comes from the provider side.
       el.value = real.get(el) || '';
@@ -712,7 +722,7 @@ ${busyMarkScript(busy)}
     }
   });
   window.addEventListener('pagehide', () => flush());
-${selectSearchScript(['', '__other__', CUSTOM_ENDPOINT])}
+${selectSearchScript(['', '__other__', CUSTOM_ENDPOINT, NEW_PROMPT_SENTINEL])}
 
   // A repaint that could not be withheld any longer lands under a focused control. The provider
   // names it, and the caret comes back to the end of what is in it — the end rather than where it
@@ -3261,7 +3271,6 @@ export const PANEL_COMMANDS = [
   'customConsultant',
   'editSecurityPrompt',
   // A hand-registered general's leftover conditions, cleared in one press (todo/PLAN_the_security_tab_reads_at_a_glance.md, D6).
-  'clearSecurityConditions',
   // The Consultant tab's health block (PLAN_the_consultant_works_on_every_vendor.md, epic 5): one real, paid check of a
   // caller kind's consultant, confirmed first; and agy's allow rule onto the clipboard. Both carry the CALLER KIND as id.
   'checkConsultant',
@@ -3316,6 +3325,7 @@ export const PANEL_COMMANDS = [
   // The Question consultant tab's buttons (todo/PLAN_question_consultant.md, S4), listed in `qconsultWrite.ts`
   // beside the decisions they reach and handled as one group by the provider.
   ...QCONSULT_COMMANDS,
+  ...SECURITY_COMMANDS,
 ] as const;
 
 export type PanelCommand = (typeof PANEL_COMMANDS)[number];

@@ -10481,3 +10481,26 @@ settled edit does not redraw, the role also stayed drawn in its old stage. The r
 `rolesPage.ts` now, run by `rolesFieldOf.test.ts`: `stage` is a pick (`PICKED_ROLE_FIELDS`), applied at once and
 redrawn. The same round's suite found an import cycle between the two page runners; `camel` moved to
 `test/datasetName.ts`.
+
+## The Security lane tab reads at a glance (2026-10-04)
+
+[PLAN_the_security_tab_reads_at_a_glance.md](../todo/PLAN_the_security_tab_reads_at_a_glance.md), epics 1–3. The
+tab's behaviour is documented in [module_security_lane.md](module_security_lane.md) ("The Security lane tab"); what
+belongs to the extension as a whole:
+
+- **Settings page hooks.** `SECURITY_LANE_CSS` is appended to `SETTINGS_CSS` and `securityLaneScript()` to
+  `settingsScript` (`settingsPage.ts`). `panelView.ts` gains only hooks: the section's registration passes
+  `securityPromptText`/`securityPromptDir`, `SECURITY_COMMANDS` is spread into `PANEL_COMMANDS`, a third select
+  sentinel (`__newSecurityPrompt__`) has its branch in `save()` and its place in `selectSearchScript`'s list, and
+  `FOCUS_ID`'s last group accepts `:` — a Security control's id carries colons, and a repaint held while typing in
+  one used to drop the caret.
+- **Host.** `panelProvider.ts` routes the six Security commands to `runSecurityCommand` (`securityFlows.ts`, bound to VS Code by `securityCommands.ts`) with
+  a host built from its own write queue, write path and stored setting; it reads the prompt files only while the
+  Settings page exists, through `SecurityPromptTextCache`, and watches `prompts/redteam-*.md` (`watchGlob`,
+  `fileWatch.ts`, extracted from the consultant health panel).
+- **Test harness.** `panelPageHarness.ts` now decodes the four entities `escapeHtml` writes in a `data-*` value, as a
+  DOM does — a JSON pair identity reached the script still escaped before — and knows `<details>` folds
+  (`page.folds`, `[data-seclane-open]`, `open`, `toggle`).
+- **Guards it met.** The notification funnel: the tab's buttons speak through `notify`/`notifyAndAsk`, and the
+  population constant rose 144 → 146 with its reason. Sonar's coverage exclusions gained `fileWatch.ts` and
+  `securityCommands.ts`, which import `vscode`.

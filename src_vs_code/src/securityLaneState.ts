@@ -40,7 +40,16 @@ const labels = (ids: readonly string[]): string => ids.map(labelOf).join(' · ')
 /** The one line a collapsed conditions block shows, so collapsed never means hidden (the plan's D8). */
 export function conditionsSummary(prompt: SecurityPrompt): string {
   if (securityAlways(prompt.id)) return 'Runs on every code change';
-  return `Runs on: ${triggerText(prompt.triggers)}; focus: ${labels(prompt.focus) || 'none'}`;
+  return `${runsOn(prompt)}; focus: ${labels(prompt.focus) || 'none'}`;
+}
+/**
+ * With no condition a SHIPPED preset never runs, while a person's own prompt runs on every change — the server's
+ * `SecuritySignals.Triggered` rule. Saying "nothing" for both told a person their own prompt would never run.
+ */
+function runsOn(prompt: SecurityPrompt): string {
+  return prompt.triggers.length === 0 && seedOf(prompt.id) === undefined
+    ? 'Runs on every change: a custom prompt with no condition always runs'
+    : `Runs on: ${triggerText(prompt.triggers)}`;
 }
 function triggerText(triggers: readonly string[]): string {
   if (TRIGGERS.every(t => triggers.includes(t))) return `any security signal (${TRIGGERS.length})`;
@@ -84,9 +93,12 @@ export function securityCommandWrite(lane: SecurityLane, command: string, id: st
  * no-op write as done — a restore on a custom card would go on to delete the person's own text (own review, epic 2).
  */
 function promptCommand(key: string, id: string | undefined, applies: (id: string) => boolean): CommandWrite {
-  if (id === undefined || !securityPromptId(id)) return { refusal: 'no prompt was named' };
+  // Any id the lane holds may be named — one a hand-edited setting stored outside the slug grammar is still removable —
+  // except one with a colon, which the field grammar `prompt:<id>:<key>` cannot carry.
+  if (!nameable(id)) return { refusal: 'no prompt was named; edit coai.securityLane in your settings JSON' };
   return applies(id) ? { field: `prompt:${id}:${key}`, value: true } : { refusal: `${id} has nothing to ${key}` };
 }
+const nameable = (id: string | undefined): id is string => id !== undefined && id !== '' && !id.includes(':');
 const shipped = (id: string): boolean => seedOf(id) !== undefined;
 const ownPrompt = (lane: SecurityLane, id: string): boolean => !shipped(id) && lane.prompts.some(p => p.id === id);
 
@@ -113,3 +125,50 @@ function parsedJson(text: string | undefined): unknown {
 /** Vendors compare without case, as the server and `uniqueRuns` compare them; prompt ids are exact. */
 const holds = (run: SecurityRun | undefined, vendor: string, prompt: string): boolean =>
   run !== undefined && run.vendor.toLowerCase() === vendor.toLowerCase() && run.prompt === prompt;
+
+/**
+ * The Security lane tab's buttons, spread into `PANEL_COMMANDS` as `QCONSULT_COMMANDS` is — whose switch is checked for
+ * exhaustiveness, so a button with no host case fails the build. Each one's write goes through
+ * {@link securityCommandWrite}; `newSecurityPrompt` asks the person for a name first.
+ */
+export const SECURITY_COMMANDS = [
+  'addSecurityRun', 'removeSecurityRun', 'newSecurityPrompt', 'restoreSecurityPrompt', 'removeSecurityPrompt',
+  'clearSecurityConditions',
+] as const;
+
+/**
+ * After "+ New custom prompt…" was picked on a pair's Prompt select, the write that points THAT pair at the new prompt —
+ * or a refusal when the pair moved while the person typed the name, which the host says in so many words
+ * ("Prompt created; the pair changed while you typed — pair it from its card", the E3 plan round).
+ */
+export function repointWrite(lane: SecurityLane, identity: string | undefined, prompt: string): CommandWrite {
+  const parsed = runIdentity(identity);
+  if (parsed === undefined) return { refusal: 'no pair asked for it' };
+  const [index, vendor, was] = parsed;
+  return holds(lane.runs[index], vendor, was) ? { field: `run:${index}:prompt`, value: prompt } : { refusal: 'the pair changed while you typed' };
+}
+
+/** What Restore default does for one prompt: ask first, refuse, write the conditions back, delete the override file. */
+export interface RestoreSteps {
+  readonly refusal: string;
+  readonly confirm: boolean;
+  readonly writeConditions: boolean;
+  readonly deleteFile: boolean;
+}
+
+/**
+ * Restore default, made idempotent so a second press is exactly the retry of a first that half failed (the E3 plan
+ * round): the conditions are written only when they differ, the file deleted only when there is one. It asks first
+ * whenever the file holds ANY content — an oversized or unreadable file is still the person's text — and refuses while
+ * the file is open with unsaved changes, because saving that buffer would bring the file straight back.
+ */
+export function restoreSteps(text: SecurityTextState, conditionsChanged: boolean, unsavedInEditor: boolean): RestoreSteps {
+  if (unsavedInEditor) return UNSAVED;
+  return { refusal: '', confirm: HOLDS_CONTENT.has(text), writeConditions: conditionsChanged, deleteFile: text !== 'none' };
+}
+const UNSAVED: RestoreSteps = {
+  refusal: 'the prompt file is open with unsaved changes; save or close it first', confirm: false, writeConditions: false, deleteFile: false,
+};
+const HOLDS_CONTENT: ReadonlySet<SecurityTextState> = new Set(['written', 'placeholder', 'oversized', 'unreadable']);
+/** Whether an override file holds anything — text the person may want back, usable by the server or not. */
+export const holdsContent = (text: SecurityTextState): boolean => HOLDS_CONTENT.has(text);

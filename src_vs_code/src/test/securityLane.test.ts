@@ -274,7 +274,7 @@ test('general\'s card draws no condition boxes and no missing-trigger warning, a
   assert.ok(page.controls.some(c => c.dataset['securityField'] === 'trigger:redteam-sql:sql'), 'a conditional preset lost its boxes too');
   // Scoped to general's own card, so a sentence elsewhere on the pane cannot satisfy it.
   const pane = lanePane(page);
-  const start = pane.indexOf('<legend>redteam-general</legend>');
+  const start = pane.indexOf('<span class="seclane-name">redteam-general</span>');
   assert.ok(start >= 0, 'general has no card');
   const card = pane.slice(start, pane.indexOf('</fieldset>', start));
   assert.doesNotMatch(card, /has no triggers/);
@@ -285,7 +285,7 @@ test('general\'s card draws no condition boxes and no missing-trigger warning, a
 /** General's own card, as the Security lane tab drew it. */
 function generalCard(page: Page): string {
   const pane = lanePane(page);
-  const start = pane.indexOf('<legend>redteam-general</legend>');
+  const start = pane.indexOf('<span class="seclane-name">redteam-general</span>');
   assert.ok(start >= 0, 'general has no card');
   return pane.slice(start, pane.indexOf('</fieldset>', start));
 }

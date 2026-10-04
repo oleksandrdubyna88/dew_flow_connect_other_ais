@@ -223,7 +223,11 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 143 → 144 on 2026-10-03, the whole-branch review of that plan (P): a landed Check is announced through the funnel
 // (`consultant-check-landed`, subject the caller kind) — the page's check lines are rebuilt with every repaint and so
 // can never be a live region a screen reader hears. One place, because it is one outcome.
-const PLACES_THIS_SPEAKS = 144;
+// 144 → 146 on 2026-10-04, PLAN_the_security_tab_reads_at_a_glance epic 3: the Security lane tab's buttons say why a
+// press did nothing or less than asked (`security-lane-command` — a pair that moved, a prompt that was not added, a file
+// that could not be deleted) and ask before they delete or drop anything (`security-lane-confirm` — Restore default over
+// a file holding text, Remove custom prompt). Two places: one refusal, one confirmation.
+const PLACES_THIS_SPEAKS = 146;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this
