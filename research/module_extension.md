@@ -9477,7 +9477,9 @@ decision is a unit test and only VS Code is left untested:
   copied). `exportedSettings(declared, baseValueOf)` keeps a setting whose BASE value
   (`config.inspect(key).globalValue`) differs from its default as canonical JSON (keys sorted by UTF-16
   code unit through `codeUnitOrder.ts`'s `byCodeUnit` — the one order `vendorPalette` also uses for colour
-  picks — so a reordered object is still the default; never by `byName`/`localeCompare`, which reads
+  picks, the chat heartbeat for the ids it announces, and `signatureOf` for the escalation, consultation and
+  question watchers' change signatures (2026-10-04: a collation tie made an unchanged snapshot read as a
+  change) — so a reordered object is still the default; never by `byName`/`localeCompare`, which reads
   the machine's locale and calls `é` and `e`+combining accent equal, leaving them in insertion order;
   fixed 2026-10-04 after the qwen code round found it), drops the `NEVER_TRANSFERRED` keys (`credsKey`,
   `dataDirectory`, `dataSide`, `alsoWatchDataDirectories`, `perSideSettings` — each with the reason an

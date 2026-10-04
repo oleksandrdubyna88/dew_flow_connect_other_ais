@@ -1,0 +1,89 @@
+import assert from 'node:assert/strict';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { test } from 'node:test';
+import { signatureOf } from '../codeUnitOrder';
+import { type QuestionConsult, parseQuestionConsult, questionsSignature } from '../questionConsults';
+
+/**
+ * A directory watcher repaints only when what a person can see changed, and it decides that by comparing a
+ * signature of the snapshot with the previous one. The files arrive in whatever order the directory lists them,
+ * so a signature must be the same for the same records in any order — including two whose ids collate as one
+ * (`é` as one code point and `e` + a combining accent), which a `localeCompare` sort left in arrival order.
+ */
+
+const composed = 'café';
+const decomposed = 'café';
+
+/** A record as the watcher reads it — through the real parser, so the fixture is one the code accepts. */
+function record(id: string): QuestionConsult {
+  const parsed = parseQuestionConsult(JSON.stringify({ id, status: 'consulting', rows: [] }));
+  assert.ok(parsed !== undefined, `the parser refused the fixture '${id}'`);
+
+  return parsed;
+}
+
+test('the question signature is the same whatever order the records arrive in, even when two ids collate as one', () => {
+  assert.notEqual(composed, decomposed, 'the fixture lost its point: the two ids are one string');
+
+  assert.equal(
+    questionsSignature([record(decomposed), record(composed)]),
+    questionsSignature([record(composed), record(decomposed)]),
+    'one snapshot gave two signatures, so an unchanged directory repaints',
+  );
+});
+
+test('a set’s signature is its parts in code-unit order, whatever order they arrive in', () => {
+  assert.equal(signatureOf([decomposed, composed], '|'), signatureOf([composed, decomposed], '|'));
+  assert.equal(signatureOf(['b', 'a', 'B'], '|'), 'B|a|b', 'code units put every capital before every lower case');
+});
+
+// ---------------------------------------------------------------------------------------------
+// The escalation and consultation watchers import `vscode`, so their shapes can only be read.
+// ---------------------------------------------------------------------------------------------
+
+/** Every `signature:` of a directory shape in the shipped sources, with the file it is in. */
+function signatureLines(): readonly string[] {
+  const src = path.join(__dirname, '..', '..', 'src');
+
+  return fs.readdirSync(src)
+    .filter((one) => one.endsWith('.ts'))
+    .flatMap((one) => fs.readFileSync(path.join(src, one), 'utf8').split('\n')
+      .filter((line) => /^\s*signature: \(/.test(line))
+      .map((line) => `${one}: ${line.trim()}`));
+}
+
+test('every directory shape builds its signature through signatureOf, never a sort of its own', () => {
+  const own = signatureLines().filter((line) => !line.includes('signatureOf('));
+
+  assert.deepEqual(own, [], 'a signature sorts by itself, where a collation can tie two different parts');
+});
+
+/** The four places whose text is compared with its own previous value — none may collate. */
+const COMPARED_WITH_ITSELF = ['chatStoreHeartbeat.ts', 'consultationWatcher.ts', 'escalationWatcher.ts', 'questionConsults.ts'];
+
+/** Every `.localeCompare(` CALL in a shipped source — the defect's own shape; a comment naming it has no parenthesis. */
+function collatingCalls(file: string): readonly string[] {
+  const text = fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
+
+  return text.split(/\r?\n/).filter((line) => line.includes('.localeCompare('));
+}
+
+test('nothing whose text is compared with its own previous value sorts by collation', () => {
+  const found = COMPARED_WITH_ITSELF.flatMap((file) => collatingCalls(file).map((line) => `${file}: ${line.trim()}`));
+
+  assert.deepEqual(found, [], 'a change-detection text is ordered by localeCompare, which ties two different parts');
+});
+
+test('the collation scan still finds a call where collation is right', () => {
+  // A scan that matches nothing passes forever; the notifications page's source list is a display order, sorted for a person.
+  assert.ok(collatingCalls('notificationsPage.ts').length > 0, 'the scan no longer matches a .localeCompare( call it should see');
+});
+
+test('the signature scan still finds the watchers it guards', () => {
+  // A scan that matches nothing passes forever; the escalation and consultation shapes are the known instances.
+  const found = signatureLines().map((line) => line.slice(0, line.indexOf(':')));
+
+  assert.ok(found.includes('escalationWatcher.ts'), `the scan found no escalation signature: ${found.join(', ')}`);
+  assert.ok(found.includes('consultationWatcher.ts'), `the scan found no consultation signature: ${found.join(', ')}`);
+});

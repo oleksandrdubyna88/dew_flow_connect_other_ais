@@ -20,3 +20,14 @@ export function byCodeUnit(left: string, right: string): number {
 
   return left < right ? -1 : 1;
 }
+
+/**
+ * A set's text: its parts in {@link byCodeUnit} order, joined — the same whatever order they arrived in.
+ *
+ * <p>What a directory watcher compares with its previous snapshot to decide whether anything a person can see
+ * changed. The files come in the order the directory lists them, so the text must not depend on it — and a
+ * `localeCompare` sort did, for two parts that collate as one: one unchanged snapshot, two signatures, a repaint.</p>
+ */
+export function signatureOf(parts: readonly string[], separator: string): string {
+  return [...parts].sort(byCodeUnit).join(separator);
+}
