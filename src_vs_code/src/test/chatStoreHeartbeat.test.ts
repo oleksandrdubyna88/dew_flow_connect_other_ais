@@ -98,8 +98,8 @@ test('a pulse writes when the set of open conversations changed, and writes noth
 test('the same set held in another order writes nothing, even when two ids collate as one', async () => {
   // `é` as one code point and `e` + a combining accent are DIFFERENT ids that `localeCompare` calls equal, so a
   // collating sort kept them in arrival order and one set announced as two lists.
-  const composed = 'café';
-  const decomposed = 'café';
+  const composed = 'caf\u00e9';
+  const decomposed = 'cafe\u0301';
   assert.notEqual(composed, decomposed, 'the fixture lost its point: the two ids are one string');
   const dir = home();
   try {

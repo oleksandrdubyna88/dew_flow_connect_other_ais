@@ -1,9 +1,8 @@
 import assert from 'node:assert/strict';
-import * as fs from 'node:fs';
-import * as path from 'node:path';
 import { test } from 'node:test';
 import { sortedJoin } from '../codeUnitOrder';
 import { type QuestionConsult, parseQuestionConsult, questionsSignature } from '../questionConsults';
+import { sourceFiles, sourceOf } from './sourceReading';
 
 /**
  * A directory watcher repaints only when what a person can see changed, and it decides that by comparing a
@@ -12,8 +11,8 @@ import { type QuestionConsult, parseQuestionConsult, questionsSignature } from '
  * (`é` as one code point and `e` + a combining accent), which a `localeCompare` sort left in arrival order.
  */
 
-const composed = 'café';
-const decomposed = 'café';
+const composed = 'caf\u00e9';
+const decomposed = 'cafe\u0301';
 
 /** A record as the watcher reads it — through the real parser, so the fixture is one the code accepts. */
 function record(id: string): QuestionConsult {
@@ -48,14 +47,12 @@ test('a set’s signature is its parts in code-unit order, whatever order they a
  * not one; the interface's own `readonly signature:` is a type, not a value, and is skipped.
  */
 function signatureLines(): readonly string[] {
-  const src = path.join(__dirname, '..', '..', 'src');
-
-  return fs.readdirSync(src)
-    .filter((one) => one.endsWith('.ts'))
-    .map((one) => ({ one, text: fs.readFileSync(path.join(src, one), 'utf8') }))
+  return sourceFiles()
+    .map((one) => ({ one, text: sourceOf(one) }))
     .filter(({ text }) => text.includes('JsonDirectoryShape<'))
     .flatMap(({ one, text }) => text.split(/\r?\n/)
-      .filter((line) => /^\s*signature:\s*\S/.test(line))
+      // A property (`signature: …`) or a method (`signature(items) {`) — both are a value; `readonly signature:` is the type.
+      .filter((line) => /^\s*signature\s*(:\s*\S|\()/.test(line))
       .map((line) => `${one}: ${line.trim()}`));
 }
 
@@ -75,9 +72,7 @@ const COMPARED_WITH_ITSELF = ['chatStoreHeartbeat.ts', 'consultationWatcher.ts',
 
 /** Every `.localeCompare(` CALL in a shipped source — the defect's own shape; a comment naming it has no parenthesis. */
 function collatingCalls(file: string): readonly string[] {
-  const text = fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
-
-  return text.split(/\r?\n/).filter((line) => line.includes('.localeCompare('));
+  return sourceOf(file).split(/\r?\n/).filter((line) => line.includes('.localeCompare('));
 }
 
 test('nothing whose text is compared with its own previous value sorts by collation', () => {
