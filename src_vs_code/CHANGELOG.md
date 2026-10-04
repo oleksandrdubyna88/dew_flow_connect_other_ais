@@ -1,5 +1,21 @@
 # Changelog
 
+## Server 0.43.0 — 2026-10-04
+
+**`redteam-general` is a shipped security prompt that runs on every code change.** It used to be a custom prompt
+outside the twelve presets. It is now the first entry of the security catalogue and a kind of its own: it is only on or
+off.
+- Paired with a reviewer, it is due on every committed change that touches a code file.
+- A change of prose (`.md`, `.markdown`, `.rst`) or of withheld files only is now a plain skip. A hand-registered
+  general used to run on documentation-only changes too.
+- It has no conditions. Triggers stored on it from before are ignored, and the lane says so once.
+- A hand-registered general with no triggers keeps working as it did.
+
+**`coai-mcp --security-prompt-text --ids a,b`** prints how this server reads each security prompt override file:
+`none`, `blank`, `placeholder`, `oversized`, `unreadable` or `written`. It exists so that the extension's Security lane
+tab and the server can be checked to read the same file the same way. A request naming no prompt is refused with exit
+code 65.
+
 ## Extension 0.63.0 — 2026-10-04
 
 **Settings → Consultant says whether each consultant can run.** With Server 0.42.1 every row shows:
