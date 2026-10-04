@@ -1,4 +1,7 @@
 import { byCodeUnit } from './codeUnitOrder';
+import { asksAnEndpoint } from './endpointModels';
+import { vaultKeyOf } from './vaultKey';
+import { Vendor, vendorsFrom } from './vendors';
 import { promptFile } from './rolesPrompts';
 import { sectionsOf } from './settingRefused';
 
@@ -12,7 +15,16 @@ import { sectionsOf } from './settingRefused';
  */
 
 export const CONFIG_FORMAT = 'coai-config';
-export const CONFIG_VERSION = 1;
+/**
+ * 2 since the model catalog (PLAN_one_model_catalog.md E1.5): the models are rows of `vendors` and every other
+ * feature refers to one. A version 1 file — written before the catalog, holding definitions — still imports; the
+ * catalog migration then moves its definitions into rows, as it moves every other. An older build refuses a
+ * version 2 file by name rather than half-reading it.
+ */
+export const CONFIG_VERSION = 2;
+
+/** Every version this build reads. */
+const READABLE_VERSIONS: readonly number[] = [1, 2];
 
 /** Why a setting is never written to a config file, by key. The reason is what an import says. */
 export const NEVER_TRANSFERRED: Readonly<Record<string, string>> = {
@@ -21,6 +33,11 @@ export const NEVER_TRANSFERRED: Readonly<Record<string, string>> = {
   dataSide: 'which side of this machine this window is',
   alsoWatchDataDirectories: 'paths on this machine',
   perSideSettings: 'how this machine splits its settings between its sides',
+  // The catalog's one-time move (PLAN_one_model_catalog.md E1.3): this machine's own copy of its settings from
+  // before it, and whether it ran. Carried across, the copy would overwrite the importer's own backup, and a
+  // `restored` marker would stop a migration the importer never declined.
+  migratedFrom: 'this machine\'s own copy of its settings from before the model catalog',
+  catalogMigration: 'whether this machine\'s settings were moved into the model catalog',
 };
 
 /** The field inside a vendor or a consultant that is a path on this machine. */
@@ -188,8 +205,8 @@ function whatIsWrongWith(file: Record<string, unknown>): string {
   if (file['format'] !== CONFIG_FORMAT) {
     return 'This is not a ConnectOtherAIs config file.';
   }
-  if (file['version'] !== CONFIG_VERSION) {
-    return `This config file is version ${String(file['version'])}, and this build reads version ${CONFIG_VERSION}. `
+  if (!READABLE_VERSIONS.includes(file['version'] as number)) {
+    return `This config file is version ${String(file['version'])}, and this build reads versions ${READABLE_VERSIONS.join(' and ')}. `
       + 'Export it again from a build of the same version, or update this one.';
   }
 
@@ -362,4 +379,51 @@ export function importQuestion(
     + (replaced > 0 ? ` ${replaced} of the prompt texts replace text you already have.` : '')
     + (refused.length > 0 ? ` Not applied: ${refused}.` : '')
     + ' Settings the file does not name are left as they are; per-side overrides are not changed.';
+}
+
+// ---------------------------------------------------------------- the models an import replaces (E1.5)
+
+/**
+ * What an import does to the models, said before it does it: how many it replaces with how many, and every row of
+ * the file that reads an API key this machine's vault does not hold — a row that would fail its first round. `''`
+ * when the file does not name the models, because then it replaces none.
+ *
+ * @param vaultKeys the key names this machine's vault holds, as coai-mcp last reported them — `undefined` when no
+ *   one has asked yet, which is said rather than read as an empty vault
+ */
+export function modelsSentence(current: readonly Vendor[], file: unknown, vaultKeys: readonly string[] | undefined): string {
+  if (!Array.isArray(file)) {
+    return '';
+  }
+  const incoming = vendorsFrom(file);
+
+  return `It replaces your ${current.length} models with the file's ${incoming.length}.${keysSentence(incoming, vaultKeys)}`;
+}
+
+function keysSentence(rows: readonly Vendor[], vaultKeys: readonly string[] | undefined): string {
+  const reading = rows.filter((row) => asksAnEndpoint(row.runtime, row.baseUrl));
+  const missing = vaultKeys === undefined ? reading : reading.filter((row) => !vaultKeys.includes(vaultKeyOf(row)));
+  if (missing.length === 0) {
+    return '';
+  }
+  const named = missing.map((row) => `${row.id} (key ${vaultKeyOf(row)})`).join(', ');
+
+  return vaultKeys === undefined
+    ? ` Which keys this machine's vault holds is not known until the ConnectOtherAIs panel has asked the server; these read one: ${named}.`
+    : ` These read a key this machine's vault does not hold, and fail until it is added: ${named}.`;
+}
+
+/** Where the setup is saved before an import replaces the models, by its moment — UTC, so it sorts as it happened. */
+export function backupFileName(now: Date): string {
+  return `before-import-${now.toISOString().replace(/\.\d{3}Z$/u, 'Z').replaceAll(':', '-')}.json`;
+}
+
+/** How many of those files are kept: the newest ten. The rest are what {@link staleBackups} names for removal. */
+const BACKUPS_KEPT = 10;
+
+/** The backup files past the newest ten, oldest first — never a file this build did not name. */
+export function staleBackups(names: readonly string[]): readonly string[] {
+  const ours = names.filter((name) => /^before-import-[0-9T-]+Z\.json$/u.test(name)).sort(byCodeUnit);
+
+  return ours.slice(0, Math.max(0, ours.length - BACKUPS_KEPT));
 }
