@@ -60,7 +60,8 @@ import { asText } from './asText';
 import { writeFileAtomically } from './atomicFile';
 import { notify, notifyAndAsk, notifyResolved, notifyThen } from './notify';
 import { DbLog } from './roundsDb';
-import { readLog, serverRunAt } from './roundsDbRead';
+import { readLog, serverRun, serverRunAt } from './roundsDbRead';
+import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -316,10 +317,12 @@ export function activate(context: vscode.ExtensionContext): void {
   // Every consultant and question-consultant model DEFINITION moves into the catalog once, per settings layer
   // (PLAN_one_model_catalog.md E1.3). The env block it leads to is the one written above, byte for byte, so the
   // mirror after it is a no-op unless something was left; the panel is redrawn so a section reads the new rows.
+  // The Bugz model moves into the catalog only for a binary that ranks by the row's runtime (E2.1).
+  const features = new FeaturesCache();
   void startCatalogMigration(context, () => {
     mirrorSettings(settingsSync);
     void panel.render();
-  });
+  }, async () => hasFeature(await features.of(serverPath(context.globalStorageUri)?.fsPath, serverRun), FEATURES.bugzRuntime));
   // Old Bugz keys waiting to be adopted or discarded: offered once per window, never filed by guessing.
   void offerOldBugzKeys(context.secrets, () => bugzServerThisSide(context)).catch((error: unknown) => {
     console.error('ConnectOtherAIs: the old Bugz keys could not be read', error);

@@ -357,8 +357,11 @@ override the stories above where they differ:
   today `bugzRuntime`. The extension reads it once per binary file (`binaryFeatures.ts`; 64, a failure or a bad answer
   is no features) and seam leg 11 fails when the extension knows a capability the build does not list.
 - **Bugz by runtime, end to end**: the picker offers every `local`-runtime instance when the binary ranks by runtime,
-  and `--collect-bugs` gets `--runtime` only then (`bugzView.collectArgs`). The Bugz MIGRATION (`bugz-<rowId>`) is
-  still to come — it is safe only now that both halves match the runtime.
+  and `--collect-bugs` gets `--runtime` only then (`bugzView.collectArgs`).
+- **The Bugz migration** (the E1.3 carry): `migrateLayer(layer, { bugzByRuntime })` moves a Bugz model that differs
+  from its row's into `bugz-<rowId>` — only for a binary that ranks by runtime. Deviation: Bugz's own row is rewritten
+  IN PLACE on a later pick and a pick through it moves nothing (the picker writes on every pick; the plain rule left an
+  orphan per pick). The backup gains `bugzModel` only when it is moved, added to an epic-1 backup, never overwriting.
 - Still open in E2.2: system prompt, timeout and effort per row in every runner (`systemPrompt`, `timeoutMinutes`,
   `cliEffort` join the list as each lands).
 
@@ -461,6 +464,7 @@ Disjoint from the rest of `todo/`. Each plan in the table gets the same row, poi
 | T4 | The mockup's own files are over 800 lines | The mockup is deleted in E5; product modules are born under the limit |
 | T5 | `coai.migratedFrom` and the restore command dropped | One release after E5 |
 | T6 | The extension's `vendorsFrom` turns a runtime it does not know into `codex` — an older panel reading a newer one's rows, and re-saving them so | coai-mcp refuses it by name since E2.1; the extension should keep the row and show it unrunnable, which widens the `Runtime` type |
+| T7 | `COAI_BUGZ_MODEL` is written into the env block and read by nothing in coai-mcp (the collector takes `--model`) | Remove it, or give it a reader, when the Bugz picker moves to the catalog (E5.1) |
 
 ## Definition of Done
 

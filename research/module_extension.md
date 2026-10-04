@@ -10740,3 +10740,20 @@ sequenceDiagram
   F-->>P: features + why
   P->>M: --collect-bugs --model local-2/qwen [--runtime local only when listed]
 ```
+
+## The Bugz model moves into the catalog (2026-10-04, PLAN_one_model_catalog.md E2.1)
+
+- `catalogMigration.migrateLayer(layer, { bugzByRuntime })`: a `bugzModel` of `<row>/<model>` whose model is not
+  the row's own becomes row `bugz-<row>` — the row's launch with the Bugz model, reviewing nothing, `uses: [bugz]` —
+  and the setting names it. Only for a binary that ranks by runtime (`--features` lists `bugzRuntime`; asked per run
+  by `catalogMigrationHost`, since the binary can be updated while a window is open): an older one would refuse
+  `bugz-local`. `bugzModel` is a migration trigger.
+- **Bugz's own row.** The picker writes the setting on every pick, so a row that exists for Bugz alone is rewritten
+  IN PLACE by a later move (never a `bugz-local-2` beside an orphan), and a pick through it moves nothing (never a
+  `bugz-bugz-local`). Shown red on both before the rule.
+- **The backup.** A first backup holds `vendors`, `consultants`, `qconsultRows` — and `bugzModel` only when that run
+  moves it, so a restore never removes a Bugz model the migration never touched. A layer epic 1 already migrated has
+  `bugzModel` ADDED to its backup (its value before the move) ahead of the rewrite; what was saved is never
+  overwritten. Restore order: references first (`consultants`, `qconsultRows`, `bugzModel`), rows last.
+- A Bugz-only row never crosses in `COAI_VENDORS` (`rowsOnTheWire`). `COAI_BUGZ_MODEL` names the new row — and no
+  code in coai-mcp reads that variable today (the collector takes `--model`), which is recorded as tail T7.
