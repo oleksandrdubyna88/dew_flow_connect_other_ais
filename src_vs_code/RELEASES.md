@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.64.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.63.0...extension-v0.64.0) (2026-10-04)
+
+
+### Features
+
+* **extension:** the Security lane tab reads at a glance ([f8e9bfc](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/f8e9bfc914a68c1b17151824e8a0a142dfc0ed79))
+* **security:** redteam-general is a shipped "always" prompt, first in the catalogue ([15bf55a](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/15bf55afa87c8e5686f1c6272da24a91f05207f3))
+* **security:** the card model, the prompt files and a lane that stores only what changed ([4fa0cb0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/4fa0cb0391797541aaa85ce2ded77ae834075b67))
+
+
+### Bug Fixes
+
+* **extension:** the placeholder check states the first marker without an index ([663da48](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/663da48b486a7bb095f5d3591f8e3ca4643a08f8))
+* **security:** the prompt-text reading and its seam, as the PR review asked ([3bf52c2](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/3bf52c26bb5038bb8af6cc1f074f3782321fb714))
+
 ## [0.63.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/extension-v0.62.1...extension-v0.63.0) (2026-10-04)
 
 
