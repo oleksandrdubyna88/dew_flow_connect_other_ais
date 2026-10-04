@@ -51,6 +51,17 @@ export function reviewsAnything(row: Vendor): boolean {
 }
 
 /**
+ * Whether the OLD Settings page lists a row among its reviewers. A row that reviews nothing and exists for its
+ * `uses` alone came from the catalog — a migrated consultant, say — and the old page has no place for it: shown
+ * as a reviewer with every box unticked, it would be a change the person can see in an epic that promises none,
+ * and removing it as clutter would take their consultant with it (plan-round finding 7). Display only: every
+ * write still reads, and keeps, every row.
+ */
+export function shownOnTheOldPage(row: Vendor): boolean {
+  return reviewsAnything(row) || row.uses === undefined;
+}
+
+/**
  * The rows `COAI_VENDORS` carries: every row, except one that reviews no stage and exists only for features
  * that reach coai-mcp RESOLVED — a consultant or question row's definition, the chat, Bugz. coai-mcp 0.43.0
  * knows nothing of `uses`, so such a row on the wire is a provider in no round, and the env block of a

@@ -10615,3 +10615,23 @@ sequenceDiagram
   H->>A: after: mirror the server settings file, redraw the panel
   Note over M: env block before == env block after (consultant + question resolution, rowsOnTheWire)
 ```
+
+**E1.4 — the old Settings page writes through the catalog.**
+
+- `catalogEdit.foldedWrite` sits in `PanelProvider.save`, the old page's one save funnel (the consultant section,
+  its custom endpoint, and every Question consultant write and button reach it). For `consultants` and
+  `qconsultRows` it folds the change into the catalog before the write: an entry that referred to a catalog row only
+  it uses (reviews nothing, one `uses`, one reference across consultants, question rows and Security lane runs) has
+  that row rewritten in place and stays a reference — a model edit or a new vendor pick never forks a row; a question
+  row written back resolved but unchanged becomes the reference again; a reference the edit removes takes its row
+  with it. A shared row is never rewritten: the edit stays a definition and the migration gives it its own row. The
+  rows are saved FIRST, so a refusal between the two writes leaves a row nobody refers to yet.
+- `catalogRules.shownOnTheOldPage`: the panel's render state lists a row only when it reviews a stage or has no
+  `uses` — a migrated consultant is no reviewer on the old page, and "the last reviewer stays" counts the same way.
+  Display only; every write reads the rows afresh.
+- The three reviewer-list writes that went around the side overlay (add a reviewer, remove a reviewer, remove a
+  Team server's rows) go through `save`, so a side that keeps its own settings gets them and a refusal is said.
+- `scripts/seam-catalog.mjs`, the seam's tenth leg: a multi-instance catalog (two `claude` rows, a consultant and a
+  question-consultant definition, effort and a system prompt on a CLI row) is migrated by the extension's own code;
+  the settings file the extension writes is byte-identical before and after, and the real coai-mcp binary lists the
+  same reviewers (`claude, claude-2, codex`) with no catalog-only row among them.

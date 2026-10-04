@@ -73,6 +73,7 @@ const { answerOf, sessionsFor } = await import('./seam-session.mjs');
 const { securitySeam } = await import('./seam-security.mjs');
 // The security prompt text leg: the tab's reading of real prompt files against the server's (epic 2).
 const { securityTextSeam } = await import('./seam-security-text.mjs');
+const { catalogSeam } = await import('./seam-catalog.mjs');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -392,6 +393,11 @@ async function apiSettingsSeam() {
 
 await apiSettingsSeam();
 console.log('  ok  an api row\'s effort, thinking switch and review limit reach the server and come back as what it runs with');
+
+// The TENTH leg: the model catalog's migration (PLAN_one_model_catalog.md E1.4) — the settings file is the same,
+// byte for byte, before and after, and the binary lists the same reviewers from a multi-instance catalog.
+const catalog = await catalogSeam({ providersIn, fail });
+console.log(`  ok  a migrated catalog writes the same settings file, and the server's reviewers are still ${catalog.ids.join(', ')}`);
 
 // The EIGHTH leg: the security lane as the extension serializes it — a well-formed lane draws no
 // complaint, its unknown trigger is refused by name, and its malformed form is refused, not ignored.

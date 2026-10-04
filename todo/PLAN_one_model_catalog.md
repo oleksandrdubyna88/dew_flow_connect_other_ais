@@ -240,6 +240,12 @@ version gate in both directions.
    byte-identical to today's (the three-way `document` kept, pristine still writes nothing), measured on the fixture
    WITH overlapping consultant, question, chat and Bugz entries, not a reviewer-only one; the seam test compares
    0.43.0's `--providers` reviewer set before and after migration.
+   **As built (2026-10-04):** the old page keeps writing definitions (its pickers resolve the reference first), and
+   `catalogEdit.foldedWrite` in `PanelProvider.save` folds each write into the catalog before it lands — an entry
+   that referred to a row only it uses rewrites that row in place, so an edit never forks or orphans one; a shared
+   row is never rewritten. The old page hides a catalog-only row (`shownOnTheOldPage`), and its three reviewer-list
+   writes that went around the side overlay now go through `save`. The seam's tenth leg proves the byte-identical
+   settings file and the unchanged reviewer set against the real binary.
 5. **Export/import v2** (rows + references; `executablePath` stripped as today); a v1 file is migrated on import and
    REPLACES the current models only after a confirmation that names the row count and every row whose vault key this
    machine does not hold; the current models are backed up first and the restore command puts them back (finding 5).

@@ -77,6 +77,8 @@ import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
 import { readerFor, reportRefusal, saveSetting, userLayer } from './sideConfig';
+import { foldedWrite } from './catalogEdit';
+import { shownOnTheOldPage } from './catalogRules';
 import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
@@ -1129,7 +1131,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const sessions = await this.readSessions();
     const state = {
       settings,
-      vendors,
+      // Display only (PLAN_one_model_catalog.md E1.4): a row that exists for its catalog uses alone is not a
+      // reviewer on this page. Every write reads the rows afresh, so a hidden row is never dropped by one.
+      vendors: vendors.filter(shownOnTheOldPage),
       codexModels: this.codexModels,
       agyModels: this.agyModels,
       // Never awaited. The probe is four real requests to a real CLI; a render that waited for one
@@ -2123,8 +2127,15 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // second copy of "which layer does this belong in" is how the roles page came to write a per-side
     // setting globally. The REPORT stayed with the callers, because only a caller knows whether a
     // notification or a banner is the right surface — this panel has no banner, so it is the toast.
+    // A consultant or question row is folded through the catalog first (PLAN_one_model_catalog.md E1.4): an edit
+    // of an entry that refers to a catalog row rewrites that row, so the old page never forks or orphans one.
+    // The rows are saved FIRST, so a refusal between the two leaves a row nobody refers to yet.
+    const fold = foldedWrite(key, value, this.read(config));
     try {
-      await saveSetting(this.context, config, key, value);
+      if (fold.vendors !== undefined) {
+        await saveSetting(this.context, config, 'vendors', fold.vendors);
+      }
+      await saveSetting(this.context, config, key, fold.value);
 
       return true;
     } catch (error: unknown) {
@@ -3487,7 +3498,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     if (answer === both) {
       const ids = new Set(rows.map((r) => r.id));
       const kept = vendorsFrom(this.read(config)('vendors')).filter((v) => !ids.has(v.id));
-      await config.update('vendors', kept, vscode.ConfigurationTarget.Global);
+      await this.save(config, 'vendors', kept);
     }
 
     await this.render();
@@ -4021,7 +4032,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
 
-    await config.update('vendors', [...vendors, vendor], vscode.ConfigurationTarget.Global);
+    // Through the one save, so a side that keeps its own settings gets the row, and a refusal is said.
+    await this.save(config, 'vendors', [...vendors, vendor]);
   }
 
   /**
@@ -4032,7 +4044,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private async removeVendor(id: string): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
     const vendors = vendorsFrom(this.read(config)('vendors'));
-    if (vendors.length <= 1) {
+    // Counted as the page shows them: a catalog-only row is no reviewer, so it cannot keep the panel populated.
+    if (vendors.filter(shownOnTheOldPage).length <= 1) {
       void notify({
         as: 'warning',
         class: 'refusal',
@@ -4058,11 +4071,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
 
-    await config.update(
-      'vendors',
-      vendors.filter((v) => v.id !== id),
-      vscode.ConfigurationTarget.Global,
-    );
+    await this.save(config, 'vendors', vendors.filter((v) => v.id !== id));
   }
 
   /**
