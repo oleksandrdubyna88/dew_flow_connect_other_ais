@@ -249,6 +249,11 @@ version gate in both directions.
 5. **Export/import v2** (rows + references; `executablePath` stripped as today); a v1 file is migrated on import and
    REPLACES the current models only after a confirmation that names the row count and every row whose vault key this
    machine does not hold; the current models are backed up first and the restore command puts them back (finding 5).
+   **As built (2026-10-04):** the backup is an export of the current setup to `<dataDir>/config-backups/` (newest ten
+   kept), named in the confirmation and put back by *Import config* — the restore command keeps one meaning, "before
+   the catalog", rather than two. Vault key names come from the panel's last `--providers` answer and are said as
+   not known yet when nobody has asked. A v1 file's definitions are moved into rows by the migration that runs on
+   the configuration change the import makes.
 
 ### E2 — coai-mcp and the Team server honour the new fields (release mcp 0.44.0; Team server contract v2)
 1. **Probe and routing fixes**: the probe runs the runtime's CLI, not the row id (RED: `claude-2` with

@@ -700,7 +700,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
     vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
-    ...registerConfigTransfer(context),
+    ...registerConfigTransfer(context, () => panel.vaultKeyNames()),
     vscode.commands.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, watcher, panel)),
     vscode.commands.registerCommand('coai.answerQuestion', () => answerQuestion(watcher)),
     // The same action under a second id, so the title bar can show a green icon while a question

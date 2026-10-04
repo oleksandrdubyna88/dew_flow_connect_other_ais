@@ -2005,6 +2005,14 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * list from the rounds it happens to hold: two lists differing by a single name are two different
    * colour assignments for the same vendor. See `vendorColour.ts`.</p>
    */
+  /**
+   * The key names this side's vault holds, as coai-mcp last reported them — `undefined` until it has answered, which
+   * an import's confirmation says rather than reading as an empty vault (PLAN_one_model_catalog.md E1.5).
+   */
+  vaultKeyNames(): readonly string[] | undefined {
+    return this.providersCache.answered ? this.providersCache.notes.vaultKeys : undefined;
+  }
+
   vendorIds(): readonly string[] {
     return this.vendorsHere().map((v) => v.id);
   }

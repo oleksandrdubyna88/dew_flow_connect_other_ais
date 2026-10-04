@@ -10635,3 +10635,19 @@ sequenceDiagram
   question-consultant definition, effort and a system prompt on a CLI row) is migrated by the extension's own code;
   the settings file the extension writes is byte-identical before and after, and the real coai-mcp binary lists the
   same reviewers (`claude, claude-2, codex`) with no catalog-only row among them.
+
+**E1.5 — export/import format v2.**
+
+- `CONFIG_VERSION` is 2: a file this build writes carries the catalog's rows and references, because export writes
+  the base layer as it is. Versions 1 and 2 are read; a v1 file (definitions, from a build before the catalog)
+  imports, and the catalog migration then moves its definitions into rows like any other. An older build refuses a
+  v2 file by name. `migratedFrom` and `catalogMigration` are never transferred, either way — the copy would overwrite
+  the importer's own backup, and a `restored` marker would stop a migration the importer never declined.
+- An import that names `vendors`, `consultants` or `qconsultRows` replaces the models, so its confirmation adds
+  `modelsSentence`: "It replaces your N models with the file's M", and every file row that reads an API key
+  (`asksAnEndpoint`) whose key (`vaultKeyOf`) this side's vault does not hold — read from the panel's last
+  `--providers` answer (`PanelProvider.vaultKeyNames`), and said as "not known yet" when nobody has asked.
+- Before such an import is applied, the current setup is exported to `<dataDir>/config-backups/before-import-<UTC
+  moment>.json` (`backupFileName`), named in the confirmation; *Import config* with that file puts it back. The
+  newest ten are kept (`staleBackups`); a backup that cannot be written stops the import. `config-backups/` is in
+  `shared/data-inventory.json` and `DATA_TO_MOVE` (moves, clashes).

@@ -453,6 +453,9 @@ export const DATA_TO_MOVE: readonly string[] = [
   'prompts/', 'usage.jsonl',
   'documents/', 'escalations/', 'consultations/', 'question-consults/', 'cadence/', 'qphase/', 'callers/',
   'chat-conversations/', 'chat-usage.jsonl', 'chat-doors.jsonl', 'pictures/',
+  // The setup saved before each import that replaced the models (PLAN_one_model_catalog.md E1.5) — the only way
+  // back from such an import, so it travels with the rest.
+  'config-backups/',
   // The notifications ledgers — two files rather than one because their writers release on
   // different days, which is the reason this repository refused a shared file twice already.
   'notifications.jsonl', 'server-notices.jsonl', 'notifications-seen.jsonl',
