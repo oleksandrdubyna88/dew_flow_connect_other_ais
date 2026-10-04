@@ -7,6 +7,7 @@ import { storageChoiceFrom, useStorageSettings } from './dataDir';
 import { thisSide } from './installer';
 import { notify, notifyThen } from './notify';
 import { ignoredWorkspaceValues, IgnoredValue, userLayerReader } from './modelKeys';
+import { MIGRATION_TRIGGERS, scheduleCatalogMigration } from './catalogMigrationHost';
 import { Notice } from './notice';
 
 /**
@@ -45,6 +46,17 @@ export function readerFor(
  */
 export function userLayer(config: vscode.WorkspaceConfiguration): ConfigReader {
   return userLayerReader((section) => config.get(section), (section) => config.inspect(section));
+}
+
+/**
+ * An overlay write raises no configuration event, so a definition saved into this side's own settings is handed
+ * to the catalog migration here (PLAN_one_model_catalog.md E1.3); a user-layer write is heard by the activation's
+ * listener instead.
+ */
+function afterOverlayWrite(context: vscode.ExtensionContext, key: string): void {
+  if (MIGRATION_TRIGGERS.includes(key)) {
+    void scheduleCatalogMigration(context);
+  }
 }
 
 /**
@@ -142,6 +154,7 @@ export async function saveSetting(
   const perSide = config.get<boolean>('perSideSettings') === true && OVERLAID_SETTINGS.includes(key);
   if (perSide || ALWAYS_PER_SIDE.includes(key)) {
     await writeOverlay(context.globalState, thisSide(context.globalStorageUri), key, value);
+    afterOverlayWrite(context, key);
 
     return;
   }

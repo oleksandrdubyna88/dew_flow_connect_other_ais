@@ -228,6 +228,11 @@
         "category": "ConnectOtherAIs"
       },
       {
+        "command": "coai.restoreCatalogBackup",
+        "title": "Restore settings from before the catalog",
+        "category": "ConnectOtherAIs"
+      },
+      {
         "command": "coai.exportConfig",
         "title": "Export config",
         "category": "ConnectOtherAIs"
@@ -868,6 +873,15 @@
           "type": "object",
           "default": {},
           "markdownDescription": "Additional security reviewer/prompt pairs. Configure in ConnectOtherAIs Settings → Security lane. Prompt bodies live in the MCP data directory."
+        },
+        "coai.catalogMigration": {
+          "type": "string",
+          "enum": ["migrated", "restored"],
+          "markdownDescription": "Written by ConnectOtherAIs, not by hand. `migrated`: the consultant and question-consultant models in these settings were moved into the reviewer list (the model catalog). `restored`: they were put back with **ConnectOtherAIs: Restore settings from before the catalog**, and are not moved again by themselves."
+        },
+        "coai.migratedFrom": {
+          "type": "object",
+          "markdownDescription": "Written by ConnectOtherAIs, not by hand: `coai.vendors`, `coai.consultants` and `coai.qconsultRows` exactly as they were before their models were moved into the catalog. **ConnectOtherAIs: Restore settings from before the catalog** puts them back."
         },
         "coai.consultants": {
           "type": "object",

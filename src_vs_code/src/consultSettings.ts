@@ -351,16 +351,25 @@ export function resolveConsultant(choice: ConsultantChoice, vendors: readonly Ve
   return runtime === undefined ? unavailable(choice) : fromRuntime(choice, runtime);
 }
 
-/** Rule (a): the row's runtime, endpoint and CLI path; the row's model only where the entry names none. */
+/**
+ * Rule (a): the row's runtime, endpoint and CLI path; the row's model only where the entry names none. A
+ * CATALOG row (one listing the consultant use) also gives back the name its key is filed under, so a
+ * migrated definition resolves to exactly what it was (PLAN_one_model_catalog.md E1.3).
+ */
 function fromRow(choice: ConsultantChoice, row: Vendor): ResolvedConsultant {
   return {
     kind: 'definition',
-    vendor: choice.vendor,
+    vendor: vendorThrough(choice, row),
     runtime: row.runtime,
     model: choice.model.length > 0 ? choice.model : row.model,
     baseUrl: row.baseUrl,
     executablePath: row.executablePath,
   };
+}
+
+/** The entry's own name — or, through a catalog row, the name the row's key is filed under. */
+function vendorThrough(choice: ConsultantChoice, row: Vendor): string {
+  return row.uses?.includes('consultant') === true ? (row.vaultKeyName ?? choice.vendor) : choice.vendor;
 }
 
 /** Rule (b): the runtime the id names — under that runtime's own name — and nothing borrowed. */

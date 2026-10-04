@@ -73,6 +73,7 @@ import { RoleDeletions, STOOD_DOWN } from './roleDeletion';
 import { forgetTheDeletions, roleDeletions } from './roleDeletionsHost';
 import { ConfigReader, settingsFrom } from './settingsShape';
 import { noticeIgnoredWorkspaceModels, readerFor, storageReadsThisSide } from './sideConfig';
+import { MIGRATION_TRIGGERS, restoreFromBeforeTheCatalog, scheduleCatalogMigration, startCatalogMigration } from './catalogMigrationHost';
 import { vendorsFrom } from './vendors';
 import { askPerson } from './personWait';
 
@@ -312,6 +313,13 @@ export function activate(context: vscode.ExtensionContext): void {
     () => (vendor) => PRICE_BOOK.priceOf(vendor.model, vendor.baseUrl),
   );
   mirrorSettings(settingsSync);
+  // Every consultant and question-consultant model DEFINITION moves into the catalog once, per settings layer
+  // (PLAN_one_model_catalog.md E1.3). The env block it leads to is the one written above, byte for byte, so the
+  // mirror after it is a no-op unless something was left; the panel is redrawn so a section reads the new rows.
+  void startCatalogMigration(context, () => {
+    mirrorSettings(settingsSync);
+    void panel.render();
+  });
   // The lists are fetched here only when an api reviewer needs pricing — the one row whose cost the
   // SERVER works out — and the file is written again once they land. Nobody else pays for a download.
   if (readCoaiConfiguration(context).vendors.some((vendor) => vendor.enabled && vendor.runtime === 'api')) {
@@ -459,7 +467,12 @@ export function activate(context: vscode.ExtensionContext): void {
         mirrorSettings(settingsSync);
         void panel.render();
       }
+      // A definition written by hand, or by a page that still writes them, moves into the catalog too.
+      if (MIGRATION_TRIGGERS.some((key) => e.affectsConfiguration(`coai.${key}`))) {
+        void scheduleCatalogMigration(context);
+      }
     }),
+    vscode.commands.registerCommand('coai.restoreCatalogBackup', () => restoreFromBeforeTheCatalog(context)),
     watcher,
     consultations,
     questionConsults,

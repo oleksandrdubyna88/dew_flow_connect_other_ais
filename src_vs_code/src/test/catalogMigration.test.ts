@@ -1,0 +1,236 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { CatalogLayer, LayerWrite, migrateLayer, MIGRATED, restoreLayer, RESTORED } from '../catalogMigration';
+import { envBlock, settingsFrom } from '../settingsShape';
+import { DEFAULT_VENDORS, vendorsFrom } from '../vendors';
+
+/**
+ * The one-time move of every model DEFINITION into the catalog (PLAN_one_model_catalog.md D3, E1.3).
+ *
+ * <p>A consultant or question-consultant entry that carries its own runtime becomes a catalog row, and the
+ * entry becomes a reference to it. Judged where it matters: the env block coai-mcp reads must be the
+ * same, byte for byte, before and after — that is the whole promise of an epic in which nothing changes
+ * for the person.</p>
+ */
+
+/** A layer as a reader sees it: its own values, falling back to the shared vendors. */
+function reader(layer: CatalogLayer): (key: string) => unknown {
+  const own: Record<string, unknown> = { ...layer };
+
+  return (key) => (key === 'vendors' ? own['vendors'] ?? layer.sharedVendors : own[key]);
+}
+
+function env(layer: CatalogLayer): Record<string, string> {
+  const read = reader(layer);
+
+  return envBlock(settingsFrom(read), vendorsFrom(read('vendors')));
+}
+
+/** Apply the writes the way the host does: in order, `undefined` removing the key. */
+function apply(layer: CatalogLayer, writes: readonly LayerWrite[]): CatalogLayer {
+  const next: Record<string, unknown> = { ...layer };
+  for (const write of writes) {
+    const field = write.key === 'migratedFrom' ? 'backup' : write.key === 'catalogMigration' ? 'marker' : write.key;
+    if (write.value === undefined) {
+      delete next[field];
+    } else {
+      next[field] = write.value;
+    }
+  }
+
+  return next as CatalogLayer;
+}
+
+function migrated(layer: CatalogLayer): CatalogLayer {
+  const outcome = migrateLayer(layer);
+  assert.equal(outcome.kind, 'migrate', `expected a migration, got ${JSON.stringify(outcome)}`);
+
+  return apply(layer, outcome.kind === 'migrate' ? outcome.writes : []);
+}
+
+const REVIEWERS = [
+  { id: 'codex', runtime: 'codex', model: 'gpt-x', enabled: true },
+  { id: 'claude', runtime: 'claude', model: '', enabled: true },
+];
+
+/** The operator's shape: overlapping reviewer, consultant and question entries. */
+const OPERATOR: CatalogLayer = {
+  vendors: REVIEWERS,
+  consultants: {
+    claude: { vendor: 'codex', runtime: 'codex', model: 'gpt-x', baseUrl: '', executablePath: '' },
+    codex: { vendor: 'glm', runtime: 'codex', model: 'glm-5.3', baseUrl: 'https://glm.example/v1', executablePath: '' },
+  },
+  qconsultRows: [
+    { id: 'q1', vendor: 'claude', runtime: 'claude', model: 'opus', prompt: 'p1', enabled: true, key: '' },
+    { id: 'q2', vendor: 'codex', runtime: '', model: '', prompt: 'p2', enabled: true },
+  ],
+};
+
+test('a pristine layer writes nothing at all', () => {
+  assert.deepEqual(migrateLayer({}), { kind: 'unchanged' });
+  assert.deepEqual(migrateLayer({ vendors: REVIEWERS, qconsultRows: [] }), { kind: 'unchanged' });
+});
+
+test('the env block coai-mcp reads is byte-identical after the migration', () => {
+  assert.deepEqual(env(migrated(OPERATOR)), env(OPERATOR));
+});
+
+test('a consultant definition becomes a row that reviews nothing, and the caller refers to it', () => {
+  const after = migrated({ vendors: REVIEWERS, consultants: OPERATOR.consultants });
+  const rows = vendorsFrom(after.vendors);
+  const glm = rows.find((row) => row.id === 'consult-codex');
+
+  assert.deepEqual((after.consultants as Record<string, unknown>)['codex'], { vendor: 'consult-codex' });
+  assert.equal(glm?.runtime, 'codex');
+  assert.equal(glm?.model, 'glm-5.3');
+  assert.equal(glm?.baseUrl, 'https://glm.example/v1');
+  assert.equal(glm?.vaultKeyName, 'glm', 'the key stays filed under the name it was stored under');
+  assert.deepEqual(glm?.uses, ['consultant']);
+  assert.deepEqual([glm?.plan, glm?.code, glm?.document], [false, false, false]);
+});
+
+test('a definition that equals an existing row exactly joins it rather than duplicating it', () => {
+  const exact = { id: 'q1', vendor: 'claude', runtime: 'claude', model: '', prompt: 'p1', enabled: true, key: '' };
+  const before: CatalogLayer = { vendors: REVIEWERS, qconsultRows: [exact] };
+  const after = migrated(before);
+  const rows = vendorsFrom(after.vendors);
+
+  assert.equal(rows.length, 2, 'no new row');
+  assert.deepEqual(rows.find((row) => row.id === 'claude')?.uses, ['qconsult']);
+  assert.deepEqual((after.qconsultRows as Record<string, unknown>[])[0], { id: 'q1', vendor: 'claude', prompt: 'p1', enabled: true, key: '' });
+  assert.deepEqual(env(after), env(before));
+});
+
+test('a consultant never becomes a reference equal to its shipped pair, which would drop it off the wire', () => {
+  // claude's definition equals the `codex` reviewer row exactly — but `{ vendor: 'codex' }` for the claude
+  // caller IS the shipped pair, and a caller equal to its shipped pair is not sent at all.
+  const after = migrated({ vendors: REVIEWERS, consultants: { claude: (OPERATOR.consultants as Record<string, unknown>)['claude'] } });
+
+  assert.deepEqual((after.consultants as Record<string, unknown>)['claude'], { vendor: 'consult-claude' });
+  assert.deepEqual(env(after), env({ vendors: REVIEWERS, consultants: { claude: (OPERATOR.consultants as Record<string, unknown>)['claude'] } }));
+});
+
+test('two callers with one definition share one row', () => {
+  const same = { vendor: 'glm', runtime: 'codex', model: 'glm-5.3', baseUrl: 'https://glm.example/v1', executablePath: '' };
+  const after = migrated({ vendors: REVIEWERS, consultants: { codex: same, gemini: same } });
+  const added = vendorsFrom(after.vendors).filter((row) => row.uses !== undefined);
+
+  assert.deepEqual(added.map((row) => row.id), ['consult-codex']);
+  assert.deepEqual((after.consultants as Record<string, unknown>)['gemini'], { vendor: 'consult-codex' });
+});
+
+test('an id already taken by a different row takes the next free one', () => {
+  const taken = [...REVIEWERS, { id: 'consult-codex', runtime: 'claude', model: 'other', enabled: true }];
+  const after = migrated({ vendors: taken, consultants: { codex: (OPERATOR.consultants as Record<string, unknown>)['codex'] } });
+
+  assert.deepEqual((after.consultants as Record<string, unknown>)['codex'], { vendor: 'consult-codex-2' });
+});
+
+test('a question row keeps its id, prompt, switch and key, and refers to an ask- row', () => {
+  const row = { id: 'q9', vendor: 'qwen', runtime: 'codex', model: 'qwen-max', baseUrl: 'https://q.example', prompt: 'p', enabled: false, key: 'qwen-key' };
+  const before: CatalogLayer = { vendors: REVIEWERS, qconsultRows: [row] };
+  const after = migrated(before);
+
+  assert.deepEqual((after.qconsultRows as unknown[])[0], { id: 'q9', vendor: 'ask-q9', prompt: 'p', enabled: false, key: 'qwen-key' });
+  assert.equal(vendorsFrom(after.vendors).find((one) => one.id === 'ask-q9')?.vaultKeyName, 'qwen');
+  assert.deepEqual(env(after), env(before));
+});
+
+test('running it twice changes nothing the second time', () => {
+  assert.deepEqual(migrateLayer(migrated(OPERATOR)), { kind: 'unchanged' });
+});
+
+test('a run stopped after any write is finished by the next run, never duplicated', () => {
+  const outcome = migrateLayer(OPERATOR);
+  assert.equal(outcome.kind, 'migrate');
+  const writes = outcome.kind === 'migrate' ? outcome.writes : [];
+  const whole = apply(OPERATOR, writes);
+
+  for (let stop = 1; stop < writes.length; stop += 1) {
+    const half = apply(OPERATOR, writes.slice(0, stop));
+    const rerun = migrateLayer(half);
+    const finished = rerun.kind === 'migrate' ? apply(half, rerun.writes) : half;
+
+    assert.deepEqual(vendorsFrom(finished.vendors), vendorsFrom(whole.vendors), `stopped after write ${stop}`);
+    assert.deepEqual(env(finished), env(OPERATOR), `stopped after write ${stop}`);
+  }
+});
+
+test('the backup holds every key it rewrites, absence included, and is written once', () => {
+  const layer: CatalogLayer = { consultants: OPERATOR.consultants, sharedVendors: REVIEWERS };
+  const outcome = migrateLayer(layer);
+  const first = outcome.kind === 'migrate' ? outcome.writes[0] : undefined;
+
+  assert.equal(first?.key, 'migratedFrom', 'the backup is the first write');
+  assert.deepEqual(first?.value, { keys: ['vendors', 'consultants', 'qconsultRows'], values: { consultants: OPERATOR.consultants } });
+  const again = migrateLayer({ ...layer, backup: { keys: ['vendors'], values: {} } });
+  assert.ok(again.kind === 'migrate' && again.writes.every((write) => write.key !== 'migratedFrom'), 'never overwritten');
+});
+
+test('the marker is the last write', () => {
+  const outcome = migrateLayer(OPERATOR);
+
+  assert.ok(outcome.kind === 'migrate');
+  assert.deepEqual(outcome.writes.at(-1), { key: 'catalogMigration', value: MIGRATED });
+});
+
+test('restore puts every key back exactly, removes what was absent, and stops the migration', () => {
+  const before: CatalogLayer = { consultants: OPERATOR.consultants, qconsultRows: OPERATOR.qconsultRows, sharedVendors: REVIEWERS };
+  const after = migrated(before);
+  const restore = restoreLayer(after);
+
+  assert.equal(restore.kind, 'restore');
+  const back = apply(after, restore.kind === 'restore' ? restore.writes : []);
+  assert.equal(back.vendors, undefined, 'the layer had no vendors of its own, and has none again');
+  assert.deepEqual(back.consultants, before.consultants);
+  assert.deepEqual(back.qconsultRows, before.qconsultRows);
+  assert.equal(back.marker, RESTORED);
+  assert.deepEqual(migrateLayer(back), { kind: 'restored' }, 'reloading does not migrate it again');
+});
+
+test('restore with no backup says so and writes nothing', () => {
+  assert.equal(restoreLayer({ consultants: {} }).kind, 'nothing-to-restore');
+});
+
+test('a migration that would pass 64 rows writes nothing and says how many it needed', () => {
+  const many = Array.from({ length: 63 }, (_, i) => ({ id: `r${i}`, runtime: 'codex', model: `m${i}` }));
+  const outcome = migrateLayer({ vendors: many, consultants: OPERATOR.consultants });
+
+  assert.equal(outcome.kind, 'refused');
+  assert.match(outcome.kind === 'refused' ? outcome.why : '', /65 models.*at most 64/u);
+});
+
+test('a definition whose name is not a valid id is left as it is, and said', () => {
+  const outcome = migrateLayer({ vendors: REVIEWERS, consultants: { codex: { vendor: 'My GLM', runtime: 'codex', model: 'glm' } } });
+
+  assert.equal(outcome.kind, 'unchanged-with-skips');
+  assert.match(outcome.kind === 'unchanged-with-skips' ? outcome.skipped.join() : '', /My GLM/u);
+});
+
+test('a layer with no rows of its own starts from the shared ones', () => {
+  const after = migrated({ consultants: OPERATOR.consultants, sharedVendors: REVIEWERS });
+
+  assert.deepEqual(vendorsFrom(after.vendors).map((row) => row.id), ['codex', 'claude', 'consult-claude', 'consult-codex']);
+});
+
+test('a layer with no rows anywhere starts from the shipped ones', () => {
+  const after = migrated({ consultants: OPERATOR.consultants });
+
+  assert.deepEqual(vendorsFrom(after.vendors).slice(0, DEFAULT_VENDORS.length).map((row) => row.id), DEFAULT_VENDORS.map((row) => row.id));
+});
+
+test('after an older build strips the catalog fields, the next run gives the uses back and adds nothing', () => {
+  const after = migrated(OPERATOR);
+  // What an older build writes back: its own parse of the rows, which knows no `uses` and no `name`.
+  const stripped = (after.vendors as Record<string, unknown>[]).map(({ uses: _uses, ...rest }) => rest);
+  const downgraded = { ...after, vendors: stripped };
+  const rerun = migrateLayer(downgraded);
+  const repaired = rerun.kind === 'migrate' ? apply(downgraded, rerun.writes) : downgraded;
+
+  assert.deepEqual(vendorsFrom(repaired.vendors), vendorsFrom(after.vendors));
+  assert.deepEqual(env(repaired), env(OPERATOR));
+});
+
+test('a layer that was restored is never migrated again by itself', () => {
+  assert.deepEqual(migrateLayer({ ...OPERATOR, marker: RESTORED }), { kind: 'restored' });
+});

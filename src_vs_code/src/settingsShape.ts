@@ -10,6 +10,7 @@
  * configuration crosses over, regenerated whenever the person copies it again.</p>
  */
 
+import { rowsOnTheWire } from './catalogRules';
 import { DEFAULT_VENDORS, Vendor } from './vendors';
 import { RowPriceLookup, vendorsEnv } from './vendorsWire';
 import { RESULT_CODE, bucketOf, composed, isActive, rolesFrom, type RoleRow } from './roles';
@@ -436,8 +437,10 @@ export function envBlock(
   // One road: a field the wire gains is compared the day it is added; a price, which never crosses, never counts.
   // Compared as CONFIGURED (no version gate), then written as the installed server may read it — so a list
   // whose only difference an older server cannot take (an api row, a feature tick) is still written, as before.
-  if (vendorsEnv(vendors) !== vendorsEnv(DEFAULT_VENDORS)) {
-    env['COAI_VENDORS'] = vendorsEnv(vendors, installedServerVersion, priceOf);
+  // A catalog row that reviews nothing and serves only features that cross resolved stays off (`rowsOnTheWire`).
+  const onTheWire = rowsOnTheWire(vendors, settings.securityLane);
+  if (vendorsEnv(onTheWire) !== vendorsEnv(DEFAULT_VENDORS)) {
+    env['COAI_VENDORS'] = vendorsEnv(onTheWire, installedServerVersion, priceOf);
   }
   if (Object.keys(settings.promptsPerRound).length > 0) {
     env['COAI_PROMPTS_PER_ROUND'] = JSON.stringify(settings.promptsPerRound);

@@ -10561,3 +10561,57 @@ flowchart LR
 - `src_mcp/tests/FeatureAvailabilityTests.cs` holds coai-mcp's `ConsultantResolution.Consulting` to the file — the
   first test comparing the two halves' lists (before it, each pinned its own literal); shown red on a runtime added
   to the file alone. coai-mcp reads the file itself from E2.1.
+
+**E1.3 — consultant and question-consultant definitions move into the catalog, once per layer.**
+
+- `catalogMigration.migrateLayer(layer)` is pure: one settings layer in (the user layer, or one side's overlay), the
+  writes out. A consultant entry or question row that carries its own `runtime` becomes a row that reviews nothing
+  (`plan`/`code`/`document` false — an older build reads those flags too), lists the feature in `uses`, and keeps the
+  key's name in `vaultKeyName` (the definition's `vendor`, so its vault entry and ledger name do not move). The entry
+  becomes a reference: a consultant `{ "vendor": "<row id>" }`; a question row keeps its `id`, `prompt`, `enabled`
+  and `key` and names the row in `vendor`.
+- Ids are deterministic: `consult-<caller>`, `ask-<question id>`; a taken id takes the next free `-N`
+  (`freeVendorId`). A definition JOINS a row only when every launch field (runtime, model, baseUrl, executablePath,
+  no dialect) and the key's name match — its desired id first — and a consultant never becomes a reference equal to
+  its caller's shipped pair, which `callersOnTheWire` would leave off the wire.
+- Writes, in order: the backup `migratedFrom` (`{ keys, values }` — every key the move may rewrite, absence recorded
+  as absence; written once, never overwritten), `vendors`, the references, the marker `catalogMigration: "migrated"`.
+  A rerun finds rows already added by their exact fields, so a run stopped after any write is finished, never
+  duplicated (tested at every stop point). More than 64 rows: nothing is written in that layer, and it says how many.
+  A name that is not a model id is left as it is, and said.
+- An older build rewrites `coai.vendors` from its own parse, which drops `uses`; the next run gives the use back to a
+  row that reviews nothing, has no `uses`, is not an api row and carries a foreign `vaultKeyName` — a shape only the
+  migration gives a CLI row — and only for a feature a reference still names it for.
+- `restoreLayer` puts every backed-up key back exactly (removing those that were absent) and marks the layer
+  `restored`; `migrateLayer` leaves a restored layer alone until the person asks.
+- Byte-identical env block, three pieces (each shown red when removed): `resolveConsultant` rule (a) gives back the
+  row's `vaultKeyName` through a row that lists `consultant`; `qconsultSettingsFrom` resolves a question row that
+  names a row listing `qconsult` to its definition in the row's own key order (`COAI_QCONSULT_ROWS` IS the wire);
+  `catalogRules.rowsOnTheWire` leaves out of `COAI_VENDORS` a row that reviews nothing and whose `uses` are all
+  features that cross resolved — kept when it lists `security`, a Security lane run names it, or the lane could not be
+  read. A row with no `uses` is a row from before the catalog and crosses as it always did.
+- `catalogMigrationHost.ts` (vscode, Sonar coverage-excluded): runs on activation, on a configuration change of
+  `vendors`/`consultants`/`qconsultRows`, and after `saveSetting` writes one of them into an overlay (which raises no
+  event) — queued through a `WriteQueue`, never concurrent. The user layer is read raw through `inspect().globalValue`
+  (so a manifest default is never migrated and a workspace value never reaches it) and written with
+  `ConfigurationTarget.Global`; the overlay through `readOverlay` and `globalState`. It speaks only about what it LEFT
+  (`catalog-migration-left`) or a stopped run (`catalog-migration-failed`). *ConnectOtherAIs: Restore settings from
+  before the catalog* (`coai.restoreCatalogBackup`) asks first, naming the layers (`catalog-restore-confirm`), or says
+  there is nothing to restore (`catalog-restore-none`). Help article `models-move-into-the-catalog`, five languages.
+- Not moved here: chat presets (conversations refer to a preset by id — E4.3, with the chat tab) and the Bugz model
+  (ranking matches the row id `local` on both halves — E2.1, with the runtime match).
+
+```mermaid
+sequenceDiagram
+  participant A as activate / config change / saveSetting
+  participant H as catalogMigrationHost
+  participant M as migrateLayer (pure)
+  participant L as layer (user settings.json | side overlay)
+  A->>H: scheduleCatalogMigration (queued)
+  H->>L: read vendors, consultants, qconsultRows, marker, backup
+  H->>M: migrateLayer(layer)
+  M-->>H: writes: migratedFrom (once) → vendors → references → catalogMigration
+  H->>L: apply in order (stop on refusal; the next run finishes it)
+  H->>A: after: mirror the server settings file, redraw the panel
+  Note over M: env block before == env block after (consultant + question resolution, rowsOnTheWire)
+```

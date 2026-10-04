@@ -227,6 +227,13 @@ version gate in both directions.
    entries, a forked side whose overlay predates migration, a `gemini` row, a codex row with an endpoint; migrate twice
    = once; a run stopped after each write and rerun reaches the same state; restore → reload → still restored;
    downgrade (fields stripped as `vendorsFrom` strips them) → rerun → nothing duplicated, `uses` regained.
+   **As built (2026-10-04), two sources moved to the epics that change their readers:** chat presets go to E4.3 —
+   saved conversations refer to a preset by id (`chatConfig.ts:237`, `chatHooks.ts:229`), so a row `chat-<id>` would
+   move a resumed conversation onto another model; the Bugz model goes to E2.1 — ranking accepts only the row id
+   `local` on both halves (`RANKING_VENDORS`, `RankingModels`), so a `bugz-local` row would be refused until the
+   runtime match lands. E1.3 moves consultant and question-consultant definitions. A consultant never becomes a
+   reference equal to its caller's shipped pair (that caller would drop off the wire). A reference to a missing row
+   keeps today's behaviour — both halves already name it unavailable — rather than being dropped from the env block.
 4. **One write road**: the old page's consultant, question-consultant and chat writes switched to rows + references
    through `saveSetting`; the env block resolves references to definitions. RED test per surface: an edit on the old
    page after migration changes the env block coai-mcp reads. The env block for an unchanged, migrated setup is
@@ -241,7 +248,8 @@ version gate in both directions.
 1. **Probe and routing fixes**: the probe runs the runtime's CLI, not the row id (RED: `claude-2` with
    `runtime: claude`); Bugz ranking matches the runtime, not the id `local`; an unknown runtime refused by name; the
    material told to each reviewer decided per runtime in `RosterBuilder.cs:181-183`; the C# side reads
-   `feature-availability.json`.
+   `feature-availability.json`. **Carries the Bugz move from E1.3**: once both halves match the runtime, a Bugz model
+   that differs from its row's model becomes row `bugz-<rowId>` (`uses: [bugz]`) by the same pure migration.
 2. **Per-row system prompt, timeout and effort in every runner** (review, consult, question consult): the prompt
    delivered inside the prompt body (stdin or the prompt file the runner already uses), NEVER argv, never logged
    (length and hash only — a test asserts no launch record contains it); refused by name past a runtime's limit.
@@ -284,7 +292,9 @@ version gate in both directions.
 3. **Security lane and Chat**: pairs from instances ticked Security lane; on each card the signals in two columns, own
    words, prompt text in place; the routing table with editable words; Try it through `--check-security` (never a
    JavaScript copy of the matcher). Chat from instances ticked Chat, per side, the starting text and the model's effort
-   and system prompt applied; prompt presets inline (replacing `chatPresetsPage.ts`).
+   and system prompt applied; prompt presets inline (replacing `chatPresetsPage.ts`). **Carries the chat move from
+   E1.3**: each model preset becomes a row with `uses: [chat]` and its `chatStartingPrompt`, and every stored
+   conversation's preset id is mapped to that row in the same change, so a resumed conversation keeps its model.
 4. **Setup**: keys counted across every row; the CLI table; Team servers with every state; the MCP server's states and
    clients (another program's config is READ only, never written, and no secret from it is shown); the data folder's
    Change and Move flows on today's `dataCommands.ts` logic, the "moved from" record surviving a reload; This side with

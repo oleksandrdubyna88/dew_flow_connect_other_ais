@@ -33,8 +33,12 @@ const DIRECT_READ = new RegExp(
   'u',
 );
 
-/** The two files that ARE the door. */
-const DOOR = ['modelKeys.ts', 'sideConfig.ts'];
+/**
+ * The files that ARE the door — and the catalog migration, which reads the user layer RAW
+ * (`inspect().globalValue`, no manifest default, never a workspace value), which is stricter than the door:
+ * it must tell a key the person never set from one set to its default, or it would migrate a default.
+ */
+const DOOR = ['modelKeys.ts', 'sideConfig.ts', 'catalogMigrationHost.ts'];
 
 test('the scan recognises every shape of a direct read it is there to refuse', () => {
   for (const planted of [

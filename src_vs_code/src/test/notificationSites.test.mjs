@@ -230,7 +230,12 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 146 → 147 on 2026-10-04, PLAN_one_model_catalog.md E1.1: a model-bearing setting a workspace or folder tried to
 // set is no longer applied, and `model-setting-from-workspace` says so once per window, offering to copy it to the
 // person's own settings — so a team setup in `.vscode/settings.json` is not lost without a word. One refusal.
-const PLACES_THIS_SPEAKS = 147;
+// 147 → 151 on 2026-10-04, PLAN_one_model_catalog.md E1.3: the one-time move of consultant and question-consultant
+// models into the catalog says what it LEFT (`catalog-migration-left` — a refusal past 64 models, a name that is not
+// a model id) and that a run stopped part way (`catalog-migration-failed`); its restore command asks first
+// (`catalog-restore-confirm`, modal) and says when there is nothing to restore (`catalog-restore-none`). A move that
+// went through says nothing, because nothing the person can see changed.
+const PLACES_THIS_SPEAKS = 151;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this
