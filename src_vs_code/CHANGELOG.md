@@ -1,5 +1,27 @@
 # Changelog
 
+## Extension 0.64.0 — 2026-10-04
+
+**Settings → Security lane reads at a glance.** With Server 0.43.0:
+- The tag legend is two columns.
+- Every prompt is a card with its name in a larger font and a badge: green `default`, orange `edited` (with
+  **Restore default**) and purple `custom`.
+- `redteam-general` comes first and is only on or off.
+- Each preset's conditions fold away into two columns under a one-line summary, and a fold you open stays open when the
+  page repaints.
+- **+ New custom prompt** asks for a `redteam-` name, creates `prompts/<name>.md` in your data directory and opens it. It
+  is also an entry in each pair's Prompt list. The card says when the text is missing, and **Remove custom prompt**
+  keeps the file on disk.
+- **+ Add reviewer / prompt pair** and **Remove pair** are buttons. When nothing can be added, the reason is shown beside
+  the button.
+
+**A general you added by hand with conditions** shows a warning and a **Clear stored conditions** button, because an
+older server still runs it only when those conditions match. On a 0.41 or 0.42 server, general runs on every change,
+documentation included.
+
+**Untouched shipped prompts are no longer written into settings.json.** A later change to a shipped preset therefore
+reaches you. What is sent to the server is unchanged.
+
 ## Server 0.43.0 — 2026-10-04
 
 **`redteam-general` is a shipped security prompt that runs on every code change.** It used to be a custom prompt
