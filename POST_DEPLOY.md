@@ -19,12 +19,20 @@ one of them arriving wrong.
 
 Target: the released **extension** version — `--target 0.33.1`. The MCP binary ships on its own tag and its own number, so item 1 reads `MCP_VERSION` (`mcp-v<version>`) rather than the target.
 
-Last verified: 2026-10-04 · extension **0.63.0** / mcp 0.42.1 / server 0.9.0 · all five automated items PASS.
-Extension-only release: the Consultant settings rows (with Server 0.42.1) and Export config no longer exporting a
-setting left at its default (`canonical()` sorts keys by code unit). `vsce` reported the publish at 10:05 UTC and
-item 2 failed until the gallery flipped to 0.63.0 at 10:11 — the lag this file warns about, about six minutes. The
-published `.vsix`'s bundle was opened: `canonical`'s key sort calls the shared code-unit comparator. Run with
-`MCP_VERSION=0.42.1` and `SERVER_VERSION=0.9.0`, the newest tags; the box still serves 0.9.0.
+Last verified: 2026-10-04 · extension **0.64.0** / mcp **0.43.0** / server 0.9.0 · all five automated items PASS;
+the seven manual items were not run for this release.
+Extension and MCP released together, MCP first: the Security lane tab reads at a glance, and `redteam-general` is
+a shipped prompt that runs on every code change (#675). The `mcp-v0.43.0` run (37208100957) published six archives
+with `.sha256` files. Its osx-x64 job failed on attempt 1:
+`McpContractTests.AHeadThatIsNotTheCheckoutsHead_IsRefusedOverTheWire_AndTheCheckoutsOwnHeadProceeds` threw `TimeoutException` after 60 s on the stdio round trip.
+That job runs the x64 binary on an arm64 runner, but the cause was not established. A re-run of that job alone passed
+all 13 contract tests in 22 s; the tag was not moved. If it recurs, compare against that log before re-running. The
+`extension-v0.64.0` run (37210537121) published to the Marketplace. Item 2 failed on the first check run
+("marketplace serves 0.63.0") and passed once the gallery served 0.64.0, about five minutes later, polled every 30 s.
+By hand: the published `.vsix` was unzipped and its bundle carries the new tab's button labels; the `win-x64` zip was
+downloaded, its `.sha256` verified (that platform only), and the binary reports 0.43.0 and answers
+`--security-prompt-text` (exit 65 with no ids). Run with `MCP_VERSION=0.43.0` and `SERVER_VERSION=0.9.0`, the newest
+tags; the Team server at coai.remsoft.dev reports 0.9.0 (item 10), unchanged this release.
 
 Previously verified: 2026-09-11 · extension 0.33.1 / mcp 0.18.17 / **server 0.5.7** · all five automated items PASS. **Item 12 observed for the first time, and it is the reason this release exists**: the release script's canary ran one real review per configured vendor on the box — `codex: done`, `antigravity: done`, `claude: done` — so the INSTALLED claude (2.1.261, not the 2.1.258 the flags were read against) accepts both halves of the confinement: the eleven `--disallowedTools` names and an allowlisted environment. Until that ran, both were asserted as SENT and nothing had observed them being taken.
 
