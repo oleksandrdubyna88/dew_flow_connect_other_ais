@@ -77,6 +77,7 @@ import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
+import { promptChosen } from './promptsPerRound';
 import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
@@ -1119,7 +1120,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // that is a wait on itself (`afterTheWrite`).
     await this.writes.settled();
     const config = vscode.workspace.getConfiguration('coai');
-    const settings = settingsFrom((section) => config.get(section));
+    // THIS side's settings, like the vendors on the next line: a side that keeps its own settings runs with its
+    // overlay, and a page drawn from the shared layer showed values it does not run with.
+    const settings = settingsFrom(this.read(config));
     const vendors = vendorsFrom(this.read(config)('vendors'));
     this.codexModels = await this.readCodexModels();
     this.agyModels = await this.readAgyModels(vendors);
@@ -1693,21 +1696,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   private async choosePrompt(role: string, round: number, id: string, from: SurfaceSlot): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
-    const settings = settingsFrom((section) => config.get(section));
-    const rounds = [...(settings.promptsPerRound[role] ?? [])];
-    while (rounds.length < round) {
-      rounds.push('');
-    }
-    rounds[round - 1] = id;
-    try {
-      await config.update(
-        'promptsPerRound',
-        { ...settings.promptsPerRound, [role]: rounds },
-        vscode.ConfigurationTarget.Global,
-      );
-    } catch (error: unknown) {
-      // A dropdown too, and not in the write queue: said like every other refusal, and put back.
-      reportRefusal(this.context, 'promptsPerRound', error);
+    // Read and written through THIS side: `promptsPerRound` is an overlaid setting, and the picker used to read the
+    // shared layer and write straight to the global one — one side's choice landing on every side.
+    const settings = settingsFrom(this.read(config));
+    if (!(await this.save(config, 'promptsPerRound', promptChosen(settings.promptsPerRound, role, round, id)))) {
+      // A dropdown too, and not in the write queue: `save` has said why, and the box is put back.
       await afterTheWrite(() => this.snapBack(from))();
       return;
     }
@@ -2768,9 +2761,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   /** The settings as configuration has them now — the same read the render does. */
   private settings(): CoaiSettings {
-    const config = vscode.workspace.getConfiguration('coai');
-
-    return settingsFrom((section) => config.get(section));
+    return settingsFrom(this.read(vscode.workspace.getConfiguration('coai')));
   }
 
   private static readonly COLLECT_CAP_MS = 30 * 60_000;

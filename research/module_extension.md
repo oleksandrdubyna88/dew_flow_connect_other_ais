@@ -10504,3 +10504,19 @@ belongs to the extension as a whole:
 - **Guards it met.** The notification funnel: the tab's buttons speak through `notify`/`notifyAndAsk`, and the
   population constant rose 144 → 146 with its reason. Sonar's coverage exclusions gained `fileWatch.ts` and
   `securityCommands.ts`, which import `vscode`.
+
+## The sidebar reads and writes THIS side's settings (2026-10-04)
+
+With *separate settings for each side* on, `PanelProvider` drew the page from `settingsFrom((section) =>
+config.get(section))` — the shared layer — so every overlaid setting it shows (rounds, thresholds, the role switches,
+the consultant, prompts per round …) read the shared value rather than the one this side runs with; only the vendors
+went through the side-aware reader. The prompt-per-round picker also wrote with a direct global update, so one side's
+choice landed on every side. Now:
+
+- `renderNow` and `settings()` read `settingsFrom(this.read(config))` — the same `readerFor` the vendors and the env
+  block use.
+- `choosePrompt` reads through it and writes through `this.save` (→ `sideConfig.saveSetting`, which picks the
+  overlay or the user layer and reports a refusal); a refused pick is put back with the repaint started, not
+  awaited. The merge is the pure `promptsPerRound.promptChosen` (pads earlier rounds with `''`, never mutates).
+- `thePanelReadsThisSide.test.ts` pins both halves (the side-aware read present, the shared read and the direct
+  update absent) and was red on the defect; `refusedSelect.test.ts` pins the picker's new refusal shape.
