@@ -2,8 +2,6 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
 import {
-  ADMIN_KEY,
-  CONTRIBUTOR_KEY,
   ISSUANCE_ATTEMPT,
   PENDING_ISSUANCE,
   Secrets,
@@ -13,11 +11,15 @@ import {
   endIssuance,
   holdIssuance,
   issuanceAttempt,
+  keyName,
   pendingIssuance,
   releaseIssuance,
   setAdminKey,
   setContributorKey,
 } from '../bugsAdminKey';
+
+/** The server every key in this file belongs to — keys are filed per server (research/PLAN_bugz_keys_per_server.md). */
+const SERVER = 'https://bugs.example.com';
 
 /**
  * Where the admin key lives, and where a key nobody has copied waits.
@@ -71,16 +73,16 @@ const issued = {
 test('with nothing stored, there is no key and no pending issuance', async () => {
   const store = new Store();
 
-  assert.equal(await adminKey(store), '', 'absent reads as empty, never as undefined');
+  assert.equal(await adminKey(store, SERVER), '', 'absent reads as empty, never as undefined');
   assert.equal(await pendingIssuance(store), undefined);
 });
 
 test('a key is stored trimmed, because it is pasted', async () => {
   const store = new Store();
 
-  await setAdminKey(store, '  a-key-with-spaces-around-it \n');
+  await setAdminKey(store, SERVER, '  a-key-with-spaces-around-it \n');
 
-  assert.equal(await adminKey(store), 'a-key-with-spaces-around-it');
+  assert.equal(await adminKey(store, SERVER), 'a-key-with-spaces-around-it');
 });
 
 /**
@@ -92,12 +94,12 @@ test('a key is stored trimmed, because it is pasted', async () => {
  */
 test('setting an empty key removes it instead of storing nothing', async () => {
   const store = new Store();
-  await setAdminKey(store, 'a-real-key');
+  await setAdminKey(store, SERVER, 'a-real-key');
 
-  await setAdminKey(store, '   ');
+  await setAdminKey(store, SERVER, '   ');
 
-  assert.equal(store.raw(ADMIN_KEY), undefined, 'it must be gone, not present and empty');
-  assert.equal(await adminKey(store), '');
+  assert.equal(store.raw(keyName('admin', SERVER)), undefined, 'it must be gone, not present and empty');
+  assert.equal(await adminKey(store, SERVER), '');
 });
 
 /** The whole point: it is written, and it is still there afterwards. */
@@ -216,12 +218,12 @@ test('an attempt that is not readable is none rather than an exception', async (
 /** The key and the pending issuance are separate: clearing one must not clear the other. */
 test('clearing the admin key leaves a pending issuance alone', async () => {
   const store = new Store();
-  await setAdminKey(store, 'a-real-key');
+  await setAdminKey(store, SERVER, 'a-real-key');
   await holdIssuance(store, issued);
 
-  await setAdminKey(store, '');
+  await setAdminKey(store, SERVER, '');
 
-  assert.equal(await adminKey(store), '');
+  assert.equal(await adminKey(store, SERVER), '');
   assert.deepEqual(
     await pendingIssuance(store),
     issued,
@@ -240,42 +242,42 @@ test('clearing the admin key leaves a pending issuance alone', async () => {
 test('the contributor key is stored, read back, and lives apart from the admin key', async () => {
   const store = new Store();
 
-  await setContributorKey(store, 'contributor-key');
-  await setAdminKey(store, 'admin-key');
+  await setContributorKey(store, SERVER, 'contributor-key');
+  await setAdminKey(store, SERVER, 'admin-key');
 
-  assert.equal(await contributorKey(store), 'contributor-key');
-  assert.equal(await adminKey(store), 'admin-key');
-  assert.equal(store.raw(CONTRIBUTOR_KEY), 'contributor-key');
-  assert.notEqual(CONTRIBUTOR_KEY, ADMIN_KEY, 'one box for both would be one key for both');
+  assert.equal(await contributorKey(store, SERVER), 'contributor-key');
+  assert.equal(await adminKey(store, SERVER), 'admin-key');
+  assert.equal(store.raw(keyName('contributor', SERVER)), 'contributor-key');
+  assert.notEqual(keyName('contributor', SERVER), keyName('admin', SERVER), 'one box for both would be one key for both');
 });
 
 test('clearing the contributor key removes it rather than storing an empty one', async () => {
   const store = new Store();
-  await setContributorKey(store, 'contributor-key');
+  await setContributorKey(store, SERVER, 'contributor-key');
 
-  await setContributorKey(store, '   ');
+  await setContributorKey(store, SERVER, '   ');
 
-  assert.equal(await contributorKey(store), '');
-  assert.equal(store.raw(CONTRIBUTOR_KEY), undefined,
+  assert.equal(await contributorKey(store, SERVER), '');
+  assert.equal(store.raw(keyName('contributor', SERVER)), undefined,
     'an empty value that READS as set is a key that refuses every request and says nothing');
-  assert.ok(store.writes.includes(`delete ${CONTRIBUTOR_KEY}`));
+  assert.ok(store.writes.includes(`delete ${keyName('contributor', SERVER)}`));
 });
 
 test('removing one credential leaves the other alone', async () => {
   const store = new Store();
-  await setContributorKey(store, 'contributor-key');
-  await setAdminKey(store, 'admin-key');
+  await setContributorKey(store, SERVER, 'contributor-key');
+  await setAdminKey(store, SERVER, 'admin-key');
 
-  await setAdminKey(store, '');
+  await setAdminKey(store, SERVER, '');
 
-  assert.equal(await adminKey(store), '');
-  assert.equal(await contributorKey(store), 'contributor-key', 'they are two credentials');
+  assert.equal(await adminKey(store, SERVER), '');
+  assert.equal(await contributorKey(store, SERVER), 'contributor-key', 'they are two credentials');
 });
 
 test('a key with spaces around it is stored trimmed, because a pasted key usually has one', async () => {
   const store = new Store();
 
-  await setContributorKey(store, '  contributor-key\n');
+  await setContributorKey(store, SERVER, '  contributor-key\n');
 
-  assert.equal(await contributorKey(store), 'contributor-key');
+  assert.equal(await contributorKey(store, SERVER), 'contributor-key');
 });

@@ -6,9 +6,11 @@ import { Admin, Answer, KeyRow, issue, keys, mayCarryAKey, revoke } from './bugs
 import {
   Pending,
   Secrets,
+  adminCredentialsFor,
   adminKey,
   beginIssuance,
   endIssuance,
+  hasServer,
   holdIssuance,
   issuanceAttempt,
   pendingIssuance,
@@ -32,6 +34,8 @@ import { Turns } from './bugsKeysTurns';
 import { BusyHost } from './busyHost';
 import { IDLE } from './busySnapshot';
 import { notify, notifyAndAsk } from './notify';
+import { revokeRefusal } from './bugzKeyChoices';
+import { oldKeysNote, refuseNoServer } from './bugzKeyFlows';
 import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
@@ -148,6 +152,10 @@ export class BugsKeysPanel {
       });
     }
 
+    // Old keys waiting while this server has none: the page says where they went and how to settle them.
+    if (this.said.length === 0) {
+      this.said = await oldKeysNote(this.secrets, this.server());
+    }
     await this.turns.run(() => this.draw());
     this.panel?.reveal(vscode.ViewColumn.Active);
   }
@@ -176,6 +184,13 @@ export class BugsKeysPanel {
    * order. (Code round 2, gemini.)</p>
    */
   private async askForKeyNow(): Promise<void> {
+    // Asked BEFORE the box opens: with no server there is nowhere to file a key, and a pasted secret thrown away
+    // after the fact is the silent drop this flow must not have.
+    if (!hasServer(this.server())) {
+      await refuseNoServer();
+
+      return;
+    }
     const typed = await askPerson(() => vscode.window.showInputBox({
       title: 'The bugs admin key',
       prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
@@ -186,7 +201,7 @@ export class BugsKeysPanel {
       return;
     }
 
-    await setAdminKey(this.secrets, typed);
+    await setAdminKey(this.secrets, this.server(), typed);
     await this.draw();
   }
 
@@ -269,7 +284,7 @@ export class BugsKeysPanel {
     // BEFORE the request leaves. Everything after this line can die and the next open still knows
     // that a key may exist.
     await beginIssuance(this.secrets, { server, note });
-    const answer = await issue({ server, key: await adminKey(this.secrets) }, note);
+    const answer = await issue(await adminCredentialsFor(this.secrets, server), note);
     if (answer.kind !== 'ok') {
       await this.failedIssue(answer);
 
@@ -378,8 +393,17 @@ export class BugsKeysPanel {
    * that the key was gone, while it stayed alive on the one that issued it. (Code round, codex.)</p>
    */
   private async discard(pending: Pending): Promise<void> {
-    const issuer = pending.server.length > 0 ? pending.server : this.server();
-    const answer = await revoke({ server: issuer, key: await adminKey(this.secrets) }, pending.id);
+    // Revoked ONLY on the server that issued it, with that server's key. A record that does not say which server
+    // that was is refused and KEPT: guessing this side's server would send a key there and read its 404 as proof
+    // the key was gone (plan round, session d5cdb1b2).
+    const refused = revokeRefusal(pending.server);
+    if (refused.length > 0) {
+      this.said = refused;
+      await this.draw();
+
+      return;
+    }
+    const answer = await revoke(await adminCredentialsFor(this.secrets, pending.server), pending.id);
     if (answer.kind === 'ok' || answer.kind === 'missing') {
       await releaseIssuance(this.secrets);
       this.said = 'The key was discarded and revoked, so nothing is left alive that nobody holds.';
@@ -402,7 +426,7 @@ export class BugsKeysPanel {
   }
 
   private async admin(): Promise<Admin> {
-    return { server: this.server(), key: await adminKey(this.secrets) };
+    return adminCredentialsFor(this.secrets, this.server());
   }
 
   /**
@@ -434,7 +458,7 @@ export class BugsKeysPanel {
   private async users(wanted: Trail): Promise<Users> {
     const pending = await pendingIssuance(this.secrets);
     const attempt = pending === undefined ? await issuanceAttempt(this.secrets) : undefined;
-    const held = await adminKey(this.secrets);
+    const held = await adminKey(this.secrets, this.server());
     const around = {
       ...(pending === undefined ? {} : { pending }),
       ...(attempt === undefined ? {} : { orphaned: attempt }),
