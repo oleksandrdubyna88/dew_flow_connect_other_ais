@@ -10541,3 +10541,23 @@ flowchart LR
   UL --> R[readerFor] --> O[side overlay first] --> V[vendorsFrom + catalogFields]
   V --> W["vendorsWire.vendorsEnv<br/>(whitelist)"] --> F["settings.json in the data dir<br/>COAI_VENDORS"]
 ```
+
+**E1.2 — one shared file says which runtime serves which feature, and which efforts each accepts.**
+
+- `shared/feature-availability.json` holds the `consultant` and `chat` runtime lists, frozen to what both halves did
+  on 2026-10-04, and one `effort` row per runtime with its source: `list` (Claude: `low, medium, high, xhigh, max`,
+  read off `claude --help`, Claude Code 2.1.289), `probe` (api and local: the model's probe report), `unmeasured`
+  (codex — no command short of a model turn names the legal values, so none is written until E2 observes one — and
+  the Team server until contract v2) and `none` (antigravity by the operator's ruling; the retired gemini runtime).
+- `scripts/generate-feature-availability.mjs` writes `featureAvailability.generated.ts` (`CONSULTING`, `CHAT`,
+  `EFFORT`), refusing an unknown field, a feature runtime outside the runtimes, a runtime with no effort row or two,
+  levels on a non-`list` source, and any effort on antigravity; `--check` is in `generatedFilesAreCurrent.test.ts`.
+- `CONSULTING_RUNTIMES` (`consultSettings.ts`) and `CHAT_RUNTIMES` (`cliChatLaunch.ts`) ARE the generated lists
+  now; the chat adapter map stays the proof — a test holds that every listed chat runtime has an adapter and none is
+  unlisted. `featureAvailability.effortRefusal(runtime, effort, probed)` names the legal efforts or why there are
+  none; an empty effort (the default) is always legal. It is wired to the Models page's writes in E3.
+- Not in the file, on purpose: the question consultant's runtimes (`shared/runtime-capabilities.json` decides them)
+  and the Bugz ranking list (`shared/ranking-vendors.txt`), which is a security allowlist, not availability.
+- `src_mcp/tests/FeatureAvailabilityTests.cs` holds coai-mcp's `ConsultantResolution.Consulting` to the file — the
+  first test comparing the two halves' lists (before it, each pinned its own literal); shown red on a runtime added
+  to the file alone. coai-mcp reads the file itself from E2.1.

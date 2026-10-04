@@ -36,6 +36,9 @@ const SCRIPTS = [
   // Added 2026-10-02, PLAN_question_consultant.md S4: the three shipped base prompts the Question consultant
   // tab shows and restores. A stale copy is a Restore default that puts back words the server no longer ships.
   'generate-question-prompts.mjs',
+  // Added 2026-10-04, PLAN_one_model_catalog.md E1.2: which runtime serves the consultant and the chat, and the
+  // efforts each accepts. A stale copy is a picker offering what the CLI or coai-mcp then refuses.
+  'generate-feature-availability.mjs',
 ] as const;
 
 // out/test at run time, so two levels reach the package root.
