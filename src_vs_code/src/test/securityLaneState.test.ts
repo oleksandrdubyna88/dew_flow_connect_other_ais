@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULT_SECURITY, compactPrompts, securityLaneFrom, securityLaneSave, type SecurityLane, type SecurityPrompt } from '../securityLane';
-import { conditionsSummary, newPromptProblem, promptState, promptsInOrder, securityCommandWrite } from '../securityLaneState';
+import { conditionsSummary, newPromptProblem, promptState, promptsInOrder, repointWrite, restoreSteps, securityCommandWrite } from '../securityLaneState';
 import { DEFAULT_VENDORS } from '../vendors';
 import { SECURITY_SEED } from '../securityLane.generated';
 
@@ -124,4 +124,31 @@ test('a shipped id stored twice is never compacted, so the server keeps reading 
   // silently promote the second (own review, epic 2).
   const twice = securityLaneFrom({ prompts: [{ id: 'redteam-sql' }, { id: 'redteam-sql', triggers: ['xss'] }] });
   assert.deepEqual(compactPrompts(twice).prompts.filter(p => p.id === 'redteam-sql').map(p => p.triggers), [['sql'], ['xss']]);
+});
+
+test('Restore default asks whenever the file holds anything, refuses over unsaved edits, and is safe to press again', () => {
+  // An oversized or unreadable override is still the person's text: it is deleted only after they said yes (E3 plan round).
+  for (const text of ['written', 'placeholder', 'oversized', 'unreadable'] as const) assert.equal(restoreSteps(text, false, false).confirm, true, text);
+  assert.deepEqual(restoreSteps('blank', true, false), { refusal: '', confirm: false, writeConditions: true, deleteFile: true });
+  assert.deepEqual(restoreSteps('none', false, false), { refusal: '', confirm: false, writeConditions: false, deleteFile: false },
+    'a second press after a full restore does nothing');
+  assert.deepEqual(restoreSteps('written', false, false), { refusal: '', confirm: true, writeConditions: false, deleteFile: true },
+    'the retry after a failed delete deletes only — the conditions are already back');
+  const refused = restoreSteps('written', true, true);
+  assert.match(refused.refusal, /unsaved changes/);
+  assert.equal(refused.deleteFile || refused.writeConditions || refused.confirm, false);
+});
+
+test('a new prompt is put on the pair that asked only while that pair is still where it was', () => {
+  const lane: SecurityLane = { ...DEFAULT_SECURITY, runs: [{ vendor: 'codex', prompt: 'redteam-authz' }] };
+  assert.deepEqual(repointWrite(lane, '[0,"codex","redteam-authz"]', 'redteam-mine'), { field: 'run:0:prompt', value: 'redteam-mine' });
+  assert.deepEqual(repointWrite(lane, '[0,"codex","redteam-sql"]', 'redteam-mine'), { refusal: 'the pair changed while you typed' });
+  assert.ok('refusal' in repointWrite(lane, undefined, 'redteam-mine'));
+});
+
+test('a custom prompt with no conditions is summarised as running on every change, not as one that never runs', () => {
+  // Seen in the epic-4 screenshot: the summary told a person their own prompt would never run, while the server runs an
+  // empty-trigger custom prompt on every change (SecuritySignals.Triggered).
+  assert.equal(conditionsSummary({ id: 'redteam-mine', triggers: [], focus: [] }), 'Runs on every change: a custom prompt with no condition always runs; focus: none');
+  assert.match(conditionsSummary(sql({ triggers: [] })), /^Runs on: nothing — a shipped preset with no condition does not run/);
 });

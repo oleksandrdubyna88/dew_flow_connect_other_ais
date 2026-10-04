@@ -1,23 +1,42 @@
 import { escapeHtml as esc } from './escapeHtml';
 import { SECURITY_SEED } from './securityLane.generated';
 import {
-  SECURITY_SINCE, SECURITY_STAGES, securityAlways, securityLaneProblem, securitySupported, securityTokenBudget,
-  type SecurityLane, type SecurityPrompt, type SecurityRun,
+  DEFAULT_SECURITY, SECURITY_MOST_PROMPTS, SECURITY_MOST_RUNS, SECURITY_SINCE, SECURITY_STAGES, securityLaneProblem,
+  securitySupported, securityTokenBudget, securityWrite, type SecurityLane, type SecurityRun,
 } from './securityLane';
+import { promptState, promptsInOrder } from './securityLaneState';
+import { promptCard } from './securityPromptCard';
+import type { SecurityTextState } from './securityPromptFiles';
 import type { Vendor } from './vendors';
+
+/**
+ * The Security lane tab (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 3): the switches, the tag legend in two
+ * columns, one card per prompt in the order the person reads them, and the reviewer / prompt pairs with real buttons.
+ */
+
+/** What the host read about the prompt files: each prompt's text state, and the folder they live in. */
+export interface SecurityLaneFiles {
+  readonly text: Readonly<Record<string, SecurityTextState>>;
+  readonly promptsDir: string;
+}
+const NO_FILES: SecurityLaneFiles = { text: {}, promptsDir: '' };
+
+/** The pair's Prompt select ends in this: not a prompt, a request to make one (`securityLaneScript.ts`). */
+export const NEW_PROMPT_SENTINEL = '__newSecurityPrompt__';
 
 const at = (field: string): string => `data-setting="securityLane" data-security-field="${esc(field)}"`;
 const check = (field: string, on: boolean, label: string, disabled = false): string => `<label><input type="checkbox" ${at(field)}${on ? ' checked' : ''}${disabled ? ' disabled' : ''}> ${esc(label)}</label>`;
 const count = (field: string, value: number, min: number, max: number): string => `<input type="number" ${at(field)} min="${min}" max="${max}" value="${esc(String(value))}">`;
 const option = (id: string, value: string): string => `<option value="${esc(id)}"${id === value ? ' selected' : ''}>${esc(id)}</option>`;
-const select = (field: string, value: string, choices: readonly string[]): string => {
+/** A dropdown that keeps an unknown current value as an option; `extra` adds attributes to the select itself. */
+const select = (field: string, value: string, choices: readonly string[], extra = ''): string => {
   const options = [...new Set([value, ...choices])].map(id => option(id, value)).join('');
-  return `<select ${at(field)}>${options}</select>`;
+  return `<select ${at(field)}${extra}>${options}</select>`;
 };
-const signalLabels = (): string => SECURITY_SEED.signals.map(s =>
-  `<code>${esc(s.id)}</code> (${esc(s.label)}${s.trigger ? '' : '; focus only'})`).join(', ');
+const legend = (): string => '<ul class="seclane-tags">' + SECURITY_SEED.signals.map(s =>
+  `<li><code>${esc(s.id)}</code> ${esc(s.label)}${s.trigger ? '' : ' (focus only)'}</li>`).join('') + '</ul>';
 
-export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[], version: string): string {
+export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[], version: string, files: SecurityLaneFiles = NO_FILES): string {
   if ('invalidConfiguration' in lane) return malformedNote(lane.invalidConfiguration);
   const old = !securitySupported(version);
   return versionNote(version)
@@ -26,12 +45,45 @@ export function securityLaneBody(lane: SecurityLane, vendors: readonly Vendor[],
       <p>${check('enabled', lane.enabled, 'Enable security lane', old)}</p>
       <label>Allowed major/blocking findings ${count('threshold', lane.threshold, 0, 100)}</label>
       <label>Maximum rounds ${count('maxRounds', lane.maxRounds, 1, 10)}</label>
-      <h3>Prompts</h3><p>Tick each check for the reviewer that should run it. Matching code conditions are required for the twelve presets; removing every trigger disables their execution. Custom prompts with no triggers run every time. Focus prioritizes source. At most 16 reviewer / prompt pairs.</p>
-      <p>${signalLabels()}</p>`
-    + lane.prompts.map(p => promptBody(p, lane, vendors, old)).join('')
-    + `<label>Add prompt (redteam-name) <input type="text" ${at('addPrompt')} value=""></label><h3>Reviewer / prompt pairs</h3>`
+      <h3>Prompts</h3>
+      <p>Pair a prompt with a reviewer by ticking the reviewer on its card. Its conditions decide whether it runs: a shipped
+      preset runs when changed code matches one of them, and redteam-general runs on every code change. Your own prompt is
+      made with + New custom prompt, and its text lives in the file its card names.</p>`
+    + legend()
+    + promptsInOrder(lane).map(p => promptCard({
+      prompt: p, state: promptState(p, files.text[p.id] ?? 'none'), text: files.text[p.id] ?? 'none', vendors, old,
+      paired: vendor => lane.runs.some(r => r.vendor === vendor && r.prompt === p.id), promptsDir: files.promptsDir,
+    })).join('')
+    + promptsFooter(lane)
+    + '<h3>Reviewer / prompt pairs</h3>'
     + lane.runs.map((r, i) => runBody(r, i, lane, vendors)).join('')
-    + `<p>${check('addRun', false, 'Add reviewer / prompt pair')}</p>`;
+    + runsFooter(lane, vendors);
+}
+
+/** The prompt count, the button that makes one, and the prompts an over-full legacy lane loses. */
+function promptsFooter(lane: SecurityLane): string {
+  const full = lane.prompts.length >= SECURITY_MOST_PROMPTS;
+  const lost = lane.prompts.slice(SECURITY_MOST_PROMPTS).map(p => p.id);
+  return '<p class="seclane-actions">'
+    + `<button type="button" data-command="newSecurityPrompt" data-id=""${full ? ' disabled' : ''}>+ New custom prompt</button>`
+    + `<span class="seclane-count">Prompts: ${lane.prompts.length} of ${SECURITY_MOST_PROMPTS} (${DEFAULT_SECURITY.prompts.length} shipped)${full ? ' — the library is full' : ''}</span></p>`
+    + (lost.length === 0 ? '' : `<p class="stale">The server reads at most ${SECURITY_MOST_PROMPTS} prompts and drops ${esc(lost.join(', '))}.</p>`);
+}
+
+/** The pair count and + Add pair — disabled, with the reason as text, when pressing it could add nothing. */
+function runsFooter(lane: SecurityLane, vendors: readonly Vendor[]): string {
+  const canAdd = securityWrite(lane, 'addRun', true, vendors) !== lane;
+  const why = canAdd ? '' : whyNoPair(lane, vendors);
+  return '<p class="seclane-actions">'
+    + `<button type="button" data-command="addSecurityRun" data-id=""${canAdd ? '' : ' disabled'}>+ Add reviewer / prompt pair</button>`
+    + `<span class="seclane-count">Pairs: ${lane.runs.length} of ${SECURITY_MOST_RUNS}${why}</span></p>`;
+}
+
+/** Why + Add pair can add nothing — said as text beside it, never only as a disabled look. */
+function whyNoPair(lane: SecurityLane, vendors: readonly Vendor[]): string {
+  if (lane.runs.length >= SECURITY_MOST_RUNS) return ' — the most a lane holds';
+  return vendors.some(v => v.enabled) ? ' — every enabled reviewer is already paired with every prompt it can take'
+    : ' — no reviewer is enabled; enable one under Reviewers';
 }
 
 /** Where the malformed value lives and what is wrong with it — the setting a person can open, never the panel's stand-in. */
@@ -47,20 +99,28 @@ function versionNote(version: string): string {
   return '';
 }
 
+/**
+ * One pair. Its Remove button and its Prompt select's "+ New custom prompt…" carry the pair's IDENTITY — row, reviewer,
+ * prompt — so a pair that moved between the paint and the press is refused rather than the wrong one written (D5).
+ */
 function runBody(r: SecurityRun, i: number, lane: SecurityLane, vendors: readonly Vendor[]): string {
   const v = vendors.find(v => v.id === r.vendor);
   const context = r.context ?? defaultContext(v);
   const field = (key: string): string => 'run:' + i + ':' + key;
   const stages = r.stages ?? SECURITY_STAGES;
+  const identity = JSON.stringify([i, r.vendor, r.prompt]);
+  const prompts = promptsInOrder(lane).map(p => p.id);
+  const promptSelect = select(field('prompt'), r.prompt, prompts, ` data-seclane-run="${esc(identity)}"`)
+    .replace('</select>', `<option value="${NEW_PROMPT_SENTINEL}">+ New custom prompt…</option></select>`);
   return `<fieldset><legend>Pair ${i + 1}${securityOnly(v) ? ' — security only' : ''}</legend>
         ${runWarnings(r, lane, v)}
         <label>Reviewer ${select(field('vendor'), r.vendor, vendors.map(v => v.id))}</label>
-        <label>Prompt ${select(field('prompt'), r.prompt, lane.prompts.map(p => p.id))}</label>
+        <label>Prompt ${promptSelect}</label>
         <label>Source ${select(field('context'), context, ['slice', 'diff'])}</label>
         <label>Context token budget ${count(field('contextTokens'), securityTokenBudget(r, context), 1024, 200000)}</label>
         ${check(field('code'), stages.includes('code'), 'Code')}
         ${check(field('feature'), stages.includes('feature'), 'Feature')}
-        ${check(field('remove'), false, 'Remove pair')}</fieldset>`;
+        <p class="seclane-actions"><button type="button" data-command="removeSecurityRun" data-id="${esc(identity)}" data-seclane-then="addSecurityRun" data-seclane-then-id="">Remove pair</button></p></fieldset>`;
 }
 const defaultContext = (v: Vendor | undefined): string => v?.runtime === 'local' ? 'slice' : 'diff';
 const securityOnly = (v: Vendor | undefined): boolean => v !== undefined && ![v.code, v.plan, v.document, v.feature].some(Boolean);
@@ -70,44 +130,4 @@ function runWarnings(run: SecurityRun, lane: SecurityLane, vendor: Vendor | unde
   if (!vendor?.enabled) warnings.push(`Reviewer ${run.vendor} is unavailable; select an enabled reviewer.`);
   if (!lane.prompts.some(p => p.id === run.prompt)) warnings.push(`Prompt ${run.prompt} is missing; select a registered prompt.`);
   return warnings.map(message => `<p class="stale">${esc(message)}</p>`).join('');
-}
-
-/**
- * An "always" prompt's whole condition story. A general registered by hand before it shipped may still carry
- * triggers: a server from before then runs it only when they match, so the card must not claim "every change"
- * until they are cleared — and clearing them is one button (the plan's D6; the coai code round on epic 1).
- */
-function alwaysBody(p: SecurityPrompt): string {
-  if (p.triggers.length === 0) return '<p>Runs on every code change while a reviewer is ticked; it has no conditions.</p>';
-  return `<p class="stale">${esc(p.id)} has stored conditions (${esc(p.triggers.join(', '))}) from before it shipped. This version ignores them, but an older MCP server still runs it only when they match. Clear them so it runs on every code change.</p>
-    <button type="button" data-command="clearSecurityConditions" data-id="${esc(p.id)}">Clear stored conditions</button>`;
-}
-
-const triggerWarning = (p: SecurityPrompt, preset: boolean): string => preset && !securityAlways(p.id) && p.triggers.length === 0
-  ? `<p class="stale">${esc(p.id)} has no triggers; select at least one condition to run this preset.</p>` : '';
-
-/**
- * What decides whether a prompt runs. An "always" prompt has no conditions to set — its writes are refused — so
- * it draws none, and says what it does instead (todo/PLAN_the_security_tab_reads_at_a_glance.md, D1).
- */
-function conditionsBody(p: SecurityPrompt): string {
-  if (securityAlways(p.id)) return alwaysBody(p);
-  return `<p>Run when code matches: ${SECURITY_SEED.signals.filter(s => s.trigger).map(s =>
-      check('trigger:' + p.id + ':' + s.id, p.triggers.includes(s.id), s.label)).join(' ')}</p>
-    <p>Prioritize source: ${SECURITY_SEED.signals.map(s =>
-      check('focus:' + p.id + ':' + s.id, p.focus.includes(s.id), s.label)).join(' ')}</p>
-    <label>All trigger tags <input type="text" ${at('prompt:' + p.id + ':triggers')} value="${esc(p.triggers.join(', '))}"></label>
-    <label>All focus tags <input type="text" ${at('prompt:' + p.id + ':focus')} value="${esc(p.focus.join(', '))}"></label>`;
-}
-
-function promptBody(p: SecurityPrompt, lane: SecurityLane, vendors: readonly Vendor[], old: boolean): string {
-  const preset = SECURITY_SEED.prompts.some(seed => seed.id === p.id);
-  return `<fieldset><legend>${esc(p.id)}</legend>
-    ${triggerWarning(p, preset)}
-    <p>${vendors.filter(v => v.enabled).map(v => check('pair:' + v.id + ':' + p.id,
-      lane.runs.some(r => r.vendor === v.id && r.prompt === p.id), v.id, old)).join(' ')}</p>
-    <p>Repository prompt: <code>src_mcp/src/prompts/${esc(p.id)}.md</code></p>
-    <button data-command="editSecurityPrompt" data-id="${esc(p.id)}">Edit local prompt override</button>
-    ${conditionsBody(p)}
-    ${preset ? '' : check('prompt:' + p.id + ':remove', false, 'Remove custom prompt')}</fieldset>`;
 }

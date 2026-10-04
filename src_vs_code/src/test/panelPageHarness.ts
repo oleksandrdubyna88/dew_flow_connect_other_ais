@@ -80,6 +80,8 @@ export class Control {
   className = '';
   /** A DOM's `hidden` — the busy bar is drawn hidden and shown by the page (`busyMark.ts`). */
   hidden = false;
+  /** A `<details>` fold's state — a DOM's `open`; the page script reopens folds by setting it (the Security lane tab). */
+  open = false;
   /** What the control says — a button's label as the page drew it, and as its script relabels it. A DOM's `textContent`. */
   textContent = '';
   /** The node the control sits in: what a page calls `insertBefore` on. Set when the control joins a running page. */
@@ -188,10 +190,19 @@ export function controlFrom(tag: string, attributes: string): Control {
   // unticked here, and a test could not tell a page drawn from the stored value from one that was not.
   control.checked = /\schecked(?=[\s>]|$)/.test(attributes);
   for (const [, name, value] of attributes.matchAll(/data-([a-zA-Z-]+)="([^"]*)"/g)) {
-    control.dataset[camel(name!)] = value!;
+    control.dataset[camel(name!)] = decoded(value!);
   }
 
   return control;
+}
+
+/**
+ * An attribute value as a DOM hands it to a script: the four entities `escapeHtml` writes, decoded — `&amp;` last, so
+ * an escaped entity stays one. Without this a value carrying a quote (a JSON pair identity) reached the script still
+ * escaped, which no browser does.
+ */
+function decoded(value: string): string {
+  return value.replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 }
 
 /**
@@ -218,6 +229,18 @@ function promptsOf(html: string): readonly Control[] {
   return [...html.matchAll(/<select\b([^>]*)>/g)]
     .filter(([, attributes]) => attributes!.includes('data-prompt="'))
     .map((match) => withChoice(controlFrom('select', match[1]!), html, match.index));
+}
+
+/** Every Security lane conditions fold the page carries — a `<details>` the page reopens by its saved state. */
+function foldsOf(html: string): readonly Control[] {
+  return [...html.matchAll(/<details\b([^>]*)>/g)]
+    .filter(([, attributes]) => attributes!.includes('data-seclane-open="'))
+    .map(([, attributes]) => {
+      const fold = controlFrom('details', attributes!);
+      fold.open = /\sopen(?=[\s>]|$)/.test(attributes!);
+
+      return fold;
+    });
 }
 
 /**
@@ -318,6 +341,8 @@ export interface Page {
   readonly bar: Control | null;
   /** Every `data-command` button, bound by the page's own script — `fire('click')` is a person clicking it. */
   readonly commands: readonly Control[];
+  /** Every Security lane conditions fold — `open` is what the person sees; `fire('toggle')` is them opening it. */
+  readonly folds: readonly Control[];
   readonly posted: readonly Record<string, unknown>[];
   /** What a live region holds NOW — its rendered content until a delivered message replaces it. */
   readonly region: (id: string) => string;
@@ -467,6 +492,7 @@ export function runPanel(state: PanelState, options: RunOptions = {}): Page {
   const controls = controlsOf(html);
   const prompts = promptsOf(html);
   const commands = commandsOf(html);
+  const folds = foldsOf(html);
   const posted: Record<string, unknown>[] = [];
   const regions = regionsOf(html);
   const inserted: Inserted[] = [];
@@ -482,7 +508,7 @@ export function runPanel(state: PanelState, options: RunOptions = {}): Page {
   const bar = busyBarOf(html);
   const fakeDocument = {
     addEventListener: () => undefined,
-    querySelectorAll: (selector: string): readonly Control[] => selected(selector, controls, commands, prompts),
+    querySelectorAll: (selector: string): readonly Control[] => selected(selector, controls, commands, prompts, folds),
     querySelector: (): null => null,
     // The live regions answer, so the script's live push can be watched landing — widened when the
     // cadence line joined Active rounds, now Active gates (PR #556, CodeRabbit). And the busy bar, when the page
@@ -519,6 +545,7 @@ export function runPanel(state: PanelState, options: RunOptions = {}): Page {
     controls,
     prompts,
     commands,
+    folds,
     posted,
     clock,
     bar,
@@ -541,6 +568,7 @@ export function runPanel(state: PanelState, options: RunOptions = {}): Page {
  */
 export function selected(
   selector: string, controls: readonly Control[], commands: readonly Control[], prompts: readonly Control[],
+  folds: readonly Control[] = [],
 ): readonly Control[] {
   switch (selector) {
     case '[data-setting]':
@@ -549,6 +577,8 @@ export function selected(
       return commands;
     case '[data-prompt]':
       return prompts;
+    case '[data-seclane-open]':
+      return folds;
     case 'select':
       // Every dropdown the page drew, a setting's and a prompt picker's alike — as `querySelectorAll('select')` does.
       return [...controls.filter((one) => one.tagName === 'SELECT'), ...prompts];

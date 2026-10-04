@@ -3,6 +3,8 @@ import { TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textControlsSt
 import { scalePx } from './zoomControl';
 import { tabKeysScript } from './tabKeys';
 import { jsonForScript } from './webviewHtml';
+import { SECURITY_LANE_CSS } from './securityLaneStyle';
+import { securityLaneScript } from './securityLaneScript';
 
 /**
  * What the Settings tab adds to the panel's shared document: its strip's look and its tab switching.
@@ -22,6 +24,7 @@ import { jsonForScript } from './webviewHtml';
  */
 export const SETTINGS_CSS = `
 ${tabCss('0 0 12px')}
+${SECURITY_LANE_CSS}
   body { padding: 12px 20px 24px; }
   .settings .tabs { flex-wrap: wrap; }
   .settings .tabs .tab { width: auto; margin: 0; flex: 0 0 auto; }
@@ -97,6 +100,7 @@ export function settingsScript(heldTab: string): string {
   showSettingsTab(shownTab, false);
 ${tabKeysScript()}
 ${textControlsScript()}
+${securityLaneScript()}
   // The root too: the small print is in rem, and rem follows the root, not the body.
   window.addEventListener('message', (event) => {
     if (event.data?.type === 'uiScale') { document.documentElement.style.fontSize = event.data.px + 'px'; }

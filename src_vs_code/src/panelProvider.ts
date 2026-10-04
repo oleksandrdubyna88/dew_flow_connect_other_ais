@@ -69,6 +69,9 @@ import type { QuestionConsult } from './questionConsults';
 import { securityLaneFrom, securityLaneSave } from './securityLane';
 import { editSecurityPrompt } from './securityPromptEditor';
 import { SECURITY_PROMPT_WATCH, SecurityPromptTextCache } from './securityPromptFiles';
+import { securityFlowHost } from './securityCommands';
+import { runSecurityCommand, type SecurityFlowHost } from './securityFlows';
+import { promptsDir } from './rolesPrompts';
 import { watchGlob } from './fileWatch';
 import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
@@ -1084,6 +1087,16 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     return { changed, stop: watchGlob(dataDir, SECURITY_PROMPT_WATCH, changed) };
   }
 
+  /** What the Security lane tab's buttons run against: this provider's write queue, write path and stored setting. */
+  private securityCommandHost(from: SurfaceSlot): SecurityFlowHost {
+    return securityFlowHost({
+      lane: () => securityLaneFrom(this.read(vscode.workspace.getConfiguration('coai'))('securityLane')),
+      dataDir: this.dataDir,
+      enqueue: (work) => this.enqueue(work),
+      write: (field, value) => this.write({ key: 'securityLane', securityField: field, value }, from),
+    });
+  }
+
   /**
    * Re-read everything and repaint — counted (`renderTracker.ts`), so a write's busy mark can settle on a render that
    * carried it. Renders still run side by side: one stalled on a slow fetch must not hold up the next paint.
@@ -1145,6 +1158,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       consultPrompt: await this.consultPrompt.readConsultPrompt(),
       qconsultPromptOverrides: await this.qconsult.overrides(),
       // Read only while the Settings page exists: the sidebar never draws a prompt card.
+      securityPromptDir: promptsDir(this.dataDir.fsPath),
       securityPromptText: this.settingsTab.view === undefined ? undefined
         : await this.securityPromptText.states(this.dataDir.fsPath, settings.securityLane.prompts.map(p => p.id)),
       qconsultPlaces: this.qconsult.places(),
@@ -2175,9 +2189,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         if (id !== undefined) await editSecurityPrompt(this.dataDir, id,
           securityLaneFrom(this.read(vscode.workspace.getConfiguration('coai'))('securityLane')));
         break;
+      case 'addSecurityRun':
+      case 'removeSecurityRun':
+      case 'newSecurityPrompt':
+      case 'restoreSecurityPrompt':
+      case 'removeSecurityPrompt':
       case 'clearSecurityConditions':
-        // A lane write like any other, so it is serialised with the setting writes rather than racing them.
-        if (id !== undefined) this.enqueue(() => this.write({ key: 'securityLane', securityField: `prompt:${id}:restore`, value: true }, from));
+        await runSecurityCommand(command, id, this.securityCommandHost(from));
         break;
       case 'customCommandModel':
         if (id !== undefined) {
