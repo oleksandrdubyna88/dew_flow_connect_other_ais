@@ -1,3 +1,4 @@
+import { byCodeUnit } from './codeUnitOrder';
 import { promptFile } from './rolesPrompts';
 import { sectionsOf } from './settingRefused';
 
@@ -322,7 +323,7 @@ export function byName(left: string, right: string): number {
   return left.localeCompare(right);
 }
 
-/** A value's JSON with object keys sorted — equal values give equal text. */
+/** A value's JSON with object keys sorted — equal values give equal text, on every machine. */
 export function canonical(value: unknown): string {
   return JSON.stringify(sortedKeys(value)) ?? 'undefined';
 }
@@ -333,7 +334,9 @@ function sortedKeys(value: unknown): unknown {
   }
 
   return isRecord(value)
-    ? Object.fromEntries(Object.keys(value).sort(byName).map((key) => [key, sortedKeys(value[key])]))
+    // Code units, never `byName`: this is an equality test, and a collation both reads the machine's locale and
+    // ties distinct keys, which kept them in insertion order — one value, two texts (see `byCodeUnit`).
+    ? Object.fromEntries(Object.keys(value).sort(byCodeUnit).map((key) => [key, sortedKeys(value[key])]))
     : value;
 }
 
