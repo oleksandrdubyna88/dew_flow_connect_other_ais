@@ -3,7 +3,8 @@ import * as path from 'node:path';
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { DEFAULTS, enabledCodeRoles, envBlock, settingsFrom } from '../settingsShape';
-import { DEFAULT_VENDORS, normaliseId, Vendor, vendorsEnv, vendorsFrom } from '../vendors';
+import { DEFAULT_VENDORS, normaliseId, Vendor, vendorsFrom } from '../vendors';
+import { vendorsEnv } from '../vendorsWire';
 import { ROLES } from '../prompts';
 
 /** A reader over a plain object, as VS Code's configuration behaves for our purposes. */

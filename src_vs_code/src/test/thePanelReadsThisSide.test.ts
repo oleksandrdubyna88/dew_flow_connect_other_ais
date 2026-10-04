@@ -73,18 +73,18 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
   // the storage choice reads where data lives before any side is known.
   'sideConfig.ts forwarding reader': { count: 2, why: 'readerFor / userLayer and the storage choice — the door' },
   'sideConfig.ts global write': { count: 1, why: 'saveSetting, when this side keeps no settings of its own' },
-  'panelProvider.ts forwarding reader': { count: 1, why: 'seeding the overlay copies what this side reads TODAY' },
   'panelProvider.ts global write': { count: 2, why: 'coai.teamServers — one list every side shares, by design' },
   'chatPresetsPanel.ts global write': { count: 1, why: 'coai.chatModelPresets — not a per-side setting' },
   'configTransferCommands.ts global write': { count: 1, why: 'an import writes the base layer; per-side overrides are never touched' },
   'helpPanel.ts global write': { count: 1, why: 'coai.helpLanguage — about the reader, not the work' },
   'textToneHost.ts global write': { count: 1, why: 'coai.textTone — about the reader, not the work' },
   'uiScaleHost.ts global write': { count: 1, why: 'coai.uiScale — about the reader, not the work' },
-  // The chat reads its own settings from the shared layer: none of them is a per-side setting today
-  // (PLAN_one_model_catalog.md E4.3 makes the chat per side, and these sites move with it).
-  'chatCommand.ts forwarding reader': { count: 3, why: 'chatSettingsFrom — the chat settings are not per side yet' },
-  'chatHooks.ts forwarding reader': { count: 1, why: 'chatSettingsFrom — the chat settings are not per side yet' },
-  'chatShow.ts forwarding reader': { count: 1, why: 'chatSettingsFrom — the chat settings are not per side yet' },
+  // The catalog migration moves EACH layer on its own (PLAN_one_model_catalog.md E1.3): the user layer is read raw
+  // and written Global on purpose — a workspace value is not the person's to have migrated, and the merged reader
+  // would hand it one — and a side's overlay reads the user layer's rows its keys fall back to (`sharedVendors`).
+  // (The chat's three shared-layer readers left with E1.1: the chat reads its model keys through `userLayer`.)
+  'catalogMigrationHost.ts by-name': { count: 1, why: 'sharedVendors — the user rows an overlay falls back to' },
+  'catalogMigrationHost.ts global write': { count: 1, why: 'the migration writes the user layer it read, and no other' },
   // Not configuration at all: the shape matches a Map lookup too, and these two are exactly that.
   'chatPresets.ts forwarding reader': { count: 1, why: 'a Map lookup (byId), not a configuration read' },
   'configTransfer.ts forwarding reader': { count: 1, why: 'a Map lookup (FITS), not a configuration read' },

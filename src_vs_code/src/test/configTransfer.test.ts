@@ -86,7 +86,7 @@ test('a file that is not a config, or of another version, is refused with a sent
   assert.equal(other.ok, false);
   const newer = importedConfig(JSON.stringify({ format: CONFIG_FORMAT, version: CONFIG_VERSION + 1, settings: {}, prompts: {} }), declared);
   assert.equal(newer.ok, false);
-  assert.match(newer.ok ? '' : newer.why, /version 2/);
+  assert.match(newer.ok ? '' : newer.why, new RegExp(`version ${CONFIG_VERSION + 1}`));
 });
 
 test('an unknown key, a never-transferred key and a bad prompt name are refused by name, WITH a reason, and the rest applies', () => {

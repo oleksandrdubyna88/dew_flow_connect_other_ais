@@ -14,6 +14,7 @@ import { remoteIsFull } from './remoteAsk';
 import { pushChatState } from './chatPanel';
 import { isRemote } from './chatModels';
 import { agentOffered } from './chatAccessRules';
+import { userLayer } from './sideConfig';
 
 /**
  * What the page is told, and the five small facts every caller of it needs first.
@@ -80,7 +81,7 @@ export function show(entry: ChatEntry, running: boolean, failure: string, queued
     // the two apart for as long as an answer lasts, and what is marked has to be what is THERE.
     marks: {
       role: thread.role,
-      task: taskOf(config, thread.promptId, chatSettingsFrom((key) => config.get(key)).prompt),
+      task: taskOf(config, thread.promptId, chatSettingsFrom(userLayer(config)).prompt),
       service: serviceLines(chatLanguage()),
     },
     queued,
@@ -158,7 +159,7 @@ export function show(entry: ChatEntry, running: boolean, failure: string, queued
 
 /** The answer language, read fresh: a follow-up turn is asked long after the command ran. */
 export function chatLanguage(): LanguageCode {
-  return chatSettingsFrom((key) => vscode.workspace.getConfiguration('coai').get(key)).language;
+  return chatSettingsFrom(userLayer(vscode.workspace.getConfiguration('coai'))).language;
 }
 
 /** A thrown thing, as a sentence. */

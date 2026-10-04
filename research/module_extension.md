@@ -10505,6 +10505,161 @@ belongs to the extension as a whole:
   population constant rose 144 → 146 with its reason. Sonar's coverage exclusions gained `fileWatch.ts` and
   `securityCommands.ts`, which import `vscode`.
 
+## The reviewer list grows into the model catalog (2026-10-04, `todo/PLAN_one_model_catalog.md` E1)
+
+Epic 1 changes the DATA and nothing a person sees. Its stories, as they land:
+
+**E1.1 — the row widens, and the model keys are read from the person's own layer.**
+
+- `coai.vendors` rows gain `name`, `uses` (`security`, `consultant`, `qconsult`, `chat`, `bugz` — the review
+  stages stay `plan`/`code`/`document`/`feature`), `systemPrompt`, `timeoutMinutes` (CLI rows; api rows keep
+  `reviewMinutes`) and `chatStartingPrompt`. Each is absent unless said, so a row written before the catalog parses
+  to exactly what it did. Parsed in `catalogFields.ts` (free of `vendors.ts`, so the import graph gains no cycle);
+  `effort` was already parsed on every row by `storedApiSettings`.
+- `catalogRules.ts` judges a catalog: more than `MAX_ROWS` (64) rows, or a system or chat starting prompt over
+  `MAX_PROMPT_BYTES` (8192, counted in UTF-8 bytes because bytes are what crosses), is refused with a sentence
+  naming the limit. `reviewsAnything(row)` is the test E1.4 uses to leave a row that reviews no stage out of
+  `COAI_VENDORS`.
+- None of the new fields crosses: `vendorsWire.ts` — the wire half of `vendors.ts`, split out because that file was
+  at the 800-line limit — writes a whitelist of fields, never the stored row. `saidText.ts` is the one trimmed-text
+  reader both halves use.
+- `modelKeys.ts`: the seven model-bearing keys (`vendors`, `consultants`, `qconsultRows`, `chatModel`,
+  `chatModelPresets`, `bugzModel`, `securityLane`) are read from the user layer (then the manifest default) via
+  `inspect()`, never from a workspace or folder. None of `coai.*` declares a manifest scope, so VS Code merged a
+  repository's `.vscode/settings.json` over the user's — a cloned repository could choose an `executablePath` the
+  next review ran. A manifest `scope` was not used because it also changes which layer a remote (WSL) window reads.
+  `sideConfig.userLayer(config)` is the one door; `readerFor` builds on it; `modelKeysAreReadOnce.test.ts` refuses
+  any other direct read (shown red on a planted `config.get('chatModelPresets')`).
+  It also refuses a reader that hands ANY key to the merged configuration (`(key) => config.get(key)`, typed or on
+  `getConfiguration('coai')`): red on the five that fed `chatSettingsFrom` (`chatModel`, `chatModelPresets`) and
+  the per-side seeding (`vendors`) — all five now pass `userLayer(config)` (PR #681 review).
+- On activation, `sideConfig.noticeIgnoredWorkspaceModels` says once per window which key a workspace or folder
+  tried to set (`model-setting-from-workspace`, a refusal), and offers *Copy to my settings* only when the person's
+  own layer holds nothing — so it never overwrites what they set. "Holds" is judged where the copy LANDS
+  (`modelKeys.copyWouldReplace`): this side's own settings when it keeps them and `saveSetting` writes the key there
+  (`writesTheOverlay`, the one rule both use), else the user layer — asked when the notice is shown and again at the
+  click (PR #681 review).
+
+```mermaid
+flowchart LR
+  WS[".vscode/settings.json<br/>coai.vendors"] -. ignored, noticed .-> N[noticeIgnoredWorkspaceModels]
+  U["user settings<br/>coai.vendors"] --> UL["sideConfig.userLayer<br/>(modelKeys.userLayerReader)"]
+  UL --> R[readerFor] --> O[side overlay first] --> V[vendorsFrom + catalogFields]
+  V --> W["vendorsWire.vendorsEnv<br/>(whitelist)"] --> F["settings.json in the data dir<br/>COAI_VENDORS"]
+```
+
+**E1.2 — one shared file says which runtime serves which feature, and which efforts each accepts.**
+
+- `shared/feature-availability.json` holds the `consultant` and `chat` runtime lists, frozen to what both halves did
+  on 2026-10-04, and one `effort` row per runtime with its source: `list` (Claude: `low, medium, high, xhigh, max`,
+  read off `claude --help`, Claude Code 2.1.289), `probe` (api and local: the model's probe report), `unmeasured`
+  (codex — no command short of a model turn names the legal values, so none is written until E2 observes one — and
+  the Team server until contract v2) and `none` (antigravity by the operator's ruling; the retired gemini runtime).
+- `scripts/generate-feature-availability.mjs` writes `featureAvailability.generated.ts` (`CONSULTING`, `CHAT`,
+  `EFFORT`), refusing an unknown field, a feature runtime outside the runtimes, a runtime with no effort row or two,
+  levels on a non-`list` source, and any effort on antigravity; `--check` is in `generatedFilesAreCurrent.test.ts`.
+- `CONSULTING_RUNTIMES` (`consultSettings.ts`) and `CHAT_RUNTIMES` (`cliChatLaunch.ts`) ARE the generated lists
+  now; the chat adapter map stays the proof — a test holds that every listed chat runtime has an adapter and none is
+  unlisted. `featureAvailability.effortRefusal(runtime, effort, probed)` names the legal efforts or why there are
+  none; an empty effort (the default) is always legal. It is wired to the Models page's writes in E3.
+- Not in the file, on purpose: the question consultant's runtimes (`shared/runtime-capabilities.json` decides them)
+  and the Bugz ranking list (`shared/ranking-vendors.txt`), which is a security allowlist, not availability.
+- `src_mcp/tests/FeatureAvailabilityTests.cs` holds coai-mcp's `ConsultantResolution.Consulting` to the file — the
+  first test comparing the two halves' lists (before it, each pinned its own literal); shown red on a runtime added
+  to the file alone. coai-mcp reads the file itself from E2.1.
+
+**E1.3 — consultant and question-consultant definitions move into the catalog, once per layer.**
+
+- `catalogMigration.migrateLayer(layer)` is pure: one settings layer in (the user layer, or one side's overlay), the
+  writes out. A consultant entry or question row that carries its own `runtime` becomes a row that reviews nothing
+  (`plan`/`code`/`document` false — an older build reads those flags too), lists the feature in `uses`, and keeps the
+  key's name in `vaultKeyName` (the definition's `vendor`, so its vault entry and ledger name do not move). The entry
+  becomes a reference: a consultant `{ "vendor": "<row id>" }`; a question row keeps its `id`, `prompt`, `enabled`
+  and `key` and names the row in `vendor`.
+- Ids are deterministic: `consult-<caller>`, `ask-<question id>`; a taken id takes the next free `-N`
+  (`freeVendorId`). A definition JOINS a row only when every launch field (runtime, model, baseUrl, executablePath,
+  no dialect) and the key's name match — its desired id first — and a consultant never becomes a reference equal to
+  its caller's shipped pair, which `callersOnTheWire` would leave off the wire.
+- Writes, in order: the backup `migratedFrom` (`{ keys, values }` — every key the move may rewrite, absence recorded
+  as absence; written once, never overwritten), `vendors`, the references, the marker `catalogMigration: "migrated"`.
+  A rerun finds rows already added by their exact fields, so a run stopped after any write is finished, never
+  duplicated (tested at every stop point). More than 64 rows: nothing is written in that layer, and it says how many.
+  A name that is not a model id is left as it is, and said.
+- An older build rewrites `coai.vendors` from its own parse, which drops `uses`; the next run gives the use back to a
+  row that reviews nothing, has no `uses`, is not an api row and carries a foreign `vaultKeyName` — a shape only the
+  migration gives a CLI row — and only for a feature a reference still names it for.
+- `restoreLayer` puts every backed-up key back exactly (removing those that were absent) and marks the layer
+  `restored`; `migrateLayer` leaves a restored layer alone until the person asks.
+- Byte-identical env block, three pieces (each shown red when removed): `resolveConsultant` rule (a) gives back the
+  row's `vaultKeyName` through a row that lists `consultant`; `qconsultSettingsFrom` resolves a question row that
+  names a row listing `qconsult` to its definition in the row's own key order (`COAI_QCONSULT_ROWS` IS the wire);
+  `catalogRules.rowsOnTheWire` leaves out of `COAI_VENDORS` a row that reviews nothing and whose `uses` are all
+  features that cross resolved — kept when it lists `security`, a Security lane run names it, or the lane could not be
+  read. A row with no `uses` is a row from before the catalog and crosses as it always did.
+- `catalogMigrationHost.ts` (vscode, Sonar coverage-excluded): runs on activation, on a configuration change of
+  `vendors`/`consultants`/`qconsultRows`, and after `saveSetting` writes one of them into an overlay (which raises no
+  event) — queued through a `WriteQueue`, never concurrent. The user layer is read raw through `inspect().globalValue`
+  (so a manifest default is never migrated and a workspace value never reaches it) and written with
+  `ConfigurationTarget.Global`; the overlay through `readOverlay` and `globalState`. It speaks only about what it LEFT
+  (`catalog-migration-left`) or a stopped run (`catalog-migration-failed`). *ConnectOtherAIs: Restore settings from
+  before the catalog* (`coai.restoreCatalogBackup`) asks first, naming the layers (`catalog-restore-confirm`), or says
+  there is nothing to restore (`catalog-restore-none`). Help article `models-move-into-the-catalog`, five languages.
+- Not moved here: chat presets (conversations refer to a preset by id — E4.3, with the chat tab) and the Bugz model
+  (ranking matches the row id `local` on both halves — E2.1, with the runtime match).
+
+```mermaid
+sequenceDiagram
+  participant A as activate / config change / saveSetting
+  participant H as catalogMigrationHost
+  participant M as migrateLayer (pure)
+  participant L as layer (user settings.json | side overlay)
+  A->>H: scheduleCatalogMigration (queued)
+  H->>L: read vendors, consultants, qconsultRows, marker, backup
+  H->>M: migrateLayer(layer)
+  M-->>H: writes: migratedFrom (once) → vendors → references → catalogMigration
+  H->>L: apply in order (stop on refusal; the next run finishes it)
+  H->>A: after: mirror the server settings file, redraw the panel
+  Note over M: env block before == env block after (consultant + question resolution, rowsOnTheWire)
+```
+
+**E1.4 — the old Settings page writes through the catalog.**
+
+- `catalogEdit.foldedWrite` sits in `PanelProvider.save`, the old page's one save funnel (the consultant section,
+  its custom endpoint, and every Question consultant write and button reach it). For `consultants` and
+  `qconsultRows` it folds the change into the catalog before the write: an entry that referred to a catalog row only
+  it uses (reviews nothing, one `uses`, one reference across consultants, question rows and Security lane runs) has
+  that row rewritten in place and stays a reference — a model edit or a new vendor pick never forks a row; a question
+  row written back resolved but unchanged becomes the reference again; a reference the edit removes takes its row
+  with it. A shared row is never rewritten: the edit stays a definition and the migration gives it its own row. The
+  rows are saved FIRST, so a refusal between the two writes leaves a row nobody refers to yet.
+- `catalogRules.shownOnTheOldPage`: the panel's render state lists a row only when it reviews a stage or has no
+  `uses` — a migrated consultant is no reviewer on the old page, and "the last reviewer stays" counts the same way.
+  Display only; every write reads the rows afresh. The page is drawn AND priced from that one list: priced from every
+  row, a hidden `api` consultant with a reviewer's model put its endpoint's rate on the reviewer's card
+  (`theOldPagePricesWhatItShows.test.ts`). The spending and consultation tabs keep every row — a consultant's runs are billed.
+- The three reviewer-list writes that went around the side overlay (add a reviewer, remove a reviewer, remove a
+  Team server's rows) go through `save`, so a side that keeps its own settings gets them and a refusal is said.
+- `scripts/seam-catalog.mjs`, the seam's tenth leg: a multi-instance catalog (two `claude` rows, a consultant and a
+  question-consultant definition, effort and a system prompt on a CLI row) is migrated by the extension's own code;
+  the settings file the extension writes is byte-identical before and after, and the real coai-mcp binary lists the
+  same reviewers (`claude, claude-2, codex`) with no catalog-only row among them.
+
+**E1.5 — export/import format v2.**
+
+- `CONFIG_VERSION` is 2: a file this build writes carries the catalog's rows and references, because export writes
+  the base layer as it is. Versions 1 and 2 are read; a v1 file (definitions, from a build before the catalog)
+  imports, and the catalog migration then moves its definitions into rows like any other. An older build refuses a
+  v2 file by name. `migratedFrom` and `catalogMigration` are never transferred, either way — the copy would overwrite
+  the importer's own backup, and a `restored` marker would stop a migration the importer never declined.
+- An import that names `vendors`, `consultants` or `qconsultRows` replaces the models, so its confirmation adds
+  `modelsSentence`: "It replaces your N models with the file's M", and every file row that reads an API key
+  (`asksAnEndpoint`) whose key (`vaultKeyOf`) this side's vault does not hold — read from the panel's last
+  `--providers` answer (`PanelProvider.vaultKeyNames`), and said as "not known yet" when nobody has asked.
+- Before such an import is applied, the current setup is exported to `<dataDir>/config-backups/before-import-<UTC
+  moment>.json` (`backupFileName`), named in the confirmation; *Import config* with that file puts it back. The
+  newest ten are kept (`staleBackups`); a backup that cannot be written stops the import. `config-backups/` is in
+  `shared/data-inventory.json` and `DATA_TO_MOVE` (moves, clashes).
+
 ## The sidebar reads and writes THIS side's settings (2026-10-04)
 
 With *separate settings for each side* on, `PanelProvider` drew the page from `settingsFrom((section) =>

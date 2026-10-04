@@ -47,6 +47,7 @@ import {
   waitingQuestion,
 } from './claudeSessions';
 import { triggerPlan } from './chatTrigger';
+import { userLayer } from './sideConfig';
 
 /**
  * The one command the person actually presses.
@@ -125,7 +126,7 @@ function newConversation(
       carryFrom: CARRY_EVERYTHING,
       marks: {
         role: roleOf(config, ready.providerId),
-        task: taskOf(config, openingPrompt(config), chatSettingsFrom((key) => config.get(key)).prompt),
+        task: taskOf(config, openingPrompt(config), chatSettingsFrom(userLayer(config)).prompt),
         service: serviceLines(chatLanguage()),
       },
       uiScale: chatUiScale(),
@@ -211,7 +212,7 @@ export async function chatWithOtherAi(
   args: readonly unknown[],
   asked?: boolean,
 ): Promise<void> {
-  const settings = chatSettingsFrom((key) => vscode.workspace.getConfiguration('coai').get(key));
+  const settings = chatSettingsFrom(userLayer(vscode.workspace.getConfiguration('coai')));
   // ONE resolution for both commands, in `readyForChat`. It was written twice — here and beside the
   // question command — two places deciding which model answers. (gemini, the code round.)
   const ready = readyForChat();
@@ -285,7 +286,7 @@ async function deliverPassage(
   append = false,
 ): Promise<void> {
   const config = vscode.workspace.getConfiguration('coai');
-  const settings = chatSettingsFrom((key) => config.get(key));
+  const settings = chatSettingsFrom(userLayer(config));
   const opening = { providerId: ready.providerId };
   // Resolved BEFORE a tab exists, because `spawn` does not search PATHEXT: a bare `codex` on
   // Windows means `codex.cmd`, and spawning the bare name fails with ENOENT at the first turn —
@@ -426,7 +427,7 @@ export function noteChatDoor(door: Door, at = new Date()): void {
 /** Which model answers, resolved the one way both commands resolve it. */
 function readyForChat(): Ready {
   const config = vscode.workspace.getConfiguration('coai');
-  const settings = chatSettingsFrom((key) => config.get(key));
+  const settings = chatSettingsFrom(userLayer(config));
   const ticked = mainModel(savedModels(config));
   const saved = ticked === undefined ? savedPick(config, settings.model) : undefined;
   const opening = saved ?? { providerId: ticked?.id ?? '', modelId: ticked?.model ?? '' };

@@ -11,6 +11,7 @@
  */
 
 import { compareVersions } from './coaiInstall';
+import { CONSULTING } from './featureAvailability.generated';
 import { Runtime, RUNTIMES } from './models';
 import { VENDOR_PRESETS, Vendor, vendorsFrom } from './vendors';
 
@@ -102,11 +103,12 @@ export interface ConsultSettings {
 }
 
 /**
- * The runtimes that can hold a consultation — the extension's copy of `ConsultantResolution.Consulting`.
+ * The runtimes that can hold a consultation — `shared/feature-availability.json`'s `consultant` list.
  *
- * <p>A mirror, and a test asserts it against the C#. The alternative was asking the server, which
- * cannot answer before it is installed — and this list decides what a picker OFFERS, which has to be
- * drawable the first time the panel opens.</p>
+ * <p>Read from the shared file (PLAN_one_model_catalog.md D4, E1.2), never typed here; coai-mcp's
+ * `ConsultantResolution.Consulting` is held to the same file by `FeatureAvailabilityTests` until E2.1 reads
+ * it. The alternative was asking the server, which cannot answer before it is installed — and this list
+ * decides what a picker OFFERS, which has to be drawable the first time the panel opens.</p>
  *
  * <p>Typed as runtimes rather than strings since {@link resolveConsultant} rule (b) resolves an id
  * INTO one of them: a `find` over this list is then a `Runtime` with no cast standing in for a type.</p>
@@ -115,7 +117,7 @@ export interface ConsultSettings {
  * shipped pairs through rule (b) while the module is loading, and a `const` read before its own line
  * is a `ReferenceError`, not `undefined`.</p>
  */
-export const CONSULTING_RUNTIMES: readonly Runtime[] = ['codex', 'claude', 'antigravity', 'local'];
+export const CONSULTING_RUNTIMES: readonly Runtime[] = CONSULTING;
 
 /**
  * A different vendor for every caller, by default.
@@ -349,16 +351,25 @@ export function resolveConsultant(choice: ConsultantChoice, vendors: readonly Ve
   return runtime === undefined ? unavailable(choice) : fromRuntime(choice, runtime);
 }
 
-/** Rule (a): the row's runtime, endpoint and CLI path; the row's model only where the entry names none. */
+/**
+ * Rule (a): the row's runtime, endpoint and CLI path; the row's model only where the entry names none. A
+ * CATALOG row (one listing the consultant use) also gives back the name its key is filed under, so a
+ * migrated definition resolves to exactly what it was (PLAN_one_model_catalog.md E1.3).
+ */
 function fromRow(choice: ConsultantChoice, row: Vendor): ResolvedConsultant {
   return {
     kind: 'definition',
-    vendor: choice.vendor,
+    vendor: vendorThrough(choice, row),
     runtime: row.runtime,
     model: choice.model.length > 0 ? choice.model : row.model,
     baseUrl: row.baseUrl,
     executablePath: row.executablePath,
   };
+}
+
+/** The entry's own name — or, through a catalog row, the name the row's key is filed under. */
+function vendorThrough(choice: ConsultantChoice, row: Vendor): string {
+  return row.uses?.includes('consultant') === true ? (row.vaultKeyName ?? choice.vendor) : choice.vendor;
 }
 
 /** Rule (b): the runtime the id names — under that runtime's own name — and nothing borrowed. */

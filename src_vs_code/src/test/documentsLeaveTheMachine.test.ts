@@ -4,8 +4,9 @@ import { DEFAULTS } from '../settingsShape';
 import { PanelState } from '../panelView';
 import { everyPageHtml } from './panelPages';
 import {
-  documentSetting, pinnedDocument, reviewsDocuments, Vendor, vendorsEnv, vendorsFrom,
+  documentSetting, pinnedDocument, reviewsDocuments, Vendor, vendorsFrom,
 } from '../vendors';
+import { vendorsEnv } from '../vendorsWire';
 
 /**
  * The third stage box: whether this reviewer reads documents, and — on a Team server — whether the

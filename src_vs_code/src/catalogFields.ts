@@ -1,0 +1,59 @@
+import { isMinutes } from './apiSettings';
+import { saidText } from './saidText';
+
+/**
+ * The fields a reviewer row gains as it becomes a catalog row (PLAN_one_model_catalog.md D1, E1.1).
+ *
+ * <p>Parsed here rather than in `vendorsFrom` because `vendors.ts` was at the 800-line limit, and kept
+ * free of `vendors.ts` so the import graph gains no cycle. Every field is ABSENT unless it was said, as
+ * every optional field of a row already is: `coai.vendors` is JSON a person reads, and a row written
+ * before the catalog must parse to exactly what it parsed to before.</p>
+ */
+
+/** A non-review feature an instance may serve. The review stages stay the row's own flags. */
+export type CatalogUse = 'security' | 'consultant' | 'qconsult' | 'chat' | 'bugz';
+
+/** Every use, in the order the catalog stores and draws them. */
+export const CATALOG_USES: readonly CatalogUse[] = ['security', 'consultant', 'qconsult', 'chat', 'bugz'];
+
+export interface CatalogFields {
+  name?: string;
+  uses?: readonly CatalogUse[];
+  systemPrompt?: string;
+  timeoutMinutes?: number;
+  chatStartingPrompt?: string;
+}
+
+/** The catalog fields off a stored row, each only when it holds a value somebody could have meant. */
+export function catalogFields(v: Record<string, unknown>): CatalogFields {
+  const name = saidText(v['name']);
+  const uses = usesFrom(v['uses']);
+
+  return {
+    ...(name === undefined ? {} : { name }),
+    ...(uses.length === 0 ? {} : { uses }),
+    ...promptField('systemPrompt', v['systemPrompt']),
+    ...timeoutField(v['runtime'], v['timeoutMinutes']),
+    ...promptField('chatStartingPrompt', v['chatStartingPrompt']),
+  };
+}
+
+/** Known uses only, once each, in {@link CATALOG_USES} order — so two spellings of one list are one list. */
+export function usesFrom(raw: unknown): readonly CatalogUse[] {
+  const said: readonly unknown[] = Array.isArray(raw) ? raw : [];
+
+  return CATALOG_USES.filter((use) => said.includes(use));
+}
+
+/**
+ * A prompt as written — NOT trimmed, because its whitespace is the person's text — and absent when it
+ * is not a string or holds nothing but spaces. Its length is judged by `catalogRefusal`, never cut here.
+ */
+function promptField(field: 'systemPrompt' | 'chatStartingPrompt', raw: unknown): CatalogFields {
+  return typeof raw === 'string' && raw.trim().length > 0 ? { [field]: raw } : {};
+}
+
+/** A CLI row's own limit; an api row has `reviewMinutes`, its module's calibrated value, instead. */
+function timeoutField(runtime: unknown, raw: unknown): CatalogFields {
+  return runtime !== 'api' && isMinutes(raw) ? { timeoutMinutes: raw } : {};
+}

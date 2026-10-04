@@ -6,6 +6,9 @@ import { asText } from './asText';
 import { storageChoiceFrom, useStorageSettings } from './dataDir';
 import { thisSide } from './installer';
 import { notify, notifyThen } from './notify';
+import { copyWouldReplace, ignoredWorkspaceValues, IgnoredValue, userLayerReader } from './modelKeys';
+import { MIGRATION_TRIGGERS, scheduleCatalogMigration } from './catalogMigrationHost';
+import { Notice } from './notice';
 
 /**
  * The ONE construction of this side's settings reader.
@@ -28,11 +31,77 @@ export function readerFor(
   config: vscode.WorkspaceConfiguration,
 ): ConfigReader {
   return sideConfigReader(
-    (section) => config.get(section),
+    userLayer(config),
     config.get<boolean>('perSideSettings') === true,
     context.globalState,
     thisSide(context.globalStorageUri),
   );
+}
+
+/**
+ * The shared settings as this side may read them: a model-bearing key from the person's own layer
+ * only, never from a workspace or folder (`modelKeys.ts`, PLAN_one_model_catalog.md E1.1). The only
+ * door to those keys — {@link readerFor} builds on it, and a setting no side overlays (the chat's model
+ * presets) is read through it directly.
+ */
+export function userLayer(config: vscode.WorkspaceConfiguration): ConfigReader {
+  return userLayerReader((section) => config.get(section), (section) => config.inspect(section));
+}
+
+/**
+ * An overlay write raises no configuration event, so a definition saved into this side's own settings is handed
+ * to the catalog migration here (PLAN_one_model_catalog.md E1.3); a user-layer write is heard by the activation's
+ * listener instead.
+ */
+function afterOverlayWrite(context: vscode.ExtensionContext, key: string): void {
+  if (MIGRATION_TRIGGERS.includes(key)) {
+    void scheduleCatalogMigration(context);
+  }
+}
+
+/**
+ * Tell the person that a workspace or folder tried to set a model and was not applied — with the one
+ * action that carries their intent over when their own layer holds nothing. Called once, on activation.
+ */
+export function noticeIgnoredWorkspaceModels(
+  context: vscode.ExtensionContext,
+  config: vscode.WorkspaceConfiguration,
+): void {
+  for (const ignored of ignoredWorkspaceValues((section) => config.inspect(section))) {
+    void notifyThen(ignoredNotice(ignored, copyWouldReplace(ignored, copyTarget(context, config, ignored.key))), (choice) => {
+      // Asked again at the click: the notice may have waited while the person set the key themselves.
+      if (choice === COPY && !copyWouldReplace(ignored, copyTarget(context, config, ignored.key))) {
+        saveSetting(context, config, ignored.key, ignored.value).catch((error: unknown) =>
+          reportRefusal(context, ignored.key, error));
+      }
+    });
+  }
+}
+
+/** This side's own settings when {@link saveSetting} would write the key there; nothing when it writes the user layer. */
+function copyTarget(context: vscode.ExtensionContext, config: vscode.WorkspaceConfiguration, key: string): Readonly<Record<string, unknown>> | undefined {
+  return writesTheOverlay(config, key) ? readOverlay(context.globalState, thisSide(context.globalStorageUri)) : undefined;
+}
+
+const COPY = 'Copy to my settings';
+
+/** The sentence, and the copy offered only when it would not overwrite what the person set where it lands. */
+function ignoredNotice(ignored: IgnoredValue, replaces: boolean): Notice {
+  const where = ignored.layer === 'folder' ? 'a folder' : 'this workspace';
+
+  return {
+    as: 'warning',
+    class: 'refusal',
+    source: 'sideConfig',
+    code: 'model-setting-from-workspace',
+    subject: ignored.key,
+    title: `coai.${ignored.key} in ${where}'s settings was not applied: the models a review runs are read `
+      + 'from your own settings only, so a repository cannot choose a program for you to run.',
+    cure: replaces
+      ? `Your own coai.${ignored.key} is the one in use; remove the ${ignored.layer} value to stop this notice.`
+      : 'Copy it to your own settings if you meant it.',
+    ...(replaces ? {} : { action: COPY }),
+  };
 }
 
 /**
@@ -43,6 +112,15 @@ export function bugzServerThisSide(context: vscode.ExtensionContext): string {
   const value = readerFor(context, vscode.workspace.getConfiguration('coai'))('bugzServer');
 
   return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
+ * Whether {@link saveSetting} writes this key into this side's own settings rather than the user layer. `ALWAYS_PER_SIDE`
+ * ignores the switch on purpose — see its own remark. A data directory written to the shared layer would be handed to
+ * the other side of this machine, where the same string names a path that does not exist.
+ */
+function writesTheOverlay(config: vscode.WorkspaceConfiguration, key: string): boolean {
+  return (config.get<boolean>('perSideSettings') === true && OVERLAID_SETTINGS.includes(key)) || ALWAYS_PER_SIDE.includes(key);
 }
 
 /**
@@ -83,9 +161,12 @@ export function bugzServerThisSide(context: vscode.ExtensionContext): string {
  *       continuing: the next thing that flow does is copy a client-entry block built from the
  *       choice, so a refusal walked past would hand somebody a directory this window is not
  *       using.</li>
+ *   <li><b>`noticeIgnoredWorkspaceModels`</b> — the panel's shape: the copy a person asked for from a
+ *       notification button is caught and reported, never thrown out of the button's callback.</li>
  * </ul>
  *
- * <p>A fifth caller must pick one of those two shapes. There is no third.</p>
+ * <p>A seventh caller must pick one of those two shapes — catch and report, or let a chain with its own `.catch`
+ * report it. There is no third, and a caller that neither catches nor sits in such a chain is an unhandled rejection.</p>
  */
 export async function saveSetting(
   context: vscode.ExtensionContext,
@@ -93,12 +174,9 @@ export async function saveSetting(
   key: string,
   value: unknown,
 ): Promise<void> {
-  // `ALWAYS_PER_SIDE` ignores the switch on purpose — see its own remark. A data directory written
-  // to the shared layer would be handed to the other side of this machine, where the same string
-  // names a path that does not exist.
-  const perSide = config.get<boolean>('perSideSettings') === true && OVERLAID_SETTINGS.includes(key);
-  if (perSide || ALWAYS_PER_SIDE.includes(key)) {
+  if (writesTheOverlay(config, key)) {
     await writeOverlay(context.globalState, thisSide(context.globalStorageUri), key, value);
+    afterOverlayWrite(context, key);
 
     return;
   }

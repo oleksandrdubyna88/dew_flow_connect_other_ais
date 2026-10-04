@@ -617,6 +617,22 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     },
   },
   {
+    id: 'models-move-into-the-catalog',
+    en: {
+      title: 'Your consultant models move into the reviewer list',
+      whatItIs:
+        'This version moves the consultant and question-consultant models you defined — every one it can, see below — into the reviewer list, as a row that reviews nothing — the first step towards one list of models that every feature picks from. The consultant or question row then names that row instead of repeating its runtime, model, endpoint and CLI path. Nothing you see in the panel changes, and coai-mcp is handed exactly the settings it was handed before.',
+      why:
+        'Until now one model could be defined three times — as a reviewer, as a consultant and as a question-consultant row — and editing one copy left the others behind. One list is the cure, and this is its first, invisible step.',
+      setup:
+        'Nothing to set up. It runs once when the extension starts: for your own settings, and for this side’s own settings when **separate settings for each side** is on. A copy of them as they were is kept in `coai.migratedFrom`, and `coai.catalogMigration` records that the settings were moved into the catalog.',
+      usage:
+        'To undo it, run **ConnectOtherAIs: Restore settings from before the catalog** from the command palette. It names the settings it will change, asks once, and puts your reviewers, consultants and question-consultant rows back exactly as they were. Restored settings are not moved again by themselves.',
+      whatCanGoWrong:
+        "A consultant whose name is not a valid model id (lower-case letters, digits and dashes) is left where it is, and a notice says which. A move that would take the list past 64 models is not made at all, and the notice says how many it needed. A model setting in a repository’s own `.vscode/settings.json` is never applied and never moved: the models a review runs are read from your own settings only.\n\nAn older version of this extension that saves the reviewer list drops the new rows’ extra fields; this version gives back the ones it needs the next time it starts. Restoring replaces anything changed in these three settings since the move.",
+    },
+  },
+  {
     id: 'the-audit-log',
     en: {
       title: 'Under the hood: the audit trail',

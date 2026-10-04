@@ -17,7 +17,8 @@ import { HELP_ARTICLES, HELP_LANGUAGES, bodyFor } from '../helpContent';
 import { serverSettingsJson } from '../serverSettingsFile';
 import { ServerSettingsSync } from '../serverSettingsSync';
 import { DEFAULTS, envBlock, settingMessageFrom, settingWrite } from '../settingsShape';
-import { DEFAULT_VENDORS, Vendor, vendorsEnv, vendorsFrom } from '../vendors';
+import { DEFAULT_VENDORS, Vendor, vendorsFrom } from '../vendors';
+import { vendorsEnv } from '../vendorsWire';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
 
 /**

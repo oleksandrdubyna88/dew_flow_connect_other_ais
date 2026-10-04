@@ -231,7 +231,18 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // refused before the box opens (`bugz-key-needs-a-server`); keys saved before they were filed per server are offered once
 // per window (`bugz-legacy-keys`, whose one button only OPENS the choice), settled in a modal that names the server
 // and what each answer costs (`bugz-settle-old-keys`), and every outcome is said (`bugz-old-keys-settled`).
-const PLACES_THIS_SPEAKS = 150;
+// 150 → 151 on 2026-10-04, PLAN_one_model_catalog.md E1.1: a model-bearing setting a workspace or folder tried to
+// set is no longer applied, and `model-setting-from-workspace` says so once per window, offering to copy it to the
+// person's own settings — so a team setup in `.vscode/settings.json` is not lost without a word. One refusal.
+// 151 → 155 on 2026-10-04, PLAN_one_model_catalog.md E1.3: the one-time move of consultant and question-consultant
+// models into the catalog says what it LEFT (`catalog-migration-left` — a refusal past 64 models, a name that is not
+// a model id) and that a run stopped part way (`catalog-migration-failed`); its restore command asks first
+// (`catalog-restore-confirm`, modal) and says when there is nothing to restore (`catalog-restore-none`). A move that
+// went through says nothing, because nothing the person can see changed.
+// 155 → 156 on 2026-10-04, PR #681 (CodeRabbit): a restore stopped part way has its own sentence
+// (`catalog-restore-failed`) — the migration's "the next start finishes it" is false for a restore. One failure.
+// (E1's three steps renumbered by +4 when PR #683 landed first.)
+const PLACES_THIS_SPEAKS = 156;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

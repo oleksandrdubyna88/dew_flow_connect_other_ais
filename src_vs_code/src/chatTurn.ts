@@ -22,6 +22,7 @@ import { MOST_WAITING, NotJoined, began as leftTheQueue, isWanted, join } from '
 import { randomUUID } from 'node:crypto';
 import { remoteIsFull } from './remoteAsk';
 import { accessOn } from './chatAccessRules';
+import { userLayer } from './sideConfig';
 
 /**
  * One turn of a conversation, start to finish — and the three gestures that are turns wearing
@@ -387,7 +388,7 @@ export async function oneTurn(
       task: taskOf(
         vscode.workspace.getConfiguration('coai'),
         thread.promptId,
-        chatSettingsFrom((key) => vscode.workspace.getConfiguration('coai').get(key)).prompt,
+        chatSettingsFrom(userLayer(vscode.workspace.getConfiguration('coai'))).prompt,
       ),
     },
   }];

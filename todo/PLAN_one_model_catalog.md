@@ -1,6 +1,6 @@
 # PLAN — One model catalog: the Settings page rebuilt around models you add once
 
-> Status: **plan only, nothing implemented yet, 2026-10-04.** The design is accepted: the clickable mockup in
+> Status: **in progress, 2026-10-04 — E1 is built (PR #681); E2–E5 are open.** The design is accepted: the clickable mockup in
 > [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
 > checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
@@ -97,11 +97,20 @@ that reads a row today changes meaning. The page's "Use for" ticks are those fla
 the key's name (absent = the id), so two instances share a key by naming it, Duplicate copies it, and removing an
 instance never deletes a vault entry (coai never writes the vault).
 
+**What crosses.** `vendorsEnv` writes a WHITELIST of fields (`vendorsWire.ts`, `vendorsEnv`), never the stored row, so none of the
+new fields reaches `COAI_VENDORS` in E1. A row that reviews no stage (`plan`, `code` false, `document` off, no `feature`)
+and whose `uses` do not include `security` is LEFT OUT of `COAI_VENDORS`: its consumers receive it resolved
+(`COAI_CONSULTANTS`, `COAI_QCONSULT_ROWS`) or never cross at all (chat, Bugz). That keeps the env block of a migrated
+setup byte-identical (plan-round finding 7, session `ac973900`). The prompt fields (`systemPrompt`,
+`chatStartingPrompt`, both ≤ 8 KiB) never travel in an environment variable — 64 rows × 8 KiB is past Windows' 32,767-
+character limit for one variable; E2.2 carries them through the settings file with a total-size budget refused by
+validation (findings 4, 9).
+
 ### D2 — Everything else refers to a row by id
 
 | Feature | Stored | On the wire (unchanged keys) |
 |---|---|---|
-| Consultant | per caller: a reference `{ vendor: <row id>, runtime: '' }`; ABSENT = the shipped pair | `COAI_CONSULTANTS` with the reference RESOLVED to a definition (every server ≥ 0.23.0), plus the row's new fields, which 0.43.0 ignores |
+| Consultant | per caller: a reference `{ vendor: <row id>, runtime: '' }`; ABSENT = the shipped pair | `COAI_CONSULTANTS` with the reference RESOLVED to a definition (every server ≥ 0.23.0), byte-for-byte what the stored definition wrote before |
 | Question consultant | rows keep `id`, `prompt`, `enabled`; `vendor` = row id, `runtime: ''` | `COAI_QCONSULT_ROWS` resolved the same way (≥ 0.41.0) |
 | Security lane | `runs[].vendor` = row id (already) | unchanged |
 | Bugz | `bugzModel` = `<row id>/<model>` (already) | unchanged; the row-id-`local` match becomes a runtime match (E2.1) |
@@ -121,12 +130,36 @@ instance never deletes a vault entry (coai never writes the vault).
   clash takes the next free `-N` (the existing `freeVendorId`, `vendors.ts:503`) and the fixture says so. The new row
   keeps the definition's key by setting `vaultKeyName` to the name it was stored under, so its vault entry and
   ledger name do not move. Running it twice changes nothing.
-- **Backup and restore:** before rewriting, the four old values are copied to `coai.migratedFrom` (one copy, a few KB),
-  and a command *ConnectOtherAIs: Restore settings from before the catalog* puts them back. Kept until one release after
-  the switch-over (T5).
-- **Downgrade:** an older extension reads the rows (unknown fields ignored) and the references (legacy (a) resolution),
-  but a row it rewrites loses the new fields, and its server-file writes stand down (`serverSettingsSync.ts`). Tested
-  new → old (edit) → new; written into POST_DEPLOY.
+- **Migrated rows review nothing.** Every row the migration adds is written with `plan: false`, `code: false`,
+  `document: false` and no `feature`, so neither this build nor an older one runs it in a round; the old page hides a
+  row that reviews nothing and has a `uses` (finding 7).
+- **Backup and restore:** before the first write, every key the migration writes in that layer — `vendors`,
+  `consultants`, `qconsultRows` (absence recorded as absence; `chatModel` and `bugzModel` join when their sources
+  move, E4.3 and E2.1) — is copied to that layer's own
+  `migratedFrom` (the user layer's `coai.migratedFrom`; a side's overlay entry `migratedFrom`). Written ONCE, never
+  overwritten by a later run. A command *ConnectOtherAIs: Restore settings from before the catalog* names the layers it
+  will change, puts every key back exactly, and marks the layer `restored` so activation does not migrate it again until
+  the person asks (findings 0, 1, 8). Kept until one release after the switch-over (T5).
+- **Order and interruption:** backup → rows → references → the layer's marker `catalogMigration: "migrated"`
+  (`"restored"` after a restore), written last. A restore writes in the reverse order — references, then rows, then the
+  marker — so a stopped restore never strands a reference. A rerun finds an already-added row by its exact launch
+  fields (the merge rule), preferring the deterministic id among the matches, so an interrupted run is
+  finished, not duplicated. A layer that cannot be written (refused write, unreadable overlay) is skipped and reported,
+  never blocks activation. A migration that would pass 64 rows writes nothing in that layer and says how many it needed
+  (findings 2, 6, 11). Two windows activating at once both reach the same final state, because every write is a
+  deterministic function of the backup.
+- **A reference to a missing row** (deleted on the old page, or a half-run migration) keeps today's behaviour: both
+  halves already name it unavailable, which says more than leaving it out would (finding 11; recorded as built in E1.3).
+- **Workspace values.** The seven model-bearing keys (`securityLane` and `chatModelPresets` included) are read through ONE reader (user layer + overlay, via `inspect()`);
+  a scan test refuses any other read of them. A workspace or folder value is ignored, and a one-time notice names the
+  key and the file and offers to copy it to the user layer (findings 3, 10).
+- **Downgrade, measured on the code:** the current build parses rows through `vendorsFrom` (`vendors.ts:332-376`),
+  which keeps only typed fields, and writes the parsed list back (`panelProvider.ts:1859`), so an older build's first
+  reviewer edit drops `name`, `uses`, `effort` (non-API), `systemPrompt`, `chatStartingPrompt`. Every feature still runs
+  the same model: references are by id and the legacy (a) resolution ignores `enabled` (`consultSettings.ts:338-361`).
+  On the next activation of this build, a row referenced by a consultant, question or chat setting regains that `uses`,
+  and a `chat-*` row regains its starting prompt from the frozen `chatModelPresets`; names and system prompts are lost
+  and POST_DEPLOY says so. No second store (finding 12).
 
 ### D4 — One shared file says what each runtime can do
 
@@ -164,7 +197,7 @@ on never answered). Each runtime's flag is pinned in argv AND observed taking ef
 | A consultant on an API key or through the Codex CLI with an endpoint | a definition it refuses by name | on the Consultants tab, "needs coai-mcp 0.44.0" |
 | A Bugz model on a second local instance | refused (row id ≠ `local`) | "needs coai-mcp 0.44.0" on the card |
 | Editable signal words, a card's own words | the shipped words only | on the routing table and the card |
-| A model used only for the consultant | a row serving no stage — included in `providers`, in no round | nothing; it is correct |
+| A model used only for the consultant, question consultant, chat or Bugz | nothing — the row is left out of `COAI_VENDORS`; its consumer receives it resolved | nothing; it is correct |
 
 ### Growth surfaces
 
@@ -182,29 +215,55 @@ on never answered). Each runtime's flag is pinned in argv AND observed taking ef
 Each epic ships on its own; the old page works until E5. Every coai-mcp/Team-server change is read behind its own
 version gate in both directions.
 
-### E1 — The instance list grows into the catalog (extension + shared; nothing visible changes)
+### Epic 1 — The instance list grows into the catalog (extension + shared; nothing visible changes)
 1. **Widen the row** (D1): the new fields, parsing with "absent means the shipped value", validation (> 64 rows,
    prompt > 8 KiB, unknown effort — each refused naming the legal values), and model-bearing keys read from the user
    layer and the side overlay only, never a workspace or folder value. RED test: a workspace `.vscode/settings.json`
    carrying `coai.vendors` changes nothing.
 2. **`shared/feature-availability.json`** (D4) with its TS generator and C# loader; the four runtime lists in the
-   extension replaced by it (the C# side follows in E2.1).
-3. **The per-layer migration** (D3): deterministic ids, the merge rule, the clash rule, backup and restore command.
-   Fixtures: today's shapes from the repo's settings fixtures and the operator's own settings (anonymised) — overlapping
-   reviewer, consultant, question and chat entries, a forked side whose overlay predates migration, a `gemini` row, a
-   codex row with an endpoint; migrate twice = once.
+   extension replaced by it (the C# side follows in E2.1). **Frozen to today's lists in E1**: until E2.1 reads the file,
+   coai-mcp keeps its own copies, so the existing TS-against-C# mirror tests stay and compare the file to them
+   (finding 13).
+3. **The per-layer migration** (D3): deterministic ids, the merge rule, the clash rule, backup once, the marker last,
+   the restore command, the 64-row check, an unwritable layer skipped. Fixtures: today's shapes from the repo's
+   settings fixtures and the operator's own settings (anonymised) — overlapping reviewer, consultant, question and chat
+   entries, a forked side whose overlay predates migration, a `gemini` row, a codex row with an endpoint; migrate twice
+   = once; a run stopped after each write and rerun reaches the same state; restore → reload → still restored;
+   downgrade (fields stripped as `vendorsFrom` strips them) → rerun → nothing duplicated, `uses` regained.
+   **As built (2026-10-04), two sources moved to the epics that change their readers:** chat presets go to E4.3 —
+   saved conversations refer to a preset by id (`chatConfig.ts:237`, `chatHooks.ts:229`), so a row `chat-<id>` would
+   move a resumed conversation onto another model; the Bugz model goes to E2.1 — ranking accepts only the row id
+   `local` on both halves (`RANKING_VENDORS`, `RankingModels`), so a `bugz-local` row would be refused until the
+   runtime match lands. E1.3 moves consultant and question-consultant definitions. A consultant never becomes a
+   reference equal to its caller's shipped pair (that caller would drop off the wire). A reference to a missing row
+   keeps today's behaviour — both halves already name it unavailable — rather than being dropped from the env block.
 4. **One write road**: the old page's consultant, question-consultant and chat writes switched to rows + references
    through `saveSetting`; the env block resolves references to definitions. RED test per surface: an edit on the old
    page after migration changes the env block coai-mcp reads. The env block for an unchanged, migrated setup is
-   byte-identical to today's (the three-way `document` kept, pristine still writes nothing).
+   byte-identical to today's (the three-way `document` kept, pristine still writes nothing), measured on the fixture
+   WITH overlapping consultant, question, chat and Bugz entries, not a reviewer-only one; the seam test compares
+   0.43.0's `--providers` reviewer set before and after migration.
+   **As built (2026-10-04):** the old page keeps writing definitions (its pickers resolve the reference first), and
+   `catalogEdit.foldedWrite` in `PanelProvider.save` folds each write into the catalog before it lands — an entry
+   that referred to a row only it uses rewrites that row in place, so an edit never forks or orphans one; a shared
+   row is never rewritten. The old page hides a catalog-only row (`shownOnTheOldPage`), and its three reviewer-list
+   writes that went around the side overlay now go through `save`. The seam's tenth leg proves the byte-identical
+   settings file and the unchanged reviewer set against the real binary.
 5. **Export/import v2** (rows + references; `executablePath` stripped as today); a v1 file is migrated on import and
-   REPLACES the current models only after a confirmation that names what it will change.
+   REPLACES the current models only after a confirmation that names the row count and every row whose vault key this
+   machine does not hold; the current models are backed up first and the restore command puts them back (finding 5).
+   **As built (2026-10-04):** the backup is an export of the current setup to `<dataDir>/config-backups/` (newest ten
+   kept), named in the confirmation and put back by *Import config* — the restore command keeps one meaning, "before
+   the catalog", rather than two. Vault key names come from the panel's last `--providers` answer and are said as
+   not known yet when nobody has asked. A v1 file's definitions are moved into rows by the migration that runs on
+   the configuration change the import makes.
 
-### E2 — coai-mcp and the Team server honour the new fields (release mcp 0.44.0; Team server contract v2)
+### Epic 2 — coai-mcp and the Team server honour the new fields (release mcp 0.44.0; Team server contract v2)
 1. **Probe and routing fixes**: the probe runs the runtime's CLI, not the row id (RED: `claude-2` with
    `runtime: claude`); Bugz ranking matches the runtime, not the id `local`; an unknown runtime refused by name; the
    material told to each reviewer decided per runtime in `RosterBuilder.cs:181-183`; the C# side reads
-   `feature-availability.json`.
+   `feature-availability.json`. **Carries the Bugz move from E1.3**: once both halves match the runtime, a Bugz model
+   that differs from its row's model becomes row `bugz-<rowId>` (`uses: [bugz]`) by the same pure migration.
 2. **Per-row system prompt, timeout and effort in every runner** (review, consult, question consult): the prompt
    delivered inside the prompt body (stdin or the prompt file the runner already uses), NEVER argv, never logged
    (length and hash only — a test asserts no launch record contains it); refused by name past a runtime's limit.
@@ -223,7 +282,7 @@ version gate in both directions.
    logged; the operator can cap effort. The client reads `X-Coai-Contract` and, against a v1 server, says which fields
    that server drops. Measured both ways. Deploy is manual and needs the operator's go-ahead.
 
-### E3 — The new Settings page: the shell and Models (behind the preview switch)
+### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
    shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;
    six tabs with sub-tabs, remembered by the host; the deep-link map (D11); two columns from 1100 px with
@@ -236,7 +295,7 @@ version gate in both directions.
    from and "ask again", the API "runs it at", the off-machine endpoint warning and the WSL fix, ✓ Check (D10), the
    per-card "this coai-mcp ignores…" note.
 
-### E4 — The feature tabs use the catalog
+### Epic 4 — The feature tabs use the catalog
 1. **Reviews**: Stages; Roles & prompts (replacing `rolesPage.ts`) with ONE switch per role — `roleEnabled` and the
    catalog's `active` merged, `COAI_ROLES` still written for servers under `ROLE_SWITCH_SINCE`; deletion's confirmation
    and reserved ids; a role off until it has a question; Prompts per round; The gate; Commands (replacing
@@ -247,13 +306,15 @@ version gate in both directions.
 3. **Security lane and Chat**: pairs from instances ticked Security lane; on each card the signals in two columns, own
    words, prompt text in place; the routing table with editable words; Try it through `--check-security` (never a
    JavaScript copy of the matcher). Chat from instances ticked Chat, per side, the starting text and the model's effort
-   and system prompt applied; prompt presets inline (replacing `chatPresetsPage.ts`).
+   and system prompt applied; prompt presets inline (replacing `chatPresetsPage.ts`). **Carries the chat move from
+   E1.3**: each model preset becomes a row with `uses: [chat]` and its `chatStartingPrompt`, and every stored
+   conversation's preset id is mapped to that row in the same change, so a resumed conversation keeps its model.
 4. **Setup**: keys counted across every row; the CLI table; Team servers with every state; the MCP server's states and
    clients (another program's config is READ only, never written, and no secret from it is shown); the data folder's
    Change and Move flows on today's `dataCommands.ts` logic, the "moved from" record surviving a reload; This side with
    the export note.
 
-### E5 — The switch-over, docs and release
+### Epic 5 — The switch-over, docs and release
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
    three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the
    sidebar's Bugz picker reads the rows ticked Bugz (the one sidebar change).
@@ -363,3 +424,17 @@ Disjoint from the rest of `todo/`. Each plan in the table gets the same row, poi
 | The claude-2 cause stated wrongly (fact-checker) | Rewritten: the probe runs the row id (`ReviewerRuntime.cs:226`), launches are fine. |
 | Wrong line for local effort, missing `FEATURE_SINCE`, the fix site for the checkout sentence, `pageDocument`, `render-page.mjs` limits, five missing boundaries, the sidebar Bugz picker, the three replaced pages (fact-checker) | Each corrected in place. |
 | The gate's commands: 4–5 epics of 3–5 stories, one gate per epic, consult on a cadence | Ten epics became five. The split was done on Opus — Fable is at its monthly spend limit (2026-10-02) — and is said so here. |
+
+### The plan round of epic 1 (session `ac973900`, 2026-10-04, good_enough, 14 findings accepted)
+
+| Finding | What changed |
+|---|---|
+| Restore cannot stick; the backup is overwritten; which keys and which layer (0, 1, 8) | Every written key backed up per layer, once; a `restored` mark stops re-migration (D3). |
+| Multi-key writes are not atomic; a missing-row reference; two windows (2, 11) | A fixed write order with the marker last; rerun finds rows by id first; a missing reference is left out and logged. |
+| Migrated rows reach `COAI_VENDORS` and the old page as reviewers (7) | They review nothing and are left out of the wire; the old page hides them; byte-identity measured on the overlapping fixture. |
+| Prompts in an environment variable exceed its limit (4, 9) | Measured: the wire is a field whitelist, so nothing new crosses in E1; prompts never go in an env variable (D1). |
+| A workspace value silently ignored; reads at some sites only (3, 10) | One reader, a scan test, a one-time notice with a copy offer. |
+| Import replaces with no rollback (5) | Backup before import; the confirmation names missing vault keys. |
+| The 64-row cap after migration (6) | Checked before writing; the layer is left untouched. |
+| An older build strips the new fields on its first write (12) | Verified in `vendorsFrom`; what is lost and what is regained is written down; no second store. |
+| `feature-availability.json` ahead of coai-mcp's own lists (13) | Frozen to today's lists in E1; the mirror tests stay. |

@@ -193,6 +193,10 @@ const SETTING_ALIAS: Record<string, string> = {
   // The one that only bites when two installations share a person: a round running in WSL writes its
   // question where a Windows window is not looking, and the round blocks on a modal nobody sees.
   'coai.alsoWatchDataDirectories': 'questions from another installation',
+  // The model catalog's one-time move (PLAN_one_model_catalog.md E1.3): the marker and the backup, both written by
+  // the extension, by the words the article uses for them.
+  'coai.catalogMigration': 'moved into the catalog',
+  'coai.migratedFrom': 'a copy of them as they were',
 };
 
 test('every command is described in the help, or declared self-evident with a reason', () => {

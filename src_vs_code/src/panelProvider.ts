@@ -76,7 +76,10 @@ import { watchGlob } from './fileWatch';
 import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
-import { bugzServerThisSide, readerFor, reportRefusal, saveSetting } from './sideConfig';
+import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer } from './sideConfig';
+import { foldedWrite } from './catalogEdit';
+import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
+import { shownOnTheOldPage } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
 import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
@@ -1131,9 +1134,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // both belong to the side this extension host is running on, never to "the machine".
     const published = await this.publishedVersion();
     const sessions = await this.readSessions();
+    // Display only (PLAN_one_model_catalog.md E1.4): a row that exists for its catalog uses alone is not a reviewer on
+    // this page. Every write reads the rows afresh, so a hidden row is never dropped by one. Drawn AND priced from this
+    // one list: priced from every row, a hidden api consultant put its endpoint's rate on a reviewer's card.
+    const shown = vendors.filter(shownOnTheOldPage);
     const state = {
       settings,
-      vendors,
+      vendors: shown,
       codexModels: this.codexModels,
       agyModels: this.agyModels,
       // Never awaited. The probe is four real requests to a real CLI; a render that waited for one
@@ -1157,7 +1164,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       latestTeamServerVersion: this.latestTeamServer,
       storage: await whereThisWindowKeepsItsData(),
       cliStatus: await this.vendorCliStatus(vendors),
-      modelPrices: await this.modelPrices(vendors),
+      modelPrices: await this.modelPrices(shown),
       snippetStatus: await pastedSnippetStatus(),
       consultPrompt: await this.consultPrompt.readConsultPrompt(),
       qconsultPromptOverrides: await this.qconsult.overrides(),
@@ -1190,12 +1197,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       teamServers: this.teamServerStates(config),
       providers: this.providerHealth(),
       usageScope: this.usageScope,
-      // Straight from the configuration, exactly as the COMMAND reads it — not through the
-      // per-side reader beside it. These four are person-level by design (`chatSettings.ts` says
-      // so, and none of them is in `OVERLAID_SETTINGS`), so routing them through an overlay that
-      // will never hold them would only invite somebody to add them to it one day and split the
-      // one reader in two.
-      chat: chatSettingsFrom((key: string) => config.get(key)),
+      // From the person's own settings, exactly as the COMMAND reads it — not through the per-side
+      // reader beside it. These are person-level by design (`chatSettings.ts` says so, and none of
+      // them is in `OVERLAID_SETTINGS`), so routing them through an overlay that will never hold them
+      // would only invite somebody to add them to it one day and split the one reader in two. The
+      // door, not `config.get`: `chatModel` and `chatModelPresets` are model keys, which a
+      // workspace may not set (`modelKeys.ts`).
+      chat: chatSettingsFrom(userLayer(config)),
       // Straight from the configuration for the same reason, and read HERE rather than inside the
       // section, so the markup the paint key is built from changes with it.
       phrases: this.phrases(),
@@ -1368,7 +1376,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // chat card read "no rate set for this model" for a model the published table prices perfectly
     // well. The two lists are asked the same question and answered from the same table.
     // (CodeRabbit, PR #209.)
-    const presets = chatModelPresetsFrom(vscode.workspace.getConfiguration('coai').get('chatModelPresets'));
+    const presets = chatModelPresetsFrom(userLayer(vscode.workspace.getConfiguration('coai'))('chatModelPresets'));
     const wanted = [...vendors.map((one) => one.model), ...presets.map((one) => one.model)];
     // An empty model is "the CLI's default" — we do not know which model that is, so the book does not
     // guess and answers nothing for it.
@@ -1496,7 +1504,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private async chatLedgers(): Promise<ChatLedgers> {
     const marks = this.chatForgottenBefore();
     const vendorOf = vendorOfPreset(chatModelPresetsFrom(
-      vscode.workspace.getConfiguration('coai').get('chatModelPresets'),
+      userLayer(vscode.workspace.getConfiguration('coai'))('chatModelPresets'),
     ));
 
     return {
@@ -2006,6 +2014,14 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * list from the rounds it happens to hold: two lists differing by a single name are two different
    * colour assignments for the same vendor. See `vendorColour.ts`.</p>
    */
+  /**
+   * The key names this side's vault holds, as coai-mcp last reported them — `undefined` until it has answered, which
+   * an import's confirmation says rather than reading as an empty vault (PLAN_one_model_catalog.md E1.5).
+   */
+  vaultKeyNames(): readonly string[] | undefined {
+    return this.providersCache.answered ? this.providersCache.notes.vaultKeys : undefined;
+  }
+
   vendorIds(): readonly string[] {
     return this.vendorsHere().map((v) => v.id);
   }
@@ -2116,7 +2132,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       await seedIfEmpty(
         this.context.globalState,
         thisSide(this.context.globalStorageUri),
-        (section) => config.get(section));
+        // What this side reads TODAY — through the door, so a workspace's `vendors` is not copied into it.
+        userLayer(config));
     }
     if (key === 'perSideSettings') {
       await this.carryTeamLogins(value === true);
@@ -2128,14 +2145,28 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // second copy of "which layer does this belong in" is how the roles page came to write a per-side
     // setting globally. The REPORT stayed with the callers, because only a caller knows whether a
     // notification or a banner is the right surface — this panel has no banner, so it is the toast.
+    // A consultant or question row is folded through the catalog first (PLAN_one_model_catalog.md E1.4): an edit
+    // of an entry that refers to a catalog row rewrites that row, so the old page never forks or orphans one.
+    // The rows are saved FIRST, so a refusal between the two leaves a row nobody refers to yet. A catalog key is
+    // read and written in ONE turn of the catalog, so a migration never reads it half-saved (PR #681's code round).
     try {
-      await saveSetting(this.context, config, key, value);
+      const write = (): Promise<void> => this.foldAndWrite(config, key, value);
+      await (MIGRATION_TRIGGERS.includes(key) ? inCatalogTurn(write) : write());
 
       return true;
     } catch (error: unknown) {
       reportRefusal(this.context, key, error);
       return false;
     }
+  }
+
+  /** The fold and its writes — the rows first, then the entry. */
+  private async foldAndWrite(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
+    const fold = foldedWrite(key, value, this.read(config));
+    if (fold.vendors !== undefined) {
+      await saveSetting(this.context, config, 'vendors', fold.vendors);
+    }
+    await saveSetting(this.context, config, key, fold.value);
   }
 
   /**
@@ -4025,7 +4056,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private async removeVendor(id: string): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
     const vendors = vendorsFrom(this.read(config)('vendors'));
-    if (vendors.length <= 1) {
+    // Counted as the page shows them: a catalog-only row is no reviewer, so it cannot keep the panel populated.
+    if (vendors.filter(shownOnTheOldPage).length <= 1) {
       void notify({
         as: 'warning',
         class: 'refusal',

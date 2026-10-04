@@ -72,7 +72,8 @@ import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
 import { RoleDeletions, STOOD_DOWN } from './roleDeletion';
 import { forgetTheDeletions, roleDeletions } from './roleDeletionsHost';
 import { ConfigReader, settingsFrom } from './settingsShape';
-import { bugzServerThisSide, readerFor, storageReadsThisSide } from './sideConfig';
+import { bugzServerThisSide, noticeIgnoredWorkspaceModels, readerFor, storageReadsThisSide } from './sideConfig';
+import { MIGRATION_TRIGGERS, restoreFromBeforeTheCatalog, scheduleCatalogMigration, startCatalogMigration } from './catalogMigrationHost';
 import { vendorsFrom } from './vendors';
 import { askPerson } from './personWait';
 
@@ -96,6 +97,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // this has run it answers the DEFAULT directory. A window that read the choice late would watch
   // the wrong directory for escalations and write a Team-server token where nothing reads it.
   storageReadsThisSide(context);
+  // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
+  // once per window, so a team setup in `.vscode/settings.json` is not lost without a word.
+  noticeIgnoredWorkspaceModels(context, vscode.workspace.getConfiguration('coai'));
   // FIRST, before anything is constructed and long before a command can be invoked: the side whose
   // settings the chat reads. Its reader falls back to the shared configuration while unbound, which
   // is the behaviour this branch exists to end — so the window in which that fallback could be
@@ -309,6 +313,13 @@ export function activate(context: vscode.ExtensionContext): void {
     () => (vendor) => PRICE_BOOK.priceOf(vendor.model, vendor.baseUrl),
   );
   mirrorSettings(settingsSync);
+  // Every consultant and question-consultant model DEFINITION moves into the catalog once, per settings layer
+  // (PLAN_one_model_catalog.md E1.3). The env block it leads to is the one written above, byte for byte, so the
+  // mirror after it is a no-op unless something was left; the panel is redrawn so a section reads the new rows.
+  void startCatalogMigration(context, () => {
+    mirrorSettings(settingsSync);
+    void panel.render();
+  });
   // Old Bugz keys waiting to be adopted or discarded: offered once per window, never filed by guessing.
   void offerOldBugzKeys(context.secrets, () => bugzServerThisSide(context)).catch((error: unknown) => {
     console.error('ConnectOtherAIs: the old Bugz keys could not be read', error);
@@ -460,7 +471,12 @@ export function activate(context: vscode.ExtensionContext): void {
         mirrorSettings(settingsSync);
         void panel.render();
       }
+      // A definition written by hand, or by a page that still writes them, moves into the catalog too.
+      if (MIGRATION_TRIGGERS.some((key) => e.affectsConfiguration(`coai.${key}`))) {
+        void scheduleCatalogMigration(context);
+      }
     }),
+    vscode.commands.registerCommand('coai.restoreCatalogBackup', () => restoreFromBeforeTheCatalog(context)),
     watcher,
     consultations,
     questionConsults,
@@ -680,7 +696,7 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
     vscode.commands.registerCommand('coai.copyConfigBlock', () => copyConfigBlock(context)),
     vscode.commands.registerCommand('coai.copyClaudeSnippet', copyClaudeSnippet),
-    ...registerConfigTransfer(context),
+    ...registerConfigTransfer(context, () => panel.vaultKeyNames()),
     vscode.commands.registerCommand('coai.showRounds', () => showRoundsLog(roundsLog, watcher, panel)),
     vscode.commands.registerCommand('coai.answerQuestion', () => answerQuestion(watcher)),
     // The same action under a second id, so the title bar can show a green icon while a question

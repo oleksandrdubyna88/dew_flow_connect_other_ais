@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { ModelPrice } from '../modelPrices';
 import { serverSettingsJson } from '../serverSettingsFile';
 import { settingsFrom } from '../settingsShape';
-import { Vendor, vendorsEnv, vendorsFrom, wirePrice } from '../vendors';
+import { Vendor, vendorsFrom } from '../vendors';
+import { vendorsEnv, wirePrice } from '../vendorsWire';
 
 /**
  * S3.7 of PLAN_feature_review.md, the panel's half: an `api` row's price crosses to the server with the

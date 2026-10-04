@@ -1,7 +1,8 @@
 import { updateAvailable } from './cliVersions';
 import { CoaiSettings } from './settingsShape';
 import { serverSettingsJson, writtenBy } from './serverSettingsFile';
-import { RowPriceLookup, Vendor } from './vendors';
+import { Vendor } from './vendors';
+import { RowPriceLookup } from './vendorsWire';
 
 /** Everything the sync needs from the editor, so the sync itself needs nothing from it. */
 export type ReadConfiguration = () => { settings: CoaiSettings; vendors: readonly Vendor[] };

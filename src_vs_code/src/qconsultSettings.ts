@@ -1,5 +1,6 @@
 import { compareVersions } from './coaiInstall';
 import { positive } from './consultSettings';
+import { Vendor, vendorsFrom } from './vendors';
 
 /**
  * The question consultant, as the panel holds it (todo/PLAN_question_consultant.md, S4).
@@ -104,7 +105,7 @@ export function qconsultSettingsFrom(read: Read): QconsultSettings {
   return {
     enabled: read('qconsultEnabled') !== false,
     mode: modeOf(read('qconsultMode')),
-    rows: capped(listOf(read('qconsultRows')).flatMap(rowFrom)),
+    rows: capped(listOf(read('qconsultRows')).flatMap(questionRowFrom).map(resolvedAgainst(vendorsFrom(read('vendors'))))),
     prompts: listOf(read('qconsultPrompts')).flatMap(promptFrom),
     roots: listOf(read('qconsultRoots')).filter((one): one is string => typeof one === 'string' && one.trim().length > 0).map((one) => one.trim()),
     rowMinutes: positive(read('qconsultRowMinutes'), DEFAULT_QCONSULT.rowMinutes),
@@ -132,8 +133,46 @@ function text(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
+/**
+ * A row that refers to a CATALOG row (one listing the question-consultant use) read as the definition it stands
+ * for — the catalog row's launch fields and key name, the question row's own id, prompt, switch and key. Every
+ * other row as it is: a definition is itself, and a reference to a plain reviewer row is coai-mcp's to resolve,
+ * as it always was. Key order kept, because these rows ARE the wire (`COAI_QCONSULT_ROWS`) and a migrated setup
+ * must write the same bytes it did (PLAN_one_model_catalog.md E1.3).
+ */
+function resolvedAgainst(rows: readonly Vendor[]): (row: QuestionRowSetting) => QuestionRowSetting {
+  return (row) => {
+    const target = catalogTarget(row, rows);
+
+    return target === undefined ? row : throughRow(row, target);
+  };
+}
+
+/** The catalog row a reference names, or nothing — a definition, or a reference to a plain reviewer row. */
+function catalogTarget(row: QuestionRowSetting, rows: readonly Vendor[]): Vendor | undefined {
+  const target = row.runtime === '' ? rows.find((one) => one.id === row.vendor.toLowerCase()) : undefined;
+
+  return listsQuestions(target) ? target : undefined;
+}
+
+function listsQuestions(row: Vendor | undefined): row is Vendor {
+  return row?.uses?.includes('qconsult') === true;
+}
+
+/** The row's launch fields and key name in the question row's own key order; its id, prompt, switch and key kept. */
+function throughRow(row: QuestionRowSetting, target: Vendor): QuestionRowSetting {
+  return {
+    ...row,
+    vendor: target.vaultKeyName ?? target.id,
+    runtime: target.runtime,
+    model: row.model || target.model,
+    baseUrl: target.baseUrl,
+    executablePath: target.executablePath,
+  };
+}
+
 /** A stored row, or none when it has no id to be named by. A row with no prompt is KEPT, so the section can say so. */
-function rowFrom(value: unknown): readonly QuestionRowSetting[] {
+export function questionRowFrom(value: unknown): readonly QuestionRowSetting[] {
   const row = recordOf(value);
   const id = text(row['id']);
 

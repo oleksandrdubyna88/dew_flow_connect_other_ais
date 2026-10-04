@@ -1,3 +1,4 @@
+import { CHAT } from './featureAvailability.generated';
 import * as fs from 'node:fs';
 import { needsShell } from './cliVersions';
 import { Platform } from './hostSide';
@@ -43,18 +44,15 @@ const ADAPTERS: Readonly<Partial<Record<Vendor['runtime'], { readonly adapter: C
 };
 
 /**
- * The runtimes a chat can speak to, typed as the VENDOR's own union rather than as strings.
+ * The runtimes a chat can speak to — `shared/feature-availability.json`'s `chat` list (PLAN_one_model_catalog.md
+ * D4, E1.2), typed as the vendor's own union.
  *
- * <p>`Object.keys` answers `string[]`, so every caller that needs a `Vendor` had to cast — the `as`
- * standing in for a real type that this repository's TypeScript rule warns about, and it appeared in a
- * test fixture the moment one was written. The cast is here now, once — and it no longer LIES, which
- * was codex's second point on the round: `ADAPTERS` is keyed by `Vendor['runtime']`, so a typo or an
- * unsupported runtime fails at the map definition rather than being laundered into a valid vendor
- * runtime by this line. `Partial` because the map holds the three that can chat, not every runtime a
- * vendor row may be set to.</p>
+ * <p>It was `Object.keys(ADAPTERS)`, which kept the list beside the code that provides it; the shared file
+ * keeps it beside every other feature's list, where the catalog's pickers read it. The map stays the proof:
+ * `featureAvailability.test.ts` holds that every runtime in this list has an adapter and no adapter is
+ * left out of it, so adding a runtime is still one map entry — plus one word in the shared file.</p>
  */
-export const CHAT_RUNTIMES: readonly Vendor['runtime'][] =
-  Object.keys(ADAPTERS) as Vendor['runtime'][];
+export const CHAT_RUNTIMES: readonly Vendor['runtime'][] = CHAT;
 
 /**
  * The entry for a runtime NAME, or nothing.

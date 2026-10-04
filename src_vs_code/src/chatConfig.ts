@@ -21,6 +21,7 @@ import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './c
 import { teamServersFrom } from './teamServers';
 import { chatRuntimeRefusal } from './cliChatLaunch';
 import { Vendor } from './vendors';
+import { userLayer } from './sideConfig';
 
 /**
  * What the chat reads out of the settings, and the host it reads the panel's discoveries on.
@@ -135,7 +136,7 @@ export function savedPrompts(config: vscode.WorkspaceConfiguration): readonly Pr
 }
 
 export function savedModels(config: vscode.WorkspaceConfiguration): readonly ModelPreset[] {
-  return chatModelPresetsFrom(config.get('chatModelPresets'));
+  return chatModelPresetsFrom(userLayer(config)('chatModelPresets'));
 }
 
 /**
