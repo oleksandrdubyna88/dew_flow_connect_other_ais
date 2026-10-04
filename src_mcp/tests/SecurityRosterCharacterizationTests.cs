@@ -99,6 +99,23 @@ public sealed class SecurityRosterCharacterizationTests : IDisposable
             """.ReplaceLineEndings("\n").TrimEnd('\n'));
     }
 
+    private const string GeneralPair = """{"enabled":true,"runs":[{"vendor":"codex","prompt":"redteam-general"}]}""";
+
+    /// <summary>
+    /// General is decided by paths, not by what a detector could read: an oversized PROSE file is not code, so a
+    /// docs-only commit is a plain skip for it, never "incomplete coverage" (2026-10-04, own review of epic 1).
+    /// </summary>
+    [Fact]
+    public void An_oversized_prose_only_change_is_a_plain_skip_for_general() =>
+        Append(GeneralPair, [new("CHANGELOG.md", new string('a', SecuritySignals.MaxFileCharacters + 1))]).Should().Be(
+            "reviewers=0 active=True\nnot asked codex/redteam-general: no code file in this committed change; redteam-general reviews code only");
+
+    /// <summary>Files past the detector cap were never looked at — they may be code, so general cannot call that a skip.</summary>
+    [Fact]
+    public void Files_beyond_the_cap_leave_general_incomplete_even_when_the_rest_is_prose() =>
+        Append(GeneralPair, [.. Enumerable.Range(0, SecuritySignals.MaxFiles + 2).Select(i => new FileDiff($"f{i}.md", "+notes"))]).Should().Be(
+            "reviewers=0 active=True\nexcluded codex/redteam-general: trigger coverage incomplete: 0 oversized diffs and 2 files beyond the detector limit were not inspected");
+
     [Fact]
     public void A_fully_inspected_change_without_the_trigger_is_a_skip() =>
         Append(SqlPair, Plain).Should().Be(

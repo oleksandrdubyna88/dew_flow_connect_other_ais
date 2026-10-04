@@ -9,7 +9,20 @@ export interface SecurityLane {
   readonly enabled: boolean; readonly threshold: number; readonly maxRounds: number;
   readonly prompts: readonly SecurityPrompt[]; readonly runs: readonly SecurityRun[];
 }
-export const DEFAULT_SECURITY: SecurityLane = { enabled: false, threshold: 0, maxRounds: 2, prompts: SECURITY_SEED.prompts, runs: [] };
+/**
+ * The shipped prompts as the wire carries them: `id`, `triggers`, `focus` and nothing else. The catalogue's
+ * `always` flag is a catalogue fact, never a settings member — a 0.41/0.42 server refuses a prompt entry that
+ * carries one, and a saved lane would keep it in settings.json for good (todo/PLAN_the_security_tab_reads_at_a_glance.md).
+ */
+const SEED_PROMPTS: readonly SecurityPrompt[] = SECURITY_SEED.prompts.map(({ id, triggers, focus }) => ({ id, triggers, focus }));
+export const DEFAULT_SECURITY: SecurityLane = { enabled: false, threshold: 0, maxRounds: 2, prompts: SEED_PROMPTS, runs: [] };
+/**
+ * A shipped prompt that is only on or off: paired with a reviewer it runs on every code change, with no conditions.
+ * Read from the RAW catalogue on purpose: `SEED_PROMPTS` above is the same catalogue projected for the wire, which
+ * is exactly the projection that drops this flag.
+ */
+export const securityAlways = (id: string): boolean =>
+  SECURITY_SEED.prompts.some(p => p.id === id && 'always' in p && p.always === true);
 export const SECURITY_SINCE = '0.41.0';
 export const securityPromptId = (id: string): boolean => /^redteam-[a-z0-9-]+$/.test(id) && id.length <= 80;
 export const securitySupported = (version: string): boolean =>
@@ -130,7 +143,7 @@ export function securityLaneSave(stored: unknown, field: string, value: unknown,
 
 /** One control edits one field; all other pairs and forward-compatible metadata survive. */
 export function securityWrite(lane: SecurityLane, field: string, value: unknown, vendors: readonly Vendor[]): SecurityLane {
-  if ('invalidConfiguration' in lane) return lane;
+  if ('invalidConfiguration' in lane || refusedForAlways(field)) return lane;
   const roots: Record<string, () => SecurityLane> = {
     enabled: () => enableLane(lane, value, vendors),
     threshold: () => ({ ...lane, threshold: number(value, lane.threshold, 0, 100) }),
@@ -152,10 +165,15 @@ function addPrompt(lane: SecurityLane, value: unknown): SecurityLane {
 }
 const hasPromptRoom = (lane: SecurityLane, id: string): boolean =>
   lane.prompts.length < 32 && !lane.prompts.some(p => p.id === id);
+/**
+ * A pair for the first enabled reviewer and the first prompt it is not paired with yet. Never an "always"
+ * prompt: it costs a reviewer on every change, so it is switched on only from its own card.
+ */
 function addRun(lane: SecurityLane, value: unknown, vendors: readonly Vendor[]): SecurityLane {
   if (value !== true || lane.runs.length >= 16) return lane;
-  const vendor = vendors.find(v => v.enabled && lane.prompts.some(p => !lane.runs.some(r => r.vendor === v.id && r.prompt === p.id)));
-  const p = lane.prompts.find(p => !lane.runs.some(r => r.vendor === vendor?.id && r.prompt === p.id));
+  const candidates = lane.prompts.filter(p => !securityAlways(p.id));
+  const vendor = vendors.find(v => v.enabled && candidates.some(p => !lane.runs.some(r => r.vendor === v.id && r.prompt === p.id)));
+  const p = candidates.find(p => !lane.runs.some(r => r.vendor === vendor?.id && r.prompt === p.id));
   return addSelected(lane, vendor, p);
 }
 function addSelected(lane: SecurityLane, vendor: Vendor | undefined, p: SecurityPrompt | undefined): SecurityLane {
@@ -172,6 +190,16 @@ function detailWrite(lane: SecurityLane, field: string, value: unknown, vendors:
 }
 const invokeEdit = (edits: Record<string, () => SecurityLane>, kind: string, fallback: SecurityLane): SecurityLane =>
   Object.hasOwn(edits, kind) ? edits[kind]!() : fallback;
+/**
+ * The writes that SET a prompt's conditions — a tag box, or an "All … tags" field. An "always" prompt has none, so
+ * these are refused for it by field, never by prompt: `prompt:<id>:restore` stays open, because it is how a
+ * leftover from a hand-registered general is cleared.
+ */
+const CONDITION_FIELDS: ReadonlySet<string> = new Set(['trigger', 'focus', 'prompt:triggers', 'prompt:focus']);
+function refusedForAlways(field: string): boolean {
+  const [kind, id, key] = field.split(':');
+  return (CONDITION_FIELDS.has(`${kind}`) || CONDITION_FIELDS.has(`${kind}:${key}`)) && securityAlways(`${id}`);
+}
 function indexedRunWrite(lane: SecurityLane, id: string, key: string, value: unknown, vendors: readonly Vendor[]): SecurityLane {
   if (!/^\d+$/.test(id)) return lane;
   const index = Number(id);
@@ -201,10 +229,24 @@ function tagWrite(lane: SecurityLane, kind: string, id: string, tag: string, val
   } : p) };
 }
 function promptWrite(lane: SecurityLane, id: string, key: string, value: unknown): SecurityLane {
-  if (key === 'remove') return removePrompt(lane, id, value);
+  const actions: Record<string, () => SecurityLane> = {
+    remove: () => removePrompt(lane, id, value), restore: () => restorePrompt(lane, id, value),
+  };
+  return Object.hasOwn(actions, key) ? actions[key]!() : tagListWrite(lane, id, key, value);
+}
+function tagListWrite(lane: SecurityLane, id: string, key: string, value: unknown): SecurityLane {
   if (!['triggers', 'focus'].includes(key) || typeof value !== 'string') return lane;
   const tags = [...new Set(value.split(',').map(s => s.trim()).filter(Boolean))];
   return { ...lane, prompts: lane.prompts.map(p => p.id === id ? { ...p, [key]: tags } : p) };
+}
+/**
+ * A shipped prompt's conditions put back to the shipped ones. Every other member it carries stays — unknown
+ * members travel on the wire for the server to refuse, and restoring must not quietly launder them away.
+ */
+function restorePrompt(lane: SecurityLane, id: string, value: unknown): SecurityLane {
+  const seed = SEED_PROMPTS.find(p => p.id === id);
+  if (value !== true || seed === undefined) return lane;
+  return { ...lane, prompts: lane.prompts.map(p => p.id === id ? { ...p, triggers: seed.triggers, focus: seed.focus } : p) };
 }
 function removePrompt(lane: SecurityLane, id: string, value: unknown): SecurityLane {
   if (value !== true || SECURITY_SEED.prompts.some(p => p.id === id)) return lane;

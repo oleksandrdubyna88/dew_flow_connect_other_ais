@@ -14,7 +14,7 @@ public sealed class SecurityProtocolTests
     [Fact]
     public void Shipped_redteam_prompts_place_the_operator_boundary_before_output_rules()
     {
-        foreach (var id in SecurityCatalog.Prompts.Select(p => p.Id).Append("redteam-general"))
+        foreach (var id in SecurityCatalog.Prompts.Select(p => p.Id))
         {
             var body = RolePrompts.ShippedDefaultFor(id);
             var boundary = body.IndexOf("### CONTEXT BOUNDARY & TARGET ISOLATION (CRITICAL):", StringComparison.Ordinal);

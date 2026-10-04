@@ -1,7 +1,7 @@
 import { escapeHtml as esc } from './escapeHtml';
 import { SECURITY_SEED } from './securityLane.generated';
 import {
-  SECURITY_SINCE, SECURITY_STAGES, securityLaneProblem, securitySupported, securityTokenBudget,
+  SECURITY_SINCE, SECURITY_STAGES, securityAlways, securityLaneProblem, securitySupported, securityTokenBudget,
   type SecurityLane, type SecurityPrompt, type SecurityRun,
 } from './securityLane';
 import type { Vendor } from './vendors';
@@ -72,8 +72,33 @@ function runWarnings(run: SecurityRun, lane: SecurityLane, vendor: Vendor | unde
   return warnings.map(message => `<p class="stale">${esc(message)}</p>`).join('');
 }
 
-const triggerWarning = (p: SecurityPrompt, preset: boolean): string => preset && p.triggers.length === 0
+/**
+ * An "always" prompt's whole condition story. A general registered by hand before it shipped may still carry
+ * triggers: a server from before then runs it only when they match, so the card must not claim "every change"
+ * until they are cleared — and clearing them is one button (the plan's D6; the coai code round on epic 1).
+ */
+function alwaysBody(p: SecurityPrompt): string {
+  if (p.triggers.length === 0) return '<p>Runs on every code change while a reviewer is ticked; it has no conditions.</p>';
+  return `<p class="stale">${esc(p.id)} has stored conditions (${esc(p.triggers.join(', '))}) from before it shipped. This version ignores them, but an older MCP server still runs it only when they match. Clear them so it runs on every code change.</p>
+    <button type="button" data-command="clearSecurityConditions" data-id="${esc(p.id)}">Clear stored conditions</button>`;
+}
+
+const triggerWarning = (p: SecurityPrompt, preset: boolean): string => preset && !securityAlways(p.id) && p.triggers.length === 0
   ? `<p class="stale">${esc(p.id)} has no triggers; select at least one condition to run this preset.</p>` : '';
+
+/**
+ * What decides whether a prompt runs. An "always" prompt has no conditions to set — its writes are refused — so
+ * it draws none, and says what it does instead (todo/PLAN_the_security_tab_reads_at_a_glance.md, D1).
+ */
+function conditionsBody(p: SecurityPrompt): string {
+  if (securityAlways(p.id)) return alwaysBody(p);
+  return `<p>Run when code matches: ${SECURITY_SEED.signals.filter(s => s.trigger).map(s =>
+      check('trigger:' + p.id + ':' + s.id, p.triggers.includes(s.id), s.label)).join(' ')}</p>
+    <p>Prioritize source: ${SECURITY_SEED.signals.map(s =>
+      check('focus:' + p.id + ':' + s.id, p.focus.includes(s.id), s.label)).join(' ')}</p>
+    <label>All trigger tags <input type="text" ${at('prompt:' + p.id + ':triggers')} value="${esc(p.triggers.join(', '))}"></label>
+    <label>All focus tags <input type="text" ${at('prompt:' + p.id + ':focus')} value="${esc(p.focus.join(', '))}"></label>`;
+}
 
 function promptBody(p: SecurityPrompt, lane: SecurityLane, vendors: readonly Vendor[], old: boolean): string {
   const preset = SECURITY_SEED.prompts.some(seed => seed.id === p.id);
@@ -83,11 +108,6 @@ function promptBody(p: SecurityPrompt, lane: SecurityLane, vendors: readonly Ven
       lane.runs.some(r => r.vendor === v.id && r.prompt === p.id), v.id, old)).join(' ')}</p>
     <p>Repository prompt: <code>src_mcp/src/prompts/${esc(p.id)}.md</code></p>
     <button data-command="editSecurityPrompt" data-id="${esc(p.id)}">Edit local prompt override</button>
-    <p>Run when code matches: ${SECURITY_SEED.signals.filter(s => s.trigger).map(s =>
-      check('trigger:' + p.id + ':' + s.id, p.triggers.includes(s.id), s.label)).join(' ')}</p>
-    <p>Prioritize source: ${SECURITY_SEED.signals.map(s =>
-      check('focus:' + p.id + ':' + s.id, p.focus.includes(s.id), s.label)).join(' ')}</p>
-    <label>All trigger tags <input type="text" ${at('prompt:' + p.id + ':triggers')} value="${esc(p.triggers.join(', '))}"></label>
-    <label>All focus tags <input type="text" ${at('prompt:' + p.id + ':focus')} value="${esc(p.focus.join(', '))}"></label>
+    ${conditionsBody(p)}
     ${preset ? '' : check('prompt:' + p.id + ':remove', false, 'Remove custom prompt')}</fieldset>`;
 }

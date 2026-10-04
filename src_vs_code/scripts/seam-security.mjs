@@ -11,7 +11,9 @@
  * <p>Three settings, each through the extension's own reader and writer, none hand-written:</p>
  * <ul>
  *   <li>a well-formed lane — the positive control: the server must raise no complaint about it, or the
- *   refusal below could be the server refusing everything;</li>
+ *   refusal below could be the server refusing everything. It pairs the shipped "always" prompt
+ *   `redteam-general` too: run against a 0.41/0.42 server (`COAI_MCP_DLL`), which knows general only as a
+ *   custom prompt, this is the mixed-version check of todo/PLAN_the_security_tab_reads_at_a_glance.md;</li>
  *   <li>a custom prompt carrying a trigger this build does not know — the server must refuse it, naming
  *   the prompt;</li>
  *   <li>a malformed setting — the extension sends it switched off with the stored value aside, and the
@@ -56,18 +58,20 @@ export async function securitySeam({ providersIn, fail }) {
 
   try {
     const clean = await complaintsAbout({ ...DEFAULT_SECURITY, enabled: true,
-      runs: [{ vendor: ROW.id, prompt: 'redteam-authz', context: 'slice', contextTokens: 4096, stages: ['code'] }] });
+      runs: [{ vendor: ROW.id, prompt: 'redteam-authz', context: 'slice', contextTokens: 4096, stages: ['code'] },
+        { vendor: ROW.id, prompt: 'redteam-general', context: 'slice', contextTokens: 4096, stages: ['code'] }] });
     if (clean.complaints.length > 0) {
       fail(`the server refused a well-formed lane the extension wrote: ${clean.complaints.join(' | ')}`);
     }
 
+    // A CUSTOM prompt: general shipped (2026-10-04), and a shipped prompt is not what this leg is about.
     const unknown = await complaintsAbout({ ...DEFAULT_SECURITY, enabled: true,
-      prompts: [{ id: 'redteam-general', triggers: ['future-detector'], focus: [] }],
-      runs: [{ vendor: ROW.id, prompt: 'redteam-general' }] });
+      prompts: [{ id: 'redteam-fixture', triggers: ['future-detector'], focus: [] }],
+      runs: [{ vendor: ROW.id, prompt: 'redteam-fixture' }] });
     if (!unknown.securityLane.prompts.some((p) => p.triggers.includes('future-detector'))) {
       fail('the extension dropped the unknown trigger before it reached the server, so nothing could refuse it');
     }
-    const refusal = unknown.complaints.find((s) => s.includes('redteam-general') && s.includes('trigger'));
+    const refusal = unknown.complaints.find((s) => s.includes('redteam-fixture') && s.includes('trigger'));
     if (refusal === undefined) {
       fail(`the server did not refuse a prompt whose trigger it does not know. It said: ${unknown.complaints.join(' | ') || '(nothing)'}`);
     }

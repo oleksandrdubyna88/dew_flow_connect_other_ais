@@ -3,18 +3,20 @@ import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { DEFAULTS, envBlock } from '../settingsShape';
-import { DEFAULT_SECURITY, securityWrite, securityLaneFrom, type SecurityLane } from '../securityLane';
+import { DEFAULT_SECURITY, securityAlways, securityEnv, securityWrite, securityLaneFrom, type SecurityLane } from '../securityLane';
 import { DEFAULT_VENDORS } from '../vendors';
 import { SECURITY_SEED } from '../securityLane.generated';
 import { settingMessageFrom } from '../settingRoute';
 import { type Control, lastWrite, type Page, panelState, runPanel, withoutSeq } from './panelPageHarness';
 
+const CONDITIONAL = SECURITY_SEED.prompts.filter(p => !securityAlways(p.id));
+
 test('each of the twelve presets has a real pairing checkbox and switching it off preserves other pairs', () => {
-  assert.equal(SECURITY_SEED.prompts.length, 12);
+  assert.equal(CONDITIONAL.length, 12);
   const page = runPanel(panelState('securityLane'));
   const vendor = DEFAULT_VENDORS.find(v => v.enabled)!;
   let lane = DEFAULT_SECURITY;
-  for (const preset of SECURITY_SEED.prompts) {
+  for (const preset of CONDITIONAL) {
     assert.ok(preset.triggers.length > 0);
     const field = 'pair:' + vendor.id + ':' + preset.id;
     const box = page.controls.find(c => c.dataset['securityField'] === field);
@@ -61,7 +63,8 @@ test('opening prompt text posts its stable redteam id', () => {
   const edit = page.commands.find(c => c.dataset['command'] === 'editSecurityPrompt');
   assert.ok(edit);
   edit.fire('click');
-  assert.deepEqual(withoutSeq(page.posted.at(-1)!), { type: 'command', command: 'editSecurityPrompt', id: 'redteam-authz' });
+  // General is the first card since it shipped (2026-10-04).
+  assert.deepEqual(withoutSeq(page.posted.at(-1)!), { type: 'command', command: 'editSecurityPrompt', id: 'redteam-general' });
 });
 
 test('editing a known field preserves unknown root, prompt and run fields', () => {
@@ -89,9 +92,9 @@ test('generated security metadata agrees with the shared catalog', () => {
   assert.deepEqual(SECURITY_SEED, JSON.parse(readFileSync(resolve(__dirname, '../../../shared/security-lane.json'), 'utf8')));
 });
 
-test('stored custom metadata keeps all twelve presets selectable and condition edits preserve other tags', () => {
+test('stored custom metadata keeps all thirteen shipped prompts selectable and condition edits preserve other tags', () => {
   const loaded = securityLaneFrom({ prompts: [{ id: 'redteam-custom', triggers: ['future-detector'] }] });
-  assert.equal(loaded.prompts.length, 13);
+  assert.equal(loaded.prompts.length, 14);
   const tagged = securityWrite(loaded, 'trigger:redteam-custom:oauth', true, DEFAULT_VENDORS);
   assert.deepEqual(tagged.prompts.find(p => p.id === 'redteam-custom')?.triggers, ['future-detector', 'oauth']);
   const untagged = securityWrite(tagged, 'trigger:redteam-custom:oauth', false, DEFAULT_VENDORS);
@@ -210,6 +213,101 @@ test('a removed reviewer stays visible with a repair instruction, and choosing o
   const repaired = routed(page, lane);
   assert.equal(repaired.runs[0]?.vendor, vendor);
   assert.doesNotMatch(lanePane(pageWith(repaired)), /Reviewer removed-reviewer is unavailable/);
+});
+
+// General is a shipped "always" prompt (todo/PLAN_the_security_tab_reads_at_a_glance.md, D1): first in the
+// list, only on or off, and its `always` flag is a catalogue fact that never reaches the wire.
+
+const GENERAL = 'redteam-general';
+
+test('general is the first shipped prompt and the only one that always runs', () => {
+  assert.equal(SECURITY_SEED.prompts[0]?.id, GENERAL);
+  assert.equal(securityAlways(GENERAL), true);
+  assert.deepEqual(SECURITY_SEED.prompts.filter(p => securityAlways(p.id)).map(p => p.id), [GENERAL]);
+  assert.equal(securityAlways('redteam-custom'), false);
+});
+
+test('the catalogue\'s always flag never reaches the wire, before or after a write', () => {
+  // A 0.41/0.42 server refuses a prompt entry with any member besides id, triggers and focus.
+  const enabled = securityWrite(DEFAULT_SECURITY, 'enabled', true, DEFAULT_VENDORS);
+  const paired = securityWrite(enabled, 'pair:' + DEFAULT_VENDORS.find(v => v.enabled)!.id + ':' + GENERAL, true, DEFAULT_VENDORS);
+  for (const lane of [DEFAULT_SECURITY, enabled, paired, securityLaneFrom({}), securityLaneFrom(JSON.parse(JSON.stringify(paired)))]) {
+    const wire = JSON.parse(securityEnv({ ...lane, enabled: true }, '0.42.0')['COAI_SECURITY_LANE']!);
+    for (const prompt of wire.prompts) assert.deepEqual(Object.keys(prompt).sort(), ['focus', 'id', 'triggers'], JSON.stringify(prompt));
+  }
+});
+
+test('general\'s conditions cannot be set, but restore clears a hand-registered leftover', () => {
+  const leftover = securityLaneFrom({ prompts: [{ id: GENERAL, triggers: ['sql'], focus: [] }] });
+  for (const [field, value] of [['trigger:' + GENERAL + ':xss', true], ['focus:' + GENERAL + ':xss', true],
+    ['prompt:' + GENERAL + ':triggers', 'xss'], ['prompt:' + GENERAL + ':focus', 'xss']] as const) {
+    assert.deepEqual(securityWrite(leftover, field, value, DEFAULT_VENDORS), leftover, field);
+  }
+  const restored = securityWrite(leftover, 'prompt:' + GENERAL + ':restore', true, DEFAULT_VENDORS);
+  const general = restored.prompts.find(p => p.id === GENERAL)!;
+  assert.deepEqual(general.triggers, []);
+  assert.deepEqual(general.focus, ['entry-point']);
+});
+
+test('restore puts a preset\'s shipped conditions back and keeps an unknown member', () => {
+  const edited = securityLaneFrom({ prompts: [{ id: 'redteam-sql', triggers: ['xss'], focus: [], futureDetector: 'v2' }] });
+  const restored = securityWrite(edited, 'prompt:redteam-sql:restore', true, DEFAULT_VENDORS);
+  const sql = restored.prompts.find(p => p.id === 'redteam-sql') as unknown as Record<string, unknown>;
+  assert.deepEqual(sql['triggers'], ['sql']);
+  assert.deepEqual(sql['focus'], ['sql', 'entry-point']);
+  assert.equal(sql['futureDetector'], 'v2');
+  assert.deepEqual(securityWrite(edited, 'prompt:redteam-custom:restore', true, DEFAULT_VENDORS), edited, 'a custom prompt has nothing shipped to restore');
+});
+
+test('Add pair never switches general on — it costs a reviewer on every change', () => {
+  let lane = DEFAULT_SECURITY;
+  for (let i = 0; i < 16; i += 1) lane = securityWrite(lane, 'addRun', true, DEFAULT_VENDORS);
+  assert.ok(lane.runs.length > 0);
+  assert.ok(lane.runs.every(r => r.prompt !== GENERAL), JSON.stringify(lane.runs));
+  assert.equal(securityWrite(DEFAULT_SECURITY, 'addRun', true, DEFAULT_VENDORS).runs[0]?.prompt, 'redteam-authz');
+});
+
+test('general\'s card draws no condition boxes and no missing-trigger warning, and says it runs on every change', () => {
+  const page = pageWith(securityWrite(DEFAULT_SECURITY, 'enabled', true, DEFAULT_VENDORS));
+  const conditions = page.controls.filter(c => /^(trigger|focus|prompt):redteam-general(:|$)/.test(String(c.dataset['securityField'])));
+  assert.deepEqual(conditions.map(c => c.dataset['securityField']), []);
+  assert.ok(page.controls.some(c => c.dataset['securityField'] === 'trigger:redteam-sql:sql'), 'a conditional preset lost its boxes too');
+  // Scoped to general's own card, so a sentence elsewhere on the pane cannot satisfy it.
+  const pane = lanePane(page);
+  const start = pane.indexOf('<legend>redteam-general</legend>');
+  assert.ok(start >= 0, 'general has no card');
+  const card = pane.slice(start, pane.indexOf('</fieldset>', start));
+  assert.doesNotMatch(card, /has no triggers/);
+  assert.match(card, /runs on every code change/i);
+  assert.equal(page.commands.some(c => c.dataset['command'] === 'clearSecurityConditions'), false, 'nothing to clear, so no button');
+});
+
+/** General's own card, as the Security lane tab drew it. */
+function generalCard(page: Page): string {
+  const pane = lanePane(page);
+  const start = pane.indexOf('<legend>redteam-general</legend>');
+  assert.ok(start >= 0, 'general has no card');
+  return pane.slice(start, pane.indexOf('</fieldset>', start));
+}
+
+test('a general registered by hand with conditions says so on its card, and one button clears them', () => {
+  // The coai code round on epic 1: the card claimed "runs on every code change" while an older server still ran
+  // this leftover only on a signal, and restore had no control anywhere.
+  const leftover = securityLaneFrom({ enabled: true, prompts: [{ id: GENERAL, triggers: ['sql'], focus: [] }] });
+  const page = pageWith(leftover);
+  assert.match(generalCard(page), /stored conditions/i);
+  assert.doesNotMatch(generalCard(page), /runs on every code change while/i, 'the card claims what an older server will not do');
+
+  const clear = page.commands.find(c => c.dataset['command'] === 'clearSecurityConditions');
+  assert.ok(clear, 'the leftover has no button to clear it');
+  assert.equal(clear.dataset['id'], GENERAL);
+  clear.fire('click');
+  assert.deepEqual(withoutSeq(page.posted.at(-1)!), { type: 'command', command: 'clearSecurityConditions', id: GENERAL });
+
+  // What the host's case writes, routed the way it routes it.
+  const cleared = securityWrite(leftover, 'prompt:' + GENERAL + ':restore', true, DEFAULT_VENDORS);
+  assert.match(generalCard(pageWith(cleared)), /runs on every code change/i);
+  assert.equal(pageWith(cleared).commands.some(c => c.dataset['command'] === 'clearSecurityConditions'), false);
 });
 
 // The live settings contract — the extension's serialized lane read by the REAL server — is a leg of

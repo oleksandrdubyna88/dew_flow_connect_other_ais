@@ -144,7 +144,8 @@ public sealed record SecurityLaneSetting
             complaints.Add(refusal);
             return;
         }
-        library[id] = ReadPrompt(entry, library.GetValueOrDefault(id, new(id, [], [])), complaints);
+        var seed = library.GetValueOrDefault(id, new(id, [], []));
+        library[id] = SecurityCatalog.IsAlways(id) ? ReadAlwaysPrompt(entry, seed, complaints) : ReadPrompt(entry, seed, complaints);
     }
 
     /// <summary>Why an entry cannot join the library at all; a valid slug is claimed even when the library is full.</summary>
@@ -158,6 +159,26 @@ public sealed record SecurityLaneSetting
 
     private static bool IsLibraryFull(string id, Dictionary<string, SecurityPrompt> library) =>
         !library.ContainsKey(id) && library.Count >= SecurityCatalog.MostPrompts;
+
+    /// <summary>
+    /// An "always" prompt keeps the catalogue's conditions whatever the entry says. A general registered by hand
+    /// before it shipped may carry triggers: they are ignored, the person is told once, and the prompt is never
+    /// refused for them — an old leftover must not stop it running (the plan's D6). A stored focus is replaced
+    /// silently: every hand-added general was stored with `focus: []`, and warning on that would warn on all of them.
+    /// </summary>
+    private static SecurityPrompt ReadAlwaysPrompt(JsonElement entry, SecurityPrompt seed, List<string> complaints)
+    {
+        if (HasStoredTriggers(entry)) complaints.Add($"{seed.Id} runs on every change; the conditions stored for it are ignored");
+        var refusal = Members(entry, ["id", "triggers", "focus"]);
+        if (refusal.Length > 0) complaints.Add($"{seed.Id}: {refusal}");
+        return seed with { Refusal = refusal };
+    }
+
+    private static bool HasStoredTriggers(JsonElement entry)
+    {
+        var triggers = Tags(entry, "triggers", [], out var malformed);
+        return malformed || triggers.Count > 0;
+    }
 
     private static SecurityPrompt ReadPrompt(JsonElement entry, SecurityPrompt seed, List<string> complaints)
     {
