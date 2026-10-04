@@ -1,5 +1,5 @@
 /**
- * The Security lane tab's part of the Settings page script (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 3, C).
+ * The Security lane tab's part of the Settings page script (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 3, C).
  *
  * <p><b>Why page-local state.</b> Any write repaints the page, and a repaint REPLACES the document: a fold the person
  * opened would snap shut, and the control they just used would lose focus — the change handler releases focus to the

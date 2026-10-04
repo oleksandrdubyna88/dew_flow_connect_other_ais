@@ -10,7 +10,7 @@ import type { PanelState } from '../panelView';
 import { DEFAULT_VENDORS } from '../vendors';
 import { type Control, type Page, panelState, runPanel, withoutSeq } from './panelPageHarness';
 
-// The Security lane tab as drawn (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 3): every test RUNS the page.
+// The Security lane tab as drawn (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 3): every test RUNS the page.
 
 const CURRENT_SERVER = { kind: 'known', version: '0.43.0', remembered: false, updateOffered: false } as const;
 const OLD_SERVER = { ...CURRENT_SERVER, version: '0.40.3' } as const;

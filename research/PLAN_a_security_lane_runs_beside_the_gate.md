@@ -30,6 +30,14 @@ available as an additional custom prompt, outside the twelve presets. Prompt bod
 and versioned in `src_mcp/src/prompts/`. A placeholder never counts as an answered review.
 Final verification includes `review_feature` over the complete E1–E5 delivery, after the code gates.
 
+> **Deviation, 2026-10-04 — `redteam-general` is no longer custom.** The operator reversed the sentence above that
+> keeps general "an additional custom prompt, outside the twelve presets": general is now a **shipped "always"
+> prompt**, first in the catalogue, only on or off, and due on every change that touches a code file (a prose-only
+> or withheld diff is a plain skip). Stored triggers on it are ignored and reported once; a hand-registered general
+> with no triggers keeps running on every change that touches code; a change of prose or withheld files only is now a plain skip (from MCP 0.43.0). See
+> [PLAN_the_security_tab_reads_at_a_glance.md](PLAN_the_security_tab_reads_at_a_glance.md) (D1, D6) and
+> [module_security_lane.md](module_security_lane.md).
+
 Operator purpose (from the supplied twelve-module specification): inspect changed code for relevant
 risk signatures and select narrow security reviews without sending every attack area on every change.
 The operator initially selected `Qwen3.5-35B-A3B-Q5_vk128:latest`, then selected
@@ -339,7 +347,7 @@ must be calibrated. This lane retains partial evidence; it does not close that r
 | `src_mcp/src/prompts/redteam-deserialize.md` | Unsafe deserialization review instructions (required preset) |
 | `src_mcp/src/prompts/redteam-xss.md` | XSS review instructions (required preset) |
 | `src_mcp/src/prompts/redteam-secrets.md` | Secret disclosure review instructions (required preset) |
-| `src_mcp/src/prompts/redteam-general.md` | Additional custom general review, outside the twelve presets |
+| `src_mcp/src/prompts/redteam-general.md` | Additional custom general review, outside the twelve presets (since 2026-10-04: a shipped "always" prompt — see the deviation note in §1) |
 | `<dataDir>/prompts/redteam-general.md` | Local override of the general prompt |
 | `<dataDir>/prompts/redteam-sql.md` | Local override of the SQL prompt |
 | Any additional `<dataDir>/prompts/redteam-<slug>.md` | Instructions for a prompt registered in settings |

@@ -303,7 +303,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   /** The Consultant tab's health blocks — probe, watcher, Check and Copy — composed in `consultantHealthPanel.ts`. */
   private readonly consultantHealth: ConsultantHealthPanel;
 
-  /** Repaints the Security lane tab when a prompt override file changes (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2). */
+  /** Repaints the Security lane tab when a prompt override file changes (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 2). */
   private readonly securityPromptWatch: { readonly changed: Debounced; readonly stop: () => void };
   /** The prompt files' states, re-read only for a file whose size or modification time changed. */
   private readonly securityPromptText = new SecurityPromptTextCache();

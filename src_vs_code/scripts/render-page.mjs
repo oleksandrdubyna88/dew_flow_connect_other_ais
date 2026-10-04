@@ -14,7 +14,7 @@
  *
  *   npm run compile && node scripts/render-page.mjs <page> <out.png> [width] [height] [--size n] [--browser path]
  *
- * <page>: sidebar · sidebar-question · settings[:<tab>] · commands · roles · presets
+ * <page>: sidebar · sidebar-question · settings[:<tab>] · security · commands · roles · presets
  *
  * Width: headless Chromium lays a page out at no less than about 500px and CROPS a narrower screenshot, so
  * a 340px sidebar comes out cut at the right edge rather than wrapped. Render the sidebar at 500.
@@ -108,11 +108,16 @@ function DEMO_SIDEBAR() {
   };
 }
 
-/** The page's html, with the theme and a stubbed editor API in front of its own script. */
-function dressed(html) {
+/** What the stubbed `getState` answers, by page: the page-local state it restores (the Security lane tab's open folds). */
+const SAVED = { security: { seclaneOpen: ['redteam-sql'] } };
+
+/** The page's html, with the theme and a stubbed editor API in front of its own script; `saved` is what getState answers. */
+function dressed(html, saved) {
+  // Escaped for a script element: no `<` reaches the page, so no value can close the script it is written into.
+  const state = JSON.stringify(saved).replaceAll('<', '\\u003c');
   const tokens = Object.entries(THEME).map(([name, value]) => `--vscode-${name}: ${value};`).join(' ');
   const head = `<style>:root { ${tokens} } body { background: var(--vscode-editor-background); }</style>`
-    + `<script nonce="${NONCE}">window.acquireVsCodeApi = () => ({ postMessage() {}, getState() {}, setState() {} });</script>`;
+    + `<script nonce="${NONCE}">window.acquireVsCodeApi = () => ({ postMessage() {}, getState() { return ${state}; }, setState() {} });</script>`;
 
   return html.replace('<head>', `<head>${head}`).replace(/<body(\s|>)/, '<body class="vscode-dark"$1');
 }
@@ -138,6 +143,8 @@ function page(name, size) {
     }
     case 'settings':
       return from('panelView.js').settingsHtml({ ...panelState(''), ...text }, NONCE, tab ?? 'reviewers');
+    case 'security':
+      return securityDemo(text);
     case 'commands':
       return from('commandsPage.js').commandsHtml({ rows: [], texts: {}, serverVersion: '', perSide: false, ...text }, NONCE);
     case 'roles':
@@ -145,9 +152,31 @@ function page(name, size) {
     case 'presets':
       return from('chatPresetsPage.js').chatPresetsHtml({ prompts: [], models: [], providers: [], unreadable: [], ...text }, NONCE);
     default:
-      console.log(`unknown page "${name}" — sidebar, settings[:<tab>], commands, roles or presets`);
+      console.log(`unknown page "${name}" — sidebar, settings[:<tab>], security, commands, roles or presets`);
       process.exit(2);
   }
+}
+
+/**
+ * The Security lane tab with every card state on it (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 4): an edited
+ * preset (override text), a preset whose conditions changed, a custom prompt with no text yet, pairs including general,
+ * and one conditions fold opened the way a person's toggle leaves it in the page's own state.
+ */
+function securityDemo(text) {
+  const { panelState } = from('test/panelPageHarness.js');
+  const { DEFAULTS } = from('settingsShape.js');
+  const { securityLaneFrom } = from('securityLane.js');
+  const lane = securityLaneFrom({
+    enabled: true,
+    prompts: [{ id: 'redteam-sql', triggers: ['sql', 'xss'] }, { id: 'redteam-mine', triggers: [], focus: [] }],
+    runs: [{ vendor: 'codex', prompt: 'redteam-general' }, { vendor: 'codex', prompt: 'redteam-authz' }, { vendor: 'antigravity', prompt: 'redteam-mine' }],
+  });
+  return from('panelView.js').settingsHtml({
+    ...panelState(''), ...text, settings: { ...DEFAULTS, securityLane: lane },
+    server: { kind: 'known', version: '0.43.0', remembered: false, updateOffered: false },
+    securityPromptText: { 'redteam-authz': 'written', 'redteam-mine': 'none' },
+    securityPromptDir: 'C:/Users/me/AppData/Roaming/coai/prompts',
+  }, NONCE, 'securityLane');
 }
 
 const [name, target, width = '1200', height = '900'] = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !all[i - 1]?.startsWith('--'));
@@ -158,7 +187,7 @@ if (name === undefined || target === undefined) {
 const sizeAt = process.argv.indexOf('--size');
 const size = sizeAt >= 0 ? Number(process.argv[sizeAt + 1]) : 0;
 const shot = screenshot(browserOrExit(), 'coai-render-', {
-  html: dressed(page(name, size)), width: Number(width), height: Number(height), out: resolve(target),
+  html: dressed(page(name, size), SAVED[name.split(':')[0]] ?? null), width: Number(width), height: Number(height), out: resolve(target),
 });
 console.log(shot.ok ? `wrote ${resolve(target)}` : `no picture: ${shot.said}`);
 process.exit(shot.ok ? 0 : 1);

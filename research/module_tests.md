@@ -41,7 +41,7 @@ hashes and session history after each cell. The command and current measurement 
 security-lane release or when changing these prompts, the model or its runtime; the implementing
 agent/operator owns that run. Deterministic tests do not establish model quality or prove that
 Ollama consumed the full input; the live run does not execute reproductions.
-`SecurityLaneAuditTests` separately runs all twelve modules against an explicitly selected committed
+`SecurityLaneAuditTests` separately runs every catalogue prompt (thirteen since `redteam-general` shipped on 2026-10-04; `COAI_SECURITY_AUDIT_PROMPTS` narrows them) against an explicitly selected committed
 feature, one at a time, preserving every request, response and failure for consultant triage. Its
 ordinary reviewer is a clean test double; the campaign does not replace the COAI code/feature gates.
 Both hardware harnesses accept `COAI_SECURITY_CALIBRATION_MODEL` to select the installed Ollama

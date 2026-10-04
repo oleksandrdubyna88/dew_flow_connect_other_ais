@@ -69,3 +69,17 @@ test('a malformed line mentioning a refusal cannot throw past the leg\'s cleanup
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('a named older server that predates --security-prompt-text skips the text leg; this repository\'s own build never does', async () => {
+  // Measured 2026-10-04: `COAI_MCP_DLL` pointed at mcp 0.42.0 — the mixed-version run the plan's DoD asks for —
+  // ended the WHOLE seam at the ninth leg (`exited 64: unknown argument '--security-prompt-text'`), so the legs
+  // after it never ran against the older server. The mode is new in 0.43.0; an older binary cannot answer it.
+  // Against the binary this repository just built, the same refusal is a regression and must still fail.
+  const { textLegVerdict } = await import('../../scripts/seam-security-text.mjs');
+  const refused = "[coai-mcp] unknown argument '--security-prompt-text' - this binary takes none; an MCP client speaks to it over stdin.";
+
+  assert.equal(textLegVerdict({ named: true, code: 64, stderr: refused }), 'older');
+  assert.equal(textLegVerdict({ named: false, code: 64, stderr: refused }), 'fail');
+  assert.equal(textLegVerdict({ named: true, code: 1, stderr: 'boom' }), 'fail');
+  assert.equal(textLegVerdict({ named: true, code: 0, stderr: '' }), 'ok');
+});

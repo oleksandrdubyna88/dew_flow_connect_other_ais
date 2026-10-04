@@ -6,7 +6,7 @@ import {
 import type { SecurityTextState } from './securityPromptFiles';
 
 /**
- * What the Security lane tab draws each prompt card from (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2):
+ * What the Security lane tab draws each prompt card from (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 2):
  * which state a card is in, the order cards come in, what a collapsed block says, whether a new name may be used,
  * and the ONE mapping every button's write goes through. Pure, so each of them is tested without a page or a host.
  */

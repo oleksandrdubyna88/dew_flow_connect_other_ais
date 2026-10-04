@@ -5,7 +5,7 @@ import {
 import type { SecurityTextState } from './securityPromptFiles';
 
 /**
- * What the Security lane tab's buttons do (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 3, D) — with every
+ * What the Security lane tab's buttons do (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 3, D) — with every
  * effect handed in, so the paths that delete a person's text are tested without an editor (`securityFlows.test.ts`).
  * `securityCommands.ts` binds the effects to VS Code.
  *

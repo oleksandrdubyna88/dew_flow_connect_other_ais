@@ -6,7 +6,7 @@ import { PROMPTS_FOLDER, promptFile, promptFilesGlob } from './rolesPrompts';
  * `shared/security-prompt-text-vectors.json`; the server's `SecurityPromptText.Classify` answers the same vectors, and
  * the seam compares this module's reading of real files with the server's own (`--security-prompt-text`), so the card
  * the Security lane tab draws and the pairing the server runs cannot disagree
- * (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2).
+ * (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 2).
  *
  * <p>The data directory is the one `editSecurityPrompt` opens files in — `PanelProvider`'s `dataDir`, which the seam
  * suite compares with the server's own resolver — so the state read here is the file the server reads.</p>

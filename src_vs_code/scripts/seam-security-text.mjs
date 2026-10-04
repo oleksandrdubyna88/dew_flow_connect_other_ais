@@ -1,6 +1,6 @@
 /**
  * The seam's security-prompt-text leg: real override files, read by the EXTENSION and by the REAL server, compared file
- * by file (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2).
+ * by file (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 2).
  *
  * <p>The Security lane tab draws each prompt card from the extension's reading of its override file; the server decides
  * whether the pairing runs from its own. `shared/security-prompt-text-vectors.json` pins the RULE on text, and both
@@ -59,29 +59,66 @@ const FILES = {
  * Run the leg. Answers how many files were compared when every one agreed; ends the process through `fail` when one did
  * not, or when the server could not answer.
  *
- * @param {{binary: string, fail: Function, timeoutMs: number}} runner the binary under test and the runner's failure road
+ * @param {{binary: string, named: boolean, fail: Function, timeoutMs: number}} runner the binary under test, whether
+ *   `COAI_MCP_DLL` named it, and the runner's failure road
+ * @returns {Promise<{compared: number, older: boolean}>} `older` when a named binary predates the mode and nothing was compared
  */
-export async function securityTextSeam({ binary, fail, timeoutMs }) {
+export async function securityTextSeam({ binary, named, fail, timeoutMs }) {
   const dataDir = mkdtempSync(join(tmpdir(), 'coai-seam-security-text-'));
   try {
-    mkdirSync(promptsDir(dataDir), { recursive: true });
-    for (const [id, bytes] of Object.entries(FILES)) if (bytes !== null) writeFileSync(promptFile(dataDir, id), bytes);
+    writeFiles(dataDir);
     const ids = Object.keys(FILES);
     const extension = await new SecurityPromptTextCache().states(dataDir, ids);
-    const server = await serverStates(binary, ids, dataDir, timeoutMs, fail);
-    const disagree = ids.filter((id) => extension[id] !== server[id]);
-    if (disagree.length > 0) {
-      fail('the Security lane tab and the server read prompt files differently: '
-        + disagree.map((id) => `${id}: extension ${extension[id]}, server ${server[id]}`).join('; '));
-    }
-    return { compared: ids.length };
+    const server = await serverStates(binary, named, ids, dataDir, timeoutMs, fail);
+    return server === undefined ? { compared: 0, older: true } : compared(ids, extension, server, fail);
   } finally {
     rmSync(dataDir, { recursive: true, force: true });
   }
 }
 
-/** The server's own reading, through a data directory nothing else shares. */
-function serverStates(binary, ids, dataDir, timeoutMs, fail) {
+/** The server's printed reading — or the leg's failure, never a throw that skips the runner's cleanup. */
+function readingOf(out, fail) {
+  try {
+    return JSON.parse(out);
+  } catch {
+    return fail(`--security-prompt-text answered something that is not JSON: ${out.slice(0, 200)}`);
+  }
+}
+
+/** Every fixture file, written under the prompt id it stands for; `null` writes nothing. */
+function writeFiles(dataDir) {
+  mkdirSync(promptsDir(dataDir), { recursive: true });
+  for (const [id, bytes] of Object.entries(FILES)) if (bytes !== null) writeFileSync(promptFile(dataDir, id), bytes);
+}
+
+/** Both readings, file by file: a failure naming every file read differently, or how many were compared. */
+function compared(ids, extension, server, fail) {
+  const disagree = ids.filter((id) => extension[id] !== server[id]);
+  if (disagree.length > 0) {
+    fail('the Security lane tab and the server read prompt files differently: '
+      + disagree.map((id) => `${id}: extension ${extension[id]}, server ${server[id]}`).join('; '));
+  }
+  return { compared: ids.length, older: false };
+}
+
+/**
+ * What a `--security-prompt-text` exit means. The mode is new in MCP 0.43.0, so a binary `COAI_MCP_DLL` NAMES — the
+ * mixed-version run against a released server — may refuse it as an unknown argument, and that is `older`: the leg
+ * has nothing to compare and the seam goes on to the legs after it. The binary this repository just built has no such
+ * excuse; the same refusal from it is a regression, and so is any other failure from either.
+ *
+ * @param {{named: boolean, code: number | null, stderr: string}} exit
+ * @returns {'ok' | 'older' | 'fail'}
+ */
+export function textLegVerdict({ named, code, stderr }) {
+  if (code === 0) return 'ok';
+  return predatesTheMode(named, code, stderr) ? 'older' : 'fail';
+}
+/** A binary COAI_MCP_DLL named, refusing the mode as an argument it does not know (exit 64, the usage error). */
+const predatesTheMode = (named, code, stderr) => named && code === 64 && stderr.includes("unknown argument '--security-prompt-text'");
+
+/** The server's own reading, through a data directory nothing else shares; `undefined` when a named binary predates it. */
+function serverStates(binary, named, ids, dataDir, timeoutMs, fail) {
   const env = {
     ...Object.fromEntries(Object.keys(process.env).filter((key) => key.startsWith('COAI_')).map((key) => [key, ''])),
     COAI_DATA_DIR: dataDir,
@@ -98,8 +135,9 @@ function serverStates(binary, ids, dataDir, timeoutMs, fail) {
     child.on('error', (e) => { clearTimeout(deadline); fail(`--security-prompt-text could not start: ${e.message}`); });
     child.on('close', (code) => {
       clearTimeout(deadline);
-      if (code !== 0) fail(`--security-prompt-text exited ${code}: ${err}`);
-      done(JSON.parse(out));
+      const verdict = textLegVerdict({ named, code, stderr: err });
+      if (verdict === 'fail') fail(`--security-prompt-text exited ${code}: ${err}`);
+      done(verdict === 'older' ? undefined : readingOf(out, fail));
     });
   });
 }

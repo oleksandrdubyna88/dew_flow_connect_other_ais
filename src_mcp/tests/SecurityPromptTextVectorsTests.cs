@@ -7,7 +7,7 @@ namespace CoaiMcp.Tests;
 
 /// <summary>
 /// What a security prompt's override text counts as — the C# half of <c>shared/security-prompt-text-vectors.json</c>;
-/// <c>securityPromptFiles.test.ts</c> is the other (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2).
+/// <c>securityPromptFiles.test.ts</c> is the other (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 2).
 /// </summary>
 /// <remarks>
 /// The server decides from this whether a pairing can run, and the Security lane tab draws each card from the

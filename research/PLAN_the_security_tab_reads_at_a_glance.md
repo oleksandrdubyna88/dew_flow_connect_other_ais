@@ -1,6 +1,12 @@
 # PLAN — The Security lane tab reads at a glance: two-column pickers, a general prompt first, coloured cards and real buttons
 
-> Status: **epics 1–3 implemented and reviewed on the branch, 2026-10-04; epic 4 (help, screenshots, release) open.**
+> Status: **IMPLEMENTED, 2026-10-04** (epics E1–E4, one PR; the MCP release and then the extension release follow
+> its merge, D11). Deviations are recorded in *What the review changed* — the "as built" rows and the epic-4 rows.
+> Open tail: the two releases with their release notes, and the boundary version 0.43.0 they must confirm (the help
+> names it); the **live round against 0.42 with general paired** (DoD) was not run, because every reviewer provider
+> was out of quota on 2026-10-04 (qwen until 2026-10-25, antigravity for ~67 h); the seam legs against 0.42 ran.
+> The E3 code round and the E4 plan and code rounds were done by own reviewer agents on the operator's
+> instruction of 2026-10-04, with the gate's round error quoted in the PR.
 > The plan itself was reviewed twice that day:
 > - by two of the session's own agents (a design critic and a fact-checker; see *What the review changed*);
 > - then by the **coai plan round**, session `041939d9` on branch `docs/security-tab-plan` (qwen / glm-5.3,
@@ -25,11 +31,11 @@
 > Every `file:line` below was read at `origin/main` = `24f6be7e` on 2026-10-04. Line numbers move; re-read
 > before cutting.
 >
-> Related docs: [module_security_lane.md](../research/module_security_lane.md),
-> [security_prompt_catalog.md](../research/security_prompt_catalog.md),
-> [PLAN_a_security_lane_runs_beside_the_gate.md](../research/PLAN_a_security_lane_runs_beside_the_gate.md),
-> [PLAN_edit_roles_in_tabs.md](../research/PLAN_edit_roles_in_tabs.md),
-> [PLAN_every_page_reads_alike.md](../research/PLAN_every_page_reads_alike.md).
+> Related docs: [module_security_lane.md](module_security_lane.md),
+> [security_prompt_catalog.md](security_prompt_catalog.md),
+> [PLAN_a_security_lane_runs_beside_the_gate.md](PLAN_a_security_lane_runs_beside_the_gate.md),
+> [PLAN_edit_roles_in_tabs.md](PLAN_edit_roles_in_tabs.md),
+> [PLAN_every_page_reads_alike.md](PLAN_every_page_reads_alike.md).
 
 ## The goal, as the operator asked it (2026-10-04, five screenshots of Settings → Security lane)
 
@@ -67,7 +73,7 @@
 | Question | Ruling |
 |---|---|
 | Item 3, a per-prompt model dropdown | **Dropped.** Reviewer rows already supply the choice. |
-| How the general prompt behaves | **A shipped prompt, shown first, that is only ON or OFF.** When it is on, it runs on **every** change, with no triggers and no conditions block. *"15 triggers do not cover 100 % anyway"* (*"15 тригеров 100 проц не покрывают всеравно"*). This replaces the operator's first answer the same day ("a preset with triggers"). It **reverses** the 2026-10-01 ruling that kept general "an additional custom prompt, outside the twelve presets" ([PLAN_a_security_lane_runs_beside_the_gate.md](../research/PLAN_a_security_lane_runs_beside_the_gate.md) §1). That plan gets a deviation note in the same change. |
+| How the general prompt behaves | **A shipped prompt, shown first, that is only ON or OFF.** When it is on, it runs on **every** change, with no triggers and no conditions block. *"15 triggers do not cover 100 % anyway"* (*"15 тригеров 100 проц не покрывают всеравно"*). This replaces the operator's first answer the same day ("a preset with triggers"). It **reverses** the 2026-10-01 ruling that kept general "an additional custom prompt, outside the twelve presets" ([PLAN_a_security_lane_runs_beside_the_gate.md](PLAN_a_security_lane_runs_beside_the_gate.md) §1). That plan gets a deviation note in the same change. |
 | The Roles page's opposite use of green; other tabs with one-shot checkboxes | **Not touched** (*"нет. не трогай"*). |
 | A hand-added general from before this change | **A visible warning plus a one-click fix.** |
 | What makes a shipped prompt "edited" (orange) | **Its text or its conditions.** A local override file with usable text, OR triggers/focus that differ from the shipped ones. One Restore puts both back. |
@@ -85,7 +91,7 @@
 | **Focus is already lost on every repaint of this tab.** A Security control's id is `securityLane||||trigger:redteam-authz:sql` (`idOf`, `panelView.ts:583-585`). `FOCUS_ID`'s last group allows only `[A-Za-z0-9_.-]`, so the `:` makes `focusLiteral` return `null`. | `panelView.ts:402`, `:414-416` | An existing defect. After a tick, the page reloads at the top and the person loses their place. With 13 cards that is unusable, so it gets a RED test and a fix. |
 | A stored prompt list is merged with the catalogue as *stored first, then missing seeds appended*. **Every save writes the whole merged list back**, so one click freezes a snapshot of every preset's triggers into `settings.json`. | `securityLane.ts:60`, `:132-141`; `panelProvider.ts:1777-1779` | (a) A new shipped `redteam-general` would sort **last** for existing users, so order is a rendering rule. (b) A frozen snapshot would turn untouched presets orange the day the catalogue changes, and would block shipped updates. Storage is compacted on write (D2). |
 | **What reaches the server is the merged lane**, not the stored array. | `securityEnv`, `securityLane.ts:17-20`; `settingsShape.ts:409`, `:431` | Compacting storage does not change the wire. |
-| The server refuses a preset whose trigger list is empty, **per prompt**. Only that prompt's pairs are excluded and the lane stays on. `Triggered` answers `false` for an empty preset and `true` for an empty custom prompt. | `SecurityLaneSetting.cs:168-169`, `:176-186`; `SecurityRoster.cs:69`; `SecuritySignals.cs:91-92` | An "always" preset is a **new kind**, not "a preset with no triggers". If general were simply added to the catalogue with `triggers: []`, it would be refused. The catalogue entry carries `"always": true`, and both rules exempt it (§F). A hand-registered general with `triggers: []` (the old recipe in `security_prompt_catalog.md:30`, `module_security_lane.md:120`) keeps meaning exactly what it meant: run every time. |
+| The server refuses a preset whose trigger list is empty, **per prompt**. Only that prompt's pairs are excluded and the lane stays on. `Triggered` answers `false` for an empty preset and `true` for an empty custom prompt. | `SecurityLaneSetting.cs:168-169`, `:176-186`; `SecurityRoster.cs:69`; `SecuritySignals.cs:91-92` | An "always" preset is a **new kind**, not "a preset with no triggers". If general were simply added to the catalogue with `triggers: []`, it would be refused. The catalogue entry carries `"always": true`, and both rules exempt it (§F). A hand-registered general with `triggers: []` (the old recipe in `security_prompt_catalog.md:30`, `module_security_lane.md:120`) keeps meaning what it meant on every change that touches code (corrected at promotion: E1 made a prose-only or withheld-only change a plain skip for it). |
 | The server decides "has text" as follows: an override that is blank falls back to the shipped text. An override that is **only the `<!-- OPERATOR: … -->` placeholder**, or **over 64 KiB**, means no text, and the pair is excluded with *"prompt unavailable or over 64 KiB; write text at \<path\>"*. | `SecurityRoster.cs:89-90`, `:120-140`; `RolePrompts.cs:96-97` | The card's text state mirrors exactly this rule. A blank file must not turn a card orange: one click on Edit creates an empty file (`securityPromptEditor.ts:16-22`). |
 | The page learns about other prompt overrides by reading them at render time. | `panelProvider.ts:1121-1122`, `qconsultHost.ts:61-65` | That is the precedent. Security prompts are edited in an ordinary text editor, so this plan also needs a watcher. The pattern is `watchHealth` (`consultantHealthPanel.ts:184-194`, private). |
 | Two select sentinels exist (`__other__`, a custom endpoint). They are intercepted in `save()` and listed for select-search. | `panelView.ts:587-602`, `:709`; `SEARCH_FROM_OPTIONS = 15` (`selectSearch.ts:18`) | "+ New custom prompt…" is the **third** sentinel, with its own branch **and** an entry in the search list. With 13 presets the Prompt select reaches the search threshold. |
@@ -275,7 +281,7 @@ The steps for `newSecurityPrompt`:
     with its text from `ForOptional` (embedded via `CoaiMcp.csproj:47`). The seam leg against the released
     0.42 binary (`COAI_MCP_DLL`, `run-seam.mjs:35-38`) proves *no complaint*. **One live round against 0.42
     with general paired** proves it runs, and is recorded in the PR.
-  - **Old extension, new server.** No general card appears. A hand-added general keeps running every time.
+  - **Old extension, new server.** No general card appears. A hand-added general keeps running on every change that touches code; a change of prose or withheld files only is now a plain skip.
   - No `SECURITY_SINCE` bump is needed.
 
 ## Reuse (per `.agents/conventions/common/reuse-first.md`)
@@ -415,6 +421,9 @@ made over page source text (`.agents/PROJECT.md:100-110`).
 | E3 plan round (coai): Restore asked only over usable text, so an oversized prompt was deleted unasked; a failed delete left a half-restored state with no named retry; a pair that moved while the person typed a new name left the prompt silently unpaired; the dirty-editor check named no API. | coai | Restore asks whenever the file holds ANY content (`restoreSteps`) and is idempotent: conditions written only when they differ, the file deleted only when present, so a second press is the retry, and the failure message says so. A moved pair gets "Prompt created; the pair changed while you typed — pair it from its card". Unsaved edits are found through `workspace.textDocuments` (background tabs included). Rejected with reasons: "setState is async" (it is synchronous, and a repaint replaces the document). |
 | E3 as built, deviations from §C and §D. | build | **Focus after a tick** comes back through page-local `setState`, not only through the widened `FOCUS_ID`: the change handler releases focus to the host, so the repaint after a tick carries no focus at all. `FOCUS_ID` is still widened, for the held repaint while typing in a fold's tag field. After **Remove pair**, focus always goes to **+ Add pair** (not "the next pair"). The **harness** decodes entities in `data-*` values as a DOM does. `--security-prompt-text` (E2) is named in `.agents/PROJECT.md`'s list of one-shot modes, which a test enforces; it landed in this commit because E2's gate session had closed. |
 | E3 code round — two own reviewer agents (correctness/security; conventions/UX/tests) in place of the coai code round, which was out of quota again on 2026-10-04, on the operator's explicit instruction. No XSS or injection hole found. Found: the host flows (the only code that deletes a person's text) had no tests; Restore decided before the queue and did not re-check, and deleted the file even when the conditions write was shadowed; a stale focus note could steal focus later and restored focus was invisible to the host; an id `promptFile` refuses got a fake path and a dead Edit button; an unusable override had no Restore; disabled buttons looked pressable; two ordering assertions passed when the element was missing; the badge ran into the name for screen readers; a custom prompt with no conditions was summarised as never running (also seen in the epic-4 screenshot). | own | The flows moved to `securityFlows.ts` with every effect injected and 11 tests over fakes (teeth checked with a compiling break). Restore re-reads the file state and the dirty check inside the queue, always writes the conditions, and deletes only once they took. Focus notes carry a time and are honoured for 4 s; the restore runs a microtask later, after the shared wiring. The card uses `promptFileIn`; Restore shows for any override with content; `:disabled` styled; assertions check existence first; a space separates name and badge; custom summaries say "runs on every change". |
+| E4 plan round — coai answered nothing (`qwen/PlanCritique: rate limited`, "token-plan 1-month quota has been exhausted… reset at 10-25"; session `6122055d`, verdict `call_human` with zero findings) and the cadence consult failed the same way (antigravity 429, closed `abandoned`). An own plan critic stood in, on the operator's instruction. Found: the docs said a hand-added general "keeps running every time", but E1 made a prose-only or withheld-only change a plain skip for it; `README.md`, `POST_DEPLOY.md` (release check 4), `research/README.md` and `module_tests.md` still said "twelve" or described the old checkboxes; nothing tested the help; the help never named **Clear stored conditions** or what an older server does with general; the calibration tail understated that an unfiltered audit now runs general. | own | All corrected. A new `securityHelp.test.ts` checks, in all five languages, that the article names every control of the tab and the 0.43.0 boundary and never counts the shipped prompts as twelve (RED on the missing names; teeth checked by restoring "Двенадцать"). `whatCanGoWrong` gains the old-server and stored-conditions sentence in all five. |
+| E4 as built, deviations from S5. | build | The help keeps "tick a reviewer": the reviewer checkboxes stayed, by the operator's ruling on item 3, so S5's "no tick left" applies to the old "tick the desired checks" only. The demo page is `render-page.mjs security`, not `settings:securityLane` with seeded state, so the before shots (from `main`, default state) and the after shots are not like for like; the PR says so. The screenshots are attached to the PR, not committed to `assets/`, whose set does not include this tab. The release note is written into `src_vs_code/CHANGELOG.md` in the release pull requests, as `release-please-config.json` requires. **The mixed-version seam run found a defect of this plan's own making:** with `COAI_MCP_DLL` at 0.42.0 the ninth leg (E2) ended the whole run, because 0.42 has no `--security-prompt-text`, so the legs after it never ran against the older server. A named binary that refuses the mode as an unknown argument now skips that leg, saying so; this repository's own build still fails on it (`textLegVerdict`, RED then GREEN in `seamLegs.test.mjs`, teeth checked). |
+| E4 code round — two own reviewer agents (correctness; conventions/tests), standing in for the coai code round on the operator's instruction. Found: the help test checked a hand-written list and called it every control, while the tab also draws **Edit prompt text** and **Remove custom prompt**, which no article named; the promoted plan left every DoD box unticked and its open tail did not name the release notes; 0.43.0 is a version only the release PR decides; two new seam functions were over complexity 4; the four translations now put "an old server gets no setting" after the 0.43.0 sentence, so it read as if a 0.42 server got nothing; the skip line claimed a comparison the run did not make; "eighteen real files" is seventeen and one absent; render-page set its saved state as a module global; an answer that is not JSON threw past the seam's cleanup (older). Rejected with a reason: checking a named binary's version before excusing it — a published binary is built from a tagged commit whose CI already ran the seam against its own build, where the refusal still fails. | own | The help test takes its labels from the RUN tab (a census test proves the lane draws every button), RED on the two missing names, then both added in five languages. DoD ticked where met; the open items carry their reasons; the status line names the release notes and the 0.43.0 check. `predatesTheMode` and `compared` split the functions; the sentence order restored; the skip line reworded; the count corrected; the state is chosen by page and escaped for its script element; a non-JSON answer fails the leg. |
 | Wrong cites: `settingsScript` (`settingsPage.ts:70`), `.prompt.mine` (`rolesPage.ts:654`), "45" files (it is 32). | fact-check | Fixed or removed. |
 
 ## Growth surfaces
@@ -438,45 +447,45 @@ Open, and the plan proceeds on the answer in brackets:
 
 | Item | Built by | Order |
 |---|---|---|
-| General becomes a shipped "always" prompt, replacing "custom, outside the twelve" | this plan; deviation note in [PLAN_a_security_lane_runs_beside_the_gate.md](../research/PLAN_a_security_lane_runs_beside_the_gate.md) | this change |
-| Calibration campaign over the presets | [PLAN_security_lane_calibration_tail.md](PLAN_security_lane_calibration_tail.md). A thirteenth preset is one more row its campaign *may* pair. No prompt text changes here. | independent; a one-line boundary note there in this change |
-| Tab semantics | [PLAN_the_tabs_announce_themselves.md](PLAN_the_tabs_announce_themselves.md) | independent |
-| `panelView.ts` / `panelProvider.ts` size | [PLAN_two_files_outgrew_the_rule.md](PLAN_two_files_outgrew_the_rule.md), [PLAN_the_panel_provider_is_too_big.md](PLAN_the_panel_provider_is_too_big.md) | this plan adds only the hooks listed in the DoD |
+| General becomes a shipped "always" prompt, replacing "custom, outside the twelve" | this plan; deviation note in [PLAN_a_security_lane_runs_beside_the_gate.md](PLAN_a_security_lane_runs_beside_the_gate.md) | this change |
+| Calibration campaign over the presets | [PLAN_security_lane_calibration_tail.md](../todo/PLAN_security_lane_calibration_tail.md). A thirteenth preset is one more row its campaign *may* pair. No prompt text changes here. | independent; a one-line boundary note there in this change |
+| Tab semantics | [PLAN_the_tabs_announce_themselves.md](../todo/PLAN_the_tabs_announce_themselves.md) | independent |
+| `panelView.ts` / `panelProvider.ts` size | [PLAN_two_files_outgrew_the_rule.md](../todo/PLAN_two_files_outgrew_the_rule.md), [PLAN_the_panel_provider_is_too_big.md](../todo/PLAN_the_panel_provider_is_too_big.md) | this plan adds only the hooks listed in the DoD |
 
 ## Definition of Done
 
-- [ ] Items 1, 2, 4, 5 and 6 behave as described. Item 3 is untouched.
-- [ ] Every test in the table exists. Each RED one was watched failing with the real symptom, and the teeth check was run.
-- [ ] No new behavioural assertion over page source text (`.agents/PROJECT.md:100-110`).
-- [ ] Every new function is within cyclomatic complexity 4.
-- [ ] `panelView.ts` changes only at:
+- [x] Items 1, 2, 4, 5 and 6 behave as described. Item 3 is untouched.
+- [x] Every test in the table exists. Each RED one was watched failing with the real symptom, and the teeth check was run.
+- [x] No new behavioural assertion over page source text (`.agents/PROJECT.md:100-110`).
+- [x] Every new function is within cyclomatic complexity 4.
+- [x] `panelView.ts` changes only at:
   - the `FOCUS_ID` pattern;
   - the `SECURITY_COMMANDS` spread;
   - the `selectSearchScript` sentinel list;
   - one script import and one CSS import;
   - the `PanelState.securityPromptText` field;
   - the section registration line.
-- [ ] `panelProvider.ts` changes only at the command cases, the `PanelState` fill, and the watcher's construction and disposal.
-- [ ] All green:
+- [x] `panelProvider.ts` changes only at the command cases, the `PanelState` fill, and the watcher's construction and disposal.
+- [x] All green:
   - `npm run compile`, `npm test`, `npm run lint`, `npm run test:host`;
   - `npm run test:seam`, against 0.42.0 via `COAI_MCP_DLL` and against the new build;
   - the C# suite, run as its MTP executable and **never** `dotnet test` (`.agents/PROJECT.md:33-38`):
     `dotnet build dew_flow_connect_other_ais.slnx -c Debug`, then
     `./src_mcp/tests/bin/Debug/net10.0/CoaiMcp.Tests.exe`.
-- [ ] One live round against 0.42 with general paired, recorded in the PR.
-- [ ] Screenshots before and after at two widths, looked at, and named in the PR.
-- [ ] Help in all five languages updated. No "twelve" left in live text. A release note on general's change of meaning.
-- [ ] Docs updated:
+- [ ] One live round against 0.42 with general paired, recorded in the PR. **Open:** every reviewer provider was out of quota on 2026-10-04; the seam legs against 0.42 ran instead (they prove the lane crosses, not that general runs).
+- [x] Screenshots before and after at two widths, looked at, and named in the PR.
+- [ ] Help in all five languages updated. No "twelve" left in live text. A release note on general's change of meaning. **The help and the "twelve" are done** (`securityHelp.test.ts`); **the release notes are open** — they are written into `src_vs_code/CHANGELOG.md` in the MCP and extension release pull requests, where the version is decided.
+- [x] Docs updated:
   - `research/module_security_lane.md` ("Prompts and settings", and the old "register general as custom" recipe at `:120`);
   - a short Security lane section in `research/module_extension.md`;
   - `research/security_prompt_catalog.md:30-33`;
   - the deviation note in `research/PLAN_a_security_lane_runs_beside_the_gate.md`;
   - the boundary line in `todo/PLAN_security_lane_calibration_tail.md`.
-- [ ] `plan-lifecycle.mjs` and `pin-check.mjs` clean. This plan promoted to `research/` with its deviations when it ships.
-- [ ] Review: a **coai code round** per epic, every finding resolved with a reason.
+- [x] `plan-lifecycle.mjs` and `pin-check.mjs` clean. This plan promoted to `research/` with its deviations when it ships.
+- [ ] Review: a **coai code round** per epic, every finding resolved with a reason. **E1 and E2 had one; E3 and E4 did not** — own reviewer agents stood in on the operator's instruction (see *What the review changed*).
   - Own reviewer agents are not a standing alternative. They stood in once, on the operator's explicit
     instruction of 2026-10-03, when every coai provider was out of quota.
   - They stand in again only on a new explicit instruction from the operator. The evidence is quoted in the
     PR: the `providers` output, and the gate's round error (as on 2026-10-04, `qwen/PlanCritique: timeout`, round
     limit of 5 minutes).
-- [ ] MCP release, then extension release (D11). The post-deploy check reads both versions.
+- [ ] MCP release, then extension release (D11). The post-deploy check reads both versions. **Open** until after the merge; the release pull request also confirms the boundary version **0.43.0** that the help, `securityHelp.test.ts`, the seam message and `module_security_lane.md` name.

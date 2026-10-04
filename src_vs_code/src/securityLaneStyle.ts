@@ -1,5 +1,5 @@
 /**
- * The Security lane tab's own stylesheet, appended to the Settings page's (todo/PLAN_the_security_tab_reads_at_a_glance.md,
+ * The Security lane tab's own stylesheet, appended to the Settings page's (research/PLAN_the_security_tab_reads_at_a_glance.md,
  * epic 3, sections A–C).
  *
  * <p>Prefixed `seclane-`: `sec-*` is the Settings page's SECTION namespace (`.sec-prompts > summary`) and `.badge` is

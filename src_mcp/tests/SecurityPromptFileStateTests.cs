@@ -10,7 +10,7 @@ namespace CoaiMcp.Tests;
 /// <summary>
 /// What a security prompt's override FILE counts as when this server reads it — the answer
 /// <c>--security-prompt-text</c> prints, which the seam compares with the Security lane tab's own reading
-/// (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2). The shared vectors pin the rule on text; these pin the
+/// (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 2). The shared vectors pin the rule on text; these pin the
 /// reading of bytes: the byte-order mark and the encoding it names.
 /// </summary>
 public sealed class SecurityPromptFileStateTests : IDisposable

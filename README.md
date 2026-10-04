@@ -144,8 +144,11 @@ German and Spanish.
 ## Security lane
 
 The optional **Security lane** adds reviewer/prompt pairs beside ordinary code and feature reviews.
-Its twelve conditional checks have independent checkboxes: authorization, SQL, concurrency,
-auth tokens, SSRF, webhooks, files, commands, deserialization, secrets, prompt injection and XSS.
+Every prompt is a card on Settings → Security lane, paired with a reviewer by a checkbox on the card:
+`redteam-general` comes first and runs on every code change while it is paired, and the conditional presets —
+authorization, SQL, concurrency, auth tokens, SSRF, webhooks, files, commands, deserialization, secrets,
+prompt injection and XSS — run when changed code matches their conditions. A shipped card is green, one you
+changed is orange with **Restore default**, and **+ New custom prompt** adds a purple one of your own.
 Prompts are versioned under `src_mcp/src/prompts/redteam-*.md`; settings select when each runs
 and how much committed source it receives. Findings keep reproduction evidence and their reviewer
 identity in history. Missing lane answers are recorded explicitly. See

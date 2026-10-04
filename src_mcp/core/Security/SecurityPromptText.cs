@@ -8,7 +8,7 @@ public enum SecurityPromptTextState { None, Blank, Placeholder, Oversized, Writt
 /// <summary>
 /// The one rule for whether a security prompt's text can be sent: <see cref="SecurityRoster"/>'s read uses it, and
 /// the extension's Security lane tab answers the same vectors (<c>shared/security-prompt-text-vectors.json</c>) so the
-/// card it draws and the pairing the server runs cannot disagree (todo/PLAN_the_security_tab_reads_at_a_glance.md).
+/// card it draws and the pairing the server runs cannot disagree (research/PLAN_the_security_tab_reads_at_a_glance.md).
 /// </summary>
 public static class SecurityPromptText
 {

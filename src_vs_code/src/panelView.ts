@@ -164,7 +164,7 @@ export interface PanelState {
   readonly qconsultPromptOverrides?: Readonly<Record<string, string>> | undefined;
   /**
    * Each Security lane prompt's override file as the server will read it, by prompt id — read at paint time like
-   * {@link qconsultPromptOverrides} (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 2). Absent = not read yet.
+   * {@link qconsultPromptOverrides} (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 2). Absent = not read yet.
    */
   readonly securityPromptText?: Readonly<Record<string, SecurityTextState>> | undefined;
   /** The folder those files live in, so a card can name the file a person writes in. */
@@ -601,7 +601,7 @@ ${busyMarkScript(busy)}
   const save = (el) => {
     const value = el.type === 'checkbox' ? el.checked : el.type === 'number' ? Number(el.value) : el.value;
     if (value === '${NEW_PROMPT_SENTINEL}') {
-      // Not a prompt — a request to make one (todo/PLAN_the_security_tab_reads_at_a_glance.md, epic 3). The select goes
+      // Not a prompt — a request to make one (research/PLAN_the_security_tab_reads_at_a_glance.md, epic 3). The select goes
       // back to the prompt it showed, and the host is told which pair asked, by identity.
       el.value = real.get(el) || '';
       send({ type: 'command', command: 'newSecurityPrompt', id: el.dataset.seclaneRun }, el);
@@ -3270,7 +3270,7 @@ export const PANEL_COMMANDS = [
   // one. Carries the CALLER as its id — four rows share the control.
   'customConsultant',
   'editSecurityPrompt',
-  // A hand-registered general's leftover conditions, cleared in one press (todo/PLAN_the_security_tab_reads_at_a_glance.md, D6).
+  // A hand-registered general's leftover conditions, cleared in one press (research/PLAN_the_security_tab_reads_at_a_glance.md, D6).
   // The Consultant tab's health block (PLAN_the_consultant_works_on_every_vendor.md, epic 5): one real, paid check of a
   // caller kind's consultant, confirmed first; and agy's allow rule onto the clipboard. Both carry the CALLER KIND as id.
   'checkConsultant',

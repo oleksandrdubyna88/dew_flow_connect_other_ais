@@ -13,7 +13,7 @@
  *   <li>a well-formed lane — the positive control: the server must raise no complaint about it, or the
  *   refusal below could be the server refusing everything. It pairs the shipped "always" prompt
  *   `redteam-general` too: run against a 0.41/0.42 server (`COAI_MCP_DLL`), which knows general only as a
- *   custom prompt, this is the mixed-version check of todo/PLAN_the_security_tab_reads_at_a_glance.md;</li>
+ *   custom prompt, this is the mixed-version check of research/PLAN_the_security_tab_reads_at_a_glance.md;</li>
  *   <li>a custom prompt carrying a trigger this build does not know — the server must refuse it, naming
  *   the prompt;</li>
  *   <li>a malformed setting — the extension sends it switched off with the stored value aside, and the
