@@ -130,8 +130,10 @@ test('the host saves every non-plain kind through saveOrSnapBack', async () => {
   // `surfaceSlot.test.ts` ('a forced repaint writes the same page again').
   assert.match(host, /private snapBack\(from: SurfaceSlot\): Promise<void> \{\s*from\.forceRepaint\(\);\s*return this\.render\(\);/,
     'the snap-back no longer forces a repaint of the page the refusal came from, so it is never rebuilt from what is stored');
-  assert.match(host, /catch \(error: unknown\) \{\s*\/\/[^\n]*\n\s*reportRefusal\(this\.context, 'promptsPerRound', error\);\s*await afterTheWrite\(\(\) => this\.snapBack\(from\)\)\(\);/,
-    'a refused prompt pick is neither said nor put back — or its repaint is awaited inside the write queue');
+  // Said by `save` (its catch reports the refusal — `settingRefusedWiring.test.ts`), written through THIS side
+  // (`thePanelReadsThisSide.test.ts`), and put back here with the repaint started, not awaited.
+  assert.match(host, /if \(!pick\.ok \|\| !\(await this\.save\(config, 'promptsPerRound', pick\.value\)\)\) \{\s*\/\/[^\n]*\n\s*await afterTheWrite\(\(\) => this\.snapBack\(from\)\)\(\);\s*return;/,
+    'a refused prompt pick is not put back — or its repaint is awaited inside the write queue');
   // A prompt pick is a setting write like any other, so it is serialised with them (the gate's code round).
   assert.match(host, /this\.enqueue\(\(\) => this\.choosePrompt\(role, round, String\(m\.value\), from\)\)/,
     'a prompt pick writes outside the write queue, so it can race the writes queued beside it');

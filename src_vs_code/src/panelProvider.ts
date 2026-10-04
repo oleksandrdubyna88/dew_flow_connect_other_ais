@@ -76,9 +76,10 @@ import { watchGlob } from './fileWatch';
 import { WATCH_DEBOUNCE_MS, debounced, type Debounced } from './debounced';
 import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
-import { readerFor, reportRefusal, saveSetting, userLayer } from './sideConfig';
+import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer } from './sideConfig';
 import { foldedWrite } from './catalogEdit';
 import { shownOnTheOldPage } from './catalogRules';
+import { promptChosen } from './promptsPerRound';
 import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
 import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
@@ -1121,7 +1122,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // that is a wait on itself (`afterTheWrite`).
     await this.writes.settled();
     const config = vscode.workspace.getConfiguration('coai');
-    const settings = settingsFrom((section) => config.get(section));
+    // THIS side's settings, like the vendors on the next line: a side that keeps its own settings runs with its
+    // overlay, and a page drawn from the shared layer showed values it does not run with.
+    const settings = settingsFrom(this.read(config));
     const vendors = vendorsFrom(this.read(config)('vendors'));
     this.codexModels = await this.readCodexModels();
     this.agyModels = await this.readAgyModels(vendors);
@@ -1697,21 +1700,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   private async choosePrompt(role: string, round: number, id: string, from: SurfaceSlot): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
-    const settings = settingsFrom((section) => config.get(section));
-    const rounds = [...(settings.promptsPerRound[role] ?? [])];
-    while (rounds.length < round) {
-      rounds.push('');
-    }
-    rounds[round - 1] = id;
-    try {
-      await config.update(
-        'promptsPerRound',
-        { ...settings.promptsPerRound, [role]: rounds },
-        vscode.ConfigurationTarget.Global,
-      );
-    } catch (error: unknown) {
-      // A dropdown too, and not in the write queue: said like every other refusal, and put back.
-      reportRefusal(this.context, 'promptsPerRound', error);
+    // Read and written through THIS side: `promptsPerRound` is an overlaid setting, and the picker used to read the
+    // shared layer and write straight to the global one — one side's choice landing on every side.
+    const settings = settingsFrom(this.read(config));
+    const pick = promptChosen(settings.promptsPerRound, role, round, id, settings.rounds[role] ?? 1);
+    if (!pick.ok || !(await this.save(config, 'promptsPerRound', pick.value))) {
+      // A dropdown too, and not in the write queue: `save` has said why, and the box is put back.
       await afterTheWrite(() => this.snapBack(from))();
       return;
     }
@@ -1975,6 +1969,16 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     rolesKnowTheServer(server.kind === 'absent' ? '' : server.version);
 
     return server;
+  }
+
+  /**
+   * What removing a Team server's reviewers does NOT reach: the server list is shared, the reviewer rows are this
+   * side's, and another side's own settings live in another window's extension host. Said rather than implied.
+   */
+  private onThisSideOnly(config: vscode.WorkspaceConfiguration): string {
+    return this.perSide(config)
+      ? ' The reviewers are removed on this side only: another side that keeps its own settings keeps its reviewers for this server until they are removed there.'
+      : '';
   }
 
   /** Whether this side keeps its own settings. Shared by every side, deliberately: one switch. */
@@ -2787,9 +2791,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   /** The settings as configuration has them now — the same read the render does. */
   private settings(): CoaiSettings {
-    const config = vscode.workspace.getConfiguration('coai');
-
-    return settingsFrom((section) => config.get(section));
+    return settingsFrom(this.read(vscode.workspace.getConfiguration('coai')));
   }
 
   private static readonly COLLECT_CAP_MS = 30 * 60_000;
@@ -3147,10 +3149,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * stale copy would ask the wrong host and blame the key.</p>
    */
   private async bugsKeys(): Promise<void> {
-    await usersPanel(
-      this.context.secrets,
-      () => vscode.workspace.getConfiguration('coai').get<string>('bugzServer', '').trim(),
-    ).show();
+    await usersPanel(this.context.secrets, () => bugzServerThisSide(this.context)).show();
   }
 
   /**
@@ -3307,9 +3306,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
 
     // To configuration, like every other control here: a value kept on this object would be lost
-    // on reload and invisible to the Settings UI.
-    await vscode.workspace.getConfiguration('coai').update(
-      'bugzServer', typed.trim(), vscode.ConfigurationTarget.Global);
+    // on reload and invisible to the Settings UI. Through the one save, so a side that keeps its own
+    // settings keeps its own server, and a refusal is said.
+    await this.save(vscode.workspace.getConfiguration('coai'), 'bugzServer', typed.trim());
     await this.render();
   }
 
@@ -3473,7 +3472,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         ? 'You will be signed out of it and its token deleted from this machine.'
         : `You will be signed out of it and its token deleted. These reviewers point at it and `
           + `cannot work without it: ${rows.map((r) => r.id).join(', ')}. Their spending history `
-          + `is kept either way.`,
+          + `is kept either way.${this.onThisSideOnly(config)}`,
       actions: rows.length === 0 ? ['Remove'] : [both, 'Remove the server only'],
     });
     if (answer === undefined) {
@@ -4040,8 +4039,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
 
-    // Through the one save, so a side that keeps its own settings gets the row, and a refusal is said.
+    // Through the one save, so a side that keeps its own settings gets the row, and a refusal is said. Then drawn
+    // from what is stored: a write to this side's overlay raises no configuration event to redraw the page.
     await this.save(config, 'vendors', [...vendors, vendor]);
+    await this.render();
   }
 
   /**
@@ -4080,6 +4081,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
 
     await this.save(config, 'vendors', vendors.filter((v) => v.id !== id));
+    await this.render();
   }
 
   /**
