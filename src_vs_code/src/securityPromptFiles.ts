@@ -55,11 +55,12 @@ function presentState(text: string): SecurityTextState {
 }
 /**
  * The operator's unfilled template: one `<!-- OPERATOR: … -->` comment and nothing after it — the text ends in the
- * FIRST `-->` (`SecurityPromptText.IsOnlyThePlaceholder` on the server; `endsWith` makes a missing marker plainly false).
+ * FIRST `-->` (`SecurityPromptText.IsOnlyThePlaceholder` on the server): it ends in one, and no other comes before it —
+ * another cannot overlap the last, so this is the server's "first index is the end" without an index (CodeQL).
  */
 function onlyThePlaceholder(text: string): boolean {
   const trimmed = dotnetTrim(text);
-  return trimmed.startsWith('<!-- OPERATOR:') && trimmed.endsWith('-->') && trimmed.indexOf('-->') === trimmed.length - 3;
+  return trimmed.startsWith('<!-- OPERATOR:') && trimmed.endsWith('-->') && !trimmed.slice(0, -3).includes('-->');
 }
 
 /**
