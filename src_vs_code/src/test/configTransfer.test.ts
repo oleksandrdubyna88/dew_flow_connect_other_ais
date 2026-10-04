@@ -181,8 +181,8 @@ test('a setting that differs from its default ONLY by a local path is the defaul
 test('a value equal to its default is the default whatever its key order, even when two keys collate as one', () => {
   // `é` as one code point and `e` + a combining accent are DIFFERENT keys that `localeCompare` calls equal, so a
   // collating sort kept them in insertion order and the same object canonicalised two ways (qwen, code round).
-  const composed = 'café';
-  const decomposed = 'café';
+  const composed = 'caf\u00e9';
+  const decomposed = 'cafe\u0301';
   const withDefault: Declared = { thing: { default: { [composed]: 1, [decomposed]: 2 } } };
 
   assert.notEqual(composed, decomposed, 'the fixture lost its point: the two keys are one string');

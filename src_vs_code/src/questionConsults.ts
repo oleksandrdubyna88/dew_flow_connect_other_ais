@@ -1,3 +1,5 @@
+import { sortedJoin } from './codeUnitOrder';
+
 /**
  * The question consultant's records, as the sidebar reads them (todo/PLAN_question_consultant.md, S4): one file
  * per question under `<dataDir>/question-consults/<id>.json`, written by `coai-mcp` as the question advances —
@@ -177,8 +179,5 @@ export function isKept(record: QuestionConsult, nowMs: number): boolean {
 
 /** What a person can SEE of the snapshot, as one string — so a poll over an unchanged directory repaints nothing. */
 export function questionsSignature(records: readonly QuestionConsult[]): string {
-  return records
-    .map((one) => `${one.id}:${one.status}:${one.escalationId}:${one.rows.map((r) => r.status).join(',')}`)
-    .sort((one, other) => one.localeCompare(other))
-    .join('|');
+  return sortedJoin(records.map((one) => `${one.id}:${one.status}:${one.escalationId}:${one.rows.map((r) => r.status).join(',')}`), '|');
 }

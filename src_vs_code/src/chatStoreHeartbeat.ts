@@ -1,5 +1,6 @@
 import { ChatStoreKeeper } from './chatStoreKeeper';
 import { HEARTBEAT_EVERY_MS } from './chatStoreSweep';
+import { byCodeUnit } from './codeUnitOrder';
 
 /**
  * This window's heartbeat: the file that tells every other window which conversations are open
@@ -126,11 +127,11 @@ export class ConversationHeartbeat {
 
   /** What is held, once each, in one order — so the same set always announces as the same text. */
   private snapshot(): readonly string[] {
-    // A NAMED comparator, not the default: the default sorts by UTF-16 code unit, which is the one
-    // "sort" in JavaScript that does something different from what its call site reads like. The
-    // order only has to be STABLE — the text is compared against this window's own previous
-    // announcement — and `localeCompare` is what every other ordering in this feature uses.
-    return [...new Set(this.held())].sort((left, right) => left.localeCompare(right));
+    // `byCodeUnit`, never `localeCompare`: the text is compared against this window's own previous
+    // announcement, so the order must be TOTAL, and collation is not — it calls two distinct ids equal
+    // (`é` as one code point and `e` plus an accent), keeps them in arrival order, and the same set
+    // then announces as a change.
+    return [...new Set(this.held())].sort(byCodeUnit);
   }
 
   private write(ids: readonly string[]): Promise<boolean> {

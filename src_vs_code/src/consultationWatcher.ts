@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { sortedJoin } from './codeUnitOrder';
 import { Consultation, isLive, parseConsultation } from './consultations';
 import { type JsonDirectoryShape, jsonRecordFiles } from './jsonDirectory';
 import { JsonDirectoryWatcher } from './jsonDirectoryWatcher';
@@ -8,9 +9,9 @@ import { JsonDirectoryWatcher } from './jsonDirectoryWatcher';
  *
  * <p><b>What a person can see, as one string.</b> The turn count and the status are in it because those are what the
  * card SHOWS; the timestamps are not, because the card's "3 min ago" is computed at paint time and would make every
- * read a change. Compared explicitly rather than by the default sort, which orders by UTF-16 code unit: any total order
- * would do here — and a sort whose ORDER is implicit is the shape that stops being harmless the day somebody reads the
- * output rather than diffing it. (SonarCloud S2871, on the pull request.)</p>
+ * read a change. Ordered by `sortedJoin`, never `localeCompare`: any TOTAL order would do here, and collation is not
+ * one — it calls two distinct ids equal (`é` as one code point and `e` plus an accent), leaves them in the order the
+ * directory listed them, and an unchanged snapshot then reads as a change.</p>
  */
 export const CONSULTATIONS: JsonDirectoryShape<vscode.Uri, Consultation> = {
   subdir: 'consultations',
@@ -20,10 +21,7 @@ export const CONSULTATIONS: JsonDirectoryShape<vscode.Uri, Consultation> = {
   keep: (one) => isLive(one),
   // A consultation file is named by its id, which is how a failed read still knows what it lost.
   fileOf: (one) => `${one.id}.json`,
-  signature: (consultations) => consultations
-    .map((one) => `${one.id}:${one.status}:${one.turns.length}:${one.alert}`)
-    .sort((one, other) => one.localeCompare(other))
-    .join('|'),
+  signature: (consultations) => sortedJoin(consultations.map((one) => `${one.id}:${one.status}:${one.turns.length}:${one.alert}`), '|'),
 };
 
 /**

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { sortedJoin } from './codeUnitOrder';
 import { answerChoices, answerJson } from './escalationAnswer';
 import {
   Escalation,
@@ -62,7 +63,7 @@ export const ESCALATIONS: JsonDirectoryShape<vscode.Uri, Escalation> = {
   parse: (text, root) => parseEscalation(text, root.fsPath),
   keep: (one) => isOpenEscalation(one),
   fileOf: (one) => `${one.id}.json`,
-  signature: (cards) => cards.map((one) => JSON.stringify(one)).sort((a, b) => a.localeCompare(b)).join('\n'),
+  signature: (cards) => sortedJoin(cards.map((one) => JSON.stringify(one)), '\n'),
 };
 
 /**

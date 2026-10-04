@@ -20,9 +20,12 @@ import * as path from 'node:path';
 export const sourceOf = (file: string): string =>
   fs.readFileSync(path.join(__dirname, '..', '..', 'src', file), 'utf8');
 
+/** The name of every `*.ts` directly under `src` — for a scan that must say WHICH file it found something in. */
+export const sourceFiles = (): readonly string[] => fs.readdirSync(path.join(__dirname, '..', '..', 'src'))
+  .filter((one) => one.endsWith('.ts'));
+
 /** Every `*.ts` under `src`, joined — for a count that must not be evadable by adding a module. */
-export const everySource = (): string => fs.readdirSync(path.join(__dirname, '..', '..', 'src'))
-  .filter((one) => one.endsWith('.ts'))
+export const everySource = (): string => sourceFiles()
   .map((one) => sourceOf(one))
   .join('\n');
 

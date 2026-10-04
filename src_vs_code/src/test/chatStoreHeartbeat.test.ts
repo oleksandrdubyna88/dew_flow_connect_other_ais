@@ -95,6 +95,30 @@ test('a pulse writes when the set of open conversations changed, and writes noth
   }
 });
 
+test('the same set held in another order writes nothing, even when two ids collate as one', async () => {
+  // `é` as one code point and `e` + a combining accent are DIFFERENT ids that `localeCompare` calls equal, so a
+  // collating sort kept them in arrival order and one set announced as two lists.
+  const composed = 'caf\u00e9';
+  const decomposed = 'cafe\u0301';
+  assert.notEqual(composed, decomposed, 'the fixture lost its point: the two ids are one string');
+  const dir = home();
+  try {
+    const keeper = new Counting(dir);
+    let held: readonly string[] = [composed, decomposed];
+    const heartbeat = new ConversationHeartbeat(keeper, () => held, 7, fakeTimers(), () => NOW);
+
+    heartbeat.pulse();
+    await heartbeat.settled();
+    held = [decomposed, composed];
+    heartbeat.pulse();
+    await heartbeat.settled();
+
+    assert.equal(keeper.beats, 1, 'the same set in another order was announced as a change');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('a pulse issued BEFORE the registry holds the entry still announces it — the ids are read on the tick, not at the pulse', async () => {
   // `newConversation` pulses from inside the factory `panels.open` calls, before `open` has
   // registered the entry. The pulse is a `setTimeout(0)`; the registration is synchronous in the same

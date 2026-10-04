@@ -52,7 +52,11 @@ export interface JsonDirectoryShape<Root, T> {
   readonly keep: (item: T, nowMs: number) => boolean;
   /** The file a record was read from — how a file that could not be read this pass keeps last pass's copy. */
   readonly fileOf: (item: T) => string;
-  /** What a person can SEE of the snapshot, as one string — a refresh that leaves it unchanged tells nobody. */
+  /**
+   * What a person can SEE of the snapshot, as one string — a refresh that leaves it unchanged tells nobody. Built with
+   * `sortedJoin` (`codeUnitOrder.ts`), never a sort of its own: the records arrive in directory order, and a collating
+   * sort can tie two different parts and keep that order — `aSignatureIgnoresArrivalOrder.test.ts` holds every shape to it.
+   */
   readonly signature: (items: readonly T[]) => string;
 }
 
