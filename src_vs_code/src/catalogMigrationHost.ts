@@ -62,11 +62,11 @@ async function migrateOne(layer: Layer): Promise<boolean> {
     return false;
   }
 
-  return applyWrites(layer, outcome.writes);
+  return applyWrites(layer, outcome.writes, migrationStopped);
 }
 
 /** In order, stopping at the first refusal — the order is what makes a stopped run safe to finish later. */
-async function applyWrites(layer: Layer, writes: readonly LayerWrite[]): Promise<boolean> {
+async function applyWrites(layer: Layer, writes: readonly LayerWrite[], stopped: (layer: Layer, error: unknown) => Promise<void>): Promise<boolean> {
   try {
     for (const write of writes) {
       await layer.write(write);
@@ -74,19 +74,41 @@ async function applyWrites(layer: Layer, writes: readonly LayerWrite[]): Promise
 
     return true;
   } catch (error: unknown) {
-    await notify({
-      as: 'error',
-      class: 'failure',
-      source: 'catalogMigrationHost',
-      code: 'catalog-migration-failed',
-      subject: layer.name,
-      title: `Moving the models in ${layer.name} into the catalog stopped part way; nothing that was written is lost, `
-        + 'and the next start finishes it.',
-      detail: error instanceof Error ? error.message : String(error),
-    });
+    await stopped(layer, error);
 
     return writes.length > 0;
   }
+}
+
+/** A migration stopped part way is finished by the next run, which is what it says. */
+async function migrationStopped(layer: Layer, error: unknown): Promise<void> {
+  await notify({
+    as: 'error',
+    class: 'failure',
+    source: 'catalogMigrationHost',
+    code: 'catalog-migration-failed',
+    subject: layer.name,
+    title: `Moving the models in ${layer.name} into the catalog stopped part way; nothing that was written is lost, `
+      + 'and the next start finishes it.',
+    detail: error instanceof Error ? error.message : String(error),
+  });
+}
+
+/**
+ * A restore stopped part way is NOT finished by anything: the layer is marked neither restored nor left as it was.
+ * It wrote the definitions first, so every consultant still resolves; running the command again finishes it.
+ */
+async function restoreStopped(layer: Layer, error: unknown): Promise<void> {
+  await notify({
+    as: 'error',
+    class: 'failure',
+    source: 'catalogMigrationHost',
+    code: 'catalog-restore-failed',
+    subject: layer.name,
+    title: `Restoring ${layer.name} from before the catalog stopped part way. Every consultant still works; run `
+      + '"Restore settings from before the catalog" again to finish it.',
+    detail: error instanceof Error ? error.message : String(error),
+  });
 }
 
 /** A refusal or a skipped definition, said once per run; a migration that went through says nothing. */
@@ -192,7 +214,7 @@ export async function restoreFromBeforeTheCatalog(context: vscode.ExtensionConte
   }
   await queue.run(async () => {
     for (const { layer, outcome } of layers) {
-      await applyWrites(layer, outcome.writes);
+      await applyWrites(layer, outcome.writes, restoreStopped);
     }
   });
   afterMigration();

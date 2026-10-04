@@ -354,10 +354,18 @@ export type RestoreOutcome =
   | { readonly kind: 'restore'; readonly writes: readonly LayerWrite[] }
   | { readonly kind: 'nothing-to-restore' };
 
+/**
+ * The order a restore writes in — the REVERSE of the migration's: the consultant and question entries get their
+ * definitions back first, the rows go last. A restore stopped part way then leaves definitions and perhaps rows nobody
+ * refers to, never a reference to a row that is gone (CodeRabbit, PR #681).
+ */
+const RESTORE_ORDER: readonly (typeof BACKED_UP)[number][] = ['consultants', 'qconsultRows', 'vendors'];
+
 /** Every backed-up key exactly as it was — removed where it was absent — and the layer marked restored. */
 export function restoreLayer(layer: CatalogLayer): RestoreOutcome {
   const backup = asRecord(layer.backup);
-  const keys = Array.isArray(backup['keys']) ? backup['keys'].filter((key): key is LayerWrite['key'] => BACKED_UP.includes(key as never)) : [];
+  const saved: readonly unknown[] = Array.isArray(backup['keys']) ? backup['keys'] : [];
+  const keys = RESTORE_ORDER.filter((key) => saved.includes(key));
   if (keys.length === 0) {
     return { kind: 'nothing-to-restore' };
   }

@@ -1,6 +1,6 @@
 # PLAN — One model catalog: the Settings page rebuilt around models you add once
 
-> Status: **plan only, nothing implemented yet, 2026-10-04.** The design is accepted: the clickable mockup in
+> Status: **in progress, 2026-10-04 — E1 is built (PR #681); E2–E5 are open.** The design is accepted: the clickable mockup in
 > [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
 > checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
@@ -97,7 +97,7 @@ that reads a row today changes meaning. The page's "Use for" ticks are those fla
 the key's name (absent = the id), so two instances share a key by naming it, Duplicate copies it, and removing an
 instance never deletes a vault entry (coai never writes the vault).
 
-**What crosses.** `vendorsEnv` writes a WHITELIST of fields (`vendors.ts:651-661`), never the stored row, so none of the
+**What crosses.** `vendorsEnv` writes a WHITELIST of fields (`vendorsWire.ts`, `vendorsEnv`), never the stored row, so none of the
 new fields reaches `COAI_VENDORS` in E1. A row that reviews no stage (`plan`, `code` false, `document` off, no `feature`)
 and whose `uses` do not include `security` is LEFT OUT of `COAI_VENDORS`: its consumers receive it resolved
 (`COAI_CONSULTANTS`, `COAI_QCONSULT_ROWS`) or never cross at all (chat, Bugz). That keeps the env block of a migrated
@@ -134,20 +134,23 @@ validation (findings 4, 9).
   `document: false` and no `feature`, so neither this build nor an older one runs it in a round; the old page hides a
   row that reviews nothing and has a `uses` (finding 7).
 - **Backup and restore:** before the first write, every key the migration writes in that layer — `vendors`,
-  `consultants`, `qconsultRows`, `chatModel`, `bugzModel` (absence recorded as absence) — is copied to that layer's own
+  `consultants`, `qconsultRows` (absence recorded as absence; `chatModel` and `bugzModel` join when their sources
+  move, E4.3 and E2.1) — is copied to that layer's own
   `migratedFrom` (the user layer's `coai.migratedFrom`; a side's overlay entry `migratedFrom`). Written ONCE, never
   overwritten by a later run. A command *ConnectOtherAIs: Restore settings from before the catalog* names the layers it
   will change, puts every key back exactly, and marks the layer `restored` so activation does not migrate it again until
   the person asks (findings 0, 1, 8). Kept until one release after the switch-over (T5).
-- **Order and interruption:** backup → rows → references → the layer's marker `catalogMigration: 1`, written last. A
-  rerun finds an already-added row by its deterministic id first and the merge rule second, so an interrupted run is
+- **Order and interruption:** backup → rows → references → the layer's marker `catalogMigration: "migrated"`
+  (`"restored"` after a restore), written last. A restore writes in the reverse order — references, then rows, then the
+  marker — so a stopped restore never strands a reference. A rerun finds an already-added row by its exact launch
+  fields (the merge rule), preferring the deterministic id among the matches, so an interrupted run is
   finished, not duplicated. A layer that cannot be written (refused write, unreadable overlay) is skipped and reported,
   never blocks activation. A migration that would pass 64 rows writes nothing in that layer and says how many it needed
   (findings 2, 6, 11). Two windows activating at once both reach the same final state, because every write is a
   deterministic function of the backup.
-- **A reference to a missing row** (deleted on the old page, or a half-run migration) is left out of the env block and
-  logged, never written as an empty definition (finding 11).
-- **Workspace values.** The six model-bearing keys are read through ONE reader (user layer + overlay, via `inspect()`);
+- **A reference to a missing row** (deleted on the old page, or a half-run migration) keeps today's behaviour: both
+  halves already name it unavailable, which says more than leaving it out would (finding 11; recorded as built in E1.3).
+- **Workspace values.** The seven model-bearing keys (`securityLane` and `chatModelPresets` included) are read through ONE reader (user layer + overlay, via `inspect()`);
   a scan test refuses any other read of them. A workspace or folder value is ignored, and a one-time notice names the
   key and the file and offers to copy it to the user layer (findings 3, 10).
 - **Downgrade, measured on the code:** the current build parses rows through `vendorsFrom` (`vendors.ts:332-376`),

@@ -621,7 +621,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
     en: {
       title: 'Your consultant models move into the reviewer list',
       whatItIs:
-        'This version moves every consultant and question-consultant model you defined into the reviewer list, as a row that reviews nothing — the first step towards one list of models that every feature picks from. The consultant or question row then names that row instead of repeating its runtime, model, endpoint and CLI path. Nothing you see in the panel changes, and coai-mcp is handed exactly the settings it was handed before.',
+        'This version moves the consultant and question-consultant models you defined — every one it can, see below — into the reviewer list, as a row that reviews nothing — the first step towards one list of models that every feature picks from. The consultant or question row then names that row instead of repeating its runtime, model, endpoint and CLI path. Nothing you see in the panel changes, and coai-mcp is handed exactly the settings it was handed before.',
       why:
         'Until now one model could be defined three times — as a reviewer, as a consultant and as a question-consultant row — and editing one copy left the others behind. One list is the cure, and this is its first, invisible step.',
       setup:

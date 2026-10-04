@@ -188,6 +188,25 @@ test('restore puts every key back exactly, removes what was absent, and stops th
   assert.deepEqual(migrateLayer(back), { kind: 'restored' }, 'reloading does not migrate it again');
 });
 
+test('a restore stopped after any write leaves every consultant and question row resolvable', () => {
+  // The migration writes rows before references; a restore must write in the REVERSE order (CodeRabbit, PR #681):
+  // put the definitions back first, then drop the rows. Stopped part way, the layer then holds definitions and
+  // perhaps rows nobody refers to — never a reference to a row that is gone.
+  const after = migrated(OPERATOR);
+  const restore = restoreLayer(after);
+  const writes = restore.kind === 'restore' ? restore.writes : [];
+
+  assert.deepEqual(writes.map((write) => write.key), ['consultants', 'qconsultRows', 'vendors', 'catalogMigration']);
+  for (let stop = 1; stop < writes.length; stop += 1) {
+    const half = apply(after, writes.slice(0, stop));
+    const rows = vendorsFrom(half.vendors ?? half.sharedVendors);
+    const consultants = settingsFrom((key) => (half as Record<string, unknown>)[key] ?? (key === 'vendors' ? half.sharedVendors : undefined)).consult.byCaller;
+
+    assert.ok(Object.values(consultants).every((one) => one.kind === 'definition'), `stopped after write ${stop}: a consultant became unavailable`);
+    assert.ok(rows.length > 0, `stopped after write ${stop}`);
+  }
+});
+
 test('restore with no backup says so and writes nothing', () => {
   assert.equal(restoreLayer({ consultants: {} }).kind, 'nothing-to-restore');
 });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { backupFileName, CONFIG_FORMAT, CONFIG_VERSION, exportedSettings, importedConfig, modelsSentence, staleBackups, type Declared } from '../configTransfer';
+import { backupFileName, backupSettings, CONFIG_FORMAT, CONFIG_VERSION, exportedSettings, importedConfig, modelsSentence, staleBackups, type Declared } from '../configTransfer';
 import { vendorsFrom } from '../vendors';
 
 /**
@@ -74,9 +74,21 @@ test('a file that does not name the models replaces none, and says nothing about
   assert.equal(modelsSentence(CURRENT, undefined, []), '');
 });
 
-test('the backup before an import is named by its moment, and only the newest ten are kept', () => {
-  assert.equal(backupFileName(new Date('2026-10-04T18:30:05.123Z')), 'before-import-2026-10-04T18-30-05Z.json');
-  const names = Array.from({ length: 12 }, (_, i) => `before-import-2026-10-${String(i + 1).padStart(2, '0')}T00-00-00Z.json`);
+test('the backup before an import is named by its moment and a suffix of its own, and only the newest ten are kept', () => {
+  // Two imports in one second must not share a file, or the second backup replaces the first (CodeRabbit, PR #681).
+  assert.equal(backupFileName(new Date('2026-10-04T18:30:05.123Z'), 'a1b2c3d4'), 'before-import-2026-10-04T18-30-05-123Z-a1b2c3d4.json');
+  assert.notEqual(backupFileName(new Date('2026-10-04T18:30:05.123Z'), 'a1b2c3d4'), backupFileName(new Date('2026-10-04T18:30:05.123Z'), 'e5f6a7b8'));
+  const names = Array.from({ length: 12 }, (_, i) => `before-import-2026-10-${String(i + 1).padStart(2, '0')}T00-00-00-000Z-0000000${i % 10}.json`);
 
-  assert.deepEqual(staleBackups([...names, 'notes.txt']), names.slice(0, 2));
+  assert.deepEqual(staleBackups([...names, 'notes.txt', 'before-import-x.json']), names.slice(0, 2));
+});
+
+test('the backup names the models even at their defaults, so importing it really puts them back', () => {
+  // An export leaves out a setting at its default, and an import leaves a setting it does not name alone — so a
+  // backup taken while `vendors` was the shipped default would not undo an import that replaced it (CodeRabbit).
+  const settings = backupSettings(declared, (key) => (key === 'consultants' ? { codex: { vendor: 'glm', runtime: 'codex', executablePath: '/x' } } : undefined));
+
+  assert.deepEqual(settings['vendors'], [], 'the shipped default, said out loud');
+  assert.deepEqual(settings['consultants'], { codex: { vendor: 'glm', runtime: 'codex' } }, 'still without a machine path');
+  assert.equal('migratedFrom' in settings, false, 'and still never the catalog backup');
 });

@@ -235,7 +235,9 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // a model id) and that a run stopped part way (`catalog-migration-failed`); its restore command asks first
 // (`catalog-restore-confirm`, modal) and says when there is nothing to restore (`catalog-restore-none`). A move that
 // went through says nothing, because nothing the person can see changed.
-const PLACES_THIS_SPEAKS = 151;
+// 151 → 152 on 2026-10-04, PR #681 (CodeRabbit): a restore stopped part way has its own sentence
+// (`catalog-restore-failed`) — the migration's "the next start finishes it" is false for a restore. One failure.
+const PLACES_THIS_SPEAKS = 152;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

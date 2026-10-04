@@ -1,11 +1,12 @@
 import { mkdir, readdir, readFile, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import { homedir } from 'node:os';
 import { basename, join } from 'node:path';
 import * as vscode from 'vscode';
 import { writeFileAtomically } from './atomicFile';
 import { applyImport, failureSentence, type Applied, type ApplyIo } from './configApply';
 import { promptNames, promptTexts, readPromptOrAbsent } from './configPromptFiles';
-import { backupFileName, configFile, declaredSettings, exportedSettings, importQuestion, importedConfig, modelsSentence, staleBackups, type Imported } from './configTransfer';
+import { backupFileName, backupSettings, configFile, declaredSettings, exportedSettings, importQuestion, importedConfig, modelsSentence, staleBackups, type Imported } from './configTransfer';
 import { userLayer } from './sideConfig';
 import { vendorsFrom } from './vendors';
 import { coaiDataDir } from './dataDir';
@@ -45,9 +46,13 @@ function suggestedFile(): vscode.Uri {
 }
 
 /** This side's base settings and prompt texts as an export writes them — to a file a person chose, or a backup. */
-async function writeExport(context: vscode.ExtensionContext, path: string): Promise<{ settings: number; prompts: number }> {
+async function writeExport(
+  context: vscode.ExtensionContext,
+  path: string,
+  which: typeof exportedSettings = exportedSettings,
+): Promise<{ settings: number; prompts: number }> {
   const config = vscode.workspace.getConfiguration('coai');
-  const settings = exportedSettings(declaredSettings(context.extension.packageJSON), (key) => config.inspect(key)?.globalValue);
+  const settings = which(declaredSettings(context.extension.packageJSON), (key) => config.inspect(key)?.globalValue);
   const prompts = await promptTexts(promptsDir(coaiDataDir()));
   await writeFileAtomically(path, `${JSON.stringify(configFile(settings, prompts, new Date().toISOString()), null, 2)}\n`);
 
@@ -114,7 +119,7 @@ async function importTitle(imported: Extract<Imported, { ok: true }>, file: vsco
   return [
     importQuestion(imported, basename(file.fsPath), await promptNames(promptsDir(coaiDataDir()))),
     modelsSentence(currentModels(), imported.settings['vendors'], vaultKeys()),
-    backup.length === 0 ? '' : `Your current setup is saved to ${backup} first; Import config with that file puts it back.`,
+    backup.length === 0 ? '' : `Your current models are saved to ${backup} first; Import config with that file puts them back (prompt texts this import adds stay).`,
   ].filter((part) => part.length > 0).join(' ');
 }
 
@@ -138,7 +143,7 @@ function currentModels(): ReturnType<typeof vendorsFrom> {
 
 /** Where this import saves the setup it replaces, or `''` when it replaces no model. */
 function backupPathFor(imported: Extract<Imported, { ok: true }>): string {
-  return replacesModels(imported) ? join(backupsDir(), backupFileName(new Date())) : '';
+  return replacesModels(imported) ? join(backupsDir(), backupFileName(new Date(), randomUUID().slice(0, 8))) : '';
 }
 
 function backupsDir(): string {
@@ -149,7 +154,7 @@ function backupsDir(): string {
 async function backedUp(context: vscode.ExtensionContext, path: string): Promise<boolean> {
   try {
     await mkdir(backupsDir(), { recursive: true });
-    await writeExport(context, path);
+    await writeExport(context, path, backupSettings);
     await Promise.all(staleBackups(await readdir(backupsDir())).map((name) => rm(join(backupsDir(), name), { force: true })));
 
     return true;

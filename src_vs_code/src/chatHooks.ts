@@ -26,6 +26,7 @@ import { createChatPanel, pushChatCopied, pushChatDraft, setChatDraft } from './
 import { notify } from './notify';
 import { retire } from './retireSession';
 import { withdraw } from './chatQueue';
+import { userLayer } from './sideConfig';
 
 /**
  * Everything a chat page can ask of the host, and the three writers that put words in its composer.
@@ -157,7 +158,7 @@ function chooseModel(
 function instructionOf(thread: Thread, config: vscode.WorkspaceConfiguration): string {
   return chatInstruction(
     thread.role,
-    taskOf(config, thread.promptId, chatSettingsFrom((key) => config.get(key)).prompt),
+    taskOf(config, thread.promptId, chatSettingsFrom(userLayer(config)).prompt),
   );
 }
 

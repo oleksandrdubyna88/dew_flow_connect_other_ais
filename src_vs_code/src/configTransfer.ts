@@ -413,9 +413,32 @@ function keysSentence(rows: readonly Vendor[], vaultKeys: readonly string[] | un
     : ` These read a key this machine's vault does not hold, and fail until it is added: ${named}.`;
 }
 
-/** Where the setup is saved before an import replaces the models, by its moment — UTC, so it sorts as it happened. */
-export function backupFileName(now: Date): string {
-  return `before-import-${now.toISOString().replace(/\.\d{3}Z$/u, 'Z').replaceAll(':', '-')}.json`;
+/**
+ * Where the setup is saved before an import replaces the models: its moment in UTC to the millisecond, so the files
+ * sort as they happened, and a suffix of its own (`suffix`, a few random hex digits from the caller) so two imports in
+ * one instant never share a file — the second would replace the first's backup (CodeRabbit, PR #681).
+ */
+export function backupFileName(now: Date, suffix: string): string {
+  return `before-import-${now.toISOString().replace('.', '-').replaceAll(':', '-')}-${suffix}.json`;
+}
+
+/** The settings a model-replacing import could change. */
+const MODEL_SETTINGS: readonly string[] = ['vendors', 'consultants', 'qconsultRows'];
+
+/**
+ * What the backup before an import holds: an export, plus the three model settings ALWAYS — at their default too.
+ *
+ * <p>An export leaves out a setting at its default and an import leaves alone a setting the file does not name, so a
+ * backup taken while `vendors` was the shipped list would never undo an import that replaced it. Said out loud, the
+ * default is written back like any other value. Machine paths stay out, as in every export. Prompt texts an import
+ * ADDED are not removed by importing the backup, which the confirmation says.</p>
+ */
+export function backupSettings(declared: Declared, baseValueOf: (key: string) => unknown): Record<string, unknown> {
+  const explicit = MODEL_SETTINGS
+    .filter((key) => Object.hasOwn(declared, key))
+    .map((key) => [key, withoutMachinePaths(baseValueOf(key) ?? defaultOf(declared, key))] as const);
+
+  return { ...exportedSettings(declared, baseValueOf), ...Object.fromEntries(explicit) };
 }
 
 /** How many of those files are kept: the newest ten. The rest are what {@link staleBackups} names for removal. */
@@ -423,7 +446,8 @@ const BACKUPS_KEPT = 10;
 
 /** The backup files past the newest ten, oldest first — never a file this build did not name. */
 export function staleBackups(names: readonly string[]): readonly string[] {
-  const ours = names.filter((name) => /^before-import-[0-9T-]+Z\.json$/u.test(name)).sort(byCodeUnit);
+  const ours = names.filter((name) => /^before-import-[0-9T-]+Z-[0-9a-f]+\.json$/u.test(name)).sort(byCodeUnit);
 
   return ours.slice(0, Math.max(0, ours.length - BACKUPS_KEPT));
 }
+
