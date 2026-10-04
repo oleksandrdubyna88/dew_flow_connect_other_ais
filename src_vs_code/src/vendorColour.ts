@@ -1,3 +1,5 @@
+import { byCodeUnit } from './codeUnitOrder';
+
 /**
  * One colour per reviewer, the same colour everywhere that reviewer is named — and never a colour
  * another reviewer already has.
@@ -103,24 +105,6 @@ const NOTHING_CLAIMED: ReadonlySet<number> = new Set<number>();
 /** Case and surrounding space do not make a second vendor — here, and in the anchor lookup. */
 function normalise(vendor: string): string {
   return vendor.trim().toLowerCase();
-}
-
-/**
- * Total order over names, by UTF-16 code unit — and deliberately NOT `localeCompare`.
- *
- * <p>The analyser asks for `localeCompare` whenever strings are sorted, and here that advice is
- * backwards. This sort decides which of two colliding vendors gets first pick of a colour, so what
- * it must be is the SAME order on every machine. `localeCompare` is collation: it depends on the
- * runtime's locale and on how much of ICU that runtime was built with, so two people looking at one
- * Team server could order the same two names differently and see the colours swapped. Code units do
- * not vary.</p>
- */
-function byCodeUnit(left: string, right: string): number {
-  if (left === right) {
-    return 0;
-  }
-
-  return left < right ? -1 : 1;
 }
 
 /**

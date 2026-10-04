@@ -3,6 +3,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { test } from 'node:test';
 import {
+  canonical,
   CONFIG_FORMAT,
   CONFIG_VERSION,
   configFile,
@@ -175,6 +176,18 @@ test('a setting that differs from its default ONLY by a local path is the defaul
   const withEntry: Declared = { vendors: { default: [{ id: 'codex' }] } };
 
   assert.deepEqual(exportedSettings(withEntry, base({ vendors: [{ id: 'codex', executablePath: 'C:/tools/codex.cmd' }] })), {});
+});
+
+test('a value equal to its default is the default whatever its key order, even when two keys collate as one', () => {
+  // `é` as one code point and `e` + a combining accent are DIFFERENT keys that `localeCompare` calls equal, so a
+  // collating sort kept them in insertion order and the same object canonicalised two ways (qwen, code round).
+  const composed = 'café';
+  const decomposed = 'café';
+  const withDefault: Declared = { thing: { default: { [composed]: 1, [decomposed]: 2 } } };
+
+  assert.notEqual(composed, decomposed, 'the fixture lost its point: the two keys are one string');
+  assert.equal(canonical({ [decomposed]: 2, [composed]: 1 }), canonical({ [composed]: 1, [decomposed]: 2 }));
+  assert.deepEqual(exportedSettings(withDefault, base({ thing: { [decomposed]: 2, [composed]: 1 } })), {}, 'the default was exported');
 });
 
 test('a key every object inherits is unknown to this build, not a never-transferred one', () => {

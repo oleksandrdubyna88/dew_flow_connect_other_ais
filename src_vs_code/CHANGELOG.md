@@ -1,5 +1,22 @@
 # Changelog
 
+## Extension 0.63.0 — 2026-10-04
+
+**Settings → Consultant says whether each consultant can run.** With Server 0.42.1 every row shows:
+- its CLI, version and sign-in, and what the consultant cannot do on this platform;
+- its last failure, with what to do about it;
+- **Check** — one real, paid turn that proves the consultant answers and stays confined (it asks before it spends);
+- for an antigravity consultant on WSL, a `permissions.allow` rule to copy into agy's settings — coai never writes
+  them.
+
+A window that also watches a WSL data directory shows that side's rows as well. The tab reads and polls only while it
+is open on screen, and with an older server it says the server is too old.
+
+**Export config no longer exports a setting you left at its default.** Whether a value equals its default was decided by
+comparing the two with their keys sorted by your machine's language rules, and those rules treat some different keys as
+the same — `é` typed as one character and as `e` plus an accent. The same value could then compare as different from
+itself. Keys are now compared in one fixed order, the same on every machine.
+
 ## Server 0.42.1 — 2026-10-04
 
 **The first release of everything in 0.42.0**, which was never published: its Windows builds failed in one test whose
