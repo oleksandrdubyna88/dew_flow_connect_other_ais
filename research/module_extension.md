@@ -10526,3 +10526,11 @@ choice landed on every side. Now:
   (multi-line) and for a shared-only reader, with two named exemptions (the door in `sideConfig.ts`; the seeding read
   that copies the shared values when the switch is turned on). It was red on the six sites and is shown to find the
   shapes it looks for; `refusedSelect.test.ts` pins the picker's new refusal shape.
+- The code round (session `1e7363d0`) widened the scan to the OPERATION rather than a receiver's name: any
+  `.get`/`.update`/`.inspect` of an overlaid name (either quote, with or without `coai.`), any one-parameter reader
+  that forwards to `.get`, and every `ConfigurationTarget.Global` — each sanctioned site named with its reason and
+  pinned to a COUNT. One `sideConfig.bugzServerThisSide` serves both doors to the Bugz keys pages. Add and remove a
+  reviewer redraw after their save (an overlay write raises no configuration event). On a per-side setup, removing a
+  Team server says its reviewers go on this side only. `promptChosen` refuses a round the role does not have and
+  reads the role as an own key. The Bugz keys themselves are still filed under fixed names, which per-side servers
+  make wrong: [PLAN_bugz_keys_per_server.md](../todo/PLAN_bugz_keys_per_server.md).
