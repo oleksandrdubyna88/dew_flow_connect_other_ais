@@ -282,6 +282,50 @@ version gate in both directions.
    logged; the operator can cap effort. The client reads `X-Coai-Contract` and, against a v1 server, says which fields
    that server drops. Measured both ways. Deploy is manual and needs the operator's go-ahead.
 
+**As revised by epic 2's plan round (coai session `589a145b`, 2026-10-04, good_enough, 19 findings accepted)** — these
+override the stories above where they differ:
+
+- **Capability, not version numbers.** coai-mcp gains a one-shot `--features` that lists the row fields and modes it
+  accepts (`systemPrompt`, `timeoutMinutes`, `cliEffort`, `apiConsultant`, `securityWords`, `checkModel`,
+  `checkSecurity`); the extension writes a field only when the installed binary lists it, and says on the card which
+  fields this binary ignores. A seam leg per field fails when the extension would send a field the built binary does
+  not list. No `*_SINCE` constant guesses the release number before release-please cuts it. (f1, f8)
+- **Effort.** A codex effort stays in the settings but is NOT sent while codex is `unmeasured`, and the card says
+  "not applied"; an E1-shaped settings file with a codex effort still yields a round with codex in it. The probe
+  records whether `claude --help` lists `--effort`; a claude row with an effort on a CLI without it is refused by name
+  for that reviewer only ("the installed claude CLI does not take --effort"), never the whole round. A refused field
+  degrades one reviewer, reported, never aborts a round. (f5, f10, f11)
+- **Sent is not applied.** Per runtime, the measurement that shows the effect is named and recorded beside the code: a
+  system prompt that forces a marker token in the answer (one recorded real call per runtime), the effort level as
+  the CLI/API reports it in its usage or metadata where it does; where no effect can be observed, the docs and the card
+  say "sent", not "applied". (f12)
+- **The system prompt's leak paths.** Delivered in the prompt body after the product's own reviewer instruction (which
+  it cannot replace: the output schema and read-only rules come after it again), never argv. A canary test runs a round
+  through success, timeout, CLI failure and API error and greps stderr, the log files, the rounds database and the
+  run records; a prompt file is deleted in `finally`. Only length and hash are recorded. (f0, f2)
+- **Team server.** The operator caps timeout and effort (clamped, said in the response); a client system prompt is
+  appended after the server's immutable instruction, recorded as client-supplied (hash only), stored nowhere. With the
+  operator switch off (the default) the server accepts the request, drops the field, and reports the drop in the
+  response — shown by the client exactly as a v1 server's drops are. A dropped field is a visible per-round note in the
+  round log, never silence. (f1, f9, f13)
+- **Security words and patterns.** Each pattern is compiled once when the setting is validated (the extension asks
+  `--check-security --validate` through stdin), per pattern, so a construct NonBacktracking refuses (lookaround,
+  backreference) or a slow construction is refused by name at save time; a pattern refused at round time marks the
+  lane DEGRADED in the verdict rather than quietly scanning with fewer signals; a total scan budget bounds 32 patterns
+  × a 1 MB diff. `--check-security` reads its text and the patterns being edited from stdin (never argv: no token on
+  a command line, no 32 K limit); a bad argument exits 65, never 64; the extension falls back on 64 (an older binary).
+  (f4, f6, f14, f17)
+- **API-consultant transcripts — growth.** Under `<dataDir>/consultations/<id>/transcript.jsonl`, owner-only mode; ≤ 1 MB
+  per consultation — the next turn past it is REFUSED by name, never truncated; total ≤ 50 MB, a new consultation
+  refused when full; swept (closed or idle consultations, and anything older than 14 days) on every coai-mcp start and
+  by `--close-consult`; an interrupted turn is ended `interrupted` by the existing consultation sweep. (f3, f15)
+- **Bugz migration** reuses `catalogMigration.migrateLayer` (backup once, deterministic id, clash `-N`, marker last,
+  idempotent, restore); history keys are untouched. (f7, f16)
+- **`--check-model` widens `--check-consultant`** rather than standing beside it: one `ConsultCheckState`-based check
+  for any row. (f18)
+- **Scope.** Five stories, two release lines and a manual deploy: built as one epic per the operator's rule, released
+  as mcp 0.44.0 with whatever stories have landed — the `--features` list, not a version, tells the extension which.
+
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
    shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;
