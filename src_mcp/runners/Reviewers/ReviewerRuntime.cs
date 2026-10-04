@@ -226,6 +226,16 @@ public interface IReviewerRuntime
     string DefaultExecutable => Provider;
 
     /// <summary>
+    /// Whether this reviewer can READ a mounted checkout — a CLI agent started in the worktree with file tools.
+    /// </summary>
+    /// <remarks>
+    /// An api row, a local model and a Team server get the change inside their prompt and nothing else; telling them a
+    /// checkout is there sends them looking for files they can never open (todo/PLAN_one_model_catalog.md, epic 2,
+    /// story 1). True by default, because every CLI adapter runs in the worktree; the three that cannot override it.
+    /// </remarks>
+    bool ReadsTheCheckout => true;
+
+    /// <summary>
     /// A second launch that CONTINUES the first, when the first ended in a way only continuing can
     /// cure — or null, and the round's ordinary repair runs.
     /// </summary>

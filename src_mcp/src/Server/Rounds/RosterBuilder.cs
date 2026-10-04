@@ -179,8 +179,8 @@ internal sealed class RosterBuilder(
         // is the exact lie this change removed from the prompt files; only a mounted worktree is a
         // checkout.
         var hasCheckout = readsCheckout && !fastCode;
-        // And what it holds without one is the stage's to say — the change, or an outline with hunks.
-        var material = hasCheckout ? ReaderMaterial.Checkout : stageRow.Reads;
+        // What each reviewer is TOLD it holds is decided per reviewer below (ReviewerMaterial), where its runtime is known:
+        // a mounted checkout is something only a reviewer that can read one has.
 
         // Only what can actually run: a vendor whose CLI is missing or whose key is absent is
         // reported by `providers` and left out of the deal rather than dealt work it cannot do.
@@ -313,6 +313,7 @@ internal sealed class RosterBuilder(
 
             var launch = SettingsFor(provider, runtime, api);
             var followUps = turns is Runners.Feature.SourceTurns.On on ? on.FollowUps : 0;
+            var material = ReviewerMaterial.For(hasCheckout, runtime, stageRow.Reads);
             var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers, followUps);
             // One key for every launch of THIS reviewer — its turns and their repairs — from the base prompt
             // every one of them shares (ConversationKey): what a vendor that routes its prompt cache by a

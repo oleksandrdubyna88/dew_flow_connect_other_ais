@@ -56,6 +56,9 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
     /// </remarks>
     public string DefaultExecutable => SelfInvocation().Executable;
 
+    /// <summary>A local model is asked through the shim: gets the change in its prompt and never a working directory it can read.</summary>
+    public bool ReadsTheCheckout => false;
+
     /// <summary>How to start this binary again: the executable, and the arguments that must precede
     /// ours.</summary>
     internal static (string Executable, IReadOnlyList<string> Prefix) SelfInvocation()

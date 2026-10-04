@@ -46,6 +46,9 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
     /// <summary>This binary, however it was started — see <see cref="LocalRuntime.SelfInvocation"/>.</summary>
     public string DefaultExecutable => LocalRuntime.SelfInvocation().Executable;
 
+    /// <summary>An api reviewer is one HTTP request: gets the change in its prompt and never a working directory it can read.</summary>
+    public bool ReadsTheCheckout => false;
+
     /// <summary>The dialect a row that named none speaks.</summary>
     public static string DialectOf(ReviewerSettings settings) =>
         settings.Dialect.Trim().Length > 0 ? settings.Dialect.Trim().ToLowerInvariant() : ApiDialects.OpenAiName;

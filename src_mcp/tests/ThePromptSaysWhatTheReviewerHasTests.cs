@@ -162,8 +162,8 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
             "every composed prompt carries it, including one a person overrode in the catalog");
         source.Should().Contain("ComposePrompt(choice, context, material, stageRow.Answers, followUps)",
             "the real mode reaches the prompt — a literal here would pass every other test in this file");
-        source.Should().Contain("var material = hasCheckout ? ReaderMaterial.Checkout : stageRow.Reads",
-            "and what a reviewer without a checkout holds is the STAGE's answer, not a constant");
+        source.Should().Contain("var material = ReviewerMaterial.For(hasCheckout, runtime, stageRow.Reads)",
+            "and what a reviewer without a checkout — or that cannot read one — holds is the STAGE's answer, per reviewer");
         source.Should().Contain("var hasCheckout = readsCheckout && !fastCode",
             "the mode is TOLD, and a round that reads no checkout has none however it is configured");
         source.Should().NotContain("!isPlan",

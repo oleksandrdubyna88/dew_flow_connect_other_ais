@@ -42,6 +42,9 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
 
     public string DefaultExecutable => LocalRuntime.SelfInvocation().Executable;
 
+    /// <summary>A Team server reviews on another machine: gets the change in its prompt and never a working directory it can read.</summary>
+    public bool ReadsTheCheckout => false;
+
     /// <summary>The server this vendor's reviews go to, in its one canonical spelling.</summary>
     public string ServerUrl => TeamServerAuth.Normalise(serverUrl);
 
