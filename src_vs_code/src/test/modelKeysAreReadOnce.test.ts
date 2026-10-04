@@ -65,3 +65,49 @@ test('no source file outside the door reads a model-bearing setting from the hos
     + 'them again — read it through readerFor or userLayer',
   );
 });
+
+/**
+ * A reader that hands ANY key to the merged configuration — `(key) => config.get(key)`, typed or not, on a variable
+ * or on `getConfiguration('coai')` itself. A helper given one reads `chatModel` or `vendors` from a workspace again
+ * without a model key ever being spelled at the call site, which `DIRECT_READ` cannot see (PR #681's review).
+ */
+const FORWARDING_READER =
+  /\(\s*(\w+)\s*(?::\s*string)?\s*\)\s*=>\s*[\w.]+(?:\s*\([^()]*\))?\s*\.\s*get\s*(?:<[^>()]*>)?\s*\(\s*\1\s*\)/u;
+
+test('the scan recognises a reader that forwards any key to the merged configuration', () => {
+  for (const planted of [
+    'chatSettingsFrom((key) => config.get(key))',
+    'chatSettingsFrom((key: string) => config.get(key))',
+    "chatSettingsFrom((key) => vscode.workspace.getConfiguration('coai').get(key))",
+    'seedIfEmpty(store, side, (section) => config.get<unknown>(section))',
+  ]) {
+    assert.match(planted, FORWARDING_READER, `the scan would miss ${planted}`);
+  }
+  assert.doesNotMatch('chatSettingsFrom(userLayer(config))', FORWARDING_READER, 'the door is the sanctioned road');
+  assert.doesNotMatch('(key) => byId.get(other)', FORWARDING_READER, 'a lookup of a DIFFERENT name forwards nothing');
+  assert.ok(MEMENTO.test('get: <T,>(key: string) => this.context.globalState.get<T>(key),'), 'extension state is not configuration');
+});
+
+test('no source file outside the door hands the merged configuration to a settings helper', () => {
+  const offenders = sourceFiles()
+    .filter((file) => !DOOR.includes(file))
+    .flatMap((file) => fs.readFileSync(path.join(SRC, file), 'utf8').split(/\r?\n/u)
+      .flatMap((line, index) => (forwards(file, line) ? [`${file}:${index + 1}`] : [])));
+
+  assert.deepEqual(
+    offenders,
+    [],
+    'these hand every key — the model keys among them — to the merged configuration; pass userLayer(config) '
+    + '(or readerFor, for a per-side setting) instead',
+  );
+});
+
+/** The same arrow shape over a Map, not a configuration: `(id) => byId.get(id)`. */
+const MAP_LOOKUPS = ['chatPresets.ts', 'configTransfer.ts'];
+
+/** ...and over the extension's own state (a Memento), which holds no setting at all. */
+const MEMENTO = /\b(?:globalState|workspaceState)\s*\.\s*get\b/u;
+
+function forwards(file: string, line: string): boolean {
+  return FORWARDING_READER.test(line) && !MAP_LOOKUPS.includes(file) && !MEMENTO.test(line);
+}

@@ -212,7 +212,7 @@ export async function chatWithOtherAi(
   args: readonly unknown[],
   asked?: boolean,
 ): Promise<void> {
-  const settings = chatSettingsFrom((key) => vscode.workspace.getConfiguration('coai').get(key));
+  const settings = chatSettingsFrom(userLayer(vscode.workspace.getConfiguration('coai')));
   // ONE resolution for both commands, in `readyForChat`. It was written twice — here and beside the
   // question command — two places deciding which model answers. (gemini, the code round.)
   const ready = readyForChat();

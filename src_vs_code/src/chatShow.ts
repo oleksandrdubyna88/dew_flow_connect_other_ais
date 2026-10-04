@@ -159,7 +159,7 @@ export function show(entry: ChatEntry, running: boolean, failure: string, queued
 
 /** The answer language, read fresh: a follow-up turn is asked long after the command ran. */
 export function chatLanguage(): LanguageCode {
-  return chatSettingsFrom((key) => vscode.workspace.getConfiguration('coai').get(key)).language;
+  return chatSettingsFrom(userLayer(vscode.workspace.getConfiguration('coai'))).language;
 }
 
 /** A thrown thing, as a sentence. */

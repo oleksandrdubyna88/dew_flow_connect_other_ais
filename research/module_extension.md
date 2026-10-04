@@ -10530,6 +10530,9 @@ Epic 1 changes the DATA and nothing a person sees. Its stories, as they land:
   next review ran. A manifest `scope` was not used because it also changes which layer a remote (WSL) window reads.
   `sideConfig.userLayer(config)` is the one door; `readerFor` builds on it; `modelKeysAreReadOnce.test.ts` refuses
   any other direct read (shown red on a planted `config.get('chatModelPresets')`).
+  It also refuses a reader that hands ANY key to the merged configuration (`(key) => config.get(key)`, typed or on
+  `getConfiguration('coai')`): red on the five that fed `chatSettingsFrom` (`chatModel`, `chatModelPresets`) and
+  the per-side seeding (`vendors`) — all five now pass `userLayer(config)` (PR #681 review).
 - On activation, `sideConfig.noticeIgnoredWorkspaceModels` says once per window which key a workspace or folder
   tried to set (`model-setting-from-workspace`, a refusal), and offers *Copy to my settings* only when the person's
   own layer holds nothing — so it never overwrites what they set.

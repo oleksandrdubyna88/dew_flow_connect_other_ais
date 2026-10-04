@@ -1193,12 +1193,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       teamServers: this.teamServerStates(config),
       providers: this.providerHealth(),
       usageScope: this.usageScope,
-      // Straight from the configuration, exactly as the COMMAND reads it — not through the
-      // per-side reader beside it. These four are person-level by design (`chatSettings.ts` says
-      // so, and none of them is in `OVERLAID_SETTINGS`), so routing them through an overlay that
-      // will never hold them would only invite somebody to add them to it one day and split the
-      // one reader in two.
-      chat: chatSettingsFrom((key: string) => config.get(key)),
+      // From the person's own settings, exactly as the COMMAND reads it — not through the per-side
+      // reader beside it. These are person-level by design (`chatSettings.ts` says so, and none of
+      // them is in `OVERLAID_SETTINGS`), so routing them through an overlay that will never hold them
+      // would only invite somebody to add them to it one day and split the one reader in two. The
+      // door, not `config.get`: `chatModel` and `chatModelPresets` are model keys, which a
+      // workspace may not set (`modelKeys.ts`).
+      chat: chatSettingsFrom(userLayer(config)),
       // Straight from the configuration for the same reason, and read HERE rather than inside the
       // section, so the markup the paint key is built from changes with it.
       phrases: this.phrases(),
@@ -2127,7 +2128,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       await seedIfEmpty(
         this.context.globalState,
         thisSide(this.context.globalStorageUri),
-        (section) => config.get(section));
+        // What this side reads TODAY — through the door, so a workspace's `vendors` is not copied into it.
+        userLayer(config));
     }
     if (key === 'perSideSettings') {
       await this.carryTeamLogins(value === true);
