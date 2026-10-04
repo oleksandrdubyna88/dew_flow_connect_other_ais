@@ -7,8 +7,7 @@ import * as fsp from 'node:fs/promises';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
-import { usersPanel } from './bugsKeysPanel';
-import { setContributorKey, migrateLegacyKeys } from './bugsAdminKey';
+import { askForContributorKey, offerLegacyBugzKeys, usersPanel } from './bugsKeysPanel';
 import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
@@ -72,7 +71,7 @@ import { ATTEMPTS, MirrorSchedule, Retryable } from './mirrorSchedule';
 import { RoleDeletions, STOOD_DOWN } from './roleDeletion';
 import { forgetTheDeletions, roleDeletions } from './roleDeletionsHost';
 import { ConfigReader, settingsFrom } from './settingsShape';
-import { bugzServerShared, bugzServerThisSide, readerFor, storageReadsThisSide } from './sideConfig';
+import { bugzServerThisSide, readerFor, storageReadsThisSide } from './sideConfig';
 import { vendorsFrom } from './vendors';
 import { askPerson } from './personWait';
 
@@ -96,10 +95,10 @@ export function activate(context: vscode.ExtensionContext): void {
   // this has run it answers the DEFAULT directory. A window that read the choice late would watch
   // the wrong directory for escalations and write a Team-server token where nothing reads it.
   storageReadsThisSide(context);
-  // The Bugz keys filed under the old fixed names move to the server they were issued by, once — every reader now asks
-  // for a key BY SERVER, so until this has run they are simply not sent anywhere (research/PLAN_bugz_keys_per_server.md).
-  void migrateLegacyKeys(context.secrets, bugzServerShared()).catch((error: unknown) => {
-    console.error('ConnectOtherAIs: the Bugz keys could not be moved to their server', error);
+  // Bugz keys saved before they were filed per server are asked about, never filed by guessing which server issued
+  // them (research/PLAN_bugz_keys_per_server.md); until the person answers they are sent nowhere.
+  void offerLegacyBugzKeys(context.secrets, bugzServerThisSide(context)).catch((error: unknown) => {
+    console.error('ConnectOtherAIs: the old Bugz keys could not be read', error);
   });
   // FIRST, before anything is constructed and long before a command can be invoked: the side whose
   // settings the chat reads. Its reader falls back to the shared configuration while unbound, which
@@ -479,16 +478,8 @@ export function activate(context: vscode.ExtensionContext): void {
     // must be able to remove either. A command as well as a button for the reason the admin key has
     // one: a door that exists only behind the thing it unlocks is not a door.
     vscode.commands.registerCommand('coai.setBugsContributorKey', async () => {
-      const typed = await askPerson(() => vscode.window.showInputBox({
-        title: 'The contributor key for the ingest server',
-        prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
-        password: true,
-        ignoreFocusOut: true,
-      }));
-      if (typed !== undefined) {
-        await setContributorKey(context.secrets, bugzServerThisSide(context), typed);
-        await panel.render();
-      }
+      await askForContributorKey(context.secrets, bugzServerThisSide(context));
+      await panel.render();
     }),
     vscode.commands.registerCommand('coai.editChatPresets', () => { openChatPresets(); }),
     // The CONTEXT goes with it: the roles page reads and writes `coai.roles`, which is a per-side

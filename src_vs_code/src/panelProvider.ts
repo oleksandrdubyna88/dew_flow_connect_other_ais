@@ -96,10 +96,10 @@ import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPath
 import { currentFileIn, folderHolding } from './openAtRevision';
 import { askCalls } from './callHierarchyAsk';
 import { callHierarchyEditor } from './callHierarchyVsCode';
-import { contributorKey, setContributorKey } from './bugsAdminKey';
+import { contributorKey } from './bugsAdminKey';
 import { mayStart, outcomeOf } from './bugsSend';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
-import { usersPanel } from './bugsKeysPanel';
+import { askForContributorKey, usersPanel } from './bugsKeysPanel';
 import { BugzReviewPanel } from './bugzReviewPanel';
 import { BugChat } from './reviewChoose';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
@@ -3243,17 +3243,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    * which is why they share a module.</p>
    */
   private async setBugsKey(): Promise<void> {
-    const typed = await askPerson(() => vscode.window.showInputBox({
-      title: 'The contributor key for the ingest server',
-      prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
-      password: true,
-      ignoreFocusOut: true,
-    }));
-    if (typed === undefined) {
-      return;
-    }
-
-    await setContributorKey(this.context.secrets, bugzServerThisSide(this.context), typed);
+    await askForContributorKey(this.context.secrets, bugzServerThisSide(this.context));
     await this.render();
   }
 

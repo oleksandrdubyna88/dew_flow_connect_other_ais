@@ -10539,9 +10539,14 @@ choice landed on every side. Now:
 
 `coai.bugzServer` is per side, and the admin and contributor keys were stored under two fixed secret names, so one
 key could be sent to whichever server a side named. `bugsAdminKey.keyName(kind, server)` files each under
-`coai.bugs.<kind>Key:<canonicalTeamServerUrl(server)>`; `adminKey`/`contributorKey` and their setters REQUIRE the server
-(a call without one does not compile), and with no server there is no key and nothing is stored. A discard revokes
-with the ISSUING server's admin key. On activation `migrateLegacyKeys` moves the old fixed-name keys once to the server
-the shared setting names (`sideConfig.bugzServerShared`, user layer only) — a key already filed there wins; with no
-shared server they stay put and are sent nowhere. Tests: `bugzKeysPerServer.test.ts` (red on the shared-key symptom),
-`bugsAdminKey.test.ts` per server.
+`coai.bugs.<kind>Key:<canonicalTeamServerUrl(server)>` (pinned by literal tests); the readers and setters REQUIRE the
+server, and `credentialsFor(secrets, server)` gives a request the server and ITS key from one value. A setter with no
+server stores nothing and answers `no-server`, which the doors say out loud (`bugz-key-needs-a-server`). A discard
+revokes only on the issuing server; a record that names none is refused and kept. The sidebar button and the command
+share one `askForContributorKey`.
+
+Keys under the old fixed names are never filed by guessing which server issued them — that would be the replay
+itself. They are held aside and sent nowhere; on activation `offerLegacyBugzKeys` asks once per window
+(`bugz-legacy-keys`) to adopt them for this side's server or discard them. `adoptLegacyKeys` writes the new name,
+reads it back, and only then deletes the old one; a key already filed there wins. Tests: `bugzKeysPerServer.test.ts`
+(red on the shared key; the read-back guard shown red when removed), `bugsAdminKey.test.ts` per server.

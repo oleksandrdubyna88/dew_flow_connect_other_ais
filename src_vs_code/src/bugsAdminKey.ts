@@ -96,14 +96,32 @@ export function keyName(kind: 'admin' | 'contributor', server: string): string {
   return where.length === 0 ? '' : `${kind === 'admin' ? ADMIN_KEY : CONTRIBUTOR_KEY}:${where}`;
 }
 
+/** What a request to one Bugz server is sent with: that server, and ITS key — read from one value, never two. */
+export interface Credentials {
+  readonly server: string;
+  readonly key: string;
+}
+
+/** What a setter did. `no-server` stored nothing, and the caller says so rather than reporting success. */
+export type Stored = 'stored' | 'cleared' | 'no-server';
+
 /** The admin key for this server, or empty when none has been set for it. */
 export async function adminKey(secrets: Secrets, server: string): Promise<string> {
   return held(secrets, keyName('admin', server));
 }
 
-/** Sets it for this server. An empty value CLEARS it; with no server nothing is stored at all. */
-export async function setAdminKey(secrets: Secrets, server: string, key: string): Promise<void> {
-  await put(secrets, keyName('admin', server), key);
+/**
+ * The admin credentials for a request to `server`: the server and its own key from the ONE value given, so the key
+ * looked up and the address the request goes to can never be two different reads of a setting that changed between
+ * them (plan round, session d5cdb1b2).
+ */
+export async function credentialsFor(secrets: Secrets, server: string): Promise<Credentials> {
+  return { server, key: await adminKey(secrets, server) };
+}
+
+/** Sets it for this server. An empty value CLEARS it; with no server nothing is stored, and that is the answer. */
+export async function setAdminKey(secrets: Secrets, server: string, key: string): Promise<Stored> {
+  return put(secrets, keyName('admin', server), key);
 }
 
 /** The contributor key for this server, or empty when none has been set for it. */
@@ -111,65 +129,96 @@ export async function contributorKey(secrets: Secrets, server: string): Promise<
   return held(secrets, keyName('contributor', server));
 }
 
-/** Sets it for this server, with the same clear-on-empty rule the admin key has. */
-export async function setContributorKey(secrets: Secrets, server: string, key: string): Promise<void> {
-  await put(secrets, keyName('contributor', server), key);
+/** Sets it for this server, with the same rules the admin key has. */
+export async function setContributorKey(secrets: Secrets, server: string, key: string): Promise<Stored> {
+  return put(secrets, keyName('contributor', server), key);
 }
 
 async function held(secrets: Secrets, name: string): Promise<string> {
   return name.length === 0 ? '' : (await secrets.get(name)) ?? '';
 }
 
+// ---------------------------------------------------------------- the keys from before they were filed per server
+
+/** The old fixed names, and the kind each one was. */
+const LEGACY: readonly (readonly [string, 'admin' | 'contributor'])[] = [[ADMIN_KEY, 'admin'], [CONTRIBUTOR_KEY, 'contributor']];
+
 /**
- * The keys filed under the old fixed names, moved once to the server they can only have been issued by: the one the
- * SHARED `coai.bugzServer` names, which every side read before the per-side fix. A key already filed for that server
- * is newer and wins; the old name is deleted either way. With no shared server there is nothing to tie the old keys to,
- * so they stay where they are — and since every reader now asks for a server, they are sent nowhere.
+ * Whether keys from before the per-server names are still held. They are NEVER filed automatically: nothing proves
+ * which server issued one — a side may have named its own server, a workspace may have overridden it, the shared value
+ * may have changed since — and filing a key under a server that did not issue it is the replay this exists to end
+ * (plan round, session d5cdb1b2). Until the person adopts or discards them, they are sent nowhere.
  */
-export async function migrateLegacyKeys(secrets: Secrets, sharedServer: string): Promise<'moved' | 'none' | 'no-server'> {
-  const legacy = [[ADMIN_KEY, keyName('admin', sharedServer)], [CONTRIBUTOR_KEY, keyName('contributor', sharedServer)]] as const;
-  const found = (await Promise.all(legacy.map(async ([old]) => (await secrets.get(old)) !== undefined))).some(Boolean);
-  if (!found) {
+export async function legacyKeysHeld(secrets: Secrets): Promise<boolean> {
+  const found = await Promise.all(LEGACY.map(async ([old]) => (await secrets.get(old)) !== undefined));
+
+  return found.some(Boolean);
+}
+
+/**
+ * The old keys filed under `server` — the one the PERSON says issued them. A key already filed there is newer and
+ * wins. Each old name is deleted only once its key is proven held under the new one (written, then read back), so a
+ * store that loses the write leaves the old key where it was: `not-kept`.
+ */
+export async function adoptLegacyKeys(secrets: Secrets, server: string): Promise<'adopted' | 'none' | 'no-server' | 'not-kept'> {
+  if (!(await legacyKeysHeld(secrets))) {
     return 'none';
   }
-  if (keyName('admin', sharedServer).length === 0) {
+  if (keyName('admin', server).length === 0) {
     return 'no-server';
   }
-  for (const [old, now] of legacy) {
-    await moved(secrets, old, now);
-  }
+  const kept = await Promise.all(LEGACY.map(([old, kind]) => adoptOne(secrets, old, keyName(kind, server))));
 
-  return 'moved';
+  return kept.every(Boolean) ? 'adopted' : 'not-kept';
 }
 
-/** One old key to its new name, unless the new name already holds one; the old name is removed either way. */
-async function moved(secrets: Secrets, old: string, now: string): Promise<void> {
+/** One old key under its new name — unless that name holds one already — and the old name gone once that is proven. */
+async function adoptOne(secrets: Secrets, old: string, now: string): Promise<boolean> {
   const value = await secrets.get(old);
-  if (value !== undefined && (await secrets.get(now)) === undefined) {
+  const proven = value === undefined || (await filed(secrets, now, value));
+  if (proven) {
+    await secrets.delete(old);
+  }
+
+  return proven;
+}
+
+/** `value` held under `now` — written unless a newer key is there already — and proven by reading it back. */
+async function filed(secrets: Secrets, now: string, value: string): Promise<boolean> {
+  if ((await secrets.get(now)) === undefined) {
     await secrets.store(now, value);
   }
-  await secrets.delete(old);
+
+  return (await secrets.get(now)) !== undefined;
+}
+
+/** The old keys removed, filed nowhere — what a person chooses when they cannot vouch for where they came from. */
+export async function discardLegacyKeys(secrets: Secrets): Promise<void> {
+  for (const [old] of LEGACY) {
+    await secrets.delete(old);
+  }
 }
 
 /**
- * Stores a credential, or removes it when what arrived is nothing.
+ * Stores a credential, or removes it when what arrived is nothing — and stores nothing at all without a name.
  *
  * <p>The clear-on-empty rule in ONE place: storing `''` leaves a key that reads as SET and refuses
  * every request, which is the worst of both — and it is the kind of rule that gets remembered at the
  * first call site and forgotten at the second.</p>
  */
-async function put(secrets: Secrets, name: string, key: string): Promise<void> {
-  const trimmed = key.trim();
+async function put(secrets: Secrets, name: string, key: string): Promise<Stored> {
   if (name.length === 0) {
-    return;
+    return 'no-server';
   }
+  const trimmed = key.trim();
   if (trimmed.length === 0) {
     await secrets.delete(name);
 
-    return;
+    return 'cleared';
   }
-
   await secrets.store(name, trimmed);
+
+  return 'stored';
 }
 
 /**

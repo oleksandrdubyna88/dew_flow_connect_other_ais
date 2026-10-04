@@ -7,13 +7,18 @@ import {
   Pending,
   Secrets,
   adminKey,
+  adoptLegacyKeys,
   beginIssuance,
+  credentialsFor,
+  discardLegacyKeys,
   endIssuance,
   holdIssuance,
   issuanceAttempt,
+  legacyKeysHeld,
   pendingIssuance,
   releaseIssuance,
   setAdminKey,
+  setContributorKey,
 } from './bugsAdminKey';
 import {
   START,
@@ -31,7 +36,7 @@ import { Users, usersPageHtml, withControls } from './bugsKeysPage';
 import { Turns } from './bugsKeysTurns';
 import { BusyHost } from './busyHost';
 import { IDLE } from './busySnapshot';
-import { notify, notifyAndAsk } from './notify';
+import { notify, notifyAndAsk, notifyThen } from './notify';
 import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
@@ -186,7 +191,9 @@ export class BugsKeysPanel {
       return;
     }
 
-    await setAdminKey(this.secrets, this.server(), typed);
+    if ((await setAdminKey(this.secrets, this.server(), typed)) === 'no-server') {
+      this.said = NO_SERVER;
+    }
     await this.draw();
   }
 
@@ -269,7 +276,7 @@ export class BugsKeysPanel {
     // BEFORE the request leaves. Everything after this line can die and the next open still knows
     // that a key may exist.
     await beginIssuance(this.secrets, { server, note });
-    const answer = await issue({ server, key: await adminKey(this.secrets, server) }, note);
+    const answer = await issue(await credentialsFor(this.secrets, server), note);
     if (answer.kind !== 'ok') {
       await this.failedIssue(answer);
 
@@ -378,8 +385,17 @@ export class BugsKeysPanel {
    * that the key was gone, while it stayed alive on the one that issued it. (Code round, codex.)</p>
    */
   private async discard(pending: Pending): Promise<void> {
-    const issuer = pending.server.length > 0 ? pending.server : this.server();
-    const answer = await revoke({ server: issuer, key: await adminKey(this.secrets, issuer) }, pending.id);
+    // Revoked ONLY on the server that issued it, with that server's key. A record that does not say which server
+    // that was is refused and KEPT: guessing this side's server would send a key there and read its 404 as proof
+    // the key was gone (plan round, session d5cdb1b2).
+    if (pending.server.length === 0) {
+      this.said = 'This key\'s record does not say which server issued it, so it cannot be revoked from here and is kept. '
+        + 'Revoke it on the server that issued it, then copy it to forget it.';
+      await this.draw();
+
+      return;
+    }
+    const answer = await revoke(await credentialsFor(this.secrets, pending.server), pending.id);
     if (answer.kind === 'ok' || answer.kind === 'missing') {
       await releaseIssuance(this.secrets);
       this.said = 'The key was discarded and revoked, so nothing is left alive that nobody holds.';
@@ -402,7 +418,7 @@ export class BugsKeysPanel {
   }
 
   private async admin(): Promise<Admin> {
-    return { server: this.server(), key: await adminKey(this.secrets, this.server()) };
+    return credentialsFor(this.secrets, this.server());
   }
 
   /**
@@ -508,6 +524,61 @@ export class BugsKeysPanel {
 let theOne: BugsKeysPanel | undefined;
 
 /** The Users panel, built once. */
+/** Said wherever a key is typed while this side names no Bugz server: a key is filed under the server that issued it. */
+const NO_SERVER = 'The key was not kept: set the Bugz server for this side first — a key is filed under the server that issued it.';
+
+/**
+ * The contributor key asked for and filed under this side's Bugz server — ONE flow for the command and the sidebar
+ * button, which were two copies of it. With no server the key is refused out loud, never dropped behind a success.
+ */
+export async function askForContributorKey(secrets: Secrets, server: string): Promise<void> {
+  const typed = await askPerson(() => vscode.window.showInputBox({
+    title: 'The contributor key for the ingest server',
+    prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
+    password: true,
+    ignoreFocusOut: true,
+  }));
+  if (typed !== undefined && (await setContributorKey(secrets, server, typed)) === 'no-server') {
+    await notify({ as: 'warning', class: 'refusal', source: 'bugsKeys', code: 'bugz-key-needs-a-server', title: NO_SERVER });
+  }
+}
+
+const ADOPT = 'Adopt them';
+const DISCARD = 'Discard them';
+
+/**
+ * Keys saved before they were filed per server, asked about — never filed by guessing (research/PLAN_bugz_keys_per_server.md).
+ * Asked once per window while they are held; adopting needs a server for this side, and the person vouching for it.
+ */
+export async function offerLegacyBugzKeys(secrets: Secrets, server: string): Promise<void> {
+  if (!(await legacyKeysHeld(secrets))) {
+    return;
+  }
+  const where = server.trim();
+  void notifyThen({
+    as: 'warning',
+    class: 'offer',
+    source: 'bugsKeys',
+    code: 'bugz-legacy-keys',
+    title: 'Bugz keys saved before keys were filed per server are kept aside and sent nowhere.',
+    cure: where.length === 0
+      ? 'Set the Bugz server for this side to adopt them, or discard them.'
+      : `Adopt them for ${where} only if that server issued them. If your sides ever named different Bugz servers, `
+        + 'discard them instead, revoke and re-issue the admin key, and ask for a new contributor key.',
+    actions: where.length === 0 ? [DISCARD] : [ADOPT, DISCARD],
+  }, (choice) => {
+    void settleLegacyKeys(secrets, where, choice);
+  });
+}
+
+async function settleLegacyKeys(secrets: Secrets, server: string, choice: string | undefined): Promise<void> {
+  if (choice === DISCARD) {
+    await discardLegacyKeys(secrets);
+  } else if (choice === ADOPT && (await adoptLegacyKeys(secrets, server)) === 'not-kept') {
+    console.error('ConnectOtherAIs: an old Bugz key could not be filed under its server, so it was kept where it was');
+  }
+}
+
 export function usersPanel(secrets: Secrets, server: () => string): BugsKeysPanel {
   theOne ??= new BugsKeysPanel(secrets, server);
 

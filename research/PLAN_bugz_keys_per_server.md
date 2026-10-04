@@ -2,11 +2,17 @@
 
 > Status: **IMPLEMENTED, 2026-10-04.** Scope: `src_vs_code/src/bugsAdminKey.ts` and its callers (the Bugz keys pages,
 > the pair upload in `panelProvider.ts`, the contributor-key commands). Deviations, recorded:
-> - "No shared server: the page says it cannot tell" was not built: with no shared server the old keys stay under
->   their old names and, since every reader now asks BY server, are sent nowhere; setting the shared server and
->   restarting moves them. A sentence on the page is left to whoever next touches the keys page.
-> - The wiring scan in the test plan became compile-time: `adminKey`/`contributorKey` and their setters REQUIRE the
->   server argument, so a call without one does not build — stronger than a scan, and nothing to keep in step.
+> - **No automatic migration.** The plan round (coai session `d5cdb1b2`) showed the premise false: nothing proves which
+>   server issued an old fixed-name key (a side may have named its own, a workspace may have overridden it, the shared
+>   value may have changed), and filing one under the wrong server is the replay itself. The old keys are held aside,
+>   sent nowhere, and the person is asked once per window to ADOPT them for this side's server (only if it issued
+>   them) or DISCARD them, with the advice to revoke and re-issue if their sides ever named different servers.
+>   Adopting writes the new name, reads it back, and only then deletes the old one.
+> - `credentialsFor(secrets, server)` is the one road to a request: the server and its key from one value. A discard
+>   whose record names no issuing server is refused and the record kept, never revoked against this side's server.
+>   A key typed with no server set is refused out loud (`bugz-key-needs-a-server`), never dropped behind a success.
+> - The wiring scan became compile-time plus one scan: the readers and setters REQUIRE the server, and a test proves
+>   the old fixed names appear in the key module alone. The key names are pinned by literal tests.
 >
 > Related docs: [module_extension.md](module_extension.md). Found on the code round of the per-side fix
 > (`fix/prompts-per-round-per-side`, coai session `1e7363d0`, 2026-10-04).
