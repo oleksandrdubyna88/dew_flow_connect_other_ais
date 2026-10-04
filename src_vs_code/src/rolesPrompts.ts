@@ -34,9 +34,20 @@ export const RESERVED_FILE_NAMES = new Set([
   'lpt1', 'lpt2', 'lpt3', 'lpt4', 'lpt5', 'lpt6', 'lpt7', 'lpt8', 'lpt9',
 ]);
 
+/** The folder's name under the data directory — what a watcher based at the data directory globs under. */
+export const PROMPTS_FOLDER = 'prompts';
+
 /** The folder the server reads overrides from, under the data directory. */
 export function promptsDir(dataDir: string): string {
-  return `${dataDir}/prompts`;
+  return `${dataDir}/${PROMPTS_FOLDER}`;
+}
+
+/**
+ * The files of one id family under {@link promptsDir}, as a glob — a watcher's half of {@link promptFile}'s naming,
+ * kept beside it so a change to one cannot leave the other watching names that no longer exist.
+ */
+export function promptFilesGlob(idPrefix: string): string {
+  return `${idPrefix}*.md`;
 }
 
 /**
