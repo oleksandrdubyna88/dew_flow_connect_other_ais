@@ -310,7 +310,19 @@ public sealed class ConsultFailureScenarioTests : ConsultScenarioBase
         /// </summary>
         private static Unreadable Proven(Unreadable made)
         {
-            if (!Bites(made._dir))
+            bool bites;
+            try
+            {
+                bites = Bites(made._dir);
+            }
+            catch
+            {
+                // Any other failure of the probe must not leave the denial behind (CodeRabbit, #667).
+                made.Dispose();
+                throw;
+            }
+
+            if (!bites)
             {
                 made.Dispose();
                 Assert.Skip("this machine lists a directory its own account was denied (root, or an elevated runner), so the fixture cannot bite");
