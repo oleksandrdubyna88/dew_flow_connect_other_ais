@@ -1067,6 +1067,26 @@ Three seams carry S4, and only one of them gained anything on the wire.
 Nothing else crossed: the decisions the tab makes (a refused pair disabled, a flagged pair waiting for its tick, a
 disk root refused) are the server's own refusals said first, from the same capability table and the same rules.
 
+### The reviewer list becomes the model catalog, and the wire does not move (2026-10-04, E1 of `todo/PLAN_one_model_catalog.md`)
+
+`coai.vendors` is now the one list of model INSTANCES: a row gains `name`, `uses` (the non-review features it may
+serve), `systemPrompt`, `timeoutMinutes` and `chatStartingPrompt`, and a consultant entry or a question-consultant row
+that carried its own definition is migrated — once per settings layer — into a row that reviews nothing, the entry
+becoming a reference to it. What crosses the container boundary does not change at all: the extension RESOLVES a
+reference to a catalog row back into the definition before writing the settings file (`resolveConsultant` rule (a),
+`qconsultSettingsFrom`), and `rowsOnTheWire` keeps a row that serves only resolved features out of `COAI_VENDORS`, so a
+migrated setup writes the same file byte for byte and coai-mcp 0.43.0 needs nothing new. The seam's tenth leg proves it
+against the real binary. The new row fields cross nowhere yet — the wire is a field whitelist — until E2 gives coai-mcp
+a reader for them.
+
+| | Before E1 | After E1 |
+|---|---|---|
+| Where a consultant's model lives | its own definition in `coai.consultants` | a row of `coai.vendors`; the caller refers to it |
+| What `COAI_CONSULTANTS` / `COAI_QCONSULT_ROWS` carry | the definition | the same definition, resolved by the extension |
+| Who may set the model keys | any layer, workspace included | the user layer and the side overlay only (`modelKeys.ts`) |
+| Which runtime serves the consultant / chat | two TS lists, one C# list, nothing comparing them | `shared/feature-availability.json` — a sixth file neither container owns; generated for the extension, compared with the C# list by `FeatureAvailabilityTests` until coai-mcp reads it (E2.1) |
+| Export/import | version 1 | version 2; a v1 file is migrated on import; the setup it replaces is saved first |
+
 ## How the Team server is deployed (2026-09-06)
 
 `coai.remsoft.dev` runs as a **systemd unit on the host**, not as a container, and the reason is the
