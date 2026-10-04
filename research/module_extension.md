@@ -9475,8 +9475,10 @@ decision is a unit test and only VS Code is left untested:
 - **`configTransfer.ts`** (pure) — WHAT travels. `declaredSettings(manifest)` reads every setting and its
   default from `contributes.configuration` through `settingRefused.sectionsOf` (exported for it, not
   copied). `exportedSettings(declared, baseValueOf)` keeps a setting whose BASE value
-  (`config.inspect(key).globalValue`) differs from its default as canonical JSON (sorted keys, so a
-  reordered object is still the default), drops the `NEVER_TRANSFERRED` keys (`credsKey`,
+  (`config.inspect(key).globalValue`) differs from its default as canonical JSON (keys sorted by UTF-16
+  code unit, so a reordered object is still the default — never by `byName`/`localeCompare`, which reads
+  the machine's locale and calls `é` and `e`+combining accent equal, leaving them in insertion order;
+  fixed 2026-10-04 after the qwen code round found it), drops the `NEVER_TRANSFERRED` keys (`credsKey`,
   `dataDirectory`, `dataSide`, `alsoWatchDataDirectories`, `perSideSettings` — each with the reason an
   import repeats) and removes every `executablePath` at any depth. Per-side overrides are never read:
   they belong to one side of one machine. `configFile` writes `{format: "coai-config", version: 1,

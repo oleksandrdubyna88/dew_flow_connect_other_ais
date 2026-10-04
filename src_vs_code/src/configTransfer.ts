@@ -322,7 +322,7 @@ export function byName(left: string, right: string): number {
   return left.localeCompare(right);
 }
 
-/** A value's JSON with object keys sorted — equal values give equal text. */
+/** A value's JSON with object keys sorted — equal values give equal text, on every machine. */
 export function canonical(value: unknown): string {
   return JSON.stringify(sortedKeys(value)) ?? 'undefined';
 }
@@ -333,8 +333,24 @@ function sortedKeys(value: unknown): unknown {
   }
 
   return isRecord(value)
-    ? Object.fromEntries(Object.keys(value).sort(byName).map((key) => [key, sortedKeys(value[key])]))
+    ? Object.fromEntries(Object.keys(value).sort(byCodeUnit).map((key) => [key, sortedKeys(value[key])]))
     : value;
+}
+
+/**
+ * The order `canonical` sorts keys in — UTF-16 code units, never a collation.
+ *
+ * <p>`canonical` is an equality test, not a display order, and {@link byName} cannot serve it twice over: it
+ * reads the machine's locale, and it calls distinct keys equal (`é` as one code point and `e` plus a combining
+ * accent), which left those keys in insertion order — so one object canonicalised two ways and a setting equal
+ * to its default was exported (qwen, code round). Code units are a total order and the same everywhere.</p>
+ */
+function byCodeUnit(left: string, right: string): number {
+  if (left === right) {
+    return 0;
+  }
+
+  return left < right ? -1 : 1;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
