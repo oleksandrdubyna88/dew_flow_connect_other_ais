@@ -1,0 +1,34 @@
+/* asking page styles — loaded after styles.css. Theme tokens only; every coloured word also says what it means. */
+
+/* "Who answers whom" carries a health block per caller: it takes the whole row, so the panels beside each
+   other below stay one height (.plan-grid stretches its rows). */
+.plan-grid > .ask-wide { grid-column: 1 / -1; }
+
+/* Everything under a caller's picker sits in the picker's column. */
+.caller-row > .ask-col { grid-column: 2; display: grid; gap: 4px; min-width: 0; }
+.ask-col > .callout { margin: 0; }
+
+/* One section per side: this side with its Check, another side read-only — indented and dimmed a little. */
+.ask-health { border-top: 1px dashed var(--border); padding-top: 4px; }
+.ask-health.read-only { padding-left: 10px; border-left: 2px solid var(--border); opacity: 0.88; }
+.ask-health h4 { margin: 0 0 2px; font-size: 0.88rem; font-weight: 600; color: var(--muted); }
+.ask-health dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 3px 10px; margin: 2px 0; align-items: baseline; }
+.ask-health dt { color: var(--muted); font-size: 0.86rem; }
+.ask-health dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.ask-health dd .btn { margin-top: 4px; }
+.ask-health code, .ask-snippet code, .ask-root code { font-family: var(--mono); font-size: 0.9em; overflow-wrap: anywhere; }
+
+/* agy's allow rule: shown, never written. */
+.ask-snippet { border-top: 1px dashed var(--border); padding-top: 4px; }
+.ask-snippet pre.paste { margin: 4px 0; white-space: pre-wrap; }
+.ask-snippet p { margin: 3px 0; }
+
+/* A folder the server refuses: the word "Refused" and the reason, under the folder. */
+.ask-root { border-top: 1px solid var(--border); padding: 2px 0; }
+.ask-root:first-of-type { border-top: 0; }
+.ask-root .row-line { margin: 2px 0; }
+.ask-refusal { margin: 0 0 4px; color: var(--err); font-size: 0.9rem; }
+
+/* The "?" beside a heading or a picker keeps its own size. */
+.panel h3 .help, .caller-row label .help { margin-left: 4px; }
+.panel h3 label { cursor: default; }

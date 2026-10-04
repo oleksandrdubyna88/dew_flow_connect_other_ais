@@ -109,3 +109,9 @@ capability row.
 - [ ] The round-deadline test passes 20 runs in a row.
 - [ ] An api row reports its cost when the vendor states it.
 - [ ] module docs updated; this plan promoted when done.
+
+## Boundary with the model catalog (2026-10-04)
+
+| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+|---|---|---|
+| the API runtime for asking | as written above | adds a consultant on an API key (its E2.3) and the shared availability file; this plan keeps agy web and api web |

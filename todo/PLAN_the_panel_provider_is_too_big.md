@@ -220,3 +220,9 @@ Reciprocal of the *Boundaries* table in [PLAN_every_page_reads_alike.md](../rese
 | Every extraction cluster | this plan | none |
 
 **Order:** independent; whichever lands second rebases.
+
+## Boundary with the model catalog (2026-10-04)
+
+| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+|---|---|---|
+| the vendor, Team-server, local-engine and price clusters | as written above | deletes those settings handlers in its E5 instead of moving them — it goes first; this plan keeps the sidebar clusters |

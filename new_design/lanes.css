@@ -1,0 +1,37 @@
+/* lanes page styles — loaded after styles.css. The Security lane and Chat tabs (lanes.js). */
+
+/* Blocks side by side are one height: each panel in a row stretches, and its last line sits at the bottom. */
+.lanes-page .plan-grid { align-items: stretch; }
+.lanes-page .plan-grid > .panel { display: flex; flex-direction: column; min-width: 0; }
+.lanes-page .plan-grid > .panel > .panel-foot { margin-top: auto; padding-top: 6px; }
+.lanes-page .prompt-cards { align-items: stretch; }
+
+/* The "?" sits beside its label's words; inside an upper-case field label it keeps its own case. */
+.lanes-page .help { margin-left: 4px; text-transform: none; letter-spacing: 0; }
+.lanes-page .row-line > .help { margin-left: -8px; }
+
+/* A card's pairing boxes, led by their label. */
+.lanes-page .pair-boxes { align-items: center; }
+.lanes-page .pair-boxes .filter-label { margin-right: 4px; }
+
+/* A long warning sentence wraps rather than running off the card. */
+.lanes-page .state.err, .lanes-page .state.warn { display: inline; }
+.lanes-page .state.err::before, .lanes-page .state.warn::before { margin-right: 5px; }
+
+/* Pairs: the model cell carries its "security only" tag; a pair's warnings sit in the row under it. */
+.pair-model { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.tag-sec {
+  font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap;
+  border: 1px solid var(--vc-amber); color: var(--vc-amber); border-radius: 3px; padding: 0 5px;
+}
+table.roles.pairs tr[data-pair]:has(+ tr.pair-note) td { border-bottom: 0; }
+table.roles.pairs tr.pair-note td { padding-top: 0; font-size: 0.9rem; }
+table.roles.pairs tr.pair-note .state { display: inline-block; font-weight: 400; margin-right: 16px; }
+.why-not { color: var(--warn); font-size: 0.9rem; }
+
+/* Chat: a stranded "opens on" choice, and the models the chat cannot speak to. */
+.lanes-page .stranded label { color: var(--muted); }
+.lanes-page .stranded .callout { margin-bottom: 0; }
+.chat-refusals { color: var(--muted); font-size: 0.9rem; margin-top: 10px; }
+.chat-refusals b { color: var(--fg); font-weight: 600; }
+.lanes-page .block .field { margin-top: 4px; }

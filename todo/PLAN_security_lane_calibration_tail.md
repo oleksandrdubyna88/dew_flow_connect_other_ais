@@ -88,3 +88,9 @@ Nothing in the repository grows.
 - [ ] The final `review_feature` run after a healthy-provider preflight; every finding resolved; accepted code
       findings turned into their own plans; reviewer counts recorded.
 - [ ] RESULTS documents updated per run; this plan promoted.
+
+## Boundary with the model catalog (2026-10-04)
+
+| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+|---|---|---|
+| the Security lane tab | as written above | rebuilds the tab and adds editable signal words and a card's own words; this plan's calibration is untouched |

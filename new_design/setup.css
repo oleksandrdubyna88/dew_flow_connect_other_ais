@@ -1,0 +1,24 @@
+/* setup page styles — loaded after styles.css. */
+
+/* The data panel holds two flows and a paste block: it takes the whole row rather than stretching its neighbour. */
+.plan-grid > .panel.span-all { grid-column: 1 / -1; }
+
+/* CLI rows: the actions wrap inside their cell; ⟳ is green when a newer version exists. */
+.cli-actions { display: flex; flex-wrap: wrap; gap: 4px; }
+.btn.update-ready { background: var(--ok); border-color: var(--ok); color: #fff; }
+.btn.update-ready:hover { filter: brightness(1.1); background: var(--ok); }
+
+/* A button that explains itself when pressed instead of going dead (Move before its tick). */
+.btn[aria-disabled="true"] { opacity: 0.6; }
+
+/* The help "?" beside a toolbar button or a table header. */
+.toolbar > .help { margin-left: 4px; }
+table.map th .help { text-transform: none; letter-spacing: 0; margin-left: 4px; }
+
+/* Status lines that are a sentence, not a badge. */
+p.state { display: flex; margin: 6px 0; }
+.flow .choices { margin-top: 2px; }
+.flow .field { margin-top: 4px; }
+.flow label.inline { align-items: baseline; }
+.callout > p:first-child { margin-top: 0; }
+.callout > p:last-child { margin-bottom: 0; }

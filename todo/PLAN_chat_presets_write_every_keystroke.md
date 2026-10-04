@@ -39,3 +39,9 @@ command goes straight through), exactly as `phrasesPanel.ts:154` does. No new qu
 ## 6. Definition of Done
 
 - [ ] Plan and code gate passed; tests RED first; `npm test` green; docs updated; this plan promoted.
+
+## Boundary with the model catalog (2026-10-04)
+
+| Item | Here | [PLAN_one_model_catalog.md](PLAN_one_model_catalog.md) |
+|---|---|---|
+| the chat presets page | as written above | replaces the page in its E4.3 — this plan is superseded once that lands |
