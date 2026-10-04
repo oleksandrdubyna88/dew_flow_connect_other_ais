@@ -200,6 +200,12 @@ internal static class Program
         SecurityPromptText,
 
         /// <summary>
+        /// The capabilities this build has, as JSON, so the extension sends a catalog field only when it is listed.
+        /// See <see cref="Server.FeaturesMode"/>.
+        /// </summary>
+        Features,
+
+        /// <summary>
         /// Print ONE round's findings as JSON and leave — what an opened row of the log asks for.
         /// </summary>
         /// <remarks>
@@ -292,6 +298,7 @@ internal static class Program
                 "--consultants" => Startup.Consultants,
                 "--check-consultant" => Startup.CheckConsultant,
                 "--security-prompt-text" => Startup.SecurityPromptText,
+                "--features" => Startup.Features,
                 _ => Startup.Usage,
             };
 
@@ -419,6 +426,9 @@ internal static class Program
 
             case Startup.SecurityPromptText:
                 return await Server.SecurityPromptTextReadMode.RunAsync(args);
+
+            case Startup.Features:
+                return await Server.FeaturesMode.RunAsync();
 
             default:
                 return await ServeAsync();
@@ -2205,6 +2215,8 @@ internal static class Program
         `--security-prompt-text --ids <id,id>` prints, per security prompt id, what its override file in the
         data directory counts as when this server reads it: none, blank, placeholder, oversized, unreadable or
         written. Read only; no model is called.
+        `--features` prints the capabilities this build has as {"features":[...]} — what the extension asks
+        before it sends a catalog field. A build too old for it exits 64.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

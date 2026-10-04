@@ -74,6 +74,7 @@ const { securitySeam } = await import('./seam-security.mjs');
 // The security prompt text leg: the tab's reading of real prompt files against the server's (epic 2).
 const { securityTextSeam } = await import('./seam-security-text.mjs');
 const { catalogSeam } = await import('./seam-catalog.mjs');
+const { featuresSeam } = await import('./seam-features.mjs');
 
 /**
  * The consultant settings as the PANEL reads them, from a stored map — never built by hand here.
@@ -398,6 +399,14 @@ console.log('  ok  an api row\'s effort, thinking switch and review limit reach 
 // byte for byte, before and after, and the binary lists the same reviewers from a multi-instance catalog.
 const catalog = await catalogSeam({ providersIn, fail });
 console.log(`  ok  a migrated catalog writes the same settings file, and the server's reviewers are still ${catalog.ids.join(', ')}`);
+
+// The ELEVENTH leg: the binary lists every capability the extension knows (PLAN_one_model_catalog.md E2) — a field
+// is sent only when `--features` lists it, so the two lists must agree on the real binary.
+const olderForFeatures = (process.env['COAI_MCP_DLL'] ?? '').length > 0 && process.env['COAI_SEAM_OLDER_SERVER'] === '1';
+const capabilities = await featuresSeam({ binary, olderExpected: olderForFeatures, fail, timeoutMs: TIMEOUT_MS });
+console.log(capabilities.older
+  ? '  skip the named server was declared older than --features; run the seam without COAI_MCP_DLL to ask this repository\x27s own build'
+  : `  ok  the server lists ${capabilities.listed.join(', ')} — every capability the extension knows`);
 
 // The EIGHTH leg: the security lane as the extension serializes it — a well-formed lane draws no
 // complaint, its unknown trigger is refused by name, and its malformed form is refused, not ignored.

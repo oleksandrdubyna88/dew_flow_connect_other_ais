@@ -6288,3 +6288,12 @@ whether the row's own settings can be sent at all (`IApiVendor.Refusal`).
 - Tests: `AnApiRowIsSettableTests` (RED first — nine of eleven red before the wiring: no effort applied, no
   exclusion, no `api` in `providers`), `ApiVendorModulesTests`, and the goldens of `ApiVendorGoldensTests` that
   hold every measured row's wire behaviour unchanged.
+
+## `--features` — the binary says what it accepts (2026-10-04, PLAN_one_model_catalog.md E2)
+
+`Server/FeaturesMode.cs` answers the one-shot `--features` with `{"features":[...]}` and exits 0. The extension sends a
+catalog field, or passes a flag, only when the installed binary lists it — "capability, not version numbers": a
+`*_SINCE` constant would guess a release number nobody has cut, and a branch build has none. An older binary exits
+64 for the mode, which the extension reads as an empty list. **An entry is added in the commit that makes it true.**
+Listed today: `bugzRuntime` (`--collect-bugs --runtime`, E2.1). In PROJECT.md's one-shot list and the help
+(`TheBinarySaysWhatItAcceptsTests`, RED first on the mode falling through to Usage).

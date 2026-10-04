@@ -7,7 +7,7 @@ import { SNIPPET_VERSION } from '../claudeSnippet';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS } from '../vendors';
 import { EMPTY_CORPUS, hasRun, isRunning, parseBugs, type BugCorpus, type CollectRun, type SendRun } from '../roundsDb';
-import { RANKING_VENDORS, bugzBody, collectLabel, lastRunLine, mayRank } from '../bugzView';
+import { RANKING_VENDORS, bugzBody, collectArgs, collectLabel, lastRunLine, mayRank } from '../bugzView';
 
 /**
  * The Bugz section — its pure decisions, and its controls RUN rather than read.
@@ -480,4 +480,36 @@ test('pressing Send posts the command the provider dispatches on', () => {
 
   assert.ok(posted.some((m) => m.type === 'command' && m.command === 'sendBugs'),
     'the button is wired to nothing');
+});
+
+// ---------------------------------------------------------------- ranked by runtime (PLAN_one_model_catalog.md E2.1)
+
+test('a binary that ranks by runtime is offered every local instance, whatever the row is called', () => {
+  const models = [
+    { id: 'local-2/qwen3.5', label: 'qwen3.5 — local-2', runtime: 'local' },
+    { id: 'bugz-local/qwen3.5', label: 'qwen3.5 — bugz-local', runtime: 'local' },
+  ];
+  const html = bugzBody({ corpus: corpus(RUN, 1), models, model: '', server: '', byRuntime: true });
+
+  assert.match(html, /local-2\/qwen3\.5/u);
+  assert.match(html, /bugz-local\/qwen3\.5/u, 'the migration\'s own row is offered too');
+});
+
+test('an older binary still matches the row id, so the picker offers only what it will accept', () => {
+  const models = [{ id: 'local-2/qwen3.5', label: 'qwen3.5 — local-2', runtime: 'local' }];
+
+  assert.ok(!bugzBody({ corpus: corpus(RUN, 1), models, model: '', server: '' }).includes('local-2/qwen3.5'));
+});
+
+test('a row merely CALLED local, on a cloud runtime, is not offered by a binary that ranks by runtime', () => {
+  const models = [{ id: 'local/gpt-5', label: 'gpt-5 — local', runtime: 'codex' }];
+
+  assert.ok(!bugzBody({ corpus: corpus(RUN, 1), models, model: '', server: '', byRuntime: true }).includes('local/gpt-5'));
+});
+
+test('the collector is told the row\'s runtime only when the binary ranks by it', () => {
+  assert.deepEqual(collectArgs('local-2/qwen3.5', 'local', true), ['--collect-bugs', '--model', 'local-2/qwen3.5', '--runtime', 'local']);
+  assert.deepEqual(collectArgs('local/qwen3.5', 'local', false), ['--collect-bugs', '--model', 'local/qwen3.5'],
+    'an older binary refuses a flag it does not know, so it is never sent one');
+  assert.deepEqual(collectArgs('', 'local', true), ['--collect-bugs'], 'no model is no ranking pass, and no runtime to say');
 });

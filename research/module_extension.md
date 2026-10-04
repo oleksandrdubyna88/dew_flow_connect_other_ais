@@ -10714,3 +10714,29 @@ key could be sent to whichever server a side named. Three modules now:
 Old keys are never filed by guessing which server issued them: that would be the replay itself (plan round, coai
 session `d5cdb1b2`). The keys page refuses a key typed with no server before the box opens, and refuses — keeping the
 record — a discard whose record names no issuing server. Help: the Bugz article, five languages.
+
+## The extension asks the binary what it accepts (2026-10-04, PLAN_one_model_catalog.md E2)
+
+- `binaryFeatures.readBinaryFeatures(run)` asks `--features`; exit 64 (an older binary), any other failure, or an
+  answer that is not a list of names is NO features, with `why` kept for the card that says what is not sent.
+  `FEATURES` names the capabilities this extension knows how to use. `PanelProvider.binaryFeatures()` asks once per
+  binary FILE (path + `modifiedMs`), so an update is asked again.
+- **Bugz ranked by runtime.** Each picker choice carries its row's runtime (every `localEngines` key is a `local`-runtime
+  row); with `bugzRuntime` listed the view offers every local instance (`local-2`, the migration's `bugz-local`) and
+  refuses a row merely called `local` on another runtime; without it, it matches the row id as that binary does.
+  `bugzView.collectArgs(model, runtime, byRuntime)` passes `--runtime` only to a binary that lists it — the row read
+  from every row, catalog-only ones included.
+- Seam leg 11 (`scripts/seam-features.mjs`) asks the REAL binary through the extension's own reader and fails when
+  the extension knows a capability the build does not list (shown red on a planted one).
+
+```mermaid
+sequenceDiagram
+  participant P as PanelProvider
+  participant F as binaryFeatures
+  participant M as coai-mcp
+  P->>F: binaryFeatures() — cached per path + mtime
+  F->>M: --features
+  M-->>F: {"features":["bugzRuntime"]} (or exit 64 → none)
+  F-->>P: features + why
+  P->>M: --collect-bugs --model local-2/qwen [--runtime local only when listed]
+```

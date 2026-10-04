@@ -351,6 +351,17 @@ override the stories above where they differ:
   extension means what it did. A row CALLED `local` on a cloud runtime is now refused. The extension passes
   `--runtime` once `--features` lists it (E2.2), and the Bugz migration (`bugz-<rowId>`) follows that.
 
+#### E2.2 as built so far
+
+- **`--features`** (`Server/FeaturesMode.cs`): `{"features":[...]}`, an entry added in the commit that makes it true;
+  today `bugzRuntime`. The extension reads it once per binary file (`binaryFeatures.ts`; 64, a failure or a bad answer
+  is no features) and seam leg 11 fails when the extension knows a capability the build does not list.
+- **Bugz by runtime, end to end**: the picker offers every `local`-runtime instance when the binary ranks by runtime,
+  and `--collect-bugs` gets `--runtime` only then (`bugzView.collectArgs`). The Bugz MIGRATION (`bugz-<rowId>`) is
+  still to come — it is safe only now that both halves match the runtime.
+- Still open in E2.2: system prompt, timeout and effort per row in every runner (`systemPrompt`, `timeoutMinutes`,
+  `cliEffort` join the list as each lands).
+
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
    shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;

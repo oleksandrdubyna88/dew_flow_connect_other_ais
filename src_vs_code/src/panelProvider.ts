@@ -94,6 +94,8 @@ import { vaultKeyOf } from './vaultKey';
 import { isApiSettingKey, resetTarget, withApiSetting, withoutApiSetting } from './apiSettings';
 import { modelsForKey } from './apiModelsProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
+import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
+import { collectArgs } from './bugzView';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
 import { currentFileIn, folderHolding } from './openAtRevision';
@@ -1179,6 +1181,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // has gone out, so a slow disk delays the count and not the panel.
       notifications: this.notificationsGlance,
       localEngines: await this.probeLocalEngines(vendors),
+      rankByRuntime: hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime),
       // Only what ≡ brought back — never asked here, on a repaint (PLAN_custom_endpoint_model_list).
       endpointListings: this.endpointListings,
       askingEndpoints: [...this.askingEndpoints],
@@ -2992,6 +2995,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     await this.render();
   }
 
+  /** What the installed coai-mcp says it accepts, asked once per binary FILE — an update is a new file, asked again. */
+  private readonly features = new FeaturesCache();
+
+  private binaryFeatures(): Promise<BinaryFeatures> {
+    return this.features.of(serverPath(this.context.globalStorageUri)?.fsPath, serverRun);
+  }
+
   /** How long a close may take. It is one small write behind a repository lock, not a vendor turn. */
   private static readonly CLOSE_CONSULT_CAP_MS = 20_000;
 
@@ -3013,9 +3023,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // that skipped it would collect against a different database from the one the section shows.
     const model = this.settings().bugzModel;
     const run = serverRun(server.fsPath);
-    const collecting = run(
-      ['--collect-bugs', ...(model.length > 0 ? ['--model', model] : [])],
-      PanelProvider.COLLECT_CAP_MS);
+    // The row's runtime, said only to a binary that ranks by it (PLAN_one_model_catalog.md E2.1) — every row read, a
+    // catalog-only `bugz-local` included, because the page's reviewer list hides those.
+    const row = vendorsFrom(this.read(vscode.workspace.getConfiguration('coai'))('vendors'))
+      .find((one) => one.id === model.split('/')[0]?.toLowerCase());
+    const byRuntime = hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime);
+    const collecting = run(collectArgs(model, row?.runtime ?? '', byRuntime), PanelProvider.COLLECT_CAP_MS);
 
     // NOT awaited before the repaint, and this is the point. The run writes `running` to the
     // database before its first candidate, so the section can show it — but only if something

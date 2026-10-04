@@ -71,7 +71,7 @@ import { SnippetStatus, snippetNote } from './claudeSnippet';
 import { ProbeResult, claudeNote } from './claudeModels';
 import { asksAnEndpoint, type EndpointListing, type RowEndpoint } from './endpointModels';
 import { LocalEngine, remoteWarning } from './localEngines';
-import { bugzBody, mayRank } from './bugzView';
+import { bugzBody } from './bugzView';
 import { BugCorpus, EMPTY_CORPUS } from './roundsDb';
 import { ServerStatus, compareVersions } from './coaiInstall';
 import { ModelPrice } from './modelPrices';
@@ -249,6 +249,11 @@ export interface PanelState {
    * not have. Found by Claude Sonnet 5, 2026-09-02.</p>
    */
   readonly localEngines: Readonly<Record<string, LocalEngine>>;
+  /**
+   * Whether the installed coai-mcp ranks Bugz by the row's runtime (`--features` lists `bugzRuntime`,
+   * PLAN_one_model_catalog.md E2.1). Absent: it is not known to, and the picker matches the row id as that binary does.
+   */
+  readonly rankByRuntime?: boolean;
   /**
    * What an endpoint row's own `GET /models` answered when ≡ was pressed, per row id — kept with what it
    * was asked WITH, so the card uses it only while the row still matches (`listingFor`). Optional: a
@@ -527,11 +532,14 @@ function bugzSection(state: PanelState): string {
     // are not anonymised. The collector refuses anything else anyway — this is so the picker
     // cannot offer what it will refuse.
     models: Object.entries(state.localEngines)
+      // Every key is a row on the `local` runtime (`probeLocalEngines` probes no other), which is what a binary that
+      // ranks by runtime matches; an older one matches the row id, and the view applies that rule when this says so.
       .flatMap(([id, engine]) => engine.models.map((m) => ({
         id: `${id}/${m.id}`,
         label: `${m.id} — ${id}`,
-      })))
-      .filter((m) => mayRank(m.id)),
+        runtime: 'local',
+      }))),
+    byRuntime: state.rankByRuntime === true,
     // From CONFIGURATION, which is where the picker writes. They were read from panel fields
     // for one commit, and nothing assigned those fields — so choosing a model did nothing.
     model: state.settings.bugzModel,
