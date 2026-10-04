@@ -77,6 +77,14 @@ jobs:
       #     analysing those files for real defects too — if they grow logic worth checking, the
       #     entry should come back out and the hotspots be reviewed instead.
       #
+      #   sonar.exclusions        + new_design/**
+      #     A static, clickable MOCKUP of the Settings redesign (todo/PLAN_one_model_catalog.md):
+      #     plain browser scripts that never ship — not in the vsix, not in coai-mcp, not built.
+      #     Analysed as product code it is ~5,000 lines of new code with no coverage, and the
+      #     quality gate would judge a drawing. The product code built from it lands under
+      #     src_vs_code/ and is analysed there like everything else. Remove this entry together
+      #     with the folder once the redesign has shipped.
+      #
       #   sonar.coverage.exclusions + src_vs_code/src/test/**, src_vs_code/scripts/**
       #     Test code and tooling, which is what `**/tests/**` already does for the .NET half.
       #     Without it a pull request that adds a test suite fails the 80 % new-code coverage gate
@@ -194,7 +202,7 @@ jobs:
             /d:sonar.token="$SONAR_TOKEN" \
             /d:sonar.host.url="https://sonarcloud.io" \
             /d:sonar.cs.vscoveragexml.reportsPaths="coverage/*.xml"             /d:sonar.javascript.lcov.reportPaths="coverage/extension.lcov"             /d:sonar.typescript.lcov.reportPaths="coverage/extension.lcov" \
-            /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**,.agents/conventions/**" \
+            /d:sonar.exclusions="**/bin/**,**/obj/**,artifacts/**,**/node_modules/**,src_mcp/tests_fakecli/**,src_vs_code/scripts/**,.claude/hooks/**,.agents/conventions/**,new_design/**" \
             /d:sonar.cpd.exclusions="src_vs_code/src/helpContent.ts,src_vs_code/src/helpRu.ts,src_vs_code/src/helpUk.ts,src_vs_code/src/helpDe.ts,src_vs_code/src/helpEs.ts,src_vs_code/src/securityLane.generated.ts" \
             /d:sonar.issue.ignore.multicriteria="e1,e2" \
             /d:sonar.issue.ignore.multicriteria.e1.ruleKey="typescript:S1523" \

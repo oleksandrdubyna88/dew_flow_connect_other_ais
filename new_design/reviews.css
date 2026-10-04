@@ -1,0 +1,21 @@
+/* reviews page styles — loaded after styles.css. */
+
+/* A control and its "?" on one line; the "?" sits outside the <label>, so clicking it never ticks the box. */
+.rv-check { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+div.rv-check { display: flex; margin: 2px 0; }
+
+/* Why a switch cannot move: the state word comes first, then the reason. */
+.rv-why { margin: 4px 0 0; }
+td .rv-why { font-size: 0.85rem; }
+
+/* Notes that a round will skip a role or a command. */
+.rv-note { margin: 6px 0; font-size: 0.92rem; }
+
+/* The words the server keeps before a shipped command's text. */
+.rv-marker b { color: var(--fg-strong); font-family: var(--mono); font-size: 0.92em; }
+.rv-marker span { font-style: italic; }
+
+/* Command cards: the title input fills the heading like a role's name does. */
+.pcard[data-cmd] h4 .name { flex: 1; }
+.pcard textarea { margin-top: 2px; }
+.section-title + .from { margin-top: 0; }
