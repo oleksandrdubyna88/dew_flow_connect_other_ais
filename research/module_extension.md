@@ -10533,4 +10533,29 @@ choice landed on every side. Now:
   reviewer redraw after their save (an overlay write raises no configuration event). On a per-side setup, removing a
   Team server says its reviewers go on this side only. `promptChosen` refuses a round the role does not have and
   reads the role as an own key. The Bugz keys themselves are still filed under fixed names, which per-side servers
-  make wrong: [PLAN_bugz_keys_per_server.md](../todo/PLAN_bugz_keys_per_server.md).
+  make wrong: [PLAN_bugz_keys_per_server.md](PLAN_bugz_keys_per_server.md) (implemented).
+
+## A Bugz key is filed under the server that issued it (2026-10-04, research/PLAN_bugz_keys_per_server.md)
+
+`coai.bugzServer` is per side, and the admin and contributor keys were stored under two fixed secret names, so one
+key could be sent to whichever server a side named. Three modules now:
+
+- `bugsAdminKey.ts` (pure, the store): `keyName(kind, server)` files each key under
+  `<prefix>:<canonicalTeamServerUrl(server)>` (pinned by literal tests); `hasServer` is the one test of "can a key be
+  filed here"; the readers and setters REQUIRE the server and a setter with no server stores nothing (`no-server`);
+  `adminCredentialsFor` / `contributorCredentialsFor` give a request the server and ITS key from one value — the pair
+  upload reads `bugzServerThisSide`, exactly where the key was filed. The old fixed names are private literals,
+  separate from the prefixes; `adoptLegacyKeys` writes the new name, reads back THE VALUE, and only then deletes the
+  old one (a real newer key wins, an empty one does not); `discardLegacyKeys` files nothing.
+- `bugzKeyChoices.ts` (pure, what is offered and said): the settle choice with and without a server, what each answer
+  costs (discarding does NOT revoke), every outcome's sentence, and `revokeRefusal` for a record naming no issuer.
+- `bugzKeyFlows.ts` (host, Sonar coverage-excluded): `askForContributorKey` — one flow for the sidebar button and the
+  command, refusing BEFORE the box opens when there is no server (`bugz-key-needs-a-server`); `offerOldBugzKeys` — once
+  per window, a toast whose one button only OPENS the choice (`bugz-legacy-keys`); `settleOldBugzKeys` — the command
+  *ConnectOtherAIs: Settle old Bugz keys*, a modal naming the server and the costs (`bugz-settle-old-keys`), every
+  outcome said (`bugz-old-keys-settled`); `oldKeysNote` — the keys page's line when old keys wait and this server has
+  none. Every detached edge is caught and logged.
+
+Old keys are never filed by guessing which server issued them: that would be the replay itself (plan round, coai
+session `d5cdb1b2`). The keys page refuses a key typed with no server before the box opens, and refuses — keeping the
+record — a discard whose record names no issuing server. Help: the Bugz article, five languages.

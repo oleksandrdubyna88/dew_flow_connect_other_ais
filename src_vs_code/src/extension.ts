@@ -8,7 +8,7 @@ import * as path from 'node:path';
 import * as vscode from 'vscode';
 
 import { usersPanel } from './bugsKeysPanel';
-import { setContributorKey } from './bugsAdminKey';
+import { askForContributorKey, offerOldBugzKeys, settleOldBugzKeys } from './bugzKeyFlows';
 import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
@@ -309,6 +309,10 @@ export function activate(context: vscode.ExtensionContext): void {
     () => (vendor) => PRICE_BOOK.priceOf(vendor.model, vendor.baseUrl),
   );
   mirrorSettings(settingsSync);
+  // Old Bugz keys waiting to be adopted or discarded: offered once per window, never filed by guessing.
+  void offerOldBugzKeys(context.secrets, () => bugzServerThisSide(context)).catch((error: unknown) => {
+    console.error('ConnectOtherAIs: the old Bugz keys could not be read', error);
+  });
   // The lists are fetched here only when an api reviewer needs pricing — the one row whose cost the
   // SERVER works out — and the file is written again once they land. Nobody else pays for a download.
   if (readCoaiConfiguration(context).vendors.some((vendor) => vendor.enabled && vendor.runtime === 'api')) {
@@ -473,17 +477,12 @@ export function activate(context: vscode.ExtensionContext): void {
     // from the admin one: one issues and revokes, the other uploads, and a person who holds both
     // must be able to remove either. A command as well as a button for the reason the admin key has
     // one: a door that exists only behind the thing it unlocks is not a door.
+    // Bugz keys saved before they were filed per server: the way back to them is this command, which the toast below
+    // only opens — nothing is filed by guessing which server issued them (research/PLAN_bugz_keys_per_server.md).
+    vscode.commands.registerCommand('coai.settleOldBugzKeys', () => settleOldBugzKeys(context.secrets, () => bugzServerThisSide(context))),
     vscode.commands.registerCommand('coai.setBugsContributorKey', async () => {
-      const typed = await askPerson(() => vscode.window.showInputBox({
-        title: 'The contributor key for the ingest server',
-        prompt: 'Kept in the editor\'s secret storage on this machine only — never in settings, which sync.',
-        password: true,
-        ignoreFocusOut: true,
-      }));
-      if (typed !== undefined) {
-        await setContributorKey(context.secrets, typed);
-        await panel.render();
-      }
+      await askForContributorKey(context.secrets, bugzServerThisSide(context));
+      await panel.render();
     }),
     vscode.commands.registerCommand('coai.editChatPresets', () => { openChatPresets(); }),
     // The CONTEXT goes with it: the roles page reads and writes `coai.roles`, which is a per-side

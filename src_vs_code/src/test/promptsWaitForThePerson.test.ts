@@ -61,8 +61,10 @@ test('every input box, quick pick and file dialog is opened through askPerson', 
     'a prompt opened without askPerson counts the person’s typing as the panel working');
 });
 
-test('the panel provider’s own fifteen prompts are among them', () => {
-  assert.equal(prompts().filter((one) => one.where.startsWith('panelProvider.ts:')).length, 15,
+// 15 → 14 on 2026-10-04 (research/PLAN_bugz_keys_per_server.md): the contributor-key box moved to the keys host's
+// askForContributorKey, still through askPerson, so the sidebar button and the command share one flow.
+test('the panel provider’s own fourteen prompts are among them', () => {
+  assert.equal(prompts().filter((one) => one.where.startsWith('panelProvider.ts:')).length, 14,
     'a prompt was added or removed in the panel provider — check it goes through askPerson, then update this count');
 });
 
