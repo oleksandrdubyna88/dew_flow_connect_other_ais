@@ -24,10 +24,10 @@ public sealed class ARowsSystemPromptReachesItsReviewerTests
 
     private static PanelService Service(params ProviderSettings[] providers) =>
         new(new PanelSettings
-            {
-                DataDir = Path.Combine(Path.GetTempPath(), $"coai-sysprompt-{Guid.NewGuid():N}"),
-                Providers = providers,
-            },
+        {
+            DataDir = Path.Combine(Path.GetTempPath(), $"coai-sysprompt-{Guid.NewGuid():N}"),
+            Providers = providers,
+        },
             VaultKeys.None("no vault"), default, new Runners.Processes.ProcessLauncher(), Serilog.Core.Logger.None, Noticing.None);
 
     private static ProviderSettings Row(string id, string runtime, string systemPrompt) =>

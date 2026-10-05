@@ -71,8 +71,11 @@ public sealed class EpicTwoCodeRoundTests
         var exit = await AskRemote.RunAsync(
             new Dictionary<string, string>
             {
-                ["--server"] = "https://coai.example", ["--vendor"] = "claude", ["--prompt-file"] = prompt,
-                ["--out"] = Path.Combine(dir, "a.json"), ["--token-file"] = token,
+                ["--server"] = "https://coai.example",
+                ["--vendor"] = "claude",
+                ["--prompt-file"] = prompt,
+                ["--out"] = Path.Combine(dir, "a.json"),
+                ["--token-file"] = token,
                 ["--system-prompt-file"] = Path.Combine(dir, "missing.system"),
             },
             notes.Add,
