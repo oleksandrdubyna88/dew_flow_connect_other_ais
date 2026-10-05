@@ -124,6 +124,8 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
             // The row's price stays HERE, in the parent (epic 3's code round, #23): the shim reports raw
             // tokens and `ReadUsage` prices them from this field — an answered call and a failed one alike.
             Price = settings.Price,
+            // The prompt file goes when the turn does (BoundedScheduler); it holds the change under review.
+            TempFiles = [promptFile],
         };
     }
 

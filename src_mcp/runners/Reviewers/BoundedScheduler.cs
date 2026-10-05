@@ -559,6 +559,43 @@ public sealed class BoundedScheduler(
         Action<ReviewerProgress>? onProgress,
         CancellationToken ct)
     {
+        // Every attempt of this turn reads the same prompt file, so it goes when the turn does — however it ended
+        // (todo/PLAN_one_model_catalog.md, epic 2). A later turn of a conversation builds files of its own.
+        try
+        {
+            return await LadderAsync(w, executor, onProgress, ct);
+        }
+        finally
+        {
+            Forget([.. w.Invocation.TempFiles, .. w.Repair?.TempFiles ?? []]);
+        }
+    }
+
+    /// <summary>
+    /// Deletes what a launch wrote for its child. A file that cannot be deleted now is left to the answers-directory
+    /// sweep (six hours), which is still there: failing a finished review over a locked file would lose its answer.
+    /// </summary>
+    private static void Forget(IReadOnlyList<string> files)
+    {
+        foreach (var file in files)
+        {
+            try
+            {
+                File.Delete(file);
+            }
+            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+            {
+                // Left for the sweep; see the summary.
+            }
+        }
+    }
+
+    private async Task<ReviewerOutcome> LadderAsync(
+        ReviewerWork w,
+        ReviewerExecutor executor,
+        Action<ReviewerProgress>? onProgress,
+        CancellationToken ct)
+    {
         var budget = w.Invocation.Request.Timeout;
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var attempts = 1;

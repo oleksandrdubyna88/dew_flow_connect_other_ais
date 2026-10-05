@@ -181,6 +181,16 @@ public sealed record ReviewerInvocation(
     /// <c>costUsd</c> the child had worked out.
     /// </remarks>
     public TokenPrice Price { get; init; } = TokenPrice.None;
+
+    /// <summary>
+    /// Files this launch wrote for its child to read — an api, local or Team server reviewer's <c>.prompt</c> — which the
+    /// scheduler deletes when the launch's turn ends, however it ended (todo/PLAN_one_model_catalog.md, epic 2).
+    /// </summary>
+    /// <remarks>
+    /// A prompt holds the change under review and, from epic 2, the person's system prompt for the row; left in the
+    /// answers directory it lived until the six-hour sweep. A CLI reviewer is handed its prompt on stdin and has none.
+    /// </remarks>
+    public IReadOnlyList<string> TempFiles { get; init; } = [];
 }
 
 /// <summary>

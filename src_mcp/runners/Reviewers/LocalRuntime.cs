@@ -177,7 +177,11 @@ public sealed class LocalRuntime(string id, string baseUrl) : IReviewerRuntime
             // length check, so a configured "   " WOULD be passed as a flag, and recording it
             // verbatim makes the panel and the audit line disagree about whether there is one.
             // Raised on the code round.
-            Effort: settings.ReasoningEffort.Trim());
+            Effort: settings.ReasoningEffort.Trim())
+        {
+            // The prompt file goes when the turn does (BoundedScheduler); it holds the change under review.
+            TempFiles = [promptFile],
+        };
     }
 
     /// <summary>

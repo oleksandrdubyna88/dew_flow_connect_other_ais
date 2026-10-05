@@ -109,7 +109,11 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
             settings.Model,
             // The parent reads this after killing the child. It is the only thing left that can stop
             // a review still running on the team's subscription.
-            jobFile);
+            jobFile)
+        {
+            // The prompt file goes when the turn does (BoundedScheduler) — the server already holds what it sent.
+            TempFiles = [promptFile],
+        };
     }
 
     /// <summary>The usage the shim printed, as <see cref="LocalRuntime.ReadUsage"/> reads its own.</summary>

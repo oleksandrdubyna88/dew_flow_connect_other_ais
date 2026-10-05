@@ -2184,3 +2184,13 @@ flowchart LR
   M -->|yes, worktree mounted| K[told: checkout]
   M -->|no| S["told: what the stage gives (change / outline)"]
 ```
+
+## A prompt file does not outlive its launch (2026-10-05, PLAN_one_model_catalog.md E2)
+
+An api, local or Team server reviewer reads its prompt from a `.prompt` file its runtime writes into the round's
+answers directory, which was swept only after six hours — with the change under review in it, and from epic 2 the
+person's system prompt for the row. `ReviewerInvocation.TempFiles` names what a launch wrote for its child (the three
+runtimes set it; a CLI reviewer, fed on stdin, has none), and `BoundedScheduler.RunWithLadderAsync` deletes them in a
+`finally` when the turn ends — answered, failed, timed out or cancelled; every retry of the ladder reads the same file,
+and a later turn of a conversation builds its own. A file that cannot be deleted then is left to the sweep rather than
+failing a finished review (`APromptFileDoesNotOutliveItsLaunchTests`, `ARuntimeNamesThePromptFileItWroteTests`, RED first).
