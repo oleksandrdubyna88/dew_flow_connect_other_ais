@@ -614,6 +614,60 @@ page is unchanged with the preview off; all suites, lint, the seam and the layou
    Change and Move flows on today's `dataCommands.ts` logic, the "moved from" record surviving a reload; This side with
    the export note.
 
+#### E4 as designed (before building; from the mockup, the plan and the code that is there)
+
+**Approach — the old builders first, in place; then the catalog.** Every old Settings section already draws its
+settings through the panel's write path; the new page is painted in the same slot. So E4 first draws each section's
+builder in the sub-tab that owns it (exported from `panelView.ts`, never copied), then moves each tab onto the catalog
+and folds in the three separate pages. One branch; a PR per story or two; one code gate at the end of the epic.
+
+**Fixed first (epic 3's missed row):** the panel's `vendors` is the current page's reviewers (`shownOnTheOldPage`), so the
+new Models tab never drew a row that reviews nothing — a migrated consultant. The state carries `catalogRows` (every
+row); the new page reads it. Done, RED first.
+
+- **E4.1 Every tab in its place.** reviews/stages and reviews/prompts ← `promptsBody` split into its two halves (the role
+  switches, rounds, thresholds, lenses and workspace; the round pickers) — the same controls, each drawn once on the
+  page; reviews/gate ← `gateBody` (its commands link opens reviews/commands); reviews/limits ← `limitsBody`;
+  consultants/consultant ← `consultantSection`; consultants/qconsult ← `questionConsultantSection`; security ←
+  `securityLaneBody` (and `securityLaneScript` joins the page's script); chat ← `chatBody`; setup/keys ← `keysBody` over
+  every row; setup/team ← `teamServersBody`; setup/mcp ← `serverBody` (its zoom rule matched to the new pane); setup/side
+  ← `sideBody`. Each feature tab shows the "used by" strip of the rows ticked for it, with "change on Models", which
+  opens Models filtered by that use (the page's own filter state). After E4.1 only Roles & prompts and Commands still
+  say where they are.
+- **E4.2 Consultants and Security from the catalog.** A caller's picker lists the rows ticked Consultant (absent = the
+  shipped pair, D2; the same vendor as the caller shown, never refused; a stranded pick shown and named, never cleared —
+  D3); the question consultant's rows pick from rows ticked it; the security pairs from rows ticked Security lane. "Try
+  it" sends the sample to `coai-mcp --check-security` on stdin (E2.4) — never a JavaScript copy of the matcher.
+- **E4.3 Roles & prompts in the page** (replacing `rolesPage.ts`): its content drawn by the panel, its edits as
+  namespaced commands into a host module both the old roles panel and the panel call (`rolesHost.ts`, extracted from
+  `rolesPanel.ts`) until E5 deletes the page. ONE switch per role — `roleEnabled` and the catalog's `active` merged,
+  `COAI_ROLES` still written for servers under `ROLE_SWITCH_SINCE`; deletion confirmed, ids reserved (the existing
+  `roleDeletions`); a role stays off until it has a question; a name is asked by the host's input box (a webview has no
+  `prompt()`). The prompt editors do not carry `data-prompt` (the shared script reads that as a round pick).
+- **E4.4 Commands in the page** (replacing `commandsPage.ts`), the same way (`commandsHost.ts`).
+- **E4.5 Setup.** Keys counted across every row; the CLI table; Team servers with their contract (E2.5); the MCP
+  server's clients — whether each registers coai-mcp, READ from its config file and never written, no other entry or
+  secret shown; the data folder's Change and Move on `dataCommands.ts`, and the "moved from" record (`coai.lastDataMove`)
+  shown after a reload with "Delete the old folder".
+- **E4.6 Chat** (the risky piece): rows ticked Chat, per side; a row's `chatStartingPrompt` and its effort and system
+  prompt applied (D8); prompt presets inline, through the panel's save (ending the presets page's direct writes). **The
+  move**: each model preset becomes a row `chat-<id>` with `uses: [chat]` and its starting text, through the epic 1
+  migration (`placeAll`/`newRow`, backup once, the marker last, restore). What is remapped, as the code stores it today
+  (research above — a conversation record holds the MODEL name, not the preset id): `coai.chatModel`, legacy
+  `SavedTab.modelId`, a record's `modelId` only where it equals a preset id, and the chat ledgers' `provider`, mapped
+  on READ through the migration's preset → row table (a ledger line is never rewritten).
+
+**Build order:** E4.1 → E4.2 → E4.5 → E4.3 → E4.4 → E4.6.
+
+**Test plan:** each tab run through the page's own script (`runPanel` with the catalog page), every control writing
+its setting; the pickers limited to ticked rows, a stranded pick shown; "Try it" posts the sample and draws what the
+binary answered; the folded pages' edits reach the same host functions their pages used (their existing tests move with
+them); the MCP clients reader over fixture files, refusing to read past its own entry; the chat migration as a pure
+function (preset → row, references remapped, backup, restore, idempotent), and a resumed conversation keeping its model.
+
+**Definition of done:** every tab of the new page works; the three separate pages are still reachable from the old page
+until E5; all suites, lint, the seam and the layout render green; module docs updated.
+
 ### Epic 5 — The switch-over, docs and release
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
    three replaced pages (`rolesPage.ts`, `commandsPage.ts`, `chatPresetsPage.ts` and their panels) deleted; the
