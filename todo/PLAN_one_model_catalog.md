@@ -643,30 +643,49 @@ row); the new page reads it. Done, RED first.
   `rolesPanel.ts`) until E5 deletes the page. ONE switch per role — `roleEnabled` and the catalog's `active` merged,
   `COAI_ROLES` still written for servers under `ROLE_SWITCH_SINCE`; deletion confirmed, ids reserved (the existing
   `roleDeletions`); a role stays off until it has a question; a name is asked by the host's input box (a webview has no
-  `prompt()`). The prompt editors do not carry `data-prompt` (the shared script reads that as a round pick).
+  `prompt()`). The prompt editors do not carry `data-prompt` (the shared script reads that as a round pick). **The
+  command shape** (plan round 1): one exported command type per host module — `roles.<verb>` / `commands.<verb>`, each
+  verb declared once with its arguments, so a new command is one declaration both callers see; the panel dispatches by
+  the prefix; the host answers with a refusal sentence (empty = done), which the panel shows through its existing
+  refusal path, so an edit that did not land is said, never silently read back; catalog keys are written inside
+  `inCatalogTurn`.
 - **E4.4 Commands in the page** (replacing `commandsPage.ts`), the same way (`commandsHost.ts`).
 - **E4.5 Setup.** Keys counted across every row; the CLI table; Team servers with their contract (E2.5); the MCP
   server's clients — whether each registers coai-mcp, READ from its config file and never written, no other entry or
-  secret shown; the data folder's Change and Move on `dataCommands.ts`, and the "moved from" record (`coai.lastDataMove`)
-  shown after a reload with "Delete the old folder".
+  secret shown (a pure file read: no client program is launched, so there is no process to time out); the data
+  folder's Change and Move on `dataCommands.ts`, and the "moved from" record (`coai.lastDataMove`) shown after a reload
+  with "Delete the old folder".
 - **E4.6 Chat** (the risky piece): rows ticked Chat, per side; a row's `chatStartingPrompt` and its effort and system
   prompt applied (D8); prompt presets inline, through the panel's save (ending the presets page's direct writes). **The
   move**: each model preset becomes a row `chat-<id>` with `uses: [chat]` and its starting text, through the epic 1
-  migration (`placeAll`/`newRow`, backup once, the marker last, restore). What is remapped, as the code stores it today
-  (research above — a conversation record holds the MODEL name, not the preset id): `coai.chatModel`, legacy
-  `SavedTab.modelId`, a record's `modelId` only where it equals a preset id, and the chat ledgers' `provider`, mapped
-  on READ through the migration's preset → row table (a ledger line is never rewritten).
+  migration (`placeAll`/`newRow`, backup once, rows, references, the marker last, restore). Corrected in plan round 1 —
+  what holds a PRESET id today: `coai.chatModel`; a conversation record's `providerId` and `chosenId` (its `modelId` is
+  the model NAME, which the move does not change — except a legacy record whose `modelId` equals a preset id); legacy
+  `SavedTab.modelId`; the spend ledger's turn and door lines' `provider`; and its forget marks, keyed by provider +
+  model. Only `coai.chatModel` is a setting and is rewritten with the rows. Every FILE reference is mapped on READ
+  through the preset → row table the migration stores in settings (`chatPresetRows`, in the same backup) — a record
+  or ledger line is never rewritten, so an interrupted move has nothing half-written outside the settings, and a rerun
+  finds its rows by their fields. `coai.chatModelPresets` itself is kept as it was until E5, so an older extension
+  still reads its presets; coai-mcp never sees a chat-only row (a row that reviews nothing is left out of
+  `COAI_VENDORS`, E1.4) and does not serve chat.
 
-**Build order:** E4.1 → E4.2 → E4.5 → E4.3 → E4.4 → E4.6.
+**Build order:** E4.1 → E4.2 → E4.5 → E4.3 → E4.4 → E4.6. E4.5 comes before the folded pages because it touches no
+host-module seam, so it lands while E4.3's command shape settles.
 
 **Test plan:** each tab run through the page's own script (`runPanel` with the catalog page), every control writing
 its setting; the pickers limited to ticked rows, a stranded pick shown; "Try it" posts the sample and draws what the
 binary answered; the folded pages' edits reach the same host functions their pages used (their existing tests move with
-them); the MCP clients reader over fixture files, refusing to read past its own entry; the chat migration as a pure
-function (preset → row, references remapped, backup, restore, idempotent), and a resumed conversation keeping its model.
+them); the MCP clients reader over fixture files, refusing to read past its own entry, with a companion assertion that
+it still reads a known entry; `COAI_ROLES` at `ROLE_SWITCH_SINCE`'s boundary — a server under it gets it written, one at
+or above it does not; the chat migration as a pure function (preset → row, `coai.chatModel` remapped, backup,
+restore, idempotent, stopped at each write boundary and rerun), and a conversation stored under each old preset
+(`providerId`, `chosenId`, a legacy `modelId`) resuming on its mapped row; the spend rows and forget marks read through
+the table.
 
 **Definition of done:** every tab of the new page works; the three separate pages are still reachable from the old page
-until E5; all suites, lint, the seam and the layout render green; module docs updated.
+until E5; each folded page's tests run the NEW page too, and any assertion over page source text is converted to run
+the page (`todo/PLAN_the_page_tests_run_the_page.md`); all suites, lint, the seam and the layout render green; module
+docs updated.
 
 ### Epic 5 — The switch-over, docs and release
 1. **The new page is Settings**: the preview switch removed; the twelve old section builders, their commands and the
@@ -796,3 +815,23 @@ Disjoint from the rest of `todo/`. Each plan in the table gets the same row, poi
 | The 64-row cap after migration (6) | Checked before writing; the layer is left untouched. |
 | An older build strips the new fields on its first write (12) | Verified in `vendorsFrom`; what is lost and what is regained is written down; no second store. |
 | `feature-availability.json` ahead of coai-mcp's own lists (13) | Frozen to today's lists in E1; the mirror tests stay. |
+
+### The plan round of epic 4 (session `21ec1de8`, 2026-10-05, good_enough, 8 findings accepted, 2 rejected)
+
+| Finding | What changed |
+|---|---|
+| The record's model name is not remapped (0) | Corrected: a record's preset references are `providerId` and `chosenId`; its `modelId` is a model name the move does not change (except a legacy one equal to a preset id). Each is mapped, with a resume test per old preset. |
+| No failure path for the multi-store rewrite (1) | Settings keep epic 1's order (backup once, rows, references, marker last); FILES — records and spend lines — are never rewritten, only mapped on read through the stored `chatPresetRows` table. |
+| An older binary meets a chat row (2) | coai-mcp never sees one (E1.4) and does not serve chat; for an older EXTENSION, `coai.chatModelPresets` is kept until E5. |
+| The host modules' command shape is unspecified (3) | One exported command type per host, dispatched by prefix; a refusal sentence shown through the panel's refusal path. |
+| Which source-text tests move or go (4) | DoD: each folded page's tests run the new page; source-text assertions converted; the reader carries a companion assertion. |
+| `COAI_ROLES` at `ROLE_SWITCH_SINCE` untested (5) | A boundary test added to the test plan. |
+| The MCP clients reader's timeout (7) | A pure file read; no process is launched. |
+| Why E4.5 precedes E4.3 (9) | One sentence in the build order. |
+| REJECTED — `catalogRows` and `feature-availability.json` unbudgeted (6) | Both exist: `catalogRows` on this branch (6903e000), row writes since E3, the file since E2. |
+| REJECTED — nothing creates the use ticks (8) | The ticks exist on every Models card since E3; the E1 migration created the consultant rows. |
+
+The gate's commands applied: one gate for the epic (the code round over the whole diff), autonomous work with
+red-green tests. Not possible: the owed consultations (cadence for epics 4–5, risk for epic 4, and the ones owed from
+epics 1–3) — the consultant is switched off in this installation (`COAI_CONSULT_ENABLED`), so the code round of this
+epic waits on the person. The split stays on Opus — Fable is at its monthly spend limit.
