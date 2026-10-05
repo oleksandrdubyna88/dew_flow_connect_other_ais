@@ -4,9 +4,10 @@ import { escapeHtml } from './escapeHtml';
 import { USE_LABELS } from './modelCardFields';
 import { BLANK_REGIONS } from './panelSurface';
 import { consultantPicksHtml } from './consultantPicks';
-import { consultantSection, PANEL_SECTIONS, promptsBody, questionConsultantSection, securityLaneSection, type PanelState } from './panelView';
+import { cliButtons, consultantSection, PANEL_SECTIONS, promptsBody, questionConsultantSection, securityLaneSection, type PanelState } from './panelView';
 import { rowsFor } from './catalogPicks';
 import { securityTryHtml } from './securityTry';
+import { cliTableHtml, mcpClientsHtml, movedFromHtml } from './setupTab';
 import type { Vendor } from './vendors';
 
 /**
@@ -52,15 +53,33 @@ function stateFor(sectionId: string, state: PanelState): PanelState {
   return sectionId === 'keys' ? { ...state, vendors: state.catalogRows ?? state.vendors } : state;
 }
 
-/** The old section drawn at this place — '' where none is (Models, and the pages E4.3 and E4.4 fold in). */
+/**
+ * What a Setup place adds after its moved section (E4.5): the CLIs the models run on under the keys; the data folder's
+ * last move and the MCP clients' registration under the MCP server.
+ */
+const AFTER: Readonly<Record<string, (state: PanelState) => string>> = {
+  'setup/keys': (state) => cliTableHtml(state.catalogRows ?? state.vendors, state.cliStatus, cliButtons),
+  'setup/mcp': (state) => `${movedFromHtml(state.lastDataMove)}\n${mcpClientsHtml(state.mcpClients ?? [])}`,
+};
+
+/** The section drawn at this place — '' where none is (Models, and the pages E4.3 and E4.4 fold in). */
 function sectionAt(place: string, state: PanelState): string {
   const split = SPLIT[place];
-  if (split !== undefined) {
-    return split(state);
-  }
+
+  return split === undefined ? `${oldSectionAt(place, state)}${afterAt(place, state)}` : split(state);
+}
+
+/** The current page's section for this place, by its own builder — '' where it has none. */
+function oldSectionAt(place: string, state: PanelState): string {
   const spec = PANEL_SECTIONS.find((one) => one.surface === 'settings' && OLD_TAB_PLACES[one.id] === place);
 
   return spec === undefined ? '' : spec.body(stateFor(spec.id, state), BLANK_REGIONS);
+}
+
+function afterAt(place: string, state: PanelState): string {
+  const after = AFTER[place];
+
+  return after === undefined ? '' : `\n${after(state)}`;
 }
 
 /** The rows ticked for a use, by name — every one a person's string, so every one escaped. */

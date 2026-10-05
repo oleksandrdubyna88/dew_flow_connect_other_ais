@@ -31,6 +31,8 @@ import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
 import { NEW_PROMPT_SENTINEL, securityLaneBody } from './securityLaneView';
 import type { SecurityTryResult } from './securityTry';
+import type { ClientRegistration } from './setupTab';
+import type { MoveRecord } from './dataMove';
 import type { SecurityTextState } from './securityPromptFiles';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { CONSULTANT_HEALTH_CSS, COPY_COMMANDS } from './consultantHealthView';
@@ -267,6 +269,10 @@ export interface PanelState {
   readonly catalogRows?: readonly Vendor[];
   /** What the installed binary last said about a sample on the new page's Security lane tab (`securityTry.ts`, E4.2). */
   readonly securityTry?: SecurityTryResult | undefined;
+  /** Whether each MCP client registers coai, read from its own config file (`setupTab.ts`, E4.5). */
+  readonly mcpClients?: readonly ClientRegistration[] | undefined;
+  /** The data folder's last move, as this profile remembers it across a reload (`coai.lastDataMove`, E4.5). */
+  readonly lastDataMove?: MoveRecord | undefined;
   /** When each control the new page marks "new" was first seen in this profile (`newTags.ts`). */
   readonly firstSeen?: Readonly<Record<string, number>>;
   /** The time the state was gathered — what a "new" mark is measured against. Absent: the moment the page is drawn. */
@@ -1536,7 +1542,7 @@ function localButtons(id: string, localEngine: LocalEngine | undefined): string 
 }
 
 /** A CLI vendor's buttons: run it, install it, update it — the last one green when there is an update. */
-function cliButtons(vendor: Vendor, id: string, cli: CliStatus): string {
+export function cliButtons(vendor: Vendor, id: string, cli: CliStatus): string {
   return `<button class="run" data-command="runVendor" data-id="${id}" title="${escapeHtml(HELP.runVendor)}"
             aria-label="Open ${id} in a terminal">▶</button>
     <button class="run get" data-command="installVendorCli" data-id="${id}" title="${escapeHtml(HELP.installVendorCli)}"
@@ -3429,6 +3435,8 @@ export const PANEL_COMMANDS = [
   // And moving what the old folder already holds, which is a different job with the opposite
   // refusal: a move wants an EMPTY destination where the change above wants a full one.
   'moveDataDirectory',
+  // And deleting what a VERIFIED move left behind, offered on the new page's MCP server tab after a reload (E4.5).
+  'deleteOldDataFolder',
   // The Bugz section. Collect runs the collector over this machine's own accepted findings;
   // Review opens what it collected; and the server address is asked for in a dialog rather than
   // typed into the section, because a free-text control here would be rebuilt under the caret on
@@ -3468,6 +3476,7 @@ export const VSCODE_COMMAND_FOR = {
   editPhrases: 'coai.editPhrases',
   changeDataDirectory: 'coai.changeDataDirectory',
   moveDataDirectory: 'coai.moveDataDirectory',
+  deleteOldDataFolder: 'coai.deleteOldDataFolder',
   showNotifications: 'coai.showNotifications',
 } as const satisfies Partial<Record<PanelCommand, string>>;
 

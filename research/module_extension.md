@@ -10976,3 +10976,23 @@ sequenceDiagram
   B-->>H: {signals, cards, refused, complaints, detectionIncomplete}
   H->>P: repaint with PanelState.securityTry
 ```
+
+## The new Settings page — Setup (2026-10-05, PLAN_one_model_catalog.md E4.5)
+
+Setup's four places draw the current page's sections (E4.1), and two of them add, after the section, what the mockup's
+Setup holds (`catalogSections.AFTER`; markup and decisions in `setupTab.ts`, pure):
+
+- **Vendor keys** — the keys are counted over every catalog row (E4.1), and **CLIs your models run on**: the rows
+  grouped by the CLI they run on (`cliGroups`: runtime + CLI path, so a row with its own path is a CLI of its own;
+  `local`, `api` and `remote` run on none), the models on each, the version (`PanelState.cliStatus`, which the host
+  already reads for every row) and the current card's own ▶ ⤓ ⟳ buttons (`panelView.cliButtons`, exported) for the
+  first model on each.
+- **MCP server** — the data folder's last move (`movedFromHtml`): `coai.lastDataMove` survives a reload, so the page says
+  where the data was moved from and, only when `mayDeleteTheOldCopy` allows it, offers **Delete the old folder…**
+  (panel command `deleteOldDataFolder` → the registered `coai.deleteOldDataFolder`, which keeps every check of its own).
+  And **MCP clients**: Claude Code (`~/.claude.json`, top level), Claude Code for this project (`.mcp.json`) and VS Code
+  (`.vscode/mcp.json`, whose member is `servers`) — each `registered`, `not registered`, `no file` or `unreadable`, with
+  the note that a `projects["<this folder>"]` entry in `~/.claude.json` takes precedence. `mcpClientsRead.ClientReader`
+  reads each file — never writes it, launches nothing — and `clientRegistration` returns ONLY that answer: no other
+  entry, value or secret of the file. A file is read again only when its time or size changed (`~/.claude.json` can
+  run to megabytes), and one past 32 MB is `unreadable`.

@@ -84,6 +84,10 @@ import { foldedWrite } from './catalogEdit';
 import { asRecord } from './catalogLaunch';
 import { consultantPickWrites } from './consultantPicks';
 import { securityRowsOffered } from './catalogPicks';
+import { clientFilesFor, ClientReader } from './mcpClientsRead';
+import { MOVE_RECORD } from './dataCommands';
+import type { MoveRecord } from './dataMove';
+import * as os from 'node:os';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { shownOnTheOldPage } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
@@ -1179,6 +1183,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // The new page draws every row (PLAN_one_model_catalog.md E4): `vendors` above is the current page's reviewers.
       catalogRows: vendors,
       securityTry: this.securityTry,
+      // The new page's Setup (PLAN_one_model_catalog.md E4.5): each MCP client's registration, read from its own file
+      // and never written; and the data folder's last move, which survives a reload so the delete can be offered.
+      mcpClients: await this.clients.read(clientFilesFor(os.homedir(), workspaceFolderPaths()[0] ?? ''), workspaceFolderPaths()[0] ?? ''),
+      lastDataMove: this.context.globalState.get<MoveRecord>(MOVE_RECORD),
       codexModels: this.codexModels,
       agyModels: this.agyModels,
       // Never awaited. The probe is four real requests to a real CLI; a render that waited for one
@@ -2415,6 +2423,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       case 'moveDataDirectory':
         await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.moveDataDirectory);
         break;
+      case 'deleteOldDataFolder':
+        // The command keeps every check of its own (the record verified, nothing written to the old folder since).
+        await vscode.commands.executeCommand(VSCODE_COMMAND_FOR.deleteOldDataFolder);
+        await this.render();
+        break;
       case 'copyPhrase':
         await this.copyPhrase(id, from);
         break;
@@ -3123,6 +3136,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /** What the installed binary last said about a sample — this window's, drawn on the new page's Security lane tab. */
   private securityTry: SecurityTryResult | undefined;
+
+  /** The MCP clients' config files, each read again only when it changed (E4.5). */
+  private readonly clients = new ClientReader();
 
   /**
    * Try it (PLAN_one_model_catalog.md E4.2): the sample and the stored lane, as a round would send it, to

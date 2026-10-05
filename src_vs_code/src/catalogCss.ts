@@ -30,6 +30,11 @@ const SHELL = `
   /* The MCP server, one and a half times the size, as on the old page — the tab people read rather than set. */
   .catalog [data-pane="setup/mcp"] .moved { zoom: 1.5; }
   .catalog .used-by { margin: 8px 0 10px; color: var(--muted); }
+  /* Setup's tables (E4.5): the CLIs and the MCP clients. */
+  .catalog table.map { border-collapse: collapse; margin: 6px 0 12px; }
+  .catalog table.map th, .catalog table.map td { text-align: left; vertical-align: top; padding: 5px 16px 5px 0; border-bottom: 1px solid var(--border); }
+  .catalog table.map td button { width: auto; margin: 0 4px 0 0; }
+  .catalog .moved-from { margin: 10px 0; }
   .catalog .used-by button.link {
     background: none; border: none; padding: 0; margin: 0 0 0 6px; color: var(--link); cursor: pointer; text-decoration: underline;
   }

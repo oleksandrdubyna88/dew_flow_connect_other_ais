@@ -658,7 +658,8 @@ row); the new page reads it. Done, RED first.
   server's clients — whether each registers coai-mcp, READ from its config file and never written, no other entry or
   secret shown (a pure file read: no client program is launched, so there is no process to time out); the data
   folder's Change and Move on `dataCommands.ts`, and the "moved from" record (`coai.lastDataMove`) shown after a reload
-  with "Delete the old folder".
+  with "Delete the old folder". **Built 2026-10-05** (`setupTab.ts`, `mcpClientsRead.ts`; the Team servers' contract
+  note moved with its section in E4.1).
 - **E4.6 Chat** (the risky piece): rows ticked Chat, per side; a row's `chatStartingPrompt` and its effort and system
   prompt applied (D8); prompt presets inline, through the panel's save (ending the presets page's direct writes). **The
   move**: each model preset becomes a row `chat-<id>` with `uses: [chat]` and its starting text, through the epic 1
