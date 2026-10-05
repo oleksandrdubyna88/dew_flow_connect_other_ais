@@ -4,7 +4,9 @@ import { escapeHtml } from './escapeHtml';
 import { USE_LABELS } from './modelCardFields';
 import { BLANK_REGIONS } from './panelSurface';
 import { consultantPicksHtml } from './consultantPicks';
-import { consultantSection, PANEL_SECTIONS, promptsBody, questionConsultantSection, type PanelState } from './panelView';
+import { consultantSection, PANEL_SECTIONS, promptsBody, questionConsultantSection, securityLaneSection, type PanelState } from './panelView';
+import { rowsFor } from './catalogPicks';
+import { securityTryHtml } from './securityTry';
 import type { Vendor } from './vendors';
 
 /**
@@ -22,6 +24,11 @@ const SPLIT: Readonly<Record<string, (state: PanelState) => string>> = {
   'reviews/prompts': (state) => promptsBody(state, 'prompts'),
   'consultants/consultant': (state) => consultantSection(state, consultantPicksHtml(state.settings.consult, state.catalogRows ?? state.vendors)),
   'consultants/qconsult': (state) => questionConsultantSection(state, state.catalogRows ?? state.vendors),
+  security: (state) => {
+    const rows = state.catalogRows ?? state.vendors;
+
+    return `${securityLaneSection(state, rowsFor('security', rows), rows)}\n${securityTryHtml(state.securityTry)}`;
+  },
 };
 
 /** The feature each place serves, for its "used by" strip. */

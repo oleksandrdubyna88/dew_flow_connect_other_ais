@@ -10947,3 +10947,32 @@ the current page's reviewers since E1.4 — so a row epic 1 had migrated into a 
 having no runtime and its switch was disabled. It resolves against `catalogRows` now
 (`aMigratedQuestionRowStillRuns.test.ts`, red before the fix). The current page still labels such a row "not in the
 catalogue" (its picker lists the vendor presets); E5 retires that page.
+
+**The Security lane's pairs come from the catalog, and "Try it" asks the binary.** On the new page
+`securityLaneSection(state, offered, allRows)` passes `rowsFor('security', rows)` as the rows a pair may name — the
+pairs' Reviewer selects and the prompt cards' reviewer ticks — and every row as `allRows`: the "enable an ordinary
+reviewer too" note is judged on all of them, and a pair whose row is not ticked (or gone) is kept, selected and named
+(`rowPicks` note, D3). The host checks a Security lane write against the same list while the new page is showing
+(`securityRowsOffered(rows, settingsPreviewOn())`: one slot shows one page, so the page showing is the page that wrote);
+the current page keeps every row.
+
+**Try it** (`securityTry.ts`): a sample box and a button (`data-security-try`); the page posts command `trySecurity` with
+the sample as its id. The host (`PanelProvider.trySecurity`) refuses before a spawn when coai-mcp is not installed, does
+not list `checkSecurity`, or the sample passes 64 K characters; otherwise it sends `{ text, lane }` — the lane as a round
+sends it to THIS binary (`securityWire`, words only for `securityWords`) — to `coai-mcp --check-security` on STDIN
+(`serverRun`, 15 s cap) and keeps the answer for the window (`PanelState.securityTry`): signals, cards that would be due,
+refused patterns, complaints, and "the detector did not finish" — or the failure, named. No JavaScript copy of the
+matcher, and no notification. Checked against the binary built from this branch: a SQL + JWT sample answered `sql`,
+`auth-token` and three cards due, and parsed exactly.
+
+```mermaid
+sequenceDiagram
+  participant P as New page (Security lane)
+  participant H as PanelProvider
+  participant B as coai-mcp --check-security
+  P->>H: command trySecurity, id = sample
+  H->>H: securityTryRefusal (installed? checkSecurity? ≤ 64 K)
+  H->>B: stdin {text, lane: securityWire(lane, features)}
+  B-->>H: {signals, cards, refused, complaints, detectionIncomplete}
+  H->>P: repaint with PanelState.securityTry
+```

@@ -69,6 +69,7 @@ import { QconsultHost, isQconsultCallerKey, type QconsultWriteHooks } from './qc
 import { isQconsultCommand } from './qconsultWrite';
 import type { QuestionConsult } from './questionConsults';
 import { securityLaneFrom, securityLaneSave } from './securityLane';
+import { securityTryAnswer, securityTryFailed, securityTryRefusal, securityTryRequest, type SecurityTryResult } from './securityTry';
 import { editSecurityPrompt } from './securityPromptEditor';
 import { SECURITY_PROMPT_WATCH, SecurityPromptTextCache } from './securityPromptFiles';
 import { securityFlowHost } from './securityCommands';
@@ -82,6 +83,7 @@ import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer } 
 import { foldedWrite } from './catalogEdit';
 import { asRecord } from './catalogLaunch';
 import { consultantPickWrites } from './consultantPicks';
+import { securityRowsOffered } from './catalogPicks';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { shownOnTheOldPage } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
@@ -1176,6 +1178,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       vendors: shown,
       // The new page draws every row (PLAN_one_model_catalog.md E4): `vendors` above is the current page's reviewers.
       catalogRows: vendors,
+      securityTry: this.securityTry,
       codexModels: this.codexModels,
       agyModels: this.agyModels,
       // Never awaited. The probe is four real requests to a real CLI; a render that waited for one
@@ -1859,7 +1862,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       const read = this.read(config);
       // Nothing is saved against a malformed setting: writing the panel's stand-in would replace
       // what the person wrote in settings JSON, which is the one place they are told to correct it.
-      const next = securityLaneSave(read('securityLane'), message.securityField, message.value, vendorsFrom(read('vendors')));
+      // Named against the rows the page that wrote OFFERED: the new page's are the rows ticked Security lane (E4.2).
+      const offered = securityRowsOffered(vendorsFrom(read('vendors')), settingsPreviewOn());
+      const next = securityLaneSave(read('securityLane'), message.securityField, message.value, offered);
       if (next !== undefined) {
         await this.save(config, 'securityLane', next);
       }
@@ -2460,6 +2465,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         if (id !== undefined) {
           await this.consultantHealth.checkModel(id);
         }
+        break;
+      case 'trySecurity':
+        await this.trySecurity(id ?? '');
         break;
       case 'settingsPreview':
         // The configuration change repaints the open tab on the other page; nothing else to do here.
@@ -3108,6 +3116,34 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   private binaryFeatures(): Promise<BinaryFeatures> {
     return this.features.of(serverPath(this.context.globalStorageUri)?.fsPath, serverRun);
+  }
+
+  /** How long Try it waits: one classification of at most 64 K characters, never a vendor turn. */
+  private static readonly TRY_SECURITY_CAP_MS = 15_000;
+
+  /** What the installed binary last said about a sample — this window's, drawn on the new page's Security lane tab. */
+  private securityTry: SecurityTryResult | undefined;
+
+  /**
+   * Try it (PLAN_one_model_catalog.md E4.2): the sample and the stored lane, as a round would send it, to
+   * `coai-mcp --check-security` on STDIN — a sample can hold a token, and an argument is in process listings. Refused
+   * before a spawn when the binary cannot answer it or the sample is too long; the answer, or why there is none, is drawn.
+   */
+  private async trySecurity(sample: string): Promise<void> {
+    const features = (await this.binaryFeatures()).features;
+    const server = serverPath(this.context.globalStorageUri);
+    const refusal = server === undefined ? 'coai-mcp is not installed on this side.' : securityTryRefusal(sample, features);
+    this.securityTry = refusal.length > 0 || server === undefined
+      ? securityTryFailed(sample, refusal)
+      : await this.askCheckSecurity(server.fsPath, sample, features);
+    await this.render();
+  }
+
+  private async askCheckSecurity(executable: string, sample: string, features: readonly string[]): Promise<SecurityTryResult> {
+    const lane = securityLaneFrom(this.read(vscode.workspace.getConfiguration('coai'))('securityLane'));
+    const { code, output } = await serverRun(executable, undefined, securityTryRequest(sample, lane, features))(['--check-security'], PanelProvider.TRY_SECURITY_CAP_MS);
+
+    return securityTryAnswer(sample, code, output);
   }
 
   /** How long a close may take. It is one small write behind a repository lock, not a vendor turn. */

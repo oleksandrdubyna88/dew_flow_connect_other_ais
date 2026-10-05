@@ -30,6 +30,7 @@ import { availabilityOf, ProviderHealth, ProvidersAnswer } from './providers';
 import { ChatSettings, chatSettingsFrom } from './chatSettings';
 import { consultantBody } from './consultantView';
 import { NEW_PROMPT_SENTINEL, securityLaneBody } from './securityLaneView';
+import type { SecurityTryResult } from './securityTry';
 import type { SecurityTextState } from './securityPromptFiles';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { CONSULTANT_HEALTH_CSS, COPY_COMMANDS } from './consultantHealthView';
@@ -264,6 +265,8 @@ export interface PanelState {
    * (`shownOnTheOldPage`). The new page's tabs read this one (PLAN_one_model_catalog.md E4, epic 3's missed row).
    */
   readonly catalogRows?: readonly Vendor[];
+  /** What the installed binary last said about a sample on the new page's Security lane tab (`securityTry.ts`, E4.2). */
+  readonly securityTry?: SecurityTryResult | undefined;
   /** When each control the new page marks "new" was first seen in this profile (`newTags.ts`). */
   readonly firstSeen?: Readonly<Record<string, number>>;
   /** The time the state was gathered — what a "new" mark is measured against. Absent: the moment the page is drawn. */
@@ -482,7 +485,7 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   // After the stuck consultant, because the two are the same idea for two moments: there an AI that is STUCK asks
   // one vendor, here an AI with a QUESTION asks every row before it asks you (todo/PLAN_question_consultant.md, S4).
   { id: 'questionconsultant', title: 'Question consultant', surface: 'settings', body: (state) => questionConsultantSection(state) },
-  { id: 'securityLane', title: 'Security lane', surface: 'settings', body: (state) => securityLaneBody(state.settings.securityLane, state.vendors, state.server.kind === 'absent' ? '' : state.server.version, { text: state.securityPromptText ?? {}, promptsDir: state.securityPromptDir ?? '' }) },
+  { id: 'securityLane', title: 'Security lane', surface: 'settings', body: (state) => securityLaneSection(state, state.vendors) },
   { id: 'prompts', title: 'Prompts per round', surface: 'settings', body: (state) => promptsBody(state) },
   { id: 'gate', title: 'The gate', surface: 'settings', body: (state) => gateBody(state) },
   { id: 'limits', title: 'Limits', surface: 'settings', body: (state) => limitsBody(state.settings, state.vendors.filter((v) => v.enabled && v.code).length) },
@@ -527,6 +530,24 @@ export function consultantSection(state: PanelState, callerRows = ''): string {
     // WHEN the consultant is asked without anybody being stuck, under WHO is asked
     // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
     + cadenceBlock(state.settings.cadence);
+}
+
+/**
+ * The Security lane tab.
+ *
+ * @param offered the rows a pair may name — the current page's reviewers, or the new page's rows ticked Security lane (E4.2)
+ * @param allRows every catalog row, which the new page names a stranded pair from; the current page reads `offered`
+ */
+export function securityLaneSection(state: PanelState, offered: readonly Vendor[], allRows: readonly Vendor[] = offered): string {
+  return securityLaneBody(state.settings.securityLane, offered, serverVersionOf(state), securityFilesOf(state), allRows);
+}
+
+function serverVersionOf(state: PanelState): string {
+  return state.server.kind === 'absent' ? '' : state.server.version;
+}
+
+function securityFilesOf(state: PanelState): { text: Readonly<Record<string, SecurityTextState>>; promptsDir: string } {
+  return { text: state.securityPromptText ?? {}, promptsDir: state.securityPromptDir ?? '' };
 }
 
 /** The Question consultant tab: the rows, the prompts, the folders, the mode and the limits. Its live questions are in the sidebar. */
@@ -3389,6 +3410,8 @@ export const PANEL_COMMANDS = [
   'removeModel',
   // ✓ Check on a Models card: one paid turn of that row, asked first by the host (D10), kept as `model-<id>`.
   'checkModel',
+  // Try it on the new page's Security lane tab: the id is the sample, put to `coai-mcp --check-security` on stdin (E4.2).
+  'trySecurity',
   // The way into the presets tab. `coai.editChatPresets` shipped registered, in no menu and named in
   // no view, so the only way to reach the CRUD the chat section points at was the command palette.
   'editChatPresets',

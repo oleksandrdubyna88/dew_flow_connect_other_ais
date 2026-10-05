@@ -638,7 +638,10 @@ row); the new page reads it. Done, RED first.
 - **E4.2 Consultants and Security from the catalog.** A caller's picker lists the rows ticked Consultant (absent = the
   shipped pair, D2; the same vendor as the caller shown, never refused; a stranded pick shown and named, never cleared —
   D3); the question consultant's rows pick from rows ticked it; the security pairs from rows ticked Security lane. "Try
-  it" sends the sample to `coai-mcp --check-security` on stdin (E2.4) — never a JavaScript copy of the matcher.
+  it" sends the sample to `coai-mcp --check-security` on stdin (E2.4) — never a JavaScript copy of the matcher. **Built
+  2026-10-05** (`consultantPicks.ts`, `catalogPicks.ts`, `securityTry.ts`). Deviation: a consultant pick is written WITHOUT
+  the current page's fold, which would drop the caller's old row (E1.4); found on the way, the Question consultant
+  section resolved its rows against the reviewers only, so a migrated row could not be switched on — fixed, RED first.
 - **E4.3 Roles & prompts in the page** (replacing `rolesPage.ts`): its content drawn by the panel, its edits as
   namespaced commands into a host module both the old roles panel and the panel call (`rolesHost.ts`, extracted from
   `rolesPanel.ts`) until E5 deletes the page. ONE switch per role — `roleEnabled` and the catalog's `active` merged,

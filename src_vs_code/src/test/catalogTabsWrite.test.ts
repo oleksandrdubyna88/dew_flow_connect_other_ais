@@ -52,8 +52,10 @@ test('every setting control of a moved section writes on the new page exactly wh
   const state = panelState('reviewers');
   const current = settingsHtml(state, 'test-nonce', 'reviewers');
   // The reviewer cards are Models' (epic 3), drawn by another builder: their writes are that tab's tests. A consultant
-  // caller's own definition is replaced on the new page by a pick from the catalog (E4.2, consultantPicks.test.ts).
-  const keys = keysOf(runPanel(state, { html: current }).controls).filter((key) => !key.includes('"vendor"') && !key.includes('"caller"'));
+  // caller's own definition is replaced on the new page by a pick from the catalog (E4.2, consultantPicks.test.ts), and
+  // a Security lane prompt card offers only the rows ticked Security lane (E4.2, securityPicks.test.ts).
+  const keys = keysOf(runPanel(state, { html: current }).controls)
+    .filter((key) => !key.includes('"vendor"') && !key.includes('"caller"') && !key.includes('"securityField":"pair:'));
   assert.ok(keys.length > 40, `the sweep found only ${keys.length} controls — the harness no longer reads the page`);
 
   const before = writesOn(current, keys);

@@ -30,7 +30,7 @@ export const securitySupported = (version: string): boolean =>
   version === '' || version === '0.0.0' || compareVersions(version, SECURITY_SINCE) >= 0;
 export function securityEnv(lane: SecurityLane, version: string, features: readonly string[] = []): Record<string, string> {
   if (!securitySupported(version)) return {};
-  return configured(lane) ? { COAI_SECURITY_LANE: JSON.stringify(wordsFor(lane, features)) } : {};
+  return configured(lane) ? { COAI_SECURITY_LANE: JSON.stringify(securityWire(lane, features)) } : {};
 }
 
 /**
@@ -38,7 +38,7 @@ export function securityEnv(lane: SecurityLane, version: string, features: reado
  * own words (a prompt's `words`) only for a binary that lists `securityWords`. An older one refuses an unknown root member
  * — the WHOLE lane goes off — and an unknown prompt member refuses that prompt; held back, it runs on its shipped words.
  */
-function wordsFor(lane: SecurityLane, features: readonly string[]): unknown {
+export function securityWire(lane: SecurityLane, features: readonly string[]): unknown {
   if (features.includes(FEATURES.securityWords)) {
     return lane;
   }

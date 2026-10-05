@@ -183,6 +183,12 @@ function modelEventsScript(): string {
       setModelFilter('uses', narrow.dataset.modelsUses || '');
       showPlace('models', true);
     }
+    // Security lane's Try it (E4.2): the sample is the command's id — the host puts it to coai-mcp on stdin.
+    const tryIt = pressed.closest('[data-security-try]');
+    if (tryIt) {
+      const sample = document.getElementById('security-sample');
+      send({ type: 'command', command: 'trySecurity', id: sample ? String(sample.value || '') : '' }, tryIt);
+    }
   });
   document.addEventListener('input', (event) => {
     const typed = event.target;
