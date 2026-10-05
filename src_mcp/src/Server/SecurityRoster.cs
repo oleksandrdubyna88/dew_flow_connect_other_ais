@@ -31,7 +31,8 @@ internal sealed class SecurityRoster(PanelSettings settings, RolePrompts prompts
         IReadOnlyDictionary<string, string>? sources = null)
     {
         if (!Applies(stage)) return ordinary;
-        var facts = SecuritySignals.Classify(files);
+        // With the lane's own table: a person's words for a signal, and each card's own words (PLAN_one_model_catalog.md E2.4).
+        var facts = SecuritySignals.Classify(files, settings.SecurityLane.Table);
         var decided = new Decided([], [], []);
         foreach (var run in settings.SecurityLane.Runs.Where(r => r.Serves(stage)))
             AppendPairing(run, facts, files.Count - facts.Count, round, sources, decided);

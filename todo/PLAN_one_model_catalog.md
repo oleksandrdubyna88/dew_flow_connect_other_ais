@@ -393,6 +393,19 @@ override the stories above where they differ:
 - Open: a measured real consultation on an endpoint row and on an api row (one each), which is also what closes the
   "consults when its provider overrides are measured" note this replaced.
 
+#### E2.4 as built so far (branch `feat/catalog-e2`)
+
+- **Editable words and a card's own words**, on one table (`SignalTable`): a signal's words replace its shipped words
+  (its shipped pattern stays); a card's words are a signal only that card is triggered by. Patterns compile once with
+  NonBacktracking and a 1 s timeout; refused by name for lookaround, backreferences, > 200 characters, > 32 in all.
+  A pattern that times out leaves its file's detection incomplete. Read from `COAI_SECURITY_LANE` (`signals`, a
+  prompt's `words`); refusals and unknown signals are complaints, never a refused lane.
+- **`--check-security [--validate]`**, on stdin, 65 for a bad request; in PROJECT.md's one-shot list.
+- The extension sends the words only when `--features` lists `securityWords`.
+- Deviation: the "total scan budget" is the engine's linear time plus the per-file match timeout, not a separate
+  budget — NonBacktracking bounds each pattern by the input it reads, and the detector already caps a file at 256 K.
+- Still open in E2.4: `--check-model` (D10, widening `--check-consultant`).
+
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
    shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;

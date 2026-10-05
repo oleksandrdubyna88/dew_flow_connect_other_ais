@@ -27,43 +27,49 @@ public static class SecuritySignals
     private static bool IsProse(string path) =>
         Path.GetExtension(path).ToLowerInvariant() is ".md" or ".markdown" or ".rst";
 
-    // Ordinary words such as "where" and "update", and querySelector/executeCommand, are not SQL.
-    // Keep common query calls and statement shapes, including removed code and configuration strings.
-    private static readonly Regex SqlCode = new(
-        @"\b(?:(?:query(?:first|single|multiple)?(?:ordefault)?|execute(?:reader|nonquery|scalar)?)(?:async)?\s*(?:<[^>\r\n]{1,160}>)?\s*\(|select\s+[\s\S]{1,256}\s+from\b|insert\s+into\b|update\s+\S+\s+set\b|delete\s+from\b|(?:create|alter|drop)\s+table\b)",
-        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.NonBacktracking,
-        TimeSpan.FromSeconds(1));
+    /// <summary>The files classified by the shipped signals — what the lane detects when the setting gives no words.</summary>
+    public static IReadOnlyList<SecurityFile> Classify(IReadOnlyList<FileDiff> files) => Classify(files, SignalTable.Shipped);
 
-    private static readonly IReadOnlyDictionary<string, string[]> Terms = new Dictionary<string, string[]>
-    {
-        ["sql"] = ["sql", "dbcontext", "dbconnection", "dbcommand", "migrationbuilder", "dapper"],
-        ["auth-token"] = ["jwt", "bearer", "cookie", "session", "authenticate", "oauth", "openid", "oidc", "pkce", "tokenvalidationparameters", "validateissuersigningkey", "redirect_uri", "client_secret"],
-        ["oauth"] = ["oauth", "openid", "oidc", "pkce", "redirect_uri", "redirecturi", "code_verifier", "code_challenge", "authorization_code", "acquiretoken", "msal"],
-        ["authz"] = ["authorize", "authorization", "permission", "tenant", "role", "allowanonymous", "mapget", "mappost", "mapput", "mapdelete", "httppost", "httpget", "controller", "route(", "user.claims", "companyid", "frombody", "dbcontext.update", ".updateasync", "patch", "endpoint"],
-        ["xss"] = ["innerhtml", "outerhtml", "dangerouslysetinnerhtml", "document.write", "webview", "<script", "markupstring", "htmlstring", "response.writeasync", "v-html"],
-        ["ssrf"] = ["httpclient", "httprequestmessage", "fetch(", "axios", "webrequest", "restsharp", "requests.get", "urllib", "redirect", "url"],
-        ["path"] = ["path.", "file.", "directory.", "readfile", "writefile", "extract", "archive"],
-        ["upload"] = ["iformfile", "multipart", "uploadedfile", "uploadfile", "fileupload", "multer", "formdata", "request.files", "request.form.files"],
-        ["command"] = ["process", "exec(", "execfile", "spawn(", "shell", "subprocess", "cmd.exe", "/bin/sh"],
-        ["deserialize"] = ["deserialize", "pickle", "yaml.load", "binaryformatter", "json.parse", "typenamehandling", "dtdprocessing", "type.gettype"],
-        ["secrets"] = ["secret", "password", "credential", "apikey", "api_key", "connectionstring", "ilogger", "loginformation", "logerror", "bearer"],
-        ["crypto"] = ["encrypt", "decrypt", "sha1", "md5", "random", "cryptograph", "cipher"],
-        ["concurrency"] = ["stripe", "paymentintent", "rowversion", "dbupdateconcurrencyexception", "balance", "credit", "transactionscope", "semaphoreslim", "lock (", "lock("],
-        ["webhooks"] = ["webhook", "stripe-signature", "x-hub-signature", "hmacsha256", "fixedtimeequals", "crypto.createhmac", "timestamp"],
-        ["prompt-injection"] = ["ichatclient", "kernel", "openaiclient", "anthropic", "tooldefinition", "system_prompt", "user_input"],
-        ["entry-point"] = ["mapget", "mappost", "controller", "endpoint", "handler", "route", "main("],
-    };
+    /// <summary>The files classified by <paramref name="table"/>: a person's words, a card's own words (PLAN_one_model_catalog.md E2.4).</summary>
+    public static IReadOnlyList<SecurityFile> Classify(IReadOnlyList<FileDiff> files, SignalTable table) =>
+        [.. files.Take(MaxFiles).OrderBy(f => f.Path, StringComparer.Ordinal).Select(file => Classify(file, table))];
 
-    public static IReadOnlyList<SecurityFile> Classify(IReadOnlyList<FileDiff> files) =>
-        [.. files.Take(MaxFiles).OrderBy(f => f.Path, StringComparer.Ordinal).Select(Classify)];
-
-    private static SecurityFile Classify(FileDiff file)
+    private static SecurityFile Classify(FileDiff file, SignalTable table)
     {
         var withheld = IsWithheld(file);
         var safe = withheld ? string.Empty : Redaction.SafeSource(WithinLimit(file.Text));
-        var text = IsProse(file.Path) ? string.Empty : file.Path + "\n" + safe;
-        return new(file with { Text = safe }, [.. Terms.Where(pair => Matches(pair, text)).Select(pair => pair.Key)])
-        { DetectionIncomplete = !withheld && IsOversized(file) };
+        var (signals, timedOut) = Detected(table, Detectable(file, safe));
+
+        return new(file with { Text = safe }, signals) { DetectionIncomplete = Incomplete(file, withheld, timedOut) };
+    }
+
+    /// <summary>What a detector reads: the path and the redacted text — nothing for prose, which cannot assert an application surface.</summary>
+    private static string Detectable(FileDiff file, string safe) => IsProse(file.Path) ? string.Empty : file.Path + "\n" + safe;
+
+    /// <summary>A file the detector read but could not finish: too large, or a pattern that ran out of time on it.</summary>
+    private static bool Incomplete(FileDiff file, bool withheld, bool timedOut) => !withheld && (IsOversized(file) || timedOut);
+
+    /// <summary>
+    /// The signals the text carries — and whether a pattern ran out of time on it, which leaves the file's detection
+    /// INCOMPLETE (the lane's own word for a detector that could not finish), never quietly unmatched.
+    /// </summary>
+    private static (IReadOnlyList<string> Signals, bool TimedOut) Detected(SignalTable table, string text)
+    {
+        var found = new List<string>();
+        var timedOut = false;
+        foreach (var (signal, matcher) in table.Signals)
+        {
+            try
+            {
+                if (matcher.Matches(text)) found.Add(signal);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                timedOut = true;
+            }
+        }
+
+        return (found, timedOut);
     }
 
     /// <summary>Binary content and credential files never reach a detector or a prompt.</summary>
@@ -72,10 +78,6 @@ public static class SecuritySignals
     private static bool IsOversized(FileDiff file) => file.Text.Length > MaxFileCharacters;
 
     private static string WithinLimit(string text) => text.Length <= MaxFileCharacters ? text : string.Empty;
-
-    private static bool Matches(KeyValuePair<string, string[]> group, string text) =>
-        group.Value.Any(term => text.Contains(term, StringComparison.OrdinalIgnoreCase))
-        || (group.Key == "sql" && SqlCode.IsMatch(text));
 
     /// <summary>
     /// The one order a slice reads files in: production and configuration ahead of documentation and
@@ -105,6 +107,7 @@ public static class SecuritySignals
         !IsProse(file.Diff.Path) && (file.Diff.Text.Length > 0 || file.DetectionIncomplete);
 
     private static bool ByTriggers(SecurityPrompt prompt, IReadOnlyList<SecurityFile> files) =>
-        prompt.Triggers.Count == 0 ? !SecurityCatalog.IsPreset(prompt.Id)
-            : files.Any(f => f.Signals.Intersect(prompt.Triggers).Any());
+        prompt.Words.Count > 0 ? files.Any(f => f.Signals.Contains(prompt.OwnSignal) || f.Signals.Intersect(prompt.Triggers).Any())
+        : prompt.Triggers.Count == 0 ? !SecurityCatalog.IsPreset(prompt.Id)
+        : files.Any(f => f.Signals.Intersect(prompt.Triggers).Any());
 }

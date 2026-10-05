@@ -23,6 +23,13 @@ public sealed record SecurityLaneSetting
     public IReadOnlyList<SecurityPrompt> Prompts { get; init; } = SecurityCatalog.Prompts;
     public IReadOnlyList<SecurityRun> Runs { get; init; } = [];
     public IReadOnlyList<string> Complaints { get; init; } = [];
+
+    /// <summary>
+    /// What the lane detects with: the shipped words, a signal's words from the setting in their place, and each card's
+    /// own words as a signal of its own (PLAN_one_model_catalog.md E2.4). Built once, when the setting is read, so a
+    /// pattern the engine refuses is a complaint here rather than a surprise inside a round.
+    /// </summary>
+    public SignalTable Table { get; init; } = SignalTable.Shipped;
     public bool Applies(Stage stage) => Enabled && stage is Stage.CodeReview or Stage.FeatureReview;
 
     public static PanelSettings Apply(PanelSettings settings, string? json)
@@ -72,7 +79,7 @@ public sealed record SecurityLaneSetting
     private static string RootProblem(JsonElement root) =>
         root.ValueKind == JsonValueKind.Object && root.TryGetProperty(Preserved, out _)
             ? "the extension found the security lane configuration malformed; the lane is off until coai.securityLane is corrected"
-            : Members(root, ["enabled", "threshold", "maxRounds", "prompts", "runs"]);
+            : Members(root, ["enabled", "threshold", "maxRounds", "prompts", "runs", "signals"]);
 
     private static SecurityLaneSetting Read(JsonElement root, IReadOnlyList<ProviderSettings> providers)
     {
@@ -82,15 +89,52 @@ public sealed record SecurityLaneSetting
         var complaints = new List<string>();
         var prompts = ReadPrompts(root, complaints);
         var runs = ReadRuns(root, providers, prompts, complaints);
+        var table = TableOf(ReadSignals(root, complaints), prompts, complaints);
         return shell with
         {
             Prompts = prompts,
             Runs = runs,
+            Table = table,
             Complaints = [.. complaints.Select(c => $"{Key}: {c}")],
         };
     }
 
     /// <summary>The root's own members (switch, threshold, rounds), or the refusal that turns the lane off.</summary>
+    /// <summary>The table the lane detects with — every pattern it could not compile said, by name, as a complaint.</summary>
+    private static SignalTable TableOf(IReadOnlyDictionary<string, IReadOnlyList<string>> signals, IReadOnlyList<SecurityPrompt> prompts, List<string> complaints)
+    {
+        var table = SignalTable.Build(signals, [.. prompts.Where(p => p.Words.Count > 0).Select(p => new OwnWords(p.Id, p.Words))]);
+        complaints.AddRange(table.Refused.Select(r => $"the pattern {r.Pattern} ({r.Signal}) is not used: {r.Why}"));
+
+        return table;
+    }
+
+    /// <summary>
+    /// A signal's words, from <c>signals</c> — each replaces that signal's shipped words. A signal this build does not know,
+    /// or a value that is not a list of words, is a complaint and is ignored: the lane still runs on the rest.
+    /// </summary>
+    private static IReadOnlyDictionary<string, IReadOnlyList<string>> ReadSignals(JsonElement root, List<string> complaints)
+    {
+        var words = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        if (!root.TryGetProperty("signals", out var signals)) return words;
+        if (signals.ValueKind != JsonValueKind.Object)
+        {
+            complaints.Add("signals must be an object of signal: [words]; ignored");
+            return words;
+        }
+        foreach (var signal in signals.EnumerateObject()) AddSignal(signal, words, complaints);
+
+        return words;
+    }
+
+    private static void AddSignal(JsonProperty signal, Dictionary<string, IReadOnlyList<string>> words, List<string> complaints)
+    {
+        var list = ListOf(signal.Value, out var invalid);
+        if (!IsSignal(signal.Name)) complaints.Add($"unknown signal '{signal.Name}' ignored; update this server or correct it");
+        else if (invalid) complaints.Add($"signal '{signal.Name}' must be a list of words; ignored");
+        else words[signal.Name] = list;
+    }
+
     private static SecurityLaneSetting Shell(JsonElement root)
     {
         var problem = RootRefusal(root);
@@ -169,7 +213,7 @@ public sealed record SecurityLaneSetting
     private static SecurityPrompt ReadAlwaysPrompt(JsonElement entry, SecurityPrompt seed, List<string> complaints)
     {
         if (HasStoredTriggers(entry)) complaints.Add($"{seed.Id} runs on every change; the conditions stored for it are ignored");
-        var refusal = Members(entry, ["id", "triggers", "focus"]);
+        var refusal = Members(entry, ["id", "triggers", "focus", "words"]);
         if (refusal.Length > 0) complaints.Add($"{seed.Id}: {refusal}");
         return seed with { Refusal = refusal };
     }
@@ -187,7 +231,16 @@ public sealed record SecurityLaneSetting
         var refusal = PromptRefusal(entry, seed.Id, triggers, badTriggers);
         if (badFocus || focus.Any(t => !IsSignal(t))) complaints.Add($"{seed.Id}: unknown focus tags ignored");
         if (refusal.Length > 0) complaints.Add($"{seed.Id}: {refusal}");
-        return seed with { Triggers = triggers, Focus = [.. focus.Where(IsSignal)], Refusal = refusal };
+        return seed with { Triggers = triggers, Focus = [.. focus.Where(IsSignal)], Refusal = refusal, Words = WordsOf(entry, seed.Id, complaints) };
+    }
+
+    /// <summary>A card's own words — each a word, a phrase, code or a /regex/; a value that is not a list is a complaint.</summary>
+    private static IReadOnlyList<string> WordsOf(JsonElement entry, string id, List<string> complaints)
+    {
+        var words = Tags(entry, "words", [], out var invalid);
+        if (invalid) complaints.Add($"{id}: words must be a list of words; the invalid ones are ignored");
+
+        return [.. words.Select(word => word.Trim()).Where(word => word.Length > 0)];
     }
 
     /// <summary>
@@ -198,7 +251,7 @@ public sealed record SecurityLaneSetting
     {
         if (HasInvalidTrigger(triggers, badTriggers)) return "unknown or invalid trigger; update this server or correct the trigger";
         if (IsPresetWithoutTrigger(id, triggers)) return "a preset requires at least one trigger; select a condition before enabling it";
-        return Members(entry, ["id", "triggers", "focus"]);
+        return Members(entry, ["id", "triggers", "focus", "words"]);
     }
 
     private static bool HasInvalidTrigger(IReadOnlyList<string> triggers, bool invalid) => invalid || triggers.Any(t => !IsTrigger(t));
@@ -318,6 +371,13 @@ public sealed record SecurityLaneSetting
     {
         invalid = false;
         if (!row.TryGetProperty(name, out var values)) return fallback;
+        return ListOf(values, out invalid);
+    }
+
+    /// <summary>A JSON list of strings, once each — <paramref name="invalid"/> when it is no list or holds anything else.</summary>
+    private static IReadOnlyList<string> ListOf(JsonElement values, out bool invalid)
+    {
+        invalid = false;
         if (values.ValueKind != JsonValueKind.Array) { invalid = true; return []; }
         var items = values.EnumerateArray().ToArray();
         invalid = items.Any(v => v.ValueKind != JsonValueKind.String);

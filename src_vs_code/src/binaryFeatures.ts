@@ -26,6 +26,10 @@ export const FEATURES = {
   cliEffort: 'cliEffort',
   /** E2.3: a consultant on an api row, or a codex row on somebody else's endpoint. */
   apiConsultant: 'apiConsultant',
+  /** E2.4: COAI_SECURITY_LANE's `signals` and a prompt's `words` — an older binary refuses those members. */
+  securityWords: 'securityWords',
+  /** E2.4: `--check-security [--validate]` on stdin. */
+  checkSecurity: 'checkSecurity',
 } as const;
 
 export interface BinaryFeatures {

@@ -6,6 +6,21 @@ public sealed record SecuritySignal(string Id, string Label, bool Trigger);
 public sealed record SecurityPrompt(string Id, IReadOnlyList<string> Triggers, IReadOnlyList<string> Focus)
 {
     public string Refusal { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The card's own words — each a word, a phrase, a piece of code or a <c>/regex/</c> (PLAN_one_model_catalog.md E2.4).
+    /// A card that has them is due when they match, or when one of its triggers does — never on every change.
+    /// </summary>
+    public IReadOnlyList<string> Words { get; init; } = [];
+
+    /// <summary>The signal this card's own words raise — one only this card is triggered by.</summary>
+    public string OwnSignal => OwnSignalOf(Id);
+
+    /// <summary>The own-words signal of the prompt <paramref name="id"/>.</summary>
+    public static string OwnSignalOf(string id) => $"own:{id}";
+
+    /// <summary>Whether a signal is a card's own — internal to detection; a person sees the CARD, not this name.</summary>
+    public static bool IsOwnSignal(string signal) => signal.StartsWith("own:", StringComparison.Ordinal);
 }
 
 /// <summary>The seed shared by settings and detection; prompt bodies belong to the operator.</summary>

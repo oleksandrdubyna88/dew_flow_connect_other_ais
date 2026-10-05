@@ -435,7 +435,7 @@ export function envBlock(
    */
   features: readonly string[] = [],
 ): Record<string, string> {
-  const env: Record<string, string> = securityEnv(settings.securityLane, installedServerVersion);
+  const env: Record<string, string> = securityEnv(settings.securityLane, installedServerVersion, features);
   // "Differs from the shipped list" is asked of what CROSSES — both lists as the server would read
   // them — not of a hand-kept subset of fields. The subset missed the plan / code / document boxes, the
   // CLI path and (until S3.3a) the feature tick, so a change to a shipped row never reached the server.

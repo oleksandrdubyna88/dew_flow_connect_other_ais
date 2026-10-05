@@ -121,6 +121,21 @@ public sealed class SecurityRosterCharacterizationTests : IDisposable
         Append(SqlPair, Plain).Should().Be(
             "reviewers=0 active=True\nnot asked codex/redteam-sql: no matching trigger in this committed change; prior fixes were not verified by this run");
 
+    /// <summary>
+    /// A card's own words decide whether the ROUND asks it (PLAN_one_model_catalog.md E2.4): the roster classifies with the
+    /// lane's table, not the shipped one — a diff carrying the card's word reaches the launch, one without it is not asked.
+    /// </summary>
+    [Fact]
+    public void A_cards_own_words_decide_whether_the_round_asks_it()
+    {
+        const string Billing = """{"enabled":true,"prompts":[{"id":"redteam-billing","words":["acme.charge("]}],"runs":[{"vendor":"codex","prompt":"redteam-billing"}]}""";
+        // A custom card's text, so the only thing deciding the outcome is whether its words are in the change.
+        WriteOverride("redteam-billing", System.Text.Encoding.UTF8.GetBytes("Review the billing calls for missing authorization."));
+
+        Append(Billing, [new("Pay.cs", "@@ -1 +1 @@\n+Acme.Charge(order);")]).Should().Contain(Unprepared, "its word is in the change, so it is asked");
+        Append(Billing, Plain).Should().Contain("not asked codex/redteam-billing");
+    }
+
     [Fact]
     public void An_oversized_diff_without_the_trigger_is_incomplete_coverage() =>
         Append(SqlPair, [new("Large.cs", new string('a', SecuritySignals.MaxFileCharacters + 1))]).Should().Be(

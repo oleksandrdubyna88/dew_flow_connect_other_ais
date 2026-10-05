@@ -206,6 +206,12 @@ internal static class Program
         Features,
 
         /// <summary>
+        /// What the security lane would make of a sample read on stdin — signals, due cards, refused patterns. See
+        /// <see cref="Server.CheckSecurityMode"/>.
+        /// </summary>
+        CheckSecurity,
+
+        /// <summary>
         /// Print ONE round's findings as JSON and leave — what an opened row of the log asks for.
         /// </summary>
         /// <remarks>
@@ -299,6 +305,7 @@ internal static class Program
                 "--check-consultant" => Startup.CheckConsultant,
                 "--security-prompt-text" => Startup.SecurityPromptText,
                 "--features" => Startup.Features,
+                "--check-security" => Startup.CheckSecurity,
                 _ => Startup.Usage,
             };
 
@@ -429,6 +436,9 @@ internal static class Program
 
             case Startup.Features:
                 return await Server.FeaturesMode.RunAsync();
+
+            case Startup.CheckSecurity:
+                return await Server.CheckSecurityMode.RunAsync(args);
 
             default:
                 return await ServeAsync();
@@ -2217,6 +2227,9 @@ internal static class Program
         written. Read only; no model is called.
         `--features` prints the capabilities this build has as {"features":[...]} — what the extension asks
         before it sends a catalog field. A build too old for it exits 64.
+        `--check-security [--validate]` reads {"text": …, "lane": …} on stdin and prints the signals the security lane
+        would raise, the cards that would be due and the patterns it refuses; --validate checks the patterns alone.
+        A request it cannot read exits 65.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

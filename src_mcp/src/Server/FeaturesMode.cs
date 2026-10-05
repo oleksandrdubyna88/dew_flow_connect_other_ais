@@ -28,6 +28,10 @@ internal static class FeaturesMode
         "cliEffort",
         // E2.3: a consultant on an api row, or a codex row on somebody else's endpoint (its provider on every turn).
         "apiConsultant",
+        // E2.4: COAI_SECURITY_LANE's `signals` (a signal's words) and a prompt's `words` — an older binary refuses the members.
+        "securityWords",
+        // E2.4: `--check-security [--validate]` on stdin — what the editor's "Try it" and save-time check ask.
+        "checkSecurity",
     ];
 
     internal static async Task<int> RunAsync()
