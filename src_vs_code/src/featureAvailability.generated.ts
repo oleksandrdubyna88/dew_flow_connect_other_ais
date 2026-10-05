@@ -76,3 +76,52 @@ export const EFFORT: readonly EffortRow[] = [
     note: "The model's probe report (coai-mcp --probe-api, ApiCapabilities.EffortLevels), judged per model.",
   },
 ];
+
+/** Whether a runtime has a thinking switch (D12): `probe` asks the model's report, the others say why there is none. */
+export type ThinkingSource = 'probe' | 'unmeasured' | 'none';
+
+/** One runtime's thinking switch — and, always, the sentence a card shows when there is none. */
+export interface ThinkingRow {
+  readonly runtime: Runtime;
+  readonly source: ThinkingSource;
+  readonly note: string;
+}
+
+/** One row per runtime. */
+export const THINKING: readonly ThinkingRow[] = [
+  {
+    runtime: 'codex',
+    source: 'unmeasured',
+    note: 'No flag that switches codex’s thinking off has been shown taking effect, so the card says so rather than drawing a switch.',
+  },
+  {
+    runtime: 'gemini',
+    source: 'none',
+    note: 'The retired Gemini CLI runtime; a row saved on it is moved to antigravity on read.',
+  },
+  {
+    runtime: 'claude',
+    source: 'none',
+    note: 'Claude’s depth is its effort (--effort); there is no separate thinking switch.',
+  },
+  {
+    runtime: 'antigravity',
+    source: 'none',
+    note: 'The model id carries its level (gemini-3.7-flash-high); there is no switch.',
+  },
+  {
+    runtime: 'local',
+    source: 'unmeasured',
+    note: 'A local engine’s thinking follows its effort setting; a separate switch has not been measured.',
+  },
+  {
+    runtime: 'remote',
+    source: 'unmeasured',
+    note: 'A Team server row carries no thinking switch: contract 2 carries effort and a system prompt only.',
+  },
+  {
+    runtime: 'api',
+    source: 'probe',
+    note: 'The model’s probe report says whether its thinking can be switched off (thinkingSwitchable), per model.',
+  },
+];

@@ -1,8 +1,8 @@
-import * as crypto from 'node:crypto';
 import { escapeHtml, jsonForScript } from './webviewHtml';
 import { PROMPT_GROUPS, PROMPT_TEXTS } from './helpPrompts';
 import { ZOOM_CSS, zoomControlHtml, zoomScript, zoomStyle } from './zoomControl';
 import { TONE_CSS, toneControlHtml, toneScript, toneStyle } from './textTone';
+import { webviewNonce } from './webviewNonce';
 import {
   HELP_ARTICLES,
   HELP_LANGUAGES,
@@ -154,7 +154,7 @@ function promptsHtml(): string {
 }
 
 export function renderHelpHtml(options: HelpPageOptions): string {
-  const nonce = crypto.randomBytes(16).toString('base64url');
+  const nonce = webviewNonce();
   const language = options.language;
   const index = searchIndex(language);
   return `<!DOCTYPE html>

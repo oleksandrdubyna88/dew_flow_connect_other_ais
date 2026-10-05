@@ -197,7 +197,7 @@ test('the host draws the tab BEFORE it waits, waits under the ceiling, and only 
   const body = panel.slice(panel.indexOf('export async function restoreAfterReload'), panel.indexOf('export async function restoreChatTab'));
 
   assert.match(body, /const id = persistedId\(state\);/u, 'the id is not validated at the boundary');
-  const drawn = body.indexOf('draw(deps, panel, restoringHtml(id, nonce()))');
+  const drawn = body.indexOf('draw(deps, panel, restoringHtml(id, webviewNonce()))');
   const waited = body.indexOf('await withinCeiling(migration, MIGRATION_WAIT_MS)');
   const read = body.indexOf('await restoreChatTab(deps, panel, id');
   assert.ok(drawn !== -1, 'nothing is drawn while the migration runs — a blank tab');

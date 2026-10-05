@@ -1,6 +1,6 @@
-import { randomBytes } from 'node:crypto';
 
 import * as vscode from 'vscode';
+import { webviewNonce } from './webviewNonce';
 
 import { asText } from './asText';
 import { notify } from './notify';
@@ -682,7 +682,7 @@ export class BugzReviewPanel {
       return;
     }
 
-    const view = { nonce: nonce(), uiScale: currentUiScale(), textTone: currentTextTone() };
+    const view = { nonce: webviewNonce(), uiScale: currentUiScale(), textTone: currentTextTone() };
     const found = reviewTabs(this.held, this.chosen, this.marks);
     this.draws += 1;
 
@@ -718,19 +718,3 @@ interface HeldReal {
   readonly read: RealRead;
 }
 
-/**
- * One nonce per paint: the CSP admits our one script and nothing else.
- *
- * <p><b>Cryptographically random, not `Math.random()`.</b> The nonce is the whole of the content
- * security policy here — a predictable one is a policy an injected script can satisfy, which is
- * the point of having it. `Math.random()` is seeded per process and its sequence is recoverable
- * from a few outputs.</p>
- *
- * <p>The panel's own `nonce()` (`panelProvider.ts`) still uses `Math.random()`. I copied it here
- * and a scanner refused the copy; the reuse rule says to write the new one well and SAY what was
- * found rather than imitate it, so this is the correct one and that one is reported rather than
- * quietly rewritten in a change about something else.</p>
- */
-function nonce(): string {
-  return randomBytes(24).toString('base64url');
-}

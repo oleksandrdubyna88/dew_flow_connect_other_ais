@@ -209,6 +209,11 @@ export function runPageHtml(
    * every timer runs at once and no bar is found, which is what every test written before the busy mark expects.
    */
   clock?: PageClock,
+  /**
+   * What the webview's state API holds — read by `getState`, replaced by `setState`, and readable by the test after. Absent:
+   * nothing saved and nothing kept, which is a first load.
+   */
+  state?: { value: unknown },
 ): Page {
   const bar = clock === undefined ? null : busyBarOf(html);
   const posted: Record<string, unknown>[] = [];
@@ -251,8 +256,8 @@ export function runPageHtml(
     // A webview always has its state API; this one has nothing saved, which is a first load.
     () => ({
       postMessage: (message: Record<string, unknown>) => { posted.push(message); },
-      getState: (): unknown => undefined,
-      setState: (): void => undefined,
+      getState: (): unknown => state?.value,
+      setState: (next: unknown): void => { if (state !== undefined) { state.value = structuredClone(next); } },
     }),
     fakeDocument,
     {

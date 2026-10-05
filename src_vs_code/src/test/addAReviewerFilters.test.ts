@@ -28,9 +28,10 @@ const PROVIDER = path.join(__dirname, '..', '..', 'src', 'panelProvider.ts');
 const source = (): string => fs.readFileSync(PROVIDER, 'utf8');
 
 test('the Add a reviewer pick filters on the detail and the description, not the label alone', () => {
-  const options = /\{\s*title: 'Add a reviewer',[\s\S]*?\}/.exec(source())?.[0];
+  // "Add a model" since the picker is grouped by where a model runs (PLAN_one_model_catalog.md E3.2).
+  const options = /\{\s*title: 'Add a model',[\s\S]*?\}/.exec(source())?.[0];
 
-  assert.ok(options, 'the Add a reviewer quick pick no longer passes a title, so this test is asserting nothing');
+  assert.ok(options, 'the Add a model quick pick no longer passes a title, so this test is asserting nothing');
   assert.match(options, /matchOnDetail: true/, 'typing words from an entry’s hint matches nothing');
   assert.match(
     options,

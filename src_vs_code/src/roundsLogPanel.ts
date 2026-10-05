@@ -1,4 +1,3 @@
-import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { Escalation } from './escalations';
 import { LogRow, questionsHtml, roundsLogHtml } from './roundsLog';
@@ -9,6 +8,7 @@ import { LogCommand, logCommandOf, LogPageMessage, RoundsLogHooks, workFor } fro
 import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
+import { webviewNonce } from './webviewNonce';
 
 /** What the page can ask the extension to do. Everything else is page state and never comes back. */
 
@@ -109,7 +109,7 @@ export class RoundsLogPanel {
     );
     this.panel = panel;
     panel.webview.html = roundsLogHtml(
-      rows, questions, crypto.randomBytes(16).toString('hex'), usageHtml, spotsHtml, totals,
+      rows, questions, webviewNonce(), usageHtml, spotsHtml, totals,
       { consultations: consultationsHtml, qconsults: qconsultsHtml, text: { size: currentUiScale(), tone: currentTextTone() } });
     this.latest = { rows, questions, usage: usageHtml, spots: spotsHtml, totals, consultations: consultationsHtml, qconsults: qconsultsHtml };
     this.rebuilt();

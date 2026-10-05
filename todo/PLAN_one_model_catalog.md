@@ -1,6 +1,7 @@
 # PLAN — One model catalog: the Settings page rebuilt around models you add once
 
-> Status: **in progress, 2026-10-04 — E1 merged (PR #681); E2 story 1 built on `feat/catalog-e2`; E2.2–E5 open.** The design is accepted: the clickable mockup in
+> Status: **in progress, 2026-10-05 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
+> the measured live calls wait on the operator); E3 in progress on `feat/catalog-e3`; E4–E5 open.** The design is accepted: the clickable mockup in
 > [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
 > checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
@@ -467,6 +468,133 @@ override the stories above where they differ:
    from and "ask again", the API "runs it at", the off-machine endpoint warning and the WSL fix, ✓ Check (D10), the
    per-card "this coai-mcp ignores…" note.
 
+#### E3 as designed (before building; from the mockup, the plan and the code that is there)
+
+**The host — one Settings panel, two pages.** The new page is NOT a second webview: when `coai.settingsPreview` is on
+(user scope, never overlaid; declared in `package.json`), the Settings slot `PanelProvider` already paints renders the
+new page instead of the old one (`pageFor`). So "never both" (D5) is structural, and the new page inherits, unchanged,
+everything the slot has: the full `PanelState` (the `--providers` report, CLI status, the local engine, Team servers,
+`--features`), the message protocol (`setting`, `command`, `focus`, `ready`, `tab`), the write queue, the busy marks,
+focus restore, the refused-write snap-back and `RenderTracker`. The page is built on `pageDocument` with its own
+`extra.css`/`extra.script`, so its CSP and shared wiring are the old page's. Toggling the switch repaints the open panel.
+`panelProvider.ts` (4 332 lines) gains only the branch and a delegation to new modules; nothing else is added to it.
+
+**E3.1 The shell** (new modules, each under 400 lines: `catalogPage.ts` the document, `catalogShell.ts` tabs/help/skew/
+newTag/confirm, `catalogPageScript.ts` the client script, `catalogCss.ts`):
+- Six tabs with the mockup's sub-tabs — Models; Reviews (Stages, Roles & prompts, Prompts per round, The gate,
+  Commands, Limits); Consultants (Consultant, Question consultant); Security lane; Chat; Setup (Vendor keys, Team
+  servers, MCP server, This side). `tabStrip` + `tabKeysScript` for both levels. The tab is held by the host as today;
+  the sub-tab and the Models filters live in the webview's `getState/setState`, which survives a repaint.
+- Until E4 builds them, the five other tabs show one line: "Still on the current Settings page" with a button that
+  switches the preview off (the old page then paints in the same panel).
+- **The deep-link map (D11):** `OLD_TAB_PLACES` maps every old section id (reviewers, chat, consultant,
+  questionconsultant, securityLane, prompts, gate, limits, keys, teamServers, side, server) to a new tab and sub-tab;
+  `coai.openSettings(id)` accepts an old id or a new `tab/sub`. A test fails when an old id has no place.
+- `help(key)` over the existing `HELP` table (English tooltips; the five-language articles are E5.2).
+  `skew(feature, what)` — ONE road, by CAPABILITY, not a version: what the installed coai-mcp's `--features` lists
+  (`FeaturesCache.known()`), "not installed" when there is none. `newTag(controlId)`: a table of control → the
+  extension version that brought it; the host stamps the first-run time of each version in `globalState` (one entry per
+  version, pruned after 60 days); the tag shows for 7 days after that. One `confirm` dialog for everything (Remove
+  included), danger-styled when the action loses something.
+- Layout from the mockup: cards two columns from 1100 px, card parts on a CSS subgrid (side-by-side cards one height);
+  text size and tone through the existing `textControls` (the census of pages grows to 11).
+- The webview nonce comes from `crypto.randomBytes` in one helper (`webviewNonce.ts`) used by every panel —
+  `panelProvider.ts` used `Math.random`.
+- `render-page.mjs` renders the new page and gains a light theme.
+
+**E3.2 Models — cards and editing** (`modelsTab.ts`, `modelCard.ts`, `addModelDialog.ts`):
+- One card per catalog row (`Vendor`): name (inline), id, runtime, model, on/off, the review stages through the
+  existing `stageBox`/`featureBox` (so `document`'s three-way absent/true/false and remote's "not offered" are the old
+  page's rules), `uses` ticks for the other features (consultant, qconsult, security, chat, bugz) with D4's availability
+  reasons merged into one line, effort (D4 levels per runtime; a remote row offers its server vendor's runtime levels),
+  system prompt (default/custom, 8 KiB counted in bytes), timeout (EMPTY means Limits › Reviewer timeout — never a
+  fake 10), prices, connection (path, endpoint, vault key, dialect, Team server fixed after adding).
+- **Thinking (D12):** `shared/feature-availability.json` gains `thinking` rows — `probe` for `api` (the module's
+  `thinkingSwitchable`, per model, as `apiSettingsView.thinkingControl` already draws it), `none` for claude (its depth
+  is `--effort`) and antigravity, `unmeasured` for codex, local and remote. The switch is drawn only for `probe` rows
+  whose report says switchable; every other card says why in one line. Generated for both halves like the effort rows.
+- Add grouped by where a model runs (a CLI here, an API key, this machine's GPU, a Team server — disabled with the
+  reason when none is signed in), ids from `freeVendorId`; duplicate (copies everything incl. `vaultKeyName`, new id,
+  "(copy)"); remove asks through the one confirm and lists every reference (consultant callers, question-consultant
+  rows, security pairs, the chat model, Bugz); the last switched-on plan or code model cannot be switched off, unticked
+  or removed (the old page's `removeVendor` rule, widened). Bugz has one model (D7): ticking it moves it, said once.
+- Filters: search, access, "show switched-off", and the three chip rows (used for, effort, vendor) with counts.
+- **Writes are validated on the way in**, for both pages: `catalogRefusal` (64 rows, 8 KiB) and `effortRefusal` were
+  called only by the migration; the vendor write path now refuses by name and the control snaps back. RED first.
+
+**E3.3 Models — the world-facing parts** (`modelCardWorld.ts`), each calling what the old card already calls:
+- The CLI's ▶ open / ⤓ install / ⟳ update — the existing `runVendor`/`installVendorCli`/`updateVendorCli` commands
+  by name (the shared message protocol reaches them unchanged); the CLI badge from `cliStatus`.
+- coai-mcp's verdict from the `--providers` report (`cannotRun`), kept apart from the last ✓ Check.
+- Where a list came from and "ask again" (`modelsProvenance`, `reprobeLocal`, `listEndpointModels`).
+- An api row's "runs it at" (`apiSettingsView.runsWith`); the off-machine endpoint warning (`remoteWarning`) and the
+  WSL fix (`fixWslNetwork`).
+- **✓ Check (D10)** through `coai-mcp --check-model` (built in E2.4), the row on stdin, confirmed first as one paid
+  turn; its status is the durable record `model-<id>` the binary keeps — read on load, "checking…" while it runs,
+  never stuck after a crash (the binary's own sweep) — by widening `ConsultantHealthHost` from a caller kind to a key.
+- The per-card "this coai-mcp ignores: …" note through `skew` — by capability (`systemPrompt`, `timeoutMinutes`,
+  `cliEffort`, `bugzRuntime`), and on a remote card what a contract-1 Team server drops (E2.5).
+
+**Mockup choices this design does NOT take, and why:** help by text (the plan's `help(key)`); one global "days since
+update" (`newTag(controlId)`); one `PLANNED` version for every gate (capabilities); a ✓ Check with no confirmation
+(D10); thinking only on api cards (D12); no sub-tab in deep links (D11); a 10-minute default timeout (D1: empty means
+the round's); a separate remove dialog (one confirm); the remove text "the id is not reused" — `freeVendorId` reuses a
+freed id today, so the dialog does not promise it (tail T9). Mockup-only, not built: the theme picker, the days and
+coai-mcp pickers, Reset demo data, the Design notes tab, localStorage, toasts in place of real actions.
+
+**Build order:** E3.1 (shell + preview switch + deep links + nonce) → E3.2 (cards, editing, validation, thinking rows)
+→ E3.3 (world-facing parts, ✓ Check). One branch, one code gate at the end of the epic.
+
+**Test plan:** every view through the real page script in the DOM shim (`panelPageHarness`), never source text: the
+six tabs and sub-tabs, arrow keys, the deep-link map for every old id, the switch repainting the panel, help keys
+attached, `newTag` on day 0 and gone on day 7, `skew` by capability. Models: each card part, add/duplicate/remove with
+references, the last-model lock, filters and counts, the thinking switch only where switchable, a refused write
+snapping back (64 rows, 8 KiB, an effort the runtime does not take). World parts: each command reaches its existing
+handler; ✓ Check confirms, runs `--check-model` with the row on stdin, shows the durable state after a reload.
+Guards that move: the page census (10 → 11), `settingsAreDeclared`, `sonarExclusions`, `bundledPage`. A headless-Chrome
+layout check (two columns at 1920, one at 900, side-by-side cards one height, light theme) through `render-page.mjs`.
+
+**Definition of done:** the preview page shows the shell and a complete Models tab; every write is validated; the old
+page is unchanged with the preview off; all suites, lint, the seam and the layout check green; module docs updated.
+
+**As revised by epic 3's plan round (coai session `ebf28ac3`, 2026-10-05, proceed, 5 findings accepted):**
+
+- **A switch never loses a draft.** The repaint that swaps the pages goes through the slot's edit hold, and a pending
+  debounced draft is saved before the other page paints; a test types into a textarea, flips the switch, and finds
+  the text saved.
+- **The row cap is checked only where a row is ADDED** (add, duplicate): an edit of a catalog already past 64 rows (a
+  hand-edited settings file) is never refused for the count, so the page can always be used to get back under it.
+  A row's own fields (8 KiB prompt, effort) are checked on every write of that row.
+- **The generator is named:** `src_vs_code/scripts/generate-feature-availability.mjs` gains the `thinking` rows; its
+  `--check` (byte for byte, already in CI) fails when the generated file drifts; C# `FeatureAvailability` reads them.
+- **No "ignores" note before the binary has answered.** `skew` draws nothing while `--features` has not settled (a
+  cold start, a timeout); "not installed" only when there is no binary at all.
+- **Every panel moves to `webviewNonce.ts`** in E3.1, not only the new page.
+
+#### E3 as built (branch `feat/catalog-e3`, PR #687)
+
+- **E3.1** as designed, plus: the old page's header offers "Try the new Settings page"; the new page's header "Use the
+  current page". `newTag` keys on a first-seen record (`newTags.ts`), so no version is guessed.
+- **E3.2** as designed. Deviations: the add flow is the existing picker, GROUPED by where a model runs, not an in-page
+  form (one add path for both pages); a use is a command (`toggleUse`), since it is one entry of a list; the new
+  card's remove is `removeModel` (the page already asked — `removeVendor` would ask a second time). Ticking Bugz writes
+  `coai.bugzModel` as well, so the tick takes effect today.
+- **E3.3** as designed. The ✓ Check is asked by the host's modal (the Consultant tab's question), not the page's
+  dialog, so a paid turn is confirmed in one place for both.
+- Not here: the Models card's usage badge (runs, failures, cost per row) — the ledger reads by row id already; drawing
+  it is E4's with the Reviews tab. Tail T9 (a freed id is reused) stands.
+
+#### Epic 3 code round (coai session `ebf28ac3`, 2026-10-05, proceed)
+
+- 4 of 4 reviewers answered; 10 findings, 9 accepted and fixed (RED first where there is behaviour), 1 rejected:
+  splitting a base stylesheet out of the old page's now (E5.1 removes the old page and moves what stays).
+- Fixed: removing the Bugz row clears `coai.bugzModel`; a model check whose row is gone spawns nothing; the
+  "new" list matches the `newTag` calls (and the marks are drawn on effort and the system prompt); each page keeps
+  its own position (`HeldTabs`); one lock sentence; the add's choices in a function and its cap checked again after
+  the picker; the page body built once; the features read once.
+- **Owed, not closed:** the cadence consultation for epics 1-3 and the risk consultations for epics 2 and 3 —
+  consulting is switched off in this installation (`COAI_CONSULT_ENABLED`).
+
 ### Epic 4 — The feature tabs use the catalog
 1. **Reviews**: Stages; Roles & prompts (replacing `rolesPage.ts`) with ONE switch per role — `roleEnabled` and the
    catalog's `active` merged, `COAI_ROLES` still written for servers under `ROLE_SWITCH_SINCE`; deletion's confirmation
@@ -555,6 +683,7 @@ Disjoint from the rest of `todo/`. Each plan in the table gets the same row, poi
 | T6 | The extension's `vendorsFrom` turns a runtime it does not know into `codex` — an older panel reading a newer one's rows, and re-saving them so | coai-mcp refuses it by name since E2.1; the extension should keep the row and show it unrunnable, which widens the `Runtime` type |
 | T7 | `COAI_BUGZ_MODEL` is written into the env block and read by nothing in coai-mcp (the collector takes `--model`) | Remove it, or give it a reader, when the Bugz picker moves to the catalog (E5.1) |
 | T8 | Contract 2 is tested against the server in-process and a stub on a socket, never a deployed one: no live call has shown a remote row's effort APPLIED on the server's claude, or its system prompt taken | The deploy is the operator's decision; the measured call follows it, at a paid review's cost |
+| T9 | `freeVendorId` gives a freed id to the next row added, so a removed row's spending history and vault key name are inherited by a new one | A retired-id list (bounded, per side) when the ledger keys on it; until then the remove dialog does not promise the id is not reused |
 
 ## Definition of Done
 

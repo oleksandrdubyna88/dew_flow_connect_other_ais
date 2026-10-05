@@ -79,6 +79,7 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
   'helpPanel.ts global write': { count: 1, why: 'coai.helpLanguage — about the reader, not the work' },
   'textToneHost.ts global write': { count: 1, why: 'coai.textTone — about the reader, not the work' },
   'uiScaleHost.ts global write': { count: 1, why: 'coai.uiScale — about the reader, not the work' },
+  'settingsPanel.ts global write': { count: 1, why: 'coai.settingsPreview — which Settings page the person reads; user scope, never per side (D5)' },
   // The catalog migration moves EACH layer on its own (PLAN_one_model_catalog.md E1.3): the user layer is read raw
   // and written Global on purpose — a workspace value is not the person's to have migrated, and the merged reader
   // would hand it one — and a side's overlay reads the user layer's rows its keys fall back to (`sharedVendors`).

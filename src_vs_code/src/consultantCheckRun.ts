@@ -38,7 +38,7 @@ export const CHECK_STATE_POLL_MS = 2_000;
 
 export interface CheckRunPorts {
   /** Spawns the server with these arguments; `stop` is asked repeatedly and true KILLS the process (`capture`). */
-  readonly run: (args: readonly string[], capMs: number, stop: () => boolean) => Promise<{ code: number; output: string }>;
+  readonly run: (args: readonly string[], capMs: number, stop: () => boolean, input: string) => Promise<{ code: number; output: string }>;
   /** This side's `<kind>.check.json`, as it is now — undefined when there is none or it cannot be read. */
   readonly readState: () => Promise<CheckRecord | undefined>;
   readonly nowMs: () => number;
@@ -47,7 +47,27 @@ export interface CheckRunPorts {
 }
 
 /** Runs one check to its end and says what came of it. Never rejects for a state read that failed. */
-export async function runConsultantCheck(kind: string, ports: CheckRunPorts): Promise<CheckRunResult> {
+/** A model's check is kept under `model-<row id>` — the record `--check-model` writes (PLAN_one_model_catalog.md D10, E2.4). */
+export const MODEL_CHECK = 'model-';
+
+/** Whether a check key is a catalog row's rather than a caller kind's. */
+export function isModelCheck(kind: string): boolean {
+  return kind.startsWith(MODEL_CHECK) && kind.length > MODEL_CHECK.length;
+}
+
+/** The arguments of one check: a caller kind's consultant by name, or a catalog row read on stdin (`--check-model`). */
+export function checkArgs(kind: string): readonly string[] {
+  return isModelCheck(kind) ? ['--check-model'] : ['--check-consultant', '--caller', kind];
+}
+
+/**
+ * @param input what the server reads on stdin — a model check's `{"row": …}`; empty for a caller kind's
+ */
+export async function runConsultantCheck(kind: string, ports: CheckRunPorts, input = ''): Promise<CheckRunResult> {
+  // A model's check with no row to read: the row was removed while the paid turn was being confirmed. Nothing is spawned.
+  if (isModelCheck(kind) && input.length === 0) {
+    return { kind: 'crashed', why: 'the model was removed before its check could run — nothing was sent' };
+  }
   const spawnedMs = ports.nowMs();
   let capAtMs = spawnedMs + CHECK_INITIAL_CAP_MS;
   const stopPolling = ports.every(CHECK_STATE_POLL_MS, () => {
@@ -55,7 +75,7 @@ export async function runConsultantCheck(kind: string, ports: CheckRunPorts): Pr
     ports.readState().then((state) => { capAtMs = tightenedCap(capAtMs, spawnedMs, state); }, () => undefined);
   });
   try {
-    const { code, output } = await ports.run(['--check-consultant', '--caller', kind], CHECK_INITIAL_CAP_MS, () => ports.nowMs() > capAtMs);
+    const { code, output } = await ports.run(checkArgs(kind), CHECK_INITIAL_CAP_MS, () => ports.nowMs() > capAtMs, input);
 
     return resultOf(code, output);
   } finally {

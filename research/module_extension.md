@@ -10789,3 +10789,91 @@ The last settled `--features` list belongs to ONE binary file (path + modificati
 forgotten at once — an updated binary claims nothing until it answers — and every settled answer calls `onSettled`,
 which `extension.ts` uses to write the settings file again. Before, `known()` kept the old binary's list until the
 new one answered, and the file was re-written only once per window.
+
+## The new Settings page — the shell (2026-10-05, PLAN_one_model_catalog.md E3.1)
+
+**One panel, two pages.** With `coai.settingsPreview` on (user scope, `application`; never a side overlay) the ONE
+Settings slot paints the new page (`catalogPage.ts`) instead of the old one — `PanelProvider.pageFor` branches on
+`settingsPreviewOn()`. So the two never write at once (D5), and the new page inherits the slot's `PanelState`, message
+protocol, write queue, busy marks, focus restore and snap-back unchanged; it is `pageDocument` with its own body,
+sheet (`catalogCss.ts`, the editor's theme variables) and script (`catalogPageScript.ts`). Any `coai` change repaints,
+so flipping the switch — the old page's **Try the new Settings page**, the new page's **Use the current page**
+(command `settingsPreview`, id `on`/`off`), or the setting itself — swaps the page in the open tab.
+
+- **Places** (`catalogPlaces.ts`): six tabs — Models, Reviews, Consultants, Security lane, Chat, Setup — with the
+  design's sub-tabs. A place is `tab` or `tab/sub`; the host holds ONE string (`settingsPanel.ts`), the page's script
+  opens it and posts the place back. A sub-tab's strip key is its whole place, so one click handler serves both
+  levels; a top tab reopens the sub-tab last open under it (`getState`). `OLD_TAB_PLACES` maps every old tab id to
+  its place (D11; a test reads the old page's own sections), and `oldIdOf` maps back when the preview is switched off.
+- **Shell pieces** (`catalogShell.ts`): `skew(feature, what, binary)` by CAPABILITY (`--features`; nothing while the
+  list has not settled — `PanelState.serverFeatures` is `undefined` until then — and "not installed" only without a
+  binary); `newTag(controlId, firstSeen, now)` for a week after a control was first seen (`newTags.ts`: a bounded
+  `globalState` record stamped at activation, pruned after 60 days — no version number guessed); one confirm
+  (`confirmButton` with `data-asks`, never `data-command`, and `CONFIRM_DIALOG`, sending only on its action button
+  through the shared `send`); `stillOnTheOldPage` for the five tabs E4 builds.
+- **Nonce:** every panel takes its CSP nonce from `webviewNonce.ts` (128 bits, base64url); the Settings panel's was
+  `Math.random()`. `everyPanelTakesItsNonceFromOneHelper.test.ts` fails on a panel that makes its own.
+- **Help:** the Settings article says how to switch, in all five languages (`coai.settingsPreview`'s help alias).
+- **Render:** `scripts/render-page.mjs catalog[:<place>]`, and `--theme light` (Light Modern tokens; the root is
+  painted, as VS Code paints a webview).
+
+```mermaid
+flowchart LR
+  S[coai.settingsPreview] --> P{PanelProvider.pageFor}
+  P -->|off| O[settingsHtml — the current page]
+  P -->|on| N[catalogHtml — the new page]
+  O -->|Try the new Settings page| C[command settingsPreview on]
+  N -->|Use the current page| D[command settingsPreview off]
+  C --> S
+  D --> S
+  H[settingsPanel: one held place] --> N
+  H -->|oldIdOf| O
+```
+
+## The new Settings page — Models (2026-10-05, PLAN_one_model_catalog.md E3.2)
+
+`modelsTab.ts` draws the toolbar (＋ Add a model, find, where it runs, show switched-off, the count), three chip rows
+(used for, effort, runs on — with counts) and one card per catalog row (`modelCard.ts`). The filters live in the page
+(`catalogPageScript.ts`, the card's `data-*`, kept in `getState`): narrowing stores nothing.
+
+- **One set of facts, one set of controls.** `cardContextFor(state)` (extracted from the current page's
+  `reviewersBody`) feeds both pages' cards; the new card calls the current card's builders, now exported from
+  `panelView.ts` (`stageBox`, `featureBox`, `priceFields`, `endpointField`, `modelOptions`, …), so a choice is stored
+  the same way from either page. A card is four subgrid rows: the head (on/off, name, ⧉ Duplicate, ✕ through the one
+  confirm), Use for (the stage boxes and the `uses` ticks), How it answers (model; effort/thinking/limit by RUNTIME;
+  the system prompt with its byte count), and the foot (connection, price, "Used as …").
+- **By runtime** (`modelCardFields.ts`): uses not offered are drawn off with one merged reason line (`useRefusal`:
+  consultants on `CONSULTING`, chat on `CHAT`, Bugz on `local`); effort as `shared/feature-availability.json` says —
+  a `list` runtime's levels, an `unmeasured` one's note ("kept and not applied"), a `probe` engine's reported levels,
+  a Team server's listed levels (the server judges); an api row keeps `apiSettingsFields`. **Thinking (D12):** the
+  file's new `thinking` rows (`probe` for api only; `none`/`unmeasured` with a note) — read by the generator, by
+  `FeatureAvailability.Thinking` in C#, and shown on every card without a switch.
+- **Writes are validated before they are saved, for both pages** (`catalogWriteRules.ts`): a system prompt past
+  8 KiB, an effort the runtime refuses (an api row by its report, a Team server row by its server), and the last
+  model switched on for plan or code review switched off or unticked — refused by name, the control snapping back.
+  The 64-row cap is checked only where a row is ADDED (`addRefusal`).
+- **The tab's own edits** (`catalogCommands.ts`, commands `toggleUse` `<row>|<use>`, `duplicateModel`, `removeModel`):
+  a use toggled in the catalog's order — Bugz moves to the one row ticked and `coai.bugzModel` with it (D7); a
+  duplicate copies everything (`vaultKeyName` too) under the next free id, right after its source; a remove after the
+  page's confirm (no second modal), refused for the last model of a stage. The card locks the same rule (`lastStagesOf`).
+- **Add a model** is the existing picker, grouped by where a model runs (`addModelGroups.ts`: a CLI here, an API key,
+  this machine's GPU, a Team server — with a line saying where to add a server when none is signed in).
+- **This coai-mcp ignores…** on a card through `skew` by capability (`systemPrompt`, `timeoutMinutes`, `cliEffort`).
+
+## The new Settings page — the Models card's world-facing parts (2026-10-05, PLAN_one_model_catalog.md E3.3)
+
+`modelCardWorld.ts`, each part what another page already calls:
+
+- **✓ Check (D10)** sends `checkModel` (id = the row); `ConsultantHealthPanel.checkModel` asks the SAME paid-turn
+  question the Consultant tab's Check asks (`notifyAndAsk`, modal), and the host runs `coai-mcp --check-model` with
+  the row on stdin — `checkInputOf` builds `{"row": …}` through the settings file's own wire (`vendorsEnv`), so the
+  row checked is the row a round would run. `capture`/`serverRun` gained an optional stdin; `runConsultantCheck`
+  picks the arguments by key (`checkArgs`: `model-<id>` or a caller kind). The state is the durable record
+  `model-<id>.check.json` the binary keeps: the watcher reads it beside the caller kinds' (`moreKinds`), the health
+  is computed while the Models tab or the Consultant place shows, and the card says "checking…", "checked: it
+  answered", "checked: no answer — …" or "not checked yet" through `checkStateOnThisDisk` — after a reload too.
+- coai-mcp's verdict ("coai-mcp will run it", or the current card's "cannot review"), kept apart from the check.
+- The CLI: its version and a newer one (`cliStatusNote`), and the current card's ▶ ⤓ ⟳ / ⟳ ⇄ / ≡ (`headButtons`,
+  `endpointButton` — the same commands, by name).
+- A local engine whose endpoint is not this machine says where the diff goes (`remoteWarning`); a remote row on a
+  Team server that speaks contract 1 says its effort and system prompt are not applied (E2.5).

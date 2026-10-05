@@ -13,7 +13,9 @@ import { chatForgetKey, rememberedChat } from './chatSpendRows';
 import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
 import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
-import { chooseSettingsTab, heldSettingsTab, type SettingsHost } from './settingsPanel';
+import { chooseSettingsTab, heldSettingsTab, setSettingsPreview, settingsPreviewOn, type SettingsHost } from './settingsPanel';
+import { catalogHtml, catalogKey } from './catalogPage';
+import { FIRST_SEEN_KEY } from './newTags';
 import { appliedTextControl } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
@@ -83,7 +85,7 @@ import { shownOnTheOldPage } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
 import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
-import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
+import { knownServerVersion, latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog } from './roundsDb';
 import { LogPeriod } from './logPeriod';
 import { NO_NOTES, ProviderNotes, ProvidersAnswer } from './providers';
@@ -94,7 +96,7 @@ import { vaultKeyOf } from './vaultKey';
 import { isApiSettingKey, resetTarget, withApiSetting, withoutApiSetting } from './apiSettings';
 import { modelsForKey } from './apiModelsProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
-import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
+import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature, settledFeatures } from './binaryFeatures';
 import { collectArgs } from './bugzView';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
@@ -146,6 +148,11 @@ import {
   vendorsFrom,
 } from './vendors';
 import { Catalog, Usage, fetchClientConfig, fetchUsage } from './teamServerApi';
+import { webviewNonce } from './webviewNonce';
+import { addRefusal, rowWriteRefusal } from './catalogWriteRules';
+import { duplicated, removedRow, type RowsChange, savedInOrder, toggledUse } from './catalogCommands';
+import { groupOf, grouped, NO_TEAM_SERVER } from './addModelGroups';
+import { checkInputOf } from './modelCheckInput';
 
 /**
  * The panel's window names, as the server's `/api/usage` spells them.
@@ -341,7 +348,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private consultEngines: Record<string, LocalEngine> = {};
   private consultEngineAt: Record<string, number> = {};
   /** One nonce per panel instance: the CSP admits our one script, and a repaint reuses it. */
-  private readonly nonce = nonce();
+  private readonly nonce = webviewNonce();
   /** Which sections the person has open — kept HERE because the panel repaints on every
       change, and a section that snapped shut mid-edit would be worse than none. */
   private openSections: string[] = [...OPEN_BY_DEFAULT];
@@ -477,8 +484,18 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       render: () => { void this.render(); },
       log: (message) => console.warn(message),
     });
-    this.consultantHealth = new ConsultantHealthPanel({ dataDir, storage: this.context.globalStorageUri, render: () => { void this.render(); } });
+    this.consultantHealth = this.healthPanel(dataDir);
     this.securityPromptWatch = this.watchSecurityPrompts(dataDir.fsPath);
+  }
+
+  /** The consultant and model checks' host: the caller kinds' checks, and each catalog row's (PLAN_one_model_catalog.md E3.3). */
+  private healthPanel(dataDir: vscode.Uri): ConsultantHealthPanel {
+    return new ConsultantHealthPanel({
+      dataDir, storage: this.context.globalStorageUri, render: () => { void this.render(); },
+      modelRows: () => this.vendorsHere(),
+      // The row exactly as coai-mcp reads it — through the settings file's own wire, switched on for the check.
+      rowInput: (row) => checkInputOf(row, knownServerVersion(this.context.globalStorageUri, this.context.globalState), this.features.known()),
+    });
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -1032,6 +1049,16 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private pageFor(slot: SurfaceSlot, state: PanelState): { key: string; html: () => string } {
     // What is in flight rides with the caret: read when BUILT, never in the key (busyMark.ts).
     const withCaret = (): PanelState => ({ ...state, focus: slot.focus(), busy: this.inFlight.snapshot() });
+    if (slot === this.settingsTab && settingsPreviewOn()) {
+      // The new page in the SAME slot (D5): one panel, one page at a time, every write through the one path below.
+      // The body IS the key: built once, and handed to the document rather than built a second time (epic 3's code round).
+      const body = catalogKey(state);
+
+      return {
+        key: body,
+        html: () => catalogHtml({ ...withCaret(), uiScale: currentUiScale(), textTone: currentTextTone() }, this.nonce, heldSettingsTab(), body),
+      };
+    }
     if (slot === this.settingsTab) {
       // The size and tone are read when the page is BUILT, not with the state: a render awaits a dozen probes
       // after gathering it, and a press in between would otherwise be drawn over by the old value — with
@@ -1140,6 +1167,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // this page. Every write reads the rows afresh, so a hidden row is never dropped by one. Drawn AND priced from this
     // one list: priced from every row, a hidden api consultant put its endpoint's rate on a reviewer's card.
     const shown = vendors.filter(shownOnTheOldPage);
+    // Once for the state: two awaits could each see a different answer if one landed in between (epic 3's code round).
+    const features = await this.binaryFeatures();
     const state = {
       settings,
       vendors: shown,
@@ -1181,7 +1210,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // has gone out, so a slow disk delays the count and not the panel.
       notifications: this.notificationsGlance,
       localEngines: await this.probeLocalEngines(vendors),
-      rankByRuntime: hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime),
+      rankByRuntime: hasFeature(features, FEATURES.bugzRuntime),
+      // The new Settings page (PLAN_one_model_catalog.md E3): what the binary takes once it has said, when each new
+      // control was first seen, and the clock its "new" marks are measured against.
+      serverFeatures: settledFeatures(features),
+      firstSeen: this.context.globalState.get<Record<string, number>>(FIRST_SEEN_KEY) ?? {},
+      now: Date.now(),
       // Only what ≡ brought back — never asked here, on a repaint (PLAN_custom_endpoint_model_list).
       endpointListings: this.endpointListings,
       askingEndpoints: [...this.askingEndpoints],
@@ -1848,6 +1882,16 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
     switch (write.kind) {
       case 'vendor': {
+        // Refused BEFORE it is saved, for both pages: a prompt past 8 KiB, an effort the runtime refuses, the last
+        // model of a review stage switched off (catalogWriteRules.ts; PLAN_one_model_catalog.md E3.2). The control
+        // snaps back and the person is told why.
+        const refused = rowWriteRefusal(this.vendorsHere(), write.vendor, write.key, write.value,
+          this.providersCache.reported[write.vendor]?.api?.capabilities.effortLevels ?? []);
+        if (refused.length > 0) {
+          reportRefusal(this.context, 'vendors', new Error(refused));
+          await afterTheWrite(() => this.snapBack(from))();
+          return;
+        }
         if (isApiSettingKey(write.key)) {
           await this.writeApiSetting(config, write, from);
           return;
@@ -2356,6 +2400,31 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         if (id !== undefined) {
           await this.removeTeamServer(id);
         }
+        break;
+      case 'toggleUse':
+        if (id !== undefined) {
+          const [row, use] = id.split('|');
+          await this.applyRowsChange(toggledUse(this.vendorsHere(), row ?? '', use ?? '', this.settings().bugzModel));
+        }
+        break;
+      case 'duplicateModel':
+        if (id !== undefined) {
+          await this.applyRowsChange(duplicated(this.vendorsHere(), id));
+        }
+        break;
+      case 'removeModel':
+        if (id !== undefined) {
+          await this.applyRowsChange(removedRow(this.vendorsHere(), id, this.settings().bugzModel));
+        }
+        break;
+      case 'checkModel':
+        if (id !== undefined) {
+          await this.consultantHealth.checkModel(id);
+        }
+        break;
+      case 'settingsPreview':
+        // The configuration change repaints the open tab on the other page; nothing else to do here.
+        await setSettingsPreview(id === 'on');
         break;
       case 'teamUsageScope':
         // Only an admin is ever shown the control, and the SERVER refuses `company` for anybody
@@ -3743,6 +3812,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   private async addVendor(): Promise<void> {
+    // The catalog's cap, checked where a row is ADDED (PLAN_one_model_catalog.md E3's plan round), before anything is asked.
+    const full = addRefusal(this.vendorsHere());
+    if (full.length > 0) {
+      void notify({ as: 'warning', class: 'refusal', source: 'reviewers', code: 'a-catalog-edit-refused', subject: full, title: full });
+      return;
+    }
     const existing = new Set(this.vendorsHere().map((v) => v.id));
     // The catalogue is offered WHOLE. It used to drop any preset already in the panel, which made a
     // second row of anything impossible and said nothing about why the entry had gone — the same
@@ -3762,36 +3837,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // now when there is none, because a pick opened before the first probe landed must not read as
     // an empty vault.
     const vaultItems = vaultKeyItems(...(await this.vaultKeysNow()), this.vendorsHere());
+    const choices = addModelChoices(items, teamServers, vaultItems);
     const picked = await askPerson(() => vscode.window.showQuickPick(
-      [
-        ...items.map((p) => ({
-          label: p.label,
-          detail: p.detail,
-          description: p.description,
-          offered: p.offered,
-          server: undefined,
-          vault: undefined,
-        })),
-        ...teamServers.map((s) => ({
-          label: `Team server ${s.name}`,
-          detail: `on ${canonicalTeamServerUrl(s.url)} — the company's subscription, nothing to install`,
-          description: '',
-          offered: undefined,
-          server: s,
-          vault: undefined,
-        })),
-        ...vaultItems.map((v) => ({
-          label: v.label,
-          detail: v.detail,
-          description: v.description,
-          offered: undefined,
-          server: undefined,
-          vault: v,
-        })),
-      ],
+      grouped(choices).map((one) => ('separator' in one ? { label: one.separator, kind: vscode.QuickPickItemKind.Separator } : one)),
       {
-        title: 'Add a reviewer',
-        placeHolder: 'Which vendor should review as well?',
+        title: 'Add a model',
+        placeHolder: 'Where does it run? A CLI here, an API key, this machine’s GPU or a Team server',
         // Both, and neither is decoration. Without matchOnDetail a person typing words from an
         // entry's hint gets an empty list; without matchOnDescription the same happens to anyone
         // typing the id a second row will take, which is only ever written in the description.
@@ -3799,7 +3850,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         matchOnDescription: true,
       },
     ));
-    if (picked === undefined) {
+    if (picked === undefined || !('notice' in picked)) {
+      return;
+    }
+    if (picked.notice) {
+      void notify({ as: 'information', class: 'outcome', source: 'reviewers', code: 'no-team-server-to-add-from', title: NO_TEAM_SERVER.detail });
       return;
     }
 
@@ -4042,6 +4097,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private async saveVendor(vendor: Vendor): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
     const vendors = vendorsFrom(this.read(config)('vendors'));
+    // The cap again, AFTER the picker: another window may have added a row while it was open (epic 3's code round).
+    const full = addRefusal(vendors);
+    if (full.length > 0) {
+      void notify({ as: 'warning', class: 'refusal', source: 'reviewers', code: 'a-catalog-edit-refused', subject: full, title: full });
+      return;
+    }
     if (vendors.some((v) => v.id === vendor.id)) {
       void notify({
         as: 'warning',
@@ -4058,6 +4119,25 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // Through the one save, so a side that keeps its own settings gets the row, and a refusal is said. Then drawn
     // from what is stored: a write to this side's overlay raises no configuration event to redraw the page.
     await this.save(config, 'vendors', [...vendors, vendor]);
+    await this.render();
+  }
+
+  /**
+   * One edit of the Models tab (`catalogCommands.ts`) — refused and said, or saved through the one save (and the
+   * Bugz ranking model with it, when ticking Bugz moved it), then drawn from what is stored.
+   */
+  private async applyRowsChange(change: RowsChange): Promise<void> {
+    if (change.refused.length > 0) {
+      void notify({ as: 'warning', class: 'refusal', source: 'reviewers', code: 'a-catalog-edit-refused', subject: change.refused, title: change.refused });
+      await this.render();
+      return;
+    }
+    const config = vscode.workspace.getConfiguration('coai');
+    // Bugz first, put back if the rows are refused: the two are one edit (PR #687's review, `savedInOrder`).
+    const saved = await savedInOrder(change, this.settings().bugzModel, (key, value) => this.save(config, key, value));
+    if (saved && change.said.length > 0) {
+      void notify({ as: 'information', class: 'outcome', source: 'reviewers', code: 'bugz-model-moved', subject: change.said, title: change.said });
+    }
     await this.render();
   }
 
@@ -4203,11 +4283,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 }
 
-/** A nonce per panel instance: the content security policy admits exactly our one script. */
-function nonce(): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
-}
 
 
 /**
@@ -4329,4 +4404,29 @@ async function openInsideWorkspace(file: string, line: number): Promise<void> {
   if (inside.ok) {
     await showCurrentFile(inside.path, line);
   }
+}
+
+/**
+ * "Add a model" grouped by WHERE the model runs (PLAN_one_model_catalog.md E3.2): a CLI here, an API key, this machine's
+ * GPU, a Team server — with a line in the last group saying where to add a server when this side holds a token for none.
+ */
+function addModelChoices(items: ReturnType<typeof reviewerPickItems>, teamServers: readonly TeamServer[], vaultItems: readonly VaultKeyItem[]) {
+  return [
+    ...items.map((p) => ({
+      label: p.label, detail: p.detail, description: p.description, offered: p.offered, server: undefined, vault: undefined,
+      notice: false, group: groupOf(p.offered.preset.runtime),
+    })),
+    ...teamServers.map((s) => ({
+      label: `Team server ${s.name}`,
+      detail: `on ${canonicalTeamServerUrl(s.url)} — the company's subscription, nothing to install`,
+      description: '', offered: undefined, server: s, vault: undefined, notice: false, group: 'remote' as const,
+    })),
+    ...(teamServers.length === 0
+      ? [{ ...NO_TEAM_SERVER, description: '', offered: undefined, server: undefined, vault: undefined, notice: true, group: 'remote' as const }]
+      : []),
+    ...vaultItems.map((v) => ({
+      label: v.label, detail: v.detail, description: v.description, offered: undefined, server: undefined, vault: v,
+      notice: false, group: 'api' as const,
+    })),
+  ];
 }

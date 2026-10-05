@@ -7,7 +7,7 @@ import { test } from 'node:test';
 import { adapterFor, CHAT_RUNTIMES } from '../cliChatLaunch';
 import { CONSULTING_RUNTIMES } from '../consultSettings';
 import { effortRefusal } from '../featureAvailability';
-import { CHAT, CONSULTING, EFFORT } from '../featureAvailability.generated';
+import { CHAT, CONSULTING, EFFORT, THINKING } from '../featureAvailability.generated';
 import { RUNTIMES } from '../models';
 
 /**
@@ -26,6 +26,7 @@ interface Seed {
   runtimes: string[];
   features: { consultant: string[]; chat: string[] };
   effort: { runtime: string; source: string; levels: string[]; measuredWith: string; note: string }[];
+  thinking: { runtime: string; source: string; note: string }[];
 }
 
 const seed = (): Seed => JSON.parse(readFileSync(SEED, 'utf8')) as Seed;
@@ -36,6 +37,14 @@ test('the generated copy agrees with the seed, field for field', () => {
   assert.deepEqual([...CONSULTING], s.features.consultant);
   assert.deepEqual([...CHAT], s.features.chat);
   assert.deepEqual(EFFORT.map((row) => ({ ...row, levels: [...row.levels] })), s.effort);
+  assert.deepEqual(THINKING.map((row) => ({ ...row })), s.thinking);
+});
+
+test('every runtime says whether it has a thinking switch (D12): only api asks its model, and every other says why not', () => {
+  assert.deepEqual(THINKING.map((row) => row.runtime), [...RUNTIMES], 'one row per runtime, in the order of the file');
+  assert.deepEqual(THINKING.filter((row) => row.source === 'probe').map((row) => row.runtime), ['api']);
+  assert.equal(THINKING.find((row) => row.runtime === 'claude')?.source, 'none', 'the depth of claude is its effort');
+  assert.equal(THINKING.every((row) => row.note.length > 0), true, 'a card with no switch shows the note');
 });
 
 test('the seed names exactly the runtimes a row can be set to', () => {

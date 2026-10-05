@@ -58,7 +58,10 @@ export function settingsTextCss(size: number, tone: number): string {
 
 /** The header above the tab strip: the page's name and its two text controls. */
 export function settingsHead(size: number, tone: number): string {
-  return `<header class="settingsHead"><h1>Settings</h1>${textControlsHtml(size, tone)}</header>`;
+  // The way to the new page while it is a preview (PLAN_one_model_catalog.md D5) — offered here, from E3 on.
+  return `<header class="settingsHead"><h1>Settings</h1>`
+    + `<button type="button" data-command="settingsPreview" data-id="on">Try the new Settings page</button>`
+    + `${textControlsHtml(size, tone)}</header>`;
 }
 
 /**

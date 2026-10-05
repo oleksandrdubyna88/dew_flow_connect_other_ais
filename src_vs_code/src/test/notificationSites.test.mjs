@@ -242,7 +242,13 @@ test('a `code` belongs to a notice, and an object that merely has a `code` prope
 // 155 → 156 on 2026-10-04, PR #681 (CodeRabbit): a restore stopped part way has its own sentence
 // (`catalog-restore-failed`) — the migration's "the next start finishes it" is false for a restore. One failure.
 // (E1's three steps renumbered by +4 when PR #683 landed first.)
-const PLACES_THIS_SPEAKS = 156;
+// 156 → 160 on 2026-10-05, PLAN_one_model_catalog.md E3.2: the Models tab's edits say why one was refused
+// (`a-catalog-edit-refused` — a duplicate or an add past 64 models, a use the runtime cannot take, the last model of a
+// review stage removed; two sites), that ticking Bugz moved its one ranking model (`bugz-model-moved`), and the add
+// picker's Team server line says where to add a server when none is signed in (`no-team-server-to-add-from`).
+// 160 → 161 on 2026-10-05, epic 3's code round: the add is refused again AFTER its picker when another window filled
+// the catalog meanwhile (`a-catalog-edit-refused`, a third site of the same refusal).
+const PLACES_THIS_SPEAKS = 161;
 
 test('the POPULATION changes only on purpose', () => {
   // Routing must not move it in either direction: the completeness promise is made over this

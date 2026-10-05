@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 
+import { heldAfter, type HeldTabs, placeOf } from './catalogPlaces';
 import { settingsSections } from './panelView';
-import { nextSettingsTab, SETTINGS_LOADING } from './settingsPage';
+import { SETTINGS_LOADING } from './settingsPage';
 import { openedFrom } from './tabStrip';
 import { pushTextControlsTo } from './textControlsHost';
 
@@ -25,20 +26,38 @@ let panel: vscode.WebviewPanel | undefined;
  * a module variable, not a setting, so closing and reopening the tab in this window keeps it and nothing
  * on disk needs validating — the arrangement `rolesPanel.ts` uses. Empty means the first tab.
  */
-let tab = '';
+let held: HeldTabs = { place: '', oldTab: '' };
 
 function tabIds(): readonly string[] {
   return settingsSections().map((section) => section.id);
 }
 
-/** The tab the page should show — always one that exists: the strip's own fallback, not a second copy of it. */
+/**
+ * Whether the Settings tab shows the NEW page (`coai.settingsPreview`, PLAN_one_model_catalog.md D5) — user scope, never a
+ * side overlay, read here so the page the slot paints and the place it opens on can never disagree.
+ */
+export function settingsPreviewOn(): boolean {
+  return vscode.workspace.getConfiguration('coai').get<boolean>('settingsPreview', false) === true;
+}
+
+/** Switches the Settings tab between the two pages; the configuration change repaints the open tab. */
+export async function setSettingsPreview(on: boolean): Promise<void> {
+  await vscode.workspace.getConfiguration('coai').update('settingsPreview', on, vscode.ConfigurationTarget.Global);
+}
+
+/**
+ * The tab the page should show — always one that exists. On the new page, a PLACE (`catalogPlaces.ts`): an old id held
+ * from the old page opens its new place. On the old page, its tab: a place held from the new page opens the old tab
+ * that holds it, where the old page had one, else the strip's own fallback.
+ */
 export function heldSettingsTab(): string {
-  return openedFrom(tabIds().map((key) => ({ key, label: key })), tab);
+  return settingsPreviewOn() ? placeOf(held.place, '') : openedFrom(tabIds().map((key) => ({ key, label: key })), held.oldTab);
 }
 
 /** A tab was chosen, on the page or by the command's argument; anything unknown changes nothing. */
 export function chooseSettingsTab(requested: unknown): string {
-  tab = nextSettingsTab(tab, requested, tabIds());
+  // Each page keeps its own position (epic 3's code round): switching back opens the tab last had THERE.
+  held = heldAfter(held, requested, settingsPreviewOn(), tabIds());
 
   return heldSettingsTab();
 }

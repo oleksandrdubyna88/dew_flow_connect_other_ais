@@ -533,6 +533,12 @@
           },
           "markdownDescription": "How many blocking/major findings each ROLE may still have and pass. A finding is counted against the threshold of the role that raised it."
         },
+        "coai.settingsPreview": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "Open the **new Settings page** (a preview) instead of the current one. It shows the Models catalog first; the other tabs stay on the current page until they are built. One page at a time: switching repaints the open Settings tab."
+        },
         "coai.dealPlanLenses": {
           "type": "boolean",
           "default": false,

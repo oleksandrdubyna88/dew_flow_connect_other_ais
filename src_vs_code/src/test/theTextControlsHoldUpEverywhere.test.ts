@@ -75,9 +75,11 @@ test('the Settings tab reads the size and tone when its page is BUILT, not befor
   // A press during a render in flight would otherwise be drawn over by the old value, and the next render
   // finds the same paint key and never repaints.
   const source = code('panelProvider.ts');
-  const pageFor = source.slice(source.indexOf('private pageFor('), source.indexOf('private pageFor(') + 800);
+  const pageFor = source.slice(source.indexOf('private pageFor('), source.indexOf('private pageFor(') + 1600);
 
   assert.match(pageFor, /settingsHtml\(\{ \.\.\.withCaret\(\), uiScale: currentUiScale\(\), textTone: currentTextTone\(\) \}/);
+  // And the new page in the same slot (PLAN_one_model_catalog.md D5), for the same reason.
+  assert.match(pageFor, /catalogHtml\(\{ \.\.\.withCaret\(\), uiScale: currentUiScale\(\), textTone: currentTextTone\(\) \}/);
   // Over the raw source: the page name is a string, which the blanked source has emptied.
   assert.match(fs.readFileSync(path.join(SRC, 'panelProvider.ts'), 'utf8'), /private receive\(from: SurfaceSlot, m: PanelMessage\): void \{\s*[\s\S]{0,400}if \(appliedTextControl\(m, 'settings'\)\) \{\s*return;/,
     'the Settings tab\'s presses are not taken out of the dispatcher first');

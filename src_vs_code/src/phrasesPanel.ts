@@ -1,5 +1,5 @@
-import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
+import { webviewNonce } from './webviewNonce';
 
 import { rowsAfter, rowsOf, viewOf } from './phrasesEdit';
 import { phraseEdit, phraseRepaints, phrasesHtml, type PhraseCommand } from './phrasesPage';
@@ -85,7 +85,7 @@ function render(): void {
   }
   panel.webview.html = phrasesHtml(
     { rows: viewOf(stored()), uiScale: currentUiScale(), textTone: currentTextTone() },
-    randomBytes(16).toString('hex'),
+    webviewNonce(),
   );
 }
 
