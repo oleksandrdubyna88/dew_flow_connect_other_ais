@@ -50,7 +50,8 @@ test('the prompts section is split: the switches and budgets on Stages, the roun
   const prompts = paneOf(body, 'reviews/prompts');
 
   assert.match(stages, /data-setting="rounds"/);
-  assert.match(stages, /data-setting="roleEnabled"/);
+  // One switch per role (E4.3): it lives on Roles & prompts, so Stages draws the role's state in words, not a second tick.
+  assert.doesNotMatch(stages, /data-setting="roleEnabled"/);
   assert.doesNotMatch(stages, /data-prompt=/, 'a round picker drawn twice on one page is two controls for one setting');
   assert.match(prompts, /data-prompt="[A-Za-z]+" data-round="1"/);
   assert.doesNotMatch(prompts, /data-setting="rounds"/);
@@ -63,11 +64,11 @@ test('no id is drawn twice on the new page — a label would name the wrong cont
   assert.deepEqual([...new Set(twice)], []);
 });
 
-test('only Roles & prompts and Commands still say where they are', () => {
+test('only Commands still says where it is (Roles & prompts is drawn since E4.3)', () => {
   const body = catalogBody(panelState('reviewers'));
   const saying = [...body.matchAll(/data-pane="([^"]+)"[^>]*>\s*<p class="hint">[^<]* is still on the current Settings page/g)].map((match) => match[1]);
 
-  assert.deepEqual(saying, ['reviews/roles', 'reviews/commands']);
+  assert.deepEqual(saying, ['reviews/commands']);
 });
 
 test('the keys are counted across every row, not only the reviewers', () => {

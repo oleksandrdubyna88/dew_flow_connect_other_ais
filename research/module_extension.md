@@ -10996,3 +10996,44 @@ Setup holds (`catalogSections.AFTER`; markup and decisions in `setupTab.ts`, pur
   reads each file — never writes it, launches nothing — and `clientRegistration` returns ONLY that answer: no other
   entry, value or secret of the file. A file is read again only when its time or size changed (`~/.claude.json` can
   run to megabytes), and one past 32 MB is `unreadable`.
+
+## The new Settings page — Roles & prompts (2026-10-05, PLAN_one_model_catalog.md E4.3)
+
+**One editing core, two pages.** The Review roles tab's writes, refusals, prompt files, deletions and its ONE
+settled-write queue moved, unchanged, from `rolesPanel.ts` into `rolesHost.ts` (`queueRoleEdit`, `flushRoleEdits`,
+`roleRows`, `roleTexts`, `rolesEmbedState`, `onRolesRedraw`); the roles are bound to this window's side at activation
+(`bindRoles`). `rolesPanel.ts` keeps only the tab: its panel, its open section, its busy marks, its redraw. An edit
+from either page lands in the same queue, so one cannot overtake the other, and every page that draws the roles is
+redrawn after a change of shape.
+
+**Drawn by the panel.** Reviews › Roles & prompts draws `rolesEmbed.rolesEmbedded` — the tab's own `roleBlock` (widened
+with `RoleBlockOptions`, never copied) under four stage headings, inside `.roles-embed`, whose layout `catalogCss.ts`
+scopes because the panel's sheet already uses `.role` for Stages. Two attributes differ: a prompt is
+`data-role-prompt` (the panel's script binds every `data-prompt` as a round pick, and would post a prompt's text as
+one), and there is no second tab strip inside a place the page's strip already selects. `rolesEmbeddedScript` is
+block-scoped on the panel's own `vscode` and `send`: a pick or a press is posted numbered as `{ type: 'roles', edit }`
+(`roles` joins `PANEL_TRACKED`, so it carries the busy mark), typing plainly; focus is reported as `roles|<role>|<prompt>|<field>`
+so the panel withholds a repaint while somebody types, and a focus release FLUSHES the roles queue before it repaints —
+the repaint reads the prompt files. The host reads the roles only while the new page can show them.
+
+**ONE switch per role** (`rolesSwitch.ts`). A role had two: the catalog's `active` (`COAI_ROLES`) and the panel's
+`roleEnabled` (`COAI_ENABLED_*`, read from 0.18.13, `ROLE_SWITCH_SINCE`). On the new page a role's switch reads both
+(`switchedOn`: on only when both are) and writes both: `active` through the roles' every refusal, and — once that has
+landed — `roleEnabled` follows (`roleSwitchFollows`, `PanelProvider.roleEdited`). A server below 0.18.13 reads the
+catalog row, a newer one reads both, and both say the same. Stages draws the role's state in words ("Off — its switch
+is under Roles & prompts"), not a tick of its own. The current page keeps its two switches until E5.
+
+```mermaid
+sequenceDiagram
+  participant P as New page (Roles & prompts)
+  participant H as PanelProvider
+  participant R as rolesHost (one queue)
+  participant T as Review roles tab
+  P->>H: {type: roles, edit} (numbered for a pick)
+  H->>R: queueRoleEdit(roleEdit(edit))
+  T->>R: queueRoleEdit(...)
+  R->>R: rowsAfter + refusals, write roles / prompt files
+  R-->>H: onRolesRedraw → render
+  R-->>T: onRolesRedraw → render
+  H->>H: roleSwitchFollows → save roleEnabled (a switch edit only)
+```

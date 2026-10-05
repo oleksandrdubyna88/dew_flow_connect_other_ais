@@ -1,3 +1,4 @@
+import { rolesEmbeddedScript } from './rolesEmbed';
 import { securityLaneScript } from './securityLaneScript';
 import { tabKeysScript } from './tabKeys';
 import { textControlsScript } from './textControls';
@@ -28,6 +29,7 @@ ${modelsScript()}
 ${tabKeysScript()}
 ${textControlsScript()}
 ${securityLaneScript()}
+${rolesEmbeddedScript()}
   window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'uiScale') { document.documentElement.style.fontSize = event.data.px + 'px'; }
   });`;

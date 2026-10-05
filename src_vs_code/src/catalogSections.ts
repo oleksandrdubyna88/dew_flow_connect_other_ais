@@ -7,6 +7,7 @@ import { consultantPicksHtml } from './consultantPicks';
 import { cliButtons, consultantSection, PANEL_SECTIONS, promptsBody, questionConsultantSection, securityLaneSection, type PanelState } from './panelView';
 import { rowsFor } from './catalogPicks';
 import { securityTryHtml } from './securityTry';
+import { rolesEmbedded } from './rolesEmbed';
 import { cliTableHtml, mcpClientsHtml, movedFromHtml } from './setupTab';
 import type { Vendor } from './vendors';
 
@@ -17,10 +18,11 @@ import type { Vendor } from './vendors';
  */
 
 /**
- * The places whose drawing is not their old section as it is: the prompts section split in two (E4.1), and the
- * consultant's callers picking from the catalog (E4.2).
+ * The places whose drawing is not their old section as it is: the prompts section split in two (E4.1), the features that
+ * pick from the catalog (E4.2), and the Review roles tab folded in (E4.3).
  */
 const SPLIT: Readonly<Record<string, (state: PanelState) => string>> = {
+  'reviews/roles': (state) => (state.roles === undefined ? '<p class="hint">Reading the roles…</p>' : rolesEmbedded(state.roles, state.settings.roleEnabled)),
   'reviews/stages': (state) => promptsBody(state, 'stages'),
   'reviews/prompts': (state) => promptsBody(state, 'prompts'),
   'consultants/consultant': (state) => consultantSection(state, consultantPicksHtml(state.settings.consult, state.catalogRows ?? state.vendors)),

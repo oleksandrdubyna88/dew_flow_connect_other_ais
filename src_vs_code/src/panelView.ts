@@ -33,6 +33,7 @@ import { NEW_PROMPT_SENTINEL, securityLaneBody } from './securityLaneView';
 import type { SecurityTryResult } from './securityTry';
 import type { ClientRegistration } from './setupTab';
 import type { MoveRecord } from './dataMove';
+import type { RolesEmbedState } from './rolesEmbed';
 import type { SecurityTextState } from './securityPromptFiles';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { CONSULTANT_HEALTH_CSS, COPY_COMMANDS } from './consultantHealthView';
@@ -273,6 +274,8 @@ export interface PanelState {
   readonly mcpClients?: readonly ClientRegistration[] | undefined;
   /** The data folder's last move, as this profile remembers it across a reload (`coai.lastDataMove`, E4.5). */
   readonly lastDataMove?: MoveRecord | undefined;
+  /** The review roles as the new page's Roles & prompts draws them (`rolesEmbed.ts`, E4.3) — read only while it can be shown. */
+  readonly roles?: RolesEmbedState | undefined;
   /** When each control the new page marks "new" was first seen in this profile (`newTags.ts`). */
   readonly firstSeen?: Readonly<Record<string, number>>;
   /** The time the state was gathered — what a "new" mark is measured against. Absent: the moment the page is drawn. */
@@ -2401,14 +2404,17 @@ export function promptsBody(state: PanelState, half: PromptsHalf = 'both'): stri
 
     // The gate and the prompts were two sections describing one thing: how many times this role
     // asks, how much it may still find, and what it asks each time. One box now.
+    // The new page's Stages draws no tick of its own: a role has ONE switch there, on Roles & prompts (E4.3).
+    const ticked = switched && half === 'both';
     return `<div class="role role-${roleTone(role.id, stage)}${off}${inactive}">
-  <div class="head">${switched
+  <div class="head">${ticked
       ? `<input type="checkbox" id="role-${role.id}" data-setting="roleEnabled" data-role="${role.id}"${on ? ' checked' : ''}${frozen ? ' disabled' : ''}
            title="${escapeHtml(tickHelp(dormant, last))}">
     <label class="name" for="role-${role.id}">${escapeHtml(label)}</label>`
       : `<span class="name">${escapeHtml(label)}</span>`}</div>
-${dormant ? `  <div class="hint">Switched off on the roles page, where its Active switch lives — this tick cannot turn it back on.</div>` : ''}
-${last ? `  <div class="hint">The only role still ticked — tick another one before turning this one off.</div>` : ''}
+${switched && !ticked && !on ? '  <div class="hint">Off — its switch is under Roles &amp; prompts.</div>' : ''}
+${ticked && dormant ? `  <div class="hint">Switched off on the roles page, where its Active switch lives — this tick cannot turn it back on.</div>` : ''}
+${ticked && last ? `  <div class="hint">The only role still ticked — tick another one before turning this one off.</div>` : ''}
 ${serverNotes(state, role)}
   <div class="field inline">
     ${labelled(`rounds-${role.id}`, 'Rounds', 'maxRounds')}

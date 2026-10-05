@@ -174,7 +174,8 @@ function page(name, size) {
     }
     case 'catalog':
       // The new Settings page, on a place: `catalog`, `catalog:setup/team` (todo/PLAN_one_model_catalog.md E3).
-      return from('catalogPage.js').catalogHtml({ ...panelState(''), ...text }, NONCE, tab ?? 'models');
+      // The shipped roles, as the host reads them for Roles & prompts (E4.3) — none stored, no prompt rewritten.
+      return from('catalogPage.js').catalogHtml({ ...panelState(''), ...text, roles: { rows: [], texts: {}, serverVersion: '', perSide: false, stranded: [] } }, NONCE, tab ?? 'models');
     case 'settings':
       return from('panelView.js').settingsHtml({ ...panelState(''), ...text }, NONCE, tab ?? 'reviewers');
     case 'security':

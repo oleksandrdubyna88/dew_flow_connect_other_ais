@@ -120,6 +120,9 @@ import { BugzReviewPanel } from './bugzReviewPanel';
 import { BugChat } from './reviewChoose';
 import { ServerStatus, sideKey, sideLabel } from './coaiInstall';
 import { rolesKnowTheServer } from './rolesPanel';
+import { flushRoleEdits, onRolesRedraw, queueRoleEdit, roleRows, rolesEmbedState } from './rolesHost';
+import { roleEdit } from './rolesPage';
+import { roleSwitchFollows } from './rolesSwitch';
 import { ModelPrice, PriceTable, priceFor } from './modelPrices';
 import { PRICE_BOOK } from './priceBook';
 import {
@@ -278,6 +281,8 @@ interface PanelMessage {
   readonly editing?: boolean;
   readonly start?: number;
   readonly end?: number;
+  /** A `roles` message's edit — the Review roles tab's own message, read by `roleEdit` (PLAN_one_model_catalog.md E4.3). */
+  readonly edit?: unknown;
   /** The page's own number for a setting, prompt or command, which the host settles it under (`inFlight.ts`). */
   readonly seq?: number;
   /** The document that numbered it — echoed in `settled`, so a predecessor's number cannot clear this one's mark. */
@@ -1031,8 +1036,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       this.settleQueued(from, m);
     } else if (m.type === 'focus') {
       if (from.edited(m.editing === true, m.id ?? '', Number(m.start), Number(m.end))) {
-        void this.render();
+        // A roles prompt still settling is written first: the repaint reads the prompt files, and one that overtook the
+        // write would draw the box from the text being replaced (E4.3).
+        void flushRoleEdits().then(() => this.render());
       }
+    } else if (m.type === 'roles') {
+      this.track(from, m, () => this.roleEdited(m.edit));
     } else if (m.type === 'command') {
       this.track(from, m, () => this.run(m.command, m.id, from));
     } else if (m.type === 'ready') {
@@ -1115,6 +1124,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // Stop first, then cancel: both are synchronous, so no file event can re-arm the debounce in between.
     this.securityPromptWatch.stop();
     this.securityPromptWatch.changed.cancel();
+    this.rolesRedraw.dispose();
   }
 
   /**
@@ -1177,12 +1187,15 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const shown = vendors.filter(shownOnTheOldPage);
     // Once for the state: two awaits could each see a different answer if one landed in between (epic 3's code round).
     const features = await this.binaryFeatures();
+    const server = this.told(await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published));
     const state = {
       settings,
       vendors: shown,
       // The new page draws every row (PLAN_one_model_catalog.md E4): `vendors` above is the current page's reviewers.
       catalogRows: vendors,
       securityTry: this.securityTry,
+      // Roles & prompts (E4.3): the prompt files are read only while the new page can show them.
+      roles: this.settingsTab.view === undefined || !settingsPreviewOn() ? undefined : await rolesEmbedState(server.kind === 'absent' ? '' : server.version),
       // The new page's Setup (PLAN_one_model_catalog.md E4.5): each MCP client's registration, read from its own file
       // and never written; and the data folder's last move, which survives a reload so the delete can be offered.
       mcpClients: await this.clients.read(clientFilesFor(os.homedir(), workspaceFolderPaths()[0] ?? ''), workspaceFolderPaths()[0] ?? ''),
@@ -1193,7 +1206,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // would be a panel that hangs for half a minute the first time it is opened on a new machine.
       claudeProbe: this.claudeProbes.answer(vendors, settings.consult),
       askingClaude: this.claudeProbes.looking,
-      server: this.told(await serverOnThisSide(this.context.globalStorageUri, this.context.globalState, published)),
+      server,
       side: sideLabel(vscode.env.remoteName, process.env['WSL_DISTRO_NAME']),
       perSide: this.perSide(config),
       questions: this.watcher.openQuestions,
@@ -2229,6 +2242,24 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   /**
+   * An edit of the review roles from the new page's Roles & prompts (PLAN_one_model_catalog.md E4.3), into the one queue
+   * the Review roles tab uses too. A role's switch is ONE switch here: once the catalog's `active` has landed — through
+   * every refusal the roles have — the panel's `roleEnabled` follows it (`rolesSwitch.ts`), so a server of any version
+   * reads the same answer.
+   */
+  private async roleEdited(edit: unknown): Promise<void> {
+    const command = roleEdit(edit);
+    await queueRoleEdit(command);
+    if (command.kind === 'edit' && command.field === 'active') {
+      const config = vscode.workspace.getConfiguration('coai');
+      const next = roleSwitchFollows(roleRows(), command.id, command.value === true, settingsFrom(this.read(config)).roleEnabled);
+      if (next !== undefined) {
+        await this.save(config, 'roleEnabled', next);
+      }
+    }
+  }
+
+  /**
    * A caller's consultant picked on the new page (PLAN_one_model_catalog.md E4.2): a reference to a catalog row, read and
    * written in ONE catalog turn, and never through the fold — a pick moves which row a caller asks, and the fold would
    * read a caller re-pointed away from a row only it used as that row's removal. A refusal is said; the picker snaps back.
@@ -3139,6 +3170,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /** The MCP clients' config files, each read again only when it changed (E4.5). */
   private readonly clients = new ClientReader();
+
+  /** A change to the roles' shape, from either page that edits them, redraws the new page's Roles & prompts (E4.3). */
+  private readonly rolesRedraw = onRolesRedraw(() => this.render());
 
   /**
    * Try it (PLAN_one_model_catalog.md E4.2): the sample and the stored lane, as a round would send it, to

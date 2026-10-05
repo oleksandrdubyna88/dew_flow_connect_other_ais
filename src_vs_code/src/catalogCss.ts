@@ -35,6 +35,27 @@ const SHELL = `
   .catalog table.map th, .catalog table.map td { text-align: left; vertical-align: top; padding: 5px 16px 5px 0; border-bottom: 1px solid var(--border); }
   .catalog table.map td button { width: auto; margin: 0 4px 0 0; }
   .catalog .moved-from { margin: 10px 0; }
+  /* Roles & prompts (E4.3): the Review roles tab's own layout, scoped — the panel's sheet uses .role for Stages. */
+  .roles-embed .role { padding: 6px 10px; margin: 8px 0; }
+  .roles-embed .role > summary { cursor: pointer; display: flex; align-items: baseline; gap: 8px; }
+  .roles-embed .role .title { font-weight: 600; }
+  .roles-embed .role .id, .roles-embed .badge { font-size: 0.82em; opacity: 0.65; }
+  .roles-embed .badge { border: 1px solid var(--border); border-radius: 3px; padding: 0 4px; }
+  .roles-embed .fields { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 8px 0; }
+  .roles-embed .fields label { display: flex; gap: 6px; align-items: center; }
+  .roles-embed .fields input[type="text"], .roles-embed .fields select { width: auto; min-width: 14em; }
+  .roles-embed .hint { flex-basis: 100%; }
+  .roles-embed .prompt { border-left: 2px solid var(--border); padding: 4px 8px; margin: 6px 0; }
+  .roles-embed .prompt.mine { border: 1px solid var(--vscode-charts-green, #b5cea8); border-radius: 3px; }
+  .roles-embed .prompt .head { display: flex; gap: 6px; margin-bottom: 4px; }
+  .roles-embed .prompt .head input { flex: 1; width: auto; }
+  .roles-embed .prompt .head .purpose { flex: 2; }
+  .roles-embed .prompt textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+  .roles-embed button { width: auto; margin: 4px 6px 0 0; }
+  .roles-embed .prompt .head button { margin: 0; }
+  .roles-embed button.remove, .roles-embed button.restore {
+    background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);
+  }
   .catalog .used-by button.link {
     background: none; border: none; padding: 0; margin: 0 0 0 6px; color: var(--link); cursor: pointer; text-decoration: underline;
   }

@@ -13,6 +13,7 @@ import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 import { roleDeletions } from './roleDeletionsHost';
 import { isTextControl } from './textControls';
 import { applyTextControl } from './textControlsHost';
+import type { RolesEmbedState } from './rolesEmbed';
 
 /**
  * The editing core of the review roles — what both pages that edit them call (todo/PLAN_one_model_catalog.md E4.3): the
@@ -337,4 +338,18 @@ export function reportRolesFailure(message: string, error: unknown): void {
     title: message,
     detail: asText(error),
   });
+}
+
+/**
+ * The roles as the new Settings page's Roles & prompts draws them (E4.3): the rows, the prompt bodies and the deletions
+ * that cannot clear — the same reads the Review roles tab is drawn from.
+ */
+export async function rolesEmbedState(serverVersion: string): Promise<RolesEmbedState> {
+  return {
+    rows: roleRows(),
+    texts: await roleTexts(),
+    serverVersion,
+    perSide: config().get('perSideSettings') === true,
+    stranded: await roleDeletions(rolesSide()).stranded(),
+  };
 }
