@@ -6316,3 +6316,10 @@ Listed today: `bugzRuntime` (`--collect-bugs --runtime`, E2.1). In PROJECT.md's 
   the server's stderr and not the reply — RED on the failed round first. Argv never carries it (`RoundAudit` logs the
   arguments and the stdin LENGTH).
 - `--features` lists `systemPrompt`.
+
+## A CLI row's own timeout (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+`VendorDto.TimeoutMinutes` → `ProviderSettings.TimeoutMinutes`: whole minutes 1 to `CatalogLimits.MaxTimeoutMinutes`
+(1440, the extension's `isMinutes`), anything else unset. `RosterBuilder.TimeoutFor` makes it the launch timeout of a
+CLI row in place of `ReviewerTimeout`; an api row keeps the round's launch timeout, its own limit being the whole review
+(`reviewMinutes`). `--features` lists `timeoutMinutes` (`ARowsOwnTimeoutTests`, RED first).

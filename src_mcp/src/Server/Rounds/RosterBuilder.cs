@@ -381,7 +381,7 @@ internal sealed class RosterBuilder(
             Dialect = provider.Dialect,
             // Only ApiRuntime reads it too: the parent prices each turn from it (S3.7).
             Price = provider.Price,
-            Timeout = _settings.ReviewerTimeout,
+            Timeout = TimeoutFor(provider, runtime, _settings.ReviewerTimeout),
             ReasoningEffort = _settings.LocalReasoningEffort,
             MaxTokens = _settings.LocalMaxTokens,
             // Only RemoteRuntime uses it, to find this machine's token for its Team server.
@@ -630,4 +630,11 @@ internal sealed class RosterBuilder(
     /// </summary>
     internal static string InstructionFor(ProviderSettings provider, Runners.Reviewers.IReviewerRuntime runtime) =>
         runtime.CarriesTheRowsPrompt ? provider.SystemPrompt : string.Empty;
+
+    /// <summary>
+    /// A CLI row's own timeout, else the round's (PLAN_one_model_catalog.md E2.2). An api row keeps the round's launch
+    /// timeout: its own limit is the whole review (<c>reviewMinutes</c>), applied to the conversation.
+    /// </summary>
+    internal static TimeSpan TimeoutFor(ProviderSettings provider, IReviewerRuntime runtime, TimeSpan roundTimeout) =>
+        provider.TimeoutMinutes > 0 && runtime is not ApiRuntime ? TimeSpan.FromMinutes(provider.TimeoutMinutes) : roundTimeout;
 }

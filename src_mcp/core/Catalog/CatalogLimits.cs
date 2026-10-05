@@ -11,4 +11,7 @@ public static class CatalogLimits
 {
     /// <summary>A row's system prompt, in UTF-8 bytes — bytes because bytes are what crosses.</summary>
     public const int MaxPromptBytes = 8192;
+
+    /// <summary>A CLI row's own timeout, in whole minutes — a day, as the extension's <c>MAX_REVIEW_MINUTES</c>.</summary>
+    public const int MaxTimeoutMinutes = 1440;
 }

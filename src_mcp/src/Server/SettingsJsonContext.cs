@@ -59,7 +59,9 @@ internal sealed record VendorDto(
     /// The person's own instruction for this row (PLAN_one_model_catalog.md E2.2) — delivered inside the prompt body after
     /// the product's reviewer instruction, never on a command line. Absent is none.
     /// </summary>
-    string? SystemPrompt = null);
+    string? SystemPrompt = null,
+    /// <summary>A CLI row's own reviewer timeout, in whole minutes (PLAN_one_model_catalog.md E2.2). Absent is the round's.</summary>
+    int? TimeoutMinutes = null);
 
 /// <summary>
 /// One vendor row's price on the wire — dollars per million tokens (PLAN_feature_review.md S3.7).

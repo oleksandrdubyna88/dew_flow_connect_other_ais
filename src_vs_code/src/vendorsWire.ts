@@ -110,8 +110,14 @@ export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = 
         // The three per-model settings (S3.8): an api row's own, and never to a server known to predate them.
         ...apiSettingsOnTheWire(v, installedServerVersion),
         ...promptOnTheWire(v, features),
+        ...timeoutOnTheWire(v, features),
       })),
   );
+}
+
+/** A CLI row's own timeout, to a binary that lists `timeoutMinutes` — an api row has none (it keeps `reviewMinutes`). */
+function timeoutOnTheWire(v: Vendor, features: readonly string[]): { timeoutMinutes?: number } {
+  return features.includes(FEATURES.timeoutMinutes) && v.timeoutMinutes !== undefined ? { timeoutMinutes: v.timeoutMinutes } : {};
 }
 
 /**

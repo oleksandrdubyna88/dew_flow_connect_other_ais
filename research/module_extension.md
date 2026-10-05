@@ -10767,3 +10767,8 @@ sequenceDiagram
   spawn per write — and the file is mirrored again once the binary has answered on activation. The catalog migration
   asks the same cache. (`PanelProvider` keeps a cache of its own — one more `--features` spawn per window.)
 - The 8192-byte limit is pinned on both halves (`catalogRow.test.ts`, `ARowsSystemPromptReachesItsReviewerTests`).
+
+## A CLI row's timeout crosses only to a binary that takes it (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+`vendorsEnv` writes a CLI row's `timeoutMinutes` when the binary lists `timeoutMinutes` (`FEATURES.timeoutMinutes`); an
+api row carries none — it keeps `reviewMinutes` (`timeoutOnTheWire.test.ts`).

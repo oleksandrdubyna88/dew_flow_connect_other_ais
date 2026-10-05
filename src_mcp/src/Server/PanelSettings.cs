@@ -16,6 +16,12 @@ public sealed record ProviderSettings(string Provider)
     /// </summary>
     public string SystemPrompt { get; init; } = string.Empty;
 
+    /// <summary>
+    /// A CLI row's own reviewer timeout in whole minutes, 1 to 1440 (PLAN_one_model_catalog.md E2.2); 0 is unset — the
+    /// round's timeout. An api row keeps its whole-review <c>reviewMinutes</c> instead.
+    /// </summary>
+    public int TimeoutMinutes { get; init; }
+
     public bool Enabled { get; init; } = true;
 
     public string Model { get; init; } = string.Empty;
@@ -1216,6 +1222,8 @@ public sealed record PanelSettings
                         Api = ApiRowOf(v),
                         // Trimmed at its edges only: the inside is the person's own text, line breaks and all.
                         SystemPrompt = v.SystemPrompt?.Trim() ?? string.Empty,
+                        // The extension's rule (`isMinutes`): 1 to a day; anything else is unset, the round's timeout.
+                        TimeoutMinutes = v.TimeoutMinutes is { } minutes && minutes is > 0 and <= Core.Catalog.CatalogLimits.MaxTimeoutMinutes ? minutes : 0,
                     })
                     // One id, one vendor — the extension already refuses a duplicate row, and a
                     // hand-edited settings file is how one reaches the server. The id is the

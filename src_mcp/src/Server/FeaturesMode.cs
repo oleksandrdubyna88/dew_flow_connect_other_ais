@@ -22,6 +22,8 @@ internal static class FeaturesMode
         "bugzRuntime",
         // E2.2: a row's `systemPrompt`, delivered in the prompt body after the product's instruction, never in argv.
         "systemPrompt",
+        // E2.2: a CLI row's `timeoutMinutes`, its launch timeout in place of the round's.
+        "timeoutMinutes",
     ];
 
     internal static async Task<int> RunAsync()
