@@ -43,7 +43,8 @@ internal static class SecuritySources
     {
         var selected = due.Where(r => r.Context == SecurityContextModes.Slice).Select(r => r.Prompt).ToHashSet(StringComparer.Ordinal);
         if (selected.Count == 0) return [];
-        var facts = SecuritySignals.Classify(files);
+        // The lane's own table, as the roster classifies with — the files read are the ones the due cards were due on.
+        var facts = SecuritySignals.Classify(files, lane.Table);
         var prompts = lane.Prompts.Where(p => selected.Contains(p.Id) && SecuritySignals.Triggered(p, facts)).ToArray();
         if (prompts.Length == 0) return [];
         var focus = prompts.SelectMany(p => p.Focus).ToHashSet();

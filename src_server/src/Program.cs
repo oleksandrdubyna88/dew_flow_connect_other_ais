@@ -313,7 +313,12 @@ app.MapReviewEndpoints(
     // How long a review may WAIT for a free account before giving up, having spent nothing. Not how
     // long the vendor may take — that is the caller's own timeoutSeconds, and the two are separate
     // clocks on purpose.
-    TimeSpan.FromMinutes(config.GetValue("Coai:QueueWaitMinutes", 10)));
+    TimeSpan.FromMinutes(config.GetValue("Coai:QueueWaitMinutes", 10)),
+    // Contract 2 (E2.5): a client's system prompt runs on the company's accounts only when the operator says so, and
+    // an effort past the cap is lowered to it.
+    new ClientOptionsPolicy(
+        config.GetValue("Coai:AcceptClientSystemPrompt", false),
+        config["Coai:MaxEffort"]?.Trim() ?? string.Empty));
 
 // Anything that is not the API does not exist here.
 app.MapFallback(() => Results.NotFound());

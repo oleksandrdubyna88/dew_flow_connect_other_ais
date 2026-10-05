@@ -132,7 +132,7 @@ internal sealed class TurnLoop(
     {
         if (outcome is not ReviewerOutcome.Ok ok) return string.Empty;
         var turns = ok.Turns > 1 ? $"{ok.Turns} turns; source: {ok.Served}" : string.Empty;
-        return string.Join(" ", new[] { turns, ok.InputCoverage }.Where(s => s.Length > 0));
+        return string.Join(" ", new[] { turns, ok.NotApplied, ok.InputCoverage }.Where(s => s.Length > 0));
     }
 
     private void Report(ReviewerInvocation invocation, string note)

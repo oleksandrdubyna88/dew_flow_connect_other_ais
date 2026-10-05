@@ -102,6 +102,9 @@ public static class RuntimeResolution
         // whole point of it — so the base-URL arm would send a Grok or a Qwen review through the
         // Codex CLI against xAI's endpoint, under the row's own name. (PLAN_feature_review.md §4.10.)
         : vendor.Runtime == "api" ? "api"
+        // And a runtime this build does not run, before the base-URL arm for the same reason once more: an endpoint does
+        // not make a row the Codex CLI's. Named as itself, it finds no adapter and is refused by that name.
+        : IsUnknown(vendor.Runtime) ? vendor.Runtime
         : vendor.BaseUrl.Length > 0 ? "codex"
         : vendor.Runtime.Length > 0 ? vendor.Runtime
         : vendor.Provider;
@@ -135,9 +138,26 @@ public static class RuntimeResolution
         // was consulted first, so a vendor called `claude` worked by accident while `my-claude` —
         // same runtime, different name — silently ran the Codex CLI. The vendor's own id travels
         // with the runtime; see ReviewerRuntimeSelector.Named for what happened when it did not.
+        // The id answers only when the row names no runtime: a row that NAMES one this build lacks is refused, never run
+        // as whatever its id happens to spell (todo/PLAN_one_model_catalog.md, epic 2, story 1).
         var name => ReviewerRuntimeSelector.Named(name, vendor.Provider)
-                    ?? ReviewerRuntimeSelector.Default.Find(vendor.Provider),
+                    ?? (vendor.Runtime.Length == 0 ? ReviewerRuntimeSelector.Default.Find(vendor.Provider) : null),
     };
+
+    /// <summary>A runtime the row names that is not one of <see cref="ReviewerRuntimeSelector.RuntimeNames"/>.</summary>
+    private static bool IsUnknown(string runtime) =>
+        runtime.Length > 0 && !ReviewerRuntimeSelector.RuntimeNames.Contains(runtime);
+
+    /// <summary>Why a row has no adapter: its runtime by name when it named one this build lacks, else its id.</summary>
+    public static string NoAdapterFor(VendorIdentity vendor) =>
+        IsUnknown(vendor.Runtime) ? UnknownRuntime(vendor.Runtime) : ReviewerRuntimeSelector.Default.RefusalFor(vendor.Provider);
+
+    /// <summary>The refusal for a runtime this build does not run, naming the ones it does.</summary>
+    /// <remarks>Most often a row written by a newer extension: updating coai-mcp is the cure as often as the picker is.</remarks>
+    public static string UnknownRuntime(string runtime) =>
+        $"the runtime '{runtime}' is not one this build of coai-mcp runs — it runs "
+        + $"{string.Join(", ", ReviewerRuntimeSelector.RuntimeNames.Order(StringComparer.Ordinal))}; "
+        + "a newer extension may have written it, so update coai-mcp or choose one of these";
 
     /// <summary>
     /// How a vendor authenticates — and therefore whether it can run at all.

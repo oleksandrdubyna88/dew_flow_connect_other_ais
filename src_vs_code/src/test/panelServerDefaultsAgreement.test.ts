@@ -142,15 +142,16 @@ test('the shipped consultant for every caller kind is the one the server would c
 
 test('the runtimes the picker offers are the runtimes the server can resolve', () => {
   // The extension cannot ask the server which they are — the picker has to be drawable before the
-  // server is installed — so it holds a copy, and a copy needs this.
-  const m = /Consulting[^=]*=[^"]*((?:"[a-z]+",?[ ]*)+)/.exec(resolution);
+  // server is installed. Since PLAN_one_model_catalog.md E2.1 neither half holds a copy: the server's
+  // list IS shared/feature-availability.json's (pinned to the instance by FeatureAvailabilityTests),
+  // and the panel's is generated from the same file. So the server must still read the file, and the
+  // panel must still equal it.
+  const shared = JSON.parse(fs.readFileSync(path.join(__dirname, '..', '..', '..', 'shared', 'feature-availability.json'), 'utf8')) as { features: { consultant: string[] } };
 
-  assert.ok(m, 'ConsultantResolution.Consulting is not in the shape this test reads');
-  assert.deepStrictEqual(
-    [...(m[1] ?? '').matchAll(/"([a-z]+)"/g)].map((one) => one[1]),
-    [...CONSULTING_RUNTIMES],
-    'the panel would offer a vendor the server cannot consult with, or hide one it can',
-  );
+  assert.match(resolution, /Consulting\s*=>\s*FeatureAvailability\.Builtin\.Consultant;/u,
+    'ConsultantResolution.Consulting is no longer the list read from the shared file — a second list is a second place to forget a runtime');
+  assert.deepStrictEqual([...CONSULTING_RUNTIMES], shared.features.consultant,
+    'the panel would offer a vendor the server cannot consult with, or hide one it can');
 });
 
 /**

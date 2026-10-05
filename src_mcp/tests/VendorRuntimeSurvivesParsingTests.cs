@@ -98,11 +98,12 @@ public class VendorRuntimeSurvivesParsingTests
     }
 
     [Fact]
-    public void AnUnknownRuntimeStillBecomesCodex()
+    public void AnUnknownRuntimeSurvivesParsing_SoItIsRefusedByName()
     {
-        // Unchanged and deliberate: a name from a newer panel is a custom vendor on the Codex CLI
-        // against its own base URL, not a row that launches nothing.
-        Parse("something-from-a-newer-panel").Runtime.Should().Be("codex");
+        // Reversed by todo/PLAN_one_model_catalog.md, epic 2, story 1: it used to become codex, which ran the Codex CLI
+        // on the person's own account for a row set to something else. Kept, the round refuses it by this name
+        // (AnUnknownRuntimeIsRefusedByNameTests).
+        Parse("something-from-a-newer-panel").Runtime.Should().Be("something-from-a-newer-panel");
     }
 
     [Fact]

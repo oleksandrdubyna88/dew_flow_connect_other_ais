@@ -112,3 +112,8 @@ test('a row that reviews nothing is told apart from one that reviews a stage', (
   assert.equal(reviewsAnything({ ...row, plan: false, code: false, document: true }), true);
   assert.equal(reviewsAnything({ ...row, runtime: 'codex', plan: false, code: false, document: false, feature: true }), true);
 });
+
+test('the prompt limit is 8192 bytes — the number coai-mcp refuses past too (CatalogLimits.MaxPromptBytes)', () => {
+  // Pinned on both halves rather than one reading the other's source: changing one alone is a red test here or there.
+  assert.equal(MAX_PROMPT_BYTES, 8192);
+});

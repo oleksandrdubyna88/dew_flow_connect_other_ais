@@ -56,8 +56,8 @@ public sealed class VendorSettingsTests
     }
 
     [Fact]
-    public void AnUnknownRuntime_BecomesCodex_TheOneThatTakesABaseUrl() =>
-        PanelSettings.ParseVendors("""[{"id":"x","runtime":"llama.cpp"}]""")[0].Runtime.Should().Be("codex");
+    public void AnUnknownRuntime_IsKept_NotMadeIntoCodex() =>
+        PanelSettings.ParseVendors("""[{"id":"x","runtime":"llama.cpp"}]""")[0].Runtime.Should().Be("llama.cpp");
 
     [Fact]
     public void ACustomVendor_GetsItsOwnProviderOverrides_AndItsOwnKeyVariable()

@@ -35,7 +35,9 @@ public sealed class ConsultationService(
     UsageLedger ledger,
     Serilog.ILogger log,
     Func<string, string?> env,
-    Noticing noticing)
+    Noticing noticing,
+    // The vault, for the one kind of consultant that authenticates with a key (ConsultantTurnInputs.TakesAKey).
+    VaultKeys keys)
 {
     public const string PromptId = "consult";
 
@@ -789,7 +791,7 @@ public sealed class ConsultationService(
     private string AnswersDir => ConsultHealthPaths.AnswersDirectory(settings.DataDir);
 
     private ReviewerSettings Settings(TurnConsultant consultant) =>
-        ConsultantTurnInputs.Settings(consultant.Row, consultant.Model, settings.ReviewerTimeout, settings.DataDir);
+        ConsultantTurnInputs.Settings(consultant.Row, consultant.Model, settings.ReviewerTimeout, settings.DataDir, keys, settings.ApiOverrides);
 
     private async Task<string> ShapedTreeAsync(string repo, CancellationToken ct)
     {

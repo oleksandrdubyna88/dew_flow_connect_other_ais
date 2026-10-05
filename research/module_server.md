@@ -6288,3 +6288,71 @@ whether the row's own settings can be sent at all (`IApiVendor.Refusal`).
 - Tests: `AnApiRowIsSettableTests` (RED first — nine of eleven red before the wiring: no effort applied, no
   exclusion, no `api` in `providers`), `ApiVendorModulesTests`, and the goldens of `ApiVendorGoldensTests` that
   hold every measured row's wire behaviour unchanged.
+
+## `--features` — the binary says what it accepts (2026-10-04, PLAN_one_model_catalog.md E2)
+
+`Server/FeaturesMode.cs` answers the one-shot `--features` with `{"features":[...]}` and exits 0. The extension sends a
+catalog field, or passes a flag, only when the installed binary lists it — "capability, not version numbers": a
+`*_SINCE` constant would guess a release number nobody has cut, and a branch build has none. An older binary exits
+64 for the mode, which the extension reads as an empty list. **An entry is added in the commit that makes it true.**
+Listed today: `bugzRuntime` (`--collect-bugs --runtime`, E2.1). In PROJECT.md's one-shot list and the help
+(`TheBinarySaysWhatItAcceptsTests`, RED first on the mode falling through to Usage).
+
+## A row's system prompt (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+- `VendorDto.SystemPrompt` → `ProviderSettings.SystemPrompt` (trimmed at its edges). `ReviewerPrompt.ComposePrompt`
+  puts it under `## What the person asked of this reviewer` AFTER what the reviewer has and BEFORE the finding
+  contract, closed by a sentence that the contract still holds — so the schema and the read-only rules come after the
+  person's words again. The repair launch is composed without it: it asks only for the answer in the schema.
+- `RosterBuilder.InstructionFor(provider, runtime)` hands it to every runtime that `CarriesTheRowsPrompt` — all but
+  a Team server's, whose operator decides whether a client prompt is taken at all (story 5).
+- A prompt past `CatalogLimits.MaxPromptBytes` (8192 UTF-8 bytes) keeps the row out of the round:
+  `PanelService.PromptRefusal` joins `CanRun`, and `ReasonFor` says "its system prompt is N bytes — at most 8192".
+- It never reaches a record. The invocation carries it in `Redact`, and the executor replaces it in the child's
+  stdout and stderr the moment the launch returns, before any tail, transcript or failure reason is cut from them — a
+  CLI echoes its input and a failing one quotes it, and that stderr was the round's reason, in the rounds database
+  and the reply the calling AI reads. `ARowsSystemPromptLeavesNoTraceTests` runs real rounds (answered while echoing
+  it, failed while quoting it, timed out) and finds it in no log line or property, no file of the data directory, not
+  the server's stderr and not the reply — RED on the failed round first. Argv never carries it (`RoundAudit` logs the
+  arguments and the stdin LENGTH).
+- `--features` lists `systemPrompt`.
+
+## A CLI row's own timeout (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+`VendorDto.TimeoutMinutes` → `ProviderSettings.TimeoutMinutes`: whole minutes 1 to `CatalogLimits.MaxTimeoutMinutes`
+(1440, the extension's `isMinutes`), anything else unset. `RosterBuilder.TimeoutFor` makes it the launch timeout of a
+CLI row in place of `ReviewerTimeout`; an api row keeps the round's launch timeout, its own limit being the whole review
+(`reviewMinutes`). `--features` lists `timeoutMinutes` (`ARowsOwnTimeoutTests`, RED first).
+
+## A CLI row's effort (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+`ProviderSettings.CliEffort` (the row's `effort`, lower-cased) means what `shared/feature-availability.json` says for
+its runtime. `RosterBuilder.EffortFor`: claude gets its row's level and nothing else — the local engines' setting is not
+a claude effort — passed as `--effort <level>` (read off claude 2.1.289) and recorded on the invocation as applied; a
+local row its own, else the panel's local setting; a codex row's is kept and NOT sent while codex is `unmeasured`, and
+the row still reviews. `PanelService.EffortRefusal` (with the prompt check in `RowRefusal`) leaves out one reviewer,
+by name, for a level a `list` runtime does not list or any effort on a runtime that takes `none`. An older claude that
+refuses the flag is diagnosed as "the installed claude CLI does not take --effort" (`VendorDiagnosis`, ahead of the
+general unknown-option cure). `--features` lists `cliEffort` (`ACliRowsEffortTests`, RED first).
+
+## A consultation launch carries the key and the module only where they belong (2026-10-05, PLAN_one_model_catalog.md E2.3)
+
+`ConsultantTurnInputs.Settings` takes the vault and the api overrides. `TakesAKey(row)` — an api row, or a codex row
+with a base URL — decides whether the row's vault key is handed over: a claude or plain codex consultant keeps its
+CLI's own sign-in, because a vault key would move it onto per-token billing (`AConsultantIsHandedItsRowsKeyTests`). An
+api row runs with its module's effective effort, ceiling and thinking switch, as an api reviewer and a question row
+do. `ConsultationService` receives the panel's vault; `--check-consultant` reads the vault as `--providers` does;
+`--consultants` (a survey of records) reads none. `--features` lists `apiConsultant`.
+
+The conversation of a consultant that keeps none is the consultation record's own: every turn's problem and advice is
+stored there, carried into the next prompt under the frozen carry budget, and swept with the consultation.
+
+## `--check-model` — the consultant's check, of any catalog row (2026-10-05, PLAN_one_model_catalog.md D10)
+
+`ConsultantCheckMode.AnswerModelAsync` reads `{"row": {…}}` on stdin — the row on the screen; a row that reviews
+nothing is on no wire this binary reads — parsed by `PanelSettings.ParseVendors`. A row whose runtime cannot consult is
+`unavailable` with `ConsultantResolution.CannotConsult`, before any lock and with nothing launched; any other row runs
+the consultant check's ONE paid turn (scratch repository, marker, canary) under the SAME machinery — `LockedAsync`
+(exclusive lock, durable record, `already-checking`, heartbeat, deadlines, scratch removed in `finally`) now serves
+both entries — keyed `model-<id>`, so two rows check apart and neither touches a caller kind's record. A request without
+a row is 65. `--features` lists `checkModel`. The refusal now calls only a codex row's base URL a custom endpoint.

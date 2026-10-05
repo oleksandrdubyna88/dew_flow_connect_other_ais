@@ -253,3 +253,88 @@ test('after an older build strips the catalog fields, the next run gives the use
 test('a layer that was restored is never migrated again by itself', () => {
   assert.deepEqual(migrateLayer({ ...OPERATOR, marker: RESTORED }), { kind: 'restored' });
 });
+
+// ---------------------------------------------------------------- the Bugz model (PLAN_one_model_catalog.md E2.1)
+
+const LOCAL = { id: 'local', runtime: 'local', model: 'qwen3.5:35b', baseUrl: 'http://127.0.0.1:11434/v1', enabled: true };
+const BY_RUNTIME = { bugzByRuntime: true };
+
+test('a Bugz model that differs from its row\'s model becomes a bugz- row, and the setting names it', () => {
+  const layer: CatalogLayer = { vendors: [...REVIEWERS, LOCAL], bugzModel: 'local/gemma4:27b' };
+  const outcome = migrateLayer(layer, BY_RUNTIME);
+  assert.equal(outcome.kind, 'migrate');
+  const after = apply(layer, outcome.kind === 'migrate' ? outcome.writes : []);
+  const row = vendorsFrom(after.vendors).find((one) => one.id === 'bugz-local');
+
+  assert.equal(after.bugzModel, 'bugz-local/gemma4:27b');
+  assert.deepEqual([row?.runtime, row?.model, row?.baseUrl], ['local', 'gemma4:27b', LOCAL.baseUrl], 'the row\'s launch, the Bugz model');
+  assert.deepEqual(row?.uses, ['bugz']);
+  assert.equal(row?.plan === false && row.code === false && row.document === false, true, 'it reviews nothing');
+  assert.equal(vendorsFrom(after.vendors).find((one) => one.id === 'local')?.model, 'qwen3.5:35b', 'the reviewer row is not touched');
+  assert.equal(env(after)['COAI_VENDORS'], env(layer)['COAI_VENDORS'], 'the reviewers coai-mcp is handed are the same: a Bugz-only row never crosses');
+  assert.equal(env(after)['COAI_BUGZ_MODEL'], 'bugz-local/gemma4:27b', 'and the Bugz entry names the row it moved to (no server half reads it today)');
+});
+
+test('the Bugz model moves only when the binary ranks by runtime — an older one refuses bugz-local', () => {
+  const layer: CatalogLayer = { vendors: [...REVIEWERS, LOCAL], bugzModel: 'local/gemma4:27b' };
+
+  assert.equal(migrateLayer(layer).kind, 'unchanged');
+});
+
+test('a Bugz model that IS its row\'s model, or names no row, stays as it is', () => {
+  for (const bugzModel of ['local/qwen3.5:35b', 'nowhere/gemma4:27b', '', 'local']) {
+    assert.equal(migrateLayer({ vendors: [...REVIEWERS, LOCAL], bugzModel }, BY_RUNTIME).kind, 'unchanged', bugzModel);
+  }
+});
+
+test('moving the Bugz model twice is moving it once', () => {
+  const layer: CatalogLayer = { vendors: [...REVIEWERS, LOCAL], bugzModel: 'local/gemma4:27b' };
+  const once = migrateLayer(layer, BY_RUNTIME);
+  const after = apply(layer, once.kind === 'migrate' ? once.writes : []);
+
+  assert.equal(migrateLayer(after, BY_RUNTIME).kind, 'unchanged');
+});
+
+test('a layer epic 1 already migrated gains the Bugz model in its backup before it is rewritten, and restore puts it back', () => {
+  const e1 = migrated({ ...OPERATOR, vendors: [...REVIEWERS, LOCAL] });
+  const layer: CatalogLayer = { ...e1, bugzModel: 'local/gemma4:27b' };
+  const outcome = migrateLayer(layer, BY_RUNTIME);
+  assert.equal(outcome.kind, 'migrate');
+  const writes = outcome.kind === 'migrate' ? outcome.writes : [];
+  const after = apply(layer, writes);
+  const backup = after.backup as { keys: string[]; values: Record<string, unknown> };
+  const before = e1.backup as { keys: string[]; values: Record<string, unknown> };
+
+  assert.ok(writes.findIndex((w) => w.key === 'migratedFrom') < writes.findIndex((w) => w.key === 'bugzModel'), 'the backup first');
+  assert.ok(backup.keys.includes('bugzModel'));
+  assert.equal(backup.values['bugzModel'], 'local/gemma4:27b', 'the value from before the move');
+  assert.deepEqual(backup.values['vendors'], before.values['vendors'], 'what epic 1 saved is never overwritten');
+
+  const restore = restoreLayer(after);
+  assert.equal(restore.kind, 'restore');
+  const restored = apply(after, restore.kind === 'restore' ? restore.writes : []);
+  assert.equal(restored.bugzModel, 'local/gemma4:27b');
+  assert.ok(!vendorsFrom(restored.vendors).some((one) => one.id === 'bugz-local'));
+});
+
+test('picking another model after the move rewrites the Bugz row in place — no second row, no orphan', () => {
+  const layer: CatalogLayer = { vendors: [...REVIEWERS, LOCAL], bugzModel: 'local/gemma4:27b' };
+  const first = migrateLayer(layer, BY_RUNTIME);
+  const moved = apply(layer, first.kind === 'migrate' ? first.writes : []);
+  const picked: CatalogLayer = { ...moved, bugzModel: 'local/llama4:17b' };
+  const second = migrateLayer(picked, BY_RUNTIME);
+  const after = apply(picked, second.kind === 'migrate' ? second.writes : []);
+  const bugzRows = vendorsFrom(after.vendors).filter((row) => row.uses?.includes('bugz') === true);
+
+  assert.deepEqual(bugzRows.map((row) => [row.id, row.model]), [['bugz-local', 'llama4:17b']]);
+  assert.equal(after.bugzModel, 'bugz-local/llama4:17b');
+});
+
+test('a pick through the Bugz row itself is the Bugz model already — nothing moves', () => {
+  const layer: CatalogLayer = { vendors: [...REVIEWERS, LOCAL], bugzModel: 'local/gemma4:27b' };
+  const first = migrateLayer(layer, BY_RUNTIME);
+  const moved = apply(layer, first.kind === 'migrate' ? first.writes : []);
+
+  assert.equal(migrateLayer({ ...moved, bugzModel: 'bugz-local/llama4:17b' }, BY_RUNTIME).kind, 'unchanged',
+    'bugz-local is Bugz\'s own row; a bugz-bugz-local row would be one per pick');
+});

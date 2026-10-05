@@ -85,6 +85,9 @@ public abstract record ReviewerOutcome
 
         protected override Usage OwnUsage => Usage;
         public string InputCoverage { get; init; } = string.Empty;
+
+        /// <summary>What a Team server said it did not apply of this reviewer's launch (E2.5); empty for every other.</summary>
+        public string NotApplied { get; init; } = string.Empty;
     }
 
     /// <param name="FailureReason">
@@ -502,7 +505,7 @@ public sealed class ReviewerExecutor(
         // rate-limit ladder already does — same helper, same arithmetic.
         var spent = System.Diagnostics.Stopwatch.StartNew();
         var budget = invocation.Request.Timeout;
-        var (outcome, review, usage, answer, evidence) = await RunOnceAsync(invocation, ct);
+        var (outcome, review, usage, answer, evidence, notApplied) = await RunOnceAsync(invocation, ct);
         if (outcome is not null)
         {
             return outcome;
@@ -510,7 +513,7 @@ public sealed class ReviewerExecutor(
 
         if (review is { } parsed)
         {
-            return Answered(parsed, Repaired: false, usage, invocation, answer);
+            return Answered(parsed, Repaired: false, usage, invocation, answer) with { NotApplied = notApplied };
         }
 
         // Measured in the ledger before it was fixed: one reviewer at 668.8 s against a ten-minute
@@ -549,7 +552,7 @@ public sealed class ReviewerExecutor(
     private ReviewerOutcome AfterTheRepair(
         ReviewerInvocation repair,
         (Usage Usage, string? Answer, string Evidence) first,
-        (ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence) second)
+        (ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence, string NotApplied) second)
     {
         if (second.Outcome is { } failed)
         {
@@ -559,7 +562,7 @@ public sealed class ReviewerExecutor(
         return second.Review is { } fixedReview
             // Both launches are billed, so both are counted — a repaired reviewer that
             // reported only its second attempt would under-report every time.
-            ? Answered(fixedReview, Repaired: true, first.Usage.Add(second.Usage), repair, second.Answer)
+            ? Answered(fixedReview, Repaired: true, first.Usage.Add(second.Usage), repair, second.Answer) with { NotApplied = second.NotApplied }
             // BOTH launches are kept, and the first one wins when the repair came back
             // empty: a vendor whose envelope broke leaves nothing to read, and the
             // evidence file was landing at zero bytes exactly when it was most needed.
@@ -583,6 +586,16 @@ public sealed class ReviewerExecutor(
     /// Both streams, labelled. An empty answer with an empty evidence file tells nobody anything;
     /// the vendor's own stream carries its status and its error, and that is the whole diagnosis.
     /// </remarks>
+    /// <summary>What the child said with every text in <paramref name="texts"/> replaced — see <see cref="ReviewerInvocation.Redact"/>.</summary>
+    private static ProcessResult Redacted(ProcessResult result, IReadOnlyList<string> texts) =>
+        texts.Count == 0 ? result : result with { StdOut = Without(result.StdOut, texts), StdErr = Without(result.StdErr, texts) };
+
+    private static string Without(string said, IReadOnlyList<string> texts) =>
+        texts.Where(text => text.Length > 0).Aggregate(said, (now, text) => now.Replace(text, RedactedText, StringComparison.Ordinal));
+
+    /// <summary>What stands where a redacted text was — saying that something was there, and what kind.</summary>
+    internal const string RedactedText = "[the row's system prompt]";
+
     private static string Transcript(ProcessResult result) =>
         $"--- stdout ---\n{result.StdOut}\n--- stderr ---\n{result.StdErr}";
 
@@ -694,13 +707,13 @@ public sealed class ReviewerExecutor(
     /// <summary>How long a courtesy cleanup may take before the round stops waiting for it.</summary>
     private static readonly TimeSpan AbandonBudget = TimeSpan.FromSeconds(10);
 
-    private async Task<(ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
+    private async Task<(ReviewerOutcome? Outcome, NormalisedReview? Review, Usage Usage, string? Answer, string Evidence, string NotApplied)> RunOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         var launch = await LaunchAsync(invocation, ct);
 
         return launch.Terminal is not null
-            ? (launch.Terminal, null, launch.Usage, null, string.Empty)
-            : (null, ParseAnswer(launch.Answer, invocation.Provider), launch.Usage, launch.Answer, launch.Evidence);
+            ? (launch.Terminal, null, launch.Usage, null, string.Empty, string.Empty)
+            : (null, ParseAnswer(launch.Answer, invocation.Provider), launch.Usage, launch.Answer, launch.Evidence, launch.NotApplied);
     }
 
     /// <summary>
@@ -722,6 +735,23 @@ public sealed class ReviewerExecutor(
     /// one catches its IO and JSON failures and answers with a null answer or
     /// <see cref="Usage.None"/>.</para>
     /// </remarks>
+    /// <summary>
+    /// <see cref="LaunchAsync"/> for an invocation launched exactly ONCE — a consultation turn, a question row — whose
+    /// files go when it does, however it ended. A review's go when its retry ladder is over (BoundedScheduler), because
+    /// a retry launches the same invocation again.
+    /// </summary>
+    public async Task<ReviewerLaunch> LaunchOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
+    {
+        try
+        {
+            return await LaunchAsync(invocation, ct);
+        }
+        finally
+        {
+            LaunchFiles.Forget(invocation.TempFiles);
+        }
+    }
+
     public async Task<ReviewerLaunch> LaunchAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         ProcessResult result;
@@ -735,7 +765,8 @@ public sealed class ReviewerExecutor(
             {
                 TrackAs = $"{invocation.Provider}/{invocation.Role}",
             };
-            result = await launcher.RunAsync(request, ct);
+            // Redacted before anything below reads it: every tail, transcript and reason is cut from these two streams.
+            result = Redacted(await launcher.RunAsync(request, ct), invocation.Redact);
         }
         catch (OperationCanceledException)
         {
@@ -796,7 +827,7 @@ public sealed class ReviewerExecutor(
 
         var (answer, evidence) = Read(invocation, result);
 
-        return new ReviewerLaunch(null, answer, usage, evidence, result);
+        return new ReviewerLaunch(null, answer, usage, evidence, result, invocation.Adapter?.NotApplied(invocation, result) ?? string.Empty);
     }
 
     /// <summary>What the vendor said, and what is left to show when it said nothing.</summary>
@@ -866,4 +897,5 @@ public sealed record ReviewerLaunch(
     string? Answer,
     Usage Usage,
     string Evidence,
-    ProcessResult? Process = null);
+    ProcessResult? Process = null,
+    string NotApplied = "");

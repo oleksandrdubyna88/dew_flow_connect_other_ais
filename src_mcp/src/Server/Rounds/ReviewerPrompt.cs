@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using CoaiMcp.Core.Catalog;
 using CoaiMcp.Core.Findings;
 using CoaiMcp.Core.Rounds;
 
@@ -23,8 +24,8 @@ internal sealed partial class ReviewerPrompt(RolePrompts prompts)
     /// How many follow-up turns a request for source buys this reviewer (S3.2) — zero for every reviewer
     /// but a feature reviewer with the switch on, and what the outline truth says about its requests.
     /// </param>
-    internal string ComposePrompt(PromptChoice choice, string context, ReaderMaterial material, SchemaShape answers, int followUps = 0) =>
-        $"{WithoutTheStaleClaim(_prompts.ForChoice(choice))}\n\n{WhatYouHave(material, followUps)}\n\n## The finding contract\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{SchemaFile.Text(answers)}\n\n{context}";
+    internal string ComposePrompt(PromptChoice choice, string context, ReaderMaterial material, SchemaShape answers, int followUps = 0, string personInstruction = "") =>
+        $"{WithoutTheStaleClaim(_prompts.ForChoice(choice))}\n\n{WhatYouHave(material, followUps)}\n\n{PersonInstruction.Section(personInstruction)}{PersonInstruction.ContractHeading}\n\nReturn ONLY a JSON object matching this schema — no fences, no prose:\n\n{SchemaFile.Text(answers)}\n\n{context}";
 
     /// <summary>
     /// What the reviewer actually has — said once, by the only code that knows which it is.

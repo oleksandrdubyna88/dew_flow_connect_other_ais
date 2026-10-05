@@ -10714,3 +10714,78 @@ key could be sent to whichever server a side named. Three modules now:
 Old keys are never filed by guessing which server issued them: that would be the replay itself (plan round, coai
 session `d5cdb1b2`). The keys page refuses a key typed with no server before the box opens, and refuses — keeping the
 record — a discard whose record names no issuing server. Help: the Bugz article, five languages.
+
+## The extension asks the binary what it accepts (2026-10-04, PLAN_one_model_catalog.md E2)
+
+- `binaryFeatures.readBinaryFeatures(run)` asks `--features`; exit 64 (an older binary), any other failure, or an
+  answer that is not a list of names is NO features, with `why` kept for the card that says what is not sent.
+  `FEATURES` names the capabilities this extension knows how to use. `PanelProvider.binaryFeatures()` asks once per
+  binary FILE (path + `modifiedMs`), so an update is asked again.
+- **Bugz ranked by runtime.** Each picker choice carries its row's runtime (every `localEngines` key is a `local`-runtime
+  row); with `bugzRuntime` listed the view offers every local instance (`local-2`, the migration's `bugz-local`) and
+  refuses a row merely called `local` on another runtime; without it, it matches the row id as that binary does.
+  `bugzView.collectArgs(model, runtime, byRuntime)` passes `--runtime` only to a binary that lists it — the row read
+  from every row, catalog-only ones included.
+- Seam leg 11 (`scripts/seam-features.mjs`) asks the REAL binary through the extension's own reader and fails when
+  the extension knows a capability the build does not list (shown red on a planted one).
+
+```mermaid
+sequenceDiagram
+  participant P as PanelProvider
+  participant F as binaryFeatures
+  participant M as coai-mcp
+  P->>F: binaryFeatures() — cached per path + mtime
+  F->>M: --features
+  M-->>F: {"features":["bugzRuntime"]} (or exit 64 → none)
+  F-->>P: features + why
+  P->>M: --collect-bugs --model local-2/qwen [--runtime local only when listed]
+```
+
+## The Bugz model moves into the catalog (2026-10-04, PLAN_one_model_catalog.md E2.1)
+
+- `catalogMigration.migrateLayer(layer, { bugzByRuntime })`: a `bugzModel` of `<row>/<model>` whose model is not
+  the row's own becomes row `bugz-<row>` — the row's launch with the Bugz model, reviewing nothing, `uses: [bugz]` —
+  and the setting names it. Only for a binary that ranks by runtime (`--features` lists `bugzRuntime`; asked per run
+  by `catalogMigrationHost`, since the binary can be updated while a window is open): an older one would refuse
+  `bugz-local`. `bugzModel` is a migration trigger.
+- **Bugz's own row.** The picker writes the setting on every pick, so a row that exists for Bugz alone is rewritten
+  IN PLACE by a later move (never a `bugz-local-2` beside an orphan), and a pick through it moves nothing (never a
+  `bugz-bugz-local`). Shown red on both before the rule.
+- **The backup.** A first backup holds `vendors`, `consultants`, `qconsultRows` — and `bugzModel` only when that run
+  moves it, so a restore never removes a Bugz model the migration never touched. A layer epic 1 already migrated has
+  `bugzModel` ADDED to its backup (its value before the move) ahead of the rewrite; what was saved is never
+  overwritten. Restore order: references first (`consultants`, `qconsultRows`, `bugzModel`), rows last.
+- A Bugz-only row never crosses in `COAI_VENDORS` (`rowsOnTheWire`). `COAI_BUGZ_MODEL` names the new row — and no
+  code in coai-mcp reads that variable today (the collector takes `--model`), which is recorded as tail T7.
+
+## A row's system prompt crosses only to a binary that takes it (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+- `vendorsEnv(…, features)` writes `systemPrompt` only when the installed binary lists it (`FEATURES.systemPrompt`); the
+  "differs from the shipped list" comparison counts it too, so a shipped row whose only change is a prompt is written.
+  `envBlock`, `serverSettingsJson` and `ServerSettingsSync` thread `features`.
+- One `FeaturesCache` per window (`extension.ts`): the settings sync reads `known()` — the last SETTLED answer, never a
+  spawn per write — and the file is mirrored again once the binary has answered on activation. The catalog migration
+  asks the same cache. (`PanelProvider` keeps a cache of its own — one more `--features` spawn per window.)
+- The 8192-byte limit is pinned on both halves (`catalogRow.test.ts`, `ARowsSystemPromptReachesItsReviewerTests`).
+
+## A CLI row's timeout crosses only to a binary that takes it (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+`vendorsEnv` writes a CLI row's `timeoutMinutes` when the binary lists `timeoutMinutes` (`FEATURES.timeoutMinutes`); an
+api row carries none — it keeps `reviewMinutes` (`timeoutOnTheWire.test.ts`).
+
+## A CLI row's effort crosses only to a binary that takes it (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+`vendorsEnv` writes a CLI row's `effort` when the binary lists `cliEffort` (`FEATURES.cliEffort`); what it means is
+coai-mcp's to decide per runtime. An api row's effort keeps `apiSettingsOnTheWire` (`cliEffortOnTheWire.test.ts`).
+
+## An api consultant (2026-10-05, PLAN_one_model_catalog.md E2.3)
+
+`CONSULTING` (generated from `shared/feature-availability.json`) lists `api`; `FEATURES.apiConsultant` names the
+capability, which seam leg 11 holds the built binary to.
+
+### `FeaturesCache` after an update (2026-10-05, PR #686 review)
+
+The last settled `--features` list belongs to ONE binary file (path + modification time). When the file changes it is
+forgotten at once — an updated binary claims nothing until it answers — and every settled answer calls `onSettled`,
+which `extension.ts` uses to write the settings file again. Before, `known()` kept the old binary's list until the
+new one answered, and the file was re-written only once per window.

@@ -88,7 +88,7 @@ public static class ConsultantTurn
     {
         var clock = Stopwatch.StartNew();
         var budget = first.Request.Timeout;
-        var launched = await executor.LaunchAsync(first, ct);
+        var launched = await executor.LaunchOnceAsync(first, ct);
         landed(launched);
 
         var next = Offered(runtime, first, launched, RetryLadder.Remaining(clock.Elapsed, budget));
@@ -104,7 +104,7 @@ public static class ConsultantTurn
             return Of(runtime, [launched], changes);
         }
 
-        var second = await executor.LaunchAsync(RetryLadder.Lesser(left, next), ct);
+        var second = await executor.LaunchOnceAsync(RetryLadder.Lesser(left, next), ct);
         landed(second);
 
         return Of(runtime, [launched, second], []);

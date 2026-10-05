@@ -90,7 +90,7 @@ public sealed class PanelService
         _projection = new Store.Projection(settings.DataDir, log);
         _consultations = new ConsultationService(
             settings, launcher, executor, _context, prompts, ledger, log,
-            Environment.GetEnvironmentVariable, noticing);
+            Environment.GetEnvironmentVariable, noticing, keys);
         // The question consultant (todo/PLAN_question_consultant.md, S2): the `ask_consultants` tool's whole flow,
         // its own record store and its fan-out — kept out of this file, as the consultation is.
         _questions = new QuestionConsultService(
@@ -332,7 +332,45 @@ public sealed class PanelService
     /// twice in this file's own history.
     /// </remarks>
     private bool CanRun(ProviderSettings provider) =>
-        RuntimeFor(provider) is not null && AuthFor(provider).Auth != "unavailable";
+        RuntimeFor(provider) is not null && AuthFor(provider).Auth != "unavailable" && RowRefusal(provider).Length == 0;
+
+    /// <summary>What in the row itself keeps it out of the round — its prompt's size, then its effort — or nothing.</summary>
+    private static string RowRefusal(ProviderSettings provider) =>
+        PromptRefusal(provider) is { Length: > 0 } prompt ? prompt : EffortRefusal(provider);
+
+    /// <summary>
+    /// A CLI row's effort that its runtime does not take (shared/feature-availability.json): a level a `list` runtime does
+    /// not list, or any effort on a runtime that takes none. An `unmeasured` runtime's (codex) is kept and not sent, a
+    /// `probe` runtime's is judged per model — neither keeps the row out. An api row's is its module's to refuse.
+    /// </summary>
+    private static string EffortRefusal(ProviderSettings provider)
+    {
+        var runtime = RuntimeResolution.NameOf(provider.Identity());
+        var row = Core.Catalog.FeatureAvailability.Builtin.EffortOf(runtime);
+
+        return provider.CliEffort.Length == 0 || runtime == "api" ? string.Empty : EffortRefusal(provider.CliEffort, runtime, row);
+    }
+
+    private static string EffortRefusal(string effort, string runtime, Core.Catalog.EffortRow row) => row.Source switch
+    {
+        "list" when !row.Levels.Contains(effort, StringComparer.Ordinal) =>
+            $"its effort '{effort}' is not one {runtime} takes ({string.Join(", ", row.Levels)})",
+        "none" => $"its effort '{effort}' cannot be applied: {runtime} takes no effort",
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// Why a row's system prompt keeps it out of the round — past <see cref="Core.Catalog.CatalogLimits.MaxPromptBytes"/>
+    /// UTF-8 bytes — or nothing. The extension refuses it at save time; a hand-edited settings file reaches this side too.
+    /// </summary>
+    private static string PromptRefusal(ProviderSettings provider)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(provider.SystemPrompt);
+
+        return bytes > Core.Catalog.CatalogLimits.MaxPromptBytes
+            ? $"its system prompt is {bytes} bytes — at most {Core.Catalog.CatalogLimits.MaxPromptBytes}; shorten it"
+            : string.Empty;
+    }
 
     /// <summary>
     /// The reviewers the operator ENABLED for this stage that this round cannot run, each as
@@ -366,7 +404,9 @@ public sealed class PanelService
     /// </remarks>
     private string ReasonFor(ProviderSettings provider) =>
         RuntimeFor(provider) is null
-            ? $"no adapter for a runtime called '{provider.Runtime}'"
+            ? RuntimeResolution.NoAdapterFor(provider.Identity())
+            : RowRefusal(provider) is { Length: > 0 } refused
+            ? refused
             : RuntimeResolution.ExclusionReason(
                 provider.Identity(), _keys.Keys.ContainsKey(provider.KeyName), HasServerToken(provider), provider.Model);
 

@@ -258,3 +258,51 @@ these deterministic guarantees.
 `SecuritySessionCompatibilityTests` loads pre-lane finding shapes through the real `SessionStore`
 and generated JSON context, saves and reloads them, and checks the empty evidence projection.
 Its positive control preserves nonempty lane evidence through the same store.
+
+## Editable words, a card's own words, and `--check-security` (2026-10-05, PLAN_one_model_catalog.md E2.4)
+
+- **`SignalTable`** (core): every signal with what it matches — words (a case-insensitive substring each) and compiled
+  patterns. `Shipped` is today's detector exactly; `Build(words, own)` puts a person's words for a signal in place of its
+  shipped words (the SQL statement shapes stay on `sql`) and makes each card's own words a signal of its own,
+  `own:<prompt id>`. `SecuritySignals.Classify(files, table)`; the old overload is the shipped table.
+- **Patterns** — an entry written `/…/` — compile once with `NonBacktracking`, `IgnoreCase` and a 1 s match timeout:
+  a catastrophic pattern over a megabyte is linear, never a hung round. Lookaround and backreferences are refused BY
+  NAME (`PatternRefusal`), as is a pattern past 200 characters or past 32 across the lane; the rest of the list still
+  works. A pattern that times out on a file leaves that file's detection INCOMPLETE — the lane's existing state.
+- **A card with words** (`SecurityPrompt.Words`) is due when its own signal or one of its triggers matches — never on
+  every change. An "always" card ignores words: it already runs on every change.
+- **The setting.** `COAI_SECURITY_LANE` reads a root `signals` (signal → words) and a prompt's `words`; an unknown signal,
+  a value that is not a list, and every refused pattern are COMPLAINTS (on `providers`), never a refused lane.
+  `SecurityLaneSetting.Table` is built when the setting is read; the roster and the source reader classify with it.
+- **`--check-security [--validate]`** reads `{"text": …, "lane": …}` on stdin (never argv: a sample can hold a token,
+  and argv is in process listings and capped at 32 K on Windows) and answers `signals`, the `cards` that would be due,
+  `refused` patterns and `complaints`; `--validate` checks the patterns alone. A request it cannot read is 65, never 64.
+- **The extension** sends `signals` and a prompt's `words` only to a binary that lists `securityWords`: an older one
+  refuses an unknown root member — the whole lane off — and an unknown prompt member refuses that prompt.
+  `--features` lists `securityWords` and `checkSecurity`.
+
+```mermaid
+flowchart LR
+  S["COAI_SECURITY_LANE<br/>signals + prompt words"] --> P[SecurityLaneSetting.Parse]
+  P --> T["SignalTable.Build<br/>NonBacktracking, 1 s, ≤ 32 × ≤ 200"]
+  T -->|refused| C[complaints, by name]
+  T --> K["SecuritySignals.Classify(files, table)"]
+  K -->|timed out| I[detection incomplete]
+  K --> R[SecurityRoster / SecuritySources: due cards]
+  X["--check-security (stdin)"] --> P
+```
+
+### Epic 2 code round fixes (2026-10-05, coai session 589a145b)
+
+- **A timed-out pattern runs once per classification.** `SecuritySignals.Classify(files, table)` keeps the signals that
+  ran out of time; a later file does not run them again and says its detection is INCOMPLETE (what they would have
+  found there is unknown). 32 patterns × 16 files × the 1 s timeout is no longer reachable.
+- **`--check-security` reads only what it was asked.** An argument other than one `--validate` is 65 by name; stdin is
+  read only to its 2 MB limit (`ReadBoundedAsync`); a `lane` that is not an object is 65, never replaced by the shipped
+  lane; the answer carries `detectionIncomplete`, so a sample the detector could not finish is not read as "no signals".
+
+### PR #686 review threads (2026-10-05)
+
+- `--check-security` parses the lane WITHOUT its `runs`: a words-and-patterns check has no reviewer list, and judging
+  runs there made every configured run a false "unknown reviewer".
+- An "always" card with stored `words` is told they are not used (a complaint), never ignored in silence.

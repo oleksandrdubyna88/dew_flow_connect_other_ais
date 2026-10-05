@@ -180,7 +180,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
 
     /// <summary>Run what the ADAPTER says to run — argv included, so the command line is under test too.</summary>
     private async Task<(int Exit, string StdOut, string StdErr, ReviewerInvocation Invocation)> RunAsync(
-        TimeSpan timeout)
+        TimeSpan timeout, ReviewerSettings? row = null)
     {
         var invocation = new RemoteRuntime("codex", _prefix).Build(
             RoleCatalog.ArchitectureRole,
@@ -188,7 +188,7 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
             _outputDir,
             Path.Combine(_outputDir, "schema.json"),
             _outputDir,
-            new ReviewerSettings("codex") { Model = "m", DataDir = _dataDir, Timeout = timeout });
+            (row ?? new ReviewerSettings("codex") { Model = "m" }) with { DataDir = _dataDir, Timeout = timeout });
 
         // The adapter names this binary through the dotnet host when it is running from a dll; the
         // test runs the published exe directly, so only the arguments are taken from it.
@@ -229,6 +229,36 @@ public sealed class RemoteShimScenarioTests : IAsyncLifetime
             invocation, new Runners.Processes.ProcessResult(exit, stdout, stderr, false));
         usage.TokensIn.Should().Be(11);
         usage.TokensOut.Should().Be(22);
+    }
+
+    [Fact]
+    public async Task ContractTwosFields_GoOut_AndWhatTheServerDidNotApply_ComesBackForTheReviewersNote()
+    {
+        // PLAN_one_model_catalog.md E2.5, through the real binary: the row's effort and its system prompt (read from its
+        // file) are in the POST body, and the server's dropped field reaches the adapter off the usage line.
+        SignIn();
+        var posted = string.Empty;
+        _answer = context =>
+        {
+            if (context.Request.HttpMethod != "POST")
+            {
+                return (200, """{"id":"job-1","status":"done","position":0,"answer":"{}","tokensIn":3,"tokensOut":4}""");
+            }
+
+            using var reader = new StreamReader(context.Request.InputStream);
+            posted = reader.ReadToEnd();
+            context.Response.Headers[RemoteAsk.ContractHeader] = "2";
+
+            return (202, """{"id":"job-1","position":0,"dropped":[{"field":"systemPrompt","reason":"the switch is off"}]}""");
+        };
+
+        var (exit, stdout, stderr, invocation) = await RunAsync(
+            TimeSpan.FromMinutes(2), new ReviewerSettings("codex") { Model = "m", ReasoningEffort = "high", SystemPrompt = "MARKER-shim be terse" });
+
+        exit.Should().Be(RemoteAsk.Ok, $"stderr said: {stderr}");
+        posted.Should().Contain("\"effort\":\"high\"").And.Contain("\"systemPrompt\":\"MARKER-shim be terse\"");
+        new RemoteRuntime("codex", _prefix).NotApplied(invocation, new Runners.Processes.ProcessResult(exit, stdout, stderr, false))
+            .Should().Be("the Team server did not apply systemPrompt: the switch is off");
     }
 
     [Fact]

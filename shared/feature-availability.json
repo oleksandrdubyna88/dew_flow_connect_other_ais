@@ -3,8 +3,8 @@
     "Which runtime can serve which feature, and which reasoning efforts each runtime accepts",
     "(todo/PLAN_one_model_catalog.md, D4). Neither half owns this file: the extension generates",
     "src/featureAvailability.generated.ts from it (node src_vs_code/scripts/generate-feature-availability.mjs) and",
-    "coai-mcp reads it from E2.1 on. Until then coai-mcp keeps its own copy of the consultant list",
-    "(ConsultantResolution.Consulting), and src_mcp/tests/FeatureAvailabilityTests.cs holds that copy to this file.",
+    "coai-mcp embeds it (src_mcp/core/Catalog/FeatureAvailability.cs): ConsultantResolution.Consulting IS",
+    "features.consultant, and a file whose lists name an undeclared runtime fails the server's start.",
     "",
     "FROZEN to what each half did on 2026-10-04: a runtime is added here when it is added to the product, never",
     "ahead of it. The question consultant's runtimes are not here - shared/runtime-capabilities.json decides them -",
@@ -17,7 +17,7 @@
   ],
   "runtimes": ["codex", "gemini", "claude", "antigravity", "local", "remote", "api"],
   "features": {
-    "consultant": ["codex", "claude", "antigravity", "local"],
+    "consultant": ["codex", "claude", "antigravity", "local", "api"],
     "chat": ["antigravity", "claude", "codex"]
   },
   "effort": [
@@ -58,10 +58,10 @@
     },
     {
       "runtime": "remote",
-      "source": "unmeasured",
+      "source": "probe",
       "levels": [],
       "measuredWith": "",
-      "note": "A Team server carries no effort until its contract v2 (PLAN_one_model_catalog.md E2.5)."
+      "note": "The Team server judges it per vendor (contract 2, PLAN_one_model_catalog.md E2.5): applied where its runtime lists the level, lowered to the operator's cap, or dropped — and the reviewer's note says which. A contract-1 server applies none."
     },
     {
       "runtime": "api",

@@ -9,6 +9,26 @@ namespace CoaiMcp.Server;
 /// <param name="Provider">Its id: what names it in the panel, in the logs, and in the vault entry.</param>
 public sealed record ProviderSettings(string Provider)
 {
+    /// <summary>
+    /// The person's own instruction for this row (PLAN_one_model_catalog.md E2.2): delivered inside the prompt body after
+    /// the product's reviewer instruction, which it cannot replace, and never logged — only its length and hash. Empty is
+    /// none.
+    /// </summary>
+    public string SystemPrompt { get; init; } = string.Empty;
+
+    /// <summary>
+    /// A CLI row's own reviewer timeout in whole minutes, 1 to 1440 (PLAN_one_model_catalog.md E2.2); 0 is unset — the
+    /// round's timeout. An api row keeps its whole-review <c>reviewMinutes</c> instead.
+    /// </summary>
+    public int TimeoutMinutes { get; init; }
+
+    /// <summary>
+    /// A CLI row's reasoning effort, lower-cased (PLAN_one_model_catalog.md E2.2) — what it means is the runtime's, per
+    /// <c>shared/feature-availability.json</c>: claude's levels are passed as <c>--effort</c>, a codex effort is kept and not
+    /// sent while codex is unmeasured, a local row's is sent per call. Empty is none. An api row's effort is <c>Api</c>'s.
+    /// </summary>
+    public string CliEffort { get; init; } = string.Empty;
+
     public bool Enabled { get; init; } = true;
 
     public string Model { get; init; } = string.Empty;
@@ -1207,6 +1227,12 @@ public sealed record PanelSettings
                         VaultKey = v.Key?.Trim().ToLowerInvariant() ?? string.Empty,
                         Price = PriceOf(v.Price),
                         Api = ApiRowOf(v),
+                        // Trimmed at its edges only: the inside is the person's own text, line breaks and all.
+                        SystemPrompt = v.SystemPrompt?.Trim() ?? string.Empty,
+                        // The extension's rule (`isMinutes`): 1 to a day; anything else is unset, the round's timeout.
+                        TimeoutMinutes = v.TimeoutMinutes is { } minutes && minutes is > 0 and <= Core.Catalog.CatalogLimits.MaxTimeoutMinutes ? minutes : 0,
+                        // The same `effort` member an api row's settings read; what it means is the runtime's.
+                        CliEffort = v.Effort?.Trim().ToLowerInvariant() ?? string.Empty,
                     })
                     // One id, one vendor — the extension already refuses a duplicate row, and a
                     // hand-edited settings file is how one reaches the server. The id is the
@@ -1286,21 +1312,12 @@ public sealed record PanelSettings
     {
         // Unset stays unset, and that is the whole distinction: the id then decides, so a vendor
         // called `gemini` with no runtime field is still a gemini.
-        var name = runtime?.Trim().ToLowerInvariant() ?? string.Empty;
-        if (name.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        // Membership, not a hand-written list. This WAS a hand-written list — gemini, claude,
-        // antigravity, else codex — and `local` never got added to it, so a local vendor became a
-        // codex vendor with a base URL, failed the key check that base URLs imply, and was dropped
-        // from every round. The panel showed a configured reviewer; the round opened with zero.
-        // The extension had the identical defect in its own copy of this set, days earlier.
         //
-        // An unknown runtime is still a custom vendor riding the Codex CLI against its own base
-        // URL — a deliberate decision kept from the vendor-settings tests, not a fallthrough.
-        return Runners.Reviewers.ReviewerRuntimeSelector.RuntimeNames.Contains(name) ? name : "codex";
+        // An unknown runtime is KEPT, not turned into codex. It used to be, so that "a name from a newer panel still
+        // launches something" — and what it launched was the Codex CLI on the person's own account, for a row set to
+        // something else: the shape `api` was once the example of. Kept, it reaches RuntimeResolution, which has no
+        // adapter for it and refuses the row by that name (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+        return runtime?.Trim().ToLowerInvariant() ?? string.Empty;
     }
 
     /// <summary>

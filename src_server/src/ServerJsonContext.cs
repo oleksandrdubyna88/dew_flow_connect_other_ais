@@ -95,10 +95,19 @@ public sealed record ReviewRequestDto(
     string? Role = null,
     int TimeoutSeconds = 600,
     string? Kind = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    /// <summary>Contract 2 (PLAN_one_model_catalog.md E2.5): the row's reasoning effort, applied where the runtime lists levels.</summary>
+    string? Effort = null,
+    /// <summary>Contract 2: the person's instruction for the row — taken only when the operator allows it, never logged.</summary>
+    string? SystemPrompt = null);
+
+/// <summary>A field the server did not take as sent: dropped, or clamped to the operator's cap — with why.</summary>
+public sealed record FieldNoteDto(string Field, string Reason);
 
 /// <param name="Position">Where it sits in its vendor's queue, 1-based; 0 once it is running.</param>
-public sealed record ReviewAcceptedDto(string Id, int Position);
+/// <param name="Dropped">Contract 2: what this server did not take, and why — shown by the client, never silence.</param>
+/// <param name="Clamped">Contract 2: what it took at the operator's cap rather than as sent.</param>
+public sealed record ReviewAcceptedDto(string Id, int Position, IReadOnlyList<FieldNoteDto>? Dropped = null, IReadOnlyList<FieldNoteDto>? Clamped = null);
 
 /// <param name="Answer">
 /// The vendor's RAW text. Parsing, repair and de-duplication stay in the client, so the same parser
@@ -202,6 +211,7 @@ public sealed record SlotStateDto(
 [JsonSerializable(typeof(SlotStateDto))]
 [JsonSerializable(typeof(ReviewRequestDto))]
 [JsonSerializable(typeof(ReviewAcceptedDto))]
+[JsonSerializable(typeof(FieldNoteDto))]
 [JsonSerializable(typeof(ReviewStatusDto))]
 [JsonSerializable(typeof(UsageEntryDto))]
 [JsonSerializable(typeof(UsageDto))]

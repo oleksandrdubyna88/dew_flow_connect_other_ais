@@ -131,6 +131,67 @@ public sealed class ConsultantCheckTests : IDisposable
         Directory.EnumerateDirectories(_temp, "coai-check-*").Should().BeEmpty("the scratch repository is deleted at the end");
     }
 
+    // ---------- --check-model <row on stdin> (PLAN_one_model_catalog.md D10, epic 2 story 4) ----------
+
+    /// <summary>The same check, of ONE catalog row handed on stdin — a row that reviews nothing is on no wire the server reads.</summary>
+    private async Task<(int Code, JsonElement Said, string Err)> CheckModel(string stdin)
+    {
+        var (code, stdout, stderr) = await ConsultantCheckMode.AnswerModelAsync(
+            Settings(), stdin, new ProcessLauncher(), _temp, _warned.Add, Noticing.None, TestContext.Current.CancellationToken, VaultKeys.None("t"));
+
+        return (code, stdout.Length > 0 ? JsonDocument.Parse(stdout).RootElement.Clone() : default, stderr);
+    }
+
+    private static string RowJson(string id, string runtime, string extra = "") =>
+        "{\"row\":{\"id\":\"" + id + "\",\"runtime\":\"" + runtime + "\",\"executablePath\":" + JsonSerializer.Serialize(FakeCliExe) + extra + "}}";
+
+    [Fact]
+    public async Task ACheckOfAModel_Answers_UnderARecordOfItsOwn()
+    {
+        CodexAnswers("marker: {{cwd-file:CHECK.md}}\ncanary: CANNOT");
+
+        var (code, said, _) = await CheckModel(RowJson("codex-2", "codex"));
+
+        code.Should().Be(0);
+        Text(said, "state").Should().Be("answered", said.ToString());
+        Text(said, "vendor").Should().Be("codex-2", "the row checked is the row handed in");
+        TurnsLaunched.Should().Be(1, "exactly one paid turn");
+        File.Exists(Path.Combine(_data, "consultations", "health", "model-codex-2.check.json")).Should().BeTrue("one record per instance");
+        File.Exists(Path.Combine(_data, "consultations", "health", "claude.check.json")).Should().BeFalse("a model's check is not the claude caller's");
+    }
+
+    [Fact]
+    public async Task AModelWhoseRuntimeCannotConsult_IsUnavailable_AndNothingIsLaunched()
+    {
+        var (code, said, _) = await CheckModel("""{"row":{"id":"srv-codex","runtime":"remote","baseUrl":"https://coai.example"}}""");
+
+        code.Should().Be(0, "unavailable is an answer, not a malformed request");
+        Text(said, "state").Should().Be("unavailable");
+        Text(said, "reason").Should().Contain("srv-codex");
+        TurnsLaunched.Should().Be(0);
+    }
+
+    [Theory]
+    [InlineData("not json")]
+    [InlineData("{}")]
+    [InlineData("""{"row":{"runtime":"codex"}}""")]
+    public async Task ACheckModelRequestWithoutARow_Is65_NeverTheOldBinarys64(string stdin)
+    {
+        var (code, _, err) = await CheckModel(stdin);
+
+        code.Should().Be(65);
+        err.Should().NotBeEmpty();
+        TurnsLaunched.Should().Be(0);
+    }
+
+    [Fact]
+    public void CheckModel_IsAKnownMode_ListedInTheHelpAndTheFeatures()
+    {
+        Program.Classify(["--check-model"]).Should().NotBe(Program.Startup.Usage);
+        Program.HelpText.Should().Contain("`--check-model");
+        FeaturesMode.Listed.Should().Contain("checkModel");
+    }
+
     [Fact]
     public async Task ACanaryWordInTheAnswer_IsALeak()
     {

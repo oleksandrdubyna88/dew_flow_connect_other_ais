@@ -20,6 +20,12 @@ public sealed record ReviewerSettings(string Provider)
     /// </summary>
     public string ReasoningEffort { get; init; } = string.Empty;
 
+    /// <summary>
+    /// For a <c>remote</c> row only: the row's system prompt, sent to its Team server as the field the operator can refuse
+    /// (contract 2, PLAN_one_model_catalog.md E2.5). Every other runtime carries it in the prompt's body instead.
+    /// </summary>
+    public string SystemPrompt { get; init; } = string.Empty;
+
     /// <summary>Empty = the CLI's own authentication (the normal case for codex and gemini).</summary>
     public string ApiKey { get; init; } = string.Empty;
 
@@ -181,6 +187,26 @@ public sealed record ReviewerInvocation(
     /// <c>costUsd</c> the child had worked out.
     /// </remarks>
     public TokenPrice Price { get; init; } = TokenPrice.None;
+
+    /// <summary>
+    /// Files this launch wrote for its child to read — an api, local or Team server reviewer's <c>.prompt</c> — which the
+    /// scheduler deletes when the launch's turn ends, however it ended (todo/PLAN_one_model_catalog.md, epic 2).
+    /// </summary>
+    /// <remarks>
+    /// A prompt holds the change under review and, from epic 2, the person's system prompt for the row; left in the
+    /// answers directory it lived until the six-hour sweep. A CLI reviewer is handed its prompt on stdin and has none.
+    /// </remarks>
+    public IReadOnlyList<string> TempFiles { get; init; } = [];
+
+    /// <summary>
+    /// Texts this launch was given that must not come back out of it into a record — a catalog row's system prompt
+    /// (todo/PLAN_one_model_catalog.md, epic 2, story 2). Replaced in the child's stdout and stderr the moment it exits,
+    /// before a tail, a transcript or a failure reason is cut from them.
+    /// </summary>
+    /// <remarks>A CLI echoes its input — <c>codex exec</c> prints the prompt on stderr — and a failing one quotes it in its
+    /// error; the round keeps that stderr as the reason, and the reason reaches the rounds database and the reply the
+    /// calling AI reads.</remarks>
+    public IReadOnlyList<string> Redact { get; init; } = [];
 }
 
 /// <summary>
@@ -224,6 +250,35 @@ public interface IReviewerRuntime
     /// the install location, and the probe did not.
     /// </remarks>
     string DefaultExecutable => Provider;
+
+    /// <summary>
+    /// Whether this reviewer can READ a mounted checkout — a CLI agent started in the worktree with file tools.
+    /// </summary>
+    /// <remarks>
+    /// An api row, a local model and a Team server get the change inside their prompt and nothing else; telling them a
+    /// checkout is there sends them looking for files they can never open (todo/PLAN_one_model_catalog.md, epic 2,
+    /// story 1). True by default, because every CLI adapter runs in the worktree; the three that cannot override it.
+    /// </remarks>
+    bool ReadsTheCheckout => true;
+
+    /// <summary>
+    /// Whether a catalog row's system prompt is delivered to this reviewer inside its prompt body
+    /// (todo/PLAN_one_model_catalog.md, epic 2, story 2). True for every runtime but a Team server's, whose operator decides
+    /// whether a client's prompt is taken (story 5): putting it in the body would go around that decision.
+    /// </summary>
+    bool CarriesTheRowsPrompt => true;
+
+    /// <summary>
+    /// Whether a row's own <c>timeoutMinutes</c> becomes this launch's timeout (PLAN_one_model_catalog.md E2.2). Said by
+    /// the runtime, beside what it reads and what it carries, rather than by a type check in the roster.
+    /// </summary>
+    bool TakesItsOwnTimeout => true;
+
+    /// <summary>
+    /// What this launch asked for and its runtime said it did NOT apply — one sentence for the reviewer's note, or empty.
+    /// Only a Team server answers it (contract 2's dropped and clamped fields); a local launch applies what it sends.
+    /// </summary>
+    string NotApplied(ReviewerInvocation invocation, ProcessResult result) => string.Empty;
 
     /// <summary>
     /// A second launch that CONTINUES the first, when the first ended in a way only continuing can
@@ -325,15 +380,31 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
 {
     public virtual string Provider => id;
 
+    /// <summary>The codex CLI — what a launch starts when no path is configured, and what the probe asks.</summary>
+    /// <remarks>
+    /// Not the row id, which the interface's default would have been: a second codex row (`codex-2`) made the probe start
+    /// a program of that name and report a working reviewer as missing (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+    /// </remarks>
+    public string DefaultExecutable => "codex";
+
     private protected virtual string KeyVariable => "OPENAI_API_KEY";
 
     private protected virtual IEnumerable<string> ProviderOverrides => [];
+
+    /// <summary>
+    /// The <c>-c</c> overrides that point the Codex CLI at this row's provider — empty for codex's own service — for a
+    /// launch built outside <see cref="Build"/>: the consultant's (PLAN_one_model_catalog.md E2.3).
+    /// </summary>
+    public IReadOnlyList<string> ProviderArgs => [.. ProviderOverrides];
+
+    /// <summary>The environment variable this row's key travels in — OpenAI's for codex's own service.</summary>
+    public string KeyEnvironmentVariable => KeyVariable;
 
     public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
         var outputFile = Path.Combine(outputDir, $"{FileName.Safe(Provider)}-{FileName.Safe(role)}.json");
         var request = new ProcessRequest(
-            Executable(settings, "codex"),
+            Executable(settings, DefaultExecutable),
             [
                 "exec",
                 "-s", "read-only",
@@ -508,10 +579,17 @@ public sealed class GeminiRuntime(string id = "gemini") : IReviewerRuntime
 {
     public string Provider => id;
 
+    /// <summary>The gemini CLI — what a launch starts when no path is configured, and what the probe asks.</summary>
+    /// <remarks>
+    /// Not the row id, which the interface's default would have been: a second gemini row (`gemini-2`) made the probe start
+    /// a program of that name and report a working reviewer as missing (todo/PLAN_one_model_catalog.md, epic 2, story 1).
+    /// </remarks>
+    public string DefaultExecutable => "gemini";
+
     public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
         var request = new ProcessRequest(
-            settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : "gemini",
+            settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : DefaultExecutable,
             [
                 // The review itself arrives on stdin, which gemini appends its `-p` text to — so
                 // `-p` carries only this one short line. Same reason as codex: the Windows shim

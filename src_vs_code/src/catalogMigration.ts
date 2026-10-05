@@ -3,7 +3,7 @@ import { catalogRefusal, reviewsAnything } from './catalogRules';
 import { CALLER_KINDS, consultantChoiceFrom, DEFAULT_CONSULT, sameChoice } from './consultSettings';
 import { questionRowFrom } from './qconsultSettings';
 import { DEFAULT_VENDORS, freeVendorId, normaliseId, Vendor, vendorsFrom } from './vendors';
-import { asRecord, isRecord, Launch, RawRow, rawId, sameLaunch } from './catalogLaunch';
+import { asRecord, isRecord, Launch, RawRow, rawId, sameLaunch, withLaunch } from './catalogLaunch';
 
 /**
  * The one-time move of every model DEFINITION into the catalog (PLAN_one_model_catalog.md D3, E1.3).
@@ -17,8 +17,9 @@ import { asRecord, isRecord, Launch, RawRow, rawId, sameLaunch } from './catalog
  * <p>Pure: one settings LAYER in (the user layer, or one side's overlay — each migrated on its own), the
  * writes out, in the order that makes an interrupted run safe: the backup first and only once, then the
  * rows, then the references, then the marker. A rerun finds a row already added by its exact fields, so it
- * finishes an interrupted run instead of duplicating it. Chat presets and the Bugz model are NOT moved here:
- * chat conversations refer to a preset by id (E4.3) and Bugz ranking matches the row id `local` (E2.1).</p>
+ * finishes an interrupted run instead of duplicating it. Chat presets are NOT moved here: chat conversations refer
+ * to a preset by id (E4.3). The Bugz model is, from E2.1 — but only when the installed coai-mcp ranks by runtime
+ * ({@link MigrationOptions.bugzByRuntime}): an older one matches the row id `local` and would refuse `bugz-local`.</p>
  */
 
 /** The marker a layer carries once migrated, and once restored — after which nothing migrates it by itself. */
@@ -26,13 +27,15 @@ export const MIGRATED = 'migrated';
 export const RESTORED = 'restored';
 
 /** The keys a migration may rewrite, and so the keys its backup holds. */
-export const BACKED_UP: readonly ('vendors' | 'consultants' | 'qconsultRows')[] = ['vendors', 'consultants', 'qconsultRows'];
+export const BACKED_UP: readonly ('vendors' | 'consultants' | 'qconsultRows' | 'bugzModel')[] = ['vendors', 'consultants', 'qconsultRows', 'bugzModel'];
 
 /** One layer's raw values — `undefined` is a key this layer does not hold. */
 export interface CatalogLayer {
   readonly vendors?: unknown;
   readonly consultants?: unknown;
   readonly qconsultRows?: unknown;
+  /** `bugzModel` — `rowId/model`. */
+  readonly bugzModel?: unknown;
   /** `catalogMigration`. */
   readonly marker?: unknown;
   /** `migratedFrom`. */
@@ -42,7 +45,7 @@ export interface CatalogLayer {
 }
 
 export interface LayerWrite {
-  readonly key: 'migratedFrom' | 'vendors' | 'consultants' | 'qconsultRows' | 'catalogMigration';
+  readonly key: 'migratedFrom' | 'vendors' | 'consultants' | 'qconsultRows' | 'bugzModel' | 'catalogMigration';
   /** `undefined` removes the key from the layer. */
   readonly value: unknown;
 }
@@ -64,15 +67,22 @@ interface Found {
   readonly definition: Definition;
   readonly caller?: string;
   readonly question?: number;
+  /** The Bugz model's own name — what `bugzModel` names after `<row id>/`. */
+  readonly bugz?: string;
 }
 
 
 /** What this layer needs done, or why nothing is. */
-export function migrateLayer(layer: CatalogLayer): MigrationOutcome {
+export interface MigrationOptions {
+  /** Whether the installed coai-mcp ranks Bugz by the row's runtime (`--features` lists `bugzRuntime`). */
+  readonly bugzByRuntime?: boolean;
+}
+
+export function migrateLayer(layer: CatalogLayer, options: MigrationOptions = {}): MigrationOutcome {
   if (layer.marker === RESTORED) {
     return { kind: 'restored' };
   }
-  const { found, skipped } = definitionsIn(layer);
+  const { found, skipped } = definitionsIn(layer, options);
   const placed = placeAll(baseRows(layer), found);
   const repaired = repairUses(placed.rows, referencesIn(layer));
   const rows = { rows: repaired.rows, changed: placed.changed || repaired.changed };
@@ -102,8 +112,9 @@ function baseRows(layer: CatalogLayer): readonly RawRow[] {
 }
 
 /** Every definition in the layer, in caller order then row order; a name that is not a valid id is skipped. */
-function definitionsIn(layer: CatalogLayer): { found: readonly Found[]; skipped: readonly string[] } {
-  const all = [...consultantDefinitions(layer.consultants), ...questionDefinitions(layer.qconsultRows)];
+function definitionsIn(layer: CatalogLayer, options: MigrationOptions): { found: readonly Found[]; skipped: readonly string[] } {
+  const bugz = options.bugzByRuntime === true ? bugzDefinition(layer.bugzModel, vendorsFrom([...baseRows(layer)])) : [];
+  const all = [...consultantDefinitions(layer.consultants), ...questionDefinitions(layer.qconsultRows), ...bugz];
   const valid = all.filter((one) => normaliseId(one.definition.vault) === one.definition.vault);
 
   return {
@@ -138,6 +149,38 @@ function questionDefinitions(raw: unknown): readonly Found[] {
     .map((row) => ({ use: 'qconsult' as const, desired: `ask-${normaliseId(row.id)}`, question: index, definition: definitionOf(row, row.vendor) })));
 }
 
+/**
+ * The Bugz model `<row id>/<model>`, when its model is not the row's own: a row of that row's launch with the Bugz
+ * model, wanted as `bugz-<row id>`. Nothing for a model the row already runs, or a row that is not there.
+ */
+function bugzDefinition(raw: unknown, rows: readonly Vendor[]): readonly Found[] {
+  const [rowId, model] = bugzParts(raw);
+  const row = rows.find((one) => one.id === rowId);
+
+  return row === undefined || !movesFrom(row, model)
+    ? []
+    : [{ use: 'bugz' as const, desired: `bugz-${row.id}`, bugz: model, definition: { ...definitionOf(row, vaultOf(row)), model } }];
+}
+
+/** The row id (lower case) and the model of `<row id>/<model>`; empty strings when it is not that. */
+function bugzParts(raw: unknown): readonly [string, string] {
+  const [rowId = '', model = ''] = typeof raw === 'string' ? splitOnce(raw.trim(), '/') : [];
+
+  return [rowId.toLowerCase(), model];
+}
+
+/** A model the row does not already run, through a row that is not Bugz's own. */
+function movesFrom(row: Vendor, model: string): boolean {
+  return model !== '' && model !== row.model && !bugzOwned(row);
+}
+
+/** `rowId/model` split at the FIRST slash — a model name may carry one of its own. */
+function splitOnce(text: string, at: string): readonly string[] {
+  const index = text.indexOf(at);
+
+  return index < 0 ? [text, ''] : [text.slice(0, index), text.slice(index + 1)];
+}
+
 function definitionOf(one: { runtime: string; model: string; baseUrl: string; executablePath: string }, vault: string): Definition {
   return { runtime: one.runtime, model: one.model, baseUrl: one.baseUrl, executablePath: one.executablePath, vault };
 }
@@ -162,6 +205,10 @@ function placeAll(base: readonly RawRow[], found: readonly Found[]): Placed {
 
 function placeOne(rows: readonly RawRow[], one: Found): { rows: readonly RawRow[]; id: string; changed: boolean } {
   const parsed = vendorsFrom([...rows]);
+  const own = one.use === 'bugz' ? parsed.find((row) => row.id === one.desired && bugzOwned(row)) : undefined;
+  if (own !== undefined) {
+    return inPlace(rows, own, one.definition);
+  }
   const match = matchingRow(parsed, one);
   if (match !== undefined) {
     return withUse(rows, match, one.use);
@@ -169,6 +216,21 @@ function placeOne(rows: readonly RawRow[], one: Found): { rows: readonly RawRow[
   const id = freeVendorId(one.desired, new Set(parsed.map((row) => row.id)));
 
   return { rows: [...rows, newRow(id, one)], id, changed: true };
+}
+
+/**
+ * Bugz's own row, rewritten in place to the newly picked model rather than joined by a second one: the picker writes
+ * the setting on every pick, and a new `bugz-<row>-N` per pick would orphan the last until the 64-row cap.
+ */
+function inPlace(rows: readonly RawRow[], own: Vendor, definition: Definition): { rows: readonly RawRow[]; id: string; changed: boolean } {
+  return sameLaunch(own, definition)
+    ? { rows, id: own.id, changed: false }
+    : { rows: rows.map((raw) => (rawId(raw) === own.id ? withLaunch(raw, own.id, definition) : raw)), id: own.id, changed: true };
+}
+
+/** A row that exists for Bugz alone — reviews nothing, used for nothing else: the one the move made. */
+function bugzOwned(row: Vendor): boolean {
+  return !reviewsAnything(row) && row.uses?.length === 1 && row.uses[0] === 'bugz';
 }
 
 /** The row this definition may join: every launch field equal and the key filed under the same name — its desired id first. */
@@ -263,7 +325,13 @@ function referencesIn(layer: CatalogLayer): readonly Reference[] {
     .filter((row) => row.runtime === '' && row.vendor !== '')
     .map((row) => ({ rowId: row.vendor.toLowerCase(), use: 'qconsult' as const }));
 
-  return [...consultants, ...questions];
+  return [...consultants, ...questions, ...bugzReference(layer.bugzModel)];
+}
+
+function bugzReference(raw: unknown): readonly Reference[] {
+  const [rowId] = bugzParts(raw);
+
+  return rowId === '' ? [] : [{ rowId, use: 'bugz' }];
 }
 
 // ---------------------------------------------------------------- the writes
@@ -275,12 +343,35 @@ function writesFor(layer: CatalogLayer, found: readonly Found[], ids: readonly s
     return [];
   }
 
-  return [...backupWrite(layer), ...rowsWrite(rows), ...references, ...markerWrite(layer)];
+  return [...backupWrite(layer, references.map((write) => write.key)), ...rowsWrite(rows), ...references, ...markerWrite(layer)];
 }
 
-/** The backup — only the first time, so a later run never overwrites the values from before the catalog. */
-function backupWrite(layer: CatalogLayer): readonly LayerWrite[] {
-  return layer.backup === undefined ? [{ key: 'migratedFrom', value: backupOf(layer) }] : [];
+/**
+ * The backup — written the first time, and never overwritten after: a later run only ADDS a key it is about to rewrite
+ * that the backup does not hold yet (the Bugz model, moved by E2.1 into a layer epic 1 already migrated), with that
+ * key's value from before this run. What an earlier backup saved stays exactly as it was.
+ */
+function backupWrite(layer: CatalogLayer, rewrites: readonly string[]): readonly LayerWrite[] {
+  if (layer.backup === undefined) {
+    return [{ key: 'migratedFrom', value: backupOf(layer, rewrites) }];
+  }
+  const missing = BACKED_UP.filter((key) => !ALWAYS_BACKED_UP.includes(key) && rewrites.includes(key) && !backedUpKeys(layer.backup).includes(key));
+
+  return missing.length === 0 ? [] : [{ key: 'migratedFrom', value: extended(layer, missing) }];
+}
+
+function backedUpKeys(backup: unknown): readonly unknown[] {
+  const keys = asRecord(backup)['keys'];
+
+  return Array.isArray(keys) ? keys : [];
+}
+
+/** The earlier backup with `missing` added — each key's current value, absence recorded as absence. */
+function extended(layer: CatalogLayer, missing: readonly (typeof BACKED_UP)[number][]): { keys: readonly unknown[]; values: Record<string, unknown> } {
+  const earlier = asRecord(layer.backup);
+  const added = Object.fromEntries(missing.filter((key) => layer[key] !== undefined).map((key) => [key, layer[key]]));
+
+  return { keys: [...backedUpKeys(layer.backup), ...missing], values: { ...asRecord(earlier['values']), ...added } };
 }
 
 function rowsWrite(rows: { rows: readonly RawRow[]; changed: boolean }): readonly LayerWrite[] {
@@ -291,10 +382,18 @@ function markerWrite(layer: CatalogLayer): readonly LayerWrite[] {
   return layer.marker === MIGRATED ? [] : [{ key: 'catalogMigration', value: MIGRATED }];
 }
 
-function backupOf(layer: CatalogLayer): { keys: readonly string[]; values: Record<string, unknown> } {
-  const values = Object.fromEntries(BACKED_UP.filter((key) => layer[key] !== undefined).map((key) => [key, layer[key]]));
+/** The keys every migration may rewrite; the Bugz model is backed up only by a run that moves it. */
+const ALWAYS_BACKED_UP: readonly string[] = ['vendors', 'consultants', 'qconsultRows'];
 
-  return { keys: BACKED_UP, values };
+/**
+ * The first backup: the keys every run may rewrite, and the Bugz model only when THIS run moves it — a backup naming a
+ * key it never needed would have a restore remove a Bugz model the migration never touched.
+ */
+function backupOf(layer: CatalogLayer, rewrites: readonly string[]): { keys: readonly string[]; values: Record<string, unknown> } {
+  const keys = BACKED_UP.filter((key) => ALWAYS_BACKED_UP.includes(key) || rewrites.includes(key));
+  const values = Object.fromEntries(keys.filter((key) => layer[key] !== undefined).map((key) => [key, layer[key]]));
+
+  return { keys, values };
 }
 
 function referenceWrites(layer: CatalogLayer, found: readonly Found[], ids: readonly string[]): readonly LayerWrite[] {
@@ -302,9 +401,15 @@ function referenceWrites(layer: CatalogLayer, found: readonly Found[], ids: read
   const questions = found.flatMap((one, index) => (one.question === undefined ? [] : [[one.question, ids[index] ?? ''] as const]));
 
   return [
+    ...bugzWrite(found, ids),
     ...(callers.length === 0 ? [] : [{ key: 'consultants' as const, value: { ...asRecord(layer.consultants), ...Object.fromEntries(callers.map(([caller, id]) => [caller, referenceTo(id)])) } }]),
     ...(questions.length === 0 ? [] : [{ key: 'qconsultRows' as const, value: questionsReferring(layer.qconsultRows, new Map(questions)) }]),
   ];
+}
+
+/** The Bugz model naming its new row: `<row id>/<model>`, the shape the collector and the picker read. */
+function bugzWrite(found: readonly Found[], ids: readonly string[]): readonly LayerWrite[] {
+  return found.flatMap((one, index) => (one.bugz === undefined ? [] : [{ key: 'bugzModel' as const, value: `${ids[index] ?? ''}/${one.bugz}` }]));
 }
 
 /** A consultant reference as the file holds it: the row's id and nothing else — the row says the rest. */
@@ -338,7 +443,7 @@ export type RestoreOutcome =
  * definitions back first, the rows go last. A restore stopped part way then leaves definitions and perhaps rows nobody
  * refers to, never a reference to a row that is gone (CodeRabbit, PR #681).
  */
-const RESTORE_ORDER: readonly (typeof BACKED_UP)[number][] = ['consultants', 'qconsultRows', 'vendors'];
+const RESTORE_ORDER: readonly (typeof BACKED_UP)[number][] = ['consultants', 'qconsultRows', 'bugzModel', 'vendors'];
 
 /** Every backed-up key exactly as it was — removed where it was absent — and the layer marked restored. */
 export function restoreLayer(layer: CatalogLayer): RestoreOutcome {

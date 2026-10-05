@@ -179,8 +179,8 @@ internal sealed class RosterBuilder(
         // is the exact lie this change removed from the prompt files; only a mounted worktree is a
         // checkout.
         var hasCheckout = readsCheckout && !fastCode;
-        // And what it holds without one is the stage's to say — the change, or an outline with hunks.
-        var material = hasCheckout ? ReaderMaterial.Checkout : stageRow.Reads;
+        // What each reviewer is TOLD it holds is decided per reviewer below (ReviewerMaterial), where its runtime is known:
+        // a mounted checkout is something only a reviewer that can read one has.
 
         // Only what can actually run: a vendor whose CLI is missing or whose key is absent is
         // reported by `providers` and left out of the deal rather than dealt work it cannot do.
@@ -313,7 +313,10 @@ internal sealed class RosterBuilder(
 
             var launch = SettingsFor(provider, runtime, api);
             var followUps = turns is Runners.Feature.SourceTurns.On on ? on.FollowUps : 0;
-            var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers, followUps);
+            var material = ReviewerMaterial.For(hasCheckout, runtime, stageRow.Reads);
+            // Once, for the body AND the redaction list below: two calls that must agree are one value.
+            var instruction = InstructionFor(provider, runtime);
+            var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers, followUps, instruction);
             // One key for every launch of THIS reviewer — its turns and their repairs — from the base prompt
             // every one of them shares (ConversationKey): what a vendor that routes its prompt cache by a
             // conversation id (xAI's x-grok-conv-id, 2026-09-26) needs to serve turn 2 from turn 1's cache.
@@ -333,9 +336,11 @@ internal sealed class RosterBuilder(
             // One composer for every turn (S3.2): turn 1 is the base with an empty tail, and a follow-up
             // is the SAME base byte for byte with its tail appended — the launch and the repair alike, so
             // the repair of turn N is composed from turn N's own prompt (plan §4.9).
+            // What the launch was given and must not echo back into a record: the row's system prompt (see Redact).
+            IReadOnlyList<string> redact = instruction.Length == 0 ? [] : [instruction];
             ReviewerWork Turn(string tail) => new(
-                runtime.Build(role, prompt + tail, launchDir, schemaFile, outputDir, launch),
-                runtime.Build(role, repairBase + tail + RepairInstruction.Text, repairDir, schemaFile, outputDir, launch),
+                runtime.Build(role, prompt + tail, launchDir, schemaFile, outputDir, launch) with { Redact = redact },
+                runtime.Build(role, repairBase + tail + RepairInstruction.Text, repairDir, schemaFile, outputDir, launch) with { Redact = redact },
                 choice.Id,
                 System.Text.Encoding.UTF8.GetByteCount(prompt + tail));
             work.Add(Turn(string.Empty) with
@@ -377,8 +382,10 @@ internal sealed class RosterBuilder(
             Dialect = provider.Dialect,
             // Only ApiRuntime reads it too: the parent prices each turn from it (S3.7).
             Price = provider.Price,
-            Timeout = _settings.ReviewerTimeout,
-            ReasoningEffort = _settings.LocalReasoningEffort,
+            Timeout = TimeoutFor(provider, runtime, _settings.ReviewerTimeout),
+            ReasoningEffort = EffortFor(provider, _settings.LocalReasoningEffort),
+            // Only RemoteRuntime reads it: the row's prompt as the field a Team server's operator can refuse (E2.5).
+            SystemPrompt = FieldPromptFor(provider, runtime),
             MaxTokens = _settings.LocalMaxTokens,
             // Only RemoteRuntime uses it, to find this machine's token for its Team server.
             DataDir = _settings.DataDir,
@@ -618,4 +625,40 @@ internal sealed class RosterBuilder(
             .Where(r => !kept.Contains(r))
             .Select(r => new SkippedRole(r, NoWrittenRules))];
     }
+
+    /// <summary>
+    /// The row's own instruction for THIS reviewer — or none where the runtime does not carry it in the body: on a Team
+    /// server the operator decides whether a client's prompt is taken at all (story 5's contract v2), and a prompt in the
+    /// body would go around that switch.
+    /// </summary>
+    internal static string InstructionFor(ProviderSettings provider, Runners.Reviewers.IReviewerRuntime runtime) =>
+        runtime.CarriesTheRowsPrompt ? provider.SystemPrompt : string.Empty;
+
+    /// <summary>The row's instruction as a FIELD — exactly where <see cref="InstructionFor"/> leaves it out of the body.</summary>
+    internal static string FieldPromptFor(ProviderSettings provider, Runners.Reviewers.IReviewerRuntime runtime) =>
+        runtime.CarriesTheRowsPrompt ? string.Empty : provider.SystemPrompt;
+
+    /// <summary>
+    /// What a CLI row's launch is told about effort (PLAN_one_model_catalog.md E2.2): claude and a Team server row their
+    /// row's level and nothing else — the local engines' setting is not theirs; a local row its own, else the panel's
+    /// local setting; every other runtime NOTHING, so the first new runtime that reads an effort is never handed a
+    /// llama.cpp level (epic 2's code round). A codex row's effort is kept and not sent while codex is unmeasured. An
+    /// api row's effort is its module's (see SettingsFor).
+    /// </summary>
+    internal static string EffortFor(ProviderSettings provider, string localEffort) => RuntimeResolution.NameOf(provider.Identity()) switch
+    {
+        "claude" => provider.CliEffort,
+        // A Team server judges it per vendor and says what it did not apply (contract 2, E2.5).
+        "remote" => provider.CliEffort,
+        "local" => provider.CliEffort.Length > 0 ? provider.CliEffort : localEffort,
+        _ => string.Empty,
+    };
+
+    /// <summary>
+    /// A row's own timeout, else the round's (PLAN_one_model_catalog.md E2.2) — where its runtime takes one
+    /// (<see cref="IReviewerRuntime.TakesItsOwnTimeout"/>). An api row keeps the round's launch timeout: its own limit is
+    /// the whole review (<c>reviewMinutes</c>), applied to the conversation.
+    /// </summary>
+    internal static TimeSpan TimeoutFor(ProviderSettings provider, IReviewerRuntime runtime, TimeSpan roundTimeout) =>
+        provider.TimeoutMinutes > 0 && runtime.TakesItsOwnTimeout ? TimeSpan.FromMinutes(provider.TimeoutMinutes) : roundTimeout;
 }

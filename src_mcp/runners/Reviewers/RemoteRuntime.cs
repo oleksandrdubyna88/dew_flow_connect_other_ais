@@ -42,6 +42,12 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
 
     public string DefaultExecutable => LocalRuntime.SelfInvocation().Executable;
 
+    /// <summary>A Team server reviews on another machine: gets the change in its prompt and never a working directory it can read.</summary>
+    public bool ReadsTheCheckout => false;
+
+    /// <summary>A row's system prompt reaches a Team server only as the field its operator can refuse (story 5), never in the body.</summary>
+    public bool CarriesTheRowsPrompt => false;
+
     /// <summary>The server this vendor's reviews go to, in its one canonical spelling.</summary>
     public string ServerUrl => TeamServerAuth.Normalise(serverUrl);
 
@@ -59,6 +65,7 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
         var answerFile = Path.Combine(outputDir, stem + ".json");
         var jobFile = Path.Combine(outputDir, stem + ".job");
         File.WriteAllText(promptFile, prompt);
+        var systemFile = SystemPromptFile(outputDir, stem, settings.SystemPrompt);
 
         var (self, prefix) = LocalRuntime.SelfInvocation();
         var executable = settings.ExecutablePath.Length > 0 ? settings.ExecutablePath : self;
@@ -94,6 +101,7 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
                     // that one is how long this client waits before it cancels and reports.
                     "--vendor-timeout-seconds",
                     VendorBudgetSeconds(settings.Timeout).ToString(),
+                    .. ContractTwo(systemFile, settings.ReasoningEffort),
                 ],
                 worktreePath)
             {
@@ -106,8 +114,36 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
             settings.Model,
             // The parent reads this after killing the child. It is the only thing left that can stop
             // a review still running on the team's subscription.
-            jobFile);
+            jobFile)
+        {
+            // The prompt file goes when the turn does (BoundedScheduler) — the server already holds what it sent.
+            TempFiles = systemFile.Length > 0 ? [promptFile, systemFile] : [promptFile],
+        };
     }
+
+    /// <summary>The row's system prompt in a file beside the prompt — never argv — or empty when the row has none.</summary>
+    private static string SystemPromptFile(string outputDir, string stem, string text)
+    {
+        if (text.Length == 0)
+        {
+            return string.Empty;
+        }
+
+        var path = Path.Combine(outputDir, stem + ".system");
+        File.WriteAllText(path, text);
+
+        return path;
+    }
+
+    /// <summary>
+    /// Contract 2's fields (PLAN_one_model_catalog.md E2.5): the row's effort and its system prompt's file, each only when
+    /// there is one — so a row with neither launches exactly as it did against a contract-1 server.
+    /// </summary>
+    private static string[] ContractTwo(string systemFile, string effort) =>
+        [.. effort.Length > 0 ? ["--effort", effort] : (string[])[], .. systemFile.Length > 0 ? ["--system-prompt-file", systemFile] : (string[])[]];
+
+    /// <summary>What the Team server said it did not apply — the shim's usage line carries it (contract 2, E2.5).</summary>
+    public string NotApplied(ReviewerInvocation invocation, ProcessResult result) => RemoteAsk.NotAppliedOf(result.StdOut);
 
     /// <summary>The usage the shim printed, as <see cref="LocalRuntime.ReadUsage"/> reads its own.</summary>
     public Usage ReadUsage(ReviewerInvocation invocation, ProcessResult result)

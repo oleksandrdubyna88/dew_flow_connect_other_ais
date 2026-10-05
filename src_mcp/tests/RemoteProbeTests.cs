@@ -109,7 +109,7 @@ public sealed class RemoteProbeTests : IDisposable
         // `…com//api/catalog` and then called unhealthy for answering 404.
         request.RequestUri!.ToString().Should().Be("https://coai.example.com/api/catalog");
         request.Headers.GetValues("Authorization").Should().ContainSingle().Which.Should().Be("Bearer the-token");
-        request.Headers.GetValues(RemoteAsk.ContractHeader).Should().ContainSingle().Which.Should().Be("1");
+        request.Headers.GetValues(RemoteAsk.ContractHeader).Should().ContainSingle().Which.Should().Be("2", "contract 2 since PLAN_one_model_catalog.md E2.5");
     }
 
     [Fact]

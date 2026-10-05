@@ -65,8 +65,14 @@ internal static class ConsultantCheckMode
         });
         try
         {
-            var (code, answer, why) = await AnswerAsync(
-                PanelSettings.FromEnvironment(configuration), args, new ProcessLauncher(), Path.GetTempPath(), Program.Note, noticing, stopping.Token);
+            var launcher = new ProcessLauncher();
+            // The same read `--providers` does: a consultant on an api row or somebody else's endpoint authenticates with a
+            // key from the vault, and a check that launched it without one would test a launch no consultation makes.
+            var keys = await KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable).ReadFromConfigurationAsync(configuration, stopping.Token);
+            var settings = PanelSettings.FromEnvironment(configuration);
+            var (code, answer, why) = IsModelCheck(args)
+                ? await AnswerModelAsync(settings, await Console.In.ReadToEndAsync(stopping.Token), launcher, Path.GetTempPath(), Program.Note, noticing, stopping.Token, keys)
+                : await AnswerAsync(settings, args, launcher, Path.GetTempPath(), Program.Note, noticing, stopping.Token, keys);
             if (answer.Length > 0)
             {
                 await Console.Out.WriteLineAsync(answer);
@@ -90,6 +96,11 @@ internal static class ConsultantCheckMode
     /// <param name="warn">Where a problem that does not change the outcome is said — stderr.</param>
     internal static async Task<(int Code, string Out, string Err)> AnswerAsync(
         PanelSettings settings, string[] args, IProcessLauncher launcher, string tempRoot, Action<string> warn, Noticing noticing, CancellationToken ct)
+        => await AnswerAsync(settings, args, launcher, tempRoot, warn, noticing, ct, VaultKeys.None("no vault was read"));
+
+    /// <param name="keys">The vault, for a consultant on an api row or somebody else's endpoint.</param>
+    internal static async Task<(int Code, string Out, string Err)> AnswerAsync(
+        PanelSettings settings, string[] args, IProcessLauncher launcher, string tempRoot, Action<string> warn, Noticing noticing, CancellationToken ct, VaultKeys keys)
     {
         var kind = KindOf(args);
         if (kind.Length == 0)
@@ -99,11 +110,62 @@ internal static class ConsultantCheckMode
 
         try
         {
-            return await CheckAsync(new ConsultantParts(settings, launcher, warn, noticing), kind, tempRoot, ct);
+            return await CheckAsync(new ConsultantParts(settings, launcher, warn, noticing, keys), kind, tempRoot, ct);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {
             return (74, string.Empty, $"the consultant check could not use the data directory {settings.DataDir}: {e.Message}"); // EX_IOERR
+        }
+    }
+
+    /// <summary>
+    /// <c>--check-model</c> (PLAN_one_model_catalog.md D10): the same paid check, of ONE catalog row read as
+    /// <c>{"row": {…}}</c> on stdin — a row that reviews nothing (a consultant's, a Bugz model's) is on no wire this
+    /// binary reads, and the row checked is the one on the screen. Its record is its own, <c>model-&lt;id&gt;</c>, so two
+    /// rows check apart and neither touches a caller kind's.
+    /// </summary>
+    internal static async Task<(int Code, string Out, string Err)> AnswerModelAsync(
+        PanelSettings settings, string stdin, IProcessLauncher launcher, string tempRoot, Action<string> warn, Noticing noticing, CancellationToken ct, VaultKeys keys)
+    {
+        var rows = RowsOf(stdin);
+        if (rows.Count == 0)
+        {
+            return (65, string.Empty, ModelUsage); // EX_DATAERR — never 64
+        }
+
+        try
+        {
+            return await CheckRowAsync(new ConsultantParts(settings, launcher, warn, noticing, keys), ModelKey(rows[0]), rows[0], tempRoot, ct);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
+        {
+            return (74, string.Empty, $"the model check could not use the data directory {settings.DataDir}: {e.Message}"); // EX_IOERR
+        }
+    }
+
+    /// <summary>Whether this run is <c>--check-model</c> — the one mode of the two that reads its row on stdin.</summary>
+    private static bool IsModelCheck(string[] args) => args.Length > 0 && args[0] == "--check-model";
+
+    private const string ModelUsage = "--check-model reads {\"row\": {\"id\": …, \"runtime\": …}} on stdin — the catalog row to check";
+
+    /// <summary>The record a model's check is kept under — file-safe, apart from every caller kind's.</summary>
+    internal static string ModelKey(ProviderSettings row) => $"model-{row.Provider}";
+
+    /// <summary>The row on stdin, read by the settings' own row parser — none when the request holds no usable row.</summary>
+    private static IReadOnlyList<ProviderSettings> RowsOf(string stdin)
+    {
+        try
+        {
+            using var request = System.Text.Json.JsonDocument.Parse(stdin);
+            var root = request.RootElement;
+
+            return root.ValueKind == System.Text.Json.JsonValueKind.Object && root.TryGetProperty("row", out var row) && row.ValueKind == System.Text.Json.JsonValueKind.Object
+                ? PanelSettings.ParseVendors($"[{row.GetRawText()}]")
+                : [];
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return [];
         }
     }
 
@@ -121,21 +183,43 @@ internal static class ConsultantCheckMode
             return Printed(new ConsultCheckRecord { CallerKind = kind, State = ConsultCheckStates.Unavailable, Side = ConsultHealth.Side(), Reason = preflight.Reason });
         }
 
-        var store = new ConsultCheckStore(parts.Settings.DataDir);
-        using var held = ConsultCheckLock.TryTake(store, kind);
-        var stored = store.Read(kind);
-        if (AlreadyRunning(held, stored))
-        {
-            // Held here, or — in one data directory both sides share, where the lock does not cross the seam — a fresh
-            // `checking` the other side wrote: either way a second paid launch beside it is the thing to refuse.
-            return Printed(AlreadyChecking(kind, stored));
-        }
-
         // The preflight resolved this same entry an instant ago; a Definition is what it answered available for.
         var row = ((ResolvedConsultant.Definition)ConsultantResolver.Resolve(
             ConsultantRouting.For(parts.Settings.Consultants, kind), kind, parts.Settings.Providers)).Vendor;
 
-        return await UnderTheLockAsync(parts, store, new Begun(kind, row, ConsultantCheck.Budget(parts.Settings.ReviewerTimeout), DateTime.UtcNow), tempRoot, ct);
+        return await LockedAsync(parts, kind, row, tempRoot, ct);
+    }
+
+    /// <summary>A model's check: a row that cannot consult is unavailable, by name and before any lock; any other runs as a consultant's.</summary>
+    private static async Task<(int Code, string Out, string Err)> CheckRowAsync(ConsultantParts parts, string key, ProviderSettings row, string tempRoot, CancellationToken ct) =>
+        Runners.Consultation.ConsultantResolution.For(row.Identity()) is null
+            ? Printed(new ConsultCheckRecord
+            {
+                CallerKind = key,
+                State = ConsultCheckStates.Unavailable,
+                Side = ConsultHealth.Side(),
+                Vendor = row.Provider,
+                Reason = Runners.Consultation.ConsultantResolution.CannotConsult(row.Identity()),
+            })
+            : await LockedAsync(parts, key, row, tempRoot, ct);
+
+    /// <summary>
+    /// One check of one row under ONE key — a caller kind's or a model's: the exclusive lock, the durable record, and a
+    /// second paid launch beside a live one refused.
+    /// </summary>
+    private static async Task<(int Code, string Out, string Err)> LockedAsync(ConsultantParts parts, string key, ProviderSettings row, string tempRoot, CancellationToken ct)
+    {
+        var store = new ConsultCheckStore(parts.Settings.DataDir);
+        using var held = ConsultCheckLock.TryTake(store, key);
+        var stored = store.Read(key);
+        if (AlreadyRunning(held, stored))
+        {
+            // Held here, or — in one data directory both sides share, where the lock does not cross the seam — a fresh
+            // `checking` the other side wrote: either way a second paid launch beside it is the thing to refuse.
+            return Printed(AlreadyChecking(key, stored));
+        }
+
+        return await UnderTheLockAsync(parts, store, new Begun(key, row, ConsultantCheck.Budget(parts.Settings.ReviewerTimeout), DateTime.UtcNow), tempRoot, ct);
     }
 
     /// <summary>Another check holds this side's lock — or the other side wrote a fresh <c>checking</c> the lock cannot see.</summary>

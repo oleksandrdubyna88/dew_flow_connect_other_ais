@@ -29,8 +29,24 @@ namespace CoaiMcp.Runners.Consultation;
 /// an api row only through the context.</para>
 /// </remarks>
 public sealed class ApiConsultant(IReviewerRuntime inner, string vendor, string vaultKeyName, QuestionMaterial? material = null)
-    : IAnsweringRuntime, IAnsweringFollowUps
+    : IConsultantRuntime, IAnsweringFollowUps
 {
+    /// <summary>
+    /// How much earlier conversation travels into each stuck-consultation turn (PLAN_one_model_catalog.md E2.3). Twice the
+    /// local route's: a hosted model's context window is far larger than a local card's, and the prompt already carries
+    /// the working-tree diff at up to 64 KB. The record freezes whatever this build declared when the consultation opened.
+    /// </summary>
+    public const int CarryBudget = 32 * 1024;
+
+    /// <summary>A hosted completion keeps no conversation — the consultation record carries it, as for a local engine.</summary>
+    public ConsultantMemory Memory => new ConsultantMemory.WeRemember(CarryBudget);
+
+    /// <summary>Nothing to read: a completion is not a conversation, and there is no id to keep.</summary>
+    public string ReadHandle(CoaiMcp.Runners.Processes.ProcessResult result) => string.Empty;
+
+    /// <summary>It never held one, so it can never have dropped one.</summary>
+    public bool DroppedTheConversation(CoaiMcp.Runners.Processes.ProcessResult result) => false;
+
     private readonly QuestionMaterial _material = material ?? QuestionMaterial.None;
 
     public string Vendor => vendor;
@@ -51,6 +67,23 @@ public sealed class ApiConsultant(IReviewerRuntime inner, string vendor, string 
     public ReviewerInvocation Build(ConsultantLaunch launch)
     {
         ConsultantLaunches.MustBeLaunchable(launch);
+        return launch.Confinement is LaunchConfinement.Planned ? Question(launch) : Stuck(launch);
+    }
+
+    /// <summary>
+    /// A stuck consultation (D9): the reviewer adapter builds the whole shim invocation — the endpoint, the module, the
+    /// deadlines, the prompt file — bound to the consultation's answer schema, as the local consultant's is.
+    /// </summary>
+    private ReviewerInvocation Stuck(ConsultantLaunch launch)
+    {
+        var built = inner.Build(ConsultantLaunches.RoleOf(launch), launch.Prompt, launch.RepoPath, launch.AnswerSchemaFile, launch.OutputDir, launch.Settings);
+        ConsultantLaunches.MustCarryNoLineBreak(built.Request.Arguments);
+
+        return built;
+    }
+
+    private ReviewerInvocation Question(ConsultantLaunch launch)
+    {
         var plan = QuestionRowOf(launch);
         var built = inner.Build(
             ConsultantRoles.Question,

@@ -20,9 +20,29 @@ import { ModelChoice } from './models';
 /** What the section needs to draw itself. */
 export interface BugzViewState {
   readonly corpus: BugCorpus;
-  readonly models: readonly ModelChoice[];
+  readonly models: readonly RankingChoice[];
   readonly model: string;
   readonly server: string;
+  /**
+   * Whether the installed coai-mcp ranks by the row's RUNTIME (`--features` lists `bugzRuntime`, E2.1). Absent or
+   * false: it matches the row id, so the picker offers only what that binary will accept.
+   */
+  readonly byRuntime?: boolean;
+}
+
+/** A picker choice, and the runtime of the catalog row it names — what a binary that ranks by runtime matches. */
+export type RankingChoice = ModelChoice & { readonly runtime?: string };
+
+/**
+ * The collector's arguments: the row's runtime is said only to a binary that ranks by it — an older one refuses a flag
+ * it does not know — and only with a model to rank with.
+ */
+export function collectArgs(model: string, runtime: string, byRuntime: boolean): readonly string[] {
+  return model.length === 0 ? ['--collect-bugs'] : ['--collect-bugs', '--model', model, ...runtimeArgs(runtime, byRuntime)];
+}
+
+function runtimeArgs(runtime: string, byRuntime: boolean): readonly string[] {
+  return byRuntime && runtime.length > 0 ? ['--runtime', runtime] : [];
 }
 
 /**
@@ -45,12 +65,19 @@ export interface BugzViewState {
  */
 export const RANKING_VENDORS: readonly string[] = ['local'];
 
-/** Whether this model may be offered, against a given list of vendors. */
-const allowedBy = (model: string, vendors: readonly string[]): boolean =>
-  model.length === 0 || vendors.includes(model.split('/')[0]?.toLowerCase() ?? '');
+/** Whether this choice may be offered, against a given list — of runtimes, or of row ids for an older binary. */
+const allowedBy = (choice: RankingChoice, vendors: readonly string[], byRuntime: boolean): boolean =>
+  choice.id.length === 0 || vendors.includes(rankedAs(choice, byRuntime));
 
-/** Whether this model may be offered at all, by the panel's own fallback list. */
-export const mayRank = (model: string): boolean => allowedBy(model, RANKING_VENDORS);
+/** What the binary matches: the row's runtime when it ranks by runtime, else the row id (`local/<model>`). */
+function rankedAs(choice: RankingChoice, byRuntime: boolean): string {
+  return byRuntime && choice.runtime !== undefined ? choice.runtime.toLowerCase() : rowIdOf(choice.id);
+}
+
+const rowIdOf = (model: string): string => model.split('/')[0]?.toLowerCase() ?? '';
+
+/** Whether this model may be offered at all, by the panel's own fallback list and an older binary's rule. */
+export const mayRank = (model: string): boolean => allowedBy({ id: model, label: model }, RANKING_VENDORS, false);
 
 /**
  * What the Collect button says right now.
@@ -157,7 +184,7 @@ export function bugzBody(state: BugzViewState = {
   const vendors = state.corpus.rankingVendors.length > 0
     ? state.corpus.rankingVendors
     : RANKING_VENDORS;
-  const offered = state.models.filter((m) => allowedBy(m.id, vendors));
+  const offered = state.models.filter((m) => allowedBy(m, vendors, state.byRuntime === true));
 
   const picker = offered.length === 0
     ? '<div class="hint">No local engine was found. The ranking pass reads findings that are not'

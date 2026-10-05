@@ -200,6 +200,24 @@ internal static class Program
         SecurityPromptText,
 
         /// <summary>
+        /// The capabilities this build has, as JSON, so the extension sends a catalog field only when it is listed.
+        /// See <see cref="Server.FeaturesMode"/>.
+        /// </summary>
+        Features,
+
+        /// <summary>
+        /// What the security lane would make of a sample read on stdin — signals, due cards, refused patterns. See
+        /// <see cref="Server.CheckSecurityMode"/>.
+        /// </summary>
+        CheckSecurity,
+
+        /// <summary>
+        /// ONE paid check of a catalog row read on stdin — the consultant's check, of any row. See
+        /// <see cref="Server.ConsultantCheckMode.AnswerModelAsync"/>.
+        /// </summary>
+        CheckModel,
+
+        /// <summary>
         /// Print ONE round's findings as JSON and leave — what an opened row of the log asks for.
         /// </summary>
         /// <remarks>
@@ -292,6 +310,9 @@ internal static class Program
                 "--consultants" => Startup.Consultants,
                 "--check-consultant" => Startup.CheckConsultant,
                 "--security-prompt-text" => Startup.SecurityPromptText,
+                "--features" => Startup.Features,
+                "--check-security" => Startup.CheckSecurity,
+                "--check-model" => Startup.CheckModel,
                 _ => Startup.Usage,
             };
 
@@ -419,6 +440,15 @@ internal static class Program
 
             case Startup.SecurityPromptText:
                 return await Server.SecurityPromptTextReadMode.RunAsync(args);
+
+            case Startup.Features:
+                return await Server.FeaturesMode.RunAsync();
+
+            case Startup.CheckSecurity:
+                return await Server.CheckSecurityMode.RunAsync(args);
+
+            case Startup.CheckModel:
+                return await Server.ConsultantCheckMode.RunAsync(args, Server.Noticing.None);
 
             default:
                 return await ServeAsync();
@@ -719,13 +749,17 @@ internal static class Program
 
         var flags = Flags(args);
         flags.TryGetValue("--model", out var model);
+        // The runtime of the row the model names, resolved by the extension from the catalog — what the allowlist matches
+        // (todo/PLAN_one_model_catalog.md, epic 2, story 1). Absent, the row id stands in, as it always did.
+        flags.TryGetValue("--runtime", out var runtime);
 
         var summary = await run.RunAsync(
             settings.DataDir,
             db,
             Limit(args, Store.BugsQuery.DefaultLimit),
             all: Array.IndexOf(args, "--all") >= 0,
-            model: model ?? string.Empty);
+            model: model ?? string.Empty,
+            runtime: runtime ?? string.Empty);
 
         if (summary.Refusal.Length > 0)
         {
@@ -2177,8 +2211,10 @@ internal static class Program
         `--outline <file> [--json]` prints one source file's declarations — signatures up to their bodies,
         with lines — as the feature review would outline it; `--json` for the structured form. A file it
         does not outline (language, over 1 MB, parse failure) is a reason on stdout, exit 0; no file is 65.
-        `--collect-bugs [--limit 200] [--all] [--model local/<name>]` decides what became of every unprocessed candidate — the fix
-        commit, or the reason there is none — and writes it to the findings rows. Prints the funnel on
+        `--collect-bugs [--limit 200] [--all] [--model <row>/<name> [--runtime <runtime>]]` decides what became of
+        every unprocessed candidate — the fix commit, or the reason there is none — and writes it to the findings rows.
+        The ranking model must be on a local runtime: `--runtime` says which the row runs on, and without it the row id
+        stands in (`local/<name>`). Prints the funnel on
         stdout and its progress on stderr. `--all` revisits candidates an earlier run handled.
         `--bugs-json [--limit 200] [--all]` prints the accepted findings as corpus material, with the
         funnel that narrowed to them. `--all` includes the ones a collector run has already handled.
@@ -2199,6 +2235,13 @@ internal static class Program
         `--security-prompt-text --ids <id,id>` prints, per security prompt id, what its override file in the
         data directory counts as when this server reads it: none, blank, placeholder, oversized, unreadable or
         written. Read only; no model is called.
+        `--features` prints the capabilities this build has as {"features":[...]} — what the extension asks
+        before it sends a catalog field. A build too old for it exits 64.
+        `--check-security [--validate]` reads {"text": …, "lane": …} on stdin and prints the signals the security lane
+        would raise, the cards that would be due and the patterns it refuses; --validate checks the patterns alone.
+        A request it cannot read exits 65.
+        `--check-model` reads {"row": {…}} on stdin and runs ONE paid check of that catalog row — the consultant's
+        check (a scratch repository, a marker, a canary), its record kept as model-<id>. A request without a row exits 65.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

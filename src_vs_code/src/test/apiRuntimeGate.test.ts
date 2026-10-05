@@ -51,9 +51,9 @@ function rowsOf(json: string): readonly { id: string; runtime: string; dialect?:
 // refuses it). The dialect list below IS held to a file neither half owns; the runtime set is held on
 // the C# side by `VendorRuntimeSurvivesParsingTests` and here by `runtimeSurvives.test.ts`.
 
-test('api is neither a chat partner nor a consultant — the two pickers derive from lists that exclude it', () => {
+test('the two pickers derive from their lists: api is no chat partner, and a consultant since the catalog (E2.3)', () => {
   assert.ok(!(CHAT_RUNTIMES as readonly string[]).includes('api'));
-  assert.ok(!(CONSULTING_RUNTIMES as readonly string[]).includes('api'));
+  assert.ok((CONSULTING_RUNTIMES as readonly string[]).includes('api'));
 });
 
 test('the dialect names mirror shared/api-dialects.json, and only the hosted ones are offered', () => {

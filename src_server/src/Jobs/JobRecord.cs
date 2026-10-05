@@ -93,7 +93,16 @@ public sealed record JobRecord(
     /// same exhausted ones — the review fails either way, and the difference is whether the caller
     /// waits ten minutes to be told. (Two reviewers, second code round.)
     /// </remarks>
-    IReadOnlySet<string>? Refused = null)
+    IReadOnlySet<string>? Refused = null,
+
+    /// <summary>Contract 2: the reasoning effort the launch applies — empty for none (PLAN_one_model_catalog.md E2.5).</summary>
+    string Effort = "",
+
+    /// <summary>
+    /// Contract 2: the SHA-256 of a client system prompt the server took — the text itself is only inside
+    /// <see cref="Prompt"/>, in memory; empty when none was taken.
+    /// </summary>
+    string SystemPromptSha = "")
 {
     public bool IsTerminal => Status is JobStatus.Done or JobStatus.Failed;
 

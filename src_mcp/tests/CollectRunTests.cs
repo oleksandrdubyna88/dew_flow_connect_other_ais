@@ -299,6 +299,24 @@ public sealed class CollectRunTests : IAsyncLifetime
         db.LastCollectRun().Any.Should().BeFalse("a refused run never started");
     }
 
+    /// <summary>
+    /// A second local instance runs the ranking pass: the allowlist matches the row's runtime, which the caller says,
+    /// not the row id (todo/PLAN_one_model_catalog.md, epic 2, story 1) — and a row merely CALLED local is not let through.
+    /// </summary>
+    [Fact]
+    public async Task ASecondLocalInstance_IsAllowedByItsRuntime_AndARowCalledLocalOnACloudOneIsNot()
+    {
+        Seed(await Head(), "Totals.cs", 5);
+        using var db = RoundsDb.Open(_data, Serilog.Core.Logger.None)!;
+        var run = new CollectRun(new CountingCollector(), TimeProvider.System);
+
+        var refused = await run.RunAsync(_data, db, 50, model: "local/gpt-5", runtime: "codex");
+        var allowed = await run.RunAsync(_data, db, 50, model: "local-2/qwen3.5:35b", runtime: "local");
+
+        refused.Refusal.Should().Contain("'codex'");
+        allowed.Refusal.Should().BeEmpty("local-2 runs on this machine, whatever it is called");
+    }
+
     /// <summary>An empty model is no ranking pass, which is the ordinary CLI case.</summary>
     [Fact]
     public async Task NoModelAtAllIsAllowed()

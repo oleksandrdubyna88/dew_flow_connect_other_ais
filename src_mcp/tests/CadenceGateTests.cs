@@ -261,7 +261,9 @@ public sealed class ConsultPreflightTests : IDisposable
         {
             "off" => Service(enabled: false),
             "unreadable" => Service(unreadable: true),
-            "no-runtime" => Service(providers: [new("codex") { ExecutablePath = FakeCliExe, BaseUrl = "http://localhost:9" }]),
+            // A row the routing finds whose runtime cannot consult: a Team server's. (A codex row on an endpoint was the
+            // example until E2.3 let it consult.)
+            "no-runtime" => Service(providers: [new("codex") { Runtime = "remote", BaseUrl = "https://coai.example" }]),
             // Every caller kind routed to a name that is neither a reviewer nor a runtime: nothing resolves.
             _ => Service(consultants: ConsultantRouting.Shipped.Keys.ToDictionary(kind => kind, _ => new ConsultantChoice("nobody", ""))),
         };

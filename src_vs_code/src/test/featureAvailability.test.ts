@@ -43,7 +43,8 @@ test('the seed names exactly the runtimes a row can be set to', () => {
 });
 
 test('the extension\'s two lists ARE the file\'s, frozen to what they were', () => {
-  assert.deepEqual([...CONSULTING_RUNTIMES], ['codex', 'claude', 'antigravity', 'local']);
+  // `api` joined when coai-mcp gained the api consultant (E2.3) — added with the product, never ahead of it.
+  assert.deepEqual([...CONSULTING_RUNTIMES], ['codex', 'claude', 'antigravity', 'local', 'api']);
   assert.deepEqual([...CHAT_RUNTIMES].sort(), ['antigravity', 'claude', 'codex']);
   assert.equal(CONSULTING_RUNTIMES, CONSULTING, 'consultSettings keeps a list of its own again');
   assert.equal(CHAT_RUNTIMES, CHAT, 'cliChatLaunch keeps a list of its own again');

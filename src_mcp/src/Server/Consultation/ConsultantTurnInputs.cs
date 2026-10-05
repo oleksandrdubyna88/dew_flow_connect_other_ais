@@ -18,14 +18,45 @@ internal static class ConsultantTurnInputs
 {
     /// <summary>The settings one consultation launch of <paramref name="row"/> runs under.</summary>
     /// <param name="model">The model already materialised for this turn — the row's, or a record's frozen one.</param>
-    public static ReviewerSettings Settings(ProviderSettings row, string model, TimeSpan timeout, string dataDir) => new(row.Provider)
+    /// <param name="keys">
+    /// The vault — read only for a row that authenticates with a key (<see cref="TakesAKey"/>). A claude or plain codex
+    /// consultant keeps its CLI's own sign-in: a vault key would move it onto per-token billing.
+    /// </param>
+    /// <param name="overrides">The environment's api overrides — an api row runs with its module's view of them, as a reviewer does.</param>
+    public static ReviewerSettings Settings(ProviderSettings row, string model, TimeSpan timeout, string dataDir, VaultKeys keys, Core.Api.ApiOverrides overrides) =>
+        RuntimeResolution.NameOf(row.Identity()) == "api" ? WithModule(Plain(row, model, timeout, dataDir, keys), row, overrides) : Plain(row, model, timeout, dataDir, keys);
+
+    /// <summary>An api row's effort, ceiling and thinking switch: the row's over the environment over the module's calibrated defaults.</summary>
+    private static ReviewerSettings WithModule(ReviewerSettings settings, ProviderSettings row, Core.Api.ApiOverrides overrides)
     {
+        var api = ApiRowView.Of(row, overrides).Effective;
+
+        return settings with { ReasoningEffort = api.Effort, MaxTokens = api.MaxTokens, ThinkingOn = api.ThinkingOn };
+    }
+
+    private static ReviewerSettings Plain(ProviderSettings row, string model, TimeSpan timeout, string dataDir, VaultKeys keys) => new(row.Provider)
+    {
+        ApiKey = TakesAKey(row) ? keys.Keys.GetValueOrDefault(row.KeyName, string.Empty) : string.Empty,
+        // Only the api runtime reads these two: the module its request is spelled in, and the price of each turn.
+        Dialect = row.Dialect,
+        Price = row.Price,
         ExecutablePath = row.ExecutablePath,
         Model = model,
         Timeout = timeout,
         DataDir = dataDir,
         // A consultant starts no MCP server either (issue #514).
         McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
+    };
+
+    /// <summary>
+    /// A row that authenticates with a vault key when it consults: an api row, or a codex row on somebody else's endpoint
+    /// (PLAN_one_model_catalog.md E2.3). Every other runtime signs in through its own CLI.
+    /// </summary>
+    public static bool TakesAKey(ProviderSettings row) => RuntimeResolution.NameOf(row.Identity()) switch
+    {
+        "api" => true,
+        "codex" => row.BaseUrl.Length > 0,
+        _ => false,
     };
 
     /// <summary>The uncommitted change in <paramref name="repo"/>, shaped to the consultant's diff budget — or the sentence for none.</summary>

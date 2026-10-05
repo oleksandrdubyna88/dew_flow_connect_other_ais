@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { CatalogLayer, LayerWrite, migrateLayer, MigrationOutcome, restoreLayer, RestoreOutcome } from './catalogMigration';
+import { CatalogLayer, LayerWrite, migrateLayer, MigrationOptions, MigrationOutcome, restoreLayer, RestoreOutcome } from './catalogMigration';
 import { overlayKey } from './coaiInstall';
 import { thisSide } from './installer';
 import { notify, notifyAndAsk } from './notify';
@@ -20,7 +20,7 @@ import { CatalogTurns } from './catalogTurns';
  */
 
 /** The settings whose change may leave a definition to move. */
-export const MIGRATION_TRIGGERS: readonly string[] = ['vendors', 'consultants', 'qconsultRows'];
+export const MIGRATION_TRIGGERS: readonly string[] = ['vendors', 'consultants', 'qconsultRows', 'bugzModel'];
 
 /** What a layer is called in a sentence, how it is read, and how one write lands in it. */
 interface Layer {
@@ -34,9 +34,16 @@ const turns = new CatalogTurns();
 /** What to do once a run has written anything — the activation's mirror of the server settings file. */
 let afterMigration: () => void = () => undefined;
 
-/** Called once on activation: remember what follows a migration, and run the first one. */
-export function startCatalogMigration(context: vscode.ExtensionContext, after: () => void): Promise<void> {
+/**
+ * Whether the installed coai-mcp ranks Bugz by runtime — asked per run, because the binary can be updated while the
+ * window is open, and the Bugz model moves only for one that does (PLAN_one_model_catalog.md E2.1).
+ */
+let bugzByRuntime: () => Promise<boolean> = () => Promise.resolve(false);
+
+/** Called once on activation: remember what follows a migration and how to ask the binary, and run the first one. */
+export function startCatalogMigration(context: vscode.ExtensionContext, after: () => void, ranksByRuntime: () => Promise<boolean>): Promise<void> {
   afterMigration = after;
+  bugzByRuntime = ranksByRuntime;
 
   return scheduleCatalogMigration(context);
 }
@@ -56,16 +63,17 @@ export function inCatalogTurn<T>(work: () => Promise<T>): Promise<T> {
 
 async function migrateEveryLayer(context: vscode.ExtensionContext): Promise<void> {
   let wrote = false;
+  const options: MigrationOptions = { bugzByRuntime: await bugzByRuntime().catch(() => false) };
   for (const layer of layersOf(context, vscode.workspace.getConfiguration('coai'))) {
-    wrote = (await migrateOne(layer)) || wrote;
+    wrote = (await migrateOne(layer, options)) || wrote;
   }
   if (wrote) {
     afterMigration();
   }
 }
 
-async function migrateOne(layer: Layer): Promise<boolean> {
-  const outcome = readAndPlan(layer);
+async function migrateOne(layer: Layer, options: MigrationOptions): Promise<boolean> {
+  const outcome = readAndPlan(layer, options);
   if (outcome instanceof Error) {
     await migrationStopped(layer, outcome);
 
@@ -83,9 +91,9 @@ async function migrateOne(layer: Layer): Promise<boolean> {
  * The layer read and the plan — or the error a read threw (a corrupted overlay, a settings-store fault), which used to
  * escape every `void` caller unheard and repeat silently on each start (PR #681's code round).
  */
-function readAndPlan(layer: Layer): MigrationOutcome | Error {
+function readAndPlan(layer: Layer, options: MigrationOptions): MigrationOutcome | Error {
   try {
-    return migrateLayer(layer.read());
+    return migrateLayer(layer.read(), options);
   } catch (error: unknown) {
     return error instanceof Error ? error : new Error(String(error));
   }
@@ -173,6 +181,7 @@ const LAYER_KEYS: Readonly<Record<LayerWrite['key'], keyof CatalogLayer>> = {
   vendors: 'vendors',
   consultants: 'consultants',
   qconsultRows: 'qconsultRows',
+  bugzModel: 'bugzModel',
   catalogMigration: 'marker',
   migratedFrom: 'backup',
 };

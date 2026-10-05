@@ -2153,3 +2153,115 @@ Tests: `RuntimeResolutionTests` (+7), `LocalReviewerRunsTests` (+1, the round's 
 - the round not passing the model → 1 red;
 - the probe not passing it → 1 red;
 - the rule removed → 5 red.
+
+## A row is run by its runtime — never by its id (2026-10-04, PLAN_one_model_catalog.md E2.1)
+
+The catalog makes several rows on one runtime ordinary (`claude`, `claude-2`), so three places that read the row id
+as if it were a program or a runtime were corrected:
+
+- **The probe runs the runtime's CLI.** `ClaudeRuntime`, `CodexRuntime` and `GeminiRuntime` declare
+  `DefaultExecutable` (`claude`/`codex`/`gemini`); the interface default was the row id, so `providers` started a
+  program called `claude-2`. Launch and probe read the one property (`ARowIdIsNotAProgramTests`).
+- **What a reviewer is told it holds is decided per reviewer.** `IReviewerRuntime.ReadsTheCheckout` (default true;
+  false for `ApiRuntime`, `LocalRuntime`, `RemoteRuntime`, which get the change in the prompt and nothing else) and
+  `Server/Rounds/ReviewerMaterial.For(hasCheckout, runtime, stageReads)`, called per item in `RosterBuilder`. A code
+  round with a worktree had told an api row, a local model and a Team server "you have the checkout read-only".
+- **An unknown runtime is refused by name.** `PanelSettings.RuntimeOf` keeps a name it does not know (it was coerced
+  to `codex`, which ran the Codex CLI on the person's account for a row set to something else); `NameOf` answers it
+  before the base-URL arm; `For` falls back to the row id only when the row names NO runtime. The probe and the
+  round's exclusion both say `RuntimeResolution.NoAdapterFor(vendor)`: the runtime by name and every runtime this
+  build runs (`AnUnknownRuntimeIsRefusedByNameTests`).
+
+```mermaid
+flowchart LR
+  R["row: id, runtime, baseUrl"] --> N{NameOf}
+  N -->|local / remote / api| A[that adapter]
+  N -->|"named, unknown"| X["no adapter → NoAdapterFor: 'llama.cpp' is not one this build runs"]
+  N -->|baseUrl| C[CustomCodexRuntime]
+  N -->|named runtime| B[Named runtime, row id travels with it]
+  N -->|"no runtime"| I["the id decides (Named ?? Default.Find)"]
+  A & C & B & I --> M{"ReadsTheCheckout?"}
+  M -->|yes, worktree mounted| K[told: checkout]
+  M -->|no| S["told: what the stage gives (change / outline)"]
+```
+
+## A prompt file does not outlive its launch (2026-10-05, PLAN_one_model_catalog.md E2)
+
+An api, local or Team server reviewer reads its prompt from a `.prompt` file its runtime writes into the round's
+answers directory, which was swept only after six hours — with the change under review in it, and from epic 2 the
+person's system prompt for the row. `ReviewerInvocation.TempFiles` names what a launch wrote for its child (the three
+runtimes set it; a CLI reviewer, fed on stdin, has none), and `BoundedScheduler.RunWithLadderAsync` deletes them in a
+`finally` when the turn ends — answered, failed, timed out or cancelled; every retry of the ladder reads the same file,
+and a later turn of a conversation builds its own. A file that cannot be deleted then is left to the sweep rather than
+failing a finished review (`APromptFileDoesNotOutliveItsLaunchTests`, `ARuntimeNamesThePromptFileItWroteTests`, RED first).
+
+## Two answers a runtime gives about a row's system prompt (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+- `IReviewerRuntime.CarriesTheRowsPrompt` (default true; `RemoteRuntime` false — on a Team server the operator decides).
+- `ReviewerInvocation.Redact`: texts the launch was given that must not come back out of it. `ReviewerExecutor`
+  replaces each in the process result (stdout and stderr) with `[the row's system prompt]` right after the launcher
+  returns, so every tail, transcript and reason is cut from redacted streams.
+
+## A consultant on an api row, or on somebody else's endpoint (2026-10-05, PLAN_one_model_catalog.md D9 / E2.3)
+
+- **Codex CLI on an endpoint** (OpenRouter, DeepSeek): `CodexConsultant` used to build its own argv without the
+  endpoint runtime's provider, so such a row would have reached OpenAI's service with the endpoint's key — which is why
+  `ConsultantResolution` refused it. `CodexRuntime.ProviderArgs` / `KeyEnvironmentVariable` now expose the four `-c
+  model_provider…` overrides and the key variable the reviewer has always used, and the consultant carries them on
+  EVERY turn — `exec` and `exec resume` alike — with the key in the endpoint's variable, never `OPENAI_API_KEY`
+  (`AnEndpointConsultantKeepsItsProviderTests`). A plain codex consultant is unchanged.
+- **An api row**: `ApiConsultant`, which answered question rows only, is widened to `IConsultantRuntime`. A stuck
+  turn is one completion through `--ask-api` (the reviewer adapter builds the whole shim invocation, bound to the
+  consultation's answer schema), and the vendor keeping no conversation it is `ConsultantMemory.WeRemember` with a
+  32 KB carry budget — twice the local route's (`AnApiRowConsultsTests`).
+- `ConsultantResolution.For` resolves both; `shared/feature-availability.json` lists `api` among the consulting runtimes.
+
+## A Team server row sends contract 2 (2026-10-05, PLAN_one_model_catalog.md E2.5)
+
+- **`RemoteAsk.ContractVersion` is 2**, as is the extension's `CONTRACT_VERSION` (each half pins it in a test).
+- **The roster** gives a remote row its own `CliEffort` (`RosterBuilder.EffortFor`) and its system prompt as
+  `ReviewerSettings.SystemPrompt` (`FieldPromptFor` — exactly where `InstructionFor` leaves it out of the body).
+  `shared/feature-availability.json` marks remote's effort `probe`: the server judges it per vendor.
+- **`RemoteRuntime.Build`** adds `--effort <level>` and `--system-prompt-file <path>` only when set — the prompt in a
+  `.system` file beside the prompt file, never argv — and both files are `TempFiles`.
+- **`--ask-remote`** reads the file, sends both fields (`RequestBody`, left out when empty), and turns the answer into
+  ONE sentence (`RemoteAsk.NotAppliedMessage`): each field a contract-2 server dropped or lowered, with its reason;
+  against a server that says contract 1 (or nothing), every field sent. The sentence rides the usage line
+  (`notApplied`) on stdout.
+- **The reviewer's note.** `IReviewerRuntime.NotApplied(invocation, result)` (empty by default; `RemoteRuntime` reads
+  the usage line) reaches `ReviewerLaunch.NotApplied` and `ReviewerOutcome.Ok.NotApplied`, and `TurnLoop.Note` puts it
+  in the reviewer's progress note — "sent" is never shown as "applied".
+
+Tests: `ATeamServerRowSendsContractTwoTests`, and the real-binary scenario
+`RemoteShimScenarioTests.ContractTwosFields_GoOut_AndWhatTheServerDidNotApply_ComesBackForTheReviewersNote`.
+
+```mermaid
+sequenceDiagram
+  participant R as RosterBuilder
+  participant A as RemoteRuntime
+  participant S as --ask-remote shim
+  participant T as Team server
+  R->>A: ReviewerSettings (ReasoningEffort, SystemPrompt)
+  A->>S: --effort, --system-prompt-file (a file, not argv)
+  S->>T: POST /api/reviews {effort, systemPrompt}
+  T-->>S: 202 {dropped, clamped} + X-Coai-Contract
+  S-->>A: usage line {tokensIn, tokensOut, notApplied}
+  A-->>R: Ok.NotApplied → the reviewer's note
+```
+
+### Epic 2 code round fixes (2026-10-05, coai session 589a145b)
+
+- `IReviewerRuntime.TakesItsOwnTimeout` (false for `ApiRuntime`) replaces the roster's `is not ApiRuntime` check.
+- `RosterBuilder.EffortFor` gives a runtime outside claude/remote/local NO effort — the panel's local-engine setting was
+  handed to every other runtime. The row's instruction is computed once for the body and the redaction list.
+- `CodexConsultant` takes a `CodexRuntime` (no cast that could fall back to OpenAI's service with an endpoint's key);
+  `ConsultantResolution` refuses a codex row whose runtime resolves to anything else.
+- `PersonInstruction.PlacedIn` returns the prompt unchanged when it has no contract heading; `HasContract` asks first.
+
+### PR #686 review threads (2026-10-05)
+
+- **A launch made once owns its files.** `ReviewerExecutor.LaunchOnceAsync` deletes the invocation's `TempFiles` in a
+  `finally`; a consultation turn (`ConsultantTurn`) and a question row (`QuestionRowLaunch`) launch through it, because
+  the scheduler's cleanup never ran for them and an api consultant's prompt file outlived its turn. A review keeps
+  its cleanup in `BoundedScheduler` (a retry launches the same invocation again). One `LaunchFiles.Forget` for both.
+- `ConsultantCheckMode.IsModelCheck` holds the mode predicate; a real-binary test pins the `--check-model` dispatch.

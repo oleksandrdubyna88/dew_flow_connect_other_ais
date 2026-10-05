@@ -46,6 +46,12 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
     /// <summary>This binary, however it was started — see <see cref="LocalRuntime.SelfInvocation"/>.</summary>
     public string DefaultExecutable => LocalRuntime.SelfInvocation().Executable;
 
+    /// <summary>An api reviewer is one HTTP request: gets the change in its prompt and never a working directory it can read.</summary>
+    public bool ReadsTheCheckout => false;
+
+    /// <summary>An api row's limit is the whole review (<c>reviewMinutes</c>), applied to the conversation — not a launch's.</summary>
+    public bool TakesItsOwnTimeout => false;
+
     /// <summary>The dialect a row that named none speaks.</summary>
     public static string DialectOf(ReviewerSettings settings) =>
         settings.Dialect.Trim().Length > 0 ? settings.Dialect.Trim().ToLowerInvariant() : ApiDialects.OpenAiName;
@@ -121,6 +127,8 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
             // The row's price stays HERE, in the parent (epic 3's code round, #23): the shim reports raw
             // tokens and `ReadUsage` prices them from this field — an answered call and a failed one alike.
             Price = settings.Price,
+            // The prompt file goes when the turn does (BoundedScheduler); it holds the change under review.
+            TempFiles = [promptFile],
         };
     }
 

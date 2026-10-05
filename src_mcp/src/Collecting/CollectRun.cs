@@ -54,6 +54,10 @@ public sealed class CollectRun(ICollector collector, TimeProvider time, TextWrit
     /// The model a later ranking pass may use, recorded on the run. Empty means no ranking pass, and
     /// is the ordinary case for a run started from a terminal.
     /// </param>
+    /// <param name="runtime">
+    /// The runtime of the catalog row <paramref name="model"/> names, which is what the allowlist matches; empty when the
+    /// caller did not say, and then the row id stands in for it (RankingModels.IsAllowed).
+    /// </param>
     /// <returns>
     /// A summary, or one carrying only a <see cref="CollectSummary.Refusal"/> when the model is named
     /// and is not local. Refused BEFORE anything is read, because a finding's own words are not
@@ -61,13 +65,13 @@ public sealed class CollectRun(ICollector collector, TimeProvider time, TextWrit
     /// </returns>
     public async Task<CollectSummary> RunAsync(
         string dataDir, RoundsDb db, int limit, bool all = false, string model = "",
-        CancellationToken ct = default)
+        CancellationToken ct = default, string runtime = "")
     {
         // First, and before a candidate is read: a picker is not an enforcement, and this is the
         // one place every caller passes through. (Plan round, gemini and codex, independently.)
-        if (!RankingModels.IsAllowed(model))
+        if (!RankingModels.IsAllowed(model, runtime))
         {
-            return new CollectSummary(Refusal: RankingModels.Refusal(model));
+            return new CollectSummary(Refusal: RankingModels.Refusal(model, runtime));
         }
 
         var runId = time.GetUtcNow().UtcDateTime.ToString("yyyyMMddTHHmmss")

@@ -112,7 +112,9 @@ internal sealed class ConsultantCheckTurn(
     ContextAssembler context,
     RolePrompts prompts,
     UsageLedger ledger,
-    Action<string> warn)
+    Action<string> warn,
+    // The vault, for a consultant that authenticates with a key — an api or endpoint row (E2.3).
+    VaultKeys keys)
 {
     private readonly FilesystemInvariant _invariant = new(launcher);
 
@@ -198,7 +200,7 @@ internal sealed class ConsultantCheckTurn(
         var schema = ConsultSchemaFile.Ensure(Path.Combine(settings.DataDir, "schemas"));
 
         return new ConsultantLaunch(turn.Scratch.Repo, prompt, string.Empty, answers,
-            ConsultantTurnInputs.Settings(turn.Row, turn.Row.Model, turn.Budget, settings.DataDir), schema.Path);
+            ConsultantTurnInputs.Settings(turn.Row, turn.Row.Model, turn.Budget, settings.DataDir, keys, settings.ApiOverrides), schema.Path);
     }
 
     /// <summary>The sentence a breach is — the repository's changes, the canary's, or both — or empty when nothing broke.</summary>

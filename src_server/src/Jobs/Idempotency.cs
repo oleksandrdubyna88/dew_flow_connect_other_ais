@@ -77,11 +77,12 @@ public static class Idempotency
     /// (local, code round.)</para>
     /// </remarks>
     public static string Fingerprint(
-        string email, string vendor, string model, string role, string prompt, JobKind kind, int timeoutSeconds)
+        string email, string vendor, string model, string role, string prompt, JobKind kind, int timeoutSeconds, string effort = "")
     {
         using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
-        foreach (var part in new[]
-                 { email, vendor, model, role, prompt, JobKinds.Wire(kind), timeoutSeconds.ToString() })
+        // The effort joins only when one was taken (contract 2, E2.5), so every fingerprint a request without one had is unchanged.
+        string[] parts = [email, vendor, model, role, prompt, JobKinds.Wire(kind), timeoutSeconds.ToString(), .. effort.Length > 0 ? [effort] : (string[])[]];
+        foreach (var part in parts)
         {
             // Length-prefixed, so ("ab","c") and ("a","bc") are two fingerprints rather than one. A
             // prompt can contain ANY text — it is a conversation quoted from somewhere else — so no

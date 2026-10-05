@@ -60,7 +60,8 @@ import { asText } from './asText';
 import { writeFileAtomically } from './atomicFile';
 import { notify, notifyAndAsk, notifyResolved, notifyThen } from './notify';
 import { DbLog } from './roundsDb';
-import { readLog, serverRunAt } from './roundsDbRead';
+import { readLog, serverRun, serverRunAt } from './roundsDbRead';
+import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -297,6 +298,11 @@ export function activate(context: vscode.ExtensionContext): void {
   // the last update is still running the build it started with. One of those reverted a
   // Team-server reviewer on 2026-09-07 by rewriting a runtime it did not know. An older build now
   // stands down and says so, once.
+  // What the installed coai-mcp accepts (`--features`, PLAN_one_model_catalog.md E2) — one cache for the window: the
+  // settings file reads its last settled answer without spawning, and the catalog migration asks it per run. Every
+  // settled answer writes the file again — the first one this session, and an updated binary's.
+  const features = new FeaturesCache(() => mirrorSettings(settingsSync));
+  const askFeatures = (): ReturnType<FeaturesCache['of']> => features.of(serverPath(context.globalStorageUri)?.fsPath, serverRun);
   const settingsSync = new ServerSettingsSync(
     () => readCoaiConfiguration(context),
     (json) => writeSettingsFile(json),
@@ -311,15 +317,20 @@ export function activate(context: vscode.ExtensionContext): void {
     // An api row's price crosses with the row (PLAN_feature_review.md S3.7): the window's shared book,
     // asking the row's own provider first when its endpoint names one.
     () => (vendor) => PRICE_BOOK.priceOf(vendor.model, vendor.baseUrl),
+    // A catalog field crosses only when the binary lists it; what it last settled on, never a spawn per write.
+    () => features.known(),
   );
   mirrorSettings(settingsSync);
+  // Ask once now: the settled answer writes the file again (above) — so a system prompt crosses this session.
+  void askFeatures();
   // Every consultant and question-consultant model DEFINITION moves into the catalog once, per settings layer
   // (PLAN_one_model_catalog.md E1.3). The env block it leads to is the one written above, byte for byte, so the
   // mirror after it is a no-op unless something was left; the panel is redrawn so a section reads the new rows.
+  // The Bugz model moves into the catalog only for a binary that ranks by the row's runtime (E2.1).
   void startCatalogMigration(context, () => {
     mirrorSettings(settingsSync);
     void panel.render();
-  });
+  }, async () => hasFeature(await askFeatures(), FEATURES.bugzRuntime));
   // Old Bugz keys waiting to be adopted or discarded: offered once per window, never filed by guessing.
   void offerOldBugzKeys(context.secrets, () => bugzServerThisSide(context)).catch((error: unknown) => {
     console.error('ConnectOtherAIs: the old Bugz keys could not be read', error);

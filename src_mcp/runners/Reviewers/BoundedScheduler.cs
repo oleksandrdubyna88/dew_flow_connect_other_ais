@@ -559,6 +559,24 @@ public sealed class BoundedScheduler(
         Action<ReviewerProgress>? onProgress,
         CancellationToken ct)
     {
+        // Every attempt of this turn reads the same prompt file, so it goes when the turn does — however it ended
+        // (todo/PLAN_one_model_catalog.md, epic 2). A later turn of a conversation builds files of its own.
+        try
+        {
+            return await LadderAsync(w, executor, onProgress, ct);
+        }
+        finally
+        {
+            LaunchFiles.Forget([.. w.Invocation.TempFiles, .. w.Repair?.TempFiles ?? []]);
+        }
+    }
+
+    private async Task<ReviewerOutcome> LadderAsync(
+        ReviewerWork w,
+        ReviewerExecutor executor,
+        Action<ReviewerProgress>? onProgress,
+        CancellationToken ct)
+    {
         var budget = w.Invocation.Request.Timeout;
         var watch = System.Diagnostics.Stopwatch.StartNew();
         var attempts = 1;

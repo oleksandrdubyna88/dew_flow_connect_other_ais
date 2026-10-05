@@ -21,8 +21,19 @@ namespace CoaiMcp.Runners.Consultation;
 /// directory the thread was started in — which the caller guarantees by launching every turn in the
 /// repository.</para>
 /// </remarks>
-public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "codex") : IConsultantRuntime
+public sealed class CodexConsultant(CodexRuntime inner, string vendor = "codex") : IConsultantRuntime
 {
+    /// <summary>
+    /// The row's provider, from the runtime the reviewer launches with — empty for codex's own service, four <c>-c</c>
+    /// overrides for somebody else's endpoint. On EVERY turn: a resume without them would send turn two to OpenAI with the
+    /// endpoint's key (PLAN_one_model_catalog.md E2.3). The constructor takes the codex runtime and nothing else, so no
+    /// other runtime can arrive here and quietly mean OpenAI's service (epic 2's code round).
+    /// </summary>
+    private readonly IReadOnlyList<string> _provider = inner.ProviderArgs;
+
+    /// <summary>Where the row's key travels: the endpoint's own variable, never OpenAI's, for an endpoint row.</summary>
+    private readonly string _keyVariable = inner.KeyEnvironmentVariable;
+
     public string Vendor => vendor;
 
     public ConsultantMemory Memory => new ConsultantMemory.VendorRemembers();
@@ -39,7 +50,7 @@ public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "cod
         var request = new ProcessRequest(Executable(launch.Settings), argv, Cwd(launch))
         {
             Environment = launch.Settings.ApiKey.Length > 0
-                ? new Dictionary<string, string?> { ["OPENAI_API_KEY"] = launch.Settings.ApiKey }
+                ? new Dictionary<string, string?> { [_keyVariable] = launch.Settings.ApiKey }
                 : [],
             StdIn = launch.Prompt,
             Timeout = launch.Settings.Timeout,
@@ -54,22 +65,22 @@ public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "cod
     private static string Cwd(ConsultantLaunch launch) =>
         launch.Confinement is LaunchConfinement.Planned planned ? ConsultantLaunches.Cwd(launch, planned.Plan) : launch.RepoPath;
 
-    private static IEnumerable<string> Argv(ConsultantLaunch launch, string outputFile) => launch.Confinement switch
+    private IEnumerable<string> Argv(ConsultantLaunch launch, string outputFile) => launch.Confinement switch
     {
         // A question row (PLAN_question_consultant.md, D4): the plan's leading flags — codex's
         // top-level `--search` (F1) — then `exec`, the plan's sandbox flags (`-s read-only
         // --ephemeral`, `-C <root>`), and this adapter's own output shape. One shot: `--ephemeral`
         // is the plan's, because nothing ever resumes a question.
         LaunchConfinement.Planned planned =>
-            [.. planned.Plan.Leading, "exec", .. planned.Plan.Flags, "--skip-git-repo-check", "--color", "never", "--json", "-o", outputFile, .. Model(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
+            [.. planned.Plan.Leading, "exec", .. planned.Plan.Flags, "--skip-git-repo-check", "--color", "never", "--json", "-o", outputFile, .. Model(launch.Settings), .. _provider, .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
         _ when launch.Handle.Length == 0 =>
-            ["exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", launch.RepoPath, "--json", "-o", outputFile, .. Model(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
+            ["exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", launch.RepoPath, "--json", "-o", outputFile, .. Model(launch.Settings), .. _provider, .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
         // UNQUOTED, and measured: `-c` parses its value as TOML and falls back to the raw string,
         // so `sandbox_mode=read-only` arrives as the string this wants. The quoted form worked
         // too, but an embedded double quote inside an argument that reaches cmd.exe through an
         // npm shim is a re-tokenisation waiting for the wrong input. Verified 2026-09-12:
         // a thread resumed with this exact form returned the number planted in turn 1. (gemini, code round.)
-        _ => ["exec", "resume", launch.Handle, "-c", "sandbox_mode=read-only", "--skip-git-repo-check", "--json", "-o", outputFile, .. Model(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
+        _ => ["exec", "resume", launch.Handle, "-c", "sandbox_mode=read-only", "--skip-git-repo-check", "--json", "-o", outputFile, .. Model(launch.Settings), .. _provider, .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
     };
 
     private static IEnumerable<string> Model(ReviewerSettings settings) =>

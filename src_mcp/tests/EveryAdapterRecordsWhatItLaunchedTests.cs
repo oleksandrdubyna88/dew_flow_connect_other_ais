@@ -65,16 +65,33 @@ public sealed class EveryAdapterRecordsWhatItLaunchedTests : IDisposable
     private string OutDir => Path.Combine(_root, "out");
 
     /// <summary>Every hosted adapter, with the settings that name a model and an effort.</summary>
-    public static TheoryData<string, IReviewerRuntime, ReviewerSettings> Hosted()
+    private static IEnumerable<(string Name, IReviewerRuntime Adapter, ReviewerSettings Settings)> Adapters() =>
+    [
+        ("codex", new CodexRuntime(), new("codex") { Model = "gpt-5.6-sol", ReasoningEffort = "high" }),
+        ("gemini", new GeminiRuntime(), new("gemini") { Model = "gemini-3.7-pro", ReasoningEffort = "high" }),
+        ("claude", new ClaudeRuntime(), new("claude") { Model = "claude-opus-5", ReasoningEffort = "high" }),
+        ("antigravity", new AntigravityRuntime(), new("antigravity") { Model = "gemini-3.7-flash-high", ReasoningEffort = "high" }),
+        ("deepseek", new DeepseekRuntime(), new("deepseek") { Model = "deepseek-reasoner", ApiKey = "sk-ds", ReasoningEffort = "high" }),
+    ];
+
+    private static TheoryData<string, IReviewerRuntime, ReviewerSettings> Table(Func<string, bool> keep)
     {
         var data = new TheoryData<string, IReviewerRuntime, ReviewerSettings>();
-        data.Add("codex", new CodexRuntime(), new("codex") { Model = "gpt-5.6-sol", ReasoningEffort = "high" });
-        data.Add("gemini", new GeminiRuntime(), new("gemini") { Model = "gemini-3.7-pro", ReasoningEffort = "high" });
-        data.Add("claude", new ClaudeRuntime(), new("claude") { Model = "claude-opus-5", ReasoningEffort = "high" });
-        data.Add("antigravity", new AntigravityRuntime(), new("antigravity") { Model = "gemini-3.7-flash-high", ReasoningEffort = "high" });
-        data.Add("deepseek", new DeepseekRuntime(), new("deepseek") { Model = "deepseek-reasoner", ApiKey = "sk-ds", ReasoningEffort = "high" });
+        foreach (var (name, adapter, settings) in Adapters().Where(one => keep(one.Name)))
+        {
+            data.Add(name, adapter, settings);
+        }
+
         return data;
     }
+
+    public static TheoryData<string, IReviewerRuntime, ReviewerSettings> Hosted() => Table(_ => true);
+
+    /// <summary>
+    /// The hosted adapters that put no effort on their command line — every one but claude, which since
+    /// PLAN_one_model_catalog.md E2.2 passes a row's level as <c>--effort</c> and records it (below).
+    /// </summary>
+    public static TheoryData<string, IReviewerRuntime, ReviewerSettings> HostedWithoutEffort() => Table(name => name != "claude");
 
     [Theory]
     [MemberData(nameof(Hosted))]
@@ -87,7 +104,7 @@ public sealed class EveryAdapterRecordsWhatItLaunchedTests : IDisposable
     }
 
     [Theory]
-    [MemberData(nameof(Hosted))]
+    [MemberData(nameof(HostedWithoutEffort))]
     public void AHostedAdapterRecordsNoEffort_BecauseItAppliesNone(string name, IReviewerRuntime adapter, ReviewerSettings settings)
     {
         // Table-driven across all four rather than asserted for codex alone: a copy-paste into any
@@ -99,6 +116,17 @@ public sealed class EveryAdapterRecordsWhatItLaunchedTests : IDisposable
             $"{name} puts no reasoning flag on its command line, so claiming an effort would be a lie");
         invocation.Request.Arguments.Should().NotContain("--reasoning-effort",
             $"and if {name} ever gains the flag, whoever adds it adds the record with it");
+    }
+
+    [Fact]
+    public void ClaudeRecordsTheEffortItPassed_BecauseItNowAppliesOne()
+    {
+        // The other side of the rule above: claude gained `--effort` (E2.2), and the record came with it.
+        var invocation = new ClaudeRuntime().Build(RoleCatalog.ArchitectureRole, "review this", Worktree, Schema, OutDir,
+            new ReviewerSettings("claude") { Model = "claude-opus-5", ReasoningEffort = "high" });
+
+        invocation.Effort.Should().Be("high");
+        invocation.Request.Arguments.Should().ContainInConsecutiveOrder("--effort", "high");
     }
 
     [Fact]

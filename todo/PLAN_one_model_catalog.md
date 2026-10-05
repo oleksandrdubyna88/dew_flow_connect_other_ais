@@ -1,6 +1,6 @@
 # PLAN — One model catalog: the Settings page rebuilt around models you add once
 
-> Status: **in progress, 2026-10-04 — E1 is built (PR #681); E2–E5 are open.** The design is accepted: the clickable mockup in
+> Status: **in progress, 2026-10-04 — E1 merged (PR #681); E2 story 1 built on `feat/catalog-e2`; E2.2–E5 open.** The design is accepted: the clickable mockup in
 > [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
 > checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
@@ -187,6 +187,7 @@ on never answered). Each runtime's flag is pinned in argv AND observed taking ef
 | D8 | **Chat models become per side**; chat PROMPT presets stay shared. A model's effort and system prompt apply to chat too (chat runs in the extension). | The catalog is per side; a chat on WSL opens a WSL CLI. |
 | D9 | **A consultant on an API key** is a multi-turn API runner; coai-mcp keeps its transcript (the vendor keeps none), retired with the consultation. | The operator's own example (GLM high as consultant). |
 | D10 | **✓ Check of any instance** is a coai-mcp one-shot mode `--check-model <id>`, built on `ConsultCheckState`'s durable record (exclusive open, owner = pid + process start time, `already-checking`, a startup sweep, never settled from another side, the config hash stamped so an edit mid-check is not credited), one at a time per instance, a hard timeout that kills the process tree, the scratch folder removed in `finally`, confirmed first as a paid turn. | The consultant's Check proved the shape; generalising it is reuse, not a second mechanism. |
+| D12 | **A thinking switch only where the model has one** (the operator, 2026-10-05: "for every model, check whether a thinking mode is available — then give an on/off switch"). Every card asks its runtime's answer, the way effort does (D4): `shared/feature-availability.json` gains a `thinking` row per runtime with a source — `probe` for api rows and local engines (the module's or engine's `thinkingSwitchable`, judged per MODEL, so a model the module was not measured on shows no switch), `unmeasured` where nobody has shown a flag (codex), `none` where the runtime has no such switch (claude — its depth is `--effort`; antigravity). The card draws the on/off switch only when the answer says switchable; otherwise one line saying why ("thinking cannot be switched off for this model", or "not measured for codex yet"). The value crosses only to a binary that lists it in `--features`. | The api card has drawn exactly this since S3.8 (`apiSettingsView.thinkingControl`); the rule widens to every runtime rather than a second mechanism. |
 | D11 | **Help moves with the tabs**, in all five languages, in the epic that moves a control; `coai.openSettings` maps every OLD tab id to its new place. | A help article naming a tab that no longer exists is the stale translation already measured. |
 
 ### What the legacy wire cannot carry, and what the page says
@@ -282,13 +283,184 @@ version gate in both directions.
    logged; the operator can cap effort. The client reads `X-Coai-Contract` and, against a v1 server, says which fields
    that server drops. Measured both ways. Deploy is manual and needs the operator's go-ahead.
 
+**As revised by epic 2's plan round (coai session `589a145b`, 2026-10-04, good_enough, 19 findings accepted)** — these
+override the stories above where they differ:
+
+- **Capability, not version numbers.** coai-mcp gains a one-shot `--features` that lists the row fields and modes it
+  accepts (`systemPrompt`, `timeoutMinutes`, `cliEffort`, `apiConsultant`, `securityWords`, `checkModel`,
+  `checkSecurity`); the extension writes a field only when the installed binary lists it, and says on the card which
+  fields this binary ignores. A seam leg per field fails when the extension would send a field the built binary does
+  not list. No `*_SINCE` constant guesses the release number before release-please cuts it. (f1, f8)
+- **Effort.** A codex effort stays in the settings but is NOT sent while codex is `unmeasured`, and the card says
+  "not applied"; an E1-shaped settings file with a codex effort still yields a round with codex in it. The probe
+  records whether `claude --help` lists `--effort`; a claude row with an effort on a CLI without it is refused by name
+  for that reviewer only ("the installed claude CLI does not take --effort"), never the whole round. A refused field
+  degrades one reviewer, reported, never aborts a round. (f5, f10, f11)
+- **Sent is not applied.** Per runtime, the measurement that shows the effect is named and recorded beside the code: a
+  system prompt that forces a marker token in the answer (one recorded real call per runtime), the effort level as
+  the CLI/API reports it in its usage or metadata where it does; where no effect can be observed, the docs and the card
+  say "sent", not "applied". (f12)
+- **The system prompt's leak paths.** Delivered in the prompt body after the product's own reviewer instruction (which
+  it cannot replace: the output schema and read-only rules come after it again), never argv. A canary test runs a round
+  through success, timeout, CLI failure and API error and greps stderr, the log files, the rounds database and the
+  run records; a prompt file is deleted in `finally`. Only length and hash are recorded. (f0, f2)
+- **Team server.** The operator caps timeout and effort (clamped, said in the response); a client system prompt is
+  appended after the server's immutable instruction, recorded as client-supplied (hash only), stored nowhere. With the
+  operator switch off (the default) the server accepts the request, drops the field, and reports the drop in the
+  response — shown by the client exactly as a v1 server's drops are. A dropped field is a visible per-round note in the
+  round log, never silence. (f1, f9, f13)
+- **Security words and patterns.** Each pattern is compiled once when the setting is validated (the extension asks
+  `--check-security --validate` through stdin), per pattern, so a construct NonBacktracking refuses (lookaround,
+  backreference) or a slow construction is refused by name at save time; a pattern refused at round time marks the
+  lane DEGRADED in the verdict rather than quietly scanning with fewer signals; a total scan budget bounds 32 patterns
+  × a 1 MB diff. `--check-security` reads its text and the patterns being edited from stdin (never argv: no token on
+  a command line, no 32 K limit); a bad argument exits 65, never 64; the extension falls back on 64 (an older binary).
+  (f4, f6, f14, f17)
+- **API-consultant transcripts — growth.** Under `<dataDir>/consultations/<id>/transcript.jsonl`, owner-only mode; ≤ 1 MB
+  per consultation — the next turn past it is REFUSED by name, never truncated; total ≤ 50 MB, a new consultation
+  refused when full; swept (closed or idle consultations, and anything older than 14 days) on every coai-mcp start and
+  by `--close-consult`; an interrupted turn is ended `interrupted` by the existing consultation sweep. (f3, f15)
+- **Bugz migration** reuses `catalogMigration.migrateLayer` (backup once, deterministic id, clash `-N`, marker last,
+  idempotent, restore); history keys are untouched. (f7, f16)
+- **`--check-model` widens `--check-consultant`** rather than standing beside it: one `ConsultCheckState`-based check
+  for any row. (f18)
+- **Scope.** Five stories, two release lines and a manual deploy: built as one epic per the operator's rule, released
+  as mcp 0.44.0 with whatever stories have landed — the `--features` list, not a version, tells the extension which.
+
+#### E2.1 as built (branch `feat/catalog-e2`)
+
+- **Probe.** `ClaudeRuntime`, `CodexRuntime`, `GeminiRuntime` name their CLI in `DefaultExecutable`; launch and probe
+  both use it, so a `claude-2` row probes `claude` (`ARowIdIsNotAProgramTests`).
+- **Material per reviewer.** `IReviewerRuntime.ReadsTheCheckout` (false for api, local, remote) and
+  `ReviewerMaterial.For` decide per reviewer in `RosterBuilder`; only a reviewer that can read a checkout is told it has
+  one (`AReviewerIsToldOnlyWhatItCanReadTests`). `CodeWorkspaceTests`' repair-launch test had pinned the old lie on a
+  local reviewer; it now asserts the guarantee on a CLI reviewer and the absence on a local one.
+- **The shared file.** `core/Catalog/FeatureAvailability.cs` embeds `shared/feature-availability.json`
+  (`FeatureAvailabilitySeed` in `CoreJsonContext`), refuses a feature list that names no runtime or an undeclared one,
+  and `ConsultantResolution.Consulting` IS `FeatureAvailability.Builtin.Consultant` — RED first on "equal but a copy".
+- **Unknown runtime — a reversed decision.** Both halves turned an unknown runtime into `codex` ("a name from a newer
+  panel still launches something"); what it launched was the Codex CLI on the person's own account, the shape `api`
+  was once the example of. The server now KEEPS the name (`PanelSettings.RuntimeOf`), `RuntimeResolution.NameOf`
+  answers it before the base-URL arm, `For` no longer falls back to the row id when a runtime was named (a row `claude`
+  with runtime `llama.cpp` ran the claude CLI), and the probe and the round's exclusion both say
+  `RuntimeResolution.NoAdapterFor` — the runtime by name and the runtimes this build runs. Two tests that pinned the
+  old coercion were rewritten. **Not done here:** the extension's `vendorsFrom` still coerces an unknown runtime to
+  `codex` when an OLDER panel reads a newer one's rows (and would re-save it so); that is an extension change, tail T6.
+- **Bugz ranking by runtime.** `RankingModels.IsAllowed(model, runtime)` / `Refusal(model, runtime)`; `--collect-bugs`
+  takes `--runtime` (the catalog row's runtime, which the extension resolves — Bugz never crosses in `COAI_VENDORS`, so
+  the collector cannot look it up). Without it the row id stands in, so `local/<model>` from a terminal or an older
+  extension means what it did. A row CALLED `local` on a cloud runtime is now refused. The extension passes
+  `--runtime` once `--features` lists it (E2.2), and the Bugz migration (`bugz-<rowId>`) follows that.
+
+#### E2.2 as built so far
+
+- **`--features`** (`Server/FeaturesMode.cs`): `{"features":[...]}`, an entry added in the commit that makes it true;
+  today `bugzRuntime`. The extension reads it once per binary file (`binaryFeatures.ts`; 64, a failure or a bad answer
+  is no features) and seam leg 11 fails when the extension knows a capability the build does not list.
+- **Bugz by runtime, end to end**: the picker offers every `local`-runtime instance when the binary ranks by runtime,
+  and `--collect-bugs` gets `--runtime` only then (`bugzView.collectArgs`).
+- **The Bugz migration** (the E1.3 carry): `migrateLayer(layer, { bugzByRuntime })` moves a Bugz model that differs
+  from its row's into `bugz-<rowId>` — only for a binary that ranks by runtime. Deviation: Bugz's own row is rewritten
+  IN PLACE on a later pick and a pick through it moves nothing (the picker writes on every pick; the plain rule left an
+  orphan per pick). The backup gains `bugzModel` only when it is moved, added to an epic-1 backup, never overwriting.
+- **A prompt file does not outlive its launch**: `ReviewerInvocation.TempFiles`, deleted by the scheduler in a `finally`.
+- **The system prompt**: in the body after the product's instruction and before the contract; never argv; refused past
+  8192 bytes by name; redacted from the child's output before anything is recorded (the canary found the leak: a
+  failing CLI's stderr became the round's reason). Deviation: NOT sent in a Team server row's body — story 5's field.
+  The extension sends it only when `--features` lists `systemPrompt`. "Sent is not applied" still owes its one recorded
+  real call per runtime (a marker the answer must carry).
+- **A CLI row's timeout** (`timeoutMinutes`, 1–1440): its launch timeout in place of the round's; an api row keeps
+  `reviewMinutes`. Listed in `--features`; the extension sends it only then.
+- **A CLI row's effort** (`cliEffort`): claude's level as `--effort` (verified on claude 2.1.289), a local row's per call,
+  a codex row's kept and not sent (unmeasured); a level a runtime does not take leaves that reviewer out by name.
+  Deviation: no `--help` probe per launch — an older claude refuses the flag itself, and that failure is named
+  ("the installed claude CLI does not take --effort") for that reviewer only.
+- Still open in E2.2: "sent is not applied" — one recorded real call per runtime showing the system prompt's effect
+  (a marker the answer must carry) and the effort as the CLI reports it; until then the docs and card say "sent".
+
+#### E2.3 as built (branch `feat/catalog-e2`)
+
+- **A codex row on an endpoint consults** with its provider on every turn (the reviewer's `-c` overrides, the key in
+  the endpoint's variable) — it was refused because the consultant dropped them. **An api row consults** through
+  `ApiConsultant`, widened from question rows to stuck consultations (one completion per turn, `WeRemember`, 32 KB).
+- The key reaches only those two kinds (`TakesAKey`); an api consultant runs with its module's effective settings.
+  `--features` lists `apiConsultant`; the shared file lists `api` among the consulting runtimes.
+- **Deviation — no separate transcript file.** The plan's `<dataDir>/consultations/<id>/transcript.jsonl` with its own
+  1 MB / 50 MB budget was written before reading the store: a consultant that keeps no conversation already has one —
+  the consultation record stores every turn's problem and advice, carries them into the next prompt under the frozen
+  carry budget, and is swept with the consultation (idle → lapsed, retention → deleted, a dead owner → interrupted).
+  A second copy of the conversation would have been a second thing to keep in step. Bounded by the turn cap and the
+  completion ceiling, a record stays far under 1 MB.
+- Open: a measured real consultation on an endpoint row and on an api row (one each), which is also what closes the
+  "consults when its provider overrides are measured" note this replaced.
+
+#### E2.4 as built so far (branch `feat/catalog-e2`)
+
+- **Editable words and a card's own words**, on one table (`SignalTable`): a signal's words replace its shipped words
+  (its shipped pattern stays); a card's words are a signal only that card is triggered by. Patterns compile once with
+  NonBacktracking and a 1 s timeout; refused by name for lookaround, backreferences, > 200 characters, > 32 in all.
+  A pattern that times out leaves its file's detection incomplete. Read from `COAI_SECURITY_LANE` (`signals`, a
+  prompt's `words`); refusals and unknown signals are complaints, never a refused lane.
+- **`--check-security [--validate]`**, on stdin, 65 for a bad request; in PROJECT.md's one-shot list.
+- The extension sends the words only when `--features` lists `securityWords`.
+- Deviation: the "total scan budget" is the engine's linear time plus the per-file match timeout, not a separate
+  budget — NonBacktracking bounds each pattern by the input it reads, and the detector already caps a file at 256 K.
+- **`--check-model`** (D10): the consultant check of any catalog row, the row read on stdin (a row that reviews nothing
+  is on no wire the server reads), its record `model-<id>`; the lock-and-record half is ONE method both checks use.
+  A row that cannot consult is unavailable by name, nothing launched. Deviation: the panel's ✓ Check button that
+  calls it is E3's (the Models card).
+
+#### E2.5 as designed (before building; the story text left delivery and storage open)
+
+- **Contract 2.** `ReviewRequestDto` gains `effort` and `systemPrompt`; `ContractVersion.Current` becomes 2. The client
+  composes the whole prompt and the server relays it, so the server's part is to decide what it TAKES:
+- **The system prompt** is taken only when the operator switch `Coai:AcceptClientSystemPrompt` is on (off by default),
+  at most 8192 UTF-8 bytes, and inserted before the client prompt's own `## The finding contract` heading — the contract
+  stays last; a prompt without that heading has the field DROPPED, never guessed at. The job store is in memory only,
+  so it is on no disk; the record carries its SHA-256, never the text; no log line names it.
+- **Effort** is applied only where the vendor's runtime LISTS levels in `shared/feature-availability.json` (claude
+  today) and the level is one of them; past the operator's `Coai:MaxEffort` it is CLAMPED to it. Elsewhere (codex,
+  unmeasured) it is dropped with its reason.
+- **The answer says so.** The accepted response gains `dropped` and `clamped` — field and reason each. The client turns
+  them into a per-reviewer note in the round; against a contract-1 server it reports every new field as dropped.
+- **Timeout** keeps today's bounds and refusal (deviation from "clamped"): turning the refusal into a clamp would
+  change what a contract-1 client asked for without it knowing.
+- The client sends the system prompt in a file beside the prompt file (`--system-prompt-file`), never argv, and both
+  are in `TempFiles`. Deploying the server stays the operator's decision.
+
+#### E2.5 as built (branch `feat/catalog-e2`)
+
+- As designed, server side: `ClientOptions.Take` (src_server `Jobs/ClientOptions.cs`), `JobRecord.Effort` /
+  `SystemPromptSha`, `Coai:AcceptClientSystemPrompt` / `Coai:MaxEffort`, `ContractVersion.Current = 2`, the
+  fingerprint covering the taken effort. The section text moved to core (`PersonInstruction`), so the server and
+  `ReviewerPrompt` place the SAME sentence.
+- Client side: `--effort` / `--system-prompt-file` on the remote launch; the not-applied sentence rides the shim's
+  usage line into `ReviewerOutcome.Ok.NotApplied` and the reviewer's progress note.
+- Deviations: remote's effort row is `probe` (judged by the server) instead of a new source name — the panel keeps
+  the row and sends the effort, which is what `probe` already means. The extension's `CONTRACT_VERSION` moved to 2
+  with the C# client; `SERVER_CONTRACT_REQUIRED` stays 1 (the panel reads nothing new).
+- Not done here: deploying the contract-2 server (the operator's decision), and the measured live call that shows
+  an effort APPLIED on the server's claude (T8).
+
+#### Epic 2 code round (coai session 589a145b, 2026-10-05, proceed)
+
+- 6 of 8 qwen reviewers answered; 16 findings, 15 accepted and fixed (RED first), 1 rejected: deriving `--features`
+  by reflection (Native AOT; seam leg 11 and the per-feature tests already guard the list).
+- Fixed: `--check-security` arguments, bounded stdin, lane shape and `detectionIncomplete`; a timed-out pattern runs once
+  per classification; `EffortFor` gives other runtimes no effort; `TakesItsOwnTimeout`; `CodexConsultant` takes only a
+  `CodexRuntime`; `PlacedIn` never returns an empty prompt; the instruction computed once; doc and message fixes.
+- **Owed, not closed:** the cadence consultation for epics 1-3 and the two risk consultations for epic 2 — consulting is
+  switched off in this installation (`COAI_CONSULT_ENABLED`), so none could be sent. They are never closed as abandoned;
+  they run when the operator turns the consultant back on.
+
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
    shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;
    six tabs with sub-tabs, remembered by the host; the deep-link map (D11); two columns from 1100 px with
    side-by-side blocks one height (CSS subgrid); `help(key)`, `skew(since, what)`, `newTag(controlId)` and one confirm
    dialog; `coai.settingsPreview` (D5); `render-page.mjs` gains the page and a light theme.
-2. **Models — cards and editing**: every card part of the mockup; add (grouped by where a model runs), duplicate
+2. **Models — cards and editing**: every card part of the mockup — the thinking switch drawn only where the model has one
+   (D12); add (grouped by where a model runs), duplicate
    (copies `vaultKeyName`), remove (lists every reference; the last switched-on plan or code model cannot leave), on/off,
    the filter rows.
 3. **Models — the world-facing parts**: the CLI's ▶ open / ⤓ install / ⟳ update, coai-mcp's verdict, where a list came
@@ -380,6 +552,9 @@ Disjoint from the rest of `todo/`. Each plan in the table gets the same row, poi
 | T3 | Export writes the shared settings only; a side's own rows are not in the file | v2 (E1.5) exports the exporting side's rows; per-side export of the rest is its own decision |
 | T4 | The mockup's own files are over 800 lines | The mockup is deleted in E5; product modules are born under the limit |
 | T5 | `coai.migratedFrom` and the restore command dropped | One release after E5 |
+| T6 | The extension's `vendorsFrom` turns a runtime it does not know into `codex` — an older panel reading a newer one's rows, and re-saving them so | coai-mcp refuses it by name since E2.1; the extension should keep the row and show it unrunnable, which widens the `Runtime` type |
+| T7 | `COAI_BUGZ_MODEL` is written into the env block and read by nothing in coai-mcp (the collector takes `--model`) | Remove it, or give it a reader, when the Bugz picker moves to the catalog (E5.1) |
+| T8 | Contract 2 is tested against the server in-process and a stub on a socket, never a deployed one: no live call has shown a remote row's effort APPLIED on the server's claude, or its system prompt taken | The deploy is the operator's decision; the measured call follows it, at a paid review's cost |
 
 ## Definition of Done
 
