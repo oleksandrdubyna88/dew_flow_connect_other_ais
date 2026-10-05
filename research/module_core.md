@@ -887,6 +887,6 @@ row id stands in, so `local/<model>` means what it did. A second local instance 
 ## `PersonInstruction` (2026-10-05, PLAN_one_model_catalog.md E2.5)
 
 `Catalog/PersonInstruction.cs`: the person's own instruction for a row as a reviewer reads it — `Heading`, `ContractHeading`,
-`Section(text)` and `PlacedIn(prompt, text)` (before the first contract heading at a line start; empty when there is
-none). In core because two composers place it: `ReviewerPrompt` on this machine and the Team server for a remote row, so
+`Section(text)`, `HasContract(prompt)` and `PlacedIn(prompt, text)` (before the first contract heading at a line start;
+the prompt unchanged when there is none — a caller that must know asks `HasContract` first). In core because two composers place it: `ReviewerPrompt` on this machine and the Team server for a remote row, so
 both reviewers read the same sentence.

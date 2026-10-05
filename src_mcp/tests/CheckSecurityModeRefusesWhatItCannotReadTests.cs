@@ -1,4 +1,4 @@
-using System.Text.Json;
+using System.Text.Json.Nodes;
 using CoaiMcp.Core.Security;
 using CoaiMcp.Server;
 using FluentAssertions;
@@ -52,10 +52,10 @@ public sealed class CheckSecurityModeRefusesWhatItCannotReadTests
     public void ASampleTheDetectorCouldNotFinish_SaysSo()
     {
         var oversized = new string('x', SecuritySignals.MaxFileCharacters + 10);
-        var (code, output, _) = CheckSecurityMode.Answer(JsonSerializer.Serialize(new Dictionary<string, string> { ["text"] = oversized }), validate: false);
+        var (code, output, _) = CheckSecurityMode.Answer(new JsonObject { ["text"] = oversized }.ToJsonString(), validate: false);
 
         code.Should().Be(0);
-        JsonDocument.Parse(output).RootElement.GetProperty("detectionIncomplete").GetBoolean().Should().BeTrue(
+        JsonNode.Parse(output)!["detectionIncomplete"]!.GetValue<bool>().Should().BeTrue(
             "an empty signal list from a detector that did not finish is not 'no signals'");
     }
 
@@ -64,7 +64,7 @@ public sealed class CheckSecurityModeRefusesWhatItCannotReadTests
     {
         var (_, output, _) = CheckSecurityMode.Answer("""{"text":"var hash = MD5.Create();"}""", validate: false);
 
-        JsonDocument.Parse(output).RootElement.GetProperty("detectionIncomplete").GetBoolean().Should().BeFalse();
+        JsonNode.Parse(output)!["detectionIncomplete"]!.GetValue<bool>().Should().BeFalse();
     }
 
     [Fact]

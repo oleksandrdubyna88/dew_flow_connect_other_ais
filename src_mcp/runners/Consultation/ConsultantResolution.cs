@@ -27,7 +27,11 @@ public static class ConsultantResolution
     /// the vendor factory to the server's storage layout. The schema is provisioned once when the
     /// service is built and travels on the launch.
     /// </remarks>
-    public static IConsultantRuntime? For(VendorIdentity vendor) => RuntimeResolution.NameOf(vendor) switch
+    public static IConsultantRuntime? For(VendorIdentity vendor) =>
+        OnACli(RuntimeResolution.NameOf(vendor), vendor) ?? ByCompletion(RuntimeResolution.NameOf(vendor), vendor);
+
+    /// <summary>A consultant that is a vendor's CLI holding its own conversation — or none for any other runtime.</summary>
+    private static IConsultantRuntime? OnACli(string runtime, VendorIdentity vendor) => runtime switch
     {
         // A custom endpoint riding the codex CLI (OpenRouter, DeepSeek) consults with ITS provider: the consultant
         // carries the runtime's own -c overrides and key variable on every turn (PLAN_one_model_catalog.md E2.3).
@@ -36,6 +40,12 @@ public static class ConsultantResolution
             new ClaudeConsultant(RuntimeResolution.For(vendor) ?? new ClaudeRuntime(vendor.Provider), vendor.Provider),
         "antigravity" =>
             new AntigravityConsultant(RuntimeResolution.For(vendor) ?? new AntigravityRuntime(vendor.Provider), vendor.Provider),
+        _ => null,
+    };
+
+    /// <summary>A consultant that is one completion per turn, its transcript ours to carry — or none for any other runtime.</summary>
+    private static IConsultantRuntime? ByCompletion(string runtime, VendorIdentity vendor) => runtime switch
+    {
         // The local engine has no CLI and no conversation: it is a completion per turn, and the
         // transcript is ours to carry.
         // Whatever RuntimeResolution says the row IS, not a cast to what it usually is: a downcast
