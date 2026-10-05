@@ -1,4 +1,5 @@
 import { type Admission, admit } from './capabilityAdmission';
+import { pickRefusal } from './catalogPicks';
 import { SHIPPED_QUESTION_PROMPTS } from './questionPrompts.generated';
 import { MAX_ACTIVE_ROWS, type QuestionPromptSetting, type QuestionRowSetting } from './qconsultSettings';
 import { RESERVED_FILE_NAMES } from './rolesPrompts';
@@ -128,6 +129,8 @@ export function isQconsultCommand(value: string): value is QconsultCommand {
 export const ROW_KEYS = [
   'qconsultRowVendor', 'qconsultRowModel', 'qconsultRowBaseUrl', 'qconsultRowExecutablePath', 'qconsultRowKey',
   'qconsultRowPrompt', 'qconsultRowEnabled',
+  // The new Settings page's pick of a catalog row ticked "question consultant" (PLAN_one_model_catalog.md E4.2).
+  'qconsultRowPick',
 ] as const;
 
 export type RowKey = (typeof ROW_KEYS)[number];
@@ -175,7 +178,23 @@ const EDITS: Readonly<Record<RowKey, Edit>> = {
   qconsultRowKey: (row, value) => ({ ...row, key: text(value).toLowerCase() }),
   qconsultRowPrompt: (row, value, _rows, context) => promptChosen(row, text(value), context),
   qconsultRowEnabled: (row, value, rows, context) => switched(row, value === true, rows, context),
+  qconsultRowPick: (row, value, _rows, context) => rowPicked(row, text(value), context.vendors),
 };
+
+/**
+ * A catalog row picked on the new page (PLAN_one_model_catalog.md E4.2): the question row becomes a REFERENCE to it —
+ * its model is edited on Models — and keeps its id and prompt; it goes OFF, as a vendor change does, because the pair
+ * it was switched on as is gone. A row not ticked "question consultant" is refused: it arrives in a webview message.
+ */
+function rowPicked(row: QuestionRowSetting, id: string, vendors: readonly Vendor[]): QuestionRowSetting | undefined {
+  if (pickRefusal('qconsult', id, vendors).length > 0) {
+    return undefined;
+  }
+
+  return row.runtime === '' && row.vendor === id
+    ? row
+    : { ...row, vendor: id, runtime: '', model: '', baseUrl: '', executablePath: '', key: '', enabled: false };
+}
 
 /**
  * A catalogue entry chosen: the row becomes that entry — runtime, model, endpoint — and stays OFF until it is

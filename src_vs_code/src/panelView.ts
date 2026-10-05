@@ -530,9 +530,12 @@ export function consultantSection(state: PanelState, callerRows = ''): string {
 }
 
 /** The Question consultant tab: the rows, the prompts, the folders, the mode and the limits. Its live questions are in the sidebar. */
-function questionConsultantSection(state: PanelState): string {
+export function questionConsultantSection(state: PanelState, pickFrom?: readonly Vendor[]): string {
   return qconsultBody(state.settings.qconsult, {
-    vendors: state.vendors,
+    // EVERY catalog row, not the current page's reviewers: since epic 1 a question row refers to an `ask-<id>` row that
+    // reviews nothing, and resolved against the reviewers it read as having no runtime and could not be switched on.
+    vendors: state.catalogRows ?? state.vendors,
+    pickFrom,
     codexModels: state.codexModels,
     agyModels: state.agyModels,
     claudeProbe: state.claudeProbe,

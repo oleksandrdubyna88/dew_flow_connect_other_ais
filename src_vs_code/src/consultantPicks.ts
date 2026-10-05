@@ -1,4 +1,5 @@
 import { CALLER_KINDS, DEFAULT_CONSULT, type ConsultantChoice, type ConsultSettings, type ResolvedConsultant } from './consultSettings';
+import { optionHtml, pickRefusal, rowPicks, type PickOption } from './catalogPicks';
 import { escapeHtml } from './escapeHtml';
 import type { Vendor } from './vendors';
 
@@ -12,13 +13,6 @@ import type { Vendor } from './vendors';
  * a word about it: a stronger model of the same vendor is a real choice, and the server sees the vendor, never the
  * model.</p>
  */
-
-/** One option of a caller's picker. */
-export interface PickOption {
-  readonly value: string;
-  readonly label: string;
-  readonly disabled: boolean;
-}
 
 /** What one caller's picker shows, decided. */
 export interface ConsultantPickView {
@@ -43,10 +37,6 @@ export interface PickWrites {
 /** The runtime a caller kind runs on — the vendor a consultant would share with it — or '' for another client. */
 const CALLER_RUNTIME: Readonly<Record<string, string>> = { claude: 'claude', codex: 'codex', gemini: 'gemini' };
 
-function tickedForConsultant(row: Vendor): boolean {
-  return (row.uses ?? []).includes('consultant');
-}
-
 /** The row id a stored entry picks — '' when it is the caller's shipped pair, which is what absence means (D2). */
 function pickedId(caller: string, stored: ConsultantChoice): string {
   const shipped = DEFAULT_CONSULT.stored[caller];
@@ -55,30 +45,11 @@ function pickedId(caller: string, stored: ConsultantChoice): string {
   return same ? '' : stored.vendor;
 }
 
-/** The option for a pick the list does not hold: still selected, so the next change cannot lose it silently. */
-function strandedOption(picked: string, rows: readonly Vendor[]): readonly PickOption[] {
-  const listed = picked === '' || rows.some((row) => row.id === picked && tickedForConsultant(row));
-
-  return listed ? [] : [{ value: picked, label: `${picked} (stranded)`, disabled: false }];
-}
-
-/** Why the pick sits where it does, in words — or '' for the shipped pair. */
-function noteFor(caller: string, picked: string, rows: readonly Vendor[]): string {
-  if (picked === '') {
-    return '';
-  }
+/** A word about a pick of the caller's own vendor — offered, never refused — or ''. */
+function sameVendorNote(caller: string, picked: string, rows: readonly Vendor[]): string {
   const row = rows.find((one) => one.id === picked);
 
-  return row === undefined ? `${picked} is no longer on Models. This caller keeps asking for it until you pick another.` : rowNote(caller, row);
-}
-
-/** What to say about a picked row that is still on Models — not ticked, or the caller's own vendor — or ''. */
-function rowNote(caller: string, row: Vendor): string {
-  if (!tickedForConsultant(row)) {
-    return `${row.id} is not ticked for the consultant on Models. This caller keeps it until you pick another.`;
-  }
-
-  return row.runtime === CALLER_RUNTIME[caller] ? 'The same vendor as the caller: it can be a stronger model, but it shares the caller’s blind spots.' : '';
+  return row !== undefined && row.runtime === CALLER_RUNTIME[caller] ? 'The same vendor as the caller: it can be a stronger model, but it shares the caller’s blind spots.' : '';
 }
 
 /**
@@ -90,12 +61,12 @@ function rowNote(caller: string, row: Vendor): string {
 export function consultantPickView(caller: string, stored: ConsultantChoice, rows: readonly Vendor[]): ConsultantPickView {
   const picked = pickedId(caller, stored);
   const shipped = DEFAULT_CONSULT.stored[caller]?.vendor ?? '';
-  const ticked = rows.filter(tickedForConsultant).map((row) => ({ value: row.id, label: `${row.id}${row.enabled ? '' : ' (switched off)'}`, disabled: false }));
+  const picks = rowPicks('consultant', picked, rows, 'This caller');
 
   return {
-    options: [{ value: '', label: `The shipped pair — ${shipped}`, disabled: false }, ...ticked, ...strandedOption(picked, rows)],
+    options: [{ value: '', label: `The shipped pair — ${shipped}`, disabled: false }, ...picks.options],
     selected: picked,
-    note: noteFor(caller, picked, rows),
+    note: picks.note || sameVendorNote(caller, picked, rows),
   };
 }
 
@@ -110,7 +81,7 @@ function refused(refusal: string): PickWrites {
  * @param current the stored map, read through the side-aware reader
  */
 export function consultantPickWrites(current: Readonly<Record<string, unknown>>, caller: string, rowId: string, rows: readonly Vendor[]): PickWrites {
-  const refusal = pickRefusal(caller, rowId, rows);
+  const refusal = callerPickRefusal(caller, rowId, rows);
   if (refusal.length > 0) {
     return refused(refusal);
   }
@@ -120,13 +91,13 @@ export function consultantPickWrites(current: Readonly<Record<string, unknown>>,
 }
 
 /** Why a pick cannot be what the page offered — '' when it can. Both arrive in a webview message. */
-function pickRefusal(caller: string, rowId: string, rows: readonly Vendor[]): string {
+function callerPickRefusal(caller: string, rowId: string, rows: readonly Vendor[]): string {
   // An id this build does not emit is refused before it indexes anything (`__proto__` would read Object.prototype).
   if (!CALLER_KINDS.some((one) => one.id === caller)) {
     return `There is no caller called ${caller}.`;
   }
 
-  return rowId === '' || rows.some((row) => row.id === rowId && tickedForConsultant(row)) ? '' : `${rowId} is not ticked for the consultant on Models.`;
+  return rowId === '' ? '' : pickRefusal('consultant', rowId, rows);
 }
 
 /** What the caller's consultant runs on, as resolved — or why it cannot run. */
@@ -136,10 +107,6 @@ function runsOn(resolved: ResolvedConsultant): string {
 
 function modelWords(model: string): string {
   return model.length > 0 ? `model ${model}` : 'its own default model';
-}
-
-function optionHtml(option: PickOption, selected: string): string {
-  return `<option value="${escapeHtml(option.value)}"${option.value === selected ? ' selected' : ''}>${escapeHtml(option.label)}</option>`;
 }
 
 function pickHtml(caller: { id: string; label: string }, consult: ConsultSettings, rows: readonly Vendor[]): string {

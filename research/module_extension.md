@@ -10932,3 +10932,18 @@ row's Models card, never here. The caps, prompt and cadence are the current page
   a caller re-pointed away from a row only it used as that row's REMOVAL (E1.4) — right for a definition only that page
   could see, wrong for a model the person now sees on Models. A test pins that the fold still drops it, so the bypass
   is removed the day it stops. A refusal is reported and the picker snaps back (`saveOrSnapBack`).
+
+**The question consultant's rows pick a row.** `catalogPicks.ts` holds the half every feature's picker shares (the rows
+ticked for a use, the stranded pick kept and named — `rowPicks`, `pickRefusal`); the consultant's callers and the
+question rows both use it. On the new page `questionConsultantSection(state, pickFrom)` draws each question row with a
+**Model** select (`data-setting="qconsultRowPick"`, `data-caller=<row id>`) instead of its vendor, model, endpoint, key
+name and CLI path; the switch, prompt, caveat and Remove are unchanged. The write is one more rule in the existing edit
+table (`qconsultWrite.EDITS.qconsultRowPick` → `rowPicked`): the row becomes a reference `{ vendor: <row id>, runtime:
+'' }`, keeps its id and prompt, and goes OFF as a vendor change does; a row not ticked "question consultant" is refused
+and the control snaps back. It goes through the usual fold, which drops a row only when its question row is REMOVED.
+
+**Fixed on the way (both pages):** the Question consultant section resolved its rows against the panel's `vendors` —
+the current page's reviewers since E1.4 — so a row epic 1 had migrated into a reference to an `ask-<id>` row read as
+having no runtime and its switch was disabled. It resolves against `catalogRows` now
+(`aMigratedQuestionRowStillRuns.test.ts`, red before the fix). The current page still labels such a row "not in the
+catalogue" (its picker lists the vendor presets); E5 retires that page.
