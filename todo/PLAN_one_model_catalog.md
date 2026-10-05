@@ -370,8 +370,12 @@ override the stories above where they differ:
   real call per runtime (a marker the answer must carry).
 - **A CLI row's timeout** (`timeoutMinutes`, 1–1440): its launch timeout in place of the round's; an api row keeps
   `reviewMinutes`. Listed in `--features`; the extension sends it only then.
-- Still open in E2.2: effort per CLI row (`cliEffort`) — codex unmeasured (kept, not sent), claude only where the probe
-  shows `--effort`.
+- **A CLI row's effort** (`cliEffort`): claude's level as `--effort` (verified on claude 2.1.289), a local row's per call,
+  a codex row's kept and not sent (unmeasured); a level a runtime does not take leaves that reviewer out by name.
+  Deviation: no `--help` probe per launch — an older claude refuses the flag itself, and that failure is named
+  ("the installed claude CLI does not take --effort") for that reviewer only.
+- Still open in E2.2: "sent is not applied" — one recorded real call per runtime showing the system prompt's effect
+  (a marker the answer must carry) and the effort as the CLI reports it; until then the docs and card say "sent".
 
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and

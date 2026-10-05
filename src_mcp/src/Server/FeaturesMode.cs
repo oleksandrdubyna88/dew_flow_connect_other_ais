@@ -24,6 +24,8 @@ internal static class FeaturesMode
         "systemPrompt",
         // E2.2: a CLI row's `timeoutMinutes`, its launch timeout in place of the round's.
         "timeoutMinutes",
+        // E2.2: a CLI row's `effort` — claude's levels as --effort, a local row's per call; a codex row's kept, not sent.
+        "cliEffort",
     ];
 
     internal static async Task<int> RunAsync()

@@ -86,6 +86,9 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 NoMcpServers.ClaudeFlag,
                 "--add-dir", worktreePath,
                 .. settings.Model.Length > 0 ? (string[])["--model", settings.Model] : [],
+                // A row's effort, as the installed CLI spells it (2.1.289: `--effort <level>`; the levels are
+                // shared/feature-availability.json's). An older CLI refuses the flag itself — VendorDiagnosis names it.
+                .. settings.ReasoningEffort.Length > 0 ? (string[])["--effort", settings.ReasoningEffort] : [],
             ],
             worktreePath)
         {
@@ -97,7 +100,7 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 : new Dictionary<string, string?>(),
             Timeout = settings.Timeout,
         };
-        return new ReviewerInvocation(Provider, role, request, OutputFile: string.Empty, this, Model: settings.Model);
+        return new ReviewerInvocation(Provider, role, request, OutputFile: string.Empty, this, Model: settings.Model, Effort: settings.ReasoningEffort);
     }
 
     /// <summary>The review is the envelope's <c>result</c> string; the rest is metadata.</summary>

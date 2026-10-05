@@ -6323,3 +6323,14 @@ Listed today: `bugzRuntime` (`--collect-bugs --runtime`, E2.1). In PROJECT.md's 
 (1440, the extension's `isMinutes`), anything else unset. `RosterBuilder.TimeoutFor` makes it the launch timeout of a
 CLI row in place of `ReviewerTimeout`; an api row keeps the round's launch timeout, its own limit being the whole review
 (`reviewMinutes`). `--features` lists `timeoutMinutes` (`ARowsOwnTimeoutTests`, RED first).
+
+## A CLI row's effort (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+`ProviderSettings.CliEffort` (the row's `effort`, lower-cased) means what `shared/feature-availability.json` says for
+its runtime. `RosterBuilder.EffortFor`: claude gets its row's level and nothing else — the local engines' setting is not
+a claude effort — passed as `--effort <level>` (read off claude 2.1.289) and recorded on the invocation as applied; a
+local row its own, else the panel's local setting; a codex row's is kept and NOT sent while codex is `unmeasured`, and
+the row still reviews. `PanelService.EffortRefusal` (with the prompt check in `RowRefusal`) leaves out one reviewer,
+by name, for a level a `list` runtime does not list or any effort on a runtime that takes `none`. An older claude that
+refuses the flag is diagnosed as "the installed claude CLI does not take --effort" (`VendorDiagnosis`, ahead of the
+general unknown-option cure). `--features` lists `cliEffort` (`ACliRowsEffortTests`, RED first).

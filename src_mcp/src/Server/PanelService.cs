@@ -332,7 +332,32 @@ public sealed class PanelService
     /// twice in this file's own history.
     /// </remarks>
     private bool CanRun(ProviderSettings provider) =>
-        RuntimeFor(provider) is not null && AuthFor(provider).Auth != "unavailable" && PromptRefusal(provider).Length == 0;
+        RuntimeFor(provider) is not null && AuthFor(provider).Auth != "unavailable" && RowRefusal(provider).Length == 0;
+
+    /// <summary>What in the row itself keeps it out of the round — its prompt's size, then its effort — or nothing.</summary>
+    private static string RowRefusal(ProviderSettings provider) =>
+        PromptRefusal(provider) is { Length: > 0 } prompt ? prompt : EffortRefusal(provider);
+
+    /// <summary>
+    /// A CLI row's effort that its runtime does not take (shared/feature-availability.json): a level a `list` runtime does
+    /// not list, or any effort on a runtime that takes none. An `unmeasured` runtime's (codex) is kept and not sent, a
+    /// `probe` runtime's is judged per model — neither keeps the row out. An api row's is its module's to refuse.
+    /// </summary>
+    private static string EffortRefusal(ProviderSettings provider)
+    {
+        var runtime = RuntimeResolution.NameOf(provider.Identity());
+        var row = Core.Catalog.FeatureAvailability.Builtin.EffortOf(runtime);
+
+        return provider.CliEffort.Length == 0 || runtime == "api" ? string.Empty : EffortRefusal(provider.CliEffort, runtime, row);
+    }
+
+    private static string EffortRefusal(string effort, string runtime, Core.Catalog.EffortRow row) => row.Source switch
+    {
+        "list" when !row.Levels.Contains(effort, StringComparer.Ordinal) =>
+            $"its effort '{effort}' is not one {runtime} takes ({string.Join(", ", row.Levels)})",
+        "none" => $"its effort '{effort}' cannot be applied: {runtime} takes no effort",
+        _ => string.Empty,
+    };
 
     /// <summary>
     /// Why a row's system prompt keeps it out of the round — past <see cref="Core.Catalog.CatalogLimits.MaxPromptBytes"/>
@@ -380,8 +405,8 @@ public sealed class PanelService
     private string ReasonFor(ProviderSettings provider) =>
         RuntimeFor(provider) is null
             ? RuntimeResolution.NoAdapterFor(provider.Identity())
-            : PromptRefusal(provider) is { Length: > 0 } tooLong
-            ? tooLong
+            : RowRefusal(provider) is { Length: > 0 } refused
+            ? refused
             : RuntimeResolution.ExclusionReason(
                 provider.Identity(), _keys.Keys.ContainsKey(provider.KeyName), HasServerToken(provider), provider.Model);
 

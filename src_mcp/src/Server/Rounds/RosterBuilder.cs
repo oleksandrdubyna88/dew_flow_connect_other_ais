@@ -382,7 +382,7 @@ internal sealed class RosterBuilder(
             // Only ApiRuntime reads it too: the parent prices each turn from it (S3.7).
             Price = provider.Price,
             Timeout = TimeoutFor(provider, runtime, _settings.ReviewerTimeout),
-            ReasoningEffort = _settings.LocalReasoningEffort,
+            ReasoningEffort = EffortFor(provider, _settings.LocalReasoningEffort),
             MaxTokens = _settings.LocalMaxTokens,
             // Only RemoteRuntime uses it, to find this machine's token for its Team server.
             DataDir = _settings.DataDir,
@@ -635,6 +635,19 @@ internal sealed class RosterBuilder(
     /// A CLI row's own timeout, else the round's (PLAN_one_model_catalog.md E2.2). An api row keeps the round's launch
     /// timeout: its own limit is the whole review (<c>reviewMinutes</c>), applied to the conversation.
     /// </summary>
+    /// <summary>
+    /// What a CLI row's launch is told about effort (PLAN_one_model_catalog.md E2.2): claude its row's level and nothing
+    /// else — the local engines' setting is not a claude effort; a local row its own, else the panel's local setting; every
+    /// other runtime the local setting as before, which only a local engine reads. A codex row's effort is kept and not
+    /// sent while codex is unmeasured. An api row's effort is its module's (see SettingsFor).
+    /// </summary>
+    internal static string EffortFor(ProviderSettings provider, string localEffort) => RuntimeResolution.NameOf(provider.Identity()) switch
+    {
+        "claude" => provider.CliEffort,
+        "local" => provider.CliEffort.Length > 0 ? provider.CliEffort : localEffort,
+        _ => localEffort,
+    };
+
     internal static TimeSpan TimeoutFor(ProviderSettings provider, IReviewerRuntime runtime, TimeSpan roundTimeout) =>
         provider.TimeoutMinutes > 0 && runtime is not ApiRuntime ? TimeSpan.FromMinutes(provider.TimeoutMinutes) : roundTimeout;
 }

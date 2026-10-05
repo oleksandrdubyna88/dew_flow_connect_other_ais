@@ -111,8 +111,17 @@ export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = 
         ...apiSettingsOnTheWire(v, installedServerVersion),
         ...promptOnTheWire(v, features),
         ...timeoutOnTheWire(v, features),
+        ...cliEffortOnTheWire(v, features),
       })),
   );
+}
+
+/**
+ * A CLI row's effort, to a binary that lists `cliEffort` — what it means is the runtime's, decided by coai-mcp. An api
+ * row's effort keeps its own road (`apiSettingsOnTheWire`), so it is never written twice.
+ */
+function cliEffortOnTheWire(v: Vendor, features: readonly string[]): { effort?: string } {
+  return v.runtime !== 'api' && features.includes(FEATURES.cliEffort) && v.effort !== undefined ? { effort: v.effort } : {};
 }
 
 /** A CLI row's own timeout, to a binary that lists `timeoutMinutes` — an api row has none (it keeps `reviewMinutes`). */

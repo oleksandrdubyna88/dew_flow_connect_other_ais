@@ -10772,3 +10772,8 @@ sequenceDiagram
 
 `vendorsEnv` writes a CLI row's `timeoutMinutes` when the binary lists `timeoutMinutes` (`FEATURES.timeoutMinutes`); an
 api row carries none — it keeps `reviewMinutes` (`timeoutOnTheWire.test.ts`).
+
+## A CLI row's effort crosses only to a binary that takes it (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+`vendorsEnv` writes a CLI row's `effort` when the binary lists `cliEffort` (`FEATURES.cliEffort`); what it means is
+coai-mcp's to decide per runtime. An api row's effort keeps `apiSettingsOnTheWire` (`cliEffortOnTheWire.test.ts`).

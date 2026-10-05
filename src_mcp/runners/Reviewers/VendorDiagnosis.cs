@@ -89,6 +89,11 @@ public static class VendorDiagnosis
         // confined consultant argv, answered `error: unknown option '--restricted'` and exit 1 — a CLI older
         // than the flags this product sends. It is not a model failure and not a sign-in: the cure is the
         // CLI's own update.
+        // The more specific first: a claude older than `--effort` (PLAN_one_model_catalog.md E2.2) has a second cure — the
+        // row's effort can be cleared — that the general sentence below cannot offer.
+        ("unknown option '--effort'",
+            "the installed claude CLI does not take --effort — update it, or clear this row's effort.",
+            DiagnosisKind.UnknownOption),
         ("unknown option",
             "the CLI does not know an option this product sends — it is older than this product expects: " +
             "update the CLI, then run it once by hand.",

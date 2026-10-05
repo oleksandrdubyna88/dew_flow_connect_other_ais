@@ -22,6 +22,13 @@ public sealed record ProviderSettings(string Provider)
     /// </summary>
     public int TimeoutMinutes { get; init; }
 
+    /// <summary>
+    /// A CLI row's reasoning effort, lower-cased (PLAN_one_model_catalog.md E2.2) — what it means is the runtime's, per
+    /// <c>shared/feature-availability.json</c>: claude's levels are passed as <c>--effort</c>, a codex effort is kept and not
+    /// sent while codex is unmeasured, a local row's is sent per call. Empty is none. An api row's effort is <c>Api</c>'s.
+    /// </summary>
+    public string CliEffort { get; init; } = string.Empty;
+
     public bool Enabled { get; init; } = true;
 
     public string Model { get; init; } = string.Empty;
@@ -1224,6 +1231,8 @@ public sealed record PanelSettings
                         SystemPrompt = v.SystemPrompt?.Trim() ?? string.Empty,
                         // The extension's rule (`isMinutes`): 1 to a day; anything else is unset, the round's timeout.
                         TimeoutMinutes = v.TimeoutMinutes is { } minutes && minutes is > 0 and <= Core.Catalog.CatalogLimits.MaxTimeoutMinutes ? minutes : 0,
+                        // The same `effort` member an api row's settings read; what it means is the runtime's.
+                        CliEffort = v.Effort?.Trim().ToLowerInvariant() ?? string.Empty,
                     })
                     // One id, one vendor — the extension already refuses a duplicate row, and a
                     // hand-edited settings file is how one reaches the server. The id is the

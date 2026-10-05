@@ -22,6 +22,8 @@ export const FEATURES = {
   systemPrompt: 'systemPrompt',
   /** E2.2: a CLI row's `timeoutMinutes`, its launch timeout in place of the round's. */
   timeoutMinutes: 'timeoutMinutes',
+  /** E2.2: a CLI row's `effort` — claude's levels as --effort; a codex row's kept and not sent while unmeasured. */
+  cliEffort: 'cliEffort',
 } as const;
 
 export interface BinaryFeatures {
