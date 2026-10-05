@@ -150,7 +150,7 @@ import {
 import { Catalog, Usage, fetchClientConfig, fetchUsage } from './teamServerApi';
 import { webviewNonce } from './webviewNonce';
 import { addRefusal, rowWriteRefusal } from './catalogWriteRules';
-import { duplicated, removedRow, type RowsChange, toggledUse } from './catalogCommands';
+import { duplicated, removedRow, type RowsChange, savedInOrder, toggledUse } from './catalogCommands';
 import { groupOf, grouped, NO_TEAM_SERVER } from './addModelGroups';
 import { checkInputOf } from './modelCheckInput';
 
@@ -4133,11 +4133,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       return;
     }
     const config = vscode.workspace.getConfiguration('coai');
-    await this.save(config, 'vendors', change.rows);
-    if (change.bugzModel !== undefined) {
-      await this.save(config, 'bugzModel', change.bugzModel);
-    }
-    if (change.said.length > 0) {
+    // Bugz first, put back if the rows are refused: the two are one edit (PR #687's review, `savedInOrder`).
+    const saved = await savedInOrder(change, this.settings().bugzModel, (key, value) => this.save(config, key, value));
+    if (saved && change.said.length > 0) {
       void notify({ as: 'information', class: 'outcome', source: 'reviewers', code: 'bugz-model-moved', subject: change.said, title: change.said });
     }
     await this.render();

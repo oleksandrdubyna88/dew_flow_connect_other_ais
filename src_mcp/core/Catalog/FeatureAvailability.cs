@@ -80,7 +80,7 @@ public sealed class FeatureAvailability
             Consultant = Within(seed.Features?.Consultant, runtimes, "consultant"),
             Chat = Within(seed.Features?.Chat, runtimes, "chat"),
             Effort = [.. (seed.Effort ?? []).Select(row => Row(row, runtimes))],
-            Thinking = [.. (seed.Thinking ?? []).Select(row => ThinkingRowOf(row, runtimes))],
+            Thinking = ThinkingRows(seed.Thinking, runtimes),
         };
     }
 
@@ -106,6 +106,23 @@ public sealed class FeatureAvailability
         return runtimes.Contains(runtime, StringComparer.Ordinal) && Sources.Contains(source, StringComparer.Ordinal)
             ? new EffortRow(runtime, source, row.Levels ?? [], row.Note ?? string.Empty)
             : throw Broken($"effort row '{runtime}' has source '{source}'; the runtimes are {string.Join(", ", runtimes)} and the sources {string.Join(", ", Sources)}");
+    }
+
+    /// <summary>
+    /// The thinking rows — exactly one per runtime, as the extension's generator requires (PR #687's review): a missing
+    /// runtime would read as "none" and a duplicate as whichever came first. A seed with no list (from before D12) has none.
+    /// </summary>
+    private static IReadOnlyList<ThinkingRow> ThinkingRows(IReadOnlyList<ThinkingRowSeed>? seed, IReadOnlyList<string> runtimes)
+    {
+        if (seed is null)
+        {
+            return [];
+        }
+        IReadOnlyList<ThinkingRow> rows = [.. seed.Select(row => ThinkingRowOf(row, runtimes))];
+
+        return runtimes.FirstOrDefault(runtime => rows.Count(row => row.Runtime == runtime) != 1) is { } off
+            ? throw Broken($"runtime '{off}' has {rows.Count(row => row.Runtime == off)} thinking rows; every runtime has exactly one")
+            : rows;
     }
 
     private static ThinkingRow ThinkingRowOf(ThinkingRowSeed row, IReadOnlyList<string> runtimes)

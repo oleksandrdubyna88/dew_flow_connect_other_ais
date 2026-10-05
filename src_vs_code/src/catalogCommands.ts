@@ -125,3 +125,23 @@ export function duplicated(rows: readonly Vendor[], id: string): RowsChange {
 
   return { rows: [...rows.slice(0, at + 1), copy, ...rows.slice(at + 1)], refused: '', said: '' };
 }
+
+/**
+ * A change's writes in a failure-safe order (PR #687's review): the Bugz ranking model FIRST — a refusal there leaves the
+ * rows untouched — then the rows, and the Bugz model put back when the rows were refused. So the two never disagree,
+ * and the ranking never names a row that is gone. False when the change was not stored.
+ */
+export async function savedInOrder(change: RowsChange, bugzBefore: string, save: (key: string, value: unknown) => Promise<boolean>): Promise<boolean> {
+  if (change.bugzModel === undefined) {
+    return save('vendors', change.rows);
+  }
+  if (!(await save('bugzModel', change.bugzModel))) {
+    return false;
+  }
+  if (await save('vendors', change.rows)) {
+    return true;
+  }
+  await save('bugzModel', bugzBefore);
+
+  return false;
+}

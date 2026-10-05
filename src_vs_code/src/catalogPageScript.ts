@@ -78,6 +78,13 @@ function placesScript(): string {
 /** The one confirm dialog: opened by a button that asks, sending its command only on the action button. */
 function confirmScript(): string {
   return `
+  // Where the caret goes after a confirmed action removed the control it was on — once, then forgotten.
+  const focusAfter = (vscode.getState() || {}).focusAfter;
+  if (focusAfter) {
+    vscode.setState(Object.assign({}, vscode.getState() || {}, { focusAfter: undefined }));
+    const target = document.getElementById(focusAfter);
+    if (target) { target.focus(); }
+  }
   // The one confirm dialog: filled from the button that asked, sending only on its action button.
   let asking = null;
   function closeConfirm() {
@@ -104,6 +111,10 @@ function confirmScript(): string {
     confirmGo.addEventListener('click', () => {
       const asked = asking;
       closeConfirm();
+      if (asked && asked.dataset.asks === 'removeModel') {
+        // The card goes with the row, and the caret with it: the next document puts it in the search box (PR #687).
+        vscode.setState(Object.assign({}, vscode.getState() || {}, { focusAfter: 'model-search' }));
+      }
       if (asked) { send({ type: 'command', command: asked.dataset.asks, id: asked.dataset.id }, asked); }
     });
   }
