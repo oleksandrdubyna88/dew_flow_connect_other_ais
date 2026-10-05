@@ -291,3 +291,12 @@ flowchart LR
   K --> R[SecurityRoster / SecuritySources: due cards]
   X["--check-security (stdin)"] --> P
 ```
+
+### Epic 2 code round fixes (2026-10-05, coai session 589a145b)
+
+- **A timed-out pattern runs once per classification.** `SecuritySignals.Classify(files, table)` keeps the signals that
+  ran out of time; a later file does not run them again and says its detection is INCOMPLETE (what they would have
+  found there is unknown). 32 patterns × 16 files × the 1 s timeout is no longer reachable.
+- **`--check-security` reads only what it was asked.** An argument other than one `--validate` is 65 by name; stdin is
+  read only to its 2 MB limit (`ReadBoundedAsync`); a `lane` that is not an object is 65, never replaced by the shipped
+  lane; the answer carries `detectionIncomplete`, so a sample the detector could not finish is not read as "no signals".

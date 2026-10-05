@@ -81,27 +81,25 @@ public static class ClientOptions
 
     private static (string Prompt, string Sha, FieldNoteDto[] Dropped) PromptOf(string prompt, string instruction, bool accept)
     {
-        var refusal = instruction.Length == 0 ? string.Empty : PromptRefusal(instruction, accept);
-        var placed = refusal.Length == 0 && instruction.Length > 0 ? PersonInstruction.PlacedIn(prompt, instruction) : string.Empty;
+        var refusal = instruction.Length == 0 ? string.Empty : PromptRefusal(prompt, instruction, accept);
 
-        return (refusal, placed) switch
+        return (instruction.Length, refusal.Length) switch
         {
-            ({ Length: > 0 }, _) => (prompt, string.Empty, [new FieldNoteDto(SystemPromptField, refusal)]),
-            (_, { Length: > 0 }) => (placed, Sha(instruction), []),
-            _ when instruction.Length == 0 => (prompt, string.Empty, []),
-            _ => (prompt, string.Empty, [new FieldNoteDto(SystemPromptField,
-                $"the prompt has no '{PersonInstruction.ContractHeading}' heading to place it before — it was not guessed at")]),
+            (0, _) => (prompt, string.Empty, []),
+            (_, > 0) => (prompt, string.Empty, [new FieldNoteDto(SystemPromptField, refusal)]),
+            _ => (PersonInstruction.PlacedIn(prompt, instruction), Sha(instruction), []),
         };
     }
 
-    private static string PromptRefusal(string instruction, bool accept)
+    private static string PromptRefusal(string prompt, string instruction, bool accept)
     {
         var bytes = Encoding.UTF8.GetByteCount(instruction);
 
-        return (accept, bytes > CatalogLimits.MaxPromptBytes) switch
+        return (accept, bytes > CatalogLimits.MaxPromptBytes, PersonInstruction.HasContract(prompt)) switch
         {
-            (false, _) => "this server does not take a client's system prompt (Coai:AcceptClientSystemPrompt is off)",
-            (_, true) => $"it is {bytes} bytes — at most {CatalogLimits.MaxPromptBytes}",
+            (false, _, _) => "this server does not take a client's system prompt (Coai:AcceptClientSystemPrompt is off)",
+            (_, true, _) => $"it is {bytes} bytes — at most {CatalogLimits.MaxPromptBytes}",
+            (_, _, false) => $"the prompt has no '{PersonInstruction.ContractHeading}' heading to place it before — it was not guessed at",
             _ => string.Empty,
         };
     }

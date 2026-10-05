@@ -31,8 +31,7 @@ public static class ConsultantResolution
     {
         // A custom endpoint riding the codex CLI (OpenRouter, DeepSeek) consults with ITS provider: the consultant
         // carries the runtime's own -c overrides and key variable on every turn (PLAN_one_model_catalog.md E2.3).
-        "codex" =>
-            new CodexConsultant(RuntimeResolution.For(vendor) ?? new CodexRuntime(vendor.Provider), vendor.Provider),
+        "codex" => CodexOn(vendor),
         "claude" =>
             new ClaudeConsultant(RuntimeResolution.For(vendor) ?? new ClaudeRuntime(vendor.Provider), vendor.Provider),
         "antigravity" =>
@@ -48,6 +47,17 @@ public static class ConsultantResolution
         // A hosted completion keeps no conversation either: the same shape as the local engine's, through the api shim
         // (PLAN_one_model_catalog.md D9) — the adapter that already answered question rows, widened.
         "api" => new ApiConsultant(RuntimeResolution.For(vendor) ?? new ApiRuntime(vendor.Provider, vendor.BaseUrl), vendor.Provider, vendor.VaultName),
+        _ => null,
+    };
+
+    /// <summary>
+    /// A codex row's consultant, on the codex runtime its row resolves to — never another: a runtime that is not the Codex
+    /// CLI cannot carry the row's provider, so it cannot consult (refused by name) rather than reach OpenAI's service.
+    /// </summary>
+    private static CodexConsultant? CodexOn(VendorIdentity vendor) => RuntimeResolution.For(vendor) switch
+    {
+        CodexRuntime codex => new CodexConsultant(codex, vendor.Provider),
+        null => new CodexConsultant(new CodexRuntime(vendor.Provider), vendor.Provider),
         _ => null,
     };
 

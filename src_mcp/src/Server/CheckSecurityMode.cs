@@ -25,10 +25,47 @@ internal static class CheckSecurityMode
 
     private const int ExDataErr = 65;
 
+    /// <summary>
+    /// Why the arguments are refused — the mode reads its name and at most one <c>--validate</c>, everything else is on
+    /// stdin — or nothing. An argument it does not read is 65, never ignored into a successful answer.
+    /// </summary>
+    internal static string ArgumentRefusal(string[] args)
+    {
+        var rest = args.Skip(1).ToList();
+
+        return rest.Count == 0 || (rest.Count == 1 && rest[0] == "--validate")
+            ? string.Empty
+            : $"--check-security takes at most one --validate and reads everything else on stdin; it does not read '{string.Join(" ", rest)}'";
+    }
+
+    /// <summary>
+    /// Stdin, up to <paramref name="limit"/> characters and no further: a request at the limit is refused by
+    /// <see cref="Answer"/>, and nothing past it is ever held in memory.
+    /// </summary>
+    internal static async Task<string> ReadBoundedAsync(TextReader reader, int limit = MaxRequestCharacters)
+    {
+        var text = new System.Text.StringBuilder();
+        var chunk = new char[8192];
+        int got;
+        while (text.Length < limit && (got = await reader.ReadAsync(chunk.AsMemory(0, Math.Min(chunk.Length, limit - text.Length)))) > 0)
+        {
+            text.Append(chunk, 0, got);
+        }
+
+        return text.ToString();
+    }
+
     internal static async Task<int> RunAsync(string[] args)
     {
-        var stdin = await Console.In.ReadToEndAsync();
-        var (code, output, error) = Answer(stdin, Array.IndexOf(args, "--validate") >= 0);
+        if (ArgumentRefusal(args) is { Length: > 0 } refused)
+        {
+            Program.Note(refused);
+
+            return ExDataErr;
+        }
+
+        var stdin = await ReadBoundedAsync(Console.In);
+        var (code, output, error) = Answer(stdin, args.Length > 1);
         if (output.Length > 0)
         {
             await Console.Out.WriteLineAsync(output);
@@ -46,7 +83,7 @@ internal static class CheckSecurityMode
     {
         if (stdin.Length >= MaxRequestCharacters)
         {
-            return (ExDataErr, string.Empty, $"the request is {stdin.Length} characters; --check-security reads at most {MaxRequestCharacters}");
+            return (ExDataErr, string.Empty, $"the request reaches {MaxRequestCharacters} characters; --check-security reads less than that");
         }
         try
         {
@@ -62,15 +99,27 @@ internal static class CheckSecurityMode
 
     private static (int Code, string Out, string Err) Answered(JsonElement request, bool validate)
     {
-        var text = TextOf(request);
-        if (!validate && text is null)
-        {
-            return (ExDataErr, string.Empty, "--check-security needs \"text\": the sample to try, a string (or --validate to check the patterns alone)");
-        }
-        var lane = LaneOf(request);
+        var refusal = RequestRefusal(request, validate);
+        var lane = refusal.Length == 0 ? LaneOf(request) : new SecurityLaneSetting();
 
-        return (0, validate ? Validation(lane) : Trial(lane, text ?? string.Empty), string.Empty);
+        return refusal.Length > 0
+            ? (ExDataErr, string.Empty, refusal)
+            : (0, validate ? Validation(lane) : Trial(lane, TextOf(request) ?? string.Empty), string.Empty);
     }
+
+    /// <summary>What in the request keeps it from being read as asked — never answered as though it had been.</summary>
+    private static string RequestRefusal(JsonElement request, bool validate) =>
+        (request.ValueKind == JsonValueKind.Object, validate || TextOf(request) is not null, LaneIsReadable(request)) switch
+        {
+            (false, _, _) => "--check-security reads one JSON object on stdin — {\"text\": …, \"lane\": …}",
+            (_, false, _) => "--check-security needs \"text\": the sample to try, a string (or --validate to check the patterns alone)",
+            (_, _, false) => "--check-security reads \"lane\" as the lane setting, an object; leave it out for the shipped words",
+            _ => string.Empty,
+        };
+
+    /// <summary>No lane, or one that is an object: a lane of any other shape is not silently replaced by the shipped one.</summary>
+    private static bool LaneIsReadable(JsonElement request) =>
+        request.ValueKind != JsonValueKind.Object || !request.TryGetProperty("lane", out var lane) || lane.ValueKind == JsonValueKind.Object;
 
     private static string? TextOf(JsonElement request) =>
         request.ValueKind == JsonValueKind.Object && request.TryGetProperty("text", out var text) && text.ValueKind == JsonValueKind.String
@@ -95,6 +144,8 @@ internal static class CheckSecurityMode
             Strings(json, "cards", [.. lane.Prompts.Where(p => p.Refusal.Length == 0 && SecuritySignals.Triggered(p, files)).Select(p => p.Id)]);
             Refusals(json, lane.Table.Refused);
             Strings(json, "complaints", lane.Complaints);
+            // An empty signal list from a detector that did not finish (too large, a pattern out of time) is not "none".
+            json.WriteBoolean("detectionIncomplete", files[0].DetectionIncomplete);
         });
     }
 

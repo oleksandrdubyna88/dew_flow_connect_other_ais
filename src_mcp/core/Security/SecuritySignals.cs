@@ -31,14 +31,23 @@ public static class SecuritySignals
     public static IReadOnlyList<SecurityFile> Classify(IReadOnlyList<FileDiff> files) => Classify(files, SignalTable.Shipped);
 
     /// <summary>The files classified by <paramref name="table"/>: a person's words, a card's own words (PLAN_one_model_catalog.md E2.4).</summary>
-    public static IReadOnlyList<SecurityFile> Classify(IReadOnlyList<FileDiff> files, SignalTable table) =>
-        [.. files.Take(MaxFiles).OrderBy(f => f.Path, StringComparer.Ordinal).Select(file => Classify(file, table))];
+    /// <remarks>
+    /// A pattern that runs out of time on one file is not run again on the rest of this classification — 32 patterns each
+    /// spending the match timeout on each of 16 files would be minutes before a round could say anything. What it would
+    /// have found on those files is then unknown, so they say their detection is incomplete.
+    /// </remarks>
+    public static IReadOnlyList<SecurityFile> Classify(IReadOnlyList<FileDiff> files, SignalTable table)
+    {
+        var spent = new HashSet<string>(StringComparer.Ordinal);
 
-    private static SecurityFile Classify(FileDiff file, SignalTable table)
+        return [.. files.Take(MaxFiles).OrderBy(f => f.Path, StringComparer.Ordinal).Select(file => Classify(file, table, spent))];
+    }
+
+    private static SecurityFile Classify(FileDiff file, SignalTable table, ISet<string> spent)
     {
         var withheld = IsWithheld(file);
         var safe = withheld ? string.Empty : Redaction.SafeSource(WithinLimit(file.Text));
-        var (signals, timedOut) = Detected(table, Detectable(file, safe));
+        var (signals, timedOut) = Detected(table, Detectable(file, safe), spent);
 
         return new(file with { Text = safe }, signals) { DetectionIncomplete = Incomplete(file, withheld, timedOut) };
     }
@@ -53,23 +62,42 @@ public static class SecuritySignals
     /// The signals the text carries — and whether a pattern ran out of time on it, which leaves the file's detection
     /// INCOMPLETE (the lane's own word for a detector that could not finish), never quietly unmatched.
     /// </summary>
-    private static (IReadOnlyList<string> Signals, bool TimedOut) Detected(SignalTable table, string text)
+    private static (IReadOnlyList<string> Signals, bool TimedOut) Detected(SignalTable table, string text, ISet<string> spent)
     {
-        var found = new List<string>();
-        var timedOut = false;
-        foreach (var (signal, matcher) in table.Signals)
+        var outcomes = table.Signals.Select(pair => (Signal: pair.Key, Match: Outcome(pair.Key, pair.Value, text, spent))).ToList();
+
+        return ([.. outcomes.Where(o => o.Match == SignalMatch.Yes).Select(o => o.Signal)], outcomes.Any(o => o.Match == SignalMatch.Unknown));
+    }
+
+    /// <summary>One signal on one file — unknown when it ran out of time here or on an earlier file, and then not run again.</summary>
+    private static SignalMatch Outcome(string signal, SignalMatcher matcher, string text, ISet<string> spent)
+    {
+        var match = spent.Contains(signal) ? SignalMatch.Unknown : TryMatch(matcher, text);
+        if (match == SignalMatch.Unknown)
         {
-            try
-            {
-                if (matcher.Matches(text)) found.Add(signal);
-            }
-            catch (RegexMatchTimeoutException)
-            {
-                timedOut = true;
-            }
+            spent.Add(signal);
         }
 
-        return (found, timedOut);
+        return match;
+    }
+
+    private static SignalMatch TryMatch(SignalMatcher matcher, string text)
+    {
+        try
+        {
+            return matcher.Matches(text) ? SignalMatch.Yes : SignalMatch.No;
+        }
+        catch (RegexMatchTimeoutException)
+        {
+            return SignalMatch.Unknown;
+        }
+    }
+
+    private enum SignalMatch
+    {
+        No,
+        Yes,
+        Unknown,
     }
 
     /// <summary>Binary content and credential files never reach a detector or a prompt.</summary>

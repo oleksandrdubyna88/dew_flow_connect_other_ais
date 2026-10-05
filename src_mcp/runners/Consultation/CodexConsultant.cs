@@ -21,17 +21,18 @@ namespace CoaiMcp.Runners.Consultation;
 /// directory the thread was started in — which the caller guarantees by launching every turn in the
 /// repository.</para>
 /// </remarks>
-public sealed class CodexConsultant(IReviewerRuntime inner, string vendor = "codex") : IConsultantRuntime
+public sealed class CodexConsultant(CodexRuntime inner, string vendor = "codex") : IConsultantRuntime
 {
     /// <summary>
     /// The row's provider, from the runtime the reviewer launches with — empty for codex's own service, four <c>-c</c>
     /// overrides for somebody else's endpoint. On EVERY turn: a resume without them would send turn two to OpenAI with the
-    /// endpoint's key (PLAN_one_model_catalog.md E2.3).
+    /// endpoint's key (PLAN_one_model_catalog.md E2.3). The constructor takes the codex runtime and nothing else, so no
+    /// other runtime can arrive here and quietly mean OpenAI's service (epic 2's code round).
     /// </summary>
-    private readonly IReadOnlyList<string> _provider = (inner as CodexRuntime)?.ProviderArgs ?? [];
+    private readonly IReadOnlyList<string> _provider = inner.ProviderArgs;
 
     /// <summary>Where the row's key travels: the endpoint's own variable, never OpenAI's, for an endpoint row.</summary>
-    private readonly string _keyVariable = (inner as CodexRuntime)?.KeyEnvironmentVariable ?? "OPENAI_API_KEY";
+    private readonly string _keyVariable = inner.KeyEnvironmentVariable;
 
     public string Vendor => vendor;
 

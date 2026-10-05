@@ -2248,3 +2248,12 @@ sequenceDiagram
   S-->>A: usage line {tokensIn, tokensOut, notApplied}
   A-->>R: Ok.NotApplied → the reviewer's note
 ```
+
+### Epic 2 code round fixes (2026-10-05, coai session 589a145b)
+
+- `IReviewerRuntime.TakesItsOwnTimeout` (false for `ApiRuntime`) replaces the roster's `is not ApiRuntime` check.
+- `RosterBuilder.EffortFor` gives a runtime outside claude/remote/local NO effort — the panel's local-engine setting was
+  handed to every other runtime. The row's instruction is computed once for the body and the redaction list.
+- `CodexConsultant` takes a `CodexRuntime` (no cast that could fall back to OpenAI's service with an endpoint's key);
+  `ConsultantResolution` refuses a codex row whose runtime resolves to anything else.
+- `PersonInstruction.PlacedIn` returns the prompt unchanged when it has no contract heading; `HasContract` asks first.

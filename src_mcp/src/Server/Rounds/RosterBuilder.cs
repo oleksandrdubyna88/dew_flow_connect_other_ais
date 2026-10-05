@@ -314,7 +314,9 @@ internal sealed class RosterBuilder(
             var launch = SettingsFor(provider, runtime, api);
             var followUps = turns is Runners.Feature.SourceTurns.On on ? on.FollowUps : 0;
             var material = ReviewerMaterial.For(hasCheckout, runtime, stageRow.Reads);
-            var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers, followUps, InstructionFor(provider, runtime));
+            // Once, for the body AND the redaction list below: two calls that must agree are one value.
+            var instruction = InstructionFor(provider, runtime);
+            var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers, followUps, instruction);
             // One key for every launch of THIS reviewer — its turns and their repairs — from the base prompt
             // every one of them shares (ConversationKey): what a vendor that routes its prompt cache by a
             // conversation id (xAI's x-grok-conv-id, 2026-09-26) needs to serve turn 2 from turn 1's cache.
@@ -335,7 +337,6 @@ internal sealed class RosterBuilder(
             // is the SAME base byte for byte with its tail appended — the launch and the repair alike, so
             // the repair of turn N is composed from turn N's own prompt (plan §4.9).
             // What the launch was given and must not echo back into a record: the row's system prompt (see Redact).
-            var instruction = InstructionFor(provider, runtime);
             IReadOnlyList<string> redact = instruction.Length == 0 ? [] : [instruction];
             ReviewerWork Turn(string tail) => new(
                 runtime.Build(role, prompt + tail, launchDir, schemaFile, outputDir, launch) with { Redact = redact },
@@ -638,14 +639,11 @@ internal sealed class RosterBuilder(
         runtime.CarriesTheRowsPrompt ? string.Empty : provider.SystemPrompt;
 
     /// <summary>
-    /// A CLI row's own timeout, else the round's (PLAN_one_model_catalog.md E2.2). An api row keeps the round's launch
-    /// timeout: its own limit is the whole review (<c>reviewMinutes</c>), applied to the conversation.
-    /// </summary>
-    /// <summary>
-    /// What a CLI row's launch is told about effort (PLAN_one_model_catalog.md E2.2): claude its row's level and nothing
-    /// else — the local engines' setting is not a claude effort; a local row its own, else the panel's local setting; every
-    /// other runtime the local setting as before, which only a local engine reads. A codex row's effort is kept and not
-    /// sent while codex is unmeasured. An api row's effort is its module's (see SettingsFor).
+    /// What a CLI row's launch is told about effort (PLAN_one_model_catalog.md E2.2): claude and a Team server row their
+    /// row's level and nothing else — the local engines' setting is not theirs; a local row its own, else the panel's
+    /// local setting; every other runtime NOTHING, so the first new runtime that reads an effort is never handed a
+    /// llama.cpp level (epic 2's code round). A codex row's effort is kept and not sent while codex is unmeasured. An
+    /// api row's effort is its module's (see SettingsFor).
     /// </summary>
     internal static string EffortFor(ProviderSettings provider, string localEffort) => RuntimeResolution.NameOf(provider.Identity()) switch
     {
@@ -653,9 +651,14 @@ internal sealed class RosterBuilder(
         // A Team server judges it per vendor and says what it did not apply (contract 2, E2.5).
         "remote" => provider.CliEffort,
         "local" => provider.CliEffort.Length > 0 ? provider.CliEffort : localEffort,
-        _ => localEffort,
+        _ => string.Empty,
     };
 
+    /// <summary>
+    /// A row's own timeout, else the round's (PLAN_one_model_catalog.md E2.2) — where its runtime takes one
+    /// (<see cref="IReviewerRuntime.TakesItsOwnTimeout"/>). An api row keeps the round's launch timeout: its own limit is
+    /// the whole review (<c>reviewMinutes</c>), applied to the conversation.
+    /// </summary>
     internal static TimeSpan TimeoutFor(ProviderSettings provider, IReviewerRuntime runtime, TimeSpan roundTimeout) =>
-        provider.TimeoutMinutes > 0 && runtime is not ApiRuntime ? TimeSpan.FromMinutes(provider.TimeoutMinutes) : roundTimeout;
+        provider.TimeoutMinutes > 0 && runtime.TakesItsOwnTimeout ? TimeSpan.FromMinutes(provider.TimeoutMinutes) : roundTimeout;
 }

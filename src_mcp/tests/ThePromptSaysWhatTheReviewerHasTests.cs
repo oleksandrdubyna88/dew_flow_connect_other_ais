@@ -160,8 +160,10 @@ public sealed class ThePromptSaysWhatTheReviewerHasTests
 
         source.Should().Contain("{WhatYouHave(material, followUps)}",
             "every composed prompt carries it, including one a person overrode in the catalog");
-        source.Should().Contain("ComposePrompt(choice, context, material, stageRow.Answers, followUps, InstructionFor(provider, runtime))",
+        source.Should().Contain("ComposePrompt(choice, context, material, stageRow.Answers, followUps, instruction)",
             "the real mode reaches the prompt — a literal here would pass every other test in this file");
+        source.Should().Contain("var instruction = InstructionFor(provider, runtime);",
+            "and the row's instruction is the runtime's decision, computed once for the body and the redaction list");
         source.Should().Contain("var material = ReviewerMaterial.For(hasCheckout, runtime, stageRow.Reads)",
             "and what a reviewer without a checkout — or that cannot read one — holds is the STAGE's answer, per reviewer");
         source.Should().Contain("var hasCheckout = readsCheckout && !fastCode",

@@ -49,6 +49,9 @@ public sealed class ApiRuntime(string id, string baseUrl) : IReviewerRuntime
     /// <summary>An api reviewer is one HTTP request: gets the change in its prompt and never a working directory it can read.</summary>
     public bool ReadsTheCheckout => false;
 
+    /// <summary>An api row's limit is the whole review (<c>reviewMinutes</c>), applied to the conversation — not a launch's.</summary>
+    public bool TakesItsOwnTimeout => false;
+
     /// <summary>The dialect a row that named none speaks.</summary>
     public static string DialectOf(ReviewerSettings settings) =>
         settings.Dialect.Trim().Length > 0 ? settings.Dialect.Trim().ToLowerInvariant() : ApiDialects.OpenAiName;

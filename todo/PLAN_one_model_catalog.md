@@ -442,6 +442,17 @@ override the stories above where they differ:
 - Not done here: deploying the contract-2 server (the operator's decision), and the measured live call that shows
   an effort APPLIED on the server's claude (T8).
 
+#### Epic 2 code round (coai session 589a145b, 2026-10-05, proceed)
+
+- 6 of 8 qwen reviewers answered; 16 findings, 15 accepted and fixed (RED first), 1 rejected: deriving `--features`
+  by reflection (Native AOT; seam leg 11 and the per-feature tests already guard the list).
+- Fixed: `--check-security` arguments, bounded stdin, lane shape and `detectionIncomplete`; a timed-out pattern runs once
+  per classification; `EffortFor` gives other runtimes no effort; `TakesItsOwnTimeout`; `CodexConsultant` takes only a
+  `CodexRuntime`; `PlacedIn` never returns an empty prompt; the instruction computed once; doc and message fixes.
+- **Owed, not closed:** the cadence consultation for epics 1-3 and the two risk consultations for epic 2 — consulting is
+  switched off in this installation (`COAI_CONSULT_ENABLED`), so none could be sent. They are never closed as abandoned;
+  they run when the operator turns the consultant back on.
+
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
    shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;

@@ -139,7 +139,7 @@ internal static class AskRemote
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            note($"the prompt file {reading} could not be read: {e.Message}");
+            note($"the {(reading == job.PromptFile ? "prompt" : "system prompt")} file {reading} could not be read: {e.Message}");
 
             return (string.Empty, string.Empty, RemoteAsk.BadUsage);
         }

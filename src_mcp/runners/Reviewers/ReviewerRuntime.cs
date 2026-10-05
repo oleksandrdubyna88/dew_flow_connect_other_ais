@@ -269,6 +269,12 @@ public interface IReviewerRuntime
     bool CarriesTheRowsPrompt => true;
 
     /// <summary>
+    /// Whether a row's own <c>timeoutMinutes</c> becomes this launch's timeout (PLAN_one_model_catalog.md E2.2). Said by
+    /// the runtime, beside what it reads and what it carries, rather than by a type check in the roster.
+    /// </summary>
+    bool TakesItsOwnTimeout => true;
+
+    /// <summary>
     /// What this launch asked for and its runtime said it did NOT apply — one sentence for the reviewer's note, or empty.
     /// Only a Team server answers it (contract 2's dropped and clamped fields); a local launch applies what it sends.
     /// </summary>

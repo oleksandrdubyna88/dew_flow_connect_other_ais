@@ -70,7 +70,7 @@ public sealed class ACliRowsEffortTests
 
         Work(service).Select(w => w.Invocation.Provider).Should().Equal("codex");
         service.ExcludedFrom(Stage.PlanReview).Should().ContainSingle()
-            .Which.Should().Contain("claude").And.Contain("'turbo'").And.Contain("low, medium, high, xhigh, max");
+            .Which.Should().Contain("claude").And.Contain("'turbo'").And.Contain(string.Join(", ", CoaiMcp.Core.Catalog.FeatureAvailability.Builtin.EffortOf("claude").Levels));
     }
 
     [Fact]
