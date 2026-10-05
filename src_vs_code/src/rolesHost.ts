@@ -1,13 +1,14 @@
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { readFile, rm } from 'node:fs/promises';
 import * as vscode from 'vscode';
 
 import { asText } from './asText';
+import { writeFileAtomically } from './atomicFile';
 import { coaiDataDir } from './dataDir';
 import { notify, notifyAndAsk } from './notify';
 import { composed, isBuiltIn, promptIdsInUse, rolesFrom, type RoleRow } from './roles';
 import { promptBelongsTo, rowsAfter } from './rolesEdit';
 import { rolesFieldOf, type RolesCommand } from './rolesPage';
-import { promptFile, promptsDir } from './rolesPrompts';
+import { promptFile } from './rolesPrompts';
 import { settledWrites } from './settledWrites';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 import { roleDeletions } from './roleDeletionsHost';
@@ -154,34 +155,45 @@ async function apply(command: RolesCommand): Promise<boolean> {
   return await applied(command);
 }
 
-/** The commands that act on the roles themselves. */
-async function applied(command: Exclude<RolesCommand, { kind: 'tab' | 'ignore' | 'zoom' | 'tone' }>): Promise<boolean> {
-  switch (command.kind) {
-    case 'editPrompt':
-      return command.field === 'text' ? await textWritten(command.id, command.promptId, command.value) : await store(command);
-    case 'restorePrompt':
-      // Restoring a shipped prompt is DELETING the override: the default is embedded in the server's binary. It
-      // repaints, because the box has to empty and the button has to go grey.
-      await writeText(command.id, command.promptId, '');
-      return true;
-    case 'remove':
-      return await removeRole(command.id);
-    case 'reloadWindow':
-      // The cure for a stand-down: a newer build owns the settings file, and reloading is how this window becomes it.
-      void vscode.commands.executeCommand('workbench.action.reloadWindow');
-      return false;
-    case 'finishDeletion':
-      await roleDeletions(rolesSide()).finishAnyway(command.id);
-      return true;
-    default:
-      return await store(command);
-  }
-}
+/** A command that acts on the roles themselves. */
+type RoleAct = Exclude<RolesCommand, { kind: 'tab' | 'ignore' | 'zoom' | 'tone' }>;
 
-async function textWritten(roleId: string, promptId: string, text: string): Promise<boolean> {
-  await writeText(roleId, promptId, text);
+/** What each command that is not a plain row edit does — a table, so each is one small rule. Answers: redraw? */
+const ACTS: { readonly [K in RoleAct['kind']]?: (command: Extract<RoleAct, { kind: K }>) => Promise<boolean> } = {
+  editPrompt: async (command) => {
+    if (command.field !== 'text') {
+      return store(command);
+    }
+    await writeText(command.id, command.promptId, command.value);
 
-  return false;
+    return false;
+  },
+  // Restoring a shipped prompt is DELETING the override: the default is embedded in the server's binary. It repaints,
+  // because the box has to empty and the button has to go grey.
+  restorePrompt: async (command) => {
+    await writeText(command.id, command.promptId, '');
+
+    return true;
+  },
+  remove: (command) => removeRole(command.id),
+  // The cure for a stand-down: a newer build owns the settings file, and reloading is how this window becomes it.
+  reloadWindow: () => {
+    void vscode.commands.executeCommand('workbench.action.reloadWindow');
+
+    return Promise.resolve(false);
+  },
+  finishDeletion: async (command) => {
+    await roleDeletions(rolesSide()).finishAnyway(command.id);
+
+    return true;
+  },
+};
+
+/** The commands that act on the roles themselves: their own rule, or a plain row edit. */
+async function applied(command: RoleAct): Promise<boolean> {
+  const act = ACTS[command.kind] as ((one: RoleAct) => Promise<boolean>) | undefined;
+
+  return act === undefined ? store(command) : act(command);
 }
 
 /** A row edit the rules refuse, said once in one place. */
@@ -247,8 +259,18 @@ async function removeRole(id: string): Promise<boolean> {
     return true;
   }
 
-  const name = roleRows().find((r) => r.id === id)?.name ?? id;
-  // A question, so both the asking and the answer are written down: what a person DECLINED to delete is as much a fact.
+  const name = roleName(id);
+
+  return (await removalConfirmed(id, name)) ? await removeConfirmed(id, name) : false;
+}
+
+/** What a role is called, for a sentence — its id when it has no name. */
+function roleName(id: string): string {
+  return roleRows().find((r) => r.id === id)?.name ?? id;
+}
+
+/** A question, so both the asking and the answer are written down: what a person DECLINED to delete is as much a fact. */
+async function removalConfirmed(id: string, name: string): Promise<boolean> {
   const answer = await notifyAndAsk({
     as: 'warning',
     class: 'confirmation',
@@ -260,12 +282,16 @@ async function removeRole(id: string): Promise<boolean> {
     detail: 'Its prompts and everything you wrote in them are deleted. Rounds already recorded keep their findings.',
     action: 'Remove',
   });
-  if (answer !== 'Remove') {
-    return false;
-  }
 
-  // Not `store`: the text waits on the far side of the mirror having carried the row, and `begin` writes the tombstone
-  // first, so a host that dies in the middle leaves evidence rather than an orphaned prompt and a freed id.
+  return answer === 'Remove';
+}
+
+/**
+ * The removal itself — not `store`: the text waits on the far side of the mirror having carried the row, and `begin`
+ * writes the tombstone first, so a host that dies in the middle leaves evidence rather than an orphaned prompt and a
+ * freed id.
+ */
+async function removeConfirmed(id: string, name: string): Promise<boolean> {
   const outcome = rowsAfter(roleRows(), { kind: 'remove', id });
   if (outcome.kind === 'refused') {
     sayRefused(outcome.why);
@@ -294,33 +320,30 @@ async function forget(promptIds: readonly string[]): Promise<void> {
 
 /**
  * A prompt's text, written where the server reads it — or the file removed, which is how a shipped prompt goes back to
- * the text this product ships. Written to a neighbouring file and RENAMED over the destination: `writeFile` truncates
- * first, and a crash between the truncation and the last byte would leave half a question.
+ * the text this product ships. Written beside the destination and RENAMED over it (`writeFileAtomically`): `writeFile`
+ * truncates first, and a crash between the truncation and the last byte would leave half a question.
  */
 async function writeText(roleId: string, promptId: string, text: string): Promise<void> {
-  // The id reaches a PATH, so it is checked twice: `promptFile` refuses anything that is not a slug, and this refuses a
-  // slug that belongs to no prompt of this role — so a webview cannot write over an unrelated role's override.
-  const file = promptFile(coaiDataDir(), promptId);
-  if (file === undefined || !promptBelongsTo(composed(roleRows()), roleId, promptId)) {
+  const file = promptFileOf(roleId, promptId);
+  if (file.length === 0) {
     reportRolesFailure(`ConnectOtherAIs ignored a prompt it does not recognise (${promptId}).`, new Error('unknown prompt id'));
 
     return;
   }
-
-  try {
-    if (text.trim().length === 0) {
-      await rm(file, { force: true });
-
-      return;
-    }
-
-    const partial = `${file}.writing`;
-    await mkdir(promptsDir(coaiDataDir()), { recursive: true });
-    await writeFile(partial, text, 'utf8');
-    await rename(partial, file);
-  } catch (error: unknown) {
+  await (text.trim().length === 0 ? rm(file, { force: true }) : writeFileAtomically(file, text)).catch((error: unknown) => {
     reportRolesFailure('ConnectOtherAIs could not save that prompt. Your text is still on the page — copy it somewhere before closing the tab.', error);
-  }
+  });
+}
+
+/**
+ * The file a prompt's text goes to, or '' when it may not be written. The id reaches a PATH, so it is checked twice:
+ * `promptFile` refuses anything that is not a slug, and this refuses a slug that belongs to no prompt of this role — so a
+ * webview cannot write over an unrelated role's override.
+ */
+function promptFileOf(roleId: string, promptId: string): string {
+  const file = promptFile(coaiDataDir(), promptId) ?? '';
+
+  return file.length > 0 && promptBelongsTo(composed(roleRows()), roleId, promptId) ? file : '';
 }
 
 /**
