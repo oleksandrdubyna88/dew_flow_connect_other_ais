@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { catalogBody, catalogHtml } from '../catalogPage';
+import { catalogHtml } from '../catalogPage';
 import { settingsHtml, type PanelState } from '../panelView';
 import { questionPrompts, rowEdited } from '../qconsultWrite';
 import type { QuestionRowSetting } from '../qconsultSettings';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { lastWrite, panelState, runPanel } from './panelPageHarness';
+import { pageTree } from './pageTree';
 
 /**
  * E4.2 of todo/PLAN_one_model_catalog.md, the question consultant's half: on the new page a question row PICKS a
@@ -46,13 +47,19 @@ function stateWith(rows: readonly QuestionRowSetting[]): PanelState {
 
 test('the new page draws a pick per question row, not the definition fields; the current page keeps them', () => {
   const state = stateWith([question('q-1', { vendor: 'ask-deep', runtime: '' }), question('q-2', { vendor: 'chat-fast', runtime: '' })]);
-  const body = catalogBody(state);
+  const html = catalogHtml(state, 'test-nonce', 'consultants/qconsult');
+  const controls = runPanel(state, { html }).controls.filter((one) => one.dataset['setting']?.startsWith('qconsultRow') === true);
+  const picks = controls.filter((one) => one.dataset['setting'] === 'qconsultRowPick');
 
-  assert.equal([...body.matchAll(/data-setting="qconsultRowPick"/g)].length, 2);
-  assert.doesNotMatch(body, /data-setting="qconsultRow(Vendor|Model|BaseUrl|ExecutablePath|Key)"/);
-  assert.match(body, /chat-fast \(stranded\)/, 'a pick of a row not ticked is kept on the list');
-  assert.match(body, /chat-fast is not ticked for the question consultant on Models/);
-  assert.match(settingsHtml(state, 'test-nonce', 'questionconsultant'), /data-setting="qconsultRowVendor"/);
+  assert.deepEqual(picks.map((one) => one.dataset['caller']), ['q-1', 'q-2']);
+  assert.deepEqual(controls.filter((one) => /^qconsultRow(Vendor|Model|BaseUrl|ExecutablePath|Key)$/.test(one.dataset['setting'] ?? '')), []);
+  const stranded = picks[1]!;
+  assert.equal(stranded.value, 'chat-fast', 'a pick of a row not ticked is gone from its list, so the next change would lose it');
+  assert.ok(stranded.options.some((one) => one.value === 'chat-fast' && one.text.includes('(stranded)')));
+  assert.match(pageTree(html).one((node) => node.dataset.pane === 'consultants/qconsult', 'the pane').text(),
+    /chat-fast is not ticked for the question consultant on Models/);
+  const current = runPanel(state, { html: settingsHtml(state, 'test-nonce', 'questionconsultant') }).controls;
+  assert.ok(current.some((one) => one.dataset['setting'] === 'qconsultRowVendor'), 'the current page lost its own picker');
 });
 
 test('changing a row\'s pick on the new page writes it', () => {

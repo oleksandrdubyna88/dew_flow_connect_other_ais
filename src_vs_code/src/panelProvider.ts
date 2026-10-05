@@ -1200,13 +1200,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // The new page draws every row (PLAN_one_model_catalog.md E4): `vendors` above is the current page's reviewers.
       catalogRows: vendors,
       securityTry: this.securityTry,
-      // Roles & prompts (E4.3): the prompt files are read only while the new page can show them.
-      roles: this.settingsTab.view === undefined || !settingsPreviewOn() ? undefined : await rolesEmbedState(server.kind === 'absent' ? '' : server.version),
-      // Commands (E4.4), read under the same rule.
-      commands: this.settingsTab.view === undefined || !settingsPreviewOn() ? undefined : await commandsEmbedState(server.kind === 'absent' ? '' : server.version),
-      // The new page's Setup (PLAN_one_model_catalog.md E4.5): each MCP client's registration, read from its own file
-      // and never written; and the data folder's last move, which survives a reload so the delete can be offered.
-      mcpClients: await this.clients.read(clientFilesFor(os.homedir(), workspaceFolderPaths()[0] ?? ''), workspaceFolderPaths()[0] ?? ''),
+      ...(await this.newPageReads(server)),
+      // The data folder's last move (E4.5), which survives a reload so the delete can be offered — a read of memory.
       lastDataMove: this.context.globalState.get<MoveRecord>(MOVE_RECORD),
       codexModels: this.codexModels,
       agyModels: this.agyModels,
@@ -3178,6 +3173,29 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /** The MCP clients' config files, each read again only when it changed (E4.5). */
   private readonly clients = new ClientReader();
+
+  /** Whether the new Settings page is what the Settings slot would paint — the tab open, the preview on. */
+  private newPageCanShow(): boolean {
+    return this.settingsTab.view !== undefined && settingsPreviewOn();
+  }
+
+  /**
+   * What only the new Settings page draws — the roles' prompt files (E4.3), the command texts (E4.4) and the MCP
+   * clients' config files (E4.5) — read only while that page can be shown, so a sidebar repaint reads no file.
+   */
+  private async newPageReads(server: ServerStatus): Promise<Pick<PanelState, 'roles' | 'commands' | 'mcpClients'>> {
+    if (!this.newPageCanShow()) {
+      return {};
+    }
+    const version = server.kind === 'absent' ? '' : server.version;
+    const folder = workspaceFolderPaths()[0] ?? '';
+
+    return {
+      roles: await rolesEmbedState(version),
+      commands: await commandsEmbedState(version),
+      mcpClients: await this.clients.read(clientFilesFor(os.homedir(), folder), folder),
+    };
+  }
 
   /** A change to the roles' shape, from either page that edits them, redraws the new page's Roles & prompts (E4.3). */
   private readonly rolesRedraw = onRolesRedraw(() => this.render());

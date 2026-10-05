@@ -5,24 +5,19 @@ import { OLD_TAB_PLACES } from '../catalogPlaces';
 import { BLANK_REGIONS } from '../panelSurface';
 import { PANEL_SECTIONS, type PanelState } from '../panelView';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
-import { panelState } from './panelPageHarness';
-import { Node, runPageHtml } from './rolesPageHarness';
+import { panelState, runPanel } from './panelPageHarness';
+import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
+import { runPageHtml } from './rolesPageHarness';
 
 /**
  * E4.1 of todo/PLAN_one_model_catalog.md: every old Settings section is drawn in the sub-tab that owns it on the new
  * page — by its own builder, never a copy — and each feature tab names the rows ticked for it, with the way to change
- * them on Models.
+ * them on Models. Read off the page as drawn (`pageTree.ts`), and run through its own script.
  */
 
-/** The pane that holds a place: `cpane-<tab>` for a tab with no sub-tabs, `cpane-<tab>-<sub>` otherwise. */
-function paneOf(html: string, place: string): string {
-  const id = `cpane-${place.replace('/', '-')}`;
-  const start = html.indexOf(`id="${id}"`);
-  assert.ok(start >= 0, `the new page has no pane for ${place}`);
-  // To the next tab panel: the sections nest their own divs, so a closing tag says nothing about where a pane ends.
-  const next = html.indexOf('role="tabpanel"', html.indexOf('>', start));
-
-  return html.slice(start, next < 0 ? html.length : next);
+/** The pane that holds a place, as drawn. */
+function paneOf(state: PanelState, place: string): PageNode {
+  return pageTree(catalogBody(state)).one((node) => node.dataset.pane === place, `a pane for ${place}`);
 }
 
 /**
@@ -40,78 +35,94 @@ test('every old section that moves whole is drawn in its place, by its own build
   for (const spec of MOVED_WHOLE) {
     const place = OLD_TAB_PLACES[spec.id];
     assert.ok(place !== undefined, `${spec.id} has no place on the new page`);
-    assert.ok(paneOf(body, place).includes(spec.body(state, BLANK_REGIONS)), `${spec.title} is not drawn in ${place}`);
+    // The builder's own output, byte for byte, inside the place's pane: drawn by it, not by a copy of it.
+    const start = body.indexOf(`data-pane="${place}"`);
+    assert.ok(start >= 0 && body.indexOf(spec.body(state, BLANK_REGIONS), start) > start, `${spec.title} is not drawn in ${place}`);
   }
 });
 
 test('the prompts section is split: the switches and budgets on Stages, the round pickers on Prompts per round', () => {
-  const body = catalogBody(panelState('reviewers'));
-  const stages = paneOf(body, 'reviews/stages');
-  const prompts = paneOf(body, 'reviews/prompts');
+  const state = panelState('reviewers');
+  const stages = paneOf(state, 'reviews/stages');
+  const prompts = paneOf(state, 'reviews/prompts');
 
-  assert.match(stages, /data-setting="rounds"/);
+  assert.ok(stages.find((node) => node.dataset.setting === 'rounds').length > 0, 'Stages draws no rounds');
   // One switch per role (E4.3): it lives on Roles & prompts, so Stages draws the role's state in words, not a second tick.
-  assert.doesNotMatch(stages, /data-setting="roleEnabled"/);
-  assert.doesNotMatch(stages, /data-prompt=/, 'a round picker drawn twice on one page is two controls for one setting');
-  assert.match(prompts, /data-prompt="[A-Za-z]+" data-round="1"/);
-  assert.doesNotMatch(prompts, /data-setting="rounds"/);
+  assert.deepEqual(stages.find((node) => node.dataset.setting === 'roleEnabled'), []);
+  assert.deepEqual(stages.find((node) => node.dataset.prompt !== undefined), [], 'a round picker drawn twice on one page is two controls for one setting');
+  assert.ok(prompts.find((node) => node.dataset.prompt !== undefined && node.dataset.round === '1').length > 0, 'Prompts per round draws no picker');
+  assert.deepEqual(prompts.find((node) => node.dataset.setting === 'rounds'), []);
+});
+
+test('on the running page a round picker writes a round pick, and each control is there once', () => {
+  const state = panelState('reviewers');
+  const page = runPanel(state, { html: catalogHtml(state, 'test-nonce', 'reviews/prompts') });
+  const keys = page.prompts.map((one) => `${one.dataset['prompt']}/${one.dataset['round']}`);
+  assert.deepEqual(keys, [...new Set(keys)], 'one round of one role has two pickers');
+  const rounds = page.controls.filter((one) => one.dataset['setting'] === 'rounds').map((one) => one.dataset['role']);
+  assert.deepEqual(rounds, [...new Set(rounds)], 'one role has two rounds boxes');
+
+  const picker = page.prompts[0]!;
+  picker.value = picker.options.at(-1)?.value ?? '';
+  picker.fire('change');
+
+  assert.deepEqual(page.posted.filter((one) => one['type'] === 'prompt').map((one) => one['role']), [picker.dataset['prompt']]);
 });
 
 test('no id is drawn twice on the new page — a label would name the wrong control', () => {
-  const ids = [...catalogBody(panelState('reviewers')).matchAll(/\sid="([^"]+)"/g)].map((match) => match[1]);
+  const ids = pageTree(catalogBody(panelState('reviewers'))).find((node) => node.id.length > 0).map((node) => node.id);
   const twice = ids.filter((id, at) => ids.indexOf(id) !== at);
 
   assert.deepEqual([...new Set(twice)], []);
 });
 
 test('no place still says where it is (Roles & prompts since E4.3, Commands since E4.4)', () => {
-  const body = catalogBody(panelState('reviewers'));
-  const saying = [...body.matchAll(/data-pane="([^"]+)"[^>]*>\s*<p class="hint">[^<]* is still on the current Settings page/g)].map((match) => match[1]);
+  const tree = pageTree(catalogBody(panelState('reviewers')));
+  const saying = tree.find((node) => node.dataset.pane !== undefined && node.text().includes('is still on the current Settings page'));
 
-  assert.deepEqual(saying, []);
+  assert.deepEqual(saying.map((node) => node.dataset.pane), []);
 });
 
 test('the keys are counted across every row, not only the reviewers', () => {
   const endpoint: Vendor = { ...DEFAULT_VENDORS[0]!, id: 'consult-router', runtime: 'api', baseUrl: 'https://example.test/v1', plan: false, code: false, uses: ['consultant'] };
   const state: PanelState = { ...panelState('reviewers'), vendors: DEFAULT_VENDORS, catalogRows: [...DEFAULT_VENDORS, endpoint] };
 
-  assert.match(paneOf(catalogBody(state), 'setup/keys'), /consult-router/);
+  assert.match(paneOf(state, 'setup/keys').text(), /consult-router/);
 });
+
+/** A feature tab's "used by" strip, as drawn. */
+function strip(state: PanelState, place: string): string {
+  return paneOf(state, place).one((node) => node.dataset.usedBy !== undefined, `the strip on ${place}`).text();
+}
 
 test('a feature tab names the rows ticked for it, and a row ticked for something else is not named', () => {
   const asks: Vendor = { ...DEFAULT_VENDORS[0]!, id: 'consult-claude', plan: false, code: false, uses: ['consultant'] };
   const chats: Vendor = { ...DEFAULT_VENDORS[1]!, id: 'chat-fast', plan: false, code: false, uses: ['chat'] };
-  const body = catalogBody({ ...panelState('reviewers'), catalogRows: [...DEFAULT_VENDORS, asks, chats] });
+  const state = { ...panelState('reviewers'), catalogRows: [...DEFAULT_VENDORS, asks, chats] };
 
-  assert.match(paneOf(body, 'consultants/consultant'), /data-used-by="consultant"[\s\S]*consult-claude/);
-  assert.doesNotMatch(paneOf(body, 'consultants/consultant'), /chat-fast/);
-  assert.match(paneOf(body, 'chat'), /data-used-by="chat"[\s\S]*chat-fast/);
+  assert.match(strip(state, 'consultants/consultant'), /consult-claude/);
+  assert.doesNotMatch(strip(state, 'consultants/consultant'), /chat-fast/);
+  assert.match(strip(state, 'chat'), /chat-fast/);
 });
 
 test('a feature tab with nothing ticked says so, and the consultant says who answers until then (D2)', () => {
-  const body = catalogBody({ ...panelState('reviewers'), catalogRows: DEFAULT_VENDORS });
+  const state = { ...panelState('reviewers'), catalogRows: DEFAULT_VENDORS };
 
-  assert.match(paneOf(body, 'security'), /No model is ticked for the security lane yet/);
-  assert.match(paneOf(body, 'consultants/consultant'), /each caller asks the pair it ships with/);
+  assert.match(strip(state, 'security'), /No model is ticked for the security lane yet/);
+  assert.match(strip(state, 'consultants/consultant'), /each caller asks the pair it ships with/);
 });
 
 test('"Change on Models" opens Models narrowed to that use, in the page alone', () => {
-  const change = new Node({ modelsUses: 'chat' }, 'BUTTON');
-  const modelsTab = new Node({ tab: 'models' }, 'BUTTON');
-  const chatTab = new Node({ tab: 'chat' }, 'BUTTON');
-  const modelsPane = new Node({ pane: 'models' }, 'SECTION');
-  const chatPane = new Node({ pane: 'chat' }, 'SECTION');
+  const html = catalogHtml(panelState('reviewers'), 'test-nonce', 'chat');
+  const tree = pageTree(html);
   const saved = { value: undefined as unknown };
-  const page = runPageHtml(catalogHtml(panelState('reviewers'), 'test-nonce', 'chat'), {
-    '[data-tab]': [modelsTab, chatTab],
-    '[data-pane]': [modelsPane, chatPane],
-    '[data-models-uses]': [change],
-  }, undefined, saved);
+  const page = runPageHtml(html, selectorsOf(tree, ['[data-tab]', '[data-pane]']), undefined, saved);
+  const change = tree.one((node) => node.dataset.modelsUses === 'chat', 'Change on Models on the chat tab');
 
-  page.fire('click', change);
+  bubbled(page, 'click', change);
 
   assert.equal((saved.value as { models?: { uses?: string } }).models?.uses, 'chat');
-  assert.equal(modelsPane.hidden, false, 'Models is not shown');
-  assert.equal(chatPane.hidden, true);
+  assert.equal(tree.one((node) => node.dataset.pane === 'models', 'the Models pane').hidden, false, 'Models is not shown');
+  assert.equal(tree.one((node) => node.dataset.pane === 'chat', 'the Chat pane').hidden, true);
   assert.deepEqual(page.posted.filter((one) => one['type'] === 'tab').map((one) => one['id']), ['models'], 'the host holds the place it opened');
 });

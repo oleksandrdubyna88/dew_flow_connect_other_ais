@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { catalogBody } from '../catalogPage';
+import { catalogHtml } from '../catalogPage';
 import { type PanelState } from '../panelView';
 import { cliGroups, clientRegistration, movedFromHtml } from '../setupTab';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
-import { panelState } from './panelPageHarness';
+import { click, panelState, runPanel } from './panelPageHarness';
+import { pageTree } from './pageTree';
 
 /**
  * E4.5 of todo/PLAN_one_model_catalog.md: the new page's Setup — the CLIs the models run on, whether each MCP client
@@ -69,15 +70,15 @@ test('the Setup places draw the CLI table, the clients and the move record', () 
     mcpClients: [{ label: 'VS Code', path: '.vscode/mcp.json', state: 'not registered', note: '' }],
     lastDataMove: { from: 'C:\\old\\coai', to: 'Z:\\coai', verified: true },
   };
-  const body = catalogBody(state);
-  const pane = (place: string): string => {
-    const start = body.indexOf(`id="cpane-${place.replace('/', '-')}"`);
-    const next = body.indexOf('role="tabpanel"', body.indexOf('>', start));
+  const html = catalogHtml(state, 'test-nonce', 'setup/mcp');
+  const tree = pageTree(html);
+  const clients = tree.one((node) => node.dataset.pane === 'setup/mcp', 'MCP server pane').find((node) => node.tagName === 'TR').map((row) => row.text());
+  assert.ok(clients.some((row) => row.includes('VS Code') && row.includes('not registered')), `no client row says so: ${clients.join(' | ')}`);
 
-    return body.slice(start, next < 0 ? body.length : next);
-  };
-
-  assert.match(pane('setup/keys'), /CLIs your models run on[\s\S]*data-command="updateVendorCli" data-id="codex"/);
-  assert.match(pane('setup/mcp'), /VS Code[\s\S]*not registered/);
-  assert.match(pane('setup/mcp'), /deleteOldDataFolder/);
+  // The buttons, pressed through the page's own script.
+  const page = runPanel(state, { html });
+  click(page, 'updateVendorCli', 'codex');
+  click(page, 'deleteOldDataFolder', '');
+  const commands = page.posted.filter((one) => one['type'] === 'command').map((one) => [one['command'], one['id']]);
+  assert.deepEqual(commands, [['updateVendorCli', 'codex'], ['deleteOldDataFolder', '']]);
 });

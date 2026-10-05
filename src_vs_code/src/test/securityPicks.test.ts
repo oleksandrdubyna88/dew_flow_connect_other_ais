@@ -9,7 +9,8 @@ import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
 import { type PanelState } from '../panelView';
 import { panelState } from './panelPageHarness';
-import { Node, runPageHtml } from './rolesPageHarness';
+import { bubbled, pageTree, type PageNode } from './pageTree';
+import { runPageHtml } from './rolesPageHarness';
 
 /**
  * E4.2 of todo/PLAN_one_model_catalog.md, the security half: on the new page the lane's pairs are made from the rows
@@ -25,32 +26,35 @@ function stateWith(lane: SecurityLane): PanelState {
   return { ...panelState('securityLane', { settings: { ...DEFAULTS, securityLane: lane } }), catalogRows: ROWS };
 }
 
-/** The security pane of the new page, cut at the next tab panel. */
-function securityPane(state: PanelState): string {
-  const body = catalogBody(state);
-  const start = body.indexOf('id="cpane-security"');
-  const next = body.indexOf('role="tabpanel"', body.indexOf('>', start));
+/** The Security lane pane of the new page, as drawn. */
+function securityPane(state: PanelState): PageNode {
+  return pageTree(catalogBody(state)).one((node) => node.dataset.pane === 'security', 'Security lane pane');
+}
 
-  return body.slice(start, next < 0 ? body.length : next);
+/** The first pair's Reviewer select, and what it offers. */
+function firstPairReviewer(pane: PageNode): { select: PageNode; offered: readonly string[]; chosen: string } {
+  const select = pane.one((node) => node.tagName === 'SELECT' && node.dataset.securityField === 'run:0:vendor', 'the first pair\'s Reviewer');
+  const options = select.find((node) => node.tagName === 'OPTION');
+
+  return { select, offered: options.map((one) => one.attrs['value'] ?? ''), chosen: options.find((one) => 'selected' in one.attrs)?.attrs['value'] ?? '' };
 }
 
 test('a pair\'s reviewer is picked from the rows ticked Security lane, on the new page', () => {
-  const pane = securityPane(stateWith({ ...DEFAULT_SECURITY, runs: [{ vendor: 'sec-guard', prompt: 'redteam-authz' }] }));
-  const reviewers = /<select data-setting="securityLane" data-security-field="run:0:vendor">(.*?)<\/select>/s.exec(pane)?.[1] ?? '';
+  const { offered } = firstPairReviewer(securityPane(stateWith({ ...DEFAULT_SECURITY, runs: [{ vendor: 'sec-guard', prompt: 'redteam-authz' }] })));
 
-  assert.match(reviewers, /value="sec-guard"/);
-  assert.doesNotMatch(reviewers, new RegExp(`value="${reviewer}"`), 'a row not ticked Security lane is offered');
+  assert.ok(offered.includes('sec-guard'));
+  assert.ok(!offered.includes(reviewer), 'a row not ticked Security lane is offered');
 });
 
 test('a pair whose row is not ticked is kept and named — never cleared (D3)', () => {
   const pane = securityPane(stateWith({ ...DEFAULT_SECURITY, runs: [{ vendor: reviewer, prompt: 'redteam-authz' }] }));
 
-  assert.match(pane, new RegExp(`data-security-field="run:0:vendor">.*value="${reviewer}" selected`, 's'));
-  assert.match(pane, new RegExp(`${reviewer} is not ticked for the security lane on Models`));
+  assert.equal(firstPairReviewer(pane).chosen, reviewer, 'the pick is gone from the list, so the next change would lose it');
+  assert.match(pane.text(), new RegExp(`${reviewer} is not ticked for the security lane on Models`));
 });
 
 test('the note about an ordinary reviewer reads every row, not only the ticked ones', () => {
-  assert.doesNotMatch(securityPane(stateWith(DEFAULT_SECURITY)), /Enable an ordinary code or feature reviewer too/);
+  assert.doesNotMatch(securityPane(stateWith(DEFAULT_SECURITY)).text(), /Enable an ordinary code or feature reviewer too/);
 });
 
 test('the host offers the same rows the page does', () => {
@@ -93,20 +97,23 @@ test('the answer is drawn on the security tab — every part of it', () => {
     securityTry: { sample: 'SELECT 1', signals: ['sql'], cards: ['redteam-injection'], refused: [{ signal: 'own:x', pattern: '/(?=a)/', why: 'lookaround' }], complaints: ['a complaint'], incomplete: true, failure: '' },
   };
   const pane = securityPane(state);
+  const answer = pane.one((node) => node.attrs['role'] === 'status', 'the answer').text();
 
-  assert.match(pane, /<textarea id="security-sample"[^>]*>SELECT 1<\/textarea>/);
+  assert.equal(pane.one((node) => node.id === 'security-sample', 'the sample box').value, 'SELECT 1', 'the sample is gone from its box');
   for (const part of ['sql', 'redteam-injection', 'lookaround', 'a complaint', 'did not finish']) {
-    assert.ok(pane.includes(part), `the answer's ${part} is not drawn`);
+    assert.ok(answer.includes(part), `the answer's ${part} is not drawn`);
   }
 });
 
 test('pressing Try it posts the sample from the box', () => {
-  const box = new Node({}, 'TEXTAREA');
+  const html = catalogHtml(stateWith(DEFAULT_SECURITY), 'test-nonce', 'security');
+  const tree = pageTree(html);
+  const box = tree.one((node) => node.id === 'security-sample', 'the sample box');
   box.value = 'password = "hunter2"';
-  const press = new Node({ securityTry: '' }, 'BUTTON');
-  const page = runPageHtml(catalogHtml(stateWith(DEFAULT_SECURITY), 'test-nonce', 'security'), { '#security-sample': [box], '[data-security-try]': [press] });
+  const press = tree.one((node) => node.dataset.securityTry !== undefined, 'Try it');
+  const page = runPageHtml(html, { '#security-sample': [box] });
 
-  page.fire('click', press);
+  bubbled(page, 'click', press);
 
   const posted = page.posted.filter((one) => one['type'] === 'command').map(({ command, id }) => ({ command, id }));
   assert.deepEqual(posted, [{ command: 'trySecurity', id: 'password = "hunter2"' }]);

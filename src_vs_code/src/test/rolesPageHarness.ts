@@ -97,6 +97,17 @@ export class Node {
     this.dispatchClick?.(this);
   }
 
+  /**
+   * This element's own listeners of one kind, handed an event whose target is `target` — one step of a bubbling event.
+   * Public for `pageTree.ts`'s `bubbled`, which walks the ancestors as a browser does: a script that binds a listener on
+   * an element (the panel binds every `[data-prompt]`) hears an event fired at something inside it.
+   */
+  runOwn(kind: string, target: Node, extra: Readonly<Record<string, unknown>> = {}): void {
+    for (const handler of this.handlers.filter((one) => one.kind === kind)) {
+      handler.run({ ...extra, target, currentTarget: this, preventDefault: (): void => undefined });
+    }
+  }
+
   /** The chain upwards, matching `[data-x]` and `[data-x="y"]` — the only two shapes the page uses. */
   closest(selector: string): Node | null {
     const exact = /^\[data-([a-z-]+)="([^"]*)"\]$/.exec(selector);

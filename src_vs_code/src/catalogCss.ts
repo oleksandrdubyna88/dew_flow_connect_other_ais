@@ -46,7 +46,7 @@ const SHELL = `
   .roles-embed .fields input[type="text"], .roles-embed .fields select { width: auto; min-width: 14em; }
   .roles-embed .hint { flex-basis: 100%; }
   .roles-embed .prompt { border-left: 2px solid var(--border); padding: 4px 8px; margin: 6px 0; }
-  .roles-embed .prompt.mine { border: 1px solid var(--vscode-charts-green, #b5cea8); border-radius: 3px; }
+  .roles-embed .prompt.mine { border: 1px solid var(--vscode-charts-green, var(--ok)); border-radius: 3px; }
   .roles-embed .prompt .head { display: flex; gap: 6px; margin-bottom: 4px; }
   .roles-embed .prompt .head input { flex: 1; width: auto; }
   .roles-embed .prompt .head .purpose { flex: 2; }

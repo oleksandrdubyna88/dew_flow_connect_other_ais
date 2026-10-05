@@ -4,7 +4,7 @@ import { settingsHtml } from '../panelView';
 import type { QuestionRowSetting } from '../qconsultSettings';
 import { DEFAULTS } from '../settingsShape';
 import { DEFAULT_VENDORS, type Vendor } from '../vendors';
-import { panelState } from './panelPageHarness';
+import { lastWrite, panelState, runPanel } from './panelPageHarness';
 
 /**
  * Found while building E4.2 of todo/PLAN_one_model_catalog.md: epic 1's migration turns a question row's own definition
@@ -26,9 +26,14 @@ test('a migrated question row can still be switched on from the current page', (
     vendors: DEFAULT_VENDORS,
     catalogRows: [...DEFAULT_VENDORS, ask],
   };
-  const html = settingsHtml(state, 'test-nonce', 'questionconsultant');
-  const toggle = /<input type="checkbox" id="qconsultRowEnabled-q-1"[^>]*>/.exec(html)?.[0] ?? '';
+  const page = runPanel(state, { html: settingsHtml(state, 'test-nonce', 'questionconsultant') });
+  const toggle = page.controls.find((one) => one.dataset['setting'] === 'qconsultRowEnabled' && one.dataset['caller'] === 'q-1');
+  assert.ok(toggle !== undefined, 'the row has no switch');
+  assert.equal(toggle.disabled, false, 'the switch is refused');
 
-  assert.ok(toggle.length > 0, 'the row has no switch');
-  assert.doesNotMatch(toggle, /disabled/, `the switch is refused: ${toggle}`);
+  toggle.checked = true;
+  toggle.fire('change');
+
+  const { key, value, caller } = lastWrite(page);
+  assert.deepEqual({ key, value, caller }, { key: 'qconsultRowEnabled', value: true, caller: 'q-1' });
 });

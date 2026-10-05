@@ -11055,3 +11055,12 @@ commands' queue and the roles' before the repaint. With E4.4 no place of the new
 Found on the way: `theTextControlsHoldUpEverywhere.test.ts` sliced each panel's handler up to a queue call the roles and
 commands panels stopped making in E4.3 / E4.4; `indexOf` answered -1, the slice ran to the end of the file, and the
 check passed on anything. It names the new calls now and fails when one is missing.
+
+**Tests read the page as drawn (PR #688's review).** `test/pageTree.ts` turns the rendered html into the page harness's
+`Node` tree — real parents, `data-*` as a dataset, values, ticks, text; `<script>`/`<style>` skipped — and `bubbled`
+fires an event up through every ancestor's own listeners before the document's, as a browser does (`Node.runOwn`). The
+new page's tests take the control they fire at from that tree, never a node built with the attributes they expected,
+and assert on what the page posts or draws. That is what showed, executed rather than claimed, that a prompt typed on
+Roles & prompts is never read as a round pick, and that the roles' and the commands' wiring never read each other's
+controls (each red when the attribute is put back). The MCP clients' files are read only while the new page can show
+them (`PanelProvider.newPageReads`), with the roles' prompt files and the command texts.

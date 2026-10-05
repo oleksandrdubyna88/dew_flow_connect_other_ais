@@ -6,12 +6,14 @@ import { composed, type RoleRow } from '../roles';
 import { roleSwitchFollows } from '../rolesSwitch';
 import { DEFAULTS, envBlock } from '../settingsShape';
 import { panelState } from './panelPageHarness';
-import { Node, runPageHtml } from './rolesPageHarness';
+import { bubbled, pageTree, selectorsOf, type PageNode } from './pageTree';
+import { runPageHtml } from './rolesPageHarness';
 
 /**
  * E4.3 of todo/PLAN_one_model_catalog.md: Roles & prompts on the new page — the Review roles tab's content drawn by the
  * panel, its edits posted as `roles` messages into the one editing core (`rolesHost.ts`), and ONE switch per role:
- * the catalog's `active` and the panel's `roleEnabled` read as one and written as one.
+ * the catalog's `active` and the panel's `roleEnabled` read as one and written as one. Every control a test fires at
+ * is taken from the page as drawn (`pageTree.ts`).
  */
 
 function stateWith(rows: readonly RoleRow[] = [], roleEnabled: Readonly<Record<string, boolean>> = {}): PanelState {
@@ -24,71 +26,82 @@ function stateWith(rows: readonly RoleRow[] = [], roleEnabled: Readonly<Record<s
   };
 }
 
-/** The Roles & prompts pane, cut at the next tab panel. */
-function rolesPane(state: PanelState): string {
-  const body = catalogBody(state);
-  const start = body.indexOf('id="cpane-reviews-roles"');
-  const next = body.indexOf('role="tabpanel"', body.indexOf('>', start));
+/** What the page's scripts select at load, so they bind to what the page drew. */
+const AT_LOAD = ['[data-setting]', '[data-prompt]', '[data-command]', '[data-tab]', '[data-pane]'];
 
-  return body.slice(start, next < 0 ? body.length : next);
+/** The new page on Roles & prompts, drawn and running. */
+function rolesPage(state: PanelState = stateWith()) {
+  const html = catalogHtml(state, 'test-nonce', 'reviews/roles');
+  const tree = pageTree(html);
+  const page = runPageHtml(html, selectorsOf(tree, AT_LOAD), undefined, { value: undefined });
+
+  return { page, pane: tree.one((node) => node.dataset.pane === 'reviews/roles', 'Roles & prompts pane') };
 }
 
-test('every role is drawn on Roles & prompts, its prompts NOT marked as round pickers', () => {
-  const pane = rolesPane(stateWith());
+/** One role's block, and a control in it. */
+function roleBlock(pane: PageNode, id: string): PageNode {
+  return pane.one((node) => node.tagName === 'DETAILS' && node.dataset.id === id, `role ${id}`);
+}
 
-  for (const role of composed([])) {
-    assert.match(pane, new RegExp(`data-id="${role.id}"`), `${role.id} is not drawn`);
-  }
-  assert.match(pane, /data-role-prompt="/);
-  assert.doesNotMatch(pane, /data-prompt="/, 'the panel\'s script reads data-prompt as a round pick, and would post a prompt\'s text as one');
-  assert.doesNotMatch(pane, /data-tab="(plan|code|documents|feature)"/, 'a second tab strip inside a place the page\'s own strip already selects');
-  assert.match(pane, /data-add="role"/);
+test('every role is drawn on Roles & prompts', () => {
+  const { pane } = rolesPage();
+  const drawn = pane.find((node) => node.tagName === 'DETAILS' && node.dataset.id !== undefined).map((node) => node.dataset.id);
+
+  assert.deepEqual(drawn, composed([]).map((role) => role.id));
+});
+
+test('a prompt typed on Roles & prompts is the roles\' edit — never read as a round pick', () => {
+  const { page, pane } = rolesPage();
+  const box = pane.one((node) => node.tagName === 'TEXTAREA' && node.dataset.field === 'text', 'prompt box');
+  box.value = 'What does this break?';
+
+  bubbled(page, 'input', box);
+  bubbled(page, 'change', box);
+
+  const types = page.posted.map((one) => one['type']);
+  assert.ok(types.includes('roles'), 'the typed prompt was not posted as the roles\' edit');
+  assert.ok(!types.includes('prompt'), 'the panel read a prompt box as a round pick and would store its text as one');
 });
 
 test('a code role switched off by EITHER switch is drawn off: one switch, read as one', () => {
-  const pane = rolesPane(stateWith([], { Architecture: false }));
-  const block = pane.slice(pane.indexOf('data-id="Architecture"'));
-  const active = /<input type="checkbox" data-field="active"[^>]*>/.exec(block)?.[0] ?? '';
+  const { pane } = rolesPage(stateWith([], { Architecture: false }));
+  const active = roleBlock(pane, 'Architecture').one((node) => node.dataset.field === 'active', 'Architecture\'s switch');
 
-  assert.ok(active.length > 0);
-  assert.doesNotMatch(active, /checked/);
+  assert.equal(active.checked, false);
 });
 
 test('Roles & prompts no longer says where it is', () => {
-  const body = catalogBody(stateWith());
-
-  assert.doesNotMatch(body, /Roles &amp; prompts is still on the current Settings page/);
+  assert.doesNotMatch(catalogBody(stateWith()), /Roles &amp; prompts is still on the current Settings page/);
 });
 
 test('the roles\' controls post `roles` edits — a pick numbered, typing not — and report focus', () => {
-  const role = new Node({ id: 'Architecture' }, 'DETAILS');
-  const name = new Node({ field: 'name' }, 'INPUT').under(role);
+  const { page, pane } = rolesPage();
+  const block = roleBlock(pane, 'Architecture');
+  const name = block.one((node) => node.dataset.field === 'name', 'the name box');
   name.value = 'Architecture, again';
-  const active = new Node({ field: 'active' }, 'INPUT').under(role);
-  active.type = 'checkbox';
-  active.checked = true;
-  const prompt = new Node({ rolePrompt: 'architecture-universal' }, 'DIV').under(role);
-  const text = new Node({ field: 'text' }, 'TEXTAREA').under(prompt);
+  const active = block.one((node) => node.dataset.field === 'active', 'the switch');
+  active.checked = false;
+  const prompt = block.one((node) => node.dataset.rolePrompt !== undefined, 'a prompt');
+  const text = prompt.one((node) => node.dataset.field === 'text', 'its box');
   text.value = 'What does this break?';
-  const addPrompt = new Node({ addPrompt: 'Architecture' }, 'BUTTON');
-  const page = runPageHtml(catalogHtml(stateWith(), 'test-nonce', 'reviews/roles'), {}, undefined, { value: undefined });
+  const addPrompt = block.one((node) => node.dataset.addPrompt !== undefined, 'Add a prompt');
 
-  page.fire('input', name);
-  page.fire('change', active);
-  page.fire('input', text);
-  page.fire('click', addPrompt);
-  page.fire('focusin', text);
+  bubbled(page, 'input', name);
+  bubbled(page, 'change', active);
+  bubbled(page, 'input', text);
+  bubbled(page, 'click', addPrompt);
+  bubbled(page, 'focusin', text);
 
   const roles = page.posted.filter((one) => one['type'] === 'roles');
   assert.deepEqual(roles.map((one) => one['edit']), [
     { type: 'edit', id: 'Architecture', field: 'name', value: 'Architecture, again' },
-    { type: 'edit', id: 'Architecture', field: 'active', value: true },
-    { type: 'editPrompt', id: 'Architecture', promptId: 'architecture-universal', field: 'text', value: 'What does this break?' },
+    { type: 'edit', id: 'Architecture', field: 'active', value: false },
+    { type: 'editPrompt', id: 'Architecture', promptId: prompt.dataset.rolePrompt, field: 'text', value: 'What does this break?' },
     { type: 'addPrompt', id: 'Architecture' },
   ]);
   assert.deepEqual(roles.map((one) => one['seq'] !== undefined), [false, true, false, true], 'typing is numbered, or a pick is not');
   const focus = page.posted.filter((one) => one['type'] === 'focus').map(({ id, editing }) => ({ id, editing }));
-  assert.deepEqual(focus, [{ id: 'roles|Architecture|architecture-universal|text', editing: true }]);
+  assert.deepEqual(focus, [{ id: `roles|Architecture|${prompt.dataset.rolePrompt}|text`, editing: true }]);
 });
 
 test('the panel switch follows the catalog switch once it has landed — and only then, and only for a switched role', () => {
