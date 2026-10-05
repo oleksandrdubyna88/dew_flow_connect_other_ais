@@ -383,6 +383,8 @@ internal sealed class RosterBuilder(
             Price = provider.Price,
             Timeout = TimeoutFor(provider, runtime, _settings.ReviewerTimeout),
             ReasoningEffort = EffortFor(provider, _settings.LocalReasoningEffort),
+            // Only RemoteRuntime reads it: the row's prompt as the field a Team server's operator can refuse (E2.5).
+            SystemPrompt = FieldPromptFor(provider, runtime),
             MaxTokens = _settings.LocalMaxTokens,
             // Only RemoteRuntime uses it, to find this machine's token for its Team server.
             DataDir = _settings.DataDir,
@@ -631,6 +633,10 @@ internal sealed class RosterBuilder(
     internal static string InstructionFor(ProviderSettings provider, Runners.Reviewers.IReviewerRuntime runtime) =>
         runtime.CarriesTheRowsPrompt ? provider.SystemPrompt : string.Empty;
 
+    /// <summary>The row's instruction as a FIELD — exactly where <see cref="InstructionFor"/> leaves it out of the body.</summary>
+    internal static string FieldPromptFor(ProviderSettings provider, Runners.Reviewers.IReviewerRuntime runtime) =>
+        runtime.CarriesTheRowsPrompt ? string.Empty : provider.SystemPrompt;
+
     /// <summary>
     /// A CLI row's own timeout, else the round's (PLAN_one_model_catalog.md E2.2). An api row keeps the round's launch
     /// timeout: its own limit is the whole review (<c>reviewMinutes</c>), applied to the conversation.
@@ -644,6 +650,8 @@ internal sealed class RosterBuilder(
     internal static string EffortFor(ProviderSettings provider, string localEffort) => RuntimeResolution.NameOf(provider.Identity()) switch
     {
         "claude" => provider.CliEffort,
+        // A Team server judges it per vendor and says what it did not apply (contract 2, E2.5).
+        "remote" => provider.CliEffort,
         "local" => provider.CliEffort.Length > 0 ? provider.CliEffort : localEffort,
         _ => localEffort,
     };

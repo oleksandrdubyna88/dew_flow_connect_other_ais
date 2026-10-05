@@ -20,6 +20,12 @@ public sealed record ReviewerSettings(string Provider)
     /// </summary>
     public string ReasoningEffort { get; init; } = string.Empty;
 
+    /// <summary>
+    /// For a <c>remote</c> row only: the row's system prompt, sent to its Team server as the field the operator can refuse
+    /// (contract 2, PLAN_one_model_catalog.md E2.5). Every other runtime carries it in the prompt's body instead.
+    /// </summary>
+    public string SystemPrompt { get; init; } = string.Empty;
+
     /// <summary>Empty = the CLI's own authentication (the normal case for codex and gemini).</summary>
     public string ApiKey { get; init; } = string.Empty;
 
@@ -261,6 +267,12 @@ public interface IReviewerRuntime
     /// whether a client's prompt is taken (story 5): putting it in the body would go around that decision.
     /// </summary>
     bool CarriesTheRowsPrompt => true;
+
+    /// <summary>
+    /// What this launch asked for and its runtime said it did NOT apply — one sentence for the reviewer's note, or empty.
+    /// Only a Team server answers it (contract 2's dropped and clamped fields); a local launch applies what it sends.
+    /// </summary>
+    string NotApplied(ReviewerInvocation invocation, ProcessResult result) => string.Empty;
 
     /// <summary>
     /// A second launch that CONTINUES the first, when the first ended in a way only continuing can

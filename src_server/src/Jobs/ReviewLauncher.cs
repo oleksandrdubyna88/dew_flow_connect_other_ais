@@ -248,6 +248,8 @@ public sealed class ReviewLauncher(IProcessLauncher launcher, Action<string, Exc
             {
                 Model = job.Model,
                 Timeout = job.RunBudget,
+                // Contract 2: only a level the vendor's runtime lists ever reaches here — ClientOptions dropped the rest.
+                ReasoningEffort = job.Effort,
                 // A reviewer on this host starts no MCP server either (issue #514) — and the config codex
                 // reads is the SLOT's (its CODEX_HOME and HOME), not this server's: naming a server the
                 // slot does not declare would stop codex from starting at all.

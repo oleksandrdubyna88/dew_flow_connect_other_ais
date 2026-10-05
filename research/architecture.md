@@ -732,6 +732,12 @@ REFUSES, because serving a client it cannot satisfy corrupts state; the panel RE
 client that refused a server it merely suspects would turn a warning into an outage. Same fact, two
 different powers, decided by which side can do damage by continuing.
 
+**Contract 2 (2026-10-05, PLAN_one_model_catalog.md E2.5)** is the first number the seam has moved. A review may
+carry the row's effort and its system prompt; the server decides what it takes (its operator switch, the
+runtime's listed levels, a cap) and the accepted answer names what it dropped or lowered. The client turns that —
+or a server that still says 1 — into the reviewer's note, so "sent" is never read as "applied". The minimum stays
+1: nothing an older half reads has changed shape.
+
 ### A setting whose ABSENCE must mean something (2026-09-08)
 
 `COAI_ENABLED_<ROLE>` crosses the same seam and is shaped by the same lesson, pushed one step

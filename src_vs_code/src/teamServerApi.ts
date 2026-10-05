@@ -22,8 +22,8 @@ export const REQUEST_TIMEOUT_MS = 10_000;
 /** The header the server judges BEFORE the token, answering 426 when this client is too old. */
 export const CONTRACT_HEADER = 'X-Coai-Contract';
 
-/** What this client speaks. Must match `RemoteAsk.ContractVersion` in C#. */
-export const CONTRACT_VERSION = 1;
+/** What this client speaks. Must match `RemoteAsk.ContractVersion` in C# — both halves pin 2 in a test (contract 2: a review may carry effort and a system prompt, PLAN_one_model_catalog.md E2.5). */
+export const CONTRACT_VERSION = 2;
 
 /**
  * The oldest server contract this panel can work with.

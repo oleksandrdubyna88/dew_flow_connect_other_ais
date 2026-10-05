@@ -737,6 +737,8 @@ delete, and the `426` — which is unreachable while `ContractVersion.Current` a
 vendor may take, which is the caller's own `timeoutSeconds`),
 `Coai:ExtraRoles` (review roles this server will run BESIDE the five it ships with, comma separated)
 and `Coai:AllowAnyRole` (accept any well-formed role id at all);
+`Coai:AcceptClientSystemPrompt` (false — whether a client's system prompt is taken at all, contract 2) and
+`Coai:MaxEffort` (empty — the highest effort a request may ask for; a level past it runs at it);
 `Auth:Microsoft:Tenant|Audiences|ClientScope`,
 `Auth:Google:Enabled|Audiences`, `Auth:Local:SigningKey`. Environment form uses `__`.
 
@@ -1091,3 +1093,41 @@ spent, downloads the archive and checks its `.sha256`, and then **runs `deploy/s
 asserts that the public URL reports the deployed version, and rolls back through the same script
 when it does not: the window between the script's canary and a person noticing used to be a live
 server on an unproven release with only a red job to say so.
+
+## Contract 2: a review carries its effort and its system prompt (2026-10-05, PLAN_one_model_catalog.md E2.5)
+
+`ContractVersion.Current` is **2**; the minimum stays **1**, because the change is additive both ways: a contract-1
+client sends neither field and reads past the notes. `ReviewRequestDto` gains `effort` and `systemPrompt`;
+`ReviewAcceptedDto` gains `dropped` and `clamped` (`FieldNoteDto`: field + reason), left out when empty.
+
+`ClientOptions.Take` (`src/Jobs/ClientOptions.cs`) decides what the server TAKES, and says what it did not:
+
+- **Effort** is applied only where the vendor's runtime LISTS its levels in `shared/feature-availability.json`
+  (claude today) and the level is one of them; past `Coai:MaxEffort` it is lowered to the cap (`clamped`). An
+  unmeasured runtime's (codex) is `dropped` with its reason. The job carries it as `JobRecord.Effort`;
+  `ReviewLauncher.Confined` sets `ReasoningEffort`, and the claude adapter adds `--effort`.
+- **The system prompt** is taken only while `Coai:AcceptClientSystemPrompt` is on (off by default), at most
+  `CatalogLimits.MaxPromptBytes` (8192) UTF-8 bytes, and placed before the prompt's own `## The finding contract`
+  heading by `PersonInstruction.PlacedIn` — the same section text a local reviewer reads (core, shared with the
+  client's `ReviewerPrompt`). A prompt with no such heading has the field dropped, never guessed at. The text is
+  only in the in-memory `Prompt`; `JobRecord.SystemPromptSha` keeps its SHA-256; no log line names it.
+- **The idempotency fingerprint** covers the prompt as composed and the effort taken (the effort joins only when
+  there is one, so every older fingerprint is unchanged).
+- **Timeout** keeps its bounds and its refusal: turning it into a clamp would change what a contract-1 client asked
+  for without it knowing.
+
+Tests: `ContractTwoTests` (src_server/tests) — the header, applied/dropped/clamped effort, the switch, the
+placement and the hash, a prompt without the heading and one past the limit. Deploying a contract-2 server is the
+operator's decision.
+
+```mermaid
+flowchart LR
+  R["POST /api/reviews<br/>effort, systemPrompt"] --> T[ClientOptions.Take]
+  T -->|"runtime lists the level"| E["JobRecord.Effort<br/>(lowered to Coai:MaxEffort)"]
+  T -->|"unmeasured / unknown level"| D[dropped + reason]
+  T -->|"switch on, ≤ 8192 B, heading found"| P["Prompt with the section<br/>before the finding contract"]
+  P --> H[SystemPromptSha]
+  T -->|"switch off / too long / no heading"| D
+  E --> L["ReviewLauncher.Confined<br/>ReasoningEffort"]
+  D --> A["202: dropped / clamped"]
+```

@@ -428,6 +428,20 @@ override the stories above where they differ:
 - The client sends the system prompt in a file beside the prompt file (`--system-prompt-file`), never argv, and both
   are in `TempFiles`. Deploying the server stays the operator's decision.
 
+#### E2.5 as built (branch `feat/catalog-e2`)
+
+- As designed, server side: `ClientOptions.Take` (src_server `Jobs/ClientOptions.cs`), `JobRecord.Effort` /
+  `SystemPromptSha`, `Coai:AcceptClientSystemPrompt` / `Coai:MaxEffort`, `ContractVersion.Current = 2`, the
+  fingerprint covering the taken effort. The section text moved to core (`PersonInstruction`), so the server and
+  `ReviewerPrompt` place the SAME sentence.
+- Client side: `--effort` / `--system-prompt-file` on the remote launch; the not-applied sentence rides the shim's
+  usage line into `ReviewerOutcome.Ok.NotApplied` and the reviewer's progress note.
+- Deviations: remote's effort row is `probe` (judged by the server) instead of a new source name — the panel keeps
+  the row and sends the effort, which is what `probe` already means. The extension's `CONTRACT_VERSION` moved to 2
+  with the C# client; `SERVER_CONTRACT_REQUIRED` stays 1 (the panel reads nothing new).
+- Not done here: deploying the contract-2 server (the operator's decision), and the measured live call that shows
+  an effort APPLIED on the server's claude (T8).
+
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
    shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;
@@ -529,6 +543,7 @@ Disjoint from the rest of `todo/`. Each plan in the table gets the same row, poi
 | T5 | `coai.migratedFrom` and the restore command dropped | One release after E5 |
 | T6 | The extension's `vendorsFrom` turns a runtime it does not know into `codex` — an older panel reading a newer one's rows, and re-saving them so | coai-mcp refuses it by name since E2.1; the extension should keep the row and show it unrunnable, which widens the `Runtime` type |
 | T7 | `COAI_BUGZ_MODEL` is written into the env block and read by nothing in coai-mcp (the collector takes `--model`) | Remove it, or give it a reader, when the Bugz picker moves to the catalog (E5.1) |
+| T8 | Contract 2 is tested against the server in-process and a stub on a socket, never a deployed one: no live call has shown a remote row's effort APPLIED on the server's claude, or its system prompt taken | The deploy is the operator's decision; the measured call follows it, at a paid review's cost |
 
 ## Definition of Done
 

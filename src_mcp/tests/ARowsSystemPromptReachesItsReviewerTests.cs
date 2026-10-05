@@ -71,7 +71,7 @@ public sealed class ARowsSystemPromptReachesItsReviewerTests
     {
         var (body, _) = Sent(Work(Service(Row("codex", "codex", string.Empty)))[0].Invocation);
 
-        body.Should().NotContain(ReviewerPrompt.PersonInstructionHeading);
+        body.Should().NotContain(CoaiMcp.Core.Catalog.PersonInstruction.Heading);
     }
 
     [Fact]

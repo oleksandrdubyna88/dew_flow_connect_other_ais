@@ -32,6 +32,9 @@ internal static class AskRemote
         var outFile = flags.GetValueOrDefault("--out", string.Empty);
         var tokenFile = flags.GetValueOrDefault("--token-file", string.Empty);
         var jobFile = flags.GetValueOrDefault("--job-file", string.Empty);
+        // Contract 2 (E2.5): the row's effort, and its system prompt in a file — never argv.
+        var effort = flags.GetValueOrDefault("--effort", string.Empty);
+        var systemPromptFile = flags.GetValueOrDefault("--system-prompt-file", string.Empty);
 
         var token = TeamServerAuth.ReadToken(tokenFile);
         if (Refusal(server, vendor, promptFile, outFile, token) is { } refused)
@@ -64,7 +67,7 @@ internal static class AskRemote
         http.DefaultRequestHeaders.Add(RemoteAsk.ContractHeader, RemoteAsk.ContractVersion.ToString());
 
         return await ReviewAsync(
-            new Job(server, vendor, model, role, promptFile, outFile, jobFile, tokenFile, deadline, vendorBudget),
+            new Job(server, vendor, model, role, promptFile, outFile, jobFile, tokenFile, deadline, vendorBudget, effort, systemPromptFile),
             http, note, output);
     }
 
@@ -89,27 +92,22 @@ internal static class AskRemote
     internal sealed record Job(
         string Server, string Vendor, string Model, string Role,
         string PromptFile, string OutFile, string JobFile, string TokenFile,
-        TimeSpan Deadline, int VendorBudgetSeconds);
+        TimeSpan Deadline, int VendorBudgetSeconds,
+        string Effort = "", string SystemPromptFile = "", string NotApplied = "");
 
     private static async Task<int> ReviewAsync(Job job, HttpClient http, Action<string> note, TextWriter output)
     {
-        string prompt;
-        try
+        var (prompt, instruction, unread) = await ReadPromptsAsync(job, note);
+        if (unread is { } bad)
         {
-            prompt = await File.ReadAllTextAsync(job.PromptFile);
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-        {
-            note($"the prompt file {job.PromptFile} could not be read: {e.Message}");
-
-            return RemoteAsk.BadUsage;
+            return bad;
         }
 
         // Started AFTER the prompt is read, so a large file on a slow disk is not later reported as
         // time the server spent thinking.
         var waited = Stopwatch.StartNew();
 
-        var submitted = await SubmitAsync(job, prompt, http, note);
+        var submitted = await SubmitAsync(job, prompt, instruction, http, note);
         if (submitted.Exit is { } refused)
         {
             return refused;
@@ -125,13 +123,32 @@ internal static class AskRemote
                 + "it will run to completion on the Team server");
         }
 
-        return await PollAsync(job, submitted.Id, waited, http, note, output);
+        return await PollAsync(job with { NotApplied = submitted.NotApplied }, submitted.Id, waited, http, note, output);
     }
 
-    private static async Task<(string Id, int? Exit)> SubmitAsync(
-        Job job, string prompt, HttpClient http, Action<string> note)
+    /// <summary>The prompt, and the row's system prompt when it sent one — or the exit for a file that cannot be read.</summary>
+    private static async Task<(string Prompt, string Instruction, int? Exit)> ReadPromptsAsync(Job job, Action<string> note)
     {
-        var body = RemoteAsk.RequestBody(job.Vendor, job.Model, job.Role, prompt, job.VendorBudgetSeconds);
+        var reading = job.PromptFile;
+        try
+        {
+            var prompt = await File.ReadAllTextAsync(reading);
+            reading = job.SystemPromptFile;
+
+            return (prompt, reading.Length == 0 ? string.Empty : await File.ReadAllTextAsync(reading), null);
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+            note($"the prompt file {reading} could not be read: {e.Message}");
+
+            return (string.Empty, string.Empty, RemoteAsk.BadUsage);
+        }
+    }
+
+    private static async Task<(string Id, int? Exit, string NotApplied)> SubmitAsync(
+        Job job, string prompt, string instruction, HttpClient http, Action<string> note)
+    {
+        var body = RemoteAsk.RequestBody(job.Vendor, job.Model, job.Role, prompt, job.VendorBudgetSeconds, job.Effort, instruction);
 
         try
         {
@@ -145,7 +162,7 @@ internal static class AskRemote
 
             if (!response.IsSuccessStatusCode)
             {
-                return (string.Empty, Refuse(job.Server, (int)response.StatusCode, text, note));
+                return (string.Empty, Refuse(job.Server, (int)response.StatusCode, text, note), string.Empty);
             }
 
             var id = RemoteAsk.AcceptedId(text);
@@ -155,18 +172,22 @@ internal static class AskRemote
                 // of the server can answer 200 with a login page.
                 note(RemoteAsk.UnreadableMessage(job.Server, text));
 
-                return (string.Empty, RemoteAsk.Unreachable);
+                return (string.Empty, RemoteAsk.Unreachable, string.Empty);
             }
 
-            return (id, null);
+            return (id, null, RemoteAsk.NotAppliedMessage(text, ContractOf(response), job.Effort, instruction));
         }
         catch (Exception e) when (e is HttpRequestException or OperationCanceledException)
         {
             note(RemoteAsk.UnreachableMessage(job.Server, e.Message));
 
-            return (string.Empty, RemoteAsk.Unreachable);
+            return (string.Empty, RemoteAsk.Unreachable, string.Empty);
         }
     }
+
+    /// <summary>The contract the server said it speaks, or empty when it said nothing.</summary>
+    private static string ContractOf(HttpResponseMessage response) =>
+        response.Headers.TryGetValues(RemoteAsk.ContractHeader, out var values) ? values.FirstOrDefault() ?? string.Empty : string.Empty;
 
     private static async Task<int> PollAsync(
         Job job, string id, Stopwatch waited, HttpClient http, Action<string> note, TextWriter output)
@@ -408,7 +429,8 @@ internal static class AskRemote
         }
 
         // The usage line, on stdout, exactly where RemoteRuntime.ReadUsage looks for it.
-        await output.WriteLineAsync(RemoteAsk.UsageLine(state.TokensIn, state.TokensOut));
+        // Contract 2: what the server did not apply rides on the same line, into this reviewer's note (E2.5).
+        await output.WriteLineAsync(RemoteAsk.UsageLine(state.TokensIn, state.TokensOut, job.NotApplied));
 
         return RemoteAsk.Ok;
     }

@@ -2215,3 +2215,36 @@ failing a finished review (`APromptFileDoesNotOutliveItsLaunchTests`, `ARuntimeN
   consultation's answer schema), and the vendor keeping no conversation it is `ConsultantMemory.WeRemember` with a
   32 KB carry budget — twice the local route's (`AnApiRowConsultsTests`).
 - `ConsultantResolution.For` resolves both; `shared/feature-availability.json` lists `api` among the consulting runtimes.
+
+## A Team server row sends contract 2 (2026-10-05, PLAN_one_model_catalog.md E2.5)
+
+- **`RemoteAsk.ContractVersion` is 2**, as is the extension's `CONTRACT_VERSION` (each half pins it in a test).
+- **The roster** gives a remote row its own `CliEffort` (`RosterBuilder.EffortFor`) and its system prompt as
+  `ReviewerSettings.SystemPrompt` (`FieldPromptFor` — exactly where `InstructionFor` leaves it out of the body).
+  `shared/feature-availability.json` marks remote's effort `probe`: the server judges it per vendor.
+- **`RemoteRuntime.Build`** adds `--effort <level>` and `--system-prompt-file <path>` only when set — the prompt in a
+  `.system` file beside the prompt file, never argv — and both files are `TempFiles`.
+- **`--ask-remote`** reads the file, sends both fields (`RequestBody`, left out when empty), and turns the answer into
+  ONE sentence (`RemoteAsk.NotAppliedMessage`): each field a contract-2 server dropped or lowered, with its reason;
+  against a server that says contract 1 (or nothing), every field sent. The sentence rides the usage line
+  (`notApplied`) on stdout.
+- **The reviewer's note.** `IReviewerRuntime.NotApplied(invocation, result)` (empty by default; `RemoteRuntime` reads
+  the usage line) reaches `ReviewerLaunch.NotApplied` and `ReviewerOutcome.Ok.NotApplied`, and `TurnLoop.Note` puts it
+  in the reviewer's progress note — "sent" is never shown as "applied".
+
+Tests: `ATeamServerRowSendsContractTwoTests`, and the real-binary scenario
+`RemoteShimScenarioTests.ContractTwosFields_GoOut_AndWhatTheServerDidNotApply_ComesBackForTheReviewersNote`.
+
+```mermaid
+sequenceDiagram
+  participant R as RosterBuilder
+  participant A as RemoteRuntime
+  participant S as --ask-remote shim
+  participant T as Team server
+  R->>A: ReviewerSettings (ReasoningEffort, SystemPrompt)
+  A->>S: --effort, --system-prompt-file (a file, not argv)
+  S->>T: POST /api/reviews {effort, systemPrompt}
+  T-->>S: 202 {dropped, clamped} + X-Coai-Contract
+  S-->>A: usage line {tokensIn, tokensOut, notApplied}
+  A-->>R: Ok.NotApplied → the reviewer's note
+```

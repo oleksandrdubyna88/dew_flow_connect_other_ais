@@ -63,7 +63,7 @@ public static class ReviewEndpoints
 
     public static void MapReviewEndpoints(
         this WebApplication app, JobStore jobs, VendorCatalogHost catalog, CallerFilter gate,
-        AcceptedRoles roles, TimeSpan? queueWait = null)
+        AcceptedRoles roles, TimeSpan? queueWait = null, ClientOptionsPolicy? options = null)
     {
         app.MapPost("/api/reviews", async (HttpContext ctx, ReviewRequestDto request) =>
         {
@@ -76,10 +76,12 @@ public static class ReviewEndpoints
                     statusCode: StatusCodes.Status400BadRequest);
             }
 
+            // `Refusal` found the vendor; what it runs on decides which effort it can take (E2.5).
+            var taken = ClientOptions.Take(request, current.Find(request.Vendor!)!.Runtime, options ?? new ClientOptionsPolicy());
             var now = DateTimeOffset.UtcNow;
             var key = request.IdempotencyKey?.Trim() ?? string.Empty;
             var (job, refused, position) = jobs.Submit(
-                Accepted(caller, request, key, now, queueWait, roles), now);
+                Accepted(caller, request, taken, key, now, queueWait, roles), now);
 
             if (Rejected(ctx, jobs, refused, key) is { } rejection)
             {
@@ -89,7 +91,7 @@ public static class ReviewEndpoints
             await Task.CompletedTask;
 
             return Results.Json(
-                new ReviewAcceptedDto(job!.Id, position),
+                new ReviewAcceptedDto(job!.Id, position, NotesOrNone(taken.Dropped), NotesOrNone(taken.Clamped)),
                 ServerJsonContext.Default.ReviewAcceptedDto,
                 statusCode: StatusCodes.Status202Accepted);
         }).RequireCaller(gate);
@@ -151,7 +153,7 @@ public static class ReviewEndpoints
     /// S3776: 19 against the 15 this repository allows.)
     /// </remarks>
     private static JobRecord Accepted(
-        Caller caller, ReviewRequestDto request, string key, DateTimeOffset now, TimeSpan? queueWait,
+        Caller caller, ReviewRequestDto request, TakenOptions taken, string key, DateTimeOffset now, TimeSpan? queueWait,
         AcceptedRoles roles)
     {
         // Its shape was checked by `Refusal` before anything reached here, so this cannot fail.
@@ -168,7 +170,7 @@ public static class ReviewEndpoints
             request.Vendor,
             request.Model,
             role,
-            request.Prompt,
+            taken.Prompt,
             JobStatus.Queued,
             now,
             now + (queueWait ?? JobTransitions.DefaultQueueWait),
@@ -178,9 +180,14 @@ public static class ReviewEndpoints
             Fingerprint: key.Length == 0
                 ? string.Empty
                 : Idempotency.Fingerprint(
-                    caller.Email, request.Vendor, request.Model, role, request.Prompt, kind,
-                    request.TimeoutSeconds));
+                    caller.Email, request.Vendor, request.Model, role, taken.Prompt, kind,
+                    request.TimeoutSeconds, taken.Effort),
+            Effort: taken.Effort,
+            SystemPromptSha: taken.SystemPromptSha);
     }
+
+    /// <summary>A contract-1 response has no notes at all, so an empty list is left out rather than sent.</summary>
+    private static IReadOnlyList<FieldNoteDto>? NotesOrNone(IReadOnlyList<FieldNoteDto> notes) => notes.Count == 0 ? null : notes;
 
     /// <summary>
     /// What the STORE refused, as an answer — or null when it refused nothing.

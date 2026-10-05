@@ -39,7 +39,7 @@ test('a request carries the contract version, and the token when there is one', 
   await ask('https://s/', 'api/catalog', { token: 'the-token', fetchImpl });
 
   const headers = fetchImpl.seen[0]?.init.headers as Record<string, string>;
-  assert.strictEqual(headers[CONTRACT_HEADER], '1');
+  assert.strictEqual(headers[CONTRACT_HEADER], '2');
   assert.strictEqual(headers['Authorization'], 'Bearer the-token');
   // The one canonical spelling, so a saved trailing slash cannot produce `…//api/catalog` — a 404
   // from a server the panel would then call unhealthy, with a token that matched perfectly.

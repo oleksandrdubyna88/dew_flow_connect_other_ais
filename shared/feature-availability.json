@@ -58,10 +58,10 @@
     },
     {
       "runtime": "remote",
-      "source": "unmeasured",
+      "source": "probe",
       "levels": [],
       "measuredWith": "",
-      "note": "A Team server carries no effort until its contract v2 (PLAN_one_model_catalog.md E2.5)."
+      "note": "The Team server judges it per vendor (contract 2, PLAN_one_model_catalog.md E2.5): applied where its runtime lists the level, lowered to the operator's cap, or dropped — and the reviewer's note says which. A contract-1 server applies none."
     },
     {
       "runtime": "api",

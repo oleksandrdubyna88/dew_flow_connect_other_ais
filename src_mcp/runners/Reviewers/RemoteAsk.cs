@@ -87,16 +87,66 @@ public static class RemoteAsk
     public const string ContractHeader = "X-Coai-Contract";
 
     /// <inheritdoc cref="ContractHeader"/>
-    public const int ContractVersion = 1;
+    /// <remarks>Two since PLAN_one_model_catalog.md E2.5: a request may carry <c>effort</c> and <c>systemPrompt</c>.</remarks>
+    public const int ContractVersion = 2;
 
     /// <summary>How long each long poll asks the server to hold the connection.</summary>
     public const int LongPollSeconds = 25;
 
     /// <summary>The body of <c>POST /api/reviews</c>.</summary>
-    public static string RequestBody(string vendor, string model, string role, string prompt, int timeoutSeconds) =>
+    /// <remarks>Contract 2's fields are left out when empty, so a row with neither sends what a contract-1 client sent.</remarks>
+    public static string RequestBody(string vendor, string model, string role, string prompt, int timeoutSeconds, string effort = "", string systemPrompt = "") =>
         JsonSerializer.Serialize(
-            new RemoteRequest(vendor, model, prompt, role, timeoutSeconds),
+            new RemoteRequest(vendor, model, prompt, role, timeoutSeconds, OrNone(effort), OrNone(systemPrompt)),
             RemoteJsonContext.Default.RemoteRequest);
+
+    private static string? OrNone(string text) => text.Length == 0 ? null : text;
+
+    /// <summary>
+    /// What the server did not apply of what this request sent, as one sentence — or empty when it applied all of it.
+    /// </summary>
+    /// <param name="acceptedBody">The 202's body: a contract-2 server names each field it dropped or clamped, with its reason.</param>
+    /// <param name="serverContract">The server's <see cref="ContractHeader"/>; below 2 (or absent) it read none of the new fields.</param>
+    public static string NotAppliedMessage(string acceptedBody, string serverContract, string effort, string systemPrompt)
+    {
+        string[] sent = [.. effort.Length > 0 ? ["effort"] : (string[])[], .. systemPrompt.Length > 0 ? ["systemPrompt"] : (string[])[]];
+
+        return (sent.Length, int.TryParse(serverContract, out var spoken) && spoken >= 2) switch
+        {
+            (0, _) => string.Empty,
+            (_, false) => $"the Team server speaks contract {(serverContract.Length > 0 ? serverContract : "1")} and did not apply: {string.Join(", ", sent)}",
+            _ => NotesOf(acceptedBody),
+        };
+    }
+
+    private static string NotesOf(string acceptedBody)
+    {
+        try
+        {
+            var accepted = JsonSerializer.Deserialize(acceptedBody, RemoteJsonContext.Default.RemoteAccepted);
+
+            return string.Join("; ", [
+                .. (accepted?.Dropped ?? []).Select(n => $"the Team server did not apply {n.Field}: {n.Reason}"),
+                .. (accepted?.Clamped ?? []).Select(n => $"the Team server lowered {n.Field}: {n.Reason}")]);
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
+
+    /// <summary>The not-applied sentence the shim's usage line carries, or empty.</summary>
+    public static string NotAppliedOf(string usageLine)
+    {
+        try
+        {
+            return JsonSerializer.Deserialize(usageLine, RemoteJsonContext.Default.RemoteUsage)?.NotApplied ?? string.Empty;
+        }
+        catch (JsonException)
+        {
+            return string.Empty;
+        }
+    }
 
     /// <summary>The id in a 202, or empty when the answer was not one.</summary>
     public static string AcceptedId(string body)
@@ -137,8 +187,8 @@ public static class RemoteAsk
     }
 
     /// <summary>The usage line the runtime reads back off stdout.</summary>
-    public static string UsageLine(long tokensIn, long tokensOut) =>
-        JsonSerializer.Serialize(new RemoteUsage(tokensIn, tokensOut, null), RemoteJsonContext.Default.RemoteUsage);
+    public static string UsageLine(long tokensIn, long tokensOut, string notApplied = "") =>
+        JsonSerializer.Serialize(new RemoteUsage(tokensIn, tokensOut, null, OrNone(notApplied)), RemoteJsonContext.Default.RemoteUsage);
 
     /// <summary>Not signed in at all — there is no token file for this server.</summary>
     public static string NotSignedInMessage(string serverUrl) =>
@@ -267,9 +317,19 @@ public static class RemoteAsk
     }
 }
 
-internal sealed record RemoteRequest(string Vendor, string Model, string Prompt, string Role, int TimeoutSeconds);
+internal sealed record RemoteRequest(
+    string Vendor,
+    string Model,
+    string Prompt,
+    string Role,
+    int TimeoutSeconds,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Effort = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? SystemPrompt = null);
 
-internal sealed record RemoteAccepted(string? Id, int Position);
+/// <summary>A field a contract-2 server did not take as sent, and why.</summary>
+internal sealed record RemoteFieldNote(string? Field, string? Reason);
+
+internal sealed record RemoteAccepted(string? Id, int Position, IReadOnlyList<RemoteFieldNote>? Dropped = null, IReadOnlyList<RemoteFieldNote>? Clamped = null);
 
 internal sealed record RemoteStatus(
     string? Id,
@@ -282,7 +342,11 @@ internal sealed record RemoteStatus(
     string? Failure,
     string? Reason);
 
-internal sealed record RemoteUsage(long TokensIn, long TokensOut, double? CostUsd);
+internal sealed record RemoteUsage(
+    long TokensIn,
+    long TokensOut,
+    double? CostUsd,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? NotApplied = null);
 
 internal sealed record RemoteError(string? Error);
 
