@@ -14,6 +14,7 @@ import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './
 import { openPhrases } from './phrasesPanel';
 import { openRoles } from './rolesPanel';
 import { bindRoles } from './rolesHost';
+import { bindCommands } from './commandsHost';
 import { openCommands } from './commandsPanel';
 import { registerConfigTransfer } from './configTransferCommands';
 import { ChatPanels } from './chatPanels';
@@ -103,6 +104,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // The review roles know this window's side from the start: the new Settings page edits them as well as the Review
   // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
   bindRoles(context);
+  bindCommands(context);
   // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
   // once per window, so a team setup in `.vscode/settings.json` is not lost without a word.
   noticeIgnoredWorkspaceModels(context, vscode.workspace.getConfiguration('coai'));

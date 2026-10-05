@@ -63,11 +63,16 @@ const code = (file: string): string => blanked(fs.readFileSync(path.join(SRC, fi
 test('a host whose page posts into a queue of its own takes a text press out of it first', () => {
   // Structural, because these hosts import vscode. Otherwise a press flushed a half-typed edit, and a
   // failed tone write surfaced as the page's own "your text was not saved".
-  for (const [file, queue] of [['phrasesPanel.ts', 'writes.queue('], ['rolesPanel.ts', 'queue(roleEdit('], ['commandsPanel.ts', 'writes.queue(']] as const) {
+  // The roles' and the commands' queues are their shared editing cores since PLAN_one_model_catalog.md E4.3 / E4.4.
+  for (const [file, queue] of [['phrasesPanel.ts', 'writes.queue('], ['rolesPanel.ts', 'queueRoleEdit('], ['commandsPanel.ts', 'queueCommandEdit(']] as const) {
     const source = code(file);
-    const handler = source.slice(source.indexOf('onDidReceiveMessage('), source.indexOf(queue, source.indexOf('onDidReceiveMessage(')));
+    const heard = source.indexOf('onDidReceiveMessage(');
+    const queued = source.indexOf(queue, heard);
+    // Found, or the slice below runs to the end of the file and the check passes on anything (it did, after E4.3).
+    assert.ok(heard >= 0 && queued > heard, `${file} no longer queues with ${queue} — this guard must name what it does now`);
+    const handler = source.slice(heard, queued);
 
-    assert.ok(handler.length > 0 && handler.includes('if (!appliedTextControl('), `${file} queues a text press with its own writes`);
+    assert.ok(handler.includes('if (!appliedTextControl('), `${file} queues a text press with its own writes`);
   }
 });
 
