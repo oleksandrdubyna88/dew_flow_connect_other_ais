@@ -735,6 +735,23 @@ public sealed class ReviewerExecutor(
     /// one catches its IO and JSON failures and answers with a null answer or
     /// <see cref="Usage.None"/>.</para>
     /// </remarks>
+    /// <summary>
+    /// <see cref="LaunchAsync"/> for an invocation launched exactly ONCE — a consultation turn, a question row — whose
+    /// files go when it does, however it ended. A review's go when its retry ladder is over (BoundedScheduler), because
+    /// a retry launches the same invocation again.
+    /// </summary>
+    public async Task<ReviewerLaunch> LaunchOnceAsync(ReviewerInvocation invocation, CancellationToken ct)
+    {
+        try
+        {
+            return await LaunchAsync(invocation, ct);
+        }
+        finally
+        {
+            LaunchFiles.Forget(invocation.TempFiles);
+        }
+    }
+
     public async Task<ReviewerLaunch> LaunchAsync(ReviewerInvocation invocation, CancellationToken ct)
     {
         ProcessResult result;

@@ -213,6 +213,7 @@ public sealed record SecurityLaneSetting
     private static SecurityPrompt ReadAlwaysPrompt(JsonElement entry, SecurityPrompt seed, List<string> complaints)
     {
         if (HasStoredTriggers(entry)) complaints.Add($"{seed.Id} runs on every change; the conditions stored for it are ignored");
+        if (Tags(entry, "words", [], out _).Count > 0) complaints.Add($"{seed.Id} runs on every change; the words stored for it are not used");
         var refusal = Members(entry, ["id", "triggers", "focus", "words"]);
         if (refusal.Length > 0) complaints.Add($"{seed.Id}: {refusal}");
         return seed with { Refusal = refusal };

@@ -95,12 +95,18 @@ function parsed(output: string): unknown {
 /**
  * One answer per binary FILE: the path and its modification time are the key, so an update — a new file at the same
  * path — is asked again, and a render that runs every few seconds is not a spawn every few seconds.
+ *
+ * <p>The last settled list belongs to ONE file: when the binary changes it is forgotten at once, so nothing the old
+ * binary took is written for the new one while it is asked (PR #686's review). `onSettled` runs after every settled
+ * answer, so the settings file is written again for what the binary now says.</p>
  */
 export class FeaturesCache {
   private asked: { readonly key: string; readonly answer: Promise<BinaryFeatures> } | undefined = undefined;
 
-  /** The last SETTLED list, for a reader that cannot wait for a spawn — the settings file is written synchronously. */
-  private last: readonly string[] = [];
+  /** The last SETTLED list and the file it is about, for a reader that cannot wait for a spawn. */
+  private last: { readonly key: string; readonly features: readonly string[] } = NO_LIST;
+
+  constructor(private readonly onSettled: () => void = () => undefined) {}
 
   async of(path: string | undefined, runFor: (path: string) => Run): Promise<BinaryFeatures> {
     if (path === undefined) {
@@ -108,9 +114,10 @@ export class FeaturesCache {
     }
     const key = `${path}|${await modifiedMs(path)}`;
     if (this.asked?.key !== key) {
+      this.forgetAnotherFile(key);
       const answer = readBinaryFeatures(runFor(path));
       this.asked = { key, answer };
-      void answer.then((got) => this.forgetUnsettled(answer, got));
+      void answer.then((got) => this.forgetUnsettled(key, answer, got));
     }
 
     return this.asked.answer;
@@ -118,18 +125,28 @@ export class FeaturesCache {
 
   /** What the binary last settled on saying, without spawning — empty until it has. */
   known(): readonly string[] {
-    return this.last;
+    return this.last.features;
+  }
+
+  /** What another file said is not this one's: an updated binary claims nothing until it has answered. */
+  private forgetAnotherFile(key: string): void {
+    if (this.last.key !== key) {
+      this.last = NO_LIST;
+    }
   }
 
   /** An answer that may pass is not kept: the next render asks again, rather than the window living on a cold start. */
-  private forgetUnsettled(answer: Promise<BinaryFeatures>, got: BinaryFeatures): void {
+  private forgetUnsettled(key: string, answer: Promise<BinaryFeatures>, got: BinaryFeatures): void {
     if (got.settled) {
-      this.last = got.features;
+      this.last = { key, features: got.features };
+      this.onSettled();
     } else if (this.asked?.answer === answer) {
       this.asked = undefined;
     }
   }
 }
+
+const NO_LIST = { key: '', features: [] } as const;
 
 function none(why: string): BinaryFeatures {
   return { features: [], why, settled: false };

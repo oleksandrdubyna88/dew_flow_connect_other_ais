@@ -78,7 +78,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         while (true)
         {
             var turnStarted = started.Elapsed;
-            var launched = await executor.LaunchAsync(input.Row.Runtime.Build(launch), ct);
+            var launched = await executor.LaunchOnceAsync(input.Row.Runtime.Build(launch), ct);
             usage = usage.Add(launched.Usage);
             Record(input, launched, started.Elapsed - turnStarted);
             if (Unanswered(launched) is { } ended)

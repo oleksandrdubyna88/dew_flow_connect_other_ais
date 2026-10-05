@@ -10782,3 +10782,10 @@ coai-mcp's to decide per runtime. An api row's effort keeps `apiSettingsOnTheWir
 
 `CONSULTING` (generated from `shared/feature-availability.json`) lists `api`; `FEATURES.apiConsultant` names the
 capability, which seam leg 11 holds the built binary to.
+
+### `FeaturesCache` after an update (2026-10-05, PR #686 review)
+
+The last settled `--features` list belongs to ONE binary file (path + modification time). When the file changes it is
+forgotten at once — an updated binary claims nothing until it answers — and every settled answer calls `onSettled`,
+which `extension.ts` uses to write the settings file again. Before, `known()` kept the old binary's list until the
+new one answered, and the file was re-written only once per window.

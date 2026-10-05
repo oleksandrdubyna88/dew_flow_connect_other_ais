@@ -129,3 +129,46 @@ test('a failure that may pass is asked again; a clean list and an older binary (
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('an updated binary is not described by the old one\'s list, and each settled answer is announced', async () => {
+  const { mkdtempSync, writeFileSync, rmSync, utimesSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(join(tmpdir(), 'coai-features-update-'));
+  try {
+    const file = join(dir, 'coai-mcp');
+    writeFileSync(file, 'one');
+    utimesSync(file, new Date(1_000_000), new Date(1_000_000));
+    let release: (value: { code: number; output: string }) => void = () => undefined;
+    let started = false;
+    const answers: Run[] = [
+      async () => ({ code: 0, output: '{"features":["systemPrompt"]}' }),
+      () => {
+        started = true;
+        return new Promise((resolve) => { release = resolve; });
+      },
+    ];
+    let asked = 0;
+    const announced: (readonly string[])[] = [];
+    const cache: FeaturesCache = new FeaturesCache(() => announced.push(cache.known()));
+
+    await cache.of(file, () => answers[asked++] ?? answers[1]!);
+    assert.deepEqual(cache.known(), ['systemPrompt']);
+    assert.equal(announced.length, 1, 'a settled answer is announced, so the settings file is written for it');
+
+    utimesSync(file, new Date(2_000_000), new Date(2_000_000));
+    const pending = cache.of(file, () => answers[asked++] ?? answers[1]!);
+    while (!started) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+    assert.deepEqual(cache.known(), [], 'the old binary\'s list does not describe the new one while it is asked');
+
+    release({ code: 0, output: '{"features":["bugzRuntime"]}' });
+    await pending;
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.deepEqual(cache.known(), ['bugzRuntime']);
+    assert.deepEqual(announced.at(-1), ['bugzRuntime'], 'and the new answer is announced too');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

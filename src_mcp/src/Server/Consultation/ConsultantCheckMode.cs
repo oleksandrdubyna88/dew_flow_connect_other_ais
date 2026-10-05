@@ -70,7 +70,7 @@ internal static class ConsultantCheckMode
             // key from the vault, and a check that launched it without one would test a launch no consultation makes.
             var keys = await KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable).ReadFromConfigurationAsync(configuration, stopping.Token);
             var settings = PanelSettings.FromEnvironment(configuration);
-            var (code, answer, why) = args.Length > 0 && args[0] == "--check-model"
+            var (code, answer, why) = IsModelCheck(args)
                 ? await AnswerModelAsync(settings, await Console.In.ReadToEndAsync(stopping.Token), launcher, Path.GetTempPath(), Program.Note, noticing, stopping.Token, keys)
                 : await AnswerAsync(settings, args, launcher, Path.GetTempPath(), Program.Note, noticing, stopping.Token, keys);
             if (answer.Length > 0)
@@ -142,6 +142,9 @@ internal static class ConsultantCheckMode
             return (74, string.Empty, $"the model check could not use the data directory {settings.DataDir}: {e.Message}"); // EX_IOERR
         }
     }
+
+    /// <summary>Whether this run is <c>--check-model</c> — the one mode of the two that reads its row on stdin.</summary>
+    private static bool IsModelCheck(string[] args) => args.Length > 0 && args[0] == "--check-model";
 
     private const string ModelUsage = "--check-model reads {\"row\": {\"id\": …, \"runtime\": …}} on stdin — the catalog row to check";
 

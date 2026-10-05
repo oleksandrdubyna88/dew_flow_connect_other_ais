@@ -129,8 +129,28 @@ internal static class CheckSecurityMode
     /// <summary>The lane being edited, read by the lane's own parser — or the shipped one when the request names none.</summary>
     private static SecurityLaneSetting LaneOf(JsonElement request) =>
         request.ValueKind == JsonValueKind.Object && request.TryGetProperty("lane", out var lane) && lane.ValueKind == JsonValueKind.Object
-            ? SecurityLaneSetting.Parse(lane.GetRawText(), [])
+            ? SecurityLaneSetting.Parse(WithoutRuns(lane), [])
             : new SecurityLaneSetting();
+
+    /// <summary>
+    /// The lane without its <c>runs</c>: this is a words-and-patterns check, and a run names a reviewer from a list this
+    /// mode does not have — judged here, every configured run would be a false "unknown reviewer" (PR #686's review).
+    /// </summary>
+    private static string WithoutRuns(JsonElement lane)
+    {
+        using var buffer = new MemoryStream();
+        using (var json = new Utf8JsonWriter(buffer))
+        {
+            json.WriteStartObject();
+            foreach (var member in lane.EnumerateObject().Where(member => member.Name != "runs"))
+            {
+                member.WriteTo(json);
+            }
+            json.WriteEndObject();
+        }
+
+        return System.Text.Encoding.UTF8.GetString(buffer.ToArray());
+    }
 
     /// <summary>What the lane makes of the sample: as one file of code, through the lane's own table.</summary>
     private static string Trial(SecurityLaneSetting lane, string text)

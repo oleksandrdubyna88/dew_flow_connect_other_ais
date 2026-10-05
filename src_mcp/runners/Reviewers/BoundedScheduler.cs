@@ -567,26 +567,7 @@ public sealed class BoundedScheduler(
         }
         finally
         {
-            Forget([.. w.Invocation.TempFiles, .. w.Repair?.TempFiles ?? []]);
-        }
-    }
-
-    /// <summary>
-    /// Deletes what a launch wrote for its child. A file that cannot be deleted now is left to the answers-directory
-    /// sweep (six hours), which is still there: failing a finished review over a locked file would lose its answer.
-    /// </summary>
-    private static void Forget(IReadOnlyList<string> files)
-    {
-        foreach (var file in files)
-        {
-            try
-            {
-                File.Delete(file);
-            }
-            catch (Exception e) when (e is IOException or UnauthorizedAccessException)
-            {
-                // Left for the sweep; see the summary.
-            }
+            LaunchFiles.Forget([.. w.Invocation.TempFiles, .. w.Repair?.TempFiles ?? []]);
         }
     }
 

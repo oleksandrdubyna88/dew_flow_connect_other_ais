@@ -300,3 +300,9 @@ flowchart LR
 - **`--check-security` reads only what it was asked.** An argument other than one `--validate` is 65 by name; stdin is
   read only to its 2 MB limit (`ReadBoundedAsync`); a `lane` that is not an object is 65, never replaced by the shipped
   lane; the answer carries `detectionIncomplete`, so a sample the detector could not finish is not read as "no signals".
+
+### PR #686 review threads (2026-10-05)
+
+- `--check-security` parses the lane WITHOUT its `runs`: a words-and-patterns check has no reviewer list, and judging
+  runs there made every configured run a false "unknown reviewer".
+- An "always" card with stored `words` is told they are not used (a complaint), never ignored in silence.

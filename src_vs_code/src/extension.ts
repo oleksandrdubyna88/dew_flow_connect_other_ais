@@ -299,8 +299,9 @@ export function activate(context: vscode.ExtensionContext): void {
   // Team-server reviewer on 2026-09-07 by rewriting a runtime it did not know. An older build now
   // stands down and says so, once.
   // What the installed coai-mcp accepts (`--features`, PLAN_one_model_catalog.md E2) — one cache for the window: the
-  // settings file reads its last settled answer without spawning, and the catalog migration asks it per run.
-  const features = new FeaturesCache();
+  // settings file reads its last settled answer without spawning, and the catalog migration asks it per run. Every
+  // settled answer writes the file again — the first one this session, and an updated binary's.
+  const features = new FeaturesCache(() => mirrorSettings(settingsSync));
   const askFeatures = (): ReturnType<FeaturesCache['of']> => features.of(serverPath(context.globalStorageUri)?.fsPath, serverRun);
   const settingsSync = new ServerSettingsSync(
     () => readCoaiConfiguration(context),
@@ -320,8 +321,8 @@ export function activate(context: vscode.ExtensionContext): void {
     () => features.known(),
   );
   mirrorSettings(settingsSync);
-  // Once the binary has said what it takes, the file is written again — so a system prompt crosses this session.
-  void askFeatures().then(() => mirrorSettings(settingsSync));
+  // Ask once now: the settled answer writes the file again (above) — so a system prompt crosses this session.
+  void askFeatures();
   // Every consultant and question-consultant model DEFINITION moves into the catalog once, per settings layer
   // (PLAN_one_model_catalog.md E1.3). The env block it leads to is the one written above, byte for byte, so the
   // mirror after it is a no-op unless something was left; the panel is redrawn so a section reads the new rows.

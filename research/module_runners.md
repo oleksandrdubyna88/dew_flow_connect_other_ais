@@ -2257,3 +2257,11 @@ sequenceDiagram
 - `CodexConsultant` takes a `CodexRuntime` (no cast that could fall back to OpenAI's service with an endpoint's key);
   `ConsultantResolution` refuses a codex row whose runtime resolves to anything else.
 - `PersonInstruction.PlacedIn` returns the prompt unchanged when it has no contract heading; `HasContract` asks first.
+
+### PR #686 review threads (2026-10-05)
+
+- **A launch made once owns its files.** `ReviewerExecutor.LaunchOnceAsync` deletes the invocation's `TempFiles` in a
+  `finally`; a consultation turn (`ConsultantTurn`) and a question row (`QuestionRowLaunch`) launch through it, because
+  the scheduler's cleanup never ran for them and an api consultant's prompt file outlived its turn. A review keeps
+  its cleanup in `BoundedScheduler` (a retry launches the same invocation again). One `LaunchFiles.Forget` for both.
+- `ConsultantCheckMode.IsModelCheck` holds the mode predicate; a real-binary test pins the `--check-model` dispatch.
