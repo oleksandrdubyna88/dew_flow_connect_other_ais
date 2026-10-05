@@ -82,7 +82,7 @@ test('the roles page reaches the same deletions the host sweeps, from the same m
     /export function roleDeletions\(context: vscode\.ExtensionContext\): RoleDeletions \{\s*deletions \?\?=/u,
     'the coordinator is rebuilt per call, so its store, clock and reporter differ between the page '
     + 'and the host that drives it');
-  assert.match(source('rolesPanel.ts'), /stranded: await roleDeletions\(side\(\)\)\.stranded\(\)/u,
+  assert.match(source('rolesPanel.ts'), /stranded: await roleDeletions\(rolesSide\(\)\)\.stranded\(\)/u,
     'the page is drawn without the stranded deletions, so a tombstone that cannot clear is invisible');
   // The panel itself is a legitimate import — `extension.ts` registers the command that opens it.
   // What must not come from there is the COORDINATOR, which is what pinned the page into the

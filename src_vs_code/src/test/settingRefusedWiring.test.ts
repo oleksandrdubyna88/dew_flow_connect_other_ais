@@ -70,7 +70,9 @@ test('every host that saves a setting reports the refusal, because saveSetting n
   // row that did not move makes everything after it meaningless, so it says so and returns.
   // `commandsPanel.ts` is the sixth (issue #467), and takes the roles page's shape: its writes go
   // through `settledWrites`, whose `report` is `reportRefusal`.
-  const callers = ['phrasesPanel.ts', 'rolesPanel.ts', 'panelProvider.ts', 'dataCommands.ts',
+  // The roles page's writes moved, with their `reportRefusal`, into `rolesHost.ts`, which both pages that edit the
+  // roles call (PLAN_one_model_catalog.md E4.3).
+  const callers = ['phrasesPanel.ts', 'rolesHost.ts', 'panelProvider.ts', 'dataCommands.ts',
     'roleDeletionsHost.ts', 'commandsPanel.ts'];
   for (const file of callers) {
     assert.match(

@@ -814,17 +814,17 @@
       "count": 4
     }
   },
+  "src/rolesHost.ts": {
+    "complexity": {
+      "count": 3
+    }
+  },
   "src/rolesPage.ts": {
     "complexity": {
       "count": 6
     },
     "max-lines-per-function": {
       "count": 4
-    }
-  },
-  "src/rolesPanel.ts": {
-    "complexity": {
-      "count": 3
     }
   },
   "src/rounds.ts": {
