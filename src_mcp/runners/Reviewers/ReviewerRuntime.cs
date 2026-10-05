@@ -191,6 +191,16 @@ public sealed record ReviewerInvocation(
     /// answers directory it lived until the six-hour sweep. A CLI reviewer is handed its prompt on stdin and has none.
     /// </remarks>
     public IReadOnlyList<string> TempFiles { get; init; } = [];
+
+    /// <summary>
+    /// Texts this launch was given that must not come back out of it into a record — a catalog row's system prompt
+    /// (todo/PLAN_one_model_catalog.md, epic 2, story 2). Replaced in the child's stdout and stderr the moment it exits,
+    /// before a tail, a transcript or a failure reason is cut from them.
+    /// </summary>
+    /// <remarks>A CLI echoes its input — <c>codex exec</c> prints the prompt on stderr — and a failing one quotes it in its
+    /// error; the round keeps that stderr as the reason, and the reason reaches the rounds database and the reply the
+    /// calling AI reads.</remarks>
+    public IReadOnlyList<string> Redact { get; init; } = [];
 }
 
 /// <summary>
@@ -244,6 +254,13 @@ public interface IReviewerRuntime
     /// story 1). True by default, because every CLI adapter runs in the worktree; the three that cannot override it.
     /// </remarks>
     bool ReadsTheCheckout => true;
+
+    /// <summary>
+    /// Whether a catalog row's system prompt is delivered to this reviewer inside its prompt body
+    /// (todo/PLAN_one_model_catalog.md, epic 2, story 2). True for every runtime but a Team server's, whose operator decides
+    /// whether a client's prompt is taken (story 5): putting it in the body would go around that decision.
+    /// </summary>
+    bool CarriesTheRowsPrompt => true;
 
     /// <summary>
     /// A second launch that CONTINUES the first, when the first ended in a way only continuing can

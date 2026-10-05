@@ -314,7 +314,7 @@ internal sealed class RosterBuilder(
             var launch = SettingsFor(provider, runtime, api);
             var followUps = turns is Runners.Feature.SourceTurns.On on ? on.FollowUps : 0;
             var material = ReviewerMaterial.For(hasCheckout, runtime, stageRow.Reads);
-            var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers, followUps);
+            var prompt = _reviewerPrompt.ComposePrompt(choice, context, material, stageRow.Answers, followUps, InstructionFor(provider, runtime));
             // One key for every launch of THIS reviewer — its turns and their repairs — from the base prompt
             // every one of them shares (ConversationKey): what a vendor that routes its prompt cache by a
             // conversation id (xAI's x-grok-conv-id, 2026-09-26) needs to serve turn 2 from turn 1's cache.
@@ -334,9 +334,12 @@ internal sealed class RosterBuilder(
             // One composer for every turn (S3.2): turn 1 is the base with an empty tail, and a follow-up
             // is the SAME base byte for byte with its tail appended — the launch and the repair alike, so
             // the repair of turn N is composed from turn N's own prompt (plan §4.9).
+            // What the launch was given and must not echo back into a record: the row's system prompt (see Redact).
+            var instruction = InstructionFor(provider, runtime);
+            IReadOnlyList<string> redact = instruction.Length == 0 ? [] : [instruction];
             ReviewerWork Turn(string tail) => new(
-                runtime.Build(role, prompt + tail, launchDir, schemaFile, outputDir, launch),
-                runtime.Build(role, repairBase + tail + RepairInstruction.Text, repairDir, schemaFile, outputDir, launch),
+                runtime.Build(role, prompt + tail, launchDir, schemaFile, outputDir, launch) with { Redact = redact },
+                runtime.Build(role, repairBase + tail + RepairInstruction.Text, repairDir, schemaFile, outputDir, launch) with { Redact = redact },
                 choice.Id,
                 System.Text.Encoding.UTF8.GetByteCount(prompt + tail));
             work.Add(Turn(string.Empty) with
@@ -619,4 +622,12 @@ internal sealed class RosterBuilder(
             .Where(r => !kept.Contains(r))
             .Select(r => new SkippedRole(r, NoWrittenRules))];
     }
+
+    /// <summary>
+    /// The row's own instruction for THIS reviewer — or none where the runtime does not carry it in the body: on a Team
+    /// server the operator decides whether a client's prompt is taken at all (story 5's contract v2), and a prompt in the
+    /// body would go around that switch.
+    /// </summary>
+    internal static string InstructionFor(ProviderSettings provider, Runners.Reviewers.IReviewerRuntime runtime) =>
+        runtime.CarriesTheRowsPrompt ? provider.SystemPrompt : string.Empty;
 }

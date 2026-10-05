@@ -583,6 +583,16 @@ public sealed class ReviewerExecutor(
     /// Both streams, labelled. An empty answer with an empty evidence file tells nobody anything;
     /// the vendor's own stream carries its status and its error, and that is the whole diagnosis.
     /// </remarks>
+    /// <summary>What the child said with every text in <paramref name="texts"/> replaced — see <see cref="ReviewerInvocation.Redact"/>.</summary>
+    private static ProcessResult Redacted(ProcessResult result, IReadOnlyList<string> texts) =>
+        texts.Count == 0 ? result : result with { StdOut = Without(result.StdOut, texts), StdErr = Without(result.StdErr, texts) };
+
+    private static string Without(string said, IReadOnlyList<string> texts) =>
+        texts.Where(text => text.Length > 0).Aggregate(said, (now, text) => now.Replace(text, RedactedText, StringComparison.Ordinal));
+
+    /// <summary>What stands where a redacted text was — saying that something was there, and what kind.</summary>
+    internal const string RedactedText = "[the row's system prompt]";
+
     private static string Transcript(ProcessResult result) =>
         $"--- stdout ---\n{result.StdOut}\n--- stderr ---\n{result.StdErr}";
 
@@ -735,7 +745,8 @@ public sealed class ReviewerExecutor(
             {
                 TrackAs = $"{invocation.Provider}/{invocation.Role}",
             };
-            result = await launcher.RunAsync(request, ct);
+            // Redacted before anything below reads it: every tail, transcript and reason is cut from these two streams.
+            result = Redacted(await launcher.RunAsync(request, ct), invocation.Redact);
         }
         catch (OperationCanceledException)
         {

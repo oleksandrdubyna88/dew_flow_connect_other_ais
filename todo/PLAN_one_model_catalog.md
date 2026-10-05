@@ -362,8 +362,13 @@ override the stories above where they differ:
   from its row's into `bugz-<rowId>` — only for a binary that ranks by runtime. Deviation: Bugz's own row is rewritten
   IN PLACE on a later pick and a pick through it moves nothing (the picker writes on every pick; the plain rule left an
   orphan per pick). The backup gains `bugzModel` only when it is moved, added to an epic-1 backup, never overwriting.
-- Still open in E2.2: system prompt, timeout and effort per row in every runner (`systemPrompt`, `timeoutMinutes`,
-  `cliEffort` join the list as each lands).
+- **A prompt file does not outlive its launch**: `ReviewerInvocation.TempFiles`, deleted by the scheduler in a `finally`.
+- **The system prompt**: in the body after the product's instruction and before the contract; never argv; refused past
+  8192 bytes by name; redacted from the child's output before anything is recorded (the canary found the leak: a
+  failing CLI's stderr became the round's reason). Deviation: NOT sent in a Team server row's body — story 5's field.
+  The extension sends it only when `--features` lists `systemPrompt`. "Sent is not applied" still owes its one recorded
+  real call per runtime (a marker the answer must carry).
+- Still open in E2.2: timeout and effort per row (`timeoutMinutes`, `cliEffort` join the list as each lands).
 
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and

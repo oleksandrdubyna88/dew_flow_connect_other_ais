@@ -99,8 +99,24 @@ export function serverSettingsJson(
   /** What an `api` row's model costs by the list — its price crosses with the row (S3.7). */
   priceOf: RowPriceLookup = () => undefined,
 ): string {
+  return serverSettingsJsonWith(settings, vendors, { writtenBy, installedServerVersion, priceOf, features: [] });
+}
+
+/** Everything a write of the settings file is decided by, besides the settings and the rows — each said, none defaulted. */
+export interface SettingsWrite {
+  readonly writtenBy: string;
+  /** The `coai-mcp` on this side, when known — `envBlock` keeps an `api` row out of the file of an older one. */
+  readonly installedServerVersion: string;
+  /** What an `api` row's model costs by the list — its price crosses with the row (S3.7). */
+  readonly priceOf: RowPriceLookup;
+  /** What the installed `coai-mcp` lists in `--features` — a catalog field crosses only when listed (E2). */
+  readonly features: readonly string[];
+}
+
+/** The settings file for a write that knows what the binary takes — the sync's road. */
+export function serverSettingsJsonWith(settings: CoaiSettings, vendors: readonly Vendor[], write: SettingsWrite): string {
   return JSON.stringify(
-    stamped(envBlock(settings, vendors, installedServerVersion, priceOf), writtenBy),
+    stamped(envBlock(settings, vendors, write.installedServerVersion, write.priceOf, write.features), write.writtenBy),
     null,
     2,
   );

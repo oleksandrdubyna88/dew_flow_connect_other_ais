@@ -1,6 +1,6 @@
 import { updateAvailable } from './cliVersions';
 import { CoaiSettings } from './settingsShape';
-import { serverSettingsJson, writtenBy } from './serverSettingsFile';
+import { serverSettingsJsonWith, writtenBy } from './serverSettingsFile';
 import { Vendor } from './vendors';
 import { RowPriceLookup } from './vendorsWire';
 
@@ -149,7 +149,24 @@ export class ServerSettingsSync {
      * asked when the file is written rather than captured when this was built. Nothing prices nothing.
      */
     private readonly priceOf: () => RowPriceLookup = () => () => undefined,
+    /**
+     * What the installed `coai-mcp` last settled on listing in `--features`, read at every sync without spawning
+     * (PLAN_one_model_catalog.md E2): a catalog field crosses into the file only when listed.
+     */
+    private readonly features: () => readonly string[] = () => [],
   ) {}
+
+  /** What the file would hold now: this side's settings and rows, as the installed binary can take them. */
+  private contentNow(): string {
+    const { settings, vendors } = this.read();
+
+    return serverSettingsJsonWith(settings, vendors, {
+      writtenBy: this.version,
+      installedServerVersion: this.installedServerVersion(),
+      priceOf: this.priceOf(),
+      features: this.features(),
+    });
+  }
 
   /**
    * Writes the settings file when — and only when — its content would change AND this build is not
@@ -170,8 +187,7 @@ export class ServerSettingsSync {
    * The story's own requirement claimed a trigger that does not exist, and the plan round said so.</p>
    */
   async sync(): Promise<SyncOutcome> {
-    const { settings, vendors } = this.read();
-    const json = serverSettingsJson(settings, vendors, this.version, this.installedServerVersion(), this.priceOf());
+    const json = this.contentNow();
     if (json === this.lastWritten && !this.stoodDown) {
       return 'unchanged';
     }

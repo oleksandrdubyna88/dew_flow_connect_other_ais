@@ -45,6 +45,9 @@ public sealed class RemoteRuntime(string id, string serverUrl, string vendorOnSe
     /// <summary>A Team server reviews on another machine: gets the change in its prompt and never a working directory it can read.</summary>
     public bool ReadsTheCheckout => false;
 
+    /// <summary>A row's system prompt reaches a Team server only as the field its operator can refuse (story 5), never in the body.</summary>
+    public bool CarriesTheRowsPrompt => false;
+
     /// <summary>The server this vendor's reviews go to, in its one canonical spelling.</summary>
     public string ServerUrl => TeamServerAuth.Normalise(serverUrl);
 

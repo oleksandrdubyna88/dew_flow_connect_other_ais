@@ -20,6 +20,8 @@ internal static class FeaturesMode
     [
         // E2.1: `--collect-bugs --runtime <runtime>` — the Bugz ranking model is allowed by its row's runtime.
         "bugzRuntime",
+        // E2.2: a row's `systemPrompt`, delivered in the prompt body after the product's instruction, never in argv.
+        "systemPrompt",
     ];
 
     internal static async Task<int> RunAsync()

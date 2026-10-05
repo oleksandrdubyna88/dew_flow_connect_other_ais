@@ -2194,3 +2194,10 @@ runtimes set it; a CLI reviewer, fed on stdin, has none), and `BoundedScheduler.
 `finally` when the turn ends — answered, failed, timed out or cancelled; every retry of the ladder reads the same file,
 and a later turn of a conversation builds its own. A file that cannot be deleted then is left to the sweep rather than
 failing a finished review (`APromptFileDoesNotOutliveItsLaunchTests`, `ARuntimeNamesThePromptFileItWroteTests`, RED first).
+
+## Two answers a runtime gives about a row's system prompt (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+- `IReviewerRuntime.CarriesTheRowsPrompt` (default true; `RemoteRuntime` false — on a Team server the operator decides).
+- `ReviewerInvocation.Redact`: texts the launch was given that must not come back out of it. `ReviewerExecutor`
+  replaces each in the process result (stdout and stderr) with `[the row's system prompt]` right after the launcher
+  returns, so every tail, transcript and reason is cut from redacted streams.

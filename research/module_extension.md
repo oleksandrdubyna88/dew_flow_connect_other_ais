@@ -10757,3 +10757,13 @@ sequenceDiagram
   overwritten. Restore order: references first (`consultants`, `qconsultRows`, `bugzModel`), rows last.
 - A Bugz-only row never crosses in `COAI_VENDORS` (`rowsOnTheWire`). `COAI_BUGZ_MODEL` names the new row — and no
   code in coai-mcp reads that variable today (the collector takes `--model`), which is recorded as tail T7.
+
+## A row's system prompt crosses only to a binary that takes it (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+- `vendorsEnv(…, features)` writes `systemPrompt` only when the installed binary lists it (`FEATURES.systemPrompt`); the
+  "differs from the shipped list" comparison counts it too, so a shipped row whose only change is a prompt is written.
+  `envBlock`, `serverSettingsJson` and `ServerSettingsSync` thread `features`.
+- One `FeaturesCache` per window (`extension.ts`): the settings sync reads `known()` — the last SETTLED answer, never a
+  spawn per write — and the file is mirrored again once the binary has answered on activation. The catalog migration
+  asks the same cache. (`PanelProvider` keeps a cache of its own — one more `--features` spawn per window.)
+- The 8192-byte limit is pinned on both halves (`catalogRow.test.ts`, `ARowsSystemPromptReachesItsReviewerTests`).

@@ -9,6 +9,13 @@ namespace CoaiMcp.Server;
 /// <param name="Provider">Its id: what names it in the panel, in the logs, and in the vault entry.</param>
 public sealed record ProviderSettings(string Provider)
 {
+    /// <summary>
+    /// The person's own instruction for this row (PLAN_one_model_catalog.md E2.2): delivered inside the prompt body after
+    /// the product's reviewer instruction, which it cannot replace, and never logged — only its length and hash. Empty is
+    /// none.
+    /// </summary>
+    public string SystemPrompt { get; init; } = string.Empty;
+
     public bool Enabled { get; init; } = true;
 
     public string Model { get; init; } = string.Empty;
@@ -1207,6 +1214,8 @@ public sealed record PanelSettings
                         VaultKey = v.Key?.Trim().ToLowerInvariant() ?? string.Empty,
                         Price = PriceOf(v.Price),
                         Api = ApiRowOf(v),
+                        // Trimmed at its edges only: the inside is the person's own text, line breaks and all.
+                        SystemPrompt = v.SystemPrompt?.Trim() ?? string.Empty,
                     })
                     // One id, one vendor — the extension already refuses a duplicate row, and a
                     // hand-edited settings file is how one reaches the server. The id is the

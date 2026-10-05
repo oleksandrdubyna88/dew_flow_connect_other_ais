@@ -1,3 +1,4 @@
+import { FEATURES } from './binaryFeatures';
 import { apiRuntimeOnServer } from './apiRuntime';
 import { apiSettingsOnTheWire } from './apiSettings';
 import { featureOnServer, reviewsFeatures } from './featureGate';
@@ -86,7 +87,7 @@ export type RowPriceLookup = (v: Vendor) => ModelPrice | undefined;
  * cannot carry a runtime and a base URL, and inventing a second encoding for them would be a
  * format nobody could read in a config file.
  */
-export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = '', priceOf: RowPriceLookup = () => undefined): string {
+export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = '', priceOf: RowPriceLookup = () => undefined, features: readonly string[] = []): string {
   return JSON.stringify(
     vendors
       .filter((v) => v.enabled)
@@ -108,8 +109,18 @@ export function vendorsEnv(vendors: readonly Vendor[], installedServerVersion = 
         ...apiOnTheWire(v, priceOf),
         // The three per-model settings (S3.8): an api row's own, and never to a server known to predate them.
         ...apiSettingsOnTheWire(v, installedServerVersion),
+        ...promptOnTheWire(v, features),
       })),
   );
+}
+
+/**
+ * A row's system prompt, to a binary that lists `systemPrompt` (`--features`; PLAN_one_model_catalog.md E2.2) — and to
+ * no other: an older binary skips a member it does not know, so the prompt would silently do nothing there. Held
+ * back, the card can say it is not sent.
+ */
+function promptOnTheWire(v: Vendor, features: readonly string[]): { systemPrompt?: string } {
+  return features.includes(FEATURES.systemPrompt) && v.systemPrompt !== undefined ? { systemPrompt: v.systemPrompt } : {};
 }
 
 /**

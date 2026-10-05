@@ -332,7 +332,20 @@ public sealed class PanelService
     /// twice in this file's own history.
     /// </remarks>
     private bool CanRun(ProviderSettings provider) =>
-        RuntimeFor(provider) is not null && AuthFor(provider).Auth != "unavailable";
+        RuntimeFor(provider) is not null && AuthFor(provider).Auth != "unavailable" && PromptRefusal(provider).Length == 0;
+
+    /// <summary>
+    /// Why a row's system prompt keeps it out of the round — past <see cref="Core.Catalog.CatalogLimits.MaxPromptBytes"/>
+    /// UTF-8 bytes — or nothing. The extension refuses it at save time; a hand-edited settings file reaches this side too.
+    /// </summary>
+    private static string PromptRefusal(ProviderSettings provider)
+    {
+        var bytes = System.Text.Encoding.UTF8.GetByteCount(provider.SystemPrompt);
+
+        return bytes > Core.Catalog.CatalogLimits.MaxPromptBytes
+            ? $"its system prompt is {bytes} bytes — at most {Core.Catalog.CatalogLimits.MaxPromptBytes}; shorten it"
+            : string.Empty;
+    }
 
     /// <summary>
     /// The reviewers the operator ENABLED for this stage that this round cannot run, each as
@@ -367,6 +380,8 @@ public sealed class PanelService
     private string ReasonFor(ProviderSettings provider) =>
         RuntimeFor(provider) is null
             ? RuntimeResolution.NoAdapterFor(provider.Identity())
+            : PromptRefusal(provider) is { Length: > 0 } tooLong
+            ? tooLong
             : RuntimeResolution.ExclusionReason(
                 provider.Identity(), _keys.Keys.ContainsKey(provider.KeyName), HasServerToken(provider), provider.Model);
 

@@ -429,6 +429,11 @@ export function envBlock(
   installedServerVersion = '',
   /** An `api` row's list price, so it can cross with the row (S3.7). Absent prices nothing. */
   priceOf: RowPriceLookup = () => undefined,
+  /**
+   * What the installed `coai-mcp` lists in `--features` (PLAN_one_model_catalog.md E2): a catalog field crosses only
+   * when it is listed. Empty — nothing new — when it is not known yet.
+   */
+  features: readonly string[] = [],
 ): Record<string, string> {
   const env: Record<string, string> = securityEnv(settings.securityLane, installedServerVersion);
   // "Differs from the shipped list" is asked of what CROSSES — both lists as the server would read
@@ -439,8 +444,10 @@ export function envBlock(
   // whose only difference an older server cannot take (an api row, a feature tick) is still written, as before.
   // A catalog row that reviews nothing and serves only features that cross resolved stays off (`rowsOnTheWire`).
   const onTheWire = rowsOnTheWire(vendors, settings.securityLane);
-  if (vendorsEnv(onTheWire) !== vendorsEnv(DEFAULT_VENDORS)) {
-    env['COAI_VENDORS'] = vendorsEnv(onTheWire, installedServerVersion, priceOf);
+  // The capabilities count in the comparison too, so a shipped row whose only change is a field the binary takes — a
+  // system prompt — is still written; one the binary does not take still is not.
+  if (vendorsEnv(onTheWire, '', undefined, features) !== vendorsEnv(DEFAULT_VENDORS, '', undefined, features)) {
+    env['COAI_VENDORS'] = vendorsEnv(onTheWire, installedServerVersion, priceOf, features);
   }
   if (Object.keys(settings.promptsPerRound).length > 0) {
     env['COAI_PROMPTS_PER_ROUND'] = JSON.stringify(settings.promptsPerRound);

@@ -6297,3 +6297,22 @@ catalog field, or passes a flag, only when the installed binary lists it — "ca
 64 for the mode, which the extension reads as an empty list. **An entry is added in the commit that makes it true.**
 Listed today: `bugzRuntime` (`--collect-bugs --runtime`, E2.1). In PROJECT.md's one-shot list and the help
 (`TheBinarySaysWhatItAcceptsTests`, RED first on the mode falling through to Usage).
+
+## A row's system prompt (2026-10-05, PLAN_one_model_catalog.md E2.2)
+
+- `VendorDto.SystemPrompt` → `ProviderSettings.SystemPrompt` (trimmed at its edges). `ReviewerPrompt.ComposePrompt`
+  puts it under `## What the person asked of this reviewer` AFTER what the reviewer has and BEFORE the finding
+  contract, closed by a sentence that the contract still holds — so the schema and the read-only rules come after the
+  person's words again. The repair launch is composed without it: it asks only for the answer in the schema.
+- `RosterBuilder.InstructionFor(provider, runtime)` hands it to every runtime that `CarriesTheRowsPrompt` — all but
+  a Team server's, whose operator decides whether a client prompt is taken at all (story 5).
+- A prompt past `CatalogLimits.MaxPromptBytes` (8192 UTF-8 bytes) keeps the row out of the round:
+  `PanelService.PromptRefusal` joins `CanRun`, and `ReasonFor` says "its system prompt is N bytes — at most 8192".
+- It never reaches a record. The invocation carries it in `Redact`, and the executor replaces it in the child's
+  stdout and stderr the moment the launch returns, before any tail, transcript or failure reason is cut from them — a
+  CLI echoes its input and a failing one quotes it, and that stderr was the round's reason, in the rounds database
+  and the reply the calling AI reads. `ARowsSystemPromptLeavesNoTraceTests` runs real rounds (answered while echoing
+  it, failed while quoting it, timed out) and finds it in no log line or property, no file of the data directory, not
+  the server's stderr and not the reply — RED on the failed round first. Argv never carries it (`RoundAudit` logs the
+  arguments and the stdin LENGTH).
+- `--features` lists `systemPrompt`.

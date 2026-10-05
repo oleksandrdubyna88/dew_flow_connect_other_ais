@@ -18,6 +18,8 @@ import type { Run } from './roundsDbRead';
 export const FEATURES = {
   /** E2.1: `--collect-bugs --runtime <runtime>` — the Bugz ranking model allowed by its row's runtime. */
   bugzRuntime: 'bugzRuntime',
+  /** E2.2: a row's `systemPrompt`, delivered in the prompt body after the product's instruction. */
+  systemPrompt: 'systemPrompt',
 } as const;
 
 export interface BinaryFeatures {
@@ -87,6 +89,9 @@ function parsed(output: string): unknown {
 export class FeaturesCache {
   private asked: { readonly key: string; readonly answer: Promise<BinaryFeatures> } | undefined = undefined;
 
+  /** The last SETTLED list, for a reader that cannot wait for a spawn — the settings file is written synchronously. */
+  private last: readonly string[] = [];
+
   async of(path: string | undefined, runFor: (path: string) => Run): Promise<BinaryFeatures> {
     if (path === undefined) {
       return none('the MCP server is not installed');
@@ -101,9 +106,16 @@ export class FeaturesCache {
     return this.asked.answer;
   }
 
+  /** What the binary last settled on saying, without spawning — empty until it has. */
+  known(): readonly string[] {
+    return this.last;
+  }
+
   /** An answer that may pass is not kept: the next render asks again, rather than the window living on a cold start. */
   private forgetUnsettled(answer: Promise<BinaryFeatures>, got: BinaryFeatures): void {
-    if (!got.settled && this.asked?.answer === answer) {
+    if (got.settled) {
+      this.last = got.features;
+    } else if (this.asked?.answer === answer) {
       this.asked = undefined;
     }
   }
