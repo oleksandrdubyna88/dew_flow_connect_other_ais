@@ -187,6 +187,7 @@ on never answered). Each runtime's flag is pinned in argv AND observed taking ef
 | D8 | **Chat models become per side**; chat PROMPT presets stay shared. A model's effort and system prompt apply to chat too (chat runs in the extension). | The catalog is per side; a chat on WSL opens a WSL CLI. |
 | D9 | **A consultant on an API key** is a multi-turn API runner; coai-mcp keeps its transcript (the vendor keeps none), retired with the consultation. | The operator's own example (GLM high as consultant). |
 | D10 | **✓ Check of any instance** is a coai-mcp one-shot mode `--check-model <id>`, built on `ConsultCheckState`'s durable record (exclusive open, owner = pid + process start time, `already-checking`, a startup sweep, never settled from another side, the config hash stamped so an edit mid-check is not credited), one at a time per instance, a hard timeout that kills the process tree, the scratch folder removed in `finally`, confirmed first as a paid turn. | The consultant's Check proved the shape; generalising it is reuse, not a second mechanism. |
+| D12 | **A thinking switch only where the model has one** (the operator, 2026-10-05: "for every model, check whether a thinking mode is available — then give an on/off switch"). Every card asks its runtime's answer, the way effort does (D4): `shared/feature-availability.json` gains a `thinking` row per runtime with a source — `probe` for api rows and local engines (the module's or engine's `thinkingSwitchable`, judged per MODEL, so a model the module was not measured on shows no switch), `unmeasured` where nobody has shown a flag (codex), `none` where the runtime has no such switch (claude — its depth is `--effort`; antigravity). The card draws the on/off switch only when the answer says switchable; otherwise one line saying why ("thinking cannot be switched off for this model", or "not measured for codex yet"). The value crosses only to a binary that lists it in `--features`. | The api card has drawn exactly this since S3.8 (`apiSettingsView.thinkingControl`); the rule widens to every runtime rather than a second mechanism. |
 | D11 | **Help moves with the tabs**, in all five languages, in the epic that moves a control; `coai.openSettings` maps every OLD tab id to its new place. | A help article naming a tab that no longer exists is the stale translation already measured. |
 
 ### What the legacy wire cannot carry, and what the page says
@@ -412,7 +413,8 @@ override the stories above where they differ:
    six tabs with sub-tabs, remembered by the host; the deep-link map (D11); two columns from 1100 px with
    side-by-side blocks one height (CSS subgrid); `help(key)`, `skew(since, what)`, `newTag(controlId)` and one confirm
    dialog; `coai.settingsPreview` (D5); `render-page.mjs` gains the page and a light theme.
-2. **Models — cards and editing**: every card part of the mockup; add (grouped by where a model runs), duplicate
+2. **Models — cards and editing**: every card part of the mockup — the thinking switch drawn only where the model has one
+   (D12); add (grouped by where a model runs), duplicate
    (copies `vaultKeyName`), remove (lists every reference; the last switched-on plan or code model cannot leave), on/off,
    the filter rows.
 3. **Models — the world-facing parts**: the CLI's ▶ open / ⤓ install / ⟳ update, coai-mcp's verdict, where a list came
