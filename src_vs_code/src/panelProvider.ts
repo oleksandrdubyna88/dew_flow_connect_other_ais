@@ -149,6 +149,9 @@ import {
 } from './vendors';
 import { Catalog, Usage, fetchClientConfig, fetchUsage } from './teamServerApi';
 import { webviewNonce } from './webviewNonce';
+import { addRefusal, rowWriteRefusal } from './catalogWriteRules';
+import { duplicated, removedRow, type RowsChange, toggledUse } from './catalogCommands';
+import { groupOf, grouped, NO_TEAM_SERVER } from './addModelGroups';
 
 /**
  * The panel's window names, as the server's `/api/usage` spells them.
@@ -1863,6 +1866,16 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     }
     switch (write.kind) {
       case 'vendor': {
+        // Refused BEFORE it is saved, for both pages: a prompt past 8 KiB, an effort the runtime refuses, the last
+        // model of a review stage switched off (catalogWriteRules.ts; PLAN_one_model_catalog.md E3.2). The control
+        // snaps back and the person is told why.
+        const refused = rowWriteRefusal(this.vendorsHere(), write.vendor, write.key, write.value,
+          this.providersCache.reported[write.vendor]?.api?.capabilities.effortLevels ?? []);
+        if (refused.length > 0) {
+          reportRefusal(this.context, 'vendors', new Error(refused));
+          await afterTheWrite(() => this.snapBack(from))();
+          return;
+        }
         if (isApiSettingKey(write.key)) {
           await this.writeApiSetting(config, write, from);
           return;
@@ -2370,6 +2383,22 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       case 'removeTeamServer':
         if (id !== undefined) {
           await this.removeTeamServer(id);
+        }
+        break;
+      case 'toggleUse':
+        if (id !== undefined) {
+          const [row, use] = id.split('|');
+          await this.applyRowsChange(toggledUse(this.vendorsHere(), row ?? '', use ?? '', this.settings().bugzModel));
+        }
+        break;
+      case 'duplicateModel':
+        if (id !== undefined) {
+          await this.applyRowsChange(duplicated(this.vendorsHere(), id));
+        }
+        break;
+      case 'removeModel':
+        if (id !== undefined) {
+          await this.applyRowsChange(removedRow(this.vendorsHere(), id));
         }
         break;
       case 'settingsPreview':
@@ -3762,6 +3791,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 
   private async addVendor(): Promise<void> {
+    // The catalog's cap, checked where a row is ADDED (PLAN_one_model_catalog.md E3's plan round), before anything is asked.
+    const full = addRefusal(this.vendorsHere());
+    if (full.length > 0) {
+      void notify({ as: 'warning', class: 'refusal', source: 'reviewers', code: 'a-catalog-edit-refused', subject: full, title: full });
+      return;
+    }
     const existing = new Set(this.vendorsHere().map((v) => v.id));
     // The catalogue is offered WHOLE. It used to drop any preset already in the panel, which made a
     // second row of anything impossible and said nothing about why the entry had gone — the same
@@ -3781,36 +3816,31 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // now when there is none, because a pick opened before the first probe landed must not read as
     // an empty vault.
     const vaultItems = vaultKeyItems(...(await this.vaultKeysNow()), this.vendorsHere());
+    // Grouped by WHERE the model runs (PLAN_one_model_catalog.md E3.2): a CLI here, an API key, this machine's GPU, a
+    // Team server — with a line in the last group saying where to add a server when this side holds a token for none.
+    const choices = [
+      ...items.map((p) => ({
+        label: p.label, detail: p.detail, description: p.description, offered: p.offered, server: undefined, vault: undefined,
+        notice: false, group: groupOf(p.offered.preset.runtime),
+      })),
+      ...teamServers.map((s) => ({
+        label: `Team server ${s.name}`,
+        detail: `on ${canonicalTeamServerUrl(s.url)} — the company's subscription, nothing to install`,
+        description: '', offered: undefined, server: s, vault: undefined, notice: false, group: 'remote' as const,
+      })),
+      ...(teamServers.length === 0
+        ? [{ ...NO_TEAM_SERVER, description: '', offered: undefined, server: undefined, vault: undefined, notice: true, group: 'remote' as const }]
+        : []),
+      ...vaultItems.map((v) => ({
+        label: v.label, detail: v.detail, description: v.description, offered: undefined, server: undefined, vault: v,
+        notice: false, group: 'api' as const,
+      })),
+    ];
     const picked = await askPerson(() => vscode.window.showQuickPick(
-      [
-        ...items.map((p) => ({
-          label: p.label,
-          detail: p.detail,
-          description: p.description,
-          offered: p.offered,
-          server: undefined,
-          vault: undefined,
-        })),
-        ...teamServers.map((s) => ({
-          label: `Team server ${s.name}`,
-          detail: `on ${canonicalTeamServerUrl(s.url)} — the company's subscription, nothing to install`,
-          description: '',
-          offered: undefined,
-          server: s,
-          vault: undefined,
-        })),
-        ...vaultItems.map((v) => ({
-          label: v.label,
-          detail: v.detail,
-          description: v.description,
-          offered: undefined,
-          server: undefined,
-          vault: v,
-        })),
-      ],
+      grouped(choices).map((one) => ('separator' in one ? { label: one.separator, kind: vscode.QuickPickItemKind.Separator } : one)),
       {
-        title: 'Add a reviewer',
-        placeHolder: 'Which vendor should review as well?',
+        title: 'Add a model',
+        placeHolder: 'Where does it run? A CLI here, an API key, this machine’s GPU or a Team server',
         // Both, and neither is decoration. Without matchOnDetail a person typing words from an
         // entry's hint gets an empty list; without matchOnDescription the same happens to anyone
         // typing the id a second row will take, which is only ever written in the description.
@@ -3818,7 +3848,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         matchOnDescription: true,
       },
     ));
-    if (picked === undefined) {
+    if (picked === undefined || !('notice' in picked)) {
+      return;
+    }
+    if (picked.notice) {
+      void notify({ as: 'information', class: 'outcome', source: 'reviewers', code: 'no-team-server-to-add-from', title: NO_TEAM_SERVER.detail });
       return;
     }
 
@@ -4077,6 +4111,27 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // Through the one save, so a side that keeps its own settings gets the row, and a refusal is said. Then drawn
     // from what is stored: a write to this side's overlay raises no configuration event to redraw the page.
     await this.save(config, 'vendors', [...vendors, vendor]);
+    await this.render();
+  }
+
+  /**
+   * One edit of the Models tab (`catalogCommands.ts`) — refused and said, or saved through the one save (and the
+   * Bugz ranking model with it, when ticking Bugz moved it), then drawn from what is stored.
+   */
+  private async applyRowsChange(change: RowsChange): Promise<void> {
+    if (change.refused.length > 0) {
+      void notify({ as: 'warning', class: 'refusal', source: 'reviewers', code: 'a-catalog-edit-refused', subject: change.refused, title: change.refused });
+      await this.render();
+      return;
+    }
+    const config = vscode.workspace.getConfiguration('coai');
+    await this.save(config, 'vendors', change.rows);
+    if (change.bugzModel !== undefined) {
+      await this.save(config, 'bugzModel', change.bugzModel);
+    }
+    if (change.said.length > 0) {
+      void notify({ as: 'information', class: 'outcome', source: 'reviewers', code: 'bugz-model-moved', subject: change.said, title: change.said });
+    }
     await this.render();
   }
 

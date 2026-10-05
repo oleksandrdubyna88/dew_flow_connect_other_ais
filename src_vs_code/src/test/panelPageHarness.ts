@@ -270,9 +270,11 @@ function withChoice(control: Control, html: string, at: number): Control {
  * binds a click to. A button is not a `data-setting` control, so it is not in `controlsOf`.
  */
 function commandsOf(html: string): readonly Control[] {
-  return [...html.matchAll(/<button\b([^>]*)>([^<]*)/g)]
-    .filter(([, attributes]) => attributes!.includes('data-command="'))
-    .map(([, attributes, label]) => labelled(controlFrom('button', attributes!), label!));
+  // A button, or a box that posts a command when ticked (the Models tab's uses, PLAN_one_model_catalog.md E3.2) — the
+  // page binds every `[data-command]`, whatever element carries it, and so does this.
+  return [...html.matchAll(/<(button|input)\b([^>]*)>([^<]*)/g)]
+    .filter(([, , attributes]) => attributes!.includes('data-command="'))
+    .map(([, tag, attributes, label]) => labelled(controlFrom(tag!, attributes!), tag === 'button' ? label! : ''));
 }
 
 /** A button with the text it was drawn with — what a page reads back before it relabels one (a copy's *Copied*). */

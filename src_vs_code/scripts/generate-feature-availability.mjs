@@ -49,11 +49,14 @@ try {
  * What the file may say. A field or a word this script does not know is REFUSED rather than dropped, so a
  * field added for coai-mcp's loader becomes a deliberate act on both sides.
  */
-const SEED_FIELDS = ['why', 'runtimes', 'features', 'effort'];
+const SEED_FIELDS = ['why', 'runtimes', 'features', 'effort', 'thinking'];
 const FEATURES = ['consultant', 'chat'];
 const EFFORT_FIELDS = ['runtime', 'source', 'levels', 'measuredWith', 'note'];
 const SOURCES = ['list', 'probe', 'unmeasured', 'none'];
 const LEVEL = /^[a-z][a-z0-9-]{0,31}$/u;
+// Thinking (D12): whether a runtime has an on/off switch — no `list`: a switch has two positions, not levels.
+const THINKING_FIELDS = ['runtime', 'source', 'note'];
+const THINKING_SOURCES = ['probe', 'unmeasured', 'none'];
 
 /**
  * The effort rules, in the order they are checked: what must hold, and what is said when it does not. A table rather
@@ -113,6 +116,32 @@ for (const runtime of runtimes) {
   }
 }
 
+const thinking = seed.thinking;
+if (!Array.isArray(thinking)) {
+  refuse('has no thinking rows');
+}
+for (const row of thinking) {
+  checkThinkingRow(row);
+}
+for (const runtime of runtimes) {
+  const count = thinking.filter((row) => row.runtime === runtime).length;
+  if (count !== 1) {
+    refuse(`runtime '${runtime}' has ${count} thinking rows; every runtime has exactly one`);
+  }
+}
+
+/** One thinking row: known fields, a known runtime and source, and always a reason a card can show. */
+function checkThinkingRow(row) {
+  const stranger = unknown(row, THINKING_FIELDS);
+  const broken = stranger !== undefined ? ` has a field this generator does not know: '${stranger}'`
+    : !runtimes.includes(row.runtime) ? ` is not one of the runtimes (${runtimes.join(', ')})`
+      : !THINKING_SOURCES.includes(row.source) ? ` has source '${row.source}'; the sources are ${THINKING_SOURCES.join(', ')}`
+        : typeof row.note !== 'string' || row.note.length === 0 ? ': every thinking row says why (note), which the card shows' : '';
+  if (broken.length > 0) {
+    refuse(`thinking row '${row.runtime}'${broken}`);
+  }
+}
+
 /** One effort row: known fields, a known source, levels only for `list`, and a reason where there are none. */
 
 function checkEffortRow(row) {
@@ -132,6 +161,14 @@ const effortRow = (row) => [
   `    source: ${lit(row.source)},`,
   `    levels: ${list(row.levels)},`,
   `    measuredWith: ${lit(row.measuredWith)},`,
+  `    note: ${lit(row.note)},`,
+  '  },',
+].join('\n');
+
+const thinkingRow = (row) => [
+  '  {',
+  `    runtime: ${lit(row.runtime)},`,
+  `    source: ${lit(row.source)},`,
   `    note: ${lit(row.note)},`,
   '  },',
 ].join('\n');
@@ -166,9 +203,24 @@ export const CHAT: readonly Runtime[] = ${list(features.chat)};
 export const EFFORT: readonly EffortRow[] = [
 ${effort.map(effortRow).join('\n')}
 ];
+
+/** Whether a runtime has a thinking switch (D12): \`probe\` asks the model's report, the others say why there is none. */
+export type ThinkingSource = ${THINKING_SOURCES.map(lit).join(' | ')};
+
+/** One runtime's thinking switch — and, always, the sentence a card shows when there is none. */
+export interface ThinkingRow {
+  readonly runtime: Runtime;
+  readonly source: ThinkingSource;
+  readonly note: string;
+}
+
+/** One row per runtime. */
+export const THINKING: readonly ThinkingRow[] = [
+${thinking.map(thinkingRow).join('\n')}
+];
 `;
 
-const counts = `${features.consultant.length} consulting, ${features.chat.length} chat, ${effort.length} effort rows`;
+const counts = `${features.consultant.length} consulting, ${features.chat.length} chat, ${effort.length} effort rows, ${thinking.length} thinking rows`;
 const rerun = [
   'node src_vs_code/scripts/generate-feature-availability.mjs',
   ...(seedPath === defaultSeed ? [] : [`--seed=${seedPath}`]),

@@ -23,6 +23,7 @@ export function catalogScript(place: string): string {
   const heldPlace = ${jsonForScript(place)};
 ${placesScript()}
 ${confirmScript()}
+${modelsScript()}
 ${tabKeysScript()}
 ${textControlsScript()}
   window.addEventListener('message', (event) => {
@@ -110,4 +111,79 @@ function confirmScript(): string {
   if (confirmKeep) { confirmKeep.addEventListener('click', closeConfirm); }
   const confirmDialog = document.getElementById('confirm-dialog');
   if (confirmDialog) { confirmDialog.addEventListener('cancel', () => { asking = null; }); }`;
+}
+
+/**
+ * The Models tab in the page: the filters (search, where it runs, switched-off, the three chip rows) narrow the cards by
+ * their `data-*` and are kept in this webview's state — narrowing changes nothing stored, so it costs no round trip and
+ * no repaint — and each system prompt counts its UTF-8 bytes as it is typed, against the 8 KiB the host enforces.
+ */
+function modelsScript(): string {
+  return `${modelFiltersScript()}${modelEventsScript()}`;
+}
+
+/** Which cards the filters show — the rules, read off each card's `data-*`. */
+function modelFiltersScript(): string {
+  return `
+  const modelFilters = Object.assign({ q: '', access: '', off: false, uses: '', effort: '', runtime: '' }, (vscode.getState() || {}).models || {});
+  function saveModelFilters() { vscode.setState(Object.assign({}, vscode.getState() || {}, { models: modelFilters })); }
+  function listHas(list, word) { return (' ' + list + ' ').indexOf(' ' + word + ' ') >= 0; }
+  function cardShown(card) {
+    const d = card.dataset;
+    return (modelFilters.off || d.enabled === 'true')
+      && (!modelFilters.q || d.search.indexOf(modelFilters.q.toLowerCase()) >= 0)
+      && (!modelFilters.access || d.access === modelFilters.access)
+      && (!modelFilters.uses || listHas(d.uses, modelFilters.uses))
+      && (!modelFilters.effort || d.effort === modelFilters.effort)
+      && (!modelFilters.runtime || d.runtime === modelFilters.runtime);
+  }
+  function applyModelFilters() {
+    const cards = catalogAll('[data-model-card]');
+    let shown = 0;
+    for (const card of cards) { card.hidden = !cardShown(card); shown += card.hidden ? 0 : 1; }
+    for (const chip of catalogAll('[data-chip]')) {
+      chip.setAttribute('aria-pressed', modelFilters[chip.dataset.chip] === chip.dataset.value ? 'true' : 'false');
+    }
+    const empty = document.querySelector('[data-models-empty]');
+    if (empty) { empty.hidden = shown > 0 || cards.length === 0; }
+  }
+`;
+}
+
+/** What moves the filters — the chips, the search box, the two pickers — and the prompt's byte count. */
+function modelEventsScript(): string {
+  return `
+  function setModelFilter(key, value) { modelFilters[key] = value; saveModelFilters(); applyModelFilters(); }
+  document.addEventListener('click', (event) => {
+    const pressed = event.target;
+    if (!pressed || typeof pressed.closest !== 'function') { return; }
+    const chip = pressed.closest('[data-chip]');
+    if (chip) { setModelFilter(chip.dataset.chip, modelFilters[chip.dataset.chip] === chip.dataset.value ? '' : chip.dataset.value); }
+    if (pressed.id === 'model-clear') {
+      Object.assign(modelFilters, { q: '', access: '', uses: '', effort: '', runtime: '' });
+      saveModelFilters();
+      applyModelFilters();
+    }
+  });
+  document.addEventListener('input', (event) => {
+    const typed = event.target;
+    if (!typed) { return; }
+    if (typed.id === 'model-search') { setModelFilter('q', typed.value || ''); }
+    if (typed.dataset && typed.dataset.setting === 'systemPrompt') {
+      const count = document.querySelector('[data-bytes-for="' + typed.id + '"]');
+      if (count) { count.textContent = String(new TextEncoder().encode(typed.value || '').length); }
+    }
+  });
+  document.addEventListener('change', (event) => {
+    const changed = event.target;
+    if (changed && changed.id === 'model-access') { setModelFilter('access', changed.value || ''); }
+    if (changed && changed.id === 'model-show-off') { setModelFilter('off', changed.checked === true); }
+  });
+  const modelSearchBox = document.getElementById('model-search');
+  if (modelSearchBox) { modelSearchBox.value = modelFilters.q; }
+  const modelAccessPick = document.getElementById('model-access');
+  if (modelAccessPick) { modelAccessPick.value = modelFilters.access; }
+  const modelShowOff = document.getElementById('model-show-off');
+  if (modelShowOff) { modelShowOff.checked = modelFilters.off === true; }
+  applyModelFilters();`;
 }

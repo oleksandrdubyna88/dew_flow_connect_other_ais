@@ -890,3 +890,11 @@ row id stands in, so `local/<model>` means what it did. A second local instance 
 `Section(text)`, `HasContract(prompt)` and `PlacedIn(prompt, text)` (before the first contract heading at a line start;
 the prompt unchanged when there is none — a caller that must know asks `HasContract` first). In core because two composers place it: `ReviewerPrompt` on this machine and the Team server for a remote row, so
 both reviewers read the same sentence.
+
+## Thinking rows in `FeatureAvailability` (2026-10-05, PLAN_one_model_catalog.md D12, E3.2)
+
+`shared/feature-availability.json` gains a `thinking` row per runtime (`probe` | `unmeasured` | `none`, always with a
+note). `FeatureAvailability.Thinking` / `ThinkingOf(runtime)` read them beside the effort rows (a runtime the file does
+not name has none); `ThinkingSources` is declared before `Builtin`, because static fields initialise in textual
+order and `Builtin` loads the file through them. Only `api` is `probe` today — the model's probe report says whether
+its thinking can be switched off; the extension draws a switch nowhere else.

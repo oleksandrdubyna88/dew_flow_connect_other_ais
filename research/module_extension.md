@@ -10829,3 +10829,33 @@ flowchart LR
   H[settingsPanel: one held place] --> N
   H -->|oldIdOf| O
 ```
+
+## The new Settings page — Models (2026-10-05, PLAN_one_model_catalog.md E3.2)
+
+`modelsTab.ts` draws the toolbar (＋ Add a model, find, where it runs, show switched-off, the count), three chip rows
+(used for, effort, runs on — with counts) and one card per catalog row (`modelCard.ts`). The filters live in the page
+(`catalogPageScript.ts`, the card's `data-*`, kept in `getState`): narrowing stores nothing.
+
+- **One set of facts, one set of controls.** `cardContextFor(state)` (extracted from the current page's
+  `reviewersBody`) feeds both pages' cards; the new card calls the current card's builders, now exported from
+  `panelView.ts` (`stageBox`, `featureBox`, `priceFields`, `endpointField`, `modelOptions`, …), so a choice is stored
+  the same way from either page. A card is four subgrid rows: the head (on/off, name, ⧉ Duplicate, ✕ through the one
+  confirm), Use for (the stage boxes and the `uses` ticks), How it answers (model; effort/thinking/limit by RUNTIME;
+  the system prompt with its byte count), and the foot (connection, price, "Used as …").
+- **By runtime** (`modelCardFields.ts`): uses not offered are drawn off with one merged reason line (`useRefusal`:
+  consultants on `CONSULTING`, chat on `CHAT`, Bugz on `local`); effort as `shared/feature-availability.json` says —
+  a `list` runtime's levels, an `unmeasured` one's note ("kept and not applied"), a `probe` engine's reported levels,
+  a Team server's listed levels (the server judges); an api row keeps `apiSettingsFields`. **Thinking (D12):** the
+  file's new `thinking` rows (`probe` for api only; `none`/`unmeasured` with a note) — read by the generator, by
+  `FeatureAvailability.Thinking` in C#, and shown on every card without a switch.
+- **Writes are validated before they are saved, for both pages** (`catalogWriteRules.ts`): a system prompt past
+  8 KiB, an effort the runtime refuses (an api row by its report, a Team server row by its server), and the last
+  model switched on for plan or code review switched off or unticked — refused by name, the control snapping back.
+  The 64-row cap is checked only where a row is ADDED (`addRefusal`).
+- **The tab's own edits** (`catalogCommands.ts`, commands `toggleUse` `<row>|<use>`, `duplicateModel`, `removeModel`):
+  a use toggled in the catalog's order — Bugz moves to the one row ticked and `coai.bugzModel` with it (D7); a
+  duplicate copies everything (`vaultKeyName` too) under the next free id, right after its source; a remove after the
+  page's confirm (no second modal), refused for the last model of a stage. The card locks the same rule (`lastStagesOf`).
+- **Add a model** is the existing picker, grouped by where a model runs (`addModelGroups.ts`: a CLI here, an API key,
+  this machine's GPU, a Team server — with a line saying where to add a server when none is signed in).
+- **This coai-mcp ignores…** on a card through `skew` by capability (`systemPrompt`, `timeoutMinutes`, `cliEffort`).

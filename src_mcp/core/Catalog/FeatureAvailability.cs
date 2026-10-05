@@ -6,7 +6,8 @@ namespace CoaiMcp.Core.Catalog;
 public sealed record FeatureAvailabilitySeed(
     IReadOnlyList<string>? Runtimes,
     FeatureListsSeed? Features,
-    IReadOnlyList<EffortRowSeed>? Effort);
+    IReadOnlyList<EffortRowSeed>? Effort,
+    IReadOnlyList<ThinkingRowSeed>? Thinking = null);
 
 /// <summary>Which runtimes serve the consultant and the chat.</summary>
 public sealed record FeatureListsSeed(IReadOnlyList<string>? Consultant, IReadOnlyList<string>? Chat);
@@ -16,6 +17,11 @@ public sealed record EffortRowSeed(string? Runtime, string? Source, IReadOnlyLis
 
 /// <summary>One runtime's legal efforts: the levels when <see cref="Source"/> is <c>list</c>, and why when it is not.</summary>
 public sealed record EffortRow(string Runtime, string Source, IReadOnlyList<string> Levels, string Note);
+
+public sealed record ThinkingRowSeed(string? Runtime, string? Source, string? Note);
+
+/// <summary>Whether a runtime has a thinking switch (PLAN_one_model_catalog.md D12), and why when it has none.</summary>
+public sealed record ThinkingRow(string Runtime, string Source, string Note);
 
 /// <summary>
 /// Which runtime serves which feature, and which efforts each accepts — read from the file the extension generates its
@@ -31,6 +37,9 @@ public sealed class FeatureAvailability
 
     private static readonly string[] Sources = ["list", "probe", "unmeasured", "none"];
 
+    // Declared BEFORE Builtin: static fields initialise in textual order, and Builtin reads the file through these.
+    private static readonly string[] ThinkingSources = ["probe", "unmeasured", "none"];
+
     public static FeatureAvailability Builtin { get; } = LoadBuiltin();
 
     public IReadOnlyList<string> Consultant { get; init; } = [];
@@ -38,6 +47,13 @@ public sealed class FeatureAvailability
     public IReadOnlyList<string> Chat { get; init; } = [];
 
     public IReadOnlyList<EffortRow> Effort { get; init; } = [];
+
+    public IReadOnlyList<ThinkingRow> Thinking { get; init; } = [];
+
+    /// <summary>One runtime's thinking switch — a runtime the file does not name has none.</summary>
+    public ThinkingRow ThinkingOf(string runtime) =>
+        Thinking.FirstOrDefault(row => string.Equals(row.Runtime, runtime, StringComparison.OrdinalIgnoreCase))
+        ?? new ThinkingRow(runtime, "none", $"'{runtime}' is not a runtime the feature-availability file names");
 
     /// <summary>One runtime's efforts — a runtime the file does not name takes none.</summary>
     public EffortRow EffortOf(string runtime) =>
@@ -64,6 +80,7 @@ public sealed class FeatureAvailability
             Consultant = Within(seed.Features?.Consultant, runtimes, "consultant"),
             Chat = Within(seed.Features?.Chat, runtimes, "chat"),
             Effort = [.. (seed.Effort ?? []).Select(row => Row(row, runtimes))],
+            Thinking = [.. (seed.Thinking ?? []).Select(row => ThinkingRowOf(row, runtimes))],
         };
     }
 
@@ -89,6 +106,16 @@ public sealed class FeatureAvailability
         return runtimes.Contains(runtime, StringComparer.Ordinal) && Sources.Contains(source, StringComparer.Ordinal)
             ? new EffortRow(runtime, source, row.Levels ?? [], row.Note ?? string.Empty)
             : throw Broken($"effort row '{runtime}' has source '{source}'; the runtimes are {string.Join(", ", runtimes)} and the sources {string.Join(", ", Sources)}");
+    }
+
+    private static ThinkingRow ThinkingRowOf(ThinkingRowSeed row, IReadOnlyList<string> runtimes)
+    {
+        var runtime = row.Runtime ?? string.Empty;
+        var source = row.Source ?? string.Empty;
+
+        return runtimes.Contains(runtime, StringComparer.Ordinal) && ThinkingSources.Contains(source, StringComparer.Ordinal)
+            ? new ThinkingRow(runtime, source, row.Note ?? string.Empty)
+            : throw Broken($"thinking row '{runtime}' has source '{source}'; the runtimes are {string.Join(", ", runtimes)} and the sources {string.Join(", ", ThinkingSources)}");
     }
 
     private static InvalidOperationException Broken(string what) =>

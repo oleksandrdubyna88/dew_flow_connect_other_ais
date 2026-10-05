@@ -56,5 +56,60 @@ const SHELL = `
   .dialog-buttons button { width: auto; margin: 0; }
   #confirm-go.danger { background: var(--err); color: var(--vscode-button-foreground, #fff); }`;
 
+/**
+ * The Models tab (E3.2): the toolbar, the three chip rows, and the cards — two columns from 1100 px, each card four rows
+ * of the shared grid through `subgrid`, so the same part of two neighbouring cards starts on the same line and the cards
+ * end together (the mockup's check 3).
+ */
+const MODELS = `
+  .catalog .lead { margin: 4px 0 10px; }
+  .catalog .toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 10px; }
+  .catalog .toolbar .spacer { flex: 1; }
+  .catalog .toolbar label { display: inline-flex; gap: 6px; align-items: center; color: var(--muted); white-space: nowrap; }
+  .catalog .toolbar input[type="search"] { width: 16em; }
+  .catalog .filters { display: grid; gap: 6px; margin-bottom: 14px; }
+  .catalog .chip-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .catalog .chip-row .group { color: var(--muted); min-width: 6em; }
+  .catalog .chip {
+    display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--border-strong); border-radius: 12px;
+    padding: 2px 10px; background: transparent; color: var(--vscode-foreground); cursor: pointer; margin: 0;
+  }
+  .catalog .chip:hover { background: var(--hover); }
+  .catalog .chip[aria-pressed="true"] { border-color: var(--focus); background: color-mix(in srgb, var(--focus) 12%, transparent); }
+  .catalog .chip .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .catalog .chip.empty { border-style: dashed; color: var(--warn); }
+  .catalog .cards { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; align-items: stretch; }
+  @media (min-width: 1100px) { .catalog .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .catalog .card {
+    display: grid; grid-row: span 4; grid-template-rows: subgrid; row-gap: 0; background: var(--card);
+    border: 1px solid var(--border); border-left: 3px solid var(--vc, var(--border-strong)); border-radius: 4px; padding: 12px 14px 10px;
+  }
+  .catalog .card.disabled { opacity: 0.62; }
+  .catalog .card-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 10px; align-items: start; }
+  .catalog .card-head .name-edit { font-weight: 600; width: 100%; }
+  .catalog .card-head .sub { color: var(--muted); font-size: 0.9em; margin-top: 2px; }
+  .catalog .card .actions { display: flex; gap: 4px; }
+  .catalog .card .actions button { margin: 0; }
+  .catalog .card .actions .ask { background: transparent; color: var(--err); border: 1px solid transparent; padding: 0 6px; }
+  .catalog .card .actions .ask:hover { border-color: var(--err); }
+  .catalog .card .actions .ask:disabled { color: var(--muted); }
+  .catalog .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
+  .catalog .badge { border: 1px solid var(--border-strong); border-radius: 3px; padding: 0 7px; font-size: 0.88em; }
+  .catalog .block { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
+  .catalog .block-title { font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 6px; opacity: 1; }
+  .catalog .boxes { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+  .catalog .feat { display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; }
+  .catalog .feat.off { color: var(--muted); text-decoration: line-through; text-decoration-color: var(--border-strong); }
+  .catalog .notes-list { margin: 6px 0 0; padding: 0; list-style: none; font-size: 0.9em; color: var(--muted); }
+  .catalog .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; align-items: start; }
+  .catalog .settings-grid .wide { grid-column: 1 / -1; }
+  @media (max-width: 560px) { .catalog .settings-grid { grid-template-columns: minmax(0, 1fr); } }
+  .catalog .card textarea { width: 100%; box-sizing: border-box; }
+  .catalog .card-foot { align-self: start; }
+  .catalog details.more { margin-top: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
+  .catalog details.more summary { cursor: pointer; color: var(--muted); }
+  .catalog .used-by { margin-top: 8px; font-size: 0.9em; color: var(--muted); }
+  .catalog .empty-state { border: 1px dashed var(--border-strong); border-radius: 4px; padding: 24px; text-align: center; color: var(--muted); }`;
+
 /** The whole sheet the new page carries beside the shared one `pageDocument` draws. */
-export const CATALOG_CSS = `${SETTINGS_CSS}${TOKENS}${SHELL}`;
+export const CATALOG_CSS = `${SETTINGS_CSS}${TOKENS}${SHELL}${MODELS}`;

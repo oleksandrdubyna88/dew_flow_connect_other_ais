@@ -36,6 +36,17 @@ public sealed class FeatureAvailabilityTests
         FeatureAvailability.Builtin.Chat.Should().Equal(Words(features.GetProperty("chat")));
         FeatureAvailability.Builtin.Effort.Select(row => row.Runtime)
             .Should().Equal(Shared().GetProperty("effort").EnumerateArray().Select(row => row.GetProperty("runtime").GetString()));
+        FeatureAvailability.Builtin.Thinking.Select(row => (row.Runtime, row.Source))
+            .Should().Equal(Shared().GetProperty("thinking").EnumerateArray()
+                .Select(row => (row.GetProperty("runtime").GetString()!, row.GetProperty("source").GetString()!)));
+    }
+
+    [Fact]
+    public void ThinkingIsSwitchable_OnlyWhereTheModelSaysSo_AndAnUnknownRuntimeHasNone()
+    {
+        FeatureAvailability.Builtin.ThinkingOf("api").Source.Should().Be("probe");
+        FeatureAvailability.Builtin.ThinkingOf("claude").Source.Should().Be("none", "claude's depth is its effort (D12)");
+        FeatureAvailability.Builtin.ThinkingOf("llama.cpp").Source.Should().Be("none");
     }
 
     [Fact]

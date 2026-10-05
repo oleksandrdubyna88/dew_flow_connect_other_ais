@@ -1094,13 +1094,24 @@ function updateLabel(id: string, cli: CliStatus): string {
 }
 
 function reviewersBody(state: PanelState): string {
+  const contextOf = cardContextFor(state);
+
+  return `${state.vendors.map((v) => vendorCard(v, contextOf(v))).join('\n')}
+<button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
+}
+
+/**
+ * What each card needs beyond its row — for the current page's card and the new page's (PLAN_one_model_catalog.md E3.2),
+ * so the two draw a row from the same facts.
+ */
+export function cardContextFor(state: PanelState): (vendor: Vendor) => CardContext {
   // Built ONCE, from the whole configured list: "no two reviewers share a colour" is a statement
   // about the list, and it cannot be decided one card at a time.
   const colour = vendorPalette(state.vendors.map((v) => v.id));
   // Once, not per card: a server that is absent or cannot be versioned is not called old.
   const serverVersion = state.server.kind === 'known' ? state.server.version : '';
 
-  return `${state.vendors.map((v) => vendorCard(v, {
+  return (v) => ({
     colour: colour(v.id),
     codexModels: state.codexModels,
     agyModels: state.agyModels,
@@ -1120,8 +1131,7 @@ function reviewersBody(state: PanelState): string {
     featureNote: featureNote(v, serverVersion),
     // An api card's per-model settings name the installed server when it is too old for them (S3.8).
     serverVersion,
-  })).join('\n')}
-<button class="add" data-command="addVendor" title="${escapeHtml(HELP.addVendor)}">＋&nbsp; Add a reviewer</button>`;
+  });
 }
 
 /**
@@ -1153,7 +1163,7 @@ const KNOWS_ITS_OWN_ENDPOINT: ReadonlySet<string> = new Set(['codex', 'claude', 
  * failed probe is a badge that lies. The reason travels as the title, because "unavailable" is not
  * something a person can act on and "not signed in to the Team server at …" is.</p>
  */
-function cannotRun(id: string, reported: Readonly<Record<string, ProviderHealth>>): string {
+export function cannotRun(id: string, reported: Readonly<Record<string, ProviderHealth>>): string {
   if (availabilityOf(id, reported) !== 'unavailable') {
     return '';
   }
@@ -1180,7 +1190,7 @@ function cannotRun(id: string, reported: Readonly<Record<string, ProviderHealth>
  * same kind of thing, a fact this panel went and found. Naming them is what makes the call site
  * legible, and an analyser was right to say so.</p>
  */
-interface CardContext {
+export interface CardContext {
   /** What the Claude CLI answered about its families, so this card offers facts. */
   readonly claudeProbe?: ProbeResult | undefined;
   /** True while the Claude probe runs, so the caption under its dropdown says so. */
@@ -1228,7 +1238,7 @@ interface CardContext {
  * endpoint" ships with an empty one), so it could never be filled in. Found by Gemma4 26B,
  * 2026-09-02, and it is the only defect in that campaign no hosted model found.</p>
  */
-function endpointField(vendor: Vendor, id: string, local: boolean, remote: boolean, off: boolean): string {
+export function endpointField(vendor: Vendor, id: string, local: boolean, remote: boolean, off: boolean): string {
   if (remote || (KNOWS_ITS_OWN_ENDPOINT.has(vendor.id) && vendor.baseUrl.length === 0)) {
     return '';
   }
@@ -1278,7 +1288,7 @@ ${remoteNotice(vendor.baseUrl)}`,
 // interop PATH and die on a missing Linux binary, and until this field existed nothing could point
 // at the native one.
 
-function runtimeFields(vendor: Vendor, id: string, remote: boolean): string {
+export function runtimeFields(vendor: Vendor, id: string, remote: boolean): string {
   return remote ? '' : `
   <div class="field">
     <input type="text" data-setting="executablePath" data-vendor="${id}" title="${escapeHtml(HELP.vendorExecutablePath)}"
@@ -1294,7 +1304,7 @@ function runtimeFields(vendor: Vendor, id: string, remote: boolean): string {
  * `openai` is the only choice until a vendor's own row has been measured (`API_PRESETS` says where
  * the next ones go).</p>
  */
-function dialectField(vendor: Vendor, id: string, off: boolean): string {
+export function dialectField(vendor: Vendor, id: string, off: boolean): string {
   const current = vendor.dialect ?? DEFAULT_API_DIALECT;
 
   return `
@@ -1316,7 +1326,7 @@ function dialectField(vendor: Vendor, id: string, off: boolean): string {
  * answered yes and silently lost both stage controls. Now the question and the answer are the same
  * thing.</p>
  */
-function priceFields(vendor: Vendor, id: string, local: boolean, remote: boolean, price: ModelPrice | undefined, plan: string, code: string, off: boolean): string {
+export function priceFields(vendor: Vendor, id: string, local: boolean, remote: boolean, price: ModelPrice | undefined, plan: string, code: string, off: boolean): string {
   // The two rows differ in five values and in nothing else, so they are one row rendered twice
   // rather than two near-identical blocks — which is also what SonarCloud measured as duplication
   // on the pull request that moved the stage boxes onto them.
@@ -1454,7 +1464,7 @@ function disabledAttr(off: boolean): string {
  * nothing else does. Disabled while that row's ask is in flight, which is half of "one ask per row at a
  * time"; the host ignores a second press as the other half (plan round, both vendors).</p>
  */
-function endpointButton(vendor: Vendor, id: string, asking: boolean): string {
+export function endpointButton(vendor: Vendor, id: string, asking: boolean): string {
   if (!asksAnEndpoint(vendor.runtime, vendor.baseUrl)) {
     return '';
   }
@@ -1469,7 +1479,7 @@ function endpointButton(vendor: Vendor, id: string, asking: boolean): string {
  * vendor's run / install / update — and NOTHING for a hosted API, which has no CLI to run, install
  * or update. An api row's one button is {@link endpointButton}, which every endpoint row gets.
  */
-function headButtons(vendor: Vendor, id: string, local: boolean, api: boolean, localEngine: LocalEngine | undefined, cli: CliStatus): string {
+export function headButtons(vendor: Vendor, id: string, local: boolean, api: boolean, localEngine: LocalEngine | undefined, cli: CliStatus): string {
   if (api) {
     return '';
   }
@@ -1511,7 +1521,7 @@ function cliButtons(vendor: Vendor, id: string, cli: CliStatus): string {
  * (PLAN_custom_endpoint_model_list); the label asks the same question, so the two can never disagree about a row
  * (research/PLAN_model_search_and_busy_marks.md, symptom 3).</p>
  */
-function modelWords(runtime: Runtime, baseUrl: string): { title: string; empty: string } {
+export function modelWords(runtime: Runtime, baseUrl: string): { title: string; empty: string } {
   switch (runtime) {
     case 'local':
       return { title: HELP.localModel, empty: 'whatever the engine answers with' };
@@ -1534,7 +1544,7 @@ function modelWords(runtime: Runtime, baseUrl: string): { title: string; empty: 
  * hosted card's boxes stay bright while the remote card's dim, which is what two reviewers caught on
  * the plan round of issue #124.</p>
  */
-function stageBox(
+export function stageBox(
   kind: 'plan' | 'code' | 'document' | 'feature', id: string, on: boolean, enabled: boolean, text: string, tip = '',
 ): string {
   return `<span class="stages${enabled ? '' : ' off'}"><label class="check">`
@@ -1552,7 +1562,7 @@ function stageBox(
  * (D10) and for an installed server older than `FEATURE_SINCE`; the vendor's own master switch still
  * dims it the way it dims the other three.</p>
  */
-function featureBox(vendor: Vendor, id: string, stageOn: boolean, note: string): string {
+export function featureBox(vendor: Vendor, id: string, stageOn: boolean, note: string): string {
   const box = stageBox('feature', id, reviewsFeatures(vendor), stageOn && note.length === 0, 'reviews features', help('vendorFeatures'));
 
   return note.length === 0 ? box : `${box} <span class="hint feature-off">${escapeHtml(note)}</span>`;
@@ -2878,7 +2888,7 @@ function cadenceBody(state: PanelState): string {
  * field's current value, so the moment a model was chosen every other option vanished and the
  * picker read as broken.</p>
  */
-function modelOptions(models: readonly ModelChoice[], current: string, emptyLabel: string): string {
+export function modelOptions(models: readonly ModelChoice[], current: string, emptyLabel: string): string {
   const known = models
     .map((m) => `<option value="${escapeHtml(m.id)}"${m.id === current ? ' selected' : ''}>${escapeHtml(m.label)}</option>`)
     .join('\n      ');
@@ -3310,6 +3320,11 @@ export const PANEL_COMMANDS = [
   // Switches the Settings tab between the current page and the new one (PLAN_one_model_catalog.md D5): its id is
   // `on` or `off`. The configuration change repaints the open tab.
   'settingsPreview',
+  // The new Settings page's Models tab (PLAN_one_model_catalog.md E3.2): a use ticked on a row (id `<row>|<use>`), a
+  // row duplicated, and a row removed after the page's own confirm — so the host asks no second question.
+  'toggleUse',
+  'duplicateModel',
+  'removeModel',
   // The way into the presets tab. `coai.editChatPresets` shipped registered, in no menu and named in
   // no view, so the only way to reach the CRUD the chat section points at was the command palette.
   'editChatPresets',
