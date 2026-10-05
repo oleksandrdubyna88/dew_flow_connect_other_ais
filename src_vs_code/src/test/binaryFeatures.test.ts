@@ -96,3 +96,36 @@ test('the binary is asked once per file, again after an update, and not at all w
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a failure that may pass is asked again; a clean list and an older binary (64) are kept', async () => {
+  const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+  const { join } = await import('node:path');
+  const { tmpdir } = await import('node:os');
+  const dir = mkdtempSync(join(tmpdir(), 'coai-features-retry-'));
+  try {
+    const file = join(dir, 'coai-mcp');
+    writeFileSync(file, 'one');
+    const answers = [{ code: 1, output: 'timed out' }, { code: 0, output: '{"features":["bugzRuntime"]}' }];
+    let asked = 0;
+    const runFor = (): Run => async () => answers[Math.min(asked++, answers.length - 1)] ?? { code: 1, output: '' };
+    const cache = new FeaturesCache();
+
+    assert.deepEqual((await cache.of(file, runFor)).features, [], 'the cold start failed');
+    assert.deepEqual((await cache.of(file, runFor)).features, ['bugzRuntime'], 'and is asked again, not kept for the life of the file');
+    await cache.of(file, runFor);
+    assert.equal(asked, 2, 'a clean answer is kept');
+
+    let older = 0;
+    const olderCache = new FeaturesCache();
+    const olderRun = (): Run => async () => {
+      older += 1;
+
+      return { code: 64, output: '' };
+    };
+    await olderCache.of(file, olderRun);
+    await olderCache.of(file, olderRun);
+    assert.equal(older, 1, 'an older binary stays older until the file changes');
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

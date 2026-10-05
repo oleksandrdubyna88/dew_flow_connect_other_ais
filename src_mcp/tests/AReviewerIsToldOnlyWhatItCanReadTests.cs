@@ -42,16 +42,7 @@ public sealed class AReviewerIsToldOnlyWhatItCanReadTests
             .Should().Be(ReaderMaterial.Outline);
     }
 
-    [Fact]
-    public void TheRoster_DecidesTheMaterialPerReviewer_ThroughTheOneFunction()
-    {
-        var roster = File.ReadAllText(Path.Combine(RepoRoot(), "src_mcp", "src", "Server", "Rounds", "RosterBuilder.cs"));
-
-        roster.Should().Contain("ReviewerMaterial.For(hasCheckout, runtime, stageRow.Reads)",
-            "the material is decided where the runtime is known — per reviewer, not once per round");
-        roster.Should().NotContain("var material = hasCheckout ? ReaderMaterial.Checkout : stageRow.Reads",
-            "the round-wide decision is what told an api row it had a checkout");
-    }
-
-    private static string RepoRoot() => ProductionSources.RepositoryRoot();
+    // The roster's use of this function is held by behaviour, not by its source text: CodeWorkspaceTests'
+    // TheRepairLaunch_IsToldItHasNoCheckout_EvenWhenTheReviewWasGivenOne builds a real round with a codex and a local
+    // reviewer and reads what each was told (PR #686's review replaced a substring check of RosterBuilder.cs).
 }

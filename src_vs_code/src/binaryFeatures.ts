@@ -24,6 +24,11 @@ export interface BinaryFeatures {
   readonly features: readonly string[];
   /** Empty for a clean answer; otherwise why the list is empty. */
   readonly why: string;
+  /**
+   * Whether this answer holds for the life of the binary file: a clean list, or a definite 64 (a binary older than
+   * the list). A spawn that timed out or a garbled answer may pass, and is asked again (PR #686's review).
+   */
+  readonly settled: boolean;
 }
 
 /** `unknown argument` — a binary from before the list. */
@@ -34,8 +39,11 @@ const CAP_MS = 15_000;
 
 export async function readBinaryFeatures(run: Run): Promise<BinaryFeatures> {
   const { code, output } = await run(['--features'], CAP_MS);
+  if (code === EX_USAGE) {
+    return { ...none('this coai-mcp is older than the list of what it accepts'), settled: true };
+  }
   if (code !== 0) {
-    return none(code === EX_USAGE ? 'this coai-mcp is older than the list of what it accepts' : `coai-mcp exited ${code}`);
+    return none(`coai-mcp exited ${code}`);
   }
 
   return listed(output);
@@ -51,7 +59,7 @@ function listed(output: string): BinaryFeatures {
 
   return features === undefined
     ? none('coai-mcp answered --features with something that is not the list')
-    : { features: [...new Set(features)], why: '' };
+    : { features: [...new Set(features)], why: '', settled: true };
 }
 
 function featuresIn(value: unknown): readonly string[] | undefined {
@@ -85,15 +93,24 @@ export class FeaturesCache {
     }
     const key = `${path}|${await modifiedMs(path)}`;
     if (this.asked?.key !== key) {
-      this.asked = { key, answer: readBinaryFeatures(runFor(path)) };
+      const answer = readBinaryFeatures(runFor(path));
+      this.asked = { key, answer };
+      void answer.then((got) => this.forgetUnsettled(answer, got));
     }
 
     return this.asked.answer;
   }
+
+  /** An answer that may pass is not kept: the next render asks again, rather than the window living on a cold start. */
+  private forgetUnsettled(answer: Promise<BinaryFeatures>, got: BinaryFeatures): void {
+    if (!got.settled && this.asked?.answer === answer) {
+      this.asked = undefined;
+    }
+  }
 }
 
 function none(why: string): BinaryFeatures {
-  return { features: [], why };
+  return { features: [], why, settled: false };
 }
 
 /**
