@@ -25,8 +25,11 @@ function paneOf(html: string, place: string): string {
   return html.slice(start, next < 0 ? html.length : next);
 }
 
-/** The old sections that move as they are: every Settings section but the reviewers (now Models) and the prompts (split). */
-const MOVED_WHOLE = PANEL_SECTIONS.filter((spec) => spec.surface === 'settings' && !['reviewers', 'prompts', 'keys'].includes(spec.id));
+/**
+ * The old sections that move as they are: every Settings section but the reviewers (now Models), the prompts (split),
+ * the keys (counted over every row) and the consultant (its callers pick from the catalog, E4.2 — consultantPicks.test.ts).
+ */
+const MOVED_WHOLE = PANEL_SECTIONS.filter((spec) => spec.surface === 'settings' && !['reviewers', 'prompts', 'keys', 'consultant'].includes(spec.id));
 
 test('every old section that moves whole is drawn in its place, by its own builder', () => {
   const state = panelState('reviewers');

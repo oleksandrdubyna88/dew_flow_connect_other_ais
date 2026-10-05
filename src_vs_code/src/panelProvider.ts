@@ -80,6 +80,8 @@ import { RoundsLogCache } from './roundsLogCache';
 import { seedIfEmpty } from './sideSettings';
 import { bugzServerThisSide, readerFor, reportRefusal, saveSetting, userLayer } from './sideConfig';
 import { foldedWrite } from './catalogEdit';
+import { asRecord } from './catalogLaunch';
+import { consultantPickWrites } from './consultantPicks';
 import { inCatalogTurn, MIGRATION_TRIGGERS } from './catalogMigrationHost';
 import { shownOnTheOldPage } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
@@ -1919,6 +1921,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         return;
       }
       case 'caller': {
+        if (write.key === 'consultantRow') {
+          await saveOrSnapBack(() => this.savePick(write.caller, String(write.value ?? '')), afterTheWrite(() => this.snapBack(from)), write.value, write.control);
+          return;
+        }
         // Merged the same way a role record is, and into `consultants` rather than the control's own
         // key: the four rows are one map, so the key a control carries says which HALF of a row
         // changed — the vendor or its model — and is never a setting of its own. The caps beside
@@ -2207,6 +2213,37 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       reportRefusal(this.context, key, error);
       return false;
     }
+  }
+
+  /**
+   * A caller's consultant picked on the new page (PLAN_one_model_catalog.md E4.2): a reference to a catalog row, read and
+   * written in ONE catalog turn, and never through the fold — a pick moves which row a caller asks, and the fold would
+   * read a caller re-pointed away from a row only it used as that row's removal. A refusal is said; the picker snaps back.
+   */
+  private async savePick(caller: string, rowId: string): Promise<boolean> {
+    try {
+      const refusal = await inCatalogTurn(() => this.writePick(caller, rowId));
+      if (refusal.length > 0) {
+        reportRefusal(this.context, 'consultants', new Error(refusal));
+      }
+
+      return refusal.length === 0;
+    } catch (error: unknown) {
+      reportRefusal(this.context, 'consultants', error);
+      return false;
+    }
+  }
+
+  /** The pick's writes, from what is stored NOW — a migration may have run since the message was posted. */
+  private async writePick(caller: string, rowId: string): Promise<string> {
+    const config = vscode.workspace.getConfiguration('coai');
+    const read = this.read(config);
+    const pick = consultantPickWrites(asRecord(read('consultants')), caller, rowId, vendorsFrom(read('vendors')));
+    for (const one of pick.writes) {
+      await saveSetting(this.context, config, one.key, one.value);
+    }
+
+    return pick.refusal;
   }
 
   /** The fold and its writes — the rows first, then the entry. */

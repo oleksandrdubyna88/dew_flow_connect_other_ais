@@ -10912,3 +10912,23 @@ flowchart LR
   B -->|feature places| U[used-by strip → Change on Models]
   B -->|reviews/roles, reviews/commands| O[stillOnTheOldPage until E4.3/E4.4]
 ```
+
+## The new Settings page — consultants from the catalog (2026-10-05, PLAN_one_model_catalog.md E4.2)
+
+**The consultant's callers pick a row.** On the new page Consultants → Consultant draws `consultantSection(state,
+callerRows)` with the callers' rows replaced by `consultantPicks.consultantPicksHtml`: per caller one select
+(`data-setting="consultantRow"`, `data-caller`) of **the shipped pair** (`''` — absence, D2) and every row ticked
+Consultant on Models, and under it what the pick runs on (resolved). The model, effort and prompt are edited on the
+row's Models card, never here. The caps, prompt and cadence are the current page's controls, unchanged.
+
+- **Never cleared (D3):** a stored pick of a row no longer ticked, or no longer on Models, stays selected as
+  "(stranded)" with a sentence saying so; only the person moves it. The caller's own vendor is offered, never refused,
+  with a word that it shares the caller's blind spots.
+- **Stored as a reference:** `consultantPickWrites` writes `consultants[caller] = { vendor: <row id> }`, or removes the
+  key for the shipped pair — and never the rows. It refuses a caller this build does not emit and a row not ticked
+  Consultant (both arrive in a webview message).
+- **Written without the fold.** The host (`PanelProvider.savePick`) reads and writes in ONE catalog turn
+  (`inCatalogTurn`), from a fresh read, and does NOT go through `catalogEdit.foldedWrite`: the current page's fold reads
+  a caller re-pointed away from a row only it used as that row's REMOVAL (E1.4) — right for a definition only that page
+  could see, wrong for a model the person now sees on Models. A test pins that the fold still drops it, so the bypass
+  is removed the day it stops. A refusal is reported and the picker snaps back (`saveOrSnapBack`).

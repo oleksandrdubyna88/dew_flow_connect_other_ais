@@ -51,8 +51,9 @@ function writesOn(html: string, keys: readonly string[]): ReadonlyMap<string, st
 test('every setting control of a moved section writes on the new page exactly what it writes on the current one', () => {
   const state = panelState('reviewers');
   const current = settingsHtml(state, 'test-nonce', 'reviewers');
-  // The reviewer cards are Models' (epic 3), drawn by another builder: their writes are that tab's tests.
-  const keys = keysOf(runPanel(state, { html: current }).controls).filter((key) => !key.includes('"vendor"'));
+  // The reviewer cards are Models' (epic 3), drawn by another builder: their writes are that tab's tests. A consultant
+  // caller's own definition is replaced on the new page by a pick from the catalog (E4.2, consultantPicks.test.ts).
+  const keys = keysOf(runPanel(state, { html: current }).controls).filter((key) => !key.includes('"vendor"') && !key.includes('"caller"'));
   assert.ok(keys.length > 40, `the sweep found only ${keys.length} controls — the harness no longer reads the page`);
 
   const before = writesOn(current, keys);

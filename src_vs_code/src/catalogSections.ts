@@ -3,7 +3,8 @@ import { OLD_TAB_PLACES } from './catalogPlaces';
 import { escapeHtml } from './escapeHtml';
 import { USE_LABELS } from './modelCardFields';
 import { BLANK_REGIONS } from './panelSurface';
-import { PANEL_SECTIONS, promptsBody, type PanelState } from './panelView';
+import { consultantPicksHtml } from './consultantPicks';
+import { consultantSection, PANEL_SECTIONS, promptsBody, type PanelState } from './panelView';
 import type { Vendor } from './vendors';
 
 /**
@@ -12,10 +13,14 @@ import type { Vendor } from './vendors';
  * E5 retires the old one. Pure: the page calls it, tests read it.
  */
 
-/** The places whose drawing is not their old section as it is: the prompts section split in two (E4.1). */
+/**
+ * The places whose drawing is not their old section as it is: the prompts section split in two (E4.1), and the
+ * consultant's callers picking from the catalog (E4.2).
+ */
 const SPLIT: Readonly<Record<string, (state: PanelState) => string>> = {
   'reviews/stages': (state) => promptsBody(state, 'stages'),
   'reviews/prompts': (state) => promptsBody(state, 'prompts'),
+  'consultants/consultant': (state) => consultantSection(state, consultantPicksHtml(state.settings.consult, state.catalogRows ?? state.vendors)),
 };
 
 /** The feature each place serves, for its "used by" strip. */

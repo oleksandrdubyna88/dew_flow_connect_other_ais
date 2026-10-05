@@ -190,17 +190,16 @@ const NO_MODEL = 'no model until this consultant is one the build can place';
  * <p>One row per CALLER rather than per vendor, and that is the shape of the feature: the question
  * is "when THIS kind of agent is stuck, who does it ask", and the answer is different for each
  * because a model cannot see its own blind spot.</p>
+ *
+ * @param callerRows what stands where each caller's own definition is drawn — the new page's picks from the catalog
+ *   (todo/PLAN_one_model_catalog.md E4.2); '' draws the current page's definitions
  */
-export function consultantBody(consult: ConsultSettings, state: ConsultantViewState): string {
-  const { refused } = consultableVendors();
-
+export function consultantBody(consult: ConsultSettings, state: ConsultantViewState, callerRows = ''): string {
   return `<div class="field">
   <div class="check-row"><label for="consultEnabled"><input type="checkbox" id="consultEnabled" data-setting="consultEnabled"${consult.enabled ? ' checked' : ''}> Let an AI consult another vendor</label>${help('consultEnabled')}</div>
   <div class="hint">The AI calls <code>consult</code> itself when it is stuck, and the gate orders one for a group of epics or a risky piece when the consultation cadence is on. The consultant reads this checkout READ-ONLY, with the uncommitted change, and answers advice the AI must verify.</div>
 </div>
-${CALLER_KINDS.map((caller) => row(consultantRowView(caller, consult, state), callerColour(caller.id, state.palette))).join('\n')}
-<div class="hint">These are the CONSULTANT’s own settings. A vendor here shares its name — and so its key in the vault — with the reviewer row of the same name, and nothing else: change a reviewer's model or endpoint and the consultant stays where you put it.</div>
-${refused.map(refusal).join('\n')}
+${callersOrDefinitions(consult, state, callerRows)}
 <div class="field inline">
   <label for="consultTurns">${help('consultTurns')}Turns per consultation</label>
   <input type="number" id="consultTurns" min="1" max="20" data-setting="consultTurns" value="${consult.turns}">
@@ -215,6 +214,20 @@ ${refused.map(refusal).join('\n')}
 </div>
 ${promptField(state.consultPrompt ?? '')}
 <div class="hint">A consultation leaves a thread in the vendor's own store holding this repository's uncommitted change — that is what makes a follow-up possible, and it is not ours to delete.</div>`;
+}
+
+/** The rows a page draws for the callers: the new page's picks when it handed them, else the current page's definitions. */
+function callersOrDefinitions(consult: ConsultSettings, state: ConsultantViewState, callerRows: string): string {
+  return callerRows.length > 0 ? callerRows : definitionRows(consult, state);
+}
+
+/** The current page's caller rows: each caller's own definition, the note on what it shares, and the refused runtimes. */
+function definitionRows(consult: ConsultSettings, state: ConsultantViewState): string {
+  const { refused } = consultableVendors();
+
+  return `${CALLER_KINDS.map((caller) => row(consultantRowView(caller, consult, state), callerColour(caller.id, state.palette))).join('\n')}
+<div class="hint">These are the CONSULTANT’s own settings. A vendor here shares its name — and so its key in the vault — with the reviewer row of the same name, and nothing else: change a reviewer's model or endpoint and the consultant stays where you put it.</div>
+${refused.map(refusal).join('\n')}`;
 }
 
 /**

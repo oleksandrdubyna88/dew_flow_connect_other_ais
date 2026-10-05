@@ -492,8 +492,13 @@ export const PANEL_SECTIONS: readonly SectionSpec<PanelState>[] = [
   { id: 'server', title: 'MCP server', surface: 'settings', body: (state) => serverBody(state) },
 ];
 
-/** The Consultant tab: the skew notes, who each caller asks, and when. Its running consultations are in the sidebar, under Active consultations. */
-function consultantSection(state: PanelState): string {
+/**
+ * The Consultant tab: the skew notes, who each caller asks, and when. Its running consultations are in the sidebar, under
+ * Active consultations.
+ *
+ * @param callerRows the new page's picks from the catalog (E4.2), drawn where each caller's definition is; '' for the current page
+ */
+export function consultantSection(state: PanelState, callerRows = ''): string {
   return consultantSkew(state)
     + vaultKeySplit(state)
     // No `vendors`, since story C5: the section picks from the CATALOGUE, and a consultant that
@@ -518,7 +523,7 @@ function consultantSection(state: PanelState): string {
       palette: vendorPalette(state.vendors.map((v) => v.id)),
       // Each row's health block: the server's facts, this side's Check, other sides read-only (epic 5).
       health: state.consultantHealth,
-    })
+    }, callerRows)
     // WHEN the consultant is asked without anybody being stuck, under WHO is asked
     // (research/PLAN_consult_on_a_cadence.md, epic 4 story 4.1).
     + cadenceBlock(state.settings.cadence);
