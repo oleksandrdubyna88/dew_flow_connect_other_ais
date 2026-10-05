@@ -212,6 +212,12 @@ internal static class Program
         CheckSecurity,
 
         /// <summary>
+        /// ONE paid check of a catalog row read on stdin — the consultant's check, of any row. See
+        /// <see cref="Server.ConsultantCheckMode.AnswerModelAsync"/>.
+        /// </summary>
+        CheckModel,
+
+        /// <summary>
         /// Print ONE round's findings as JSON and leave — what an opened row of the log asks for.
         /// </summary>
         /// <remarks>
@@ -306,6 +312,7 @@ internal static class Program
                 "--security-prompt-text" => Startup.SecurityPromptText,
                 "--features" => Startup.Features,
                 "--check-security" => Startup.CheckSecurity,
+                "--check-model" => Startup.CheckModel,
                 _ => Startup.Usage,
             };
 
@@ -439,6 +446,9 @@ internal static class Program
 
             case Startup.CheckSecurity:
                 return await Server.CheckSecurityMode.RunAsync(args);
+
+            case Startup.CheckModel:
+                return await Server.ConsultantCheckMode.RunAsync(args, Server.Noticing.None);
 
             default:
                 return await ServeAsync();
@@ -2230,6 +2240,8 @@ internal static class Program
         `--check-security [--validate]` reads {"text": …, "lane": …} on stdin and prints the signals the security lane
         would raise, the cards that would be due and the patterns it refuses; --validate checks the patterns alone.
         A request it cannot read exits 65.
+        `--check-model` reads {"row": {…}} on stdin and runs ONE paid check of that catalog row — the consultant's
+        check (a scratch repository, a marker, a canary), its record kept as model-<id>. A request without a row exits 65.
         Configure it in your client as:
 
           { "mcpServers": { "coai": { "command": "<full path to coai-mcp>" } } }

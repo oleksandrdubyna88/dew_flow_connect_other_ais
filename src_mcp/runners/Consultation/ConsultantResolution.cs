@@ -54,7 +54,8 @@ public static class ConsultantResolution
     /// <summary>The sentence a refused vendor gets: what it is, and who could consult instead.</summary>
     public static string CannotConsult(VendorIdentity vendor) =>
         $"the vendor '{vendor.Provider}' runs on '{RuntimeResolution.NameOf(vendor)}'"
-        + (vendor.BaseUrl.Length > 0 ? " with a custom endpoint" : string.Empty)
+        // Only a codex row's base URL is a custom endpoint — a Team server row's is the server, an api row's its vendor.
+        + (vendor.BaseUrl.Length > 0 && RuntimeResolution.NameOf(vendor) == "codex" ? " with a custom endpoint" : string.Empty)
         + $", which cannot hold a consultation in this build — consultants run on: {string.Join(", ", Consulting)}. "
         + "Pick one of those in ConnectOtherAIs > Consultant.";
 }

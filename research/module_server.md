@@ -6346,3 +6346,13 @@ do. `ConsultationService` receives the panel's vault; `--check-consultant` reads
 
 The conversation of a consultant that keeps none is the consultation record's own: every turn's problem and advice is
 stored there, carried into the next prompt under the frozen carry budget, and swept with the consultation.
+
+## `--check-model` — the consultant's check, of any catalog row (2026-10-05, PLAN_one_model_catalog.md D10)
+
+`ConsultantCheckMode.AnswerModelAsync` reads `{"row": {…}}` on stdin — the row on the screen; a row that reviews
+nothing is on no wire this binary reads — parsed by `PanelSettings.ParseVendors`. A row whose runtime cannot consult is
+`unavailable` with `ConsultantResolution.CannotConsult`, before any lock and with nothing launched; any other row runs
+the consultant check's ONE paid turn (scratch repository, marker, canary) under the SAME machinery — `LockedAsync`
+(exclusive lock, durable record, `already-checking`, heartbeat, deadlines, scratch removed in `finally`) now serves
+both entries — keyed `model-<id>`, so two rows check apart and neither touches a caller kind's record. A request without
+a row is 65. `--features` lists `checkModel`. The refusal now calls only a codex row's base URL a custom endpoint.

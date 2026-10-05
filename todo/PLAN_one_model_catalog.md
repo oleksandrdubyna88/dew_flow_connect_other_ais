@@ -405,7 +405,10 @@ override the stories above where they differ:
 - The extension sends the words only when `--features` lists `securityWords`.
 - Deviation: the "total scan budget" is the engine's linear time plus the per-file match timeout, not a separate
   budget — NonBacktracking bounds each pattern by the input it reads, and the detector already caps a file at 256 K.
-- Still open in E2.4: `--check-model` (D10, widening `--check-consultant`).
+- **`--check-model`** (D10): the consultant check of any catalog row, the row read on stdin (a row that reviews nothing
+  is on no wire the server reads), its record `model-<id>`; the lock-and-record half is ONE method both checks use.
+  A row that cannot consult is unavailable by name, nothing launched. Deviation: the panel's ✓ Check button that
+  calls it is E3's (the Models card).
 
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and

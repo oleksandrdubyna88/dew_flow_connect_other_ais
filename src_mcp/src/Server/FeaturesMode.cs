@@ -32,6 +32,8 @@ internal static class FeaturesMode
         "securityWords",
         // E2.4: `--check-security [--validate]` on stdin — what the editor's "Try it" and save-time check ask.
         "checkSecurity",
+        // E2.4: `--check-model` — the consultant's check of any catalog row, read on stdin (D10).
+        "checkModel",
     ];
 
     internal static async Task<int> RunAsync()

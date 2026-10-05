@@ -68,3 +68,14 @@ public sealed class AnEndpointConsultantKeepsItsProviderTests
         ConsultantResolution.For(row).Should().BeOfType<CodexConsultant>("its provider now travels with every turn");
     }
 }
+
+/// <summary>The refusal names what a row IS: a Team server row has a base URL — the server's — and is no custom endpoint.</summary>
+public sealed class ARefusalNamesWhatTheRowIsTests
+{
+    [Fact]
+    public void ATeamServerRow_IsNotCalledACustomEndpoint()
+    {
+        ConsultantResolution.CannotConsult(new VendorIdentity("srv-codex", "remote", "https://coai.example"))
+            .Should().Contain("runs on 'remote'").And.NotContain("custom endpoint");
+    }
+}
