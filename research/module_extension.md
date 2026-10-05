@@ -10535,9 +10535,9 @@ Epic 1 changes the DATA and nothing a person sees. Its stories, as they land:
   the per-side seeding (`vendors`) — all five now pass `userLayer(config)` (PR #681 review).
 - On activation, `sideConfig.noticeIgnoredWorkspaceModels` says once per window which key a workspace or folder
   tried to set (`model-setting-from-workspace`, a refusal), and offers *Copy to my settings* only when the person's
-  own layer holds nothing — so it never overwrites what they set. "Holds" is judged where the copy LANDS
-  (`modelKeys.copyWouldReplace`): this side's own settings when it keeps them and `saveSetting` writes the key there
-  (`writesTheOverlay`, the one rule both use), else the user layer — asked when the notice is shown and again at the
+  own layer holds nothing — so it never overwrites what they set. "Holds" is judged where the copy LANDS
+  (`modelKeys.copyWouldReplace`): this side's own settings when it keeps them and `saveSetting` writes the key there
+  (`writesTheOverlay`, the one rule both use), else the user layer — asked when the notice is shown and again at the
   click (PR #681 review).
 
 ```mermaid
@@ -10634,8 +10634,8 @@ sequenceDiagram
   rows are saved FIRST, so a refusal between the two writes leaves a row nobody refers to yet.
 - `catalogRules.shownOnTheOldPage`: the panel's render state lists a row only when it reviews a stage or has no
   `uses` — a migrated consultant is no reviewer on the old page, and "the last reviewer stays" counts the same way.
-  Display only; every write reads the rows afresh. The page is drawn AND priced from that one list: priced from every
-  row, a hidden `api` consultant with a reviewer's model put its endpoint's rate on the reviewer's card
+  Display only; every write reads the rows afresh. The page is drawn AND priced from that one list: priced from every
+  row, a hidden `api` consultant with a reviewer's model put its endpoint's rate on the reviewer's card
   (`theOldPagePricesWhatItShows.test.ts`). The spending and consultation tabs keep every row — a consultant's runs are billed.
 - The three reviewer-list writes that went around the side overlay (add a reviewer, remove a reviewer, remove a
   Team server's rows) go through `save`, so a side that keeps its own settings gets them and a refusal is said.
@@ -10810,7 +10810,8 @@ so flipping the switch — the old page's **Try the new Settings page**, the new
   binary); `newTag(controlId, firstSeen, now)` for a week after a control was first seen (`newTags.ts`: a bounded
   `globalState` record stamped at activation, pruned after 60 days — no version number guessed); one confirm
   (`confirmButton` with `data-asks`, never `data-command`, and `CONFIRM_DIALOG`, sending only on its action button
-  through the shared `send`); `stillOnTheOldPage` for the five tabs E4 builds.
+  through the shared `send`); `stillOnTheOldPage` for a place E4 has not drawn yet (since E4.1: Roles & prompts and
+  Commands).
 - **Nonce:** every panel takes its CSP nonce from `webviewNonce.ts` (128 bits, base64url); the Settings panel's was
   `Math.random()`. `everyPanelTakesItsNonceFromOneHelper.test.ts` fails on a panel that makes its own.
 - **Help:** the Settings article says how to switch, in all five languages (`coai.settingsPreview`'s help alias).
@@ -10877,3 +10878,37 @@ flowchart LR
   `endpointButton` — the same commands, by name).
 - A local engine whose endpoint is not this machine says where the diff goes (`remoteWarning`); a remote row on a
   Team server that speaks contract 1 says its effort and system prompt are not applied (E2.5).
+
+## The new Settings page — every tab in its place (2026-10-05, PLAN_one_model_catalog.md E4.1)
+
+Every place of the new page but Models draws the CURRENT page's section for it, by that section's own builder —
+`catalogSections.placeBody(place, state)` looks the section up in `PANEL_SECTIONS` through `OLD_TAB_PLACES`, so no
+builder is copied and a control behaves the same on both pages until E5 retires the old one. The page wraps it in a
+`.moved` column (760 px, the width the sections were written for); the MCP server keeps its 1.5× zoom on its new pane.
+
+- **The prompts section is split in two** by one parameter, `promptsBody(state, half)` (`PromptsHalf`): `both` is the
+  current page, unchanged; `stages` (Reviews → Stages) is the switches, rounds, thresholds, lens deals and workspace;
+  `prompts` (Reviews → Prompts per round) is each role's round pickers alone, or "Switched off on Stages". Each control
+  is drawn once on a page — a test fails on an id drawn twice.
+- **Keys across every row:** Setup → Vendor keys counts `catalogRows`, so a row that exists for a feature alone (a
+  migrated consultant on an endpoint) is still named as needing a key.
+- **The "used by" strip** on Consultant, Question consultant, Security lane and Chat names the rows ticked for that
+  feature (switched-off ones marked), or says none is — and for the consultant, D2's rule: each caller asks the pair it
+  ships with. **Change on Models** sets the Models filter to that use and opens Models, in the page alone
+  (`data-models-uses`; nothing stored, nothing posted but the place).
+- **Script:** the security lane's own script (`securityLaneScript`, block-scoped) joins the page's.
+- **Still on the current page:** Roles & prompts and Commands — E4.3 and E4.4 fold their pages in.
+- **Tests:** `catalogTabsInPlace.test.ts` (each section in its place, the split, unique ids, the strip, Change on
+  Models run through the page's script); `catalogTabsWrite.test.ts` changes every setting control of the current
+  page (515) on BOTH pages and compares what each posted — a section left out goes red with "not drawn".
+
+```mermaid
+flowchart LR
+  T[CATALOG_TABS place] --> B{placeBody}
+  B -->|reviews/stages| PS["promptsBody(state, 'stages')"]
+  B -->|reviews/prompts| PP["promptsBody(state, 'prompts')"]
+  B -->|other places| L[OLD_TAB_PLACES → PANEL_SECTIONS spec.body]
+  L -->|setup/keys| K[keysBody over catalogRows]
+  B -->|feature places| U[used-by strip → Change on Models]
+  B -->|reviews/roles, reviews/commands| O[stillOnTheOldPage until E4.3/E4.4]
+```

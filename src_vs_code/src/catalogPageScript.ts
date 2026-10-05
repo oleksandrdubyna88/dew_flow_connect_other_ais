@@ -1,3 +1,4 @@
+import { securityLaneScript } from './securityLaneScript';
 import { tabKeysScript } from './tabKeys';
 import { textControlsScript } from './textControls';
 import { jsonForScript } from './webviewHtml';
@@ -26,6 +27,7 @@ ${confirmScript()}
 ${modelsScript()}
 ${tabKeysScript()}
 ${textControlsScript()}
+${securityLaneScript()}
   window.addEventListener('message', (event) => {
     if (event.data && event.data.type === 'uiScale') { document.documentElement.style.fontSize = event.data.px + 'px'; }
   });`;
@@ -174,6 +176,12 @@ function modelEventsScript(): string {
       Object.assign(modelFilters, { q: '', access: '', uses: '', effort: '', runtime: '' });
       saveModelFilters();
       applyModelFilters();
+    }
+    // A feature tab's "Change on Models" (E4.1): Models, narrowed to the rows that can be ticked for that feature.
+    const narrow = pressed.closest('[data-models-uses]');
+    if (narrow) {
+      setModelFilter('uses', narrow.dataset.modelsUses || '');
+      showPlace('models', true);
     }
   });
   document.addEventListener('input', (event) => {

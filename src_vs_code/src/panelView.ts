@@ -2287,7 +2287,30 @@ function serverNotes(state: PanelState, role: RoleRow): string {
   return lines.map((line) => `  <div class="hint">${escapeHtml(line)}</div>`).join('\n');
 }
 
-function promptsBody(state: PanelState): string {
+/**
+ * Which half of the prompts section a page draws: the old page draws both in one box per role; the new page splits
+ * them across Stages (the switch, the rounds, the threshold) and Prompts per round (the round pickers) —
+ * todo/PLAN_one_model_catalog.md E4.1. Each control is drawn once on a page either way.
+ */
+export type PromptsHalf = 'both' | 'stages' | 'prompts';
+
+/** One role's round pickers alone, for the new page's Prompts per round — or why it has none. */
+function pickersOnly(role: RoleRow, on: boolean, off: string, pickers: string): string {
+  return `<div class="role role-${roleTone(role.id, stageOf(role))}${off}">
+  <div class="head"><span class="name">${escapeHtml(role.name ?? role.id)}</span></div>
+${on ? pickers : '  <div class="hint">Switched off on Stages — no round asks it.</div>'}
+</div>`;
+}
+
+/** The new page's Prompts per round: the stages' heads and each role's pickers, nothing else. */
+function pickersBody(groups: readonly (readonly [string, string])[]): string {
+  return groups.map(([head, rows]) => `<div class="role-group">
+  <div class="group-head">${head}</div>
+${rows}
+</div>`).join('\n');
+}
+
+export function promptsBody(state: PanelState, half: PromptsHalf = 'both'): string {
   const s = state.settings;
   // The COMPOSED catalog rather than the shipped five: a role a person added is drawn here beside
   // them, under the name they gave it, with its own rounds, threshold and pickers. `composed` is the
@@ -2337,6 +2360,9 @@ function promptsBody(state: PanelState): string {
     const frozen = last || dormant;
     const inactive = !isActive(role) ? ' off' : '';
     const off = switched && !on ? ' off' : '';
+    if (half === 'prompts') {
+      return pickersOnly(role, on, off, pickers);
+    }
 
     // The gate and the prompts were two sections describing one thing: how many times this role
     // asks, how much it may still find, and what it asks each time. One box now.
@@ -2359,7 +2385,7 @@ ${serverNotes(state, role)}
     <input type="number" id="threshold-${role.id}" min="0" data-setting="thresholds" data-role="${role.id}"
            value="${s.thresholds[role.id] ?? 3}"${on ? '' : ' disabled'}>
   </div>
-${on ? pickers : ''}
+${on && half === 'both' ? pickers : ''}
 </div>`;
   };
 
@@ -2373,6 +2399,29 @@ ${on ? pickers : ''}
   // and a switch of its own, and drawing it among the code roles would count it into a fan-out it
   // takes no part in. The stage's vendor tick and its tool are epic 3's; this is what the seed forces.
   const features = all.filter((r) => bucketOf(r) === FEATURE_CODE).map(roleRow).join('\n');
+
+  return PROMPTS_HALVES[half](state, { plan, code, documents, features });
+}
+
+/** Each stage's role boxes, drawn. */
+interface RoleGroups {
+  readonly plan: string;
+  readonly code: string;
+  readonly documents: string;
+  readonly features: string;
+}
+
+/** How each half is drawn around the role boxes: the stages with their own switches, or the round pickers alone. */
+const PROMPTS_HALVES: Readonly<Record<PromptsHalf, (state: PanelState, groups: RoleGroups) => string>> = {
+  both: (state, groups) => stagesBody(state, groups),
+  stages: (state, groups) => stagesBody(state, groups),
+  prompts: (_state, { plan, code, documents, features }) =>
+    pickersBody([['Plan stage', plan], ['Code stage', code], ['Document stage', documents], ['Feature stage', features]]),
+};
+
+/** The stages around their role boxes: the lens deals, the workspace, the notes and the way to the roles page. */
+function stagesBody(state: PanelState, { plan, code, documents, features }: RoleGroups): string {
+  const s = state.settings;
 
   return `<div class="role-group">
   <div class="group-head">Plan stage</div>

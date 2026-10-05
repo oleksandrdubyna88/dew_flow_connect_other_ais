@@ -25,6 +25,14 @@ const TOKENS = `
 /** The shell: the two levels of tabs, the panes, the dialog and the shared marks. */
 const SHELL = `
   .catalog .pane { max-width: none; }
+  /* The old page's sections, moved whole (E4.1): the width they were written for. */
+  .catalog .moved { max-width: 760px; padding: 4px 2px 16px; }
+  /* The MCP server, one and a half times the size, as on the old page — the tab people read rather than set. */
+  .catalog [data-pane="setup/mcp"] .moved { zoom: 1.5; }
+  .catalog .used-by { margin: 8px 0 10px; color: var(--muted); }
+  .catalog .used-by button.link {
+    background: none; border: none; padding: 0; margin: 0 0 0 6px; color: var(--link); cursor: pointer; text-decoration: underline;
+  }
   .catalog .pane .tabs { margin: 10px 0 6px; gap: 6px; border-bottom: none; }
   .catalog .pane .tabs .tab {
     border: 1px solid var(--border-strong); border-radius: 14px; padding: 3px 12px; color: var(--muted);

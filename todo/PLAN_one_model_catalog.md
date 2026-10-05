@@ -633,7 +633,8 @@ row); the new page reads it. Done, RED first.
   every row; setup/team ← `teamServersBody`; setup/mcp ← `serverBody` (its zoom rule matched to the new pane); setup/side
   ← `sideBody`. Each feature tab shows the "used by" strip of the rows ticked for it, with "change on Models", which
   opens Models filtered by that use (the page's own filter state). After E4.1 only Roles & prompts and Commands still
-  say where they are.
+  say where they are. **Built 2026-10-05** (`catalogSections.ts`; the split is one parameter, `promptsBody(state,
+  half)`; every setting control of the current page writes the same on both pages — 515 swept).
 - **E4.2 Consultants and Security from the catalog.** A caller's picker lists the rows ticked Consultant (absent = the
   shipped pair, D2; the same vendor as the caller shown, never refused; a stranded pick shown and named, never cleared —
   D3); the question consultant's rows pick from rows ticked it; the security pairs from rows ticked Security lane. "Try
