@@ -34,6 +34,7 @@ import type { SecurityTryResult } from './securityTry';
 import type { ClientRegistration } from './setupTab';
 import type { MoveRecord } from './dataMove';
 import type { RolesEmbedState } from './rolesEmbed';
+import type { CommandsEmbedState } from './commandsEmbed';
 import type { SecurityTextState } from './securityPromptFiles';
 import type { ConsultantHealthState } from './consultantHealthState';
 import { CONSULTANT_HEALTH_CSS, COPY_COMMANDS } from './consultantHealthView';
@@ -276,6 +277,8 @@ export interface PanelState {
   readonly lastDataMove?: MoveRecord | undefined;
   /** The review roles as the new page's Roles & prompts draws them (`rolesEmbed.ts`, E4.3) — read only while it can be shown. */
   readonly roles?: RolesEmbedState | undefined;
+  /** The gate's commands as the new page's Commands draws them (`commandsEmbed.ts`, E4.4) — read only while it can be shown. */
+  readonly commands?: CommandsEmbedState | undefined;
   /** When each control the new page marks "new" was first seen in this profile (`newTags.ts`). */
   readonly firstSeen?: Readonly<Record<string, number>>;
   /** The time the state was gathered — what a "new" mark is measured against. Absent: the moment the page is drawn. */

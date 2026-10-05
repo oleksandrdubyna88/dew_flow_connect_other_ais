@@ -657,7 +657,9 @@ row); the new page reads it. Done, RED first.
   type for both pages, not a second set of verbs; a refusal is the roles' existing notification; the stages are headed
   groups, not a second tab strip; `roleEnabled` follows `active` only after the catalog write landed; a role's name is
   typed in place, as on the tab, so no input box was needed.
-- **E4.4 Commands in the page** (replacing `commandsPage.ts`), the same way (`commandsHost.ts`).
+- **E4.4 Commands in the page** (replacing `commandsPage.ts`), the same way (`commandsHost.ts`). **Built 2026-10-05**
+  (`commandsHost.ts`, `commandsEmbed.ts`); deviation: the blocks carry `data-cmd-*` attributes on the new page, because
+  the page also draws the roles, whose wiring reads `data-field`, `data-remove` and `data-restore`.
 - **E4.5 Setup.** Keys counted across every row; the CLI table; Team servers with their contract (E2.5); the MCP
   server's clients — whether each registers coai-mcp, READ from its config file and never written, no other entry or
   secret shown (a pure file read: no client program is launched, so there is no process to time out); the data

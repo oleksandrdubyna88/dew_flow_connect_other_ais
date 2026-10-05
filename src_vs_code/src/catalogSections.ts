@@ -8,6 +8,7 @@ import { cliButtons, consultantSection, PANEL_SECTIONS, promptsBody, questionCon
 import { rowsFor } from './catalogPicks';
 import { securityTryHtml } from './securityTry';
 import { rolesEmbedded } from './rolesEmbed';
+import { commandsEmbedded } from './commandsEmbed';
 import { cliTableHtml, mcpClientsHtml, movedFromHtml } from './setupTab';
 import type { Vendor } from './vendors';
 
@@ -22,6 +23,7 @@ import type { Vendor } from './vendors';
  * pick from the catalog (E4.2), and the Review roles tab folded in (E4.3).
  */
 const SPLIT: Readonly<Record<string, (state: PanelState) => string>> = {
+  'reviews/commands': (state) => (state.commands === undefined ? '<p class="hint">Reading the commands…</p>' : commandsEmbedded(state.commands)),
   'reviews/roles': (state) => (state.roles === undefined ? '<p class="hint">Reading the roles…</p>' : rolesEmbedded(state.roles, state.settings.roleEnabled)),
   'reviews/stages': (state) => promptsBody(state, 'stages'),
   'reviews/prompts': (state) => promptsBody(state, 'prompts'),

@@ -11037,3 +11037,21 @@ sequenceDiagram
   R-->>T: onRolesRedraw → render
   H->>H: roleSwitchFollows → save roleEnabled (a switch edit only)
 ```
+
+## The new Settings page — Commands (2026-10-05, PLAN_one_model_catalog.md E4.4)
+
+The Gate commands tab, folded in the way Roles & prompts was (E4.3). Its writes, refusals, text files and ONE
+settled-write queue moved, unchanged, from `commandsPanel.ts` into `commandsHost.ts` (`queueCommandEdit`,
+`flushCommandEdits`, `commandRows`, `commandTexts`, `commandsEmbedState`, `onCommandsRedraw`; bound at activation by
+`bindCommands`); the tab keeps its panel, busy marks and redraw. Reviews › Commands draws `commandsEmbed.commandsEmbedded`
+— the tab's own `customBlock` / `shippedBlock`, which now take their attribute names (`CommandAttrs`) — inside
+`.commands-embed`. The page also draws the roles, whose wiring reads `data-field`, `data-remove` and `data-restore`, so a
+command block here is `data-cmd-*` throughout and each wiring reads only its own (a test fires one of each and checks
+neither posts the other's edit). `commandsEmbeddedScript` posts `{ type: 'commands', edit }` — the tab's own message,
+read by its own `commandEdit` — numbered for a switch, a stage, Add, Remove and Restore (`commands` joins
+`PANEL_TRACKED`), plainly for typing, and reports focus as `commands|<file or row>|<field>`; a focus release flushes the
+commands' queue and the roles' before the repaint. With E4.4 no place of the new page points at the current page.
+
+Found on the way: `theTextControlsHoldUpEverywhere.test.ts` sliced each panel's handler up to a queue call the roles and
+commands panels stopped making in E4.3 / E4.4; `indexOf` answered -1, the slice ran to the end of the file, and the
+check passed on anything. It names the new calls now and fails when one is missing.

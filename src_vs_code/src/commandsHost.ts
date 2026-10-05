@@ -6,6 +6,7 @@ import { writeFileAtomically } from './atomicFile';
 import { COMMAND_PREFIX, commandsFrom, type CommandRow } from './commands';
 import { commandsAfter, forgettable, textBelongs, type RowCommand } from './commandsEdit';
 import type { PageCommand } from './commandsPage';
+import type { CommandsEmbedState } from './commandsEmbed';
 import { coaiDataDir } from './dataDir';
 import { notify, notifyAndAsk } from './notify';
 import { promptFile, promptsDir } from './rolesPrompts';
@@ -239,4 +240,14 @@ export function reportCommandsFailure(message: string, error: unknown): void {
   void notify({
     as: 'error', class: 'failure', source: 'commandsPage', code: 'commands-page-failure', subject: message, title: message, detail: asText(error),
   });
+}
+
+/** The commands as the new Settings page's Commands draws them (E4.4) — the same reads the Gate commands tab is drawn from. */
+export async function commandsEmbedState(serverVersion: string): Promise<CommandsEmbedState> {
+  return {
+    rows: commandRows(),
+    texts: await commandTexts(),
+    serverVersion,
+    perSide: config().get('perSideSettings') === true,
+  };
 }

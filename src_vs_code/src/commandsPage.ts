@@ -107,27 +107,45 @@ ${BUSY_BAR}
 ${note.length > 0 ? `<div class="stale" role="status">${escapeHtml(note)}</div>` : ''}
 <h2>Yours</h2>
 <p class="note">Commands you add are given after the built-in orders, in the rounds you choose. One is switched on only once it has text.</p>
-${state.rows.map((row) => customBlock(row, state.texts)).join('\n')}
+${state.rows.map((row) => customBlock(row, state.texts, OWN_ATTRS)).join('\n')}
 <button type="button" data-add>Add a command</button>
 <h2>Shipped</h2>
 <p class="note">The words the built-in orders are made of. Write your own to replace them; an empty box is the shipped text, shown faintly. The words in <code>bold</code> before a box are kept by the server — they are how an order is recognised.</p>
-${SHIPPED_COMMANDS.map((one) => shippedBlock(one, state.texts)).join('\n')}
+${SHIPPED_COMMANDS.map((one) => shippedBlock(one, state.texts, OWN_ATTRS)).join('\n')}
 ${script(nonce, state.busy ?? IDLE)}
 </body>
 </html>`;
 }
 
-function customBlock(row: CommandRow, texts: Readonly<Record<string, string>>): string {
+/**
+ * The attributes a command block carries. This tab's own, or — on the new Settings page, which also draws the roles
+ * (todo/PLAN_one_model_catalog.md E4.4) — names of its own, so the roles' wiring never reads a command's control.
+ */
+export interface CommandAttrs {
+  readonly row: string;
+  readonly field: string;
+  readonly text: string;
+  readonly remove: string;
+  readonly restore: string;
+  readonly file: string;
+  readonly add: string;
+}
+
+const OWN_ATTRS: CommandAttrs = {
+  row: 'data-id', field: 'data-field', text: 'data-text', remove: 'data-remove', restore: 'data-restore', file: 'data-file', add: 'data-add',
+};
+
+export function customBlock(row: CommandRow, texts: Readonly<Record<string, string>>, a: CommandAttrs): string {
   const fileId = fileIdOf(row.id);
 
-  return `<section class="command" data-id="${escapeHtml(row.id)}">
+  return `<section class="command" ${a.row}="${escapeHtml(row.id)}">
 <div class="row">
-<input type="text" data-field="title" aria-label="Title" value="${escapeHtml(row.title)}">
-<select data-field="stage" aria-label="Rounds">${STAGE_NAMES.map((stage) => stageOption(stage, row.stage)).join('')}</select>
-<label><input type="checkbox" data-field="enabled"${row.enabled ? ' checked' : ''}> On</label>
-<button type="button" class="remove" data-remove>Remove</button>
+<input type="text" ${a.field}="title" aria-label="Title" value="${escapeHtml(row.title)}">
+<select ${a.field}="stage" aria-label="Rounds">${STAGE_NAMES.map((stage) => stageOption(stage, row.stage)).join('')}</select>
+<label><input type="checkbox" ${a.field}="enabled"${row.enabled ? ' checked' : ''}> On</label>
+<button type="button" class="remove" ${a.remove}>Remove</button>
 </div>
-<textarea data-text="${escapeHtml(fileId)}" aria-label="What it tells the AI" rows="3">${escapeHtml(texts[fileId] ?? '')}</textarea>
+<textarea ${a.text}="${escapeHtml(fileId)}" aria-label="What it tells the AI" rows="3">${escapeHtml(texts[fileId] ?? '')}</textarea>
 </section>`;
 }
 
@@ -137,15 +155,15 @@ function stageOption(stage: CommandStageName, chosen: CommandStageName): string 
   return `<option value="${stage}"${stage === chosen ? ' selected' : ''}>${STAGE_LABEL[stage]}</option>`;
 }
 
-function shippedBlock(one: ShippedCommand, texts: Readonly<Record<string, string>>): string {
+export function shippedBlock(one: ShippedCommand, texts: Readonly<Record<string, string>>, a: CommandAttrs): string {
   // Only an override that SAYS something is one — a blank file is the shipped text, as the server reads it.
   const written = hasText(texts, one.id) ? texts[one.id] ?? '' : '';
 
-  return `<section class="command" data-file="${escapeHtml(one.id)}">
+  return `<section class="command" ${a.file}="${escapeHtml(one.id)}">
 <h3>${escapeHtml(one.title)}${written.length > 0 ? ' <span class="badge">yours</span>' : ''}</h3>
 ${placeholderNote(one)}${markerLine(one.marker)}
-<textarea data-text="${escapeHtml(one.id)}" aria-label="${escapeHtml(one.title)}" rows="4" placeholder="${escapeHtml(shippedTextOf(one.id))}">${escapeHtml(written)}</textarea>
-${restoreButton(one.id, written)}
+<textarea ${a.text}="${escapeHtml(one.id)}" aria-label="${escapeHtml(one.title)}" rows="4" placeholder="${escapeHtml(shippedTextOf(one.id))}">${escapeHtml(written)}</textarea>
+${restoreButton(one.id, written, a.restore)}
 </section>`;
 }
 
@@ -153,8 +171,8 @@ function markerLine(marker: string): string {
   return marker.length > 0 ? `<p class="marker"><b>${escapeHtml(marker)}</b>…</p>` : '';
 }
 
-function restoreButton(fileId: string, written: string): string {
-  return written.length > 0 ? `<button type="button" data-restore="${escapeHtml(fileId)}">Restore the shipped text</button>` : '';
+function restoreButton(fileId: string, written: string, attr: string): string {
+  return written.length > 0 ? `<button type="button" ${attr}="${escapeHtml(fileId)}">Restore the shipped text</button>` : '';
 }
 
 function placeholderNote(one: ShippedCommand): string {

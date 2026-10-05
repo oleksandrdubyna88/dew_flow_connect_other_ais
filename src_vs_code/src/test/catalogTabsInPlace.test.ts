@@ -64,11 +64,11 @@ test('no id is drawn twice on the new page — a label would name the wrong cont
   assert.deepEqual([...new Set(twice)], []);
 });
 
-test('only Commands still says where it is (Roles & prompts is drawn since E4.3)', () => {
+test('no place still says where it is (Roles & prompts since E4.3, Commands since E4.4)', () => {
   const body = catalogBody(panelState('reviewers'));
   const saying = [...body.matchAll(/data-pane="([^"]+)"[^>]*>\s*<p class="hint">[^<]* is still on the current Settings page/g)].map((match) => match[1]);
 
-  assert.deepEqual(saying, ['reviews/commands']);
+  assert.deepEqual(saying, []);
 });
 
 test('the keys are counted across every row, not only the reviewers', () => {

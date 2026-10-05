@@ -53,7 +53,17 @@ const SHELL = `
   .roles-embed .prompt textarea { width: 100%; box-sizing: border-box; resize: vertical; }
   .roles-embed button { width: auto; margin: 4px 6px 0 0; }
   .roles-embed .prompt .head button { margin: 0; }
-  .roles-embed button.remove, .roles-embed button.restore {
+  /* Commands (E4.4): the Gate commands tab's cards, scoped like the roles. */
+  .commands-embed .command { border-left: 3px solid var(--link); padding: 6px 10px; margin: 8px 0; background: var(--card); }
+  .commands-embed .command h3 { font-size: 1em; margin: 0 0 6px; }
+  .commands-embed .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 8px; }
+  .commands-embed .row input[type="text"] { flex: 1 1 12rem; min-width: 0; width: auto; }
+  .commands-embed .row select { width: auto; }
+  .commands-embed textarea { width: 100%; box-sizing: border-box; font-family: var(--vscode-editor-font-family); }
+  .commands-embed button { width: auto; margin: 6px 6px 0 0; }
+  .commands-embed .note, .commands-embed .lead { color: var(--muted); }
+  .commands-embed .badge { font-size: 0.8em; color: var(--link); }
+  .roles-embed button.remove, .roles-embed button.restore, .commands-embed button.remove {
     background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);
   }
   .catalog .used-by button.link {

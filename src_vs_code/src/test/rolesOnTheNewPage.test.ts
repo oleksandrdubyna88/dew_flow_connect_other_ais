@@ -54,11 +54,10 @@ test('a code role switched off by EITHER switch is drawn off: one switch, read a
   assert.doesNotMatch(active, /checked/);
 });
 
-test('only Commands still says where it is', () => {
+test('Roles & prompts no longer says where it is', () => {
   const body = catalogBody(stateWith());
 
   assert.doesNotMatch(body, /Roles &amp; prompts is still on the current Settings page/);
-  assert.match(body, /Commands is still on the current Settings page/);
 });
 
 test('the roles\' controls post `roles` edits — a pick numbered, typing not — and report focus', () => {

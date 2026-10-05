@@ -123,6 +123,8 @@ import { rolesKnowTheServer } from './rolesPanel';
 import { flushRoleEdits, onRolesRedraw, queueRoleEdit, roleRows, rolesEmbedState } from './rolesHost';
 import { roleEdit } from './rolesPage';
 import { roleSwitchFollows } from './rolesSwitch';
+import { commandsEmbedState, flushCommandEdits, onCommandsRedraw, queueCommandEdit } from './commandsHost';
+import { commandEdit } from './commandsPage';
 import { ModelPrice, PriceTable, priceFor } from './modelPrices';
 import { PRICE_BOOK } from './priceBook';
 import {
@@ -1038,10 +1040,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       if (from.edited(m.editing === true, m.id ?? '', Number(m.start), Number(m.end))) {
         // A roles prompt still settling is written first: the repaint reads the prompt files, and one that overtook the
         // write would draw the box from the text being replaced (E4.3).
-        void flushRoleEdits().then(() => this.render());
+        void Promise.all([flushRoleEdits(), flushCommandEdits()]).then(() => this.render());
       }
     } else if (m.type === 'roles') {
       this.track(from, m, () => this.roleEdited(m.edit));
+    } else if (m.type === 'commands') {
+      // An edit of the gate's commands from the new page's Commands (E4.4), into the one queue the tab uses too.
+      this.track(from, m, () => queueCommandEdit(commandEdit(m.edit)));
     } else if (m.type === 'command') {
       this.track(from, m, () => this.run(m.command, m.id, from));
     } else if (m.type === 'ready') {
@@ -1125,6 +1130,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     this.securityPromptWatch.stop();
     this.securityPromptWatch.changed.cancel();
     this.rolesRedraw.dispose();
+    this.commandsRedraw.dispose();
   }
 
   /**
@@ -1196,6 +1202,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       securityTry: this.securityTry,
       // Roles & prompts (E4.3): the prompt files are read only while the new page can show them.
       roles: this.settingsTab.view === undefined || !settingsPreviewOn() ? undefined : await rolesEmbedState(server.kind === 'absent' ? '' : server.version),
+      // Commands (E4.4), read under the same rule.
+      commands: this.settingsTab.view === undefined || !settingsPreviewOn() ? undefined : await commandsEmbedState(server.kind === 'absent' ? '' : server.version),
       // The new page's Setup (PLAN_one_model_catalog.md E4.5): each MCP client's registration, read from its own file
       // and never written; and the data folder's last move, which survives a reload so the delete can be offered.
       mcpClients: await this.clients.read(clientFilesFor(os.homedir(), workspaceFolderPaths()[0] ?? ''), workspaceFolderPaths()[0] ?? ''),
@@ -3173,6 +3181,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /** A change to the roles' shape, from either page that edits them, redraws the new page's Roles & prompts (E4.3). */
   private readonly rolesRedraw = onRolesRedraw(() => this.render());
+
+  /** The same for the gate's commands, edited from the new page's Commands or the Gate commands tab (E4.4). */
+  private readonly commandsRedraw = onCommandsRedraw(() => this.render());
 
   /**
    * Try it (PLAN_one_model_catalog.md E4.2): the sample and the stored lane, as a round would send it, to

@@ -174,8 +174,12 @@ function page(name, size) {
     }
     case 'catalog':
       // The new Settings page, on a place: `catalog`, `catalog:setup/team` (todo/PLAN_one_model_catalog.md E3).
-      // The shipped roles, as the host reads them for Roles & prompts (E4.3) — none stored, no prompt rewritten.
-      return from('catalogPage.js').catalogHtml({ ...panelState(''), ...text, roles: { rows: [], texts: {}, serverVersion: '', perSide: false, stranded: [] } }, NONCE, tab ?? 'models');
+      // The shipped roles and commands, as the host reads them (E4.3, E4.4) — one command of your own, nothing rewritten.
+      return from('catalogPage.js').catalogHtml({
+        ...panelState(''), ...text,
+        roles: { rows: [], texts: {}, serverVersion: '', perSide: false, stranded: [] },
+        commands: { rows: [{ id: 'cmd-ab12', title: 'Run the linter', stage: 'code', enabled: true }], texts: {}, serverVersion: '', perSide: false },
+      }, NONCE, tab ?? 'models');
     case 'settings':
       return from('panelView.js').settingsHtml({ ...panelState(''), ...text }, NONCE, tab ?? 'reviewers');
     case 'security':
