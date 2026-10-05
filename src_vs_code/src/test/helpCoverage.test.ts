@@ -151,6 +151,7 @@ const SETTING_ALIAS: Record<string, string> = {
   'coai.promptsPerRound': 'one picker per round per role',
   'coai.roles': 'the roles you add are your own',
   'coai.uiScale': 'text size',
+  'coai.settingsPreview': 'the new settings page',
   'coai.textTone': 'text tone',
   'coai.helpLanguage': 'language switch',
   // The three gate switches. They shipped undeclared, so this guard never saw them: a setting that

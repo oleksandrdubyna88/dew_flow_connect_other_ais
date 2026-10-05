@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { restoreConversation } from './chatConversationRestore';
 import { chatTabIcon } from './chatIcon';
@@ -14,6 +13,7 @@ import {
 } from './chatRestore';
 import { ChatStoreFile } from './chatStoreFile';
 import { ChatTabMemory } from './chatTabs';
+import { webviewNonce } from './webviewNonce';
 
 /**
  * The `vscode` half of bringing a chat tab back: validate what the reload handed over, put something
@@ -83,7 +83,7 @@ export async function restoreAfterReload(
   const closing = panel.onDidDispose(() => { disposed = true; });
   const open = (): boolean => !disposed;
   try {
-    draw(deps, panel, restoringHtml(id, nonce()));
+    draw(deps, panel, restoringHtml(id, webviewNonce()));
     await withinCeiling(migration, MIGRATION_WAIT_MS);
     if (!open()) {
       return;
@@ -136,7 +136,7 @@ function showNotice(
   id: string,
   notice: Extract<RestoreDecision, { kind: 'notice' }>,
 ): void {
-  draw(deps, panel, noticeHtml(id, notice, nonce()));
+  draw(deps, panel, noticeHtml(id, notice, webviewNonce()));
   if (!notice.retry) {
     return;
   }
@@ -191,4 +191,3 @@ async function withinCeiling(work: Promise<unknown>, ms: number): Promise<void> 
   }
 }
 
-const nonce = (): string => randomBytes(16).toString('hex');

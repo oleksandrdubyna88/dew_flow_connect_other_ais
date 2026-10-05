@@ -1,6 +1,6 @@
-import { randomBytes } from 'node:crypto';
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import * as vscode from 'vscode';
+import { webviewNonce } from './webviewNonce';
 
 import { asText } from './asText';
 import { coaiDataDir } from './dataDir';
@@ -278,7 +278,7 @@ async function render(): Promise<void> {
       busy: stillRunning(),
       textTone: currentTextTone(),
     },
-    nonce(),
+    webviewNonce(),
   );
   // Re-checked: `await texts()` is a suspension point, and the panel can be disposed across it.
   if (panel !== undefined) {
@@ -286,17 +286,6 @@ async function render(): Promise<void> {
   }
 }
 
-/**
- * A nonce for the page's one script.
- *
- * <p>From `crypto`, not `Math.random`: this is the value the Content-Security-Policy trusts, and a
- * predictable one is a policy that trusts whatever guessed it. Hex, so the guarantee that it cannot
- * carry a quote into the policy string is a property of this function rather than of a coincidence
- * about base-36.</p>
- */
-function nonce(): string {
-  return randomBytes(16).toString('hex');
-}
 
 /**
  * Commands are applied ONE AT A TIME, and a typed field waits to settle before it is stored.

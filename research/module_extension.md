@@ -10789,3 +10789,43 @@ The last settled `--features` list belongs to ONE binary file (path + modificati
 forgotten at once — an updated binary claims nothing until it answers — and every settled answer calls `onSettled`,
 which `extension.ts` uses to write the settings file again. Before, `known()` kept the old binary's list until the
 new one answered, and the file was re-written only once per window.
+
+## The new Settings page — the shell (2026-10-05, PLAN_one_model_catalog.md E3.1)
+
+**One panel, two pages.** With `coai.settingsPreview` on (user scope, `application`; never a side overlay) the ONE
+Settings slot paints the new page (`catalogPage.ts`) instead of the old one — `PanelProvider.pageFor` branches on
+`settingsPreviewOn()`. So the two never write at once (D5), and the new page inherits the slot's `PanelState`, message
+protocol, write queue, busy marks, focus restore and snap-back unchanged; it is `pageDocument` with its own body,
+sheet (`catalogCss.ts`, the editor's theme variables) and script (`catalogPageScript.ts`). Any `coai` change repaints,
+so flipping the switch — the old page's **Try the new Settings page**, the new page's **Use the current page**
+(command `settingsPreview`, id `on`/`off`), or the setting itself — swaps the page in the open tab.
+
+- **Places** (`catalogPlaces.ts`): six tabs — Models, Reviews, Consultants, Security lane, Chat, Setup — with the
+  design's sub-tabs. A place is `tab` or `tab/sub`; the host holds ONE string (`settingsPanel.ts`), the page's script
+  opens it and posts the place back. A sub-tab's strip key is its whole place, so one click handler serves both
+  levels; a top tab reopens the sub-tab last open under it (`getState`). `OLD_TAB_PLACES` maps every old tab id to
+  its place (D11; a test reads the old page's own sections), and `oldIdOf` maps back when the preview is switched off.
+- **Shell pieces** (`catalogShell.ts`): `skew(feature, what, binary)` by CAPABILITY (`--features`; nothing while the
+  list has not settled — `PanelState.serverFeatures` is `undefined` until then — and "not installed" only without a
+  binary); `newTag(controlId, firstSeen, now)` for a week after a control was first seen (`newTags.ts`: a bounded
+  `globalState` record stamped at activation, pruned after 60 days — no version number guessed); one confirm
+  (`confirmButton` with `data-asks`, never `data-command`, and `CONFIRM_DIALOG`, sending only on its action button
+  through the shared `send`); `stillOnTheOldPage` for the five tabs E4 builds.
+- **Nonce:** every panel takes its CSP nonce from `webviewNonce.ts` (128 bits, base64url); the Settings panel's was
+  `Math.random()`. `everyPanelTakesItsNonceFromOneHelper.test.ts` fails on a panel that makes its own.
+- **Help:** the Settings article says how to switch, in all five languages (`coai.settingsPreview`'s help alias).
+- **Render:** `scripts/render-page.mjs catalog[:<place>]`, and `--theme light` (Light Modern tokens; the root is
+  painted, as VS Code paints a webview).
+
+```mermaid
+flowchart LR
+  S[coai.settingsPreview] --> P{PanelProvider.pageFor}
+  P -->|off| O[settingsHtml — the current page]
+  P -->|on| N[catalogHtml — the new page]
+  O -->|Try the new Settings page| C[command settingsPreview on]
+  N -->|Use the current page| D[command settingsPreview off]
+  C --> S
+  D --> S
+  H[settingsPanel: one held place] --> N
+  H -->|oldIdOf| O
+```

@@ -62,6 +62,7 @@ import { notify, notifyAndAsk, notifyResolved, notifyThen } from './notify';
 import { DbLog } from './roundsDb';
 import { readLog, serverRun, serverRunAt } from './roundsDbRead';
 import { FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
+import { FIRST_SEEN_KEY, NEW_CONTROLS, seenNow } from './newTags';
 import { StorageFingerprint } from './dataMove';
 import { flushChatUsage } from './chatUsageFile';
 import { RoundsLogPanel } from './roundsLogPanel';
@@ -321,6 +322,8 @@ export function activate(context: vscode.ExtensionContext): void {
     () => features.known(),
   );
   mirrorSettings(settingsSync);
+  // When each new control of the Settings page was first seen here, so its "new" mark lasts a week (newTags.ts).
+  void context.globalState.update(FIRST_SEEN_KEY, seenNow(context.globalState.get(FIRST_SEEN_KEY), NEW_CONTROLS, Date.now()));
   // Ask once now: the settled answer writes the file again (above) — so a system prompt crosses this session.
   void askFeatures();
   // Every consultant and question-consultant model DEFINITION moves into the catalog once, per settings layer

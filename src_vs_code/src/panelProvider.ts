@@ -13,7 +13,9 @@ import { chatForgetKey, rememberedChat } from './chatSpendRows';
 import { phraseCopier } from './phraseCopy';
 import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
 import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
-import { chooseSettingsTab, heldSettingsTab, type SettingsHost } from './settingsPanel';
+import { chooseSettingsTab, heldSettingsTab, setSettingsPreview, settingsPreviewOn, type SettingsHost } from './settingsPanel';
+import { catalogHtml, catalogKey } from './catalogPage';
+import { FIRST_SEEN_KEY } from './newTags';
 import { appliedTextControl } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
@@ -94,7 +96,7 @@ import { vaultKeyOf } from './vaultKey';
 import { isApiSettingKey, resetTarget, withApiSetting, withoutApiSetting } from './apiSettings';
 import { modelsForKey } from './apiModelsProbe';
 import { Found, FoundRound, keysFileIn, readBugs, readFileAt, readPairs, readRealMethod, RoundKey, serverRun, uploadRun, writeDecisions } from './roundsDbRead';
-import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature } from './binaryFeatures';
+import { BinaryFeatures, FEATURES, FeaturesCache, hasFeature, settledFeatures } from './binaryFeatures';
 import { collectArgs } from './bugzView';
 import { readTreeAt } from './reviewTreeRead';
 import { openTreeFolder, RevisionDocuments, showCurrentFile, workspaceFolderPaths } from './revisionOpen';
@@ -146,6 +148,7 @@ import {
   vendorsFrom,
 } from './vendors';
 import { Catalog, Usage, fetchClientConfig, fetchUsage } from './teamServerApi';
+import { webviewNonce } from './webviewNonce';
 
 /**
  * The panel's window names, as the server's `/api/usage` spells them.
@@ -341,7 +344,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private consultEngines: Record<string, LocalEngine> = {};
   private consultEngineAt: Record<string, number> = {};
   /** One nonce per panel instance: the CSP admits our one script, and a repaint reuses it. */
-  private readonly nonce = nonce();
+  private readonly nonce = webviewNonce();
   /** Which sections the person has open — kept HERE because the panel repaints on every
       change, and a section that snapped shut mid-edit would be worse than none. */
   private openSections: string[] = [...OPEN_BY_DEFAULT];
@@ -1032,6 +1035,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private pageFor(slot: SurfaceSlot, state: PanelState): { key: string; html: () => string } {
     // What is in flight rides with the caret: read when BUILT, never in the key (busyMark.ts).
     const withCaret = (): PanelState => ({ ...state, focus: slot.focus(), busy: this.inFlight.snapshot() });
+    if (slot === this.settingsTab && settingsPreviewOn()) {
+      // The new page in the SAME slot (D5): one panel, one page at a time, every write through the one path below.
+      return {
+        key: catalogKey(state),
+        html: () => catalogHtml({ ...withCaret(), uiScale: currentUiScale(), textTone: currentTextTone() }, this.nonce, heldSettingsTab()),
+      };
+    }
     if (slot === this.settingsTab) {
       // The size and tone are read when the page is BUILT, not with the state: a render awaits a dozen probes
       // after gathering it, and a press in between would otherwise be drawn over by the old value — with
@@ -1182,6 +1192,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       notifications: this.notificationsGlance,
       localEngines: await this.probeLocalEngines(vendors),
       rankByRuntime: hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime),
+      // The new Settings page (PLAN_one_model_catalog.md E3): what the binary takes once it has said, when each new
+      // control was first seen, and the clock its "new" marks are measured against.
+      serverFeatures: settledFeatures(await this.binaryFeatures()),
+      firstSeen: this.context.globalState.get<Record<string, number>>(FIRST_SEEN_KEY) ?? {},
+      now: Date.now(),
       // Only what ≡ brought back — never asked here, on a repaint (PLAN_custom_endpoint_model_list).
       endpointListings: this.endpointListings,
       askingEndpoints: [...this.askingEndpoints],
@@ -2356,6 +2371,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         if (id !== undefined) {
           await this.removeTeamServer(id);
         }
+        break;
+      case 'settingsPreview':
+        // The configuration change repaints the open tab on the other page; nothing else to do here.
+        await setSettingsPreview(id === 'on');
         break;
       case 'teamUsageScope':
         // Only an admin is ever shown the control, and the SERVER refuses `company` for anybody
@@ -4203,11 +4222,6 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   }
 }
 
-/** A nonce per panel instance: the content security policy admits exactly our one script. */
-function nonce(): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  return Array.from({ length: 32 }, () => alphabet[Math.floor(Math.random() * alphabet.length)]).join('');
-}
 
 
 /**

@@ -11,6 +11,7 @@ import { phrasesHtml } from '../phrasesPage';
 import { rolesHtml } from '../rolesPage';
 import { roundsLogHtml } from '../roundsLog';
 import { settingsHtml } from '../panelView';
+import { catalogHtml } from '../catalogPage';
 import { panelState } from './panelPageHarness';
 import { Node, runPageHtml, type Page } from './rolesPageHarness';
 
@@ -43,6 +44,8 @@ const PAGES: readonly (readonly [name: string, render: () => string, ids?: reado
   ['Review rounds', () => roundsLogHtml([], [], 'n'), ROUNDS_IDS],
   ['Who holds a key', () => usersPageHtml({ view: { kind: 'no-key', said: '' } }, 'n')],
   ['Settings tab', () => settingsHtml(panelState(''), 'n', 'reviewers')],
+  // The new Settings page, in the same tab while it is a preview (PLAN_one_model_catalog.md E3).
+  ['new Settings page', () => catalogHtml(panelState(''), 'n', 'models')],
   ['Help', () => renderHelpHtml({ language: 'en' }), HELP_IDS],
   ['Review bugs', () => reviewPageHtml({ pairs: [], nonce: 'n' }), BUGZ_IDS],
 ];
@@ -117,6 +120,6 @@ for (const [name, render, ids] of PAGES) {
   });
 }
 
-test('the census renders the ten pages it names — a table that lost a row would pass for the ones left', () => {
-  assert.equal(PAGES.length, 10);
+test('the census renders the eleven pages it names — a table that lost a row would pass for the ones left', () => {
+  assert.equal(PAGES.length, 11);
 });

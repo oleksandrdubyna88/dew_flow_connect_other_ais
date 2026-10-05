@@ -68,6 +68,36 @@ const THEME = {
   'widget-border': '#313131',
 };
 
+/**
+ * Light Modern, for `--theme light` (todo/PLAN_one_model_catalog.md E3.1): the same names as {@link THEME}, so a page
+ * drawn on the editor's own variables can be seen in both before it ships.
+ */
+const LIGHT = {
+  ...THEME,
+  foreground: '#3b3b3b',
+  descriptionForeground: '#6f6f6f',
+  errorForeground: '#c72e0f',
+  focusBorder: '#005fb8',
+  'editor-background': '#ffffff',
+  'editor-foreground': '#3b3b3b',
+  'sideBar-background': '#f8f8f8',
+  'panel-border': '#e5e5e5',
+  'input-background': '#ffffff',
+  'input-foreground': '#3b3b3b',
+  'input-border': '#cecece',
+  'button-background': '#005fb8',
+  'button-hoverBackground': '#0258a8',
+  'button-secondaryBackground': '#e5e5e5',
+  'button-secondaryForeground': '#3b3b3b',
+  'textLink-foreground': '#005fb8',
+  'textCodeBlock-background': '#f2f2f2',
+  'editorWarning-foreground': '#bf8803',
+  'list-hoverBackground': '#f2f2f2',
+  'widget-border': '#e5e5e5',
+  'editorWidget-background': '#f8f8f8',
+  'testing-iconPassed': '#388a34',
+};
+
 const NONCE = 'render';
 
 /** Something happening, for the sidebar's picture: one round running, one consultation being had, a plan the cadence follows, three phrases. */
@@ -112,14 +142,15 @@ function DEMO_SIDEBAR() {
 const SAVED = { security: { seclaneOpen: ['redteam-sql'] } };
 
 /** The page's html, with the theme and a stubbed editor API in front of its own script; `saved` is what getState answers. */
-function dressed(html, saved) {
+function dressed(html, saved, theme) {
   // Escaped for a script element: no `<` reaches the page, so no value can close the script it is written into.
   const state = JSON.stringify(saved).replaceAll('<', '\\u003c');
-  const tokens = Object.entries(THEME).map(([name, value]) => `--vscode-${name}: ${value};`).join(' ');
-  const head = `<style>:root { ${tokens} } body { background: var(--vscode-editor-background); }</style>`
+  const tokens = Object.entries(theme === 'light' ? LIGHT : THEME).map(([name, value]) => `--vscode-${name}: ${value};`).join(' ');
+  // On the ROOT, as VS Code paints a webview: the page itself draws its body transparent.
+  const head = `<style>:root { ${tokens} background: var(--vscode-editor-background); color-scheme: ${theme === 'light' ? 'light' : 'dark'}; }</style>`
     + `<script nonce="${NONCE}">window.acquireVsCodeApi = () => ({ postMessage() {}, getState() { return ${state}; }, setState() {} });</script>`;
 
-  return html.replace('<head>', `<head>${head}`).replace(/<body(\s|>)/, '<body class="vscode-dark"$1');
+  return html.replace('<head>', `<head>${head}`).replace(/<body(\s|>)/, `<body class="vscode-${theme === 'light' ? 'light' : 'dark'}"$1`);
 }
 
 function page(name, size) {
@@ -141,6 +172,9 @@ function page(name, size) {
       const questions = [{ id: 'q1', sessionId: 's1', repoPath: 'D:/work/app', branch: 'feat/cadence-own-section', question, openFindings: [], askedUtc: new Date().toISOString() }];
       return from('panelView.js').panelHtml({ ...panelState(''), ...text, questions }, NONCE);
     }
+    case 'catalog':
+      // The new Settings page, on a place: `catalog`, `catalog:setup/team` (todo/PLAN_one_model_catalog.md E3).
+      return from('catalogPage.js').catalogHtml({ ...panelState(''), ...text }, NONCE, tab ?? 'models');
     case 'settings':
       return from('panelView.js').settingsHtml({ ...panelState(''), ...text }, NONCE, tab ?? 'reviewers');
     case 'security':
@@ -152,7 +186,7 @@ function page(name, size) {
     case 'presets':
       return from('chatPresetsPage.js').chatPresetsHtml({ prompts: [], models: [], providers: [], unreadable: [], ...text }, NONCE);
     default:
-      console.log(`unknown page "${name}" — sidebar, settings[:<tab>], security, commands, roles or presets`);
+      console.log(`unknown page "${name}" — sidebar, settings[:<tab>], catalog[:<place>], security, commands, roles or presets`);
       process.exit(2);
   }
 }
@@ -181,13 +215,15 @@ function securityDemo(text) {
 
 const [name, target, width = '1200', height = '900'] = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !all[i - 1]?.startsWith('--'));
 if (name === undefined || target === undefined) {
-  console.log('usage: node scripts/render-page.mjs <page> <out.png> [width] [height] [--size n] [--browser path]');
+  console.log('usage: node scripts/render-page.mjs <page> <out.png> [width] [height] [--size n] [--theme light|dark] [--browser path]');
   process.exit(2);
 }
 const sizeAt = process.argv.indexOf('--size');
 const size = sizeAt >= 0 ? Number(process.argv[sizeAt + 1]) : 0;
+const themeAt = process.argv.indexOf('--theme');
+const theme = themeAt >= 0 ? process.argv[themeAt + 1] : 'dark';
 const shot = screenshot(browserOrExit(), 'coai-render-', {
-  html: dressed(page(name, size), SAVED[name.split(':')[0]] ?? null), width: Number(width), height: Number(height), out: resolve(target),
+  html: dressed(page(name, size), SAVED[name.split(':')[0]] ?? null, theme), width: Number(width), height: Number(height), out: resolve(target),
 });
 console.log(shot.ok ? `wrote ${resolve(target)}` : `no picture: ${shot.said}`);
 process.exit(shot.ok ? 0 : 1);

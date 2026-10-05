@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 
+import { oldIdOf, placeOf } from './catalogPlaces';
 import { settingsSections } from './panelView';
 import { nextSettingsTab, SETTINGS_LOADING } from './settingsPage';
 import { openedFrom } from './tabStrip';
@@ -31,14 +32,31 @@ function tabIds(): readonly string[] {
   return settingsSections().map((section) => section.id);
 }
 
-/** The tab the page should show — always one that exists: the strip's own fallback, not a second copy of it. */
+/**
+ * Whether the Settings tab shows the NEW page (`coai.settingsPreview`, PLAN_one_model_catalog.md D5) — user scope, never a
+ * side overlay, read here so the page the slot paints and the place it opens on can never disagree.
+ */
+export function settingsPreviewOn(): boolean {
+  return vscode.workspace.getConfiguration('coai').get<boolean>('settingsPreview', false) === true;
+}
+
+/** Switches the Settings tab between the two pages; the configuration change repaints the open tab. */
+export async function setSettingsPreview(on: boolean): Promise<void> {
+  await vscode.workspace.getConfiguration('coai').update('settingsPreview', on, vscode.ConfigurationTarget.Global);
+}
+
+/**
+ * The tab the page should show — always one that exists. On the new page, a PLACE (`catalogPlaces.ts`): an old id held
+ * from the old page opens its new place. On the old page, its tab: a place held from the new page opens the old tab
+ * that holds it, where the old page had one, else the strip's own fallback.
+ */
 export function heldSettingsTab(): string {
-  return openedFrom(tabIds().map((key) => ({ key, label: key })), tab);
+  return settingsPreviewOn() ? placeOf(tab, '') : openedFrom(tabIds().map((key) => ({ key, label: key })), oldIdOf(tab) || tab);
 }
 
 /** A tab was chosen, on the page or by the command's argument; anything unknown changes nothing. */
 export function chooseSettingsTab(requested: unknown): string {
-  tab = nextSettingsTab(tab, requested, tabIds());
+  tab = settingsPreviewOn() ? placeOf(requested, placeOf(tab, '')) : nextSettingsTab(oldIdOf(tab) || tab, requested, tabIds());
 
   return heldSettingsTab();
 }

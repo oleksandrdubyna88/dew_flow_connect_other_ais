@@ -422,6 +422,8 @@ function pageHolding(state: PanelState): string {
 export interface RunOptions {
   /** What a previous document of the same webview saved with `setState` — `undefined` for a first load. */
   readonly saved?: unknown;
+  /** A page to run in place of the one holding the fixture's section — the new Settings page, say (PLAN_one_model_catalog.md E3). */
+  readonly html?: string;
 }
 
 /**
@@ -488,7 +490,7 @@ export function createdElement(tag: string): Control {
 
 /** Render the page holding the fixture's section, parse its controls, and run its own script over them. */
 export function runPanel(state: PanelState, options: RunOptions = {}): Page {
-  const html = pageHolding(state);
+  const html = options.html ?? pageHolding(state);
   const controls = controlsOf(html);
   const prompts = promptsOf(html);
   const commands = commandsOf(html);

@@ -255,6 +255,15 @@ export interface PanelState {
    */
   readonly rankByRuntime?: boolean;
   /**
+   * What the installed coai-mcp's `--features` lists — `undefined` until that answer has SETTLED, which the new Settings
+   * page tells apart from an empty list so a cold start never reads as an older binary (PLAN_one_model_catalog.md E3.1).
+   */
+  readonly serverFeatures?: readonly string[] | undefined;
+  /** When each control the new page marks "new" was first seen in this profile (`newTags.ts`). */
+  readonly firstSeen?: Readonly<Record<string, number>>;
+  /** The time the state was gathered — what a "new" mark is measured against. Absent: the moment the page is drawn. */
+  readonly now?: number;
+  /**
    * What an endpoint row's own `GET /models` answered when ≡ was pressed, per row id — kept with what it
    * was asked WITH, so the card uses it only while the row still matches (`listingFor`). Optional: a
    * state built without one has asked nothing, which is the honest default.
@@ -3298,6 +3307,9 @@ export const PANEL_COMMANDS = [
   // The Company/Me control on the spending section, which only an admin is shown. Without it that
   // control would be a button wired to nothing, which is the exact trap this list exists to prevent.
   'teamUsageScope',
+  // Switches the Settings tab between the current page and the new one (PLAN_one_model_catalog.md D5): its id is
+  // `on` or `off`. The configuration change repaints the open tab.
+  'settingsPreview',
   // The way into the presets tab. `coai.editChatPresets` shipped registered, in no menu and named in
   // no view, so the only way to reach the CRUD the chat section points at was the command palette.
   'editChatPresets',

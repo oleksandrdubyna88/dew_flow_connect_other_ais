@@ -1,4 +1,3 @@
-import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { ChatCatalog, ChatProvider, chatProvidersFromPresets } from './chatModels';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
@@ -25,6 +24,7 @@ import { allowedModelsFor, modelsFor } from './models';
 import { teamServersFrom } from './teamServers';
 import { VENDOR_PRESETS } from './vendors';
 import { askPerson } from './personWait';
+import { webviewNonce } from './webviewNonce';
 
 /**
  * The presets tab: one webview, reused while open.
@@ -175,7 +175,7 @@ function render(): void {
       uiScale: currentUiScale(),
       textTone: currentTextTone(),
     },
-    crypto.randomBytes(16).toString('hex'),
+    webviewNonce(),
   );
 }
 

@@ -17,6 +17,7 @@ import { currentUiScale } from './uiScaleHost';
 import { readerFor, reportRefusal, saveSetting } from './sideConfig';
 import { BusyHost } from './busyHost';
 import { type BusySnapshot, IDLE } from './busySnapshot';
+import { webviewNonce } from './webviewNonce';
 
 /**
  * The tab that edits the gate's commands — issue #467, Epic B. A thin host over `commands.ts`,
@@ -125,7 +126,7 @@ async function render(): Promise<void> {
   }
   const html = commandsHtml(
     { rows: rows(), texts: await texts(), serverVersion, perSide: config().get('perSideSettings') === true, uiScale: currentUiScale(), textTone: currentTextTone(), busy: stillRunning() },
-    randomBytes(16).toString('hex'),
+    webviewNonce(),
   );
   // Re-checked: `await texts()` is a suspension point, and the tab can close across it.
   if (panel !== undefined) {

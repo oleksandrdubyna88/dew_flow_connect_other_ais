@@ -1,6 +1,6 @@
-import { randomBytes } from 'node:crypto';
 
 import * as vscode from 'vscode';
+import { webviewNonce } from './webviewNonce';
 
 import { Admin, Answer, KeyRow, issue, keys, mayCarryAKey, revoke } from './bugsAdminApi';
 import {
@@ -504,7 +504,7 @@ export class BugsKeysPanel {
     }
 
     // What is still running is painted in, so a repaint mid-action — `Turns` repaints as every action starts — keeps the bar.
-    this.panel.webview.html = usersPageHtml(users, nonce(), { size: currentUiScale(), tone: currentTextTone() }, this.busy?.snapshot() ?? IDLE);
+    this.panel.webview.html = usersPageHtml(users, webviewNonce(), { size: currentUiScale(), tone: currentTextTone() }, this.busy?.snapshot() ?? IDLE);
     this.lastPaint = users;
   }
 
@@ -538,7 +538,3 @@ export function usersPanel(secrets: Secrets, server: () => string): BugsKeysPane
   return theOne;
 }
 
-/** One nonce per paint: the CSP admits our one script and nothing else. */
-function nonce(): string {
-  return randomBytes(24).toString('base64url');
-}

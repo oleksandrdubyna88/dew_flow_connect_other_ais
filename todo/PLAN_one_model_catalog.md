@@ -557,6 +557,20 @@ layout check (two columns at 1920, one at 900, side-by-side cards one height, li
 **Definition of done:** the preview page shows the shell and a complete Models tab; every write is validated; the old
 page is unchanged with the preview off; all suites, lint, the seam and the layout check green; module docs updated.
 
+**As revised by epic 3's plan round (coai session `ebf28ac3`, 2026-10-05, proceed, 5 findings accepted):**
+
+- **A switch never loses a draft.** The repaint that swaps the pages goes through the slot's edit hold, and a pending
+  debounced draft is saved before the other page paints; a test types into a textarea, flips the switch, and finds
+  the text saved.
+- **The row cap is checked only where a row is ADDED** (add, duplicate): an edit of a catalog already past 64 rows (a
+  hand-edited settings file) is never refused for the count, so the page can always be used to get back under it.
+  A row's own fields (8 KiB prompt, effort) are checked on every write of that row.
+- **The generator is named:** `src_vs_code/scripts/generate-feature-availability.mjs` gains the `thinking` rows; its
+  `--check` (byte for byte, already in CI) fails when the generated file drifts; C# `FeatureAvailability` reads them.
+- **No "ignores" note before the binary has answered.** `skew` draws nothing while `--features` has not settled (a
+  cold start, a timeout); "not installed" only when there is no binary at all.
+- **Every panel moves to `webviewNonce.ts`** in E3.1, not only the new page.
+
 ### Epic 4 — The feature tabs use the catalog
 1. **Reviews**: Stages; Roles & prompts (replacing `rolesPage.ts`) with ONE switch per role — `roleEnabled` and the
    catalog's `active` merged, `COAI_ROLES` still written for servers under `ROLE_SWITCH_SINCE`; deletion's confirmation

@@ -1,4 +1,3 @@
-import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
 import { coaiDataDir } from './dataDir';
 import {
@@ -15,6 +14,7 @@ import { appliedTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';
 import { currentUiScale } from './uiScaleHost';
 import { withinTheClock } from './withinTheClock';
+import { webviewNonce } from './webviewNonce';
 
 /**
  * The window the notifications page lives in.
@@ -129,7 +129,7 @@ export class NotificationsPanel {
       this.panel = panel;
       // Something to read WHILE the disk is read. Without it a slow share shows a window with
       // nothing in it, which is indistinguishable from one that failed. (codex, the S5 code round.)
-      panel.webview.html = waitingPageHtml(coaiDataDir(), randomBytes(16).toString('base64'), { size: currentUiScale(), tone: currentTextTone() });
+      panel.webview.html = waitingPageHtml(coaiDataDir(), webviewNonce(), { size: currentUiScale(), tone: currentTextTone() });
       const text = pushTextControlsTo(panel.webview);
       panel.onDidDispose(() => {
         text.dispose();
@@ -224,7 +224,7 @@ export class NotificationsPanel {
     this.notice = '';
     alive.webview.html = notificationsPageHtml(
       { ...snapshot.state, uiScale: currentUiScale(), textTone: currentTextTone() },
-      randomBytes(16).toString('base64'),
+      webviewNonce(),
     );
   }
 

@@ -43,6 +43,14 @@ export interface BinaryFeatures {
   readonly settled: boolean;
 }
 
+/**
+ * The list as a page may trust it: what the binary lists once its answer has SETTLED, `undefined` before that — a
+ * cold start or a timeout is not an older binary, and the new Settings page says nothing about it (E3's plan round).
+ */
+export function settledFeatures(answer: BinaryFeatures): readonly string[] | undefined {
+  return answer.settled ? answer.features : undefined;
+}
+
 /** `unknown argument` — a binary from before the list. */
 const EX_USAGE = 64;
 

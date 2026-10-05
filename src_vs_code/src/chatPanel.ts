@@ -1,4 +1,3 @@
-import * as crypto from 'node:crypto';
 import * as vscode from 'vscode';
 import { PageMessage, chatCommandOf, offersPair } from './chatMessages';
 import { ChatEntry, DisposableSession, RevealablePanel } from './chatPanels';
@@ -8,6 +7,7 @@ import { ChatPushState, sendChatState } from './chatStateMessage';
 import { escapeHtml } from './webviewHtml';
 import { applyZoomDelta, currentUiScale, pushUiScaleTo } from './uiScaleHost';
 import { applyToneDelta, currentTextTone, pushTextToneTo } from './textToneHost';
+import { webviewNonce } from './webviewNonce';
 
 /**
  * The `vscode` half of a conversation tab, and deliberately the thin one.
@@ -200,7 +200,7 @@ export function createChatPanel(
   // `view.webview.options = …`). Raised by two reviewers on the code round; recorded rather than
   // worked around, because the alternative is a creation API the API does not have.
   panel.iconPath = chatTabIcon((...segments) => vscode.Uri.joinPath(extensionUri, ...segments));
-  panel.webview.html = chatPageHtml(state, crypto.randomBytes(16).toString('hex'));
+  panel.webview.html = chatPageHtml(state, webviewNonce());
 
   const scale = pushUiScaleTo(panel.webview);
   const tone = pushTextToneTo(panel.webview);
