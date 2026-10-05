@@ -259,6 +259,11 @@ export interface PanelState {
    * page tells apart from an empty list so a cold start never reads as an older binary (PLAN_one_model_catalog.md E3.1).
    */
   readonly serverFeatures?: readonly string[] | undefined;
+  /**
+   * EVERY catalog row, the ones that review nothing included — `vendors` is the current page's reviewers only
+   * (`shownOnTheOldPage`). The new page's tabs read this one (PLAN_one_model_catalog.md E4, epic 3's missed row).
+   */
+  readonly catalogRows?: readonly Vendor[];
   /** When each control the new page marks "new" was first seen in this profile (`newTags.ts`). */
   readonly firstSeen?: Readonly<Record<string, number>>;
   /** The time the state was gathered — what a "new" mark is measured against. Absent: the moment the page is drawn. */

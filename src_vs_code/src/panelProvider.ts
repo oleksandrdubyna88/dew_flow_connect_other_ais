@@ -1172,6 +1172,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const state = {
       settings,
       vendors: shown,
+      // The new page draws every row (PLAN_one_model_catalog.md E4): `vendors` above is the current page's reviewers.
+      catalogRows: vendors,
       codexModels: this.codexModels,
       agyModels: this.agyModels,
       // Never awaited. The probe is four real requests to a real CLI; a render that waited for one

@@ -78,7 +78,9 @@ function toolbar(rows: readonly Vendor[]): string {
 }
 
 /** The tab. */
-export function modelsTabHtml(state: PanelState): string {
+export function modelsTabHtml(shown: PanelState): string {
+  // EVERY row, the ones that review nothing included: the current page's `vendors` hides them (E4, epic 3's missed row).
+  const state = { ...shown, vendors: shown.catalogRows ?? shown.vendors };
   const rows = state.vendors;
   const contextOf = cardContextFor(state);
   const binary = { installed: state.server.kind !== 'absent', features: state.serverFeatures };
