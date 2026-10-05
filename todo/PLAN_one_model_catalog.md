@@ -410,6 +410,24 @@ override the stories above where they differ:
   A row that cannot consult is unavailable by name, nothing launched. Deviation: the panel's ✓ Check button that
   calls it is E3's (the Models card).
 
+#### E2.5 as designed (before building; the story text left delivery and storage open)
+
+- **Contract 2.** `ReviewRequestDto` gains `effort` and `systemPrompt`; `ContractVersion.Current` becomes 2. The client
+  composes the whole prompt and the server relays it, so the server's part is to decide what it TAKES:
+- **The system prompt** is taken only when the operator switch `Coai:AcceptClientSystemPrompt` is on (off by default),
+  at most 8192 UTF-8 bytes, and inserted before the client prompt's own `## The finding contract` heading — the contract
+  stays last; a prompt without that heading has the field DROPPED, never guessed at. The job store is in memory only,
+  so it is on no disk; the record carries its SHA-256, never the text; no log line names it.
+- **Effort** is applied only where the vendor's runtime LISTS levels in `shared/feature-availability.json` (claude
+  today) and the level is one of them; past the operator's `Coai:MaxEffort` it is CLAMPED to it. Elsewhere (codex,
+  unmeasured) it is dropped with its reason.
+- **The answer says so.** The accepted response gains `dropped` and `clamped` — field and reason each. The client turns
+  them into a per-reviewer note in the round; against a contract-1 server it reports every new field as dropped.
+- **Timeout** keeps today's bounds and refusal (deviation from "clamped"): turning the refusal into a clamp would
+  change what a contract-1 client asked for without it knowing.
+- The client sends the system prompt in a file beside the prompt file (`--system-prompt-file`), never argv, and both
+  are in `TempFiles`. Deploying the server stays the operator's decision.
+
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
    shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;
