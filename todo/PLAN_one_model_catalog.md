@@ -377,6 +377,22 @@ override the stories above where they differ:
 - Still open in E2.2: "sent is not applied" — one recorded real call per runtime showing the system prompt's effect
   (a marker the answer must carry) and the effort as the CLI reports it; until then the docs and card say "sent".
 
+#### E2.3 as built (branch `feat/catalog-e2`)
+
+- **A codex row on an endpoint consults** with its provider on every turn (the reviewer's `-c` overrides, the key in
+  the endpoint's variable) — it was refused because the consultant dropped them. **An api row consults** through
+  `ApiConsultant`, widened from question rows to stuck consultations (one completion per turn, `WeRemember`, 32 KB).
+- The key reaches only those two kinds (`TakesAKey`); an api consultant runs with its module's effective settings.
+  `--features` lists `apiConsultant`; the shared file lists `api` among the consulting runtimes.
+- **Deviation — no separate transcript file.** The plan's `<dataDir>/consultations/<id>/transcript.jsonl` with its own
+  1 MB / 50 MB budget was written before reading the store: a consultant that keeps no conversation already has one —
+  the consultation record stores every turn's problem and advice, carries them into the next prompt under the frozen
+  carry budget, and is swept with the consultation (idle → lapsed, retention → deleted, a dead owner → interrupted).
+  A second copy of the conversation would have been a second thing to keep in step. Bounded by the turn cap and the
+  completion ceiling, a record stays far under 1 MB.
+- Open: a measured real consultation on an endpoint row and on an api row (one each), which is also what closes the
+  "consults when its provider overrides are measured" note this replaced.
+
 ### Epic 3 — The new Settings page: the shell and Models (behind the preview switch)
 1. **The shell**: a page module of its own (pure page + thin host); the CSP/nonce extracted from `pageDocument` and
    shared; `tabStrip` + `tabKeys`, `selectSearch`, the busy marks, focus restore and the refused-write snap-back reused;

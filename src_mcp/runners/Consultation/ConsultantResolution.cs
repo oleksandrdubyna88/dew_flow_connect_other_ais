@@ -29,9 +29,9 @@ public static class ConsultantResolution
     /// </remarks>
     public static IConsultantRuntime? For(VendorIdentity vendor) => RuntimeResolution.NameOf(vendor) switch
     {
-        // A custom endpoint riding the codex CLI (DeepSeek) authenticates and configures differently;
-        // it consults when its provider overrides are measured, not before.
-        "codex" when vendor.BaseUrl.Length == 0 =>
+        // A custom endpoint riding the codex CLI (OpenRouter, DeepSeek) consults with ITS provider: the consultant
+        // carries the runtime's own -c overrides and key variable on every turn (PLAN_one_model_catalog.md E2.3).
+        "codex" =>
             new CodexConsultant(RuntimeResolution.For(vendor) ?? new CodexRuntime(vendor.Provider), vendor.Provider),
         "claude" =>
             new ClaudeConsultant(RuntimeResolution.For(vendor) ?? new ClaudeRuntime(vendor.Provider), vendor.Provider),
@@ -45,6 +45,9 @@ public static class ConsultantResolution
         "local" => new LocalConsultant(
             RuntimeResolution.For(vendor) ?? new LocalRuntime(vendor.Provider, vendor.BaseUrl),
             vendor.Provider),
+        // A hosted completion keeps no conversation either: the same shape as the local engine's, through the api shim
+        // (PLAN_one_model_catalog.md D9) — the adapter that already answered question rows, widened.
+        "api" => new ApiConsultant(RuntimeResolution.For(vendor) ?? new ApiRuntime(vendor.Provider, vendor.BaseUrl), vendor.Provider, vendor.VaultName),
         _ => null,
     };
 

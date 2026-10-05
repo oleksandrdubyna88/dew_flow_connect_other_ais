@@ -348,7 +348,7 @@ public sealed class ConsultantResolutionAfterStoryTwoTests : IDisposable
 
     [Theory]
     [InlineData("remsoftdev-codex", "remote", "https://coai.remsoft.dev")]
-    [InlineData("deepseek", "codex", "https://api.deepseek.com")]
+    // A codex row on a custom endpoint consults since PLAN_one_model_catalog.md E2.3; a Team server row still does not.
     public void ATeamServerRowAndACustomEndpointAreStillRefusedByName(string provider, string runtime, string baseUrl)
     {
         var identity = new VendorIdentity(provider, runtime, baseUrl);
@@ -358,19 +358,17 @@ public sealed class ConsultantResolutionAfterStoryTwoTests : IDisposable
     }
 
     /// <summary>
-    /// An <c>api</c> vendor is refused BY NAME in v1 (PLAN_feature_review.md §4.10): the refusal says
-    /// it runs on <c>api</c>, not that it is a codex endpoint — which is what an api row read through
-    /// the base-URL arm would have been called, and a sentence about the wrong runtime sends a person
-    /// to the wrong setting.
+    /// An <c>api</c> vendor consults under its OWN name (PLAN_one_model_catalog.md D9, E2.3) — it was refused by name in
+    /// v1 (PLAN_feature_review.md §4.10). Resolved as an api consultant, never through the base-URL arm as a codex
+    /// endpoint, which would have sent a hosted model's review through the Codex CLI.
     /// </summary>
     [Fact]
-    public void AnApiVendorIsRefusedByItsOwnName_NotAsACodexEndpoint()
+    public void AnApiVendorConsults_UnderItsOwnName_NotAsACodexEndpoint()
     {
         var grok = new VendorIdentity("grok", "api", "https://api.x.ai/v1");
 
-        ConsultantResolution.For(grok).Should().BeNull("consultations over a hosted API are not in this build");
-        ConsultantResolution.CannotConsult(grok).Should().Contain("runs on 'api'").And.NotContain("'codex'");
-        ConsultantResolution.Consulting.Should().NotContain("api");
+        ConsultantResolution.For(grok).Should().BeOfType<ApiConsultant>();
+        ConsultantResolution.Consulting.Should().Contain("api");
     }
 
     [Fact]

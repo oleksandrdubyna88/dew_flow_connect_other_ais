@@ -24,6 +24,8 @@ export const FEATURES = {
   timeoutMinutes: 'timeoutMinutes',
   /** E2.2: a CLI row's `effort` — claude's levels as --effort; a codex row's kept and not sent while unmeasured. */
   cliEffort: 'cliEffort',
+  /** E2.3: a consultant on an api row, or a codex row on somebody else's endpoint. */
+  apiConsultant: 'apiConsultant',
 } as const;
 
 export interface BinaryFeatures {

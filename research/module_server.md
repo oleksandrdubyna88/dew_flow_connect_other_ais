@@ -6334,3 +6334,15 @@ the row still reviews. `PanelService.EffortRefusal` (with the prompt check in `R
 by name, for a level a `list` runtime does not list or any effort on a runtime that takes `none`. An older claude that
 refuses the flag is diagnosed as "the installed claude CLI does not take --effort" (`VendorDiagnosis`, ahead of the
 general unknown-option cure). `--features` lists `cliEffort` (`ACliRowsEffortTests`, RED first).
+
+## A consultation launch carries the key and the module only where they belong (2026-10-05, PLAN_one_model_catalog.md E2.3)
+
+`ConsultantTurnInputs.Settings` takes the vault and the api overrides. `TakesAKey(row)` — an api row, or a codex row
+with a base URL — decides whether the row's vault key is handed over: a claude or plain codex consultant keeps its
+CLI's own sign-in, because a vault key would move it onto per-token billing (`AConsultantIsHandedItsRowsKeyTests`). An
+api row runs with its module's effective effort, ceiling and thinking switch, as an api reviewer and a question row
+do. `ConsultationService` receives the panel's vault; `--check-consultant` reads the vault as `--providers` does;
+`--consultants` (a survey of records) reads none. `--features` lists `apiConsultant`.
+
+The conversation of a consultant that keeps none is the consultation record's own: every turn's problem and advice is
+stored there, carried into the next prompt under the frozen carry budget, and swept with the consultation.

@@ -373,6 +373,15 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
 
     private protected virtual IEnumerable<string> ProviderOverrides => [];
 
+    /// <summary>
+    /// The <c>-c</c> overrides that point the Codex CLI at this row's provider — empty for codex's own service — for a
+    /// launch built outside <see cref="Build"/>: the consultant's (PLAN_one_model_catalog.md E2.3).
+    /// </summary>
+    public IReadOnlyList<string> ProviderArgs => [.. ProviderOverrides];
+
+    /// <summary>The environment variable this row's key travels in — OpenAI's for codex's own service.</summary>
+    public string KeyEnvironmentVariable => KeyVariable;
+
     public ReviewerInvocation Build(string role, string prompt, string worktreePath, string schemaFilePath, string outputDir, ReviewerSettings settings)
     {
         var outputFile = Path.Combine(outputDir, $"{FileName.Safe(Provider)}-{FileName.Safe(role)}.json");

@@ -19,7 +19,14 @@ internal sealed class ConsultantParts
 {
     /// <param name="noticing">Handed down from <c>Program</c>, which composes every one — the silent one for a one-shot mode.</param>
     public ConsultantParts(PanelSettings settings, IProcessLauncher launcher, Action<string> warn, Noticing noticing)
+        : this(settings, launcher, warn, noticing, VaultKeys.None("this one-shot reads no vault"))
     {
+    }
+
+    /// <param name="keys">The vault, for a consultant that authenticates with a key — an api or endpoint row (E2.3).</param>
+    public ConsultantParts(PanelSettings settings, IProcessLauncher launcher, Action<string> warn, Noticing noticing, VaultKeys keys)
+    {
+        Keys = keys;
         Settings = settings;
         Launcher = launcher;
         Warn = warn;
@@ -33,8 +40,11 @@ internal sealed class ConsultantParts
         Ledger = new UsageLedger(settings.DataDir);
         Consultations = new ConsultationService(
             settings, launcher, Executor, Context, Prompts, Ledger, Serilog.Core.Logger.None,
-            Environment.GetEnvironmentVariable, noticing);
+            Environment.GetEnvironmentVariable, noticing, keys);
     }
+
+    /// <summary>The vault this one-shot read — empty unless its mode needs a key.</summary>
+    public VaultKeys Keys { get; }
 
     public PanelSettings Settings { get; }
 
@@ -53,5 +63,5 @@ internal sealed class ConsultantParts
     public ConsultationService Consultations { get; }
 
     /// <summary>A consultant check's turn over these parts.</summary>
-    public ConsultantCheckTurn Turn() => new(Settings, Launcher, Executor, Context, Prompts, Ledger, Warn);
+    public ConsultantCheckTurn Turn() => new(Settings, Launcher, Executor, Context, Prompts, Ledger, Warn, Keys);
 }

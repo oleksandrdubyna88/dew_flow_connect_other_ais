@@ -18,7 +18,11 @@ namespace CoaiMcp.Runners.Consultation;
 public static class QuestionResolution
 {
     /// <summary>The runtimes a question row may run on, in the order the table lists them.</summary>
-    public static IReadOnlyList<string> Answering { get; } = [.. ConsultantResolution.Consulting, "api"];
+    /// <remarks>
+    /// The stuck consultant's runtimes and `api` — once each: since PLAN_one_model_catalog.md E2.3 the stuck consultant's
+    /// list holds `api` itself, and appending it again listed it twice, in the refusal sentence a person reads too.
+    /// </remarks>
+    public static IReadOnlyList<string> Answering { get; } = [.. ConsultantResolution.Consulting.Union(["api"], StringComparer.Ordinal)];
 
     public static IAnsweringRuntime? For(VendorIdentity vendor) => RuntimeResolution.NameOf(vendor) switch
     {

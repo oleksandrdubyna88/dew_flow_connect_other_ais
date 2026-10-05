@@ -17,7 +17,7 @@
   ],
   "runtimes": ["codex", "gemini", "claude", "antigravity", "local", "remote", "api"],
   "features": {
-    "consultant": ["codex", "claude", "antigravity", "local"],
+    "consultant": ["codex", "claude", "antigravity", "local", "api"],
     "chat": ["antigravity", "claude", "codex"]
   },
   "effort": [

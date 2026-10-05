@@ -10777,3 +10777,8 @@ api row carries none — it keeps `reviewMinutes` (`timeoutOnTheWire.test.ts`).
 
 `vendorsEnv` writes a CLI row's `effort` when the binary lists `cliEffort` (`FEATURES.cliEffort`); what it means is
 coai-mcp's to decide per runtime. An api row's effort keeps `apiSettingsOnTheWire` (`cliEffortOnTheWire.test.ts`).
+
+## An api consultant (2026-10-05, PLAN_one_model_catalog.md E2.3)
+
+`CONSULTING` (generated from `shared/feature-availability.json`) lists `api`; `FEATURES.apiConsultant` names the
+capability, which seam leg 11 holds the built binary to.

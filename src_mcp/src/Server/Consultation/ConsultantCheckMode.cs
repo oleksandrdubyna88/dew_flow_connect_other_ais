@@ -65,8 +65,12 @@ internal static class ConsultantCheckMode
         });
         try
         {
+            var launcher = new ProcessLauncher();
+            // The same read `--providers` does: a consultant on an api row or somebody else's endpoint authenticates with a
+            // key from the vault, and a check that launched it without one would test a launch no consultation makes.
+            var keys = await KeyVault.ForThisMachine(launcher, Environment.GetEnvironmentVariable).ReadFromConfigurationAsync(configuration, stopping.Token);
             var (code, answer, why) = await AnswerAsync(
-                PanelSettings.FromEnvironment(configuration), args, new ProcessLauncher(), Path.GetTempPath(), Program.Note, noticing, stopping.Token);
+                PanelSettings.FromEnvironment(configuration), args, launcher, Path.GetTempPath(), Program.Note, noticing, stopping.Token, keys);
             if (answer.Length > 0)
             {
                 await Console.Out.WriteLineAsync(answer);
@@ -90,6 +94,11 @@ internal static class ConsultantCheckMode
     /// <param name="warn">Where a problem that does not change the outcome is said — stderr.</param>
     internal static async Task<(int Code, string Out, string Err)> AnswerAsync(
         PanelSettings settings, string[] args, IProcessLauncher launcher, string tempRoot, Action<string> warn, Noticing noticing, CancellationToken ct)
+        => await AnswerAsync(settings, args, launcher, tempRoot, warn, noticing, ct, VaultKeys.None("no vault was read"));
+
+    /// <param name="keys">The vault, for a consultant on an api row or somebody else's endpoint.</param>
+    internal static async Task<(int Code, string Out, string Err)> AnswerAsync(
+        PanelSettings settings, string[] args, IProcessLauncher launcher, string tempRoot, Action<string> warn, Noticing noticing, CancellationToken ct, VaultKeys keys)
     {
         var kind = KindOf(args);
         if (kind.Length == 0)
@@ -99,7 +108,7 @@ internal static class ConsultantCheckMode
 
         try
         {
-            return await CheckAsync(new ConsultantParts(settings, launcher, warn, noticing), kind, tempRoot, ct);
+            return await CheckAsync(new ConsultantParts(settings, launcher, warn, noticing, keys), kind, tempRoot, ct);
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or System.Security.SecurityException)
         {

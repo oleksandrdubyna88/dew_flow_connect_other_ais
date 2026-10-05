@@ -19,7 +19,7 @@ export interface EffortRow {
 }
 
 /** The runtimes a consultant can run on, in the file's order. */
-export const CONSULTING: readonly Runtime[] = ['codex', 'claude', 'antigravity', 'local'];
+export const CONSULTING: readonly Runtime[] = ['codex', 'claude', 'antigravity', 'local', 'api'];
 
 /** The runtimes a chat can speak to, in the file's order. */
 export const CHAT: readonly Runtime[] = ['antigravity', 'claude', 'codex'];

@@ -2201,3 +2201,17 @@ failing a finished review (`APromptFileDoesNotOutliveItsLaunchTests`, `ARuntimeN
 - `ReviewerInvocation.Redact`: texts the launch was given that must not come back out of it. `ReviewerExecutor`
   replaces each in the process result (stdout and stderr) with `[the row's system prompt]` right after the launcher
   returns, so every tail, transcript and reason is cut from redacted streams.
+
+## A consultant on an api row, or on somebody else's endpoint (2026-10-05, PLAN_one_model_catalog.md D9 / E2.3)
+
+- **Codex CLI on an endpoint** (OpenRouter, DeepSeek): `CodexConsultant` used to build its own argv without the
+  endpoint runtime's provider, so such a row would have reached OpenAI's service with the endpoint's key — which is why
+  `ConsultantResolution` refused it. `CodexRuntime.ProviderArgs` / `KeyEnvironmentVariable` now expose the four `-c
+  model_provider…` overrides and the key variable the reviewer has always used, and the consultant carries them on
+  EVERY turn — `exec` and `exec resume` alike — with the key in the endpoint's variable, never `OPENAI_API_KEY`
+  (`AnEndpointConsultantKeepsItsProviderTests`). A plain codex consultant is unchanged.
+- **An api row**: `ApiConsultant`, which answered question rows only, is widened to `IConsultantRuntime`. A stuck
+  turn is one completion through `--ask-api` (the reviewer adapter builds the whole shim invocation, bound to the
+  consultation's answer schema), and the vendor keeping no conversation it is `ConsultantMemory.WeRemember` with a
+  32 KB carry budget — twice the local route's (`AnApiRowConsultsTests`).
+- `ConsultantResolution.For` resolves both; `shared/feature-availability.json` lists `api` among the consulting runtimes.

@@ -48,9 +48,10 @@ test('the manifest lets a person write runtime: api in coai.vendors', () => {
   }
 });
 
-test('api is neither a chat partner nor a consultant', () => {
+test('api is no chat partner, and is a consultant since the catalog', () => {
   assert.ok(!(CHAT_RUNTIMES as readonly string[]).includes('api'), 'the chat speaks to CLIs; an API has no conversation to resume');
-  assert.ok(!(CONSULTING_RUNTIMES as readonly string[]).includes('api'), 'coai-mcp refuses an api consultant by name in v1');
+  // coai-mcp refused an api consultant by name in v1; PLAN_one_model_catalog.md D9 (E2.3) gave it one.
+  assert.ok((CONSULTING_RUNTIMES as readonly string[]).includes('api'));
 });
 
 test('the catalogue offers the generic api preset and the two MEASURED vendor presets, each with its dialect', () => {

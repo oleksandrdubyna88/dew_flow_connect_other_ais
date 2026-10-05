@@ -90,7 +90,7 @@ public sealed class PanelService
         _projection = new Store.Projection(settings.DataDir, log);
         _consultations = new ConsultationService(
             settings, launcher, executor, _context, prompts, ledger, log,
-            Environment.GetEnvironmentVariable, noticing);
+            Environment.GetEnvironmentVariable, noticing, keys);
         // The question consultant (todo/PLAN_question_consultant.md, S2): the `ask_consultants` tool's whole flow,
         // its own record store and its fan-out — kept out of this file, as the consultation is.
         _questions = new QuestionConsultService(

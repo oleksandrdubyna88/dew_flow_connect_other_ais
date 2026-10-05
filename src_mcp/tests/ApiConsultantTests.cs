@@ -117,15 +117,17 @@ public sealed class ApiConsultantTests : IAsyncLifetime
             QuestionResolution.For(identity).Should().NotBeNull(runtime);
         }
 
-        // Acceptance 5: the stuck consultant's allowlist is NOT widened (ConsultantResolution.cs:17).
-        ConsultantResolution.Consulting.Should().Equal("codex", "claude", "antigravity", "local");
-        ConsultantResolution.For(OpenRouterGrok).Should().BeNull("the stuck consultant still refuses an api row by name");
+        // The stuck consultant's list was held narrower than this one until PLAN_one_model_catalog.md E2.3, which gave it
+        // the api runtime: the two now name the same runtimes, read from shared/feature-availability.json.
+        ConsultantResolution.Consulting.Should().Equal("codex", "claude", "antigravity", "local", "api");
+        ConsultantResolution.For(OpenRouterGrok).Should().BeOfType<ApiConsultant>("an api row consults since E2.3");
     }
 
     [Theory]
     [InlineData("remsoftdev-codex", "remote", "https://coai.remsoft.dev")]
-    [InlineData("deepseek", "codex", "https://api.deepseek.com")]
     [InlineData("gemini", "gemini", "")]
+    // A codex row on a custom endpoint answers since E2.3: the question consultant resolves CLI rows through the same
+    // CodexConsultant, which now carries the endpoint's provider on every launch.
     public void ARowNeitherListCanLaunch_IsRefusedByName(string provider, string runtime, string baseUrl)
     {
         var identity = new VendorIdentity(provider, runtime, baseUrl);
@@ -166,7 +168,7 @@ public sealed class ApiConsultantTests : IAsyncLifetime
     }
 
     [Fact]
-    public void DiskAndWeb_AreRefusedByName_AndSoIsTheStuckConsultantsShape()
+    public void DiskAndWeb_AreRefusedByName_AndTheStuckConsultantsShapeBuilds()
     {
         var disk = new Confinement.Planned("api", CapabilityGrant.Disk("D:/x"), [], [], CwdKind.Root, ["D:/x"], AdmissionFlag.None);
         var web = new Confinement.Planned("api", CapabilityGrant.Web, [], [], CwdKind.Scratch, [], AdmissionFlag.None);
@@ -177,7 +179,8 @@ public sealed class ApiConsultantTests : IAsyncLifetime
 
         buildDisk.Should().Throw<ArgumentException>().WithMessage("*'disk'*api*");
         buildWeb.Should().Throw<ArgumentException>().WithMessage("*'web'*api*");
-        buildShipped.Should().Throw<ArgumentException>().WithMessage("*question row*");
+        // A stuck consultation is an api shape since E2.3 (AnApiRowConsultsTests): one completion through the shim.
+        buildShipped.Should().NotThrow();
     }
 
     [Fact]

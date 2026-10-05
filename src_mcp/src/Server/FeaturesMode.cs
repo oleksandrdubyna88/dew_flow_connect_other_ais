@@ -26,6 +26,8 @@ internal static class FeaturesMode
         "timeoutMinutes",
         // E2.2: a CLI row's `effort` — claude's levels as --effort, a local row's per call; a codex row's kept, not sent.
         "cliEffort",
+        // E2.3: a consultant on an api row, or a codex row on somebody else's endpoint (its provider on every turn).
+        "apiConsultant",
     ];
 
     internal static async Task<int> RunAsync()
