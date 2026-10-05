@@ -75,11 +75,12 @@ function catalogHead(state: PanelState): string {
  * The new page's whole document.
  *
  * @param place the place the host holds (`catalogPlaces.ts`); it reaches the script, never the markup
+ * @param body the body when the caller has already built it (it is the paint key) — built here otherwise
  */
-export function catalogHtml(state: PanelState, nonce: string, place: string): string {
+export function catalogHtml(state: PanelState, nonce: string, place: string, body = catalogBody(state)): string {
   const { size, tone } = textOf(state);
 
-  return pageDocument(`${catalogHead(state)}\n${catalogBody(state)}\n${CONFIRM_DIALOG}`, nonce, state.focus, {
+  return pageDocument(`${catalogHead(state)}\n${body}\n${CONFIRM_DIALOG}`, nonce, state.focus, {
     css: CATALOG_CSS + settingsTextCss(size, tone),
     script: catalogScript(place),
   }, state.busy ?? IDLE);

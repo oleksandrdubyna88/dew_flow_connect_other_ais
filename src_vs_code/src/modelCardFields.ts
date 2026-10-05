@@ -63,11 +63,12 @@ function reasonsOf(runtime: Runtime): ReadonlyMap<string, readonly string[]> {
 }
 
 /** The effort control of a row that is not an `api` row (an api row's comes from its probe report, `apiSettingsView`). */
-export function effortField(vendor: Vendor, id: string, probed: readonly string[]): string {
+/** @param mark the control's "new" mark, or '' (`catalogShell.newTag`) */
+export function effortField(vendor: Vendor, id: string, probed: readonly string[], mark = ''): string {
   const row = EFFORT.find((one) => one.runtime === vendor.runtime);
   const draw = row === undefined ? NO_EFFORT : EFFORT_FIELDS[vendor.runtime === 'remote' ? 'remote' : row.source];
 
-  return `<div class="field"><label for="effort-${id}">Effort</label>${draw(vendor, id, row, probed)}</div>`;
+  return `<div class="field"><label for="effort-${id}">Effort${mark}</label>${draw(vendor, id, row, probed)}</div>`;
 }
 
 type EffortDraw = (vendor: Vendor, id: string, row: EffortRow | undefined, probed: readonly string[]) => string;
@@ -113,10 +114,10 @@ export function thinkingLine(vendor: Vendor): string {
 const ENCODER = new TextEncoder();
 
 /** The row's own system prompt (D1): empty sends the feature's own prompt unchanged; at most 8 KiB, counted in bytes. */
-export function systemPromptField(vendor: Vendor, id: string): string {
+export function systemPromptField(vendor: Vendor, id: string, mark = ''): string {
   const text = vendor.systemPrompt ?? '';
 
-  return `<div class="field wide"><label for="sp-${id}">System prompt</label>`
+  return `<div class="field wide"><label for="sp-${id}">System prompt${mark}</label>`
     + `<textarea id="sp-${id}" rows="3" data-setting="systemPrompt" data-vendor="${id}"`
     + ` placeholder="Empty: the feature’s own prompt is sent unchanged">${escapeHtml(text)}</textarea>`
     + `<div class="hint"><span data-bytes-for="sp-${id}">${ENCODER.encode(text).length}</span> of ${MAX_PROMPT_BYTES} bytes</div></div>`;

@@ -584,6 +584,17 @@ page is unchanged with the preview off; all suites, lint, the seam and the layou
 - Not here: the Models card's usage badge (runs, failures, cost per row) — the ledger reads by row id already; drawing
   it is E4's with the Reviews tab. Tail T9 (a freed id is reused) stands.
 
+#### Epic 3 code round (coai session `ebf28ac3`, 2026-10-05, proceed)
+
+- 4 of 4 reviewers answered; 10 findings, 9 accepted and fixed (RED first where there is behaviour), 1 rejected:
+  splitting a base stylesheet out of the old page's now (E5.1 removes the old page and moves what stays).
+- Fixed: removing the Bugz row clears `coai.bugzModel`; a model check whose row is gone spawns nothing; the
+  "new" list matches the `newTag` calls (and the marks are drawn on effort and the system prompt); each page keeps
+  its own position (`HeldTabs`); one lock sentence; the add's choices in a function and its cap checked again after
+  the picker; the page body built once; the features read once.
+- **Owed, not closed:** the cadence consultation for epics 1-3 and the risk consultations for epics 2 and 3 —
+  consulting is switched off in this installation (`COAI_CONSULT_ENABLED`).
+
 ### Epic 4 — The feature tabs use the catalog
 1. **Reviews**: Stages; Roles & prompts (replacing `rolesPage.ts`) with ONE switch per role — `roleEnabled` and the
    catalog's `active` merged, `COAI_ROLES` still written for servers under `ROLE_SWITCH_SINCE`; deletion's confirmation

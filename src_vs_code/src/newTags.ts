@@ -16,11 +16,8 @@ export const FORGET_AFTER_MS = 60 * 24 * 60 * 60 * 1000;
 /** The controls the new Settings page marks as new, by id. Remove an id once its tag no longer matters. */
 export const NEW_CONTROLS: readonly string[] = [
   'settings.preview',
-  'model.thinking',
   'model.systemPrompt',
   'model.effort',
-  'model.timeout',
-  'model.check',
 ];
 
 /**

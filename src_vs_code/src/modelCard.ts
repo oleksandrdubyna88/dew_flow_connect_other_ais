@@ -1,5 +1,5 @@
 import { apiSettingsFields } from './apiSettingsView';
-import { type BinarySays, confirmButton, skew } from './catalogShell';
+import { type BinarySays, confirmButton, type FirstSeen, newTag, skew } from './catalogShell';
 import { escapeHtml } from './escapeHtml';
 import { effortField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
 import {
@@ -34,6 +34,9 @@ export interface ModelCardFacts {
   readonly check: CheckFacts;
   /** The Team servers this side knows — what a remote row's contract note reads. */
   readonly teamServers: readonly TeamServerState[];
+  /** When each new control was first seen, and the clock its "new" mark is measured against. */
+  readonly firstSeen: FirstSeen;
+  readonly now: number;
 }
 
 interface Access {
@@ -165,15 +168,17 @@ function probedOf(context: CardContext, id: string): readonly string[] {
 }
 
 /** By runtime: an api row's effort, thinking and limit come from its probe report; any other row's from its runtime. */
-function tuning(vendor: Vendor, id: string, context: CardContext): string {
+function tuning(vendor: Vendor, id: string, facts: ModelCardFacts): string {
+  const context = facts.context;
+
   return vendor.runtime === 'api'
     ? apiSettingsFields(vendor, id, context.reported[vendor.id], context.serverVersion)
-    : effortField(vendor, id, probedOf(context, vendor.id)) + thinkingLine(vendor) + timeoutField(vendor, id);
+    : effortField(vendor, id, probedOf(context, vendor.id), newTag('model.effort', facts.firstSeen, facts.now)) + thinkingLine(vendor) + timeoutField(vendor, id);
 }
 
 function answers(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   return `<div class="block"><h4 class="block-title">How it answers</h4><div class="settings-grid">`
-    + `${modelField(vendor, id, facts.context)}${tuning(vendor, id, facts.context)}${systemPromptField(vendor, id)}</div></div>`;
+    + `${modelField(vendor, id, facts.context)}${tuning(vendor, id, facts)}${systemPromptField(vendor, id, newTag('model.systemPrompt', facts.firstSeen, facts.now))}</div></div>`;
 }
 
 /** How the row is reached: its endpoint, an api row's dialect, the CLI's path where there is a CLI here. */

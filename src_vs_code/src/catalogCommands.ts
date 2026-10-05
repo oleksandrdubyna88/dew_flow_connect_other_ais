@@ -1,5 +1,5 @@
 import { CATALOG_USES, type CatalogUse } from './catalogFields';
-import { addRefusal, lastStagesOf } from './catalogWriteRules';
+import { addRefusal, lastStageMessage, lastStagesOf } from './catalogWriteRules';
 import { useRefusal } from './modelCardFields';
 import { freeVendorId, type Vendor } from './vendors';
 
@@ -86,17 +86,24 @@ function heldElsewhere(bugzModel: string, id: string): string {
  * A row removed — after the page's one confirm, so no second question here — and refused while it is the only
  * switched-on model for a review stage (the card locks the same, from the same rule).
  */
-export function removedRow(rows: readonly Vendor[], id: string): RowsChange {
+export function removedRow(rows: readonly Vendor[], id: string, bugzModel = ''): RowsChange {
   const row = rows.find((one) => one.id === id);
   const refused = row === undefined ? `There is no model ${id} to remove.` : lockRefusal(rows, row);
 
-  return refused.length > 0 ? unchanged(rows, refused) : { rows: rows.filter((one) => one.id !== id), refused: '', said: '' };
+  return refused.length > 0 ? unchanged(rows, refused) : { ...withoutRow(rows, id, bugzModel), refused: '', said: '' };
+}
+
+/** The catalog without the row — and, when Bugz ranked with it, no Bugz model rather than one naming a row that is gone. */
+function withoutRow(rows: readonly Vendor[], id: string, bugzModel: string): Pick<RowsChange, 'rows' | 'bugzModel'> {
+  const kept = rows.filter((one) => one.id !== id);
+
+  return bugzModel.split('/')[0] === id ? { rows: kept, bugzModel: '' } : { rows: kept };
 }
 
 function lockRefusal(rows: readonly Vendor[], row: Vendor): string {
   const last = lastStagesOf(rows, row);
 
-  return last.length === 0 ? '' : `${row.id} is the only model switched on for ${last.join(' and ')} review — switch another on first.`;
+  return last.length === 0 ? '' : lastStageMessage(row.id, last);
 }
 
 /**

@@ -64,6 +64,10 @@ export function checkArgs(kind: string): readonly string[] {
  * @param input what the server reads on stdin — a model check's `{"row": …}`; empty for a caller kind's
  */
 export async function runConsultantCheck(kind: string, ports: CheckRunPorts, input = ''): Promise<CheckRunResult> {
+  // A model's check with no row to read: the row was removed while the paid turn was being confirmed. Nothing is spawned.
+  if (isModelCheck(kind) && input.length === 0) {
+    return { kind: 'crashed', why: 'the model was removed before its check could run — nothing was sent' };
+  }
   const spawnedMs = ports.nowMs();
   let capAtMs = spawnedMs + CHECK_INITIAL_CAP_MS;
   const stopPolling = ports.every(CHECK_STATE_POLL_MS, () => {

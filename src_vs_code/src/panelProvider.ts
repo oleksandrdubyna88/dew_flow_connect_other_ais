@@ -1051,9 +1051,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     const withCaret = (): PanelState => ({ ...state, focus: slot.focus(), busy: this.inFlight.snapshot() });
     if (slot === this.settingsTab && settingsPreviewOn()) {
       // The new page in the SAME slot (D5): one panel, one page at a time, every write through the one path below.
+      // The body IS the key: built once, and handed to the document rather than built a second time (epic 3's code round).
+      const body = catalogKey(state);
+
       return {
-        key: catalogKey(state),
-        html: () => catalogHtml({ ...withCaret(), uiScale: currentUiScale(), textTone: currentTextTone() }, this.nonce, heldSettingsTab()),
+        key: body,
+        html: () => catalogHtml({ ...withCaret(), uiScale: currentUiScale(), textTone: currentTextTone() }, this.nonce, heldSettingsTab(), body),
       };
     }
     if (slot === this.settingsTab) {
@@ -1164,6 +1167,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // this page. Every write reads the rows afresh, so a hidden row is never dropped by one. Drawn AND priced from this
     // one list: priced from every row, a hidden api consultant put its endpoint's rate on a reviewer's card.
     const shown = vendors.filter(shownOnTheOldPage);
+    // Once for the state: two awaits could each see a different answer if one landed in between (epic 3's code round).
+    const features = await this.binaryFeatures();
     const state = {
       settings,
       vendors: shown,
@@ -1205,10 +1210,10 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // has gone out, so a slow disk delays the count and not the panel.
       notifications: this.notificationsGlance,
       localEngines: await this.probeLocalEngines(vendors),
-      rankByRuntime: hasFeature(await this.binaryFeatures(), FEATURES.bugzRuntime),
+      rankByRuntime: hasFeature(features, FEATURES.bugzRuntime),
       // The new Settings page (PLAN_one_model_catalog.md E3): what the binary takes once it has said, when each new
       // control was first seen, and the clock its "new" marks are measured against.
-      serverFeatures: settledFeatures(await this.binaryFeatures()),
+      serverFeatures: settledFeatures(features),
       firstSeen: this.context.globalState.get<Record<string, number>>(FIRST_SEEN_KEY) ?? {},
       now: Date.now(),
       // Only what ≡ brought back — never asked here, on a repaint (PLAN_custom_endpoint_model_list).
@@ -2409,7 +2414,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
         break;
       case 'removeModel':
         if (id !== undefined) {
-          await this.applyRowsChange(removedRow(this.vendorsHere(), id));
+          await this.applyRowsChange(removedRow(this.vendorsHere(), id, this.settings().bugzModel));
         }
         break;
       case 'checkModel':
@@ -3832,26 +3837,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // now when there is none, because a pick opened before the first probe landed must not read as
     // an empty vault.
     const vaultItems = vaultKeyItems(...(await this.vaultKeysNow()), this.vendorsHere());
-    // Grouped by WHERE the model runs (PLAN_one_model_catalog.md E3.2): a CLI here, an API key, this machine's GPU, a
-    // Team server — with a line in the last group saying where to add a server when this side holds a token for none.
-    const choices = [
-      ...items.map((p) => ({
-        label: p.label, detail: p.detail, description: p.description, offered: p.offered, server: undefined, vault: undefined,
-        notice: false, group: groupOf(p.offered.preset.runtime),
-      })),
-      ...teamServers.map((s) => ({
-        label: `Team server ${s.name}`,
-        detail: `on ${canonicalTeamServerUrl(s.url)} — the company's subscription, nothing to install`,
-        description: '', offered: undefined, server: s, vault: undefined, notice: false, group: 'remote' as const,
-      })),
-      ...(teamServers.length === 0
-        ? [{ ...NO_TEAM_SERVER, description: '', offered: undefined, server: undefined, vault: undefined, notice: true, group: 'remote' as const }]
-        : []),
-      ...vaultItems.map((v) => ({
-        label: v.label, detail: v.detail, description: v.description, offered: undefined, server: undefined, vault: v,
-        notice: false, group: 'api' as const,
-      })),
-    ];
+    const choices = addModelChoices(items, teamServers, vaultItems);
     const picked = await askPerson(() => vscode.window.showQuickPick(
       grouped(choices).map((one) => ('separator' in one ? { label: one.separator, kind: vscode.QuickPickItemKind.Separator } : one)),
       {
@@ -4111,6 +4097,12 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
   private async saveVendor(vendor: Vendor): Promise<void> {
     const config = vscode.workspace.getConfiguration('coai');
     const vendors = vendorsFrom(this.read(config)('vendors'));
+    // The cap again, AFTER the picker: another window may have added a row while it was open (epic 3's code round).
+    const full = addRefusal(vendors);
+    if (full.length > 0) {
+      void notify({ as: 'warning', class: 'refusal', source: 'reviewers', code: 'a-catalog-edit-refused', subject: full, title: full });
+      return;
+    }
     if (vendors.some((v) => v.id === vendor.id)) {
       void notify({
         as: 'warning',
@@ -4414,4 +4406,29 @@ async function openInsideWorkspace(file: string, line: number): Promise<void> {
   if (inside.ok) {
     await showCurrentFile(inside.path, line);
   }
+}
+
+/**
+ * "Add a model" grouped by WHERE the model runs (PLAN_one_model_catalog.md E3.2): a CLI here, an API key, this machine's
+ * GPU, a Team server — with a line in the last group saying where to add a server when this side holds a token for none.
+ */
+function addModelChoices(items: ReturnType<typeof reviewerPickItems>, teamServers: readonly TeamServer[], vaultItems: readonly VaultKeyItem[]) {
+  return [
+    ...items.map((p) => ({
+      label: p.label, detail: p.detail, description: p.description, offered: p.offered, server: undefined, vault: undefined,
+      notice: false, group: groupOf(p.offered.preset.runtime),
+    })),
+    ...teamServers.map((s) => ({
+      label: `Team server ${s.name}`,
+      detail: `on ${canonicalTeamServerUrl(s.url)} — the company's subscription, nothing to install`,
+      description: '', offered: undefined, server: s, vault: undefined, notice: false, group: 'remote' as const,
+    })),
+    ...(teamServers.length === 0
+      ? [{ ...NO_TEAM_SERVER, description: '', offered: undefined, server: undefined, vault: undefined, notice: true, group: 'remote' as const }]
+      : []),
+    ...vaultItems.map((v) => ({
+      label: v.label, detail: v.detail, description: v.description, offered: undefined, server: undefined, vault: v,
+      notice: false, group: 'api' as const,
+    })),
+  ];
 }

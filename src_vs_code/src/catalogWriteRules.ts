@@ -57,7 +57,12 @@ function lastStageRefusal(rows: readonly Vendor[], row: Vendor, key: string, val
   const lost = value === false ? STAGES.filter((stage) => key === 'enabled' || key === stage) : [];
   const alone = lost.find((stage) => servesAlone(rows, row, stage));
 
-  return alone === undefined ? '' : `${row.id} is the only model switched on for ${alone} review — switch another on first.`;
+  return alone === undefined ? '' : lastStageMessage(row.id, [alone]);
+}
+
+/** The one sentence a locked row is refused with — by the write path and the Models tab's remove alike. */
+export function lastStageMessage(id: string, stages: readonly string[]): string {
+  return `${id} is the only model switched on for ${stages.join(' and ')} review — switch another on first.`;
 }
 
 /** The review stages this row is the ONLY switched-on model for — what the card locks, and the write refuses. */
