@@ -1,4 +1,5 @@
 import { CALLER_KINDS } from './consultSettings';
+import { isModelCheck } from './consultantCheckRun';
 import { type CheckRunResult, canaryWording, failureLabel } from './consultantHealth';
 import type { LandedRun } from './consultantHealthState';
 import type { CopyReport, TextCopier } from './copyText';
@@ -90,11 +91,18 @@ function said(sentence: string): string {
 }
 
 /** The modal's words: a paid call, on whom, where, and what it leaves behind. */
+/** A model's check names its row; a caller kind's names the consultant it resolves to. */
+function titleOf(kind: string, vendor: string, who: string): string {
+  return isModelCheck(kind)
+    ? `Check ${vendor} with one real, paid turn of ${who}?`
+    : `Check the ${kind} consultant with one real, paid turn of ${who.length > 0 ? who : 'the consultant it resolves to'}?`;
+}
+
 export function confirmationOf(kind: string, about: CheckAbout): { title: string; detail: string; go: string } {
   const who = about.model.length > 0 ? `${about.vendor} · ${about.model}` : about.vendor;
 
   return {
-    title: `Check the ${kind} consultant with one real, paid turn of ${who.length > 0 ? who : 'the consultant it resolves to'}?`,
+    title: titleOf(kind, about.vendor, who),
     detail: 'The turn runs in a scratch git folder under the temp directory (coai-check-…, removed afterwards) — never your code — '
       + 'and asks the consultant to read a marker file there and to try a file outside it. It is billed like a consultation and '
       + `leaves one session in ${about.vendor.length > 0 ? about.vendor : 'the vendor'}'s own session store, which coai does not delete.`,
@@ -140,7 +148,8 @@ export class ConsultantHealthHost {
 
   /** A caller kind this build knows, with no confirmation open and no check running. */
   private pressable(kind: string): boolean {
-    return KINDS.includes(kind) && !this.asking.has(kind) && !this.running.has(kind);
+    // A caller kind's consultant, or a catalog row (`model-<id>`, the Models tab's ✓ Check — PLAN_one_model_catalog.md D10).
+    return (KINDS.includes(kind) || isModelCheck(kind)) && !this.asking.has(kind) && !this.running.has(kind);
   }
 
   /**

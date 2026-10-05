@@ -95,6 +95,13 @@ const MODELS = `
   .catalog .card .actions .ask:disabled { color: var(--muted); }
   .catalog .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 2px; }
   .catalog .badge { border: 1px solid var(--border-strong); border-radius: 3px; padding: 0 7px; font-size: 0.88em; }
+  .catalog .badge.verdict.ok, .catalog .badge.health.ok { border-color: color-mix(in srgb, var(--ok) 60%, transparent); }
+  .catalog .badge.health.ok::before { content: "● "; color: var(--ok); }
+  .catalog .badge.health.warn::before { content: "● "; color: var(--warn); }
+  .catalog .badge.health.err::before { content: "● "; color: var(--err); }
+  .catalog .badge.health.busy::before { content: "◌ "; color: var(--link); }
+  .catalog .world { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 0; }
+  .catalog .world button { margin: 0; width: auto; }
   .catalog .block { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
   .catalog .block-title { font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 6px; opacity: 1; }
   .catalog .boxes { display: flex; flex-wrap: wrap; gap: 4px 14px; }

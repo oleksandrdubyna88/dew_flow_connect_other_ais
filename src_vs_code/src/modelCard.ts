@@ -2,6 +2,10 @@ import { apiSettingsFields } from './apiSettingsView';
 import { type BinarySays, confirmButton, skew } from './catalogShell';
 import { escapeHtml } from './escapeHtml';
 import { effortField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
+import {
+  type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, offMachineNote, verdictBadge, worldButtons,
+} from './modelCardWorld';
+import type { TeamServerState } from './teamServerView';
 import { modelsFor, modelsProvenance } from './models';
 import {
   type CardContext, cannotRun, dialectField, endpointField, featureBox, modelOptions, modelWords, priceFields, runtimeFields, stageBox,
@@ -26,6 +30,10 @@ export interface ModelCardFacts {
   /** The review stages this row is the only switched-on model for: it can then be neither switched off nor removed. */
   readonly lastFor: readonly string[];
   readonly binary: BinarySays;
+  /** The row's last ✓ Check, from its durable record (`modelCardWorld.ts`). */
+  readonly check: CheckFacts;
+  /** The Team servers this side knows — what a remote row's contract note reads. */
+  readonly teamServers: readonly TeamServerState[];
 }
 
 interface Access {
@@ -100,7 +108,7 @@ function actions(vendor: Vendor, id: string, facts: ModelCardFacts, locked: stri
     body: removeBody(vendor, facts.references), ...(locked.length > 0 ? { refused: locked } : {}),
   });
 
-  return `<div class="actions"><button type="button" class="link" data-command="duplicateModel" data-id="${id}" title="Add a copy with its own id">⧉ Duplicate</button>${remove}</div>`;
+  return `<div class="actions">${checkButton(id, facts.check)}<button type="button" class="link" data-command="duplicateModel" data-id="${id}" title="Add a copy with its own id">⧉ Duplicate</button>${remove}</div>`;
 }
 
 /** What this side's coai-mcp ignores on a row, asked through the one `skew` road — by capability (E3's plan round). */
@@ -120,8 +128,10 @@ function top(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   const locked = lockOf(facts);
 
   return `<div class="card-top"><div class="card-head">${onSwitch(vendor, id, locked)}${nameBlock(vendor, id)}${actions(vendor, id, facts, locked)}</div>`
-    + `<div class="badges"><span class="badge access">${escapeHtml(accessOf(vendor.runtime).label)}</span>${cannotRun(vendor.id, facts.context.reported)}</div>`
-    + `${ignoredNote(vendor, facts.binary)}</div>`;
+    + `<div class="badges"><span class="badge access">${escapeHtml(accessOf(vendor.runtime).label)}</span>${verdictBadge(vendor.id, facts.context)}`
+    + `${cannotRun(vendor.id, facts.context.reported)}${cliBadge(vendor, facts.context.cli)}${healthBadge(facts.check)}</div>`
+    + `<div class="world">${worldButtons(vendor, id, facts.context)}</div>`
+    + `${offMachineNote(vendor)}${contractNote(vendor, facts.teamServers)}${ignoredNote(vendor, facts.binary)}</div>`;
 }
 
 function useFor(vendor: Vendor, id: string, facts: ModelCardFacts): string {

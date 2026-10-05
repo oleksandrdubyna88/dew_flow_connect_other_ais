@@ -10859,3 +10859,21 @@ flowchart LR
 - **Add a model** is the existing picker, grouped by where a model runs (`addModelGroups.ts`: a CLI here, an API key,
   this machine's GPU, a Team server — with a line saying where to add a server when none is signed in).
 - **This coai-mcp ignores…** on a card through `skew` by capability (`systemPrompt`, `timeoutMinutes`, `cliEffort`).
+
+## The new Settings page — the Models card's world-facing parts (2026-10-05, PLAN_one_model_catalog.md E3.3)
+
+`modelCardWorld.ts`, each part what another page already calls:
+
+- **✓ Check (D10)** sends `checkModel` (id = the row); `ConsultantHealthPanel.checkModel` asks the SAME paid-turn
+  question the Consultant tab's Check asks (`notifyAndAsk`, modal), and the host runs `coai-mcp --check-model` with
+  the row on stdin — `checkInputOf` builds `{"row": …}` through the settings file's own wire (`vendorsEnv`), so the
+  row checked is the row a round would run. `capture`/`serverRun` gained an optional stdin; `runConsultantCheck`
+  picks the arguments by key (`checkArgs`: `model-<id>` or a caller kind). The state is the durable record
+  `model-<id>.check.json` the binary keeps: the watcher reads it beside the caller kinds' (`moreKinds`), the health
+  is computed while the Models tab or the Consultant place shows, and the card says "checking…", "checked: it
+  answered", "checked: no answer — …" or "not checked yet" through `checkStateOnThisDisk` — after a reload too.
+- coai-mcp's verdict ("coai-mcp will run it", or the current card's "cannot review"), kept apart from the check.
+- The CLI: its version and a newer one (`cliStatusNote`), and the current card's ▶ ⤓ ⟳ / ⟳ ⇄ / ≡ (`headButtons`,
+  `endpointButton` — the same commands, by name).
+- A local engine whose endpoint is not this machine says where the diff goes (`remoteWarning`); a remote row on a
+  Team server that speaks contract 1 says its effort and system prompt are not applied (E2.5).

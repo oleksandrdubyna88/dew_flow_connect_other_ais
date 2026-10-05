@@ -35,8 +35,11 @@ export const CONSULTANT_TAB = 'consultant';
  * block nobody can see.
  */
 export function consultantTabShowing(settingsVisible: boolean, heldTab: string): boolean {
-  return settingsVisible && heldTab === CONSULTANT_TAB;
+  // On the new page the Consultant tab is a place, and the Models tab shows each row's ✓ Check (PLAN_one_model_catalog.md E3.3).
+  return settingsVisible && HEALTH_SHOWN_ON.includes(heldTab);
 }
+
+const HEALTH_SHOWN_ON: readonly string[] = [CONSULTANT_TAB, 'consultants/consultant', 'models'];
 
 export interface HealthWatchPorts {
   /** The sides to read, asked on every refresh — the setting that names them can change while the window is open. */
@@ -46,6 +49,8 @@ export interface HealthWatchPorts {
   /** Watches `<dir>/consultations/health/*.json`; the function returned stops it. */
   readonly watch: (dir: string, changed: () => void) => () => void;
   readonly every: (ms: number, tick: () => void) => () => void;
+  /** The checks to read beyond the caller kinds' — each catalog row's `model-<id>` (PLAN_one_model_catalog.md E3.3). */
+  readonly moreKinds?: () => readonly string[];
 }
 
 const KINDS: readonly string[] = CALLER_KINDS.map((one) => one.id);
@@ -121,7 +126,7 @@ export class ConsultantHealthWatcher {
   }
 
   private async readAll(sides: readonly HealthSide[]): Promise<void> {
-    const read = await Promise.all(sides.map(async (side) => [side.dir, await readSide(side.dir, KINDS, this.ports, side.kind === 'this')] as const));
+    const read = await Promise.all(sides.map(async (side) => [side.dir, await readSide(side.dir, [...KINDS, ...(this.ports.moreKinds?.() ?? [])], this.ports, side.kind === 'this')] as const));
     const now = this.ports.now();
     // A side that failed keeps what it had: replaced, never mutated, with only the sides that answered this time — each
     // with when this window first saw its heartbeats, carried over from the read before.

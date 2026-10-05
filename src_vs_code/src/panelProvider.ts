@@ -85,7 +85,7 @@ import { shownOnTheOldPage } from './catalogRules';
 import { promptChosen } from './promptsPerRound';
 import { hostPlatform, Platform } from './hostSide';
 import { thisSide } from './installer';
-import { latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
+import { knownServerVersion, latestServerVersion, latestTeamServerVersion, serverOnThisSide, serverPath } from './installer';
 import { DbLog } from './roundsDb';
 import { LogPeriod } from './logPeriod';
 import { NO_NOTES, ProviderNotes, ProvidersAnswer } from './providers';
@@ -152,6 +152,7 @@ import { webviewNonce } from './webviewNonce';
 import { addRefusal, rowWriteRefusal } from './catalogWriteRules';
 import { duplicated, removedRow, type RowsChange, toggledUse } from './catalogCommands';
 import { groupOf, grouped, NO_TEAM_SERVER } from './addModelGroups';
+import { checkInputOf } from './modelCheckInput';
 
 /**
  * The panel's window names, as the server's `/api/usage` spells them.
@@ -483,8 +484,18 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       render: () => { void this.render(); },
       log: (message) => console.warn(message),
     });
-    this.consultantHealth = new ConsultantHealthPanel({ dataDir, storage: this.context.globalStorageUri, render: () => { void this.render(); } });
+    this.consultantHealth = this.healthPanel(dataDir);
     this.securityPromptWatch = this.watchSecurityPrompts(dataDir.fsPath);
+  }
+
+  /** The consultant and model checks' host: the caller kinds' checks, and each catalog row's (PLAN_one_model_catalog.md E3.3). */
+  private healthPanel(dataDir: vscode.Uri): ConsultantHealthPanel {
+    return new ConsultantHealthPanel({
+      dataDir, storage: this.context.globalStorageUri, render: () => { void this.render(); },
+      modelRows: () => this.vendorsHere(),
+      // The row exactly as coai-mcp reads it — through the settings file's own wire, switched on for the check.
+      rowInput: (row) => checkInputOf(row, knownServerVersion(this.context.globalStorageUri, this.context.globalState), this.features.known()),
+    });
   }
 
   resolveWebviewView(view: vscode.WebviewView): void {
@@ -2399,6 +2410,11 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       case 'removeModel':
         if (id !== undefined) {
           await this.applyRowsChange(removedRow(this.vendorsHere(), id));
+        }
+        break;
+      case 'checkModel':
+        if (id !== undefined) {
+          await this.consultantHealth.checkModel(id);
         }
         break;
       case 'settingsPreview':

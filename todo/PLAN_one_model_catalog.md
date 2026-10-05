@@ -571,6 +571,19 @@ page is unchanged with the preview off; all suites, lint, the seam and the layou
   cold start, a timeout); "not installed" only when there is no binary at all.
 - **Every panel moves to `webviewNonce.ts`** in E3.1, not only the new page.
 
+#### E3 as built (branch `feat/catalog-e3`, PR #687)
+
+- **E3.1** as designed, plus: the old page's header offers "Try the new Settings page"; the new page's header "Use the
+  current page". `newTag` keys on a first-seen record (`newTags.ts`), so no version is guessed.
+- **E3.2** as designed. Deviations: the add flow is the existing picker, GROUPED by where a model runs, not an in-page
+  form (one add path for both pages); a use is a command (`toggleUse`), since it is one entry of a list; the new
+  card's remove is `removeModel` (the page already asked — `removeVendor` would ask a second time). Ticking Bugz writes
+  `coai.bugzModel` as well, so the tick takes effect today.
+- **E3.3** as designed. The ✓ Check is asked by the host's modal (the Consultant tab's question), not the page's
+  dialog, so a paid turn is confirmed in one place for both.
+- Not here: the Models card's usage badge (runs, failures, cost per row) — the ledger reads by row id already; drawing
+  it is E4's with the Reviews tab. Tail T9 (a freed id is reused) stands.
+
 ### Epic 4 — The feature tabs use the catalog
 1. **Reviews**: Stages; Roles & prompts (replacing `rolesPage.ts`) with ONE switch per role — `roleEnabled` and the
    catalog's `active` merged, `COAI_ROLES` still written for servers under `ROLE_SWITCH_SINCE`; deletion's confirmation

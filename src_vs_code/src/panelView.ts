@@ -3325,6 +3325,8 @@ export const PANEL_COMMANDS = [
   'toggleUse',
   'duplicateModel',
   'removeModel',
+  // ✓ Check on a Models card: one paid turn of that row, asked first by the host (D10), kept as `model-<id>`.
+  'checkModel',
   // The way into the presets tab. `coai.editChatPresets` shipped registered, in no menu and named in
   // no view, so the only way to reach the CRUD the chat section points at was the command palette.
   'editChatPresets',

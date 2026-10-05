@@ -103,6 +103,8 @@ export function capture(
    * the door that does it — a version probe does not care where the data lives.</p>
    */
   env?: Readonly<Record<string, string>>,
+  /** What the child reads on stdin — a model check's row (`--check-model`, PLAN_one_model_catalog.md E3.3); empty for every probe. */
+  input = '',
 ): Promise<{ code: number; output: string }> {
   return new Promise((resolve) => {
     const child = launch(target, args, env === undefined ? { shell } : { shell, env });
@@ -143,7 +145,7 @@ export function capture(
     // check written for issue #301: the Claude CLI prints "no stdin data received in 3s, proceeding
     // without it" and waits those three seconds, on every candidate, so a four-candidate probe spent
     // twelve seconds waiting for a stream nobody would ever write to.
-    child.writeAndEnd('');
+    child.writeAndEnd(input);
 
     child.onStdout((chunk) => {
       output += chunk;

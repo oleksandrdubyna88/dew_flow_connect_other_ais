@@ -1,7 +1,8 @@
 import * as vscode from 'vscode';
 
 import { type CheckRecord, parseCheckFile } from './consultantHealth';
-import { runConsultantCheck } from './consultantCheckRun';
+import { isModelCheck, MODEL_CHECK, runConsultantCheck } from './consultantCheckRun';
+import type { Vendor } from './vendors';
 import { ConsultantHealthHost } from './consultantHealthHost';
 import { type FileRead, healthPaths } from './consultantHealthRead';
 import { type ConsultantHealthState, reportedAbout, reportedSnippet } from './consultantHealthState';
@@ -37,6 +38,10 @@ export interface HealthPanelDeps {
   readonly dataDir: vscode.Uri;
   readonly storage: vscode.Uri;
   readonly render: () => void;
+  /** This side's catalog rows — what the Models tab's ✓ Check can check (PLAN_one_model_catalog.md D10, E3.3). */
+  readonly modelRows?: () => readonly Vendor[];
+  /** One row as `coai-mcp --check-model` reads it on stdin: `{"row": …}`, from the same wire the settings file is written with. */
+  readonly rowInput?: (row: Vendor) => string;
 }
 
 export class ConsultantHealthPanel {
@@ -60,6 +65,7 @@ export class ConsultantHealthPanel {
       now: Date.now,
       watch: watchHealth,
       every: everyMs,
+      moreKinds: () => (deps.modelRows?.() ?? []).map((row) => `${MODEL_CHECK}${row.id}`),
     });
     this.watcher.onChanged = deps.render;
     // Only this side's server can settle this side's check by its lock, so a state that moved is asked of it again.
@@ -123,6 +129,13 @@ export class ConsultantHealthPanel {
   }
 
   /** A press of Copy under one caller kind's allow rule; `told` tells the page that was pressed. */
+  /** The Models tab's ✓ Check of one catalog row: the same paid-turn question and the same durable record, keyed `model-<id>`. */
+  checkModel(id: string): Promise<void> {
+    const row = (this.deps.modelRows?.() ?? []).find((one) => one.id === id);
+
+    return row === undefined ? Promise.resolve() : this.host.check(`${MODEL_CHECK}${row.id}`, { vendor: row.id, model: row.model });
+  }
+
   async copySnippet(kind: string, told: (kind: string) => void): Promise<void> {
     await this.host.copySnippet(kind, reportedSnippet(this.probe.shown(), kind), told);
   }
@@ -153,11 +166,22 @@ export class ConsultantHealthPanel {
     }
 
     return runConsultantCheck(kind, {
-      run: (args, capMs, stop) => serverRun(executable, stop)(args, capMs),
+      run: (args, capMs, stop, input) => serverRun(executable, stop, input)(args, capMs),
       readState: () => ownCheck(this.deps.dataDir.fsPath, kind),
       nowMs: Date.now,
       every: everyMs,
-    });
+    }, this.inputFor(kind));
+  }
+
+  /** What a check reads on stdin: a catalog row for a model's check, nothing for a caller kind's. */
+  private inputFor(kind: string): string {
+    const row = isModelCheck(kind) ? this.rowFor(kind) : undefined;
+
+    return row === undefined || this.deps.rowInput === undefined ? '' : this.deps.rowInput(row);
+  }
+
+  private rowFor(kind: string): Vendor | undefined {
+    return (this.deps.modelRows?.() ?? []).find((one) => `${MODEL_CHECK}${one.id}` === kind);
   }
 }
 

@@ -3,6 +3,7 @@ import { lastStagesOf } from './catalogWriteRules';
 import { escapeHtml } from './escapeHtml';
 import { accessOf, modelCard, usedFor } from './modelCard';
 import { USE_LABELS } from './modelCardFields';
+import { checkFactsOf } from './modelCardWorld';
 import { cardContextFor, type PanelState } from './panelView';
 import type { Vendor } from './vendors';
 
@@ -83,6 +84,7 @@ export function modelsTabHtml(state: PanelState): string {
   const binary = { installed: state.server.kind !== 'absent', features: state.serverFeatures };
   const cards = rows.map((row) => modelCard(row, {
     context: contextOf(row), references: referencesOf(state, row.id), lastFor: lastStagesOf(rows, row), binary,
+    check: checkFactsOf(state.consultantHealth, row.id), teamServers: state.teamServers ?? [],
   }));
 
   return `<p class="lead">Every model this side can use, added once. Tick what each one is used for; one model can be added `

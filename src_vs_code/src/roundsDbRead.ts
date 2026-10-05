@@ -326,8 +326,8 @@ export function keysFileIn(folder: string): WithKeysFile {
  * remember and the fourth does not, and what that fourth one produces is an empty list rather than
  * an error.</p>
  */
-export function serverRun(executable: string, stop?: () => boolean): Run {
-  return (args, capMs) => capture(executable, [...args], false, capMs, stop, serverEnv());
+export function serverRun(executable: string, stop?: () => boolean, input = ''): Run {
+  return (args, capMs) => capture(executable, [...args], false, capMs, stop, serverEnv(), input);
 }
 
 /**
