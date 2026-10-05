@@ -680,6 +680,36 @@ row); the new page reads it. Done, RED first.
   still reads its presets; coai-mcp never sees a chat-only row (a row that reviews nothing is left out of
   `COAI_VENDORS`, E1.4) and does not serve chat.
 
+  **E4.6 as designed, from a trace of the chat code (2026-10-05) — it corrects the bullet above.**
+  - *What really holds a preset id on disk:* `coai.chatModel`; the `provider` field of `chat-usage.jsonl` and
+    `chat-doors.jsonl` (and, for an old line with no `vendor`, the forget mark keyed through it); and
+    `coai.chatModelPresets` itself. A conversation record holds only the MODEL id (`chatStore.ts:94-126`); its
+    `providerId`/`chosenId` are in memory only, and a restored conversation finds its provider again by that model id
+    (`legacyPick`) — so the move changes nothing a record holds, and the record row of the remap goes.
+  - *Three stories, the move first:* **E4.6a the move** — **E4.6b the Chat tab** (rows ticked Chat per side, the prompt
+    presets inline) — **E4.6c effort and system prompt applied to a chat launch** (D8; today a chat launch reads
+    neither).
+  - *E4.6a, the move.* A step of the epic 1 migration, run in every layer and again whenever `chatModelPresets` or
+    `chatModel` changes (a config import can bring old presets back): each preset the reader sees (`savedModels`, so a
+    positional `preset-N` id is the one the chat used) that the stored table `chatPresetRows` (preset id → row id) does
+    not hold yet becomes its OWN row — never joined to an existing one, because `sameLaunch` ignores the Team server and
+    two presets' starting texts would collapse — with id `chat-<normalised id>` (`freeVendorId`), `uses: [chat]`,
+    `name`, `chatStartingPrompt`, the launch fields, `vaultKeyName` = the old preset id (the vault key keeps its name),
+    and an explicit `remoteVendor` for a Team-server preset (its server vendor came from an id prefix `chat-` would
+    break). Written in epic 1's order — backup (`chatModelPresets` and `chatModel` join `BACKED_UP`), rows, the table,
+    `coai.chatModel` remapped (to the MAIN preset's row when one is marked main — the catalog has no "main"), the marker.
+    Idempotent: a preset already in the table is skipped. The 64-row cap refuses the step, said, as it refuses a layer.
+    A layer that keeps its own `vendors` (a side overlay) gets the chat rows too, read from the user layer's presets.
+  - *Then chat reads the rows.* `savedModels` answers from the rows ticked Chat (row → the preset shape the chat code
+    already takes; `chatRunSpec` carries the row's `vaultKeyName`), so every chat path keeps working with row ids. The
+    ledgers are mapped on READ: an old line's `provider` through `chatPresetRows`, so old and new lines of one model
+    are one spend row. The presets page stays reachable until E5 but writes rows through the panel's save.
+  - *Test plan, E4.6a:* the step as a pure function — a preset becomes its row with every field and the vault key
+    name; a positional id; a mixed-case id; a remote preset keeps its server vendor; MAIN moves `chatModel`; a second
+    run changes nothing; an imported preset moves alone; the cap refuses; backup and restore round-trip — and the
+    reads: a ledger line under an old id lands in the row's spend row; a conversation restored by model id opens on
+    the moved row.
+
 **Build order:** E4.1 → E4.2 → E4.5 → E4.3 → E4.4 → E4.6. E4.5 comes before the folded pages because it touches no
 host-module seam, so it lands while E4.3's command shape settles.
 
