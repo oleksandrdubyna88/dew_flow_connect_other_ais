@@ -145,3 +145,11 @@ person may turn on, not a qwen repair, and the card's "?" says so.
   (`RateLimit.Hit` reads stderr at any non-zero exit), so a separate code bought nothing; the note says "inside its
   HTTP 200" and quotes the error. The stub (`ApiEndpointStub`) serves chunked `text/event-stream` and can drop the
   connection mid-answer.
+- **Steps 3–4 and the docs, 2026-10-06:** the row field end to end on the server (`VendorDto` → `ApiRowSettings` →
+  `ApiEffective` → `ReviewerSettings.Stream` through ONE helper, `WithApi`, at all three places an api row becomes a
+  launch; `--stream on`; `--features apiStream`), the extension (`catalogFields`, `streamOnTheWire`, the model card's
+  switch with its help, "new" tag and skew note), a seam leg (a row's stream reaches a binary that lists `apiStream`,
+  never one that does not), and the four module docs. Open: build step 5, a live streamed call (needs the owner's go —
+  it sends a test prompt to a vendor), then promotion.
+- **The plan gate ran late.** No gate reviewer was available while this was planned (the only one, qwen, had spent its
+  Token Plan quota); two own reviewer agents stood in. The coai gate is run over plan and code once it is available.

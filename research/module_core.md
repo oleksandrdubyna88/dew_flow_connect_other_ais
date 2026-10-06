@@ -61,6 +61,7 @@ flowchart LR
 | `ApiDialect`, `ApiDialects`, `ChatRequest` | `Api/*.cs` | the embedded `shared/api-dialects.json` rows and the one request writer; a row's `cacheKeyHeader`, `extraBody` (vendor fields verbatim) and `maxTokensFloor` (`CeilingFor`) are what the 2026-09-26 measurement added — see [module_runners.md](module_runners.md), *Dialects are data* |
 | `IApiVendor`, `ApiVendors`, `OpenAiCompatibleVendor`, `XaiVendor`, `QwenVendor`, `DeepSeekVendor`, `GlmVendor`, `OpenAiCompatibleTransport`, `DashScopeTransport` | `Api/*.cs` | one module per hosted vendor behind one interface (2026-09-27): the request, the headers, the reader, the classification, the **capabilities** (thinking switch, the vendor's effort levels, exclusions), the calibrated **defaults**, the price route; `ApiVendors.Resolve(dialectOrName, model)` is the only name→type map; the Alibaba three compose one transport — see [module_runners.md](module_runners.md), *Each API vendor is a module* |
 | `ApiCapabilities`, `ApiDefaults`, `ApiRowSettings`, `ThinkingSetting`, `ApiOverrides`, `ApiEffective`, `ApiTurn`, `ApiOutcome` | `Api/*.cs` | the module's data and the row's: what a vendor can be told, what calibration settled, what a person set on one row (effort / thinking / review minutes), what the environment set for every row, and `ApiEffective.Of` — row over environment over default |
+| `SseEvents`, `StreamAssembler`, `StreamOutcome`, `StreamEnd` | `Api/SseEvents.cs`, `Api/StreamAssembler.cs` | a streamed completion (todo/PLAN_api_streaming.md): server-sent-event lines into payloads, payloads into the ONE completion shape `CompletionReader` reads — or a failure reported inside a 200, or a broken stream — see *Streamed answers* below |
 | `CompletionReader`, `ChatAnswer`, `ApiClassification` | `Api/CompletionReader.cs` | the one reader of an OpenAI-compatible completion (moved from `LocalAsk.ReadAnswer`, behaviour intact: xAI's reasoning outside `completion_tokens` is `total − prompt`; the cached subset; the finish reason) and the one classification of an HTTP answer (a refused key incl. xAI's 400, a rate limit, a failure) |
 | `GeminiPayload` | `Findings/GeminiPayload.cs` | `-o json` envelope → fence stripping → string-aware balanced `{…}` |
 | `FindingDedup` | `Gate/FindingDedup.cs` | cross-provider merge; severity disagreement resolves toward caution |
@@ -898,3 +899,21 @@ note). `FeatureAvailability.Thinking` / `ThinkingOf(runtime)` read them beside t
 not name has none); `ThinkingSources` is declared before `Builtin`, because static fields initialise in textual
 order and `Builtin` loads the file through them. Only `api` is `probe` today — the model's probe report says whether
 its thinking can be switched off; the extension draws a switch nowhere else.
+
+## Streamed answers (2026-10-06, todo/PLAN_api_streaming.md)
+
+An api row may ask for its answer as a stream (`"stream": true`). Two pure types turn the stream into the answer shape
+the non-streaming path already reads, so a streamed and an unstreamed answer are judged by ONE reader:
+
+- `SseEvents` — lines into `data` payloads by the SSE rules: blank lines and `:` comments (`: keep-alive`,
+  `: OPENROUTER PROCESSING`) skipped, `event:`/`id:`/`retry:` skipped, one optional space after `data:`, several
+  `data:` lines joined, `data: [DONE]` ends and nothing after it is read, a trailing CR tolerated.
+- `StreamAssembler` — payloads into one completion JSON (written with `Utf8JsonWriter`: the binary is Native AOT):
+  `choices[index 0].delta.content` joined; reasoning (`reasoning_content` or `reasoning`) COUNTED and kept only as a
+  short quote, never in the content; the last non-null `usage` wherever it came; the last non-null `finish_reason`.
+  `StreamEnd.Failed` for an `error` chunk or a failure reason (`error`, `network_error`, `sensitive`,
+  `insufficient_system_resource`, `aborted`) — winning over a later `stop`; `StreamEnd.Broken` when neither
+  `[DONE]` nor a `finish_reason` arrived.
+- `ApiTurn.Stream` reaches `ChatRequest.Body(..., streamed)` through every module; on it writes `"stream": true`
+  followed by `"stream_options": {"include_usage": true}`, off it writes exactly the bytes every golden holds.
+- `ApiRowSettings.Stream` / `ApiEffective.Stream`: the row's own switch — no environment knob, no module default.
