@@ -4,6 +4,7 @@ import { catalogHtml } from '../catalogPage';
 import { parseCheckDocument } from '../consultantHealth';
 import type { ConsultantHealthState } from '../consultantHealthState';
 import { HELP } from '../help';
+import { ignoredSaid } from '../modelCard';
 import { checkFactsOf } from '../modelCardWorld';
 import { NEW_CONTROLS } from '../newTags';
 import { settingsHtml, type PanelState } from '../panelView';
@@ -69,11 +70,14 @@ test('an api row\'s card draws the switch and it writes the row; a CLI row\'s ca
 });
 
 test('a binary whose settled list lacks apiStream gets the card\'s skew note; an unsettled list says nothing', () => {
-  const older = catalogHtml(stateWith([api({ stream: true })], { serverFeatures: ['systemPrompt'] }), 'test-nonce', 'models');
-  const unsettled = catalogHtml(stateWith([api({ stream: true })], { serverFeatures: undefined }), 'test-nonce', 'models');
+  // The note is the renderer's decision, not the page script's, so it is asserted as the value it is (CodeRabbit on #689).
+  const said = (features: readonly string[] | undefined, row = api({ stream: true })): string =>
+    ignoredSaid(row, { installed: true, features }).join(' ');
 
-  assert.match(older, /does not take streaming the answer yet/u);
-  assert.doesNotMatch(unsettled, /streaming the answer/u);
+  assert.match(said(['systemPrompt']), /does not take streaming the answer yet/u);
+  assert.equal(said(undefined), '', 'a cold start is not an older binary');
+  assert.equal(said(['apiStream']), '', 'a binary that takes it is told nothing');
+  assert.equal(said(['systemPrompt'], api()), '', 'a row that does not stream says nothing about streams');
 });
 
 test('the switch is new, has its own help, and the current Settings page draws no stream control', () => {

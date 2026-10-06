@@ -122,8 +122,13 @@ const IGNORED: readonly { readonly feature: string; readonly what: string; reado
   { feature: 'apiStream', what: 'streaming the answer', set: (vendor) => vendor.runtime === 'api' && vendor.stream === true },
 ];
 
+/** The sentences a row's card says about what this side's coai-mcp ignores on it — a decision, tested as a value. */
+export function ignoredSaid(vendor: Vendor, binary: BinarySays): readonly string[] {
+  return [...new Set(IGNORED.filter((one) => one.set(vendor)).map((one) => skew(one.feature, one.what, binary)).filter((one) => one.length > 0))];
+}
+
 function ignoredNote(vendor: Vendor, binary: BinarySays): string {
-  const said = [...new Set(IGNORED.filter((one) => one.set(vendor)).map((one) => skew(one.feature, one.what, binary)).filter((one) => one.length > 0))];
+  const said = ignoredSaid(vendor, binary);
 
   return said.length === 0 ? '' : `<p class="skew">${escapeHtml(said.join(' '))}</p>`;
 }
