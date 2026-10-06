@@ -87,7 +87,7 @@ test('the switch is new, has its own help, and the current Settings page draws n
 function badgeAfter(streamed: string): { said: string; tone: string } {
   const answered = parseCheckDocument(JSON.stringify({ callerKind: 'model-qwen', state: 'answered', streamed, finishedUtc: '2026-10-06T09:59:00.000Z' }))!;
   const health: ConsultantHealthState = {
-    thisSide: { label: 'Windows', probe: { kind: 'never' } as never, files: { report: undefined, checks: { 'model-qwen': { kind: 'found', value: answered } } }, checking: [], runs: {} },
+    thisSide: { label: 'Windows', probe: { kind: 'asking' }, files: { report: undefined, checks: { 'model-qwen': { kind: 'found', value: answered } } }, checking: [], runs: {} },
     otherSides: [],
     nowMs: Date.parse('2026-10-06T10:00:00.000Z'),
   };

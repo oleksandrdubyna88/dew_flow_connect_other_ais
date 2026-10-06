@@ -306,16 +306,6 @@ internal static class AskApiMode
         _ => "Internal Server Error",
     };
 
-    /// <summary>
-    /// The one line on stdout: the raw tokens the vendor reported, and no money.
-    /// </summary>
-    /// <remarks>
-    /// The cost is worked out in the PARENT (epic 3's code round, #23) — <see cref="ApiRuntime.ReadUsage"/>
-    /// prices this line from the row's <c>TokenPrice</c>, an answered call and a failed one alike — so no
-    /// rate rides on a command line and one arithmetic serves every launch. <c>tokensOut</c> is everything
-    /// generated (reasoning included, wherever the vendor filed it); <c>tokensReasoning</c> is the
-    /// reasoning share for the record.
-    /// </remarks>
     /// <summary>Whether the answer is a stream — decided by what was ANSWERED, not by what was asked: a gateway that
     /// ignores <c>stream</c> answers one JSON, which is read whole as always.</summary>
     private static bool IsEventStream(HttpResponseMessage response) =>
@@ -334,11 +324,13 @@ internal static class AskApiMode
         var answer = ask.Vendor.ReadAnswer(read.Outcome.Completion);
         // `streamed` says a stream WAS read — a row's Check tells a stream it asked for and got from one it did not get.
         await output.WriteLineAsync(UsageLine(answer.Usage, streamed: true));
-        if (read.Stop != StreamStop.Ended)
-        {
-            return Stopped(ask, read, note);
-        }
 
+        return read.Stop != StreamStop.Ended ? Stopped(ask, read, note) : await EndedAsync(ask, answer, read, note);
+    }
+
+    /// <summary>A stream that ran to its end: the answer judged as any other, or the failure it carried inside its 200.</summary>
+    private static async Task<int> EndedAsync(Ask ask, ChatAnswer answer, StreamRead read, Action<string> note)
+    {
         return read.Outcome.End switch
         {
             StreamEnd.Failed => Said(note, $"the stream from {ask.Endpoint} reported a failure inside its HTTP 200: {Quoted(read.Outcome.ErrorText)}", Failed),
@@ -368,6 +360,17 @@ internal static class AskApiMode
         return exit;
     }
 
+    /// <summary>
+    /// The one line on stdout: the raw tokens the vendor reported, and no money.
+    /// </summary>
+    /// <remarks>
+    /// The cost is worked out in the PARENT (epic 3's code round, #23) — <see cref="ApiRuntime.ReadUsage"/>
+    /// prices this line from the row's <c>TokenPrice</c>, an answered call and a failed one alike — so no
+    /// rate rides on a command line and one arithmetic serves every launch. <c>tokensOut</c> is everything
+    /// generated (reasoning included, wherever the vendor filed it); <c>tokensReasoning</c> is the
+    /// reasoning share for the record.
+    /// </remarks>
+    /// <param name="usage">What the vendor reported the call consumed.</param>
     /// <param name="streamed">The answer was READ as a stream (todo/PLAN_api_streaming.md, Story C); absent otherwise —
     /// a gateway that answered one JSON, and an older coai-mcp that ignored <c>--stream on</c>, both write none.</param>
     internal static string UsageLine(Usage usage, bool streamed = false) =>

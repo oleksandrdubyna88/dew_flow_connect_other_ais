@@ -1,7 +1,7 @@
 # PLAN — api rows can stream their answer (`"stream": true`), switched per row on the new Settings page
 
-> Status: **in progress, 2026-10-06 — Stories A–C (build steps 1–4, the check's stream verdict) and the docs built on `feat/api-streaming`; the live call, two tests
-> of the test plan and the promotion open (see Progress).** Revised the same day after an own plan review. Scope:
+> Status: **in progress, 2026-10-06 — Stories A–D built on `feat/api-streaming` and through the code gate (`proceed`);
+> the live call (waits for the owner's key export), two tests of the test plan and the promotion open (see Progress).** Revised the same day after an own plan review. Scope:
 > coai-mcp's `--ask-api` path, one new catalog row field, and one control on the new Settings page's model card.
 >
 > Related docs: [RESULTS_api_streaming_vendors.md](../research/RESULTS_api_streaming_vendors.md) (what each vendor
@@ -174,7 +174,18 @@ Fable's monthly spend limit is reached, so it was made with Opus). Built on this
   never one that does not), and the four module docs. Open: build step 5, a live streamed call (needs the owner's go —
   it sends a test prompt to a vendor), then promotion.
 - **The plan gate ran late.** No gate reviewer was available while this was planned (the only one, qwen, had spent its
-  Token Plan quota); two own reviewer agents stood in. The coai gate is run over plan and code once it is available.
+  Token Plan quota); two own reviewer agents stood in. The coai gate then ran over the plan (session `f8a24551`,
+  `proceed`, three findings accepted — Stories C and D) and over the code.
+- **Stories C and D, 2026-10-06:** the check's stream verdict (`UsageLine(usage, streamed)`, `ConsultantCheck.StreamVerdict`,
+  the card's badge and notice) and the scenario through the real child (`AStreamedRowIsCheckedTests`, its flow in
+  `research/module_tests.md`).
+- **The code round, 2026-10-06** (codex, four roles, `proceed`, six findings): accepted and fixed — an EVENT of many
+  short `data:` lines that nothing closes is refused at the line ceiling (two reviewers; `SseEvents.PendingChars`), the
+  card test's `as never` fixture, and `research/architecture.md`. Rejected with reasons — an immutable assembler state
+  per chunk (it is a stateful reader, and a copy per chunk is quadratic) and failing a test on a leftover temp
+  directory. The own reviewer beside it found that the reader waited for the body to END after `[DONE]` — a proxy that
+  holds the connection turned a whole answer into a timeout; it now stops at `[DONE]` (RED test first) — plus a
+  misplaced doc comment and two methods over complexity 4.
 - **Not built yet, from the test plan:** the per-module parity tests (each module's recorded non-streaming golden
   re-told as a stream, giving the same usage line and exit) — S4 is held today by the assembler tests and one end-to-end
   ask test; and the `ApiRuntime.ReadUsage`-level "never 0" test — today the usage line is checked at the shim's own

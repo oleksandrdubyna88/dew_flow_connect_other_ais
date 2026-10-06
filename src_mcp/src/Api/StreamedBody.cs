@@ -6,13 +6,17 @@ namespace CoaiMcp.Api;
 /// <summary>Why the reading of a stream stopped.</summary>
 internal enum StreamStop
 {
-    /// <summary>The body ended — with <c>[DONE]</c> or without it; the outcome says which.</summary>
+    /// <summary>
+    /// The stream ended — at its <c>[DONE]</c>, read no further even when the connection stays open (a proxy that holds
+    /// it, or keeps sending keep-alives, must not turn a whole answer into a timeout); or the body ended without one.
+    /// The outcome says which.
+    /// </summary>
     Ended,
 
     /// <summary>More answer than the ceiling allows; read no further.</summary>
     Capped,
 
-    /// <summary>One line longer than any chunk is: not a stream this reader will buffer.</summary>
+    /// <summary>One line — or one event's data lines together — longer than any chunk is: not a stream this reader will buffer.</summary>
     LineTooLong,
 
     /// <summary>The connection dropped after the headers.</summary>
@@ -125,7 +129,14 @@ internal static class StreamedBody
                 assembler.Add(payload);
             }
 
-            return assembler.ContentChars > maxAnswerChars ? StreamStop.Capped : null;
+            return Stop();
         }
+
+        /// <summary>Whether to read on: not past <c>[DONE]</c>, not past an event's ceiling, not past the answer's.</summary>
+        private StreamStop? Stop() =>
+            events.Done ? StreamStop.Ended
+            : events.PendingChars > maxLineChars ? StreamStop.LineTooLong
+            : assembler.ContentChars > maxAnswerChars ? StreamStop.Capped
+            : null;
     }
 }

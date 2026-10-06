@@ -43,6 +43,32 @@ public sealed class AStreamIsReadAgainstItsLimitsTests
     }
 
     [Fact]
+    public async Task One_event_of_many_short_lines_with_no_end_is_refused_at_the_line_ceiling()
+    {
+        // Each line is under the ceiling; the event they make is not, and nothing ever closes it (the code round's
+        // findings 4 and 5: an endpoint could otherwise fill the child's memory below every per-line limit).
+        var sse = string.Concat(Enumerable.Repeat("data: xxxxxxxxxx\n", 200));
+
+        var read = await ReadAsync(new MemoryStream(Encoding.UTF8.GetBytes(sse)), maxLine: 100);
+
+        read.Stop.Should().Be(StreamStop.LineTooLong);
+    }
+
+    [Fact]
+    public async Task The_stream_ends_at_its_DONE_even_when_the_connection_stays_open()
+    {
+        // A proxy that keeps the connection after [DONE] — or keeps sending keep-alives — must not turn a whole, paid
+        // answer into a timeout (the own review of the code round).
+        using var deadline = new CancellationTokenSource(TimeSpan.FromSeconds(5));
+        var bytes = Encoding.UTF8.GetBytes(Chunk("all of it", "\"stop\"") + Done + ": keep-alive\n\n");
+
+        var read = await ReadAsync(new Trickle(bytes, 64, hangAtEnd: true), token: deadline.Token);
+
+        read.Stop.Should().Be(StreamStop.Ended);
+        read.Outcome.ContentChars.Should().Be("all of it".Length);
+    }
+
+    [Fact]
     public async Task The_answer_is_capped_not_the_stream_around_it()
     {
         // Twenty characters of answer in a stream many times that size: the cap counts the answer.

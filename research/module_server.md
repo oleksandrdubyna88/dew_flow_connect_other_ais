@@ -6364,9 +6364,12 @@ a row is 65. `--features` lists `checkModel`. The refusal now calls only a codex
 a `200 application/json` (a gateway that ignored `stream`) and every refusal are read whole, as before.
 
 `StreamedBody` reads the stream line by line with the deadline's token on every read, decodes UTF-8 as a stream, refuses
-one line past `MaxStreamLineChars` (1 Mi) and caps the ASSEMBLED answer at `MaxAnswerBytes` — not the raw stream,
-which is several times the answer. It tells a dropped connection (`IOException` after the headers) and a passed
-deadline apart, each keeping what had arrived.
+one line past `MaxStreamLineChars` (1 Mi) — and one EVENT whose `data:` lines together pass it (`SseEvents.PendingChars`;
+the code round: short lines that no blank line ever closes would otherwise fill memory below every per-line limit) —
+and caps the ASSEMBLED answer at `MaxAnswerBytes` — not the raw stream, which is several times the answer. It stops at
+`[DONE]` without waiting for the body to end, so a proxy that holds the connection open or keeps sending keep-alives
+does not turn a whole answer into a timeout. It tells a dropped connection (`IOException` after the headers) and a
+passed deadline apart, each keeping what had arrived.
 
 **Usage first, then the exit, however the stream ended:** the usage line is printed before anything else is decided — the
 last usage the stream carried, or `notCaptured`, never a zero for a generation the vendor billed. Then: the answer

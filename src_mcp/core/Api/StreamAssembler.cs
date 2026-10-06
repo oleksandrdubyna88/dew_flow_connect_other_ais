@@ -112,9 +112,13 @@ public sealed class StreamAssembler
     {
         if (_error.Length == 0 && chunk.TryGetProperty("error", out var error) && error.ValueKind != JsonValueKind.Null)
         {
-            _error = Bounded(error.ValueKind == JsonValueKind.Object && TextOf(error, "message") is { } message ? $"{message} ({error.GetRawText()})" : error.GetRawText());
+            _error = Bounded(ErrorText(error));
         }
     }
+
+    /// <summary>The vendor's words first when its error carries a message, then the whole error as it was sent.</summary>
+    private static string ErrorText(JsonElement error) =>
+        error.ValueKind == JsonValueKind.Object && TextOf(error, "message") is { } message ? $"{message} ({error.GetRawText()})" : error.GetRawText();
 
     private void ReadChoice(JsonElement choice)
     {
