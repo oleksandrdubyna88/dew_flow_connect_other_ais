@@ -855,6 +855,17 @@ row); the new page reads it. Done, RED first.
     consultation:** the frozen preset is not a second source after the move (the row is what is edited), and adding the
     launch fields would turn every such edit made in an older build into a duplicate row. Open question for the
     consultation: is a preset edited in an older build after the move a new model, or the same one to leave alone?
+
+  **The owed consultations, 2026-10-06** — the consultant is back (codex `gpt-6-astra`). The cadence consultation for
+  epics 1–3 and the risk consultation for epic 4 ran; every finding, and which test reproduced it, is in
+  [RESULTS_catalog_consultations_2026-10-06.md](../research/RESULTS_catalog_consultations_2026-10-06.md). Fixed on
+  this branch, each RED first: C1, C3, C4 (epics 1–3) and R1–R6 (epic 4). Still open:
+  - *C2 — a row's options never reach a consultation* (effort, system prompt, timeout, key name): `COAI_CONSULTANTS`
+    carries the launch fields only and `ConsultantResolver` rebuilds only those. Next on this branch.
+  - *R7 — the answer to the open question above:* a preset edited in an older build after the move is a conflicting
+    revision of the SAME preset, not a new model. Planned, not built: keep the edited revision and show the conflict on
+    Chat (the person chooses); widening the fingerprint alone would duplicate rows.
+  - The cadence consultation for epics 4–5, before epic 5 is built.
   - *Not measured on a real call yet,* as for reviewers (the plan's open measurement): whether an older claude CLI
     refuses `--effort` in chat mode (the server names that refusal for a reviewer; the chat shows the CLI's own
     error), and how strongly a model follows an instruction placed in the first user turn rather than a system role.

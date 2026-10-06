@@ -57,6 +57,27 @@ test('a row of the same id that is not this preset\'s is never adopted — it is
   assert.equal(moved.record[0]!.rowId, 'chat-p-1-2');
 });
 
+test('a row like this preset\'s but launched elsewhere — another executable or endpoint — is never adopted', () => {
+  // Matching runtime, model and name is not the same model: another CLI or endpoint answers (the risk consultation, R3).
+  const first = chatMove({ presets: [preset('p-1')], rows: BASE, record: [] });
+  const elsewhere = first.rows.map((row) => (row['id'] === 'chat-p-1' ? { ...row, executablePath: 'C:\\other\\claude.exe' } : row));
+
+  const moved = chatMove({ presets: [preset('p-1')], rows: elsewhere, record: [] });
+
+  assert.equal(moved.record[0]!.rowId, 'chat-p-1-2');
+});
+
+test('after a collision, a retry adopts the row the interrupted run wrote — never a third one', () => {
+  // The unrelated `chat-p-1` pushed the move to `chat-p-1-2`; the window closed before the record; the retry looked only
+  // at `chat-p-1` and wrote `chat-p-1-3` (the risk consultation, R3).
+  const theirs = { ...BASE[0], id: 'chat-p-1', name: 'Mine', model: 'sonnet', uses: ['chat'] };
+  const first = chatMove({ presets: [preset('p-1')], rows: [...BASE, theirs], record: [] });
+  const resumed = chatMove({ presets: [preset('p-1')], rows: first.rows, record: [] });
+
+  assert.deepEqual(resumed.rows, first.rows, 'the interrupted run\'s row was written again');
+  assert.equal(resumed.record[0]!.rowId, 'chat-p-1-2');
+});
+
 test('a recorded id with a different fingerprint is a different preset — a positional id that shifted', () => {
   const first = chatMove({ presets: [preset('preset-2', { name: 'Fast', model: 'haiku' })], rows: BASE, record: [] });
   const shifted = chatMove({ presets: [preset('preset-2', { name: 'Deep', model: 'opus' })], rows: first.rows, record: first.record });

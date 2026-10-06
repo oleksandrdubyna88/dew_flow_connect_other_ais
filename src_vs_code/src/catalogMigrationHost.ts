@@ -213,6 +213,26 @@ function userLayerOf(config: vscode.WorkspaceConfiguration): Layer {
 }
 
 /** This side's overlay; a key it does not hold falls back to the user layer, which is what `sharedVendors` says. */
+/**
+ * What a side reads of the user layer, and why: the rows a key it does not hold falls back to; the consultants and question
+ * rows it inherits, so the rows they refer to join its own list (C1); the user layer's chat record, whose row ids it keeps
+ * where free (E4.6a); and the chat model it inherits, which it replaces when its own move gave that preset another id (R2).
+ */
+function inheritedFrom(config: vscode.WorkspaceConfiguration): Partial<CatalogLayer> {
+  // Each read by NAME, so the scan that keeps every read around a side visible (thePanelReadsThisSide) sees all five.
+  return {
+    sharedVendors: userValue(config.inspect('vendors')),
+    sharedConsultants: userValue(config.inspect('consultants')),
+    sharedQconsultRows: userValue(config.inspect('qconsultRows')),
+    userChatRecord: userValue(config.inspect('chatPresetsMoved')),
+    userChatModel: userValue(config.inspect('chatModel')),
+  };
+}
+
+function userValue(inspected: { readonly globalValue?: unknown } | undefined): unknown {
+  return inspected?.globalValue;
+}
+
 function sideLayer(context: vscode.ExtensionContext, config: vscode.WorkspaceConfiguration): Layer {
   const side = thisSide(context.globalStorageUri);
   const store = context.globalState;
@@ -221,12 +241,11 @@ function sideLayer(context: vscode.ExtensionContext, config: vscode.WorkspaceCon
     name: 'this side\'s own settings',
     read: () => ({
       ...layerFrom((key) => readOverlay(store, side)[key]),
-      sharedVendors: config.inspect('vendors')?.globalValue,
+      ...inheritedFrom(config),
       // The chat's presets are the user layer's; a side that keeps its own rows gets chat rows of its own, under the
       // ids the user layer gave them where they are free (E4.6a).
       chatPresets: chatPresetsOf(config),
       side: true,
-      userChatRecord: config.inspect('chatPresetsMoved')?.globalValue,
     }),
     write: async ({ key, value }) => {
       const { [key]: _old, ...rest } = readOverlay(store, side);

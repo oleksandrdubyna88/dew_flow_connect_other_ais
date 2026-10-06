@@ -119,6 +119,19 @@ test('a side that keeps no rows of its own is left alone; one that does gets the
   assert.equal((written(clash, 'vendors') as readonly Record<string, unknown>[]).at(-1)!['id'], 'chat-a-2', 'a taken id is never reused');
 });
 
+test('a side whose own row for the chat model got another id opens on ITS row, not the unrelated one the inherited id names', () => {
+  // The user layer's chat model is `chat-a`; the side already owns an unrelated `chat-a`, so its move put the preset at
+  // `chat-a-2` — and the side, inheriting `chat-a`, opened on the unrelated row (the risk consultation of epic 4, R2).
+  const userRecord = [{ presetId: 'a', runtime: 'claude', model: 'opus', name: 'Name of a', rowId: 'chat-a' }];
+  const taken = [...DEFAULT_VENDORS.map((row) => ({ ...row })), { id: 'chat-a', runtime: 'codex', model: '', enabled: true, plan: false, code: true }];
+
+  const clash = writes({ side: true, chatPresets: [preset('a')], vendors: taken, userChatRecord: userRecord, userChatModel: 'chat-a' });
+  assert.equal(written(clash, 'chatModel'), 'chat-a-2');
+
+  const same = writes({ side: true, chatPresets: [preset('a')], vendors: DEFAULT_VENDORS.map((row) => ({ ...row })), userChatRecord: userRecord, userChatModel: 'chat-a' });
+  assert.ok(!same.some((one) => one.key === 'chatModel'), 'a side whose row kept the id still inherits the chat model');
+});
+
 test('a restored layer moves nothing, and a restore puts the chat\'s keys back before the rows', () => {
   assert.equal(migrateLayer({ chatPresets: [preset('a')], marker: RESTORED }).kind, 'restored');
 

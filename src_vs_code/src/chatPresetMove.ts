@@ -115,20 +115,32 @@ function movedOne(acc: ChatMove, preset: ModelPreset, preferred: readonly MovedP
 
 /**
  * The row an INTERRUPTED run already wrote for this preset — the rows and the record are two settings writes, and a
- * window closed between them left the row with no record (CodeRabbit's architecture note on PR #688). It is the id
- * this preset would take, ticked Chat, holding this preset's runtime, model and name, and no record names it; anything
- * else under that id is somebody else's row and is never adopted.
+ * window closed between them left the row with no record (CodeRabbit's architecture note on PR #688). It is an id this
+ * preset could have taken — the preferred one, `chat-<id>`, or a `chat-<id>-N` a collision pushed it to — ticked Chat,
+ * no record naming it, and launched EXACTLY as this run would write it: the same runtime, model, name, endpoint,
+ * executable and server. Anything else is somebody else's row and is never adopted (the risk consultation, R3).
  */
 function adoptedRow(acc: ChatMove, preset: ModelPreset, preferred: readonly MovedPreset[]): string | undefined {
-  return [preferredId(preset, preferred), freeChatRowId(preset.id, new Set())]
-    .filter((id) => id.length > 0 && !acc.record.some((one) => one.rowId === id))
-    .find((id) => acc.rows.some((row) => row['id'] === id && isThisPresetsRow(row, preset)));
+  return candidateIds(acc.rows, preset, preferred)
+    .filter((id) => !acc.record.some((one) => one.rowId === id))
+    .find((id) => acc.rows.some((row) => row['id'] === id && isThisPresetsRow(row, preset, id)));
 }
 
-const FINGERPRINT: readonly ('runtime' | 'model' | 'name')[] = ['runtime', 'model', 'name'];
+/** Every id this preset's row may be under: the preferred one, its own base, and the base's numbered family. */
+function candidateIds(rows: readonly RawRow[], preset: ModelPreset, preferred: readonly MovedPreset[]): readonly string[] {
+  const base = freeChatRowId(preset.id, new Set());
+  const family = rows.map((row) => String(row['id'] ?? '')).filter((id) => id.startsWith(`${base}-`) && /^\d+$/u.test(id.slice(base.length + 1)));
 
-function isThisPresetsRow(row: Readonly<Record<string, unknown>>, preset: ModelPreset): boolean {
-  return FINGERPRINT.every((key) => row[key] === preset[key]) && Array.isArray(row['uses']) && row['uses'].includes('chat');
+  return [preferredId(preset, preferred), base, ...family].filter((id) => id.length > 0);
+}
+
+/** The fields that say where a model is launched — a row adopted must hold every one as this run would write it. */
+const LAUNCH: readonly string[] = ['runtime', 'model', 'name', 'baseUrl', 'executablePath', 'teamServerId', 'remoteVendor'];
+
+function isThisPresetsRow(row: Readonly<Record<string, unknown>>, preset: ModelPreset, id: string): boolean {
+  const ours = rowOf(preset, id);
+
+  return LAUNCH.every((key) => (row[key] ?? '') === (ours[key] ?? '')) && Array.isArray(row['uses']) && row['uses'].includes('chat');
 }
 
 /** The main preset the run moved — the first one that claims it, as the presets list itself decides. */

@@ -25,6 +25,8 @@ export interface ChatLayer {
   readonly chatModelName?: unknown;
   readonly side?: boolean;
   readonly userChatRecord?: unknown;
+  /** For a side: the user layer's `coai.chatModel`, which a side without its own inherits (the risk consultation, R2). */
+  readonly userChatModel?: unknown;
 }
 
 /** One of the chat's keys the step writes — a `LayerWrite` of the migration's. */
@@ -57,9 +59,43 @@ export function chatStep(layer: ChatLayer, rows: readonly RawRow[]): ChatStep {
  * names a row that exists: `coai.chatModel` has always held a row id, so that is the person's own pick.
  */
 function remapped(layer: ChatLayer, rows: readonly RawRow[]): ChatStep {
-  const entry = ownsChatModel(layer) ? recordedEntryOf(layer, rows) : undefined;
+  const writes = ownsChatModel(layer) ? remapOf(layer, rows) : inheritedFix(layer, movedRecordFrom(layer.chatPresetsMoved));
 
-  return entry === undefined ? NOTHING(rows) : { rows, writes: remapWrites(layer, entry), changed: true };
+  return writes.length === 0 ? NOTHING(rows) : { rows, writes, changed: true };
+}
+
+function remapOf(layer: ChatLayer, rows: readonly RawRow[]): readonly ChatWrite[] {
+  const entry = recordedEntryOf(layer, rows);
+
+  return entry === undefined ? [] : remapWrites(layer, entry);
+}
+
+/**
+ * A side that inherits the user layer's chat model, when that model is a moved preset's row and the side's own move put
+ * the SAME preset at another id (its id was taken there): the inherited id names somebody else's row on this side, so
+ * the side writes its own — its row for that preset (the risk consultation of epic 4, R2). Nothing otherwise: a side
+ * whose row kept the id still inherits.
+ */
+function inheritedFix(layer: ChatLayer, record: readonly MovedPreset[]): readonly ChatWrite[] {
+  const theirs = inheritedEntry(layer);
+
+  return theirs === undefined ? [] : ownRowFor(theirs, record);
+}
+
+/** The user layer's record entry for the chat model a side inherits — none for the user layer, or a model no move made. */
+function inheritedEntry(layer: ChatLayer): MovedPreset | undefined {
+  return layer.side === true ? movedRecordFrom(layer.userChatRecord).find((one) => one.rowId === layer.userChatModel) : undefined;
+}
+
+function ownRowFor(theirs: MovedPreset, record: readonly MovedPreset[]): readonly ChatWrite[] {
+  const mine = record.find((one) => sameMove(one, theirs));
+
+  return mine === undefined || mine.rowId === theirs.rowId ? [] : [{ key: 'chatModel', value: mine.rowId }];
+}
+
+/** The same preset moved in two layers: the same id and the same fingerprint. */
+function sameMove(one: MovedPreset, other: MovedPreset): boolean {
+  return one.presetId === other.presetId && one.runtime === other.runtime && one.model === other.model && one.name === other.name;
 }
 
 /** The record's entry for the preset the chat model still names — none when it names a row that exists, or nothing. */
@@ -98,7 +134,7 @@ function preferredOf(layer: ChatLayer): readonly MovedPreset[] {
 /** The rows, the record, and — in the user layer — the model the chat opens on. */
 function stepOf(layer: ChatLayer, moved: ChatMove): ChatStep {
   const added = moved.record.slice(movedRecordFrom(layer.chatPresetsMoved).length);
-  const chatKeys = ownsChatModel(layer) ? opensOn(layer, added, moved.main) : [];
+  const chatKeys = ownsChatModel(layer) ? opensOn(layer, added, moved.main) : inheritedFix(layer, moved.record);
 
   return { rows: moved.rows, writes: [{ key: 'chatPresetsMoved', value: moved.record }, ...chatKeys], changed: true };
 }
