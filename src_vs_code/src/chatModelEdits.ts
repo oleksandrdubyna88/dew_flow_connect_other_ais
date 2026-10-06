@@ -1,7 +1,8 @@
 import { rowsAfterMain, type ChatVendorChoice } from './chatPresets';
 import { editedRows, type PresetCommand } from './chatPresetsPage';
 import { reviewsAnything } from './catalogRules';
-import { freeVendorId, normaliseId, vendorsFrom } from './vendors';
+import { freeChatRowId, takenRowIds } from './chatPresetMove';
+import { vendorsFrom } from './vendors';
 
 /**
  * The chat presets page's model edits, routed to ONE store (todo/PLAN_one_model_catalog.md E4.6a). A model the chat
@@ -132,12 +133,9 @@ export function chatModelAdd(rows: readonly RawRow[], vendor: ChatVendorChoice, 
   }];
 }
 
-/** `chat-<the name, normalised>`, the next free one — `chat-model` for a name with nothing left once normalised. */
+/** `chat-<the name, normalised>`, the next free one — the rule a moved preset's row takes too (`freeChatRowId`). */
 function newChatId(rows: readonly RawRow[], name: string): string {
-  const taken = new Set(rows.map((row) => String(row['id'] ?? '').toLowerCase()));
-  const base = normaliseId(name);
-
-  return freeVendorId(base.length > 0 ? `chat-${base}` : 'chat-model', taken);
+  return freeChatRowId(name, takenRowIds(rows));
 }
 
 function optionalOf(startingPrompt: string, vendor: ChatVendorChoice): RawRow {

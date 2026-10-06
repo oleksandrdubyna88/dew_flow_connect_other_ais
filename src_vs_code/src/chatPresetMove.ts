@@ -76,7 +76,7 @@ export function chatMove(input: ChatMoveInput): ChatMove {
 function rowIdFor(preset: ModelPreset, taken: ReadonlySet<string>, preferred: readonly MovedPreset[]): string {
   const there = preferredId(preset, preferred);
 
-  return there.length > 0 && !taken.has(there) ? there : freeVendorId(baseId(preset), taken);
+  return there.length > 0 && !taken.has(there) ? there : freeChatRowId(preset.id, taken);
 }
 
 /** The row id another layer gave this preset — '' when it gave none. */
@@ -84,16 +84,24 @@ function preferredId(preset: ModelPreset, preferred: readonly MovedPreset[]): st
   return preferred.find((one) => wasMoved(preset, [one]))?.rowId ?? '';
 }
 
-/** `chat-<the preset's id, normalised>` — `chat-model` for an id with nothing left once normalised. */
-function baseId(preset: ModelPreset): string {
-  const id = normaliseId(preset.id);
+/**
+ * The next free id for a chat row: `chat-<seed, normalised>` — `chat-model` for a seed with nothing left once normalised.
+ * The ONE rule for both ways a chat row is made: a preset moved (its id is the seed) and a model added on the Chat
+ * presets tab (its name is) — `chatModelEdits.chatModelAdd`.
+ */
+export function freeChatRowId(seed: string, taken: ReadonlySet<string>): string {
+  const id = normaliseId(seed);
 
-  return id.length > 0 ? `chat-${id}` : 'chat-model';
+  return freeVendorId(id.length > 0 ? `chat-${id}` : 'chat-model', taken);
+}
+
+/** The ids the rows already use, lower-cased — what `freeVendorId` compares against. */
+export function takenRowIds(rows: readonly Readonly<Record<string, unknown>>[]): ReadonlySet<string> {
+  return new Set(rows.map((row) => String(row['id'] ?? '').toLowerCase()));
 }
 
 function movedOne(acc: ChatMove, preset: ModelPreset, preferred: readonly MovedPreset[]): ChatMove {
-  const taken = new Set(acc.rows.map((row) => String(row['id'] ?? '').toLowerCase()));
-  const rowId = rowIdFor(preset, taken, preferred);
+  const rowId = rowIdFor(preset, takenRowIds(acc.rows), preferred);
   const entry: MovedPreset = { presetId: preset.id, runtime: preset.runtime, model: preset.model, name: preset.name, rowId };
 
   return {

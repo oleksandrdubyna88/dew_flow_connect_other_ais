@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { movedTo, resumedPick } from '../chatCatalogModels';
 import { catalogUsing, EMPTY_DISCOVERY } from '../chatDiscovery';
-import { chatProvidersFromPresets } from '../chatModels';
+import { chatProvidersFromPresets, legacyPick } from '../chatModels';
 import { chatRunSpec, type ModelPreset } from '../chatPresets';
 import type { MovedPreset } from '../chatPresetMove';
 import { CONVERSATION_VERSION, recordFrom } from '../chatStore';
@@ -37,7 +37,10 @@ test('an old preset id — a record\'s, or coai.chatModel\'s — is followed to 
 test('a recorded row that is gone falls back to what the model name says, as before', () => {
   const pick = resumedPick(list, specs, RECORD, 'chat-removed', 'sonnet');
 
-  assert.equal(pick.providerId === 'chat-removed', false, 'a conversation was resumed on a row that is not there');
+  assert.notEqual(pick.providerId, 'chat-removed', 'a conversation was resumed on a row that is not there');
+  // Exactly what the model name says on its own — here two rows offer it, so the person is asked, never guessed for.
+  assert.deepEqual(pick, legacyPick(list, specs, 'sonnet'));
+  assert.deepEqual(pick.candidates, ['chat-fast', 'chat-deep']);
 });
 
 test('the record keeps the row it was spoken to; one written before it existed reads as it did', () => {
