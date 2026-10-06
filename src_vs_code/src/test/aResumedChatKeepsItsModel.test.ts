@@ -34,6 +34,13 @@ test('an old preset id — a record\'s, or coai.chatModel\'s — is followed to 
   assert.equal(resumedPick(list, specs, RECORD, '', 'preset-7').providerId, 'chat-deep');
 });
 
+test('a saved value that names a row that exists is that row, though an old preset had the same id', () => {
+  // `coai.chatModel` has always held a ROW id; an old preset that happened to share it must not capture the choice.
+  const shadowing: readonly MovedPreset[] = [{ presetId: 'chat-fast', runtime: 'claude', model: 'sonnet', name: 'Old', rowId: 'chat-deep' }];
+
+  assert.equal(resumedPick(list, specs, shadowing, '', 'chat-fast').providerId, 'chat-fast');
+});
+
 test('a recorded row that is gone falls back to what the model name says, as before', () => {
   const pick = resumedPick(list, specs, RECORD, 'chat-removed', 'sonnet');
 

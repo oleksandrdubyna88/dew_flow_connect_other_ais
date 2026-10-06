@@ -38,6 +38,25 @@ test('a second run changes nothing, and a deleted row stays deleted', () => {
   assert.equal(deleted.changed, false, 'the person removed the row on Models and the move put it back');
 });
 
+test('a run interrupted after its rows were written adopts the row it wrote, and never makes a second one', () => {
+  // The rows and the record are two settings writes. A window closed between them left the row and no record, and the next
+  // run moved the preset again into `chat-p-1-2`. (CodeRabbit's architecture note on PR #688.)
+  const first = chatMove({ presets: [preset('p-1')], rows: BASE, record: [] });
+  const resumed = chatMove({ presets: [preset('p-1')], rows: first.rows, record: [] });
+
+  assert.deepEqual(resumed.rows, first.rows, 'the interrupted run\'s row was written a second time');
+  assert.deepEqual(resumed.record, first.record);
+  assert.equal(resumed.changed, true, 'the record the interrupted run never wrote is still owed');
+});
+
+test('a row of the same id that is not this preset\'s is never adopted — it is somebody else\'s model', () => {
+  const theirs = { ...BASE[0], id: 'chat-p-1', name: 'Mine', model: 'sonnet', uses: ['chat'] };
+  const moved = chatMove({ presets: [preset('p-1')], rows: [...BASE, theirs], record: [] });
+
+  assert.deepEqual(moved.rows.map((row) => row['id']).slice(-2), ['chat-p-1', 'chat-p-1-2']);
+  assert.equal(moved.record[0]!.rowId, 'chat-p-1-2');
+});
+
 test('a recorded id with a different fingerprint is a different preset — a positional id that shifted', () => {
   const first = chatMove({ presets: [preset('preset-2', { name: 'Fast', model: 'haiku' })], rows: BASE, record: [] });
   const shifted = chatMove({ presets: [preset('preset-2', { name: 'Deep', model: 'opus' })], rows: first.rows, record: first.record });

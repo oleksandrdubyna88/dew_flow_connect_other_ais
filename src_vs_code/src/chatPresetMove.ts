@@ -101,15 +101,34 @@ export function takenRowIds(rows: readonly Readonly<Record<string, unknown>>[]):
 }
 
 function movedOne(acc: ChatMove, preset: ModelPreset, preferred: readonly MovedPreset[]): ChatMove {
-  const rowId = rowIdFor(preset, takenRowIds(acc.rows), preferred);
+  const adopted = adoptedRow(acc, preset, preferred);
+  const rowId = adopted ?? rowIdFor(preset, takenRowIds(acc.rows), preferred);
   const entry: MovedPreset = { presetId: preset.id, runtime: preset.runtime, model: preset.model, name: preset.name, rowId };
 
   return {
-    rows: [...acc.rows, rowOf(preset, rowId)],
+    rows: adopted === undefined ? [...acc.rows, rowOf(preset, rowId)] : acc.rows,
     record: [...acc.record, entry],
     ...mainAfter(acc, preset, rowId),
     changed: true,
   };
+}
+
+/**
+ * The row an INTERRUPTED run already wrote for this preset — the rows and the record are two settings writes, and a
+ * window closed between them left the row with no record (CodeRabbit's architecture note on PR #688). It is the id
+ * this preset would take, ticked Chat, holding this preset's runtime, model and name, and no record names it; anything
+ * else under that id is somebody else's row and is never adopted.
+ */
+function adoptedRow(acc: ChatMove, preset: ModelPreset, preferred: readonly MovedPreset[]): string | undefined {
+  return [preferredId(preset, preferred), freeChatRowId(preset.id, new Set())]
+    .filter((id) => id.length > 0 && !acc.record.some((one) => one.rowId === id))
+    .find((id) => acc.rows.some((row) => row['id'] === id && isThisPresetsRow(row, preset)));
+}
+
+const FINGERPRINT: readonly ('runtime' | 'model' | 'name')[] = ['runtime', 'model', 'name'];
+
+function isThisPresetsRow(row: Readonly<Record<string, unknown>>, preset: ModelPreset): boolean {
+  return FINGERPRINT.every((key) => row[key] === preset[key]) && Array.isArray(row['uses']) && row['uses'].includes('chat');
 }
 
 /** The main preset the run moved — the first one that claims it, as the presets list itself decides. */

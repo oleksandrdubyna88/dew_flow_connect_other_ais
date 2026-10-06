@@ -44,8 +44,28 @@ const NOTHING = (rows: readonly RawRow[]): ChatStep => ({ rows, writes: [], chan
 
 export function chatStep(layer: ChatLayer, rows: readonly RawRow[]): ChatStep {
   const moved = keepsOwnRows(layer) ? movedIn(layer, rows) : undefined;
+  if (moved === undefined) {
+    return NOTHING(rows);
+  }
 
-  return moved === undefined || !moved.changed ? NOTHING(rows) : stepOf(layer, moved);
+  return moved.changed ? stepOf(layer, moved) : remapped(layer, rows);
+}
+
+/**
+ * A run interrupted after its record was written left `coai.chatModel` naming a preset it recorded (CodeRabbit's
+ * architecture note on PR #688); nothing moves this time, so the remap is all that is owed. Never over a chat model that
+ * names a row that exists: `coai.chatModel` has always held a row id, so that is the person's own pick.
+ */
+function remapped(layer: ChatLayer, rows: readonly RawRow[]): ChatStep {
+  const row = ownsChatModel(layer) ? recordedRowOf(layer, rows) : '';
+
+  return row.length === 0 ? NOTHING(rows) : { rows, writes: [{ key: 'chatModel', value: row }], changed: true };
+}
+
+function recordedRowOf(layer: ChatLayer, rows: readonly RawRow[]): string {
+  const saved = typeof layer.chatModel === 'string' ? layer.chatModel : '';
+
+  return rows.some((row) => row['id'] === saved) ? '' : savedRowOf(layer, movedRecordFrom(layer.chatPresetsMoved));
 }
 
 /** The user layer, or a side that keeps rows of its own — never a side that reads the shared rows. */

@@ -55,6 +55,39 @@ test('a second run changes nothing — the record holds every preset', () => {
   assert.equal(again.kind, 'unchanged');
 });
 
+test('a run interrupted after its record was written still points the chat model at the row', () => {
+  // The record and `coai.chatModel` are two settings writes. A window closed between them left the chat model naming the
+  // old preset, and the next run, finding nothing to move, never remapped it. (CodeRabbit's architecture note, PR #688.)
+  const first = writes({ chatPresets: [preset('a')], chatModel: 'a' });
+  const resumed = writes({
+    chatPresets: [preset('a')],
+    vendors: written(first, 'vendors'),
+    chatPresetsMoved: written(first, 'chatPresetsMoved'),
+    chatModel: 'a',
+    marker: MIGRATED,
+    backup: written(first, 'migratedFrom'),
+  });
+
+  assert.equal(written(resumed, 'chatModel'), 'chat-a');
+});
+
+test('a chat model that names a row is the person\'s choice, and no recorded preset of that id takes it over', () => {
+  const first = writes({ chatPresets: [preset('a')] });
+  const rows = written(first, 'vendors') as readonly Record<string, unknown>[];
+  const again = migrateLayer({
+    chatPresets: [preset('a')],
+    // The record says preset "codex" moved to chat-a; the person has since picked the reviewer row called codex.
+    vendors: rows,
+    chatPresetsMoved: [{ presetId: 'codex', runtime: 'claude', model: 'opus', name: 'Name of a', rowId: 'chat-a' }, ...(written(first, 'chatPresetsMoved') as readonly unknown[])],
+    chatModel: 'codex',
+    marker: MIGRATED,
+    backup: written(first, 'migratedFrom'),
+  });
+
+  assert.ok(rows.some((row) => row['id'] === 'codex'), 'the fixture has no row called codex');
+  assert.equal(again.kind, 'unchanged', 'the person\'s pick of a row was rewritten');
+});
+
 test('a side that keeps no rows of its own is left alone; one that does gets the user layer\'s row ids', () => {
   assert.equal(migrateLayer({ side: true, chatPresets: [preset('a')], sharedVendors: DEFAULT_VENDORS }).kind, 'unchanged');
 

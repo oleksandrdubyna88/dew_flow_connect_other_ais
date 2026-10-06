@@ -844,6 +844,17 @@ row); the new page reads it. Done, RED first.
   - a switch between two rows that offer one model saved nothing (the save guard compared the model only), so a
     reload resumed on the old row — `savedProviderId` joins the guard and `UNSAVED`;
   - a chat row's id rule was written twice (a moved preset, a model added on the tab) — one `freeChatRowId` now.
+
+  **CodeRabbit on PR #688 (2026-10-06)** — no actionable comments; its architecture summary raised two medium notes:
+  - *An interrupted move* (rows, record and chat model are separate settings writes). Fixed, RED first: a rerun ADOPTS
+    the row an interrupted run wrote (its own id, ticked Chat, the preset's runtime/model/name, named by no record —
+    `chatPresetMove.adoptedRow`) instead of writing `chat-<id>-2`; a run with nothing to move still remaps a chat
+    model left naming a recorded preset (`catalogChatStep.remapped`). Neither ever overrides a chat model that names a
+    row that exists — `coai.chatModel` has always held a row id — and `resumedPick` keeps the same rule.
+  - *The fingerprint ignores launch fields* (executable, endpoint, Team server). **Not changed — for the owed risk
+    consultation:** the frozen preset is not a second source after the move (the row is what is edited), and adding the
+    launch fields would turn every such edit made in an older build into a duplicate row. Open question for the
+    consultation: is a preset edited in an older build after the move a new model, or the same one to leave alone?
   - *Not measured on a real call yet,* as for reviewers (the plan's open measurement): whether an older claude CLI
     refuses `--effort` in chat mode (the server names that refusal for a reviewer; the chat shows the CLI's own
     error), and how strongly a model follows an instruction placed in the first user turn rather than a system role.

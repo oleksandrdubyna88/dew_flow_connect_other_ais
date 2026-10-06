@@ -90,5 +90,9 @@ export function resumedPick(
 ): LegacyPick {
   const row = list.providers.find((one) => one.id === providerId);
 
-  return row === undefined ? legacyPick(list, specs, movedTo(modelId, record)) : { providerId, modelId, candidates: [] };
+  // A value that names a row that exists is that row — `coai.chatModel` has always held one — never an old preset of the
+  // same id.
+  const named = list.providers.some((one) => one.id === modelId) ? modelId : movedTo(modelId, record);
+
+  return row === undefined ? legacyPick(list, specs, named) : { providerId, modelId, candidates: [] };
 }
