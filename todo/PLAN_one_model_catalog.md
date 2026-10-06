@@ -757,6 +757,37 @@ row); the new page reads it. Done, RED first.
   - *An import cycle avoided:* `catalogChatStep` declares the part of a layer it reads (`ChatLayer`) and the writes it
     makes (`ChatWrite`) instead of importing them from `catalogMigration`, which calls it.
 
+  **E4.6b as designed (2026-10-06), from the mockup's Chat page (`new_design/lanes.js` `chatPage`) and the way E4.3/E4.4
+  folded their pages in.** The Chat place stops drawing the current page's section and draws its own (`SPLIT['chat']`):
+  - *Which model a chat opens on* — one radio per model the chat can answer with (`chatProvidersFromPresets` over
+    `state.chat.models`, the panel's discoveries in it, as `chatBody` builds it today — extracted, not copied), its
+    name and an *Opens with* box (the row's `chatStartingPrompt`). The checked radio is `coai.chatModel`, or the preset
+    ticked main while nothing is saved. A saved choice that no longer resolves is drawn checked and disabled with
+    the reason (the stranded rule the current page keeps), and every switched-on row the chat cannot speak to is
+    named with its reason (`list.refused`). Per side: the note "saved for this side" when `perSideSettings` is on.
+    Picking a radio is the presets page's `main` edit, so `coai.chatModel` is set and a stale `chatModelName` cleared.
+    No *Add a model* here: models are added on Models (tick Chat).
+  - *Sending* — the three fields the current section has (what to ask, answer in, who presses send), from ONE
+    builder both pages call (`chatSendingFields`, extracted from `chatBody`), written through `data-setting`.
+  - *Prompt presets* — inline: the presets page's own prompt block (`chatPresetsPage.promptRow`, its attribute names
+    passed in, as `commandsPage.customBlock` takes them, because the roles' wiring reads `data-field`/`data-remove`),
+    with *Add a prompt*.
+  - *One editing core* — the presets page's writes move, unchanged in effect, from `chatPresetsPanel.ts` into
+    `chatPresetsHost.ts` (`queueChatPresetEdit`, `flushChatPresetEdits`, `onChatPresetsRedraw`, bound at activation),
+    behind ONE settled-write queue, as `rolesHost`/`commandsHost`. The new page posts `{ type: 'chatPresets', edit }`
+    — the presets page's own message, read by its own `presetEdit` — numbered for a pick, a tick, Add and Remove
+    (`chatPresets` joins `PANEL_TRACKED`), plainly for typing, and reports focus as `chatPresets|<id>|<field>`; a
+    focus release flushes this queue with the roles' and the commands'. The presets page keeps its wizard (*Add a
+    model*) and its prune.
+  - *Not built:* the mockup's Shortcuts panel (the key list lives in `package.json`, and VS Code's own editor is
+    where a key is changed) — named here so its absence is a decision.
+  - *Test plan, E4.6b:* the tab's html read as a tree (`pageTree`): one radio per model that can answer, the checked
+    one, a stranded choice disabled with its reason, a refused row named; firing a radio, a prompt's box, its main
+    tick, Add and Remove through the page's real script (`runPanel`) posts the presets page's own edit, and the roles'
+    and commands' wiring post nothing for them (and the reverse); the host's queue: a typed field settles, a click
+    goes straight through, a model edit lands in the row (`chatModelEdit`), a prompt edit in `chatPromptPresets`;
+    the old page's chat section still draws its fields (the extraction is behaviour-neutral).
+
 **Build order:** E4.1 → E4.2 → E4.5 → E4.3 → E4.4 → E4.6. E4.5 comes before the folded pages because it touches no
 host-module seam, so it lands while E4.3's command shape settles.
 
