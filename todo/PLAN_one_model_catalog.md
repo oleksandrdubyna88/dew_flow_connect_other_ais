@@ -1,7 +1,7 @@
 # PLAN — One model catalog: the Settings page rebuilt around models you add once
 
 > Status: **in progress, 2026-10-06 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
-> the measured live calls wait on the operator); E3 merged (PR #687); E4 in progress on `feat/catalog-e4` (E4.1–E4.5 and E4.6a built; E4.6b, E4.6c open); E5 open.** The design is accepted: the clickable mockup in
+> the measured live calls wait on the operator); E3 merged (PR #687); E4 in progress on `feat/catalog-e4` (E4.1–E4.5, E4.6a and E4.6b built; E4.6c open); E5 open.** The design is accepted: the clickable mockup in
 > [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
 > checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
@@ -787,6 +787,21 @@ row); the new page reads it. Done, RED first.
     and commands' wiring post nothing for them (and the reverse); the host's queue: a typed field settles, a click
     goes straight through, a model edit lands in the row (`chatModelEdit`), a prompt edit in `chatPromptPresets`;
     the old page's chat section still draws its fields (the extraction is behaviour-neutral).
+
+  **E4.6b built 2026-10-06** (`chatTabEmbed.ts`, `chatPresetsHost.ts`, `chatModelWizard.ts`; wired in
+  `catalogSections.ts`, `catalogPageScript.ts`, `panelProvider.ts`, `busyMark.ts`, `catalogCss.ts`). As designed, with
+  these differences:
+  - *The add-model dialogs became their own module* (`chatModelWizard.ts`), so the editing core does not import the
+    page that draws them; the presets panel's two complexity suppressions went with the move (written within the
+    limit, not carried).
+  - *Which edits settle* is decided in the pure page module (`chatPresetsPage.presetSettlesAs`, tested) rather than
+    in the host: typed fields (name, text, starting text) settle per list/row/field; a tick, a pick or a press goes
+    straight through. A presets write that fails is now reported, where the tab used to only log it.
+  - *The host's queue is not unit-tested* (it imports `vscode`); its decisions are — `presetSettlesAs`,
+    `chatModelEdit`, `editedRows`, `rowsAfterMain` — and its wiring is pinned by `noSecondPresetStore.test.ts` and
+    `settingRefusedWiring.test.ts`.
+  - *The two route branches share one* in `PanelProvider.receive` (`commands` or `chatPresets`), which keeps that
+    method at its 50-line limit.
 
 **Build order:** E4.1 → E4.2 → E4.5 → E4.3 → E4.4 → E4.6. E4.5 comes before the folded pages because it touches no
 host-module seam, so it lands while E4.3's command shape settles.

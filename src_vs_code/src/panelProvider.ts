@@ -126,6 +126,8 @@ import { roleEdit } from './rolesPage';
 import { roleSwitchFollows } from './rolesSwitch';
 import { commandsEmbedState, flushCommandEdits, onCommandsRedraw, queueCommandEdit } from './commandsHost';
 import { commandEdit } from './commandsPage';
+import { flushChatPresetEdits, onChatPresetsRedraw, queueChatPresetEdit } from './chatPresetsHost';
+import { presetEdit } from './chatPresetsPage';
 import { ModelPrice, PriceTable, priceFor } from './modelPrices';
 import { PRICE_BOOK } from './priceBook';
 import {
@@ -1041,13 +1043,13 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       if (from.edited(m.editing === true, m.id ?? '', Number(m.start), Number(m.end))) {
         // A roles prompt still settling is written first: the repaint reads the prompt files, and one that overtook the
         // write would draw the box from the text being replaced (E4.3).
-        void Promise.all([flushRoleEdits(), flushCommandEdits()]).then(() => this.render());
+        void Promise.all([flushRoleEdits(), flushCommandEdits(), flushChatPresetEdits()]).then(() => this.render());
       }
     } else if (m.type === 'roles') {
       this.track(from, m, () => this.roleEdited(m.edit));
-    } else if (m.type === 'commands') {
-      // An edit of the gate's commands from the new page's Commands (E4.4), into the one queue the tab uses too.
-      this.track(from, m, () => queueCommandEdit(commandEdit(m.edit)));
+    } else if (m.type === 'commands' || m.type === 'chatPresets') {
+      // An edit from the new page's Commands (E4.4) or Chat (E4.6b), into the one queue its own tab uses too.
+      this.track(from, m, () => (m.type === 'commands' ? queueCommandEdit(commandEdit(m.edit)) : queueChatPresetEdit(presetEdit(m.edit))));
     } else if (m.type === 'command') {
       this.track(from, m, () => this.run(m.command, m.id, from));
     } else if (m.type === 'ready') {
@@ -1132,6 +1134,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     this.securityPromptWatch.changed.cancel();
     this.rolesRedraw.dispose();
     this.commandsRedraw.dispose();
+    this.chatPresetsRedraw.dispose();
   }
 
   /**
@@ -3203,6 +3206,9 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
 
   /** The same for the gate's commands, edited from the new page's Commands or the Gate commands tab (E4.4). */
   private readonly commandsRedraw = onCommandsRedraw(() => this.render());
+
+  /** The same for the chat presets, edited from the new page's Chat or the Chat presets tab (E4.6b). */
+  private readonly chatPresetsRedraw = onChatPresetsRedraw(() => this.render());
 
   /**
    * Try it (PLAN_one_model_catalog.md E4.2): the sample and the stored lane, as a round would send it, to

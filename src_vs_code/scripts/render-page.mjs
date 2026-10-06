@@ -179,6 +179,16 @@ function page(name, size) {
         ...panelState(''), ...text,
         roles: { rows: [], texts: {}, serverVersion: '', perSide: false, stranded: [] },
         commands: { rows: [{ id: 'cmd-ab12', title: 'Run the linter', stage: 'code', enabled: true }], texts: {}, serverVersion: '', perSide: false },
+        // Two chat models that can answer, one that cannot, two prompts (E4.6b).
+        chat: {
+          prompt: 'Explain', promptChoice: '', language: 'en', autoSend: 'keyboard', model: 'chat-deep', modelName: '',
+          prompts: [{ id: 'p1', name: 'Explain', text: 'Explain', main: true }, { id: 'p2', name: 'Review', text: 'Review this for bugs.', main: false }],
+          models: [
+            { id: 'chat-deep', name: 'Deep', runtime: 'claude', model: 'opus', main: false, executablePath: '', baseUrl: '', startingPrompt: 'You review APIs.' },
+            { id: 'chat-fast', name: 'Fast', runtime: 'claude', model: 'sonnet', main: false, executablePath: '', baseUrl: '' },
+            { id: 'chat-gpu', name: 'On my GPU', runtime: 'local', model: 'qwen', main: false, executablePath: '', baseUrl: '' },
+          ],
+        },
       }, NONCE, tab ?? 'models');
     case 'settings':
       return from('panelView.js').settingsHtml({ ...panelState(''), ...text }, NONCE, tab ?? 'reviewers');

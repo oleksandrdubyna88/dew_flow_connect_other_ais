@@ -170,14 +170,31 @@ function option(id: string, label: string, chosen: string): string {
   return `<option value="${escapeHtml(id)}"${id === chosen ? ' selected' : ''}>${escapeHtml(label)}</option>`;
 }
 
-function promptRow(preset: PromptPreset): string {
-  return `<div class="preset" data-id="${escapeHtml(preset.id)}">
+/**
+ * The attribute names a prompt block carries. The tab's own are the defaults; the new Settings page's Chat draws the
+ * same block with names of its own (todo/PLAN_one_model_catalog.md E4.6b), because that page also draws the roles,
+ * whose wiring reads `data-field` and `data-remove` — the commands' arrangement (`commandsPage.CommandAttrs`).
+ */
+export interface PresetAttrs {
+  readonly row: string;
+  readonly list: string;
+  readonly field: string;
+  readonly remove: string;
+}
+
+const TAB_ATTRS: PresetAttrs = { row: 'data-id', list: 'data-list', field: 'data-field', remove: 'data-remove' };
+
+/** One saved prompt: its name, the main tick, Remove, and its words in a large box. */
+export function promptBlock(preset: PromptPreset, attrs: PresetAttrs = TAB_ATTRS): string {
+  const id = escapeHtml(preset.id);
+
+  return `<div class="preset" ${attrs.row}="${id}">
   <div class="head">
-    <input type="text" data-list="prompt" data-field="name" value="${escapeHtml(preset.name)}" placeholder="A name for this prompt">
-    <label class="main"><input type="checkbox" data-list="prompt" data-field="main"${preset.main ? ' checked' : ''}> main</label>
-    <button type="button" class="remove" data-remove="prompt" data-id="${escapeHtml(preset.id)}">Remove</button>
+    <input type="text" ${attrs.list}="prompt" ${attrs.field}="name" value="${escapeHtml(preset.name)}" placeholder="A name for this prompt">
+    <label class="main"><input type="checkbox" ${attrs.list}="prompt" ${attrs.field}="main"${preset.main ? ' checked' : ''}> main</label>
+    <button type="button" class="remove" ${attrs.remove}="prompt" ${attrs.row}="${id}">Remove</button>
   </div>
-  <textarea data-list="prompt" data-field="text" rows="${PROMPT_ROWS}" placeholder="What the captured passage travels with">${escapeHtml(preset.text)}</textarea>
+  <textarea ${attrs.list}="prompt" ${attrs.field}="text" rows="${PROMPT_ROWS}" placeholder="What the captured passage travels with">${escapeHtml(preset.text)}</textarea>
 </div>`;
 }
 
@@ -265,7 +282,7 @@ function script(nonce: string): string {
 
 /** The page. Its own function so the document below stays readable, as every page here does it. */
 export function chatPresetsHtml(state: PresetsPageState, nonce: string): string {
-  const prompts = state.prompts.map((preset) => promptRow(preset).replace('class="preset"', 'class="preset prompt-row"')).join('');
+  const prompts = state.prompts.map((preset) => promptBlock(preset).replace('class="preset"', 'class="preset prompt-row"')).join('');
   const models = state.models.map((preset) => modelRow(preset, state.providers)).join('');
   // NAMED, not silently passed over. These rows name a reviewer, and repairing them would mean
   // reading the reviewer list — which this feature may not do. Saying so is what is left, and it is

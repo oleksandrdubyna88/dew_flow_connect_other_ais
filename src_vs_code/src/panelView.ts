@@ -47,7 +47,7 @@ import {
   SLOT_LABELS,
   commandModelsSkewNote,
 } from './commandModels';
-import { chatProvidersFromPresets } from './chatModels';
+import { chatProvidersFromPresets, type ChatProviderList } from './chatModels';
 import { mainPrompt } from './chatPresets';
 import { CoaiSettings, GatePer, LANGUAGES, enabledCodeRoles, roleIsOn } from './settingsShape';
 import { gatePerSkewNote, stopLocalSkewNote } from './gateScope';
@@ -915,7 +915,7 @@ ${selectSearchScript(['', '__other__', CUSTOM_ENDPOINT, NEW_PROMPT_SENTINEL])}
 }
 
 /** What the section shows when nothing has been configured — the reader's own fallbacks. */
-const DEFAULT_CHAT: ChatSettings = chatSettingsFrom(() => undefined);
+export const DEFAULT_CHAT: ChatSettings = chatSettingsFrom(() => undefined);
 
 /**
  * The option for a model the settings NAME and the chat cannot use.
@@ -951,18 +951,7 @@ function strandedOption(chosen: string, offered: readonly { readonly id: string 
  * conversation itself picks from — one source, so the picker and the tab cannot disagree.</p>
  */
 function chatBody(chat: ChatSettings, state: PanelState): string {
-  // The panel's OWN catalog, which is the half `PLAN_provider_then_model.md` left open: three of the
-  // four model sources are FETCHED rather than read — the codex and agy CLIs' own lists and a Team
-  // server's allowlist — and all three are already in hand HERE. The chat command builds the same
-  // list with them empty, so a row whose models must be discovered offers only what it is set to.
-  // A `local` row cannot chat at all (`canChat`), so the engine that would name its models is never
-  // consulted: passing one would be passing a value nothing on this path can read.
-  const list = chatProvidersFromPresets(chat.models, {
-    discoveredCodex: state.codexModels,
-    discoveredAgy: state.agyModels,
-    localEngine: undefined,
-    teamServers: state.teamServers ?? [],
-  });
+  const list = chatProviderListFor(chat, state);
   // The provider that ANSWERS: the saved row, or — only when nothing is saved — the first that can.
   // A saved row that no longer resolves must NOT fall through to `providers[0]`: the select above
   // strands it while this one fills with an unrelated provider's models, and the two controls then
@@ -973,33 +962,7 @@ function chatBody(chat: ChatSettings, state: PanelState): string {
   const ownModel = chat.models.find((one) => one.id === chosen?.id)?.model ?? '';
   const refusals = list.refused.map((row) => row.reason);
 
-  return `<div class="field">
-  ${labelled('chatPromptChoice', 'What to ask about the selection', 'chatPrompt')}
-  <select id="chatPromptChoice" data-setting="chatPromptChoice">
-${chatOption('', `The main one — ${mainPrompt(chat.prompts)?.name ?? chat.prompt}`, chat.promptChoice)}
-${chat.prompts.map((preset) => chatOption(preset.id, preset.name, chat.promptChoice)).join('\n')}
-${strandedOption(chat.promptChoice, chat.prompts, 'deleted — the main one is being sent')}
-  </select>
-  <div class="hint">${escapeHtml(chat.prompt)}</div>
-  <button type="button" class="run" data-command="editChatPresets">Edit presets…</button>
-</div>
-<div class="field">
-  ${labelled('chatLanguage', 'Answer in', 'chatLanguage')}
-  <select id="chatLanguage" data-setting="chatLanguage">
-${LANGUAGES.map((language) =>
-    `    <option value="${language.code}"${language.code === chat.language ? ' selected' : ''}>`
-    + `${escapeHtml(language.label)}</option>`).join('\n')}
-  </select>
-</div>
-<div class="field">
-  ${labelled('chatAutoSend', 'Who presses send', 'chatAutoSend')}
-  <select id="chatAutoSend" data-setting="chatAutoSend">
-    <option value="keyboard"${chat.autoSend === 'keyboard' ? ' selected' : ''}>The keybinding sends; the menu waits</option>
-    <option value="always"${chat.autoSend === 'always' ? ' selected' : ''}>Always send at once</option>
-    <option value="never"${chat.autoSend === 'never' ? ' selected' : ''}>Never — always let me press Enter</option>
-  </select>
-</div>
-<div class="field">
+  return `${chatSendingFields(chat, '  <button type="button" class="run" data-command="editChatPresets">Edit presets…</button>\n')}<div class="field">
   ${labelled('chatModel', 'Which model answers', 'chatModel')}
   <select id="chatModel" data-setting="chatModel">
 ${chatOption('', 'The first one that can answer', chat.model)}
@@ -1013,6 +976,68 @@ ${strandedOption(chat.modelName, chosen?.models ?? [], 'this provider does not o
   </select>
 ${refusals.map((reason) => `  <div class="hint">${escapeHtml(reason)}</div>`).join('\n')}
 </div>`;
+}
+
+/**
+ * The chat's models as providers — which can answer, and which cannot and why — with the panel's OWN catalog in it.
+ * Both Settings pages draw from it (todo/PLAN_one_model_catalog.md E4.6b).
+ *
+ * <p>The half `PLAN_provider_then_model.md` left open: three of the four model sources are FETCHED rather than read —
+ * the codex and agy CLIs' own lists and a Team server's allowlist — and all three are already in hand HERE. The chat
+ * command builds the same list with them empty, so a row whose models must be discovered offers only what it is set
+ * to. A `local` row cannot chat at all (`canChat`), so the engine that would name its models is never consulted:
+ * passing one would be passing a value nothing on this path can read.</p>
+ */
+export function chatProviderListFor(chat: ChatSettings, state: PanelState): ChatProviderList {
+  return chatProvidersFromPresets(chat.models, {
+    discoveredCodex: state.codexModels,
+    discoveredAgy: state.agyModels,
+    localEngine: undefined,
+    teamServers: state.teamServers ?? [],
+  });
+}
+
+/**
+ * What to ask about the selection, the language the answer comes in, and who presses send — the fields both Settings
+ * pages draw, from this one builder (E4.6b).
+ *
+ * @param afterPrompt what follows the prompt's hint inside its field — the current page's *Edit presets…*; '' for none
+ */
+export function chatSendingFields(chat: ChatSettings, afterPrompt: string): string {
+  return `<div class="field">
+  ${labelled('chatPromptChoice', 'What to ask about the selection', 'chatPrompt')}
+  <select id="chatPromptChoice" data-setting="chatPromptChoice">
+${chatOption('', `The main one — ${mainPromptName(chat)}`, chat.promptChoice)}
+${chat.prompts.map((preset) => chatOption(preset.id, preset.name, chat.promptChoice)).join('\n')}
+${strandedOption(chat.promptChoice, chat.prompts, 'deleted — the main one is being sent')}
+  </select>
+  <div class="hint">${escapeHtml(chat.prompt)}</div>
+${afterPrompt}</div>
+<div class="field">
+  ${labelled('chatLanguage', 'Answer in', 'chatLanguage')}
+  <select id="chatLanguage" data-setting="chatLanguage">
+${LANGUAGES.map((language) => chatOption(language.code, language.label, chat.language)).join('\n')}
+  </select>
+</div>
+<div class="field">
+  ${labelled('chatAutoSend', 'Who presses send', 'chatAutoSend')}
+  <select id="chatAutoSend" data-setting="chatAutoSend">
+${AUTO_SEND_CHOICES.map(([value, label]) => chatOption(value, label, chat.autoSend)).join('\n')}
+  </select>
+</div>
+`;
+}
+
+/** Who presses send, as the select offers it. */
+const AUTO_SEND_CHOICES: readonly (readonly [string, string])[] = [
+  ['keyboard', 'The keybinding sends; the menu waits'],
+  ['always', 'Always send at once'],
+  ['never', 'Never — always let me press Enter'],
+];
+
+/** The main prompt's name — or, with none ticked, the words that are sent. */
+function mainPromptName(chat: ChatSettings): string {
+  return mainPrompt(chat.prompts)?.name ?? chat.prompt;
 }
 
 /**

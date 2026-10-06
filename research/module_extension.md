@@ -11110,3 +11110,40 @@ flowchart LR
   K[ConversationRecord.providerId] --> Q
   Q --> T[a restored conversation]
 ```
+
+## The new Settings page — Chat (2026-10-06, PLAN_one_model_catalog.md E4.6b)
+
+The Chat place draws its own tab (`chatTabEmbed.chatTabHtml`, `SPLIT['chat']`), no longer the current page's section:
+
+- **Which model a chat opens on** — one radio per chat model that can answer (`panelView.chatProviderListFor`, the
+  panel's discoveries in it — extracted from `chatBody`, which calls it too), each with an *Opens with* box (the row's
+  `chatStartingPrompt`). Checked: `coai.chatModel`, else the model ticked main. A saved choice that no longer resolves
+  is drawn checked and disabled, with the reason; with nothing chosen the page names the model that answers first; a
+  model the chat cannot speak to is listed with its reason. "Saved for this side" when `perSideSettings` is on. No
+  *Add a model* here: models are added on Models.
+- **Sending** — what to ask, the answer language and who presses send, from `panelView.chatSendingFields`, the ONE
+  builder the current page's `chatBody` also calls; written through `data-setting`.
+- **Prompt presets** — inline: `chatPresetsPage.promptBlock`, the presets tab's own block, with attribute names
+  passed in (`PresetAttrs`, `data-chp-*`), because the page also draws the roles and the commands.
+
+**One editing core.** The presets tab's reads and writes moved from `chatPresetsPanel.ts` into `chatPresetsHost.ts`
+(`queueChatPresetEdit`, `flushChatPresetEdits`, `onChatPresetsRedraw`, bound at activation by `bindChatPresets`) behind
+ONE settled-write queue, as `rolesHost` and `commandsHost`; the add-model dialogs moved to `chatModelWizard.ts`.
+`chatPresetsPage.presetSettlesAs` decides what settles: typed fields per list/row/field; a tick, a pick or a press goes
+straight through. The tab (`chatPresetsPanel.ts`) now only draws: it queues each message, redraws on the host's
+redraw, and flushes on close. The new page's script (`chatTabEmbeddedScript`) posts `{ type: 'chatPresets', edit }` —
+the tab's own message, read by its own `presetEdit` — numbered for the opening model, a main tick, Add and Remove
+(`chatPresets` is in `PANEL_TRACKED`), plainly for typing, and reports focus as `chatPresets|<id>|<field>`; a focus
+release flushes this queue with the roles' and the commands'. Picking the opening model is the presets' `main` edit,
+so `coai.chatModel` is set and a stale `chatModelName` cleared (`chatModelEdits`).
+
+```mermaid
+flowchart LR
+  T[Chat presets tab] -->|presetEdit| Q[chatPresetsHost queue]
+  N[new page Chat] -->|chatPresets message, presetEdit| Q
+  Q -->|chatModelEdit| R[catalog rows / coai.chatModel]
+  Q -->|prompts| P[coai.chatPromptPresets]
+  Q -->|redraw| T
+  Q -->|redraw| N
+  N -->|data-setting| S[chatPromptChoice, chatLanguage, chatAutoSend]
+```

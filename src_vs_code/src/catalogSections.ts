@@ -9,6 +9,7 @@ import { rowsFor } from './catalogPicks';
 import { securityTryHtml } from './securityTry';
 import { rolesEmbedded } from './rolesEmbed';
 import { commandsEmbedded } from './commandsEmbed';
+import { chatTabHtml } from './chatTabEmbed';
 import { cliTableHtml, mcpClientsHtml, movedFromHtml } from './setupTab';
 import type { Vendor } from './vendors';
 
@@ -20,12 +21,14 @@ import type { Vendor } from './vendors';
 
 /**
  * The places whose drawing is not their old section as it is: the prompts section split in two (E4.1), the features that
- * pick from the catalog (E4.2), and the Review roles tab folded in (E4.3).
+ * pick from the catalog (E4.2), the Review roles tab folded in (E4.3), and Chat (E4.6b).
  */
 const SPLIT: Readonly<Record<string, (state: PanelState) => string>> = {
   'reviews/commands': (state) => (state.commands === undefined ? '<p class="hint">Reading the commands…</p>' : commandsEmbedded(state.commands)),
   'reviews/roles': (state) => (state.roles === undefined ? '<p class="hint">Reading the roles…</p>' : rolesEmbedded(state.roles, state.settings.roleEnabled)),
   'reviews/stages': (state) => promptsBody(state, 'stages'),
+  // Chat, drawn from the rows ticked Chat with the prompt presets inline (E4.6b).
+  chat: chatTabHtml,
   'reviews/prompts': (state) => promptsBody(state, 'prompts'),
   'consultants/consultant': (state) => consultantSection(state, consultantPicksHtml(state.settings.consult, state.catalogRows ?? state.vendors)),
   'consultants/qconsult': (state) => questionConsultantSection(state, state.catalogRows ?? state.vendors),

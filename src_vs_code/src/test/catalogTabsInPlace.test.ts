@@ -23,9 +23,10 @@ function paneOf(state: PanelState, place: string): PageNode {
 /**
  * The old sections that move as they are: every Settings section but the reviewers (now Models), the prompts (split),
  * the keys (counted over every row), and the three that pick from the catalog since E4.2 — the consultant, the question
- * consultant and the Security lane (consultantPicks, qconsultRowPicks and securityPicks tests).
+ * consultant and the Security lane (consultantPicks, qconsultRowPicks and securityPicks tests) — and Chat, drawn from the
+ * rows ticked Chat with its prompt presets inline since E4.6b (chatOnTheNewPage.test.ts).
  */
-const PICKING = ['consultant', 'questionconsultant', 'securityLane'];
+const PICKING = ['consultant', 'questionconsultant', 'securityLane', 'chat'];
 const MOVED_WHOLE = PANEL_SECTIONS.filter((spec) => spec.surface === 'settings' && !['reviewers', 'prompts', 'keys', ...PICKING].includes(spec.id));
 
 test('every old section that moves whole is drawn in its place, by its own builder', () => {

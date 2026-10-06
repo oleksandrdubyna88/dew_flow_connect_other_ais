@@ -57,7 +57,10 @@ test('every setting control of a moved section writes on the new page exactly wh
   const keys = keysOf(runPanel(state, { html: current }).controls)
     .filter((key) => !key.includes('"vendor"') && !key.includes('"caller"') && !key.includes('"securityField":"pair:')
       // A role's one switch is on Roles & prompts (E4.3, rolesOnTheNewPage.test.ts): Stages draws no tick of its own.
-      && !key.includes('"setting":"roleEnabled"'));
+      && !key.includes('"setting":"roleEnabled"')
+      // The model a chat opens on is a radio per row on Chat (E4.6b, chatOnTheNewPage.test.ts), posted as the presets' own
+      // main edit, which sets the chat model and clears a stale model name: neither select is drawn there.
+      && !key.includes('"setting":"chatModel"') && !key.includes('"setting":"chatModelName"'));
   assert.ok(keys.length > 40, `the sweep found only ${keys.length} controls — the harness no longer reads the page`);
 
   const before = writesOn(current, keys);

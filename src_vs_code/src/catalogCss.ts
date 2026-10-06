@@ -63,7 +63,21 @@ const SHELL = `
   .commands-embed button { width: auto; margin: 6px 6px 0 0; }
   .commands-embed .note, .commands-embed .lead { color: var(--muted); }
   .commands-embed .badge { font-size: 0.8em; color: var(--link); }
-  .roles-embed button.remove, .roles-embed button.restore, .commands-embed button.remove {
+  /* Chat (E4.6b): the opening model's blocks and the prompt presets, scoped like the commands. */
+  .chat-embed .block { border-left: 3px solid var(--border-strong); padding: 6px 10px; margin: 8px 0; background: var(--card); }
+  .chat-embed .block label.inline { display: flex; gap: 8px; align-items: baseline; justify-content: flex-start; }
+  .chat-embed .block label.inline .hint { flex-basis: auto; }
+  .chat-embed .block label.field { display: block; margin-top: 6px; }
+  .chat-embed .block label.field > span { display: block; margin-bottom: 2px; color: var(--muted); }
+  .chat-embed .block.stranded { border-left-color: var(--vscode-editorWarning-foreground, var(--link)); }
+  .chat-embed .preset { border-left: 3px solid var(--link); padding: 6px 10px; margin: 8px 0; background: var(--card); }
+  .chat-embed .preset .head { display: flex; gap: 8px; align-items: center; margin-bottom: 6px; }
+  .chat-embed .preset .head input[type="text"] { flex: 1 1 12rem; min-width: 0; width: auto; }
+  .chat-embed textarea { width: 100%; box-sizing: border-box; resize: vertical; }
+  .chat-embed button { width: auto; margin: 6px 6px 0 0; }
+  .chat-embed .preset .head button { margin: 0; }
+  .chat-embed .note, .chat-embed .lead { color: var(--muted); }
+  .roles-embed button.remove, .roles-embed button.restore, .commands-embed button.remove, .chat-embed button.remove {
     background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground);
   }
   .catalog .used-by button.link {

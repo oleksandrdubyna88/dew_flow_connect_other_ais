@@ -687,7 +687,7 @@
       "count": 16
     },
     "max-lines-per-function": {
-      "count": 6
+      "count": 5
     }
   },
   "src/phrasesEdit.ts": {
