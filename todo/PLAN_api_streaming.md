@@ -136,3 +136,12 @@ person may turn on, not a qwen repair, and the card's "?" says so.
 - [ ] The switch is on the new page's model card only.
 - [ ] One live streamed call measured and kept as a fixture; the plan says which vendor and which model.
 - [ ] The four `research/module_*.md` files updated; this plan promoted with `IMPLEMENTED <date>` and its deviations.
+
+## Progress
+
+- **Steps 1–2 built 2026-10-06** (`core/Api/SseEvents.cs`, `core/Api/StreamAssembler.cs`, `src/Api/StreamedBody.cs`;
+  `ApiTurn.Stream`, `ChatRequest.Body(..., streamed)`, the `--ask-api --stream on` branch). One deviation from S5: a
+  failure reported inside a 200 stream exits **70**, not 75 — the retry ladder decides from the quoted vendor text
+  (`RateLimit.Hit` reads stderr at any non-zero exit), so a separate code bought nothing; the note says "inside its
+  HTTP 200" and quotes the error. The stub (`ApiEndpointStub`) serves chunked `text/event-stream` and can drop the
+  connection mid-answer.

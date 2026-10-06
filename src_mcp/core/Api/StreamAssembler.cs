@@ -59,6 +59,9 @@ public sealed class StreamAssembler
     private string _id = string.Empty;
     private string _model = string.Empty;
 
+    /// <summary>How much answer has arrived so far — what the reader caps (the answer, never the stream around it).</summary>
+    public long ContentChars => _content.Length;
+
     /// <summary>One <c>data</c> payload.</summary>
     public void Add(string payload)
     {

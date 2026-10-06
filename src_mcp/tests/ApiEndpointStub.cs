@@ -25,7 +25,17 @@ internal sealed class ApiEndpointStub : IDisposable
         public string Header(string name) => Headers is not null && Headers.TryGetValue(name, out var value) ? value : string.Empty;
     }
 
-    internal sealed record Answer(int Status, string Body, IReadOnlyDictionary<string, string>? Headers = null);
+    /// <param name="ContentType">The answer's media type — <c>text/event-stream</c> for a streamed one.</param>
+    /// <param name="Chunks">When set, the body is sent as these pieces, each flushed on its own, with no length declared —
+    /// a stream (todo/PLAN_api_streaming.md); <see cref="Body"/> is then unused.</param>
+    /// <param name="Drop">After the chunks, abort the connection instead of closing it: a stream cut mid-answer.</param>
+    internal sealed record Answer(
+        int Status,
+        string Body,
+        IReadOnlyDictionary<string, string>? Headers = null,
+        string ContentType = "application/json",
+        IReadOnlyList<byte[]>? Chunks = null,
+        bool Drop = false);
 
     private readonly HttpListener _server;
     private readonly List<Seen> _seen = [];
@@ -137,17 +147,24 @@ internal sealed class ApiEndpointStub : IDisposable
         try
         {
             var answer = Answers(seen);
-            var bytes = Encoding.UTF8.GetBytes(answer.Body);
             context.Response.StatusCode = answer.Status;
-            context.Response.ContentType = "application/json";
+            context.Response.ContentType = answer.ContentType;
             foreach (var (name, value) in answer.Headers ?? new Dictionary<string, string>())
             {
                 context.Response.Headers[name] = value;
             }
 
-            context.Response.ContentLength64 = bytes.Length;
-            await context.Response.OutputStream.WriteAsync(bytes);
-            context.Response.Close();
+            if (answer.Chunks is { } chunks)
+            {
+                await StreamedAsync(context, chunks, answer.Drop);
+            }
+            else
+            {
+                var bytes = Encoding.UTF8.GetBytes(answer.Body);
+                context.Response.ContentLength64 = bytes.Length;
+                await context.Response.OutputStream.WriteAsync(bytes);
+                context.Response.Close();
+            }
             Noted($"{seen.Method} {seen.Path} -> {answer.Status}");
         }
         catch (Exception e)
@@ -160,6 +177,26 @@ internal sealed class ApiEndpointStub : IDisposable
             catch (Exception torn) when (torn is not OutOfMemoryException)
             {
             }
+        }
+    }
+
+    /// <summary>The body in pieces, each flushed, no length declared; closed — or aborted mid-answer when asked.</summary>
+    private static async Task StreamedAsync(HttpListenerContext context, IReadOnlyList<byte[]> chunks, bool drop)
+    {
+        context.Response.SendChunked = true;
+        foreach (var chunk in chunks)
+        {
+            await context.Response.OutputStream.WriteAsync(chunk);
+            await context.Response.OutputStream.FlushAsync();
+        }
+
+        if (drop)
+        {
+            context.Response.Abort();
+        }
+        else
+        {
+            context.Response.Close();
         }
     }
 

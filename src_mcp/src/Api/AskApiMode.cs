@@ -49,6 +49,12 @@ internal static class AskApiMode
     /// </summary>
     internal const int MaxAnswerBytes = 8 * 1024 * 1024;
 
+    /// <summary>
+    /// The longest one line of a stream may be. A chunk is a few hundred bytes; a line past this is a body with no line
+    /// ends, refused rather than held (todo/PLAN_api_streaming.md).
+    /// </summary>
+    internal const int MaxStreamLineChars = 1024 * 1024;
+
     private const string Mode = "--ask-api";
 
     internal static async Task<int> RunAsync(
@@ -91,7 +97,9 @@ internal static class AskApiMode
             deadline,
             flags.GetValueOrDefault("--conversation", string.Empty).Trim(),
             // Absent is on: the switch is spelled only when a row turned thinking OFF on a module that has one.
-            ThinkingOn: !string.Equals(flags.GetValueOrDefault("--thinking", "on").Trim(), "off", StringComparison.OrdinalIgnoreCase));
+            ThinkingOn: !string.Equals(flags.GetValueOrDefault("--thinking", "on").Trim(), "off", StringComparison.OrdinalIgnoreCase),
+            // Absent is off: a row asks for a stream only when a person switched it on (todo/PLAN_api_streaming.md).
+            Stream: string.Equals(flags.GetValueOrDefault("--stream", "off").Trim(), "on", StringComparison.OrdinalIgnoreCase));
 
         try
         {
@@ -165,6 +173,11 @@ internal static class AskApiMode
         // client's Timeout stops covering the read, which is why the same deadline rides on a token.
         using var deadline = new CancellationTokenSource(ask.Deadline);
         using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
+        if (ask.Stream && IsEventStream(response))
+        {
+            return await StreamedAsync(ask, response, deadline.Token, note, output);
+        }
+
         if (await BoundedBody.ReadAsync(response.Content, MaxAnswerBytes, deadline.Token) is not { } text)
         {
             note($"the API at {ask.Endpoint} answered more than {MaxAnswerBytes / (1024 * 1024)} MiB — refused, not read past the ceiling");
@@ -192,7 +205,7 @@ internal static class AskApiMode
         try
         {
             return ask.Vendor.RequestBody(
-                new ApiTurn(ask.Model, prompt, schema, LocalAsk.SeedFor(prompt), ask.ReasoningEffort, ask.MaxTokens, ask.ThinkingOn));
+                new ApiTurn(ask.Model, prompt, schema, LocalAsk.SeedFor(prompt), ask.ReasoningEffort, ask.MaxTokens, ask.ThinkingOn, ask.Stream));
         }
         catch (System.Text.Json.JsonException ex)
         {
@@ -240,6 +253,13 @@ internal static class AskApiMode
         // because this mode never speaks the protocol. `tokensCached` rides along for the follow-up
         // turns of a feature review (D25): the vendor's own cached-prefix count, zero when it reported none.
         await output.WriteLineAsync(UsageLine(answer.Usage));
+
+        return await KeptAsync(ask, answer, text, note);
+    }
+
+    /// <summary>A read answer, judged: no content, a cut fragment, or the answer written to the out file.</summary>
+    private static async Task<int> KeptAsync(Ask ask, ChatAnswer answer, string text, Action<string> note)
+    {
         if (answer.Content is null)
         {
             note($"the API at {ask.Endpoint} returned no message content{Thinking(answer)}: {Quoted(text)}");
@@ -296,6 +316,57 @@ internal static class AskApiMode
     /// generated (reasoning included, wherever the vendor filed it); <c>tokensReasoning</c> is the
     /// reasoning share for the record.
     /// </remarks>
+    /// <summary>Whether the answer is a stream — decided by what was ANSWERED, not by what was asked: a gateway that
+    /// ignores <c>stream</c> answers one JSON, which is read whole as always.</summary>
+    private static bool IsEventStream(HttpResponseMessage response) =>
+        response.IsSuccessStatusCode
+        && string.Equals(response.Content.Headers.ContentType?.MediaType, "text/event-stream", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// A streamed answer (todo/PLAN_api_streaming.md, S4 and S5): read, assembled into the one answer shape, and its usage
+    /// line printed FIRST however it ended — the last usage the stream carried, or "not captured", never a zero for a
+    /// generation the vendor billed. Then the exit: the answer judged as any other; a failure the stream reported inside
+    /// its 200, quoted so the retry rule reads the vendor's words; a stream that stopped before its answer finished.
+    /// </summary>
+    private static async Task<int> StreamedAsync(Ask ask, HttpResponseMessage response, CancellationToken token, Action<string> note, TextWriter output)
+    {
+        var read = await StreamedBody.ReadAsync(response.Content, MaxAnswerBytes, MaxStreamLineChars, token);
+        var answer = ask.Vendor.ReadAnswer(read.Outcome.Completion);
+        await output.WriteLineAsync(UsageLine(answer.Usage));
+        if (read.Stop != StreamStop.Ended)
+        {
+            return Stopped(ask, read, note);
+        }
+
+        return read.Outcome.End switch
+        {
+            StreamEnd.Failed => Said(note, $"the stream from {ask.Endpoint} reported a failure inside its HTTP 200: {Quoted(read.Outcome.ErrorText)}", Failed),
+            StreamEnd.Broken => Said(note, $"the stream from {ask.Endpoint} ended before the answer finished ({Arrived(read.Outcome)})", Unavailable),
+            _ => await KeptAsync(ask, answer, read.Outcome.Completion, note),
+        };
+    }
+
+    /// <summary>A stream whose reading stopped early: a ceiling, a drop or the deadline — each said with how far it got.</summary>
+    private static int Stopped(Ask ask, StreamRead read, Action<string> note) => read.Stop switch
+    {
+        StreamStop.Capped => Said(note, $"the API at {ask.Endpoint} streamed more than {MaxAnswerBytes / (1024 * 1024)} Mi characters of answer — refused, not read past the ceiling", Failed),
+        StreamStop.LineTooLong => Said(note, $"the API at {ask.Endpoint} sent a stream line longer than {MaxStreamLineChars / (1024 * 1024)} Mi characters — not a stream; refused", Failed),
+        StreamStop.TimedOut => Said(note, $"the API at {ask.Endpoint} did not finish in time — the {ask.Deadline.TotalSeconds:F0}s this reviewer was given ran out mid-stream ({Arrived(read.Outcome)}). "
+            + "Give it more time (COAI_REVIEWER_TIMEOUT_MINUTES) or a smaller prompt (the Fast context).", Unavailable),
+        _ => Said(note, $"the stream from {ask.Endpoint} ended before the answer finished — the connection dropped ({Arrived(read.Outcome)})", Unavailable),
+    };
+
+    /// <summary>How much had arrived: what tells a model that was still thinking from one that was writing.</summary>
+    private static string Arrived(StreamOutcome outcome) =>
+        $"{outcome.ContentChars} characters of answer and {outcome.ReasoningChars} of reasoning had arrived";
+
+    private static int Said(Action<string> note, string text, int exit)
+    {
+        note(text);
+
+        return exit;
+    }
+
     internal static string UsageLine(Usage usage) =>
         "{" + $"\"tokensIn\":{usage.TokensIn},\"tokensOut\":{usage.TokensOut},\"tokensCached\":{usage.TokensCached},\"tokensReasoning\":{usage.TokensReasoning}"
         // The vendor answered and said nothing about what the call consumed: the parent records it as unknown.
@@ -342,6 +413,7 @@ internal static class AskApiMode
     /// <param name="Vendor">The module that spells the request, reads the answer and classifies a refusal.</param>
     /// <param name="Conversation">The reviewer's conversation key for the module's cache-routing header; empty sends none.</param>
     /// <param name="ThinkingOn">Whether the model thinks; off only on a module with a switch, and only when a row said so.</param>
+    /// <param name="Stream">Whether the answer is asked for as a stream (todo/PLAN_api_streaming.md).</param>
     private sealed record Ask(
         string Row,
         string Endpoint,
@@ -354,5 +426,6 @@ internal static class AskApiMode
         int MaxTokens,
         TimeSpan Deadline,
         string Conversation = "",
-        bool ThinkingOn = true);
+        bool ThinkingOn = true,
+        bool Stream = false);
 }
