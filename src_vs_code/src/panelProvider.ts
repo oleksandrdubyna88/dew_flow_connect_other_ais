@@ -1272,7 +1272,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
       // would only invite somebody to add them to it one day and split the one reader in two. The
       // door, not `config.get`: `chatModel` and `chatModelPresets` are model keys, which a
       // workspace may not set (`modelKeys.ts`).
-      chat: chatSettingsFrom(userLayer(config)),
+      // This side's: the chat model and its name are per side (E4.6a, D8).
+      chat: chatSettingsFrom(this.read(config)),
       // Straight from the configuration for the same reason, and read HERE rather than inside the
       // section, so the markup the paint key is built from changes with it.
       phrases: this.phrases(),

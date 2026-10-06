@@ -46,9 +46,17 @@ function preferredOf(layer: CatalogLayer): readonly MovedPreset[] {
 /** The rows, the record, and — in the user layer — the model the chat opens on. */
 function stepOf(layer: CatalogLayer, moved: ChatMove): ChatStep {
   const added = moved.record.slice(movedRecordFrom(layer.chatPresetsMoved).length);
-  const chatKeys = layer.side === true ? [] : opensOn(layer, added, moved.main);
+  const chatKeys = ownsChatModel(layer) ? opensOn(layer, added, moved.main) : [];
 
   return { rows: moved.rows, writes: [{ key: 'chatPresetsMoved', value: moved.record }, ...chatKeys], changed: true };
+}
+
+/**
+ * Whether this layer holds the chat model it opens on: the user layer always; a side only when its overlay keeps one of
+ * its own (`chatModel` is per side, D8) — a side that reads the user layer's is never handed one.
+ */
+function ownsChatModel(layer: CatalogLayer): boolean {
+  return layer.side !== true || layer.chatModel !== undefined;
 }
 
 /**

@@ -99,3 +99,12 @@ test('a chat row an older build wrote back without its uses gets its chat tick b
 
   assert.deepEqual((written(all, 'vendors') as readonly Record<string, unknown>[]).at(-1)!['uses'], ['chat']);
 });
+
+test('a side that keeps its own chat model has it remapped too — the user layer\'s is never written from a side', () => {
+  const ownRows = DEFAULT_VENDORS.map((row) => ({ ...row }));
+  const side = writes({ side: true, chatPresets: [preset('a'), preset('b')], vendors: ownRows, chatModel: 'b' });
+  assert.equal(written(side, 'chatModel'), 'chat-b', 'the side would open on the first model, silently');
+
+  const noModel = writes({ side: true, chatPresets: [preset('a', { main: true })], vendors: ownRows });
+  assert.ok(!noModel.some((one) => one.key === 'chatModel' || one.key === 'chatModelName'), 'a side that holds no chat model of its own was given one');
+});

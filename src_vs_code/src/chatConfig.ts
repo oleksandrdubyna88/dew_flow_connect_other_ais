@@ -145,8 +145,11 @@ export function bindChatSide(context: vscode.ExtensionContext): void {
   chatSide = context;
 }
 
-/** This side's reader once the extension bound its window; the user layer before that (a test drives no activation). */
-function sideRead(config: vscode.WorkspaceConfiguration): ConfigReader {
+/**
+ * This side's reader once the extension bound its window — the chat's model and its name are per side (D8) — and the
+ * user layer before that (a test drives no activation).
+ */
+export function chatRead(config: vscode.WorkspaceConfiguration): ConfigReader {
   return chatSide === undefined ? userLayer(config) : readerFor(chatSide, config);
 }
 
@@ -155,7 +158,7 @@ function sideRead(config: vscode.WorkspaceConfiguration): ConfigReader {
  * the move has not taken it (`chatCatalogModels.ts`). Every chat path reads its models here, so it is the one switch.
  */
 export function savedModels(config: vscode.WorkspaceConfiguration): readonly ModelPreset[] {
-  const read = sideRead(config);
+  const read = chatRead(config);
 
   return chatModelsOf(chatModelPresetsFrom(userLayer(config)('chatModelPresets')), vendorsFrom(read('vendors')), movedRecordFrom(read('chatPresetsMoved')));
 }

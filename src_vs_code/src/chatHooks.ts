@@ -11,7 +11,7 @@ import { switchAccess } from './chatAccess';
 import { freshStart } from './chatArchive';
 import { resolveAndPin } from './chatSessionJoin';
 import { ModelPreset } from './chatPresets';
-import { savedModels, savedPrompts, taskOf } from './chatConfig';
+import { chatRead, savedModels, savedPrompts, taskOf } from './chatConfig';
 import { chatInstruction, instructedBox, type TypedText } from './chatPrompt';
 import { chatSettingsFrom } from './chatSettings';
 import { carriedFrom, carryMark } from './chatCarry';
@@ -26,7 +26,6 @@ import { createChatPanel, pushChatCopied, pushChatDraft, setChatDraft } from './
 import { notify } from './notify';
 import { retire } from './retireSession';
 import { withdraw } from './chatQueue';
-import { userLayer } from './sideConfig';
 
 /**
  * Everything a chat page can ask of the host, and the three writers that put words in its composer.
@@ -158,7 +157,7 @@ function chooseModel(
 function instructionOf(thread: Thread, config: vscode.WorkspaceConfiguration): string {
   return chatInstruction(
     thread.role,
-    taskOf(config, thread.promptId, chatSettingsFrom(userLayer(config)).prompt),
+    taskOf(config, thread.promptId, chatSettingsFrom(chatRead(config)).prompt),
   );
 }
 

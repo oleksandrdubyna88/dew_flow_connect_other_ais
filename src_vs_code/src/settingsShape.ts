@@ -316,6 +316,8 @@ export const OVERLAID_SETTINGS: readonly string[] = [
   'bugzModel', 'bugzServer',
   // Which chat presets this side's catalog moved (E4.6a) — beside its `vendors`, which hold the rows they became.
   'chatPresetsMoved',
+  // Which chat model this side opens on, and its model name (D8: chat models are per side) — they name this side's rows.
+  'chatModel', 'chatModelName',
   // Which consultant answers is a property of the WORK, not of the person reading the panel — two
   // sides of one machine serving two companies want their own, like every other row above. Spread
   // rather than listed, so adding a sixth consult setting cannot leave it silently shared.
