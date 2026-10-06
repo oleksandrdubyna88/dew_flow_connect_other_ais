@@ -59,13 +59,13 @@ function isMoved(value: unknown): value is MovedPreset {
 }
 
 /** Whether a preset is the one an entry recorded — the same id, and still the same model under it. */
-function recorded(preset: ModelPreset, record: readonly MovedPreset[]): boolean {
+export function wasMoved(preset: ModelPreset, record: readonly MovedPreset[]): boolean {
   return record.some((one) => one.presetId === preset.id && one.runtime === preset.runtime && one.model === preset.model && one.name === preset.name);
 }
 
 /** Every preset the record does not hold yet becomes its own row, in the presets' order. */
 export function chatMove(input: ChatMoveInput): ChatMove {
-  const due = input.presets.filter((preset) => !recorded(preset, input.record));
+  const due = input.presets.filter((preset) => !wasMoved(preset, input.record));
 
   const preferred = input.preferred ?? [];
 
@@ -81,7 +81,7 @@ function rowIdFor(preset: ModelPreset, taken: ReadonlySet<string>, preferred: re
 
 /** The row id another layer gave this preset — '' when it gave none. */
 function preferredId(preset: ModelPreset, preferred: readonly MovedPreset[]): string {
-  return preferred.find((one) => recorded(preset, [one]))?.rowId ?? '';
+  return preferred.find((one) => wasMoved(preset, [one]))?.rowId ?? '';
 }
 
 /** `chat-<the preset's id, normalised>` — `chat-model` for an id with nothing left once normalised. */

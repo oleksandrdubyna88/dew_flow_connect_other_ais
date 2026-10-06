@@ -20,8 +20,11 @@ import { ChatModelChoice } from './chatContracts';
 import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './chatDiscovery';
 import { teamServersFrom } from './teamServers';
 import { chatRuntimeRefusal } from './cliChatLaunch';
-import { Vendor } from './vendors';
-import { userLayer } from './sideConfig';
+import { Vendor, vendorsFrom } from './vendors';
+import { readerFor, userLayer } from './sideConfig';
+import type { ConfigReader } from './settingsShape';
+import { chatModelsOf } from './chatCatalogModels';
+import { movedRecordFrom } from './chatPresetMove';
 
 /**
  * What the chat reads out of the settings, and the host it reads the panel's discoveries on.
@@ -135,8 +138,26 @@ export function savedPrompts(config: vscode.WorkspaceConfiguration): readonly Pr
   );
 }
 
+/** The window this extension runs in — which side's rows the chat reads (E4.6a). Bound at activation. */
+let chatSide: vscode.ExtensionContext | undefined;
+
+export function bindChatSide(context: vscode.ExtensionContext): void {
+  chatSide = context;
+}
+
+/** This side's reader once the extension bound its window; the user layer before that (a test drives no activation). */
+function sideRead(config: vscode.WorkspaceConfiguration): ConfigReader {
+  return chatSide === undefined ? userLayer(config) : readerFor(chatSide, config);
+}
+
+/**
+ * The chat's models (PLAN_one_model_catalog.md E4.6a): this side's catalog rows ticked Chat, and a preset only while
+ * the move has not taken it (`chatCatalogModels.ts`). Every chat path reads its models here, so it is the one switch.
+ */
 export function savedModels(config: vscode.WorkspaceConfiguration): readonly ModelPreset[] {
-  return chatModelPresetsFrom(userLayer(config)('chatModelPresets'));
+  const read = sideRead(config);
+
+  return chatModelsOf(chatModelPresetsFrom(userLayer(config)('chatModelPresets')), vendorsFrom(read('vendors')), movedRecordFrom(read('chatPresetsMoved')));
 }
 
 /**

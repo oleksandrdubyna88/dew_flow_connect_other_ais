@@ -11,7 +11,8 @@ import { chatSettingsFrom, clearedByWriting } from './chatSettings';
 import { phrasesFrom, type Phrase } from './phrases';
 import { chatForgetKey, rememberedChat } from './chatSpendRows';
 import { phraseCopier } from './phraseCopy';
-import { chatModelPresetsFrom, vendorOfPreset } from './chatPresets';
+import { chatModelPresetsFrom, vendorOfPreset, type ModelPreset } from './chatPresets';
+import { savedModels } from './chatConfig';
 import { anyHeld, paintEach, SurfaceSlot } from './surfaceSlot';
 import { chooseSettingsTab, heldSettingsTab, setSettingsPreview, settingsPreviewOn, type SettingsHost } from './settingsPanel';
 import { catalogHtml, catalogKey } from './catalogPage';
@@ -1444,7 +1445,7 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
     // chat card read "no rate set for this model" for a model the published table prices perfectly
     // well. The two lists are asked the same question and answered from the same table.
     // (CodeRabbit, PR #209.)
-    const presets = chatModelPresetsFrom(userLayer(vscode.workspace.getConfiguration('coai'))('chatModelPresets'));
+    const presets = chatModelsAndPresets();
     const wanted = [...vendors.map((one) => one.model), ...presets.map((one) => one.model)];
     // An empty model is "the CLI's default" — we do not know which model that is, so the book does not
     // guess and answers nothing for it.
@@ -1571,9 +1572,8 @@ export class PanelProvider implements vscode.WebviewViewProvider, SettingsHost {
    */
   private async chatLedgers(): Promise<ChatLedgers> {
     const marks = this.chatForgottenBefore();
-    const vendorOf = vendorOfPreset(chatModelPresetsFrom(
-      userLayer(vscode.workspace.getConfiguration('coai'))('chatModelPresets'),
-    ));
+    // An old line names a PRESET id, a line written since the move names a ROW id (E4.6a): both resolve to their vendor.
+    const vendorOf = vendorOfPreset(chatModelsAndPresets());
 
     return {
       turns: rememberedChat(await this.chatLines(), marks, vendorOf),
@@ -4558,6 +4558,16 @@ async function openInsideWorkspace(file: string, line: number): Promise<void> {
   if (inside.ok) {
     await showCurrentFile(inside.path, line);
   }
+}
+
+/**
+ * The chat's models AND every preset, moved or not (E4.6a): what the price book and the spend ledgers resolve against —
+ * a line written before the move names a preset id, one written since names a row id, and both must find their vendor.
+ */
+function chatModelsAndPresets(): readonly ModelPreset[] {
+  const config = vscode.workspace.getConfiguration('coai');
+
+  return [...savedModels(config), ...chatModelPresetsFrom(userLayer(config)('chatModelPresets'))];
 }
 
 /**

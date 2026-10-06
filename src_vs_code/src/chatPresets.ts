@@ -91,6 +91,11 @@ export interface ModelPreset {
   readonly teamServerId?: string | undefined;
   /** For a `remote` preset: the vendor name THAT SERVER knows — `codex`, not the preset's own id. */
   readonly remoteVendor?: string | undefined;
+  /**
+   * The vault key a model read from a catalog row is filed under (PLAN_one_model_catalog.md E4.6a): a moved preset's row
+   * keeps its key under the preset's old id. Absent = the id, as a preset always was.
+   */
+  readonly vaultKeyName?: string | undefined;
 }
 
 
@@ -461,6 +466,7 @@ export function chatRunSpec(preset: ModelPreset): Vendor {
     pricePerMillionOut: 0,
     ...(preset.teamServerId !== undefined ? { teamServerId: preset.teamServerId } : {}),
     ...(preset.remoteVendor !== undefined ? { remoteVendor: preset.remoteVendor } : {}),
+    ...(preset.vaultKeyName !== undefined ? { vaultKeyName: preset.vaultKeyName } : {}),
   };
 }
 

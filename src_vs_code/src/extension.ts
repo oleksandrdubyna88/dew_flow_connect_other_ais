@@ -15,6 +15,7 @@ import { openPhrases } from './phrasesPanel';
 import { openRoles } from './rolesPanel';
 import { bindRoles } from './rolesHost';
 import { bindCommands } from './commandsHost';
+import { bindChatSide } from './chatConfig';
 import { openCommands } from './commandsPanel';
 import { registerConfigTransfer } from './configTransferCommands';
 import { ChatPanels } from './chatPanels';
@@ -105,6 +106,8 @@ export function activate(context: vscode.ExtensionContext): void {
   // roles tab, and either can be the first (PLAN_one_model_catalog.md E4.3).
   bindRoles(context);
   bindCommands(context);
+  // The chat reads this side's catalog rows (E4.6a).
+  bindChatSide(context);
   // A model-bearing setting a workspace or folder tried to set is not applied (`modelKeys.ts`); say so
   // once per window, so a team setup in `.vscode/settings.json` is not lost without a word.
   noticeIgnoredWorkspaceModels(context, vscode.workspace.getConfiguration('coai'));
