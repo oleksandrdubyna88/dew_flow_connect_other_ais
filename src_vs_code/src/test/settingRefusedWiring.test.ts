@@ -73,7 +73,9 @@ test('every host that saves a setting reports the refusal, because saveSetting n
   // The roles page's and the commands page's writes moved, with their `reportRefusal`, into `rolesHost.ts` and
   // `commandsHost.ts`, which both pages that edit them call (PLAN_one_model_catalog.md E4.3, E4.4).
   const callers = ['phrasesPanel.ts', 'rolesHost.ts', 'panelProvider.ts', 'dataCommands.ts',
-    'roleDeletionsHost.ts', 'commandsHost.ts'];
+    'roleDeletionsHost.ts', 'commandsHost.ts',
+    // The chat presets page's model edits go to the catalog's rows and this side's chat model since E4.6a.
+    'chatPresetsPanel.ts'];
   for (const file of callers) {
     assert.match(
       source(file),

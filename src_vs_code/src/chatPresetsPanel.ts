@@ -4,16 +4,18 @@ import { DISCOVERY_KEY, EMPTY_DISCOVERY, catalogUsing, discoveryFrom } from './c
 import {
   ModelPreset,
   PromptPreset,
-  chatModelPresetsFrom,
   chatPromptPresetsFrom,
   ChatVendorChoice,
   chatRunSpec,
   freshPromptRow,
-  modelRowsAfterAdd,
   rowsAfterMain,
   deadModelRow,
   unreadableModels,
 } from './chatPresets';
+import { chatRead, savedModels } from './chatConfig';
+import { chatModelAdd, chatModelEdit, type ChatModelStores, type ChatModelWrite } from './chatModelEdits';
+import { inCatalogTurn } from './catalogMigrationHost';
+import { reportRefusal, saveSetting } from './sideConfig';
 import { PresetCommand, chatPresetsHtml, editRepaints, editedRows, presetEdit } from './chatPresetsPage';
 import { isTextControl } from './textControls';
 import { applyTextControl, pushTextControlsTo } from './textControlsHost';
@@ -56,8 +58,51 @@ function prompts(): readonly PromptPreset[] {
   return chatPromptPresetsFrom(config().get(PROMPTS_KEY), typeof legacy === 'string' ? legacy : '');
 }
 
+/**
+ * The chat's models as the chat lists them (PLAN_one_model_catalog.md E4.6a): this side's rows ticked Chat, and a preset
+ * only while the move has not taken it — with MAIN shown on the model the chat opens on, `coai.chatModel`, since the
+ * catalog has no main of its own.
+ */
 function models(): readonly ModelPreset[] {
-  return chatModelPresetsFrom(config().get(MODELS_KEY));
+  const opensOn = chatRead(config())('chatModel');
+
+  return savedModels(config()).map((model) => (model.main || model.id !== opensOn ? model : { ...model, main: true }));
+}
+
+/** This side's raw catalog rows, the raw presets and the chat model — what a model edit reads (E4.6a). */
+function modelStores(): ChatModelStores {
+  const read = chatRead(config());
+  const rows = read('vendors');
+
+  return {
+    rows: Array.isArray(rows) ? rows.filter((row): row is Record<string, unknown> => typeof row === 'object' && row !== null) : [],
+    presets: rowsOf(MODELS_KEY),
+    chatModel: String(read('chatModel') ?? ''),
+  };
+}
+
+/**
+ * One model write, to the store it names: the catalog rows in the catalog's turn and through this side, the chat model
+ * through this side, a preset the move has not taken where presets have always been written.
+ */
+async function saveModelWrite(one: ChatModelWrite): Promise<void> {
+  if (one.key === 'chatModelPresets') {
+    await write(MODELS_KEY, one.value);
+
+    return;
+  }
+  const context = presetsContext;
+  if (context === undefined) {
+    throw new Error('the chat presets page saved a model before the extension bound it');
+  }
+  // A refusal is said — `saveSetting` throws it, so the one cure it has (a window that has not caught up with an update
+  // cannot store a key it never registered) is offered rather than lost in a log.
+  await (one.key === 'vendors'
+    ? inCatalogTurn(() => saveSetting(context, config(), one.key, one.value))
+    : saveSetting(context, config(), one.key, one.value)
+  ).catch((error: unknown) => {
+    reportRefusal(context, one.key, error, { ordinary: 'ConnectOtherAIs could not save that change to your chat models.' });
+  });
 }
 
 /** The rows a model preset may point at — the same list the chat's own picker offers. */
@@ -118,25 +163,23 @@ async function apply(command: PresetCommand): Promise<boolean> {
 
     return false;
   }
-  const key = command.kind === 'ignore' ? '' : (command.list === 'prompt' ? PROMPTS_KEY : MODELS_KEY);
+  if (command.kind !== 'ignore' && command.list === 'model') {
+    return command.kind === 'add' ? addModel() : applyModel(command);
+  }
   if (command.kind === 'add') {
-    const rows = key === PROMPTS_KEY ? promptRowsToWrite() : rowsOf(key);
-    if (command.list === 'prompt') {
-      await write(key, [...rows, freshPromptRow(rows as { id: string }[])]);
+    const rows = promptRowsToWrite();
+    await write(PROMPTS_KEY, [...rows, freshPromptRow(rows as { id: string }[])]);
 
-      return true;
-    }
-
-    return addModel(rows);
+    return true;
   }
   if (command.kind === 'remove') {
-    const rows = key === PROMPTS_KEY ? promptRowsToWrite() : rowsOf(key);
-    await write(key, rows.filter((row) => row['id'] !== command.id));
+    const rows = promptRowsToWrite();
+    await write(PROMPTS_KEY, rows.filter((row) => row['id'] !== command.id));
 
     return true;
   }
   if (command.kind === 'edit') {
-    const rows = key === PROMPTS_KEY ? promptRowsToWrite() : rowsOf(key);
+    const rows = promptRowsToWrite();
     // The `main` box is a rule of its own — exactly one, and the last one cannot be turned off —
     // so it is decided beside the reader that enforces the same thing, not in `edited`. BOTH lists
     // carry one now: the prompts' tick says which one a capture sends with, the models' says which
@@ -151,7 +194,7 @@ async function apply(command: PresetCommand): Promise<boolean> {
       // draw again — and a repaint would move a caret in some other row for an edit that did nothing.
       return false;
     }
-    await write(key, next);
+    await write(PROMPTS_KEY, next);
 
     // `editRepaints` decides, beside the message parser and tested with it. Typing must NOT repaint —
     // the caret is in a box somebody is writing in — and the `main` tick MUST, because its whole
@@ -160,6 +203,19 @@ async function apply(command: PresetCommand): Promise<boolean> {
   }
 
   return false;
+}
+
+/**
+ * A model edited in the ONE store it lives in (E4.6a) — its catalog row, or a preset the move has not taken. Answers
+ * whether the page repaints: a removal and the main tick do; typing does not.
+ */
+async function applyModel(command: Extract<PresetCommand, { kind: 'edit' | 'remove' }>): Promise<boolean> {
+  const writes = chatModelEdit(command, modelStores());
+  for (const one of writes) {
+    await saveModelWrite(one);
+  }
+
+  return writes.length > 0 && (command.kind === 'remove' || editRepaints(command));
 }
 
 function render(): void {
@@ -250,15 +306,13 @@ function openPanel(): void {
  * than one that says why it cannot. The dead rows an earlier build left behind go at the same time —
  * they are not drafts, because no surface has ever been able to show one.</p>
  */
-async function addModel(rows: readonly Record<string, unknown>[]): Promise<boolean> {
+async function addModel(): Promise<boolean> {
   const chosen = await askForAModel();
-  const written = chosen === undefined
-    ? undefined
-    : modelRowsAfterAdd(rows, chosen.vendor, chosen.model, chosen.name, chosen.startingPrompt);
-  if (written === undefined) {
+  if (chosen === undefined) {
     return false;
   }
-  await write(MODELS_KEY, written);
+  // A catalog row ticked Chat, never a preset (E4.6a): the chat reads its models from the catalog.
+  await saveModelWrite({ key: 'vendors', value: chatModelAdd(modelStores().rows, chosen.vendor, chosen.model, chosen.name, chosen.startingPrompt) });
 
   return true;
 }
