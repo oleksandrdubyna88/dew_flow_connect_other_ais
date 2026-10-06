@@ -710,6 +710,34 @@ row); the new page reads it. Done, RED first.
     reads: a ledger line under an old id lands in the row's spend row; a conversation restored by model id opens on
     the moved row.
 
+  **E4.6a revised by an independent design review (2026-10-06)** — the consultant is still switched off, so a reviewer
+  agent checked the design against the code (the risk consultation stays owed and runs before the merge). It changes:
+  - *The identity is a stored RECORD, never the row's key name.* `vaultKeyName` cannot be it: a deleted row would come
+    back on the next run, `vendorsFrom` lower-cases it (`vendors.ts:451-455`) so a mixed-case preset id would be moved
+    again on every run up to the cap, a positional `preset-N` shifts when an earlier preset is removed, Duplicate
+    copies it (`catalogCommands.ts:110`), and the current page's save rewrites it (`catalogLaunch.ts:43-53`). The
+    record `chatPresetsMoved` — `{ presetId, runtime, model, name, rowId }` per moved preset, a DECLARED setting,
+    overlaid per side like `vendors` — is what a run skips by; the fingerprint catches a positional shift (a preset
+    whose id is recorded but whose fingerprint differs is a different preset and is moved as such). A deleted row
+    stays deleted. `vaultKeyName` is still set to the old id when it is `normaliseId`-clean (the vault key keeps its
+    name) and left off otherwise; an id that normalises to nothing gets `chat-model`.
+  - *No dual store, ever:* E4.6a ships TOGETHER with the presets page reading and writing rows (its model half), and a
+    scan test refuses any write to `chatModelPresets` outside the move's restore. The chat reads the rows ticked Chat,
+    plus — only before a layer's first move, after a cap refusal, or in a restored layer — the presets the record
+    lacks. `chatModelPresets` joins `MIGRATION_TRIGGERS` (an import, a hand edit); `chatModel` does not.
+  - *Per side:* `chatModel` and `chatModelName` join `OVERLAID_SETTINGS` (D8: chat models are per side), so a row id
+    that differs between a side's `vendors` and the user layer's never leaves the chat opening on the first provider.
+    The step writes an overlay's chat rows only when that overlay keeps its own `vendors`.
+  - *MAIN:* the run that moves the main preset writes `chatModel` = its row AND `chatModelName` = its model (both backed
+    up) — a stale `chatModelName` would otherwise open a different model (`chatModels.ts:488-494`).
+  - *A downgrade:* an older build drops `uses` and keeps `vaultKeyName`; `repairUses` gives `chat` back to a row the
+    record names (it already repairs what a reference names).
+  - *A resumed conversation:* the record gains an optional `providerId` (absent = today; no format bump, as `access`
+    was added) and is resolved through the record, so two rows that offer one model name cannot swap a conversation's
+    model, system prompt or effort. A legacy record whose `modelId` is a preset id is mapped through the record too.
+  - *The ledger needs no row map:* spend rows and forget marks key on the vendor (runtime) and the model
+    (`chatSpendRows.ts:220-227`); old lines resolve their vendor through presets ∪ rows, and after E5 through the backup.
+
 **Build order:** E4.1 → E4.2 → E4.5 → E4.3 → E4.4 → E4.6. E4.5 comes before the folded pages because it touches no
 host-module seam, so it lands while E4.3's command shape settles.
 
