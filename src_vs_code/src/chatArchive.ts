@@ -73,7 +73,7 @@ type KeptByAReset =
   // session, and a reset's new session is never it — so the new conversation hears the row's instruction again (E4.6c).
   | 'session' | 'home' | 'instructed'
   // Deleted rather than assigned — see `UNSAVED` — and decided by whichever model answers next.
-  | 'savedMessages' | 'savedModelId' | 'savedCarryFrom' | 'savedAccess' | 'forgetful' | 'ourDraft';
+  | 'savedMessages' | 'savedModelId' | 'savedCarryFrom' | 'savedAccess' | 'savedProviderId' | 'forgetful' | 'ourDraft';
 
 /** Any field of a thread that a reset neither replaces nor has been told to keep. Must be none. */
 type Unclassified = Exclude<keyof Thread, keyof Freshened | KeptByAReset>;

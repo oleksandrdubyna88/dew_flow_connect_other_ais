@@ -92,7 +92,8 @@ test('the marks that say what the disk holds are DELETED, and all four of them a
   // write the new record at all — the tab saying one thing and the disk another until the next
   // question. They are deleted rather than emptied because the guard reads "never written" from
   // their ABSENCE and "written as this" from their value, and an empty array is a value.
-  assert.deepEqual([...UNSAVED], ['savedMessages', 'savedModelId', 'savedCarryFrom', 'savedAccess']);
+  // And the fifth, `savedProviderId`, since the record keeps the row it was spoken to (PLAN_one_model_catalog.md E4.6a).
+  assert.deepEqual([...UNSAVED], ['savedMessages', 'savedModelId', 'savedCarryFrom', 'savedAccess', 'savedProviderId']);
   // None of them is in the slate: setting them there would be the bug this constant exists to avoid.
   const slate: Record<string, unknown> = { ...freshened(FRESH, 1) };
   for (const mark of UNSAVED) {

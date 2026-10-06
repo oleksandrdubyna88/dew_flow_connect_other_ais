@@ -5,8 +5,8 @@ import { NEW_CONVERSATION } from '../chatAdapter';
 import { chatModelsOf } from '../chatCatalogModels';
 import { chatRunSpec } from '../chatPresets';
 import { rowInstructed } from '../chatPrompt';
-import type { ChatSession } from '../chatSession';
-import { hearsRowInstruction } from '../chatThread';
+import type { ChatSession, TurnResult } from '../chatSession';
+import { hearsRowInstruction, instructedAfter } from '../chatThread';
 import { sourceOf } from './sourceReading';
 import { remoteChatFor } from '../chatRemote';
 import { CLAUDE_ARGS, claudeAdapter } from '../claudeAdapter';
@@ -98,11 +98,25 @@ test('a session hears the instruction once; another session, or one that forgets
   assert.equal(hearsRowInstruction({ forgetful: true, instructed: a, session: a }), true, 'a Team server forgets each turn');
 });
 
-test('the send path instructs what it SENDS and marks the session — the transcript is not touched', () => {
-  // chatTurn.ts imports vscode, so its wiring is read; the two decisions it calls are tested above.
+test('a stopped, failed or restarted turn leaves the session un-instructed, so the next turn carries it again', () => {
+  // One session object outlives its process: a stop or a crash starts a new child on the SAME object. Marking it as
+  // instructed before the send dropped the row's system prompt for the rest of the conversation. (our own reviewer, E4.6.)
+  const a: ChatSession = { send: () => Promise.resolve({ ok: true, answer: '' }), stop: () => undefined, dispose: () => undefined };
+  const next = (result: TurnResult): boolean => hearsRowInstruction({ forgetful: false, instructed: instructedAfter(a, result), session: a });
+
+  assert.equal(next({ ok: true, answer: 'fine' }), false, 'a session that answered was told again');
+  assert.equal(next({ ok: false, failure: 'the person stopped it', stopped: true }), true, 'after a stop the next process never heard it');
+  assert.equal(next({ ok: false, failure: 'the CLI exited' }), true, 'after a failed turn the next process never heard it');
+  assert.equal(next({ ok: true, answer: 'fine', contextLost: true }), true, 'a turn answered by a new process left it unheard');
+});
+
+test('the send path instructs what it SENDS and marks the session only by the turn\'s result — the transcript is not touched', () => {
+  // chatTurn.ts imports vscode, so its wiring is read; the decisions it calls are tested above.
   const turn = sourceOf('chatTurn.ts');
 
-  assert.match(turn, /const instructing = hearsRowInstruction\(thread\);\s*thread\.instructed = thread\.session;/u);
-  assert.match(turn, /thread\.session\.send\(rowInstructed\(sent, answering\?\.systemPrompt \?\? '', instructing\)/u);
+  assert.match(turn, /const instructing = hearsRowInstruction\(thread\);/u);
+  assert.match(turn, /\.send\(rowInstructed\(sent, answering\?\.systemPrompt \?\? '', instructing\)/u);
+  assert.match(turn, /thread\.instructed = instructedAfter\(heard, result\);/u);
+  assert.doesNotMatch(turn, /thread\.instructed = thread\.session;/u, 'the session is marked before anything has heard it');
   assert.doesNotMatch(turn, /messages[^\n]*rowInstructed/u, 'the instruction was written into the transcript');
 });

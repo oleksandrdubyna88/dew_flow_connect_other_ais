@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ChatEntry } from './chatPanels';
-import { Thread, hearsRowInstruction, threads } from './chatThread';
+import { Thread, hearsRowInstruction, instructedAfter, threads } from './chatThread';
 import { answeredBy, asText, chatLanguage, pairOf, show } from './chatShow';
 import { cliFor, remoteFor, started } from './chatLaunch';
 import { retire } from './retireSession';
@@ -445,13 +445,15 @@ export async function oneTurn(
   // while a poll was in flight must not re-open the thinking line. (gemini, the code round.)
   // The row's system prompt goes with the first turn a session hears, and with every turn of one that forgets each (E4.6c,
   // D8) — in the text, as coai-mcp places it for a reviewer; what is shown stays what was typed.
+  // Marked by the turn's RESULT, never before it: a stop, a failure or a new process means nothing has heard it yet.
   const instructing = hearsRowInstruction(thread);
-  thread.instructed = thread.session;
-  const result = await thread.session.send(rowInstructed(sent, answering?.systemPrompt ?? '', instructing), (position) => {
+  const heard = thread.session;
+  const result = await heard.send(rowInstructed(sent, answering?.systemPrompt ?? '', instructing), (position) => {
     if (thread.running) {
       show(entry, true, '', position);
     }
   });
+  thread.instructed = instructedAfter(heard, result);
   if (!turnEnded(thread, mySlate)) {
     // THE SLATE WAS WIPED WHILE THIS TURN WAS IN FLIGHT. Not the same question as the generation
     // check above: a reset bumps the generation first and clears the conversation only once this

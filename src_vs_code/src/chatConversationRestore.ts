@@ -179,6 +179,8 @@ export function restoreConversation(
     access: saved.access ?? 'text',
     savedAccess: saved.access ?? 'text',
     providerId: ready.ok ? ready.providerId : restored.providerId,
+    // The row it opens on — so the first push after a reload writes nothing: a reload is not a use.
+    savedProviderId: ready.ok ? ready.providerId : restored.providerId,
     modelId: saved.modelId,
     // The MAIN prompt and the restored model's own role: a reloaded tab shows the same pressed
     // buttons a new one does, because the list is the configuration and a reload changes no part

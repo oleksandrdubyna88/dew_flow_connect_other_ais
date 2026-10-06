@@ -121,13 +121,15 @@ export function show(entry: ChatEntry, running: boolean, failure: string, queued
   if (thread.savedMessages === thread.messages
     && thread.savedModelId === thread.modelId
     && thread.savedCarryFrom === thread.carryFrom
-    && thread.savedAccess === thread.access) {
+    && thread.savedAccess === thread.access
+    && thread.savedProviderId === thread.providerId) {
     return;
   }
   thread.savedMessages = thread.messages;
   thread.savedModelId = thread.modelId;
   thread.savedCarryFrom = thread.carryFrom;
   thread.savedAccess = thread.access;
+  thread.savedProviderId = thread.providerId;
   // AND WHEN. Below the guard, so it records that something CHANGED rather than that a page redrew —
   // the picker orders its Open section by this, and a conversation nobody has spoken in must not
   // climb to the top of it because its tab repainted. See `Thread.usedAt`.

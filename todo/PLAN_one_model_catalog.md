@@ -831,7 +831,19 @@ row); the new page reads it. Done, RED first.
   `remoteAsk.ts`, `remoteChatSession.ts`, `chatRemote.ts`). As designed, with these notes:
   - *"The session that heard it"* is the session OBJECT (`Thread.instructed`), so every way a session is replaced — a
     switch, a reload, a reset (`chatArchive`'s partition classifies the field with `session`) — sends it again
-    without each path having to remember to.
+    without each path having to remember to. It is set by the turn's RESULT (`chatThread.instructedAfter`): one
+    session object outlives its process, so a stopped or failed turn, or one answered by a new process
+    (`contextLost`), leaves it unset and the next turn carries the instruction again.
+
+  **Own review of E4.6 (2026-10-06)** — two reviewer agents (correctness; conventions) while the coai consultant is
+  off; the owed consultations still run before the merge. Fixed, each with a RED test first:
+  - the instruction marker was set BEFORE the send, so after a stop or a crash the row's system prompt was gone for
+    the rest of the conversation (above);
+  - unticking Chat on Models on a moved chat-only row bounced back: the downgrade repair read the person's explicit
+    `uses: []` as an older build's missing key — only a MISSING key is repaired now (`catalogMigration.lostRows`);
+  - a switch between two rows that offer one model saved nothing (the save guard compared the model only), so a
+    reload resumed on the old row — `savedProviderId` joins the guard and `UNSAVED`;
+  - a chat row's id rule was written twice (a moved preset, a model added on the tab) — one `freeChatRowId` now.
   - *Not measured on a real call yet,* as for reviewers (the plan's open measurement): whether an older claude CLI
     refuses `--effort` in chat mode (the server names that refusal for a reviewer; the chat shows the CLI's own
     error), and how strongly a model follows an instruction placed in the first user turn rather than a system role.

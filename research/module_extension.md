@@ -11163,7 +11163,9 @@ in a review and in a chat:
 - **System prompt.** `chatPrompt.rowInstructed` puts a section — "## What the person asked of this model", the text,
   one framing line — before what is SENT, never in argv. `chatThread.hearsRowInstruction` decides when: the session
   sending the turn has not heard it (`Thread.instructed` names the session that has — a new conversation, a switch, a
-  reload or a reset is a new session object), or the session forgets every turn (a Team server). Not a request field
+  reload or a reset is a new session object; `chatThread.instructedAfter` sets it from the turn's RESULT, so a stopped
+  or failed turn, or one a new process answered, leaves it unset), or the session forgets every turn (a Team server).
+  A switch between two rows that offer one model is saved too (`savedProviderId` in the save guard). Not a request field
   for a Team server: the server drops a system prompt from a prompt with no finding contract, which a chat never has.
   What is shown and stored stays what the person typed.
 

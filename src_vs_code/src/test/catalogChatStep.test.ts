@@ -100,6 +100,22 @@ test('a chat row an older build wrote back without its uses gets its chat tick b
   assert.deepEqual((written(all, 'vendors') as readonly Record<string, unknown>[]).at(-1)!['uses'], ['chat']);
 });
 
+test('a chat tick the person took off on Models stays off — only a MISSING uses is an older build\'s', () => {
+  // Unticking Chat on a moved chat-only row writes `uses: []`; an older build drops the key. Reading both as "lost" ticked
+  // Chat back on the very next run, which the person's own write triggers. (our own reviewer, E4.6.)
+  const unticked = { id: 'chat-a', runtime: 'claude', model: 'opus', enabled: true, plan: false, code: false, document: false, baseUrl: '', executablePath: '', vaultKeyName: 'a', uses: [] };
+  const outcome = migrateLayer({
+    chatPresets: [preset('a')],
+    vendors: [...DEFAULT_VENDORS.map((row) => ({ ...row })), unticked],
+    chatPresetsMoved: [{ presetId: 'a', runtime: 'claude', model: 'opus', name: 'Name of a', rowId: 'chat-a' }],
+    marker: MIGRATED,
+    backup: { keys: ['vendors', 'consultants', 'qconsultRows'], values: {} },
+  });
+  const rows = outcome.kind === 'migrate' ? (written(outcome.writes, 'vendors') as readonly Record<string, unknown>[] | undefined) : undefined;
+
+  assert.deepEqual(rows?.find((row) => row['id'] === 'chat-a')?.['uses'] ?? [], [], 'the chat tick the person removed came back');
+});
+
 test('a side that keeps its own chat model has it remapped too — the user layer\'s is never written from a side', () => {
   const ownRows = DEFAULT_VENDORS.map((row) => ({ ...row }));
   const side = writes({ side: true, chatPresets: [preset('a'), preset('b')], vendors: ownRows, chatModel: 'b' });

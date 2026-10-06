@@ -185,6 +185,7 @@ async function forkOnDisk(entry: ChatEntry, thread: Thread): Promise<void> {
   delete thread.savedModelId;
   delete thread.savedCarryFrom;
   delete thread.savedAccess;
+  delete thread.savedProviderId;
   // THE MEMENTO FIRST, and WAITED FOR — while it is still bound. Written the other way round, a crash
   // in between leaves the fork on disk under an id the memento has never heard of: while the memento
   // is a fallback the tab could reload as the original it no longer owns, and the copy holding the

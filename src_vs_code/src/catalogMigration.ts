@@ -308,7 +308,7 @@ function addUse(raw: RawRow, use: CatalogUse): RawRow {
  * field). Only such a row — and only for a feature a reference in this layer still names it for — is repaired.
  */
 function repairUses(rows: readonly RawRow[], references: readonly Reference[]): { rows: readonly RawRow[]; changed: boolean } {
-  const lost = vendorsFrom([...rows]).filter(lostItsUses);
+  const lost = lostRows(rows);
   const repairs = references.filter((ref) => lost.some((row) => row.id === ref.rowId));
 
   return repairs.reduce<{ rows: readonly RawRow[]; changed: boolean }>((acc, ref) => {
@@ -317,6 +317,17 @@ function repairUses(rows: readonly RawRow[], references: readonly Reference[]): 
 
     return { rows: next.rows, changed: acc.changed || next.changed };
   }, { rows, changed: false });
+}
+
+/**
+ * The rows an older build wrote back without their uses: the KEY is missing. An empty list is what unticking the last use
+ * on Models writes, and that is the person's own choice — repaired, the tick came back on the next run, which their own
+ * write triggers (our own reviewer, E4.6).
+ */
+function lostRows(rows: readonly RawRow[]): readonly Vendor[] {
+  const unsaid = new Set(rows.filter((row) => !('uses' in row)).map((row) => String(row['id'] ?? '')));
+
+  return vendorsFrom([...rows]).filter((row) => unsaid.has(row.id) && lostItsUses(row));
 }
 
 function lostItsUses(row: Vendor): boolean {
