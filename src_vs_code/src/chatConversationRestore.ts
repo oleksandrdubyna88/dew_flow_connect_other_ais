@@ -7,7 +7,7 @@ import { conversationHooks } from './chatHooks';
 import { pinSession } from './chatSessionJoin';
 import { LegacyPick, isRemote } from './chatModels';
 import { agentOffered } from './chatAccessRules';
-import { Ready, readyToChat, savedModels, savedPick, savedPrompts } from './chatConfig';
+import { Ready, readyToChat, resumedPickFor, savedModels, savedPrompts } from './chatConfig';
 import { ModelPreset, PromptPreset, mainPrompt } from './chatPresets';
 import { ChatPageState } from './chatPage';
 import { ConversationRecord } from './chatStore';
@@ -71,7 +71,7 @@ function restoredPage(
       canRetry: false,
       attached: '',
       spend: '',
-      // The row this tab was speaking to, read by `savedPick` out of the old `modelId`.
+      // The row this tab was speaking to, read by `resumedPickFor` out of the record.
       providerId: ready.ok ? ready.providerId : restored.providerId,
       chosenModelId: ready.ok ? ready.providerId : restored.providerId,
       modelId: saved.modelId,
@@ -141,7 +141,7 @@ export function restoreConversation(
     return already;
   }
   const config = vscode.workspace.getConfiguration('coai');
-  const restored = savedPick(config, saved.modelId);
+  const restored = resumedPickFor(config, saved.providerId ?? '', saved.modelId);
   const presets = { promptPresets: savedPrompts(config), modelPresets: savedModels(config) };
   const ready = readyToChat(config, restored.providerId, restored.modelId);
   // ONE array for the transcript and for "what the store already holds", so the first push after a

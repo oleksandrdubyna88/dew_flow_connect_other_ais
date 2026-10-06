@@ -119,6 +119,12 @@ export interface ConversationRecord {
    * discards every record).
    */
   readonly access?: 'agent';
+  /**
+   * The catalog row the conversation was spoken to (PLAN_one_model_catalog.md E4.6a), so a resume opens on that row
+   * and not on another row that offers the same `modelId`. ABSENT for a record written before it existed, which reads
+   * as it did; a malformed value is dropped rather than the conversation — so, as with `access`, no version move.
+   */
+  readonly providerId?: string;
   readonly createdAt: number;
   readonly updatedAt: number;
   /** When the person started a new chat here, if they did. A closed conversation is still readable. */
@@ -346,6 +352,7 @@ export function recordFrom(value: unknown): ConversationRecord | undefined {
     source,
     workspace: row.workspace ?? '',
     ...(row.access === 'agent' ? { access: 'agent' as const } : {}),
+    ...(isText(row.providerId) && row.providerId.length > 0 ? { providerId: row.providerId } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     ...(row.closedAt === undefined ? {} : { closedAt: row.closedAt }),

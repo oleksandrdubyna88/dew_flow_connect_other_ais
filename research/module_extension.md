@@ -11064,3 +11064,47 @@ and assert on what the page posts or draws. That is what showed, executed rather
 Roles & prompts is never read as a round pick, and that the roles' and the commands' wiring never read each other's
 controls (each red when the attribute is put back). The MCP clients' files are read only while the new page can show
 them (`PanelProvider.newPageReads`), with the roles' prompt files and the command texts.
+
+## Chat model presets move into the catalog (2026-10-06, PLAN_one_model_catalog.md E4.6a)
+
+Each chat model preset becomes its own catalog row ticked Chat, and the chat reads its models from the rows.
+
+- **The move** is a step of the catalog migration (`catalogChatStep.chatStep`, run in `migrateLayer`, so it shares the
+  migration's turn, backup and write order). `chatPresetMove.chatMove` turns each preset the record does not hold into
+  a row: id `chat-<normalised id>` (or `chat-model`), `uses: ['chat']`, its name, launch fields and starting text
+  (`chatStartingPrompt`), `vaultKeyName` = the old id when that id is already clean, and an explicit `remoteVendor` for
+  a Team-server preset. It is never joined to an existing row.
+- **The record** `coai.chatPresetsMoved` (`{ presetId, runtime, model, name, rowId }`, declared, overlaid per side) is
+  the identity: a run skips a preset the record holds with the same fingerprint (`wasMoved`), so a deleted row stays
+  deleted and a positional `preset-N` that shifted is moved as the new preset it is. `chatModelPresets` itself is
+  never written by the move (an older build still reads it until E5).
+- **The model the chat opens on:** the run that moves the MAIN preset writes `coai.chatModel` = its row and
+  `coai.chatModelName` = its model; otherwise a saved `chatModel` naming a moved preset is remapped to its row. Both
+  are per side (`OVERLAID_SETTINGS`) and backed up with the record. A side that keeps no `vendors` of its own is left
+  alone. `chatModelPresets` is a migration trigger, so an imported preset moves on the next run.
+- **The chat reads the rows.** `chatConfig.savedModels` = `chatCatalogModels.chatModelsOf`: this side's rows ticked
+  Chat, as the preset shape every chat path takes, plus a preset only while the record lacks it (before the first
+  move, after a refused one, in a restored layer). Every chat path reads its settings through `chatRead(config)`, this
+  side's reader (`bindChatSide` at activation).
+- **The presets page edits one store** (`chatModelEdits.chatModelEdit`): a row id edits the row (name, model, starting
+  text; Remove drops a chat-only row and only unticks Chat on a reviewer; Main sets `coai.chatModel`); an unmoved
+  preset keeps its own path. *Add a model* adds a row ticked Chat. `noSecondPresetStore.test.ts` pins the presets
+  page's two writes to `chatModelPresets` (that path, and the prune of dead rows) and the modules that name the key.
+- **A resumed conversation** keeps its model. `ConversationRecord` gains an optional `providerId` (absent on an old
+  record, no version move; a malformed value is dropped, the conversation kept), written by `chatPersist.recordOf`.
+  `chatConversationRestore` opens it through `chatConfig.resumedPickFor` → `chatCatalogModels.resumedPick`: the
+  recorded row while it is offered, else `legacyPick` of the saved model value after `movedTo` maps an old preset id
+  through the record. `savedPick` (`coai.chatModel`) maps the same way.
+
+```mermaid
+flowchart LR
+  P[coai.chatModelPresets] -->|chatMove, in migrateLayer| R[catalog rows ticked Chat]
+  P -->|record| M[coai.chatPresetsMoved]
+  R --> S[savedModels = chatModelsOf]
+  P -->|only presets the record lacks| S
+  M --> S
+  S --> C[every chat path]
+  M -->|movedTo| Q[resumedPick]
+  K[ConversationRecord.providerId] --> Q
+  Q --> T[a restored conversation]
+```

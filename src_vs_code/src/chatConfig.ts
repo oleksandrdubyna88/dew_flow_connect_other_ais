@@ -13,7 +13,6 @@ import {
   LegacyPick,
   chatModelsFrom,
   chatProvidersFromPresets,
-  legacyPick,
   resolveChatPick,
 } from './chatModels';
 import { ChatModelChoice } from './chatContracts';
@@ -23,7 +22,7 @@ import { chatRuntimeRefusal } from './cliChatLaunch';
 import { Vendor, vendorsFrom } from './vendors';
 import { readerFor, userLayer } from './sideConfig';
 import type { ConfigReader } from './settingsShape';
-import { chatModelsOf } from './chatCatalogModels';
+import { chatModelsOf, resumedPick } from './chatCatalogModels';
 import { movedRecordFrom } from './chatPresetMove';
 
 /**
@@ -206,9 +205,18 @@ export function taskOf(config: vscode.WorkspaceConfiguration, promptId: string, 
  * place so the two callers cannot drift.</p>
  */
 export function savedPick(config: vscode.WorkspaceConfiguration, saved: string): LegacyPick {
-  const specs = savedModels(config).map(chatRunSpec);
+  return resumedPickFor(config, '', saved);
+}
 
-  return legacyPick(chatProvidersFromPresets(savedModels(config), chatCatalogFrom(config)), specs, saved);
+/**
+ * The pair a resumed conversation opens on (PLAN_one_model_catalog.md E4.6a): the row its record names while that row
+ * is offered, else `savedPick`'s reading — an old preset id followed through this side's record of moved presets first.
+ */
+export function resumedPickFor(config: vscode.WorkspaceConfiguration, providerId: string, modelId: string): LegacyPick {
+  const models = savedModels(config);
+  const record = movedRecordFrom(chatRead(config)('chatPresetsMoved'));
+
+  return resumedPick(chatProvidersFromPresets(models, chatCatalogFrom(config)), models.map(chatRunSpec), record, providerId, modelId);
 }
 
 /**

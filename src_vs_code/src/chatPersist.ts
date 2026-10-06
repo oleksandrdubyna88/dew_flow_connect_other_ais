@@ -70,6 +70,8 @@ export function recordOf(thread: Thread, at = Date.now()): ConversationRecord {
     workspace: thread.workspace,
     // Only when on: absent is text, which is also what every record written before issue #289 says.
     ...(thread.access === 'agent' ? { access: 'agent' as const } : {}),
+    // The row that answered, so a resume cannot land on another row offering the same model (E4.6a).
+    ...(thread.providerId.length > 0 ? { providerId: thread.providerId } : {}),
     // WHEN IT BEGAN, not when it was last written. The two were the same instant here until A3's
     // plan round; a conversation answered three months after it started was recorded as having
     // started that day, and the picker draws its "started" from this field.

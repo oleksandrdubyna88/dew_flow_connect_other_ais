@@ -1,3 +1,4 @@
+import { legacyPick, type ChatProviderList, type LegacyPick } from './chatModels';
 import type { ModelPreset } from './chatPresets';
 import { wasMoved, type MovedPreset } from './chatPresetMove';
 import type { Vendor } from './vendors';
@@ -49,4 +50,32 @@ function asChatModel(row: Vendor): ModelPreset {
  */
 export function chatModelsOf(presets: readonly ModelPreset[], rows: readonly Vendor[], record: readonly MovedPreset[]): readonly ModelPreset[] {
   return [...rows.filter(ticked).map(asChatModel), ...presets.filter((preset) => !wasMoved(preset, record))];
+}
+
+/**
+ * The row a saved value names now: an old preset id — a conversation's record, or `coai.chatModel` — is followed to
+ * the row the move made of it; anything else is returned as it is.
+ */
+export function movedTo(saved: string, record: readonly MovedPreset[]): string {
+  return record.find((one) => one.presetId === saved)?.rowId ?? saved;
+}
+
+/**
+ * The pair a resumed conversation opens on. The row it recorded, while that row is still offered — so two rows that
+ * offer one model name cannot swap its model, starting text or effort; otherwise what the saved model value says, an
+ * old preset id followed through the record first.
+ *
+ * @param providerId the row the conversation recorded, or empty for a record written before it was recorded
+ * @param modelId the conversation's saved model value
+ */
+export function resumedPick(
+  list: ChatProviderList,
+  specs: readonly Vendor[],
+  record: readonly MovedPreset[],
+  providerId: string,
+  modelId: string,
+): LegacyPick {
+  const row = list.providers.find((one) => one.id === providerId);
+
+  return row === undefined ? legacyPick(list, specs, movedTo(modelId, record)) : { providerId, modelId, candidates: [] };
 }

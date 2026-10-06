@@ -1,7 +1,7 @@
 # PLAN — One model catalog: the Settings page rebuilt around models you add once
 
-> Status: **in progress, 2026-10-05 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
-> the measured live calls wait on the operator); E3 merged (PR #687); E4 in progress on `feat/catalog-e4`; E5 open.** The design is accepted: the clickable mockup in
+> Status: **in progress, 2026-10-06 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
+> the measured live calls wait on the operator); E3 merged (PR #687); E4 in progress on `feat/catalog-e4` (E4.1–E4.5 and E4.6a built; E4.6b, E4.6c open); E5 open.** The design is accepted: the clickable mockup in
 > [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
 > checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
@@ -737,6 +737,22 @@ row); the new page reads it. Done, RED first.
     model, system prompt or effort. A legacy record whose `modelId` is a preset id is mapped through the record too.
   - *The ledger needs no row map:* spend rows and forget marks key on the vendor (runtime) and the model
     (`chatSpendRows.ts:220-227`); old lines resolve their vendor through presets ∪ rows, and after E5 through the backup.
+
+  **E4.6a built 2026-10-06** (`chatPresetMove.ts`, `catalogChatStep.ts`, `chatCatalogModels.ts`, `chatModelEdits.ts`;
+  wired in `catalogMigration.ts`, `catalogMigrationHost.ts`, `chatConfig.ts`, `chatPresetsPanel.ts`, `chatStore.ts`,
+  `chatPersist.ts`, `chatConversationRestore.ts`). As revised above, with these differences:
+  - *The record is the only thing the move writes outside the rows.* `chatModelPresets` is never written by the move,
+    so the restore has no presets to put back; `BACKED_UP` gains `chatPresetsMoved`, `chatModel` and `chatModelName`.
+  - *The "no dual store" scan* (`noSecondPresetStore.test.ts`) pins which modules name the presets setting and the
+    presets page's two writes: the edit of a preset the move has not taken (`chatModelEdits.onPreset`) and the prune
+    of dead rows no surface can show — the latter was not in the plan and is kept, because a dead row is never moved.
+  - *The chat reads this side.* `chatRead(config)` (`readerFor(side)`, bound at activation by `bindChatSide`) is what
+    every chat path reads its settings through; `theChatReadsThisSide.test.ts` refuses `chatSettingsFrom(userLayer(`.
+  - *A resume* goes through `resumedPickFor` → `resumedPick`: the recorded row while it is offered, else `legacyPick`
+    of the saved model value after `movedTo` maps an old preset id. `savedPick` (`coai.chatModel`) maps through the
+    record the same way. `recordFrom` drops a malformed `providerId` and keeps the conversation.
+  - *An import cycle avoided:* `catalogChatStep` declares the part of a layer it reads (`ChatLayer`) and the writes it
+    makes (`ChatWrite`) instead of importing them from `catalogMigration`, which calls it.
 
 **Build order:** E4.1 → E4.2 → E4.5 → E4.3 → E4.4 → E4.6. E4.5 comes before the folded pages because it touches no
 host-module seam, so it lands while E4.3's command shape settles.
