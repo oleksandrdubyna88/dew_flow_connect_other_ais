@@ -74,7 +74,7 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
   'sideConfig.ts forwarding reader': { count: 2, why: 'readerFor / userLayer and the storage choice — the door' },
   'sideConfig.ts global write': { count: 1, why: 'saveSetting, when this side keeps no settings of its own' },
   'panelProvider.ts global write': { count: 2, why: 'coai.teamServers — one list every side shares, by design' },
-  'chatPresetsPanel.ts global write': { count: 1, why: 'coai.chatModelPresets — not a per-side setting' },
+  'chatPresetsHost.ts global write': { count: 1, why: 'coai.chatModelPresets — not a per-side setting' },
   'configTransferCommands.ts global write': { count: 1, why: 'an import writes the base layer; per-side overrides are never touched' },
   'helpPanel.ts global write': { count: 1, why: 'coai.helpLanguage — about the reader, not the work' },
   'textToneHost.ts global write': { count: 1, why: 'coai.textTone — about the reader, not the work' },

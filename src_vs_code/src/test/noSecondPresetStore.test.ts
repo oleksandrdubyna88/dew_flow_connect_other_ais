@@ -21,15 +21,15 @@ test('only the known modules name the presets setting — a new one must say how
     'catalogMigrationHost.ts', 'chatConfig.ts',
     // The edit of a preset the move has not taken.
     'chatModelEdits.ts',
-    // The presets page — its two writes are pinned below.
-    'chatPresetsPanel.ts', 'chatSettings.ts', 'modelKeys.ts', 'panelProvider.ts',
+    // The presets' editing core, which both pages that edit them call (E4.6b) — its two writes are pinned below.
+    'chatPresetsHost.ts', 'chatSettings.ts', 'modelKeys.ts', 'panelProvider.ts',
   ], 'a module began to name chat model presets — if it writes them, a moved preset can be edited in two places');
 });
 
-test('the presets page writes the presets in exactly two places, and the model edit picks the store', () => {
-  const page = sourceOf('chatPresetsPanel.ts');
+test('the presets’ editing core writes the presets in exactly two places, and the model edit picks the store', () => {
+  const page = sourceOf('chatPresetsHost.ts');
 
-  assert.equal(page.split('write(MODELS_KEY').length - 1, 2, 'the presets page gained a write to the presets');
+  assert.equal(page.split('write(MODELS_KEY').length - 1, 2, 'the presets’ editing core gained a write to the presets');
   // The model edit's write goes there only when `chatModelEdit` named the presets — never a moved preset's row.
   assert.match(page, /if \(one\.key === 'chatModelPresets'\) \{\s*await write\(MODELS_KEY, one\.value\);/u);
   // And the other is the prune of rows nobody can show, which a preset with a provider never is.

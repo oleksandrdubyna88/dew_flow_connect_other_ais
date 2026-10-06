@@ -116,6 +116,18 @@ export function editRepaints(command: Extract<PresetCommand, { kind: 'edit' }>):
   return command.field === 'main';
 }
 
+/** The fields a person TYPES into. */
+const TYPED: readonly string[] = ['name', 'text', 'startingPrompt'];
+
+/**
+ * The key a typed edit settles under in the one queue both pages share (`chatPresetsHost.ts`,
+ * todo/PLAN_one_model_catalog.md E4.6b) — per list, row and field, so typing in two boxes stores both — or nothing for a
+ * tick, a pick or a press, which has no caret to disturb and goes straight through.
+ */
+export function presetSettlesAs(command: PresetCommand): string | undefined {
+  return command.kind === 'edit' && TYPED.includes(command.field) ? `${command.list}/${command.id}/${command.field}` : undefined;
+}
+
 export function presetEdit(message: unknown): PresetCommand {
   if (typeof message !== 'object' || message === null) {
     return IGNORE;

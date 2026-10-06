@@ -241,11 +241,6 @@
       "count": 2
     }
   },
-  "src/chatPresetsPanel.ts": {
-    "complexity": {
-      "count": 2
-    }
-  },
   "src/chatPrompt.ts": {
     "complexity": {
       "count": 2

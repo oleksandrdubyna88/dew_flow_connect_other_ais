@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { vendorOfPreset } from '../chatPresets';
-import { chatPresetsHtml, editRepaints, editedRows, presetEdit } from '../chatPresetsPage';
+import { chatPresetsHtml, editRepaints, editedRows, presetEdit, presetSettlesAs } from '../chatPresetsPage';
 
 /**
  * The tab where a person keeps their prompts and their models.
@@ -245,4 +245,24 @@ test('a recorded preset id resolves to the vendor whose row it belongs in', () =
   // id that was written down - never a guess, and never an empty cell.
   assert.strictEqual(vendorOf('preset-deleted'), 'preset-deleted');
   assert.strictEqual(vendorOf(''), '');
+});
+
+test('a typed field settles under its own key; a tick, a pick or a press goes straight through (E4.6b)', () => {
+  // Both pages that edit the presets share one settled-write queue (chatPresetsHost.ts), so this decides for both.
+  for (const field of ['name', 'text', 'startingPrompt'] as const) {
+    assert.strictEqual(presetSettlesAs({ kind: 'edit', list: 'prompt', id: 'p1', field, value: 'x' }), `prompt/p1/${field}`);
+  }
+  assert.notStrictEqual(
+    presetSettlesAs({ kind: 'edit', list: 'model', id: 'a', field: 'name', value: 'x' }),
+    presetSettlesAs({ kind: 'edit', list: 'model', id: 'b', field: 'name', value: 'x' }),
+    'two rows typed in one after the other would store only the last',
+  );
+  for (const command of [
+    { kind: 'edit', list: 'prompt', id: 'p1', field: 'main', value: true },
+    { kind: 'edit', list: 'model', id: 'm1', field: 'model', value: 'opus' },
+    { kind: 'add', list: 'prompt' },
+    { kind: 'remove', list: 'model', id: 'm1' },
+  ] as const) {
+    assert.strictEqual(presetSettlesAs(command), undefined, `${command.kind} waited to settle`);
+  }
 });

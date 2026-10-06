@@ -9,7 +9,8 @@ import * as vscode from 'vscode';
 
 import { usersPanel } from './bugsKeysPanel';
 import { askForContributorKey, offerOldBugzKeys, settleOldBugzKeys } from './bugzKeyFlows';
-import { openChatPresets, presetsReadDiscoveriesFrom } from './chatPresetsPanel';
+import { openChatPresets } from './chatPresetsPanel';
+import { bindChatPresets } from './chatPresetsHost';
 import { askWhereDataLives, deleteTheOldDataFolder, moveDataDirectory } from './dataCommands';
 import { openPhrases } from './phrasesPanel';
 import { openRoles } from './rolesPanel';
@@ -117,7 +118,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // reached is closed by ordering rather than argued about. Four reviewers raised it in one round,
   // and `chatWiring.test.ts` now fails if this line ever drifts below a `registerCommand`.
   chatReadsThisSide(context);
-  presetsReadDiscoveriesFrom(context);
+  bindChatPresets(context);
   const watcher = new EscalationWatcher(dataDir());
   // The second watcher, and it asks for nothing from anybody: a consultation blocks nothing, so it
   // has no modal and no status-bar item — it appears in the sidebar where a person is already
