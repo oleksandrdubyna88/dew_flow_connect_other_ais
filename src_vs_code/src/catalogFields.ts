@@ -22,6 +22,7 @@ export interface CatalogFields {
   systemPrompt?: string;
   timeoutMinutes?: number;
   chatStartingPrompt?: string;
+  stream?: boolean;
 }
 
 /** The catalog fields off a stored row, each only when it holds a value somebody could have meant. */
@@ -35,6 +36,7 @@ export function catalogFields(v: Record<string, unknown>): CatalogFields {
     ...promptField('systemPrompt', v['systemPrompt']),
     ...timeoutField(v['runtime'], v['timeoutMinutes']),
     ...promptField('chatStartingPrompt', v['chatStartingPrompt']),
+    ...streamField(v['runtime'], v['stream']),
   };
 }
 
@@ -51,6 +53,11 @@ export function usesFrom(raw: unknown): readonly CatalogUse[] {
  */
 function promptField(field: 'systemPrompt' | 'chatStartingPrompt', raw: unknown): CatalogFields {
   return typeof raw === 'string' && raw.trim().length > 0 ? { [field]: raw } : {};
+}
+
+/** An api row's stream switch (todo/PLAN_api_streaming.md) — kept only when ON, so a switched-off row reads as one that never had it. */
+function streamField(runtime: unknown, raw: unknown): CatalogFields {
+  return runtime === 'api' && raw === true ? { stream: true } : {};
 }
 
 /** A CLI row's own limit; an api row has `reviewMinutes`, its module's calibrated value, instead. */

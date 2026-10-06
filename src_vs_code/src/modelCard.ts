@@ -1,7 +1,7 @@
 import { apiSettingsFields } from './apiSettingsView';
 import { type BinarySays, confirmButton, type FirstSeen, newTag, skew } from './catalogShell';
 import { escapeHtml } from './escapeHtml';
-import { effortField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
+import { effortField, streamField, systemPromptField, thinkingLine, timeoutField, usesBoxes } from './modelCardFields';
 import {
   type CheckFacts, checkButton, cliBadge, contractNote, healthBadge, offMachineNote, verdictBadge, worldButtons,
 } from './modelCardWorld';
@@ -119,6 +119,7 @@ const IGNORED: readonly { readonly feature: string; readonly what: string; reado
   { feature: 'systemPrompt', what: 'its system prompt', set: (vendor) => (vendor.systemPrompt ?? '').length > 0 },
   { feature: 'timeoutMinutes', what: 'its own time limit', set: (vendor) => vendor.runtime !== 'api' && vendor.timeoutMinutes !== undefined },
   { feature: 'cliEffort', what: 'its effort', set: (vendor) => vendor.runtime !== 'api' && (vendor.effort ?? '').length > 0 },
+  { feature: 'apiStream', what: 'streaming the answer', set: (vendor) => vendor.runtime === 'api' && vendor.stream === true },
 ];
 
 function ignoredNote(vendor: Vendor, binary: BinarySays): string {
@@ -172,7 +173,7 @@ function tuning(vendor: Vendor, id: string, facts: ModelCardFacts): string {
   const context = facts.context;
 
   return vendor.runtime === 'api'
-    ? apiSettingsFields(vendor, id, context.reported[vendor.id], context.serverVersion)
+    ? apiSettingsFields(vendor, id, context.reported[vendor.id], context.serverVersion) + streamField(vendor, id, newTag('model.stream', facts.firstSeen, facts.now))
     : effortField(vendor, id, probedOf(context, vendor.id), newTag('model.effort', facts.firstSeen, facts.now)) + thinkingLine(vendor) + timeoutField(vendor, id);
 }
 
