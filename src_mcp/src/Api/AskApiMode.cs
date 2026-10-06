@@ -175,7 +175,7 @@ internal static class AskApiMode
         using var response = await http.SendAsync(message, HttpCompletionOption.ResponseHeadersRead, deadline.Token);
         if (ask.Stream && IsEventStream(response))
         {
-            return await StreamedAsync(ask, response, deadline.Token, note, output);
+            return await StreamedAsync(ask, response, note, output, deadline.Token);
         }
 
         if (await BoundedBody.ReadAsync(response.Content, MaxAnswerBytes, deadline.Token) is not { } text)
@@ -318,7 +318,7 @@ internal static class AskApiMode
     /// generation the vendor billed. Then the exit: the answer judged as any other; a failure the stream reported inside
     /// its 200, quoted so the retry rule reads the vendor's words; a stream that stopped before its answer finished.
     /// </summary>
-    private static async Task<int> StreamedAsync(Ask ask, HttpResponseMessage response, CancellationToken token, Action<string> note, TextWriter output)
+    private static async Task<int> StreamedAsync(Ask ask, HttpResponseMessage response, Action<string> note, TextWriter output, CancellationToken token)
     {
         var read = await StreamedBody.ReadAsync(response.Content, MaxAnswerBytes, MaxStreamLineChars, token);
         var answer = ask.Vendor.ReadAnswer(read.Outcome.Completion);

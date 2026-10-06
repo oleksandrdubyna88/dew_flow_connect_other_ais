@@ -162,12 +162,10 @@ public sealed class StreamAssembler
         {
             return null;
         }
-        foreach (var choice in choices.EnumerateArray().Where((one) => one.ValueKind == JsonValueKind.Object))
-        {
-            return IndexOf(choice) == 0 ? choice : null;
-        }
-
-        return null;
+        return choices.EnumerateArray()
+            .Where((one) => one.ValueKind == JsonValueKind.Object && IndexOf(one) == 0)
+            .Select((one) => (JsonElement?)one)
+            .FirstOrDefault();
     }
 
     private static long IndexOf(JsonElement choice) =>

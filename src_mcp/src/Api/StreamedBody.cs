@@ -55,7 +55,7 @@ internal static class StreamedBody
             await using var body = await content.ReadAsStreamAsync(token);
             using var reader = new StreamReader(body, new UTF8Encoding(false), detectEncodingFromByteOrderMarks: false);
 
-            var stop = await lines.ReadAsync(reader, token);
+            var stop = await lines.ReadLinesAsync(reader, token);
 
             return new StreamRead(lines.Outcome(), stop);
         }
@@ -84,7 +84,7 @@ internal static class StreamedBody
             return assembler.Finish(events.Done);
         }
 
-        public async Task<StreamStop> ReadAsync(StreamReader reader, CancellationToken token)
+        public async Task<StreamStop> ReadLinesAsync(StreamReader reader, CancellationToken token)
         {
             var buffer = new char[ReadChars];
             int read;

@@ -58,6 +58,19 @@ public sealed class AStreamedAnswerIsReadLikeAnyOtherTests
     }
 
     [Fact]
+    public void The_answer_is_the_choice_whose_index_is_0_wherever_it_sits_in_the_chunk()
+    {
+        // A chunk may carry several choices in any order; the answer is choice 0's (SonarCloud S1751 on #689: the loop
+        // looked at the FIRST choice only, so choice 0 after choice 1 was dropped).
+        var sse = "data: {\"choices\":[{\"index\":1,\"delta\":{\"content\":\"other\"}},{\"index\":0,\"delta\":{\"content\":\"answer\"},\"finish_reason\":\"stop\"}]}\n\n"
+            + "data: [DONE]\n\n";
+
+        var outcome = Assemble(sse);
+
+        CompletionReader.Read(outcome.Completion).Content.Should().Be("answer");
+    }
+
+    [Fact]
     public void Carriage_returns_are_line_ends_and_several_data_lines_are_one_payload()
     {
         var events = new SseEvents();
