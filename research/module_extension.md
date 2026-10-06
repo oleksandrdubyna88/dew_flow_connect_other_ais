@@ -10887,3 +10887,8 @@ the switch for api rows (`modelCardFields.streamField`, help `apiStream`, the "n
 skew note when the installed coai-mcp's settled list lacks `apiStream`. The current Settings page draws no stream control
 (a test holds it). The seam (`run-seam.mjs`) carries a row's stream to a binary that lists `apiStream` and checks the
 server reports it effective — and that a binary without it is never handed it.
+
+The check record's `streamed` field (`consultantHealth.CheckRecord`) turns the card's badge into "checked: it answered ·
+streamed" (ok), or "…but NOT streamed — the endpoint or this coai-mcp ignored the switch" (warn)
+(`modelCardWorld.STREAMED`); the landed-check notice says the same (`consultantHealthHost.streamClause`). A row that did
+not ask hears nothing about streams.

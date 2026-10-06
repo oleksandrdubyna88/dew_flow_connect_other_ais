@@ -6375,3 +6375,9 @@ vendor's words through `RateLimit.Hit`); a cut stream or a passed deadline exit 
 how many characters of answer and of reasoning had arrived.
 
 `FeaturesMode` lists `apiStream`; the extension sends a row's `stream` only to a binary that does.
+
+**Did it stream? (Story C.)** The usage line carries `"streamed":true` only when a stream was READ (`UsageLine(usage,
+streamed)`). A gateway that answered one JSON, and an older coai-mcp reached through a row's `executablePath` that ignores
+`--stream on`, both write none. A ✓ Check of an api row with its switch on reads that field from the launches' stdout
+(`ConsultantCheck.StreamVerdict`) and records `streamed` or `not-streamed` in `ConsultCheckRecord.Streamed` — empty for
+every other check — so the card can say that the setting did nothing.

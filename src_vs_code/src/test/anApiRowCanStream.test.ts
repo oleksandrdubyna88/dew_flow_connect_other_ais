@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
+import { parseCheckDocument } from '../consultantHealth';
+import type { ConsultantHealthState } from '../consultantHealthState';
 import { HELP } from '../help';
+import { checkFactsOf } from '../modelCardWorld';
 import { NEW_CONTROLS } from '../newTags';
 import { settingsHtml, type PanelState } from '../panelView';
 import { DEFAULT_VENDORS, vendorsFrom, type Vendor } from '../vendors';
@@ -78,4 +81,27 @@ test('the switch is new, has its own help, and the current Settings page draws n
   assert.match(HELP.apiStream, /stream/u);
   const state = stateWith([api({ stream: true })], { serverFeatures: ['apiStream'] });
   assert.deepEqual(switches(runPanel(state, { html: settingsHtml(state, 'test-nonce', 'reviewers') })), []);
+});
+
+/** The card's check badge for a row whose last ✓ Check landed with `streamed` as given ('' = the field absent). */
+function badgeAfter(streamed: string): { said: string; tone: string } {
+  const answered = parseCheckDocument(JSON.stringify({ callerKind: 'model-qwen', state: 'answered', streamed, finishedUtc: '2026-10-06T09:59:00.000Z' }))!;
+  const health: ConsultantHealthState = {
+    thisSide: { label: 'Windows', probe: { kind: 'never' } as never, files: { report: undefined, checks: { 'model-qwen': { kind: 'found', value: answered } } }, checking: [], runs: {} },
+    otherSides: [],
+    nowMs: Date.parse('2026-10-06T10:00:00.000Z'),
+  };
+  const facts = checkFactsOf(health, 'qwen');
+
+  return { said: facts.said, tone: facts.tone };
+}
+
+test('the check says whether a row that asked to stream got a stream — the plan gate\'s finding 1', () => {
+  assert.deepEqual(badgeAfter('streamed'), { said: 'checked: it answered · streamed', tone: 'ok' });
+
+  const ignored = badgeAfter('not-streamed');
+  assert.equal(ignored.tone, 'warn', 'a stream asked for and not got reads as fine');
+  assert.match(ignored.said, /NOT streamed/u);
+
+  assert.deepEqual(badgeAfter(''), { said: 'checked: it answered', tone: 'ok' }, 'a row that did not ask is told nothing about streams');
 });

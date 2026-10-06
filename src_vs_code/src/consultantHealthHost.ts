@@ -74,12 +74,19 @@ function reportedClause(record: LandedRecord): string {
 }
 
 const REPORTED: Readonly<Record<string, (record: LandedRecord) => string>> = {
-  'answered': (record) => `answered${record.markerRead ? ' and read the marker' : ', but did NOT read the marker'}${canaryClause(record.canary)}`,
+  'answered': (record) => `answered${record.markerRead ? ' and read the marker' : ', but did NOT read the marker'}${canaryClause(record.canary)}${streamClause(record.streamed)}`,
   'failed': (record) => `failed — ${failureLabel(record.failureKind)}`,
 };
 
 function endedAs(record: LandedRecord): string {
   return `ended as ${record.state}${record.reason.length > 0 ? ` — ${record.reason}` : ''}`;
+}
+
+/** A row that asked to stream is told whether it did (todo/PLAN_api_streaming.md, Story C); every other row, nothing. */
+function streamClause(streamed: string): string {
+  return streamed === 'streamed' ? '; the answer was streamed'
+    : streamed === 'not-streamed' ? '; the answer was NOT streamed — the endpoint or this coai-mcp ignored the switch'
+    : '';
 }
 
 function canaryClause(canary: string): string {

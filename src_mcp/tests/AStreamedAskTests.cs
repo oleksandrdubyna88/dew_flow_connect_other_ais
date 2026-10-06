@@ -131,6 +131,30 @@ public sealed class AStreamedAskTests : IDisposable
 
         (await RunAsync()).Should().Be(0, Stderr);
         File.ReadAllText(OutFile).Should().Be("{\"findings\":[]}");
+        // ...and its usage line does NOT say it streamed: the row's Check reports a stream it asked for and did not get
+        // (the plan gate's finding 1, Story C).
+        _stdout.ToString().Should().NotContain("streamed");
+    }
+
+    [Fact]
+    public async Task The_usage_line_says_streamed_only_when_a_stream_was_read()
+    {
+        Streams(false, Chunk("{\"findings\":[]}", "\"stop\""), Usage, "data: [DONE]\n\n");
+
+        (await RunAsync()).Should().Be(0, Stderr);
+        _stdout.ToString().Should().Contain("\"streamed\":true");
+    }
+
+    [Theory]
+    [InlineData(false, "{\"tokensIn\":1,\"tokensOut\":2,\"streamed\":true}", "")]
+    [InlineData(true, "{\"tokensIn\":1,\"tokensOut\":2,\"streamed\":true}", "streamed")]
+    [InlineData(true, "{\"tokensIn\":1,\"tokensOut\":2}", "not-streamed")]
+    [InlineData(true, "", "not-streamed")]
+    public void A_check_of_a_row_that_asked_to_stream_says_whether_it_did(bool asked, string stdout, string verdict)
+    {
+        // An older coai-mcp that ignored --stream on, and a gateway that answered one JSON, both leave no "streamed":
+        // the Check cannot confirm the setting took effect, and says so (the plan gate's findings 1 and 2).
+        CoaiMcp.Server.ConsultantCheck.StreamVerdict(asked, ["thread noise", stdout]).Should().Be(verdict);
     }
 
     [Fact]

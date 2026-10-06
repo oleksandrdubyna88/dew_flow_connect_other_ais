@@ -1,6 +1,6 @@
 # PLAN — api rows can stream their answer (`"stream": true`), switched per row on the new Settings page
 
-> Status: **in progress, 2026-10-06 — build steps 1–4 and the docs built on `feat/api-streaming`; the live call, two tests
+> Status: **in progress, 2026-10-06 — Stories A–C (build steps 1–4, the check's stream verdict) and the docs built on `feat/api-streaming`; the live call, two tests
 > of the test plan and the promotion open (see Progress).** Revised the same day after an own plan review. Scope:
 > coai-mcp's `--ask-api` path, one new catalog row field, and one control on the new Settings page's model card.
 >
@@ -90,6 +90,27 @@ person may turn on, not a qwen repair, and the card's "?" says so.
   (Alibaba, OpenAI and Ollama return no usage without it); a backend that refuses it shows that in the row's ✓ Check.
 - A killed reviewer drops the connection, which usually stops the vendor's generation — expected, not measured.
 - A row whose `executablePath` points at an older coai-mcp ignores `--stream on` silently (`ApiRuntime.cs:73`); rare.
+
+## Stories (the plan gate's order, session `f8a24551`, 2026-10-06)
+
+The gate passed with three findings, all accepted; its operator asked for 3–5 stories (the split was asked of Fable;
+Fable's monthly spend limit is reached, so it was made with Opus). Built on this branch, gated once over the whole diff.
+
+- **Story A — read a stream.** `SseEvents`, `StreamAssembler`, `StreamedBody`, the `--ask-api --stream on` branch, the
+  usage-first rule (build steps 1–2). *Built.*
+- **Story B — the row's switch.** The row field end to end, the three launch places, `--features apiStream`, the model
+  card's switch (build steps 3–4). *Built.*
+- **Story C — say whether it streamed** (gate findings 1 and 2). The shim's usage line says `"streamed": true` only when
+  it actually READ a stream; a row that asked for one and was answered with one JSON (a gateway that ignored it), or
+  launched an older coai-mcp that ignored `--stream on`, carries no such field. The row's ✓ Check reports it: "streamed",
+  or "asked to stream — the answer was not streamed" / "not confirmed by this coai-mcp". The JSON fallback for ordinary
+  calls stays. *Built:* `UsageLine(usage, streamed)`, `ConsultantCheck.StreamVerdict` → `ConsultCheckRecord.Streamed`,
+  the card's badge (`modelCardWorld.STREAMED`) and the landed-check notice. One sentence covers both causes ("the
+  endpoint or this coai-mcp ignored the switch") — the check cannot tell them apart from the output, so it does not try.
+- **Story D — the person's flow, measured** (gate finding 3, build steps 5–6). A scenario that switches the stream on
+  for an api row, saves it, runs ✓ Check against a local streaming endpoint and sees "streamed"; the flow and its
+  harness command in `research/module_tests.md`; the live call on a real vendor (the owner's go), its SSE kept as a
+  fixture; the plan promoted.
 
 ## Build order
 

@@ -332,7 +332,8 @@ internal static class AskApiMode
     {
         var read = await StreamedBody.ReadAsync(response.Content, MaxAnswerBytes, MaxStreamLineChars, token);
         var answer = ask.Vendor.ReadAnswer(read.Outcome.Completion);
-        await output.WriteLineAsync(UsageLine(answer.Usage));
+        // `streamed` says a stream WAS read — a row's Check tells a stream it asked for and got from one it did not get.
+        await output.WriteLineAsync(UsageLine(answer.Usage, streamed: true));
         if (read.Stop != StreamStop.Ended)
         {
             return Stopped(ask, read, note);
@@ -367,10 +368,13 @@ internal static class AskApiMode
         return exit;
     }
 
-    internal static string UsageLine(Usage usage) =>
+    /// <param name="streamed">The answer was READ as a stream (todo/PLAN_api_streaming.md, Story C); absent otherwise —
+    /// a gateway that answered one JSON, and an older coai-mcp that ignored <c>--stream on</c>, both write none.</param>
+    internal static string UsageLine(Usage usage, bool streamed = false) =>
         "{" + $"\"tokensIn\":{usage.TokensIn},\"tokensOut\":{usage.TokensOut},\"tokensCached\":{usage.TokensCached},\"tokensReasoning\":{usage.TokensReasoning}"
         // The vendor answered and said nothing about what the call consumed: the parent records it as unknown.
-        + (usage.NotCaptured ? ",\"notCaptured\":true" : string.Empty) + "}";
+        + (usage.NotCaptured ? ",\"notCaptured\":true" : string.Empty)
+        + (streamed ? ",\"streamed\":true" : string.Empty) + "}";
 
     /// <summary>" (N reasoning tokens)" when the vendor reported any — the number a person needs to size the ceiling.</summary>
     private static string Thinking(ChatAnswer answer) =>
