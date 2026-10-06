@@ -5,6 +5,7 @@ import { thisSide } from './installer';
 import { notify, notifyAndAsk } from './notify';
 import { readOverlay } from './sideSettings';
 import { CatalogTurns } from './catalogTurns';
+import { userLayerReader } from './modelKeys';
 
 /**
  * The host half of the move into the catalog (PLAN_one_model_catalog.md E1.3): read each settings layer, run
@@ -19,8 +20,11 @@ import { CatalogTurns } from './catalogTurns';
  * reads the other half-written; a request before a run starts joins it ({@link CatalogTurns}).</p>
  */
 
-/** The settings whose change may leave a definition to move. */
-export const MIGRATION_TRIGGERS: readonly string[] = ['vendors', 'consultants', 'qconsultRows', 'bugzModel'];
+/**
+ * The settings whose change may leave a definition to move — the chat presets too (E4.6a): a config import or a hand edit
+ * can bring presets back. Not `chatModel`: the move remaps it only in the run that moves the preset it names.
+ */
+export const MIGRATION_TRIGGERS: readonly string[] = ['vendors', 'consultants', 'qconsultRows', 'bugzModel', 'chatModelPresets'];
 
 /** What a layer is called in a sentence, how it is read, and how one write lands in it. */
 interface Layer {
@@ -184,13 +188,24 @@ const LAYER_KEYS: Readonly<Record<LayerWrite['key'], keyof CatalogLayer>> = {
   bugzModel: 'bugzModel',
   catalogMigration: 'marker',
   migratedFrom: 'backup',
+  chatPresetsMoved: 'chatPresetsMoved',
+  chatModel: 'chatModel',
+  chatModelName: 'chatModelName',
 };
+
+/**
+ * The chat model presets AS THE CHAT READS THEM (E4.6a): the user layer's, the shipped ones included when the person
+ * never changed them — the same reader `savedModels` uses, so the move moves exactly what the chat offered.
+ */
+function chatPresetsOf(config: vscode.WorkspaceConfiguration): unknown {
+  return userLayerReader((section) => config.get(section), (section) => config.inspect(section))('chatModelPresets');
+}
 
 /** The user's own `settings.json` — never a workspace value, which is not theirs to have migrated. */
 function userLayerOf(config: vscode.WorkspaceConfiguration): Layer {
   return {
     name: 'your settings',
-    read: () => layerFrom((key) => config.inspect(key)?.globalValue),
+    read: () => ({ ...layerFrom((key) => config.inspect(key)?.globalValue), chatPresets: chatPresetsOf(config) }),
     write: async ({ key, value }) => {
       await config.update(key, value, vscode.ConfigurationTarget.Global);
     },
@@ -207,6 +222,11 @@ function sideLayer(context: vscode.ExtensionContext, config: vscode.WorkspaceCon
     read: () => ({
       ...layerFrom((key) => readOverlay(store, side)[key]),
       sharedVendors: config.inspect('vendors')?.globalValue,
+      // The chat's presets are the user layer's; a side that keeps its own rows gets chat rows of its own, under the
+      // ids the user layer gave them where they are free (E4.6a).
+      chatPresets: chatPresetsOf(config),
+      side: true,
+      userChatRecord: config.inspect('chatPresetsMoved')?.globalValue,
     }),
     write: async ({ key, value }) => {
       const { [key]: _old, ...rest } = readOverlay(store, side);

@@ -30,6 +30,11 @@ export interface ChatMoveInput {
   readonly presets: readonly ModelPreset[];
   readonly rows: readonly RawRow[];
   readonly record: readonly MovedPreset[];
+  /**
+   * Another layer's record — the user layer's, for a side that keeps its own rows: a preset it moved keeps the SAME row
+   * id here when that id is free, so the one `coai.chatModel` names the same row on every side.
+   */
+  readonly preferred?: readonly MovedPreset[];
 }
 
 /** What a run ends with — and the row and model the chat opens on, when it moved the main preset. */
@@ -62,12 +67,33 @@ function recorded(preset: ModelPreset, record: readonly MovedPreset[]): boolean 
 export function chatMove(input: ChatMoveInput): ChatMove {
   const due = input.presets.filter((preset) => !recorded(preset, input.record));
 
-  return due.reduce<ChatMove>((acc, preset) => movedOne(acc, preset), { rows: input.rows, record: input.record, changed: false });
+  const preferred = input.preferred ?? [];
+
+  return due.reduce<ChatMove>((acc, preset) => movedOne(acc, preset, preferred), { rows: input.rows, record: input.record, changed: false });
 }
 
-function movedOne(acc: ChatMove, preset: ModelPreset): ChatMove {
+/** The row id a preset takes: the one another layer gave it when it is free here, else the next free `chat-<id>`. */
+function rowIdFor(preset: ModelPreset, taken: ReadonlySet<string>, preferred: readonly MovedPreset[]): string {
+  const there = preferredId(preset, preferred);
+
+  return there.length > 0 && !taken.has(there) ? there : freeVendorId(baseId(preset), taken);
+}
+
+/** The row id another layer gave this preset — '' when it gave none. */
+function preferredId(preset: ModelPreset, preferred: readonly MovedPreset[]): string {
+  return preferred.find((one) => recorded(preset, [one]))?.rowId ?? '';
+}
+
+/** `chat-<the preset's id, normalised>` — `chat-model` for an id with nothing left once normalised. */
+function baseId(preset: ModelPreset): string {
+  const id = normaliseId(preset.id);
+
+  return id.length > 0 ? `chat-${id}` : 'chat-model';
+}
+
+function movedOne(acc: ChatMove, preset: ModelPreset, preferred: readonly MovedPreset[]): ChatMove {
   const taken = new Set(acc.rows.map((row) => String(row['id'] ?? '').toLowerCase()));
-  const rowId = freeVendorId(`chat-${normaliseId(preset.id) || 'model'}`, taken);
+  const rowId = rowIdFor(preset, taken, preferred);
   const entry: MovedPreset = { presetId: preset.id, runtime: preset.runtime, model: preset.model, name: preset.name, rowId };
 
   return {

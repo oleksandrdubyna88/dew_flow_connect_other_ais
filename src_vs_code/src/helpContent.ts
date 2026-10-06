@@ -625,7 +625,7 @@ export const HELP_ARTICLES: readonly HelpArticle[] = [
       why:
         'Until now one model could be defined three times — as a reviewer, as a consultant and as a question-consultant row — and editing one copy left the others behind. One list is the cure, and this is its first, invisible step.',
       setup:
-        'Nothing to set up. It runs once when the extension starts: for your own settings, and for this side’s own settings when **separate settings for each side** is on. A copy of them as they were is kept in `coai.migratedFrom`, and `coai.catalogMigration` records that the settings were moved into the catalog.',
+        'Nothing to set up. It runs once when the extension starts: for your own settings, and for this side’s own settings when **separate settings for each side** is on. A copy of them as they were is kept in `coai.migratedFrom`, and `coai.catalogMigration` records that the settings were moved into the catalog. Your chat model presets move the same way: each becomes a model of its own, ticked Chat, and `coai.chatPresetsMoved` remembers which chat presets moved — so a chat model you remove from Models stays removed.',
       usage:
         'To undo it, run **ConnectOtherAIs: Restore settings from before the catalog** from the command palette. It names the settings it will change, asks once, and puts your reviewers, consultants and question-consultant rows back exactly as they were. Restored settings are not moved again by themselves.',
       whatCanGoWrong:

@@ -84,7 +84,8 @@ const SANCTIONED: Readonly<Record<string, { readonly count: number; readonly why
   // and written Global on purpose — a workspace value is not the person's to have migrated, and the merged reader
   // would hand it one — and a side's overlay reads the user layer's rows its keys fall back to (`sharedVendors`).
   // (The chat's three shared-layer readers left with E1.1: the chat reads its model keys through `userLayer`.)
-  'catalogMigrationHost.ts by-name': { count: 1, why: 'sharedVendors — the user rows an overlay falls back to' },
+  'catalogMigrationHost.ts by-name': { count: 2, why: 'sharedVendors — the user rows an overlay falls back to; userChatRecord — the user layer’s chat record, whose row ids a side keeps (E4.6a)' },
+  'catalogMigrationHost.ts forwarding reader': { count: 1, why: 'the chat presets as the chat reads them — the user layer, the shipped ones included — for every layer (E4.6a)' },
   'catalogMigrationHost.ts global write': { count: 1, why: 'the migration writes the user layer it read, and no other' },
   // Not configuration at all: the shape matches a Map lookup too, and these two are exactly that.
   'chatPresets.ts forwarding reader': { count: 1, why: 'a Map lookup (byId), not a configuration read' },

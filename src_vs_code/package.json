@@ -890,6 +890,11 @@
           "enum": ["migrated", "restored"],
           "markdownDescription": "Written by ConnectOtherAIs, not by hand. `migrated`: the consultant and question-consultant models in these settings were moved into the reviewer list (the model catalog). `restored`: they were put back with **ConnectOtherAIs: Restore settings from before the catalog**, and are not moved again by themselves."
         },
+        "coai.chatPresetsMoved": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Written by ConnectOtherAIs, not by hand: which chat model presets were moved into the model catalog, and the model each became. A preset listed here is not moved again — so a chat model removed from **Models** stays removed. **ConnectOtherAIs: Restore settings from before the catalog** puts the presets back."
+        },
         "coai.migratedFrom": {
           "type": "object",
           "markdownDescription": "Written by ConnectOtherAIs, not by hand: `coai.vendors`, `coai.consultants` and `coai.qconsultRows` exactly as they were before their models were moved into the catalog. **ConnectOtherAIs: Restore settings from before the catalog** puts them back."

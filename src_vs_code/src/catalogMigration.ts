@@ -4,6 +4,7 @@ import { CALLER_KINDS, consultantChoiceFrom, DEFAULT_CONSULT, sameChoice } from 
 import { questionRowFrom } from './qconsultSettings';
 import { DEFAULT_VENDORS, freeVendorId, normaliseId, Vendor, vendorsFrom } from './vendors';
 import { asRecord, isRecord, Launch, RawRow, rawId, sameLaunch, withLaunch } from './catalogLaunch';
+import { chatReferences, chatStep } from './catalogChatStep';
 
 /**
  * The one-time move of every model DEFINITION into the catalog (PLAN_one_model_catalog.md D3, E1.3).
@@ -27,7 +28,11 @@ export const MIGRATED = 'migrated';
 export const RESTORED = 'restored';
 
 /** The keys a migration may rewrite, and so the keys its backup holds. */
-export const BACKED_UP: readonly ('vendors' | 'consultants' | 'qconsultRows' | 'bugzModel')[] = ['vendors', 'consultants', 'qconsultRows', 'bugzModel'];
+export const BACKED_UP: readonly ('vendors' | 'consultants' | 'qconsultRows' | 'bugzModel' | 'chatPresetsMoved' | 'chatModel' | 'chatModelName')[] = [
+  'vendors', 'consultants', 'qconsultRows', 'bugzModel',
+  // The chat presets' move (E4.6a): its record and the model the chat opens on — backed up by the run that writes them.
+  'chatPresetsMoved', 'chatModel', 'chatModelName',
+];
 
 /** One layer's raw values — `undefined` is a key this layer does not hold. */
 export interface CatalogLayer {
@@ -42,10 +47,21 @@ export interface CatalogLayer {
   readonly backup?: unknown;
   /** What `vendors` reads when this layer holds none: the shared value, or nothing for the shipped rows. */
   readonly sharedVendors?: unknown;
+  /** The chat model presets AS THE CHAT READS THEM — the user layer's, the shipped ones included — for every layer (E4.6a). */
+  readonly chatPresets?: unknown;
+  /** `chatPresetsMoved` — this layer's record of the presets it moved. */
+  readonly chatPresetsMoved?: unknown;
+  /** `chatModel` and `chatModelName` — the user layer's alone. */
+  readonly chatModel?: unknown;
+  readonly chatModelName?: unknown;
+  /** A side's overlay rather than the user layer. */
+  readonly side?: boolean;
+  /** For a side: the user layer's record, whose row ids it keeps where they are free. */
+  readonly userChatRecord?: unknown;
 }
 
 export interface LayerWrite {
-  readonly key: 'migratedFrom' | 'vendors' | 'consultants' | 'qconsultRows' | 'bugzModel' | 'catalogMigration';
+  readonly key: 'migratedFrom' | 'vendors' | 'consultants' | 'qconsultRows' | 'bugzModel' | 'catalogMigration' | 'chatPresetsMoved' | 'chatModel' | 'chatModelName';
   /** `undefined` removes the key from the layer. */
   readonly value: unknown;
 }
@@ -85,9 +101,10 @@ export function migrateLayer(layer: CatalogLayer, options: MigrationOptions = {}
   const { found, skipped } = definitionsIn(layer, options);
   const placed = placeAll(baseRows(layer), found);
   const repaired = repairUses(placed.rows, referencesIn(layer));
-  const rows = { rows: repaired.rows, changed: placed.changed || repaired.changed };
+  const chat = chatStep(layer, repaired.rows);
+  const rows = { rows: chat.rows, changed: [placed, repaired, chat].some((step) => step.changed) };
 
-  return outcomeOf(writesFor(layer, found, placed.ids, rows), skipped, catalogRefusal(vendorsFrom([...rows.rows])), rows.changed);
+  return outcomeOf(writesFor(layer, found, placed.ids, rows, chat.writes), skipped, catalogRefusal(vendorsFrom([...rows.rows])), rows.changed);
 }
 
 function outcomeOf(writes: readonly LayerWrite[], skipped: readonly string[], refusal: string, rowsChanged: boolean): MigrationOutcome {
@@ -325,7 +342,7 @@ function referencesIn(layer: CatalogLayer): readonly Reference[] {
     .filter((row) => row.runtime === '' && row.vendor !== '')
     .map((row) => ({ rowId: row.vendor.toLowerCase(), use: 'qconsult' as const }));
 
-  return [...consultants, ...questions, ...bugzReference(layer.bugzModel)];
+  return [...consultants, ...questions, ...bugzReference(layer.bugzModel), ...chatReferences(layer)];
 }
 
 function bugzReference(raw: unknown): readonly Reference[] {
@@ -336,9 +353,11 @@ function bugzReference(raw: unknown): readonly Reference[] {
 
 // ---------------------------------------------------------------- the writes
 
-/** Backup → rows → references → marker; each only when it changes something. */
-function writesFor(layer: CatalogLayer, found: readonly Found[], ids: readonly string[], rows: { rows: readonly RawRow[]; changed: boolean }): readonly LayerWrite[] {
-  const references = referenceWrites(layer, found, ids);
+/** Backup → rows → references → the chat's record and keys → marker; each only when it changes something. */
+function writesFor(
+  layer: CatalogLayer, found: readonly Found[], ids: readonly string[], rows: { rows: readonly RawRow[]; changed: boolean }, chat: readonly LayerWrite[],
+): readonly LayerWrite[] {
+  const references = [...referenceWrites(layer, found, ids), ...chat];
   if (!rows.changed && references.length === 0) {
     return [];
   }
@@ -443,7 +462,7 @@ export type RestoreOutcome =
  * definitions back first, the rows go last. A restore stopped part way then leaves definitions and perhaps rows nobody
  * refers to, never a reference to a row that is gone (CodeRabbit, PR #681).
  */
-const RESTORE_ORDER: readonly (typeof BACKED_UP)[number][] = ['consultants', 'qconsultRows', 'bugzModel', 'vendors'];
+const RESTORE_ORDER: readonly (typeof BACKED_UP)[number][] = ['chatModel', 'chatModelName', 'chatPresetsMoved', 'consultants', 'qconsultRows', 'bugzModel', 'vendors'];
 
 /** Every backed-up key exactly as it was — removed where it was absent — and the layer marked restored. */
 export function restoreLayer(layer: CatalogLayer): RestoreOutcome {
