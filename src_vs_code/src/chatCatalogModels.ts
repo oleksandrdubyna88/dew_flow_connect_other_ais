@@ -1,7 +1,7 @@
 import { legacyPick, type ChatProviderList, type LegacyPick } from './chatModels';
-import type { ModelPreset } from './chatPresets';
-import { wasMoved, type MovedPreset } from './chatPresetMove';
-import type { Vendor } from './vendors';
+import { chatModelPresetsFrom, type ModelPreset } from './chatPresets';
+import { movedRecordFrom, wasMoved, type MovedPreset } from './chatPresetMove';
+import { vendorsFrom, type Vendor } from './vendors';
 
 /**
  * What the chat lists as its models, once its presets have moved into the catalog (todo/PLAN_one_model_catalog.md
@@ -50,6 +50,17 @@ function asChatModel(row: Vendor): ModelPreset {
  */
 export function chatModelsOf(presets: readonly ModelPreset[], rows: readonly Vendor[], record: readonly MovedPreset[]): readonly ModelPreset[] {
   return [...rows.filter(ticked).map(asChatModel), ...presets.filter((preset) => !wasMoved(preset, record))];
+}
+
+/**
+ * The chat's models as one side reads them — the ONE composition every reader takes, so the chat and the settings'
+ * picker cannot list two different things.
+ *
+ * @param presets `coai.chatModelPresets` as the chat reads them (the user layer's: the presets are not per side)
+ * @param read this side's reader, for its catalog rows and its record of the presets it moved
+ */
+export function chatModelsReading(presets: unknown, read: (key: string) => unknown): readonly ModelPreset[] {
+  return chatModelsOf(chatModelPresetsFrom(presets), vendorsFrom(read('vendors')), movedRecordFrom(read('chatPresetsMoved')));
 }
 
 /**

@@ -11082,9 +11082,11 @@ Each chat model preset becomes its own catalog row ticked Chat, and the chat rea
   `coai.chatModelName` = its model; otherwise a saved `chatModel` naming a moved preset is remapped to its row. Both
   are per side (`OVERLAID_SETTINGS`) and backed up with the record. A side that keeps no `vendors` of its own is left
   alone. `chatModelPresets` is a migration trigger, so an imported preset moves on the next run.
-- **The chat reads the rows.** `chatConfig.savedModels` = `chatCatalogModels.chatModelsOf`: this side's rows ticked
+- **The chat reads the rows.** `chatCatalogModels.chatModelsReading` (over `chatModelsOf`): this side's rows ticked
   Chat, as the preset shape every chat path takes, plus a preset only while the record lacks it (before the first
-  move, after a refused one, in a restored layer). Every chat path reads its settings through `chatRead(config)`, this
+  move, after a refused one, in a restored layer). It is the ONE composition: `chatConfig.savedModels` (the chat) and
+  `chatSettings.chatSettingsFrom` (the settings' "Which model answers" picker) both call it — the picker listed the
+  raw presets at first, and so showed the row `coai.chatModel` names after the move as one that cannot answer. Every chat path reads its settings through `chatRead(config)`, this
   side's reader (`bindChatSide` at activation).
 - **The presets page edits one store** (`chatModelEdits.chatModelEdit`): a row id edits the row (name, model, starting
   text; Remove drops a chat-only row and only unticks Chat on a reviewer; Main sets `coai.chatModel`); an unmoved

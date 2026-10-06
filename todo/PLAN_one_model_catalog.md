@@ -746,6 +746,9 @@ row); the new page reads it. Done, RED first.
   - *The "no dual store" scan* (`noSecondPresetStore.test.ts`) pins which modules name the presets setting and the
     presets page's two writes: the edit of a preset the move has not taken (`chatModelEdits.onPreset`) and the prune
     of dead rows no surface can show — the latter was not in the plan and is kept, because a dead row is never moved.
+  - *The settings' chat picker reads the rows too* (`chatModelsReading`, shared with `savedModels`): it listed the raw
+    presets at first, so after the move it showed the chat's own row as one that "cannot answer a chat" — found while
+    designing E4.6b, fixed with a RED test (`thePanelListsTheMovedRows.test.ts`).
   - *The chat reads this side.* `chatRead(config)` (`readerFor(side)`, bound at activation by `bindChatSide`) is what
     every chat path reads its settings through; `theChatReadsThisSide.test.ts` refuses `chatSettingsFrom(userLayer(`.
   - *A resume* goes through `resumedPickFor` → `resumedPick`: the recorded row while it is offered, else `legacyPick`
