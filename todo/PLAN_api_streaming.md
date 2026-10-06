@@ -1,6 +1,7 @@
 # PLAN — api rows can stream their answer (`"stream": true`), switched per row on the new Settings page
 
-> Status: **plan only, nothing implemented yet, 2026-10-06 (revised the same day after an own plan review).** Scope:
+> Status: **in progress, 2026-10-06 — build steps 1–4 and the docs built on `feat/api-streaming`; the live call, two tests
+> of the test plan and the promotion open (see Progress).** Revised the same day after an own plan review. Scope:
 > coai-mcp's `--ask-api` path, one new catalog row field, and one control on the new Settings page's model card.
 >
 > Related docs: [RESULTS_api_streaming_vendors.md](../research/RESULTS_api_streaming_vendors.md) (what each vendor
@@ -153,3 +154,7 @@ person may turn on, not a qwen repair, and the card's "?" says so.
   it sends a test prompt to a vendor), then promotion.
 - **The plan gate ran late.** No gate reviewer was available while this was planned (the only one, qwen, had spent its
   Token Plan quota); two own reviewer agents stood in. The coai gate is run over plan and code once it is available.
+- **Not built yet, from the test plan:** the per-module parity tests (each module's recorded non-streaming golden
+  re-told as a stream, giving the same usage line and exit) — S4 is held today by the assembler tests and one end-to-end
+  ask test; and the `ApiRuntime.ReadUsage`-level "never 0" test — today the usage line is checked at the shim's own
+  output (`AStreamedAskTests`), which is what `ReadUsage` parses. `SseReader` shipped as `SseEvents`.
