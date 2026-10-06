@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ChatEntry } from './chatPanels';
-import { Thread, threads } from './chatThread';
+import { Thread, hearsRowInstruction, threads } from './chatThread';
 import { answeredBy, asText, chatLanguage, pairOf, show } from './chatShow';
 import { cliFor, remoteFor, started } from './chatLaunch';
 import { retire } from './retireSession';
@@ -11,7 +11,7 @@ import { reaskFrom, retryFrom } from './chatPresets';
 import { sameSlate, turnEnded } from './chatFresh';
 import { imageTurn } from './chatImage';
 import { carriedFrom, carryMark } from './chatCarry';
-import { CARRY_BUDGET, REMOTE_CARRY_BUDGET, carriedTurn } from './chatPrompt';
+import { CARRY_BUDGET, REMOTE_CARRY_BUDGET, carriedTurn, rowInstructed } from './chatPrompt';
 import { chatSettingsFrom } from './chatSettings';
 import { ChatOutcome, ReportedUsage, chatTurnRecord } from './chatUsage';
 import { recordChatTurn } from './chatUsageFile';
@@ -443,7 +443,11 @@ export async function oneTurn(
   // does on every poll, which is the difference between "the model is thinking" and "somebody else's
   // round has the vendor and you are fourth". Guarded by the flag, because a turn that finished
   // while a poll was in flight must not re-open the thinking line. (gemini, the code round.)
-  const result = await thread.session.send(sent, (position) => {
+  // The row's system prompt goes with the first turn a session hears, and with every turn of one that forgets each (E4.6c,
+  // D8) — in the text, as coai-mcp places it for a reviewer; what is shown stays what was typed.
+  const instructing = hearsRowInstruction(thread);
+  thread.instructed = thread.session;
+  const result = await thread.session.send(rowInstructed(sent, answering?.systemPrompt ?? '', instructing), (position) => {
     if (thread.running) {
       show(entry, true, '', position);
     }

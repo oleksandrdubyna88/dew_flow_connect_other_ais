@@ -37,6 +37,11 @@ export interface Thread extends ChatMemory {
    * to know how a turn is sent would buy nothing and cost that.</p>
    */
   session: ChatSession;
+  /**
+   * The session that has heard the row's system prompt (PLAN_one_model_catalog.md E4.6c). A turn to any OTHER session —
+   * a new conversation, a model switch, a reload — carries it again; absent until the first turn is sent.
+   */
+  instructed?: ChatSession | undefined;
   /** The directory that session runs in. Replaced with it, and released with it. */
   home: ChatHome;
   /**
@@ -326,3 +331,11 @@ export interface Thread extends ChatMemory {
 }
 
 export const threads = new WeakMap<object, Thread>();
+
+/**
+ * Whether the next turn carries the row's system prompt (PLAN_one_model_catalog.md E4.6c): when the session sending it has
+ * not heard it — a new conversation, a model switch, a reload, a reset — and on every turn of a session that forgets each.
+ */
+export function hearsRowInstruction(thread: Pick<Thread, 'forgetful' | 'instructed' | 'session'>): boolean {
+  return thread.forgetful || thread.instructed !== thread.session;
+}

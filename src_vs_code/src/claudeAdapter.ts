@@ -35,6 +35,11 @@ export const CLAUDE_ARGS: readonly string[] = [
  */
 export const CLAUDE_AGENT_ARGS: readonly string[] = [...CLAUDE_ARGS, '--permission-mode', 'bypassPermissions'];
 
+/** A flag and its value, or nothing for an empty value — asking a CLI for "" is not the same as not asking. */
+function flagged(flag: string, value: string): readonly string[] {
+  return value.length > 0 ? [flag, value] : [];
+}
+
 export const claudeAdapter: ChatAdapter = {
   shape: 'persistent',
   // Per-turn: each `result` prices the turn it ends, `total_cost_usd` included.
@@ -42,11 +47,13 @@ export const claudeAdapter: ChatAdapter = {
   announces: false,
   // `--model`, the spelling this repository already verified against the installed CLI for its
   // reviewers (ClaudeRuntime). Empty sends nothing, so the CLI keeps its own default.
-  argv: ({ model, access }) => {
-    const args = access === 'agent' ? CLAUDE_AGENT_ARGS : CLAUDE_ARGS;
-
-    return model.length > 0 ? [...args, '--model', model] : args;
-  },
+  // `--effort` is the flag coai-mcp hands the same CLI for a reviewer (ClaudeRuntime), so a row chats at the effort it
+  // reviews at (E4.6c); `chatLaunchFor` passes only a level the CLI accepts.
+  argv: ({ model, access, effort }) => [
+    ...(access === 'agent' ? CLAUDE_AGENT_ARGS : CLAUDE_ARGS),
+    ...flagged('--model', model),
+    ...flagged('--effort', effort ?? ''),
+  ],
   // The block shape, not a bare string: the content of a user message is a list of typed blocks,
   // and a string where a list is expected is refused by the CLI rather than misread.
   encode: (turn) => JSON.stringify({

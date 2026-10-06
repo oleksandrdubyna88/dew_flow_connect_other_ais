@@ -11147,3 +11147,34 @@ flowchart LR
   Q -->|redraw| N
   N -->|data-setting| S[chatPromptChoice, chatLanguage, chatAutoSend]
 ```
+
+## A row chats as it reviews — effort and system prompt (2026-10-06, PLAN_one_model_catalog.md E4.6c, D8)
+
+A catalog row's `effort` and `systemPrompt` reach the chat by coai-mcp's own rules (E2.2), so one row behaves the same
+in a review and in a chat:
+
+- **Carried.** `ModelPreset` has optional `effort` and `systemPrompt`; `chatCatalogModels.OPTIONAL` copies them from
+  the row and `chatRunSpec` hands them to the run spec (`carriedOf`, one table for every optional field).
+- **Effort.** `cliChatLaunch.chatLaunchFor` builds every chat launch: a claude row gets the row's effort as
+  `ChatLaunch.effort` only when `featureAvailability.effortRefusal` accepts it, and `claudeAdapter` writes
+  `--effort <level>` — the flag the server's `ClaudeRuntime` uses. codex and agy get none (the server sends them none).
+  A Team-server row sends `effort` in the request (`remoteAsk.requestBody`, via `RemoteVendor.effort`); the server
+  applies it to a vendor with measured levels and drops it otherwise.
+- **System prompt.** `chatPrompt.rowInstructed` puts a section — "## What the person asked of this model", the text,
+  one framing line — before what is SENT, never in argv. `chatThread.hearsRowInstruction` decides when: the session
+  sending the turn has not heard it (`Thread.instructed` names the session that has — a new conversation, a switch, a
+  reload or a reset is a new session object), or the session forgets every turn (a Team server). Not a request field
+  for a Team server: the server drops a system prompt from a prompt with no finding contract, which a chat never has.
+  What is shown and stored stays what the person typed.
+
+```mermaid
+flowchart LR
+  R[catalog row: effort, systemPrompt] -->|OPTIONAL| M[ModelPreset]
+  M -->|chatRunSpec| V[run spec Vendor]
+  V -->|chatLaunchFor| L[ChatLaunch.effort, claude only]
+  L -->|claudeAdapter| A["--effort level"]
+  V -->|RemoteVendor.effort| B[request field effort]
+  V -->|systemPrompt| P[rowInstructed]
+  H[hearsRowInstruction] --> P
+  P --> S[the text sent, not the transcript]
+```

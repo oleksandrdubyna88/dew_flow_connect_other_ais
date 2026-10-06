@@ -69,8 +69,9 @@ type KeptByAReset =
   | 'turn' | 'generation' | 'resetting'
   // Queues rather than contents.
   | 'turns' | 'writes'
-  // Replaced by the host, which owns them: a dead session and a released directory are not values.
-  | 'session' | 'home'
+  // Replaced by the host, which owns them: a dead session and a released directory are not values. `instructed` names a
+  // session, and a reset's new session is never it — so the new conversation hears the row's instruction again (E4.6c).
+  | 'session' | 'home' | 'instructed'
   // Deleted rather than assigned — see `UNSAVED` — and decided by whichever model answers next.
   | 'savedMessages' | 'savedModelId' | 'savedCarryFrom' | 'savedAccess' | 'forgetful' | 'ourDraft';
 

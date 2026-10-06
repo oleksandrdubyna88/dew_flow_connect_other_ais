@@ -1,7 +1,7 @@
 # PLAN — One model catalog: the Settings page rebuilt around models you add once
 
 > Status: **in progress, 2026-10-06 — E1 merged (PR #681); E2 merged (PR #686; its release, the Team server deploy and
-> the measured live calls wait on the operator); E3 merged (PR #687); E4 in progress on `feat/catalog-e4` (E4.1–E4.5, E4.6a and E4.6b built; E4.6c open); E5 open.** The design is accepted: the clickable mockup in
+> the measured live calls wait on the operator); E3 merged (PR #687); E4 in progress on `feat/catalog-e4` (E4.1–E4.6 built; the owed consultations and the epic's code gate open); E5 open.** The design is accepted: the clickable mockup in
 > [`new_design/`](../new_design/README.md) (open `new_design/index.html`; `node new_design/check.mjs` drives it, 61
 > checks). Scope: the extension's Settings page (`src_vs_code/src`), the settings it writes and how they reach
 > coai-mcp, coai-mcp's runners where the design adds a capability (`src_mcp`), the Team server's review request
@@ -802,6 +802,41 @@ row); the new page reads it. Done, RED first.
     `settingRefusedWiring.test.ts`.
   - *The two route branches share one* in `PanelProvider.receive` (`commands` or `chatPresets`), which keeps that
     method at its 50-line limit.
+
+  **E4.6c as designed (2026-10-06), from a trace of how coai-mcp applies both (E2.2) and of the chat's launch.** The
+  chat follows the server's rules exactly, so a row behaves the same when it reviews and when it chats:
+  - *Carried.* `ModelPreset` gains optional `effort` and `systemPrompt`; `chatCatalogModels.OPTIONAL` copies them
+    from the row and `chatRunSpec` hands them on. Today both are dropped at `asChatModel` and again at `chatRunSpec`.
+  - *Effort, where the server sends one.* claude: `--effort <level>` on the launch (`ClaudeRuntime.cs:89-91`), and
+    only a level `featureAvailability.effortRefusal` accepts — the TS mirror of the server's check — so a value the CLI
+    would refuse never reaches it. A Team-server row: the request's `effort` field (`RemoteAsk.cs:98-103`), which the
+    server applies to a vendor with measured levels and drops otherwise. codex and agy: none (`RosterBuilder.EffortFor`
+    gives them none; agy's level is in its model id). `ChatLaunch` gains an OPTIONAL `effort` — every adapter's
+    `argv` decides, and only claude's uses it. No thinking switch: no chat runtime has one.
+  - *System prompt, inside the text, never in argv.* As the server does for every runtime but a Team server
+    (`ReviewerPrompt.ComposePrompt`, `PersonInstruction`): a section before the person's words —
+    "## What the person asked of this model" — on the FIRST turn a session hears (a new conversation, a model switch,
+    a reload: the session object changed), and on EVERY turn of a forgetful (Team-server) session, which forgets each
+    turn. Not a request field for a Team server: the server drops a system prompt from a prompt without a finding
+    contract, which a chat never has (`ClientOptions.cs:98-102`). What is SHOWN and stored stays what the person
+    typed; the section is in what is sent only, as the carried transcript already is.
+  - *Test plan, E4.6c:* a row's effort and system prompt reach the chat model (`chatModelsOf`) and the run spec; the
+    claude argv carries `--effort high` and no flag for an empty or refused level, and codex/agy argv never one (the
+    pinned text-mode argv tests unchanged); the Team-server body carries `effort` only when set; the section is
+    prepended on a session's first turn and not its second, on every turn of a forgetful session, never when the row
+    has none, and the transcript keeps the typed text.
+
+  **E4.6c built 2026-10-06** (`cliChatLaunch.chatLaunchFor`, `claudeAdapter`, `chatPrompt.rowInstructed`,
+  `chatThread.hearsRowInstruction`; carried in `chatPresets.ts`, `chatCatalogModels.ts`; sent in `chatTurn.ts`,
+  `remoteAsk.ts`, `remoteChatSession.ts`, `chatRemote.ts`). As designed, with these notes:
+  - *"The session that heard it"* is the session OBJECT (`Thread.instructed`), so every way a session is replaced — a
+    switch, a reload, a reset (`chatArchive`'s partition classifies the field with `session`) — sends it again
+    without each path having to remember to.
+  - *Not measured on a real call yet,* as for reviewers (the plan's open measurement): whether an older claude CLI
+    refuses `--effort` in chat mode (the server names that refusal for a reviewer; the chat shows the CLI's own
+    error), and how strongly a model follows an instruction placed in the first user turn rather than a system role.
+  - *The wiring in `chatTurn.ts`* (it imports `vscode`) is pinned by reading the source; the two decisions it calls
+    are tested as values (`aChatHonoursItsRow.test.ts`).
 
 **Build order:** E4.1 → E4.2 → E4.5 → E4.3 → E4.4 → E4.6. E4.5 comes before the folded pages because it touches no
 host-module seam, so it lands while E4.3's command shape settles.

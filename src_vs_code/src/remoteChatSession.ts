@@ -50,6 +50,8 @@ export interface RemoteVendor {
   /** The vendor id the SERVER knows — not the row's id, which is `<server>-<vendor>`. */
   readonly vendor: string;
   readonly model: string;
+  /** The row's effort, sent for the server to judge (PLAN_one_model_catalog.md E4.6c); absent sends none. */
+  readonly effort?: string;
 }
 
 export class RemoteChatSession implements ChatSession {
@@ -216,7 +218,7 @@ export class RemoteChatSession implements ChatSession {
     // that has not learned the field ignores it, which is measured rather than assumed.
     const key = this.retry?.text === text ? this.retry.key : this.key();
     const sent = await this.transport.submit(
-      requestBody(this.vendor.vendor, this.vendor.model, text, seconds, key),
+      requestBody(this.vendor.vendor, this.vendor.model, text, seconds, key, this.vendor.effort ?? ''),
     );
     if (sent.failure.length > 0) {
       // Kept, because THIS is the case the key exists for: the request may well have been accepted

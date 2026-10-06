@@ -20,6 +20,8 @@ function ticked(row: Vendor): boolean {
 /** A row's optional fields, and what each is called on a chat model — carried only when the row has it. */
 const OPTIONAL: readonly (readonly [keyof Vendor, keyof ModelPreset])[] = [
   ['chatStartingPrompt', 'startingPrompt'], ['teamServerId', 'teamServerId'], ['remoteVendor', 'remoteVendor'], ['vaultKeyName', 'vaultKeyName'],
+  // A row chats as it reviews (E4.6c, D8).
+  ['effort', 'effort'], ['systemPrompt', 'systemPrompt'],
 ];
 
 function optionalOf(row: Vendor): Partial<ModelPreset> {
