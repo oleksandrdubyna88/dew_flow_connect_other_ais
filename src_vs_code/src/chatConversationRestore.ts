@@ -74,7 +74,7 @@ function restoredPage(
       // The row this tab was speaking to, read by `resumedPickFor` out of the record.
       providerId: ready.ok ? ready.providerId : restored.providerId,
       chosenModelId: ready.ok ? ready.providerId : restored.providerId,
-      modelId: saved.modelId,
+      modelId: ready.ok ? ready.modelId : restored.modelId, // the RESOLVED model, never the saved value (R5)
       // A restored tab starts on the MAIN prompt, like a new one: the button that was pressed lived
       // in a conversation whose process is gone, and the main one is what this list says to use when
       // nobody has pressed anything.
@@ -181,7 +181,8 @@ export function restoreConversation(
     providerId: ready.ok ? ready.providerId : restored.providerId,
     // The row it opens on — so the first push after a reload writes nothing: a reload is not a use.
     savedProviderId: ready.ok ? ready.providerId : restored.providerId,
-    modelId: saved.modelId,
+    // The model the resume RESOLVED, never the saved value: a legacy preset id resolved to its row and model (R5).
+    modelId: ready.ok ? ready.modelId : restored.modelId,
     // The MAIN prompt and the restored model's own role: a reloaded tab shows the same pressed
     // buttons a new one does, because the list is the configuration and a reload changes no part
     // of it.

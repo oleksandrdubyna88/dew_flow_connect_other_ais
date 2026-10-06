@@ -71,6 +71,24 @@ test('a run interrupted after its record was written still points the chat model
   assert.equal(written(resumed, 'chatModel'), 'chat-a');
 });
 
+test('a run interrupted before the chat keys of a MAIN move ends where an uninterrupted run ends — row AND model', () => {
+  // The uninterrupted run writes chatModel = the main row AND chatModelName = its model; a resume that repaired only the
+  // chat model left a stale model name, which opens another model on the right row (the risk consultation, R4).
+  const presets = [preset('a', { main: true, model: 'sonnet' })];
+  const first = writes({ chatPresets: presets, chatModel: 'a', chatModelName: 'haiku' });
+  const resumed = writes({
+    chatPresets: presets,
+    vendors: written(first, 'vendors'),
+    chatPresetsMoved: written(first, 'chatPresetsMoved'),
+    chatModel: 'a',
+    chatModelName: 'haiku',
+    marker: MIGRATED,
+    backup: written(first, 'migratedFrom'),
+  });
+
+  assert.deepEqual([written(resumed, 'chatModel'), written(resumed, 'chatModelName')], [written(first, 'chatModel'), written(first, 'chatModelName')]);
+});
+
 test('a chat model that names a row is the person\'s choice, and no recorded preset of that id takes it over', () => {
   const first = writes({ chatPresets: [preset('a')] });
   const rows = written(first, 'vendors') as readonly Record<string, unknown>[];
@@ -126,6 +144,22 @@ test('a chat row an older build wrote back without its uses gets its chat tick b
     chatPresets: [preset('a')],
     vendors: [...DEFAULT_VENDORS.map((row) => ({ ...row })), lost],
     chatPresetsMoved: [{ presetId: 'a', runtime: 'claude', model: 'opus', name: 'Name of a', rowId: 'chat-a' }],
+    marker: MIGRATED,
+    backup: { keys: ['vendors', 'consultants', 'qconsultRows'], values: {} },
+  });
+
+  assert.deepEqual((written(all, 'vendors') as readonly Record<string, unknown>[]).at(-1)!['uses'], ['chat']);
+});
+
+test('a chat row whose preset id kept no key name gets its tick back too — the record proves the move made it', () => {
+  // A mixed-case id is not normaliseId-clean, so its row carries no vaultKeyName; the repair looked for a "foreign" key
+  // name to know a migration made the row, and so never repaired this one — after a downgrade and an upgrade the model
+  // was gone from the chat (the risk consultation, R6).
+  const lost = { id: 'chat-glm-fast', runtime: 'claude', model: 'opus', enabled: true, plan: false, code: false, document: false, baseUrl: '', executablePath: '' };
+  const all = writes({
+    chatPresets: [preset('GLM Fast')],
+    vendors: [...DEFAULT_VENDORS.map((row) => ({ ...row })), lost],
+    chatPresetsMoved: [{ presetId: 'GLM Fast', runtime: 'claude', model: 'opus', name: 'Name of GLM Fast', rowId: 'chat-glm-fast' }],
     marker: MIGRATED,
     backup: { keys: ['vendors', 'consultants', 'qconsultRows'], values: {} },
   });

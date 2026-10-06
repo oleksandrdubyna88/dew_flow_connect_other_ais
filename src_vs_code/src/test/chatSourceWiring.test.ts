@@ -42,6 +42,11 @@ test('a record keeps the row it was spoken to, and a resume reads that row back'
   assert.match(built, /providerId: thread\.providerId/u, 'a record is written without the row that answered');
   assert.match(restore, /resumedPickFor\(config, saved\.providerId \?\? '', saved\.modelId\)/u, 'a resume does not read the recorded row');
   assert.doesNotMatch(restore, /savedPick\(config, saved\.modelId\)/u, 'a resume still reads the model name alone');
+  // And the thread goes on with the model the resume RESOLVED, never the saved value: a legacy record's `modelId` that
+  // is an old preset id resolves to `chat-a/sonnet`, and a thread that kept `a` asked for `chat-a/a` on its first turn
+  // and was refused (the risk consultation of epic 4, finding R5).
+  assert.doesNotMatch(restore, /\bmodelId: saved\.modelId,/u, 'a restored thread asks for the saved value, not the resolved model');
+  assert.match(restore, /modelId: ready\.ok \? ready\.modelId : restored\.modelId,/u);
 });
 
 test('the pin writes the session id AND the folder it was found in, and saves for itself', () => {

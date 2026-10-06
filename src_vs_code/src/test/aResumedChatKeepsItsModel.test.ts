@@ -41,11 +41,19 @@ test('a saved value that names a row that exists is that row, though an old pres
   assert.equal(resumedPick(list, specs, shadowing, '', 'chat-fast').providerId, 'chat-fast');
 });
 
-test('a recorded row that is gone falls back to what the model name says, as before', () => {
-  const pick = resumedPick(list, specs, RECORD, 'chat-removed', 'sonnet');
+test('a recorded row that is gone stays the row the conversation names — refused by name, never quietly replaced', () => {
+  // Falling back to the model name resumed it on whichever row still offered that model — somebody else's row, prompt
+  // and effort, unasked (the risk consultation of epic 4, R1). The chat's own rule is that a row a person named and
+  // which cannot answer is refused BY NAME (readyToChat), and the person picks another.
+  const onlyFast = chatProvidersFromPresets([MODELS[0]!], catalogUsing(EMPTY_DISCOVERY, []));
 
-  assert.notEqual(pick.providerId, 'chat-removed', 'a conversation was resumed on a row that is not there');
-  // Exactly what the model name says on its own — here two rows offer it, so the person is asked, never guessed for.
+  assert.deepEqual(resumedPick(onlyFast, [chatRunSpec(MODELS[0]!)], RECORD, 'chat-removed', 'sonnet'), { providerId: 'chat-removed', modelId: 'sonnet', candidates: [] });
+});
+
+test('a record written before rows were recorded still resumes by its model name', () => {
+  const pick = resumedPick(list, specs, RECORD, '', 'sonnet');
+
+  // Here two rows offer it, so the person is asked, never guessed for.
   assert.deepEqual(pick, legacyPick(list, specs, 'sonnet'));
   assert.deepEqual(pick.candidates, ['chat-fast', 'chat-deep']);
 });

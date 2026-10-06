@@ -309,7 +309,7 @@ function addUse(raw: RawRow, use: CatalogUse): RawRow {
  */
 function repairUses(rows: readonly RawRow[], references: readonly Reference[]): { rows: readonly RawRow[]; changed: boolean } {
   const lost = lostRows(rows);
-  const repairs = references.filter((ref) => lost.some((row) => row.id === ref.rowId));
+  const repairs = references.filter((ref) => lost.some((row) => row.id === ref.rowId && (ref.proven === true || carriesAForeignKeyName(row))));
 
   return repairs.reduce<{ rows: readonly RawRow[]; changed: boolean }>((acc, ref) => {
     const match = vendorsFrom([...acc.rows]).find((row) => row.id === ref.rowId);
@@ -330,8 +330,9 @@ function lostRows(rows: readonly RawRow[]): readonly Vendor[] {
   return vendorsFrom([...rows]).filter((row) => unsaid.has(row.id) && lostItsUses(row));
 }
 
+/** Reviews nothing and uses nothing. Whether the MIGRATION made it is the reference's to prove, or its key name's. */
 function lostItsUses(row: Vendor): boolean {
-  return !reviewsAnything(row) && row.uses === undefined && carriesAForeignKeyName(row);
+  return !reviewsAnything(row) && row.uses === undefined;
 }
 
 /** A CLI row whose key is filed under another name — which only the migration gives a CLI row. */
@@ -342,6 +343,12 @@ function carriesAForeignKeyName(row: Vendor): boolean {
 interface Reference {
   readonly rowId: string;
   readonly use: CatalogUse;
+  /**
+   * The reference itself proves the migration made the row — the chat move's record names exactly the rows it wrote.
+   * Every other reference needs the row's foreign key name for that: a mixed-case preset id keeps none, and without
+   * the proof its row lost its chat tick for good after a downgrade (the risk consultation, R6).
+   */
+  readonly proven?: boolean;
 }
 
 function referencesIn(layer: CatalogLayer): readonly Reference[] {

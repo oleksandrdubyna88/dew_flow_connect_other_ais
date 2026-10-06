@@ -1154,9 +1154,27 @@ public sealed record PanelSettings
     /// carry a runtime and a base URL, and a second encoding for those would be a format nobody
     /// could read in a config file. `COAI_PROVIDERS` still works for the simple case.
     /// </summary>
+    /// <summary>Whether the text is a JSON array with nothing in it — said, not malformed and not absent.</summary>
+    private static bool IsEmptyList(string json)
+    {
+        try
+        {
+            using var parsed = System.Text.Json.JsonDocument.Parse(json);
+
+            return parsed.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array && parsed.RootElement.GetArrayLength() == 0;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return false;
+        }
+    }
+
     private PanelSettings WithProvidersFrom(Func<string, string?> env)
     {
-        if (env("COAI_VENDORS") is { Length: > 0 } json && ParseVendors(json) is { Count: > 0 } vendors)
+        // An EMPTY list is empty: a catalog whose rows review nothing arrives as `[]`, and reading that as "not configured"
+        // ran Codex and Antigravity, reviewers the person never chose (the cadence consultation for epics 1-3, finding 3).
+        // The round then refuses with its own sentence. Unset or blank still means not configured.
+        if (env("COAI_VENDORS") is { Length: > 0 } json && ParseVendors(json) is { } vendors && (vendors.Count > 0 || IsEmptyList(json)))
         {
             // The env variable still answers for a vendor the list did not place. It predates the
             // panel, it is what a scripted or containerised run has, and dropping it the moment a

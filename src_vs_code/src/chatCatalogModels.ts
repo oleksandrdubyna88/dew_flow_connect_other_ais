@@ -74,9 +74,11 @@ export function movedTo(saved: string, record: readonly MovedPreset[]): string {
 }
 
 /**
- * The pair a resumed conversation opens on. The row it recorded, while that row is still offered — so two rows that
- * offer one model name cannot swap its model, starting text or effort; otherwise what the saved model value says, an
- * old preset id followed through the record first.
+ * The pair a resumed conversation opens on. The row it recorded — so two rows that offer one model name cannot swap its
+ * model, starting text or effort — and KEPT when that row is gone: the chat refuses a row a person named and which cannot
+ * answer by name (`readyToChat`), and the person picks another; falling back to the model name resumed it on whichever
+ * row still offered that model, unasked (the risk consultation of epic 4, R1). A record written before rows were
+ * recorded resumes by what its model value says, an old preset id followed through the record first.
  *
  * @param providerId the row the conversation recorded, or empty for a record written before it was recorded
  * @param modelId the conversation's saved model value
@@ -88,11 +90,12 @@ export function resumedPick(
   providerId: string,
   modelId: string,
 ): LegacyPick {
-  const row = list.providers.find((one) => one.id === providerId);
-
+  if (providerId.length > 0) {
+    return { providerId, modelId, candidates: [] };
+  }
   // A value that names a row that exists is that row — `coai.chatModel` has always held one — never an old preset of the
   // same id.
   const named = list.providers.some((one) => one.id === modelId) ? modelId : movedTo(modelId, record);
 
-  return row === undefined ? legacyPick(list, specs, named) : { providerId, modelId, candidates: [] };
+  return legacyPick(list, specs, named);
 }

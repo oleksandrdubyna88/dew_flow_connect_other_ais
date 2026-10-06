@@ -57,15 +57,28 @@ export function chatStep(layer: ChatLayer, rows: readonly RawRow[]): ChatStep {
  * names a row that exists: `coai.chatModel` has always held a row id, so that is the person's own pick.
  */
 function remapped(layer: ChatLayer, rows: readonly RawRow[]): ChatStep {
-  const row = ownsChatModel(layer) ? recordedRowOf(layer, rows) : '';
+  const entry = ownsChatModel(layer) ? recordedEntryOf(layer, rows) : undefined;
 
-  return row.length === 0 ? NOTHING(rows) : { rows, writes: [{ key: 'chatModel', value: row }], changed: true };
+  return entry === undefined ? NOTHING(rows) : { rows, writes: remapWrites(layer, entry), changed: true };
 }
 
-function recordedRowOf(layer: ChatLayer, rows: readonly RawRow[]): string {
+/** The record's entry for the preset the chat model still names — none when it names a row that exists, or nothing. */
+function recordedEntryOf(layer: ChatLayer, rows: readonly RawRow[]): MovedPreset | undefined {
   const saved = typeof layer.chatModel === 'string' ? layer.chatModel : '';
 
-  return rows.some((row) => row['id'] === saved) ? '' : savedRowOf(layer, movedRecordFrom(layer.chatPresetsMoved));
+  return rows.some((row) => row['id'] === saved) ? undefined : movedRecordFrom(layer.chatPresetsMoved).find((one) => one.presetId === saved);
+}
+
+/**
+ * What the uninterrupted run would have written: the row — and, for the preset ticked MAIN, its model as well, because
+ * that run writes both and a stale model name opens another model on the right row (the risk consultation, R4).
+ */
+function remapWrites(layer: ChatLayer, entry: MovedPreset): readonly ChatWrite[] {
+  const main = chatModelPresetsFrom(layer.chatPresets).some((preset) => preset.main && preset.id === entry.presetId);
+
+  return main
+    ? [{ key: 'chatModel', value: entry.rowId }, { key: 'chatModelName', value: entry.model }]
+    : [{ key: 'chatModel', value: entry.rowId }];
 }
 
 /** The user layer, or a side that keeps rows of its own — never a side that reads the shared rows. */
@@ -119,6 +132,7 @@ function savedRowOf(layer: ChatLayer, added: readonly MovedPreset[]): string {
 }
 
 /** The rows the record names, for the uses repair: a chat row an older build wrote back without its `uses`. */
-export function chatReferences(layer: ChatLayer): readonly { readonly rowId: string; readonly use: 'chat' }[] {
-  return movedRecordFrom(layer.chatPresetsMoved).map((one) => ({ rowId: one.rowId, use: 'chat' as const }));
+export function chatReferences(layer: ChatLayer): readonly { readonly rowId: string; readonly use: 'chat'; readonly proven: true }[] {
+  // Proven: the record names exactly the rows the move wrote (R6).
+  return movedRecordFrom(layer.chatPresetsMoved).map((one) => ({ rowId: one.rowId, use: 'chat' as const, proven: true as const }));
 }
