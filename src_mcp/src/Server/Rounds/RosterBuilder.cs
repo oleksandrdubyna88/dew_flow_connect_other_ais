@@ -394,14 +394,7 @@ internal sealed class RosterBuilder(
             McpServersToSwitchOff = NoMcpServers.CodexConfigured(Environment.GetEnvironmentVariable),
         };
 
-        return runtime is ApiRuntime
-            ? settings with
-            {
-                ReasoningEffort = api.Effective.Effort,
-                MaxTokens = api.Effective.MaxTokens,
-                ThinkingOn = api.Effective.ThinkingOn,
-            }
-            : settings;
+        return runtime is ApiRuntime ? settings.WithApi(api.Effective) : settings;
     }
 
     /// <summary>
