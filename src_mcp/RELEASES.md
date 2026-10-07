@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.44.1](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.44.0...mcp-v0.44.1) (2026-10-07)
+
+
+### Bug Fixes
+
+* **mcp:** an idle server reads nothing, and initialize is answered at once ([#690](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/issues/690)) ([293f55f](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/commit/293f55f718ba89093241be12fabf6fff0cba48e2))
+
 ## [0.44.0](https://github.com/oleksandrdubyna88/dew_flow_connect_other_ais/compare/mcp-v0.43.0...mcp-v0.44.0) (2026-10-07)
 
 
