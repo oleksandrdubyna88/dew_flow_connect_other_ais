@@ -125,7 +125,7 @@ public sealed class ConsultKindsScenarioTests : ConsultScenarioBase
         {
             Id(await ConsultFor(Service(), kind, epics));
 
-            var prompt = Directory.EnumerateFiles(recorded, "*.argv").Select(File.ReadAllText).Single().Split('\0')[^1];
+            var prompt = Directory.EnumerateFiles(recorded, "*.argv").Select(LaunchRecords.Read).Single().Split('\0')[^1];
             prompt.Should().ContainEquivalentOf(heard);
         }
         finally

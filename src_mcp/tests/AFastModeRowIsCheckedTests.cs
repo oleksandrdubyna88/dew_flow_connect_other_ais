@@ -62,7 +62,7 @@ public sealed class AFastModeRowIsCheckedTests : IDisposable
         var launched = Directory.EnumerateFiles(_record, "*.argv").Single();
 
         // The recorder writes the argv NUL-joined (a field may be multiline); the last field is the prompt on stdin.
-        return File.ReadAllText(launched).Split('\0');
+        return LaunchRecords.Read(launched).Split('\0');
     }
 
     private static IEnumerable<string> Tiers(IReadOnlyList<string> argv) =>

@@ -149,7 +149,7 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
 
         // The argv a real process was started with is the planner's — one shot, read-only, ephemeral, no --search.
         var argv = Directory.GetFiles(_record, "*.argv").Should().ContainSingle().Subject;
-        var fields = File.ReadAllText(argv).Split('\0');
+        var fields = LaunchRecords.Read(argv).Split('\0');
         fields.Should().ContainInOrder("exec", "-s", "read-only", "--ephemeral").And.NotContain("--search").And.NotContain("-C");
         fields[^1].Should().Contain("Which retry shape fits a flaky vendor?").And.Contain("ladder or a breaker", "the prompt reaches the child on stdin");
 
