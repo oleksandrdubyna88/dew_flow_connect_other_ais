@@ -1,5 +1,22 @@
 # Changelog
 
+## Server 0.44.2 — 2026-10-07
+
+**codex 0.110–0.130 are never told the standard tier they refuse.** Since 0.44.0 every codex launch whose row's fast
+mode is Off — the default — carried `-c service_tier=default`. codex 0.110.0 through 0.130.0 refuse that value when
+they load their config (`Error loading config.toml: unknown variant \`default\`, expected \`fast\` or \`flex\``), so on
+those releases every codex review, consultation and question row failed before it sent anything. Measured on eleven
+releases (`research/RESULTS_codex_service_tier_versions_2026-10-07.md`): 0.107.0 and older ignore the key, 0.131.0 and
+newer accept it.
+- Every launch path now asks the installed codex its version first (`codex --version`, 10 s ceiling, never cached) and
+  sends an Off row no tier on a release in that range. Every other release is told exactly what it was told before.
+- An answer that names two releases (a wrapper's banner before the CLI's own line) counts as unknown, and is sent what
+  was always sent.
+- If the refusal is met anyway, it is named with its cure: update codex to 0.131 or newer, or set the row's fast mode
+  to "As the CLI is set" — which then runs on whatever tier your codex config asks for.
+- `providers` says beside such a row that its release cannot be told the standard tier.
+- The refusing range is data (`shared/feature-availability.json`, the codex `fastMode` row), checked by both halves.
+
 ## Server 0.44.1 — 2026-10-07
 
 **An idle server reads nothing, and `initialize` is answered at once.** Every minute each `coai-mcp` swept its
