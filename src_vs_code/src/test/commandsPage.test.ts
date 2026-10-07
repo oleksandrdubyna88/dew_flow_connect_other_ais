@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { CommandRow } from '../commands';
-import { commandEdit, commandsHtml, commandsSkewNote, type CommandsPageState } from '../commandsPage';
+import { commandsHtml, commandsSkewNote, type CommandsPageState } from '../commandsPage';
+import { commandEdit } from '../commandsMessages';
 import { Node, presses, runPageHtml } from './rolesPageHarness';
 
 /**

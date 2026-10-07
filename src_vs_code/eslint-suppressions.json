@@ -238,7 +238,7 @@
   },
   "src/chatPresetsPage.ts": {
     "complexity": {
-      "count": 2
+      "count": 1
     }
   },
   "src/chatPrompt.ts": {
@@ -811,10 +811,10 @@
   },
   "src/rolesPage.ts": {
     "complexity": {
-      "count": 6
+      "count": 4
     },
     "max-lines-per-function": {
-      "count": 4
+      "count": 3
     }
   },
   "src/rounds.ts": {

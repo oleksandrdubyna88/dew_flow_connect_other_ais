@@ -5,7 +5,7 @@ import { asText } from './asText';
 import { writeFileAtomically } from './atomicFile';
 import { COMMAND_PREFIX, commandsFrom, type CommandRow } from './commands';
 import { commandsAfter, forgettable, textBelongs, type RowCommand } from './commandsEdit';
-import type { PageCommand } from './commandsPage';
+import type { PageCommand } from './commandsMessages';
 import type { CommandsEmbedState } from './commandsEmbed';
 import { coaiDataDir } from './dataDir';
 import { notify, notifyAndAsk } from './notify';

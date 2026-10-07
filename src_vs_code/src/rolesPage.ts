@@ -1,6 +1,7 @@
-import { FEATURE_CODE, FEATURE_DOCUMENT, FEATURE_STAGE, MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, builtInFor, composed, isActive, isBuiltIn, isProgramming, stageOf, whyNotAskable, type RoleRow } from './roles';
+import { FEATURE_CODE, FEATURE_DOCUMENT, FEATURE_STAGE, MAX_ACTIVE_PER_BUCKET, PLAN_CODE, PLAN_DOCUMENT, PLAN_STAGE, RESULT_CODE, RESULT_DOCUMENT, RESULT_STAGE, activeCount, bucketOf, composed, isActive, isBuiltIn, isProgramming, stageOf, whyNotAskable, type RoleRow } from './roles';
+import { ROLE_TABS, isShippedPrompt, type RolesCommand } from './rolesMessages';
 import { formBodyCss } from './formPageStyle';
-import { TEXT_CONTROLS_CSS, textControlFrom, textControlsHtml, textControlsScript, textOf } from './textControls';
+import { TEXT_CONTROLS_CSS, textControlsHtml, textControlsScript, textOf } from './textControls';
 import { STOOD_DOWN, type Tombstone } from './roleDeletion';
 import { escapeHtml } from './webviewHtml';
 import { ROLE_TONE_CSS, roleTone } from './roleTone';
@@ -34,9 +35,6 @@ import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
  * `resize: vertical`, and what it holds is its value however much of it is on screen.</p>
  */
 const PROMPT_ROWS = 10;
-
-/** The four tabs this page is divided into, in the order they are drawn — one per bucket that has a round. */
-export const ROLE_TABS: readonly string[] = ['plan', 'code', 'documents', 'feature'];
 
 /** Where a page with no choice yet opens: the first section. */
 export const DEFAULT_ROLE_TAB = 'plan';
@@ -120,161 +118,6 @@ export interface RolesPageState {
    * window is.</p>
    */
   readonly tab?: string;
-}
-
-/** Every message this page can send, decided without a host so a test can reach the decision. */
-export type RolesCommand =
-  | { readonly kind: 'add' }
-  | { readonly kind: 'remove'; readonly id: string }
-  | { readonly kind: 'edit'; readonly id: string; readonly field: RoleField; readonly value: string | boolean }
-  | { readonly kind: 'addPrompt'; readonly id: string }
-  | { readonly kind: 'removePrompt'; readonly id: string; readonly promptId: string }
-  | { readonly kind: 'editPrompt'; readonly id: string; readonly promptId: string; readonly field: PromptField; readonly value: string }
-  | { readonly kind: 'restorePrompt'; readonly id: string; readonly promptId: string }
-  | { readonly kind: 'zoom'; readonly delta: number }
-  | { readonly kind: 'tone'; readonly delta: number }
-  /** Which of the three sections is open — decided on the page, remembered by the host. */
-  | { readonly kind: 'tab'; readonly id: string }
-  /** A deletion the mirror could not carry, finished locally with the cost accepted. */
-  | { readonly kind: 'finishDeletion'; readonly id: string }
-  /** The cure for a stand-down, offered beside the deletion it is stuck behind. */
-  | { readonly kind: 'reloadWindow' }
-  | { readonly kind: 'ignore' };
-
-const IGNORE: RolesCommand = { kind: 'ignore' };
-
-/** The fields a ROLE has. A name this does not know is not a field — `__proto__` included. */
-const ROLE_FIELDS = ['name', 'stage', 'programmingTask', 'active'] as const;
-type RoleField = (typeof ROLE_FIELDS)[number];
-
-/** The fields a PROMPT has. `text` is the body; it goes to a file rather than into the setting. */
-const PROMPT_FIELDS = ['label', 'purpose', 'text'] as const;
-type PromptField = (typeof PROMPT_FIELDS)[number];
-
-/** The two fields that are booleans on the wire; everything else arrives as a string. */
-const FLAGS: readonly string[] = ['programmingTask', 'active'];
-
-function idOf(value: unknown): string {
-  return typeof value === 'string' && value.length > 0 ? value : '';
-}
-
-/**
- * The key a typed field settles under, or nothing for a command that is not typing — what `settledWrites` debounces.
- * Moved here from `rolesPanel.ts`, which cannot be built in a test, so the rule is run (E3 code round).
- */
-export function rolesFieldOf(command: RolesCommand): string | undefined {
-  if (command.kind === 'editPrompt') {
-    return `${command.id}/${command.promptId}/${command.field}`;
-  }
-
-  return typedEdit(command) ? `${command.id}/${command.field}` : undefined;
-}
-
-/**
- * The role fields drawn as a `<select>`: a pick, applied at once like a switch, never settled like typing. Settled, a
- * stage pick waited 300 ms before it started — time the busy mark then counted — skipped the drain that stores pending
- * typing first, and was not redrawn into its new stage (E3 code round, gemini).
- */
-const PICKED_ROLE_FIELDS: ReadonlySet<string> = new Set(['stage']);
-
-/** A role edit that is somebody typing: a text value, in a field that is not a pick. */
-function typedEdit(command: RolesCommand): command is Extract<RolesCommand, { readonly kind: 'edit' }> {
-  return command.kind === 'edit' && typeof command.value === 'string' && !PICKED_ROLE_FIELDS.has(command.field);
-}
-
-/**
- * One message from the page, as a command — or `ignore`.
- *
- * <p>Pure, and separate from the host, so every shape a webview can post is reachable from a test.
- * A field is checked against a LIST of names rather than with `in`, so no key of `Object.prototype`
- * can be one.</p>
- */
-export function roleEdit(message: unknown): RolesCommand {
-  if (typeof message !== 'object' || message === null) {
-    return IGNORE;
-  }
-
-  const said = message as Record<string, unknown>;
-  const type = said['type'];
-  if (type === 'zoom' || type === 'tone') {
-    return textControlFrom(said) ?? IGNORE;
-  }
-  if (type === 'add') {
-    return { kind: 'add' };
-  }
-  if (type === 'reloadWindow') {
-    return { kind: 'reloadWindow' };
-  }
-  if (type === 'finishDeletion') {
-    // Through `idOf`, like every other id off this page: the value reaches a file path, and a page
-    // that can be older or newer than the extension it talks to is not a source this side trusts.
-    const id = idOf(said['id']);
-
-    return id === '' ? IGNORE : { kind: 'finishDeletion', id };
-  }
-  if (type === 'tab') {
-    // Against the LIST, so a word this page has no section for is never stored. The drawing side
-    // normalises too — two halves, neither trusting the other, because a retained webview can be
-    // older or newer than the extension it is talking to.
-    const wanted = idOf(said['id']);
-
-    return ROLE_TABS.includes(wanted) ? { kind: 'tab', id: wanted } : IGNORE;
-  }
-
-  const id = idOf(said['id']);
-  if (id.length === 0) {
-    return IGNORE;
-  }
-  if (type === 'remove') {
-    return { kind: 'remove', id };
-  }
-  if (type === 'addPrompt') {
-    return { kind: 'addPrompt', id };
-  }
-  if (type === 'removePrompt' || type === 'restorePrompt' || type === 'editPrompt') {
-    return promptCommand(type, id, said);
-  }
-  if (type !== 'edit') {
-    return IGNORE;
-  }
-
-  const field = said['field'];
-  if (typeof field !== 'string' || !(ROLE_FIELDS as readonly string[]).includes(field)) {
-    return IGNORE;
-  }
-
-  const value = said['value'];
-  const wanted = FLAGS.includes(field) ? 'boolean' : 'string';
-
-  return typeof value === wanted
-    ? { kind: 'edit', id, field: field as RoleField, value: value as string | boolean }
-    : IGNORE;
-}
-
-function promptCommand(type: string, id: string, said: Record<string, unknown>): RolesCommand {
-  const promptId = idOf(said['promptId']);
-  if (promptId.length === 0) {
-    return IGNORE;
-  }
-  if (type === 'removePrompt') {
-    return { kind: 'removePrompt', id, promptId };
-  }
-  if (type === 'restorePrompt') {
-    return { kind: 'restorePrompt', id, promptId };
-  }
-
-  const field = said['field'];
-  const value = said['value'];
-  if (typeof field !== 'string' || !(PROMPT_FIELDS as readonly string[]).includes(field) || typeof value !== 'string') {
-    return IGNORE;
-  }
-
-  return { kind: 'editPrompt', id, promptId, field: field as PromptField, value };
-}
-
-/** Whether a prompt is one this product ships — its text is embedded, so it cannot be deleted. */
-export function isShippedPrompt(roleId: string, promptId: string): boolean {
-  return builtInFor(roleId)?.prompts.some((p) => p.id === promptId) === true;
 }
 
 /**

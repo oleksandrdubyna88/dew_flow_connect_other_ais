@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { vendorOfPreset } from '../chatPresets';
-import { chatPresetsHtml, editRepaints, editedRows, presetEdit, presetSettlesAs } from '../chatPresetsPage';
+import { chatPresetsHtml } from '../chatPresetsPage';
+import { editRepaints, editedRows, presetEdit, presetSettlesAs } from '../chatPresetsMessages';
 
 /**
  * The tab where a person keeps their prompts and their models.

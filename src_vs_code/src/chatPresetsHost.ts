@@ -15,7 +15,7 @@ import { chatModelAdd, chatModelEdit, type ChatModelStores, type ChatModelWrite 
 import { askForAModel } from './chatModelWizard';
 import { inCatalogTurn } from './catalogMigrationHost';
 import { reportRefusal, saveSetting } from './sideConfig';
-import { PresetCommand, editRepaints, editedRows, presetSettlesAs } from './chatPresetsPage';
+import { PresetCommand, editRepaints, editedRows, presetSettlesAs } from './chatPresetsMessages';
 import { settledWrites } from './settledWrites';
 import { teamServersFrom } from './teamServers';
 
@@ -24,7 +24,7 @@ import { teamServersFrom } from './teamServers';
  * the Chat presets tab (`chatPresetsPanel.ts`) and, on the new Settings page, Chat. Moved here from
  * `chatPresetsPanel.ts`, never copied — the roles' and the commands' arrangement (`rolesHost.ts`, `commandsHost.ts`).
  *
- * <p>Everything DECIDED is `chatPresetsPage.ts`, `chatPresets.ts` and `chatModelEdits.ts`. What is here is what only a
+ * <p>Everything DECIDED is `chatPresetsMessages.ts`, `chatPresets.ts` and `chatModelEdits.ts`. What is here is what only a
  * host can do: read a setting and write one — through ONE settled-write queue for both pages, so an edit on one cannot
  * overtake the other's. Whoever draws the presets listens with {@link onChatPresetsRedraw}.</p>
  */

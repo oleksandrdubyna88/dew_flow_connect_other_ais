@@ -9,7 +9,8 @@ import {
   savedPromptPresets,
   unreadablePresetModels,
 } from './chatPresetsHost';
-import { chatPresetsHtml, presetEdit } from './chatPresetsPage';
+import { chatPresetsHtml } from './chatPresetsPage';
+import { presetEdit } from './chatPresetsMessages';
 import { isTextControl } from './textControls';
 import { applyTextControl, pushTextControlsTo } from './textControlsHost';
 import { currentTextTone } from './textToneHost';

@@ -3,7 +3,8 @@ import { test } from 'node:test';
 
 import { FEATURE_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
 import { rowsAfter } from '../rolesEdit';
-import { CUSTOM_ROLES_SINCE, roleEdit, rolesHtml, type RolesPageState } from '../rolesPage';
+import { CUSTOM_ROLES_SINCE, rolesHtml, type RolesPageState } from '../rolesPage';
+import { roleEdit } from '../rolesMessages';
 import { Node, runRolesPage, presses } from './rolesPageHarness';
 
 /**

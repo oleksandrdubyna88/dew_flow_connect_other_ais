@@ -1,5 +1,5 @@
 import { rowsAfterMain, type ChatVendorChoice } from './chatPresets';
-import { editedRows, type PresetCommand } from './chatPresetsPage';
+import { editedRows, type PresetCommand } from './chatPresetsMessages';
 import { reviewsAnything } from './catalogRules';
 import { freeChatRowId, takenRowIds } from './chatPresetMove';
 import { vendorsFrom } from './vendors';

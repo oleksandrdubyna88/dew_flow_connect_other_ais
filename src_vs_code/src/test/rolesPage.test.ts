@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { BUILTIN_ROLES } from '../builtinRoles.generated';
 import { escapeHtml } from '../webviewHtml';
 import { MAX_ACTIVE_PER_BUCKET, PLAN_STAGE, RESULT_STAGE, type RoleRow } from '../roles';
-import { CUSTOM_ROLES_SINCE, canActivate, canDeactivate, isShippedPrompt, roleEdit, rolesHtml, tooOldFor, type RolesPageState } from '../rolesPage';
+import { CUSTOM_ROLES_SINCE, canActivate, canDeactivate, rolesHtml, tooOldFor, type RolesPageState } from '../rolesPage';
+import { isShippedPrompt, roleEdit } from '../rolesMessages';
 
 /**
  * The roles page: what it draws, and what it refuses to offer.

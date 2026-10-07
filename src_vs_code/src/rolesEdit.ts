@@ -2,7 +2,7 @@ import {
   MAX_ACTIVE_PER_BUCKET, RESULT_STAGE, activeCount, bucketAt, bucketOf, idFor, isActive,
   isBuiltIn, promptIdFor, promptIdsInUse, stageOf, whyNotAskable, type RoleRow,
 } from './roles';
-import { isShippedPrompt, type RolesCommand } from './rolesPage';
+import { isShippedPrompt, type RolesCommand } from './rolesMessages';
 
 /**
  * What one command from the roles page does to the rows — every rule, and nothing a host can do.

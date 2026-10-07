@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { catalogHtml } from '../catalogPage';
 import type { ModelPreset, PromptPreset } from '../chatPresets';
-import { presetEdit } from '../chatPresetsPage';
+import { presetEdit } from '../chatPresetsMessages';
 import type { ChatSettings } from '../chatSettings';
 import { chatProviderListFor, type PanelState } from '../panelView';
 import { panelState } from './panelPageHarness';

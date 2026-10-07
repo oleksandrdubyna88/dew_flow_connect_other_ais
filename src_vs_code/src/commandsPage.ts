@@ -1,6 +1,6 @@
 import { COMMAND_MODELS_SINCE } from './commandModels';
 import { SHIPPED_COMMANDS, fileIdOf, hasText, shippedTextOf, type CommandRow, type CommandStageName, type ShippedCommand } from './commands';
-import type { RowCommand } from './commandsEdit';
+import { STAGE_NAMES } from './commandsMessages';
 import { compareVersions } from './coaiInstall';
 import { FORM_FIELDS_CSS, FORM_HEAD_CSS, formCardCss, formFrameCss } from './formPageStyle';
 import { textControlsHtml, textControlsScript, textOf } from './textControls';
@@ -9,8 +9,9 @@ import { type BusySnapshot, IDLE } from './busySnapshot';
 import { BUSY_BAR, BUSY_CSS, busyMarkScript } from './busyMark';
 
 /**
- * The Edit commands page — issue #467, Epic B. Pure: the markup, its script and the parser of what the
- * script posts. `commandsPanel.ts` is the only part that touches VS Code.
+ * The Edit commands page — issue #467, Epic B. Pure: the markup and its script; the parser of what the
+ * script posts is `commandsMessages.ts`, which the new Settings page shares. `commandsPanel.ts` is the
+ * only part that touches VS Code.
  */
 
 /** Everything the page is drawn from. `texts` are the command files on disk, by file id. */
@@ -25,50 +26,6 @@ export interface CommandsPageState {
   readonly textTone?: number;
   /** What the host had running when this tab was drawn: the busy mark's painted half (research/PLAN_busy_marks_on_every_webview.md). */
   readonly busy?: BusySnapshot;
-}
-
-/** What the page can ask the host for: an edit of the rows, or a text written or restored. */
-export type PageCommand =
-  | RowCommand
-  | { readonly kind: 'text'; readonly fileId: string; readonly value: string }
-  | { readonly kind: 'restore'; readonly fileId: string }
-  | { readonly kind: 'ignore' };
-
-const IGNORE: PageCommand = { kind: 'ignore' };
-
-const STAGE_NAMES: readonly CommandStageName[] = ['any', 'plan', 'code'];
-
-/** A message from the page, read as one of the few things it may ask — anything else is ignored. */
-export function commandEdit(message: unknown): PageCommand {
-  const m = recordOf(message);
-  const type = text(m['type']);
-
-  return Object.hasOwn(READERS, type) ? (READERS[type] ?? ignored)(m) : IGNORE;
-}
-
-const ignored = (): PageCommand => IGNORE;
-
-function recordOf(message: unknown): Record<string, unknown> {
-  return typeof message === 'object' && message !== null ? message as Record<string, unknown> : {};
-}
-
-const text = (value: unknown): string => (typeof value === 'string' ? value : '');
-
-const READERS: Readonly<Record<string, (m: Record<string, unknown>) => PageCommand>> = {
-  // No token from the page: the host draws a random one (`commandsPanel.store`).
-  add: () => ({ kind: 'add', token: '' }),
-  remove: (m) => ({ kind: 'remove', id: text(m['id']) }),
-  retitle: (m) => ({ kind: 'retitle', id: text(m['id']), value: text(m['value']) }),
-  restage: (m) => stageCommand(text(m['id']), m['value']),
-  switch: (m) => (typeof m['value'] === 'boolean' ? { kind: 'switch', id: text(m['id']), value: m['value'] } : IGNORE),
-  text: (m) => ({ kind: 'text', fileId: text(m['fileId']), value: text(m['value']) }),
-  restore: (m) => ({ kind: 'restore', fileId: text(m['fileId']) }),
-};
-
-function stageCommand(id: string, value: unknown): PageCommand {
-  const stage = STAGE_NAMES.find((one) => one === value);
-
-  return stage === undefined ? IGNORE : { kind: 'restage', id, value: stage };
 }
 
 /**
