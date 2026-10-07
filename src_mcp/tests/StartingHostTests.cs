@@ -149,6 +149,39 @@ public sealed class StartingHostTests : IDisposable
         (await StartingHost.Ended(sweeping, TimeSpan.FromSeconds(5))).Should().BeTrue("serving ended, so the sweeper ends");
     }
 
+    /// <summary>
+    /// Own review of the branch (2026-10-07): the sweeper waited for the start by asking for the CURRENT service, and that
+    /// call also rebuilds on a settings change, so one reload failure during the start ended the sweeper for the life of
+    /// the process. It now waits for the start alone (IPanelServiceSource.Ready); a call that throws later is one failed beat.
+    /// </summary>
+    [Fact]
+    public async Task TheSweeper_KeepsBeating_WhenAReloadFailsRightAfterAGoodStart()
+    {
+        var source = new FailsOnce(Host());
+        using var stop = new CancellationTokenSource();
+
+        var sweeping = ConsultationSweeper.RunAsync(source, TimeSpan.FromMilliseconds(20), Serilog.Core.Logger.None, stop.Token);
+
+        (await StartingHost.Ended(sweeping, TimeSpan.FromMilliseconds(400))).Should().BeFalse("one failed call is one failed beat");
+        source.Calls.Should().BeGreaterThan(1, "the sweeper went on asking after the first call threw");
+        await stop.CancelAsync();
+        (await StartingHost.Ended(sweeping, TimeSpan.FromSeconds(5))).Should().BeTrue();
+    }
+
+    private sealed class FailsOnce(PanelServiceHost host) : IPanelServiceSource
+    {
+        private int _calls;
+
+        public int Calls => Volatile.Read(ref _calls);
+
+        public Task Ready => Task.CompletedTask;
+
+        public ValueTask<PanelService> CurrentAsync(CancellationToken ct = default) =>
+            Interlocked.Increment(ref _calls) == 1
+                ? throw new IOException("the settings file was mid-write")
+                : ValueTask.FromResult(host.Current);
+    }
+
     [Fact]
     public async Task TheSweeper_NeverBeats_AfterAFailedStart()
     {

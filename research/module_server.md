@@ -33,7 +33,7 @@ its own 30 s timeout, now given the stop token), the `starting:` line, and `new 
 `PanelService` constructor runs every startup sweep (orphaned rounds, consultations and their re-projection into
 `coai.db`, question consults, escalations, process tracking). `initialize`, `tools/list` and `prompts/list` need none
 of it — `Tools.All` takes an `IPanelServiceSource` and every tool `await`s `CurrentAsync()`, so the first CALL waits
-for the start without holding a thread. A start that FAILS closes the transport, and `ThrowIfFailed` hands the
+for the start without holding a thread; background jobs wait on `IPanelServiceSource.Ready`, the start alone. A start that FAILS closes the transport, and `ThrowIfFailed` hands the
 failure to the crash path as a `ServerStartFailed` carrying the cause, exactly as when it ran before serving (exit 70,
 the crash recorded) — its own type, so the serving road's "the client closed the connection" filter cannot take a start
 that failed with an `IOException` for an ending. The start has its own stop (`startStop`), linked to the signal and
@@ -59,7 +59,7 @@ sequenceDiagram
     S->>B: await CurrentAsync()
     B-->>S: PanelService once built
     S-->>C: tool answer
-    W->>B: ConsultationSweeper.RunAsync(source): await CurrentAsync() — no beat before a successful start
+    W->>B: ConsultationSweeper.RunAsync(source): await source.Ready — no beat before a successful start
     loop every COAI_SWEEP_SECONDS (60, clamped 10–3600)
         W->>W: consultations, question consults, escalations
     end
@@ -70,7 +70,9 @@ card, and the answer (`SessionStore.HoldsQuestion`) deserialised every session f
 minute, about 750 MB of JSON per minute per server on the measured data. Now a card is judged FIRST; only a card that
 is due asks, the held set is read once per sweep (`Lazy`), and `SessionStore.HeldQuestions()` caches it PER FILE
 (`SessionHolds`: each session under its own write time and length — a stat per file, no read), so one active session
-costs one parse, not all of them. A session that could not be read makes the set `Complete = false` and every due card
+costs one parse, not all of them. An entry is trusted for `SessionHolds.Recheck` (10 minutes) at most: past it the file is
+parsed again whatever its stamp says, so a same-length save inside one timestamp tick, or a read that failed for a
+moment, delays a new hold by minutes and never for good. A session that could not be read makes the set `Complete = false` and every due card
 is kept (fail closed); it is cached as unreadable under its stamp, so a torn file that stays torn is not parsed again
 every beat. The beat's
 interval is `ServerPace.SweepEvery`, `COAI_SWEEP_SECONDS` — read once per start, so unlike the settings a tool call
@@ -90,7 +92,8 @@ boundary both survey. The extension reads `consultants.json` only and never sees
 | What | Where |
 |---|---|
 | The background start, its failure (`ServerStartFailed`) and stop semantics | `Server/StartingHost.cs`, `Program.StartedAsync` |
-| The sweeper waits for the start through the source | `ConsultationSweeper.RunAsync(IPanelServiceSource, …)` |
+| The sweeper waits for the start through the source (`Ready`), then asks for the current service per beat | `ConsultationSweeper.RunAsync(IPanelServiceSource, …)` |
+| A settings reload publishes the new stamp only with a service that built | `PanelServiceHost.Current` |
 | The held set, its cache and fail-closed answer | `Server/SessionHolds.cs`, `SessionStore.HeldQuestions` |
 | Judged first, held asked once per sweep | `Server/EscalationRetention.cs` |
 | The two settings | `Server/ServerPace.cs` (`PanelSettings.Pace`) |

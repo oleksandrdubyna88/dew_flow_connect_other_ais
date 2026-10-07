@@ -35,14 +35,20 @@ public sealed record HeldQuestions(IReadOnlySet<string> Ids, bool Complete)
 /// <c>Complete = false</c>; it is cached as unreadable under its stamp, so a torn file that STAYS torn is not parsed
 /// again until it changes (own review of the branch, 2026-10-07). A file CONFIRMED gone between the listing and its stat
 /// holds nothing; a stat that fails for any other reason keeps the set incomplete.</para>
+/// <para><b>Trusted for ten minutes at most</b> (<see cref="Recheck"/>): past it an entry is parsed again whatever its
+/// stamp says, so a stamp collision delays a new hold by minutes and never for good — the cost is one parse of each
+/// session every ten minutes, and only on beats that have a due card at all.</para>
 /// </remarks>
-internal sealed class SessionHolds(string sessionsDirectory, Func<string, PersistedSession?> read)
+internal sealed class SessionHolds(string sessionsDirectory, Func<string, PersistedSession?> read, TimeProvider clock)
 {
+    /// <summary>How long a cached entry is trusted whatever its stamp says; past it the file is parsed again.</summary>
+    internal static readonly TimeSpan Recheck = TimeSpan.FromMinutes(10);
+
     private readonly Lock _gate = new();
     private Dictionary<string, Holds> _files = new(StringComparer.Ordinal);
 
     /// <summary>One session file as last parsed: its stamp, what it holds, and whether it could be read at all.</summary>
-    private sealed record Holds(Stamp Stamp, IReadOnlyList<string> Ids, bool Readable);
+    private sealed record Holds(Stamp Stamp, IReadOnlyList<string> Ids, bool Readable, DateTimeOffset ParsedAt);
 
     /// <summary>What a stat of one session file said: when it was written and how long it is, gone, or unknown.</summary>
     private abstract record Stamp
@@ -93,22 +99,29 @@ internal sealed class SessionHolds(string sessionsDirectory, Func<string, Persis
         next[file.FullName] = Reusable(file.FullName, stamp) ?? Parsed(file.FullName, stamp);
     }
 
-    /// <summary>The cached holds when the file's stamp is the one they were parsed under — or null, parse it.</summary>
+    /// <summary>
+    /// The cached holds when the file's stamp is the one they were parsed under AND they are younger than
+    /// <see cref="Recheck"/> — or null, parse it. The age bound is what makes a missed change (a same-length save inside
+    /// one timestamp tick, a read that failed for a moment) a delay of minutes rather than a state that lasts until the
+    /// file is written again (the cadence consultation, codex, 2026-10-07).
+    /// </summary>
     private Holds? Reusable(string path, Stamp stamp) =>
-        stamp is Stamp.Seen seen && _files.TryGetValue(path, out var cached) && cached.Stamp == seen ? cached : null;
+        _files.TryGetValue(path, out var cached) && cached.Stamp == stamp && Fresh(cached) ? cached : null;
+
+    private bool Fresh(Holds cached) => cached.Stamp is Stamp.Seen && clock.GetUtcNow() - cached.ParsedAt < Recheck;
 
     private Holds Parsed(string path, Stamp stamp)
     {
         if (stamp is Stamp.Unknown)
         {
-            return new(stamp, [], Readable: false); // its holds cannot be known, so the set is incomplete
+            return new(stamp, [], Readable: false, clock.GetUtcNow()); // its holds cannot be known, so the set is incomplete
         }
 
         Parses++;
 
         return read(path) is { } session
-            ? new(stamp, [.. session.State.HoldQuestions, .. session.State.RequestQuestions], Readable: true)
-            : new(stamp, [], Readable: false);
+            ? new(stamp, [.. session.State.HoldQuestions, .. session.State.RequestQuestions], Readable: true, clock.GetUtcNow())
+            : new(stamp, [], Readable: false, clock.GetUtcNow());
     }
 
     /// <summary>

@@ -27,7 +27,9 @@ public static class ConsultationSweeper
     {
         try
         {
-            await source.CurrentAsync(stop).ConfigureAwait(false);
+            // The start alone — not CurrentAsync, which also rebuilds on a settings change and can fail for THAT reason,
+            // which would have ended the sweeper for the life of the process (own review of the branch, 2026-10-07).
+            await source.Ready.WaitAsync(stop).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
@@ -43,7 +45,8 @@ public static class ConsultationSweeper
         }
 
         // The start has completed, so every later CurrentAsync completes synchronously — this blocks nothing; it still
-        // asks per beat, so a settings reload is swept by the service it built.
+        // asks per beat, so a settings reload is swept by the service it built, and a call that throws is one failed
+        // beat (Swept's catch), never the end of the sweeping.
         await RunAsync(() => source.CurrentAsync(stop).AsTask().GetAwaiter().GetResult(), every, log, stop).ConfigureAwait(false);
     }
 

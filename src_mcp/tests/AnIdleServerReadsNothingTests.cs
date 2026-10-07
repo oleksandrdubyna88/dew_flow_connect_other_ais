@@ -147,6 +147,31 @@ public sealed class AnIdleServerReadsNothingTests : IDisposable
         store.HeldQuestions().Complete.Should().BeTrue("the unreadable session is gone, so what is held is known again");
     }
 
+    /// <summary>
+    /// The cadence consultation (codex, 2026-10-07): a cached entry is trusted for as long as its file's write time and
+    /// length stay put, and a save that keeps both — same length, inside one timestamp tick — would leave a NEW hold
+    /// unseen for good; seven days later its card could go. Every cached entry is therefore parsed again once it is older
+    /// than SessionHolds.Recheck, whatever its stamp says.
+    /// </summary>
+    [Fact]
+    public void ACachedSession_IsReadAgainAfterTheRecheck_EvenWhenItsStampDidNotMove()
+    {
+        var store = new SessionStore(_data);
+        var session = Saved(store, "b1", holding: "q1");
+        var file = Directory.EnumerateFiles(Path.Combine(_data, "sessions"), "session-*.json").Single();
+        var clock = new MovableClock(DateTimeOffset.UtcNow);
+        var holds = new SessionHolds(Path.Combine(_data, "sessions"), store.TryReadForTests, clock);
+        holds.Read().Ids.Should().BeEquivalentTo(["q1"]);
+
+        var stamp = File.GetLastWriteTimeUtc(file);
+        store.Save(session with { State = session.State with { HoldQuestions = ["q2"] } }); // same length: q1 -> q2
+        File.SetLastWriteTimeUtc(file, stamp); // and the same write time: the collision a stat cannot see
+
+        holds.Read().Ids.Should().BeEquivalentTo(["q1"], "inside the recheck the cache is trusted");
+        clock.Advance(SessionHolds.Recheck + TimeSpan.FromSeconds(1));
+        holds.Read().Ids.Should().BeEquivalentTo(["q2"], "past the recheck every session is parsed again, so a missed hold is seen");
+    }
+
     private PanelService Service()
     {
         var settings = new PanelSettings

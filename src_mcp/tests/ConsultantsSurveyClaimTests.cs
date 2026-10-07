@@ -119,6 +119,18 @@ public sealed class ConsultantsSurveyClaimTests : IDisposable
         File.Exists(other).Should().BeTrue("another identity's window may be a day long, so its claim of an hour ago may be live");
     }
 
+    /// <summary>Own review of the branch (2026-10-07): a claim NAME is read back from disk, so a nonsense window in it must not throw.</summary>
+    [Fact]
+    public void AClaimNamedWithANonsenseWindow_IsPrunedByTheLongestOne_AndNothingThrows()
+    {
+        Directory.CreateDirectory(Health);
+        var odd = Path.Combine(Health, "consultants.survey.9223372036854775807.0123456789abcdef0123.claim");
+        File.WriteAllText(odd, "x");
+
+        ConsultantsSurveyClaim.Take(Health, "v1|wsl|s", DateTime.UtcNow, Window).Taken.Should().BeTrue();
+        File.Exists(odd).Should().BeTrue("a claim written a moment ago is kept under the longest window");
+    }
+
     [Fact]
     public void AClaim_CarriesItsOwnIdFromTheMomentItExists()
     {

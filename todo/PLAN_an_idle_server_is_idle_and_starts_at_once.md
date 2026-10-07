@@ -136,15 +136,25 @@ which ran beside the gate:
 | — | `Take` decides by the create alone, and the claim's id is written through the create's own stream (a failed write removes the file) | own code review: an `IOException` after the create matched the "already exists" filter; the code round (codex, gemini): an empty claim could not be released |
 | claims pruned at each take | each claim pruned by two of ITS OWN windows, carried in its name (`consultants.survey.<seconds>.<hash>.claim`) | own review of the branch: a 30 s window pruned the live claim of a day-long one |
 | held set cached behind a stamp of the whole directory | cached PER FILE; an unreadable file is cached as unreadable under its stamp | the code round (gemini): one active session re-parsed every session each beat; own review: a torn file was parsed every beat |
-| `StartingHost.SweepAsync` | `ConsultationSweeper.RunAsync(IPanelServiceSource, …)`; the ending's one bounded wait covers the sweeper too | the code round (gemini; codex): the start should not supervise background jobs, and `await sweeping` was unbounded |
+| the held set's per-file cache trusted while the stamp holds | trusted for `SessionHolds.Recheck` (10 min) at most, then parsed again | the cadence consultation (codex, 2026-10-07): a same-length save inside one timestamp tick would have hidden a new hold for good |
+| (pre-existing) the reload recorded the new settings stamp before the rebuild | the stamp and the service published together, after a successful build | the cadence consultation: a failed rebuild left the old settings serving under the new stamp, never retried |
+| `StartingHost.SweepAsync` | `ConsultationSweeper.RunAsync(IPanelServiceSource, …)` waiting on `IPanelServiceSource.Ready` (the start alone); the ending's one bounded wait covers the sweeper too | the code round (gemini; codex): the start should not supervise background jobs, and `await sweeping` was unbounded |
 | a start cancelled without its stop "is a failure" read off the stop afterwards | settled inside the start: such a cancellation is rethrown as a `TimeoutException`; and the start throws right after the vault read when its stop came during it | own review of the branch: the ending always cancels the stop first, so the outcome flipped; and the launcher reports a killed child as timed out, so a false `starting: … timed out` was logged |
 | a real-binary stdio test "with the codex probe sleeping too" | the fake CLI copied in as `creds` on the server's PATH and named as the codex executable, both sleeping 20 s | the vault read is what blocked `initialize`; the probe never did, so it alone could not be RED |
 
-Not built, with what was checked: an end-to-end test of a FAILING start through the real binary. Checked: making
-`sessions`, `consultations`, `running`, `escalations` or `question-consults` a file instead of a directory — the start
-succeeds in every case (each store guards its directory), and no other input makes it throw without a test hook in the
-shipped binary, which was not added. The failure road is covered at the `StartingHost` unit
-(`AStartThatFailsWithAnIoError_IsReportedAsAFailedStart_NotAsAnIoError`) and the success road end to end.
+An end-to-end test of a FAILING start through the real binary, first recorded as not buildable (making `sessions`,
+`consultations`, `running`, `escalations` or `question-consults` a file was checked — each store guards its directory),
+WAS built after the cadence consultation named a fixture: a session file `{"state":null,"rounds":[]}` makes the startup
+sweep throw (`AStartThatFails_EndsAsARecordedCrash_NeverAsAClosedConnection`: exit 70 and `ServerStartFailed` recorded).
+That fixture is itself a pre-existing defect — one such file crashes every start of the server — recorded below and not
+fixed here.
+
+**Open tail — a session file with a null state crashes every start.** `SessionStore.Normalised` dereferences
+`State`, outside the exception types `TryRead` catches, so one malformed `session-*.json` makes the startup sweep (and
+the escalation retention) throw. Pre-existing; found by the cadence consultation; left for its own plan.
+
+**Open tail — tool calls take no cancellation token.** A tool call waiting on a start that never finishes is bounded
+by the client's own timeout only; the start's parts each carry a ceiling (decided in code round 1).
 
 **Open tail.** A settings write (the panel's provider switch at 16:50Z on 2026-10-06 was one) makes every running server rebuild its `PanelService` on the next call (`PanelServiceHost.Current`), and that constructor still runs the startup sweeps — orphaned rounds over every session file, the consultation re-projection — inside the call, under the host's lock. D1 makes the escalation part cheap; the rest was left as it was (the plan's constraint: the reload path keeps today's behaviour). Measured on 2026-10-07: the provider row itself does not change the start ([RESULTS](../research/RESULTS_idle_cpu_and_slow_start.md), *Was it the codex probe? No*).
 

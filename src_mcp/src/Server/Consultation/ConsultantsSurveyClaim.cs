@@ -148,7 +148,8 @@ internal sealed class ConsultantsSurveyClaim
     {
         var parts = Path.GetFileName(claim).Split('.');
 
-        return parts.Length == 5 && long.TryParse(parts[2], out var seconds) && seconds > 0
+        // Bounded: a name is read back from disk, and a window past the longest one ServerPace allows is not a window.
+        return parts.Length == 5 && long.TryParse(parts[2], out var seconds) && seconds is > 0 and <= ServerPace.LongestConsultantsReuseSeconds
             ? TimeSpan.FromSeconds(seconds)
             : LongestWindow;
     }
@@ -162,7 +163,8 @@ internal sealed class ConsultantsSurveyClaim
         }
         catch (IOException)
         {
-            file.Dispose();
+            // The dispose flushes again and can throw the same way; the delete must happen anyway (own review, 2026-10-07).
+            Quietly(file.Dispose);
             Quietly(() => File.Delete(path));
             throw;
         }

@@ -5,6 +5,9 @@ public interface IPanelServiceSource
 {
     /// <summary>The service for THIS call — waiting, without holding a thread, while the first one is still being built.</summary>
     ValueTask<PanelService> CurrentAsync(CancellationToken ct = default);
+
+    /// <summary>Ends when the first service is built (or the start failed) — what a background job waits for before it begins.</summary>
+    Task Ready { get; }
 }
 
 /// <summary>
@@ -67,6 +70,8 @@ public sealed class StartingHost : IPanelServiceSource
             throw new TimeoutException("the server's start was cancelled although nothing asked it to stop", cancelled);
         }
     }
+
+    public Task Ready => Started;
 
     public async ValueTask<PanelService> CurrentAsync(CancellationToken ct = default) =>
         (await Started.WaitAsync(ct).ConfigureAwait(false)).Current;

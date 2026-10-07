@@ -73,8 +73,11 @@ public sealed class PanelServiceHost : IPanelServiceSource
                     return _current;
                 }
 
-                _stamp = stamp;
-                _current = Build(first: false);
+                // Built FIRST, published after: a rebuild that throws leaves the old stamp in place, so the next call
+                // tries again instead of serving the old settings under the new stamp (the cadence consultation,
+                // codex, 2026-10-07).
+                var rebuilt = Build(first: false);
+                (_stamp, _current) = (stamp, rebuilt);
                 _log.Information("settings reloaded — the panel's file changed on disk");
                 return _current;
             }
@@ -83,6 +86,9 @@ public sealed class PanelServiceHost : IPanelServiceSource
 
     /// <summary>The same service as <see cref="Current"/>, for a caller that may also be served by a <see cref="StartingHost"/>.</summary>
     public ValueTask<PanelService> CurrentAsync(CancellationToken ct = default) => ValueTask.FromResult(Current);
+
+    /// <summary>Built in the constructor, so always ready.</summary>
+    public Task Ready => Task.CompletedTask;
 
     /// <param name="first">
     /// Whether this is the constructor's build. A PARAMETER rather than a field somebody has to

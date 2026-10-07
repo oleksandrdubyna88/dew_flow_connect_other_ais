@@ -598,7 +598,10 @@ public sealed class SessionStore(string dataDir, RoleCatalog? catalog = null)
     /// Built on first use: it needs <see cref="TryRead"/>, which a field initializer cannot name. Two threads racing the
     /// first use can each build one; the loser's cache is simply dropped.
     /// </summary>
-    private SessionHolds Holds => field ??= new SessionHolds(SessionsDir, TryRead);
+    private SessionHolds Holds => field ??= new SessionHolds(SessionsDir, TryRead, TimeProvider.System);
+
+    /// <summary>The one session reader, for a test that builds a <see cref="SessionHolds"/> of its own.</summary>
+    internal PersistedSession? TryReadForTests(string file) => TryRead(file);
 
     /// <summary>One session file, or nothing — torn, busy or not a session is nothing, and a sweep walks on.</summary>
     private PersistedSession? TryRead(string file)

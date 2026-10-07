@@ -1,4 +1,6 @@
 using System.Diagnostics;
+using CoaiMcp.Core.Notices;
+using CoaiMcp.Server;
 using FluentAssertions;
 using Xunit;
 
@@ -99,6 +101,46 @@ public sealed class TheServerAnswersInitializeAtOnceTests : IDisposable
             var logged = string.Concat(Directory.EnumerateFiles(Path.Combine(_data, "logs"), "*.log", SearchOption.AllDirectories)
                 .Select(File.ReadAllText));
             logged.Should().NotContain("starting:", "the vault read was cut short by the ending, not timed out, and nothing was started");
+        }
+        finally
+        {
+            if (!server.HasExited)
+            {
+                await StdioServer.StopAsync(server);
+            }
+        }
+    }
+
+    /// <summary>
+    /// The failing start, through the real binary (a gap the plan recorded, closed with the cadence consultant's fixture,
+    /// 2026-10-07): a session file whose state is null makes the startup sweep throw. The server must end as the crash
+    /// it is — exit 70 and the crash written down — as it did when the start ran before serving. Whether `initialize`
+    /// is answered first is a race with a start that fails in milliseconds, so it is not asserted.
+    /// </summary>
+    [Fact]
+    public async Task AStartThatFails_EndsAsARecordedCrash_NeverAsAClosedConnection()
+    {
+        Directory.CreateDirectory(Path.Combine(_data, "sessions"));
+        File.WriteAllText(Path.Combine(_data, "sessions", "session-bad.json"), """{"state":null,"rounds":[]}""");
+        using var server = StdioServer.Start(_data, "debug", 1800);
+        try
+        {
+            try
+            {
+                await server.StandardInput.WriteLineAsync(
+                    """{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"init-test","version":"0"}}}""");
+                await server.StandardInput.FlushAsync();
+            }
+            catch (IOException)
+            {
+                // The server may already have ended: the start fails in milliseconds.
+            }
+
+            await server.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(30));
+
+            server.ExitCode.Should().Be(HostCrash.ExitCode, "a start that failed is a crash, never a client that went away");
+            File.ReadAllText(Path.Combine(_data, ServerNotices.Name)).Should().Contain("ServerStartFailed",
+                "the crash is written down where the panel reads it");
         }
         finally
         {
