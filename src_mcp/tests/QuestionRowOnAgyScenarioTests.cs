@@ -234,7 +234,7 @@ public sealed class QuestionRowOnAgyScenarioTests : IAsyncLifetime
                 return [];
             },
         };
-        var launch = new QuestionRowLaunch(new ReviewerExecutor(_launcher), new UsageLedger(_data), Logger.None);
+        var launch = new QuestionRowLaunch(new ReviewerExecutor(_launcher), new UsageLedger(_data), Logger.None, _launcher);
 
         var giving = () => launch.RunAsync(input, new QuestionRowRecord("agy-disk", "antigravity", "gemini-3.8-flash-low", "antigravity", "question-disk", "Projects on this disk", "disk", "default-deny"), caller.Token);
 

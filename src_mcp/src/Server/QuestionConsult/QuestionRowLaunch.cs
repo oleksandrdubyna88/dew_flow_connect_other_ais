@@ -58,7 +58,8 @@ internal sealed record RowTurn(IReadOnlyList<ReviewerLaunch> Launches, IReadOnly
 /// <para>The scratch directory is the row's own and is removed in <c>finally</c>: <c>coai-question-</c>
 /// is in <c>shared/temp-sweep.json</c>'s never-swept list so a test sweep leaves a live row's alone.</para>
 /// </remarks>
-public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger ledger, Serilog.ILogger log)
+/// <param name="launcher">What a codex row's release is asked through before it launches (<see cref="TierProbedAsync"/>).</param>
+public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger ledger, Serilog.ILogger log, Runners.Processes.IProcessLauncher launcher)
 {
     public const string ScratchPrefix = "coai-question-";
 
@@ -70,7 +71,7 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
         row.CancelAfter(ConsultationDeadline.For(input.Budget));
         try
         {
-            return await TurnsAsync(input, Launch(input, scratch), start, started, row.Token);
+            return await TurnsAsync(input, await TierProbedAsync(input.Row.Runtime, Launch(input, scratch), row.Token), start, started, row.Token);
         }
         catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
@@ -87,6 +88,18 @@ public sealed class QuestionRowLaunch(ReviewerExecutor executor, UsageLedger led
             Remove(scratch);
         }
     }
+
+    /// <summary>
+    /// A CODEX row's launch with its installed release asked first, through the codex adapter's own preparation — the
+    /// stuck consultant's road, so the rule lives once (todo/PLAN_codex_tier_floor.md): an Off row on 0.110–0.130, which
+    /// refuse <c>service_tier=default</c> at config load, is sent no tier. Inside the row's deadline, so a probe that hangs
+    /// is bounded like the launch. Every other runtime's launch is unchanged — a claude row's own preparation is a
+    /// separate open plan (todo/PLAN_a_question_row_on_an_old_claude.md), and a codex preparation never refuses.
+    /// </summary>
+    private async Task<ConsultantLaunch> TierProbedAsync(IConsultantRuntime runtime, ConsultantLaunch launch, CancellationToken ct) =>
+        runtime is CodexConsultant codex && await codex.PrepareAsync(launch, launcher, ct) is ConsultantPreparation.Ready ready
+            ? ready.Launch
+            : launch;
 
     private static ConsultantLaunch Launch(RowLaunchInput input, string scratch) =>
         new(input.Repo, input.Prompt, string.Empty, input.AnswersDir, input.Settings, input.SchemaFile)

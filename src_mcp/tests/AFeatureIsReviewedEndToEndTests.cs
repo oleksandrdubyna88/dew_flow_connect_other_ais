@@ -336,6 +336,29 @@ public sealed class AFeatureIsReviewedEndToEndTests : IAsyncLifetime
             .GetProperty("stage").GetString().Should().Be("Done", "status finds the feature session by its plan");
     }
 
+    /// <summary>
+    /// The feature round asks the installed codex its release before it builds, as every review round does
+    /// (todo/PLAN_codex_tier_floor.md; the other rounds are <see cref="EveryReviewRoundAsksTheInstalledCodexTests"/>): an
+    /// Off row on codex 0.120.0 — which refuses <c>service_tier=default</c> at config load — is sent no tier, and one on
+    /// 0.160.0 is sent exactly what it was before.
+    /// </summary>
+    [Theory]
+    [InlineData("0.120.0", new string[0])]
+    [InlineData("0.160.0", new[] { "service_tier=default" })]
+    public async Task AFeatureRound_TellsItsCodexOnlyWhatItsReleaseTakes(string release, string[] sent)
+    {
+        Environment.SetEnvironmentVariable("FAKECLI_VERSION_STDOUT", $"codex-cli {release}\n");
+
+        var answer = Parse(await ReviewAsync(Service()));
+
+        answer.TryGetProperty("error", out var error).Should().BeFalse($"the round runs: {error}");
+        var launches = Launches().Select(launch => launch.Split('\0')[..^1]).ToList();
+        launches.Should().NotBeEmpty().And.OnlyContain(argv => argv.Zip(argv.Skip(1))
+                .Where(pair => pair.First == "-c" && pair.Second.StartsWith("service_tier=", StringComparison.Ordinal))
+                .Select(pair => pair.Second).SequenceEqual(sent),
+            $"codex {release} with fast Off is told {(sent.Length == 0 ? "no tier" : sent[0])} on every launch");
+    }
+
     // ---------- S3.2: a reviewer that asks for source is served it and asked again ----------
 
     [Fact]

@@ -598,7 +598,7 @@ public sealed class PanelService
         // something to be checked against.
         return _engine.RunStageAsync(repoPath, branch, planText, new StageRun(RoundMachine.BeginPlanRound,
             NeedsWorktree: false, Stage: Stage.PlanReview, ReadsCheckout: false,
-            (session, workingDir, _, _) =>
+            async (session, workingDir, _, roundToken) =>
             {
                 // The rules a PLAN is judged against, from `repoPath` and never from `workingDir` —
                 // this stage runs `NeedsWorktree: false`, so its working directory is an empty
@@ -631,8 +631,11 @@ public sealed class PanelService
                 // story B2's code round.)
                 var round = session.State.RoundsRunThisStage + 1;
                 var roles = _settings.Rounds.RolesForRound(Stage.PlanReview, round);
+                // Asked before the roster is built, every round: an Off codex row on 0.110–0.130 must be sent no tier
+                // (todo/PLAN_codex_tier_floor.md).
+                var tiers = await _roster.CodexTiersAsync(_launcher, workingDir, roundToken);
 
-                return Task.FromResult(WithNothingSkippedByRule(
+                return WithNothingSkippedByRule(
                     _roster.BuildWork(
                         roles, workingDir,
                         RulesText.Section(rules, rules.TierCoverage(StageRules.Plan))
@@ -641,7 +644,8 @@ public sealed class PanelService
                         stage: Stage.PlanReview, readsCheckout: false,
                         seed: StableSeed(session.State.SessionId, round),
                         planPrompts: _settings.DealPlanLenses ? UnspentPlanLenses(session, roles) : null,
-                        deal: _settings.DealPlanLenses)));
+                        deal: _settings.DealPlanLenses,
+                        codexTiers: tiers));
             })
         {
             RolesPerVendor = 1,
@@ -805,11 +809,14 @@ public sealed class PanelService
                     _roster.Security().Due(Stage.CodeReview, round), collected.Files,
                     new Runners.Feature.SourceResolver(new Runners.Collecting.GitHistory(_launcher),
                         new Normalizer.TreeSitterOutliner(), repoPath, sha), roundToken);
+                // The ordinary reviewers' codex and the security lane's alike (todo/PLAN_codex_tier_floor.md).
+                var tiers = await _roster.CodexTiersAsync(_launcher, workingDir, roundToken);
                 var built = WithSkippedByRule(
                     _roster.BuildWork(roles, workingDir, context, round,
                         stage: Stage.CodeReview, readsCheckout: true,
                         seed: StableSeed(session.State.SessionId, round),
-                        deal: _settings.DealCodeLenses, securityFiles: collected.Files, securitySources: securitySources),
+                        deal: _settings.DealCodeLenses, securityFiles: collected.Files, securitySources: securitySources,
+                        codexTiers: tiers),
                     notAsked);
 
                 // The RESOLVED base, not `baseRef`: when the two differ the reviewers are told so a
@@ -1130,7 +1137,7 @@ public sealed class PanelService
             // because its job is the document it was given. Neither says it is the plan stage.
             new StageRun(RoundMachine.BeginDocumentRound,
                 NeedsWorktree: false, Stage: Stage.DocumentReview, ReadsCheckout: false,
-                (running, workingDir, _, _) =>
+                async (running, workingDir, _, roundToken) =>
                 {
                     // From `repoPath`, not `workingDir` — this stage is handed no checkout on
                     // purpose, so its working directory is empty and collecting there would gather
@@ -1153,12 +1160,15 @@ public sealed class PanelService
 
                     var round = running.State.RoundsRunThisStage + 1;
                     var roles = _settings.Rounds.RolesForRound(Stage.DocumentReview, round);
+                    // As every review stage does before it builds (todo/PLAN_codex_tier_floor.md).
+                    var tiers = await _roster.CodexTiersAsync(_launcher, workingDir, roundToken);
 
-                    return Task.FromResult(WithNothingSkippedByRule(
+                    return WithNothingSkippedByRule(
                         _roster.BuildWork(
                             roles, workingDir, DocumentContext(purposeText, document, rules), round,
                             stage: Stage.DocumentReview, readsCheckout: false,
-                            seed: StableSeed(running.State.SessionId, round))));
+                            seed: StableSeed(running.State.SessionId, round),
+                            codexTiers: tiers));
                 })
             {
                 Document = session.State.Document,

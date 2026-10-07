@@ -106,6 +106,32 @@ public sealed class QuestionConsultScenarioTests : IAsyncLifetime
     private static QuestionRow CodexRow(string prompt) =>
         new("astra", "codex", "codex", "gpt-6-astra", string.Empty, FakeCliExe, string.Empty, prompt, Enabled: true);
 
+    /// <summary>
+    /// A codex question row asks the installed codex its release before it launches (todo/PLAN_codex_tier_floor.md): an Off
+    /// row on 0.120.0 — which refuses <c>service_tier=default</c> at config load, and so failed every question row there —
+    /// is sent no tier; one on 0.160.0 is sent exactly what it was before. The probe runs with the server's environment, so
+    /// the steering FILE answers its <c>--version</c> too.
+    /// </summary>
+    [Theory]
+    [InlineData("0.120.0", new string[0])]
+    [InlineData("0.160.0", new[] { "service_tier=default" })]
+    public async Task ACodexQuestionRow_IsToldOnlyWhatItsReleaseTakes(string release, string[] sent)
+    {
+        Steer(
+            ("FAKECLI_STDOUT", "{\"type\":\"thread.started\",\"thread_id\":\"0198f2c1-first\"}\n"),
+            ("FAKECLI_OUTFILE_TEXT", Advice),
+            ("FAKECLI_RECORD_DIR", _record),
+            ("FAKECLI_VERSION_STDOUT", $"codex-cli {release}\n"));
+
+        var reply = JsonDocument.Parse(await Service(CodexRow("question-opinion")).AskConsultantsAsync(
+            _repo, "Which retry shape fits a flaky vendor?", "I tried a fixed wait.", ct: TestContext.Current.CancellationToken)).RootElement;
+
+        reply.GetProperty("status").GetString().Should().Be("complete", reply.ToString());
+        var argv = File.ReadAllText(Directory.GetFiles(_record, "*.argv").Should().ContainSingle().Subject).Split('\0')[..^1];
+        argv.Zip(argv.Skip(1)).Where(pair => pair.First == "-c" && pair.Second.StartsWith("service_tier=", StringComparison.Ordinal))
+            .Select(pair => pair.Second).Should().Equal(sent, $"codex {release} with fast Off");
+    }
+
     [Fact]
     public async Task AQuestionIsAnsweredByARealChild_FencedAndRecorded()
     {
