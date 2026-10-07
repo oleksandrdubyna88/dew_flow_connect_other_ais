@@ -107,5 +107,56 @@
       "source": "probe",
       "note": "The model’s probe report says whether its thinking can be switched off (thinkingSwitchable), per model."
     }
+  ],
+  "fastMode": [
+    {
+      "runtime": "codex",
+      "source": "every-model",
+      "models": [],
+      "measuredWith": "codex-cli 0.160.0",
+      "note": "-c service_tier=default (Off) or =fast (On), on codex’s OWN service only — a row on another endpoint has no codex tier. Measured 2026-10-07: the key is read and checked per model; a value the model does not advertise is dropped with a warning, never a refusal."
+    },
+    {
+      "runtime": "gemini",
+      "source": "none",
+      "models": [],
+      "measuredWith": "",
+      "note": "The retired Gemini CLI runtime; a row saved on it is moved to antigravity on read."
+    },
+    {
+      "runtime": "claude",
+      "source": "models",
+      "models": ["opus", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8"],
+      "measuredWith": "Claude Code 2.1.289",
+      "note": "--settings with a one-key file, fastMode true or false (documented for claude -p, v2.1.205+), Opus 5.5, 5 and 4.8 only. Measured 2026-10-07: Off reports fast_mode_state off; On is held off where the account’s own preference does not allow it, and the run says so."
+    },
+    {
+      "runtime": "antigravity",
+      "source": "none",
+      "models": [],
+      "measuredWith": "",
+      "note": "No fast tier: the model id carries its level."
+    },
+    {
+      "runtime": "local",
+      "source": "none",
+      "models": [],
+      "measuredWith": "",
+      "note": "A local engine has no service tier."
+    },
+    {
+      "runtime": "remote",
+      "source": "none",
+      "models": [],
+      "measuredWith": "",
+      "note": "A Team server row carries no fast mode: its contract does not."
+    },
+    {
+      "runtime": "api",
+      "source": "none",
+      "models": [],
+      "measuredWith": "",
+      "note": "Not until a dialect’s tier is measured on a real call (xai first); the generic openai dialect serves every unnamed endpoint and gets none."
+    }
   ]
 }

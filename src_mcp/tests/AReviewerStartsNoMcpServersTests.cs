@@ -128,7 +128,8 @@ public sealed class AReviewerStartsNoMcpServersTests
     [Fact]
     public void ANameCmdWouldReadAsACommand_IsNotPassed()
     {
-        Overrides(CodexReviewer(["ok", "srv&calc", "a|b", "per%cent"])).Should().Equal(["mcp_servers.ok.enabled=false"],
+        // service_tier=default is the row's fast mode, Off by default (todo/PLAN_fast_mode.md) — no server name in it.
+        Overrides(CodexReviewer(["ok", "srv&calc", "a|b", "per%cent"])).Should().Equal(["service_tier=default", "mcp_servers.ok.enabled=false"],
             "on Windows codex is an npm .cmd shim, and cmd.exe splits an unquoted & or | into a second command (gemini, the code round)");
     }
 

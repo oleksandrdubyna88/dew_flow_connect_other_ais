@@ -89,6 +89,8 @@ public sealed class ClaudeRuntime(string id = "claude") : IReviewerRuntime
                 // A row's effort, as the installed CLI spells it (2.1.289: `--effort <level>`; the levels are
                 // shared/feature-availability.json's). An older CLI refuses the flag itself — VendorDiagnosis names it.
                 .. settings.ReasoningEffort.Length > 0 ? (string[])["--effort", settings.ReasoningEffort] : [],
+                // The row's fast mode, as a one-key settings file (todo/PLAN_fast_mode.md).
+                .. ClaudeFastMode.Args(settings),
             ],
             worktreePath)
         {

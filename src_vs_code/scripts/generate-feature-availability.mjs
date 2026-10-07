@@ -49,7 +49,7 @@ try {
  * What the file may say. A field or a word this script does not know is REFUSED rather than dropped, so a
  * field added for coai-mcp's loader becomes a deliberate act on both sides.
  */
-const SEED_FIELDS = ['why', 'runtimes', 'features', 'effort', 'thinking'];
+const SEED_FIELDS = ['why', 'runtimes', 'features', 'effort', 'thinking', 'fastMode'];
 const FEATURES = ['consultant', 'chat'];
 const EFFORT_FIELDS = ['runtime', 'source', 'levels', 'measuredWith', 'note'];
 const SOURCES = ['list', 'probe', 'unmeasured', 'none'];
@@ -57,6 +57,9 @@ const LEVEL = /^[a-z][a-z0-9-]{0,31}$/u;
 // Thinking (D12): whether a runtime has an on/off switch — no `list`: a switch has two positions, not levels.
 const THINKING_FIELDS = ['runtime', 'source', 'note'];
 const THINKING_SOURCES = ['probe', 'unmeasured', 'none'];
+// Fast mode (todo/PLAN_fast_mode.md): a tier on every model of the runtime, on the listed models only, or none.
+const FAST_FIELDS = ['runtime', 'source', 'models', 'measuredWith', 'note'];
+const FAST_SOURCES = ['every-model', 'models', 'none'];
 
 /**
  * The effort rules, in the order they are checked: what must hold, and what is said when it does not. A table rather
@@ -73,6 +76,15 @@ const EFFORT_RULES = [
   [(row) => row.source !== 'list' || row.measuredWith.length > 0, () => ': a listed effort says where it was read (measuredWith)'],
   [(row) => row.source === 'list' || row.note.length > 0, () => ': a runtime with no list says why (note)'],
   [(row) => row.runtime !== 'antigravity' || row.source === 'none', () => ": antigravity takes no effort (the operator's ruling, 2026-10-04)"],
+];
+
+/** The fast-mode rules, as a table for the reason the effort rules are one. */
+const FAST_RULES = [
+  [(row) => unknown(row, FAST_FIELDS) === undefined, (row) => ` has a field this generator does not know: '${unknown(row, FAST_FIELDS)}'`],
+  [(row) => runtimes.includes(row.runtime), () => ` is not one of the runtimes (${runtimes.join(', ')})`],
+  [(row) => FAST_SOURCES.includes(row.source), (row) => ` has source '${row.source}'; the sources are ${FAST_SOURCES.join(', ')}`],
+  [(row) => strings(row.models) && typeof row.measuredWith === 'string' && typeof row.note === 'string' && row.note.length > 0, () => ': models is a list, measuredWith a string, and the note says why'],
+  [(row) => (row.source === 'models') === (row.models.length > 0), () => ": a 'models' source lists its models, and every other source lists none"],
 ];
 
 const unknown = (fields, known) => Object.keys(fields).find((field) => !known.includes(field));
@@ -130,6 +142,28 @@ for (const runtime of runtimes) {
   }
 }
 
+const fastMode = seed.fastMode;
+if (!Array.isArray(fastMode)) {
+  refuse('has no fastMode rows');
+}
+for (const row of fastMode) {
+  checkFastRow(row);
+}
+for (const runtime of runtimes) {
+  const count = fastMode.filter((row) => row.runtime === runtime).length;
+  if (count !== 1) {
+    refuse(`runtime '${runtime}' has ${count} fastMode rows; every runtime has exactly one`);
+  }
+}
+
+/** One fast-mode row: known fields, runtime and source, models only for `models`, and always a reason. */
+function checkFastRow(row) {
+  const broken = FAST_RULES.find(([holds]) => !holds(row));
+  if (broken !== undefined) {
+    refuse(`fastMode row '${row.runtime}'${broken[1](row)}`);
+  }
+}
+
 /** One thinking row: known fields, a known runtime and source, and always a reason a card can show. */
 function checkThinkingRow(row) {
   const stranger = unknown(row, THINKING_FIELDS);
@@ -160,6 +194,16 @@ const effortRow = (row) => [
   `    runtime: ${lit(row.runtime)},`,
   `    source: ${lit(row.source)},`,
   `    levels: ${list(row.levels)},`,
+  `    measuredWith: ${lit(row.measuredWith)},`,
+  `    note: ${lit(row.note)},`,
+  '  },',
+].join('\n');
+
+const fastRow = (row) => [
+  '  {',
+  `    runtime: ${lit(row.runtime)},`,
+  `    source: ${lit(row.source)},`,
+  `    models: ${list(row.models)},`,
   `    measuredWith: ${lit(row.measuredWith)},`,
   `    note: ${lit(row.note)},`,
   '  },',
@@ -218,9 +262,26 @@ export interface ThinkingRow {
 export const THINKING: readonly ThinkingRow[] = [
 ${thinking.map(thinkingRow).join('\n')}
 ];
+
+/** Where a runtime's fast tier is (todo/PLAN_fast_mode.md): on every model, on the listed models, or none. */
+export type FastSource = ${FAST_SOURCES.map(lit).join(' | ')};
+
+/** One runtime's fast tier — and, always, why. */
+export interface FastModeRow {
+  readonly runtime: Runtime;
+  readonly source: FastSource;
+  readonly models: readonly string[];
+  readonly measuredWith: string;
+  readonly note: string;
+}
+
+/** One row per runtime. */
+export const FAST_MODE: readonly FastModeRow[] = [
+${fastMode.map(fastRow).join('\n')}
+];
 `;
 
-const counts = `${features.consultant.length} consulting, ${features.chat.length} chat, ${effort.length} effort rows, ${thinking.length} thinking rows`;
+const counts = `${features.consultant.length} consulting, ${features.chat.length} chat, ${effort.length} effort rows, ${thinking.length} thinking rows, ${fastMode.length} fast-mode rows`;
 const rerun = [
   'node src_vs_code/scripts/generate-feature-availability.mjs',
   ...(seedPath === defaultSeed ? [] : [`--seed=${seedPath}`]),

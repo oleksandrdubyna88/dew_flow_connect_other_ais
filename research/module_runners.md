@@ -2273,3 +2273,24 @@ ceiling, thinking switch and stream into launch settings. The roster (`RosterBui
 card's ✓ Check (`ConsultantTurnInputs`) and the question consultant (`QuestionFanOut`) all call it; a test keeps any
 of them from carrying the fields by hand again. `ApiRuntime.Build` adds `--stream on` only when the row's switch is
 on, so every launch before the switch is spelled as it was.
+
+## A row's fast mode reaches every codex and claude launch (2026-10-07, todo/PLAN_fast_mode.md, Story A)
+
+`ReviewerSettings.Fast` (`Core.Catalog.FastMode`: `Off` — the default —, `On`, `Cli`) is set from the row at all three
+places a row becomes a launch (`RosterBuilder.SettingsFor`, `ConsultantTurnInputs.Plain`, `QuestionFanOut.SettingsFor`)
+and read by the runtime that has a tier:
+
+- **codex** — `CodexRuntime.TierArgs`: `-c service_tier=default` for Off, `=fast` for On, nothing for Cli; nothing at all
+  on somebody else's endpoint (a provider override — `CustomCodexRuntime`, `DeepseekRuntime` — has no codex tier). The
+  reviewer argv and all three consultant branches (stuck, resumed, question row) take it from the one method. Unquoted,
+  as `sandbox_mode=read-only`. Measured (`research/RESULTS_fast_mode_measured_2026-10-07.md`): codex reads and checks the
+  key per model and DROPS an unadvertised value with a warning — never a refusal.
+- **claude** — `ClaudeFastMode.Args`: `--settings <file>`, the file holding exactly one key, `fastMode` (documented
+  headless spelling), as a path because an inline JSON argument's quotes are re-tokenised by an npm `.cmd` shim. The
+  files (`fast-mode/fast-on.json`, `fast-off.json` under the data folder) are written only when missing or different,
+  through a temp file moved into place. Only a model `shared/feature-availability.json` lists has the tier (the Opus
+  family, alias and `[1m]` suffix included); any other, and an empty model, is sent nothing in either state.
+
+Which runtime and model has a tier is data: the `fastMode` block of `shared/feature-availability.json`
+(`FeatureAvailability.FastMode` / `HasFastTier`, one row per runtime, refused whole when a runtime has none or two —
+the extension's generator checks the same).

@@ -76,6 +76,13 @@ public sealed record ReviewerSettings(string Provider)
     public bool Stream { get; init; }
 
     /// <summary>
+    /// The row's fast mode (todo/PLAN_fast_mode.md): <see cref="Core.Catalog.FastMode.Off"/> by default — the owner's
+    /// choice, so a fast tier switched on in the CLI's own configuration is not used for coai unasked. Every runtime that
+    /// has a tier reads it; the others ignore it.
+    /// </summary>
+    public Core.Catalog.FastMode Fast { get; init; }
+
+    /// <summary>
     /// These settings with an api row's effective ones — its effort, ceiling, thinking switch and stream. The ONE way an
     /// api row's settings reach a launch: the roster, the consultant (and the model card's Check) and the question
     /// consultant all call it, so a field cannot reach one of them and not the others.
@@ -406,6 +413,21 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
     private protected virtual IEnumerable<string> ProviderOverrides => [];
 
     /// <summary>
+    /// The row's fast mode as codex spells it (todo/PLAN_fast_mode.md): <c>-c service_tier=default</c> for Off,
+    /// <c>=fast</c> for On, nothing for "As the CLI is set" — and nothing at all on somebody else's endpoint (a provider
+    /// override), which has no codex service tier. Unquoted, as <c>sandbox_mode=read-only</c> is (CodexConsultant).
+    /// Measured 2026-10-07 on codex-cli 0.160.0: the key is read and checked per model; a value the model does not
+    /// advertise is dropped with a warning, never a refusal (research/RESULTS_fast_mode_measured_2026-10-07.md).
+    /// </summary>
+    public IReadOnlyList<string> TierArgs(ReviewerSettings settings) =>
+        ProviderOverrides.Any() ? [] : settings.Fast switch
+        {
+            Core.Catalog.FastMode.Off => ["-c", "service_tier=default"],
+            Core.Catalog.FastMode.On => ["-c", "service_tier=fast"],
+            _ => [],
+        };
+
+    /// <summary>
     /// The <c>-c</c> overrides that point the Codex CLI at this row's provider — empty for codex's own service — for a
     /// launch built outside <see cref="Build"/>: the consultant's (PLAN_one_model_catalog.md E2.3).
     /// </summary>
@@ -434,6 +456,7 @@ public class CodexRuntime(string id = "codex") : IReviewerRuntime
                 "--json",
                 .. ModelArgs(settings),
                 .. ProviderOverrides,
+                .. TierArgs(settings),
                 // Every MCP server this machine declares, switched off for this launch (issue #514).
                 .. NoMcpServers.CodexArgs(settings.McpServersToSwitchOff),
                 // `-` is codex's documented "read the instructions from stdin". The prompt does

@@ -72,15 +72,15 @@ public sealed class CodexConsultant(CodexRuntime inner, string vendor = "codex")
         // --ephemeral`, `-C <root>`), and this adapter's own output shape. One shot: `--ephemeral`
         // is the plan's, because nothing ever resumes a question.
         LaunchConfinement.Planned planned =>
-            [.. planned.Plan.Leading, "exec", .. planned.Plan.Flags, "--skip-git-repo-check", "--color", "never", "--json", "-o", outputFile, .. Model(launch.Settings), .. _provider, .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
+            [.. planned.Plan.Leading, "exec", .. planned.Plan.Flags, "--skip-git-repo-check", "--color", "never", "--json", "-o", outputFile, .. Model(launch.Settings), .. _provider, .. inner.TierArgs(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
         _ when launch.Handle.Length == 0 =>
-            ["exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", launch.RepoPath, "--json", "-o", outputFile, .. Model(launch.Settings), .. _provider, .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
+            ["exec", "-s", "read-only", "--skip-git-repo-check", "--color", "never", "-C", launch.RepoPath, "--json", "-o", outputFile, .. Model(launch.Settings), .. _provider, .. inner.TierArgs(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
         // UNQUOTED, and measured: `-c` parses its value as TOML and falls back to the raw string,
         // so `sandbox_mode=read-only` arrives as the string this wants. The quoted form worked
         // too, but an embedded double quote inside an argument that reaches cmd.exe through an
         // npm shim is a re-tokenisation waiting for the wrong input. Verified 2026-09-12:
         // a thread resumed with this exact form returned the number planted in turn 1. (gemini, code round.)
-        _ => ["exec", "resume", launch.Handle, "-c", "sandbox_mode=read-only", "--skip-git-repo-check", "--json", "-o", outputFile, .. Model(launch.Settings), .. _provider, .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
+        _ => ["exec", "resume", launch.Handle, "-c", "sandbox_mode=read-only", "--skip-git-repo-check", "--json", "-o", outputFile, .. Model(launch.Settings), .. _provider, .. inner.TierArgs(launch.Settings), .. NoMcpServers.CodexArgs(launch.Settings.McpServersToSwitchOff), "-"],
     };
 
     private static IEnumerable<string> Model(ReviewerSettings settings) =>

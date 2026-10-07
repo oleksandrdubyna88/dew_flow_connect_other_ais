@@ -6384,3 +6384,9 @@ streamed)`). A gateway that answered one JSON, and an older coai-mcp reached thr
 `--stream on`, both write none. A ✓ Check of an api row with its switch on reads that field from the launches' stdout
 (`ConsultantCheck.StreamVerdict`) and records `streamed` or `not-streamed` in `ConsultCheckRecord.Streamed` — empty for
 every other check — so the card can say that the setting did nothing.
+
+## A row's `fast` (2026-10-07, todo/PLAN_fast_mode.md)
+
+`VendorDto.Fast` (`off` | `on` | `cli`, any case; absent or unknown is Off — the owner's default) is parsed by
+`ProviderSettings.FastOf` into `ProviderSettings.Fast` and carried into every launch of the row (module_runners.md, *A
+row's fast mode*). `--features` lists `fastMode`, so the extension sends the field only to a binary that reads it.

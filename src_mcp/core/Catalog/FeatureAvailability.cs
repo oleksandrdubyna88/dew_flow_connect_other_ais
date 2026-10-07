@@ -7,7 +7,8 @@ public sealed record FeatureAvailabilitySeed(
     IReadOnlyList<string>? Runtimes,
     FeatureListsSeed? Features,
     IReadOnlyList<EffortRowSeed>? Effort,
-    IReadOnlyList<ThinkingRowSeed>? Thinking = null);
+    IReadOnlyList<ThinkingRowSeed>? Thinking = null,
+    IReadOnlyList<FastModeRowSeed>? FastMode = null);
 
 /// <summary>Which runtimes serve the consultant and the chat.</summary>
 public sealed record FeatureListsSeed(IReadOnlyList<string>? Consultant, IReadOnlyList<string>? Chat);
@@ -22,6 +23,14 @@ public sealed record ThinkingRowSeed(string? Runtime, string? Source, string? No
 
 /// <summary>Whether a runtime has a thinking switch (PLAN_one_model_catalog.md D12), and why when it has none.</summary>
 public sealed record ThinkingRow(string Runtime, string Source, string Note);
+
+public sealed record FastModeRowSeed(string? Runtime, string? Source, IReadOnlyList<string>? Models, string? MeasuredWith, string? Note);
+
+/// <summary>
+/// Whether a runtime has a fast tier (todo/PLAN_fast_mode.md, decision 2): on <c>every-model</c>, on the listed
+/// <c>models</c> only, or <c>none</c> — and, always, why.
+/// </summary>
+public sealed record FastModeRow(string Runtime, string Source, IReadOnlyList<string> Models, string Note);
 
 /// <summary>
 /// Which runtime serves which feature, and which efforts each accepts — read from the file the extension generates its
@@ -40,6 +49,8 @@ public sealed class FeatureAvailability
     // Declared BEFORE Builtin: static fields initialise in textual order, and Builtin reads the file through these.
     private static readonly string[] ThinkingSources = ["probe", "unmeasured", "none"];
 
+    private static readonly string[] FastSources = ["every-model", "models", "none"];
+
     public static FeatureAvailability Builtin { get; } = LoadBuiltin();
 
     public IReadOnlyList<string> Consultant { get; init; } = [];
@@ -49,6 +60,24 @@ public sealed class FeatureAvailability
     public IReadOnlyList<EffortRow> Effort { get; init; } = [];
 
     public IReadOnlyList<ThinkingRow> Thinking { get; init; } = [];
+
+    public IReadOnlyList<FastModeRow> FastMode { get; init; } = [];
+
+    /// <summary>One runtime's fast tier — a runtime the file does not name has none.</summary>
+    public FastModeRow FastModeOf(string runtime) =>
+        FastMode.FirstOrDefault(row => string.Equals(row.Runtime, runtime, StringComparison.OrdinalIgnoreCase))
+        ?? new FastModeRow(runtime, "none", [], $"'{runtime}' is not a runtime the feature-availability file names");
+
+    /// <summary>
+    /// Whether <paramref name="model"/> on <paramref name="runtime"/> has a fast tier — a listed model matched with its
+    /// case and any <c>[1m]</c>-style suffix set aside; an empty model only on a runtime whose every model has one.
+    /// </summary>
+    public bool HasFastTier(string runtime, string model) => FastModeOf(runtime) switch
+    {
+        { Source: "every-model" } => true,
+        { Source: "models" } row => row.Models.Contains(model.Split('[')[0].Trim().ToLowerInvariant(), StringComparer.Ordinal),
+        _ => false,
+    };
 
     /// <summary>One runtime's thinking switch — a runtime the file does not name has none.</summary>
     public ThinkingRow ThinkingOf(string runtime) =>
@@ -81,6 +110,7 @@ public sealed class FeatureAvailability
             Chat = Within(seed.Features?.Chat, runtimes, "chat"),
             Effort = [.. (seed.Effort ?? []).Select(row => Row(row, runtimes))],
             Thinking = ThinkingRows(seed.Thinking, runtimes),
+            FastMode = FastModeRows(seed.FastMode, runtimes),
         };
     }
 
@@ -133,6 +163,30 @@ public sealed class FeatureAvailability
         return runtimes.Contains(runtime, StringComparer.Ordinal) && ThinkingSources.Contains(source, StringComparer.Ordinal)
             ? new ThinkingRow(runtime, source, row.Note ?? string.Empty)
             : throw Broken($"thinking row '{runtime}' has source '{source}'; the runtimes are {string.Join(", ", runtimes)} and the sources {string.Join(", ", ThinkingSources)}");
+    }
+
+    /// <summary>The fast-mode rows — exactly one per runtime, as for thinking; a seed from before the block has none.</summary>
+    private static IReadOnlyList<FastModeRow> FastModeRows(IReadOnlyList<FastModeRowSeed>? seed, IReadOnlyList<string> runtimes)
+    {
+        if (seed is null)
+        {
+            return [];
+        }
+        IReadOnlyList<FastModeRow> rows = [.. seed.Select(row => FastModeRowOf(row, runtimes))];
+
+        return runtimes.FirstOrDefault(runtime => rows.Count(row => row.Runtime == runtime) != 1) is { } off
+            ? throw Broken($"runtime '{off}' has {rows.Count(row => row.Runtime == off)} fast-mode rows; every runtime has exactly one")
+            : rows;
+    }
+
+    private static FastModeRow FastModeRowOf(FastModeRowSeed row, IReadOnlyList<string> runtimes)
+    {
+        var runtime = row.Runtime ?? string.Empty;
+        var source = row.Source ?? string.Empty;
+
+        return runtimes.Contains(runtime, StringComparer.Ordinal) && FastSources.Contains(source, StringComparer.Ordinal)
+            ? new FastModeRow(runtime, source, row.Models ?? [], row.Note ?? string.Empty)
+            : throw Broken($"fast-mode row '{runtime}' has source '{source}'; the runtimes are {string.Join(", ", runtimes)} and the sources {string.Join(", ", FastSources)}");
     }
 
     private static InvalidOperationException Broken(string what) =>

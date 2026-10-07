@@ -387,6 +387,8 @@ internal sealed class RosterBuilder(
             // Only RemoteRuntime reads it: the row's prompt as the field a Team server's operator can refuse (E2.5).
             SystemPrompt = FieldPromptFor(provider, runtime),
             MaxTokens = _settings.LocalMaxTokens,
+            // Every runtime with a tier reads it — codex and claude here; the others ignore it (todo/PLAN_fast_mode.md).
+            Fast = provider.Fast,
             // Only RemoteRuntime uses it, to find this machine's token for its Team server.
             DataDir = _settings.DataDir,
             // A reviewer starts no MCP server (issue #514); read per round, so a server added to

@@ -138,6 +138,18 @@ promote).
   chat's model is the conversation's; `skewSaid` lands with the catalog branch (PR #688) — until then the note uses
   `catalogShell.skew`; a Team server row is not forwarded the field (its server's contract does not carry it).
 
+## Progress
+
+- **Story 0, 2026-10-07** — measured ([RESULTS_fast_mode_measured_2026-10-07.md](../research/RESULTS_fast_mode_measured_2026-10-07.md)):
+  codex reads and checks `-c service_tier`, dropping an unadvertised value with a warning; claude accepts the documented
+  `--settings` fastMode, Off reports `off`, On is held off on this account by its own preference (`fast_mode_disabled_reason:
+  preference`). Open: the `xai` tier (no key export yet).
+- **Story A (server), 2026-10-07** — `FastMode`, `ReviewerSettings.Fast`, the row field and its parse, all three launch
+  places, codex (`CodexRuntime.TierArgs`, reviewer and every consultant branch, none on another endpoint), claude
+  (`ClaudeFastMode`, a one-key file), `fastMode` in `--features`, and the data block in `shared/feature-availability.json`
+  read by both halves. Seven tests that pinned the full argv now carry the Off flag — the intended change. Not yet: the
+  api tier (waits for a measured `xai` value).
+
 ## Definition of Done
 
 - [ ] Every launch of a row with a fast tier carries its state's flag, tested per runtime, per state, per launch kind.

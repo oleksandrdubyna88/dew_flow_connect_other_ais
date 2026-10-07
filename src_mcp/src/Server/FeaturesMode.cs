@@ -36,6 +36,8 @@ internal static class FeaturesMode
         "checkModel",
         // A row's `stream`: an api row asks for its answer as a stream (todo/PLAN_api_streaming.md).
         "apiStream",
+        // A row's `fast`: its fast mode, Off by default, for codex and claude launches (todo/PLAN_fast_mode.md).
+        "fastMode",
     ];
 
     internal static async Task<int> RunAsync()
